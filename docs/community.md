@@ -363,6 +363,13 @@ own plan when they start:
   in `hub-client.cjs`'s `HUB_URL`, in Settings › Community › Connection
   details, or in `MEFI_STUDIO_HUB_URL` (which wins), and a linked Discord
   account.
+  **Cowork rooms** also carry live file claims (the hub's `/v1/rooms/:id/claims`
+  and the `claims` frame): Studio claims the files a builder will edit in the
+  room linked to the project, and waits for files another PC holds (main.cjs
+  "Cowork claims"). For the bot's rebuild: if `/v1/health` also returns
+  `studioAppId` (the Mefi Studio Link Application ID), Studio fills the link
+  app ID from the hub address alone, and a release that builds the hub's
+  permanent address in needs no setup values on any PC.
   **Companion playdates** are the second piece, and the first that needs the
   hub to learn something new. Studio's side ships; the hub only relays:
   - The hub's `ready` frame lists `features`. Studio sends companion frames

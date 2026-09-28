@@ -158,3 +158,14 @@ test("the environment still wins, and an unreachable hub is saved with the reaso
   const wrong = setupHost({ status: 404, answer: null });
   assert.match((await wrong.api.communitySetupSave({ hubUrl: "https://example.com" })).health.error, /not as a Void Engine hub \(HTTP 404\)/);
 });
+
+test("a hub that names its link app fills in the link app ID when only its address was given", async () => {
+  const h = setupHost({ answer: { ok: true, protocol: 1, paused: false, studioAppId: APP } });
+  const saved = plainCopy(await h.api.communitySetupSave({ clientId: "", hubUrl: "https://hub.example.com" }));
+  assert.deepEqual([saved.clientId, saved.linkReady, saved.health.appId], [APP, true, APP]);
+  assert.deepEqual(plainCopy(h.settings().communitySetup), { clientId: APP, hubUrl: "https://hub.example.com" });
+  const typed = setupHost({ answer: { ok: true, protocol: 1, paused: false, studioAppId: "1500000000000000002" } });
+  assert.equal((await typed.api.communitySetupSave({ clientId: APP, hubUrl: "https://hub.example.com" })).clientId, APP, "a typed ID is never replaced");
+  const odd = setupHost({ answer: { ok: true, protocol: 1, studioAppId: "not-an-id" } });
+  assert.equal((await odd.api.communitySetupSave({ hubUrl: "https://hub.example.com" })).clientId, "");
+});

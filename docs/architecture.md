@@ -379,6 +379,16 @@ settings and per-model work-kind summaries for the shared controls.
   profile. Keys cross only with the typed confirmation and a native prompt,
   and their values stay in main. A `.mefishare` friend file is always
   scrubbed, names no repository or PC, and is reviewed before it is kept.
+- **Agents on several PCs** (main.cjs "Cowork claims", scripts/cowork.cjs,
+  the hub client's claims calls). A cowork room linked to the project's
+  GitHub repository (settings.cowork.rooms) carries live file claims. The
+  dispatch's write-lock step also claims the run's files in the room, and
+  claimWork treats other PCs' exclusive claims as in-flight jobs, so a pick
+  on those files defers. Claims are renewed every minute; a run that did its
+  work holds its claim until the next push or 30 minutes. Without a room,
+  hub or link nothing waits. Alongside it, syncFollow asks GitHub every
+  minute (sync.mjs remoteMoved, one ls-remote) and fast-forwards when this
+  PC has nothing in the way and no builder is running.
 - The same glowing wisp wakes in the launch box, responds to pointer play with
   floating ASCII expressions and a few sparks, and accompanies the first-run
   guide. During setup, a pending chat reply or reported agent work, little lights

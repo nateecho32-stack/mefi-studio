@@ -29,10 +29,10 @@ class Element {
   byClass(name) { return this.className.split(" ").includes(name) ? this : this.children.map((child) => child.byClass?.(name)).find(Boolean) ?? null; }
 }
 
-function environment(api) {
+function environment(api, extra = {}) {
   const events = {};
-  const window = { mefiStudio: api, addEventListener: (type, fn) => { (events[type] ??= []).push(fn); } };
-  const context = vm.createContext({ window, document: { createElement: (tag) => new Element(tag) }, Date, Number, Array, Set });
+  const window = { mefiStudio: api, addEventListener: (type, fn) => { (events[type] ??= []).push(fn); }, ...extra };
+  const context = vm.createContext({ window, document: { createElement: (tag) => new Element(tag), getElementById: (id) => extra.elements?.[id] ?? null }, Date, Number, Array, Set, Promise });
   vm.runInContext(source, context);
   return { sync: window.MefiPcSync, fire: (type) => (events[type] ?? []).forEach((fn) => fn({ type })) };
 }
@@ -263,4 +263,38 @@ test("the Friends section mounts the card inside the hub, and the Friends bubble
   assert.match(badge, /\[data-hub-section="friends"\]/);
   assert.match(badge, /window\.MefiPcSync\?\.badge\?\.\(\)/);
   assert.match(hub, /window\.MefiPcSync\?\.subscribe\?\.\(\(\) => syncBadge\(\)\);/, "the badge follows every answer");
+});
+
+test("Keep this PC up to date reads and sets the switch; Linking this PC lists what is left with the place that finishes it", async () => {
+  const fake = bridge({ syncStatus: answer() });
+  const follows = [];
+  const routes = [];
+  const vault = { open: false, scrolled: 0, scrollIntoView() { this.scrolled += 1; } };
+  Object.assign(fake.api, {
+    syncFollow: async (on) => { follows.push(on); return { ok: true, on: on ?? false }; },
+    pcSetupStatus: async () => ({ ok: true, ready: true, account: "me", tools: [], project: {}, steps: [], notes: [], links: [
+      { id: "vault", done: false, label: "Not paired with your vault yet", action: "vault" },
+      { id: "link-id", done: true, label: "Discord linking is set up on this PC", action: "community" },
+      { id: "hub", done: false, label: "No rooms hub address yet (Settings › Community › Connection details)", action: "community" },
+    ] }),
+  });
+  const card = environment(fake.api, { MefiNav: { go: (id) => routes.push(id) }, elements: { "pc-vault": vault } }).sync.card();
+  await flush();
+  const tick = card.find("pc-sync-follow");
+  assert.equal(tick.checked, false, "the saved setting, off");
+  tick.checked = true;
+  tick.listeners.change[0]({ type: "change" });
+  await flush();
+  assert.deepEqual(follows, [undefined, true]);
+  assert.equal(tick.checked, true);
+  const box = card.find("pc-setup");
+  box.open = true;
+  box.listeners.toggle[0]({ type: "toggle" });
+  await flush();
+  const rows = card.find("pc-setup-links").children;
+  assert.deepEqual(rows.map((row) => row.textContent), ["• Not paired with your vault yetOpen", "✓ Discord linking is set up on this PC", "• No rooms hub address yet (Settings › Community › Connection details)Open Settings"]);
+  rows[0].children.find((child) => child.tagName === "BUTTON").click();
+  assert.equal(vault.open, true, "Open opens Share between my PCs");
+  rows[2].children.find((child) => child.tagName === "BUTTON").click();
+  assert.deepEqual(routes, ["community"], "Open Settings goes to Settings › Community");
 });

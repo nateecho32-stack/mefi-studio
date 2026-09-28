@@ -29,6 +29,9 @@
 
 "use strict";
 
+// The claim path rules and lease shape, shared with main's "Cowork claims".
+const cowork = require("./cowork.cjs");
+
 const PROTOCOL_VERSION = 1;
 // The hub's public address. It is filled once the hub has one; until then the
 // feature reports "not configured". MEFI_STUDIO_HUB_URL wins, so a maintainer
@@ -230,7 +233,9 @@ function createHubClient(options = {}) {
       try { data = await res.json(); } catch {}
       if (res.ok && object(data) && data.ok !== false) return { ok: true, status: res.status, data };
       const code = object(data) && typeof data.error === "string" ? data.error : res.status === 401 ? "unauthorized" : "failed";
-      return { ok: false, status: res.status, error: code, reason: object(data) && typeof data.reason === "string" ? data.reason : undefined, retryAfter: object(data) && Number.isFinite(data.retryAfter) ? data.retryAfter : undefined };
+      // The body stays for callers that read it (a claim's 409 names the leases
+      // it collided with); refused() still passes on only error, reason and wait.
+      return { ok: false, status: res.status, error: code, reason: object(data) && typeof data.reason === "string" ? data.reason : undefined, retryAfter: object(data) && Number.isFinite(data.retryAfter) ? data.retryAfter : undefined, data: object(data) ? data : null };
     } catch {
       return { ok: false, error: "network" };
     } finally {
@@ -409,6 +414,11 @@ function createHubClient(options = {}) {
         if (invite) emit({ type: "invite", invite });
         return;
       }
+      // A cowork room's live file claims, all of them, after every change and
+      // once right after subscribing (scripts/cowork.cjs reads each lease).
+      case "claims":
+        if (OPAQUE_ID.test(String(frame.roomId)) && Array.isArray(frame.leases)) emit({ type: "claims", roomId: frame.roomId, leases: frame.leases.slice(0, 200).map(cowork.lease).filter(Boolean) });
+        return;
       case "hubState":
         paused = frame.paused === true;
         emit({ type: "status", status: status() });
@@ -574,6 +584,39 @@ function createHubClient(options = {}) {
     deleteMessage(roomId, messageId) {
       if (!id(roomId) || !SNOWFLAKE.test(String(messageId ?? ""))) return Promise.resolve({ ok: false, reason: "bad-request" });
       return withAck({ type: "delete", roomId, messageId: String(messageId) });
+    },
+    // ---- File claims in a cowork room (main.cjs "Cowork claims") -------------
+    // Claim before editing, renew every minute, release when done. A conflict
+    // answers { ok: false, error: "conflict", conflicts } naming who holds
+    // what; a lease the hub no longer has answers { ok: false, error: "gone" }.
+    async claims(roomId) {
+      if (!id(roomId)) return { ok: false, error: "bad-request" };
+      const answer = await authed("GET", `/v1/rooms/${roomId}/claims`);
+      if (!answer.ok) return refused(answer);
+      return { ok: true, leases: Array.isArray(answer.data.leases) ? answer.data.leases.map(cowork.lease).filter(Boolean) : [] };
+    },
+    async claim(roomId, fields = {}) {
+      const paths = Array.isArray(fields.paths) ? fields.paths.map(cowork.claimPath) : null;
+      if (!id(roomId) || !paths || paths.some((value) => !value) || paths.length > cowork.MAX_PATHS || !cowork.MACHINE_ID.test(String(fields.machineId ?? ""))) return { ok: false, error: "bad-request" };
+      const body = { machineId: fields.machineId, paths, exclusive: fields.exclusive !== false };
+      for (const [key, max] of [["runId", 64], ["title", 200], ["branch", 200]]) { const value = line(fields[key], max); if (value) body[key] = value; }
+      if (Number.isInteger(fields.ttlMs)) body.ttlMs = Math.max(60_000, Math.min(3_600_000, fields.ttlMs));
+      const answer = await authed("POST", `/v1/rooms/${roomId}/claims`, body);
+      if (answer.ok && id(answer.data.leaseId)) return { ok: true, leaseId: answer.data.leaseId, expiresAt: Number.isFinite(answer.data.expiresAt) ? answer.data.expiresAt : null, reused: answer.data.reused === true };
+      if (!answer.ok && answer.error === "conflict") {
+        const conflicts = (Array.isArray(answer.data?.conflicts) ? answer.data.conflicts : []).slice(0, 20).map((item) => ({
+          leaseId: id(item?.leaseId) ? item.leaseId : null, machineId: typeof item?.machineId === "string" ? item.machineId.slice(0, 64) : null,
+          title: line(item?.title, 200), overlapping: Array.isArray(item?.overlapping) ? item.overlapping.map(cowork.claimPath).filter(Boolean).slice(0, 50) : [],
+        }));
+        return { ok: false, error: "conflict", conflicts };
+      }
+      return answer.ok ? { ok: false, error: "failed" } : refused(answer);
+    },
+    renewClaim(leaseId) { return id(leaseId) ? simple("PUT", `/v1/claims/${leaseId}`) : bad(); },
+    releaseClaim(leaseId, reason = "") {
+      if (!id(leaseId)) return bad();
+      const why = line(reason, 200);
+      return simple("DELETE", `/v1/claims/${leaseId}`, why ? { reason: why } : undefined);
     },
     subscribe(roomId) {
       if (!OPAQUE_ID.test(String(roomId))) return false;

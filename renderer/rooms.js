@@ -297,10 +297,48 @@
       openRoom = null;
       void refresh();
     }
+    // A cowork room's part in the open project: whether that project's agents
+    // claim the files they edit here (main.cjs "Cowork claims"), and what is
+    // claimed now. Repainted on each claims frame.
+    let coworkShow = null;
+    function coworkSection(room) {
+      const box = node("div", "rooms-cowork");
+      box.id = "rooms-cowork";
+      const line = node("p", "muted", "Checking the open project…");
+      const actions = node("div", "rooms-row-actions");
+      const list = node("ul", "rooms-list rooms-claims");
+      list.id = "rooms-claims";
+      box.append(node("strong", "", "Agents working together"), line, actions, list);
+      const link = (roomId) => guard(roomId ? "Linking this room…" : "Unlinking…", async () => {
+        const view = await api.coworkLink(roomId);
+        show(view);
+        status.textContent = view?.ok ? room.name : view?.error || "That did not go through.";
+      });
+      const show = (view) => {
+        if (!view?.ok) { line.textContent = view?.error || "The open project could not be read."; return; }
+        if (!view.repo) { line.textContent = "Open a project that is on GitHub to let its agents claim files here."; actions.replaceChildren(); list.replaceChildren(); return; }
+        const linked = view.roomId === room.id;
+        line.textContent = linked
+          ? `${view.repo}'s agents claim the files they edit here. Agents on your other PCs, and friends' in this room, leave those files alone until the work is pushed.`
+          : `${view.roomId ? `${view.repo}'s agents use another cowork room now. ` : ""}Let ${view.repo}'s agents claim the files they edit here, so agents on two PCs never edit the same file at once.`;
+        actions.replaceChildren(button(linked ? "Stop using this room for this project" : "Use this room for this project's agents", () => link(linked ? null : room.id), "rooms-cowork-link"));
+        const rows = linked ? view.leases.map((item) => node("li", "rooms-row", `${item.here ? "This PC" : "Another PC"} · ${item.title || "Work"} · ${item.paths.slice(0, 3).join(", ")}${item.paths.length > 3 ? ` +${item.paths.length - 3} more` : ""}`)) : [];
+        list.replaceChildren(...rows);
+        if (linked && !rows.length) list.append(node("li", "muted", "No files are claimed right now."));
+      };
+      coworkShow = show;
+      void Promise.resolve(api.coworkStatus?.()).then(show).catch(() => {});
+      return box;
+    }
     function roomView() {
       const room = openRoom;
       const head = node("div", "rooms-room-head");
       head.append(button("‹ All rooms", close, "rooms-back"), node("strong", "", room.name));
+      // The hub's privacy note: rooms are private Discord threads.
+      const privacy = node("p", "muted rooms-privacy", "Void Engine moderators can read every room.");
+      privacy.id = "rooms-privacy";
+      coworkShow = null;
+      const together = room.kind === "cowork" && room.status === "active" && ["owner", "member"].includes(room.you) && typeof api.coworkStatus === "function" ? coworkSection(room) : null;
       const earlier = button("Load earlier", () => guard("Loading earlier messages…", async () => {
         const page = await call("messages", room.id, messages[0]?.id ?? null);
         if (page?.ok) { messages = [...page.messages, ...messages]; more = page.hasMore === true; }
@@ -361,7 +399,7 @@
             if (answer?.ok) close();
           });
         }));
-        return [head, earlier, log, box, send, controls, found];
+        return [head, privacy, ...(together ? [together] : []), earlier, log, box, send, controls, found];
       }
       controls.append(button("Leave room", () => {
         if (!window.confirm?.(`Leave ${room.name}?`)) return;
@@ -371,7 +409,7 @@
           if (answer?.ok) close();
         });
       }));
-      return [head, earlier, log, box, send, controls];
+      return [head, privacy, ...(together ? [together] : []), earlier, log, box, send, controls];
     }
 
     function paint() {
@@ -418,6 +456,7 @@
       if (event?.type === "status") { if (!openRoom) void load(); return; }
       if (["joinRequest", "invite", "membership", "room"].includes(event?.type)) { if (!openRoom) void refresh(); else if (event.type === "room" && event.room?.id === openRoom.id) { openRoom = event.room; paint(); } return; }
       if (!openRoom || event?.roomId !== openRoom.id) return;
+      if (event.type === "claims") { if (coworkShow) void Promise.resolve(api.coworkStatus?.()).then(coworkShow).catch(() => {}); return; }
       if (event.type === "message" && !messages.some((item) => item.id === event.message.id)) { messages = [...messages, event.message].slice(-500); showMessages(); }
       else if (event.type === "messageUpdate") { messages = messages.map((item) => (item.id === event.message.id ? event.message : item)); showMessages(); }
       else if (event.type === "messageDelete") { messages = messages.filter((item) => item.id !== event.messageId); showMessages(); }

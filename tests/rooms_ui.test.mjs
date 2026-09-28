@@ -36,7 +36,7 @@ class Element {
 const room = (overrides = {}) => ({ id: "room_mine", name: "Lo-fi corner", kind: "hangout", policy: "request", listed: true, status: "active", you: "owner", ownerId: ME.id, memberCount: 3, maxMembers: 25, ...overrides });
 const message = (overrides = {}) => ({ id: "423456789012345678", author: { id: FRIEND.id, name: "Aksana", viaStudio: true }, text: "hey <@123456789012345678>", createdAt: Date.UTC(2026, 8, 27, 20), editedAt: null, mentions: [{ id: ME.id, name: "Mefi" }], attachments: [], ...overrides });
 
-function environment({ status = { configured: true, linked: true, state: "ready", user: ME }, rooms = [], requests = [], invites = [], replies = {}, bridge = true } = {}) {
+function environment({ status = { configured: true, linked: true, state: "ready", user: ME }, rooms = [], requests = [], invites = [], replies = {}, bridge = true, extra = {} } = {}) {
   const calls = [];
   let hubEvent = null;
   const api = bridge ? {
@@ -52,6 +52,7 @@ function environment({ status = { configured: true, linked: true, state: "ready"
       const reply = replies[method];
       return typeof reply === "function" ? reply(...args) : reply ?? { ok: true };
     },
+    ...extra,
   } : undefined;
   const window = { mefiStudio: api, confirm: () => true };
   const context = vm.createContext({ window, document: { createElement: (tag) => new Element(tag) }, Date, Number, Array, Set, Map, Promise, JSON, Object, String });
@@ -196,4 +197,35 @@ test("main passes only the listed room methods, with no more arguments than each
   await context.hubRoom("sendMessage", ["room_a", () => "not data"]);
   assert.deepEqual(JSON.parse(JSON.stringify(seen)), [["createRoom", { name: "x", kind: "hangout" }], ["sendMessage", "room_a", null]]);
   assert.match(main, /ipcMain\.handle\("hub:room", async \(_event, payload\) => hubRoom\(String\(payload\?\.method \?\? ""\), Array\.isArray\(payload\?\.args\) \? payload\.args : \[\]\)\);/);
+});
+
+test("every room says moderators can read it; a cowork room offers to carry the open project's file claims", async () => {
+  const links = [];
+  let view = { ok: true, repo: "owner/app", roomId: null, leases: [] };
+  const env = environment({
+    rooms: [room({ id: "room_work", name: "Build crew", kind: "cowork" }), room()],
+    replies: { messages: { ok: true, messages: [], hasMore: false } },
+    extra: {
+      coworkStatus: async () => view,
+      coworkLink: async (roomId) => { links.push(roomId); view = { ...view, roomId, leases: roomId ? [{ title: "Refactor", paths: ["src/app.js", "src/b.js", "src/c.js", "src/d.js"], exclusive: true, here: false }, { title: "Fix login", paths: ["lib/u.js"], exclusive: true, here: true }] : [] }; return view; },
+    },
+  });
+  const panel = env.rooms.panel();
+  await flush();
+  panel.all().find((item) => item.dataset?.room === "room_work")?.children.flatMap((child) => child.all?.() ?? [child]).find((item) => item.tagName === "BUTTON")?.click();
+  await flush();
+  assert.equal(panel.find("rooms-privacy").textContent, "Void Engine moderators can read every room.");
+  const box = panel.find("rooms-cowork");
+  assert.ok(box, "a cowork room shows its part in the open project");
+  assert.match(box.textContent, /Let owner\/app's agents claim the files they edit here/);
+  panel.find("rooms-cowork-link").click();
+  await flush();
+  assert.deepEqual(links, ["room_work"]);
+  assert.match(box.textContent, /owner\/app's agents claim the files they edit here/);
+  assert.deepEqual(panel.find("rooms-claims").children.map((row) => row.textContent), ["Another PC · Refactor · src/app.js, src/b.js, src/c.js +1 more", "This PC · Fix login · lib/u.js"]);
+  env.push({ type: "claims", roomId: "room_work", leases: [] });
+  await flush();
+  panel.find("rooms-cowork-link").click();
+  await flush();
+  assert.deepEqual(links, ["room_work", null], "and can stop");
 });

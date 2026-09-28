@@ -64,6 +64,20 @@ async function defaultBranch(git) {
   return "main";
 }
 
+// Whether GitHub's default branch has moved past this PC's last fetch: one
+// small ls-remote and no fetch, so main can ask every minute and look (and
+// fetch) only when another PC has pushed.
+export async function remoteMoved(cwd, { run = runGit, timeout = 15000 } = {}) {
+  const git = (args, options) => run(cwd, args, options);
+  const main = await defaultBranch(git);
+  const remote = await git(["ls-remote", REMOTE, `refs/heads/${main}`], { timeout });
+  if (!remote.ok) return { ok: false, offline: fetchFailure(remote) === "offline" };
+  const sha = remote.stdout.split(/\s+/)[0] || "";
+  if (!/^[0-9a-f]{40,64}$/.test(sha)) return { ok: true, moved: false, main };
+  const local = await git(["rev-parse", "--verify", "--quiet", `refs/remotes/${REMOTE}/${main}`]);
+  return { ok: true, moved: !local.ok || local.stdout.trim() !== sha, main };
+}
+
 // The project's own gate before a push: its package.json "check" script, run
 // the way `npm run check` runs it, or null when the project has none.
 export async function projectCheck(cwd, { run = null, timeout = CHECK_TIMEOUT_MS } = {}) {

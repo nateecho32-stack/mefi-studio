@@ -232,6 +232,12 @@ const api = {
   // including the background look behind the Friends badge.
   syncStatus: () => ipcRenderer.invoke("sync:status"),
   syncRun: (options) => ipcRenderer.invoke("sync:run", { rebase: options?.rebase === true }),
+  // "Keep this PC up to date": no argument reads it, true or false sets it.
+  syncFollow: (on) => ipcRenderer.invoke("sync:follow", typeof on === "boolean" ? { on } : {}),
+  // Cowork claims: the open project's room for live file claims (a room id,
+  // or null to stop), and what is claimed there.
+  coworkStatus: () => ipcRenderer.invoke("cowork:status"),
+  coworkLink: (roomId) => ipcRenderer.invoke("cowork:link", { roomId: roomId === null ? null : typeof roomId === "string" ? roomId.slice(0, 64) : "" }),
   onSyncEvent: (callback) => ipcRenderer.on("sync:event", (_event, result) => callback(result)),
   // Friends › Your PCs › Set up this PC (scripts/pc-setup.cjs): the renderer
   // names an action or a repository from the account's own list, never a

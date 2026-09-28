@@ -7,6 +7,24 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Agents on several PCs never edit the same file at once.** Link a cowork
+  room to a project (Friends › Rooms, open the room, **Use this room for this
+  project's agents**). Before a builder starts, Studio claims the files it will
+  edit in that room; every PC hears it within a second, and a task whose files
+  another PC holds waits and picks other work. A run that did its work keeps
+  its claim until this PC pushes (or 30 minutes), so the other PCs only edit
+  those files once they can pull the change. The room lists what is claimed
+  and by which PC. With no room, hub or Discord link, nothing waits.
+- **Keep this PC up to date** (Friends › Your PCs, on by default). Studio asks
+  GitHub once a minute whether another PC pushed, looks when one did, and
+  brings the work in with a fast-forward when this PC has nothing of its own
+  in the way and no builder is running. Other PCs' work arrives within about a
+  minute instead of at the next 15-minute look.
+- **Set up this PC** also lists what links this PC: the vault, the link app ID,
+  the Discord link and the rooms hub, each with a button to the place that
+  finishes it. A hub that names its link app fills in the link app ID from its
+  address alone. Every room now says that Void Engine moderators can read it.
+
 - **Discord linking and Rooms without environment variables.** Settings ›
   Community › **Connection details** takes the Mefi Studio Link Application
   ID and the rooms hub's address once per PC, saves them in settings and uses

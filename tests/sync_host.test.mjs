@@ -21,8 +21,8 @@ const block = main.slice(from, to);
 const flush = async () => { for (let i = 0; i < 30; i += 1) await Promise.resolve(); };
 const CHECK = () => ({ ok: true });
 
-function host({ fail = null, state = null, risk = [], answers = [], flags = {}, background = false, lookNever = false } = {}) {
-  const calls = [], sent = [], dialogs = [], timers = [], quits = [];
+function host({ fail = null, state = null, risk = [], answers = [], flags = {}, background = false, lookNever = false, moved = false, follow = true, jobs = [] } = {}) {
+  const calls = [], sent = [], dialogs = [], timers = [], quits = [], released = [];
   let root = "C:/projects/one";
   const app = { isQuitting: false, quit: () => quits.push(app.isQuitting) };
   const window = { isDestroyed: () => false, isVisible: () => true };
@@ -35,6 +35,10 @@ function host({ fail = null, state = null, risk = [], answers = [], flags = {}, 
     app, window,
     tray: background ? {} : null,
     assistantState: { prefs: { background } },
+    // syncFollow: whether GitHub moved, the setting, builders, and claims held for a push.
+    readSettings: async () => ({ sync: { follow } }),
+    autopilot: { jobs },
+    coworkPushed: () => released.push(true),
     setTimeout: (fn, ms) => { const timer = { fn, ms, unref() {} }; timers.push(timer); return timer; },
     setInterval: (fn, ms) => { const timer = { fn, ms, every: true, unref() {} }; timers.push(timer); return timer; },
     clearTimeout: () => {}, clearInterval: () => {},
@@ -47,6 +51,7 @@ function host({ fail = null, state = null, risk = [], answers = [], flags = {}, 
         inspect: (folder) => (lookNever ? new Promise(() => {}) : Promise.resolve(state ?? { repo: true, remote: true, branch: "main", main: "main", ahead: 0, behind: 0, folder })),
         pending: () => risk,
         atRisk: (items) => items,
+        remoteMoved: async () => ({ ok: true, moved }),
         sync: (folder, options) => new Promise((resolve) => {
           const call = { folder, options: { ...options }, resolve: (extra = {}) => resolve({ ok: true, headline: `synced ${folder}`, folder, lines: [`synced ${folder}`], actions: [], problems: [], ...extra }) };
           calls.push(call);
@@ -54,8 +59,8 @@ function host({ fail = null, state = null, risk = [], answers = [], flags = {}, 
       };
     },
   });
-  vm.runInContext(`${block}\nthis.api = { syncProject, startSyncWatch, stopSyncWatch, requestQuit, syncWindowClose, state: () => syncQuit };`, context);
-  return { api: context.api, context, app, calls, sent, dialogs, timers, quits, setRoot: (value) => { root = value; } };
+  vm.runInContext(`${block}\nthis.api = { syncProject, syncFollow, startSyncWatch, stopSyncWatch, requestQuit, syncWindowClose, state: () => syncQuit };`, context);
+  return { api: context.api, context, app, calls, sent, dialogs, timers, quits, released, setRoot: (value) => { root = value; } };
 }
 
 test("a look fetches only and runs no check; Sync this PC runs the project's check and may rebase", async () => {
@@ -132,7 +137,7 @@ test("the background look starts once, looks without pushing, and skips a projec
   const h = host();
   h.api.startSyncWatch();
   h.api.startSyncWatch();
-  assert.deepEqual(h.timers.map((timer) => [timer.ms, Boolean(timer.every)]), [[45000, false], [900000, true]]);
+  assert.deepEqual(h.timers.map((timer) => [timer.ms, Boolean(timer.every)]), [[45000, false], [900000, true], [60000, true]], "a look, the 15-minute look and the one-minute follow");
   h.timers[0].fn();
   await flush();
   assert.deepEqual(h.calls[0].options, { pull: false, push: false, rebase: false, check: null });
@@ -262,4 +267,51 @@ test("the bridge, the project gate and the three places a quit starts", async ()
   assert.match(main, /window\.on\("close", \(event\) => syncWindowClose\(event\)\);/, "closing the window asks first");
   assert.match(main, /if \(!SMOKE && !CAPTURE && !CLI_MODE\) startSyncWatch\(\);/);
   assert.equal((main.match(/app\.isQuitting = true;\s*app\.quit\(\)/g) ?? []).length, 2, "only requestQuit sets up a quit by hand");
+});
+
+test("following GitHub: nothing moved, nothing runs; moved, it looks; and it pulls only when nothing here is in the way", async () => {
+  const still = host({ moved: false });
+  await still.api.syncFollow();
+  assert.equal(still.calls.length, 0, "one ls-remote and nothing else");
+  const clean = host({ moved: true });
+  const follow = clean.api.syncFollow();
+  await flush();
+  assert.deepEqual(clean.calls[0].options, { pull: false, push: false, rebase: false, check: null }, "a look first");
+  clean.calls[0].resolve({ state: { behind: 2 }, risk: 0 });
+  await flush();
+  assert.deepEqual(clean.calls[1].options, { pull: true, push: false, rebase: false, check: null }, "then a fast-forward, never a push");
+  clean.calls[1].resolve();
+  await follow;
+  for (const [why, options, answer] of [
+    ["work only this PC holds", { moved: true }, { state: { behind: 2 }, risk: 1 }],
+    ["a builder running", { moved: true, jobs: [{ finished: false }] }, { state: { behind: 2 }, risk: 0 }],
+    ["the switch turned off", { moved: true, follow: false }, { state: { behind: 2 }, risk: 0 }],
+    ["nothing to bring in", { moved: true }, { state: { behind: 0 }, risk: 0 }],
+  ]) {
+    const h = host(options);
+    const run = h.api.syncFollow();
+    await flush();
+    h.calls[0].resolve(answer);
+    await run;
+    assert.equal(h.calls.length, 1, `no pull with ${why}`);
+  }
+});
+
+test("a push that reached GitHub lets go of the file claims held for it", async () => {
+  const h = host();
+  const look = h.api.syncProject(false);
+  await flush();
+  h.calls[0].resolve();
+  await look;
+  assert.equal(h.released.length, 0, "a look releases nothing");
+  const run = h.api.syncProject(true);
+  await flush();
+  h.calls[1].resolve();
+  await run;
+  assert.equal(h.released.length, 1);
+  const failed = h.api.syncProject(true);
+  await flush();
+  h.calls[2].resolve({ ok: false });
+  await failed;
+  assert.equal(h.released.length, 1, "a push that did not go through keeps them");
 });

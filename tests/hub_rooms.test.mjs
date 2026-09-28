@@ -194,3 +194,44 @@ test("message, request and invite frames reach the host checked, and malformed o
   assert.equal(seen[3].request.requester.name, "Aksana");
   assert.equal(seen[4].invite.invitedBy.id, ME.id);
 });
+
+// File claims in a cowork room (main.cjs "Cowork claims", scripts/cowork.cjs).
+test("claims: checked paths out, the hub's lease back, a conflict names who holds what", async () => {
+  const lease = { leaseId: "lease_9", memberId: FRIEND.id, machineId: "pc-laptop", runId: "run_7", paths: ["src/app.js"], exclusive: true, fence: 3, at: T0, expiresAt: T0 + 900_000, title: "Refactor", branch: null, taskKey: null, scopeHash: null, baseSha: null };
+  const h = harness({
+    [`POST /v1/rooms/${ROOM}/claims`]: { status: 201, body: { ok: true, leaseId: "lease_1", fence: 4, expiresAt: T0 + 900_000 } },
+    [`GET /v1/rooms/${ROOM}/claims`]: { status: 200, body: { ok: true, leases: [lease, { leaseId: "bad id!" }] } },
+    "PUT /v1/claims/lease_1": { status: 200, body: { ok: true, expiresAt: T0 + 960_000 } },
+    "DELETE /v1/claims/lease_1": { status: 200, body: { ok: true } },
+  });
+  await h.readyUp();
+  for (const bad of [{ machineId: "pc", paths: ["../x"] }, { machineId: "has space", paths: ["a.js"] }, { machineId: "pc", paths: Array.from({ length: 51 }, (_, i) => `f${i}.js`) }, { machineId: "pc" }]) {
+    assert.deepEqual(await h.client.claim(ROOM, bad), { ok: false, error: "bad-request" }, JSON.stringify(bad).slice(0, 60));
+  }
+  assert.equal(h.calls.length, 0, "nothing bad leaves");
+  const claimed = await h.client.claim(ROOM, { machineId: "pc-desk", runId: "run_1", paths: [String.raw`src\app.js`, "docs/**"], title: "Fix login", secret: "not sent" });
+  assert.deepEqual(claimed, { ok: true, leaseId: "lease_1", expiresAt: T0 + 900_000, reused: false });
+  assert.deepEqual(h.calls[0].body, { machineId: "pc-desk", paths: ["src/app.js", "docs/**"], exclusive: true, runId: "run_1", title: "Fix login" });
+  assert.equal(h.calls[0].auth, "Bearer hub-session-1");
+  const listed = await h.client.claims(ROOM);
+  assert.deepEqual(listed.leases.map((item) => item.leaseId), ["lease_9"], "a malformed lease is dropped");
+  assert.deepEqual(await h.client.renewClaim("lease_1"), { ok: true });
+  assert.deepEqual(await h.client.releaseClaim("lease_1", "done"), { ok: true });
+  assert.deepEqual(h.calls.at(-1), { method: "DELETE", path: "/v1/claims/lease_1", auth: "Bearer hub-session-1", body: { reason: "done" } });
+  const clash = harness({ [`POST /v1/rooms/${ROOM}/claims`]: { status: 409, body: { ok: false, error: "conflict", conflicts: [{ leaseId: "lease_9", memberId: FRIEND.id, machineId: "pc-laptop", runId: "run_7", paths: ["src/app.js"], overlapping: ["src/app.js"], title: "Refactor", expiresAt: T0 + 1 }] } } });
+  await clash.readyUp();
+  assert.deepEqual(JSON.parse(JSON.stringify(await clash.client.claim(ROOM, { machineId: "pc-desk", paths: ["src/app.js"] }))), { ok: false, error: "conflict", conflicts: [{ leaseId: "lease_9", machineId: "pc-laptop", title: "Refactor", overlapping: ["src/app.js"] }] });
+  const gone = harness({ "PUT /v1/claims/lease_1": { status: 410, body: { ok: false, error: "gone" } } });
+  await gone.readyUp();
+  assert.deepEqual(await gone.client.renewClaim("lease_1"), { ok: false, error: "gone" });
+});
+
+test("a cowork room's claims frame reaches the host with every lease checked", async () => {
+  const h = harness();
+  await h.readyUp();
+  h.socket().receive({ type: "claims", roomId: ROOM, leases: [{ leaseId: "lease_2", memberId: ME.id, machineId: "pc-desk", paths: ["a.js", "../b.js"], exclusive: true, expiresAt: T0 + 1 }, { leaseId: "x" }] });
+  h.socket().receive({ type: "claims", roomId: "../bad", leases: [] });
+  const frames = h.events.filter((event) => event.type === "claims");
+  assert.equal(frames.length, 1);
+  assert.deepEqual(frames[0].leases.map((item) => [item.leaseId, item.paths]), [["lease_2", ["a.js"]]]);
+});

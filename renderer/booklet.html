@@ -8223,6 +8223,11 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 .pc-setup > :not(summary) { margin-top: 8px; }
 .pc-setup-repos { flex: 1 1 180px; min-width: 0; max-width: 100%; }
 .pc-setup-list { list-style: none; padding-left: 0; }
+.pc-setup-links-head { margin: 10px 0 0; font-size: 12px; font-weight: 600; }
+.pc-setup-links button { margin-left: 8px; }
+/* Keep this PC up to date (renderer/pc-sync.js). */
+.pc-sync-follow { display: flex; align-items: flex-start; gap: 6px; font-size: 12px; }
+.pc-sync-follow > input { flex: none; margin-top: 2px; }
 /* Friends › Your PCs › Share between my PCs and Share with friends (renderer/pc-vault.js). */
 .pc-vault { border-top: 1px solid var(--hairline); padding-top: 8px; }
 .pc-vault > summary { cursor: pointer; font-size: 12px; font-weight: 600; }
@@ -8266,6 +8271,10 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 .rooms-messages { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 260px; overflow-y: auto; }
 .rooms-message { padding: 6px 8px; border-radius: 8px; background: color-mix(in srgb, var(--gold) 3%, transparent); font-size: 12px; }
 .rooms-message-text { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* The privacy line and a cowork room's shared file claims. */
+.rooms-privacy { margin: 0; font-size: 11px; }
+.rooms-cowork { display: grid; gap: 6px; padding: 8px 10px; border: 1px solid var(--hairline); border-radius: 10px; font-size: 12px; overflow-wrap: anywhere; }
+.rooms-cowork > p { margin: 0; }
 .agent-hub .companion-panel.companion-in-hub { position: relative; inset: auto; width: 100%; min-height: 160px; max-height: min(510px, calc(100dvh - 290px)); flex: 0 1 auto; background: color-mix(in srgb, var(--theme-panel-solid, #131b28) 24%, transparent); backdrop-filter: blur(10px); box-shadow: none; transition: height 340ms cubic-bezier(.22,1,.36,1); }
 .companion-in-hub .companion-shell-head { display: none; }
 /* In the hub the bubbles are the menu; the panel's own tabs would repeat them. */
@@ -58694,7 +58703,22 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     clone.type = "button";
     clone.id = "pc-setup-clone";
     picker.append(select, clone);
-    box.append(node("summary", "", "Set up this PC"), status, checks, steps, tools, picker);
+    // What links this PC to your others and to friends: the vault, the
+    // Discord link and the rooms hub, each with the place that finishes it.
+    const linksHead = node("p", "pc-setup-links-head", "Linking this PC");
+    linksHead.hidden = true;
+    const links = node("ul", "pc-sync-list pc-setup-links");
+    links.id = "pc-setup-links";
+    const openLink = (action) => {
+      if (action === "vault") {
+        const vault = document.getElementById("pc-vault");
+        if (vault) { vault.open = true; vault.scrollIntoView?.({ block: "nearest" }); }
+        return;
+      }
+      window.MefiCompanionHub?.close?.({ immediate: true, restore: false });
+      window.MefiNav?.go?.("community");
+    };
+    box.append(node("summary", "", "Set up this PC"), status, checks, steps, tools, picker, linksHead, links);
     let busy = false, loaded = false, signedIn = false;
     const line = (done, text) => node("li", "", `${done ? "✓" : "•"} ${text}`);
     const paint = (result) => {
@@ -58717,6 +58741,19 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         return button;
       }));
       steps.hidden = !result.steps.length;
+      const linking = Array.isArray(result.links) ? result.links : [];
+      links.replaceChildren(...linking.map((item) => {
+        const row = line(item.done === true, String(item.label ?? ""));
+        row.dataset.link = String(item.id ?? "");
+        if (item.done !== true) {
+          const go = node("button", "ghost mini", item.action === "vault" ? "Open" : "Open Settings");
+          go.type = "button";
+          go.addEventListener("click", () => openLink(item.action));
+          row.append(go);
+        }
+        return row;
+      }));
+      linksHead.hidden = !linking.length;
       signedIn = Boolean(result.account);
     };
     const guard = async (label, work) => {
@@ -58790,6 +58827,19 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const note = node("p", "muted", "Sync pulls what your other PCs pushed and pushes this PC's commits after the project's check passes. It never overwrites uncommitted work or force-pushes.");
     root.append(title, status, list, actions, meta, note);
     const api = bridge();
+    // Keep this PC up to date: main checks GitHub every minute and, when this
+    // PC has nothing of its own in the way, pulls what the other PCs pushed.
+    if (typeof api?.syncFollow === "function") {
+      const follow = node("label", "pc-sync-follow");
+      const tick = node("input");
+      tick.type = "checkbox";
+      tick.id = "pc-sync-follow";
+      tick.checked = true;
+      follow.append(tick, node("span", "", "Keep this PC up to date: bring in other PCs' pushes within a minute, when nothing here is in the way"));
+      tick.addEventListener("change", () => { void Promise.resolve(api.syncFollow(tick.checked)).then((answer) => { if (answer?.ok) tick.checked = answer.on !== false; }).catch(() => {}); });
+      void Promise.resolve(api.syncFollow()).then((answer) => { if (answer?.ok) tick.checked = answer.on !== false; }).catch(() => {});
+      root.append(follow);
+    }
     if (typeof api?.pcSetupStatus === "function") root.append(setupSection(api));
     // Share between my PCs and Share with friends (renderer/pc-vault.js).
     if (window.MefiPcVault) root.append(window.MefiPcVault.section(), window.MefiPcVault.shareSection());
@@ -59837,10 +59887,48 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       openRoom = null;
       void refresh();
     }
+    // A cowork room's part in the open project: whether that project's agents
+    // claim the files they edit here (main.cjs "Cowork claims"), and what is
+    // claimed now. Repainted on each claims frame.
+    let coworkShow = null;
+    function coworkSection(room) {
+      const box = node("div", "rooms-cowork");
+      box.id = "rooms-cowork";
+      const line = node("p", "muted", "Checking the open project…");
+      const actions = node("div", "rooms-row-actions");
+      const list = node("ul", "rooms-list rooms-claims");
+      list.id = "rooms-claims";
+      box.append(node("strong", "", "Agents working together"), line, actions, list);
+      const link = (roomId) => guard(roomId ? "Linking this room…" : "Unlinking…", async () => {
+        const view = await api.coworkLink(roomId);
+        show(view);
+        status.textContent = view?.ok ? room.name : view?.error || "That did not go through.";
+      });
+      const show = (view) => {
+        if (!view?.ok) { line.textContent = view?.error || "The open project could not be read."; return; }
+        if (!view.repo) { line.textContent = "Open a project that is on GitHub to let its agents claim files here."; actions.replaceChildren(); list.replaceChildren(); return; }
+        const linked = view.roomId === room.id;
+        line.textContent = linked
+          ? `${view.repo}'s agents claim the files they edit here. Agents on your other PCs, and friends' in this room, leave those files alone until the work is pushed.`
+          : `${view.roomId ? `${view.repo}'s agents use another cowork room now. ` : ""}Let ${view.repo}'s agents claim the files they edit here, so agents on two PCs never edit the same file at once.`;
+        actions.replaceChildren(button(linked ? "Stop using this room for this project" : "Use this room for this project's agents", () => link(linked ? null : room.id), "rooms-cowork-link"));
+        const rows = linked ? view.leases.map((item) => node("li", "rooms-row", `${item.here ? "This PC" : "Another PC"} · ${item.title || "Work"} · ${item.paths.slice(0, 3).join(", ")}${item.paths.length > 3 ? ` +${item.paths.length - 3} more` : ""}`)) : [];
+        list.replaceChildren(...rows);
+        if (linked && !rows.length) list.append(node("li", "muted", "No files are claimed right now."));
+      };
+      coworkShow = show;
+      void Promise.resolve(api.coworkStatus?.()).then(show).catch(() => {});
+      return box;
+    }
     function roomView() {
       const room = openRoom;
       const head = node("div", "rooms-room-head");
       head.append(button("‹ All rooms", close, "rooms-back"), node("strong", "", room.name));
+      // The hub's privacy note: rooms are private Discord threads.
+      const privacy = node("p", "muted rooms-privacy", "Void Engine moderators can read every room.");
+      privacy.id = "rooms-privacy";
+      coworkShow = null;
+      const together = room.kind === "cowork" && room.status === "active" && ["owner", "member"].includes(room.you) && typeof api.coworkStatus === "function" ? coworkSection(room) : null;
       const earlier = button("Load earlier", () => guard("Loading earlier messages…", async () => {
         const page = await call("messages", room.id, messages[0]?.id ?? null);
         if (page?.ok) { messages = [...page.messages, ...messages]; more = page.hasMore === true; }
@@ -59901,7 +59989,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
             if (answer?.ok) close();
           });
         }));
-        return [head, earlier, log, box, send, controls, found];
+        return [head, privacy, ...(together ? [together] : []), earlier, log, box, send, controls, found];
       }
       controls.append(button("Leave room", () => {
         if (!window.confirm?.(`Leave ${room.name}?`)) return;
@@ -59911,7 +59999,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
           if (answer?.ok) close();
         });
       }));
-      return [head, earlier, log, box, send, controls];
+      return [head, privacy, ...(together ? [together] : []), earlier, log, box, send, controls];
     }
 
     function paint() {
@@ -59958,6 +60046,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       if (event?.type === "status") { if (!openRoom) void load(); return; }
       if (["joinRequest", "invite", "membership", "room"].includes(event?.type)) { if (!openRoom) void refresh(); else if (event.type === "room" && event.room?.id === openRoom.id) { openRoom = event.room; paint(); } return; }
       if (!openRoom || event?.roomId !== openRoom.id) return;
+      if (event.type === "claims") { if (coworkShow) void Promise.resolve(api.coworkStatus?.()).then(coworkShow).catch(() => {}); return; }
       if (event.type === "message" && !messages.some((item) => item.id === event.message.id)) { messages = [...messages, event.message].slice(-500); showMessages(); }
       else if (event.type === "messageUpdate") { messages = messages.map((item) => (item.id === event.message.id ? event.message : item)); showMessages(); }
       else if (event.type === "messageDelete") { messages = messages.filter((item) => item.id !== event.messageId); showMessages(); }

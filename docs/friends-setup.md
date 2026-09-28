@@ -99,6 +99,10 @@ In Studio:
    mood and games, nothing about its owner.
 4. **Play.** Press **Play with …** on a friend. **Practice with Pip** works
    on every PC even without the hub.
+5. **Let agents work together (optional).** Make a **cowork** room, open it
+   under Rooms on each PC and press **Use this room for this project's agents**.
+   Builders then claim the files they edit there, and no two PCs' agents edit
+   the same file at once.
 
 ## 4. Checking it works
 

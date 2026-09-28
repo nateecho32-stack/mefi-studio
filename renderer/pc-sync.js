@@ -85,7 +85,22 @@
     clone.type = "button";
     clone.id = "pc-setup-clone";
     picker.append(select, clone);
-    box.append(node("summary", "", "Set up this PC"), status, checks, steps, tools, picker);
+    // What links this PC to your others and to friends: the vault, the
+    // Discord link and the rooms hub, each with the place that finishes it.
+    const linksHead = node("p", "pc-setup-links-head", "Linking this PC");
+    linksHead.hidden = true;
+    const links = node("ul", "pc-sync-list pc-setup-links");
+    links.id = "pc-setup-links";
+    const openLink = (action) => {
+      if (action === "vault") {
+        const vault = document.getElementById("pc-vault");
+        if (vault) { vault.open = true; vault.scrollIntoView?.({ block: "nearest" }); }
+        return;
+      }
+      window.MefiCompanionHub?.close?.({ immediate: true, restore: false });
+      window.MefiNav?.go?.("community");
+    };
+    box.append(node("summary", "", "Set up this PC"), status, checks, steps, tools, picker, linksHead, links);
     let busy = false, loaded = false, signedIn = false;
     const line = (done, text) => node("li", "", `${done ? "✓" : "•"} ${text}`);
     const paint = (result) => {
@@ -108,6 +123,19 @@
         return button;
       }));
       steps.hidden = !result.steps.length;
+      const linking = Array.isArray(result.links) ? result.links : [];
+      links.replaceChildren(...linking.map((item) => {
+        const row = line(item.done === true, String(item.label ?? ""));
+        row.dataset.link = String(item.id ?? "");
+        if (item.done !== true) {
+          const go = node("button", "ghost mini", item.action === "vault" ? "Open" : "Open Settings");
+          go.type = "button";
+          go.addEventListener("click", () => openLink(item.action));
+          row.append(go);
+        }
+        return row;
+      }));
+      linksHead.hidden = !linking.length;
       signedIn = Boolean(result.account);
     };
     const guard = async (label, work) => {
@@ -181,6 +209,19 @@
     const note = node("p", "muted", "Sync pulls what your other PCs pushed and pushes this PC's commits after the project's check passes. It never overwrites uncommitted work or force-pushes.");
     root.append(title, status, list, actions, meta, note);
     const api = bridge();
+    // Keep this PC up to date: main checks GitHub every minute and, when this
+    // PC has nothing of its own in the way, pulls what the other PCs pushed.
+    if (typeof api?.syncFollow === "function") {
+      const follow = node("label", "pc-sync-follow");
+      const tick = node("input");
+      tick.type = "checkbox";
+      tick.id = "pc-sync-follow";
+      tick.checked = true;
+      follow.append(tick, node("span", "", "Keep this PC up to date: bring in other PCs' pushes within a minute, when nothing here is in the way"));
+      tick.addEventListener("change", () => { void Promise.resolve(api.syncFollow(tick.checked)).then((answer) => { if (answer?.ok) tick.checked = answer.on !== false; }).catch(() => {}); });
+      void Promise.resolve(api.syncFollow()).then((answer) => { if (answer?.ok) tick.checked = answer.on !== false; }).catch(() => {});
+      root.append(follow);
+    }
     if (typeof api?.pcSetupStatus === "function") root.append(setupSection(api));
     // Share between my PCs and Share with friends (renderer/pc-vault.js).
     if (window.MefiPcVault) root.append(window.MefiPcVault.section(), window.MefiPcVault.shareSection());

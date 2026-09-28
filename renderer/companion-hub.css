@@ -122,6 +122,11 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 .pc-setup > :not(summary) { margin-top: 8px; }
 .pc-setup-repos { flex: 1 1 180px; min-width: 0; max-width: 100%; }
 .pc-setup-list { list-style: none; padding-left: 0; }
+.pc-setup-links-head { margin: 10px 0 0; font-size: 12px; font-weight: 600; }
+.pc-setup-links button { margin-left: 8px; }
+/* Keep this PC up to date (renderer/pc-sync.js). */
+.pc-sync-follow { display: flex; align-items: flex-start; gap: 6px; font-size: 12px; }
+.pc-sync-follow > input { flex: none; margin-top: 2px; }
 /* Friends › Your PCs › Share between my PCs and Share with friends (renderer/pc-vault.js). */
 .pc-vault { border-top: 1px solid var(--hairline); padding-top: 8px; }
 .pc-vault > summary { cursor: pointer; font-size: 12px; font-weight: 600; }
@@ -165,6 +170,10 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 .rooms-messages { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 260px; overflow-y: auto; }
 .rooms-message { padding: 6px 8px; border-radius: 8px; background: color-mix(in srgb, var(--gold) 3%, transparent); font-size: 12px; }
 .rooms-message-text { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* The privacy line and a cowork room's shared file claims. */
+.rooms-privacy { margin: 0; font-size: 11px; }
+.rooms-cowork { display: grid; gap: 6px; padding: 8px 10px; border: 1px solid var(--hairline); border-radius: 10px; font-size: 12px; overflow-wrap: anywhere; }
+.rooms-cowork > p { margin: 0; }
 .agent-hub .companion-panel.companion-in-hub { position: relative; inset: auto; width: 100%; min-height: 160px; max-height: min(510px, calc(100dvh - 290px)); flex: 0 1 auto; background: color-mix(in srgb, var(--theme-panel-solid, #131b28) 24%, transparent); backdrop-filter: blur(10px); box-shadow: none; transition: height 340ms cubic-bezier(.22,1,.36,1); }
 .companion-in-hub .companion-shell-head { display: none; }
 /* In the hub the bubbles are the menu; the panel's own tabs would repeat them. */

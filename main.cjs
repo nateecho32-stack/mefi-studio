@@ -1849,7 +1849,9 @@ async function communityHubHealth(url) {
   try {
     const response = await fetch(`${address.http}/v1/health`, { signal: controller.signal, redirect: "error" });
     const body = await response.json().catch(() => null);
-    if (response.ok && body?.ok === true) return { ok: true, protocol: Number.isInteger(body.protocol) ? body.protocol : null, paused: body.paused === true };
+    // A hub may name the link app it accepts (studioAppId), which saves typing it.
+    const appId = /^\d{17,20}$/.test(String(body?.studioAppId ?? "")) ? String(body.studioAppId) : null;
+    if (response.ok && body?.ok === true) return { ok: true, protocol: Number.isInteger(body.protocol) ? body.protocol : null, paused: body.paused === true, ...(appId ? { appId } : {}) };
     return { ok: false, error: `The hub answered, but not as a Void Engine hub (HTTP ${response.status}).` };
   } catch (error) {
     return { ok: false, error: error?.name === "AbortError" ? "The hub did not answer within 6 seconds. Is it running, and is its tunnel up?" : "Studio could not reach the hub at that address." };
@@ -1867,6 +1869,12 @@ async function communitySetupSave(payload) {
   });
   communitySetupReload({ clientId: next.clientId, hubUrl: next.hubUrl });
   const health = next.hubUrl ? await communityHubHealth(next.hubUrl) : null;
+  // Only the hub address given, and the hub names its link app: use that.
+  if (!next.clientId && health?.appId) {
+    next.clientId = health.appId;
+    await updateSettings((settings) => { settings.communitySetup = { clientId: next.clientId, hubUrl: next.hubUrl }; });
+    communitySetupReload({ clientId: next.clientId, hubUrl: next.hubUrl });
+  }
   logLine(`[community] connection details saved: link app id ${next.clientId ? "set" : "empty"}, hub ${next.hubUrl ? (health?.ok ? "answering" : "not answering") : "empty"}`);
   return { ...communitySetupView(), health, status: await publishCommunity({ force: true }) };
 }
@@ -1878,7 +1886,11 @@ function hubInstance() {
       getAccessToken: hubAccessToken,
       // Companion cards go through the "Companion friends" block, which reads
       // them before the renderer sees one; everything else passes straight on.
-      onEvent: (event) => (typeof friendsHear === "function" ? friendsHear(event) : send("hub:event", event)),
+      // A cowork room's claims also reach the dispatcher (the "Cowork claims" block).
+      onEvent: (event) => {
+        if (event?.type === "claims" && typeof coworkHear === "function") coworkHear(event);
+        return typeof friendsHear === "function" ? friendsHear(event) : send("hub:event", event);
+      },
       log: (line) => logLine(line),
     });
   }
@@ -1902,7 +1914,9 @@ async function hubCall(work) {
 const hubConnect = () => hubCall(async (client) => { const status = await client.connect(); return { ok: status.state === "ready" || status.state === "connecting" }; });
 const hubDisconnect = () => hubCall(async (client) => { await client.disconnect(); return { ok: true }; });
 const hubRooms = () => hubCall((client) => client.rooms());
-const hubSubscribe = (roomId, on) => hubCall((client) => ({ ok: on ? client.subscribe(roomId) : client.unsubscribe(roomId) }));
+// The open project's cowork room stays subscribed when Rooms closes it: its
+// claims frames keep the dispatcher's view of other PCs' files current.
+const hubSubscribe = (roomId, on) => hubCall((client) => ({ ok: on ? client.subscribe(roomId) : (typeof coworkActive !== "undefined" && coworkActive?.roomId === roomId) || client.unsubscribe(roomId) }));
 const hubListen = (payload) => hubCall((client) => client.listen(payload?.roomId, payload ?? {}));
 const hubNowPlaying = (track) => hubCall((client) => ({ ok: client.setNowPlaying(track) }));
 // Friends › Rooms (renderer/rooms.js): creating rooms, joining by request or
@@ -1930,8 +1944,9 @@ function hubRoom(method, args) {
 // commits on top of GitHub's). One sync runs at a time: a look asked for during
 // one shares its answer when both are for the same folder, and anything else
 // waits its turn. Every answer goes out as sync:event, which the Friends badge
-// counts. A look runs 45 s after launch and every 15 minutes; it fetches and
-// never pulls or pushes. Every quit the owner starts (File › Quit, the tray's
+// counts. A look runs 45 s after launch and every 15 minutes, and within a
+// minute of another PC's push (syncFollow); it fetches and never pushes, and
+// only syncFollow's safe fast-forward pulls. Every quit the owner starts (File › Quit, the tray's
 // Quit, closing the window when Studio does not live in the tray) comes through
 // requestQuit: when the open project holds work no other PC has, Studio asks
 // first. Updates and restarts call app.exit and never ask. Git gets its own
@@ -1942,32 +1957,65 @@ const SYNC_QUIT_LOOK_MS = 3000;
 let syncFlight = null;
 let syncWatch = null;
 let syncQuit = "idle";
-async function syncProject(push, { rebase = false } = {}) {
+// `pullOnly` fast-forwards without checking or pushing (syncFollow below).
+async function syncProject(push, { rebase = false, pullOnly = false } = {}) {
   const root = projectRoot();
   while (syncFlight) {
     const flight = syncFlight;
     const result = await flight.promise;
-    if (!push && flight.root === root) return result;
+    if (!push && !pullOnly && flight.root === root) return result;
   }
   const promise = loadModule("scripts/sync.mjs")
-    .then(async (sync) => sync.sync(root, { pull: push, push, rebase: push && rebase === true, check: push ? await sync.projectCheck(root) : null }))
+    .then(async (sync) => sync.sync(root, { pull: push || pullOnly, push, rebase: push && rebase === true, check: push ? await sync.projectCheck(root) : null }))
     .catch((error) => ({ ok: false, headline: `Sync could not run: ${error?.message || error}`, lines: [], pending: [], actions: [], problems: [{ kind: "error" }], risk: 0 }))
-    .then((result) => { send("sync:event", result); if (typeof vaultHeartbeat === "function") vaultHeartbeat(result).catch(() => {}); return result; })
+    .then((result) => {
+      send("sync:event", result);
+      if (typeof vaultHeartbeat === "function") vaultHeartbeat(result).catch(() => {});
+      // This PC's work is on GitHub now: file claims held for it can go.
+      if (push && result?.ok && typeof coworkPushed === "function") coworkPushed();
+      return result;
+    })
     .finally(() => { if (syncFlight?.promise === promise) syncFlight = null; });
   syncFlight = { root, promise };
   return promise;
 }
 
+// Following GitHub: once a minute a small ls-remote asks whether another PC
+// has pushed, and only then does Studio look (a fetch, which updates the
+// Friends badge). When "Keep this PC up to date" is on (the default) and this
+// PC has nothing of its own in the way (no uncommitted, unpushed or stashed
+// work, no builder running), it fast-forwards as well, so the other PCs' work
+// is here within about a minute instead of at the next 15-minute look.
+const SYNC_FOLLOW_EVERY_MS = 60 * 1000;
+let syncFollowing = false;
+async function syncFollow() {
+  if (syncFollowing || syncFlight || projectSwitching || !projectRoot()) return;
+  syncFollowing = true;
+  try {
+    const root = projectRoot();
+    const sync = await loadModule("scripts/sync.mjs");
+    const moved = typeof sync.remoteMoved === "function" ? await sync.remoteMoved(root) : { ok: false };
+    if (!moved.ok || !moved.moved) return;
+    const look = await syncProject(false);
+    const building = typeof autopilot !== "undefined" && (autopilot.jobs ?? []).some((job) => job && !job.finished);
+    const follow = (await readSettings()).sync?.follow !== false;
+    if (follow && !building && look?.ok !== false && look?.state?.behind > 0 && !look.risk && projectRoot() === root) await syncProject(false, { pullOnly: true });
+  } catch {} finally {
+    syncFollowing = false;
+  }
+}
+
 function startSyncWatch() {
   if (syncWatch || SMOKE || CAPTURE || CLI_MODE) return;
   const tick = () => { if (!projectSwitching && projectRoot()) syncProject(false).catch(() => {}); };
-  syncWatch = { first: setTimeout(tick, SYNC_WATCH_FIRST_MS), timer: setInterval(tick, SYNC_WATCH_EVERY_MS) };
+  syncWatch = { first: setTimeout(tick, SYNC_WATCH_FIRST_MS), timer: setInterval(tick, SYNC_WATCH_EVERY_MS), follow: setInterval(() => { void syncFollow(); }, SYNC_FOLLOW_EVERY_MS) };
   syncWatch.first.unref?.();
   syncWatch.timer.unref?.();
+  syncWatch.follow.unref?.();
 }
 
 function stopSyncWatch() {
-  if (syncWatch) { clearTimeout(syncWatch.first); clearInterval(syncWatch.timer); }
+  if (syncWatch) { clearTimeout(syncWatch.first); clearInterval(syncWatch.timer); clearInterval(syncWatch.follow); }
   syncWatch = null;
 }
 
@@ -2306,6 +2354,154 @@ async function libraryUse(shelf, id, from) {
   return vaultUse(entry, { anyProject: entry.source === "file" });
 }
 // ---- end of the Your PCs vault ---------------------------------------------------
+
+// ---- Cowork claims: agents on several PCs, one set of files ----------------------
+// A cowork room linked to the project's GitHub repository (Friends › Rooms,
+// settings.cowork.rooms) carries live file claims between PCs through the hub
+// (scripts/cowork.cjs, the hub client's claims calls). Before a builder starts,
+// the files it will edit are claimed there (coworkClaim, from the dispatch's
+// write-lock step), and the dispatcher's claimWork also waits for files another
+// PC holds (coworkHeldJobs), so agents on two PCs never edit the same file at
+// once; every PC hears a change within a second. Claims are renewed every
+// minute. A run that did its work keeps its claim until this PC's next push
+// reaches GitHub, or 30 minutes, so the other PCs edit those files only once
+// they can pull the change; a run that did nothing lets go at once. With no
+// linked room, no Discord link or no hub, nothing here holds anything up:
+// claims add safety between PCs and are never a gate on working alone.
+const cowork = require("./scripts/cowork.cjs");
+const COWORK_TICK_MS = 60 * 1000;
+const COWORK_HOLD_MS = 30 * 60 * 1000;
+const COWORK_CLAIM_WAIT_MS = 5000;
+const coworkLeases = new Map(); // roomId -> live leases from the hub's claims frames
+const coworkMine = new Map(); // run id -> { roomId, leaseId, holdUntil }
+let coworkActive = null; // { repo, roomId } for the open project, from the last tick
+let coworkMachine = null;
+let coworkTimer = null;
+
+// This PC's id in claims, made once and kept in settings (never shared).
+async function coworkMachineId() {
+  if (coworkMachine) return coworkMachine;
+  const saved = cowork.normalizeSettings((await readSettings()).cowork).machineId;
+  if (saved) return (coworkMachine = saved);
+  const fresh = `pc-${crypto.randomUUID()}`;
+  await updateSettings((settings) => { settings.cowork = { ...(settings.cowork && typeof settings.cowork === "object" ? settings.cowork : {}), machineId: fresh }; });
+  return (coworkMachine = fresh);
+}
+async function coworkRoomForProject() {
+  if (!projects.open() || typeof vaultProjectRepo !== "function") return null;
+  const repo = await vaultProjectRepo().catch(() => null);
+  if (!repo) return null;
+  const roomId = cowork.normalizeSettings((await readSettings()).cowork).rooms[repo.toLowerCase()];
+  return roomId ? { repo, roomId } : null;
+}
+const coworkSelf = () => ({ memberId: hubClient?.status?.().user?.id ?? null, machineId: coworkMachine });
+// Other PCs' exclusive claims in the open project's room, as the in-flight
+// jobs claimWork already waits for. This PC's own leases never count.
+function coworkHeldJobs() {
+  if (!coworkActive || !coworkMachine) return [];
+  const mine = new Set([...coworkMine.values()].map((item) => item.leaseId));
+  return cowork.heldElsewhere((coworkLeases.get(coworkActive.roomId) ?? []).filter((item) => !mine.has(item.leaseId)), coworkSelf());
+}
+function coworkHear(event) {
+  if (event?.type === "claims" && typeof event.roomId === "string") coworkLeases.set(event.roomId, Array.isArray(event.leases) ? event.leases : []);
+}
+// Claims a run's files before it starts. { ok: true } also when there is no
+// room, no hub or no answer in time; { ok: false, note } when another PC
+// holds one of them.
+async function coworkClaim(entry, root, files, title = "") {
+  const active = coworkActive;
+  const client = hubClient;
+  if (!active || !client || client.status().state !== "ready") return { ok: true, skipped: true };
+  const paths = cowork.claimPathsFor(root, files);
+  if (!paths.length) return { ok: true, skipped: true };
+  const machineId = await coworkMachineId();
+  let timer;
+  const late = new Promise((resolve) => { timer = setTimeout(() => resolve(null), COWORK_CLAIM_WAIT_MS); });
+  const answer = await Promise.race([client.claim(active.roomId, { machineId, runId: String(entry.id).slice(0, 64), paths, exclusive: true, title: String(title || "").slice(0, 200) }), late]).finally(() => clearTimeout(timer));
+  if (answer?.ok) { coworkMine.set(entry.id, { roomId: active.roomId, leaseId: answer.leaseId, holdUntil: null }); return { ok: true }; }
+  if (answer?.error === "conflict") return { ok: false, note: cowork.conflictNote(answer.conflicts) };
+  logLine(`[cowork] claim not taken (${answer?.error ?? "no answer in time"}); the run goes ahead`);
+  return { ok: true, skipped: true };
+}
+// A run that did its work holds its claim until the next push; anything else
+// lets go now.
+function coworkRelease(runId, { hold = false } = {}) {
+  const mine = coworkMine.get(runId);
+  if (!mine) return;
+  if (hold && !mine.holdUntil) { mine.holdUntil = Date.now() + COWORK_HOLD_MS; return; }
+  coworkMine.delete(runId);
+  Promise.resolve().then(() => hubClient?.releaseClaim(mine.leaseId, "done")).catch(() => {});
+}
+function coworkPushed() {
+  for (const [runId, mine] of coworkMine) if (mine.holdUntil) coworkRelease(runId);
+}
+// Once a minute: find the open project's room, connect and subscribe when a
+// Discord link allows it, renew this PC's claims, and let go of held ones
+// whose time is up.
+async function coworkTick() {
+  try {
+    coworkActive = await coworkRoomForProject().catch(() => null);
+    const client = coworkActive || coworkMine.size ? hubInstance() : null;
+    if (coworkActive && client) {
+      await coworkMachineId();
+      if (client.status().state === "off" && (await communityRead()).state.link) await client.connect().catch(() => {});
+      if (client.status().state === "ready") client.subscribe(coworkActive.roomId);
+    }
+    for (const [runId, mine] of coworkMine) {
+      if (mine.holdUntil && Date.now() > mine.holdUntil) { coworkRelease(runId); continue; }
+      const renewed = client ? await client.renewClaim(mine.leaseId).catch(() => null) : null;
+      if (renewed?.error === "gone") coworkMine.delete(runId);
+    }
+  } catch (error) {
+    logLine(`[cowork] ${error?.message || error}`);
+  }
+}
+function startCowork() {
+  if (coworkTimer || SMOKE || CAPTURE || CLI_MODE) return;
+  coworkTimer = setInterval(() => { void coworkTick(); }, COWORK_TICK_MS);
+  coworkTimer.unref?.();
+  setTimeout(() => { void coworkTick(); }, 20_000).unref?.();
+}
+// Friends › Rooms: which room the open project's agents claim files in, and
+// what is claimed there now.
+async function coworkView() {
+  const repo = projects.open() && typeof vaultProjectRepo === "function" ? await vaultProjectRepo().catch(() => null) : null;
+  const saved = cowork.normalizeSettings((await readSettings()).cowork);
+  const roomId = repo ? saved.rooms[repo.toLowerCase()] ?? null : null;
+  const self = coworkSelf();
+  const mine = new Set([...coworkMine.values()].map((item) => item.leaseId));
+  const leases = roomId ? (coworkLeases.get(roomId) ?? []).map((item) => ({ title: item.title, paths: item.paths, exclusive: item.exclusive, expiresAt: item.expiresAt, here: mine.has(item.leaseId) || (item.memberId === self.memberId && item.machineId === self.machineId) })) : [];
+  return { ok: true, repo, roomId, leases };
+}
+async function coworkLink(roomId) {
+  const repo = projects.open() && typeof vaultProjectRepo === "function" ? await vaultProjectRepo().catch(() => null) : null;
+  if (!repo) return { ok: false, error: "This project is not on GitHub, so its agents have nothing to share claims by." };
+  if (roomId !== null && !/^[A-Za-z0-9_-]{1,64}$/.test(String(roomId))) return { ok: false, error: "bad-request" };
+  await updateSettings((settings) => {
+    const current = cowork.normalizeSettings(settings.cowork);
+    if (roomId === null) delete current.rooms[repo.toLowerCase()];
+    else current.rooms[repo.toLowerCase()] = roomId;
+    settings.cowork = { ...(settings.cowork && typeof settings.cowork === "object" ? settings.cowork : {}), rooms: current.rooms };
+  });
+  await coworkTick();
+  return coworkView();
+}
+// Set up this PC's second list: what links this PC to your others and to
+// friends, read without the network, each naming the place that finishes it.
+async function pcSetupLinks() {
+  const home = typeof vaultHome === "function" ? vaultHome() : null;
+  const paired = Boolean(home && existsSync(path.join(home, "vault.json")) && existsSync(path.join(home, "vault-key.bin")));
+  const setup = typeof communitySetupView === "function" ? communitySetupView() : { linkReady: false, hubReady: false };
+  let linked = false;
+  try { linked = Boolean(community && (await communityRead()).state.link); } catch { linked = false; }
+  return [
+    { id: "vault", done: paired, label: paired ? "Paired with your vault: memory and keys move between your PCs" : "Not paired with your vault yet", action: "vault" },
+    { id: "link-id", done: setup.linkReady, label: setup.linkReady ? "Discord linking is set up on this PC" : "No link app ID yet (Settings › Community › Connection details)", action: "community" },
+    { id: "discord", done: linked, label: linked ? "Discord is linked" : "Discord is not linked yet", action: "community" },
+    { id: "hub", done: setup.hubReady, label: setup.hubReady ? "The rooms hub address is set" : "No rooms hub address yet (Settings › Community › Connection details)", action: "community" },
+  ];
+}
+// ---- end of cowork claims ---------------------------------------------------------
 
 // ---- Companion friends: playdates in rooms -------------------------------------
 // scripts/companion-friends.cjs decides what the companion may tell a friend's
@@ -14827,7 +15023,9 @@ async function spawnNextJob(options) {
             sessions: assistantCache.store?.sessions ?? [],
             todos: assistantCache.store?.todos ?? [],
             uncommitted: assistantCache.store?.uncommitted ?? [],
-            jobs: autopilot.jobs,
+            // Files another PC claimed in the project's cowork room wait like
+            // a sibling job's ("Cowork claims").
+            jobs: typeof coworkHeldJobs === "function" ? [...autopilot.jobs, ...coworkHeldJobs()] : autopilot.jobs,
           }) || decision;
       }
     } catch {}
@@ -15029,7 +15227,11 @@ async function spawnNextJob(options) {
   // that owns the registry: a live module reload must not strand its claims.
   const claimRegistry = assistantModule;
   const claimPaths = entry.files.map((file) => path.resolve(runRoot, file));
-  const releaseFiles = () => { try { claimRegistry?.releaseWrite?.(claimPaths, entry.id); } catch {} };
+  const releaseFiles = () => {
+    try { claimRegistry?.releaseWrite?.(claimPaths, entry.id); } catch {}
+    // The cowork claim: held until the next push when the run did its work.
+    if (typeof coworkRelease === "function") coworkRelease(entry.id, { hold: entry.sawDone === true });
+  };
   const discardEntry = () => {
     releaseFiles();
     autopilot.jobs = autopilot.jobs.filter((item) => item !== entry);
@@ -15105,6 +15307,16 @@ async function spawnNextJob(options) {
     } catch (error) {
       discardEntry();
       logLine(`[autopilot] file claim unavailable: ${error.message}`);
+      return "deferred";
+    }
+  }
+  // The same files in the project's cowork room, so no other PC's agent edits
+  // them meanwhile. Another PC holding one defers this pick like a local claim.
+  if (typeof coworkClaim === "function" && entry.files.length) {
+    const shared = await coworkClaim(entry, runRoot, entry.files, job.title).catch(() => ({ ok: true }));
+    if (!shared.ok) {
+      discardEntry();
+      logLine(`[cowork] ${String(job.title ?? "").slice(0, 80)} waits: ${shared.note}`);
       return "deferred";
     }
   }
@@ -20538,6 +20750,15 @@ function registerIpc() {
   // hub:*: both act on the open project's folder, so a switch waits for them.
   ipcMain.handle("sync:status", async () => syncProject(false));
   ipcMain.handle("sync:run", async (_event, payload) => syncProject(true, { rebase: payload?.rebase === true }));
+  // "Keep this PC up to date": syncFollow's safe fast-forward, on by default.
+  ipcMain.handle("sync:follow", async (_event, payload) => {
+    if (typeof payload?.on === "boolean") await updateSettings((settings) => { settings.sync = { ...(settings.sync && typeof settings.sync === "object" ? settings.sync : {}), follow: payload.on }; });
+    return { ok: true, on: (await readSettings()).sync?.follow !== false };
+  });
+  // Cowork claims (the "Cowork claims" block): which room the open project's
+  // agents claim files in, and what is claimed there now.
+  ipcMain.handle("cowork:status", async () => coworkView());
+  ipcMain.handle("cowork:link", async (_event, payload) => coworkLink(payload?.roomId === null ? null : String(payload?.roomId ?? "")));
 
   // ---- Set up this PC (scripts/pc-setup.cjs) ------------------------------
   // Friends › Your PCs › Set up this PC. The renderer names an action or a
@@ -20551,7 +20772,8 @@ function registerIpc() {
   ipcMain.handle("pc-setup:status", async () => {
     // A tool installed since launch is only on the registry PATH.
     await refreshProcessPath().catch(() => false);
-    return pcSetup.status(pcSetupRoot());
+    const result = await pcSetup.status(pcSetupRoot());
+    return result?.ok ? { ...result, links: await pcSetupLinks().catch(() => []) } : result;
   });
   ipcMain.handle("pc-setup:action", async (_event, payload) => pcSetup.action(String(payload?.action ?? ""), { cwd: pcSetupRoot() }));
   ipcMain.handle("pc-setup:repos", async () => pcSetup.repos());
@@ -21283,6 +21505,8 @@ app.whenReady().then(() => {
   if (!SMOKE && !CAPTURE && !CLI_MODE) startCommunityWatch();
   // Friends › Your PCs badge: a fetch-only look 45 s in, then every 15 minutes.
   if (!SMOKE && !CAPTURE && !CLI_MODE) startSyncWatch();
+  // Cowork claims: the open project's room, this PC's claims renewed each minute.
+  if (!SMOKE && !CAPTURE && !CLI_MODE) startCowork();
   if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => announceRestart().catch(() => {}));
   if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => announceRelease().catch(() => {}));
   // The assistant service runs on its own clock, renderer or not; the smoke
