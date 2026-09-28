@@ -204,6 +204,7 @@ npm run audit            # renderer/template contract audit
 | [docs/performance.md](docs/performance.md) | Measurements and how to reproduce them |
 | [docs/community.md](docs/community.md) | The Void Engine Discord link: the weekly card, the login, what is stored, unlinking and the fork switch |
 | [docs/ux-audit.md](docs/ux-audit.md) | The UX audit and its phased plan |
+| [docs/fleet-overhaul-plan.md](docs/fleet-overhaul-plan.md) | The fleet overhaul: seats, pods, missions and Refocus from OpenRig, Live › Fleet, and the phase plan |
 | [docs/pi-provider-storage.md](docs/pi-provider-storage.md) | How pi's coding agent stores provider config, and the settings/auth split Studio adopted from it |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Check gates, test-file rules, parallel-session etiquette |
 | [SECURITY.md](SECURITY.md) · [CHANGELOG.md](CHANGELOG.md) | Reporting and what changed |
