@@ -317,6 +317,8 @@
       host.toggle(false); document.body.append(host.panel); host.panel.inert = hub.locked.has(host.panel) ? true : false;
       host.panel.classList.remove("companion-in-hub"); host.panel.setAttribute("role", "dialog");
     }
+    // A section's panels let go of what they hold (Rooms' open room) first.
+    for (const child of [...el.extra.children]) child.dispose?.();
     el.layer.dataset.section = section || "home"; el.detail.hidden = !section; el.extra.replaceChildren();
     for (const item of el.stage.querySelectorAll("[data-hub-section]")) item.setAttribute("aria-expanded", String(item.dataset.hubSection === section));
     if (!section) { if (previous && hub.open) el.stage.querySelector(`[data-hub-section="${previous}"]`)?.focus({ preventScroll: true }); return; }

@@ -206,7 +206,9 @@ const api = {
   hubConnect: () => ipcRenderer.invoke("hub:connect"),
   hubDisconnect: () => ipcRenderer.invoke("hub:disconnect"),
   hubRooms: () => ipcRenderer.invoke("hub:rooms"),
-  hubSubscribe: (roomId, on = true) => ipcRenderer.invoke("hub:subscribe", { roomId: typeof roomId === "string" ? roomId : null, on: on !== false }),
+  // `holder` is who holds the room ("rooms" or "together"): each lets go of
+  // its own hold only.
+  hubSubscribe: (roomId, on = true, holder = null) => ipcRenderer.invoke("hub:subscribe", { roomId: typeof roomId === "string" ? roomId : null, on: on !== false, holder: typeof holder === "string" ? holder : null }),
   hubListen: (payload) => ipcRenderer.invoke("hub:listen", payload && typeof payload === "object" ? {
     roomId: typeof payload.roomId === "string" ? payload.roomId : null, action: typeof payload.action === "string" ? payload.action : null,
     url: typeof payload.url === "string" ? payload.url : undefined, label: typeof payload.label === "string" ? payload.label : undefined,

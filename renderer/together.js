@@ -101,7 +101,7 @@
     state.busy = true; render();
     try { const answer = await bridge().hubConnect(); if (answer?.status) state.hub = answer.status; } catch {}
     state.busy = false;
-    if (prefs.roomId) { try { await bridge().hubSubscribe(prefs.roomId, true); } catch {} }
+    if (prefs.roomId) { try { await bridge().hubSubscribe(prefs.roomId, true, "together"); } catch {} }
     if (ready()) await joined();
     render();
   }
@@ -121,17 +121,20 @@
   async function choose(roomId) {
     const next = ROOM_ID.test(String(roomId)) ? roomId : null;
     if (next === prefs.roomId) return;
-    if (prefs.roomId) { try { await bridge().hubSubscribe(prefs.roomId, false); } catch {} }
+    if (prefs.roomId) { try { await bridge().hubSubscribe(prefs.roomId, false, "together"); } catch {} }
     prefs.roomId = next; prefs.following = false; save();
     state.session = null; state.inStudio = [];
     note("");
     if (next) {
       if (!ready() && canConnect()) await connect();
-      try { await bridge().hubSubscribe(next, true); } catch {}
+      try { await bridge().hubSubscribe(next, true, "together"); } catch {}
     } else if (!prefs.share) { try { await bridge().hubDisconnect(); } catch {} }
     render();
   }
   function forgetRoom(reason) {
+    // Let go of the room's hold too; Rooms may still hold it for its chat.
+    const left = prefs.roomId;
+    if (left) void Promise.resolve().then(() => bridge().hubSubscribe(left, false, "together")).catch(() => {});
     prefs.roomId = null; prefs.following = false; save();
     state.session = null; state.inStudio = [];
     if (reason) note(reason);

@@ -1915,9 +1915,13 @@ async function hubCall(work) {
 const hubConnect = () => hubCall(async (client) => { const status = await client.connect(); return { ok: status.state === "ready" || status.state === "connecting" }; });
 const hubDisconnect = () => hubCall(async (client) => { await client.disconnect(); return { ok: true }; });
 const hubRooms = () => hubCall((client) => client.rooms());
-// The open project's cowork room stays subscribed when Rooms closes it: its
-// claims frames keep the dispatcher's view of other PCs' files current.
-const hubSubscribe = (roomId, on) => hubCall((client) => ({ ok: on ? client.subscribe(roomId) : (typeof coworkActive !== "undefined" && coworkActive?.roomId === roomId) || client.unsubscribe(roomId) }));
+// The renderer holds rooms as Rooms' chat or as Listen together; each lets go
+// of its own hold only, so the open project's cowork room (held as "cowork"
+// by the claims below) stays subscribed when Rooms closes it.
+const hubSubscribe = (roomId, on, holder) => hubCall((client) => {
+  const as = ["rooms", "together"].includes(holder) ? holder : "default";
+  return { ok: on ? client.subscribe(roomId, as) : client.unsubscribe(roomId, as) };
+});
 const hubListen = (payload) => hubCall((client) => client.listen(payload?.roomId, payload ?? {}));
 const hubNowPlaying = (track) => hubCall((client) => ({ ok: client.setNowPlaying(track) }));
 // Friends › Rooms (renderer/rooms.js): creating rooms, joining by request or
@@ -2389,6 +2393,7 @@ const COWORK_CLAIM_WAIT_MS = 5000;
 const coworkLeases = new Map(); // roomId -> live leases from the hub's claims frames
 const coworkMine = new Map(); // run id -> { roomId, leaseId, holdUntil }
 let coworkActive = null; // { repo, roomId } for the open project, from the last tick
+let coworkHeld = null; // the room the claims hold subscribed ("cowork"), released when it changes
 let coworkMachine = null;
 let coworkTimer = null;
 
@@ -2456,10 +2461,12 @@ async function coworkTick() {
   try {
     coworkActive = await coworkRoomForProject().catch(() => null);
     const client = coworkActive || coworkMine.size ? hubInstance() : null;
+    // Another project (or no room) now: let go of the old room's hold.
+    if (coworkHeld && coworkHeld !== coworkActive?.roomId) { hubClient?.unsubscribe(coworkHeld, "cowork"); coworkHeld = null; }
     if (coworkActive && client) {
       await coworkMachineId();
       if (client.status().state === "off" && (await communityRead()).state.link) await client.connect().catch(() => {});
-      if (client.status().state === "ready") client.subscribe(coworkActive.roomId);
+      if (client.status().state === "ready") { client.subscribe(coworkActive.roomId, "cowork"); coworkHeld = coworkActive.roomId; }
     }
     for (const [runId, mine] of coworkMine) {
       if (mine.holdUntil && Date.now() > mine.holdUntil) { coworkRelease(runId); continue; }
@@ -21109,7 +21116,7 @@ function registerIpc() {
   ipcMain.handle("hub:connect", async () => hubConnect());
   ipcMain.handle("hub:disconnect", async () => hubDisconnect());
   ipcMain.handle("hub:rooms", async () => hubRooms());
-  ipcMain.handle("hub:subscribe", async (_event, payload) => hubSubscribe(payload?.roomId, payload?.on !== false));
+  ipcMain.handle("hub:subscribe", async (_event, payload) => hubSubscribe(payload?.roomId, payload?.on !== false, payload?.holder));
   ipcMain.handle("hub:listen", async (_event, payload) => hubListen(payload));
   ipcMain.handle("hub:now-playing", async (_event, payload) => hubNowPlaying(payload?.track ?? null));
   // Friends › Rooms: one channel, HUB_ROOM_METHODS decides what it may call.

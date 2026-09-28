@@ -49,6 +49,10 @@ const NOW_PLAYING_PROVIDERS = Object.freeze([...LISTEN_PROVIDERS, "radio", "loca
 const LISTEN_ACTIONS = Object.freeze(["start", "play", "pause", "seek", "stop"]);
 const MAX_POSITION_MS = 86_400_000;
 const STATES = Object.freeze(["off", "connecting", "ready", "offline", "error"]);
+// The parts of Studio that hold a room subscribed: Friends › Rooms' chat,
+// Listen together, main's cowork claims, and callers that name none.
+const HOLDERS = Object.freeze(["default", "rooms", "together", "cowork"]);
+const holderOf = (value) => (HOLDERS.includes(value) ? value : "default");
 
 const OPAQUE_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const SNOWFLAKE = /^\d{17,20}$/;
@@ -200,7 +204,11 @@ function createHubClient(options = {}) {
   let opening = null;
   // What the hub said it carries in its last `ready` frame.
   let features = [];
-  const rooms = new Set();
+  // Subscribed rooms, each with the parts of Studio holding it open (Rooms'
+  // chat, Listen together, the cowork claims). The hub hears subscribe from
+  // the first holder and unsubscribe only when the last lets go, so one part
+  // closing a room never cuts another off.
+  const rooms = new Map(); // roomId -> Set of HOLDERS
   const pending = new Map(); // nonce -> { resolve, timer }
 
   const emit = (event) => { try { onEvent(event); } catch {} };
@@ -208,7 +216,7 @@ function createHubClient(options = {}) {
     return {
       configured: Boolean(address), state, error,
       user: session?.user ?? null, readOnly: Boolean(session?.readOnly), paused,
-      rooms: [...rooms],
+      rooms: [...rooms.keys()],
       companions: features.includes("companion"), companionDirect: features.includes("companion") && features.includes("companion.direct"),
     };
   }
@@ -363,11 +371,11 @@ function createHubClient(options = {}) {
         features = Array.isArray(frame.features) ? frame.features.filter((name) => typeof name === "string" && name.length <= 40).slice(0, 32) : [];
         setState("ready");
         emit({ type: "status", status: status() });
-        for (const roomId of rooms) { send({ type: "subscribe", roomId }); send({ type: "presence", roomId }); }
+        for (const roomId of rooms.keys()) { send({ type: "subscribe", roomId }); send({ type: "presence", roomId }); }
         // The hub forgets a share when the member's last socket closes.
         if (nowPlaying) sendNowPlaying();
         if (presenceTimer) stopEvery(presenceTimer);
-        presenceTimer = every(() => { for (const roomId of rooms) send({ type: "presence", roomId }); }, PRESENCE_EVERY_MS);
+        presenceTimer = every(() => { for (const roomId of rooms.keys()) send({ type: "presence", roomId }); }, PRESENCE_EVERY_MS);
         scheduleRenew();
         return;
       }
@@ -618,14 +626,22 @@ function createHubClient(options = {}) {
       const why = line(reason, 200);
       return simple("DELETE", `/v1/claims/${leaseId}`, why ? { reason: why } : undefined);
     },
-    subscribe(roomId) {
+    // `holder` names the part of Studio asking (HOLDERS; anything else is
+    // "default"). Holding a room twice is one hold.
+    subscribe(roomId, holder = "default") {
       if (!OPAQUE_ID.test(String(roomId))) return false;
-      rooms.add(roomId);
-      if (state === "ready") { send({ type: "subscribe", roomId }); send({ type: "presence", roomId }); }
+      const holders = rooms.get(roomId) ?? new Set();
+      const first = !holders.size;
+      holders.add(holderOf(holder));
+      rooms.set(roomId, holders);
+      if (first && state === "ready") { send({ type: "subscribe", roomId }); send({ type: "presence", roomId }); }
       return true;
     },
-    unsubscribe(roomId) {
-      if (!rooms.delete(roomId)) return false;
+    unsubscribe(roomId, holder = "default") {
+      const holders = rooms.get(roomId);
+      if (!holders?.delete(holderOf(holder))) return false;
+      if (holders.size) return true;
+      rooms.delete(roomId);
       send({ type: "unsubscribe", roomId });
       return true;
     },
@@ -670,6 +686,6 @@ function createHubClient(options = {}) {
 }
 
 module.exports = {
-  PROTOCOL_VERSION, HUB_URL, LISTEN_PROVIDERS, NOW_PLAYING_PROVIDERS, LISTEN_ACTIONS, BACKOFF_MS, PRESENCE_EVERY_MS, SESSION_MARGIN_MS,
+  PROTOCOL_VERSION, HUB_URL, LISTEN_PROVIDERS, NOW_PLAYING_PROVIDERS, LISTEN_ACTIONS, HOLDERS, BACKOFF_MS, PRESENCE_EVERY_MS, SESSION_MARGIN_MS,
   hubAddress, configuredUrl, listenSession, nowPlayingTrack, roomSummary, roomMessage, joinRequest, roomInvite, postText, createHubClient,
 };

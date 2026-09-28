@@ -122,6 +122,28 @@ test("connecting trades the Discord token for a hub session once, says hello and
   assert.ok(!leak.includes("discord-access") && !leak.includes("hub-session"), "no token or hub session reaches an event");
 });
 
+test("each part of Studio holds a room on its own; the hub hears unsubscribe only when the last lets go", async () => {
+  const h = harness();
+  await h.readyUp();
+  const frames = () => h.socket().sent.filter((frame) => ["subscribe", "unsubscribe"].includes(frame.type) && frame.roomId === ROOM).map((frame) => frame.type);
+  assert.equal(h.client.subscribe(ROOM, "rooms"), true);
+  assert.equal(h.client.subscribe(ROOM, "together"), true);
+  assert.equal(h.client.subscribe(ROOM, "rooms"), true, "holding twice is one hold");
+  assert.deepEqual(frames(), ["subscribe"], "one subscribe for the first holder only");
+  assert.equal(h.client.unsubscribe(ROOM, "rooms"), true);
+  assert.deepEqual(frames(), ["subscribe"], "Rooms closing the chat leaves Listen together subscribed");
+  assert.deepEqual([...h.client.status().rooms], [ROOM]);
+  assert.equal(h.client.unsubscribe(ROOM, "rooms"), false, "a holder lets go once");
+  assert.equal(h.client.unsubscribe(ROOM, "made-up"), false, "an unknown holder is the default one, which holds nothing here");
+  assert.equal(h.client.unsubscribe(ROOM, "together"), true);
+  assert.deepEqual(frames(), ["subscribe", "unsubscribe"]);
+  assert.deepEqual([...h.client.status().rooms], []);
+  assert.equal(h.client.subscribe(ROOM), true, "a caller naming no holder is the default one");
+  assert.equal(h.client.unsubscribe(ROOM, "cowork"), false);
+  assert.equal(h.client.unsubscribe(ROOM), true);
+  assert.deepEqual(hub.HOLDERS, ["default", "rooms", "together", "cowork"]);
+});
+
 test("listen frames are validated before they reach Studio, and acks settle each request by nonce", async () => {
   const h = harness();
   await h.readyUp();

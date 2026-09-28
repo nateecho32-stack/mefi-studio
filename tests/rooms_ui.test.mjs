@@ -39,12 +39,13 @@ const message = (overrides = {}) => ({ id: "423456789012345678", author: { id: F
 function environment({ status = { configured: true, linked: true, state: "ready", user: ME }, rooms = [], requests = [], invites = [], replies = {}, bridge = true, extra = {} } = {}) {
   const calls = [];
   let hubEvent = null;
+  let hearing = 0;
   const api = bridge ? {
     hubStatus: async () => ({ ok: true, status }),
     hubConnect: async () => { calls.push(["connect"]); status = { ...status, state: "ready" }; return { ok: true, status }; },
     hubRooms: async () => ({ ok: true, rooms }),
-    hubSubscribe: (id, on) => { calls.push(["subscribe", id, on]); },
-    onHubEvent: (fn) => { hubEvent = fn; },
+    hubSubscribe: (id, on, holder) => { calls.push(["subscribe", id, on, holder]); },
+    onHubEvent: (fn) => { hearing += 1; hubEvent = fn; },
     hubRoom: async (method, ...args) => {
       calls.push([method, ...args]);
       if (method === "requests") return { ok: true, requests };
@@ -57,7 +58,7 @@ function environment({ status = { configured: true, linked: true, state: "ready"
   const window = { mefiStudio: api, confirm: () => true };
   const context = vm.createContext({ window, document: { createElement: (tag) => new Element(tag) }, Date, Number, Array, Set, Map, Promise, JSON, Object, String });
   vm.runInContext(source, context);
-  return { rooms: window.MefiRooms, calls, push: (event) => hubEvent(event), setStatus: (next) => { status = next; } };
+  return { rooms: window.MefiRooms, calls, push: (event) => hubEvent(event), setStatus: (next) => { status = next; }, hearing: () => hearing, setLists: (next) => { requests = next.requests ?? requests; invites = next.invites ?? invites; } };
 }
 
 test("the panel explains itself until the hub is configured, linked and connected", async () => {
@@ -155,7 +156,7 @@ test("a room shows chat as text with @names, follows live frames, and sends or s
   await flush();
   panel.buttons("Open")[0].click();
   await flush();
-  assert.deepEqual(env.calls.find((call) => call[0] === "subscribe"), ["subscribe", "room_mine", true]);
+  assert.deepEqual(env.calls.find((call) => call[0] === "subscribe"), ["subscribe", "room_mine", true, "rooms"], "Rooms holds the room as its own");
   assert.equal(panel.dataset.view, "room");
   const texts = () => panel.byClass("rooms-message-text").map((item) => item.textContent);
   assert.deepEqual(texts(), ["hey @Mefi", "<img src=x onerror=alert(1)>"], "mentions read as names; markup stays text");
@@ -178,8 +179,105 @@ test("a room shows chat as text with @names, follows live frames, and sends or s
   assert.equal(box.value, "");
   panel.find("rooms-back").click();
   await flush();
-  assert.deepEqual(env.calls.filter((call) => call[0] === "subscribe").at(-1), ["subscribe", "room_mine", false]);
+  assert.deepEqual(env.calls.filter((call) => call[0] === "subscribe").at(-1), ["subscribe", "room_mine", false, "rooms"]);
   assert.doesNotMatch(source, /innerHTML|insertAdjacentHTML|outerHTML/, "rooms.js never builds markup from strings");
+});
+
+test("a room opened while another one's messages load shows its own, and a late page is dropped", async () => {
+  const gates = new Map();
+  const env = environment({
+    rooms: [room({ id: "room_a", name: "A" }), room({ id: "room_b", name: "B", you: "member" })],
+    replies: { messages: (roomId) => new Promise((resolve) => gates.set(roomId, resolve)) },
+  });
+  const panel = env.rooms.panel();
+  await flush();
+  const openRow = (id) => panel.all().find((item) => item.dataset?.room === id).buttons("Open")[0].click();
+  const texts = () => panel.byClass("rooms-message-text").map((item) => item.textContent);
+  openRow("room_a");
+  await flush();
+  panel.find("rooms-back").click();
+  await flush();
+  openRow("room_b");
+  await flush();
+  gates.get("room_b")({ ok: true, messages: [message({ id: "923456789012345678", text: "in B" })], hasMore: true });
+  await flush();
+  assert.deepEqual(texts(), ["in B"]);
+  gates.get("room_a")({ ok: true, messages: [message({ text: "in A" })], hasMore: false });
+  await flush();
+  assert.deepEqual(texts(), ["in B"], "A's page arrived after B opened and is dropped");
+  assert.equal(panel.find("rooms-status").textContent, "B");
+  panel.buttons("Load earlier")[0].click();
+  await flush();
+  assert.deepEqual(env.calls.filter((call) => call[0] === "messages").at(-1), ["messages", "room_b", "923456789012345678"], "Load earlier pages the room on screen");
+  assert.deepEqual(env.calls.filter((call) => call[0] === "subscribe"), [["subscribe", "room_a", true, "rooms"], ["subscribe", "room_a", false, "rooms"], ["subscribe", "room_b", true, "rooms"]]);
+});
+
+test("closing Friends lets go of the open room, and the next panel takes over the one hub listener", async () => {
+  const env = environment({ rooms: [room()], replies: { messages: { ok: true, messages: [message()], hasMore: false } } });
+  const first = env.rooms.panel();
+  await flush();
+  first.buttons("Open")[0].click();
+  await flush();
+  first.dispose();
+  first.dispose();
+  assert.deepEqual(env.calls.filter((call) => call[0] === "subscribe"), [["subscribe", "room_mine", true, "rooms"], ["subscribe", "room_mine", false, "rooms"]], "released once, however often it closes");
+  env.push({ type: "message", roomId: "room_mine", message: message({ id: "723456789012345678", text: "after close" }) });
+  assert.equal(first.byClass("rooms-message-text").some((item) => item.textContent === "after close"), false, "a closed panel hears nothing");
+  const second = env.rooms.panel();
+  const third = env.rooms.panel();
+  await flush();
+  assert.equal(env.hearing(), 1, "one listener however many times Friends opens");
+  env.push({ type: "joinRequest", request: {} });
+  await flush();
+  assert.equal(third.dataset.view, "rooms");
+  assert.equal(second.dataset.view, "rooms");
+});
+
+test("hub frames keep what the owner is typing, and the owner's controls", async () => {
+  const env = environment({ rooms: [room()], replies: { messages: { ok: true, messages: [message()], hasMore: false } } });
+  const panel = env.rooms.panel();
+  await flush();
+  panel.find("rooms-create-name").value = "Half a na";
+  env.push({ type: "invite", invite: {} });
+  await flush();
+  assert.equal(panel.find("rooms-create-name").value, "Half a na", "a list refresh keeps the room name being typed");
+  panel.buttons("Open")[0].click();
+  await flush();
+  const box = panel.find("rooms-compose");
+  box.value = "a draft";
+  panel.buttons("Report")[0].click();
+  panel.byClass("rooms-note").find((item) => item.dataset.draft?.startsWith("report:")).value = "spam";
+  env.push({ type: "room", room: room({ memberCount: 4, you: "none" }) });
+  assert.equal(panel.find("rooms-compose"), box, "a member count change repaints nothing");
+  env.push({ type: "room", room: room({ status: "locked", you: "none" }) });
+  assert.notEqual(panel.find("rooms-compose"), box);
+  assert.equal(panel.find("rooms-compose").value, "a draft", "a repaint gives the draft back");
+  assert.equal(panel.buttons("Unlock").length, 1, "a room frame without `you` keeps the owner's controls");
+  env.push({ type: "message", roomId: "room_mine", message: message({ id: "723456789012345678", text: "new one" }) });
+  assert.equal(panel.byClass("rooms-note").find((item) => item.dataset.draft?.startsWith("report:")).value, "spam", "a new message keeps a report reason being typed");
+  env.push({ type: "membership", roomId: "room_mine", userId: ME.id, state: "removed" });
+  await flush();
+  assert.equal(panel.dataset.view, "rooms");
+  assert.equal(panel.find("rooms-status").textContent, "You were removed from that room. You can ask again after 30 days.");
+});
+
+test("with Friends closed, invites and requests still reach the badge", async () => {
+  const env = environment({ rooms: [room()] });
+  let notified = 0;
+  env.rooms.subscribe(() => { notified += 1; });
+  assert.equal(env.rooms.pending(), 0);
+  env.setLists({ invites: [{ id: "inv_1", roomId: "room_x", roomName: "X", invitedBy: FRIEND, status: "pending", expiresAt: 9e12 }], requests: [{ id: "req_1", roomId: "room_mine", requester: FRIEND, note: "", status: "pending", createdAt: 1 }] });
+  env.push({ type: "invite", invite: {} });
+  await flush();
+  assert.equal(env.rooms.pending(), 2);
+  assert.ok(notified >= 1);
+  const panel = env.rooms.panel();
+  await flush();
+  panel.dispose();
+  env.setLists({ invites: [], requests: [] });
+  env.push({ type: "joinRequest", request: {} });
+  await flush();
+  assert.equal(env.rooms.pending(), 0, "after Friends closes the badge keeps following");
 });
 
 test("main passes only the listed room methods, with no more arguments than each takes", async () => {

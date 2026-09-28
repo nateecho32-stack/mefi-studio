@@ -17,7 +17,7 @@ const block = main.slice(from, to);
 const T0 = 1_800_000_000_000;
 const MARGIN = 5 * 60 * 1000;
 
-function host({ link = { userId: "42" }, tokens = null, clientId = "1234567890", check } = {}) {
+function host({ link = { userId: "42" }, tokens = null, clientId = "1234567890", check, client = {} } = {}) {
   const sent = [], checks = [];
   let created = null;
   const context = vm.createContext({
@@ -32,12 +32,28 @@ function host({ link = { userId: "42" }, tokens = null, clientId = "1234567890",
     require: () => null,
     optionalHelper: () => ({
       configuredUrl: () => "https://hub.example.test",
-      createHubClient: (options) => { created = options; return { status: () => ({ configured: true, state: "off", error: null, user: null, readOnly: false, paused: false, rooms: [] }) }; },
+      createHubClient: (options) => { created = options; return { status: () => ({ configured: true, state: "off", error: null, user: null, readOnly: false, paused: false, rooms: [] }), ...client }; },
     }),
   });
-  vm.runInContext(`${block}\nthis.api = { hubAccessToken, hubStatus, hubInstance };`, context);
+  vm.runInContext(`${block}\nthis.api = { hubAccessToken, hubStatus, hubInstance, hubSubscribe };`, context);
   return { api: context.api, context, sent, checks, created: () => created };
 }
+
+test("the renderer holds rooms as Rooms or Listen together, never as the cowork claims", async () => {
+  const seen = [];
+  const h = host({ client: {
+    subscribe: (roomId, holder) => { seen.push(["subscribe", roomId, holder]); return true; },
+    unsubscribe: (roomId, holder) => { seen.push(["unsubscribe", roomId, holder]); return true; },
+  } });
+  await h.api.hubSubscribe("room_a", true, "rooms");
+  await h.api.hubSubscribe("room_a", false, "together");
+  await h.api.hubSubscribe("room_a", false, "cowork");
+  await h.api.hubSubscribe("room_a", true, undefined);
+  assert.deepEqual(seen, [["subscribe", "room_a", "rooms"], ["unsubscribe", "room_a", "together"], ["unsubscribe", "room_a", "default"], ["subscribe", "room_a", "default"]],
+    "a renderer that names the cowork hold releases only its own default hold");
+  assert.match(preload, /hubSubscribe: \(roomId, on = true, holder = null\) => ipcRenderer\.invoke\("hub:subscribe", \{[^}]*holder: typeof holder === "string" \? holder : null \}\)/);
+  assert.match(main, /ipcMain\.handle\("hub:subscribe", async \(_event, payload\) => hubSubscribe\(payload\?\.roomId, payload\?\.on !== false, payload\?\.holder\)\);/);
+});
 
 test("a live Discord access token is handed over as is", async () => {
   const h = host({ tokens: { accessToken: "live", expiresAt: T0 + MARGIN + 60_000 } });

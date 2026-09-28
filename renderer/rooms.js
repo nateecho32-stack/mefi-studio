@@ -6,6 +6,13 @@
 // textContent only, links are never made clickable, and `<@id>` mentions show
 // as @name from the message's own mention list. pending() is what the Friends
 // badge adds: invites to answer and requests to decide.
+//
+// One hub listener serves the module: it hands frames to the panel on screen,
+// and with Friends closed it still re-counts invites and requests for the
+// badge. A panel holds its open room as "rooms" (hub-client HOLDERS) and lets
+// go when it closes: dispose(), which companion-hub calls before it clears the
+// Friends section. A repaint keeps what the owner was typing and each
+// message's own row.
 (function () {
   "use strict";
   const node = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = text; return el; };
@@ -45,12 +52,44 @@
   };
   const why = (answer, fallback) => REASONS[answer?.reason] || REASONS[answer?.error] || fallback;
   const time = (ms) => (Number.isFinite(ms) ? new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "");
+  // A room frame is the same for every member, so it may not say what you are
+  // in it ("none"); keep what this panel knew.
+  const merged = (was, next) => ({ ...was, ...next, you: next?.you === "none" && was?.you ? was.you : next?.you });
   const counts = { invites: 0, decide: 0 };
   const listeners = new Set();
   const notify = () => { for (const fn of listeners) { try { fn(); } catch {} } };
+  let current = null; // the panel on screen: { hear, dispose }
+  let hearing = false;
+  let recounting = null;
 
   function pending() { return counts.invites + counts.decide; }
-  function subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
+  function subscribe(fn) { listeners.add(fn); listen(bridge()); return () => listeners.delete(fn); }
+  function tally(invites, requests, me) {
+    if (Array.isArray(invites)) counts.invites = invites.filter((item) => item.status === "pending").length;
+    if (Array.isArray(requests)) counts.decide = requests.filter((item) => item.status === "pending" && item.requester?.id !== me?.id).length;
+    notify();
+  }
+  // With Friends closed, an invite or a request to decide still reaches the badge.
+  function recountQuietly(api) {
+    if (recounting || typeof api?.hubRoom !== "function" || typeof api?.hubStatus !== "function") return recounting;
+    recounting = (async () => {
+      try {
+        const hub = (await api.hubStatus())?.status;
+        if (hub?.state !== "ready") return;
+        const [requestList, inviteList] = await Promise.all([api.hubRoom("requests"), api.hubRoom("invites")]);
+        tally(inviteList?.ok ? inviteList.invites : null, requestList?.ok ? requestList.requests : null, hub.user);
+      } catch {} finally { recounting = null; }
+    })();
+    return recounting;
+  }
+  function listen(api) {
+    if (hearing || typeof api?.onHubEvent !== "function") return;
+    hearing = true;
+    api.onHubEvent((event) => {
+      if (current) current.hear(event);
+      else if (["status", "joinRequest", "invite", "membership"].includes(event?.type)) void recountQuietly(api);
+    });
+  }
 
   // The text of a message with its <@id> mentions as @name.
   function readable(message) {
@@ -75,8 +114,18 @@
       root.dataset.state = "unavailable";
       return root;
     }
-    let me = null, tab = "rooms", openRoom = null, busy = false;
+    listen(api);
+    current?.dispose();
+    let me = null, tab = "rooms", openRoom = null, busy = false, openSeq = 0;
     let rooms = [], requests = [], invites = [], messages = [], more = false;
+    // Fields keyed by what they hold. A repaint gives each its text back, and
+    // a field that is off screen (another tab, another room) keeps its draft.
+    const fields = new Map();
+    const drafts = new Map();
+    const field = (el, key) => { el.dataset.draft = key; fields.set(key, el); return el; };
+    const asking = new Set(); // rooms whose join note is open
+    const reporting = new Set(); // messages whose report reason is open
+    const rows = new Map(); // message id -> { message, item }
 
     const call = async (method, ...args) => {
       try { return await api.hubRoom(method, ...args); } catch (error) { return { ok: false, error: "failed", message: error?.message }; }
@@ -90,18 +139,15 @@
       busy = false;
       root.removeAttribute("aria-busy");
     };
-    const recount = () => {
-      counts.invites = invites.filter((item) => item.status === "pending").length;
-      counts.decide = requests.filter((item) => item.status === "pending" && item.requester.id !== me?.id).length;
-      notify();
-    };
-    async function refresh() {
+    // The list only repaints while it is on screen; a refresh under an open
+    // room still brings the counts up to date.
+    async function refresh({ repaint = !openRoom } = {}) {
       const [roomList, requestList, inviteList] = await Promise.all([api.hubRooms(), call("requests"), call("invites")]);
       rooms = roomList?.ok ? roomList.rooms : rooms;
       requests = requestList?.ok ? requestList.requests : requests;
       invites = inviteList?.ok ? inviteList.invites : invites;
-      recount();
-      paint();
+      tally(invites, requests, me);
+      if (repaint) paint();
     }
 
     function tabs() {
@@ -124,17 +170,18 @@
       const actions = node("div", "rooms-row-actions");
       const mine = requests.find((item) => item.roomId === room.id && item.requester.id === me?.id && item.status === "pending");
       const invitation = invites.find((item) => item.roomId === room.id && item.status === "pending");
+      const askable = !(room.you === "owner" || room.you === "member") && !invitation && !mine && room.policy === "request" && room.status === "active";
       if (room.you === "owner" || room.you === "member") actions.append(button("Open", () => { void open(room); }));
       else if (invitation) actions.append(button("Accept invite", () => answerInvite(invitation, true)), button("Decline", () => answerInvite(invitation, false)));
       else if (mine) actions.append(node("span", "muted", "Requested"), button("Cancel", () => cancel(mine)));
-      else if (room.policy === "request" && room.status === "active") actions.append(button("Ask to join", () => ask(room, row)));
+      else if (askable) actions.append(button("Ask to join", () => { if (!asking.has(room.id)) { asking.add(room.id); ask(room, row); } }));
       row.append(text, actions);
+      if (askable && asking.has(room.id)) ask(room, row);
       return row;
     }
 
     function ask(room, row) {
-      if (row.querySelector?.(".rooms-note")) return;
-      const note = node("input", "rooms-note");
+      const note = field(node("input", "rooms-note"), `note:${room.id}`);
       note.type = "text";
       note.maxLength = 300;
       note.placeholder = "A short note for the owner (optional)";
@@ -142,7 +189,7 @@
       const send = button("Send request", () => guard("Asking to join…", async () => {
         const answer = await call("requestJoin", room.id, note.value);
         status.textContent = answer?.ok ? `Asked to join ${room.name}. The owner will decide.` : why(answer, "The request did not go through.");
-        if (answer?.ok) await refresh();
+        if (answer?.ok) { asking.delete(room.id); note.value = ""; await refresh(); }
       }));
       row.append(note, send);
     }
@@ -165,24 +212,24 @@
     function createForm() {
       const form = node("div", "rooms-create");
       form.append(node("h5", "", "Make a room"));
-      const name = node("input", "rooms-name");
+      const name = field(node("input", "rooms-name"), "create-name");
       name.type = "text";
       name.maxLength = 80;
       name.id = "rooms-create-name";
       name.placeholder = "Room name";
       name.setAttribute("aria-label", "Room name");
-      const kind = node("select", "rooms-select");
+      const kind = field(node("select", "rooms-select"), "create-kind");
       kind.id = "rooms-create-kind";
       kind.setAttribute("aria-label", "Kind of room");
       for (const [value, label] of [["hangout", "Hangout (up to 25)"], ["cowork", "Cowork (up to 10)"]]) { const option = node("option", "", label); option.value = value; kind.append(option); }
       kind.value = "hangout";
-      const policy = node("select", "rooms-select");
+      const policy = field(node("select", "rooms-select"), "create-policy");
       policy.id = "rooms-create-policy";
       policy.setAttribute("aria-label", "Who can join");
       for (const [value, label] of [["request", "Anyone can ask to join"], ["invite", "Invite only"]]) { const option = node("option", "", label); option.value = value; policy.append(option); }
       policy.value = "request";
       const listedLabel = node("label", "rooms-check");
-      const listed = node("input");
+      const listed = field(node("input"), "create-listed");
       listed.type = "checkbox";
       listed.id = "rooms-create-listed";
       listed.checked = true;
@@ -247,7 +294,8 @@
     const log = node("ol", "rooms-messages");
     log.setAttribute("aria-live", "polite");
     log.setAttribute("aria-label", "Room messages");
-    function messageItem(message) {
+    // Each row is built once per message and belongs to the room it came from.
+    function messageItem(message, roomId) {
       const item = node("li", "rooms-message");
       item.dataset.message = message.id;
       const head = node("div", "rooms-message-head");
@@ -257,44 +305,69 @@
       if (message.attachments?.length) item.append(node("p", "muted", `Attachments in Discord: ${message.attachments.map((file) => file.name).join(", ")}`));
       const actions = node("div", "rooms-row-actions");
       if (message.author.id === me?.id && message.author.viaStudio) actions.append(button("Delete", () => guard("Deleting…", async () => {
-        const answer = await call("deleteMessage", openRoom.id, message.id);
+        const answer = await call("deleteMessage", roomId, message.id);
         status.textContent = answer?.ok ? "Deleted." : why(answer, "The message could not be deleted.");
       })));
-      else if (message.author.id !== me?.id) actions.append(button("Report", () => report(message, item)));
+      else if (message.author.id !== me?.id) actions.append(button("Report", () => { if (!reporting.has(message.id)) { reporting.add(message.id); report(message, item, roomId); } }));
       item.append(actions);
+      if (reporting.has(message.id)) report(message, item, roomId);
       return item;
     }
-    function report(message, item) {
-      if (item.querySelector?.(".rooms-note")) return;
-      const reason = node("input", "rooms-note");
+    function report(message, item, roomId) {
+      const reason = field(node("input", "rooms-note"), `report:${message.id}`);
       reason.type = "text";
       reason.maxLength = 500;
       reason.placeholder = "Why? Moderators see the message link, not this text.";
       reason.setAttribute("aria-label", "Reason for the report");
       item.append(reason, button("Send report", () => guard("Reporting…", async () => {
-        const answer = await call("report", openRoom.id, message.id, reason.value);
+        const answer = await call("report", roomId, message.id, reason.value);
         status.textContent = answer?.ok ? "Reported to the moderators." : why(answer, "Say briefly why, then send.");
+        if (answer?.ok) reporting.delete(message.id);
       })));
     }
-    function showMessages() {
-      log.replaceChildren(...messages.map(messageItem));
+    // The log keeps each message's row, so a new message never wipes a report
+    // reason being typed, and it follows the newest message while the reader
+    // is at the bottom.
+    function showMessages({ follow = false } = {}) {
+      const atEnd = !(log.scrollHeight > log.clientHeight) || log.scrollHeight - log.scrollTop - log.clientHeight < 24;
+      const roomId = openRoom?.id;
+      const items = messages.map((message) => {
+        const known = rows.get(message.id);
+        if (known?.message === message) return known.item;
+        const item = messageItem(message, roomId);
+        rows.set(message.id, { message, item });
+        return item;
+      });
+      for (const id of [...rows.keys()]) if (!messages.some((message) => message.id === id)) rows.delete(id);
+      log.replaceChildren(...items);
+      if (follow || atEnd) log.scrollTop = log.scrollHeight;
     }
     async function open(room) {
+      const seq = ++openSeq;
+      if (openRoom && openRoom.id !== room.id) api.hubSubscribe?.(openRoom.id, false, "rooms");
       openRoom = room;
       messages = [];
+      more = false;
+      rows.clear();
+      reporting.clear();
       paint();
-      api.hubSubscribe?.(room.id, true);
-      await guard("Loading messages…", async () => {
-        const page = await call("messages", room.id);
-        messages = page?.ok ? page.messages : [];
-        more = page?.hasMore === true;
-        status.textContent = page?.ok ? `${room.name}` : why(page, "Messages could not be loaded.");
-        paint();
-      });
+      api.hubSubscribe?.(room.id, true, "rooms");
+      status.textContent = "Loading messages…";
+      const page = await call("messages", room.id);
+      // The owner went back, or opened another room, while this page loaded.
+      if (seq !== openSeq) return;
+      messages = page?.ok ? page.messages : [];
+      more = page?.hasMore === true;
+      status.textContent = page?.ok ? `${room.name}` : why(page, "Messages could not be loaded.");
+      paint();
+      showMessages({ follow: true });
     }
     function close() {
-      if (openRoom) api.hubSubscribe?.(openRoom.id, false);
+      openSeq += 1;
+      if (openRoom) api.hubSubscribe?.(openRoom.id, false, "rooms");
       openRoom = null;
+      rows.clear();
+      reporting.clear();
       void refresh();
     }
     // A cowork room's part in the open project: whether that project's agents
@@ -340,14 +413,16 @@
       coworkShow = null;
       const together = room.kind === "cowork" && room.status === "active" && ["owner", "member"].includes(room.you) && typeof api.coworkStatus === "function" ? coworkSection(room) : null;
       const earlier = button("Load earlier", () => guard("Loading earlier messages…", async () => {
+        const seq = openSeq;
         const page = await call("messages", room.id, messages[0]?.id ?? null);
+        if (seq !== openSeq) return;
         if (page?.ok) { messages = [...page.messages, ...messages]; more = page.hasMore === true; }
         status.textContent = page?.ok ? room.name : why(page, "Earlier messages could not be loaded.");
         paint();
       }));
       earlier.hidden = !more;
       showMessages();
-      const box = node("textarea", "rooms-compose");
+      const box = field(node("textarea", "rooms-compose"), `compose:${room.id}`);
       box.id = "rooms-compose";
       box.maxLength = 2000;
       box.rows = 2;
@@ -368,7 +443,7 @@
       const owner = room.you === "owner";
       const controls = node("div", "rooms-row-actions");
       if (owner) {
-        const find = node("input", "rooms-note");
+        const find = field(node("input", "rooms-note"), `find:${room.id}`);
         find.type = "text";
         find.maxLength = 32;
         find.placeholder = "Invite someone: type a name";
@@ -388,7 +463,7 @@
         }));
         controls.append(find, search, button(room.status === "locked" ? "Unlock" : "Lock", () => guard("Updating…", async () => {
           const answer = await call(room.status === "locked" ? "unlock" : "lock", room.id);
-          if (answer?.ok) openRoom = answer.room;
+          if (answer?.ok && openRoom?.id === room.id) openRoom = merged(openRoom, answer.room);
           status.textContent = answer?.ok ? (answer.room.status === "locked" ? "Locked: no new posts or requests." : "Unlocked.") : why(answer, "That did not go through.");
           paint();
         })), button("Close room", () => {
@@ -412,9 +487,22 @@
       return [head, privacy, ...(together ? [together] : []), earlier, log, box, send, controls];
     }
 
+    // Rebuilds the view and gives every keyed field its draft (and focus) back.
     function paint() {
+      const active = typeof document !== "undefined" ? document.activeElement : null;
+      let focused = null;
+      for (const [key, el] of fields) {
+        drafts.set(key, { value: el.value, checked: el.checked });
+        if (el === active) focused = key;
+      }
+      fields.clear();
       root.dataset.view = openRoom ? "room" : tab;
       body.replaceChildren(...(openRoom ? roomView() : [tabs(), ...(tab === "rooms" ? listView() : tab === "requests" ? requestsView() : invitesView())]));
+      for (const [key, el] of fields) {
+        const draft = drafts.get(key);
+        if (draft) { if (el.type === "checkbox") el.checked = draft.checked; else el.value = draft.value; }
+        if (key === focused) el.focus?.({ preventScroll: true });
+      }
     }
 
     function explain(hub) {
@@ -451,16 +539,47 @@
       await refresh();
     }
 
-    if (typeof api.onHubEvent === "function") api.onHubEvent((event) => {
-      if (root.isConnected === false) return;
+    // Frames from the module's one hub listener, while this panel is on screen.
+    function hear(event) {
+      if (root.isConnected === false) {
+        dispose();
+        if (["status", "joinRequest", "invite", "membership"].includes(event?.type)) void recountQuietly(api);
+        return;
+      }
       if (event?.type === "status") { if (!openRoom) void load(); return; }
-      if (["joinRequest", "invite", "membership", "room"].includes(event?.type)) { if (!openRoom) void refresh(); else if (event.type === "room" && event.room?.id === openRoom.id) { openRoom = event.room; paint(); } return; }
+      if (openRoom && event?.type === "membership" && event.roomId === openRoom.id && (event.state === "closed" || (event.userId === me?.id && ["left", "removed"].includes(event.state)))) {
+        status.textContent = event.state === "closed" ? REASONS.closed : event.state === "removed" ? REASONS.removed : `You left ${openRoom.name}.`;
+        close();
+        return;
+      }
+      if (["joinRequest", "invite", "membership", "room"].includes(event?.type)) {
+        if (openRoom && event.type === "room" && event.room?.id === openRoom.id) {
+          const next = merged(openRoom, event.room);
+          const shape = (room) => `${room.status}|${room.you}|${room.name}|${room.kind}`;
+          const changed = shape(next) !== shape(openRoom);
+          openRoom = next;
+          if (changed) paint();
+          return;
+        }
+        void refresh();
+        return;
+      }
       if (!openRoom || event?.roomId !== openRoom.id) return;
       if (event.type === "claims") { if (coworkShow) void Promise.resolve(api.coworkStatus?.()).then(coworkShow).catch(() => {}); return; }
       if (event.type === "message" && !messages.some((item) => item.id === event.message.id)) { messages = [...messages, event.message].slice(-500); showMessages(); }
       else if (event.type === "messageUpdate") { messages = messages.map((item) => (item.id === event.message.id ? event.message : item)); showMessages(); }
       else if (event.type === "messageDelete") { messages = messages.filter((item) => item.id !== event.messageId); showMessages(); }
-    });
+    }
+    // Lets go of the open room's hold and stops hearing frames. Safe to call twice.
+    function dispose() {
+      openSeq += 1;
+      if (openRoom) api.hubSubscribe?.(openRoom.id, false, "rooms");
+      openRoom = null;
+      if (current === handle) current = null;
+    }
+    const handle = { hear, dispose };
+    current = handle;
+    root.dispose = dispose;
     void load();
     return root;
   }
