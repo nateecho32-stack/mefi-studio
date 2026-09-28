@@ -6,6 +6,44 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-26 - ai-offline overseer re-verification and spec-scan artifacts fix (task_b172488b3c947b88)
+
+Resumed the ai-offline overseer task after the owner re-plan decision. Inspected
+the current tree before changes: all claimed recovery fixes remain intact after
+heavy sibling editing of main.cjs — resetAssistantAiBackoff at all four recovery
+sites (key save, team save/inherit/apply, settings:set-ai-routing, auto-setup),
+the parseClaudeCliResult is_error exit guard (commit 11fcebc), and the
+scheduleAssistantAiProbe offline-probe chain.
+
+Fresh validation this run: npm.cmd run test:fast 3862 pass / 0 fail / 4 skip
+(the seven shared Analyzer/nav UI failures from the earlier handoff are resolved
+in the current tree); python tools/test_mefi_studio_offline_probe.py 12 tests OK;
+npm.cmd run audit zero findings.
+
+npm.cmd run check initially failed spec-collisions: the active canvas-transfer
+session's isolated harness (tools/logs/canvas-transfer-integration/tests/
+command_render.test.mjs, written minutes earlier) duplicated the tests/
+command_render.test.mjs basename. tools/logs/ is the git-ignored reports and
+isolated-harness home this notebook documents, and neither runner discovers it
+(Python discovery is tools/test_mefi_studio_*.py; node is tests/**/*.test.mjs),
+so its basenames cannot shadow a live spec. Fixed scripts/spec-collisions.mjs to
+skip exactly the tools/logs subtree during the walk; everything else under
+tools/ stays scanned. Added two guard cases in tests/spec_collisions.test.mjs
+(logs subtree exempt, a logs-named directory elsewhere still collides).
+Sibling harness files were not touched.
+
+After the fix: node --test tests/spec_collisions.test.mjs 6/6;
+node scripts/spec-collisions.mjs ok (343 specs); npm.cmd run check exit 0
+(165 targets, specs, css, syntax, 20 live testruns rows); npm.cmd run audit
+exit 0.
+
+ai-offline status: root cause stands — three real Claude session-limit quota
+failures (reset 23:10 America/Chicago) plus two spurious parser/exit bugs now
+fixed and committed; the selected Codex route replied ok through the real host
+CLI completion function at 20:11 this evening. Code cannot reset the provider
+quota; loading the committed fixes into the alerting Studio instance needs the
+owner's app restart.
+
 ## 2026-09-26 - Built-in media browser replaces the separate window
 
 Replaced the standalone BrowserWindow and toolbar preload/page with a

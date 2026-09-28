@@ -34,6 +34,22 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-27 - Community website and plain-language 0.4.4 guide
+
+Published static-site commit 3fdf4b9 to gh-pages: Mefi Studio public branding,
+community and Discord invitations, a 1200x630 social preview, and all 21 guide
+pages rewritten plus a new media/community page. Application code and installed
+package names are unchanged. The main-branch changes align the README and
+release introduction and record the future voice direction in docs/public-site.md.
+
+Validation: all 22 wiki routes render in hidden Electron; 8 desktop/mobile
+captures include 320px and 390px widths, with no overflow or browser console
+errors. Search finds the new voice/community text; mobile navigation opens;
+Skip to content preserves the route and focuses the article. Local HTML,
+Markdown, section-anchor and image references pass after fixing an obsolete
+social-post link. JavaScript syntax and git diff --check pass. No application
+suite was run for these static website and documentation changes.
+
 ## 2026-09-27 evening - Work done outside Studio: last look, report and relevance check
 
 New scripts/outside-work.cjs (pure) and main.cjs's "work done outside Studio"
@@ -321,44 +337,6 @@ Verified the media-browser inlining this task owes. The build wiring was already
 ## 2026-09-26 - Briefer fix commit re-verified landed: cliReply guard and tests green (task_c61c1cb49e01e552, run_1790480422178_7)
 
 Verified the already-landed briefer fix commit 11fcebc (Guard the briefer against failed CLI exits) in the current work tree for task task_c61c1cb49e01e552. The cliReply exit-code guard is intact in main.cjs (committed, no work-tree drift; the many modified files belong to sibling sessions), and tests/briefer_cli_failure.test.mjs is committed unchanged. Narrow validation this run: node --test tests/briefer_cli_failure.test.mjs 7/7 pass; node --test tests/usage_tracker_host.test.mjs 23/23 pass (shared cliReply/parse coverage green alongside sibling usage-tracker edits). No new commit needed: the fix and its tests are already in history at 11fcebc.
-
-## 2026-09-26 - ai-offline overseer re-verification and spec-scan artifacts fix (task_b172488b3c947b88)
-
-Resumed the ai-offline overseer task after the owner re-plan decision. Inspected
-the current tree before changes: all claimed recovery fixes remain intact after
-heavy sibling editing of main.cjs — resetAssistantAiBackoff at all four recovery
-sites (key save, team save/inherit/apply, settings:set-ai-routing, auto-setup),
-the parseClaudeCliResult is_error exit guard (commit 11fcebc), and the
-scheduleAssistantAiProbe offline-probe chain.
-
-Fresh validation this run: npm.cmd run test:fast 3862 pass / 0 fail / 4 skip
-(the seven shared Analyzer/nav UI failures from the earlier handoff are resolved
-in the current tree); python tools/test_mefi_studio_offline_probe.py 12 tests OK;
-npm.cmd run audit zero findings.
-
-npm.cmd run check initially failed spec-collisions: the active canvas-transfer
-session's isolated harness (tools/logs/canvas-transfer-integration/tests/
-command_render.test.mjs, written minutes earlier) duplicated the tests/
-command_render.test.mjs basename. tools/logs/ is the git-ignored reports and
-isolated-harness home this notebook documents, and neither runner discovers it
-(Python discovery is tools/test_mefi_studio_*.py; node is tests/**/*.test.mjs),
-so its basenames cannot shadow a live spec. Fixed scripts/spec-collisions.mjs to
-skip exactly the tools/logs subtree during the walk; everything else under
-tools/ stays scanned. Added two guard cases in tests/spec_collisions.test.mjs
-(logs subtree exempt, a logs-named directory elsewhere still collides).
-Sibling harness files were not touched.
-
-After the fix: node --test tests/spec_collisions.test.mjs 6/6;
-node scripts/spec-collisions.mjs ok (343 specs); npm.cmd run check exit 0
-(165 targets, specs, css, syntax, 20 live testruns rows); npm.cmd run audit
-exit 0.
-
-ai-offline status: root cause stands — three real Claude session-limit quota
-failures (reset 23:10 America/Chicago) plus two spurious parser/exit bugs now
-fixed and committed; the selected Codex route replied ok through the real host
-CLI completion function at 20:11 this evening. Code cannot reset the provider
-quota; loading the committed fixes into the alerting Studio instance needs the
-owner's app restart.
 
 ## Read Before Any Tests
 
