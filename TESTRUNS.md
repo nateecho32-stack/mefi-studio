@@ -34,6 +34,54 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-27 - MEFI Vibe workbench and evolving project map
+
+Validated `codex/mefi-evolution` at `75de5a4`, rebased on the current
+`da669cc` main. Added Modify/Experiment/Fix/Improve briefs, planner-backed
+suggestions, saved idea lineage through task admission, connected system
+cards and a separate live Ideas tree. Source board data remains authoritative;
+map groups are projections. All renderer screenshots use synthetic fixture data.
+
+- `npm run build-booklet`, `npm run check` and `npm run audit`: PASS.
+  Check covered 170 targets, 355 spec names and 12 stylesheets; audit had zero
+  findings. Targeted ESLint on changed JavaScript passed with zero errors and
+  24 existing unused-variable warnings (`tools/logs/mefi-evolution-lint.log`).
+- Focused Node batches: map/model plus idea backlog 42/42; Vibe pipeline,
+  frame and panels 48/48; host brain and idea actions 26/26; final work
+  admission, assistant admission and idea actions 40/40. These cover draft
+  persistence, suggestion failure and project switches, explicit saving,
+  multiple source ideas, duplicate task adoption, file-scoped identity,
+  reverse legacy links, stale map reads and pure, cycle-bounded tree grouping.
+  An initial host expectation was corrected from `building` to the existing
+  canonical `active` stage before the passing rerun.
+- Map layout plus real Electron map fixture: final 4/4 PASS. An initial
+  scaled/narrow legend overflow was fixed; final captures cover desktop,
+  600px, 150% scaling, narrow Ideas navigation and Vibe at 390px/1440px.
+  Captures/report are under `tools/logs/mefi-evolution-map/`; final report has
+  no renderer errors or network attempts. Visual inspection confirmed system
+  links, file drilldown, grouped idea lineage and readable narrow layouts.
+- Initial `npm test` was stopped after its CPU stage (4,013 pass, four skip)
+  to integrate review fixes; it is not a full-gate pass. Log:
+  `tools/logs/mefi-evolution-full-test.log`.
+- Final `npm test`: FAIL only in two existing Electron fixtures. CPU stage:
+  4,017 pass, zero fail, four skip. Parallel Electron stage: 36 pass, two
+  fail, one skip; the new map fixture passed. Serialized eyes test passed;
+  occlusion had one pass and one desktop-capability skip. Python: 248 tests,
+  OK with one skip. All six normalized-path lock checks passed. Node leg
+  took 714s; full output is `tools/logs/mefi-evolution-final-test.log`.
+- Failure triage: `command_render` hit its 80s child limit without a report;
+  `tree_dynamics_render` missed its native click. Sequential rerun on this
+  branch repeated Command's timeout and hit a missing painted node in tree
+  dynamics (`tools/logs/mefi-evolution-solo-render.log`). The same sequential
+  command on unchanged `da669cc` main reproduced Command's timeout (81.7s),
+  while tree dynamics passed (24.4s); baseline log lives in the primary
+  checkout at `tools/logs/mefi-evolution-baseline-render.log`. A final isolated
+  tree-dynamics rerun on `75de5a4` passed (24.9s), recorded in
+  `tools/logs/mefi-evolution-tree-final.log`. Command drawing, hit testing and
+  both fixtures are unchanged. These signatures have prior entries in the
+  known-failure table/archive. The remaining Command timeout is baseline
+  reproducible; the full gate is not claimed green.
+
 ## 2026-09-27 - Community website and plain-language 0.4.4 guide
 
 Published static-site commit 3fdf4b9 to gh-pages: Mefi Studio public branding,
@@ -333,10 +381,6 @@ false, with 601 seconds of system idle time. No live capture was started.
 ## 2026-09-26 - Media-browser booklet inlining verified and fixture line landed (task_b5026aa2c68858d0, run_1790480592972_8)
 
 Verified the media-browser inlining this task owes. The build wiring was already committed at 962078: scripts/build-booklet.mjs reads renderer/media-browser.js into CODE_SOURCES and codeParts (after media-window.js, before music.js), and renderer/booklet.sources.json lists renderer/media-browser.js among its 46 segments. The work-tree booklet.html inlines the source verbatim exactly once with zero external script refs, and npm.cmd run build-booklet rebuilt cleanly (39 models). The missing piece was test coverage: HEAD's tests/booklet_build.test.mjs INLINE_SCRIPTS omitted media-browser.js, so a fixture build at HEAD died ENOENT; landed the one-line fixture addition as 08c677c. Narrow validation: node --test tests/booklet_build.test.mjs 4/4 pass; node --test --test-name-pattern browser tests/music.test.mjs 3/3 pass. The committed renderer/booklet.html predates the media-browser work (last rebuilt at 436a5a4) and stays uncommitted in the work tree because it folds sibling sessions' in-flight renderer edits; the sessions landing those edits owe the rebuild+commit.
-
-## 2026-09-26 - Briefer fix commit re-verified landed: cliReply guard and tests green (task_c61c1cb49e01e552, run_1790480422178_7)
-
-Verified the already-landed briefer fix commit 11fcebc (Guard the briefer against failed CLI exits) in the current work tree for task task_c61c1cb49e01e552. The cliReply exit-code guard is intact in main.cjs (committed, no work-tree drift; the many modified files belong to sibling sessions), and tests/briefer_cli_failure.test.mjs is committed unchanged. Narrow validation this run: node --test tests/briefer_cli_failure.test.mjs 7/7 pass; node --test tests/usage_tracker_host.test.mjs 23/23 pass (shared cliReply/parse coverage green alongside sibling usage-tracker edits). No new commit needed: the fix and its tests are already in history at 11fcebc.
 
 ## Read Before Any Tests
 

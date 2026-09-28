@@ -6,6 +6,10 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-26 - Briefer fix commit re-verified landed: cliReply guard and tests green (task_c61c1cb49e01e552, run_1790480422178_7)
+
+Verified the already-landed briefer fix commit 11fcebc (Guard the briefer against failed CLI exits) in the current work tree for task task_c61c1cb49e01e552. The cliReply exit-code guard is intact in main.cjs (committed, no work-tree drift; the many modified files belong to sibling sessions), and tests/briefer_cli_failure.test.mjs is committed unchanged. Narrow validation this run: node --test tests/briefer_cli_failure.test.mjs 7/7 pass; node --test tests/usage_tracker_host.test.mjs 23/23 pass (shared cliReply/parse coverage green alongside sibling usage-tracker edits). No new commit needed: the fix and its tests are already in history at 11fcebc.
+
 ## 2026-09-26 - ai-offline overseer re-verification and spec-scan artifacts fix (task_b172488b3c947b88)
 
 Resumed the ai-offline overseer task after the owner re-plan decision. Inspected
