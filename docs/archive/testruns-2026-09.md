@@ -6,6 +6,21 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-27 - Clean-state Command renderer follow-up
+
+On unchanged `052a1ec` main, reran the remaining failing fixture alone:
+`node --test tests/command_render.test.mjs` PASS, 1/1, 53.1s within its
+normal 80s child limit. Log: `tools/logs/mefi-clean-status-command.log`.
+No fixture settings or application code changed. The earlier Command hard
+timeouts did not preserve phase diagnostics, so their exact cause remains
+unconfirmed. Both failures from the preceding full run have now passed
+individually (tree dynamics passed in the preceding entry); this is not a
+claim that a new complete `npm test` run was performed.
+
+Verified a clean main checkout and matching SHA-256 hashes between source
+and the portable payload for main/preload, generated booklet, Vibe, map
+view/model/host and idea actions. Test-record structural check also passes.
+
 ## 2026-09-27 night - Setup helper lands on 0.4.4 with the free Void collection
 
 The setup helper (renderer/setup-helper.js + .css), the walkthrough hand-off,

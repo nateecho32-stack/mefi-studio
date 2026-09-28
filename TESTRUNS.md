@@ -35,6 +35,37 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-28 - Task board cleanup
+
+The owner said the Task board was a mess nobody knew how to use. The left
+column lost its heading, intro paragraph and "cards in this view"
+explanation; search now shares a row with the state picker ("Any state"),
+and the stage chips are one segmented control. Cards are tighter and open
+their current task on click or Enter (the "Open current task" button is
+gone); the open card is ringed and the selected row highlighted. In the
+detail, "All cards" shows at every width, the status box renders only in
+Details (stage pill, fine-print facts, callout, Next line, no Home button),
+the brief has a heading, and the placeholder readiness line and the
+duplicate "Verifying: ..." line are dropped.
+
+- `npm run build-booklet`, `npm run check` and `npm run audit` (0 errors):
+  PASS on the private-index commit in C:\wt\tb-gate (HEAD 6c1c940 plus only
+  this change; another session's template and CSS edits left out).
+- `npm test`: Python contracts and normalized-path lock PASS; Node suites
+  FAIL on the first run with 5 Electron fixtures and occlusion_probe.
+  workflow_render was ours: its fixture clicked the removed status-box Home
+  button and the card's Open button; it now uses the header's Home button
+  and the card itself, and passes. agent_setup_render, companion_hub_render,
+  tree_dynamics_render and unified_studio_render timed out under load and
+  pass solo. occlusion_probe fails the same way (visible probe lag
+  300-530 ms) on clean 6c1c940, so it is environmental.
+- Rebased onto 39a153d: booklet fresh, `npm run check` and `npm run audit`
+  PASS, and a second full `npm test` PASS (Node suites 1324 s including the
+  Electron lane and occlusion_probe, Python contracts 207 s, normalized-path
+  lock).
+- tasks_ui (62) and task_overview_render pass; before/after captures at
+  1360x980 and 1920x1080 from a scratch copy of the task overview fixture.
+
 ## 2026-09-28 - Reach your PCs from Discord: the Studio side of the DM remote
 
 The Studio half of the Discord remote (docs/remote.md). `scripts/remote.cjs`
@@ -570,21 +601,6 @@ fit the visible panel through scrolling and overlapping notifications.
 Full logs and synthetic captures remain ignored under `tools/logs/` with the
 `media-usability-` prefix; browser captures are in the temporary
 `media-player-native-captures` directory. No live user state was committed.
-
-## 2026-09-27 - Clean-state Command renderer follow-up
-
-On unchanged `052a1ec` main, reran the remaining failing fixture alone:
-`node --test tests/command_render.test.mjs` PASS, 1/1, 53.1s within its
-normal 80s child limit. Log: `tools/logs/mefi-clean-status-command.log`.
-No fixture settings or application code changed. The earlier Command hard
-timeouts did not preserve phase diagnostics, so their exact cause remains
-unconfirmed. Both failures from the preceding full run have now passed
-individually (tree dynamics passed in the preceding entry); this is not a
-claim that a new complete `npm test` run was performed.
-
-Verified a clean main checkout and matching SHA-256 hashes between source
-and the portable payload for main/preload, generated booklet, Vibe, map
-view/model/host and idea actions. Test-record structural check also passes.
 
 ## Read Before Any Tests
 
