@@ -340,7 +340,7 @@ test("Tasks lanes count each task once, keep deferred work in Later, and open it
 test("queue controls use the host pause and worker-limit controls", async () => {
   const { window, get, fire, calls } = await load({ running: true });
   window.MefiVibe.openPanel("tasks");
-  assert.match(get("vibe-panel-body").querySelector(".vibe-governor-counts").textContent, /^1 building · 1 ready · 1 need you$/);
+  assert.match(get("vibe-panel-body").querySelector(".vibe-governor-counts").textContent, /^1 building · 1 ready · 2 need you$/, "the count matches the Needs you list, questions included");
   const limit = get("vibe-panel-body").querySelector(".vibe-worker-limit select");
   limit.value = "3"; fire(limit, "change"); await settle();
   assert.deepEqual(plain(calls.find(([name]) => name === "assistantAutopilot")), ["assistantAutopilot", { adaptiveParallel: false, parallel: 3 }]);

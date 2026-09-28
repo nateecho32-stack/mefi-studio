@@ -344,7 +344,7 @@
         index.append(line);
       }
       if (results.length > shown) index.append(button("ghost mini pm-more", `Show more (${results.length - shown})`, "Show more map items", () => { shown += 60; renderIndex(); }));
-      if (!results.length) index.append(element("p", "ab-quiet pm-no-results", query ? "No matches. Try a file name or a shorter phrase." : "Nothing in this filter. Choose All to see this level."));
+      if (!results.length) index.append(element("p", "ab-quiet pm-no-results", query ? "No matches. Try a file name or a shorter phrase." : filter === "all" ? "Nothing mapped here yet." : "Nothing in this filter. Choose All to see this level."));
       updateSelection(); index.scrollTop = scroll;
       if (previousId) [...index.querySelectorAll(".ab-index-item")].find(el => el.dataset.key === previousId)?.focus({ preventScroll: true });
     }
@@ -409,6 +409,9 @@
       return { scale, x: (152 - bounds.w * scale) / 2, y: (98 - bounds.h * scale) / 2 };
     }
     function drawMini(P) {
+      // An empty map has nothing to overview; an empty box read as broken.
+      mini.hidden = !widget.layout.length;
+      if (mini.hidden) return;
       const ctx = mini.getContext("2d"), m = miniGeometry(), area = visibleArea();
       ctx.clearRect(0, 0, 152, 98);
       const points = new Map(widget.layout.map(item => [item.row.id, item]));

@@ -53,7 +53,7 @@
         state.result = result;
         render();
       } catch (error) {
-        status(error?.message || "The log could not be read.", "bad");
+        status(window.MefiUi?.plainError ? window.MefiUi.plainError(error, "The log could not be read.") : "The log could not be read.", "bad");
       }
     })().finally(() => {
       state.reading = null;
@@ -77,12 +77,15 @@
   // ---- painting -------------------------------------------------------------------------
   function renderChannels() {
     const list = $("channel-list");
+    // The list refreshes every few seconds; keep the keyboard on its channel.
+    const focused = list.contains(document.activeElement) ? document.activeElement.dataset.id : null;
     list.replaceChildren();
     for (const channel of state.channels) {
       const item = el("li");
       const button = el("button", "trace-channel");
       button.type = "button";
       button.dataset.area = channel.area || "main";
+      button.dataset.id = channel.id;
       if (channel.id === state.channel) button.setAttribute("aria-current", "true");
       button.title = channel.detail || channel.label;
       button.append(el("span", "trace-channel-name", channel.label), el("span", "trace-channel-size", channel.error ? "unreadable" : size(channel.size)));
@@ -94,6 +97,7 @@
     }
     // One mark sits behind the open channel and springs to the next one
     // (renderer/motion.js); the list is rebuilt, so the mark lives beside it.
+    if (focused) [...list.querySelectorAll(".trace-channel")].find((item) => item.dataset.id === focused)?.focus({ preventScroll: true });
     const box = list.parentElement;
     let mark = box?.querySelector?.(".trace-channel-mark");
     if (box && !mark) { mark = el("span", "trace-channel-mark"); mark.setAttribute("aria-hidden", "true"); box.append(mark); }
@@ -101,12 +105,24 @@
     const current = state.channels.find((channel) => channel.id === state.channel);
     $("channel-detail").textContent = current?.error ? `${current.detail} It could not be read: ${current.error}` : current?.detail || "";
   }
-  function chip(label, on, run, tone = "") {
+  function chip(label, on, run, tone = "", key = label) {
     const button = el("button", `chip${on ? " on" : ""}${tone ? ` trace-chip-${tone}` : ""}`, label);
     button.type = "button";
+    button.dataset.key = key;
     button.setAttribute("aria-pressed", String(on));
     button.addEventListener("click", run);
     return button;
+  }
+  // Follow re-reads every two seconds: the same chips update in place, so a
+  // focused chip keeps focus and only a new set of sources rebuilds the row.
+  function syncChips(host, chips) {
+    const current = [...host.children];
+    if (current.length !== chips.length || current.some((item, index) => item.dataset.key !== chips[index].dataset.key)) { host.replaceChildren(...chips); return; }
+    current.forEach((item, index) => {
+      item.textContent = chips[index].textContent;
+      item.className = chips[index].className;
+      item.setAttribute("aria-pressed", chips[index].getAttribute("aria-pressed"));
+    });
   }
   function render() {
     const result = state.result;
@@ -114,18 +130,18 @@
     if (result.ok === false) { status(result.error || "The log could not be read.", "bad"); $("lines").replaceChildren(); return; }
     const counts = result.counts || { error: 0, warn: 0, info: 0 };
     const levels = $("levels");
-    levels.replaceChildren(...LEVELS.map(([key, label]) => {
-      const count = key === "all" ? result.total : counts[key] || 0;
-      return chip(`${label} ${count}`, key === "all" ? !state.level : state.level === key, () => { state.level = key === "all" || state.level === key ? null : key; void read(); }, key);
+    syncChips(levels, LEVELS.map(([key, label]) => {
+      const count = key === "all" ? result.total || 0 : counts[key] || 0;
+      return chip(`${label} ${count}`, key === "all" ? !state.level : state.level === key, () => { state.level = key === "all" || state.level === key ? null : key; void read(); }, key, key);
     }));
     const sources = $("sources");
-    sources.replaceChildren(...(result.sources || []).map(([name, count]) => chip(`${name} ${count}`, state.sources.includes(name), () => {
+    syncChips(sources, (result.sources || []).map(([name, count]) => chip(`${name} ${count}`, state.sources.includes(name), () => {
       state.sources = state.sources.includes(name) ? state.sources.filter((item) => item !== name) : [...state.sources, name];
       void read();
-    })));
+    }, "", name)));
     $("file").hidden = !result.file;
     const shown = result.rows || [];
-    status(result.total ? `${shown.length} of ${result.matched} matching line${result.matched === 1 ? "" : "s"} (${result.total} in this channel${result.dropped ? `, ${result.dropped} older lines rotated out` : ""})` : "Nothing logged here yet.");
+    status(result.total ? `${shown.length} of ${result.matched} matching line${result.matched === 1 ? "" : "s"} (${result.total} in this channel${result.dropped ? `, ${result.dropped} older lines rotated out` : ""})` : "");
     const signature = JSON.stringify([state.channel, state.newest, shown.length, shown[0]?.at, shown[0]?.text, shown.at(-1)?.at, shown.at(-1)?.text]);
     if (signature === state.signature) return;
     state.signature = signature;
@@ -137,6 +153,8 @@
       item.append(el("time", "trace-time", clock(row.at)), el("span", "trace-level", row.level === "warn" ? "warn" : row.level), el("span", "trace-source", row.source), el("span", "trace-text", row.text));
       return item;
     }));
+    // An empty channel says so where the lines would be, not only above them.
+    if (!rows.length) lines.append(el("li", "trace-empty", result.total ? "No lines match these filters." : "Nothing logged here yet."));
     if (pinned) lines.scrollTop = state.newest ? 0 : lines.scrollHeight;
     // Another channel's log arrives with a short rise; a tail that grows
     // does not.

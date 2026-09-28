@@ -77,6 +77,9 @@
   const draftKey = () => `${projectId() || "none"}:${scope}`;
   const draft = () => drafts.get(draftKey());
   function button(text, run, cls = "ghost") { const el = node("button", cls, text); el.type = "button"; el.addEventListener("click", run); return el; }
+  // A button that throws work away asks twice (MefiUi.arm in studio-ui.js).
+  function risky(text, run, armed, cls = "ghost") { const el = node("button", cls, text); el.type = "button"; if (window.MefiUi?.arm) window.MefiUi.arm(el, { run, armed }); else el.addEventListener("click", run); return el; }
+  const plain = (error, fallback) => window.MefiUi?.plainError ? window.MefiUi.plainError(error, fallback) : error?.message || fallback;
   function card(title, detail) { const el = node("section", "agents-card"); el.append(node("h3", "", title)); if (detail) el.append(node("p", "muted", detail)); return el; }
   function say(text, bad = false) { const el = $("agents-save-status"); if (el) { el.textContent = text; el.dataset.tone = bad ? "bad" : "good"; } }
   function location(id, options = {}) {
@@ -204,7 +207,7 @@
     sheet.append(body);
     const foot = node("footer", "agents-save-bar"); foot.id = "agents-save-bar";
     const status = node("p", "", "Saved settings"); status.id = "agents-save-status"; status.setAttribute("role", "status");
-    foot.append(status, button("Discard draft", discard, "ghost mini"), button("Apply changes", () => save("save"), "primary")); sheet.append(foot);
+    foot.append(status, risky("Discard draft", discard, "Discard your edits?", "ghost mini"), button("Apply changes", () => save("save"), "primary")); sheet.append(foot);
     overlay.append(sheet); document.body.append(overlay);
     move("settings-category-connections", "connections"); move("settings-log", "connections");
     move("settings-routing", "routing"); move("settings-workers", "routing");
@@ -246,7 +249,7 @@
       const chosen = draft()?.saved.presets.find((item) => item.id === picker.value); if (!chosen) return;
       draft().configuration = clone(chosen.configuration); draft().name = chosen.name; $("agents-team-name").value = chosen.name; dirty(); renderConfiguration();
       window.dispatchEvent(new CustomEvent("mefi:agent-draft"));
-    }), button("Save as new preset", () => save("preset-save")), button("Update selected preset", () => save("preset-save", picker.value)), button("Delete preset", () => save("preset-delete", picker.value)));
+    }), button("Save as new preset", () => save("preset-save")), button("Update selected preset", () => save("preset-save", picker.value)), risky("Delete preset", () => save("preset-delete", picker.value), "Delete this preset?"));
     presets.append(actions); const saved = node("details", "agents-saved-teams"); saved.append(node("summary", "", "Saved teams & presets"), presets); $("agents-team").append(saved);
   }
   function buildOverview() {
@@ -294,7 +297,7 @@
   }
   function queueToggle(key, title) {
     const row = node("label", "settings-control"), text = node("span", "", title), input = node("input"); input.type = "checkbox"; input.setAttribute("role", "switch"); input.dataset.agentQueue = key;
-    input.addEventListener("change", async () => { input.disabled = true; try { await setQueue(key, input.checked); } catch (error) { window.MefiToast?.(error.message, "bad"); } finally { syncQueue(); } }); row.append(text, input); return row;
+    input.addEventListener("change", async () => { input.disabled = true; try { await setQueue(key, input.checked); } catch (error) { window.MefiToast?.(plain(error, "The queue setting was not saved."), "bad"); } finally { syncQueue(); } }); row.append(text, input); return row;
   }
   function syncQueue() {
     for (const input of document.querySelectorAll("[data-agent-queue]")) { const key = input.dataset.agentQueue; input.checked = Boolean(queue[key]); input.disabled = !(key === "newWork" || key === "proactive" ? queue.newWorkKnown : queue.known); }
@@ -665,7 +668,11 @@
       renderConfiguration(); window.dispatchEvent(new CustomEvent("mefi:agent-draft"));
       const visibleProviders = new Set(Array.from(document.querySelectorAll(".agents-model-select"), (select) => select.dataset.provider));
       for (const provider of visibleProviders) loadProviderModels(provider);
-    } catch (error) { if (key === draftKey()) { say(error.message, true); $("agents-ready").textContent = error.message; $("agents-role-grid").replaceChildren(node("p", "muted", error.message)); } }
+    } catch (error) {
+      if (key !== draftKey()) return;
+      const text = plain(error, "Agent setup could not be read. Try Reload saved settings.");
+      say(text, true); $("agents-ready").textContent = text; $("agents-role-grid").replaceChildren(node("p", "muted", text));
+    }
   }
   async function save(action, id) {
     const item = draft(); if (!item || saving) return;
@@ -678,8 +685,8 @@
       if (!result?.ok) throw new Error(result?.error || "The team was not saved.");
       if (action.startsWith("preset-")) item.saved = result;
       else drafts.set(key, { saved: result, configuration: clone(result.configuration), name: result.name, dirty: false });
-      if (key === draftKey()) { renderConfiguration(); window.dispatchEvent(new CustomEvent("mefi:agent-draft")); say(action.startsWith("preset-") ? "Preset saved. Project copies are unchanged." : "Saved · new work uses this team. Running work keeps its configuration."); }
-    } catch (error) { if (key === draftKey()) say(error.message, true); }
+      if (key === draftKey()) { renderConfiguration(); window.dispatchEvent(new CustomEvent("mefi:agent-draft")); say(action === "preset-delete" ? "Preset deleted. Project copies are unchanged." : action.startsWith("preset-") ? "Preset saved. Project copies are unchanged." : "Saved · new work uses this team. Running work keeps its configuration."); }
+    } catch (error) { if (key === draftKey()) say(plain(error, "The team was not saved."), true); }
     finally { saving = false; }
   }
   function discard() { drafts.delete(draftKey()); load(); }

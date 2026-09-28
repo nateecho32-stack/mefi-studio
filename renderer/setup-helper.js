@@ -89,6 +89,14 @@
     if (text !== undefined && text !== null) element.textContent = text;
     return element;
   }
+  const plain = (error, fallback) => window.MefiUi?.plainError ? window.MefiUi.plainError(error, fallback) : error?.message || fallback;
+  // A button that throws something away asks twice (MefiUi.arm, studio-ui.js).
+  const risky = (text, run, armed, className = "ghost mini") => {
+    const el = button(text, () => {}, className);
+    if (window.MefiUi?.arm) return window.MefiUi.arm(el, { run, armed });
+    el.addEventListener("click", run);
+    return el;
+  };
   function button(text, action, className = "ghost") {
     const element = node("button", className, text);
     element.type = "button";
@@ -181,7 +189,7 @@
       say(typeof done === "function" ? done(result) : done, "good");
       return result ?? { ok: true };
     } catch (error) {
-      say(error?.message || "This change was not saved.", "bad");
+      say(plain(error, "This change was not saved."), "bad");
       return null;
     } finally {
       for (const control of list) control.disabled = false;
@@ -252,7 +260,7 @@
       return null;
     });
     teamQueue = task;
-    return task.then((result) => { say(message, "good"); return result; }, (error) => { say(error?.message || "The team was not saved.", "bad"); return null; });
+    return task.then((result) => { say(message, "good"); return result; }, (error) => { say(plain(error, "The team was not saved."), "bad"); return null; });
   }
   const config = () => data.team?.configuration || {};
 
@@ -271,7 +279,7 @@
       : `Editing the Studio defaults: every project without its own team uses these.`);
     const pick = select([["defaults", "Studio defaults"], ["project", `This project only`]], data.scope, async (value) => {
       data.scope = value; data.team = null;
-      try { await loadTeam(); } catch (error) { say(error.message, "bad"); }
+      try { await loadTeam(); } catch (error) { say(plain(error, "The team could not be read."), "bad"); }
       rerender();
     }, "Which team these settings change");
     bar.append(words, field("Applies to", pick));
@@ -351,7 +359,7 @@
       where.append(choices([
         ["defaults", "Studio defaults", "Every project that has no team of its own."],
         ["project", "This project only", `Only ${projectName()}.`],
-      ], data.scope || "defaults", async (value) => { data.scope = value; data.team = null; await loadTeam().catch((error) => say(error.message, "bad")); }, "Team scope"));
+      ], data.scope || "defaults", async (value) => { data.scope = value; data.team = null; await loadTeam().catch((error) => say(plain(error, "The team could not be read."), "bad")); }, "Team scope"));
       body.append(where);
     },
   });
@@ -383,10 +391,10 @@
       const result = await run([save, input], () => need("setApiKey")(key, which), `${title} key saved. It stays encrypted on this computer.`);
       if (result) { input.value = ""; await refreshKeys([which]); await loadRouting().catch(() => {}); window.dispatchEvent(new CustomEvent("mefi:connection-saved", { detail: { which } })); rerender(); }
     }, "primary mini");
-    const remove = button("Remove", async () => {
+    const remove = risky("Remove", async () => {
       const result = await run(remove, () => need("setApiKey")("", which), `${title} key removed.`);
       if (result) { await refreshKeys([which]); await loadRouting().catch(() => {}); rerender(); }
-    }, "ghost mini");
+    }, "Remove this key?");
     remove.hidden = !saved.saved;
     const actions = node("div", "setup-helper-row");
     actions.append(input, save, remove);
@@ -670,7 +678,7 @@
       };
       const row = node("div", "setup-helper-row");
       row.append(button("Apply to this project", (event) => presetCall("apply", picked, "Saved team applied to this project.")(event), "ghost mini"),
-        button("Delete", (event) => presetCall("preset-delete", picked, "Saved team deleted.")(event), "ghost mini"));
+        risky("Delete", (event) => presetCall("preset-delete", picked, "Saved team deleted.")(event), "Delete this team?"));
       const saveRow = node("div", "setup-helper-row");
       saveRow.append(name, button("Save current team", (event) => presetCall("preset-save", null, "Team saved. Project copies are unchanged.")(event), "ghost mini"));
       presets.append(field("Saved team", pick), row, saveRow);
@@ -1195,7 +1203,7 @@
     try {
       await item.render(content, { current: () => serial === renderSerial && state.section === item.id && state.open });
     } catch (error) {
-      if (serial === renderSerial) say(error?.message || "This section could not load.", "bad");
+      if (serial === renderSerial) say(plain(error, "This section could not load."), "bad");
     }
     if (serial !== renderSerial) return;
     const active = document.activeElement;

@@ -752,9 +752,11 @@
         const stat = node("div", "pm-overview-stat"); stat.append(node("strong", "", value), node("span", "", name)); stats.append(stat);
       }
       target.append(stats);
+      const places = rankedSystems(data.map).slice(0, 6);
+      if (!places.length) return;
       const section = node("section", "ab-region-list"); section.append(node("h4", "", "Places to explore"));
       const list = node("ul");
-      for (const row of rankedSystems(data.map).slice(0, 6)) {
+      for (const row of places) {
         const li = node("li"), open = node("button", "ab-link pm-region-row", row.name || row.id); open.type = "button";
         open.addEventListener("click", () => explorer()?.choose(row.id));
         li.append(open, node("span", "ab-quiet", row.tasks?.active ? `${row.tasks.active} working` : `${row.fileCount ?? 0} files`)); list.append(li);
@@ -1323,13 +1325,10 @@
     rename.type = "text"; rename.value = recipe.name; rename.maxLength = 60; rename.setAttribute("aria-label", "Recipe name");
     rename.addEventListener("change", () => act("rename", { name: rename.value.trim() }));
     actions.append(rename);
-    const remove = node("button", "ghost mini", "Delete");
+    const remove = node("button", "ghost mini danger", "Delete");
     remove.type = "button";
-    let armed = false;
-    remove.addEventListener("click", () => {
-      if (!armed) { armed = true; remove.textContent = "Delete: click again"; setTimeout(() => { armed = false; remove.textContent = "Delete"; }, 3000); return; }
-      act("delete");
-    });
+    if (window.MefiUi?.arm) window.MefiUi.arm(remove, { run: () => act("delete"), armed: "Delete: click again" });
+    else remove.addEventListener("click", () => act("delete"));
     actions.append(remove);
     el.recipe.append(actions);
   }

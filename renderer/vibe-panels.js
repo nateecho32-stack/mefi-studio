@@ -131,12 +131,14 @@
   }
   function actions(buttons) {
     const holder = el("div", "vibe-ask-actions");
-    for (const { label, primary, run, disabled, title } of buttons) {
+    for (const { label, primary, run, disabled, title, confirm } of buttons) {
       const button = el("button", `vibe-btn ${primary ? "primary" : "quiet"}`, label);
       button.type = "button";
       button.disabled = state.busy || Boolean(disabled);
       if (title) button.title = title;
-      button.addEventListener("click", () => void run());
+      // A button that throws work away asks twice.
+      if (confirm && window.MefiUi?.arm) window.MefiUi.arm(button, { run: () => void run(), armed: confirm });
+      else button.addEventListener("click", () => void run());
       holder.append(button);
     }
     return holder;
@@ -234,9 +236,9 @@
       body.append(el("p", "vibe-panel-empty", "No tasks yet. Describe something in the box and press Build it; it shows up here."));
       return;
     }
-    fold(body, "needs", "Needs you", needs.map((need) => row({ tone: need.tone, title: need.title, meta: need.meta, action: { label: need.verb, run: () => vibe()?.openNeed?.({ kind: need.kind, id: need.id }) }, onOpen: () => vibe()?.openNeed?.({ kind: need.kind, id: need.id }) })), { empty: "Nothing is waiting on you." });
-    fold(body, "active", "In progress", active.map(({ task, stage: now }) => row({ tone: now.tone, title: task.title || "A task", meta: now.text, onOpen: () => push({ view: "task", id: task.id }) })), { empty: "Nothing is queued or building." });
-    fold(body, "done", "Done", finished.map((task) => { const now = stage(task); return row({ tone: now.tone, title: task.title || "A task", meta: `${now.text} · ${ago(stamp(task))}`, onOpen: () => push({ view: "task", id: task.id }) }); }), { empty: "Finished work lands here." });
+    fold(body, "needs", "Needs you", needs.map((need) => row({ key: `need:${need.kind}:${need.id}`, tone: need.tone, title: need.title, meta: need.meta, action: { label: need.verb, run: () => vibe()?.openNeed?.({ kind: need.kind, id: need.id }) }, onOpen: () => vibe()?.openNeed?.({ kind: need.kind, id: need.id }) })), { empty: "Nothing is waiting on you." });
+    fold(body, "active", "In progress", active.map(({ task, stage: now }) => row({ key: `task:${task.id}`, tone: now.tone, title: task.title || "A task", meta: now.text, onOpen: () => push({ view: "task", id: task.id }) })), { empty: "Nothing is queued or building." });
+    fold(body, "done", "Done", finished.map((task) => { const now = stage(task); return row({ key: `task:${task.id}`, tone: now.tone, title: task.title || "A task", meta: `${now.text} · ${ago(stamp(task))}`, onOpen: () => push({ view: "task", id: task.id }) }); }), { empty: "Finished work lands here." });
   }
   function governor(body) {
     const data = state.data;
@@ -244,7 +246,7 @@
     const box = el("section", "vibe-governor");
     box.setAttribute("aria-label", "Queue controls");
     const counts = (data.tasks || []).reduce((out, task) => { const key = stage(task).key; out[key] = (out[key] || 0) + 1; return out; }, {});
-    box.append(el("strong", "vibe-governor-counts", `${counts.running || 0} building · ${counts.ready || 0} ready · ${(counts.approval || 0) + (counts.blocked || 0)} need you`));
+    box.append(el("strong", "vibe-governor-counts", `${counts.running || 0} building · ${counts.ready || 0} ready · ${(data.needs || []).length} need you`));
     const reason = gate?.title || data.backlog?.waiting || data.status?.capacity?.reason;
     if (reason) box.append(el("p", "vibe-panel-hint", reason));
     const held = gate && ["held", "paused"].includes(gate.key);
@@ -269,7 +271,7 @@
   }
   function taskLanes(body) {
     const questions = (state.data.needs || []).filter((need) => need.kind === "question");
-    if (questions.length) fold(body, "questions", "Questions", questions.map((need) => row({ tone: "ask", title: need.title, meta: need.meta, onOpen: () => vibe()?.openNeed?.({ kind: "question", id: need.id }) })));
+    if (questions.length) fold(body, "questions", "Questions", questions.map((need) => row({ key: `need:question:${need.id}`, tone: "ask", title: need.title, meta: need.meta, onOpen: () => vibe()?.openNeed?.({ kind: "question", id: need.id }) })));
     const lanes = [["needs", "Needs you"], ["ready", "Ready"], ["running", "Building"], ["review", "Checking"], ["later", "Later"], ["done", "Done"]];
     const groups = Object.fromEntries(lanes.map(([key]) => [key, []]));
     for (const task of state.data.tasks || []) {
@@ -282,7 +284,7 @@
       const lane = el("section", `vibe-task-lane is-${key}`);
       lane.append(el("h3", "vibe-lane-title", `${title} · ${groups[key].length}`));
       const list = el("ol", "vibe-rows");
-      for (const { task, now } of groups[key]) list.append(row({ tone: now.tone, title: task.title || "A task", meta: [now.text, task.priority && task.priority !== "normal" ? task.priority : "", task.estimateMinutes ? `${task.estimateMinutes} min estimate` : ""].filter(Boolean).join(" · "), onOpen: () => push({ view: "task", id: task.id }) }));
+      for (const { task, now } of groups[key]) list.append(row({ key: `task:${task.id}`, tone: now.tone, title: task.title || "A task", meta: [now.text, task.priority && task.priority !== "normal" ? task.priority : "", task.estimateMinutes ? `${task.estimateMinutes} min estimate` : ""].filter(Boolean).join(" · "), onOpen: () => push({ view: "task", id: task.id }) }));
       if (!groups[key].length) list.append(el("li", "vibe-empty", "Nothing here."));
       lane.append(list); board.append(lane);
     }
@@ -304,7 +306,7 @@
     const buttons = [];
     if (now.key === "running") {
       buttons.push({ label: "Watch it", primary: true, run: () => { close({ quiet: true }); go("command", { selected: `task:${id}` }); } });
-      buttons.push({ label: "Stop", title: "Stop this worker; its progress is kept and the task waits for you", run: () => act(() => api().tasksAction({ taskId: id, projectId, action: "stop" }), "Stopped. It waits for you under Needs you.") });
+      buttons.push({ label: "Stop", confirm: "Stop this worker?", title: "Stop this worker; its progress is kept and the task waits for you", run: () => act(() => api().tasksAction({ taskId: id, projectId, action: "stop" }), "Stopped. It waits for you under Needs you.") });
     } else if (need) {
       buttons.push({ label: need.verb, primary: true, run: () => vibe()?.openNeed?.({ kind: need.kind, id: need.id }) });
     } else if (now.key === "deferred") {
@@ -315,7 +317,7 @@
       buttons.push({ label: "Ask for a change", primary: true, title: "Start a new request about this result in the box", run: () => askChange(task) });
     } else {
       buttons.push({ label: "Start now", primary: true, title: "Build this next, even ahead of the queue", disabled: !api()?.assistantWorkOn, run: () => act(() => api().assistantWorkOn({ kind: "task", id, start: true, projectId }), "Starting it now.") });
-      buttons.push({ label: "Drop it", title: "Close it without building it", run: () => act(() => api().tasksAction({ taskId: id, projectId, action: "drop" }), "Dropped.", { after: () => back() }) });
+      buttons.push({ label: "Drop it", confirm: "Drop this task?", title: "Close it without building it", run: () => act(() => api().tasksAction({ taskId: id, projectId, action: "drop" }), "Dropped.", { after: () => back() }) });
     }
     if (buttons.length) body.append(actions(buttons));
     if (!isDone(task) && now.key !== "review") noteForm(body, task, now);
@@ -413,10 +415,10 @@
     const families = state.data.families || [];
     if (!plans.length && !families.length) body.append(el("p", "vibe-panel-empty", "No plans in progress. A big request you build is split into steps here, and a plan helps when an idea needs a few decisions first."));
     // Requests Build it split into steps (vibe.js families()).
-    if (families.length) fold(body, "families", "Split into steps", families.map((family) => row({ tone: familyTone(family), title: family.title, meta: familyMeta(family), onOpen: () => push({ view: "family", id: family.id }) })));
+    if (families.length) fold(body, "families", "Split into steps", families.map((family) => row({ key: `family:${family.id}`, tone: familyTone(family), title: family.title, meta: familyMeta(family), onOpen: () => push({ view: "family", id: family.id }) })));
     if (plans.length) fold(body, "plans", "Plans", plans.map((plan) => {
       const meta = planMeta(plan);
-      return row({ tone: meta.tone, title: plan.title || "A plan", meta: meta.text, onOpen: () => { close({ quiet: true }); go("plans", { planId: plan.id }); } });
+      return row({ key: `plan:${plan.id}`, tone: meta.tone, title: plan.title || "A plan", meta: meta.text, onOpen: () => { close({ quiet: true }); go("plans", { planId: plan.id }); } });
     }));
     body.append(actions([{ label: "Plan something new", run: () => { close({ quiet: true }); go("plans", { create: true }); } }]));
   }
@@ -432,8 +434,8 @@
     heading(body, family.title, [chip(`${family.finished} of ${family.steps.length} done`, family.steps.some((step) => step.state === "approval") ? "decision" : "")]);
     if (family.summary) body.append(el("p", "vibe-ask-detail vibe-panel-reason", family.summary));
     const list = el("ol", "vibe-rows");
-    for (const [index, step] of family.steps.entries()) list.append(row({ tone: STEP_TONES[step.state], title: `${index + 1}. ${step.title}`, meta: STEP_WORDS[step.state], onOpen: () => push({ view: "task", id: step.id }) }));
-    list.append(row({ tone: family.final === "running" ? "live" : family.final === "checking" ? "check" : "next", title: "Then: put it together and check the whole thing", meta: family.final === "running" ? "running now" : family.final === "checking" ? "checking its work" : family.final === "next" ? "up next" : "after the last step", onOpen: () => push({ view: "task", id: family.id }) }));
+    for (const [index, step] of family.steps.entries()) list.append(row({ key: `step:${step.id || index}`, tone: STEP_TONES[step.state], title: `${index + 1}. ${step.title}`, meta: STEP_WORDS[step.state], onOpen: () => push({ view: "task", id: step.id }) }));
+    list.append(row({ key: "then", tone: family.final === "running" ? "live" : family.final === "checking" ? "check" : "next", title: "Then: put it together and check the whole thing", meta: family.final === "running" ? "running now" : family.final === "checking" ? "checking its work" : family.final === "next" ? "up next" : "after the last step", onOpen: () => push({ view: "task", id: family.id }) }));
     body.append(list);
     const need = (state.data.needs || []).find((item) => item.kind === "family" && item.id === id);
     const unstarted = family.steps.filter((step) => ["approval", "waiting", "blocked"].includes(step.state));
@@ -458,7 +460,7 @@
     if (!ideas.length) { body.append(el("p", "vibe-panel-empty", "No ideas right now. The agents add ideas here as they notice them.")); return; }
     const fresh = ideas.filter((idea) => !idea.read && !idea.taskId);
     const seen = ideas.filter((idea) => idea.read || idea.taskId);
-    const rowOf = (idea) => row({ tone: idea.taskId ? "done" : idea.read ? "next" : "idea", title: ideaTitle(idea), meta: idea.taskId ? "already a task" : [idea.source, idea.at ? ago(idea.at) : ""].filter(Boolean).join(" · ") || "idea", action: idea.taskId ? null : { label: "Build it", run: () => buildIdea(idea) }, onOpen: () => push({ view: "idea", id: idea.id }) });
+    const rowOf = (idea) => row({ key: `idea:${idea.id}`, tone: idea.taskId ? "done" : idea.read ? "next" : "idea", title: ideaTitle(idea), meta: idea.taskId ? "already a task" : [idea.source, idea.at ? ago(idea.at) : ""].filter(Boolean).join(" · ") || "idea", action: idea.taskId ? null : { label: "Build it", run: () => buildIdea(idea) }, onOpen: () => push({ view: "idea", id: idea.id }) });
     fold(body, "fresh", "New", fresh.map(rowOf), { empty: "You've seen every idea." });
     fold(body, "seen", "Seen", seen.map(rowOf));
   }
@@ -512,7 +514,7 @@
     else if (gate && ["held", "paused"].includes(gate.key)) controls.push({ label: gate.key === "held" ? "Start agents" : "Resume", primary: true, run: () => act(() => api().assistantControl("start-work"), "Agents started. They pick up what's queued.") });
     else controls.push({ label: "Pause new work", title: "Running jobs finish; nothing new starts until you resume", disabled: !api()?.backlogControl, run: () => act(() => api().backlogControl({ action: "pause", projectId: data.projectId }), "New work paused. Running jobs finish normally.") });
     body.append(actions(controls));
-    fold(body, "working", "Working now", running.map((job) => row({ tone: "live", title: job.title || "A task", meta: [job.phase ? String(job.phase).replace(/_/g, " ") : "working", job.model || job.route || "", job.startedAt ? `started ${ago(job.startedAt)}` : ""].filter(Boolean).join(" · "), onOpen: () => { close({ quiet: true }); go("command", job.taskId ? { selected: `task:${job.taskId}` } : {}); } })), { empty: "Nobody is building right now." });
+    fold(body, "working", "Working now", running.map((job, index) => row({ key: `job:${job.taskId || index}`, tone: "live", title: job.title || "A task", meta: [job.phase ? String(job.phase).replace(/_/g, " ") : "working", job.model || job.route || "", job.startedAt ? `started ${ago(job.startedAt)}` : ""].filter(Boolean).join(" · "), onOpen: () => { close({ quiet: true }); go("command", job.taskId ? { selected: `task:${job.taskId}` } : {}); } })), { empty: "Nobody is building right now." });
     const roster = [];
     const info = state.teamProject === state.data.projectId ? state.team : null;
     if (info) {
@@ -528,6 +530,7 @@
   }
   function seat(role, provider, model, problem = "") {
     const item = el("li", "vibe-seat");
+    item.dataset.key = role;
     item.append(el("span", "vibe-seat-role", role), el("span", "vibe-seat-model", `${provider} · ${model}`));
     if (problem) item.append(el("span", "vibe-seat-problem", problem));
     return item;

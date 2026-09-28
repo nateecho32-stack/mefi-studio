@@ -38,6 +38,7 @@
 .trace-line:hover { background: color-mix(in srgb, var(--ivory) 4%, transparent); }
 .trace-line.is-error { border-left-color: var(--bad); background: color-mix(in srgb, var(--bad) 7%, transparent); }
 .trace-line.is-warn { border-left-color: var(--warn); }
+.trace-empty { padding: 28px 16px; color: var(--muted); font: 13px/1.5 var(--font-ui, inherit); text-align: center; }
 .trace-time { color: var(--dim); }
 .trace-level { color: var(--dim); text-transform: uppercase; font-size: 10.5px; letter-spacing: .04em; }
 .trace-line.is-error .trace-level { color: var(--bad); }

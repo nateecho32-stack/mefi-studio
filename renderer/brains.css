@@ -342,7 +342,7 @@
 .brains-status[data-tone="warn"] { color: var(--warn); }
 
 /* ---- Space search -------------------------------------------------------------- */
-.brains-search { position: absolute; inset: 0; z-index: 14; display: grid; place-items: start center; padding-top: 12vh; background: rgba(0,0,0,.5); backdrop-filter: blur(3px); }
+.brains-search { position: absolute; inset: 0; z-index: 14; display: grid; place-items: start center; padding-top: 12vh; background: color-mix(in srgb, var(--scrim) 70%, transparent); backdrop-filter: blur(3px); }
 .brains-search-panel { width: min(540px, 90%); border: 1px solid var(--hairline-strong); border-radius: 16px; background: var(--panel-solid); box-shadow: var(--shadow-3); overflow: hidden; animation: brains-pop var(--dur-2) var(--ease); }
 .brains-search-panel input { width: 100%; border: 0; border-bottom: 1px solid var(--hairline); border-radius: 0; padding: 14px 16px; font-size: 14px; background: transparent; box-shadow: none; }
 .brains-search-list { list-style: none; margin: 0; padding: 6px; max-height: 340px; overflow: auto; display: grid; gap: 2px; }
@@ -359,7 +359,7 @@
 .brains-search-hint { margin: 0; padding: 8px 15px; font-size: 10.5px; color: var(--dim); border-top: 1px solid var(--hairline); }
 
 /* ---- dialog and shortcuts --------------------------------------------------------- */
-.brains-dialog, .brains-shortcuts { position: absolute; inset: 0; z-index: 20; display: grid; place-items: center; padding: 20px; background: rgba(0,0,0,.55); backdrop-filter: blur(4px); }
+.brains-dialog, .brains-shortcuts { position: absolute; inset: 0; z-index: 20; display: grid; place-items: center; padding: 20px; background: color-mix(in srgb, var(--scrim) 75%, transparent); backdrop-filter: blur(4px); }
 .brains-shortcuts { z-index: 16; }
 .brains-dialog-panel, .brains-shortcuts-panel { max-height: 100%; overflow: auto; border: 1px solid var(--hairline-strong); border-radius: 18px; background: var(--panel-solid); box-shadow: var(--shadow-3); animation: brains-pop var(--dur-2) var(--ease); }
 .brains-dialog-panel { width: min(520px, 100%); display: grid; gap: 12px; padding: 22px; }

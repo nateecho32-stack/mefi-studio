@@ -9,6 +9,14 @@
   const number = (value, digits = 0) => finite(value) ? value.toLocaleString("en-US", { maximumFractionDigits: digits }) : "Unknown";
   const duration = (value) => finite(value) ? value < 1000 ? `${number(value)} ms` : `${number(value / 1000, 1)} s` : "Unmeasured";
   const money = (value) => finite(value) ? `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: value < 0.01 ? 6 : 4 })}` : "Unknown";
+  // Each view names what it measures; one shared line read the same on three pages.
+  const LEDES = {
+    rankings: "How each model did on your own work: speed, cost, errors and your ratings.",
+    usage: "Tokens and cost from the model calls Studio recorded.",
+    context: "What a task carries into its model calls, and what the latest attempt cost.",
+    tracker: "What each provider account reports: plans, balances and limits.",
+  };
+  const plain = (error, fallback) => window.MefiUi?.plainError ? window.MefiUi.plainError(error, fallback) : error?.message || fallback;
   const when = (value) => {
     if (value == null || value === "") return "Time unavailable";
     const date = new Date(value);
@@ -63,7 +71,7 @@
   function renderSummary(snapshot) {
     const models = rows(snapshot.models);
     const totals = $("summary"); totals.replaceChildren();
-    const stats = [["Recorded calls", number(snapshot.calls)], ["Models observed", number(models.filter((model) => model.samples > 0).length)], ["Errors recorded", number(models.reduce((sum, model) => sum + (model.errors || 0), 0))]];
+    const stats = [["Recorded calls", number(finite(snapshot.calls) ? snapshot.calls : models.reduce((sum, model) => sum + (model.samples || 0), 0))], ["Models observed", number(models.filter((model) => model.samples > 0).length)], ["Errors recorded", number(models.reduce((sum, model) => sum + (model.errors || 0), 0))]];
     for (const [label, value] of stats) { const card = element("div", "lab-stat"); card.append(element("span", "", label), element("strong", "", value)); totals.append(card); }
   }
   function renderRankings(snapshot) {
@@ -105,7 +113,7 @@
     target.replaceChildren(table(["When", "Model / purpose", "Result", "Effort", "Duration", "Input / output"], recent.slice(0, 30), (call) => {
       const name = element("div", "lab-model-name");
       name.append(element("strong", "", call.model || "Unknown model"), element("span", "muted", [call.provider, call.role || call.taskType].filter(Boolean).join(" · ")));
-      return [when(call.at), name, call.status === "ok" ? "Completed" : call.status || "Unknown", `${call.requestedEffort || "Default"} requested · ${call.appliedEffort ? `${call.appliedEffort} confirmed` : "provider confirmation unavailable"}`, duration(call.elapsedMs), `${number(call.tokenUsage?.inputTokens)} / ${number(call.tokenUsage?.outputTokens)}`];
+      return [when(call.at), name, call.status === "ok" ? "Completed" : call.status || "Unknown", `${call.requestedEffort || "Default"} requested · ${call.appliedEffort ? `${call.appliedEffort} confirmed` : "provider confirmation unavailable"}`, duration(call.elapsedMs), finite(call.tokenUsage?.inputTokens) || finite(call.tokenUsage?.outputTokens) ? `${number(call.tokenUsage?.inputTokens)} / ${number(call.tokenUsage?.outputTokens)}` : "Not reported"];
     }));
   }
   function renderRecent(snapshot) {
@@ -136,7 +144,7 @@
           if (!result || result.ok === false) throw new Error(result?.error || "The rating could not be saved.");
           status.textContent = "Saved";
           await refresh();
-        } catch (error) { status.textContent = error.message || "The rating could not be saved."; button.disabled = false; }
+        } catch (error) { status.textContent = plain(error, "The rating could not be saved."); button.disabled = false; }
       });
       card.append(description, select, note, button, status); target.append(card);
     }
@@ -163,7 +171,7 @@
       state.snapshot = snapshot; state.at = Date.now();
       renderSummary(snapshot); updateTypes(snapshot); renderRankings(snapshot); renderUsage(snapshot);
       $("status").textContent = `Local measurements · updated ${when(snapshot.generatedAt || state.at)}`;
-    } catch (error) { if (token === state.read) $("status").textContent = error.message || "Model measurements could not be read."; }
+    } catch (error) { if (token === state.read) $("status").textContent = plain(error, "Model measurements could not be read."); }
     finally { if (token === state.read) $("refresh").disabled = false; }
   }
   async function loadTasks() {
@@ -206,7 +214,10 @@
           })
           .catch(() => {});
       }
-      $("context-status").textContent = `${number(result.estimatedTokens)} estimated tokens / ${number(result.budgetTokens)} budget${result.truncated ? " · some source text is excluded from this preview; saved originals are retained" : ""}`;
+      // Leave out what the preview did not report rather than print "Unknown".
+      const budget = finite(result.budgetTokens) ? result.budgetTokens : Number($("context-budget")?.value) || null;
+      const weight = finite(result.estimatedTokens) ? `${number(result.estimatedTokens)} estimated tokens` : "";
+      $("context-status").textContent = [weight && budget ? `${weight} of a ${number(budget)} token budget` : weight || (budget ? `${number(budget)} token budget` : ""), result.truncated ? "some source text is excluded from this preview; saved originals are retained" : ""].filter(Boolean).join(" · ");
       for (const section of rows(result.sections)) {
         const fold = element("details", `lab-context-source${section.included ? "" : " excluded"}`); fold.open = section.included === true;
         const summary = element("summary", "", `${section.label || section.kind || "Context"} · ${number(section.estimatedTokens)} tokens · ${section.included ? "included" : "excluded"}`);
@@ -216,7 +227,7 @@
         target.append(fold);
       }
       if (!rows(result.sections).length) empty(target, "No saved context here yet", "A task brief, references and handoff will appear when they have been saved.");
-    } catch (error) { if (token === state.contextRead) { $("context-status").textContent = error.message || "The context could not be read."; $("context-sections").replaceChildren(); } }
+    } catch (error) { if (token === state.contextRead) { $("context-status").textContent = plain(error, "The context could not be read."); $("context-sections").replaceChildren(); } }
     finally { if (token === state.contextRead) $("context-refresh").disabled = false; }
   }
   function show(view) {
@@ -227,6 +238,7 @@
       $(`tab-${name}`).setAttribute("aria-selected", String(name === view));
       $(`tab-${name}`).tabIndex = name === view ? 0 : -1;
     }
+    if ($("lede") && LEDES[view]) $("lede").textContent = LEDES[view];
     const usageSwitch = $("usage-switch");
     if (usageSwitch) usageSwitch.hidden = !["usage", "tracker"].includes(view);
     for (const [id, target] of [["recorded", "usage"], ["accounts", "tracker"]]) {
@@ -236,7 +248,7 @@
     if ($("summary")) $("summary").hidden = view !== "rankings";
     window.dispatchEvent(new CustomEvent("mefi:model-view", { detail: { view } }));
     if (view === "tracker") window.MefiUsageTracker?.refresh?.();
-    if (view === "context") loadTasks().then((fresh) => { if (fresh) return previewContext(); }).catch((error) => { $("context-status").textContent = error.message || "Tasks could not be read."; });
+    if (view === "context") loadTasks().then((fresh) => { if (fresh) return previewContext(); }).catch((error) => { $("context-status").textContent = plain(error, "Tasks could not be read."); });
   }
   function init() {
     if (state.initialized || !document.getElementById("model-lab")) return;
