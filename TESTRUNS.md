@@ -34,6 +34,29 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-28 - More than one Claude Code or Codex login, swapped when one tops out
+
+Extra subscription logins (settings.cliAccounts, each a folder under user
+data handed over as CLAUDE_CONFIG_DIR / CODEX_HOME). scripts/cli-accounts.cjs
+holds the pure rules; main.cjs's "Several logins per coding CLI" block keeps
+the folders and cli-account-limits.json. Assistant calls retry on the next
+login inside cliAccountTurn; a worker whose login tops out is settled in
+finish() as an outage with `accountLimit`, requeued at once with no backoff.
+Gated in the detached-style worktree C:\wt\multi-acct on the rebased commit
+(on top of 726eb48).
+
+- `npm run build-booklet`, `npm run check` (188 targets, 384 specs) and
+  `npm run audit` (zero findings): PASS.
+- `npm test`: Node 4,298 tests, 4,293 pass, 0 fail, 5 skipped (359 s);
+  Python contracts 248 OK (1 skipped); normalized-path lock PASS.
+- New suites: `cli_accounts` (reset parsing incl. named zones, fill-first
+  pick, marks), `cli_accounts_host` (the real block in a vm: call rotation,
+  marks surviving a restart and a limit hit before the file was read,
+  junction-safe removal on a real temp folder, and an executor run that
+  tops out on the main login and runs again at once on the second).
+- Updated pins: `test_mefi_studio_routing.py` now asserts
+  `claudeCompletion(system, user, route.model, login)` and `cliAccountTurn`.
+
 ## 2026-09-28 - Cowork file claims between PCs; keep this PC up to date
 
 A cowork room linked to the project (settings.cowork) carries live file
@@ -472,31 +495,6 @@ Results: `npm run check` ok; `npm run audit` 0 errors, 0 warnings; `npm test`
 Node 3,976 tests, 3,970 pass, 5 skipped, 1 fail (occlusion_probe:
 "MessageChannel round trip too slow: 283ms" under the parallel load; passes
 solo, 2/2); Python 248 OK, 1 skipped; normalized-path lock 6/6.
-
-## 2026-09-27 - Node tree pass: wires past the hub, live layout, lifecycle, interaction and frame cost
-
-Five read-only audits of the Command node tree (graph building, layout and
-camera, render cost, interaction and accessibility, rail/Overhead/shared
-painters) were verified against the source and fixed in renderer/idle.js,
-tree3d.js, tree-dynamics.js, camera-tour.js, overhead.js, task-groups.js,
-node-visuals.js, agent-brain.js and one line of main.cjs (the run id on
-autopilot status rows, which keys a builder's orb for its whole run). The
-largest: Command indexed `projected` (which drops the hub) with state.nodes
-edge indices, so every wire past the hub went to the wrong node and the
-branch parents the layouts use were wrong; `frameEdges` remaps them per
-graph. New suite tests/command_node_tree.test.mjs (12 tests); new or
-extended tests in tree3d_performance, tree3d_project, tree3d_keyboard,
-overhead_poll_backoff, node_visuals, tree_dynamics and camera_tour; the
-command_activity markers and tools/test_mefi_studio_tree_keyboard.py pins
-follow the new source. Rebuilt renderer/booklet.html.
-
-Results on one tree: `npm run check` ok; `npm run audit` 0 errors, 0
-warnings; `npm test` passes (Node 3,971 tests, 3,966 pass, 5 skipped, 0
-fail; Python 248 OK, 1 skipped; normalized-path lock 6/6). Before the pass,
-`command_render` had failed once under load on its midrange-drum assertion
-(mid 0.743 against bass 0.535 x 1.4) and once on its 80 s kill bound while
-five audits ran; it passed in this run.
-
 
 ## Read Before Any Tests
 

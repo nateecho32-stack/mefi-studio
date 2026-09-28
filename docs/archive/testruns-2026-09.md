@@ -6,6 +6,30 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-27 - Node tree pass: wires past the hub, live layout, lifecycle, interaction and frame cost
+
+Five read-only audits of the Command node tree (graph building, layout and
+camera, render cost, interaction and accessibility, rail/Overhead/shared
+painters) were verified against the source and fixed in renderer/idle.js,
+tree3d.js, tree-dynamics.js, camera-tour.js, overhead.js, task-groups.js,
+node-visuals.js, agent-brain.js and one line of main.cjs (the run id on
+autopilot status rows, which keys a builder's orb for its whole run). The
+largest: Command indexed `projected` (which drops the hub) with state.nodes
+edge indices, so every wire past the hub went to the wrong node and the
+branch parents the layouts use were wrong; `frameEdges` remaps them per
+graph. New suite tests/command_node_tree.test.mjs (12 tests); new or
+extended tests in tree3d_performance, tree3d_project, tree3d_keyboard,
+overhead_poll_backoff, node_visuals, tree_dynamics and camera_tour; the
+command_activity markers and tools/test_mefi_studio_tree_keyboard.py pins
+follow the new source. Rebuilt renderer/booklet.html.
+
+Results on one tree: `npm run check` ok; `npm run audit` 0 errors, 0
+warnings; `npm test` passes (Node 3,971 tests, 3,966 pass, 5 skipped, 0
+fail; Python 248 OK, 1 skipped; normalized-path lock 6/6). Before the pass,
+`command_render` had failed once under load on its midrange-drum assertion
+(mid 0.743 against bass 0.535 x 1.4) and once on its 80 s kill bound while
+five audits ran; it passed in this run.
+
 ## 2026-09-27 morning - Handout rebroadcast dedupe: a heard note is not re-sent; AI-link retirement re-verified (task_plan_mujom5h3_0, run_1790505348418_7)
 
 Grouped A-Eyes alerts "Compactor rebroadcasts finished work item" (task_6e3c0afebf8489ff) and "Queue handout broadcast spam" (task_9645fd821b9d03bc). Member 1 is the stale work broadcast loop the sibling session already retired: inspected HEAD before touching anything and adopted 6f1ef62 as it stands (assistant.mjs aiLinkTicket/aiLinkHealthy/aiLinkResolved, the compact()/tidy() ai-block absorb, the resolvedAiLinkWork promotion guard); all four board.test.mjs retirement tests green and the live data/eyes-assistant.json read read-only confirms the loop is over (ai online true, failures 0, backoffUntil 0, requests 0), so no further piece was owed there. Member 2's general spam had a second half the retirement did not cover: sendMail only deduped identical UNREAD notes, so once the foreman read a handout (it reads its inbox every start) the compactor's next identical "N work item(s) ready — yours to hand out" landed as a fresh row, packet and chatter line every pass — the seven handouts in eleven minutes that kept coming after the briefer's rebuke. Fix: assistant.mjs exports MAIL_REBROADCAST_MS (15 min) and sendMail now returns the state unchanged for a repeat of the same note from the same seat while a read copy sits within that window, so host assistantSendMail reports it unsent and pushes nothing; changed handouts (a different count or next pick) and repeats after the window still go out, and the unread-refresh path is untouched. Tests: new module and host cases in tests/assistant_mail.test.mjs; node --test tests/assistant_mail.test.mjs tests/board.test.mjs tests/briefing_fix_requests.test.mjs 57 pass / 0 fail; node --test tests/request_dedupe tests/task_delegation tests/task_grouping_cleanup tests/idea_backlog tests/task_history tests/work_admission_host tests/request_admission tests/board_growth tests/assistant_loop tests/role_provider_isolation 137 pass / 0 fail; python tools/test_mefi_studio_assistant.py 66 OK; npm run check ok (165 targets); npm test all gates pass; npm run audit 0 errors / 0 warnings. Sibling work-tree hunks preserved untouched.
