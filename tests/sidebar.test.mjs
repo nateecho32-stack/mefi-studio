@@ -26,6 +26,7 @@ function environment({ rail = false } = {}) {
     append(...children) { for (const child of children) { child.parent = this; this.children.push(child); } }
     contains(element) { return element === this || this.children.some((child) => child.contains(element)); }
     setAttribute(name, value) { this.attrs[name] = value; }
+    getAttribute(name) { return this.attrs[name] ?? null; }
     closest(selector) {
       const found = selector.split(",").some((part) => {
         part = part.trim();
@@ -61,12 +62,16 @@ function environment({ rail = false } = {}) {
   const dismiss = new Element("workspace-sidebar-close", "button");
   const link = new Element("sidebar-workspace", "button"); link.dataset.nav = "workspace";
   const input = new Element("workspace-person-name", "input");
+  const addProject = new Element("workspace-add-project", "button");
+  const projects = new Element("workspace-projects");
+  const selectedProject = new Element("selected-project", "button"); selectedProject.setAttribute("aria-pressed", "true");
+  projects.append(selectedProject);
   const outside = new Element("workspace-input", "textarea");
-  const body = new Element("body"); body.append(root, outside); root.append(toggle, panel); panel.append(dismiss, link, input);
+  const body = new Element("body"); body.append(root, outside); root.append(toggle, panel); panel.append(dismiss, link, input, addProject, projects);
   // The navigation rail's M+ is the panel's door when the rail shell is on.
   const brand = new Element("app-rail-brand", "button");
   if (rail) body.append(brand);
-  const elements = new Map([body, root, panel, toggle, dismiss, link, input, outside, ...(rail ? [brand] : [])].map((element) => [element.id, element]));
+  const elements = new Map([body, root, panel, toggle, dismiss, link, input, addProject, projects, selectedProject, outside, ...(rail ? [brand] : [])].map((element) => [element.id, element]));
   document = Object.assign(new Target(), { body, activeElement: outside, readyState: "loading", getElementById: (id) => elements.get(id), querySelector: () => null });
   if (rail) document.documentElement = { dataset: { shell: "rail" } };
   const window = new Target();
@@ -80,7 +85,7 @@ function environment({ rail = false } = {}) {
   const flush = () => { const pending = [...timers]; timers.clear(); for (const fn of pending) fn(); };
   const hover = (element) => element.emit("pointerenter", { pointerType: "mouse" });
   const leave = (element) => element.emit("pointerleave", { pointerType: "mouse" });
-  return { sidebar: window.MefiSidebar, nav: window.MefiNav, window, document, root, panel, toggle, dismiss, link, input, outside, brand, hover, leave, flush };
+  return { sidebar: window.MefiSidebar, nav: window.MefiNav, window, document, root, panel, toggle, dismiss, link, input, addProject, selectedProject, outside, brand, hover, leave, flush };
 }
 
 test("hover reveals the menu without moving focus and crossing into it cancels delayed closure", () => {
@@ -222,6 +227,20 @@ test("a panel opened on purpose stays when the pointer leaves; a hover peek clos
   env.leave(env.toggle);
   env.flush();
   assert.equal(env.sidebar.isOpen(), false, "a hover peek still closes on leave");
+});
+
+test("M+ focuses the selected project, then Add project when the selection is unavailable", () => {
+  const env = environment({ rail: true });
+  env.sidebar.open({ focus: true, projectFocus: true });
+  assert.equal(env.document.activeElement, env.selectedProject);
+  env.sidebar.close({ restoreFocus: true });
+  env.selectedProject.disabled = true;
+  env.sidebar.open({ focus: true, projectFocus: true });
+  assert.equal(env.document.activeElement, env.addProject);
+  env.sidebar.close({ restoreFocus: true });
+  env.addProject.disabled = true;
+  env.sidebar.open({ focus: true, projectFocus: true });
+  assert.equal(env.document.activeElement, env.link, "unavailable project controls keep the established first-menu fallback");
 });
 
 test("closing the panel returns focus to its door: the rail's M+ on the rail shell, the edge strip otherwise", () => {

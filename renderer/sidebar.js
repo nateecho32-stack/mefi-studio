@@ -36,7 +36,9 @@
     toggle.focus({ preventScroll: true });
     suppressFocusOpen = false;
   }
-  function open({ focus = false, by = "sticky" } = {}) {
+  // projectFocus (M+ from the menu): keyboard focus starts on the selected
+  // project, or Add project when none is available, not the first control.
+  function open({ focus = false, by = "sticky", projectFocus = false } = {}) {
     syncBlocked();
     if (blocked()) return false;
     cancelClose();
@@ -47,9 +49,13 @@
     panel.setAttribute("aria-hidden", "false");
     toggle.setAttribute("aria-expanded", "true");
     if (focus) {
-      const target = [...panel.querySelectorAll("[data-nav], button, summary, input, select, a[href]")]
-        .find((element) => element !== dismiss && !element.disabled && !element.closest("[hidden], [inert]") && element.getClientRects().length);
-      (target ?? dismiss).focus({ preventScroll: true });
+      const usable = (element) => element && element !== dismiss && !element.disabled && !element.closest("[hidden], [inert]") && element.getClientRects().length;
+      const selectedProject = projectFocus ? [...(document.getElementById("workspace-projects")?.querySelectorAll("button") ?? [])]
+        .find((element) => element.getAttribute("aria-pressed") === "true") : null;
+      const projectTarget = [selectedProject, projectFocus ? document.getElementById("workspace-add-project") : null].find(usable);
+      const target = projectTarget ?? [...panel.querySelectorAll("[data-nav], button, summary, input, select, a[href]")].find(usable) ?? dismiss;
+      // A long project list can scroll inside the panel; reveal the selected row.
+      target.focus(projectTarget ? undefined : { preventScroll: true });
     }
     return true;
   }

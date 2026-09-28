@@ -1707,7 +1707,7 @@
       const sidebar = window.MefiSidebar;
       if (!sidebar) return;
       if (sidebar.isOpen?.()) sidebar.close({ restoreFocus: true });
-      else sidebar.open({ focus: true });
+      else sidebar.open({ focus: true, projectFocus: true });
     });
     document.getElementById("app-rail-pin")?.addEventListener("click", () => {
       setRailPinned(!railPinWanted);

@@ -461,8 +461,9 @@ settings and per-model work-kind summaries for the shared controls.
   there, so Command's canvas never sees them. `Ctrl ,` opens Settings from
   anywhere, a text field included.
 - **M+** at the top of the menu opens the project panel beside it, which holds
-  projects only. It replaces the grip on the left edge that used to open the
-  same panel.
+  projects only. Keyboard focus starts on the selected project, or Add project
+  when none is available. It replaces the grip on the left edge that used to
+  open the same panel.
 - Workspace pages share a compact title and action header. List/detail pages
   show one pane at narrow widths, with a visible Back control. Focus follows
   the visible pane; returning to a view retains its selection and drafts.
