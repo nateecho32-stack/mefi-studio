@@ -7,6 +7,29 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Live › Fleet: every seat on your team, and the wires between them.** A
+  new page beside Command shows the open project's team the way OpenRig draws a
+  rig. An explorer lists it as pods (Lead, Build, Check, Keep) of seats such as
+  `builder-2`, each with a status dot, and five views sit beside it. **Graph**
+  is the branches: seat cards in columns, wired by why (a handoff, a
+  delegation, a check, rework, a desk question, an ask that reaches you);
+  drag to pan, wheel to zoom, **Fit** to see the whole team, and a team too
+  big for the window still shows every name and state. **Table** is a row per
+  seat, **Recent** is a feed of claims, handoffs, checks, asks, merges and
+  kept branches with filters, **Tree** draws the team as a node tree, and
+  **Health** lists what needs a look: a run quiet for ten minutes, an ask
+  waiting fifteen, three tries at one task, a branch that was kept, an
+  escalation, and the agents' loop holding ready work (with its own reason and
+  button). Click a seat for its inspector: what it is doing now, the runs it
+  has had (a retry goes back to the same seat), the wires in and out, and
+  **Stop this run** (two presses, and only for the run you were looking at),
+  **Open task** and **Open in Command**, which lands on its orb; the Command
+  node tree is unchanged. The arrow keys walk the explorer, the graph and the
+  feed, and Escape steps back. Studio only pushes updates while the page is open
+  and the window is visible, keeps the seats per project, and sends nothing
+  beyond clipped titles (no prompts, paths, keys or addresses). In a narrower
+  window the inspector becomes a drawer under the tabs, and in the narrowest
+  the page stacks, down to Studio's 600 px minimum.
 - **A merge that drops another branch's work is caught before it is pushed.**
   On 2026-09-27 a merge kept one PC's copy of every file both sides had
   changed, and the next commit put the rest of the tree back to that copy:

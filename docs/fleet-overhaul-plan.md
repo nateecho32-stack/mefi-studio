@@ -8,9 +8,9 @@ is landing: its Phase 1 is `1d86a1a`, and its Phase 2 unifies the sections. It d
 
 | Phase | State |
 | --- | --- |
-| 0. Sync, verify, tidy | Lost work restored by `dc85f68`, the only restore now. `perf/hidden-surfaces` merged (`3954e1a`). Duplicate branches deleted. Menu Phase 1 (`loop`) landed (`1d86a1a`). Still to do: the lost-work guard in `scripts/sync.mjs` and Configuration indexing the setup helper. |
-| 1. Seats and the fleet model | In progress on `fleet/overhaul` |
-| 2. Live › Fleet | Next |
+| 0. Sync, verify, tidy | Done. Lost work restored by `dc85f68`, the only restore. `perf/hidden-surfaces` merged (`3954e1a`). Duplicate branches deleted. Menu Phase 1 (`loop`) landed (`1d86a1a`). Configuration lists the setup helper's sections and a pinned walkthrough (`340a8da`), and `npm run sync` catches a merge that drops another branch's work (`40e35a6`). |
+| 1. Seats and the fleet model | Done (`5438f6d`, `8a3dd13`): `scripts/fleet.cjs`, `scripts/fleet-host.cjs`, five guarded hooks and four `fleet:*` calls. |
+| 2. Live › Fleet | Done: the Fleet page (explorer, Graph, Table, Recent, Tree, Health, seat inspector) under Agents › Live. It moves to the Live section with one line when the menu session's slice (a) lands. What differs from the list below is under **As built**. |
 | 3–8 | Planned |
 
 ## Why
@@ -108,7 +108,7 @@ The owner wants Studio overhauled, remaking code where that pays, using three so
 | Area this plan touches | Owned / in progress by | Rule |
 | --- | --- | --- |
 | Loop status, "why is it waiting", Agents switch | Menu overhaul Phase 1, landed `1d86a1a` (`scripts/loop-status.cjs`) | **Read `loop`** from every `assistant:status` push: `{ state, on, tone, headline, reason, action:{id,label}\|null, running, ready, approval, blocked }`. Never re-derive it. |
-| Sections, tabs, `nav.js` structure, `agents.js` menus, classic shell | Menu overhaul Phase 2 | **Follow it.** Fleet registers under Agents today and moves to Live when slice (a) lands (the menu session will say). Phase 5 starts only after its Phase 2 merges. |
+| Sections, tabs, `nav.js` structure, `agents.js` menus, classic shell | Menu overhaul Phase 2 | **Follow it.** Fleet is registered under Agents while the Live section (slice (a), `88a8580` on `overhaul/phase2`) is not on `main`. Whoever lands second flips it: `section: "live"`, `"fleet"` from `LOCAL_ROUTES.agents` to `LOCAL_ROUTES.live` after `"command"`, and the `children.live` line in `agents.js` goes. Phase 5 starts only after its Phase 2 merges. |
 | Setup helper, `community.cjs`, `music.js`, `onboarding.js` | Setup-helper owner | **Message before editing.** The seat editor opens `MefiSetupHelper.open("team")` rather than duplicating it. |
 | `scripts/sync.mjs`, vault | *Cross-PC sync strategy* session | Hand it the lost-work guard, or land it after pulling their work. |
 | Friends, Rooms, guest work | Rooms (`4ee6891`), vault (`d516312`), menu overhaul Phase 4 | **Build on it.** Phase 8 comes after menu Phase 4 and uses its sharing grants and `scripts/share-review.cjs`. |
@@ -134,7 +134,7 @@ Done:
 - `perf/quick-wins` and the two empty `worktree-*` branches removed.
 - Baseline gates green on `421453f`: check, audit, and 4,226 fast tests.
 
-Remaining:
+Then, also done (Configuration `340a8da`, the guard `40e35a6`):
 - **Configuration becomes the one index.**
   - `renderer/config-dialog.js` `records()` also indexes the setup helper's `setup-helper:*` records.
   - Add a pinned "Walk me through setup" row. Extend `tests/config_dialog.test.mjs`.
@@ -232,6 +232,22 @@ no prompts, no absolute paths.
    - route lists in `app_rail`, `nav_startup` and `command-render-electron.cjs`;
    - this doc, `architecture.md` and `code-map.md`.
 
+**As built.**
+- Step 0 (the booklet prep) and steps 1–2 (`ui-kit.js`, `panels.js`) were not built. The three
+  hand-aligned build lists were edited by hand. `MefiUi` already has `arm` and `plainError`, the
+  graph is DOM cards with SVG wires (so no canvas or camera helper was needed), and a panel contract has
+  no second user until Phase 5, which is where it belongs.
+- Fleet has no global key: Command owns F, C, V, L, S and N in its own view. It is reached from Live
+  and from Search.
+- Below 60% zoom the graph keeps only each seat's name and state ("far" zoom), so a whole team stays
+  readable in a 600 px window. The inspector is a third column above 1500 px, a drawer under the tab
+  bar up to that width, and stacked at 760 px and under.
+- *Open in Command* goes through `MefiNav.go("command", { selected: "builder:<taskId>" })`: Command's
+  builder nodes are named that way, so `idle.js` needed no change.
+- Escape clears the selection first. A second Escape on a workspace page opened the companion hub; the
+  menu session's slice (e) makes it leave the page first.
+- `fleet_render` covers five window sizes and five views, and `command_render` now counts the Fleet route.
+
 ### Phase 3 — Work › Tasks › Lanes
 
 - **Card fields:** `seatId`, `laneRank`, `closer: "self"|"human"`, and an editable `blockedOn` merged into `workState`.
@@ -296,6 +312,7 @@ no prompts, no absolute paths.
 - `npm run build-booklet` + `git diff --exit-code renderer/booklet.html`;
 - `npm run check`, `npm test`, `npm run audit`;
 - the slice's vm suites and Electron fixtures at all four sizes;
+- for anything that touches the fleet's host or IPC, `node_modules/.bin/electron tools/verify_fleet.cjs` (the real app on a throwaway profile);
 - a TESTRUNS row via `node scripts/append-testruns-row.mjs`;
 - land on `main`, then `npm run sync`.
 

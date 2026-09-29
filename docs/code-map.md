@@ -264,6 +264,8 @@ imports. See [Unified Studio](unified-studio.md) for the interfaces and fixture 
 | `companion-friends.js` | 265 | `window.MefiCompanionFriends`, Friends › Playground: friends' companions out in your rooms, scripted playdates (and Practice with Pip), per-friend and per-room sharing, the share-back ask and What was sent. Everything comes from main's "Companion friends" block through `hubFriends`, `hubSharingSet` and `hubPlaydate`. Bundled after `pc-sync.js`. |
 | `motion.js` | | `window.MefiMotion`: motion for menus that rebuild their rows. `keep` (rows keyed by `data-key` stay still and glide, new ones cascade, leavers fade as ghosts), `swap` (a view change that fades through, sliding the way you went), `enter`, `glide` (a selection mark) and `tally` (a counting number). No-ops with motion off or without layout, so fake-DOM suites run without it. |
 | `trace.js` / `trace.css` | | `window.MefiTrace`: the Trace sheet (Live, `trace`), Studio's logs as channels with search, tail, level and source chips, problems only, follow, copy and open file. |
+| `fleet.js` / `fleet.css` | 1,239 · 280 | `window.MefiFleet`: Live › Fleet (`fleet`), the open project's team as OpenRig draws a rig ([fleet-overhaul-plan.md](fleet-overhaul-plan.md)). An explorer of pods and seats, then Graph (the branches), Table, Recent, Tree and Health, and a seat inspector (now, generations, wires, Stop / Open task / Open in Command). Everything comes from `fleetSnapshot` and `onFleetUpdate`; it holds a `fleetWatch` lease only while on screen and paints at most once a frame. Bundled after `trace.js`. |
+| `fleet-layout.js` | 242 | `window.MefiFleetLayout`, pure and vm-tested: pods as columns of seat cards, every wire one orthogonal polyline with a lane of its own in the gutters and on the rails, the camera maths (`fit`, `zoomAt`, `constrain`), keyboard neighbours and the tidy tree. No DOM and no clock. |
 | `analyzer.js` · `tracker.js` · `eyes.js` · `palette.js` · `graph.js` · `ideas.js` · `overhead.js` | 594 · 823 · 626 · 492 · 461 · 504 · 462 | Analyzer, usage tracker (Command's Usage popover and Models › Usage › Provider accounts; its host readers live in `main.cjs` from `const ACCOUNT_READ_TIMEOUT_MS` to `usageAccounts`, its parsers in `scripts/usage-tracker.cjs`), Activity and its evidence inspector, Search, Catalog insights, Ideas and Overhead. |
 | `boot.js` · `model-lab.js` · `profiler.js` · `task-groups.js` · `startup.js` · `performance-core.js` · `sidebar.js` · `stage-labels.js` | 271 · 284 · 206 · 188 · 158 · 107 · 111 · 40 | Startup readiness, Model Lab, the live profiler, read-only task grouping, the launch screen, bounded measurements, the project menu, and one vocabulary for task badges. |
 
@@ -275,7 +277,7 @@ Its bounds follow the visible viewport as the panel scrolls, keeping website
 controls inside the panel without reloading the page.
 The main preload exposes controls only to Studio; websites have no preload.
 
-Fourteen stylesheets are inlined, in this order, so a later one wins a tie
+Fifteen stylesheets are inlined, in this order, so a later one wins a tie
 with an earlier one:
 
 | File | Lines | Purpose |
@@ -283,12 +285,12 @@ with an earlier one:
 | `styles.css` | 5,061 | The Club Blackout theme: its tokens and most surfaces. Its section order is load-bearing, as its header explains. |
 | `music.css` | 832 | The music room, plus the theme tokens that also colour Command and the boards. |
 | `planning.css` · `brains.css` · `profiler.css` | 329 · 458 · 45 | The Plans sheet, the brain-map editor and the profiler overlay. |
-| `trace.css` · `config-dialog.css` | 53 · 81 | The Trace sheet and Configuration. |
+| `trace.css` · `fleet.css` · `config-dialog.css` | 53 · 280 · 81 | The Trace sheet, Live › Fleet (its wire colours are named once, from theme tokens) and Configuration. |
 | `agent-brain.css` · `agents.css` · `companion-ui.css` | 359 · 191 · 44 | The Agent brain surfaces (sheet, Home hub, companion), the Agents workspace and the companion panel. |
 | `studio-ui.css` | 623 | Shared overflow, dropdown and glass recipes, after the page styles. |
 | `companion-hub.css` · `vibe.css` · `setup-helper.css` | 313 · 732 · 161 | The companion bubble and its menu, Vibe, and the setup helper. |
 
-`npm run check` runs `check-css.mjs --unused` over all fourteen, and `--merge`
+`npm run check` runs `check-css.mjs --unused` over all fifteen, and `--merge`
 over `styles.css` while a merge is in progress (see
 [CONTRIBUTING.md](../CONTRIBUTING.md)).
 
@@ -331,6 +333,18 @@ commit rewrites the JSON view as well.
   deep links and Search entries), `command_toolbar.test.mjs` (the Command
   toolbar's groups, View ▾ and Ambience) and `main_window_guards.test.mjs`
   (the 600×560 minimum and the window's navigation guards).
+- **The fleet** is pinned by `fleet.test.mjs` (the reducer: seat continuity on a
+  retry, wires, health, bounded reload, no prompts or paths in a snapshot),
+  `fleet_host.test.mjs` (pushes only while watched, one trailing push per half
+  second, per-project files), `fleet_layout.test.mjs` (no overlap, only
+  horizontal and vertical segments, one lane per wire, the same picture every
+  time), `fleet_ui.test.mjs` (the sheet in a `vm` fake DOM: rows keep their
+  identity, no lease while hidden, keyboard) and `fleet_render.test.mjs` with
+  `fixtures/fleet-render-electron.cjs` (real Chromium at five window sizes and
+  five views: nothing overflows, every seat has a card in view with none
+  overlapping, the inspector drawer never covers the selected seat, a push
+  repaints, the arrows walk the explorer, Escape clears the selection and
+  closing gives the watch lease back).
 - **Permissions** are pinned by `autonomy_ui.test.mjs` (saved controls,
   warnings, learning scopes, scoped history actions and failed saves;
   `vibe_pipeline` also covers one-line suggestions, item-bound errors and
@@ -352,6 +366,12 @@ commit rewrites the JSON view as well.
   harnesses, not unit tests. `tools/monitor_loop.mjs` runs the real agent loop
   against a virtual clock, and `tools/profile_studio.mjs` replays renderer
   workloads.
+- `tools/verify_fleet.cjs` boots the app's own `main.cjs` in smoke mode on a
+  throwaway profile (it refuses to run on any other) and drives Live › Fleet
+  through the real preload bridge, handlers and fleet host:
+  `node_modules/.bin/electron tools/verify_fleet.cjs`. The fleet suites fake
+  the bridge; this is the check that the wires behind it work, with no project
+  open.
 - `tools/profile_live_studio.mjs` captures bounded metrics and optional CPU
   samples from the running Studio through a PID-checked loopback inspector.
   `tools/profile_scroll_controls.cjs` compares scroll-control versions in an

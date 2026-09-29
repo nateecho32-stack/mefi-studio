@@ -196,6 +196,7 @@ settings and per-model work-kind summaries for the shared controls.
 | **Awaiting verification** | A finished attempt whose completion is not yet established; housekeeping checks the evidence before it becomes **Done**. |
 | **Work done outside Studio** | What changed in the open folder while Studio was closed, on another folder or hidden: commits, uncommitted edits and Claude Code, Codex or OpenCode sessions, compared with Studio's **last look** at the folder. The thread, the chat assistant (even without a model) and the welcome-back digest report it, and when the code changed every queued card is **checked** against it before a worker takes it: still needed, partly done (its worker is told what changed), or already done / no longer needed, which waits for your answer on an Ask card. See [agent-loop.md §14](agent-loop.md#14-work-done-outside-studio). |
 | **Agent brain** | The Live view (`J`) that draws a task's **pipeline** from recorded **work events**: the head (the companion), the lead, the steps and the sub-agents; plus the **Playbook** of recipes and **project map** under Agents › Workflows. The seats live under Agents › Setup. See [roadmap-0.4.0.md](roadmap-0.4.0.md) and [agent-loop.md §13](agent-loop.md#13-the-agent-brain). |
+| **Fleet / seat / pod / generation** | Live › Fleet (OpenRig's vocabulary, built natively): a **seat** is one agent's stable address on the team (`builder-2@project`), a **generation** is one run it took, and seats sit in four **pods** (Lead, Build, Check, Keep) wired by handoffs, checks and asks. A retry returns to the seat that last worked the task. |
 | **Companion** | The roaming character (named under General): click it to talk, see what it and the team are doing, handle its needs-you queue, suggest work or take its picks, meet friends' companions, or set its personality (Straight work, Balanced, Friendly & expressive). It also gives a welcome-back digest, can be petted, and covers this project or all of them. Its default model is GPT-6 Luna on Zen at medium reasoning and fast service when Zen is connected. |
 | **Orb, callout, absorb** | Command-view vocabulary: an orb is a node, a callout is its floating card, and absorb is a finished node collapsing into its host. |
 | **Node style / `MefiNodeStyles`** | How a node is drawn: one of eight looks (five classic, three in the two-tone Void collection), painted on both the Command view and the tree rail by `renderer/node-styles.js`. Each look owns its body and may take over the agent ring, hub dress, work orbit, arrival, selection, the finish beats (`done` at a step whose work came back, `absorb` at the lead taking an agent in), wires, pulses and landing; per-node motion records keep every node animating, and reduced motion freezes each look to a still pose. |
@@ -459,7 +460,7 @@ settings and per-model work-kind summaries for the shared controls.
 - One **menu** down the left edge has three destinations: **Home**, **Work**
   and **Agents**. A single local row lists the current destination's views:
   Tasks, Plans, Ideas and Analyzer under Work; Overview, Setup, Live
-  (Command, Pipelines, Sessions, Activity, Trace, Overhead), Workflows (Brain
+  (Command, Fleet, Pipelines, Sessions, Activity, Trace, Overhead), Workflows (Brain
   maps, Playbook, Project map, Context), Models (Catalog, Performance) and
   Usage under Agents. **New task** and **Search** (`Ctrl K`) sit above the
   destinations; **Settings** and **Help** stay at the foot. Help contains
@@ -1115,6 +1116,46 @@ failed process stays an error and cannot produce briefing requests.
   With the Audio link on, its **Tree motion** reaction lets the music
   smoothly quicken the Overview's spin, sway it round a small figure of eight
   and swell it on the bass, inside room the frame keeps for it.
+
+### Fleet: seats, pods and the branches view
+
+- **Live › Fleet** shows the open project's team the way OpenRig draws a rig
+  ([fleet-overhaul-plan.md](fleet-overhaul-plan.md)). Every agent is a **seat**
+  with a stable address (`builder-2@project`); each run a seat takes is one
+  **generation**, and a retry of a task goes back to the seat that last worked
+  it. Seats sit in four **pods**: Lead (lead, companion, foreman, thinker, the
+  cluster planner), Build (`builder-1…N`, at least as many as run at once),
+  Check (overseer, desk, auditor, the cluster reviewer) and Keep (the other
+  roles, the scout).
+- The host half is `scripts/fleet.cjs` (pure) and `scripts/fleet-host.cjs`. The
+  first reduces what the loop already reports (brain events, executor status,
+  board writes, run finishes, worktree merges) into seats, their last 20
+  generations, a Recent feed of 300 rows and the **wires** between seats
+  (dispatch, handoff, delegation, check, rework, desk, escalation, report,
+  mail); the second keeps `data/projects/<id>/fleet.json`, written five seconds
+  after a change. `main.cjs` reaches it through five one-line guarded hooks.
+  `fleet:update` is pushed only while a Fleet page holds a 60-second watch lease
+  (renewed every 30 s), only for the open project, at most twice a second, and
+  it waits while Studio is hidden. Snapshots carry clipped titles only: no
+  prompts, paths, keys or addresses.
+- The page (`renderer/fleet.js`) has an explorer (pods and seats with a status
+  dot, walked with the arrow keys) and five views. **Graph** is the branches:
+  pods as columns of seat cards, wired by why (a handoff, a delegation, a check,
+  rework, a desk question, an ask that reaches you). Each wire is orthogonal
+  with a lane of its own (`renderer/fleet-layout.js`). Drag to pan, wheel to
+  zoom, **Fit** to see the whole team; under 60% the cards keep only the name
+  and state so a big team stays readable. **Table** is a sortable row per seat.
+  **Recent** is the feed, with Work / Checks / Asks / Problems chips. **Tree**
+  is the team as a node tree. **Health** lists what needs a look: a run quiet
+  for ten minutes, an ask open for fifteen, three generations on one task, a
+  kept branch, an escalation, and the loop holding ready work (with the loop
+  status's own reason and button).
+- Selecting a seat opens its **inspector**: what it is doing now, its
+  generations, the wires in and out, and **Stop this run** (which names the run
+  on screen, so a seat that moved on is left alone), **Open task** and
+  **Open in Command**, which lands on the seat's orb. The Command node tree
+  itself is unchanged. At 1500 px and under the inspector is a drawer under the
+  tab bar, and under 760 px the page stacks.
 
 ### The Agent Brain
 

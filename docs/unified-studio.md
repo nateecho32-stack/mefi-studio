@@ -12,7 +12,7 @@ shortcuts still resolve through the navigation registry.
 | --- | --- |
 | Overview | Readiness, active team, running work, decisions, start/pause controls |
 | Setup | Device connections, teams and presets, model routing, workflow behavior |
-| Live | Command, Pipelines, Sessions, Activity, Trace and Overhead |
+| Live | Command, Fleet, Pipelines, Sessions, Activity, Trace and Overhead |
 | Workflows | Brain maps, Playbook, Project map and Context |
 | Models | Catalog and measured performance |
 | Usage | Recorded calls and provider account readings |

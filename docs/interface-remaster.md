@@ -24,6 +24,7 @@ in JavaScript. A route opening alone does not verify its interior controls.
 | Activity | Filters; PNG/Diff/Log views; file/evidence selection; pins; inspector; unavailable states |
 | Sessions | Session tree/detail; optional Session tools with Assistant/Activity/Diagnostics tabs; conversation, briefing and inbox; machine/auditor views; Back from tools or detail; tools replace detail below 1100 px and become the sole pane below 760 px |
 | Overhead | Overview toggle; task legend/selection; canvas and detail |
+| Fleet | Team explorer (pods, seats, arrow keys); Graph, Table, Recent, Tree and Health tabs; pan, zoom and Fit; seat selection, the inspector (Stop, Open task, Open in Command) and its drawer; Recent filters and search; Escape; watch lease on open and close |
 | Models | Catalog search/filter/sort; expandable model/specifications; catalog insights; Performance; ratings; Usage Recorded calls/Provider accounts; Context |
 | General | Names; startup behavior; legacy preference links |
 | Appearance | Themes/custom colors; motion/blur; node style/layout/backdrop; effects; live preview and return |
@@ -85,9 +86,9 @@ Chromium desktop viewport metrics remove Windows client-area rounding, so
 the 1100 px breakpoint is tested exactly. Increased scaling uses the real
 `webContents` zoom factor. Each configuration covers:
 
-- All 15 logical routes: Home, Tasks, Plans, Ideas, Brain maps, Analyzer,
-  Command, Activity, Sessions, Overhead, Catalog, Performance, Usage, Context
-  and Settings — **60 route checks**.
+- All 16 logical routes: Home, Tasks, Plans, Ideas, Brain maps, Analyzer,
+  Command, Fleet, Activity, Sessions, Overhead, Catalog, Performance, Usage,
+  Context and Settings — **64 route checks**.
 - General, Appearance, Connections, Models, Automation, Audio and System,
   with exactly one category pane visible — **28 category checks**.
 - Session tools' Assistant, Activity and Diagnostics tabs, including pane
@@ -156,6 +157,7 @@ it does not imply every possible data value or external account was tested.
 | Activity | `activity_navigation`, evidence rendering and route matrix | Remaining |
 | Sessions | `explorer_ui`, all three tools tabs and Back in layout matrix | Remaining |
 | Overhead | `overhead_poll_backoff` including keyboard selection/focus, route matrix | Remaining |
+| Fleet | `fleet_layout`, `fleet_ui`, `fleet_render` (five window sizes by five views), route matrix | Real Chromium against the real fleet model; a live run's seats still to be watched |
 | Models | `model_lab`, `graph_table_ui`, catalog/build contracts, route matrix | Catalog, Performance, Usage and Context |
 | General | `settings_nav`, settings category matrix | Inspected |
 | Appearance | `settings_nav`, `music`, canvas/preview tests, category matrix | Controls and preview/return |
