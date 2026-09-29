@@ -173,6 +173,23 @@
                 "Discord is the fastest way in, but you won't need it.",
                 "Started so far: the fair queue, on the rooms hub."
               ]
+            },
+            {
+              "id": "fleet-view",
+              "title": "The Fleet view",
+              "text": "Every agent at a glance, as a seat in pods, lanes and missions. Its first page is built, and it ships with 0.4.6.",
+              "status": "progress",
+              "label": "In progress for 0.4.6",
+              "area": "Agents & work",
+              "details": [
+                "Built on main: Live › Fleet shows the team's seats, pods and wires as a page.",
+                "Seats grouped into Lead, Build, Check and Keep pods, wired by who hands work to whom.",
+                "Table, Recent, Graph, Tree and Health views, with Open in Command on each seat.",
+                "A task board with a lane per agent, lanes you can pause, and a budget.",
+                "Missions: plans whose progress is measured from verified work.",
+                "Your other PCs, and friends' fleets at the sharing level you choose.",
+                "Its groundwork ships in 0.4.5, but nothing shows yet."
+              ]
             }
           ]
         },
@@ -363,22 +380,6 @@
           "title": "Planned",
           "note": "Decided. No version or date yet.",
           "items": [
-            {
-              "id": "fleet-view",
-              "title": "The Fleet view",
-              "text": "Every agent at a glance, as a seat in pods, lanes and missions.",
-              "status": "planned",
-              "label": "Planned",
-              "area": "Agents & work",
-              "details": [
-                "Seats grouped into Lead, Build, Check and Keep pods, wired by who hands work to whom.",
-                "Table, Recent, Graph, Tree and Health views, with Open in Command on each seat.",
-                "A task board with a lane per agent, lanes you can pause, and a budget.",
-                "Missions: plans whose progress is measured from verified work.",
-                "Your other PCs, and friends' fleets at the sharing level you choose.",
-                "Its groundwork ships in 0.4.5, but nothing shows yet."
-              ]
-            },
             {
               "id": "welcome-back",
               "title": "A new launch screen and a welcome-back hub",
