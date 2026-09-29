@@ -6,6 +6,33 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-27 night - Share between my PCs and with friends: vault, shelves and share files
+
+Friends › Your PCs gains Share between my PCs (a private
+`<account>/mefi-studio-vault` repository sealed with AES-256-GCM under a key
+only paired PCs hold, shelves reviewed both ways, a library whose kept model
+results and decisions join learning, keys behind the exact typed phrase and a
+native prompt) and Share with friends (scrubbed, previewed `.mefishare`
+files; opened ones reviewed before they can be kept).
+
+- `npm run build-booklet`, `npm run check` (185 targets, 375 specs) and
+  `npm run audit` (zero findings): PASS.
+- New suites: vault_crypto (pairing codes, 200 rounds of last-character
+  typos, sealing bound to path and key), share_review, pc_vault (real git,
+  a bare repository standing in for GitHub, a faked gh: pairing, refusing
+  another vault's code, nothing readable in the repository, stopped and
+  scrubbed items, quarantine of edited and planted files, keys only with the
+  exact phrase and taken back out, unpairing one PC), vault_shelves,
+  pc_vault_ui (fake DOM; the keys handler returns no value), playbook
+  importRecipe, and a vault step in the companion hub Electron fixture
+  (both PCs, the library, keys locked until the phrase, no overflow).
+- `npm test` on 553bcaa in a private worktree, exit 0: Node parallel stage
+  4214 tests, 4210 passed, 4 skipped, 0 failures; Electron stage 42 tests,
+  41 passed, 1 skipped; `eyes_toggle_electron` 1/1; `occlusion_probe` 1
+  passed, 1 capability skip; Python contracts OK; normalized-path lock
+  passed. Rebased onto aacf276 as d516312 with check and the booklet,
+  first-install and vault UI suites passing again.
+
 ## 2026-09-27 night - Restore the work the 16:57 merge dropped: full gate on dc85f68
 
 The 16:57 merge of GitHub main (65703a6) kept this PC's copy of 15 conflicted

@@ -7,10 +7,10 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { atRisk, describe, inspect, pending, projectCheck, runGit, scrub, sync } from "../scripts/sync.mjs";
+import { LOST_WORK, atRisk, describe, inspect, lostWork, lostWorkText, pending, projectCheck, runGit, scrub, sync } from "../scripts/sync.mjs";
 
 async function run(cwd, ...args) {
   const out = await runGit(cwd, args);
@@ -281,4 +281,179 @@ test("only work this PC alone holds counts as at risk", () => {
   const items = ["branch", "uncommitted", "unpushed", "stash", "worktree", "local-branch", "github-branch"].map((kind) => ({ kind }));
   assert.deepEqual(atRisk(items).map((item) => item.kind), ["uncommitted", "unpushed", "stash", "worktree", "local-branch"]);
   assert.deepEqual(atRisk(null), []);
+});
+
+// ---- lost work: the 2026-09-27 incident, reproduced on throwaway clones ---------------
+// PC 2's work and GitHub's both rewrite one file (a real conflict) and each add
+// a file of their own; PC 2 merges GitHub's work and resolves the conflict.
+
+const body = (tag, lines = 260) => `${Array.from({ length: lines }, (_, index) => `${tag} line ${index}`).join("\n")}\n`;
+
+function write(cwd, name, text) {
+  const file = path.join(cwd, name);
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, text);
+}
+
+async function diverged(t, conflicted = "shared.txt", lines = 260) {
+  const { first, second, hub, root } = await fixture(t);
+  write(first, conflicted, body("base", lines));
+  await run(first, "add", "-A");
+  await run(first, "commit", "-q", "-m", `Add ${conflicted}`);
+  await run(first, "push", "-q", "origin", "main");
+  await run(second, "pull", "-q", "--ff-only");
+  // GitHub's side, from PC 1.
+  write(first, conflicted, body("github", lines));
+  write(first, "github-only.txt", body("github-only"));
+  await run(first, "add", "-A");
+  await run(first, "commit", "-q", "-m", "GitHub work");
+  await run(first, "push", "-q", "origin", "main");
+  // This PC's side.
+  write(second, conflicted, body("local", lines));
+  write(second, "local-only.txt", body("local-only"));
+  await run(second, "add", "-A");
+  await run(second, "commit", "-q", "-m", "This PC work");
+  await run(second, "fetch", "-q", "origin");
+  const merge = await runGit(second, ["merge", "--no-commit", "--no-ff", "origin/main"]);
+  assert.equal(merge.ok, false, "both sides rewrote the same file, so the merge conflicts");
+  return { first, second, hub, root, conflicted };
+}
+
+const finish = (cwd, message) => run(cwd, "commit", "-q", "-m", message);
+const scan = (cwd, extra = {}) => lostWork(cwd, { range: "origin/main..main", tip: "main", ...extra });
+
+test("a merge that keeps this PC copy of a conflicted file whole is found, with the lines and files it dropped", async (t) => {
+  const { second, conflicted } = await diverged(t);
+  await run(second, "checkout", "--ours", conflicted);
+  await run(second, "add", "-A");
+  await finish(second, "Merge GitHub main");
+  const { findings, acknowledged } = await scan(second);
+  assert.deepEqual(acknowledged, []);
+  assert.equal(findings.length, 1);
+  const [item] = findings;
+  assert.equal(item.merge, await run(second, "rev-parse", "HEAD"));
+  assert.deepEqual(item.files, [{ path: "shared.txt", lines: 520 }], "260 lines removed and 260 added by GitHub rewrite");
+  assert.equal(item.lines, 520);
+  assert.equal(item.count, 1);
+  assert.equal(item.keptFrom, await run(second, "rev-parse", "HEAD^1"));
+  assert.equal(item.lostFrom, await run(second, "rev-parse", "HEAD^2"));
+  assert.match(lostWorkText(item, { blocked: true }), /^Nothing was pushed\. Merge [0-9a-f]{7} \(Merge GitHub main\) left out 520 lines of 1 file another branch changed \(shared\.txt\)\. Restore them, or if that was deliberate say so with a "Lost-work-ok: <why>" line in a commit message\.$/);
+});
+
+test("a hand-made resolution and a clean merge are not lost work", async (t) => {
+  const mixed = await diverged(t);
+  write(mixed.second, mixed.conflicted, `${body("github", 130)}${body("local", 130)}`);
+  await run(mixed.second, "add", "-A");
+  await finish(mixed.second, "Merge GitHub main");
+  assert.deepEqual((await scan(mixed.second)).findings, [], "a mix of both sides matches neither");
+
+  const clean = await fixture(t);
+  write(clean.first, "a.txt", body("a"));
+  await run(clean.first, "add", "-A");
+  await run(clean.first, "commit", "-q", "-m", "GitHub adds a");
+  await run(clean.first, "push", "-q", "origin", "main");
+  write(clean.second, "b.txt", body("b"));
+  await run(clean.second, "add", "-A");
+  await run(clean.second, "commit", "-q", "-m", "This PC adds b");
+  await run(clean.second, "fetch", "-q", "origin");
+  await run(clean.second, "merge", "-q", "--no-edit", "origin/main");
+  assert.deepEqual((await scan(clean.second)).findings, []);
+});
+
+test("a small conflict kept whole is under the threshold, and the threshold is the only reason", async (t) => {
+  const { second, conflicted } = await diverged(t, "notes.txt", 12);
+  await run(second, "checkout", "--ours", conflicted);
+  await run(second, "add", "-A");
+  await finish(second, "Merge GitHub main");
+  const dropped = await scan(second, { minLines: 10 });
+  assert.equal(dropped.findings.length, 1);
+  assert.equal(dropped.findings[0].files[0].lines, 24);
+  assert.ok(dropped.findings[0].files.some((file) => file.path === "github-only.txt") === false, "the clean part of the merge kept GitHub's new file");
+  assert.equal(LOST_WORK.minLines, 200);
+  assert.deepEqual((await scan(second)).findings.map((item) => item.lines), [], "24 lines of another side's work is under 200");
+});
+
+test("a later commit that puts the tree back to one parent of a merge is found too", async (t) => {
+  const { second, conflicted } = await diverged(t);
+  write(second, conflicted, `${body("github", 130)}${body("local", 130)}`);
+  await run(second, "add", "-A");
+  await finish(second, "Merge GitHub main");
+  const merged = await run(second, "rev-parse", "HEAD");
+  assert.deepEqual((await scan(second)).findings, []);
+  // "fixes": the whole tree goes back to this PC's side of the merge.
+  await run(second, "read-tree", "--reset", "-u", `${merged}^1`);
+  await finish(second, "fixes");
+  const { findings } = await scan(second);
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].merge, merged);
+  assert.deepEqual(findings[0].files.map((file) => file.path).sort(), ["github-only.txt", "shared.txt"]);
+  assert.equal(findings[0].lines, 260 + 520, "GitHub's new file plus its rewrite of the shared one");
+});
+
+test("generated and rotated files may keep either side: the booklet and TESTRUNS never count", async (t) => {
+  for (const name of ["renderer/booklet.html", "TESTRUNS.md", "docs/archive/testruns-2026-09.md"]) {
+    const { second } = await diverged(t, name);
+    await run(second, "checkout", "--ours", name);
+    await run(second, "add", "-A");
+    await finish(second, "Merge GitHub main");
+    assert.deepEqual((await scan(second)).findings, [], `${name} is exempt`);
+  }
+  assert.ok(LOST_WORK.exempt.every((rule) => rule instanceof RegExp));
+});
+
+test("a Lost-work-ok line in the merge or a later commit accounts for a deliberate choice", async (t) => {
+  const { second, conflicted } = await diverged(t);
+  await run(second, "checkout", "--ours", conflicted);
+  await run(second, "add", "-A");
+  await finish(second, "Merge GitHub main");
+  const before = await scan(second);
+  assert.equal(before.findings.length, 1);
+  await run(second, "commit", "-q", "--allow-empty", "-m", "Keep this PC design\n\nLost-work-ok: GitHub rewrite of shared.txt is replaced on purpose");
+  const after = await scan(second);
+  assert.deepEqual(after.findings, []);
+  assert.equal(after.acknowledged.length, 1);
+  assert.equal(after.acknowledged[0].merge, before.findings[0].merge);
+  const inMerge = await diverged(t);
+  await run(inMerge.second, "checkout", "--ours", inMerge.conflicted);
+  await run(inMerge.second, "add", "-A");
+  await finish(inMerge.second, "Merge GitHub main\n\nLost-work-ok: this PC design wins");
+  assert.equal((await scan(inMerge.second)).acknowledged.length, 1, "the merge message itself may say so");
+});
+
+test("sync refuses to push a merge that left work out, names it, and pushes once told it was deliberate", async (t) => {
+  const { second, hub, conflicted } = await diverged(t);
+  await run(second, "checkout", "--ours", conflicted);
+  await run(second, "add", "-A");
+  await finish(second, "Merge GitHub main");
+  const remoteHead = await run(hub, "rev-parse", "main");
+  const refused = await sync(second, { check: async () => ({ ok: true }) });
+  assert.equal(refused.ok, false);
+  assert.deepEqual(refused.problems.map((item) => item.kind), ["lost-work"]);
+  assert.match(refused.headline, /^Nothing was pushed\. Merge [0-9a-f]{7} \(Merge GitHub main\) left out 520 lines of 1 file another branch changed \(shared\.txt\)\./);
+  assert.equal(await run(hub, "rev-parse", "main"), remoteHead, "GitHub is untouched");
+  assert.equal(refused.lines.filter((line) => /left out 520 lines/.test(line)).length, 1, "the finding is reported once");
+  let checked = false;
+  const allowed = await sync(second, { allowLostWork: true, check: async () => { checked = true; return { ok: true }; } });
+  assert.equal(allowed.ok, true);
+  assert.equal(checked, true, "the project check still runs");
+  assert.deepEqual(allowed.actions, [{ kind: "pushed", commits: 2 }], "this PC work and the merge");
+  assert.equal(await run(hub, "rev-parse", "main"), await run(second, "rev-parse", "HEAD"));
+});
+
+test("a session hook only reports recent lost work, and never fails or pushes", async (t) => {
+  const { first, second, hub, conflicted } = await diverged(t);
+  await run(second, "checkout", "--ours", conflicted);
+  await run(second, "add", "-A");
+  await finish(second, "Merge GitHub main");
+  await sync(second, { allowLostWork: true });
+  const hook = await sync(first, { push: false });
+  assert.equal(hook.ok, true, "a report is not a failure");
+  assert.deepEqual(hook.problems, []);
+  const item = hook.pending.find((entry) => entry.kind === "lost-work");
+  assert.ok(item, "the merge GitHub now holds is listed");
+  assert.equal(item.merge, await run(hub, "rev-parse", "main"));
+  assert.match(item.text, /^Merge [0-9a-f]{7} \(Merge GitHub main\) left out 520 lines of 1 file another branch changed \(shared\.txt\)\./);
+  assert.ok(!/^Nothing was pushed/.test(item.text));
+  assert.match(describe(hook, { hook: true }), /left out 520 lines/);
+  assert.equal(atRisk(hook.pending).length, 0, "it is history on GitHub, not work only this PC holds");
 });

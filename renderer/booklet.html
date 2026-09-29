@@ -53530,6 +53530,11 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     { path: /^Settings › System\b/, words: /\b(update|updates|github|discord|styler|dashboard|bot)\b/i, category: "web", otherwise: "dev" },
     { path: /^Agents\b/, words: /\b(builders? run on|parallel builds|build approval|agent coordination|allow new work|run the queue|each build may cost|pinned model for this cli)\b/i, category: "exec", otherwise: "agents" },
   ];
+  // The setup helper (renderer/setup-helper.js) registers one Search record per
+  // section, `setup-helper:<section>`. Configuration files them beside the
+  // settings they configure and each row opens the helper at that section, so
+  // this stays the one index. Welcome and Finish are the walkthrough itself.
+  const HELPER_SECTIONS = { providers: "agents", team: "agents", routing: "agents", run: "exec", permissions: "exec", tools: "exec", system: "dev", look: "ui" };
   // Buttons that only act on the field beside them (Save, Add, Refresh list)
   // and links out of a card are reached through that field or card: listed
   // alone they read as five identical "Save" rows.
@@ -53553,7 +53558,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const named = new Set();
     const rows = [];
     for (const record of list) {
-      if (!record || typeof record.id !== "string" || !record.id.startsWith("settings:") || seen.has(record.id)) continue;
+      if (!record || typeof record.id !== "string" || seen.has(record.id)) continue;
+      const helper = /^setup-helper:([a-z-]+)$/.exec(record.id)?.[1] ?? null;
+      if (!record.id.startsWith("settings:") && !(helper && HELPER_SECTIONS[helper])) continue;
       if (typeof record.hidden === "function" && record.hidden()) continue;
       seen.add(record.id);
       const label = String(record.label || record.short || record.id);
@@ -53565,7 +53572,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       if (named.has(label)) continue;
       named.add(label);
       const words = `${label} ${record.desc || ""} ${record.searchTerms || ""}`;
-      rows.push({ id: record.id, title, path, where: path.slice(0, -1).join(" › "), desc: String(record.desc || ""), terms: words.toLowerCase(), category: categoryOf(label, words), run: record.run });
+      rows.push({ id: record.id, title, path, where: path.slice(0, -1).join(" › "), desc: String(record.desc || ""), terms: words.toLowerCase(), category: helper ? HELPER_SECTIONS[helper] : categoryOf(label, words), run: record.run });
+    }
+    // The guided walkthrough itself heads Inference & Agents, whatever the
+    // helper's section records say.
+    if (typeof window.MefiSetupHelper?.open === "function") {
+      rows.unshift({ id: "setup-helper:walkthrough", title: "Walk me through setup", path: ["Setup helper", "Walk me through setup"], where: "Setup helper", desc: "Connect an AI, choose your team and set permissions, step by step.", terms: "walk me through setup guided walkthrough wizard first run setup helper connect an ai team permissions", category: "agents", run: () => window.MefiSetupHelper.open("welcome") });
     }
     return rows;
   }

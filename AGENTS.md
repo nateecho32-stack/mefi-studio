@@ -37,6 +37,16 @@ Claude Code sessions and Claude's memory stay on the PC that made them.
   and stops without changes on a conflict. Never force-push `main`, never
   skip the check to get a push through, and never leave finished work only
   on one PC.
+- Resolve merge conflicts file by file. Never keep one side of a conflicted
+  file whole (`git checkout --ours`/`--theirs`) or put the tree back to one
+  parent: on 2026-09-27 a merge and a "fixes" commit did that and twelve
+  commits of work left `main` without a conflict marker or a failing test.
+  Regenerate `renderer/booklet.html` and rotate TESTRUNS rows instead of
+  choosing a side. `npm run sync` refuses to push a merge that leaves out 200
+  or more lines of another branch's changes, and the session hook lists recent
+  ones. If a choice is deliberate, say so in history with a `Lost-work-ok: <why>`
+  line in the merge's message (or any later commit's); `--allow-lost-work` only
+  overrides one push.
 - Park unfinished work that another PC may need on a pushed `wip/<topic>`
   branch. Its commit message should say what is missing and which tests fail.
 - Other sessions may be working in the same checkout. Check `git status` and

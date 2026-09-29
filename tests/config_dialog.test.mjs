@@ -12,7 +12,7 @@ import { createDom, templateIds } from "./fixtures/renderer-dom.mjs";
 const source = await readFile(new URL("../renderer/config-dialog.js", import.meta.url), "utf8");
 const settle = async () => { for (let turn = 0; turn < 8; turn += 1) await new Promise((resolve) => setImmediate(resolve)); };
 
-function load({ zoom = true } = {}) {
+function load({ zoom = true, helper = false } = {}) {
   const ran = [];
   const zoomed = [];
   const record = (id, label, desc = "") => ({ id, label, desc, kind: "action", run: () => ran.push(id) });
@@ -29,14 +29,28 @@ function load({ zoom = true } = {}) {
     { id: "tasks", label: "Task board", kind: "overlay" },
     { ...record("settings:hidden", "Settings › General › Hidden"), hidden: () => true },
   ];
+  // The setup helper's per-section Search records (renderer/setup-helper.js).
+  const opened = [];
+  if (helper) {
+    records.push(
+      record("setup-helper:welcome", "Setup helper › Welcome", "Start here"),
+      record("setup-helper:providers", "Setup helper › Connect an AI", "Sign in to a coding CLI or add a key"),
+      record("setup-helper:routing", "Setup helper › Routing", "Which provider answers each role"),
+      record("setup-helper:permissions", "Setup helper › Permissions", "What Mefi may decide for you"),
+      record("setup-helper:system", "Setup helper › Machine & app", "This computer and the app"),
+      record("setup-helper:look", "Setup helper › Look", "Theme and nodes"),
+      record("setup-helper:finish", "Setup helper › Finish", "You are set"),
+      record("setup-helper:mystery", "Setup helper › Mystery", "A section Configuration does not know"),
+    );
+  }
   const { document, get } = createDom({ ids: templateIds((id) => id.startsWith("config-")) });
   get("config-overlay").hidden = true;
   const api = zoom ? { uiZoom: async ({ factor }) => { zoomed.push(factor); return { ok: true, factor }; }, uiZoomGet: async () => ({ ok: true, factor: 1.1 }) } : {};
-  const window = { mefiStudio: api, MefiNav: { list: () => records }, MefiToast() {} };
+  const window = { mefiStudio: api, MefiNav: { list: () => records }, MefiToast() {}, ...(helper ? { MefiSetupHelper: { open: (id) => opened.push(id) } } : {}) };
   vm.runInContext(source, vm.createContext({ window, document, console, requestAnimationFrame: () => 0 }));
   const titles = () => get("config-pane").querySelectorAll(".config-item-title").map((node) => node.textContent);
   const categories = () => get("config-tree").querySelectorAll(".config-category").filter((button) => !button.hidden).map((button) => [button.dataset.category, button.children[1].textContent]);
-  return { config: window.MefiConfig, get, ran, zoomed, titles, categories };
+  return { config: window.MefiConfig, get, ran, opened, zoomed, titles, categories };
 }
 
 test("every settings record is filed once, by the page it lives on and then by its words", () => {
@@ -100,4 +114,42 @@ test("the host keeps the scale between 70% and 150% in 5% steps", async () => {
   assert.deepEqual([0.5, 0.72, 1, 1.26, 2, "x", null].map(zoomFactorOf), [0.7, 0.7, 1, 1.25, 1.5, 1, 1]);
   assert.match(main, /settings\.ui = \{ \.\.\.\(settings\.ui \?\? \{\}\), zoom: value \}/, "the scale is saved with the other UI settings");
   assert.match(main, /did-finish-load[\s\S]{0,200}zoomFactorOf\(settings\?\.ui\?\.zoom\)/, "and put back when the page loads");
+});
+
+test("the setup helper's sections are filed with the settings they configure; its own framing is left out", () => {
+  const { config } = load({ helper: true });
+  const filed = Object.fromEntries(config.records().filter((row) => row.id.startsWith("setup-helper:")).map((row) => [row.id, row.category]));
+  assert.deepEqual(filed, {
+    "setup-helper:walkthrough": "agents",
+    "setup-helper:providers": "agents",
+    "setup-helper:routing": "agents",
+    "setup-helper:permissions": "exec",
+    "setup-helper:system": "dev",
+    "setup-helper:look": "ui",
+  }, "Welcome and Finish are the walkthrough's framing, and a section Configuration does not know is not a setting");
+  assert.ok(!load().config.records().some((row) => row.id.startsWith("setup-helper:")), "without the helper there is nothing to index");
+});
+
+test("Walk me through setup heads Inference & Agents and opens the helper's welcome", async () => {
+  const { config, get, opened, ran, titles } = load({ helper: true });
+  await config.open({ category: "agents" });
+  assert.deepEqual(titles().slice(0, 4), ["Walk me through setup", "Connect an AI", "Routing", "Builder model"]);
+  assert.equal(get("config-pane").querySelector(".config-group-name").textContent, "Setup helper");
+  get("config-pane").querySelector(".config-item").click();
+  assert.deepEqual(opened, ["welcome"]);
+  assert.deepEqual(ran, [], "the walkthrough opens the helper itself, not a section record");
+  assert.equal(get("config-overlay").hidden, true, "the dialog steps aside first");
+});
+
+test("search reaches the helper's sections, and a match opens the helper at that section", async () => {
+  const { config, get, ran, titles } = load({ helper: true });
+  await config.open();
+  const search = get("config-search");
+  const type = (text) => { search.value = text; for (const fn of search.listeners.input) fn({}); };
+  type("walk");
+  assert.deepEqual(titles(), ["Walk me through setup"]);
+  type("routing");
+  assert.deepEqual(titles(), ["Routing"]);
+  for (const fn of search.listeners.keydown) fn({ key: "Enter", preventDefault() {}, stopPropagation() {} });
+  assert.deepEqual(ran, ["setup-helper:routing"]);
 });

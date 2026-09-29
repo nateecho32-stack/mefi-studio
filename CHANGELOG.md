@@ -7,6 +7,27 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **A merge that drops another branch's work is caught before it is pushed.**
+  On 2026-09-27 a merge kept one PC's copy of every file both sides had
+  changed, and the next commit put the rest of the tree back to that copy:
+  twelve commits of work left `main` with no conflict marker and no failing
+  test. `npm run sync` now finds that shape (a path one side of a merge
+  changed, where the tip holds exactly the other side's copy), and when 200 or
+  more lines of the other side's work vanish it refuses to push and names the
+  merge, the lines and the files. The session hook and Friends › Your PCs list
+  recent ones without blocking. A deliberate choice is recorded in history
+  with a `Lost-work-ok: <why>` line in the merge's message (or a later
+  commit's); `--allow-lost-work` overrides one push. The generated booklet and
+  TESTRUNS rows are exempt. Run against the real history it flags `65703a6`
+  (136 files, 10,474 lines).
+- **Configuration is the one index for agent setup.** Ctrl Shift , now also
+  lists the setup helper's sections beside the settings they configure
+  (Connect an AI, Team & models and Routing under Inference & Agents; How work
+  runs, Permissions and Tools & skills under Files & Exec; Machine & app under
+  Dev & Meta; Look under UI & Surfaces), each opening the helper at that
+  section, and pins **Walk me through setup** at the head of Inference &
+  Agents.
+
 - **A calmer Task board.** The board opens straight on its tools: add a
   task, then search with the state picker beside it, then the All / Open /
   Review / Done chips as one compact row. The explanatory heading and the
