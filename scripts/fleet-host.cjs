@@ -258,7 +258,14 @@ function createFleetHost(options = {}) {
       const current = detail.seat.now;
       const last = detail.lineage[0] ?? null;
       const kind = String(payload?.action ?? "");
-      if (kind === "stop") return current?.taskId ? { ok: true, action: kind, taskId: current.taskId, runId: current.runId } : { ok: false, error: "That seat is not running anything." };
+      if (kind === "stop") {
+        if (!current?.taskId) return { ok: false, error: "That seat is not running anything." };
+        // The run the owner was looking at when they armed Stop: a seat that has moved on to
+        // another run (or another project's seat of the same name) is not stopped by mistake.
+        const seen = String(payload?.runId ?? "");
+        if (seen && seen !== current.runId) return { ok: false, error: "That seat has moved on to another run. Look again before stopping it." };
+        return { ok: true, action: kind, taskId: current.taskId, runId: current.runId };
+      }
       if (kind === "open-task" || kind === "open-log") {
         const taskId = current?.taskId ?? last?.taskId ?? null;
         const runId = current?.runId ?? last?.runId ?? null;

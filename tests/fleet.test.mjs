@@ -47,7 +47,8 @@ test("a run takes a seat as its next generation, goes home, and is verified on t
   fleet.observeTasks(state, [{ id: "task_a", title: "Wire the fleet", status: "done", verification: { state: "verified", at: T0 + 9 * MIN } }], T0 + 9 * MIN);
   snapshot = view(state, T0 + 10 * MIN);
   assert.equal(seat(snapshot, "builder-1").status, "idle");
-  assert.deepEqual(seat(snapshot, "builder-1").last, { gen: 1, title: "Wire the fleet", outcome: "verified", endedAt: T0 + 5 * MIN });
+  // The ids let the page open the run's task and its orb from an idle seat.
+  assert.deepEqual(seat(snapshot, "builder-1").last, { gen: 1, taskId: "task_a", runId: "run_1", title: "Wire the fleet", outcome: "verified", endedAt: T0 + 5 * MIN });
   assert.deepEqual(snapshot.recent.map((row) => row.kind), ["verified", "completed", "claimed"]);
   assert.deepEqual(snapshot.edges.map((item) => [item.from, item.to, item.kind]).sort(), [["builder-1", "overseer", "verify"], ["foreman", "builder-1", "dispatch"]]);
   const detail = fleet.seatDetail(state, "builder-1", { projectName: "Mefi Studio", at: T0 + 10 * MIN });
@@ -198,4 +199,30 @@ test("a snapshot carries clipped titles and ids only — never prompts or paths"
   assert.ok(!text.includes("SECRET PROMPT TEXT"));
   assert.ok(!text.includes("secret.txt"));
   assert.ok(!text.includes("x".repeat(fleet.LIMITS.title + 1)));
+});
+
+test("text that reorders or hides other text never reaches a snapshot", () => {
+  const state = fleet.emptyState();
+  const marks = [0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2066, 0x2067, 0x2068, 0x2069, 0x200b, 0x200e, 0x200f, 0x2060, 0xfeff].map((code) => String.fromCharCode(code)).join("");
+  const title = `Pay${marks} the invoice${String.fromCharCode(0x202e)}txt.exe`;
+  start(state, { runId: "run_1", taskId: "task_a", title, at: T0 });
+  fleet.observeEvent(state, { kind: "mail", at: T0 + 500, from: "foreman", to: "lead", text: `all${marks} clear` });
+  const text = JSON.stringify(view(state, T0 + 1000));
+  for (const code of [0x202a, 0x202b, 0x202d, 0x202e, 0x2066, 0x2069, 0x200b, 0x200e, 0x200f, 0x2060, 0xfeff]) {
+    assert.ok(!text.includes(String.fromCharCode(code)), `U+${code.toString(16)} is left out`);
+  }
+  assert.match(text, /Pay the invoicetxt\.exe/);
+  assert.match(text, /all clear/);
+});
+
+test("an idle seat's last run carries the ids that let the page open its task and its orb", () => {
+  const state = fleet.emptyState();
+  start(state, { runId: "run_1", taskId: "task_a", title: "First", at: T0 });
+  assert.equal(seat(view(state, T0 + MIN), "builder-1").last, null, "a seat that is running has no last run");
+  fleet.observeEvent(state, { kind: "agent.home", at: T0 + 2 * MIN, runId: "run_1", taskId: "task_a", title: "First", ok: true });
+  fleet.observeStatus(state, { parallel: 3, loop: { state: "running", on: true, ready: 0 }, running: [] }, T0 + 2 * MIN);
+  const last = seat(view(state, T0 + 3 * MIN), "builder-1").last;
+  assert.equal(last.taskId, "task_a");
+  assert.equal(last.runId, "run_1");
+  assert.equal(seat(view(state, T0 + 3 * MIN), "lead").last, null, "a seat with no runs has none");
 });

@@ -366,7 +366,7 @@ const api = {
   fleetSnapshot: () => ipcRenderer.invoke("fleet:snapshot"),
   fleetWatch: (payload) => ipcRenderer.invoke("fleet:watch", { id: typeof payload?.id === "string" ? payload.id.slice(0, 40) : "fleet", on: payload?.on !== false }),
   fleetSeat: (seatId) => ipcRenderer.invoke("fleet:seat", { seatId: String(seatId ?? "").slice(0, 40) }),
-  fleetAction: (payload) => ipcRenderer.invoke("fleet:action", { seatId: String(payload?.seatId ?? "").slice(0, 40), action: String(payload?.action ?? "").slice(0, 20) }),
+  fleetAction: (payload) => ipcRenderer.invoke("fleet:action", { seatId: String(payload?.seatId ?? "").slice(0, 40), action: String(payload?.action ?? "").slice(0, 20), runId: String(payload?.runId ?? "").slice(0, 80) }),
   onFleetUpdate: (callback) => ipcRenderer.on("fleet:update", (_event, payload) => callback(payload)),
   onCompanionWelcome: (callback) => ipcRenderer.on("companion:welcome", (_event, payload) => callback(payload)),
 };

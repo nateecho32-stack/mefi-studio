@@ -75,8 +75,11 @@ const NOT_TAKING = new Set(["held", "paused", "parked", "draining", "stuck", "wa
 const record = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
 const finite = (value) => (typeof value === "number" && Number.isFinite(value) ? value : null);
 const count = (value) => Math.max(0, Math.floor(finite(value) ?? 0));
+// Text that came from a model or a friend is shown as it is, so the characters that
+// reorder or hide text (bidi overrides and isolates, zero-width marks) never get through.
+const HIDDEN_TEXT = /[\u200b\u200e\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]/g;
 function clip(value, max) {
-  return String(value ?? "").replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
+  return String(value ?? "").replace(HIDDEN_TEXT, "").replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
 }
 // Run, task and session ids as main writes them; anything else is not an id.
 function ident(value) {
@@ -619,7 +622,7 @@ function builderSeat(state, seatId, { slug, team, loopOn }) {
     } : null,
     ctx: null,
     gen: saved?.gen ?? 0,
-    last: !run && last ? { gen: last.gen, title: last.title, outcome: last.outcome, endedAt: last.endedAt } : null,
+    last: !run && last ? { gen: last.gen, taskId: last.taskId ?? null, runId: last.runId ?? null, title: last.title, outcome: last.outcome, endedAt: last.endedAt } : null,
     lastAt: run ? run.lastOutputAt ?? run.startedAt : last?.endedAt ?? last?.startedAt ?? null,
     text: escalated ? `needs you: ${escalated.text}` : ask ? `asked the desk: ${ask.text}` : null,
   };

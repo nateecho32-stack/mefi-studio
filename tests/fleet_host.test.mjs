@@ -10,9 +10,14 @@ import host from "../scripts/fleet-host.cjs";
 
 const T0 = 1_800_000_000_000;
 const settle = () => new Promise((resolve) => setImmediate(resolve));
-// Waits out the file read and the async team lookup a watch or a first hook starts.
+// The hosts a test has made. flush waits for what each of them has started, not for a guessed number of
+// event-loop turns: on a loaded machine the first file read outlasted a fixed count.
+const live = new Set();
 const flush = async () => {
-  for (let turn = 0; turn < 25; turn += 1) await settle();
+  for (let round = 0; round < 3; round += 1) {
+    for (const fleet of live) for (const scope of fleet._scopes.values()) { await scope.loaded; await scope.writes; }
+    for (let turn = 0; turn < 10; turn += 1) await settle();
+  }
 };
 
 function fakeTimers(clock) {
@@ -60,7 +65,8 @@ async function harness({ tasks = [], project = "project_1", active = () => true 
     readTasks: async () => tasks,
     timers,
   });
-  return { fleet, sent, clock, timers, root, switchTo: (id) => { current = id; }, done: () => rm(root, { recursive: true, force: true }) };
+  live.add(fleet);
+  return { fleet, sent, clock, timers, root, switchTo: (id) => { current = id; }, done: () => { live.delete(fleet); return rm(root, { recursive: true, force: true }); } };
 }
 
 const running = (runId, taskId, at) => ({ parallel: 2, loop: { state: "running", on: true, ready: 1 }, running: [{ id: runId, taskId, title: `Work on ${taskId}`, startedAt: at, phase: "building", lastOutputAt: at }] });
@@ -185,7 +191,7 @@ test("generations are saved and come back after a restart, and a snapshot works 
     const builder = builderOf(view);
     assert.equal(builder.gen, 2);
     assert.equal(builder.status, "idle");
-    assert.deepEqual(builder.last, { gen: 2, title: "Work on task_a", outcome: "lost", endedAt: null });
+    assert.deepEqual(builder.last, { gen: 2, taskId: "task_a", runId: "run_2", title: "Work on task_a", outcome: "lost", endedAt: null });
     const detail = await second.seat({ seatId: "builder-1" });
     assert.deepEqual(detail.lineage.map((gen) => [gen.gen, gen.outcome]), [[2, "lost"], [1, "awaiting"]]);
   } finally {
@@ -221,6 +227,23 @@ test("hooks never throw into the caller, whatever they are given", async () => {
     const view = await h.fleet.snapshot();
     assert.equal(view.ok, true);
     assert.deepEqual(view.recent, []);
+  } finally {
+    await h.done();
+  }
+});
+
+test("Stop names the run the owner was looking at, and a seat that moved on is not stopped by mistake", async () => {
+  const h = await harness();
+  try {
+    await h.fleet.observeStatus(running("run_1", "task_a", T0));
+    assert.deepEqual(await h.fleet.action({ seatId: "builder-1", action: "stop", runId: "run_1" }), { ok: true, action: "stop", taskId: "task_a", runId: "run_1" }, "the run that was on screen is the one held");
+    assert.deepEqual(await h.fleet.action({ seatId: "builder-1", action: "stop", runId: "" }), { ok: true, action: "stop", taskId: "task_a", runId: "run_1" }, "a caller with no run in mind gets the seat's current one");
+    const refused = await h.fleet.action({ seatId: "builder-1", action: "stop", runId: "run_0" });
+    assert.equal(refused.ok, false);
+    assert.match(refused.error, /moved on to another run/);
+    await h.fleet.observeEvent({ v: 1, kind: "agent.home", at: T0 + 1000, runId: "run_1", taskId: "task_a", ok: true });
+    await h.fleet.observeStatus(running("run_2", "task_b", T0 + 2000));
+    assert.equal((await h.fleet.action({ seatId: "builder-1", action: "stop", runId: "run_1" })).ok, false, "the seat took another task after the click was armed");
   } finally {
     await h.done();
   }
