@@ -35,6 +35,50 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-29 - GitHub link: the Git chip, Save and push, Publish and the Quiet-card launch screen
+
+The chip (`renderer/git-sync.js`), its host (`scripts/git-link.cjs`,
+`git-actions.cjs`, `git-host.cjs`, wired in `main.cjs` and `preload.cjs`), New
+app's GitHub choice and the Quiet-card launch screen. Built and gated in an
+isolated worktree (`C:\wt\ghl`, branch `gh-link`) off `origin/main`, then
+merged with `origin/main` at ab206be (two conflicts, CHANGELOG and
+`build-booklet.mjs`, both resolved by keeping both sides).
+
+- `npm run check` (0.4.5, 200 targets, 411 specs, 16 stylesheets, and
+  `MERGE-CSS-RESOLVED` on the merge) and `npm run audit` (0 findings): PASS.
+  The auditor now also reads `scripts/git-host.cjs` for the events main hands
+  it to send (`git:state`).
+- `npm test` on the merged tree: PASS. Node suites 4834 tests, 4829 pass, 0
+  fail, 5 skipped (514 s, the Electron lane included: 48 tests, 47 pass, 1
+  skipped); Python contracts 248 tests OK (1 skipped, 41 s); normalized-path
+  lock PASS.
+- New suites: `git_link` 59, `git_actions` 65 (real git in temp folders, a local
+  bare repository as "GitHub" and a fake `gh`), `git_host` 53, `git_link_host`
+  11, `git_sync_ui` 60, and `startup_screen` (rewritten deliberately: the two
+  open buttons became one Open and a Start agents switch), `vibe_panels` 48.
+  Nothing in them reaches GitHub or an account.
+- Independent reviews (three reviewers who had not written the code, host only)
+  found and fixed 41 defects, each with a regression test that fails without the
+  fix. The serious ones: a save followed a Windows junction out of the project
+  and committed a file from outside it; a branch named `-f` became a force push;
+  `scrub()` was quadratic and took 8 s on 80 KB, enough to freeze the main
+  process; key scanning was skipped for changed files when `diff.noprefix` was
+  set and for files over 1 MiB; a sync-backed step queued behind another writer
+  ran on a project opened meanwhile; an unset commit identity and a throwing
+  project check failed open. A later pass found the renderer never sent the
+  project id the host guards on, and its model sanitiser dropped the id the host
+  adds; both are fixed and pinned.
+- Left open on purpose (noted in the reviews): a file edited between the scan and
+  the commit is not re-scanned; a repository's own `.git/config` runs for reads
+  as it already does for `sync.mjs`; files over 1 MiB are warned about, not read
+  for keys; the glance has no merge/rebase-in-progress flag (Save and Publish do
+  refuse there); in-app device-code sign-in is not built (the setup window is
+  polled instead).
+- Real-app look, not only fakes: the built booklet was opened in offscreen
+  Electron at 1920x1080 with a fake bridge whose chip models come from the real
+  `describe()`: the launch card (four projects with chips, 600x560 too), the chip
+  and its popover on Vibe's home and on Build's section bar.
+
 ## 2026-09-29 - 0.4.5 roadmap quick wins and release boundary
 
 Friends now has a primary menu entry, direct Rooms, Your PCs and Playground
@@ -682,35 +726,6 @@ this PC; a hub naming its studioAppId fills the link app ID.
   4268 passed, 5 skipped, 0 failures; Electron stage 42 tests, 41 passed, 1
   skipped; `eyes_toggle_electron` 1/1; `occlusion_probe` 1 passed, 1
   capability skip; Python contracts OK (248); normalized-path lock passed.
-
-## 2026-09-28 - Discord linking without environment variables; vault kept in step
-
-Settings › Community › Connection details saves the Mefi Studio Link
-Application ID and the rooms hub's address (settings.communitySetup, checked
-by community.normalizeSetup and the hub client's address rule) and uses them
-at once; the environment variables still win. The Your PCs vault now rebases
-its own commits onto GitHub's instead of pulling fast-forward only, so a push
-that loses the race to another PC is sent again and a copy is never left
-stuck; a clash on the same item keeps GitHub's. Keys and setup queues behind
-a loading vault instead of staying empty.
-
-- `npm run build-booklet`, `npm run check` (186 targets, 379 specs) and
-  `npm run audit` (zero findings): PASS.
-- New and changed suites: community_rules (normalizeSetup), hub_host
-  (save, refuse, clear, environment wins, hub answering or not, a new hub
-  address rebuilds the client), community_bridge, community_ui (Connection
-  details opens while not set up, reasons, Link my Discord at once),
-  pc_vault (a push losing the race goes on top; a same-item clash keeps
-  GitHub's; a copy left behind catches up and sends its commit), and
-  pc_vault_ui (Keys and setup opened while loading, the phrase hint, a
-  failed list).
-- A throwaway Electron probe of Settings › Community with a fake bridge:
-  the details open while not set up, a bad id gives its reason, Save shows
-  Link my Discord and the hub line, no overflow at 1280 or 620 px.
-- `npm test` in a private worktree, exit 0: Node parallel stage 4253 tests,
-  4248 passed, 5 skipped, 0 failures; Electron stage 42 tests, 41 passed, 1
-  skipped; `eyes_toggle_electron` 1/1; `occlusion_probe` 1 passed, 1
-  capability skip; Python contracts OK; normalized-path lock passed.
 
 ## Read Before Any Tests
 
