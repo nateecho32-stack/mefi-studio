@@ -6,6 +6,10 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-28 - Merge all branches: hidden-surfaces onto the restored main; Friends across PCs verified end to end; 0.4.5
+
+Surveyed every branch and tree. gh-pages is the website (no shared history; not merged). perf/quick-wins is content-identical to aef5dfe on main (skipped). worktree-* branches and the cli-path-refresh clone are already in main. The 16:57 merge (65703a6) and "fixes" (7ba162c) losses were already restored on GitHub main by dc85f68, which keeps the docked video player the other PC is developing; this merge keeps that and the fuller Friends › Rooms (4ee6891). Merged perf/hidden-surfaces (docs/performance.md kept both). Added tests/companion_e2e.test.mjs: three Studios (main's real Companion friends block and hub client, three Discord accounts) against the Void Engine Bot's real hub with its companion relay: make a room, ask, let in, play-only default, a friend rule keeping a token-bearing title home, share-back ask, mirrored playdate, stay home; 1/1 with MEFI_STUDIO_BOT_ROOT set (hub relay patch, 462/462 bot tests). Version 0.4.5. Full npm test: 4209 passed, 1 failed (command_render, known load-sensitive; passed solo in 51 s); Python contracts and path lock passed. check ok, audit 0 errors.
+
 ## 2026-09-27 night - Agent loop: one loop status, approval race, launch choice
 
 `npm run test:fast` on branch `overhaul/agents-menus-main` (GitHub main `421453f` plus this change): full `npm test` green (Node 4243 tests, 4238 pass, 0 fail, 5 skipped; Python contracts pass). `npm run check` is green. New: `loop_status` (9), plus approval-race, Auto build mapping and launch-choice cases in `build_approval` and `startup_screen`; `startup_hold` and `boot_poll_visibility` updated for the resume emit and the opt-in idle switch.

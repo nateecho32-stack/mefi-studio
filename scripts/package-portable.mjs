@@ -9,6 +9,7 @@ import { createHash } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { copyrightLine, isWindowsExecutable, stampExecutable } from "./stamp-exe.mjs";
 
 const STUDIO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ELECTRON_DIST = path.join(STUDIO, "node_modules", "electron", "dist");
@@ -55,12 +56,43 @@ async function fileDigest(file) {
   for await (const chunk of createReadStream(file)) hash.update(chunk);
   return hash.digest("hex");
 }
+// The executable is Electron's, stamped with Studio's name, version and icon
+// (scripts/stamp-exe.mjs) so Windows and a later code signature name Studio,
+// not Electron. The stamp is deterministic, so an unchanged result is left
+// alone like the rest of the runtime.
+async function placeExecutable(from, to) {
+  let bytes = await readFile(from);
+  if (isWindowsExecutable(bytes)) {
+    const license = existsSync(path.join(STUDIO, "LICENSE")) ? await readFile(path.join(STUDIO, "LICENSE"), "utf8") : "";
+    const copyright = copyrightLine(license) || "";
+    const icon = path.join(STUDIO, "assets", "icon.ico");
+    bytes = await stampExecutable(bytes, {
+      productName: pkg.productName,
+      version: pkg.version,
+      fileName: EXE_NAME,
+      company: copyright.replace(/^Copyright\s+(\(c\)\s*)?[\d\s,-]*/i, ""),
+      copyright,
+      icon: existsSync(icon) ? await readFile(icon) : null,
+    });
+  }
+  if (existsSync(to) && (await fileDigest(to)) === createHash("sha256").update(bytes).digest("hex")) return;
+  try {
+    await writeFile(to, bytes);
+  } catch (error) {
+    // A running development copy locks its executable. Its payload still
+    // updates; only a release build must carry the new stamp.
+    if (release || !["EBUSY", "EPERM"].includes(error.code)) throw error;
+    console.warn(`${EXE_NAME} is in use and keeps its old name, version and icon until the app is closed and this runs again`);
+  }
+}
 async function copyRuntime(source, target) {
   await mkdir(target, { recursive: true });
   for (const entry of await readdir(source, { withFileTypes: true })) {
     const from = path.join(source, entry.name);
-    const to = path.join(target, source === ELECTRON_DIST && entry.name === "electron.exe" ? EXE_NAME : entry.name);
+    const executable = source === ELECTRON_DIST && entry.name === "electron.exe";
+    const to = path.join(target, executable ? EXE_NAME : entry.name);
     if (entry.isDirectory()) { await copyRuntime(from, to); continue; }
+    if (executable) { await placeExecutable(from, to); continue; }
     if (existsSync(to)) {
       const [before, after] = await Promise.all([fileDigest(from), fileDigest(to)]);
       if (before === after) continue;

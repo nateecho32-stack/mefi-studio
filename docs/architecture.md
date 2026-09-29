@@ -42,7 +42,7 @@ written in Studio's own vocabulary, so start with the glossary. For first
 steps read [GETTING_STARTED.md](../GETTING_STARTED.md); for the code-level
 walk through the agent loop read [agent-loop.md](agent-loop.md).
 
-The current navigation, configuration scope and companion behavior are described in [Unified Studio](unified-studio.md). Home, Work and Agents own the main workflow; agent setup is no longer spread across Settings, Command and Seats.
+The current navigation, configuration scope and companion behavior are described in [Unified Studio](unified-studio.md). Home, Work and Agents own the main workflow; Friends gives direct access to Rooms, Your PCs and Playground in the companion's existing menu. Agent setup is no longer spread across Settings, Command and Seats.
 
 Short dropdowns arrange their choices in two or three columns, with a check
 on the saved value and headings for option groups. Long labels and large
@@ -165,7 +165,7 @@ settings and per-model work-kind summaries for the shared controls.
 
 | Term | Meaning |
 | --- | --- |
-| **Menu** (the rail) | New task and Search sit above three main destinations: **Home**, **Work** and **Agents**, with one local row for the current group's views. Recent tasks belong to the current project; Settings and Help stay at the foot. Help contains Start here, Shortcuts and Community. The project selector at the top opens the project panel. The registry in `renderer/nav.js` preserves existing shortcuts and destination IDs. |
+| **Menu** (the rail) | New task and Search sit above **Home**, **Work**, **Agents** and **Friends**, with one local row for the current group's views. Friends and its Rooms, Your PCs and Playground links open the existing companion menu at the matching card; Search finds them too. Recent tasks belong to the current project; Settings and Help stay at the foot. Help contains Start here, Shortcuts and Community. The project selector at the top opens the project panel. The registry in `renderer/nav.js` preserves existing shortcuts and destination IDs. |
 | **Workspace** | The home screen (`H`): current task, app preview and conversation. Project queue, Studio status and setup information expand when needed. |
 | **Command view** | The 3D node tree (`D`): sessions, tasks and agents as orbs, with a right panel for Work, Assistant, Runs and Ask, and agent settings in the top toolbar. |
 | **Booklet** | Historically the single-file model catalog; today `renderer/booklet.html` is the whole app bundled into one file by `npm run build-booklet`. The **Model catalog** tab (`1`) is the part that kept the name. |
@@ -655,6 +655,13 @@ settings and per-model work-kind summaries for the shared controls.
 - **Search Studio** (`Ctrl K`) finds pages, tools, tasks and settings by
   familiar terms. **Settings › General** holds names and startup behavior;
   **Appearance** holds themes, motion, panel blur and canvas presentation.
+
+Ideas uses a responsive inbox of compact cards with a title, a short detail
+preview, status and source. Selecting a card opens the existing detail and
+actions; the Graph view remains available. Tasks and Ideas share
+`renderer/card-layout.js` to reserve each card's measured height, update when
+cards or the window resize, respect reduced motion, and release observers
+and pending animations when the view closes.
 
 ### Planning
 

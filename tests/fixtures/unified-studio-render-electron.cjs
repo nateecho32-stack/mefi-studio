@@ -358,9 +358,36 @@ app.whenReady().then(async () => {
     report.layouts.push({width,height,zoom,preset,...layout});
     assert.ok(!layout.overflow&&layout.sheet.left>=0&&layout.sheet.right<=layout.w+1&&layout.sheet.top>=0&&layout.sheet.bottom<=layout.h+1&&layout.foot<=layout.h+1,JSON.stringify(report.layouts.at(-1)));
     assert.ok(await run("return [...document.querySelectorAll('.agents-navigation button')].filter(el=>el.getClientRects().length).every(el=>{const r=el.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth+1&&r.height>=28;});"),'navigation fits at '+width+' / '+zoom);
-    if (layout.h<=520) assert.ok(await run("const list=document.getElementById('app-rail-sections'),box=list.getBoundingClientRect();list.scrollTop=0;return [...list.querySelectorAll('.app-rail-head')].every(el=>{const r=el.getBoundingClientRect();return r.top>=box.top-1&&r.bottom<=box.bottom+1;});"),'primary destinations stay visible at '+width+' / '+zoom);
+    if (layout.h<=520) {
+      const primary = await run("const list=document.getElementById('app-rail-sections');list.scrollTop=0;const box=list.getBoundingClientRect();return {top:box.top,bottom:box.bottom,heads:[...list.querySelectorAll('.app-rail-head')].map(el=>{const r=el.getBoundingClientRect();return {id:el.dataset.nav,top:r.top,bottom:r.bottom,height:r.height};})};");
+      assert.deepEqual(primary.heads.map(head=>head.id), ['workspace','tasks','agents','friends']);
+      assert.ok(primary.heads.every(head=>head.top>=primary.top-1&&head.bottom<=primary.bottom+1&&head.height>=28),'primary destinations stay visible at '+width+' / '+zoom+': '+JSON.stringify(primary));
+    }
     if (zoom===1&&preset==='studio') await capture(`unified-team-${width}.png`);
   }
+  // At the minimum window and 150% zoom, keyboard navigation can reach every
+  // Friends child even when the expanded section list has to scroll.
+  const friendsMotionWasOff=await run("const off=document.body.classList.contains('no-motion');document.body.classList.add('no-motion');return off;");
+  report.friendsNavigation=[];
+  for (const [id, heading] of [['rooms','rooms-title'],['your-pcs','pc-sync-title'],['playground','friends-title']]) {
+    const keyboard = await run(`
+      const rail=document.getElementById('app-rail'),head=rail.querySelector('.app-rail-head[data-section=friends]');
+      document.documentElement.dataset.railDrawer='';head.focus();
+      for(const child of ['rooms','your-pcs','playground']) {
+        document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));
+        if(child===${JSON.stringify(id)}) break;
+      }
+      const active=document.activeElement,box=active.getBoundingClientRect(),hit=document.elementFromPoint(box.x+box.width/2,box.y+box.height/2);
+      return {id:active.dataset.nav,height:box.height,hit:hit===active||active.contains(hit),top:box.top,bottom:box.bottom,viewport:innerHeight};
+    `);
+    assert.equal(keyboard.id,id);assert.ok(keyboard.height>=28&&keyboard.top>=0&&keyboard.bottom<=keyboard.viewport+1&&keyboard.hit,'Friends keyboard target is reachable: '+JSON.stringify(keyboard));
+    await run("document.activeElement.click();");
+    await until(`window.MefiCompanionHub.isOpen()&&document.activeElement.id===${JSON.stringify(heading)}`,`Friends opens ${id}`);
+    assert.ok(await reachable('#'+heading),'Friends card is visible: '+id);
+    report.friendsNavigation.push(id);
+    await run("window.MefiCompanionHub.close({immediate:true});await window.MefiNav.go('agents',{section:'setup',pane:'team'});");
+  }
+  if(!friendsMotionWasOff) await run("document.body.classList.remove('no-motion');");
   await require('./studio-background-checks.cjs')({ session, window, contents, run, until, capture, reachable, report });
   await run("window.unifiedFixture.project('second-project');");
   await until("window.MefiWorkspace.activeProjectId()==='second-project'", "project switch");

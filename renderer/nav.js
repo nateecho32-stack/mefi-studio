@@ -144,6 +144,7 @@
     ["home", "Home"],
     ["work", "Work"],
     ["agents", "Agents"],
+    ["friends", "Friends"],
     ["settings", "Settings"],
     ["help", "Help"],
     ["community", "Community"],
@@ -153,7 +154,7 @@
   // A rail place for a record whose kind alone would keep it out of the rail:
   // community.js registers "community" as a palette action at DOMContentLoaded,
   // and the foot (Help & community) is its home.
-  const RAIL_SLOTS = Object.freeze({ community: "foot" });
+  const RAIL_SLOTS = Object.freeze({ community: "foot", friends: "friends", rooms: "friends", "your-pcs": "friends", playground: "friends" });
   // Sections for records other modules register without one. The assistant's
   // commands and Command view's key rows name theirs in `group`.
   const ACTION_SECTIONS = Object.freeze({ community: "community" });
@@ -182,6 +183,17 @@
   // ---- registry ----------------------------------------------------------
 
   const registry = [
+    ...[
+      ["friends", "Friends", "g-orbit", "Rooms, your PCs and companion playdates", null],
+      ["rooms", "Rooms", "g-orbit", "Room chat, invitations and requests to join", "rooms"],
+      ["your-pcs", "Your PCs", "g-explorer", "Connect your PCs and sync work through GitHub", "pcs"],
+      ["playground", "Playground", "g-ambience", "Companion playdates, sharing rules and practice with Pip", "playground"],
+    ].map(([id, label, glyph, desc, target]) => ({
+      id, label, short: label, glyph, desc, kind: "action", layer: null, section: "friends", group: "tools", key: null,
+      searchTerms: `friends ${label} ${desc}`,
+      showIn: showIn({ palette: true }),
+      run: () => { closeAll(); window.MefiCompanionHub?.open?.({ section: "friends", target }); },
+    })),
     {
       id: "agents", label: "Agents", short: "Agents", kind: "overlay", layer: "sheet", section: "agents", group: "tools",
       glyph: "g-agents", badge: "questions", desc: "Your team, setup, live work, workflows, models and usage",
@@ -1325,7 +1337,7 @@
   // The More tools menus group by the same sections as the rail. Home rides
   // with Work, the foot's Community with Help, and anything else unfiled
   // lands in Settings.
-  const MENU_GROUPS = ["Work", "Agents", "Settings", "Help"];
+  const MENU_GROUPS = ["Work", "Agents", "Friends", "Settings", "Help"];
   function menuGroup(dest) {
     const section = sectionOf(dest);
     if (section === "home") return "Work";
@@ -1405,6 +1417,7 @@
     { id: "home", label: "Home", target: "workspace" },
     { id: "work", label: "Work", target: "tasks" },
     { id: "agents", label: "Agents", target: "agents" },
+    { id: "friends", label: "Friends", target: "friends" },
   ];
   const LOCAL_ROUTES = Object.freeze({
     home: ["workspace"],
@@ -1511,6 +1524,13 @@
       label.className = "app-rail-text";
       label.textContent = section.label;
       group.append(head);
+      if (section.id === "friends") {
+        const children = document.createElement("div");
+        children.className = "app-rail-children app-rail-friends";
+        children.setAttribute("role", "group"); children.setAttribute("aria-label", "Friends tools");
+        for (const id of ["rooms", "your-pcs", "playground"]) children.append(navButton(get(id), "app-rail-item", { key: false }));
+        group.append(children);
+      }
       sections.append(group);
     }
     const recent = document.createElement("div"); recent.className = "app-rail-recent app-rail-children";

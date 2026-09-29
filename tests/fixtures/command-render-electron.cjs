@@ -1150,7 +1150,7 @@ app.whenReady().then(async () => {
       assert.equal(sample.inViewport, true, `${route} fits beside the rail at ${width}: ${JSON.stringify(sample)}`);
       assert.equal(sample.fitsHeight,true,`${route} fits below local navigation within ${height}px`);
       assert.ok(sample.local.every(item=>item.hit),`${route} local navigation remains clickable at ${width}×${height}`);
-      assert.deepEqual(sample.railHeads, ["Home", "Work", "Agents"]);
+      assert.deepEqual(sample.railHeads, ["Home", "Work", "Agents", "Friends"]);
       if (sample.page) { assert.equal(sample.role,"region"); assert.equal(sample.modal,null); }
       if (!["workspace","studio"].includes(route) && sample.local.some(item=>item.id===route)) assert.equal(sample.local.find(item=>item.id===route)?.current,true,`${route} has a selected local view`);
       await menuCapture(`${width}${scale===1?'':'-125pct'}-${route}`);

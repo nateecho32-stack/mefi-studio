@@ -1532,11 +1532,21 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
 #task-detail .task-detail-panel > h4 { margin: 18px 0 8px; font-size: 13px; }
 #task-detail .task-detail-panel > h4:first-child { margin-top: 0; }
 #task-reference-controls { margin-top: 18px; border-top: 1px solid var(--hairline); padding-top: 12px; }
-#ideas-overlay .explorer-grid { grid-template-columns: minmax(230px, 34%) minmax(0, 1fr); }
+#ideas-overlay .explorer-grid { grid-template-columns: minmax(260px, 58%) minmax(0, 1fr); }
 #ideas-overlay[data-view="graph"] .explorer-grid { grid-template-columns: minmax(200px, 25%) minmax(0, 1fr) minmax(240px, 28%); }
 #ideas-overlay .explorer-col:last-child { grid-column: auto; }
 #ideas-graph-col[hidden] { display: none !important; }
 #ideas-overlay .explorer-col { min-width: 0; }
+/* The inbox uses the Task board's compact card layout. DOM order still
+   follows unread first, then newest, including keyboard navigation. */
+#ideas-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); grid-auto-rows: 4px; column-gap: 12px; row-gap: 0; align-content: start; align-items: start; }
+#ideas-list > .idea-card { display: block; min-width: 0; margin: 0; padding: 14px; border: 1px solid var(--hairline-strong); border-left: 3px solid var(--task-color, var(--gold-dim)); border-radius: var(--r-md); background: color-mix(in srgb, var(--ivory) 3%, var(--panel-solid)); overflow-wrap: anywhere; transition: border-color var(--dur-1) var(--ease), background var(--dur-1) var(--ease); }
+#ideas-list > .idea-card:hover { border-color: var(--gold); }
+#ideas-list > .idea-card.selected { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 10%, var(--panel-solid)); }
+#ideas-list .idea-card-title { display: block; margin: 8px 0 5px; font-size: 14px; line-height: 1.4; font-weight: 600; color: var(--ivory); }
+#ideas-list .idea-card-excerpt { margin: 0 0 9px; font-size: 12px; line-height: 1.5; color: var(--muted); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+#ideas-list .who { font-size: 11px; line-height: 1.5; }
+#ideas-list > .muted { grid-column: 1 / -1; border: 0; padding: 10px 0; cursor: default; }
 #explorer-overlay .explorer-grid { grid-template-columns: minmax(200px, 27%) minmax(0, 1fr); }
 #explorer-overlay[data-tools="true"] .explorer-grid { grid-template-columns: minmax(200px, 23%) minmax(0, 1fr) minmax(300px, 31%); }
 #explorer-overlay .explorer-col:last-child { grid-column: auto; }
@@ -3238,7 +3248,7 @@ html[data-no-blur] {
 #tasks-overlay.task-overview-mode:not(.task-detail-open) .explorer-grid > section.explorer-col { display: none; }
 #tasks-overlay.task-overview-mode #task-list { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,320px),1fr)); gap: 12px; align-content: start; align-items: start; }
 #tasks-overlay.task-detail-open #task-list { grid-template-columns: minmax(0,1fr); }
-/* Masonry: 4px rows that tasks.js spans per card (MASONRY_ROW, with the
+/* Masonry: 4px rows that card-layout.js spans per card (with the
    12px gap folded into the span), so cards slide up into free space. */
 #tasks-overlay.task-overview-mode:not(.task-detail-open) :is(#task-list, .task-overview-finished-list) { grid-auto-rows: 4px; row-gap: 0; }
 #task-list > .task-overview-summary { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; border: 0; padding: 2px 0 2px; color: var(--muted); font-size: 11px; cursor: default; }
@@ -4924,6 +4934,8 @@ html[data-rail-pinned] #app-rail .app-rail-head .count { position: static; margi
 #app-rail .app-rail-search { margin-bottom: 16px; }
 #app-rail .app-rail-recent { display: flex; flex-direction: column; margin-top: 26px; gap: 8px; }
 #app-rail .app-rail-heading { padding: 0 12px; color: var(--dim); font: 500 11px/1.5 var(--font-ui); }
+#app-rail .app-rail-friends { display: flex; flex-direction: column; gap: 1px; }
+#app-rail .app-rail-friends .app-rail-item { min-height: 34px; padding-left: 20px; font-size: 13px; }
 #app-rail-recent-list { display: flex; flex-direction: column; gap: 1px; }
 #app-rail .app-rail-recent-task { min-height: 36px; font-size: 13px; font-weight: 400; }
 #app-rail .app-rail-recent-task[aria-pressed="true"] { color: var(--ivory); background: color-mix(in srgb, var(--ivory) 6%, transparent); }
@@ -4949,6 +4961,7 @@ html[data-rail-pinned] #app-rail .app-rail-head .count { position: static; margi
    keycaps and counts wait for the rail to open instead of peeking out clipped. */
 html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) :is(.app-rail-brand, .app-rail-foot-item, .app-rail-pin, .app-rail-compose, .app-rail-search) :is(.label, .key, .app-rail-text, .count) { display: none; }
 html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-recent { display: none; }
+html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-friends { display: none; }
 /* ...except the foot's Settings and Help and the update dot: at rest they keep
    a word under the icon, as the sections above do, instead of bare glyphs. */
 html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) :is(.app-rail-foot-item, #app-rail-foot .update-pill) {
@@ -8047,7 +8060,7 @@ span.catalog-expand { width: 16px; height: 16px; }
 .studio-field { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(120px, 1fr); align-items: center; gap: 16px; padding: 8px 0; }
 .studio-history { display: flex; align-items: center; gap: 4px; padding-right: 10px; border-right: 1px solid var(--hairline); flex-shrink: 0; }
 .studio-history button { min-width: 32px; font-size: 18px; }
-/* Keep the three primary destinations in view at increased display scaling. */
+/* Keep the primary destinations in view at increased display scaling. */
 @media (max-height: 600px) {
   #app-rail { padding-block: 3px; gap: 2px; }
   #app-rail .app-rail-brand { min-height: 34px; margin-bottom: 0; padding-block: 3px; }
@@ -8064,6 +8077,21 @@ span.catalog-expand { width: 16px; height: 16px; }
   #app-rail .app-rail-pin { min-height: 26px; margin-top: 2px; }
   html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) :is(.app-rail-foot-item, #app-rail-foot .update-pill) { flex-direction: row; min-height: 30px; padding: 2px; }
   html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) :is(.app-rail-foot-item, #app-rail-foot .update-pill) .label { display: none; }
+}
+/* The minimum window at 150% zoom has about 373 CSS pixels of height.
+   Keep four primary tiles visible; the expanded Friends tools still scroll
+   inside the existing section list, with 28px keyboard and pointer targets. */
+@media (max-height: 440px) {
+  #app-rail .app-rail-section > .app-rail-head,
+  #app-rail:hover .app-rail-section:has(> .app-rail-children) > .app-rail-head,
+  #app-rail:has(:focus-visible) .app-rail-section:has(> .app-rail-children) > .app-rail-head,
+  html[data-rail-pinned] #app-rail .app-rail-section:has(> .app-rail-children) > .app-rail-head,
+  html[data-rail-drawer] #app-rail .app-rail-section:has(> .app-rail-children) > .app-rail-head { min-height: 28px; margin-top: 0; padding-block: 2px; gap: 0; }
+  #app-rail .app-rail-head .glyph { width: 14px; height: 14px; }
+  #app-rail .app-rail-head .app-rail-text { line-height: 1; }
+  html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-head .app-rail-text { line-height: 1; }
+  #app-rail .app-rail-friends .app-rail-item { min-height: 28px; }
+  #app-rail :is(.app-rail-compose, .app-rail-search) { margin-bottom: 0; }
 }
 .studio-style-controls { width: 100%; }
 .studio-style-choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 10px 0; }
@@ -10632,6 +10660,7 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
     <button type="button" data-nav="plans" title="Plan an idea before building it (P)"><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg><span>Plans</span></button>
     <button type="button" data-nav="ideas" title="Ideas the agents noticed (I)"><svg class="glyph" aria-hidden="true"><use href="#g-ideas"/></svg><span>Ideas</span><span class="count" data-badge="ideas" hidden></span></button>
     <button type="button" data-nav="agents" title="Your agents, models and usage"><svg class="glyph" aria-hidden="true"><use href="#g-agents"/></svg><span>Agents</span></button>
+    <button type="button" data-nav="friends" title="Rooms, your PCs and companion playdates"><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span>Friends</span></button>
     <button type="button" data-nav="palette" title="Search everything (Ctrl K)"><svg class="glyph" aria-hidden="true"><use href="#g-search"/></svg><span>Search</span></button>
   </div>
   <div class="vibe-rail-foot">
@@ -17449,6 +17478,80 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
   window.MefiMotion = { keep, swap, enter, glide, tally, off };
 })();
 
+// Compact card grids shared by Tasks and Ideas. CSS supplies 4px rows;
+// each card reserves its measured height plus the 12px space below it.
+(function () {
+  "use strict";
+  const ROW = 4, GAP = 12;
+
+  function create({ lists, visible = () => true }) {
+    let observer = null, frame = 0, watching = false;
+    const animations = new Set();
+    function layout() {
+      frame = 0;
+      if (!watching || !visible() || typeof getComputedStyle !== "function") return;
+      const glide = !window.MefiMotion?.off?.() && !window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+      const placed = [], spans = [];
+      for (const list of lists().filter(Boolean)) {
+        if (!list.getBoundingClientRect().width) continue;
+        const on = getComputedStyle(list).gridAutoRows === `${ROW}px`;
+        for (const item of list.children) {
+          const before = item.getBoundingClientRect();
+          if (glide && on && item.style.gridRowEnd) placed.push({ item, before });
+          // Sheet entrance transforms must not shrink the reserved space.
+          // offsetHeight measures the card's layout size before transforms.
+          const height = Number.isFinite(item.offsetHeight) ? item.offsetHeight : before.height;
+          spans.push([item, on ? `span ${Math.max(1, Math.ceil((height + GAP) / ROW))}` : ""]);
+        }
+      }
+      let changed = false;
+      for (const [item, value] of spans) if (item.style.gridRowEnd !== value) { item.style.gridRowEnd = value; changed = true; }
+      if (!changed) return;
+      for (const { item, before } of placed) {
+        if (typeof item.animate !== "function") continue;
+        const after = item.getBoundingClientRect();
+        const dx = before.left - after.left, dy = before.top - after.top;
+        if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1) continue;
+        const animation = item.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "none" }], { duration: 260, easing: "cubic-bezier(.2,.8,.2,1)" });
+        if (animation) {
+          animations.add(animation);
+          animation.onfinish = animation.oncancel = () => animations.delete(animation);
+        }
+      }
+    }
+    function schedule() {
+      if (watching && !frame && typeof requestAnimationFrame === "function") frame = requestAnimationFrame(layout);
+    }
+    function refresh({ immediate = false } = {}) {
+      watching = visible();
+      observer?.disconnect();
+      if (!watching) { stop(); return; }
+      if (typeof ResizeObserver === "function") {
+        observer ??= new ResizeObserver(schedule);
+        for (const list of lists().filter(Boolean)) {
+          observer.observe(list);
+          for (const item of list.children) observer.observe(item);
+        }
+      }
+      if (immediate) {
+        if (frame && typeof cancelAnimationFrame === "function") cancelAnimationFrame(frame);
+        layout();
+      } else schedule();
+    }
+    function stop() {
+      watching = false;
+      observer?.disconnect();
+      if (frame && typeof cancelAnimationFrame === "function") cancelAnimationFrame(frame);
+      frame = 0;
+      for (const animation of animations) animation.cancel();
+      animations.clear();
+    }
+    return { refresh, stop };
+  }
+
+  window.MefiCardLayout = { create };
+})();
+
 // Mefi's Studio AI+ — navigation registry for Home, Work, Live and Models,
 // project-scoped recent tasks, the local view row, Search, Help and shortcuts.
 // Classic tabs, dock and sheet links resolve through this same registry.
@@ -17595,6 +17698,7 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
     ["home", "Home"],
     ["work", "Work"],
     ["agents", "Agents"],
+    ["friends", "Friends"],
     ["settings", "Settings"],
     ["help", "Help"],
     ["community", "Community"],
@@ -17604,7 +17708,7 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
   // A rail place for a record whose kind alone would keep it out of the rail:
   // community.js registers "community" as a palette action at DOMContentLoaded,
   // and the foot (Help & community) is its home.
-  const RAIL_SLOTS = Object.freeze({ community: "foot" });
+  const RAIL_SLOTS = Object.freeze({ community: "foot", friends: "friends", rooms: "friends", "your-pcs": "friends", playground: "friends" });
   // Sections for records other modules register without one. The assistant's
   // commands and Command view's key rows name theirs in `group`.
   const ACTION_SECTIONS = Object.freeze({ community: "community" });
@@ -17633,6 +17737,17 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
   // ---- registry ----------------------------------------------------------
 
   const registry = [
+    ...[
+      ["friends", "Friends", "g-orbit", "Rooms, your PCs and companion playdates", null],
+      ["rooms", "Rooms", "g-orbit", "Room chat, invitations and requests to join", "rooms"],
+      ["your-pcs", "Your PCs", "g-explorer", "Connect your PCs and sync work through GitHub", "pcs"],
+      ["playground", "Playground", "g-ambience", "Companion playdates, sharing rules and practice with Pip", "playground"],
+    ].map(([id, label, glyph, desc, target]) => ({
+      id, label, short: label, glyph, desc, kind: "action", layer: null, section: "friends", group: "tools", key: null,
+      searchTerms: `friends ${label} ${desc}`,
+      showIn: showIn({ palette: true }),
+      run: () => { closeAll(); window.MefiCompanionHub?.open?.({ section: "friends", target }); },
+    })),
     {
       id: "agents", label: "Agents", short: "Agents", kind: "overlay", layer: "sheet", section: "agents", group: "tools",
       glyph: "g-agents", badge: "questions", desc: "Your team, setup, live work, workflows, models and usage",
@@ -18776,7 +18891,7 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
   // The More tools menus group by the same sections as the rail. Home rides
   // with Work, the foot's Community with Help, and anything else unfiled
   // lands in Settings.
-  const MENU_GROUPS = ["Work", "Agents", "Settings", "Help"];
+  const MENU_GROUPS = ["Work", "Agents", "Friends", "Settings", "Help"];
   function menuGroup(dest) {
     const section = sectionOf(dest);
     if (section === "home") return "Work";
@@ -18856,6 +18971,7 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
     { id: "home", label: "Home", target: "workspace" },
     { id: "work", label: "Work", target: "tasks" },
     { id: "agents", label: "Agents", target: "agents" },
+    { id: "friends", label: "Friends", target: "friends" },
   ];
   const LOCAL_ROUTES = Object.freeze({
     home: ["workspace"],
@@ -18962,6 +19078,13 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
       label.className = "app-rail-text";
       label.textContent = section.label;
       group.append(head);
+      if (section.id === "friends") {
+        const children = document.createElement("div");
+        children.className = "app-rail-children app-rail-friends";
+        children.setAttribute("role", "group"); children.setAttribute("aria-label", "Friends tools");
+        for (const id of ["rooms", "your-pcs", "playground"]) children.append(navButton(get(id), "app-rail-item", { key: false }));
+        group.append(children);
+      }
       sections.append(group);
     }
     const recent = document.createElement("div"); recent.className = "app-rail-recent app-rail-children";
@@ -48721,6 +48844,7 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
 
   function renderList() {
     paintedList = UNPAINTED;
+    cardLayout?.stop();
     els.list.textContent = "";
     renderFilters();
     els.overlay?.classList.toggle("task-overview-mode", state.filter !== "done");
@@ -48943,51 +49067,14 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
     watchMasonry();
   }
 
-  // Masonry for the card grid: while styles.css gives a list 4px rows (the
-  // full-width overview), each child spans the rows its height needs plus
-  // the gap, so a card slides up under a short neighbour instead of waiting
-  // below the tallest card in its row. A ResizeObserver keeps the spans
-  // right as folds open, text wraps or the window resizes, and a card that
-  // moves glides to its new place. Elsewhere the spans are cleared.
-  const MASONRY_ROW = 4, MASONRY_GAP = 12;
-  let masonryObserver = null, masonryFrame = 0;
-  const masonryLists = () => [els.list, ...(els.list?.querySelectorAll?.(".task-overview-finished-list") ?? [])].filter(Boolean);
-  function layoutMasonry() {
-    masonryFrame = 0;
-    const glide = !window.MefiMotion?.off?.() && !window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-    // Where every placed card sits now: one card's new span moves the cards
-    // below it too. A card with no span yet is new and just appears.
-    const placed = [];
-    const spans = [];
-    for (const list of masonryLists()) {
-      const on = getComputedStyle(list).gridAutoRows === `${MASONRY_ROW}px`;
-      for (const item of list.children) {
-        if (glide && on && item.style.gridRowEnd) placed.push({ item, before: item.getBoundingClientRect() });
-        spans.push([item, on ? `span ${Math.max(1, Math.ceil((item.getBoundingClientRect().height + MASONRY_GAP) / MASONRY_ROW))}` : ""]);
-      }
-    }
-    let changed = false;
-    for (const [item, value] of spans) if (item.style.gridRowEnd !== value) { item.style.gridRowEnd = value; changed = true; }
-    if (!changed) return;
-    for (const { item, before } of placed) {
-      if (typeof item.animate !== "function") continue;
-      const after = item.getBoundingClientRect();
-      const dx = before.left - after.left, dy = before.top - after.top;
-      if (Math.abs(dx) > 1 || Math.abs(dy) > 1) item.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "none" }], { duration: 260, easing: "cubic-bezier(.2,.8,.2,1)" });
-    }
-  }
-  function scheduleMasonry() {
-    if (!masonryFrame && typeof requestAnimationFrame === "function") masonryFrame = requestAnimationFrame(layoutMasonry);
-  }
+  // Tasks and Ideas use the same measured card spans and resize behavior.
+  let cardLayout = null;
   function watchMasonry() {
-    if (typeof ResizeObserver !== "function" || typeof getComputedStyle !== "function") return;
-    masonryObserver ??= new ResizeObserver(scheduleMasonry);
-    masonryObserver.disconnect();
-    for (const list of masonryLists()) {
-      masonryObserver.observe(list);
-      for (const item of list.children) masonryObserver.observe(item);
-    }
-    scheduleMasonry();
+    cardLayout ??= window.MefiCardLayout?.create({
+      lists: () => [els.list, ...(els.list?.querySelectorAll?.(".task-overview-finished-list") ?? [])],
+      visible: () => !els.overlay.hidden,
+    });
+    cardLayout?.refresh();
   }
 
   async function loadPlans() {
@@ -50149,6 +50236,7 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
     window.MefiNav?.claim?.("tasks");
     const params = optionsOf(options);
     els.overlay.hidden = false;
+    watchMasonry();
     // Set the selection before load() so the first render already shows it.
     // A link that names another project never selects a same-id task here.
     const elsewhere = typeof params.projectId === "string" && params.projectId && state.projectId && params.projectId !== state.projectId;
@@ -50173,6 +50261,7 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
   function close() {
     if (els.overlay.hidden) return;
     els.overlay.hidden = true;
+    cardLayout?.stop();
     window.MefiNav?.release?.("tasks");
   }
 
@@ -50387,6 +50476,12 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
   const el = {};
   let initialized = false;
   let ideaRevision = 0;
+  let cardLayout = null;
+
+  function layoutCards(immediate = false) {
+    cardLayout ??= window.MefiCardLayout?.create({ lists: () => [el.list], visible: () => !el.overlay.hidden });
+    cardLayout?.refresh({ immediate });
+  }
 
   const unreadCount = () => state.ideas.filter((idea) => !idea.read).length;
   // #ideas-open binds straight to open(), so arg 0 can be a click Event.
@@ -50485,15 +50580,25 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
       li.className = "muted";
       li.textContent = state.clusterFilter ? `No ideas tagged "${state.clusterFilter}". Select the tag again to show every idea.` : "No ideas yet. Choose Tools › Scan chats to collect them from recent conversations.";
       el.list.append(li);
+      layoutCards();
       return;
     }
     for (const idea of filtered.slice(0, 60)) {
       const li = document.createElement("li");
-      li.classList.add("task-row");
+      li.classList.add("task-row", "idea-card");
       li.style.setProperty("--task-color", idea.read ? "var(--gold-dim)" : "var(--gold-bright)");
       if (idea.id === state.selected) li.classList.add("selected");
       li.append(statusTag(idea));
-      li.append(document.createTextNode(` ${idea.title || idea.detail || "Untitled idea"}`));
+      const title = document.createElement("strong");
+      title.className = "idea-card-title";
+      title.textContent = idea.title || idea.detail || "Untitled idea";
+      li.append(title);
+      if (idea.detail && idea.title && idea.detail !== idea.title) {
+        const excerpt = document.createElement("p");
+        excerpt.className = "idea-card-excerpt";
+        excerpt.textContent = idea.detail;
+        li.append(excerpt);
+      }
       const meta = document.createElement("div");
       meta.className = "who";
       // A sparse row (no source, no time) leaves those parts out rather than
@@ -50513,6 +50618,7 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
       });
       el.list.append(li);
     }
+    layoutCards();
   }
 
   function select(id) {
@@ -50795,9 +50901,12 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
     window.MefiNav?.claim?.("ideas");
     const params = optionsOf(options);
     el.overlay.hidden = false;
+    // Retained cards still need sizing if a reload fails after a resize.
+    layoutCards(true);
     // load() is async; a deep-linked idea can only be selected once it exists.
     load().then(() => {
       if (typeof params.ideaId === "string" && params.ideaId) select(params.ideaId);
+      layoutCards(true);
       el.list?.querySelector("li.selected")?.scrollIntoView({ block: "nearest" });
     });
   }
@@ -50805,6 +50914,7 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
   function close() {
     if (el.overlay.hidden) return;
     el.overlay.hidden = true;
+    cardLayout?.stop();
     if (el.tools) el.tools.open = false;
     window.MefiNav?.release?.("ideas");
   }
@@ -50844,7 +50954,7 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
       if (event.key === "Escape" && el.tools.open) { event.preventDefault(); event.stopPropagation(); el.tools.open = false; el.tools.querySelector("summary")?.focus(); }
     });
     document.addEventListener("pointerdown", (event) => { if (el.tools?.open && !el.tools.contains(event.target)) el.tools.open = false; });
-    el.back?.addEventListener("click", () => { el.overlay.dataset.detail = "false"; el.list?.querySelector("li.selected")?.focus(); });
+    el.back?.addEventListener("click", () => { el.overlay.dataset.detail = "false"; layoutCards(true); el.list?.querySelector("li.selected")?.focus(); });
     const clean = async () => {
       if (window.mefiStudio?.ideasAction) {
         if (await act("clean", { ideaIds: state.ideas.filter((idea) => idea.status === "done").map((idea) => idea.id) })) el.status.textContent = "Removed finished ideas; accepted work stays available.";
@@ -50867,6 +50977,7 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
       el.overlay.dataset.detail = "false";
       // `hidden`, not display: it is what drawGraph()'s early return reads.
       el.canvas.hidden = state.view !== "graph";
+      layoutCards();
       drawGraph();
     });
     window.mefiStudio?.onIdeas?.((ideas) => {
@@ -69888,7 +69999,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     return !Number.isFinite(number) ? fallback : /ms$/.test(value) ? number : /s$/.test(value) ? number * 1000 : number;
   }
   const glyphSvg = (id) => `<svg class="glyph" aria-hidden="true" focusable="false"><use href="#${id}"/></svg>`;
-  const hub = { open: false, closing: false, section: null, locked: new Map(), returnFocus: null, timer: 0 };
+  const hub = { open: false, closing: false, section: null, friendTarget: null, locked: new Map(), returnFocus: null, timer: 0 };
   const el = {};
   let host, data, bootPhase, audioFrame = 0, audioAt = 0, energy = 0, wakeTimer = 0, reactionIndex = 0, chatThinking = false, anticTimer = 0, lastTouch = Date.now();
   const plays = new WeakMap();
@@ -70089,6 +70200,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     ["friends", "Friends", "g-orbit", "Playdates, sharing, rooms and your PCs"],
     ["settings", "Personality", "g-ambience", "How I behave, and settings"],
   ];
+  const FRIENDS_ROUTES = new Set(["friends", "rooms", "your-pcs", "playground"]);
+  const FRIENDS_TARGETS = { rooms: "rooms-title", pcs: "pc-sync-title", playground: "friends-title" };
   function icon(glyph) { const span = node("span", "agent-hub-icon"); span.innerHTML = `<svg class="glyph" aria-hidden="true"><use href="#${glyph}"/></svg>`; return span; }
   function attach(value) {
     if (host) return;
@@ -70141,7 +70254,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       // than being dropped; either way Studio's shortcuts never see it.
       else if (!(event.key === "Tab" || event.key === "Enter" || event.key === " " || event.key.startsWith("Arrow") || event.target?.closest?.("input, textarea, select"))) { window.MefiNav?.typeInto?.(event); event.stopPropagation(); }
     }, true);
-    window.addEventListener("mefi:nav", () => { if (hub.open) close({ immediate: true, restore: false }); });
+    window.addEventListener("mefi:nav", (event) => { if (hub.open && !FRIENDS_ROUTES.has(event.detail?.id)) close({ immediate: true, restore: false }); });
     window.addEventListener("resize", resize);
     document.addEventListener("visibilitychange", () => { el.layer.toggleAttribute("data-suspended", document.hidden); if (document.hidden) for (const creature of document.querySelectorAll(".agent-creature")) clearPlay(creature); cancelAnimationFrame(audioFrame); audioFrame = 0; if (!document.hidden && hub.open) audioFrame = requestAnimationFrame(audioTick); });
     window.addEventListener("mefi-audio-change", updateAudio);
@@ -70161,9 +70274,16 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   function otherDialog() {
     return Array.from(document.querySelectorAll('[aria-modal="true"]')).some((item) => item !== el.layer && !el.layer?.contains(item) && !item.closest("[hidden]") && item.getClientRects().length);
   }
-  function open() {
+  function open(options = {}) {
     if (!host || window.MefiBoot?.isActive?.() || otherDialog()) return false;
-    if (hub.open) { if (hub.closing) { clearTimeout(hub.timer); hub.closing = false; el.layer.classList.remove("leaving"); } return true; }
+    const section = typeof options === "string" ? options : options?.section;
+    const target = typeof options === "object" ? options?.target : null;
+    const requested = items.some(([id]) => id === section) ? section : null;
+    if (hub.open) {
+      if (hub.closing) { clearTimeout(hub.timer); hub.closing = false; el.layer.classList.remove("leaving"); }
+      if (requested) { if (hub.section === requested) focusFriend(target); else select(requested, target); }
+      return true;
+    }
     host.toggle(false); window.MefiCompanionUI?.freeze(); window.MefiSelect?.close();
     lastTouch = Date.now(); wake();
     hub.returnFocus = document.activeElement; hub.open = true; hub.closing = false;
@@ -70173,13 +70293,13 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       if (child === el.layer || ["SCRIPT", "STYLE"].includes(child.tagName) || ["studio-floats", "toast-host"].includes(child.id)) continue;
       hub.locked.set(child, child.inert); child.inert = true;
     }
-    select(null); update(data); updateAudio();
+    select(requested, target); update(data); updateAudio();
     const from = host.orb.getBoundingClientRect(), to = el.center.getBoundingClientRect();
     if (!still()) {
       el.avatar.animate([{ transform: `translate(${from.left + from.width / 2 - to.left - to.width / 2}px,${from.top + from.height / 2 - to.top - to.height / 2}px) scale(.3)`, opacity: .4 }, { transform: "translate(0,0) scale(1)", opacity: 1 }], { duration: 540, easing: "cubic-bezier(.22,1,.36,1)" });
     }
     play(el.avatar.querySelector("svg"));
-    el.center.focus({ preventScroll: true });
+    if (!requested) el.center.focus({ preventScroll: true });
     if (!document.hidden) audioFrame = requestAnimationFrame(audioTick);
     host.refresh?.();
     return true;
@@ -70200,8 +70320,18 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
   function navigate(action) { close({ immediate: true, restore: false }); action(); }
   function action(title, run) { return button(title, () => navigate(run), "ghost agent-hub-action"); }
-  function select(section) {
+  function focusFriend(target) {
+    hub.friendTarget = Object.hasOwn(FRIENDS_TARGETS, target) ? target : null;
+    const id = hub.friendTarget ? FRIENDS_TARGETS[hub.friendTarget] : null;
+    if (!id || !hub.open || hub.section !== "friends") return;
+    const heading = el.extra.querySelector(`#${id}`);
+    if (!heading) return;
+    heading.tabIndex = -1;
+    heading.focus({ preventScroll: true }); heading.scrollIntoView?.({ block: "start", behavior: "instant" });
+  }
+  function select(section, target = null) {
     const previous = hub.section; hub.section = section;
+    hub.friendTarget = section === "friends" && Object.hasOwn(FRIENDS_TARGETS, target) ? target : null;
     if (host.panel.parentElement === el.detail) {
       host.toggle(false); document.body.append(host.panel); host.panel.inert = hub.locked.has(host.panel) ? true : false;
       host.panel.classList.remove("companion-in-hub"); host.panel.setAttribute("role", "dialog");
@@ -70238,6 +70368,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       } else {
         el.extra.append(...ideas());
       }
+      // A target can sit below a delayed section transition. Focus only after
+      // its actual card exists; the same cards own all Friends entry points.
+      if (section === "friends") requestAnimationFrame(() => focusFriend(hub.friendTarget));
     };
     // The section arrives from the bubbles' side, or across from the last one,
     // which fades where it was (renderer/motion.js); without layout it just paints.
