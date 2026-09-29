@@ -56,8 +56,9 @@ you do it yourself.
 
 Studio opens on a launch screen before it reads anything. Pick the project to
 open (the one you last had open is preselected) or **Open another folder…**,
-then choose **Open studio** or **Open and start agents**. With **Open studio**
-the assistant and the coding workers stay off: the companion bar reads *Agents
+then press **Open**; the **Start agents** switch beside it decides whether the
+agents start with it. With the switch off (the default) the assistant and the
+coding workers stay off: the companion bar reads *Agents
 are waiting for you*, and its **Start agents** button (also in the tray menu)
 releases them whenever you are ready. Nothing is built, briefed or spent
 before that. A pause you saved earlier still stands and asks for **Resume** as

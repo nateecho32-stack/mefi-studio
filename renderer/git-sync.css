@@ -1,0 +1,246 @@
+/* Git sync (renderer/git-sync.js): the Push and Pull chip, its popover, and the
+   Save and push, Publish, Link and Sign in dialogs. Every colour reads the
+   theme's tokens (--ivory, --muted, --gold, --good, --info, --warn, --bad), so
+   custom palettes carry over; tone shows in a chip's border and fill and in
+   its glyph, never in its words (a light palette cannot read them). The
+   popover follows the menu recipe of studio-ui.css (float fill, glass edge,
+   float blur, opens on the spring and leaves on the exit curve) and the
+   dialogs sit on the shared .overlay and .sheet of styles.css, so this file
+   only sets what is its own. Bundled after studio-ui.css and vibe.css. */
+
+/* ---- the chip -------------------------------------------------------------- */
+.gs-slot { display: inline-flex; flex: none; align-items: center; }
+.gs-slot[hidden] { display: none; }
+/* At the tail of the section bar, just before the task shortcuts (the bar orders those last), and held in view when a
+   narrow window makes the bar scroll. What it covers then is blurred, not painted over, so the chip has no edge of its
+   own against the bar's glass; without blur (solid, no-blur, reduced transparency) it takes the bar's own fill. */
+.gs-slot[data-variant="bar"] { order: 98; position: sticky; right: 12px; z-index: 1; margin-left: auto; padding-left: 8px; backdrop-filter: blur(14px); }
+html[data-no-blur] .gs-slot[data-variant="bar"], :root[data-studio-material="solid"] .gs-slot[data-variant="bar"] { background: var(--studio-shell-fill, var(--bg)); backdrop-filter: none; }
+@media (prefers-reduced-transparency: reduce) { .gs-slot[data-variant="bar"] { background: var(--studio-shell-fill, var(--bg)); backdrop-filter: none; } }
+/* The task shortcuts float right on a margin of their own: beside the chip they follow it instead of splitting the free space. */
+#app-local-nav:has(> .gs-slot[data-variant="bar"]:not([hidden])) > .app-task-context { margin-left: 0; }
+.gs-chip { --T: var(--muted); position: relative; display: inline-flex; align-items: center; gap: 6px; min-height: 26px; padding: 4px 10px; border: 1px solid color-mix(in srgb, var(--T) 45%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--T) 12%, transparent); color: var(--ivory); font: 550 12px/1.3 var(--font-ui); white-space: nowrap; cursor: pointer; transition: border-color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out), box-shadow var(--motion-base) var(--ease-out); }
+.gs-chip[data-tone="good"] { --T: var(--good); }
+.gs-chip[data-tone="info"] { --T: var(--info); }
+.gs-chip[data-tone="warn"] { --T: var(--warn); }
+.gs-chip[data-tone="bad"] { --T: var(--bad); }
+.gs-chip[data-tone="neutral"] { border-color: color-mix(in srgb, var(--ivory) 10%, transparent); background: color-mix(in srgb, var(--ivory) 5%, transparent); color: var(--muted); }
+.gs-chip .gs-glyph { flex: none; color: var(--T); }
+.gs-chip[data-tone="neutral"] .gs-glyph { color: currentColor; }
+:root[data-studio-theme-tone="light"] .gs-chip .gs-glyph { color: var(--ivory); }
+button.gs-chip:hover { border-color: color-mix(in srgb, var(--T) 70%, transparent); background: color-mix(in srgb, var(--T) 18%, transparent); }
+button.gs-chip[data-tone="neutral"]:hover { border-color: var(--hairline-strong); background: color-mix(in srgb, var(--ivory) 10%, transparent); }
+button.gs-chip[aria-expanded="true"] { box-shadow: 0 0 0 3px color-mix(in srgb, var(--T, var(--hairline-strong)) 22%, transparent); }
+.gs-chip.gs-chip-static { cursor: default; }
+/* --ink is picked against --gold (music.js onAccent), so the count takes --gold too: on a custom palette --gold-bright can be the pale one. */
+.gs-chip-badge { display: none; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--gold); box-shadow: 0 0 0 2px var(--bg); color: var(--ink); font: 700 10.5px/1 var(--font-ui); }
+/* Vibe's project cluster: a 36px glass chip beside New app. */
+.gs-slot[data-variant="vibe"] .gs-chip { min-height: 0; height: 36px; padding: 0 12px 0 10px; gap: 7px; border-radius: 12px; background: color-mix(in srgb, var(--T) 12%, var(--v-glass, transparent)); backdrop-filter: var(--v-blur, none); font-size: 12.5px; }
+.gs-slot[data-variant="vibe"] .gs-chip[data-tone="neutral"] { border-color: var(--v-edge, var(--hairline)); background: var(--v-glass, transparent); }
+/* Under 900px the words go and the glyph stays, with the count as a badge. */
+@media (max-width: 899px) {
+  .gs-chip:not(.gs-chip-static) { width: 36px; min-width: 36px; height: 36px; min-height: 36px; padding: 0; justify-content: center; border-radius: 12px; }
+  .gs-chip:not(.gs-chip-static) .gs-chip-label { display: none; }
+  .gs-chip-badge:not([hidden]) { position: absolute; top: -6px; right: -6px; display: inline-flex; }
+}
+/* Hidden in Zen and in the classic shell, where the section bar is not drawn. */
+body.command-zen .gs-slot, html:not([data-shell="rail"]) .gs-slot { display: none; }
+
+/* ---- working glyphs (they go still under reduced motion) ---------------------- */
+@keyframes gs-turn { to { transform: rotate(360deg); } }
+@keyframes gs-march { to { stroke-dashoffset: -100; } }
+.gs-spin { animation: gs-turn 1.1s linear infinite; }
+.gs-arc { transform-box: view-box; transform-origin: 8px 8px; animation: gs-turn 1.1s linear infinite; }
+.gs-march { animation: gs-march 1.4s linear infinite; }
+.gs-muted-glyph { color: var(--muted); }
+.gs-good { color: var(--good); }
+.gs-bad { color: var(--bad); }
+:root[data-studio-theme-tone="light"] :is(.gs-good, .gs-bad, .gs-mark-done, .gs-mark-failed) { color: var(--ivory); }
+
+/* ---- the popover -------------------------------------------------------------- */
+.gs-pop { position: fixed; z-index: 88; width: min(340px, calc(100vw - 32px)); max-height: calc(100vh - 24px); overflow: auto; padding: 8px; border: 1px solid var(--studio-glass-edge, var(--hairline-strong)); border-radius: var(--r-lg); background: var(--studio-float-fill, var(--panel-solid)); backdrop-filter: var(--studio-float-blur, none); box-shadow: var(--studio-float-shadow, var(--shadow-2)); color: var(--ivory); transform-origin: var(--gs-from, top left); outline: none; transition: opacity var(--motion-base) var(--ease-out), scale var(--motion-spring) var(--ease-spring), translate var(--motion-spring) var(--ease-spring), display var(--motion-base) allow-discrete; }
+/* The root takes the focus when it opens: an inset hairline, as the sheets have (styles.css section 4), not a ring drawn around the whole popover. */
+.gs-pop:focus-visible { outline: none; box-shadow: var(--studio-float-shadow, var(--shadow-2)), inset 0 0 0 1px var(--gold-dim); }
+.gs-pop[hidden] { opacity: 0; scale: .96; translate: 0 -4px; pointer-events: none; transition: opacity var(--motion-exit) var(--ease-in), scale var(--motion-exit) var(--ease-in), translate var(--motion-exit) var(--ease-in), display var(--motion-exit) allow-discrete; }
+@starting-style { .gs-pop:not([hidden]) { opacity: 0; scale: .96; translate: 0 -4px; } }
+.gs-pop-head { display: flex; flex-wrap: nowrap; align-items: center; justify-content: flex-start; gap: 8px; padding: 3px 4px 7px; border-bottom: 1px solid var(--hairline); font: 600 12px/1.4 var(--font-ui); }
+.gs-branch { min-width: 0; overflow: hidden; font: 600 12px/1.4 var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
+.gs-pop-tail { display: inline-flex; flex: none; align-items: center; gap: 6px; margin-left: auto; }
+button.gs-icon { display: inline-flex; align-items: center; justify-content: center; width: 24px; min-width: 24px; height: 24px; min-height: 24px; padding: 0; border: 1px solid transparent; border-radius: var(--r-xs); background: transparent; color: var(--muted); }
+button.gs-icon:hover { border-color: var(--hairline-strong); background: var(--tint-gold-2); color: var(--ivory); }
+.gs-pop-body { display: grid; gap: 10px; padding: 10px 4px; }
+.gs-lead { display: flex; align-items: flex-start; gap: 8px; }
+.gs-lead .gs-glyph { margin-top: 2px; }
+.gs-sentence { margin: 0; font: 12.5px/1.5 var(--font-ui); overflow-wrap: anywhere; }
+.gs-hint { margin: 0; color: var(--muted); font: 12px/1.5 var(--font-ui); }
+.gs-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 14px; margin: 0; font: 12px/1.5 var(--font-ui); }
+.gs-facts dt { color: var(--muted); }
+.gs-facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.gs-mono { font-family: var(--font-mono); }
+.gs-facts dd.gs-mono { font-size: 11.5px; }
+.gs-split { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.gs-cell { display: grid; gap: 2px; padding: 8px 10px; border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--studio-inset-bg); font: 12px/1.4 var(--font-ui); }
+.gs-cell strong { font-size: 13px; }
+.gs-cell-who, .gs-cell-words { color: var(--muted); }
+.gs-lines { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; color: var(--muted); font: 12px/1.5 var(--font-ui); }
+.gs-lines li { overflow-wrap: anywhere; }
+.gs-lines.gs-output { padding: 8px 10px; border: 1px solid var(--studio-glass-edge, var(--hairline)); border-radius: var(--r-sm); background: var(--studio-field-bg, var(--bg-deep)); color: var(--ivory); font: 11.5px/1.5 var(--font-mono); }
+.gs-actions { display: grid; gap: 6px; justify-items: center; }
+button.gs-primary { width: 100%; min-height: 36px; }
+button.gs-primary.gs-armed { box-shadow: 0 0 0 2px var(--gold-bright); }
+.gs-actions .gs-hint { justify-self: stretch; text-align: center; }
+button.gs-link, a.gs-link { display: inline-flex; align-items: center; min-height: 0; padding: 6px 4px; border: 0; background: transparent; color: var(--gold-bright); font: 12.5px/1.3 var(--font-ui); text-decoration: underline; text-decoration-color: var(--gold-dim); text-underline-offset: 3px; cursor: pointer; }
+button.gs-link:hover, a.gs-link:hover { background: transparent; color: var(--ivory); text-decoration-color: currentColor; }
+button.gs-link[aria-disabled="true"] { opacity: .5; cursor: default; }
+/* A button the host holds (aria-disabled, so it stays reachable and its reason is read) looks as a disabled one does. */
+button.gs-held { opacity: .4; cursor: not-allowed; }
+button.gs-held:hover { filter: none; }
+.gs-pop-foot { display: grid; gap: 0; margin-top: 0; padding: 8px 4px 2px; border-top: 1px solid var(--hairline); color: var(--muted); font: 11.5px/1.4 var(--font-ui); }
+.gs-foot-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0 8px; }
+.gs-pop-foot :is(button.gs-link, a.gs-link) { padding: 5px 2px; font-size: 11.5px; }
+.gs-when { display: inline-flex; gap: 4px; }
+
+/* ---- stages: done, in progress, waiting, stopped (glyph and words) --------------- */
+.gs-stages { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; font: 12.5px/1.4 var(--font-ui); }
+.gs-stage { display: flex; align-items: center; gap: 8px; }
+.gs-stage[data-state="waiting"] { color: var(--muted); }
+.gs-mark-done { color: var(--good); }
+.gs-mark-active { color: var(--gold-bright); }
+.gs-mark-waiting { color: var(--dim); }
+.gs-mark-failed { color: var(--bad); }
+
+/* ---- dialogs: Save and push, Publish, Link, Sign in ------------------------------- */
+/* The rail shell moves .overlay over by the rail's width, so a sheet measures against what is left of the window (600px: 504, not 568). */
+.overlay.gs-overlay { z-index: 88; }
+.overlay.gs-overlay > .gs-sheet.sheet { display: flex; flex-direction: column; width: min(var(--gs-w, 480px), calc(100vw - var(--shell-rail-w, 0px) - 32px)); max-height: min(88vh, 900px); padding: 0; overflow: hidden; border: 1px solid var(--studio-glass-edge, var(--hairline-strong)); border-radius: var(--r-lg); background: var(--studio-float-fill, var(--panel-solid)); backdrop-filter: var(--studio-float-blur, none); box-shadow: var(--shadow-3), var(--studio-float-shadow, none); color: var(--ivory); }
+.gs-dialog-head { display: flex; flex-wrap: nowrap; align-items: flex-start; justify-content: flex-start; gap: 12px; padding: 24px 24px 12px; border-bottom: 0; }
+.gs-dialog-words { display: grid; flex: 1; min-width: 0; gap: 4px; }
+.gs-eyebrow { margin: 0; overflow: hidden; color: var(--gold); font: 600 10.5px/1.4 var(--font-mono); letter-spacing: .08em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.gs-dialog-words h2 { margin: 0; font: 600 22px/1.2 var(--font-display); letter-spacing: .01em; }
+.gs-dialog-head button.gs-icon { width: 28px; min-width: 28px; height: 28px; min-height: 28px; color: var(--ivory); }
+.gs-dialog-body { display: grid; flex: 1; align-content: start; gap: 16px; min-height: 0; padding: 0 24px 20px; overflow: auto; }
+.gs-dialog-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 0; padding: 14px 24px; border-top: 1px solid var(--hairline); color: var(--ivory); }
+.gs-dialog-note { display: flex; flex: 1 1 200px; align-items: center; gap: 8px; min-width: 0; min-height: 20px; margin: 0; font: 12.5px/1.4 var(--font-ui); }
+.gs-dialog-note[data-kind="alert"] { color: var(--ivory); }
+.gs-dialog-buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+p.gs-muted { margin: 0; color: var(--muted); font: 13px/1.5 var(--font-ui); }
+.gs-muted { color: var(--muted); }
+.gs-grow { flex: 1; min-width: 0; }
+.gs-safe { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.gs-lead-line { display: flex; align-items: center; gap: 8px; margin: 0; font: 13px/1.5 var(--font-ui); }
+.gs-inline-status { display: flex; align-items: center; gap: 8px; min-height: 18px; margin: 0; font: 12.5px/1.4 var(--font-ui); }
+.gs-facts.gs-facts-wide { margin: 0; }
+.gs-notes { display: grid; gap: 8px; }
+.gs-notes:empty { display: none; }
+.gs-notes .gs-hint { text-align: left; }
+.gs-strip { --T: var(--info); display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--T) 45%, transparent); border-radius: var(--r-md); background: color-mix(in srgb, var(--T) 12%, transparent); font: 12px/1.45 var(--font-ui); }
+.gs-strip[data-tone="warn"] { --T: var(--warn); }
+.gs-strip[data-tone="bad"] { --T: var(--bad); }
+.gs-strip[data-tone="good"] { --T: var(--good); }
+.gs-strip .gs-glyph { flex: none; margin-top: 1px; color: var(--T); }
+:root[data-studio-theme-tone="light"] .gs-strip .gs-glyph { color: var(--ivory); }
+.gs-strip-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.gs-strip .mini { flex: none; align-self: center; }
+.gs-ack { display: inline-flex; align-items: center; gap: 8px; min-height: 32px; margin-left: 24px; font: 600 12px/1.3 var(--font-ui); cursor: pointer; }
+.gs-strip:has(.gs-ack) { flex-wrap: wrap; }
+.gs-ack input, .gs-file input[type="checkbox"] { width: 16px; height: 16px; margin: 0; accent-color: var(--gold); }
+
+/* the files of a save */
+.gs-section { display: grid; gap: 8px; }
+.gs-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.gs-section-head h3 { margin: 0; }
+.gs-tally { color: var(--muted); font: 11px/1.4 var(--font-mono); }
+.gs-files { margin: 0; padding: 0; overflow: hidden; border: 1px solid var(--hairline); border-radius: 11px; background: var(--studio-inset-bg); list-style: none; }
+.gs-file-item + .gs-file-item { border-top: 1px solid var(--hairline); }
+.gs-file { display: grid; grid-template-columns: 20px 112px minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 44px; padding: 8px 12px; cursor: pointer; }
+.gs-file:hover { background: var(--tint-gold-1); }
+.gs-file:has(input:disabled) { cursor: not-allowed; }
+.gs-file-kind { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font: 12px/1.3 var(--font-ui); }
+.gs-file-path { min-width: 0; overflow: hidden; font: 12.5px/1.4 var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
+.gs-file-size { color: var(--muted); font: 11px/1.4 var(--font-mono); }
+.gs-file-item > .gs-strip { margin: 0 12px 10px 44px; }
+.gs-message { display: grid; gap: 6px; }
+
+/* fields and choices */
+.gs-field { display: grid; gap: 6px; }
+.gs-field-label { color: var(--muted); font: 500 12px/1.4 var(--font-ui); }
+.gs-field-label.gs-mono { font-family: var(--font-mono); }
+.gs-field-hint { margin: 0; color: var(--muted); font: 11.5px/1.4 var(--font-ui); }
+.gs-optional { font-weight: 400; }
+.gs-input { width: 100%; min-height: 36px; padding: 8px 11px; border: 1px solid var(--studio-glass-edge, var(--hairline)); border-radius: var(--r-sm); background: var(--studio-field-bg, var(--bg-deep)); color: var(--ivory); font: 13.5px var(--font-ui); }
+.gs-input:hover { border-color: var(--hairline-strong); }
+.gs-name-box .gs-input, .gs-public .gs-input { font: 12.5px var(--font-mono); }
+.gs-input[readonly] { color: var(--muted); }
+.gs-message .gs-input { font-size: 13.5px; }
+.gs-message .gs-field-label { justify-self: start; }
+.gs-publish-grid { display: grid; grid-template-columns: minmax(0, 424px) minmax(0, 1fr); align-items: start; gap: 24px; }
+.gs-col { display: grid; gap: 16px; min-width: 0; }
+.gs-name-box { display: grid; gap: 8px; }
+.gs-pair { display: grid; grid-template-columns: minmax(0, 184px) 12px minmax(0, 1fr); align-items: end; gap: 0 6px; }
+.gs-slash { display: grid; place-items: center; height: 36px; color: var(--muted); font: 14px var(--font-mono); }
+.gs-creates { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 11px; border: 1px solid var(--hairline); border-radius: var(--r-sm); background: var(--studio-inset-bg); color: var(--muted); font: 12px var(--font-ui); }
+.gs-creates-name { flex: 1; min-width: 0; overflow: hidden; color: var(--ivory); font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
+.gs-group { display: grid; gap: 6px; }
+.gs-public { display: grid; gap: 10px; margin-top: 2px; padding: 12px; border: 1px solid var(--hairline); border-left: 3px solid var(--warn); border-radius: var(--r-md); background: var(--studio-inset-bg); }
+.gs-public .gs-strip { padding: 0; border: 0; background: none; }
+.gs-seg { display: grid; gap: 8px; }
+.gs-seg.gs-seg-row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; padding: 3px; border: 1px solid var(--studio-glass-edge, var(--hairline)); border-radius: 10px; background: var(--studio-field-bg, var(--bg-deep)); }
+button.gs-seg-item { display: flex; align-items: center; justify-content: center; min-height: 34px; padding: 0 10px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted); font: 600 12.5px/1.3 var(--font-ui); text-align: left; }
+button.gs-seg-item:hover { background: var(--tint-gold-2); }
+button.gs-seg-item[aria-checked="true"] { border-color: var(--gold-dim); background: var(--tint-gold-3); color: var(--gold-bright); }
+/* gold-bright on the selected tint is 3.8:1 on a light palette: the chosen word takes the text colour there. */
+:root[data-studio-theme-tone="light"] button.gs-seg-item[aria-checked="true"] { color: var(--ivory); }
+.gs-seg-stack button.gs-seg-item { align-items: flex-start; justify-content: flex-start; gap: 10px; width: 100%; min-height: 58px; padding: 10px 12px; border-color: var(--hairline); border-radius: var(--r-md); color: var(--ivory); white-space: normal; }
+.gs-seg-stack button.gs-seg-item::after { content: ""; flex: none; width: 16px; height: 16px; margin: 2px 0 0 auto; border: 1.5px solid var(--hairline-strong); border-radius: 50%; }
+.gs-seg-stack button.gs-seg-item[aria-checked="true"] { border-color: var(--gold-dim); background: var(--tint-gold-3); color: var(--ivory); }
+.gs-seg-stack button.gs-seg-item[aria-checked="true"]::after { border-color: var(--gold-bright); background: radial-gradient(circle, var(--gold-bright) 0 4px, transparent 4.5px); }
+.gs-seg-body { display: flex; flex: 1; align-items: flex-start; gap: 10px; min-width: 0; }
+.gs-seg-body .gs-glyph { margin-top: 1px; }
+.gs-seg-text { display: grid; gap: 2px; min-width: 0; }
+.gs-seg-title { display: flex; align-items: center; gap: 8px; font: 600 13px/1.3 var(--font-ui); }
+.gs-seg-sub { color: var(--muted); font: 400 12px/1.4 var(--font-ui); }
+.gs-tag { flex: none; padding: 1px 8px; border: 1px solid var(--hairline); border-radius: 999px; color: var(--muted); font: 500 11px/1.4 var(--font-ui); }
+button.gs-check { justify-content: flex-start; gap: 10px; min-height: 36px; padding: 0 2px; border: 0; background: transparent; color: var(--ivory); font: 13px/1.4 var(--font-ui); text-align: left; }
+button.gs-check:hover { background: transparent; }
+.gs-box { display: grid; flex: none; place-items: center; width: 18px; height: 18px; border: 1.5px solid var(--hairline-strong); border-radius: 5px; color: var(--ink); }
+.gs-box .gs-glyph { width: 14px; height: 14px; opacity: 0; }
+button.gs-check:hover .gs-box { border-color: var(--gold-dim); }
+button.gs-check[aria-checked="true"] .gs-box { border-color: var(--gold); background: var(--gold); }
+button.gs-check[aria-checked="true"] .gs-box .gs-glyph { opacity: 1; }
+.gs-files-title { margin: 0; font: 600 13px/1.3 var(--font-ui); }
+.gs-groups { display: grid; gap: 2px; margin: 0; padding: 6px; border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--studio-inset-bg); list-style: none; }
+.gs-group-row { display: flex; align-items: center; gap: 8px; min-height: 28px; padding: 0 6px; font: 12px/1.4 var(--font-ui); }
+.gs-progress, .gs-done { display: grid; gap: 12px; }
+button.gs-repo { display: grid; justify-items: start; gap: 2px; width: 100%; min-height: 0; padding: 9px 11px; border: 1px solid var(--hairline); border-radius: 11px; background: transparent; color: var(--ivory); text-align: left; white-space: normal; }
+button.gs-repo:hover { background: color-mix(in srgb, var(--gold) 8%, transparent); }
+button.gs-repo[aria-checked="true"] { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 13%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 28%, transparent); }
+/* The list scrolls, so it clips: 4px of room all round (2px ring + 2px offset) keeps the focused repository's ring whole; the negative margin gives it back. */
+.gs-repos { display: grid; gap: 6px; max-height: 320px; margin: -4px; padding: 4px; overflow: auto; }
+.gs-repo-top { display: flex; align-items: center; gap: 8px; width: 100%; font: 500 13px/1.3 var(--font-ui); }
+.gs-repo-about { overflow: hidden; color: var(--muted); font: 12px/1.4 var(--font-ui); text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+
+@media (max-width: 760px) {
+  .gs-publish-grid { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+}
+@media (max-width: 640px) {
+  .gs-dialog-head { padding: 18px 16px 10px; }
+  .gs-dialog-body { padding: 0 16px 16px; }
+  .gs-dialog-foot { padding: 12px 16px; }
+  .gs-file { grid-template-columns: 20px 92px minmax(0, 1fr) auto; gap: 8px; padding: 8px; }
+  .gs-file-item > .gs-strip { margin: 0 8px 8px; }
+  .gs-pair { grid-template-columns: minmax(0, 1fr); }
+  .gs-slash { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gs-spin, .gs-arc, .gs-march { animation: none; }
+  .gs-chip, .gs-pop, .gs-pop[hidden] { transition: none; }
+}
+html[data-motion="off"] :is(.gs-spin, .gs-arc, .gs-march) { animation: none; }
+html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: none; }
+
+/* ---- touch: 44px hit areas, as the boards' kit draws them (the fine-pointer sizes are 36, 28 and 24) ---- */
+@media (pointer: coarse) {
+  .gs-slot .gs-chip:not(.gs-chip-static) { min-width: 44px; min-height: 44px; }
+  :is(.gs-pop, .gs-sheet) :is(button, a.gs-link, .gs-input, .gs-ack) { min-height: 44px; }
+  :is(.gs-pop, .gs-sheet) button.gs-icon { min-width: 44px; }
+}

@@ -1597,6 +1597,8 @@
     }
     paintBadges(nav);
     paintTaskContext();
+    // The Git sync chip rides at the tail of the bar (renderer/git-sync.js).
+    window.MefiGitSync?.mount?.(nav, { variant: "bar" });
   }
 
   function paintRail() {

@@ -8,7 +8,10 @@
 // panel at a time (a menu, the conversation or a decision); inside a panel a
 // row opens its detail, and Back or Esc steps out again. Moving between
 // panels and details slides the way you went; a push that only changes data
-// keeps the rows that stay (renderer/motion.js).
+// keeps the rows that stay (renderer/motion.js). New app also asks what
+// happens on GitHub (a private repository, one you already have, or nothing
+// yet) and does it as its own step once the folder exists, so a refusal from
+// GitHub never costs the folder. Guarded by tests/vibe_panels.test.mjs.
 (function () {
   "use strict";
   const aside = document.getElementById("vibe-panel");
@@ -29,6 +32,14 @@
   // Half-written task notes, by project and task: the panel repaints on
   // every action and push, and a failed save used to lose the text.
   state.noteDrafts = {};
+  // What New app knows about GitHub: read when the panel opens (githubAccount
+  // is a light, local look) and again while a sign-in or install window is open.
+  state.gh = { checked: false, account: null, ghInstalled: true, gitInstalled: true, polling: false, waiting: false };
+  state.paintGh = null;
+  // A New app being made. Closing the panel and opening it again clears
+  // "busy" while it waits, and a second Start must not run it twice: two
+  // publishes, two first builds.
+  state.making = false;
 
   // ---- open, close, back ---------------------------------------------------------
   function open(kind, { data = null, taskId = null, ideaId = null, familyId = null, fold = null } = {}) {
@@ -48,6 +59,7 @@
     state.signature = "";
     render();
     if (kind === "team") { void loadTeam(); void window.MefiAutonomy?.refresh?.({ learning: true }); }
+    if (kind === "newapp") void checkAccount();
     vibe()?.paintDock?.();
     requestAnimationFrame(() => (typeHere() || aside.querySelector(".vibe-panel-body button, .vibe-panel-body input") || $("close"))?.focus?.({ preventScroll: true }));
     return true;
@@ -63,6 +75,7 @@
     state.kind = null;
     state.stack = [];
     state.place = null;
+    state.paintGh = null;
     delete aside.dataset.kind;
     vibe()?.paintDock?.();
     // Focus goes back to the stop that opened it, so the keyboard stays put.
@@ -650,6 +663,277 @@
   // the project (main.cjs projects:create), and the description goes through
   // Build it as the first request, sized like any other.
   const slugOf = (value) => String(value ?? "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48).replace(/-+$/g, "");
+
+  // ---- GitHub for a new app -------------------------------------------------------------
+  // A choice is offered only where the host can carry it out: githubAccount
+  // says who is signed in, gitPublish makes the private repository and the
+  // link picker lives in renderer/git-sync.js. With none of them New app is
+  // what it always was. The host does the work, never this file: it names
+  // the account and the repository, and never a command, an address or a path.
+  const CHOICES = [
+    { id: "create", label: "Create a private GitHub repository", hint: "Only you can see it" },
+    { id: "link", label: "Link a repository I already have", hint: "One you made on GitHub" },
+    { id: "local", label: "Only on this PC for now", hint: "Publish any time later" },
+  ];
+  const LINES = {
+    create: "Studio saves a first commit with a README on a branch named main, then uploads it to GitHub as a private project.",
+    link: "Once the folder is made, Studio asks which of your repositories to link it to. It has to be an empty one.",
+    local: "The project stays on this PC. You can publish it to GitHub any time later.",
+  };
+  const STAYED = "It is only on this PC for now.";
+  const SWITCHED = "You switched projects, so nothing was published. Open the new app and publish it from the GitHub chip.";
+  const ONEDRIVE = "This folder syncs with OneDrive. Git works, but OneDrive can lock or duplicate .git files.";
+  const gitSync = () => window.MefiGitSync;
+  const hasPublish = () => typeof api()?.gitPublish === "function";
+  const hasPicker = () => typeof gitSync()?.showLink === "function";
+  const githubOn = () => typeof api()?.githubAccount === "function" && (hasPublish() || hasPicker());
+  // Signed in and able to run git: what a repository needs before it can be made or linked.
+  const ready = () => Boolean(state.gh.account) && state.gh.gitInstalled;
+  const offered = (id) => id === "local" || (ready() && (id === "create" ? hasPublish() : id === "link" && hasPicker()));
+  // What is picked, or a private repository once GitHub knows who you are.
+  function choiceNow() {
+    const picked = state.draftApp.github;
+    return picked && offered(picked) ? picked : offered("create") ? "create" : "local";
+  }
+  // The GitHub name a folder suggests: GitHub's own limits (letters, digits,
+  // ".", "-" and "_", 100 at most, never a trailing dot, hyphen or ".git").
+  // This is repoName in scripts/git-link.cjs, copied because a renderer
+  // cannot require it; tests/vibe_panels.test.mjs holds the two together. It
+  // only paints the final name before the folder exists; once it does, the
+  // host is asked (gitPublishPreview) and its answer wins.
+  function repoName(folderName) {
+    let name = String(folderName ?? "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/['\u2018\u2019\u02bc`]/g, "")
+      .replace(/[^A-Za-z0-9._-]+/g, "-").replace(/-{2,}/g, "-");
+    // Dots, hyphens and ".git" come off the ends until nothing more does; cutting to 100 can uncover another.
+    const settle = () => {
+      let before;
+      do {
+        before = name;
+        name = name.replace(/\.git$/i, "").replace(/^[-.]+/, "").replace(/[-.]+$/, "");
+      } while (name !== before);
+    };
+    settle();
+    name = name.slice(0, 100);
+    settle();
+    return name;
+  }
+  const repoOf = (appName) => repoName(slugOf(appName));
+  // A toast that cannot come is never a reason to fail the folder.
+  const toast = (text, tone = "warn") => { try { window.MefiToast?.(text, tone); } catch { /* the sentence is in the panel too */ } };
+  const reasonOf = (answer, fallback) => (typeof answer?.error === "string" && answer.error.trim() ? answer.error.trim().slice(0, 240) : fallback);
+
+  // The project the host has open, or null when it cannot say. The host
+  // publishes whichever project is open when it is asked, so a switch while
+  // GitHub answers must stop the publish (see publishNew).
+  const openProject = async () => { try { return (await api()?.projectsList?.())?.activeId ?? null; } catch { return null; } };
+
+  // Who is signed in to GitHub, from the host's light look (no network).
+  async function checkAccount() {
+    if (typeof api()?.githubAccount !== "function") return null;
+    let answer = null;
+    try { answer = await api().githubAccount(); } catch { answer = null; }
+    if (!answer || answer.ok === false) state.gh = { ...state.gh, checked: true };
+    else {
+      const account = typeof answer.account === "string" && answer.account ? answer.account : null;
+      const ghInstalled = answer.ghInstalled !== false;
+      const gitInstalled = answer.gitInstalled !== false;
+      const moved = ghInstalled !== state.gh.ghInstalled || gitInstalled !== state.gh.gitInstalled;
+      state.gh = { ...state.gh, checked: true, account, ghInstalled, gitInstalled, waiting: account || moved ? false : state.gh.waiting };
+    }
+    if (state.kind === "newapp") state.paintGh?.();
+    return state.gh.account;
+  }
+  // A sign-in or install window finishes outside Studio: look again every two
+  // seconds, for five minutes at most, until the panel shows a signed-in account.
+  function watchAccount() {
+    state.gh.waiting = true;
+    if (state.gh.polling) return;
+    state.gh.polling = true;
+    let turns = 0;
+    const tick = async () => {
+      if (!state.gh.polling || aside.hidden || state.kind !== "newapp") { state.gh.polling = false; state.gh.waiting = false; return; }
+      const account = await checkAccount();
+      if (account || (turns += 1) >= 150) { state.gh.polling = false; state.gh.waiting = false; state.paintGh?.(); return; }
+      setTimeout(tick, 2000);
+    };
+    setTimeout(tick, 2000);
+  }
+  // Sign in through the dialog Studio's chip uses when it is there, else the
+  // setup window Friends › Your PCs opens; the same for installing Git or the
+  // GitHub CLI. Studio never sees a password or a token either way.
+  async function setUp(action) {
+    watchAccount();
+    state.paintGh?.();
+    try {
+      if (action === "github-login" && typeof gitSync()?.showSignIn === "function") await gitSync().showSignIn();
+      else if (typeof api()?.pcSetupAction === "function") {
+        const opened = await api().pcSetupAction(action);
+        if (opened?.ok === false) toast(reasonOf(opened, "The setup window could not open."));
+      } else toast("Set up GitHub from Friends › Your PCs.");
+    } catch (error) { toast(reasonOf({ error: error?.message }, "The setup window could not open.")); }
+    void checkAccount();
+  }
+
+  // The GitHub choice, drawn once per form and repainted in place: an answer
+  // from the host must never rebuild the fields under someone typing.
+  function githubSection(nameBox, repaintMake) {
+    const locked = () => state.busy || Boolean(state.draftApp.git);
+    const node = el("div", "vibe-gh");
+    node.setAttribute("role", "group"); node.setAttribute("aria-label", "GitHub");
+    const head = el("div", "vibe-gh-head");
+    const who = el("span", "vibe-gh-account");
+    head.append(el("span", "vibe-set-label", "GitHub"), who);
+    const group = el("div", "vibe-gh-choices");
+    group.setAttribute("role", "radiogroup"); group.setAttribute("aria-label", "What happens on GitHub");
+    const segments = CHOICES.filter(({ id }) => id === "local" || (id === "create" ? hasPublish() : hasPicker())).map((choice) => {
+      const button = el("button", "vibe-gh-choice");
+      button.type = "button"; button.setAttribute("role", "radio"); button.dataset.choice = choice.id;
+      const dot = el("span", "vibe-gh-dot"); dot.setAttribute("aria-hidden", "true");
+      const hint = el("small", "", choice.hint);
+      const text = el("span", "vibe-gh-text"); text.append(el("b", "", choice.label), hint);
+      button.append(dot, text);
+      button.addEventListener("click", () => pick(choice.id));
+      group.append(button);
+      return { id: choice.id, button, hint, resting: choice.hint };
+    });
+    const status = el("div", "vibe-gh-status");
+    status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite");
+    node.append(head, group, status);
+
+    function pick(id) {
+      if (locked() || !offered(id)) return;
+      state.draftApp = { ...state.draftApp, github: id };
+      paint(); repaintMake();
+    }
+    // Radios move with the arrow keys, skipping the ones that cannot be chosen.
+    group.addEventListener("keydown", (event) => {
+      const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
+      const open = segments.filter((segment) => !segment.button.disabled);
+      if (!step || !open.length) return;
+      event.preventDefault?.();
+      const next = open[(Math.max(0, open.findIndex((segment) => segment.id === choiceNow())) + step + open.length) % open.length];
+      pick(next.id); next.button.focus?.();
+    });
+
+    const row = (text, sub, label, run) => {
+      const box = el("div", "vibe-gh-signin");
+      const words = el("div", "vibe-gh-signin-text");
+      words.append(el("p", "", text), el("p", "vibe-gh-sub", sub));
+      if (state.gh.waiting) words.append(el("p", "vibe-gh-sub", "Finish in the window that opened. This updates by itself."));
+      const go = el("button", "vibe-btn vibe-gh-signin-go", label);
+      go.type = "button";
+      go.addEventListener("click", run);
+      box.append(words);
+      if (!state.busy) box.append(go);
+      return box;
+    };
+    let shown = "", named = null;
+    const finalName = (repo) => `${state.gh.account}/${repo || "your-app"}`;
+    function paintStatus(now) {
+      const draft = state.draftApp.git;
+      const repo = repoOf(nameBox.value);
+      // What is typed changes only the name, and in place: a live region
+      // rewritten on every key reads itself out again on every key.
+      const seen = JSON.stringify([now, state.gh, state.busy, draft ? [draft.ok, draft.text, draft.reason] : null]);
+      if (seen === shown) { if (named) named.textContent = finalName(repo); return; }
+      shown = seen; named = null;
+      const refocus = status.contains?.(document.activeElement) && document.activeElement?.tagName === "BUTTON";
+      const parts = [];
+      if (draft && (draft.reason || draft.text)) parts.push(el("p", "", [draft.reason, draft.text].filter(Boolean).join(" ")));
+      else if (!state.gh.checked) parts.push(el("p", "", "Checking your GitHub sign-in…"));
+      else if (!ready()) {
+        if (!state.gh.gitInstalled) parts.push(row("Git is not installed.", "Studio needs it to publish or link a project.", "Install Git", () => void setUp("install-git")));
+        else if (!state.gh.ghInstalled) parts.push(row("GitHub CLI is not installed on this PC.", "Studio uses it to publish and link projects.", "Install GitHub CLI", () => void setUp("install-gh")));
+        else parts.push(row("Sign in to GitHub first to publish this project or link it to a repo.", "Studio never sees your password or token.", "Sign in to GitHub", () => void setUp("github-login")));
+      } else if (now === "create") {
+        const final = el("div", "vibe-gh-final");
+        const pill = el("span", "vibe-gh-pill", "Private");
+        named = el("code", "vibe-gh-repo", finalName(repo));
+        named.setAttribute("aria-live", "off");
+        final.append(el("span", "vibe-gh-label", "Will be created as"), named, pill);
+        parts.push(final, el("p", "", LINES.create));
+      } else parts.push(el("p", "", LINES[now]));
+      status.replaceChildren(...parts);
+      if (refocus) status.querySelector("button")?.focus?.();
+    }
+    function paint() {
+      const now = choiceNow();
+      for (const segment of segments) {
+        segment.button.disabled = locked() || !offered(segment.id);
+        segment.button.setAttribute("aria-checked", String(segment.id === now));
+        segment.button.setAttribute("tabindex", segment.id === now ? "0" : "-1");
+        segment.hint.textContent = segment.id !== "local" && state.gh.checked && !ready() ? (state.gh.account ? "Install Git first" : "Sign in first") : segment.resting;
+      }
+      who.textContent = !state.gh.checked ? "Checking…" : state.gh.account ? `Signed in as ${state.gh.account}` : "Not signed in";
+      paintStatus(now);
+    }
+    paint();
+    return { node, paint };
+  }
+
+  // The private repository, once the folder is open. Each refusal becomes a
+  // toast and a sentence; none of them throws, and none can undo the folder.
+  async function publishNew(name, made, opened) {
+    const owner = state.gh.account;
+    const refused = (reason) => { toast(reason); void checkAccount(); return { choice: "create", ok: false, reason, text: STAYED }; };
+    if (made?.git === false) return refused("Git could not start in the new folder, so there is nothing to publish.");
+    note("Publishing to GitHub…");
+    try {
+      let repo = repoOf(name);
+      let oneDrive = false;
+      if (typeof api().gitPublishPreview === "function") {
+        const plan = await api().gitPublishPreview({ owner, name: repo, ...(opened ? { projectId: opened } : {}) });
+        if (!plan || plan.ok === false) return refused(reasonOf(plan, "Studio could not check GitHub. Nothing was created."));
+        if (plan.needsSignIn) return refused("Sign in to GitHub first.");
+        if (plan.weakDrive) return refused("Publishing needs a folder on an NTFS drive. The project is open and stays on this PC.");
+        if (typeof plan.sanitized === "string" && plan.sanitized) repo = plan.sanitized;
+        else if (plan.valid === false) return refused("That name cannot be a GitHub repository name.");
+        if (plan.taken) return refused(`${owner}/${repo} already exists. Link to it, or pick another name.`);
+        oneDrive = plan.oneDrive === true;
+      }
+      // The host acts on the open project: never on one somebody switched to meanwhile.
+      const now = await openProject();
+      if (opened && now && now !== opened) return refused(SWITCHED);
+      // Private, with the .gitignore and no license: the panel never publishes public.
+      const result = await api().gitPublish({ owner, name: repo, visibility: "private", gitignore: true, license: "none", ...(opened ? { projectId: opened } : {}) });
+      if (!result || result.ok === false) return refused(reasonOf(result, "GitHub did not accept the project."));
+      const where = typeof result.repo === "string" && result.repo ? result.repo : `${owner}/${repo}`;
+      return { choice: "create", ok: true, repo: where, text: `Published ${where} (private).${oneDrive ? ` ${ONEDRIVE}` : ""}` };
+    } catch (error) { return refused(reasonOf({ error: error?.message }, "GitHub did not accept the project.")); }
+  }
+  // Linking is the owner's to take their time over: the picker opens and the
+  // first build does not wait for it. What it does then is its own to say.
+  function linkNew(made) {
+    const failed = (reason) => { toast(reason); return { choice: "link", ok: false, reason, text: STAYED }; };
+    if (made?.git === false) return failed("Git could not start in the new folder, so there is nothing to link.");
+    try {
+      note("Choose the repository to link…");
+      Promise.resolve(gitSync().showLink()).then((result) => { if (result && result.ok === false) toast(reasonOf(result, "The project could not be linked.")); }, (error) => toast(reasonOf({ error: error?.message }, "The project could not be linked.")));
+      return { choice: "link", ok: true, text: "Choose the repository to link it to in the window that opened." };
+    } catch (error) { return failed(reasonOf({ error: error?.message }, "The project could not be linked.")); }
+  }
+  // Its own step, after the folder is open and before the first build is
+  // queued: agents start writing files with the build, and the first commit
+  // should be the starter folder. It runs once, however often the build is retried.
+  async function githubStep(name, made) {
+    if (state.draftApp.git || !githubOn()) return state.draftApp.git ?? null;
+    const choice = choiceNow();
+    let outcome;
+    try {
+      // The project just made is the one to publish; a switch since then stops it (publishNew).
+      const opened = choice === "create" ? made?.selectedId || made?.addedId || await openProject() : null;
+      outcome = choice === "create" ? await publishNew(name, made, opened) : choice === "link" ? linkNew(made) : { choice, ok: true, text: "" };
+    } catch (error) {
+      // Nothing in this step may cost the folder or the first build.
+      const reason = reasonOf({ error: error?.message }, "GitHub could not be reached.");
+      toast(reason);
+      outcome = { choice, ok: false, reason, text: STAYED };
+    }
+    state.draftApp.git = outcome;
+    return outcome;
+  }
+
   function newAppForm(body) {
     body.append(el("p", "vibe-panel-hint", "Studio makes an empty folder under Mefi Apps in your home folder, starts git in it and opens it as your project. What you describe becomes its first build."));
     const form = el("form", "vibe-set vibe-newapp");
@@ -665,15 +949,22 @@
     const where = el("span", "vibe-set-hint", "");
     const paintWhere = () => { const slug = slugOf(name.value); where.textContent = slug ? `Folder: Mefi Apps/${slug}` : "The folder is named after the app."; };
     paintWhere();
-    name.addEventListener("input", () => { state.draftApp = { ...state.draftApp, name: name.value }; paintWhere(); });
+    // With a GitHub choice the button says what is about to happen; without
+    // one it says what it always did.
+    const makeLabel = () => (state.busy ? "Making it…" : state.draftApp.made?.ok === false ? "Open app and start building" : state.draftApp.made ? "Retry first build"
+      : !github ? "Make it and start building" : { create: "Start and publish", link: "Start and link", local: "Start project" }[choiceNow()]);
+    const github = githubOn() ? githubSection(name, () => { make.textContent = makeLabel(); }) : null;
+    name.addEventListener("input", () => { state.draftApp = { ...state.draftApp, name: name.value }; paintWhere(); github?.paint(); });
     about.addEventListener("input", () => { state.draftApp = { ...state.draftApp, about: about.value }; });
     const nameField = el("label", "vibe-set-field");
     nameField.append(el("span", "", "Name"), name);
     const aboutField = el("label", "vibe-set-field");
     aboutField.append(el("span", "", "What should it be?"), about);
-    const make = el("button", "vibe-btn primary", state.busy ? "Making it…" : state.draftApp.made?.ok === false ? "Open app and start building" : state.draftApp.made ? "Retry first build" : "Make it and start building");
+    const make = el("button", "vibe-btn primary", makeLabel());
     make.type = "submit"; make.disabled = state.busy;
-    form.append(nameField, aboutField, where, make);
+    form.append(nameField, aboutField, where, ...(github ? [github.node] : []), make);
+    // An answer from the host (who is signed in) repaints the choice in place.
+    state.paintGh = github ? () => { github.paint(); make.textContent = makeLabel(); } : null;
     form.addEventListener("submit", (event) => { event.preventDefault(); void createApp(); });
     body.append(form);
     // The first build being sized, live (renderer/vibe-flow.js).
@@ -686,12 +977,15 @@
     if (!name) { note("Give the new app a name.", "warn"); return; }
     if (!api()?.projectsCreate) { note("New apps can be made in the desktop app.", "warn"); return; }
     if (state.busy) return;
+    // Closing the panel and opening it again clears "busy" while the first Start still waits on GitHub.
+    if (state.making) { note("Still making it…"); return; }
     // Enter in a field submits the form but leaves the field focused, and a
     // panel never repaints under a field being typed in: let go of it, so
     // "Making it…" and the first build's sizing can show.
     if (aside.contains(document.activeElement)) document.activeElement.blur?.();
     state.busy = true; state.signature = ""; render();
     note("Making the folder…");
+    state.making = true;
     try {
       let made = state.draftApp.made;
       if (made?.ok === false && made.addedId) {
@@ -704,6 +998,8 @@
       if (made?.created && made.addedId) state.draftApp.made = made;
       if (!made || made.ok === false) throw new Error(made?.error || "The app could not be made.");
       state.draftApp.made = made;
+      // The GitHub choice is a separate step: nothing it does can fail the folder.
+      const github = await githubStep(name, made);
       let said = `${name} is ready and open.`;
       if (about && api()?.vibeBuild) {
         note("Folder ready. Sizing up the first build…");
@@ -721,16 +1017,18 @@
         if (!built || built.ok === false) throw new Error(`The folder is ready, but the first build could not be added: ${built?.error || "no answer"}`);
         said = built.steps ? `${name} is ready, and its first build is split into ${built.steps} steps.` : `${name} is ready, and its first build is queued.`;
       }
+      if (github?.text) said = `${said} ${github.text}`;
       state.draftApp = { name: "", about: "" };
       state.busy = false;
-      close({ quiet: true });
+      // A panel opened while this waited on GitHub or the build is not this one's to close.
+      if (state.kind === "newapp") close({ quiet: true });
       vibe()?.feedback?.(said, "good");
       await vibe()?.refresh?.();
     } catch (error) {
       state.busy = false;
       note(error?.message || "The app could not be made.", "bad");
       state.signature = ""; render();
-    }
+    } finally { state.making = false; }
   }
 
   // ---- paint ------------------------------------------------------------------------
@@ -808,5 +1106,5 @@
 
   $("back").addEventListener("click", () => back());
   $("close").addEventListener("click", () => close());
-  window.MefiVibePanels = { open, close, back, escape, update, isOpen: () => !aside.hidden, current: () => (aside.hidden ? null : state.kind), view: () => top() };
+  window.MefiVibePanels = { open, close, back, escape, update, repoName, isOpen: () => !aside.hidden, current: () => (aside.hidden ? null : state.kind), view: () => top() };
 })();

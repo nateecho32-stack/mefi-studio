@@ -11,7 +11,7 @@ const deferred = () => {
 };
 const flush = async () => { for (let count = 0; count < 20; count += 1) await Promise.resolve(); };
 
-function bootEnvironment({ bridge = {}, startup = null, reducedMotion = false, domLoading = false } = {}) {
+function bootEnvironment({ bridge = {}, startup = null, reducedMotion = false, domLoading = false, companion = false } = {}) {
   let now = 0, nextId = 0;
   const timers = new Map(), frames = new Map(), listeners = new Map(), windowListeners = new Map();
   const document = { readyState: domLoading ? "loading" : "complete", hidden: false, activeElement: null };
@@ -39,6 +39,7 @@ function bootEnvironment({ bridge = {}, startup = null, reducedMotion = false, d
   const context = vm.createContext({
     window: {
       mefiStudio: bridge, MefiStartup: startup, MefiNav: { noMotion: () => reducedMotion },
+      MefiCompanionHub: companion ? { boot() {}, handoff() {} } : undefined,
       addEventListener: (name, fn) => windowListeners.set(name, fn),
       removeEventListener: (name, fn) => { if (windowListeners.get(name) === fn) windowListeners.delete(name); },
     }, document, performance: { now: () => now },
@@ -171,6 +172,42 @@ test("the launch gate routes radio arrows and skips unselected projects in its T
   env.document.activeElement = open;
   env.key("Tab", open);
   assert.equal(env.document.activeElement, radio, "Tab wraps to the selected project only");
+});
+
+// The launch question hides the companion. A Tab stop that cannot take focus
+// would swallow the Tab and end the cycle at its last control.
+test("the launch gate's Tab cycle leaves out a companion that is not drawn and keeps one that is", async () => {
+  const env = bootEnvironment({ companion: true, startup: { navigateProjects: () => false } });
+  env.boot.run([], () => {}, { choose: () => new Promise(() => {}) });
+  await env.advance(20);
+  const radio = { tabIndex: 0, getAttribute: () => "radio", focus: () => { env.document.activeElement = radio; } };
+  const open = { tabIndex: 0, focus: () => { env.document.activeElement = open; } };
+  let rects = [];
+  const agent = { getClientRects: () => rects, focus: () => { env.document.activeElement = agent; } };
+  env.elements["boot-agent"] = agent;
+  env.elements["boot-choose"].querySelectorAll = () => [radio, open];
+  env.document.activeElement = open;
+  env.key("Tab", open);
+  assert.equal(env.document.activeElement, radio, "with the companion hidden Tab wraps straight to the first control");
+  env.key("Tab", radio, { shiftKey: true });
+  assert.equal(env.document.activeElement, open, "and Shift+Tab wraps back to the last");
+  rects = [{ width: 94, height: 94 }];
+  env.document.activeElement = open;
+  env.key("Tab", open);
+  assert.equal(env.document.activeElement, agent, "a companion that is drawn is still a Tab stop");
+});
+
+test("the launch gate's Tab cycle asks for buttons, single-line fields and text areas, so a panel's description is reachable", async () => {
+  const env = bootEnvironment();
+  env.boot.run([], () => {}, { choose: () => new Promise(() => {}) });
+  await env.advance(20);
+  const asked = [];
+  const field = { tabIndex: 0, focus: () => { env.document.activeElement = field; } };
+  env.elements["boot-choose"].querySelectorAll = (selector) => { asked.push(selector); return [field]; };
+  env.key("Tab", field);
+  assert.match(asked[0], /button:not\(\[disabled\]\)/);
+  assert.match(asked[0], /input:not\(\[disabled\]\)/);
+  assert.match(asked[0], /textarea:not\(\[disabled\]\)/);
 });
 
 test("Escape, Enter, pointer clicks and shortcuts cannot bypass pending preloads", async () => {

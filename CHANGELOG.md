@@ -7,6 +7,38 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **The Git chip: where this project stands against GitHub, and Push, Pull,
+  Save and Publish from it.** A small chip beside the project name in Vibe (and
+  at the end of the section bar in Build) says in words and a glyph whether the
+  open project is in sync, has work to send ("2 to push") or to get ("3 to
+  pull"), changed on both sides, has files you have not saved, is only on this
+  PC, or cannot reach GitHub. Click it for one plain sentence, the details and
+  the one button that fits ("Push 2 commits", "Pull 3 commits", "Publish to
+  GitHub", "Sign in to GitHub", "Save and push 4 files"), with "Last checked"
+  and "Check now". Studio never commits for you: with uncommitted files the
+  button opens **Save and push**, where you tick the files, edit the message and
+  see anything it stopped (a private key, an `.env`, a file over 100 MB); it
+  commits only what you ticked, never with `add -A` or `--no-verify`.
+  **Publish to GitHub** creates a private repository named for the folder
+  (public needs its name typed back), writes the `.gitignore` before the first
+  commit and never replaces an existing `origin`. **Link to a repository** picks
+  one from your own list and refuses a repository with a different history.
+  Pushing the default branch still runs the project's own `npm run check` and
+  the lost-work guard. Behind it: `scripts/git-link.cjs` (the states and rules),
+  `scripts/git-actions.cjs` (the git and gh calls), `scripts/git-host.cjs` (one
+  writer at a time, one model) and `renderer/git-sync.js`.
+- **Start a new app on GitHub.** New app asks what should happen on GitHub: a
+  private repository (the default once you are signed in), one you already
+  have, or only this PC for now. The folder is made first and publishing is a
+  separate step, so a failed publish never loses the folder; the chip shows what
+  happened.
+- **A quieter launch screen.** One **Open** button that never moves and a
+  **Start agents** switch replace the two open buttons that swapped places. Rows
+  show when each project was opened and its GitHub state (the chip arrives a
+  moment after the list); a folder that has gone says so, keeps Open off and
+  offers **Remove from list**; Enter or a double click opens a row; and **Open a
+  folder…**, **Start a new app** and **Get from GitHub** sit at the foot. The
+  loading card's spinner and progress bar no longer sit above the list.
 - **Live › Fleet: every seat on your team, and the wires between them.** A
   new page beside Command shows the open project's team the way OpenRig draws a
   rig. An explorer lists it as pods (Lead, Build, Check, Keep) of seats such as

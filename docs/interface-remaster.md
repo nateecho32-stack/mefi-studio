@@ -14,7 +14,7 @@ in JavaScript. A route opening alone does not verify its interior controls.
 | --- | --- |
 | Shell | Home, Work, Live, Models; local navigation; Settings, Search, Help; expanded/collapsed rail; project selector; keyboard and return focus |
 | Home | Project actions; Chat/Create task; suggestions; queue settings; work filters, search and details; service status; loading/failure/retry |
-| Projects/startup | Project list and active marker; add/switch project; no-project path; Open studio versus start-agents choice; recovery |
+| Projects/startup | Project list and active marker; add/switch project; no-project path; one Open plus a Start agents switch; recovery |
 | Tasks | Overview/list; All/Open/Done filters; selected task; Details/Evidence/History/References; attempts; prerequisites; handoffs; approval, retry and blocked states |
 | Plans | Plan list; new plan; current stage; interview; unknowns and dependencies; review/specification; task handoff; project discovery; revisions |
 | Ideas | List/graph views; selection; Tools menu; scan/review/cleanup affordances; selected-idea actions |

@@ -1987,6 +1987,8 @@ async function syncProject(push, { rebase = false, pullOnly = false } = {}) {
     .catch((error) => ({ ok: false, headline: `Sync could not run: ${error?.message || error}`, lines: [], pending: [], actions: [], problems: [{ kind: "error" }], risk: 0 }))
     .then((result) => {
       send("sync:event", result);
+      // The Git chip (scripts/git-host.cjs) reads the same answers.
+      if (typeof gitHostHooks !== "undefined" && gitHostHooks) gitHostHooks.onSyncEvent(result);
       if (typeof vaultHeartbeat === "function") vaultHeartbeat(result).catch(() => {});
       // This PC's work is on GitHub now: file claims held for it can go.
       if (push && result?.ok && typeof coworkPushed === "function") coworkPushed();
@@ -2089,6 +2091,35 @@ function syncWindowClose(event) {
   requestQuit();
 }
 // ---- end of multi-PC sync -----------------------------------------------------
+
+// ---- GitHub link: the Git chip, Save and push, Publish and Link ---------------
+// scripts/git-host.cjs does the work. registerIpc builds it on first use, next
+// to the pc-setup handlers ("GitHub link" there), and sets gitHostHooks, which
+// syncProject's answers and a project switch reach through a typeof guard, so
+// this block stays inert in the suites that slice their neighbours. What the
+// launch screen learns per project beyond its name and folder is here too:
+// whether the folder is still there, and when the project was last opened
+// (settings.projectOpened, stamped when the owner opens it).
+let gitHostHooks = null;
+async function projectLaunchFacts(list) {
+  if (!list || !Array.isArray(list.projects)) return list;
+  const settings = await readSettings().catch(() => ({}));
+  const opened = settings?.projectOpened && typeof settings.projectOpened === "object" ? settings.projectOpened : {};
+  return { ...list, projects: list.projects.map((project) => ({
+    ...project,
+    available: typeof project?.path === "string" && existsSync(project.path),
+    openedAt: Number.isFinite(opened[project?.id]) ? opened[project.id] : null,
+  })) };
+}
+async function stampProjectOpened(id) {
+  if (typeof id !== "string" || !id) return;
+  await updateSettings((settings) => {
+    const previous = settings.projectOpened && typeof settings.projectOpened === "object" ? settings.projectOpened : {};
+    // Only the newest 200, so an old profile cannot grow this without bound.
+    settings.projectOpened = Object.fromEntries(Object.entries({ ...previous, [id]: Date.now() }).sort((a, b) => b[1] - a[1]).slice(0, 200));
+  }).catch(() => {});
+}
+// ---- end of the GitHub link ---------------------------------------------------
 
 // ---- Your PCs vault: memory and setup between the owner's PCs ------------------
 // Friends › Your PCs › Share between my PCs (renderer/pc-vault.js). One private
@@ -19744,6 +19775,9 @@ async function adoptProject(previous, next, { savedAgents = 0, selected = false 
   // The loop status counts this board now, not the one just left ("2 tasks need your OK").
   autopilot.queueCounts = typeof boardCounts === "function" ? boardCounts(tasks) : null;
   send("projects:changed", projects.list());
+  if (typeof gitHostHooks !== "undefined" && gitHostHooks) gitHostHooks.onProjectChanged();
+  // Every way a folder becomes the open project (picked, added, made, cloned) is an opening for the launch list.
+  if (typeof stampProjectOpened === "function" && next && !next.placeholder) void stampProjectOpened(next.id);
   send("eyes:tasks", tasks.map(taskView));
   send("eyes:requests", requests);
   send("eyes:ideas", ideas);
@@ -20078,16 +20112,18 @@ function registerIpc() {
       }
     } catch (error) { return { ...projects.list(), ok: false, error: error.message }; }
   });
-  ipcMain.handle("projects:select", (_event, payload) => {
-    if (typeof payload === "string") return selectProject(payload);
-    return selectProject(payload?.id, { saveProgress: payload?.saveProgress === true });
+  ipcMain.handle("projects:select", async (_event, payload) => {
+    const id = typeof payload === "string" ? payload : payload?.id;
+    const result = typeof payload === "string" ? await selectProject(payload) : await selectProject(payload?.id, { saveProgress: payload?.saveProgress === true });
+    if (result?.ok !== false && typeof stampProjectOpened === "function") void stampProjectOpened(id);
+    return result;
   });
   // The launch screen (renderer/startup.js): which project to open, and
   // whether the agents may start. `chosen` lets a renderer reload skip the
   // screen; `held` is what the Start agents controls key on; `resumed` names
   // the folder this launch reopened on its own, so the gate can say so
   // instead of asking a question it has already answered.
-  ipcMain.handle("startup:state", async () => ({ ...projects.list(), interactive: !SMOKE && !CAPTURE && !CLI_MODE, chosen: startupChosen, resumed: startupResumed, held: autopilot.held === true, started: assistantLoop,
+  ipcMain.handle("startup:state", async () => ({ ...(await projectLaunchFacts(projects.list())), interactive: !SMOKE && !CAPTURE && !CLI_MODE, chosen: startupChosen, resumed: startupResumed, held: autopilot.held === true, started: assistantLoop,
     launch: launchAgentsInfo(await readSettings().catch(() => ({}))) }));
   ipcMain.handle("startup:choose", async (_event, payload) => {
     const id = typeof payload?.id === "string" && payload.id ? payload.id : null;
@@ -20097,6 +20133,7 @@ function registerIpc() {
       if (result.ok === false) return result;
     }
     startupChosen = true;
+    if (typeof stampProjectOpened === "function") void stampProjectOpened(id ?? (projects.open() ? projects.active().id : null));
     // The owner opened this folder: cards held for a check against work done
     // outside Studio may be checked now (the check waited for this choice).
     outsideWorkKick("chosen");
@@ -21811,6 +21848,69 @@ function registerIpc() {
     return opened.ok === false ? { ok: false, folder: cloned.folder, error: `Got ${repo}, but Studio could not open it: ${opened.error}` } : { ok: true, folder: cloned.folder };
   });
 
+  // ---- GitHub link (scripts/git-host.cjs) ------------------------------------
+  // The Git chip, Save and push, Publish and Link. git:* is project-gated like
+  // sync:* (it acts on the open project's folder, so a switch waits for it);
+  // projects:glance and pc-setup:account are app-wide, because the launch
+  // screen asks before any project is open. The renderer names an action and
+  // plain fields: folders come from the open project, repositories from the
+  // account's own list, file paths from the preview Studio built, and a project
+  // id only guards against a switch between two calls. The host is built on
+  // first use, so a profile that never opens the chip pays nothing.
+  let gitHostInstance = null;
+  const gitHost = () => {
+    if (gitHostInstance) return gitHostInstance;
+    const link = require("./scripts/git-link.cjs");
+    const { createGitActions } = require("./scripts/git-actions.cjs");
+    const { createGitHost } = require("./scripts/git-host.cjs");
+    const actions = createGitActions({ execFile: require("node:child_process").execFile, exists: existsSync, readText: (file) => readFile(file, "utf8").catch(() => null), env: () => process.env });
+    // `later` lets the chip's "Done" end by itself (git-host settle): an unref'd timer, so it never keeps Studio alive.
+    // (No comments inside the object: tests/git_link_host.test.mjs reads its keys.)
+    gitHostInstance = createGitHost({
+      actions, link, pcSetup, send, syncProject,
+      exists: existsSync,
+      now: () => Date.now(),
+      later: (ms, run) => { const timer = setTimeout(run, ms); timer.unref?.(); },
+      context: () => {
+        const open = projects.open();
+        return { root: open ? projectRoot() : null, projectId: open ? projects.active().id : null, builders: typeof autopilot !== "undefined" && (autopilot.jobs ?? []).some((job) => job && !job.finished) };
+      },
+      listProjects: () => projects.list().projects ?? [],
+      projectCheck: async (root) => (await loadModule("scripts/sync.mjs")).projectCheck(root),
+    });
+    return gitHostInstance;
+  };
+  gitHostHooks = {
+    onSyncEvent: (result) => { if (gitHostInstance) gitHostInstance.onSyncEvent(result); },
+    onProjectChanged: () => { if (gitHostInstance) gitHostInstance.onProjectChanged(); },
+  };
+  const gitCall = (run) => async (_event, payload) => {
+    try { return await run(gitHost(), payload && typeof payload === "object" ? payload : {}); }
+    catch (error) { return { ok: false, error: String(error?.message ?? error).replace(/([a-z][a-z0-9+.-]*:\/\/)[^/@\s]+@/gi, "$1").slice(0, 300) }; }
+  };
+  ipcMain.handle("git:state", gitCall((host, payload) => host.state(payload)));
+  ipcMain.handle("git:check", gitCall((host, payload) => host.check(payload)));
+  ipcMain.handle("git:pull", gitCall((host, payload) => host.pull(payload)));
+  ipcMain.handle("git:push", gitCall((host, payload) => host.push(payload)));
+  ipcMain.handle("git:rebase", gitCall((host, payload) => host.rebase(payload)));
+  ipcMain.handle("git:save-preview", gitCall((host, payload) => host.savePreview(payload)));
+  ipcMain.handle("git:save", gitCall((host, payload) => host.save(payload)));
+  ipcMain.handle("git:owners", gitCall((host) => host.owners()));
+  ipcMain.handle("git:publish-preview", gitCall((host, payload) => host.publishPreview(payload)));
+  ipcMain.handle("git:publish", gitCall((host, payload) => host.publish(payload)));
+  ipcMain.handle("git:link-repos", gitCall((host) => host.linkRepos()));
+  ipcMain.handle("git:link", gitCall((host, payload) => host.link(payload)));
+  let accountPath = 0, accountAt = 0, accountNow = null;
+  ipcMain.handle("pc-setup:account", gitCall(async (host) => {
+    if (accountNow && Date.now() - accountAt < 2500) return accountNow;
+    // A tool installed since launch is only on the registry PATH; look again at most every 20 s.
+    if (Date.now() - accountPath > 20000) { accountPath = Date.now(); await refreshProcessPath().catch(() => false); }
+    accountNow = await host.account();
+    accountAt = Date.now();
+    return accountNow;
+  }));
+  ipcMain.handle("projects:glance", gitCall((host, payload) => host.glance(Array.isArray(payload.ids) ? payload.ids.filter((id) => typeof id === "string").slice(0, 100) : undefined)));
+
   // ---- Your PCs vault (the "Your PCs vault" block) ----------------------------
   // Friends › Your PCs › Share between my PCs. Project-gated: brains, recipes,
   // notes and ideas act on the open project, so a switch waits for them.
@@ -22518,6 +22618,8 @@ app.whenReady().then(() => {
   if (!startupResumed && typeof startupAtLogin === "function") startupResumed = startupAtLogin();
   if (startupResumed) {
     startupChosen = true;
+    // A launch that reopened this folder on its own is an opening too (the launch list's "Opened ...").
+    if (typeof stampProjectOpened === "function") void stampProjectOpened(startupResumed.projectId);
     logLine(startupResumed.atLogin
       ? `[startup] started with Windows · ${startupResumed.name}${startupResumed.agents ? " · agents start" : " · agents stay held"}`
       : `[startup] resuming ${startupResumed.name} · work ${Math.round((Date.now() - startupResumed.activityAt) / 1000)}s ago${startupResumed.agents ? " · agents were running" : " · agents stay held"}`);

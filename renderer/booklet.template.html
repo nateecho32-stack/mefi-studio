@@ -19,12 +19,24 @@
     <progress id="boot-progress" max="100" value="0" aria-label="Startup progress"></progress>
     <ol id="boot-steps" class="boot-steps" aria-label="Startup checks"><li class="boot-step" data-state="loading">Preparing startup</li></ol>
     <div id="boot-choose" class="boot-choose" hidden>
+      <div id="boot-filter-row" class="boot-filter" hidden>
+        <svg class="boot-glyph" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="7" cy="7" r="4.5"/><path d="M10.4 10.4 13.5 13.5"/></svg>
+        <input id="boot-filter" type="search" aria-label="Filter projects" placeholder="Filter projects" autocomplete="off">
+      </div>
       <div id="boot-projects" class="boot-projects" role="radiogroup" aria-label="Choose a project"></div>
-      <button id="boot-add-project" class="ghost boot-add" type="button">Open another folder…</button>
-      <p id="boot-choose-note" class="boot-choose-note" role="status" aria-live="polite">Agents stay off until you start them.</p>
-      <div class="boot-actions">
-        <button id="boot-open" class="primary" type="button">Open studio</button>
-        <button id="boot-open-start" class="ghost" type="button">Open and start agents</button>
+      <div id="boot-panel" class="boot-panel" hidden></div>
+      <div class="boot-foot">
+        <div id="boot-go" class="boot-go">
+          <button id="boot-start-agents" class="switch boot-switch" type="button" role="switch" aria-checked="false"><span class="track" aria-hidden="true"></span><span>Start agents</span></button>
+          <button id="boot-open" class="primary" type="button">Open</button>
+        </div>
+        <p id="boot-choose-note" class="boot-choose-note" role="status" aria-live="polite">Agents stay off until you start them.</p>
+        <p id="boot-live" class="sr-only" role="status" aria-live="polite"></p>
+      </div>
+      <div id="boot-verbs" class="boot-verbs">
+        <button id="boot-add-project" class="boot-verb" type="button">Open a folder…</button>
+        <button id="boot-new-app" class="boot-verb" type="button">Start a new app</button>
+        <button id="boot-from-github" class="boot-verb" type="button">Get from GitHub</button>
       </div>
     </div>
     <div id="boot-actions" class="boot-actions" hidden>

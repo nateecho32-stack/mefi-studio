@@ -316,7 +316,7 @@ settings and per-model work-kind summaries for the shared controls.
   decision or closes. **Open in Watch** shows the decision in Command instead.
 - Vibe can run on its own. When something holds every agent back, a banner
   under the box names it and carries its fix: **Start agents** after a launch
-  that left them off (the launch screen's plain Open), **Resume** when new
+  that left them off (the launch screen's Open with Start agents off), **Resume** when new
   work is paused, **Try now** during a worker-start cooldown, **Restart
   Studio** when the scheduler is stuck, **Open a project** with none open,
   **Connect an AI** when none is connected. The banner, Home's Service tile,
@@ -1465,6 +1465,50 @@ vX.Y.Z --publish`, or push a `v*` tag and let
 `.github/workflows/release.yml` run. A private repository needs a read-only
 token: save one in Settings › Updates, set `MEFI_STUDIO_GITHUB_TOKEN`, or let
 Studio reuse the GitHub CLI's `gh auth token`.
+
+### Git sync: Push, Pull and GitHub linking
+
+The **Git chip** (`renderer/git-sync.js`, `window.MefiGitSync`) sits beside the
+project name on Vibe's home and at the end of the section bar on every other
+page. It draws one **model** the host builds and pushes on `git:state`: an id
+from a fixed table of 31 states (in sync, "2 to push", "3 to pull", both
+changed, only on this PC, no commits yet, signed out, held back, and so on),
+its label, tone and glyph, one plain sentence, detail lines, and at most one
+primary and one secondary action. The renderer only maps an action id to a
+bridge call; the wording and the choice of state live in
+`scripts/git-link.cjs`, which is pure (states, `describe()`, name and ignore
+rules, and the sentences for what git and gh say when they refuse).
+
+Who does what:
+
+- `scripts/git-actions.cjs` runs git and gh with argument arrays, no shell and
+  prompts off: `glance` (two local calls, an unborn repository is "no commits
+  yet", not a detached HEAD), `preview` and `save` (only the previewed,
+  unblocked paths, an intent-to-add then a path-limited commit, never `add -A`
+  or `--no-verify`; private keys, tokens and `.env` files stop a file, files
+  over 50 MB warn and over 100 MB are refused), `pushBranch`, `publish` (private
+  by default, public only when the exact `owner/name` is typed back, the
+  `.gitignore` written before the first add, idempotent on retry) and `link`
+  (from the account's own list only, unrelated histories refused).
+- `scripts/git-host.cjs` is what `main.cjs` calls ("GitHub link" beside the
+  pc-setup handlers): it binds each call to the project that was open when the
+  request began, runs pull, push, rebase, save, publish and link one at a time,
+  builds the model from a local glance, the last sync result, the cached
+  account and what is running, and pushes it. The default branch pushes through
+  `syncProject(true)` so the project's own check, the lost-work guard and the
+  vault heartbeat still apply.
+- The bridge (`preload.cjs`) forwards named plain fields only; `git:*` waits for
+  a project switch like `sync:*`, while `projects:glance` and
+  `pc-setup:account` answer before any project is open.
+
+Studio commits only from **Save and push**: with uncommitted files the chip's
+button opens that dialog, and nothing is saved that you did not tick. **Publish
+to GitHub** and **Link to a repository** are dialogs too (`showPublish`,
+`showLink`, `showSignIn`, which New app and the launch screen can call).
+Sign-in uses the same setup window as Friends › Your PCs and is polled until an
+account appears; Studio never sees a password or a token. The launch screen's
+rows carry the same chips through `projects:glance` (local, no network, three
+at a time, a second and a half each).
 
 ### Community
 

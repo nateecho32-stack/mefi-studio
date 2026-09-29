@@ -1307,6 +1307,8 @@
     initialized = true;
     renderSparks();
     window.MefiAutonomy?.mount($("autonomy-control"), { id: "vibe-autonomy" });
+    // The Git sync chip sits right after New app in the project cluster (renderer/git-sync.js).
+    window.MefiGitSync?.mount?.($("new-app")?.parentNode, { after: $("new-app"), variant: "vibe" });
     window.addEventListener("mefi:autonomy-changed", () => { signatures.delete("ask"); renderAsk(); renderHead(); renderLanes(); });
     $("compose").addEventListener("submit", (event) => { event.preventDefault(); void send("build"); });
     window.MefiFileInputs?.bind($("input"), { scope: () => `${draftEpoch}:${projectId()}`, blocked: () => state.pending || !projectId() });

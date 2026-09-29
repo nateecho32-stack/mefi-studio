@@ -62,6 +62,9 @@ the weight is, not to be exact.
 | `reconcile-board.mjs` · `reconcile-store-fork.mjs` | 246 · 156 | One-shot repairs, run with the app closed: board reconciliation, and the repo-versus-installed store fork. |
 | `sync.mjs` | 423 | Multi-PC sync: keeps a checkout's default branch in step with GitHub (fetch, fast-forward, the project's own check, push without force, and a conflict-safe rebase on request) and lists what has not reached it yet, including what only this PC holds (`atRisk`) and merges that left another branch's work out (`lostWork`: it refuses that push, and the hook and card only report it). Behind `npm run sync`, the Claude Code SessionStart hook and main's "Multi-PC sync" block (`sync:*` channels, the background look and the question before closing). |
 | `pc-setup.cjs` | 165 | Set up this PC: checks Git, the GitHub CLI, Node.js, the GitHub sign-in (account name only) and, for the open project, its GitHub remote, packages and drive type; opens a visible PowerShell window with Studio's fixed command for each gap; lists the account's repositories and clones a listed one into a folder main's dialog picked (never exFAT/FAT). Behind main's app-wide `pc-setup:*` channels. |
+| `git-link.cjs` | 1,069 | The Git chip's rules: the 31-state table (label, tone, glyph, sentence, primary and secondary), `describe()` (a glance, the last sync result, the account and what is running become one chip model, by priority), repository-name and `.gitignore`/license rules, `publishPlan`, `classifyPush` and `classifyGh` (what git and gh say when they refuse, in words), `pathBlocked`. Pure. |
+| `git-actions.cjs` | 1,129 | The git and gh calls behind the chip, all IO injected: `glance`, `preview`, `save` (previewed, unblocked paths only), `pushBranch`, `publish`, `link`, `owners`, `account`. Argument arrays, no shell, credentials scrubbed. |
+| `git-host.cjs` | 562 | What `main.cjs` calls from its `git:*` handlers: binds each call to the open project, runs writers one at a time, builds and pushes the chip model, and answers the launch screen's `projects:glance`. |
 | `cowork.cjs` | 122 | Live file claims between PCs in a Void Engine cowork room: the hub's claim-path rules and overlap test, a lease's shape, other PCs' live exclusive claims as the in-flight jobs `assistant.mjs` claimWork waits for, a job's files as repo-relative claim paths, a conflict in words, and `settings.cowork` (room per repository, this PC's machine id). Pure; main.cjs's "Cowork claims" block and hub-client.cjs's claims calls use it. |
 | `vault-crypto.cjs` | 103 | The Your PCs vault's sealing: a 32-byte key, its pairing code (Crockford base32 with a checksum, canonical form only) and fingerprint, and AES-256-GCM seal/open with the file's path as associated data, so a file moved, edited or sealed with another key does not open. Pure. |
 | `share-review.cjs` | 122 | What Studio checks before anything leaves for another PC or a friend, and again when it arrives: `scan` (keys, tokens, passwords, logins in links as blocks; paths, emails, addresses and this PC's names as warnings; instructions aimed at an agent, downloaded scripts, encoded commands, paste and webhook hosts and hidden characters as blocks) and `scrub` over `redaction.cjs`. Pure. |
@@ -250,6 +253,7 @@ imports. See [Unified Studio](unified-studio.md) for the interfaces and fixture 
 | `community.js` | 560 | `window.MefiCommunity`: the quiet weekly community card, General's Community disclosure, and the Community action in Help and Search; `mefi-community-status` tells Listen together when the link changes. It sees only the public status from main, never a token. Bundled after `music.js` and before `booklet.js`. |
 | `together.js` | 476 | `window.MefiTogether`: Listen together and the now-playing share, drawn into the Links panel (`MefiMusic.togetherHost`). It picks a room, follows its shared player (a file to the second, YouTube/Vimeo/SoundCloud through their postMessage APIs, Spotify by loading the same link) and sends the share only when the member turns it on. Talks to main only through `hub*` on the bridge. Bundled after `music.js`. |
 | `rooms.js` | 588 | `window.MefiRooms`: Friends › Rooms. Lists rooms with the one action each needs (open, ask to join, accept or decline an invite, cancel a request); has Requests and Invites tabs, making a room, and a room view with chat (text only, `<@id>` shown as @name), invite by member search, lock/unlock, close and leave. Everything goes through main's `hub:room` channel (`HUB_ROOM_METHODS`) plus `hubStatus`/`hubConnect`/`hubRooms`/`hubSubscribe`; the hub's refusal reasons read as plain sentences. `pending()` feeds the Friends badge. Bundled after `companion-friends.js`. |
+| `git-sync.js` / `git-sync.css` | 1,591 · 246 | `window.MefiGitSync`: the Git chip, its popover and the Save and push, Publish, Link and Sign in dialogs, drawn from the model `git-host.cjs` pushes on `git:state`. Mounted by `nav.js` (the section bar's tail) and `vibe.js` (the project cluster); bundled after `camera-tour.js`. |
 | `pc-sync.js` | 439 | `window.MefiPcSync`: the Your PCs card that `companion-hub.js` mounts in Friends, and the count it badges the Friends bubble with. It shows this PC against GitHub and offers Sync this PC and, when both sides moved, Put my commits on top of GitHub's. Its wording comes from `scripts/sync.mjs` through `syncStatus`, `syncRun` and `onSyncEvent`. Its Set up this PC section (the `pcSetup*` bridge methods, `scripts/pc-setup.cjs`) checks nothing until opened. Bundled after `together.js`. Its Reach this PC from Discord section (`remote:*`) holds the switch, this PC's name, the alerts, quiet hours, the digest hour, the approval PIN and the last commands this PC answered. |
 | `pc-vault.js` | 468 | `window.MefiPcVault`: the two sharing sections in the Your PCs card. Share between my PCs (make or pair the vault, the pairing code on request, every PC's line, shelves with what Studio found, what the other PCs shared, the library, keys and setup behind the exact typed phrase) and Share with friends (preview then save a scrubbed `.mefishare`, or open one for review). Text only; key values never reach it. Bundled after `pc-sync.js`. |
 | `camera-tour.js` | | `window.MefiCameraTour`: Zen's branch tour through `idle.js.setDirector`, plus automatic Overview's bounded pan/scale lens. Uses painted layout anchors and the real canvas projection; the overview lens fits every branch without moving anchors. The tour's `velocity()` carries pan, zoom and tilt into the glide home. Bundled right after `idle.js`. |
@@ -277,7 +281,7 @@ Its bounds follow the visible viewport as the panel scrolls, keeping website
 controls inside the panel without reloading the page.
 The main preload exposes controls only to Studio; websites have no preload.
 
-Fifteen stylesheets are inlined, in this order, so a later one wins a tie
+Sixteen stylesheets are inlined, in this order, so a later one wins a tie
 with an earlier one:
 
 | File | Lines | Purpose |
@@ -289,8 +293,9 @@ with an earlier one:
 | `agent-brain.css` · `agents.css` · `companion-ui.css` | 359 · 191 · 44 | The Agent brain surfaces (sheet, Home hub, companion), the Agents workspace and the companion panel. |
 | `studio-ui.css` | 623 | Shared overflow, dropdown and glass recipes, after the page styles. |
 | `companion-hub.css` · `vibe.css` · `setup-helper.css` | 313 · 732 · 161 | The companion bubble and its menu, Vibe, and the setup helper. |
+| `git-sync.css` | 246 | The Git chip, its popover and dialogs. |
 
-`npm run check` runs `check-css.mjs --unused` over all fifteen, and `--merge`
+`npm run check` runs `check-css.mjs --unused` over all sixteen, and `--merge`
 over `styles.css` while a merge is in progress (see
 [CONTRIBUTING.md](../CONTRIBUTING.md)).
 
@@ -321,6 +326,10 @@ commit rewrites the JSON view as well.
   whose collaborators are stubs. So a new identifier used inside a sliced
   section needs a stub in every suite that slices that section, and moving a
   marker breaks a suite in a way that can look like flake.
+- **The GitHub link** has six: `git_link`, `git_actions` (real git in temp
+  folders, a local bare repository as "GitHub" and a fake `gh`), `git_host`,
+  `git_link_host` (the `main.cjs` block and the bridge), `git_sync_ui` and
+  `startup_screen` (each `.test.mjs`); none reaches GitHub.
 - **`tests/fixtures/`** holds the Electron fixtures (`*-electron.cjs`), fake
   bridges, the executor host harness and replay data.
 - **Structure tests** hold the tree to rules rather than behaviour:

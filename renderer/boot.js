@@ -47,7 +47,7 @@
       ? boot.resumed + (loading ? " · " + loading.label + "…" : "")
       : loading ? loading.label + "…" : "Preparing your workspace…";
     if (el.detail) el.detail.textContent = choosing
-      ? "Pick the folder to open. Nothing runs until you say so."
+      ? "Pick a project to work on, or add one below."
       : boot.phase === "error"
         ? "Couldn't finish " + failed.map((step) => step.label.toLowerCase()).join(", ") + ". Retry, or open with what's available."
         : boot.phase === "ready" ? "Everything is in place." : opening;
@@ -73,8 +73,10 @@
     }
     if (event.key === "Tab") {
       event.preventDefault();
+      // The launch question hides the companion; a Tab stop that cannot take focus would end the cycle.
       const agent = window.MefiCompanionHub ? document.getElementById("boot-agent") : null;
-      const buttons = [agent, ...(boot.phase === "error" ? [el.retry, el.continue].filter(Boolean) : boot.phase === "choose" ? chooserControls() : [])].filter(Boolean);
+      const drawn = agent && agent.getClientRects?.().length !== 0 ? agent : null;
+      const buttons = [drawn, ...(boot.phase === "error" ? [el.retry, el.continue].filter(Boolean) : boot.phase === "choose" ? chooserControls() : [])].filter(Boolean);
       if (!buttons.length) el.layer?.focus({ preventScroll: true });
       else {
         const index = buttons.indexOf(document.activeElement);
@@ -83,9 +85,9 @@
     } else if (event.key === "Escape" || !el.layer?.contains(event.target)) event.preventDefault();
   }
 
-  // Tab stays inside the launch choice: its project rows and buttons.
+  // Tab stays inside the launch choice: its project rows, buttons and fields.
   function chooserControls() {
-    const nodes = el.choose?.querySelectorAll?.("button:not([disabled]), input:not([disabled])") ?? [];
+    const nodes = el.choose?.querySelectorAll?.("button:not([disabled]), input:not([disabled]), textarea:not([disabled])") ?? [];
     return Array.from(nodes).filter((node) => node.tabIndex !== -1 && !node.hidden && !node.closest?.("[hidden]"));
   }
 

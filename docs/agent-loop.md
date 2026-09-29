@@ -645,14 +645,14 @@ collections its mutation returned (`refreshAutopilotQueue(eyes, result)`).
 - `renderer/booklet.js`, the boot sequence (`window.MefiBoot.run`) — the
   `startAgents` choice releases the launch hold (`MefiStartup.begin` →
   `startup:begin` → `releaseStartupHold` in main.cjs) so the loop may
-  dispatch ("Open and start agents"). A launch that resumed an interrupted
+  dispatch (the **Start agents** switch). A launch that resumed an interrupted
   session (main.cjs `startupResume`) never holds in the first place, so the
   agents that were running come back with it. **When Studio opens**
   (`settings.ui.launchAgents`: resume, start or off; main.cjs
-  `launchAgentsInfo`, read by `renderer/startup.js`) picks which launch
-  button is the default. With resume, a project whose last session record
+  `launchAgentsInfo`, read by `renderer/startup.js`) picks whether the launch
+  switch starts on. With resume, a project whose last session record
   (`session.json`, read once at launch as `startupLastSession`) ended with
-  agents running defaults to "Open and start agents".
+  agents running starts with the switch on.
 - **The loop status** (`scripts/loop-status.cjs`, `autopilotLoop` in
   main.cjs) is the one answer to "are agents working, and why not". It is
   sent as `loop` on every `assistant:status` push and in the chat facts

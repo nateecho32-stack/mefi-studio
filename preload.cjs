@@ -1,6 +1,16 @@
 // Mefi's Studio AI+ — preload bridge (CJS; Electron's safe preload format).
 const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
+// The Git chip's calls (main.cjs "GitHub link"): plain fields only, strings cut
+// to a sane length. A project id only guards against a switch between calls.
+const gitProject = (options) => (typeof options?.projectId === "string" ? { projectId: options.projectId.slice(0, 120) } : {});
+const gitText = (value, limit) => (typeof value === "string" ? value.slice(0, limit) : "");
+const gitRepoFields = (options) => ({
+  owner: gitText(options?.owner, 100), name: gitText(options?.name, 120),
+  gitignore: options?.gitignore !== false, license: ["mit", "apache-2.0"].includes(options?.license) ? options.license : "none",
+  ...gitProject(options),
+});
+
 const api = {
   mediaSceneSample: (rect) => ipcRenderer.invoke("media:scene-sample", rect),
   youtubeSearch: (query) => ipcRenderer.invoke("media:youtube-search", query),
@@ -369,6 +379,33 @@ const api = {
   fleetAction: (payload) => ipcRenderer.invoke("fleet:action", { seatId: String(payload?.seatId ?? "").slice(0, 40), action: String(payload?.action ?? "").slice(0, 20), runId: String(payload?.runId ?? "").slice(0, 80) }),
   onFleetUpdate: (callback) => ipcRenderer.on("fleet:update", (_event, payload) => callback(payload)),
   onCompanionWelcome: (callback) => ipcRenderer.on("companion:welcome", (_event, payload) => callback(payload)),
+  // The Git chip, Save and push, Publish and Link (main.cjs "GitHub link",
+  // scripts/git-host.cjs). The renderer names an action; a repository must be
+  // one the account's own list returned, file paths come from the preview
+  // Studio built, and folders are always the open project's.
+  gitState: (options) => ipcRenderer.invoke("git:state", gitProject(options)),
+  onGitState: (callback) => ipcRenderer.on("git:state", (_event, model) => callback(model)),
+  gitCheck: (options) => ipcRenderer.invoke("git:check", gitProject(options)),
+  gitPull: (options) => ipcRenderer.invoke("git:pull", { anyway: options?.anyway === true, ...gitProject(options) }),
+  gitPush: (options) => ipcRenderer.invoke("git:push", gitProject(options)),
+  gitRebase: (options) => ipcRenderer.invoke("git:rebase", gitProject(options)),
+  gitSavePreview: (options) => ipcRenderer.invoke("git:save-preview", gitProject(options)),
+  gitSave: (payload) => ipcRenderer.invoke("git:save", {
+    paths: Array.isArray(payload?.paths) ? payload.paths.filter((item) => typeof item === "string").slice(0, 5000).map((item) => item.slice(0, 1024)) : [],
+    message: gitText(payload?.message, 2000), push: payload?.push === true, ignoreBuilders: payload?.ignoreBuilders === true, ...gitProject(payload),
+  }),
+  gitOwners: () => ipcRenderer.invoke("git:owners"),
+  gitPublishPreview: (options) => ipcRenderer.invoke("git:publish-preview", gitRepoFields(options)),
+  gitPublish: (options) => ipcRenderer.invoke("git:publish", {
+    ...gitRepoFields(options), visibility: options?.visibility === "public" ? "public" : "private",
+    description: gitText(options?.description, 350), confirmPublic: gitText(options?.confirmPublic, 200),
+  }),
+  gitLinkRepos: () => ipcRenderer.invoke("git:link-repos"),
+  gitLink: (repo, options) => ipcRenderer.invoke("git:link", { repo: gitText(repo, 200), ...gitProject(options) }),
+  // The signed-in GitHub account's NAME (never a token) and whether git and gh exist.
+  githubAccount: () => ipcRenderer.invoke("pc-setup:account"),
+  // The launch screen's per-project glance (branch, ahead/behind, the chip), by project id.
+  projectsGlance: (ids) => ipcRenderer.invoke("projects:glance", { ids: Array.isArray(ids) ? ids.filter((id) => typeof id === "string").slice(0, 100).map((id) => id.slice(0, 120)) : undefined }),
 };
 
 // The context bridge deep-copies every value that crosses into the page, so
