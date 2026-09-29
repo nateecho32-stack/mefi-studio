@@ -105,6 +105,23 @@
     </div>
   </section>
 
+  <!-- ALREADY ON 0.4.4: this once, by hand -->
+  <section class="section-tight" id="from-044" aria-labelledby="from044-title">
+    <div class="container">
+      <div class="notice warn" data-reveal>
+        <h2 id="from044-title">Already on 0.4.4? Update by hand this once</h2>
+        <p>The <strong>Update</strong> button in 0.4.4 can download 0.4.5 but can't install it: its install step doesn't run after Studio closes. 0.4.5 fixes that, so this is the only time you need to do it yourself:</p>
+        <ol>
+          <li>Quit Studio. Closing the window keeps it in the tray, so right-click the tray icon and choose <strong>Quit</strong>.</li>
+          <li>Unzip the new release into a new folder.</li>
+          <li>Copy everything in your old <code>resources\app\data</code> folder into the new one, except <code>curated.json</code> and <code>models.json</code>, which are the new build's model lists.</li>
+          <li>Open the new <code>Mefi Studio AI+.exe</code>. Settings, saved keys and your project list live in Windows' app data, so they come along by themselves. Keep the old folder until you're happy.</li>
+        </ol>
+        <p class="muted">Your tasks, ideas, plans and conversations come along in the data folder. The app still says <strong>Mefi Studio AI+</strong> in its window title and file names on purpose, so your settings carry over.</p>
+      </div>
+    </div>
+  </section>
+
   <!-- INSTALL -->
   <section class="band" id="install" aria-labelledby="install-title">
     <div class="container">
@@ -206,15 +223,9 @@ $want = (Get-Content "$zip.sha256").Split(" ")[0]
         <p class="muted">Running from source? Pull <code>main</code>. Live update applies the changes while Studio runs.</p>
         <p><a href="wiki/#/updates">Update Studio in the wiki →</a></p>
       </div>
-      <div class="notice warn" data-reveal>
-        <h3>Updating from 0.4.4? Do it by hand this once <span class="status next">Fixed in 0.4.5</span></h3>
-        <p>In 0.4.4 and earlier, <strong>Update</strong> can download a new release but its install step may not run after Studio closes. 0.4.5 fixes it, but 0.4.4 can't install 0.4.5 for you, so move to 0.4.5 by hand this once:</p>
-        <ol>
-          <li>Quit Studio. Closing the window keeps it in the tray, so right-click the tray icon and choose <strong>Quit</strong>.</li>
-          <li>Unzip the new release into a new folder.</li>
-          <li>Copy everything in your old <code>resources\app\data</code> folder into the new one, except <code>curated.json</code> and <code>models.json</code>, which are the new build's model lists.</li>
-          <li>Open the new <code>Mefi Studio AI+.exe</code>. Settings, saved keys and your project list live in Windows' app data, so they come along by themselves. Keep the old folder until you're happy.</li>
-        </ol>
+      <div class="notice" data-reveal>
+        <h3>Coming from 0.4.4?</h3>
+        <p>0.4.4 can't install 0.4.5 by itself. <a href="#from-044">Update by hand this once</a>. From 0.4.5 on, <strong>Update</strong> installs new releases for you.</p>
       </div>
     </div>
   </section>
