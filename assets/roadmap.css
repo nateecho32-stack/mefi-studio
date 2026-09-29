@@ -1,0 +1,170 @@
+/* Roadmap page (roadmap.html). The board, lanes, items, timeline, status
+   badges, chips and the request band come from site.css; this file only adds
+   what the roadmap needs on top of them. */
+
+/* ---- page head: what the page is, the latest release and the labels ---- */
+.rm-head { padding-bottom: 6px; }
+.rm-head h1 { max-width: 16ch; }
+.rm-facts { margin: 16px 0 0; color: var(--dim); font-size: 0.93rem; }
+.rm-facts a { color: var(--muted); font-weight: 600; }
+.rm-legend { list-style: none; margin: 22px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px 22px; max-width: 1020px; }
+.rm-legend li { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 0.88rem; line-height: 1.4; }
+.rm-jump { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; margin: 20px 0 0; font-size: 0.92rem; }
+.rm-jump-label { color: var(--dim); }
+.rm-jump a { color: var(--accent-bright); font-weight: 600; }
+
+/* ---- the area filter: one row of chips that stays under the site header
+   while the board scrolls (shown only when roadmap.js runs) ---- */
+.rm-wrap { position: relative; }
+.rm-bar {
+  position: sticky; top: 65px; z-index: 40; margin: 22px 0 24px;
+  background: rgba(5, 13, 19, 0.9);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border-block: 1px solid var(--hairline);
+}
+.rm-bar[hidden] { display: none; }
+.rm-chips { display: flex; gap: 8px; padding: 9px 2px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; }
+.rm-chips::-webkit-scrollbar { display: none; }
+.rm-chips .chip { flex: none; font-size: 0.86rem; padding: 6px 12px; }
+.rm-chips .chip:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }
+
+/* ---- the board ---- */
+.rm-body { padding-top: 10px; padding-bottom: 8px; }
+.rm-state { display: flex; align-items: center; margin: 0 0 24px; color: var(--muted); }
+.rm-state[hidden] { display: none; }
+.rm-state.is-error { display: block; padding: 14px 18px; border: 1px solid rgba(255, 212, 121, 0.4); border-radius: var(--r); background: rgba(255, 212, 121, 0.08); color: var(--ivory); }
+.rm-board[hidden] { display: none; }
+.rm-board [hidden] { display: none !important; }
+
+.rm-lane { --lane-accent: var(--accent); border-top: 3px solid var(--lane-accent); scroll-margin-top: 136px; }
+.rm-lane[data-lane="working"] { --lane-accent: var(--live); }
+.rm-lane[data-lane="planned"] { --lane-accent: var(--info); }
+.rm-lane .lane-head { padding-bottom: 10px; }
+.rm-lane .lane-head h2 { font-size: 1.28rem; }
+.rm-lane .lane-head .count { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rm-lane .lane-group { font-family: var(--font-ui); line-height: 1.4; margin: 24px 6px 6px; color: var(--muted); scroll-margin-top: 136px; }
+.rm-lane .rm-group-note { margin: 0 6px 12px; line-height: 1.5; }
+.rm-none { margin: 16px 6px 4px; color: var(--dim); font-size: 0.9rem; }
+
+/* Items: the colour on the left edge repeats the badge's colour. */
+.rm-items { display: grid; gap: 10px; }
+.rm-items > .item + .item { margin-top: 0; }
+.rm-item { --edge: transparent; box-shadow: inset 3px 0 0 var(--edge); scroll-margin-top: 136px; }
+.rm-item[data-status="released"] { --edge: rgba(113, 203, 183, 0.55); }
+.rm-item[data-status="next"] { --edge: rgba(140, 123, 255, 0.7); }
+.rm-item[data-status="progress"] { --edge: rgba(87, 255, 154, 0.55); }
+.rm-item[data-status="rolling"] { --edge: rgba(255, 212, 121, 0.6); }
+.rm-item[data-status="planned"] { --edge: rgba(157, 183, 255, 0.55); }
+.rm-item[data-status="idea"] { --edge: rgba(169, 193, 198, 0.4); }
+.rm-item h4 { line-height: 1.32; overflow-wrap: anywhere; }
+.rm-item p, .rm-item li { overflow-wrap: anywhere; }
+.rm-item.is-target, .rm-release.is-target > h4 { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: var(--r); }
+.item .rm-link, .rm-release .rm-link { margin: 8px 0 0; font-size: 0.88rem; }
+.rm-link a { font-weight: 600; }
+
+/* A long group shows its first six items and a "Show all" button
+   (roadmap.js), unless a filter is narrowing the board. */
+.rm-board:not(.is-filtering) .rm-group.is-folded .rm-items > .rm-item:nth-child(n+7) { display: none; }
+.rm-unfold {
+  display: flex; justify-content: center; width: 100%; margin-top: 10px; padding: 10px 14px;
+  border: 1px dashed var(--hairline-strong); border-radius: var(--r); background: transparent;
+  color: var(--accent-bright); font: inherit; font-size: 0.92rem; font-weight: 600; cursor: pointer;
+}
+.rm-unfold:hover { background: var(--accent-dim); border-style: solid; }
+.rm-board.is-filtering .rm-unfold { display: none; }
+
+/* The Details disclosure on every item and release. */
+.rm-more, .rm-highlights { margin-top: 8px; }
+.rm-more > summary, .rm-highlights > summary {
+  display: inline-flex; align-items: center; gap: 8px; cursor: pointer; list-style: none;
+  color: var(--accent-bright); font-size: 0.86rem; font-weight: 600; padding: 2px 0;
+}
+.rm-more > summary::-webkit-details-marker, .rm-highlights > summary::-webkit-details-marker { display: none; }
+.rm-more > summary::before, .rm-highlights > summary::before {
+  content: ""; width: 6px; height: 6px; margin: 0 2px 2px 1px;
+  border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg); transition: transform .2s var(--ease);
+}
+.rm-more[open] > summary::before, .rm-highlights[open] > summary::before { transform: rotate(45deg); margin-bottom: 4px; }
+.rm-more > summary:hover, .rm-highlights > summary:hover { color: var(--ivory); }
+.rm-more > ul { margin-top: 6px; }
+.rm-more li + li, .rm-highlights li + li { margin-top: 5px; }
+.rm-more ul ul { margin-top: 5px; font-size: 1em; }
+
+/* The release timeline inside the Done lane. */
+.rm-timeline { margin: 6px 6px 0 8px; }
+.rm-timeline > li { padding-bottom: 24px; scroll-margin-top: 136px; }
+.rm-timeline > li:last-child { padding-bottom: 6px; }
+.rm-timeline .when { margin: 0; }
+.rm-timeline h4 { margin: 2px 0 6px; font-size: 1.02rem; line-height: 1.35; letter-spacing: -0.005em; }
+.rm-version {
+  display: inline-block; margin-right: 6px; padding: 1px 9px; border-radius: var(--r-pill);
+  background: var(--accent-dim); border: 1px solid var(--hairline-strong); color: var(--accent-bright);
+  font-family: var(--font-ui); font-size: 0.82rem; font-weight: 700; letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums; vertical-align: 2px;
+}
+.rm-timeline .upcoming .rm-version { background: rgba(140, 123, 255, 0.12); border-color: rgba(140, 123, 255, 0.34); color: #c3b9ff; }
+.rm-release-note { margin: 0; color: var(--muted); font-size: 0.92rem; }
+.rm-highlights > ul { margin-top: 6px; font-size: 0.9rem; }
+/* A release drawn as cards (releases[].items in roadmap.json). */
+.rm-release-items { margin-top: 12px; }
+.rm-item h5 { margin: 0 0 4px; font-family: var(--font-ui); font-size: 1rem; font-weight: 650; letter-spacing: 0; line-height: 1.32; color: var(--ivory); overflow-wrap: anywhere; }
+.rm-release .rm-more > ul { font-size: 0.9rem; }
+
+/* ---- ask for something, and the most-wanted requests ---- */
+.rm-ask { padding-top: 64px; }
+.rm-ask .pulse { margin: 16px 0 0; }
+.rm-ask-fine { margin: 14px 4px 0; }
+.rm-wanted { margin-top: 28px; padding: 24px; background: var(--panel); border: 1px solid var(--hairline); border-radius: var(--r-lg); }
+.rm-wanted-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 18px; }
+.rm-wanted-head h3 { margin: 0; font-size: 1.25rem; }
+.rm-wanted-head a { font-size: 0.92rem; font-weight: 600; }
+.rm-wanted-lede { margin: 6px 0 0; color: var(--muted); font-size: 0.95rem; }
+.rm-wanted-note { margin: 16px 0 0; color: var(--muted); }
+.rm-wanted-list { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.rm-want {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 14px; align-items: center; min-width: 0;
+  padding: 12px 14px; border: 1px solid var(--hairline); border-radius: var(--r); background: rgba(5, 13, 19, 0.45);
+}
+.rm-votes {
+  grid-row: span 2; display: grid; place-items: center; min-width: 60px; padding: 8px 6px;
+  border-radius: var(--r-sm); background: var(--accent-dim); border: 1px solid var(--hairline);
+  color: var(--accent-bright); font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.rm-want-title { color: var(--ivory); font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.rm-want-meta { color: var(--dim); font-size: 0.84rem; }
+
+/* The lane picker for narrow screens (roadmap.js adds it above the board). */
+.rm-views { display: none; }
+
+/* ---- smaller screens ---- */
+@media (max-width: 1100px) {
+  /* The chip row scrolls sideways here; fade its right edge so that shows. */
+  .rm-chips { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 44px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 44px), transparent); padding-right: 36px; }
+}
+@media (max-width: 960px) {
+  .rm-lane { scroll-margin-top: 128px; }
+  /* One lane at a time, picked above the board. */
+  .rm-views {
+    display: flex; gap: 4px; margin: 0 0 16px; padding: 4px;
+    border: 1px solid var(--hairline); border-radius: var(--r-pill); background: rgba(16, 31, 41, 0.55);
+  }
+  .rm-views button {
+    flex: 1 1 auto; min-width: 0; padding: 9px 10px; border: 0; border-radius: var(--r-pill);
+    background: transparent; color: var(--muted); font: inherit; font-size: 0.9rem; font-weight: 600;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
+  }
+  .rm-views button:hover { color: var(--ivory); }
+  .rm-views .count { margin-left: 6px; font-size: 0.78rem; opacity: 0.8; font-variant-numeric: tabular-nums; }
+  .rm-views button[aria-pressed="true"] { color: var(--ink); background: linear-gradient(180deg, var(--accent-bright), var(--accent)); }
+  .rm-views button:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }
+  .rm-board[data-view] > .rm-lane:not(.is-shown) { display: none; }
+}
+@media (max-width: 720px) {
+  .rm-legend { gap: 8px 16px; }
+  .rm-bar { margin-top: 18px; }
+  .rm-lane { padding: 12px; }
+  .rm-lane .item { padding: 13px 14px; }
+  .rm-wanted { padding: 18px; }
+  .rm-wanted-list { grid-template-columns: 1fr; }
+}
