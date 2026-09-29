@@ -135,6 +135,7 @@ one-line hooks; the rules live in the pure modules it composes. See
 | `agent-addons.cjs` · `agent-models.cjs` | 58 · 19 | Each agent's local skills, found and attached to its prompt; read-only provider model rosters, with the credentials kept in the host. |
 | `agent-tools.cjs` · `agent-mcp.cjs` | 110 · 104 | Per-role tool policies, bounded research turns, public web search, scoped file reads, and the stdio MCP client. |
 | `agent-tool-configs.cjs` · `agent-tools-mcp.cjs` | 33 · 37 | The tool attachments captured for each run, and the MCP adapter a coding worker talks to. |
+| `fleet.cjs` · `fleet-host.cjs` | 781 · 286 | The fleet ([fleet-overhaul-plan.md](fleet-overhaul-plan.md)): every seat on the team, the generations (runs) each seat has had and the wires between seats, as pods, a Recent feed and Health signals for Live › Fleet. A seat is a stable address (`builder-2@project`); a retry returns to the seat that last worked the task. `fleet.cjs` is pure; `fleet-host.cjs` keeps `fleet.json` per project and pushes `fleet:update` only while a Fleet view holds a watch lease. `main.cjs` calls it from five one-line guarded hooks (brain event, executor status, board write, run finish, worktree merge). |
 
 ### Processes, paths and projects
 
