@@ -6,7 +6,9 @@
 //                                 check, push the default branch's local
 //                                 commits, then report what GitHub still lacks
 //                                 (--rebase puts diverged commits on top of
-//                                 GitHub's first; --no-check skips the check)
+//                                 GitHub's first; --no-check skips the check;
+//                                 --allow-lost-work pushes a merge that left
+//                                 another branch's work out on purpose)
 //   node scripts/sync.mjs --hook  the Claude Code SessionStart hook in
 //                                 .claude/settings.json: fetch and
 //                                 fast-forward only, never push, never fail
@@ -116,6 +118,111 @@ export async function changedFiles(cwd, { run = runGit } = {}) {
 }
 
 // The checkout as it stands, with no network and no writes.
+// ---- lost work ---------------------------------------------------------------
+// On 2026-09-27 a merge of one PC's work with GitHub's (65703a6) kept this PC's
+// copy of every file both sides had changed, and the next commit (7ba162c) put
+// the rest of the tree back to that copy too. A day of the other side's work,
+// twelve commits, left main with no conflict marker and no failing test. The
+// shape is checkable: a path that one side of a merge changed, where the tip of
+// history holds neither that side's version nor a hand-made mix but exactly the
+// OTHER side's copy. A clean merge, a hand-resolved conflict and later edits all
+// differ from both sides, so they never match. One rule catches both a merge that
+// kept one side and a later commit that reset the tree to a parent.
+//
+// It only reads history. A finding above LOST_WORK.minLines lines blocks a push
+// (--allow-lost-work overrides it) and is listed as pending in the session hook
+// and Friends › Your PCs. A deliberate choice is acknowledged in history, where
+// every PC sees it: a `Lost-work-ok: <why>` line in the merge's message or in
+// any commit after it.
+export const LOST_WORK = Object.freeze({
+  // Lines of the other side's work a merge may leave out before it counts.
+  minLines: 200,
+  // How much recent history the read-only report looks through.
+  windowCommits: 30,
+  // Generated or rotated files whose conflicts are always resolved by
+  // regenerating or rotating one side (npm run build-booklet, append-testruns-row).
+  exempt: Object.freeze([/^renderer\/booklet\.html$/, /^TESTRUNS\.md$/, /^docs\/archive\/testruns-/]),
+  // A binary file has no line count; it weighs about a small text file.
+  binaryLines: 20,
+});
+const ACKNOWLEDGED = /^Lost-work-ok:\s*\S/im;
+const SHA = /^[0-9a-f]{40,64}$/;
+const nulLines = (text) => String(text ?? "").split("\0").filter(Boolean);
+const lostCache = new Map();
+
+// Paths that differ between two commits, or a commit and its merge base.
+async function changedPaths(git, from, to) {
+  const out = await git(["diff", "--name-only", "--no-renames", "-z", from, to], { timeout: 60000 });
+  return out.ok ? new Set(nulLines(out.stdout)) : null;
+}
+
+// Lines each path changed from `from` to `to` (text files by numstat; binary by weight).
+async function changedLines(git, from, to, binaryLines) {
+  const out = await git(["diff", "--numstat", "--no-renames", "-z", from, to], { timeout: 60000 });
+  if (!out.ok) return null;
+  const lines = new Map();
+  for (const entry of nulLines(out.stdout)) {
+    const match = /^(\d+|-)\t(\d+|-)\t([\s\S]+)$/.exec(entry);
+    if (match) lines.set(match[3], match[1] === "-" ? binaryLines : Number(match[1]) + Number(match[2]));
+  }
+  return lines;
+}
+
+// `range` is a git revision range of the merges to examine, `tip` the commit
+// whose files are compared with each merge's two sides. Returns what was left
+// out (findings) and what a Lost-work-ok line already accounts for (acknowledged).
+export async function lostWork(cwd, { range, tip = "HEAD", first = false, limit = 0, minLines = LOST_WORK.minLines, exempt = LOST_WORK.exempt, run = runGit } = {}) {
+  const git = (args, options) => run(cwd, args, options);
+  const findings = [];
+  const acknowledged = [];
+  if (!range) return { findings, acknowledged };
+  const tipSha = (await git(["rev-parse", "--verify", "--quiet", `${tip}^{commit}`])).stdout;
+  if (!SHA.test(tipSha)) return { findings, acknowledged };
+  const key = `${cwd}|${tipSha}|${range}|${first}|${limit}|${minLines}`;
+  if (lostCache.has(key)) return lostCache.get(key);
+  const listed = await git(["rev-list", ...(first ? ["--first-parent"] : []), "--parents", ...(limit ? ["-n", String(limit)] : []), range]);
+  const merges = listed.ok
+    ? listed.stdout.split(/\r?\n/).map((line) => line.trim().split(/\s+/)).filter((parts) => parts.length === 3 && parts.every((part) => SHA.test(part)))
+    : [];
+  const isExempt = (file) => exempt.some((rule) => (rule instanceof RegExp ? rule.test(file) : rule === file));
+  for (const [merge, first1, second] of merges.reverse()) {
+    const base = (await git(["merge-base", first1, second])).stdout;
+    if (!SHA.test(base)) continue;
+    const sides = { [first1]: await changedPaths(git, base, first1), [second]: await changedPaths(git, base, second) };
+    const tipVs = { [first1]: await changedPaths(git, tipSha, first1), [second]: await changedPaths(git, tipSha, second) };
+    if (!sides[first1] || !sides[second] || !tipVs[first1] || !tipVs[second]) continue;
+    // Each side in turn is the one whose work may have been left out.
+    for (const [lost, kept] of [[second, first1], [first1, second]]) {
+      // Changed by `lost`; not what the tip holds of it; and what the tip
+      // holds is exactly `kept`'s copy.
+      const gone = [...sides[lost]].filter((file) => tipVs[lost].has(file) && !tipVs[kept].has(file) && !isExempt(file));
+      if (!gone.length) continue;
+      const weights = await changedLines(git, base, lost, LOST_WORK.binaryLines);
+      if (!weights) continue;
+      const files = gone.map((file) => ({ path: file, lines: weights.get(file) ?? 0 })).sort((a, b) => b.lines - a.lines || a.path.localeCompare(b.path));
+      const lines = files.reduce((sum, file) => sum + file.lines, 0);
+      if (lines < minLines) continue;
+      const subject = (await git(["log", "-1", "--format=%s", merge])).stdout;
+      const finding = { merge, subject: scrub(subject).slice(0, 120), lostFrom: lost, keptFrom: kept, lines, count: files.length, files: files.slice(0, 8) };
+      const notes = [(await git(["log", "-1", "--format=%B", merge])).stdout, (await git(["log", "--format=%B", `${merge}..${tipSha}`])).stdout];
+      (notes.some((note) => ACKNOWLEDGED.test(note)) ? acknowledged : findings).push(finding);
+    }
+  }
+  const result = { findings, acknowledged };
+  lostCache.set(key, result);
+  if (lostCache.size > 12) lostCache.delete(lostCache.keys().next().value);
+  return result;
+}
+
+// One sentence a person can act on: which merge, how much, which files.
+export function lostWorkText(item, { blocked = false } = {}) {
+  const named = item.files.slice(0, 3).map((file) => file.path);
+  const more = item.count - named.length;
+  const files = `${named.join(", ")}${more > 0 ? ` and ${more} more` : ""}`;
+  return `${blocked ? "Nothing was pushed. " : ""}Merge ${item.merge.slice(0, 7)} (${item.subject || "no subject"}) left out ${plural(item.lines, "line")} of ${plural(item.count, "file")} another branch changed (${files}). ` +
+    "Restore them, or if that was deliberate say so with a \"Lost-work-ok: <why>\" line in a commit message.";
+}
+
 export async function inspect(cwd, { run = runGit } = {}) {
   const git = (args, options) => run(cwd, args, options);
   const top = await git(["rev-parse", "--show-toplevel"]);
@@ -193,6 +300,8 @@ function headline(state, problems, waiting) {
   if (!state.hasUpstream) return `GitHub has no ${state.upstream} yet. Push ${state.main} once to link your PCs.`;
   const conflict = problems.find((item) => item.kind === "rebase-conflict");
   if (conflict) return `Your commits and GitHub's both change ${conflict.files.length ? conflict.files.slice(0, 3).join(", ") : "the same lines"}. Nothing was changed; merge them by hand or ask Mefi.`;
+  const lost = problems.find((item) => item.kind === "lost-work");
+  if (lost) return lostWorkText(lost.findings[0], { blocked: true });
   if (problems.some((item) => item.kind === "check-failed")) return "The project's check failed, so nothing was pushed. Fix it, then sync again.";
   if (problems.some((item) => item.kind === "diverged")) {
     return state.dirty
@@ -209,7 +318,7 @@ function headline(state, problems, waiting) {
 // push: publish the default branch's local commits once `check` (an async
 // () => { ok, detail }) passes. rebase: when both sides moved and nothing is
 // uncommitted, put this PC's commits on top of GitHub's first. Nothing throws.
-export async function sync(cwd, { fetch = true, pull = true, push = true, rebase = false, check = null, timeout = 30000, run = runGit, now = () => Date.now() } = {}) {
+export async function sync(cwd, { fetch = true, pull = true, push = true, rebase = false, allowLostWork = false, check = null, timeout = 30000, run = runGit, now = () => Date.now() } = {}) {
   const actions = [];
   const problems = [];
   const git = (args, options) => run(cwd, args, options);
@@ -244,8 +353,12 @@ export async function sync(cwd, { fetch = true, pull = true, push = true, rebase
     if (merged.ok) actions.push({ kind: "pulled", commits: state.behind });
     else problems.push({ kind: "pull-refused", detail: firstLine(merged.stderr) });
   } else if (online && onMain && push && state.ahead && !problems.length) {
-    const gate = check ? await check().catch((error) => ({ ok: false, detail: String(error?.message ?? error) })) : { ok: true };
-    if (!gate?.ok) problems.push({ kind: "check-failed", detail: scrub(gate?.detail || "the check failed") });
+    // Before the project's own check: work another branch made must not be
+    // dropped by what is about to be published.
+    const lost = allowLostWork ? { findings: [] } : await lostWork(cwd, { range: `${state.upstream}..${state.main}`, tip: state.main, run });
+    const gate = lost.findings.length ? null : check ? await check().catch((error) => ({ ok: false, detail: String(error?.message ?? error) })) : { ok: true };
+    if (lost.findings.length) problems.push({ kind: "lost-work", findings: lost.findings, detail: lostWorkText(lost.findings[0], { blocked: true }) });
+    else if (!gate?.ok) problems.push({ kind: "check-failed", detail: scrub(gate?.detail || "the check failed") });
     else {
       const pushed = await git(["push", REMOTE, `${state.main}:${state.main}`], { timeout });
       if (pushed.ok) actions.push({ kind: "pushed", commits: state.ahead });
@@ -254,13 +367,23 @@ export async function sync(cwd, { fetch = true, pull = true, push = true, rebase
   }
   if (actions.some((item) => item.kind !== "rebased")) state = await inspect(cwd, { run });
   const waiting = pending(state);
+  // Merges in recent history that left another branch's work out are reported
+  // whatever the mode (a session hook or the Friends card never blocks on them).
+  // One a push was just refused for is already in the headline.
+  if (state.repo && state.hasUpstream && !problems.some((item) => item.kind === "fetch-failed")) {
+    const refused = new Set(problems.filter((item) => item.kind === "lost-work").flatMap((item) => item.findings.map((finding) => finding.merge)));
+    const recent = await lostWork(cwd, { range: state.main, tip: state.main, first: true, limit: LOST_WORK.windowCommits, run });
+    for (const item of recent.findings) if (!refused.has(item.merge)) waiting.push({ kind: "lost-work", merge: item.merge, count: item.count, text: lostWorkText(item) });
+  }
   const notes = [
     ...actions.map((item) => ({
       pulled: `Pulled ${plural(item.commits, "commit")} from GitHub.`,
       pushed: `Pushed ${plural(item.commits, "commit")} to GitHub.`,
       rebased: `Put ${plural(item.commits, "commit")} from this PC on top of GitHub's.`,
     })[item.kind]),
-    ...problems.filter((item) => !["diverged", "rebase-conflict", "fetch-failed"].includes(item.kind)).map((item) => ({
+    // Findings past the first (the headline names it) each get their own line.
+    ...problems.filter((item) => item.kind === "lost-work").flatMap((item) => item.findings.slice(1).map((finding) => lostWorkText(finding))),
+    ...problems.filter((item) => !["diverged", "rebase-conflict", "fetch-failed", "lost-work"].includes(item.kind)).map((item) => ({
       offline: `Could not reach GitHub: ${item.detail}`,
       "pull-refused": `Could not fast-forward ${state.main} (uncommitted edits in the way?): ${item.detail}`,
       "push-refused": `GitHub refused the push: ${item.detail}`,
@@ -294,7 +417,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const hook = process.argv.includes("--hook");
   const cwd = process.cwd();
   const check = hook || process.argv.includes("--no-check") ? null : await projectCheck(cwd);
-  const result = await sync(cwd, { push: !hook, rebase: !hook && process.argv.includes("--rebase"), check, timeout: hook ? 15000 : 60000 });
+  const result = await sync(cwd, { push: !hook, rebase: !hook && process.argv.includes("--rebase"), allowLostWork: !hook && process.argv.includes("--allow-lost-work"), check, timeout: hook ? 15000 : 60000 });
   console.log(describe(result, { hook }));
   process.exitCode = hook || result.ok ? 0 : 1;
 }
