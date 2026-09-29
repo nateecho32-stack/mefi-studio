@@ -57,6 +57,7 @@
   <symbol id="g-fit" viewBox="0 0 16 16"><path d="M2.5 6V3.5a1 1 0 0 1 1-1H6M10 2.5h2.5a1 1 0 0 1 1 1V6M13.5 10v2.5a1 1 0 0 1-1 1H10M6 13.5H3.5a1 1 0 0 1-1-1V10"/><circle cx="8" cy="8" r="1.5"/></symbol>
   <symbol id="g-frame" viewBox="0 0 16 16"><rect x="1.5" y="3" width="13" height="10" rx="1.75"/><circle cx="8.6" cy="7.4" r="1.35" fill="currentColor" stroke="none"/><circle cx="4.7" cy="10.2" r=".8" fill="currentColor" stroke="none"/><circle cx="5.1" cy="5.8" r=".8" fill="currentColor" stroke="none"/><circle cx="11.6" cy="10.3" r=".8" fill="currentColor" stroke="none"/></symbol>
   <symbol id="g-orbit" viewBox="0 0 16 16"><ellipse cx="8" cy="8" rx="6.25" ry="2.75" transform="rotate(-20 8 8)"/><circle cx="8" cy="8" r="1.75"/></symbol>
+  <symbol id="g-fleet" viewBox="0 0 16 16"><rect x="5.5" y="1.75" width="5" height="3.5" rx="1"/><rect x="1.5" y="10.75" width="5" height="3.5" rx="1"/><rect x="9.5" y="10.75" width="5" height="3.5" rx="1"/><path d="M8 5.25v2.5M4 10.75v-3h8v3"/></symbol>
   <symbol id="g-target" viewBox="0 0 16 16"><circle cx="8" cy="8" r="4.25"/><circle cx="8" cy="8" r="1.1" fill="currentColor" stroke="none"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2"/></symbol>
   <symbol id="g-zoom-in" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.4 10.4 14 14M5 7h4M7 5v4"/></symbol>
   <symbol id="g-zoom-out" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.4 10.4 14 14M5 7h4"/></symbol>
@@ -1726,6 +1727,41 @@
         <p id="trace-status" class="trace-hint" role="status" aria-live="polite"></p>
         <ol id="trace-lines" class="trace-lines"></ol>
       </section>
+    </div>
+  </div>
+</div>
+<div class="overlay explorer" id="fleet-overlay" hidden>
+  <div class="explorer-sheet fleet-sheet" role="dialog" aria-modal="true" aria-labelledby="fleet-heading" tabindex="-1">
+    <header class="explorer-head sheet-head">
+      <button class="sheet-back ghost mini" data-nav-close="fleet" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
+      <div class="sheet-title">
+        <div class="eyebrow">Live</div>
+        <h2 id="fleet-heading" tabindex="-1">Fleet</h2>
+      </div>
+      <div class="sheet-links" data-sheet-links="fleet" role="group" aria-label="Other tools"></div>
+      <div class="sheet-actions">
+        <button id="fleet-close" class="ghost sheet-close" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
+      </div>
+    </header>
+    <div id="fleet-body" class="fleet-body">
+      <aside id="fleet-side" class="fleet-side" aria-labelledby="fleet-team-title">
+        <div class="fleet-side-head"><h3 id="fleet-team-title">Team</h3></div>
+        <ul id="fleet-tree" class="fleet-tree" role="tree" aria-labelledby="fleet-team-title"></ul>
+      </aside>
+      <section class="fleet-main" aria-label="Fleet views">
+        <div class="fleet-bar">
+          <div id="fleet-tabs" class="fleet-tabs" role="tablist" aria-label="Fleet views"></div>
+          <p id="fleet-status" class="fleet-status" role="status" aria-live="polite"></p>
+        </div>
+        <div id="fleet-panels" class="fleet-panels">
+          <div id="fleet-graph" class="fleet-panel" role="tabpanel" aria-labelledby="fleet-tab-graph"></div>
+          <div id="fleet-table" class="fleet-panel" role="tabpanel" aria-labelledby="fleet-tab-table" hidden></div>
+          <div id="fleet-recent" class="fleet-panel" role="tabpanel" aria-labelledby="fleet-tab-recent" hidden></div>
+          <div id="fleet-nodes" class="fleet-panel" role="tabpanel" aria-labelledby="fleet-tab-nodes" hidden></div>
+          <div id="fleet-health" class="fleet-panel" role="tabpanel" aria-labelledby="fleet-tab-health" hidden></div>
+        </div>
+      </section>
+      <aside id="fleet-inspector" class="fleet-inspector" aria-label="Selected seat"></aside>
     </div>
   </div>
 </div>

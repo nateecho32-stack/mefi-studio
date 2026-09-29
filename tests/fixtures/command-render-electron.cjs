@@ -1112,7 +1112,7 @@ app.whenReady().then(async () => {
     fs.writeFileSync(path.join(directory, `${name}.png`), (await capturePage()).toPNG());
     fs.writeFileSync(path.join(directory,"menu-report.json"),JSON.stringify(report.menus,null,2));
   };
-  const menuRoutes = ["workspace", "tasks", "plans", "ideas", "brains", "analyzer", "command", "eyes", "explorer", "overhead", "booklet", "graph", "usage", "context", "studio"];
+  const menuRoutes = ["workspace", "tasks", "plans", "ideas", "brains", "analyzer", "command", "fleet", "eyes", "explorer", "overhead", "booklet", "graph", "usage", "context", "studio"];
   for (const [width, height, scale = 1] of [[1440, 900], [1100, 720], [600, 560], [1100,720,1.25]]) {
     window.setContentSize(width, height);
     contents.setZoomFactor(scale);

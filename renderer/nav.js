@@ -220,6 +220,27 @@
       isOpen: () => idleActive(),
     },
     {
+      id: "fleet",
+      label: "Fleet",
+      short: "Fleet",
+      kind: "overlay",
+      layer: "sheet",
+      section: "agents",
+      group: "surfaces",
+      // No single letter: Command keeps F (fit), C, V, L, S and N while it is open.
+      key: null,
+      glyph: "g-fleet",
+      badge: "questions",
+      desc: "Every agent seat on the team: who is working on what, and how work moves between them",
+      searchTerms: "fleet seats pods agents team topology graph branches builders foreman overseer desk handoff generations lineage runs health",
+      showIn: showIn({ palette: true, help: true, tools: true }),
+      element: "fleet-overlay",
+      focus: "#fleet-heading",
+      open: (params) => window.MefiFleet?.open?.(params),
+      close: () => window.MefiFleet?.close?.(),
+      isOpen: () => overlayOpen("fleet-overlay"),
+    },
+    {
       id: "booklet",
       label: "Model catalog",
       short: "Catalog",
@@ -732,7 +753,7 @@
     window.MefiModelLab?.show?.(view);
   }
 
-  const WORKSPACE_PAGES = new Set(["tasks", "plans", "ideas", "brains", "analyzer", "explorer", "trace", "overhead", "agent-brain", "agents"]);
+  const WORKSPACE_PAGES = new Set(["tasks", "plans", "ideas", "brains", "analyzer", "explorer", "trace", "fleet", "overhead", "agent-brain", "agents"]);
   const isWorkspacePage = (dest) => document.documentElement?.dataset?.shell === "rail" && WORKSPACE_PAGES.has(dest?.id);
   function syncPageInert() {
     const page = isWorkspacePage(get(state.sheet));
@@ -1388,7 +1409,7 @@
   const LOCAL_ROUTES = Object.freeze({
     home: ["workspace"],
     work: ["tasks", "plans", "ideas", "analyzer"],
-    agents: ["agents", "command", "eyes", "trace", "explorer", "overhead", "agent-brain", "brains", "context", "booklet", "graph", "usage"],
+    agents: ["agents", "command", "fleet", "eyes", "trace", "explorer", "overhead", "agent-brain", "brains", "context", "booklet", "graph", "usage"],
     settings: ["studio"],
   });
 

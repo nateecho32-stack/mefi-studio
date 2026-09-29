@@ -48,7 +48,7 @@ const runFixture = async () => {
     assert.deepEqual(report.errors, []);
     assert.deepEqual(report.networkAttempts, []);
     assert.deepEqual(report.processAttempts, []);
-    assert.equal(report.menus.filter(sample => sample.route).length,60,"every primary destination renders at three sizes plus increased scaling");
+    assert.equal(report.menus.filter(sample => sample.route).length,64,"every primary destination renders at three sizes plus increased scaling");
     assert.equal(report.menus.filter(sample => sample.category).length,16,"all four Studio settings categories render at three sizes plus increased scaling");
     assert.equal(report.menus.filter(sample => sample.submenu?.startsWith('sessions:')).length,12,"all Session tools tabs fit at three sizes plus increased scaling");
     assert.ok(report.first.frames >= 4 && report.reentered.frames >= report.stoppedFrames + 3);
