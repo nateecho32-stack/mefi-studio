@@ -61,7 +61,7 @@ You can also ask for help in the [Void Engine Discord](https://discord.gg/xgfKc5
 
 ## In progress for 0.4.6
 
-> <span class="status progress">In progress for 0.4.6</span> A logging rework: structured logs, a transcript of each run, and old logs archived instead of deleted, with all of them kept. The 0.4.5 release waits for it. See the [roadmap](../roadmap.html).
+> <span class="status progress">In progress for 0.4.6</span> A logging rework: structured logs, a transcript of each run, and old logs archived instead of deleted, with all of them kept. It is outside the 0.4.5 scope; that release does not wait for this rework. See the [roadmap](../roadmap.html).
 
 ## Related pages
 

@@ -1,6 +1,6 @@
 # Updates
 
-The current release is **0.4.4**, from 27 September 2026. The next one, 0.4.5, is finished on `main` and comes out soon. A source install gets new work by pulling `main`.
+The current release is **0.4.4**, from 27 September 2026. The next one, 0.4.5, includes work built on `main` and selected usability fixes. It has not been published and has no release date. See [the 0.4.5 scope](#/coming-in-0-4-5/what-will-and-wont-ship). A source install gets new work by pulling `main`.
 
 Open **Settings › System › Updates** to see your version and look for a newer one.
 

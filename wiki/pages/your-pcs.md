@@ -2,7 +2,7 @@
 
 Do you work on the same project from more than one Windows PC? **Your PCs** keeps them in step through GitHub. Each PC keeps its own copy, and the project's default branch on GitHub is the one state they share. Studio shows what hasn't reached GitHub yet and only syncs in safe directions.
 
-Open your [companion](#/companion), choose **Friends**, and find **Your PCs**. Opening it only looks. Nothing moves until you press a button.
+Open your [companion](#/companion), choose **Friends**, and find **Your PCs**. Opening it only looks. Nothing moves until you press a button. <span class="status next">Coming in 0.4.5</span> **Friends › Your PCs** also opens straight from Build’s main menu or Search, and Friends is on Vibe’s rail.
 
 This page covers syncing, [Set up this PC](#set-up-this-pc), [Share between my PCs](#share-between-my-pcs) (your private vault) and [Share with friends](#share-with-friends).
 
@@ -16,6 +16,7 @@ Your PCs says whether this PC matches the open project's default branch on GitHu
 
 <span class="status next">Coming in 0.4.5</span> Syncing gets safer and more automatic:
 
+- **A lost-work guard.** Sync stops a push if a merge silently drops 200 or more lines of another branch’s changes, and names the merge and files. The report also flags recent suspicious merges.
 - **Checked pushes.** If the project has a `check` script, Sync runs it first and pushes only when it passes.
 - **Put my commits on top of GitHub's** appears when this PC and GitHub both moved and nothing is uncommitted. It puts your commits on top of GitHub's, checks and pushes. On a conflict it changes nothing and names the files.
 - **Keep this PC up to date** is on by default. Studio asks GitHub once a minute whether another PC pushed, and brings the work in when nothing on this PC is in the way and no builder is running.
@@ -88,7 +89,7 @@ To use a friend's file, choose **Open a share file**. Studio reviews it first an
 
 Turn on **Start with Windows** in **Settings › General › Profile & startup**, or in the setup helper's **Machine & app**. Studio then opens in the tray when you sign in to Windows, on the project you had open, and the agents follow **When Studio opens**. A PC you leave working keeps working after an update restart. The switch shows what Windows really holds, so it notices when Task Manager › Startup apps turns Studio off.
 
-## Reach this PC from Discord <span class="status next">Coming in 0.4.5</span>
+## Reach this PC from Discord <span class="status rolling">Rolling out</span>
 
 **Reach this PC from Discord**, inside Your PCs, will let you check on this PC and talk to Mefi from a DM with the Void Engine bot. Studio's side is ready, but the bot's side isn't live yet, so it doesn't work today. [Reach your PCs from Discord](#/discord/reach-your-pcs-from-discord) explains what it will do.
 

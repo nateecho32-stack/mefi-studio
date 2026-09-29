@@ -168,3 +168,13 @@
   .rm-wanted { padding: 18px; }
   .rm-wanted-list { grid-template-columns: 1fr; }
 }
+
+/* Release scope stays visible above the status board, including without JS. */
+.rm-scope { margin: 28px 0 0; padding: 22px; border: 1px solid var(--hairline-strong); border-radius: var(--r-lg); background: var(--panel); scroll-margin-top: 90px; }
+.rm-scope h2 { margin: 0; font-size: 1.35rem; }
+.rm-scope > p { margin: 8px 0 0; font-size: 0.95rem; }
+.rm-scope-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; margin-top: 18px; }
+.rm-scope-grid article { min-width: 0; }
+.rm-scope-grid h3 { margin: 0 0 6px; font-size: 1rem; }
+.rm-scope-grid p { margin: 0; color: var(--muted); font-size: 0.9rem; overflow-wrap: anywhere; }
+@media (max-width: 960px) { .rm-scope-grid { grid-template-columns: 1fr; gap: 16px; } }

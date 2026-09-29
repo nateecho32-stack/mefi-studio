@@ -96,7 +96,7 @@ Configuration lists every setting in Studio in one searchable tree.
 2. Pick a group, or type in the search box.
 3. Pick a setting to open its real control.
 
-Settings are filed in seven groups: **Inference & Agents**, **Knowledge**, **Files & Exec**, **Web & Community**, **Storage**, **UI & Surfaces** and **Dev & Meta**. Configuration never keeps a second copy of a setting: it always opens the real one.
+Settings are filed in seven groups: **Inference & Agents**, **Knowledge**, **Files & Exec**, **Web & Community**, **Storage**, **UI & Surfaces** and **Dev & Meta**. Configuration never keeps a second copy of a setting: it always opens the real one. It also indexes the [setup helper](#/setup-helper)’s sections under the same groups, with **Walk me through setup** pinned at the top of **Inference & Agents**. Choose a section to open its actual controls.
 
 **UI & Surfaces** also holds **Interface scale**, which makes everything in Studio smaller or larger, from 70% to 150%. Studio keeps your choice on every launch.
 

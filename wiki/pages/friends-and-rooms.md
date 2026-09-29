@@ -8,6 +8,8 @@ Friends is the social side of Studio. You can join rooms with people from the [V
 
 Click your [companion](#/companion) at the foot of the menu, or press **Esc** on a workspace page. Then choose the **Friends** bubble.
 
+<span class="status next">Coming in 0.4.5</span> **Friends** also has its own section in Build’s main menu, with **Rooms**, **Your PCs** and **Playground** links. Each opens its matching card in the same hub. Vibe’s rail has a Friends stop, and Search reaches Friends and each card in both modes. The companion bubble still works.
+
 In 0.4.4, Friends holds three things:
 
 - **Connect with Discord** opens **Settings › General › Community**.

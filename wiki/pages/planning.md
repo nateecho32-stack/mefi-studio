@@ -9,6 +9,8 @@ An idea is a note about something you might build. It becomes a task only when y
 - **Feature ideas** (`I`) is the inbox. New ideas arrive unread, such as the suggestions from a project's first map, or ideas found in your chats with **Scan chats for ideas** in Search. Select one to read it, keep it or mark it done.
 - In Vibe, the **Fresh ideas** card and the **Ideas** panel show what's waiting. Each idea offers **Build it**, **Keep for later** (or **Not now**) and **Dismiss**.
 
+<span class="status next">Coming in 0.4.5</span> The Ideas list becomes compact cards with a title, short excerpt and status. Short cards fill the free space under taller ones, and the layout adapts to the window. Select a card to use the same detail and actions.
+
 ## Plan it, or just build it?
 
 Use **Build it** in Vibe when you can say what you want in a few sentences. Studio sizes it: a small change becomes one task, and a bigger one may become two to six steps.

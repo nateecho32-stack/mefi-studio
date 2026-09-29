@@ -1,12 +1,20 @@
 # Coming in 0.4.5
 
-> <span class="status next">Coming in 0.4.5</span> Everything on this page is finished on main, the app's development branch, and ships with 0.4.5, the next release. The current download is 0.4.4, from 27 September 2026. [What's new in 0.4.4](#/whats-new) covers that release.
+> <span class="status next">Coming in 0.4.5</span> This is the scope for the next release: work built on main, the app’s development branch, plus small usability wins. 0.4.5 is not published yet and has no release date. The current download is 0.4.4, from 27 September 2026. [What’s new in 0.4.4](#/whats-new) covers that release.
 
 **On 0.4.4?** Its in-app update can't install 0.4.5 for you, so when 0.4.5 is out, [update by hand](#/updates/update-from-044-by-hand) this once. From 0.4.5 on, updates install themselves. The release after that, 0.4.6, is [being built now](#/coming-in-0-4-5/being-built-for-046).
 
 A few things below need the rooms hub, which the owner runs. They're marked <span class="status rolling">Rolling out</span>, because they switch on only once the hub is online.
 
 If you run Studio from source on main, you already have everything here. See [Install Studio](#/installation).
+
+## What will and won’t ship
+
+0.4.5 includes the setup helper, Configuration’s setup index, clearer agent status and live Vibe progress, the Fleet page, PC setup and sharing, Friends in the main menu, and compact Task and Ideas cards. The lists below cover the built work.
+
+**Outside 0.4.5:** faster agent sends, retained logs, the faster launch and Friends 2.0 target 0.4.6. Fleet lanes, missions and other PCs are planned for that release. The full menu overhaul and card cleanup for Providers, Plans, Vibe and the Project map stay planned without a release target. Build desktop, the media redesign, Command sub-agent visuals, tree-brightness work and community ratings still have branch work or decisions ahead of them. Linux, voice, credits and creative-tool bridges are later plans or ideas.
+
+**Conditional features:** rooms, Listen together, friends’ playdates and cross-PC file claims need the rooms hub and Discord link online. Discord remote controls also need the bot’s matching support. Publishing 0.4.5 does not activate these services.
 
 ## Setting up
 
@@ -39,11 +47,14 @@ If you run Studio from source on main, you already have everything here. See [In
 - **Every node style finishes in its own way.** In the Agent brain, a step whose work came back, and an agent the lead takes in, play your node style's own beat. A failed check finishes in amber.
 - **A map that shows relationships.** Connected system cards, an **Ideas tree** and **Work with Mefi** in the project map. See [Agent brain, Playbook and project map](#/agent-brain/coming-in-045).
 - **Plans, one step at a time.** Plans opens without waiting for the folder scan, shows one step at a time with an **Up next** button, and answers with a quick model first, asking a deeper one only when needed. **Think harder** goes straight to the deep one. See [Plans and ideas](#/planning).
+- **The Fleet page.** **Agents › Live › Fleet** shows the open project’s seats in Lead, Build, Check and Keep pods, with Graph, Table, Recent, Tree and Health views. Click a seat for its work and earlier runs, **Open task**, **Open in Command** and a two-press **Stop this run**. Lanes, missions and other PCs remain later work.
 - **A calmer Task board.** Search and filters sit in one compact row, a click anywhere on a card opens its task, and short cards slide up into free space. See [Tasks](#/workflow).
+
+- **Compact Ideas cards.** Clear titles, short excerpts and status tags replace the long rows. Short cards slide into free space, and the layout adapts to the window. Choosing a card opens its existing detail and actions. See [Plans and ideas](#/planning).
 
 ## Settings and menus
 
-- **Configuration.** Every setting in one searchable tree (`Ctrl Shift ,`), with a new **Interface scale** from 70% to 150%. See [Configuration](#/settings/configuration).
+- **Configuration.** Every setting in one searchable tree (`Ctrl Shift ,`), with the setup helper’s sections, a pinned **Walk me through setup**, and a new **Interface scale** from 70% to 150%. See [Configuration](#/settings/configuration).
 - **When Studio opens.** Choose **Resume what I had**, **Start agents** or **Keep agents off**.
 - **No surprise Command view.** Switching to the Command view after five quiet minutes is now a setting, off by default.
 - **Start with Windows.** Studio can open in the tray when you sign in, so a PC you leave working keeps working after an update restart. See [Settings and Configuration](#/settings).
@@ -51,6 +62,7 @@ If you run Studio from source on main, you already have everything here. See [In
 - **Plain words.** Errors read as sentences, and pages leave out values that weren't recorded instead of showing "undefined".
 - **Calmer menus.** Rows that stay keep still and glide to their new place, new rows rise in, and old ones fade out. Reduced motion turns it off.
 - **Typing goes to the open menu.** With a menu open, what you type lands in its text box instead of setting off single-key shortcuts.
+- **Friends in the main menu.** A Build menu section links straight to **Rooms**, **Your PCs** and **Playground** in the existing Friends hub. Friends also has a stop in Vibe’s rail, and Search reaches the hub and each card in both modes. The companion bubble stays available.
 - **Projects on M+.** The project panel opens with the keyboard on your current project.
 - **Media controls stay in reach.** Floating players have a move handle and minimize to a restore bar. See [Music, video and the player](#/media-player).
 
@@ -68,6 +80,7 @@ If you run Studio from source on main, you already have everything here. See [In
 - **Share between my PCs.** A sealed, private vault on GitHub carries your setups, recipes, what Mefi learned, and open tasks and ideas between your own PCs. Each PC's line also says what its agents are doing.
 - **Share with friends.** Save one brain, recipe, team setup or set of preferences as a `.mefishare` file. Everything is scrubbed and previewed before it's saved, and a friend's file is reviewed before it's kept. It can't change your permissions.
 - **Safer sync.** **Sync this PC** pushes only after the project's own checks pass. **Put my commits on top of GitHub's** handles work that has split. Closing Studio asks first when work exists only on this PC.
+- **A guard against lost work.** Sync refuses to push a merge that silently drops 200 or more lines of another branch’s changes, and names the merge and files. **Your PCs** reports recent suspicious merges too.
 - **Reach this PC from Discord.** Check on a PC and talk to Mefi from a direct message with the Void Engine bot. Studio's side is built; it works once the bot's side goes live. Work asked for this way always waits for your OK.
 
 ## Friends and rooms
@@ -82,6 +95,7 @@ If you run Studio from source on main, you already have everything here. See [In
 ## Speed and fixes
 
 - **In-app updates install.** In 0.4.4, **Update** downloads a new release but never installs it. That's fixed from 0.4.5 on. To get from 0.4.4 to 0.4.5, [update by hand](#/updates/update-from-044-by-hand) this once. The [download page](../download.html#updates) has the same steps.
+- **Portable build details.** The executable carries Studio’s name, version and icon.
 - **Guided sign-in works again.** In 0.4.4, the setup window for installing or signing in to a coding tool may close at once. Until then, [sign in from a terminal](#/connections/sign-in-from-a-terminal); [Set up in 0.4.4](#/setup-helper/set-up-in-044) has the rest.
 - **Lighter in the tray.** While Studio's window is hidden or minimized, task lists and machine status wait until you open it.
 - **Starting up.** Studio no longer gets stuck on "Picking up where you left off" when its window is covered or in the tray.
@@ -96,6 +110,8 @@ If you run Studio from source on main, you already have everything here. See [In
 - **A logging rework.** Structured logs, with old logs archived instead of deleted, and all of them kept. See [Trace, logs and diagnostics](#/trace).
 - **A faster launch.** A shorter start, with no blank fade and fewer calls while Studio starts.
 - **Friends 2.0.** A lobby with rooms, who's online, Studios on the same Wi-Fi finding each other, invite links you click instead of codes you copy, and a fair queue for shared videos. Discord is the fastest way in, but you won't need it.
+
+<span class="status planned">Planned for 0.4.6</span> The next Fleet phases add agent lanes, missions measured from verified work, and your other PCs and friends’ fleets. The full menu overhaul remains planned with no release target.
 
 <span class="status planned">Planned</span> A new launch screen: your project assembles as a constellation of its systems, and a welcome-back hub shows what changed when you've been away for 10 minutes or more. It isn't started yet.
 

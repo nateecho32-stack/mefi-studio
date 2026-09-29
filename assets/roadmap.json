@@ -101,7 +101,7 @@
         {
           "id": "coming-in-0-4-5",
           "title": "Coming in 0.4.5",
-          "note": "Built on main and ready. It ships with 0.4.5, the next release. Studio's public name becomes Mefi Studio with it; the app's window and files keep their names, so your settings carry over.",
+          "note": "Built on main for 0.4.5, the next release. The download is still 0.4.4; there is no release date yet. Studio’s public name becomes Mefi Studio, while the app’s window and files keep their names so your settings carry over.",
           "items": [
             {
               "id": "setup-helper",
@@ -170,7 +170,8 @@
               },
               "details": [
                 "In 0.4.4 and earlier, Update can download and check a new release, but its install step may not run. Update by hand this once.",
-                "In 0.4.4, the guided install and sign-in windows can close before they run. Sign in from a terminal, then use Check connection."
+                "In 0.4.4, the guided install and sign-in windows can close before they run. Sign in from a terminal, then use Check connection.",
+                "The portable executable carries Studio’s name, version and icon."
               ]
             },
             {
@@ -284,7 +285,8 @@
               "area": "Menus",
               "details": [
                 "It adds an Interface scale, from 70% to 150%.",
-                "It's also in Settings, as All settings in one place."
+                "It's also in Settings, as All settings in one place.",
+                "It also indexes every setup-helper section and pins Walk me through setup. Pick a section to open its real controls."
               ]
             },
             {
@@ -400,6 +402,63 @@
                 "Bursts of status updates are merged into one.",
                 "A closed Explorer and Command's hidden rail stop repainting on every update."
               ]
+            },
+            {
+              "id": "fleet-view",
+              "title": "The Fleet page: your team at a glance",
+              "text": "Agents › Live › Fleet shows the open project’s seats in Lead, Build, Check and Keep pods, with the wires between them.",
+              "status": "next",
+              "label": "Coming in 0.4.5",
+              "area": "Agents & work",
+              "details": [
+                "Graph, Table, Recent, Tree and Health views show the team, handoffs, checks and what needs a look.",
+                "Each seat opens an inspector with its current work, earlier runs and Open task, Open in Command and a two-press Stop this run.",
+                "The Fleet page is already visible on main, and the existing Command node tree stays available.",
+                "Agent lanes, missions and fleets from other PCs belong to the later Fleet work."
+              ],
+              "link": {
+                "href": "wiki/#/coming-in-0-4-5/agents-tasks-and-plans",
+                "text": "What 0.4.5 adds"
+              }
+            },
+            {
+              "id": "sync-lost-work",
+              "title": "Sync catches a merge that loses work",
+              "text": "Before pushing, Sync checks whether a merge silently kept one branch’s files and dropped another PC’s changes.",
+              "status": "next",
+              "label": "Coming in 0.4.5",
+              "area": "Platform",
+              "details": [
+                "A loss of 200 or more lines stops the push and names the merge and files that need a look.",
+                "Friends › Your PCs also reports recent suspicious merges.",
+                "The report names the files to inspect before you try to sync again."
+              ]
+            },
+            {
+              "id": "friends-menu",
+              "title": "Friends in the main menu",
+              "text": "Friends has its own Build menu section with Rooms, Your PCs and Playground, plus a stop in Vibe’s rail.",
+              "status": "next",
+              "label": "Coming in 0.4.5",
+              "area": "Menus",
+              "details": [
+                "Each shortcut opens the existing Friends hub at the matching card, keeping all its controls together.",
+                "Search reaches Friends and its three cards directly in both modes.",
+                "The companion’s Friends bubble stays available. This small navigation change ships ahead of the full menu overhaul."
+              ]
+            },
+            {
+              "id": "tidy-menus",
+              "title": "Tidier Ideas cards alongside Tasks",
+              "text": "Ideas gets compact cards with a clear title, a short excerpt and its status. Short cards slide up into free space, as on the Task board.",
+              "status": "next",
+              "label": "Coming in 0.4.5",
+              "area": "Menus",
+              "details": [
+                "The layout adapts when the window changes size, and keeps one column in narrow spaces.",
+                "Source and date appear only when recorded, and selecting a card keeps the existing idea detail and actions.",
+                "Providers, Plans, Vibe and the Project map’s wider card cleanup remain planned outside 0.4.5."
+              ]
             }
           ]
         },
@@ -477,23 +536,6 @@
                 },
                 "Discord is the fastest way in, but you won't need it.",
                 "Started so far: the fair queue, on the rooms hub."
-              ]
-            },
-            {
-              "id": "fleet-view",
-              "title": "The Fleet view",
-              "text": "Every agent at a glance, as a seat in pods, lanes and missions. Its first page is built, and it ships with 0.4.6.",
-              "status": "progress",
-              "label": "In progress for 0.4.6",
-              "area": "Agents & work",
-              "details": [
-                "Built on main: Live › Fleet shows the team's seats, pods and wires as a page.",
-                "Seats grouped into Lead, Build, Check and Keep pods, wired by who hands work to whom.",
-                "Table, Recent, Graph, Tree and Health views, with Open in Command on each seat.",
-                "A task board with a lane per agent, lanes you can pause, and a budget.",
-                "Missions: plans whose progress is measured from verified work.",
-                "Your other PCs, and friends' fleets at the sharing level you choose.",
-                "Its groundwork ships in 0.4.5, but nothing shows yet."
               ]
             }
           ]
@@ -602,7 +644,7 @@
                 "A hangout room holds up to 25 people, and a cowork room up to 10.",
                 "Void Engine moderators can read every room, and each room says so.",
                 "For now, rooms use a linked Discord account.",
-                "In the app since 0.4.5. It works once the rooms hub is online."
+                "Studio’s room UI comes in 0.4.5. It works once the rooms hub is online."
               ]
             },
             {
@@ -641,7 +683,7 @@
               "details": [
                 "A task whose files another PC holds waits and picks other work.",
                 "Without a room or the hub, nothing waits.",
-                "In the app since 0.4.5."
+                "Studio’s file-claim support comes in 0.4.5."
               ]
             },
             {
@@ -654,7 +696,7 @@
               "details": [
                 "Studio reads only who you are and your membership in the Void Engine server: never your messages, your email or other servers.",
                 "Studio's side has been in the app since 0.3.3. It switches on when the Mefi Studio Link app is set up.",
-                "Since 0.4.5, each PC can enter the link app's ID and the rooms hub's address itself, with no restart."
+                "With 0.4.5, each PC can enter the link app's ID and the rooms hub's address itself, with no restart."
               ]
             },
             {
@@ -668,7 +710,7 @@
                 "See what needs you and what's being made, pause or resume the agents, or just message Mefi.",
                 "Work you start from Discord waits for your OK, and approving from Discord needs a PIN you set in Studio.",
                 "Only your own Discord account gets answers, and no port opens on your PC.",
-                "Studio's side is in 0.4.5. It works once the rooms hub carries it and the bot's side is live; the bot's side is still being built."
+                "Studio’s side ships in 0.4.5. It works once the rooms hub carries it and the bot's side is live; the bot's side is still being built."
               ]
             }
           ]
@@ -698,18 +740,6 @@
               ]
             },
             {
-              "id": "friends-menu",
-              "title": "Friends gets its own place in the menu",
-              "text": "Friends becomes a section of its own, so Rooms, Your PCs and Playground no longer hide behind the companion.",
-              "status": "planned",
-              "label": "Planned",
-              "area": "Menus",
-              "details": [
-                "A test checks that every page and setting stays reachable, and that old links still work.",
-                "Configuration also finds the setup helper's settings."
-              ]
-            },
-            {
               "id": "menu-overhaul",
               "title": "The menu overhaul",
               "text": "Separate Live and Friends sections, and one Settings page.",
@@ -718,7 +748,8 @@
               "area": "Menus",
               "details": [
                 "The menu settles into Home, Work, Agents, Live, Friends and Settings.",
-                "Each new section retires the old menus it replaces in the same change, so nothing piles up."
+                "Each new section retires the old menus it replaces in the same change, so nothing piles up.",
+                "The Friends shortcut and Configuration’s setup index can ship first. The full unified shell has no release commitment for 0.4.5."
               ]
             },
             {
@@ -743,6 +774,20 @@
                 "Setups that need no AI at all, like a player beside a project that Studio watches.",
                 "Coding agents that build the support for a new tool.",
                 "AI stays optional, and no single service is required."
+              ]
+            },
+            {
+              "id": "fleet-next",
+              "title": "Fleet lanes, missions and other PCs",
+              "text": "The next Fleet phases add a lane per agent, progress measured from verified work, and fleets from your other PCs and friends.",
+              "status": "planned",
+              "label": "Planned for 0.4.6",
+              "area": "Agents & work",
+              "details": [
+                "The first Fleet page ships in 0.4.5. These larger phases are still planned and are outside that release.",
+                "Lanes you can pause, with a budget; missions with intent, evidence and task progress.",
+                "Your other PCs and friends’ fleets follow the sharing level you choose.",
+                "The inspector, status bar and dockable panels depend on the full menu overhaul. There is no release date."
               ]
             }
           ]
@@ -776,14 +821,15 @@
               ]
             },
             {
-              "id": "tidy-menus",
-              "title": "The Task board's tidy look on more menus",
-              "text": "Ideas, Settings › Providers, Plans, Vibe and the Project map get the Task board's cleanup, with cards that slide up into free space.",
+              "id": "tidy-more-menus",
+              "title": "The tidy-card layout on the remaining menus",
+              "text": "Extend the compact cards and cleanup to Settings › Providers, Plans, Vibe and the Project map.",
               "status": "planned",
               "label": "Planned",
               "area": "Menus",
               "details": [
-                "The owner asked for it. It starts with one shared helper for the sliding cards."
+                "Task and Ideas cards ship in 0.4.5. This wider rollout stays outside that release.",
+                "The card-layout helper is now shared, so later pages can use the same behavior."
               ]
             },
             {
@@ -910,10 +956,10 @@
   "upcoming": {
     "version": "0.4.5",
     "when": "Not released yet",
-    "note": "Next up: 0.4.5, built and ready. After it, 0.4.6.",
+    "note": "Next up: 0.4.5, with setup, clearer work, the Fleet page and small usability fixes. The larger rebuilds stay outside this release.",
     "link": {
-      "href": "#coming-in-0-4-5",
-      "text": "See what's in it"
+      "href": "#scope-0-4-5",
+      "text": "What will and won’t ship"
     }
   },
   "releases": [
