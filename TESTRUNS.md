@@ -35,6 +35,39 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-28 - Fleet host: seats, generations and wires (fleet overhaul Phase 1)
+
+Phase 1 of docs/fleet-overhaul-plan.md: the pure fleet model
+(`scripts/fleet.cjs`), its host (`scripts/fleet-host.cjs`), five guarded
+one-line hooks in `main.cjs` (brain event, executor status, board write, run
+finish, worktree merge), four `fleet:*` handlers, the `fleet:update` push and
+the preload methods. No renderer change yet; Live > Fleet is Phase 2.
+
+Gated in an isolated clone (`.claude/worktrees/fleet-overhaul`, branch
+`fleet/overhaul`, rebased onto GitHub main `60c4abb`), because the shared
+checkout carried other sessions' edits.
+
+- `npm run check` and `npm run audit` (0 findings): PASS.
+- `npm run test:fast`: PASS, 4461 pass, 0 fail, 5 skipped. New suites:
+  `fleet` (11: seat continuity on retry, handoff and delegation wires, desk
+  ask and escalation, the owner's stop outranking a failed exit, lost runs,
+  mail, health signals, bounded reload, no prompts or paths in a snapshot)
+  and `fleet_host` (7: pushes only while watched, one trailing push per half
+  second, lapsed leases, per-project files, reload, seat actions, hooks that
+  never throw); `module_purity` now holds `fleet.cjs` to its header.
+- `npm test`: Node suites (111 s), Python contracts (248 tests, 44 s) and the
+  normalized-path lock PASS. The nine Electron render suites SKIPPED: this
+  clone is on an exFAT drive with no `node_modules/electron`, and they skip
+  when the binary is missing. They run in Phase 2, with Electron set up in
+  the clone.
+- Boot: `electron . --smoke --user-data-dir=<throwaway>` exits 0 with the
+  normal smoke summary and no `[fleet]` line, so the host is created and the
+  handlers register. (A throwaway profile keeps the owner's settings out of
+  it.)
+- One flake fixed while writing `fleet_host`: waiting two `setImmediate`
+  ticks after a watch is not enough for the first load's file read; the test
+  now waits for the loop to go quiet (`flush`). 10 consecutive runs pass.
+
 ## 2026-09-28 (afternoon) - Every node style's finish beats, and Agent brain list/shelf fixes
 
 Gated in an isolated worktree (`C:\wt\land-beats`, GitHub main `f85681b`,
@@ -584,32 +617,6 @@ files; opened ones reviewed before they can be kept).
   passed, 1 capability skip; Python contracts OK; normalized-path lock
   passed. Rebased onto aacf276 as d516312 with check and the booklet,
   first-install and vault UI suites passing again.
-
-## 2026-09-27 night - Restore the work the 16:57 merge dropped: full gate on dc85f68
-
-The 16:57 merge of GitHub main (65703a6) kept this PC's copy of 15 conflicted
-files whole and the next commit (7ba162c "fixes") reset the rest of the tree
-to it, so main lost 3e0e1e0..2dd1ff8 (Configuration and Habits, the other
-PC's bug hunt and CLI setup, sync hardening, Set up this PC, the companion
-pet and friend, first-time setup, still-video sampling and a lighter Command
-over video). dc85f68 redoes that merge (local fcc3343) on top of 1dd9518,
-keeping 0.4.4, the free Void collection, the public docs, the MEFI work, the
-setup helper and the media player work. Music & video keeps main's docked
-player (music.js, music.css, media-window.js, media-browser.js and their
-tests as on 1dd9518), because the other PC is still developing it; the
-morning's floating-player redesign from 95bd61c is not carried over.
-
-- `npm run build-booklet`, `npm run check` (179 targets, 368 specs) and
-  `npm run audit` (zero findings): PASS. Focused music, media, scene,
-  browser, booklet, onboarding and scroll-hint suites: 160/160.
-- `npm test` in a private worktree: Node parallel stage 4172 tests, 4168
-  passed, 4 skipped, 0 failures; Electron stage 42 tests, 41 passed, 1
-  skipped; `eyes_toggle_electron` 1/1; Python contracts 248 tests OK (1 skip);
-  normalized-path lock passed. `occlusion_probe` failed "visible probe lag
-  should be ~0, got 108.6ms (samples=[108.6,0,0])" in the serialized stage
-  on an unattended desktop and solo gave 1 pass plus the capability skip.
-  Earlier runs of the same restore on 052a1ec and 937e244 differed only in
-  those two timing-sensitive fixtures.
 
 ## Read Before Any Tests
 
