@@ -41,6 +41,7 @@
     "package:release": "npm run build-booklet && node scripts/package-portable.mjs --release"
   },
   "devDependencies": {
-    "electron": "44.4.1"
+    "electron": "44.4.1",
+    "resedit": "3.1.0"
   }
 }
