@@ -1,56 +1,86 @@
-# Brain maps and agent questions
+# Brain maps
 
-Brain maps let you inspect and adjust parts of Studio's workflow: how work is approved, handed to agents and reviewed, and how the agents ask you for help.
+Brain maps let you look at, and change, the steps Studio's work follows: how work is approved, handed to agents and checked, and how the agents ask you for help.
 
-Open **Agents › Workflows › Brain maps**, or press `B`. The included **The studio pipeline** map is a useful starting point. You can use Studio without editing it.
+Open **Agents › Workflows › Brain maps**, or press `B`. The built-in map, **The studio pipeline**, is a good place to start. You can use Studio without ever editing it.
+
+Brain maps are the rules. The [Agent brain](agent-brain.md) (`J`) is different: it shows one task's pipeline as it runs.
 
 ## Read a map
 
-Each part represents a step, such as choosing a model, starting a worker or checking evidence. Wires show the connections between steps.
+Each part is a step, such as picking a model, starting a worker or checking the evidence. Wires connect the steps, and a part's colour shows its stage: intake, checks, planning, assistant, routing, build or decisions.
 
-Select a part to see its description and settings in the inspector. Pay attention to whether a setting is active: some settings are saved with the map but marked **Not read by the studio yet**. In particular, the model shown on a part does not replace Studio's model routing.
+Select a part to see its description and settings in the inspector. Watch whether a setting is really used: some are saved with the map but marked **Not read by the studio yet**. In particular, the model shown on a part doesn't replace Studio's own model routing.
 
 The inspector also shows recent activity for supported steps, so you can see how often workers started or questions reached you.
 
+The `?` button explains the marks:
+
+- **Map rules**: the map itself decides here, and your edit takes effect as soon as you save.
+- **Note**: a drawing only. It's saved and shown, but nothing runs it.
+- Some parts move a real switch when the map goes live.
+- A dashed wire is a feedback wire: what it carries lands on the next pass.
+- A red ring is a required end with nothing wired. A red part or wire is a problem to fix before the map can go live.
+
 ## Make a small change
 
-1. Open **Map › Duplicate this map** if you want to experiment with a copy.
+1. Choose **Map › Duplicate this map** if you'd like to experiment on a copy.
 2. Select the part you want to change and adjust its settings.
-3. Use **Save** to save your edits.
-4. Choose **Make this live** to apply the map. Read the proposed setting changes before confirming.
+3. Choose **Save**.
+4. Choose **Make this live** to use the map. Read the list of setting changes before you confirm.
 
-Applying a map can change build approval, proactive work, model selection, dispatch and the worker limit. Removing a controlling part can turn its setting off. The preview explains what will happen.
+Making a map live can change build approval, proactive work, model selection, how work is handed out and the worker limit, which is at most 3. Removing a part that controls a setting can turn that setting off. The confirm list says what will happen.
 
-Changes to question-handling rules on the active map take effect when you save them. For a fresh start, the built-in map has **Reset to the shipped pipeline** in the Map menu.
+Changes to the question-handling parts of the live map take effect when you save them. For a fresh start, the **Map** menu has **Reset to the shipped pipeline**. It also holds **New empty map**, **Discard unsaved changes** and **Delete this map**.
+
+> <span class="status next">Coming in 0.4.5</span> Making a map live changes your [permission mode](permissions.md) and the New work switch only when the confirm list shows them moving. The Verify first step moves the mode instead of overwriting it: **Always ask** and **Accept per task** move up to **Auto**, or **Auto** and **Elevated only** move down to **Always ask**.
 
 ## Work with the editor
 
-Drag a part to move it. Drag from an output connection to a compatible input to connect two parts. The editor explains a refused connection.
+Drag a part to move it. To connect two parts, drag from an output end to an input end, or click one and then the other. The editor explains a connection it refuses. It also has **Add part**, **Tidy**, zoom controls and a minimap.
 
 | Action | Shortcut |
 | --- | --- |
 | Find a part to add | `Space` |
 | Find a part already on the map | `Ctrl F` |
 | Fit the map | `F` |
-| Zoom | `Ctrl` + scroll |
+| Zoom around the pointer | `Ctrl` + scroll |
 | Undo / redo | `Ctrl Z` / `Ctrl Shift Z` |
 | Save | `Ctrl S` |
+| Go to the next problem | `F8` |
 
-**Map › Draft with AI** turns a description into a draft for you to review. Drafting does not make it live.
+[Navigation and shortcuts](shortcuts.md#in-brain-maps) lists every key.
+
+**Map › Draft with AI** turns a description into a draft for you to review. On an empty map, **Build with AI** does the same. A draft says "Drafted. Nothing is saved yet." Choose **Save as a new map** to keep it, or **Discard draft**. Drafting never makes a map live.
 
 ## The decision lane
 
-The parts **Agent issues → Triage → Ask you → Apply the answer** handle questions raised during work. Depending on your settings and the issue, Studio may resolve a routine problem or ask you.
+The parts **Agent issues → Triage → Ask you → Apply the answer** handle the questions agents raise while they work.
 
-Open **Ask** in [Command view](command-center.md), or **Needs you** in Vibe. Each question explains the problem and offers relevant actions:
+Who answers depends on your [permission mode](permissions.md):
 
-- **Retry** makes another attempt with the decision recorded.
-- **Narrow** keeps the task to its original brief.
-- **Split** puts extra work on a separate card.
-- **Re-plan** returns the task to planning.
-- **Instruct** gives the next agent your own direction.
-- **Hold** leaves the task waiting.
+- **Always ask**: you answer each question, and Mefi suggests an answer.
+- **Accept per task**: once you've accepted a task, Mefi handles its ordinary questions.
+- **Auto** and **Elevated only**: the desk settles ordinary questions for you. Its answers are marked **Mefi decided**, keep your stop on the task, and are never learned as your own choice. You can undo them under **Decided for you**.
 
-An owner-only question may offer **I'll take care of it**. That records your choice without starting the task again.
+Questions about permissions, risk, or things only you can do always wait for you.
 
-For the complete list of parts and supported settings, see the [brain map reference](https://github.com/nateecho32-stack/mefi-studio/blob/main/docs/brain-maps.md).
+Questions reach you in Command's **Ask** tab, Vibe's **Needs you** drawer, your companion's **Requests** bubble, and a **Decision needed** notice with **Answer**. Each question explains the problem and offers the actions that fit. Depending on the kind of question, you may see:
+
+| Option | What it does |
+| --- | --- |
+| **Try again** | Re-arms the task, with your decision written on it for the next worker. |
+| **Try again with a heavier model** | Routes the next attempt as deep work, so a stronger model picks it up. |
+| **Keep to the brief** | The extra work stays out. The agent finishes what was asked and says what it left. |
+| **Split the extra work out** | The task keeps its brief, and the rest becomes its own card on the board. |
+| **Re-plan this task** | Sends it back to planning with what the agent found. |
+| **Answer it in one line** | Your sentence goes onto the task, and the next worker reads it first. |
+| **Grant it for this task** | The extra reach is allowed for this task only. |
+| **Keep it out of scope** | The agent works with what it has and reports the rest. |
+| **Go ahead** | Your approval goes onto the task, so the agent may make the risky change. |
+| **I'll take care of it** | Recorded on the task. No new card is made and nothing restarts. |
+| **Leave it for review** | Nothing changes. The task keeps the note and waits for you. |
+
+> <span class="status next">Coming in 0.4.5</span> **Try again with a heavier model** uses the Heavy-tier model, and only appears where there is one. An answered question leaves the list at once. Questions older than two days, or about a task that left the board, close when the project loads.
+
+For every part and setting, see the [brain map reference](https://github.com/nateecho32-stack/mefi-studio/blob/main/docs/brain-maps.md).

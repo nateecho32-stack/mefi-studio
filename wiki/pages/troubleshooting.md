@@ -1,68 +1,121 @@
 # Troubleshooting
 
-Start with the message Studio shows for the task or connection. If these steps do not help, [report the problem](https://github.com/nateecho32-stack/mefi-studio/issues/new?template=bug_report.md) with your version, install type and steps to reproduce.
+Start with the message Studio shows for the task or connection. If these steps don't help, [report the problem](https://github.com/nateecho32-stack/mefi-studio/issues/new?template=bug_report.md) with your version, install type and the steps that cause it. [Trace, logs and diagnostics](trace.md) shows what to gather first.
 
 ## The portable app will not open
 
-1. Extract the entire ZIP with **Extract All…**. Do not run the app from inside the ZIP.
-2. Open `Mefi Studio AI+.exe` in the extracted folder, keeping the supporting files beside it.
-3. If Windows SmartScreen blocks it, check that you downloaded the official release and [verify its SHA-256](../../download.html#verify). The build is not code-signed; after checking it, **More info → Run anyway** lets you open it.
+1. Extract the entire zip with **Extract All…**. Don't run the app from inside the zip.
+2. Open `Mefi Studio AI+.exe` in the extracted folder, and keep its supporting files beside it.
+3. If Windows SmartScreen blocks it, check that you downloaded the official release and [verify its SHA-256](../../download.html#verify). The build isn't code-signed, so after checking it, **More info › Run anyway** opens it.
 
-## “Agents are waiting for you”
+## A different install came forward
 
-**Open studio** opens the project with agents off. Press **Start agents** when you are ready. If you previously paused work, use **Resume**.
+A portable build and a source install on the same Windows account share their settings, so only one of them runs at a time. Opening the second one brings the running one forward instead. Quit the running one first, from its tray icon, if you want the other.
+
+## An update doesn't install
+
+In 0.4.4, the in-app update downloads and verifies the new release, but the step that installs it after Studio closes never runs. The old version stays in place. Update by hand instead:
+
+1. Quit Studio from its tray icon.
+2. Extract the new release zip into a **new** folder.
+3. Copy everything in the old folder's `resources\app\data` into the new one's `resources\app\data`, except `curated.json` and `models.json`. Those hold the new release's model catalog.
+4. Open `Mefi Studio AI+.exe` in the new folder.
+
+Settings and saved keys live in `%APPDATA%\Mefi's Studio AI+`, so they carry over by themselves. [Updates](updates.md#update-from-044-by-hand) has the full steps. <span class="status next">Coming in 0.4.5</span> The install step works, so updates from 0.4.5 on install themselves.
+
+## Agents are off or not starting
+
+Read the line under Vibe's box, or the status at the top of Home in Build mode. It names what's holding the agents and offers one button:
+
+- **Waiting for you** means Studio opened with the agents off. Press **Start agents**. The tray icon's menu has **Start agents** too.
+- **Paused** means new work is on hold. Press **Resume**.
+- **No AI connected** means there's no working AI yet. Press **Connect an AI**, or see [Connect an AI](connections.md).
+
+> <span class="status next">Coming in 0.4.5</span> One status explains every hold, everywhere, with the one button that clears it: **Agents are off** (**Start agents**), **Agents paused** (**Resume agents**), **No AI connected** (**Connect an AI**), **No project open** (**Open a project**), **Agents are cooling down** after failed starts (**Try now**), **The work scheduler is stuck** (**Restart Studio**), and tasks that need your OK or review (**Review tasks**). **Settings › General › When Studio opens** decides whether agents start on launch.
 
 ## A connection or coding agent is not ready
 
-Open **Start here** and use **Check connection** for the agent you selected. Complete its sign-in if needed. You can also search Studio with `Ctrl+K` to find its connection settings.
+Open **Help › Start here** and use **Check connection** for the tool you picked. Finish its sign-in if it asks. **Agents › Overview › Check connections** takes you to the connection settings, and `Ctrl K` finds them too.
 
-A working assistant connection does not prove the builder is ready. Check the coding agent separately. If it still fails, try that CLI directly in a terminal and read its error before retrying in Studio.
+In 0.4.4 the guided **Install and sign in** window may close as soon as it opens. [Sign in from a terminal](connections.md#sign-in-from-a-terminal), then choose **Refresh installed tools** and **Check connection**. Studio finds a tool you install while it's open, so you don't need to restart it.
+
+A working chat connection doesn't prove the coding worker is ready, so check the coding tool as well. If it still fails, run that tool in a terminal and read its error before you retry in Studio. In 0.4.4, a missing coding tool can show up as "'opencode' is not recognized".
+
+> <span class="status next">Coming in 0.4.5</span> The [setup helper](setup-helper.md) opens first, marks a tool that's installed but not signed in, and offers **Set up automatically**. With no coding tool installed, **Start agents** says to install OpenCode, Claude Code or Codex, and a run that fails that way says the tool "is not installed or not on PATH".
+
+## A Claude Code or Codex login hit its limit
+
+Work waits until your plan's limit resets. <span class="status next">Coming in 0.4.5</span> Add a second login under the setup helper's **Connect an AI › More than one login**. Studio then moves to the next login when one reaches its limit. See [Connect an AI](connections.md#more-than-one-login).
 
 ## A task stays Ready
 
-Open the task and read its waiting reason. Then check:
+Open the task and read its waiting reason. Then check that:
 
-1. Agents are running and new work is not paused.
-2. The selected builder is connected.
-3. Any required build approval has been given.
-4. Prerequisite tasks are complete.
-5. Another worker is not already using the same files, and the worker limit has room for another run.
+1. The agents are running and new work isn't paused.
+2. The selected coding tool is connected.
+3. Any approval the task needs has been given.
+4. Its prerequisite tasks are done.
+5. No other worker is using the same files, and the worker limit has room for another run.
 
-Studio may wait while the machine is busy or a failed connection cools down. Repeatedly recreating the task will not clear that wait.
+Studio may also wait while the PC is busy, or while a failed connection cools down. Creating the task again won't clear that wait.
+
+> <span class="status next">Coming in 0.4.5</span> A ready task that won't start says why: new work is paused, the agents are cooling down, the scheduler is stuck, the task needs your OK in the current [permission mode](permissions.md), the free coding model runs one task at a time, or it waits for a running worker with the same title. A task you put off reads **Scheduled for later**. With a cowork room <span class="status rolling">Rolling out</span>, a task also waits while another PC holds its files.
 
 ## I created a task but it did not appear
 
-Use **Retry loading** before creating it again. A failed board refresh can hide a task that was saved successfully.
+Use **Retry loading** before you create it again. A failed board refresh can hide a task that was saved.
 
 ## A task says Needs attention
 
-Read the failure and the agent's question. Answer it in **Needs you** or **Ask**, fix the reported cause, then retry. Check the selected project and connection before running the same attempt again.
+Read the failure and the agent's question. Answer it in **Needs you** or **Ask**, fix the cause, then retry. Check the selected project and connection before running the same attempt again.
 
-If a prerequisite cycle is reported, edit the tasks so they no longer depend on each other in a loop.
+If Studio reports a prerequisite cycle, edit the tasks so they no longer depend on each other in a loop.
 
-## A task is Awaiting verification
+## A task says Verifying
 
-Open **Review** and read the checks and evidence. A worker saying it finished is not enough to mark a task done. If automatic verification cannot run, test the result yourself and confirm only after it meets the request. See [Verification](verification.md).
+The worker finished, but Studio doesn't have enough evidence yet that the task is done. Open the task and read its checks and evidence. If automatic checks can't run, test the result yourself and confirm it only once it does what you asked. See [Verification](verification.md).
+
+In 0.4.4, work built by Claude Code, Codex, Grok or Antigravity usually waits for you to check and confirm it, because Studio can't read those runs yet. <span class="status next">Coming in 0.4.5</span> Studio checks those builds with its own checks.
+
+## Old questions stay in Needs you
+
+In 0.4.4, **Clear list** in the companion's list takes stuck items off it until something new happens to them.
+
+> <span class="status next">Coming in 0.4.5</span> Answered questions leave the list at once. Questions older than two days, or about a task that left the board, close when the project loads.
+
+## Studio switched to Command view by itself
+
+In 0.4.4, Studio switches to Command view after five quiet minutes. Move the mouse or press a key to get back to work. <span class="status next">Coming in 0.4.5</span> This becomes a switch, **Show Command view after 5 quiet minutes**, and it's off by default.
 
 ## A worker will not stop
 
-Follow the recovery steps shown by Studio. Do not delete task or ownership records to start a second worker on the same files. If an external process is stuck, stop that process before restarting Studio.
+Follow the recovery steps Studio shows. Don't delete task or ownership records to start a second worker on the same files. If an outside process is stuck, stop that process before you restart Studio.
 
 ## The window went blank or disappeared
 
-If you closed the window, look for Studio in the Windows tray. If the window went blank, allow the app a moment to recover, then restart it if needed. Do not delete its data folder as a repair step. Include the error and what you were doing in a bug report if it repeats.
+If you closed the window, look for Studio in the Windows tray. If the window went blank, give the app a moment to recover, then restart it if needed. Don't delete its data folder as a fix. If it keeps happening, report the error and what you were doing.
 
 ## My saved connection does not work on another PC
 
-Sign in or enter the key again on that PC. Saved credentials are protected by the Windows account that created them. Copying `auth.json` or `settings.json` is not a way to transfer a login.
+Sign in or enter the key again on that PC. Saved keys are protected by the Windows account that saved them, so copying `auth.json` or `settings.json` won't move a login.
+
+> <span class="status next">Coming in 0.4.5</span> **Friends › Your PCs › Share between my PCs** can move keys and setup to your other PC's protected storage, after you type a confirmation. See [Your PCs](your-pcs.md).
+
+## Sync this PC doesn't sync
+
+**Friends › Your PCs › Sync this PC** works only on the project's default branch, while that branch is checked out, and only in two safe ways: it fast-forwards, or it pushes without force. It never merges histories that went apart, rebases, stashes or throws anything away. When something needs you, such as edits a pull would overwrite, it lists what's left to do.
+
+> <span class="status next">Coming in 0.4.5</span> Sync pushes only after the project's own `npm run check` passes. When both this PC and GitHub moved, **Put my commits on top of GitHub's** combines them; on a conflict it changes nothing and names the files. A lapsed GitHub sign-in shows as a problem instead of "offline". **Set up this PC** flags a drive that can't hold Git worktrees, such as exFAT or FAT.
 
 ## The app behaves oddly in OneDrive
 
-A synced folder can lock files while uploading them. Try keeping the Studio installation outside OneDrive. Back up local data before moving an installation; a new copy has its own project store.
+A synced folder can lock files while it uploads them. Try keeping the Studio folder outside OneDrive. Back up your data before you move an installation, because a new copy has its own project store.
 
 ## I cannot join a shared listening room
 
-The personal media player is available in 0.4.4. Synced rooms and the app's Discord connection are still rolling out, so those controls may be unavailable in your build. Reinstalling does not enable a service that has not been configured for that release.
+Listen together and rooms are <span class="status rolling">Rolling out</span>. They need the Void Engine rooms hub, which the Studio owner runs, and a linked Discord account. In 0.4.4 the message reads "this build isn't connected to one yet", and reinstalling won't change that. The music player itself works without any of it.
+
+> <span class="status next">Coming in 0.4.5</span> Once the hub is live, each PC can add its address under **Settings › General › Community › Connection details**. Every "not connected yet" message says which value is missing. See [Friends, rooms and playdates](friends-and-rooms.md).
 
 ## `npm start` says Electron is running as Node
 
@@ -73,8 +126,8 @@ Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
 npm start
 ```
 
-Run the command from the Studio application folder. The browser preview from `npm run start:web` cannot launch coding agents; use the desktop app for that.
+Run the command from the Studio application folder. The browser preview from `npm run start:web` can't launch coding agents: use the desktop app for that.
 
-## Application tests stop before they start
+## `npm ci` or the tests stop before they start
 
-`npm test` needs Python 3 available as `python`, and Electron tests need a usable desktop. Read the repository's [TESTRUNS.md](https://github.com/nateecho32-stack/mefi-studio/blob/main/TESTRUNS.md) for setup and known environmental failures. `npm run test:fast` runs the Node suites without Electron while you iterate; it does not replace the full checks.
+A source install runs `main`, where `npm ci` stops on a Node.js older than 24 and downloads Electron itself. `npm test` needs Python 3, found as `python`, `py -3` or `python3`, and the Electron tests need a real desktop. Read [TESTRUNS.md](https://github.com/nateecho32-stack/mefi-studio/blob/main/TESTRUNS.md) for setup and known flaky runs. `npm run test:fast` runs the Node suites without Electron while you work, but it doesn't replace the full checks.

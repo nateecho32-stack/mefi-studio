@@ -1,36 +1,66 @@
-# Mefi Studio guide
+# Start here
 
-Mefi Studio is a Windows app for working on projects with coding agents. Use it to discuss an idea, turn it into tasks, follow the work and review the result. This guide covers **0.4.4**.
+Welcome to the Mefi Studio guide. Studio is a free Windows app for building your ideas with coding agents. You talk an idea through, the agents build it, and you check what they made. The [Void Engine Discord](discord.md) is where people share what they're making, get help and hang out.
+
+This guide describes **Studio 0.4.4**, the current download.
+
+## How this guide marks things
+
+Most pages have no mark: they describe what's in the 0.4.4 download. Newer things carry one of these marks.
+
+| Mark | What it means |
+| --- | --- |
+| <span class="status next">Coming in 0.4.5</span> | Finished, but not in a download yet. It ships with 0.4.5. |
+| <span class="status rolling">Rolling out</span> | Built, but it needs the rooms hub that the Studio owner runs. It may not work for you yet. |
+| <span class="status progress">In progress</span> | Being built right now. |
+| <span class="status planned">Planned</span> | On the [roadmap](../roadmap.html), not started yet. |
+| <span class="status idea">Idea</span> | Something being thought about. The details are open. |
+
+[Coming in 0.4.5](coming-in-0-4-5.md) lists everything that's finished for the next release.
 
 ## Get your first project running
 
-1. [Download and open Studio](installation.md). The portable build needs no installer.
-2. [Connect a coding tool](connections.md). Setup can use a supported CLI login, an API key or a local model.
+1. [Install Studio](installation.md). The portable build needs no installer.
+2. [Connect an AI](connections.md). Use a coding tool you already sign in to, an API key or a local model.
 3. [Try a small task](getting-started.md). Start with a change you can easily check.
 
-Already installed? Read [what's new in 0.4.4](whats-new.md).
+Already using Studio? Read [what's new in 0.4.4](whats-new.md), then see what's [coming in 0.4.5](coming-in-0-4-5.md).
+
+> Two things to know in 0.4.4: the in-app update can't finish installing, so [update by hand](updates.md#update-from-044-by-hand) when 0.4.5 comes out. And if a guided sign-in window closes at once, [sign in from a terminal](connections.md#sign-in-from-a-terminal).
 
 ## Find what you need
 
-| You want to… | Open |
+| You want to… | Read |
 | --- | --- |
-| Describe work and follow its progress | [Tasks](workflow.md) |
-| Work out an approach before building | [Plans](planning.md) |
-| Understand the agent tree | [Command view](command-center.md) |
-| Change your model or coding tool | [Connections](connections.md) |
-| Put on music or join a shared session | [Media and community](community.md) |
-| Check a result before accepting it | [Reviewing work](verification.md) |
+| Set up every agent setting in one place <span class="status next">Coming in 0.4.5</span> | [The setup helper](setup-helper.md) |
+| Talk an idea over, then build it from one box | [Vibe mode](vibe-mode.md) |
+| Create work and follow its progress | [Tasks](workflow.md) |
+| Work out an approach before anything is built | [Plans and ideas](planning.md) |
+| Decide what Mefi may start and answer for you | [Permissions and decisions](permissions.md) |
+| Watch your agents in the live tree | [Command view](command-center.md) |
+| See a task's pipeline, or explore your project's map | [Agent brain](agent-brain.md) |
+| Change your model or coding tool | [Connect an AI](connections.md) |
+| Talk with your companion and see what needs you | [Your companion](companion.md) |
+| Play music or video while you work | [Music, video and the player](media-player.md) |
+| Pick a theme, node style and layout | [Themes, node styles and looks](appearance.md) |
+| Keep your own PCs in step | [Your PCs](your-pcs.md) |
+| Meet other people who use Studio | [Community and Discord](community.md) |
+| Check a result before you accept it | [Verification](verification.md) |
 | Fix a connection or a stuck task | [Troubleshooting](troubleshooting.md) |
-| Find a screen or keyboard shortcut | [Navigation and shortcuts](shortcuts.md) |
+| Find a screen, setting or shortcut | [Navigation and shortcuts](shortcuts.md) and [Settings](settings.md) |
 
-## Share what you're making
+## Build together
 
-The [Void Engine Discord](https://discord.gg/xgfKc5pVxG) is where we share projects, ask questions and hang out. Unfinished work is welcome. You can also meet Studio, the community's new Discord bot.
+The [Void Engine Discord](discord.md) is the easiest way to meet other builders. Share a project or a work in progress, ask for help, or keep someone company while you work. Unfinished work is welcome, and you don't need Studio to join. Joining is always optional: nothing in Studio needs it.
 
-The desktop app's shared rooms are still rolling out. In-app cowork spaces and “Hey Studio” voice activation are future ideas. [Media and community](community.md) explains what's available now.
+Inside Studio, [friends and rooms](friends-and-rooms.md) are <span class="status rolling">Rolling out</span>. Rooms with chat, listening together and companion playdates need the owner's rooms hub to be online. [Community and Discord](community.md) explains what works today and what's planned.
+
+## Ask for something
+
+Missing a feature? [Request it on GitHub](https://github.com/nateecho32-stack/mefi-studio/issues/new?template=feature_request.md) or ask in the [Discord](https://discord.gg/xgfKc5pVxG). The [roadmap](../roadmap.html) shows what's done, what's being built and what's planned.
 
 ## About this guide
 
-Mefi Studio is free and open source. Connected AI services may have their own costs. Project records stay on your PC; providers can receive the context you send them. See [privacy](privacy.md) for details.
+Mefi Studio is free and open source. AI services you connect may have their own costs. Your project records stay on your PC, and providers receive the context you send them. See [Privacy](privacy.md).
 
-Pages use the app's control names where possible. Some screenshots show earlier layouts with sample projects. If a step doesn't match your version, [report it](https://github.com/nateecho32-stack/mefi-studio/issues) or use **Edit this page** below. More technical detail lives in the repository's [architecture guide](https://github.com/nateecho32-stack/mefi-studio/blob/main/docs/architecture.md).
+Pages use the app's own control names. If a step doesn't match what you see, [report it](https://github.com/nateecho32-stack/mefi-studio/issues) or use **Edit this page on GitHub** at the bottom of the page. [About this guide](about-this-wiki.md) explains how pages are written. Technical detail lives in the repository's [architecture guide](https://github.com/nateecho32-stack/mefi-studio/blob/main/docs/architecture.md).

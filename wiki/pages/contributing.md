@@ -1,20 +1,34 @@
-# Contributing
+# Contributing and feature requests
 
-You can help Mefi Studio with code, documentation, bug reports or feedback. Start with a small change that you can explain and verify.
+You can help Mefi Studio with ideas, bug reports, documentation or code. Start small: a change you can explain and check.
 
-## Report a problem or suggest an idea
+## Suggest a feature
 
-Use the [bug report](https://github.com/nateecho32-stack/mefi-studio/issues/new?template=bug_report.md) or [feature request](https://github.com/nateecho32-stack/mefi-studio/issues/new?template=feature_request.md) template. For bugs, include the version, install type, selected agent, steps and what happened. For an idea, explain what you want to do and what gets in the way.
+1. Look at the [roadmap](../roadmap.html) first: it may already be planned or being built. It also shows the most-wanted requests.
+2. If someone already asked for it, add a 👍 to their request, or a comment with your own reason.
+3. Otherwise, [open a feature request](https://github.com/nateecho32-stack/mefi-studio/issues/new?template=feature_request.md). Say what you're trying to do, what gets in the way today, and what you'd expect instead.
 
-Keep credentials and private project content out of posts. Report security problems through [SECURITY.md](https://github.com/nateecho32-stack/mefi-studio/blob/main/SECURITY.md).
+You can also suggest it in the [Discord](https://discord.gg/xgfKc5pVxG). Feature requests get the **enhancement** label.
+
+## Report a problem
+
+Use the [bug report](https://github.com/nateecho32-stack/mefi-studio/issues/new?template=bug_report.md) template. Include your version, install type, the coding agent you picked, the steps, and what happened. [Troubleshooting](troubleshooting.md) and [Trace, logs and diagnostics](trace.md) help you gather the details.
+
+Keep keys and private project content out of posts. Report security problems privately through GitHub's [vulnerability report form](https://github.com/nateecho32-stack/mefi-studio/security/advisories/new), as [SECURITY.md](https://github.com/nateecho32-stack/mefi-studio/blob/main/SECURITY.md) explains.
+
+## Good first contributions
+
+Look for issues labelled **good first issue**, **help wanted**, **documentation** or **accessibility**. A fix to this guide is a great first step too: see [Change the website or guide](#change-the-website-or-guide).
 
 ## Change the application
 
-Application code lives on the repository's `main` branch. Read [CONTRIBUTING.md](https://github.com/nateecho32-stack/mefi-studio/blob/main/CONTRIBUTING.md) before starting; it has the current conventions and check requirements. The [code map](https://github.com/nateecho32-stack/mefi-studio/blob/main/docs/code-map.md) helps you find the relevant file.
+Application code lives on the repository's `main` branch. Read [CONTRIBUTING.md](https://github.com/nateecho32-stack/mefi-studio/blob/main/CONTRIBUTING.md) before you start: it has the current conventions and required checks. The [code map](https://github.com/nateecho32-stack/mefi-studio/blob/main/docs/code-map.md) helps you find the right file.
 
-1. Check for existing local changes and other sessions before changing branches. Use a separate worktree when you need an isolated checkout.
+You need Node.js 24 or newer: on `main`, `npm ci` stops on an older one.
+
+1. Check for existing local changes and other sessions before you switch branches. Use a separate worktree when you need an isolated checkout.
 2. Make the change. If you edit `renderer/`, run `npm run build-booklet` and include the generated `renderer/booklet.html`.
-3. Read [TESTRUNS.md](https://github.com/nateecho32-stack/mefi-studio/blob/main/TESTRUNS.md) before testing, then run the required checks from the application root:
+3. Read [TESTRUNS.md](https://github.com/nateecho32-stack/mefi-studio/blob/main/TESTRUNS.md) before testing, then run the required checks from the application folder:
 
    ```powershell
    npm run check
@@ -22,19 +36,19 @@ Application code lives on the repository's `main` branch. Read [CONTRIBUTING.md]
    npm run audit
    ```
 
-4. Open a pull request explaining the change, how to try it and which checks passed. Update the app docs and changelog when behavior changes.
+4. Open a pull request that says what changed, how to see it and which checks passed. Update the app's docs and changelog when behavior changes.
 
-`npm run test:fast` and `npm run lint` help while you iterate. The full test run needs Python 3 on PATH and a usable desktop for Electron tests. Follow the contribution guide for recording test runs.
+`npm run test:fast` and `npm run lint` help while you work. The full test run needs Python 3, found as `python`, `py -3` or `python3`, and a real desktop for the Electron tests. Follow the contribution guide to record your test runs.
 
-## Change the website or wiki
+## Change the website or guide
 
-The website lives on `gh-pages` in the same repository. Each wiki page has an **Edit this page on GitHub** link. See [About this wiki](about-this-wiki.md) for adding pages and previewing changes.
+The website and this guide live on the `gh-pages` branch of the same repository. Every guide page has an **Edit this page on GitHub** link at the bottom. [About this guide](about-this-wiki.md) explains how pages are written and marked, and how to preview your change.
 
-For a site-only change, check links and view the affected pages on desktop and a narrow screen. Application test commands belong to the application checkout.
+For a site-only change, check the links and look at the pages on a desktop and on a narrow screen. The application's test commands belong to the application checkout.
 
 ## Keep local work safe
 
-- Preserve other people's uncommitted changes and active sessions.
-- Do not commit local settings, keys, databases, screenshots of private work or migration backups. Only `data/curated.json` and `data/models.json` belong in Git.
+- Keep other people's uncommitted changes and active sessions intact.
+- Don't commit local settings, keys, databases, screenshots of private work or migration backups. Only `data/curated.json` and `data/models.json` belong in Git.
 - Keep Ruins Runner in its own repository.
-- Preserve the application's existing package identifiers and executable names so saved settings and updates keep working. The public name is Mefi Studio.
+- Keep the application's package identifiers and executable names, so saved settings and updates keep working. The public name is Mefi Studio.
