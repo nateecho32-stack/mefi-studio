@@ -13599,6 +13599,32 @@ async function readProjectInventory() {
   }
   return files;
 }
+// The fleet (docs/fleet-overhaul-plan.md): every seat on the open project's
+// team, its generations and the wires between seats, for Live > Fleet. The
+// hooks are one guarded line each; the rules live in scripts/fleet*.cjs.
+// Declared before the Agent Brain, whose event hook calls it.
+const fleetHost = (() => {
+  try {
+    return require("./scripts/fleet-host.cjs").createFleetHost({
+      dataFile: (name) => projectDataPath(path.join(STUDIO_ROOT, "data", name)),
+      projectId: () => projects.current().id,
+      projectName: () => projects.current().name,
+      isActive: (id) => projects.active().id === id,
+      // The only channel it may push, named here so the IPC audit sees it.
+      send: (channel, payload) => {
+        if (channel === "fleet:update") send("fleet:update", payload);
+      },
+      logLine: (line) => logLine(line),
+      status: () => autopilotStatus(),
+      roster: () => assistantState?.agents ?? [],
+      team: () => readAgentSettings(),
+      readTasks: async () => (await getEyes()).readJson(TASKS_PATH, []),
+    });
+  } catch (error) {
+    console.error(`[fleet] disabled: ${error.message}`);
+    return null;
+  }
+})();
 const agentBrain = (() => {
   try {
     return require("./scripts/agent-brain-host.cjs").createAgentBrain({
@@ -13608,8 +13634,11 @@ const agentBrain = (() => {
       projectRoot: () => projectRoot(),
       // The only channels it may push, named here so the IPC audit sees them.
       send: (channel, payload) => {
-        if (channel === "brain:event") send("brain:event", payload);
-        else if (channel === "brain:update") send("brain:update", payload);
+        if (channel === "brain:event") {
+          send("brain:event", payload);
+          // The same event moves the fleet's seats (scripts/fleet.cjs).
+          if (typeof fleetHost !== "undefined" && fleetHost) fleetHost.observeEvent(payload);
+        } else if (channel === "brain:update") send("brain:update", payload);
       },
       logLine: (line) => logLine(line),
       seatFetch: (seat, system, user, maxTokens) => seatFetch(seat, system, user, maxTokens),
@@ -13861,7 +13890,11 @@ function emitAutopilot() {
     autopilotEmitPending = true;
     return;
   }
-  send("assistant:status", autopilotStatus());
+  const status = autopilotStatus();
+  send("assistant:status", status);
+  // The fleet reads the same push: which runs are live and what they are doing.
+  // Only the open project is described, as for the push itself.
+  if (typeof fleetHost !== "undefined" && fleetHost && projects.current().id === projects.active().id) fleetHost.observeStatus(status);
   autopilotEmitTimer = setTimeout(() => {
     autopilotEmitTimer = null;
     if (!autopilotEmitPending) return;
@@ -15322,6 +15355,14 @@ function boardWritten(result, project) {
         if (project) projects.run(project, () => assistantObserveTasks(tasks))?.catch?.(() => {});
         else assistantObserveTasks(tasks);
       } catch {}
+      // The fleet reads it too: a verdict, a rejection or the owner's stop
+      // becomes a row on the seat that built the card.
+      try {
+        if (typeof fleetHost !== "undefined" && fleetHost) {
+          if (project) projects.run(project, () => fleetHost.observeTasks(tasks))?.catch?.(() => {});
+          else fleetHost.observeTasks(tasks).catch(() => {});
+        }
+      } catch {}
       // The Agent Brain reads the same write: stage events, verdicts into the
       // Playbook, and delegated children moving their parent's steps.
       try {
@@ -16311,6 +16352,8 @@ async function spawnNextJob(options) {
     if (!entry.worktree || !worktreeManager) return;
     worktreeManager.settle(entry.worktree)
       .then((result) => {
+        // Merged, or kept on its branch: the fleet shows it on the seat.
+        if (typeof fleetHost !== "undefined" && fleetHost) fleetHost.observeMerge({ runId: entry.id, branch: entry.worktree.branch, merged: result?.merged === true, reason: result?.reason });
         if (!result?.merged) logLine(`[autopilot] worktree merge-back kept branch ${entry.worktree.branch}: ${String(result?.reason ?? "unknown").slice(0, 160)}`);
         else if (result.keptWorktree) logLine(`[autopilot] worktree kept for recovery (${String(result.reason ?? "").slice(0, 120)}): ${result.keptWorktree}`);
       })
@@ -16584,6 +16627,8 @@ async function spawnNextJob(options) {
     // The durable record: what ran, how it ended, and the tail of what it
     // said (sentinel and result lines aside) — the work log that survives the app.
     executorLog(executorCore.finishLogRecord({ run: entry, job, ok, code, errorMessage, userStop, sessionId, now: Date.now(), doneMark: EXECUTOR_DONE_MARK })).catch(() => {});
+    // The fleet hears how the run ended before the Agent Brain's agent.home.
+    if (typeof fleetHost !== "undefined" && fleetHost && job.kind === "task") fleetHost.observeFinish({ runId: entry.id, ok, userStop, result: entry.resultNote ?? null });
     if (typeof agentBrain !== "undefined" && agentBrain && job.kind === "task") agentBrain.runFinished({ task: job.ref, runId: entry.id, ok, userStop, resultNote: entry.resultNote ?? null });
     // Shared-index sweep guard: concurrent runs in one repo share .git/index,
     // so a staged-but-uncommitted file left by one session is exactly what a
@@ -18877,7 +18922,7 @@ function flushHeldPushes() {
 // to another before it goes out; the switch sends its own lists.
 const BOARD_PUSH_MS = 250;
 const BOARD_PUSH_CHANNELS = new Set(["eyes:tasks", "eyes:requests", "eyes:ideas"]);
-const HELD_WHILE_HIDDEN = new Set([...BOARD_PUSH_CHANNELS, "machine:status"]);
+const HELD_WHILE_HIDDEN = new Set([...BOARD_PUSH_CHANNELS, "machine:status", "fleet:update"]);
 const boardPushes = new Map(); // channel -> { timer, pending: { payload, projectId } | null }
 
 function pushBoardList(channel, payload) {
@@ -21266,6 +21311,22 @@ function registerIpc() {
     return { ok: true, map, result: brains.validateMap(map, { maps: store.maps }), compiled: brains.compileMap(map, { maps: store.maps }) };
   });
   ipcMain.handle("brains:draft", (_event, payload) => brainsDraft(payload ?? {}));
+
+  // The fleet (fleet-host.cjs): seats, generations and the wires between them,
+  // for Live > Fleet. Reads, a watch lease that keeps the pushes coming, and
+  // one action: stopping the run a seat holds goes through the same stop as
+  // the task card. Opening a task or its log is the renderer itself.
+  const fleetOff = { ok: false, error: "The fleet is not available in this build." };
+  ipcMain.handle("fleet:snapshot", async () => (fleetHost ? fleetHost.snapshot() : fleetOff));
+  ipcMain.handle("fleet:watch", async (_event, payload) => (fleetHost ? fleetHost.watch(payload ?? {}) : fleetOff));
+  ipcMain.handle("fleet:seat", async (_event, payload) => (fleetHost ? fleetHost.seat(payload ?? {}) : fleetOff));
+  ipcMain.handle("fleet:action", async (_event, payload) => {
+    if (!fleetHost) return fleetOff;
+    const target = await fleetHost.action(payload ?? {});
+    if (!target.ok || target.action !== "stop") return target;
+    const stopped = await stopTaskRun({ taskId: target.taskId, reason: "stopped from the Fleet view" });
+    return { ...target, ...stopped, ok: stopped.ok === true };
+  });
 
   // The Agent Brain (agent-brain-host.cjs): pipelines, events, the Playbook,
   // the project map and the companion. Reads only, except the Playbook's own

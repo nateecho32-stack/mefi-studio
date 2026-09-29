@@ -49,6 +49,8 @@ const PROMISES = [
   { file: "scripts/companion-friends.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (time", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   // Several logins per coding CLI; main.cjs's block of that name owns the folders and the marks file.
   { file: "scripts/cli-accounts.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (time is", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  // The fleet's seats and wires (docs/fleet-overhaul-plan.md); fleet-host.cjs owns its I/O.
+  { file: "scripts/fleet.cjs", says: "Pure module: no Electron, no filesystem, no network, no processes, no", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
 ];
 
 const CLOCK = /\bDate\.now\s*\(|new\s+Date\s*\(\s*\)|\bperformance\.now\s*\(/;
