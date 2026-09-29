@@ -26,6 +26,9 @@ import {
 } from "./release-updater.mjs";
 
 const STUDIO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+// What a release is called in public. The zip, its root folder and the
+// updater's asset match keep PORTABLE_NAME: that is the app's identity.
+const RELEASE_TITLE = "Mefi Studio";
 const argv = process.argv.slice(2);
 const flag = (name) => argv.includes(name);
 const value = (name, fallback = null) => {
@@ -134,9 +137,9 @@ if (publish) {
       "--repo",
       repo,
       "--title",
-      `${PORTABLE_NAME} v${version.raw}`,
+      `${RELEASE_TITLE} v${version.raw}`,
       "--notes",
-      `Portable Windows build of ${PORTABLE_NAME} v${version.raw}.\n\nStudio checks this release from its App updates block and installs it in place; user data (data/) never travels in the zip.`,
+      `Portable Windows build of ${RELEASE_TITLE} v${version.raw}.\n\nStudio checks this release from its App updates block and installs it in place; user data (data/) never travels in the zip.`,
     ]);
   }
   console.log(`published: https://github.com/${repo}/releases/tag/${tag}`);
