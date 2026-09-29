@@ -40,7 +40,7 @@ Linking is optional. It tells Studio who you are in the Void Engine, which the [
 - **What it reads:** your Discord id and name, and your roles and join date in the Void Engine server. It reads them when you link, about once a week after that, and when you press **Check now**. It never reads your messages, your email or your other servers, and nothing about your projects is sent.
 - **Where it's kept:** in Studio's settings on this PC, with the sign-in encrypted in `community-auth.json`.
 
-Studio 0.4.4 doesn't include the Mefi Studio Link app ID yet, so **Link my Discord** stays hidden and the card offers **Join the Discord** only. <span class="status next">Coming in 0.4.5</span> **Connection details**, in the same card, takes the link app ID and the rooms hub address and uses them at once, with no restart.
+Studio 0.4.4 doesn't include the Mefi Studio Link app ID yet, so **Link my Discord** stays hidden and the card offers **Join the Discord** only. <span class="status next">New in 0.4.5</span> **Connection details**, in the same card, takes the link app ID and the rooms hub address and uses them at once, with no restart.
 
 You can also remove “Mefi Studio Link” in Discord under **User Settings › Authorized Apps**.
 
@@ -48,7 +48,7 @@ You can also remove “Mefi Studio Link” in Discord under **User Settings › 
 
 Now and then, Studio shows a small card that invites you to join. It waits three days after your first launch, then comes back at most once a week, and once a month after four showings. **Not now** hides it for a week, and **Don't show again** stops it. It never asks a linked member to join. Build's Home also has **Getting started & community**, with **Join the Discord**.
 
-## Reach your PCs from Discord <span class="status next">Coming in 0.4.5</span>
+## Reach your PCs from Discord <span class="status next">New in 0.4.5</span>
 
 Studio's side of a Discord remote is built for 0.4.5. The bot's side isn't live yet, so it doesn't work today. When it is, a DM with the Void Engine bot becomes a remote for your home PCs:
 

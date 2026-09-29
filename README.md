@@ -29,9 +29,9 @@ Every page uses the same header and footer markup.
 ## Status labels
 
 Every feature and roadmap item says where it stands. Keep the labels honest:
-- **In 0.4.4**: in the latest release.
-- **Coming in 0.4.5**: built on `main`, not released yet.
-- **In progress**: being built now.
+- **In Studio**: in the download today.
+- **New in 0.4.5**: new in the latest release. When a release comes out, the previous "New in" items become "In Studio".
+- **In progress** (with the release it's meant for, such as 0.4.6): being built now, not in a download yet.
 - **Rolling out**: built, but it needs the community rooms hub and the Discord link to be online.
 - **Planned**, and ideas with no date.
 
@@ -39,7 +39,7 @@ The download stays on the latest published release.
 
 ## Editing the roadmap
 
-`assets/roadmap.json` holds every roadmap item; the comment field at the top of the file explains the fields. To move an item, change its status there. The page, the Home preview and the timeline all read the same file, so no HTML changes are needed.
+`assets/roadmap.json` holds every roadmap item; the comment field at the top of the file explains the fields. To move an item, change its status there. The roadmap page and its timeline read that file. The Home page shows a few items as plain HTML, so update them there too.
 
 ## Adding to the Made with Studio wall
 
@@ -47,7 +47,7 @@ The download stays on the latest published release.
 
 ## Wiki pages
 
-Add a markdown file under `wiki/pages/` and list it in `wiki/pages.json` (title, section and a one-line summary). Link between pages with `#/slug`. Mark behaviour that isn't released yet with `<span class="status next">Coming in 0.4.5</span>`.
+Add a markdown file under `wiki/pages/` and list it in `wiki/pages.json` (title, section and a one-line summary). Link between pages with `#/slug`. Mark what the latest release added with `<span class="status next">New in 0.4.5</span>`, and work that isn't in a download yet with `<span class="status progress">In progress</span>` or `<span class="status planned">Planned</span>`.
 
 ## Names and assets
 

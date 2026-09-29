@@ -1,6 +1,10 @@
-# What's new in 0.4.4
+# What's new
 
-Studio 0.4.4 came out on 27 September 2026, and it's the current download. [Download it for Windows](../../download.html) or open the [GitHub release](https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.4).
+**Studio 0.4.5 is the current download** (28 September 2026). [New in 0.4.5](coming-in-0-4-5.md) lists everything it adds. This page covers what 0.4.4 added.
+
+## 0.4.4
+
+Studio 0.4.4 came out on 27 September 2026. [Download it for Windows](../../download.html) or open the [GitHub release](https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.4).
 
 ## Easier setup
 
@@ -44,12 +48,12 @@ An update's **Restart now** stops the coding agents, saves their latest work and
 
 ## Known problems in 0.4.4
 
-- **In-app updates don't finish installing.** Studio can check GitHub, download a new release and verify it, but the step that installs it after Studio closes doesn't run. When 0.4.5 comes out, [update by hand](updates.md#update-from-044-by-hand). The fix ships in 0.4.5, so in-app updates work from 0.4.5 on.
+- **In-app updates don't finish installing.** Studio can check GitHub, download a new release and verify it, but the step that installs it after Studio closes doesn't run. [Update to 0.4.5 by hand](updates.md#update-from-044-by-hand) this once. The fix is in 0.4.5, so in-app updates work from 0.4.5 on.
 - **Guided sign-in windows may close at once.** [Sign in from a terminal](connections.md#sign-in-from-a-terminal), then use **Check connection** and **Use for the whole studio**. Fixed in 0.4.5.
 
-## Coming in 0.4.5
+## New in 0.4.5
 
-The next release is already taking shape on `main`: the setup helper, clearer reasons when agents aren't working, more than one Claude Code or Codex login, sharing between your own PCs, and more. Rooms and companion playdates are built too, and they're <span class="status rolling">Rolling out</span>. [Coming in 0.4.5](coming-in-0-4-5.md) lists it all.
+The latest release adds the setup helper, clearer reasons when agents aren't working, more than one Claude Code or Codex login, sharing between your own PCs, and more. Rooms and companion playdates are built too, and they're <span class="status rolling">Rolling out</span>. [New in 0.4.5](coming-in-0-4-5.md) lists it all.
 
 ## Full history
 

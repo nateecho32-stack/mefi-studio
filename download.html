@@ -208,7 +208,7 @@ $want = (Get-Content "$zip.sha256").Split(" ")[0]
       </div>
       <div class="notice warn" data-reveal>
         <h3>Updating from 0.4.4? Do it by hand this once <span class="status next">Fixed in 0.4.5</span></h3>
-        <p>In 0.4.4 and earlier, <strong>Update</strong> can download a new release but its install step may not run after Studio closes. The fix is coming in 0.4.5. Until then:</p>
+        <p>In 0.4.4 and earlier, <strong>Update</strong> can download a new release but its install step may not run after Studio closes. 0.4.5 fixes it, but 0.4.4 can't install 0.4.5 for you, so move to 0.4.5 by hand this once:</p>
         <ol>
           <li>Quit Studio. Closing the window keeps it in the tray, so right-click the tray icon and choose <strong>Quit</strong>.</li>
           <li>Unzip the new release into a new folder.</li>
@@ -222,10 +222,10 @@ $want = (Get-Content "$zip.sha256").Split(" ")[0]
   <!-- COMING IN 0.4.5 -->
   <section class="section-tight" aria-labelledby="coming-title">
     <div class="container">
-      <div class="coming" data-until="0.4.5" data-reveal>
+      <div class="coming" data-until="0.4.6" data-reveal>
         <div class="coming-head">
-          <h2 id="coming-title">Next up <span class="status next">Coming in 0.4.5</span></h2>
-          <p>Built already, and it ships with 0.4.5. There's no release date yet.</p>
+          <h2 id="coming-title">New in 0.4.5</h2>
+          <p>A few of the things the latest release adds. <a href="wiki/#/coming-in-0-4-5">See everything that's new</a>.</p>
         </div>
         <div class="grid-2">
           <div>
@@ -262,7 +262,7 @@ $want = (Get-Content "$zip.sha256").Split(" ")[0]
       <div data-reveal>
         <p class="eyebrow">For developers</p>
         <h2 id="source-title">Run it from source</h2>
-        <p class="muted">You need Node 24 with npm, and Git. <code>npm ci</code> downloads Electron once, about 110 MB. Source runs what's on <code>main</code>, so it already has the Coming in 0.4.5 work, and it changes often.</p>
+        <p class="muted">You need Node 24 with npm, and Git. <code>npm ci</code> downloads Electron once, about 110 MB. Source runs what's on <code>main</code>, so it has the newest work before it's released, and it changes often.</p>
         <p class="muted">Run <code>npm start</code> from a normal shell. If <code>ELECTRON_RUN_AS_NODE</code> is set, Studio stops and tells you how to fix it. A source install and the portable app share settings and keys on the same Windows account, so only one of them runs at a time.</p>
         <p><a href="wiki/#/installation">Install Studio in the wiki →</a> · <a href="https://github.com/nateecho32-stack/mefi-studio/blob/main/CONTRIBUTING.md" rel="noopener">Contributing guide</a></p>
       </div>

@@ -43,7 +43,7 @@ Some CLI routes and subscriptions don't report tokens or a price per call. An **
 
 Command view's **Usage** pill gives a quick summary, with **Refresh** and **Details**.
 
-> <span class="status next">Coming in 0.4.5</span> Empty cells read **Not reported** instead of "Unknown". Performance, Usage and Context each get their own subtitle, and pages leave out values that were never recorded. With [more than one Claude Code or Codex login](connections.md#more-than-one-login), each login gets its own row under **Provider accounts**.
+> <span class="status next">New in 0.4.5</span> Empty cells read **Not reported** instead of "Unknown". Performance, Usage and Context each get their own subtitle, and pages leave out values that were never recorded. With [more than one Claude Code or Codex login](connections.md#more-than-one-login), each login gets its own row under **Provider accounts**.
 
 ## Preview a task's context
 

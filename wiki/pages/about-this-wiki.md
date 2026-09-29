@@ -9,18 +9,18 @@ Anything that isn't in the 0.4.4 download carries a mark, so you always know wha
 | Mark | Meaning |
 | --- | --- |
 | <span class="status released">Released</span> | In the current download. Most pages leave this mark out. |
-| <span class="status next">Coming in 0.4.5</span> | Finished on `main`, and ships with 0.4.5. |
+| <span class="status next">New in 0.4.5</span> | New in the latest release, 0.4.5. |
 | <span class="status rolling">Rolling out</span> | Built, but it needs the rooms hub that the Studio owner runs. |
 | <span class="status progress">In progress</span> | Being built right now. |
 | <span class="status planned">Planned</span> | On the [roadmap](../roadmap.html), not started. |
 | <span class="status idea">Idea</span> | Being thought about. The details are open. |
 
-In a page's Markdown, write a mark as a span, for example `<span class="status next">Coming in 0.4.5</span>`. The classes are `released`, `next`, `rolling`, `progress`, `planned` and `idea`. A mark inside a heading doesn't change that heading's link.
+In a page's Markdown, write a mark as a span, for example `<span class="status next">New in 0.4.5</span>`. The classes are `released`, `next`, `rolling`, `progress`, `planned` and `idea`. A mark inside a heading doesn't change that heading's link.
 
 To colour a whole note, start a quote with the mark, or with bold words that begin with the status:
 
 ```markdown
-> <span class="status next">Coming in 0.4.5</span> The setup helper opens first.
+> <span class="status next">New in 0.4.5</span> The setup helper opens first.
 > **Rolling out:** rooms need the rooms hub.
 ```
 

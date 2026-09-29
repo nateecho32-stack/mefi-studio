@@ -59,7 +59,7 @@ The toolbar's audio button (**Connect audio**) opens **Music & video**. Closing 
 
 In 0.4.4, Studio switches to Command view after five quiet minutes. Move the mouse or press a key, then **Close** (`Esc` or `D`) to go back.
 
-> <span class="status next">Coming in 0.4.5</span> This becomes a switch in **Settings › General**, **Show Command view after 5 quiet minutes**, and it's off by default. The Command header also says why agents aren't working, with the one control that fixes it. Answered questions leave the **Ask** list at once, and **Stop all** and **Restart** ask twice.
+> <span class="status next">New in 0.4.5</span> This becomes a switch in **Settings › General**, **Show Command view after 5 quiet minutes**, and it's off by default. The Command header also says why agents aren't working, with the one control that fixes it. Answered questions leave the **Ask** list at once, and **Stop all** and **Restart** ask twice.
 
 ## Other Live views
 

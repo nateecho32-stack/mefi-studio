@@ -2,7 +2,7 @@
 
 Your permission mode decides how much Mefi may start and decide without you. Every choice Mefi makes for you keeps its reason and an **Undo**, and some kinds of decision always stay yours.
 
-The four modes arrived in 0.4.4. Clearer mode descriptions and a fix for the old **Auto build** switch are <span class="status next">Coming in 0.4.5</span>.
+The four modes arrived in 0.4.4. Clearer mode descriptions and a fix for the old **Auto build** switch are <span class="status next">New in 0.4.5</span>.
 
 ## The four modes
 
@@ -24,7 +24,7 @@ All of these change the same saved setting:
 - **In your companion's menu**, under **Settings** (called **Personality** from 0.4.5).
 - **In Agents › Overview**.
 - **In Search**: press `Ctrl K` and pick **Mefi's permission mode**.
-- <span class="status next">Coming in 0.4.5</span> **In the setup helper**, under **Setup helper › Permissions**. See [The setup helper](#/setup-helper).
+- <span class="status next">New in 0.4.5</span> **In the setup helper**, under **Setup helper › Permissions**. See [The setup helper](#/setup-helper).
 
 ## Elevated requests
 
@@ -50,7 +50,7 @@ Some things never go to Mefi, whatever your mode:
 - a question about whether work done outside Studio already covers a task;
 - approving a build, when your mode asks for approval.
 
-<span class="status next">Coming in 0.4.5</span> Work you ask for from Discord also waits for your OK in every mode. That's part of **Reach this PC from Discord**, which works once the bot's side goes live. See [Your PCs](#/your-pcs).
+<span class="status next">New in 0.4.5</span> Work you ask for from Discord also waits for your OK in every mode. That's part of **Reach this PC from Discord**, which works once the bot's side goes live. See [Your PCs](#/your-pcs).
 
 ## Decided for you and For you
 
@@ -79,7 +79,7 @@ Two older switches pick a mode for you:
 - **Auto build**, on some older screens and in brain maps: on picks **Auto**, off picks **Always ask**.
 - **Let the desk handle asks**, in **Agents › Setup › Run behavior**: on picks **Auto**, off picks **Always ask**.
 
-<span class="status next">Coming in 0.4.5</span> In 0.4.4, **Auto build** could overwrite your mode, turning **Elevated only** into **Auto** or **Accept per task** into **Always ask**. From 0.4.5 it leaves a matching mode alone: on keeps **Auto** and **Elevated only**, and off keeps **Always ask** and **Accept per task**. Each mode's description also says what happens to a new task.
+<span class="status next">New in 0.4.5</span> In 0.4.4, **Auto build** could overwrite your mode, turning **Elevated only** into **Auto** or **Accept per task** into **Always ask**. From 0.4.5 it leaves a matching mode alone: on keeps **Auto** and **Elevated only**, and off keeps **Always ask** and **Accept per task**. Each mode's description also says what happens to a new task.
 
 ## Related pages
 

@@ -11,7 +11,7 @@ Besides its model, each agent can use a few tools while it works: web search, re
 
 Each project's team, the Studio defaults and your saved team presets keep their own choices.
 
-> <span class="status next">Coming in 0.4.5</span> The panel becomes **Skills, tools & habits**, and the [setup helper](setup-helper.md)'s **Tools & skills** section holds the same choices for every agent.
+> <span class="status next">New in 0.4.5</span> The panel becomes **Skills, tools & habits**, and the [setup helper](setup-helper.md)'s **Tools & skills** section holds the same choices for every agent.
 
 ## Web search
 
@@ -45,7 +45,7 @@ These checkboxes only limit Studio's tools. A coding CLI also has its own tools,
 
 Studio's other agents get only the tools you tick. They can't write files or run commands unless an MCP tool you chose lets them.
 
-> <span class="status next">Coming in 0.4.5</span> Codex workers get Studio's tools too. **Habits** give each agent short rules of behaviour, such as explaining its changes, testing, working in small steps, matching the code around it, the shape of its report and keeping a to-do list. Each habit is off, brief or full, and the panel shows how many tokens they add to every prompt.
+> <span class="status next">New in 0.4.5</span> Codex workers get Studio's tools too. **Habits** give each agent short rules of behaviour, such as explaining its changes, testing, working in small steps, matching the code around it, the shape of its report and keeping a to-do list. Each habit is off, brief or full, and the panel shows how many tokens they add to every prompt.
 
 ## Other tools in Studio
 

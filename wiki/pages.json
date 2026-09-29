@@ -41,7 +41,7 @@
         {
           "slug": "setup-helper",
           "title": "The setup helper",
-          "summary": "Coming in 0.4.5: one guided sheet for connecting an AI, permissions and every agent setting",
+          "summary": "New in 0.4.5: one guided sheet for connecting an AI, permissions and every agent setting",
           "status": "next"
         },
         {
@@ -51,7 +51,7 @@
         },
         {
           "slug": "coming-in-0-4-5",
-          "title": "Coming in 0.4.5",
+          "title": "New in 0.4.5",
           "summary": "Finished on main but not in a download yet: the setup helper, live progress in Vibe, PC sharing and more"
         }
       ]
