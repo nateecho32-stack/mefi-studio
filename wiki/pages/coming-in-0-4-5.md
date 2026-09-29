@@ -6,7 +6,7 @@
 
 A few things below need the rooms hub, which the owner runs. They're marked <span class="status rolling">Rolling out</span>, because they switch on only once the hub is online.
 
-If you run Studio from source on main, you already have everything here. See [Install Studio](#/installation).
+A source install on main includes the built 0.4.5 work listed below. Features marked **Rolling out** still need the hub; the later sections describe deferred work. See [Install Studio](#/installation).
 
 ## What will and won’t ship
 

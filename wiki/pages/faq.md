@@ -76,7 +76,7 @@ Yes. Install it on each PC. **Friends › Your PCs** keeps a project's Git commi
 
 ## What's in 0.4.5, and when does it come out?
 
-0.4.5 is finished on `main` and comes out soon: see [Coming in 0.4.5](coming-in-0-4-5.md). The release after it, 0.4.6, is <span class="status progress">In progress</span>, with faster agents, kept logs, a faster launch and Friends 2.0. There's no date yet. The [roadmap](../roadmap.html) shows what's being built.
+The built work selected for 0.4.5 is on `main`, but the release is not published and has no date yet: see [Coming in 0.4.5](coming-in-0-4-5.md) for its scope and service dependencies. The release after it, 0.4.6, is <span class="status progress">In progress</span>, with faster agents, kept logs, a faster launch and Friends 2.0. There's no date yet. The [roadmap](../roadmap.html) shows what's being built.
 
 ## How do I update?
 
