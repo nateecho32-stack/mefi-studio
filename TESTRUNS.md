@@ -35,6 +35,38 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-28 - Configuration indexes the setup helper; sync catches a merge that drops another branch's work
+
+Two changes from the fleet overhaul's Phase 0 (docs/fleet-overhaul-plan.md).
+Configuration (`renderer/config-dialog.js`) now also files the setup helper's
+per-section Search records beside the settings they configure and pins "Walk
+me through setup" at the head of Inference & Agents. `scripts/sync.mjs` gains
+`lostWork()`: for each merge it finds paths one side changed where the tip
+holds exactly the other side's copy, refuses a push that drops 200 or more
+lines of another branch's work, and lists recent findings in the session hook
+and Friends > Your PCs. A deliberate choice is acknowledged with a
+`Lost-work-ok:` line in history; `--allow-lost-work` overrides one push.
+
+Gated in a clone (`.claude/worktrees/fleet-gate`, a copy of the fleet branch
+with Electron copied in so the render suites run), because the shared
+checkout carried other sessions' edits.
+
+- `npm run check` and `npm run audit` (0 findings): PASS. `npm run test:fast`:
+  PASS, 4472 pass, 0 fail, 5 skipped (11 new: 8 in sync, 3 in
+  config_dialog).
+- `npm test` with the Electron lane: Python contracts (69 s) and the
+  normalized-path lock PASS; Node suites FAIL on two suites (655 s).
+  `planning_render` timed out waiting for the Plans field's focus ring while
+  other suites and builds shared the machine; it passes solo (28.8 s).
+  `occlusion_probe` is the documented environmental failure (attended
+  desktop). Everything else passes, including the nine Electron render suites.
+- The guard against the real history: it flags `65703a6` (136 files, 10,474
+  lines, the merge that dropped the 12 commits) and the two earlier merges
+  whose work the reset also removed. Over the last 200 first-parent commits
+  of main it raises one finding, 9785601, whose own message says it kept
+  main's companion on purpose, which a `Lost-work-ok:` line would settle. A
+  30-commit scan takes about a second; 200 commits take 6 s.
+
 ## 2026-09-28 - Fleet host: seats, generations and wires (fleet overhaul Phase 1)
 
 Phase 1 of docs/fleet-overhaul-plan.md: the pure fleet model
@@ -590,33 +622,6 @@ Surveyed every branch and tree. gh-pages is the website (no shared history; not 
 ## 2026-09-27 night - Agent loop: one loop status, approval race, launch choice
 
 `npm run test:fast` on branch `overhaul/agents-menus-main` (GitHub main `421453f` plus this change): full `npm test` green (Node 4243 tests, 4238 pass, 0 fail, 5 skipped; Python contracts pass). `npm run check` is green. New: `loop_status` (9), plus approval-race, Auto build mapping and launch-choice cases in `build_approval` and `startup_screen`; `startup_hold` and `boot_poll_visibility` updated for the resume emit and the opt-in idle switch.
-
-## 2026-09-27 night - Share between my PCs and with friends: vault, shelves and share files
-
-Friends › Your PCs gains Share between my PCs (a private
-`<account>/mefi-studio-vault` repository sealed with AES-256-GCM under a key
-only paired PCs hold, shelves reviewed both ways, a library whose kept model
-results and decisions join learning, keys behind the exact typed phrase and a
-native prompt) and Share with friends (scrubbed, previewed `.mefishare`
-files; opened ones reviewed before they can be kept).
-
-- `npm run build-booklet`, `npm run check` (185 targets, 375 specs) and
-  `npm run audit` (zero findings): PASS.
-- New suites: vault_crypto (pairing codes, 200 rounds of last-character
-  typos, sealing bound to path and key), share_review, pc_vault (real git,
-  a bare repository standing in for GitHub, a faked gh: pairing, refusing
-  another vault's code, nothing readable in the repository, stopped and
-  scrubbed items, quarantine of edited and planted files, keys only with the
-  exact phrase and taken back out, unpairing one PC), vault_shelves,
-  pc_vault_ui (fake DOM; the keys handler returns no value), playbook
-  importRecipe, and a vault step in the companion hub Electron fixture
-  (both PCs, the library, keys locked until the phrase, no overflow).
-- `npm test` on 553bcaa in a private worktree, exit 0: Node parallel stage
-  4214 tests, 4210 passed, 4 skipped, 0 failures; Electron stage 42 tests,
-  41 passed, 1 skipped; `eyes_toggle_electron` 1/1; `occlusion_probe` 1
-  passed, 1 capability skip; Python contracts OK; normalized-path lock
-  passed. Rebased onto aacf276 as d516312 with check and the booklet,
-  first-install and vault UI suites passing again.
 
 ## Read Before Any Tests
 
