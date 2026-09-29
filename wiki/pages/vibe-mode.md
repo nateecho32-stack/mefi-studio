@@ -2,7 +2,7 @@
 
 Vibe is Studio's calm front door and its default mode. You get one box for an idea, a fix or a question. Below it, cards appear only when they have something to show: what needs you, what's building and what just finished.
 
-Vibe arrived in 0.4.2, and 0.4.4 added its panels, **Build it** sizing and **New app**. Items marked <span class="status next">New in 0.4.5</span> are new in 0.4.5.
+Vibe arrived in 0.4.2, and 0.4.4 added its panels, **Build it** sizing and **New app**. Items marked <span class="status next">Coming in 0.4.5</span> are finished on main and ship with 0.4.5, the next release.
 
 ## Vibe or Build
 
@@ -60,7 +60,7 @@ Each row under **Needs you** has one action:
 
 **Open in Watch** shows the same decision in the Command view.
 
-When something holds every agent back, a banner under the box names it and carries the fix, such as **Start agents**, **Resume** or **Connect an AI**. <span class="status next">New in 0.4.5</span> The banner can also offer **Try now**, **Restart Studio** or **Open a project**, and it reads the same answer as every other part of Studio, so they never disagree.
+When something holds every agent back, a banner under the box names it and carries the fix, such as **Start agents**, **Resume** or **Connect an AI**. <span class="status next">Coming in 0.4.5</span> The banner can also offer **Try now**, **Restart Studio** or **Open a project**, and it reads the same answer as every other part of Studio, so they never disagree.
 
 Mefi's automatic choices appear as **Decided for you · For you** under the box. See [Permissions and decisions](#/permissions).
 
@@ -74,9 +74,9 @@ Each one opens a compact panel beside the box. Rows open their details, and **Ba
 - **Team** shows who's building and each agent's model, with **Start agents**, **Resume** or **Pause new work**.
 - The gear at the top right opens a short **Settings** panel: your permission mode, Studio mode, colours, names and **Open Vibe on launch**.
 
-## New in 0.4.5
+## Coming in 0.4.5
 
-> <span class="status next">New in 0.4.5</span> These are finished on main and not in the 0.4.4 download.
+> <span class="status next">Coming in 0.4.5</span> These are finished on main and not in the 0.4.4 download.
 
 ### MEFI: Modify, Experiment, Fix, Improve
 

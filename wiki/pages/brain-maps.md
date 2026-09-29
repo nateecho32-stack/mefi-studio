@@ -33,7 +33,7 @@ Making a map live can change build approval, proactive work, model selection, ho
 
 Changes to the question-handling parts of the live map take effect when you save them. For a fresh start, the **Map** menu has **Reset to the shipped pipeline**. It also holds **New empty map**, **Discard unsaved changes** and **Delete this map**.
 
-> <span class="status next">New in 0.4.5</span> Making a map live changes your [permission mode](permissions.md) and the New work switch only when the confirm list shows them moving. The Verify first step moves the mode instead of overwriting it: **Always ask** and **Accept per task** move up to **Auto**, or **Auto** and **Elevated only** move down to **Always ask**.
+> <span class="status next">Coming in 0.4.5</span> Making a map live changes your [permission mode](permissions.md) and the New work switch only when the confirm list shows them moving. The Verify first step moves the mode instead of overwriting it: **Always ask** and **Accept per task** move up to **Auto**, or **Auto** and **Elevated only** move down to **Always ask**.
 
 ## Work with the editor
 
@@ -81,6 +81,6 @@ Questions reach you in Command's **Ask** tab, Vibe's **Needs you** drawer, your 
 | **I'll take care of it** | Recorded on the task. No new card is made and nothing restarts. |
 | **Leave it for review** | Nothing changes. The task keeps the note and waits for you. |
 
-> <span class="status next">New in 0.4.5</span> **Try again with a heavier model** uses the Heavy-tier model, and only appears where there is one. An answered question leaves the list at once. Questions older than two days, or about a task that left the board, close when the project loads.
+> <span class="status next">Coming in 0.4.5</span> **Try again with a heavier model** uses the Heavy-tier model, and only appears where there is one. An answered question leaves the list at once. Questions older than two days, or about a task that left the board, close when the project loads.
 
 For every part and setting, see the [brain map reference](https://github.com/nateecho32-stack/mefi-studio/blob/main/docs/brain-maps.md).

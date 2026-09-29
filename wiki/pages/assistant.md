@@ -11,7 +11,7 @@ Mefi, the assistant, is who you talk to: think an idea through, ask about your p
 
 Your project keeps the conversation and the work that comes out of it.
 
-> <span class="status next">New in 0.4.5</span> The companion's bubble is called **Talk**, with three one-tap starters: *What are you doing?*, *What's next?* and *Recap today*. See [Your companion](companion.md).
+> <span class="status next">Coming in 0.4.5</span> The companion's bubble is called **Talk**, with three one-tap starters: *What are you doing?*, *What's next?* and *Recap today*. See [Your companion](companion.md).
 
 ## Start with a conversation
 
@@ -21,7 +21,7 @@ When you're ready to make something, choose **Create task** on Home or **Build i
 
 You can also ask the assistant to act on a task by name, such as "stop the search build" or "try the login task again". It acts only on a task your words clearly name, and anything else it offers waits for your OK.
 
-> <span class="status next">New in 0.4.5</span> **Talk it over** only talks. A plain request such as "add a search box" no longer turns into a task by itself: the reply offers to put it on the board instead.
+> <span class="status next">Coming in 0.4.5</span> **Talk it over** only talks. A plain request such as "add a search box" no longer turns into a task by itself: the reply offers to put it on the board instead.
 
 ## Who's on the team
 
@@ -44,7 +44,7 @@ Behind them, a service loop of small helpers keeps the work moving: a **watcher*
 
 Each agent can also get skills and tools, such as web search: see [Agent tools and skills](tools.md).
 
-> <span class="status next">New in 0.4.5</span> **Habits** give each agent short rules to follow, such as testing or small steps, each set to off, brief or full. The [setup helper](setup-helper.md) holds every team setting in one place.
+> <span class="status next">Coming in 0.4.5</span> **Habits** give each agent short rules to follow, such as testing or small steps, each set to off, brief or full. The [setup helper](setup-helper.md) holds every team setting in one place.
 
 ## Choose when work starts
 
@@ -71,7 +71,7 @@ In **Auto** and **Elevated only**, the desk settles ordinary questions for you. 
 
 An open question can hold its task while other work carries on. [Brain maps](brain-maps.md) explains how questions are routed.
 
-> <span class="status next">New in 0.4.5</span> The companion's bubble reads **Needs you**, and an answered question leaves the list at once.
+> <span class="status next">Coming in 0.4.5</span> The companion's bubble reads **Needs you**, and an answered question leaves the list at once.
 
 ## When you're away
 
@@ -81,7 +81,7 @@ When you come back, your companion greets you with a short digest of what happen
 
 After a crash or an update restart, Studio uses the saved progress to pick the work back up.
 
-> <span class="status next">New in 0.4.5</span> The setup helper's **Machine & app** section has **Keep running in the tray when the window closes** and **Start with Windows**. Closing Studio asks first when the open project has work that exists only on this PC.
+> <span class="status next">Coming in 0.4.5</span> The setup helper's **Machine & app** section has **Keep running in the tray when the window closes** and **Start with Windows**. Closing Studio asks first when the open project has work that exists only on this PC.
 
 ## Machine coordination
 

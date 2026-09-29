@@ -1,10 +1,10 @@
 # Updates
 
-The current release is **0.4.5**, from 28 September 2026. A source install gets new work by pulling `main`.
+The current release is **0.4.4**, from 27 September 2026. The next one, 0.4.5, is finished on `main` and comes out soon. A source install gets new work by pulling `main`.
 
 Open **Settings › System › Updates** to see your version and look for a newer one.
 
-> **In 0.4.4, in-app updates don't finish installing.** Studio downloads and verifies the new release, but the step that installs it after Studio closes never runs. So to move from 0.4.4 to 0.4.5, [update by hand](#update-from-044-by-hand), just this once. <span class="status next">New in 0.4.5</span> The install step works, so from 0.4.5 on, updates install themselves.
+> **In 0.4.4, in-app updates don't finish installing.** Studio downloads and verifies the new release, but the step that installs it after Studio closes never runs. So when 0.4.5 comes out, [update by hand](#update-from-044-by-hand), just this once. <span class="status next">Coming in 0.4.5</span> The install step works, so from 0.4.5 on, updates install themselves.
 
 ## How the portable build updates
 
@@ -51,7 +51,7 @@ Turn off **Apply updates automatically** if you'd rather choose when changes app
 
 A public release needs no GitHub token. A private repository needs a read-only token, saved in **Settings › System › Updates**.
 
-> <span class="status next">New in 0.4.5</span> The [setup helper](setup-helper.md)'s **Machine & app** section also holds **Install updates automatically** and the GitHub token.
+> <span class="status next">Coming in 0.4.5</span> The [setup helper](setup-helper.md)'s **Machine & app** section also holds **Install updates automatically** and the GitHub token.
 
 ## Publishing a release
 

@@ -2,7 +2,7 @@
 
 The Agent brain shows how a task is broken into steps and who is working on each one. Next to it are the **Playbook**, which keeps the step recipes that worked, and the **project map**, which shows your project as systems, parts and files.
 
-Everything here is drawn from events Studio recorded, so nothing moves without real work behind it. The Agent brain arrived in 0.4.0 and is in 0.4.4. Finishing beats for every node style and a few map features are <span class="status next">New in 0.4.5</span>.
+Everything here is drawn from events Studio recorded, so nothing moves without real work behind it. The Agent brain arrived in 0.4.0 and is in 0.4.4. Finishing beats for every node style and a few map features are <span class="status next">Coming in 0.4.5</span>.
 
 ## Open it
 
@@ -55,9 +55,9 @@ Under **Map actions**, **Refresh files** reads your files again, and **Name syst
 
 A line between two systems means their files **changed together**. It doesn't mean one imports or runs the other.
 
-## New in 0.4.5
+## Coming in 0.4.5
 
-> <span class="status next">New in 0.4.5</span> These are finished on main and not in the 0.4.4 download.
+> <span class="status next">Coming in 0.4.5</span> These are finished on main and not in the 0.4.4 download.
 
 - **Every node style finishes in its own way.** When a step's work comes back, and when the lead takes its agent in, Live work plays your node style's own beat. Classic orbs' ring bursts, Soft glass ripples, Minimal draws a check, Halo slips its ring over the lead, Crystal glints, Singularity's disc flares, Prism shatters and fuses back, and Sigil's rune stamps the lead. A failed check finishes in amber. With reduced motion on, no beats play.
 - **Tidier lists.** The pipeline list no longer cuts long titles off, the Playbook shelf keeps its books in tight rows, and the feed no longer says nothing happened on a task that finished steps before Studio opened.

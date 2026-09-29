@@ -41,7 +41,7 @@ The pin button, **Keep the menu open**, keeps the menu open beside the page in w
 | **Agents › Usage** | Recorded calls, Provider accounts |
 | **Settings** | General, Appearance, Audio, System. See [Settings](settings.md). |
 
-> <span class="status next">New in 0.4.5</span> **M+** opens Projects with keyboard focus on the project you're in.
+> <span class="status next">Coming in 0.4.5</span> **M+** opens Projects with keyboard focus on the project you're in.
 
 ## Single keys
 
@@ -69,7 +69,7 @@ These work when you're not typing in a text field.
 | --- | --- |
 | `Ctrl K` | Search Studio |
 | `Ctrl ,` | Open Settings, even while typing |
-| `Ctrl Shift ,` | <span class="status next">New in 0.4.5</span> Open **Configuration**: every setting in one searchable tree |
+| `Ctrl Shift ,` | <span class="status next">Coming in 0.4.5</span> Open **Configuration**: every setting in one searchable tree |
 | `/` | Search the model catalog |
 | `R` | Refresh the model catalog |
 | `G` | Pin the node-tree preview |

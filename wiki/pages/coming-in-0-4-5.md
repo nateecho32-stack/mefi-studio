@@ -1,8 +1,8 @@
-# New in 0.4.5
+# Coming in 0.4.5
 
-> <span class="status next">New in 0.4.5</span> Everything on this page is new in Studio 0.4.5, released on 28 September 2026. [What's new](#/whats-new) also covers what 0.4.4 added.
+> <span class="status next">Coming in 0.4.5</span> Everything on this page is finished on main, the app's development branch, and ships with 0.4.5, the next release. The current download is 0.4.4, from 27 September 2026. [What's new in 0.4.4](#/whats-new) covers that release.
 
-**Coming from 0.4.4?** The in-app update can't install 0.4.5 for you, so [update by hand](#/updates/update-from-044-by-hand) this once. From 0.4.5 on, updates install themselves. The next release, 0.4.6, is [being built now](#/coming-in-0-4-5/being-built-for-046).
+**On 0.4.4?** Its in-app update can't install 0.4.5 for you, so when 0.4.5 is out, [update by hand](#/updates/update-from-044-by-hand) this once. From 0.4.5 on, updates install themselves. The release after that, 0.4.6, is [being built now](#/coming-in-0-4-5/being-built-for-046).
 
 A few things below need the rooms hub, which the owner runs. They're marked <span class="status rolling">Rolling out</span>, because they switch on only once the hub is online.
 
@@ -37,7 +37,7 @@ If you run Studio from source on main, you already have everything here. See [In
 - **"What changed while I was away?" works without an AI.** Studio answers from its record of work done outside Studio. A task matched only by file and commit names now says it "may already be done".
 - **A heavier model when it helps.** **Try again with a heavier model** really uses the Heavy tier, and only shows where one exists.
 - **Every node style finishes in its own way.** In the Agent brain, a step whose work came back, and an agent the lead takes in, play your node style's own beat. A failed check finishes in amber.
-- **A map that shows relationships.** Connected system cards, an **Ideas tree** and **Work with Mefi** in the project map. See [Agent brain, Playbook and project map](#/agent-brain/new-in-045).
+- **A map that shows relationships.** Connected system cards, an **Ideas tree** and **Work with Mefi** in the project map. See [Agent brain, Playbook and project map](#/agent-brain/coming-in-045).
 - **Plans, one step at a time.** Plans opens without waiting for the folder scan, shows one step at a time with an **Up next** button, and answers with a quick model first, asking a deeper one only when needed. **Think harder** goes straight to the deep one. See [Plans and ideas](#/planning).
 - **A calmer Task board.** Search and filters sit in one compact row, a click anywhere on a card opens its task, and short cards slide up into free space. See [Tasks](#/workflow).
 

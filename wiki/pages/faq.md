@@ -24,7 +24,7 @@ You can open the app, browse the catalog and use your saved work without any AI 
 
 OpenCode, Claude Code, Codex, Grok and Antigravity. Start with one you already use, and check its connection before you create a task.
 
-In 0.4.4, work built by a tool other than OpenCode usually waits for you to confirm it. <span class="status next">New in 0.4.5</span> Studio checks every tool's builds itself. See [Verification](verification.md).
+In 0.4.4, work built by a tool other than OpenCode usually waits for you to confirm it. <span class="status next">Coming in 0.4.5</span> Studio checks every tool's builds itself. See [Verification](verification.md).
 
 ## What are Vibe and Build?
 
@@ -54,7 +54,7 @@ Yes. Studio can run up to three builders at once and coordinates which files the
 
 Yes. Closing the window hides Studio in the Windows tray, and running work carries on while your PC is on and awake. To exit, choose **Quit** from the tray icon. A sleeping or switched-off PC can't run agents.
 
-> <span class="status next">New in 0.4.5</span> A **Keep running in the tray when the window closes** switch in the [setup helper](setup-helper.md), and **Start with Windows**, which opens Studio in the tray when you sign in.
+> <span class="status next">Coming in 0.4.5</span> A **Keep running in the tray when the window closes** switch in the [setup helper](setup-helper.md), and **Start with Windows**, which opens Studio in the tray when you sign in.
 
 ## Why does a task say Verifying?
 
@@ -64,19 +64,19 @@ The worker finished its attempt, but Studio still needs evidence that it works. 
 
 Yes. Install it on each PC. **Friends › Your PCs** keeps a project's Git commits in step through GitHub, with **Sync this PC**. Tasks, conversations and settings don't travel that way, so set up your connections on each PC.
 
-> <span class="status next">New in 0.4.5</span> **Share between my PCs** carries the items you choose, such as open tasks and ideas, preferences and model results, between your own PCs. Keys go only after you type a confirmation. Conversations still stay on each PC. See [Your PCs](your-pcs.md).
+> <span class="status next">Coming in 0.4.5</span> **Share between my PCs** carries the items you choose, such as open tasks and ideas, preferences and model results, between your own PCs. Keys go only after you type a confirmation. Conversations still stay on each PC. See [Your PCs](your-pcs.md).
 
 ## Can I share my setup with a friend?
 
-<span class="status next">New in 0.4.5</span> Yes. **Share with friends** saves one brain, recipe, team setup, set of model results, memory note or your preferences to a `.mefishare` file. Studio cleans it and shows you what's inside first. A friend's file is reviewed before you use it, and it can't change your permissions.
+<span class="status next">Coming in 0.4.5</span> Yes. **Share with friends** saves one brain, recipe, team setup, set of model results, memory note or your preferences to a `.mefishare` file. Studio cleans it and shows you what's inside first. A friend's file is reviewed before you use it, and it can't change your permissions.
 
 ## Can I use two Claude or ChatGPT subscriptions?
 
-<span class="status next">New in 0.4.5</span> Yes. Add up to six Claude Code or Codex logins under **Connect an AI › More than one login** in the setup helper. Studio moves to the next login when one reaches its usage limit. See [Connect an AI](connections.md#more-than-one-login).
+<span class="status next">Coming in 0.4.5</span> Yes. Add up to six Claude Code or Codex logins under **Connect an AI › More than one login** in the setup helper. Studio moves to the next login when one reaches its usage limit. See [Connect an AI](connections.md#more-than-one-login).
 
-## What's new in 0.4.5, and what's next?
+## What's in 0.4.5, and when does it come out?
 
-0.4.5 came out on 28 September 2026: see [New in 0.4.5](coming-in-0-4-5.md). The next release, 0.4.6, is <span class="status progress">In progress</span>, with faster agents, kept logs, a faster launch and Friends 2.0. There's no date yet. The [roadmap](../roadmap.html) shows what's being built.
+0.4.5 is finished on `main` and comes out soon: see [Coming in 0.4.5](coming-in-0-4-5.md). The release after it, 0.4.6, is <span class="status progress">In progress</span>, with faster agents, kept logs, a faster launch and Friends 2.0. There's no date yet. The [roadmap](../roadmap.html) shows what's being built.
 
 ## How do I update?
 

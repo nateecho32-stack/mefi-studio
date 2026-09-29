@@ -13,7 +13,7 @@ Check the project name at the top before you send any work. In Vibe, the project
 
 Starting from nothing? **New app**, the button beside Vibe's project picker, asks for a name and a description. Studio makes a folder under **Mefi Apps** in your home folder, starts Git there with a short README, opens it, and sends your description through **Build it** as the first request.
 
-> <span class="status next">New in 0.4.5</span> With no project yet, the launch screen leads with **Open a folder…**. **Settings › General › When Studio opens** decides the default button: **Resume what I had** (the default), **Start agents** or **Keep agents off**.
+> <span class="status next">Coming in 0.4.5</span> With no project yet, the launch screen leads with **Open a folder…**. **Settings › General › When Studio opens** decides the default button: **Resume what I had** (the default), **Start agents** or **Keep agents off**.
 
 ## 2. Connect your tools
 
@@ -32,7 +32,7 @@ The connection check uses a little of your account's allowance, and your provide
 
 The **Start here** walkthrough has seven stops and remembers your place. A stop's **Walk me to…** button opens the matching part of the app and points at the control.
 
-> <span class="status next">New in 0.4.5</span> The [setup helper](setup-helper.md) opens before the walkthrough. Its **Quick setup** takes three steps: connect an AI, choose how much Mefi may decide for you, and finish. **Set up automatically** uses the login you already have. **Start free with OpenCode** uses OpenCode's free models, with no subscription or key. When you close a setup window, Studio finds the tool by itself.
+> <span class="status next">Coming in 0.4.5</span> The [setup helper](setup-helper.md) opens before the walkthrough. Its **Quick setup** takes three steps: connect an AI, choose how much Mefi may decide for you, and finish. **Set up automatically** uses the login you already have. **Start free with OpenCode** uses OpenCode's free models, with no subscription or key. When you close a setup window, Studio finds the tool by itself.
 
 ## 3. Give one clear task
 
@@ -72,7 +72,7 @@ If nothing starts, read the line under Vibe's box. It says what's holding the ag
 
 **Pause** stops new starts while running jobs finish. If a task is waiting, read the reason on its card.
 
-> <span class="status next">New in 0.4.5</span> The same line also names a cooldown after failed starts, a stuck scheduler or tasks waiting for your OK, with **Try now**, **Restart Studio** or **Review tasks**. Vibe also offers **Modify**, **Experiment**, **Fix** and **Improve** starting points, and **Suggest a next step**. See [Vibe mode](vibe-mode.md).
+> <span class="status next">Coming in 0.4.5</span> The same line also names a cooldown after failed starts, a stuck scheduler or tasks waiting for your OK, with **Try now**, **Restart Studio** or **Review tasks**. Vibe also offers **Modify**, **Experiment**, **Fix** and **Improve** starting points, and **Suggest a next step**. See [Vibe mode](vibe-mode.md).
 
 ## 5. Review and recover
 

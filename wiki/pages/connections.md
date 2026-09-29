@@ -20,7 +20,7 @@ For OpenCode, steps 4 and 5 are **Scan OpenCode**, then **Use scanned setup**.
 
 **Use for the whole studio** saves the account for Studio's defaults and for the current project, even if that project has its own team. Other projects with their own saved teams keep them. It also turns cross-provider fallback off, so Studio won't switch to another provider when that account fails.
 
-> In 0.4.4 the **Install and sign in** and **Sign in** windows may close as soon as they open. If that happens, [sign in from a terminal](#sign-in-from-a-terminal). <span class="status next">New in 0.4.5</span> The windows stay open and run the setup, and Studio finds the tool by itself when you close one.
+> In 0.4.4 the **Install and sign in** and **Sign in** windows may close as soon as they open. If that happens, [sign in from a terminal](#sign-in-from-a-terminal). <span class="status next">Coming in 0.4.5</span> The windows stay open and run the setup, and Studio finds the tool by itself when you close one.
 
 ## Sign in from a terminal
 
@@ -41,7 +41,7 @@ Use this when the guided window closes at once in 0.4.4:
 
 These are the same commands Studio's setup window runs. Your password and tokens stay with the tool: Studio never sees them.
 
-## More than one login <span class="status next">New in 0.4.5</span>
+## More than one login <span class="status next">Coming in 0.4.5</span>
 
 Have two Claude or ChatGPT subscriptions? In the [setup helper](setup-helper.md), open **Connect an AI › More than one login** and add a second Claude Code or Codex login, up to six in all. Each login signs in through its own window.
 
@@ -63,7 +63,7 @@ Find the provider forms under **Agents › Setup › Providers**. **Agents › S
 
 Chat and coding have separate needs. A local chat server, for example, doesn't install a coding worker. Check both before you start a build.
 
-> <span class="status next">New in 0.4.5</span> The custom endpoint's key becomes optional, and automatic setup finds a local Ollama and a saved Zen key by itself.
+> <span class="status next">Coming in 0.4.5</span> The custom endpoint's key becomes optional, and automatic setup finds a local Ollama and a saved Zen key by itself.
 
 ## Auto setup
 
@@ -71,7 +71,7 @@ Chat and coding have separate needs. A local chat server, for example, doesn't i
 
 Auto setup says what it picked. It doesn't send a test prompt or change your saved keys. Use **Check connection** when you want to test an account.
 
-> <span class="status next">New in 0.4.5</span> The setup helper's **Set up automatically** does the same job. It picks a signed-in Claude Code, Codex, Grok or Antigravity login first. **Start free with OpenCode** is the way in with no subscription or key. A tool that's installed but not signed in is marked, and it doesn't count as a connected AI until it signs in.
+> <span class="status next">Coming in 0.4.5</span> The setup helper's **Set up automatically** does the same job. It picks a signed-in Claude Code, Codex, Grok or Antigravity login first. **Start free with OpenCode** is the way in with no subscription or key. A tool that's installed but not signed in is marked, and it doesn't count as a connected AI until it signs in.
 
 ## Models, seats and coding tiers
 

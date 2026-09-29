@@ -24,7 +24,7 @@ Discord linking and rooms need the rooms hub that the Studio owner runs, and the
 
 **Audio link** uses desktop audio or the microphone only when you turn it on, and only to move the visuals: nothing is transcribed. A "Hey Studio" voice shortcut is an <span class="status idea">Idea</span>, not a feature.
 
-## New network features in 0.4.5 <span class="status next">New in 0.4.5</span>
+## New network features in 0.4.5 <span class="status next">Coming in 0.4.5</span>
 
 | Feature | What it sends, and where |
 | --- | --- |

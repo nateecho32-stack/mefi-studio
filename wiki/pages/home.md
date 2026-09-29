@@ -10,13 +10,13 @@ Most pages have no mark: they describe what's in the 0.4.4 download. Newer thing
 
 | Mark | What it means |
 | --- | --- |
-| <span class="status next">New in 0.4.5</span> | New in the latest download, 0.4.5. |
+| <span class="status next">Coming in 0.4.5</span> | Finished on `main`, and ships with 0.4.5, the next release. |
 | <span class="status rolling">Rolling out</span> | Built, but it needs the rooms hub that the Studio owner runs. It may not work for you yet. |
 | <span class="status progress">In progress</span> | Being built right now. |
 | <span class="status planned">Planned</span> | On the [roadmap](../roadmap.html), not started yet. |
 | <span class="status idea">Idea</span> | Something being thought about. The details are open. |
 
-[New in 0.4.5](coming-in-0-4-5.md) lists everything the latest release adds.
+[Coming in 0.4.5](coming-in-0-4-5.md) lists everything that's finished for the next release.
 
 ## Get your first project running
 
@@ -24,15 +24,15 @@ Most pages have no mark: they describe what's in the 0.4.4 download. Newer thing
 2. [Connect an AI](connections.md). Use a coding tool you already sign in to, an API key or a local model.
 3. [Try a small task](getting-started.md). Start with a change you can easily check.
 
-Already using Studio? See what's [new in 0.4.5](coming-in-0-4-5.md), and [what's new](whats-new.md) for 0.4.4 too.
+Already using Studio? Read [what's new in 0.4.4](whats-new.md), then see what's [coming in 0.4.5](coming-in-0-4-5.md).
 
-> Still on 0.4.4? Its in-app update can't finish installing, so [update to 0.4.5 by hand](updates.md#update-from-044-by-hand) this once. And if a guided sign-in window closes at once, [sign in from a terminal](connections.md#sign-in-from-a-terminal).
+> On 0.4.4, the in-app update can't finish installing, so [update by hand](updates.md#update-from-044-by-hand) when 0.4.5 comes out. And if a guided sign-in window closes at once, [sign in from a terminal](connections.md#sign-in-from-a-terminal).
 
 ## Find what you need
 
 | You want to… | Read |
 | --- | --- |
-| Set up every agent setting in one place <span class="status next">New in 0.4.5</span> | [The setup helper](setup-helper.md) |
+| Set up every agent setting in one place <span class="status next">Coming in 0.4.5</span> | [The setup helper](setup-helper.md) |
 | Talk an idea over, then build it from one box | [Vibe mode](vibe-mode.md) |
 | Create work and follow its progress | [Tasks](workflow.md) |
 | Work out an approach before anything is built | [Plans and ideas](planning.md) |

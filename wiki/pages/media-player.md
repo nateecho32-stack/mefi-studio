@@ -48,7 +48,7 @@ Videos and websites play in a floating player that stays on screen as you move a
 - If the player was open in the last ten minutes, it comes back after Studio closes or reloads, in the same place. YouTube, Vimeo and files pick up where they were.
 - Studio remembers the volume and mute for YouTube, Vimeo and files.
 
-<span class="status next">New in 0.4.5</span> Every floating player gets a move handle and a **Settings** button, a minimized player leaves a restore bar in view, and websites get the full panel width.
+<span class="status next">Coming in 0.4.5</span> Every floating player gets a move handle and a **Settings** button, a minimized player leaves a restore bar in view, and websites get the full panel width.
 
 ## A video behind your work
 

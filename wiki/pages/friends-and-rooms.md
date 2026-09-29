@@ -14,13 +14,13 @@ In 0.4.4, Friends holds three things:
 - **Friends & listening rooms** opens [Listen together](#listen-together) in Music & video.
 - **Your PCs** keeps your own PCs in step. See [Your PCs](#/your-pcs).
 
-<span class="status next">New in 0.4.5</span> Friends also holds **Playground** and **Rooms**. Its bubble shows a badge when invites or join requests wait for you, or when a PC has work to sync.
+<span class="status next">Coming in 0.4.5</span> Friends also holds **Playground** and **Rooms**. Its bubble shows a badge when invites or join requests wait for you, or when a PC has work to sync.
 
 ## What you need
 
 - A Discord account in the Void Engine server. [Join the Discord](#/discord) first.
 - Your Discord linked in Studio, under **Settings › General › Community › Link my Discord**. <span class="status rolling">Rolling out</span> Studio 0.4.4 doesn't ship the link app ID yet, so the button stays hidden for now.
-- A connection to the rooms hub. <span class="status next">New in 0.4.5</span> **Settings › General › Community › Connection details** holds the link app ID and the rooms hub address. A PC uses them at once, with no restart, and **Save** tells you whether the hub answered.
+- A connection to the rooms hub. <span class="status next">Coming in 0.4.5</span> **Settings › General › Community › Connection details** holds the link app ID and the rooms hub address. A PC uses them at once, with no restart, and **Save** tells you whether the hub answered.
 
 Linking reads only your Discord id and name, and your roles and join date in the Void Engine server. It never reads your messages, and nothing about your projects is sent. [Link your Discord in Studio](#/discord/link-your-discord-in-studio) has the details.
 
@@ -69,7 +69,7 @@ Play a link for one of your rooms, and everyone who listens along hears it at th
 2. Load a YouTube, Spotify, SoundCloud or Vimeo link, or a link to an audio or video file.
 3. Choose **Connect**, pick the room under **Choose a room**, then choose **Play this link in the room**. The room's Discord thread gets a note.
 
-Friends in the room choose **Listen along**. Whoever put the link on, or the room's owner, can **Pause** it, play it **From the start** or **Stop** it. <span class="status next">New in 0.4.5</span> **Stop** asks first, because it stops the link for everyone.
+Friends in the room choose **Listen along**. Whoever put the link on, or the room's owner, can **Pause** it, play it **From the start** or **Stop** it. <span class="status next">Coming in 0.4.5</span> **Stop** asks first, because it stops the link for everyone.
 
 Audio and video files stay in step to the second. YouTube, Vimeo and SoundCloud join part-way through. Spotify's player can only be loaded, so everyone presses play in it.
 
@@ -79,7 +79,7 @@ Audio and video files stay in step to the second. YouTube, Vimeo and SoundCloud 
 
 ## Playground and playdates
 
-<span class="status next">New in 0.4.5</span> **Friends › Playground** is where companions meet. Like toys that link up, they play short scripted playdates: high fives, races, rock-paper-scissors, hide and seek and sticker swaps.
+<span class="status next">Coming in 0.4.5</span> **Friends › Playground** is where companions meet. Like toys that link up, they play short scripted playdates: high fives, races, rock-paper-scissors, hide and seek and sticker swaps.
 
 - **Practice with Pip** plays a playdate with Pip, a practice buddy that never leaves your PC. Nothing is sent, and you need neither Discord nor the hub.
 - **Play with a friend.** <span class="status rolling">Rolling out</span> When a friend's companion is out in a room you have open, it shows up with **Play with …**. Both screens show the same scene, each from its own side. This needs a rooms hub that carries companions.

@@ -5,7 +5,7 @@
 (function () {
   "use strict";
 
-  const WORDS = { released: "in Studio", next: "new in 0.4.5", rolling: "rolling out", experimental: "experimental" };
+  const WORDS = { released: "in 0.4.4", next: "coming in 0.4.5", rolling: "rolling out", experimental: "experimental" };
 
   const norm = (s) => String(s || "")
     .toLowerCase()
