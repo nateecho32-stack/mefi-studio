@@ -61,7 +61,7 @@ function host({ settings = {}, tasks = [], needs = { total: 0, counts: {}, items
     releaseStartupHold: async () => { calls.push(["release"]); context.autopilot.held = false; },
     assistantControl: async (action) => { calls.push(["control", action]); },
     autopilot: { held, autoBuild: true, approve: () => true },
-    projects: { open: () => (projectOpen ? { id: "p1", name: "Ruins Runner" } : null), current: () => ({ id: "p1" }) },
+    projects: { open: () => (projectOpen ? { id: "p1", name: "Quillfold" } : null), current: () => ({ id: "p1" }) },
     assistantMessage: async (text, options) => { calls.push(["message", text, plain(options)]); return { ok: true, reply: { text: `Mefi: got "${text}".` } }; },
     getEyes: async () => ({ readJson: async () => board.tasks }),
     TASKS_PATH: "tasks.json",
@@ -84,11 +84,11 @@ test("only the owner's own account is answered, and only while the remote is on"
   const off = host({ settings: { on: false } });
   await off.api.remoteHear(command({ command: "status" }));
   assert.equal(off.replies.length, 0, "off: nothing is answered");
-  const h = host({ settings: { on: true }, snapshot: { project: "Ruins Runner", state: "running", headline: "1 agent working", working: [{ title: "Add login", since: Date.now() - 60000 }], needsYou: 0, done: [], failed: [] } });
+  const h = host({ settings: { on: true }, snapshot: { project: "Quillfold", state: "running", headline: "1 agent working", working: [{ title: "Add login", since: Date.now() - 60000 }], needsYou: 0, done: [], failed: [] } });
   await h.api.remoteHear(command({ command: "status", from: "999999999999999999" }));
   assert.equal(h.replies.length, 0, "someone else's DM never reaches this PC");
   await h.api.remoteHear(command({ command: "status" }));
-  assert.match(h.replies[0].text, /^\*\*Ruins Runner\*\* · 1 agent working\n• Add login \(1 min\)/);
+  assert.match(h.replies[0].text, /^\*\*Quillfold\*\* · 1 agent working\n• Add login \(1 min\)/);
   assert.deepEqual(plain(h.api.log.map((row) => row.command)), ["status"], "the log keeps the command, never its words");
   await settle();
   assert.ok(h.sent.some(([channel]) => channel === "remote:event"), "Settings hears about it");
@@ -249,7 +249,7 @@ test("Settings saves the choices and the PIN's hash, and never sees the PIN", as
 
 test("the look turns changes into alerts, with a PIN'd Approve for a new approval", async () => {
   const { task, needs } = approvalBoard();
-  const snapshot = { project: "Ruins Runner", state: "running", headline: "1 agent working", working: [], needsYou: 1, done: [], failed: [] };
+  const snapshot = { project: "Quillfold", state: "running", headline: "1 agent working", working: [], needsYou: 1, done: [], failed: [] };
   const h = host({ settings: { on: true, pin: remoteRules.hashPin("4321") }, tasks: [task], needs: { total: 0, counts: {}, items: [] }, snapshot });
   h.client.remote = { on: true };
   await h.api.remoteApply();
@@ -264,7 +264,7 @@ test("the look turns changes into alerts, with a PIN'd Approve for a new approva
 });
 
 test("what goes to Discord is scrubbed of paths, emails and keys first", async () => {
-  const snapshot = { project: "Ruins Runner", state: "running", headline: "1 agent working", working: [{ title: "Fix the loader", since: Date.now(), step: "Bash running · node C:\\Users\\echor\\secret\\build.js --key sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789 to me@example.com" }], needsYou: 0, done: [], failed: [] };
+  const snapshot = { project: "Quillfold", state: "running", headline: "1 agent working", working: [{ title: "Fix the loader", since: Date.now(), step: "Bash running · node C:\\Users\\echor\\secret\\build.js --key sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789 to me@example.com" }], needsYou: 0, done: [], failed: [] };
   const h = host({ settings: { on: true }, snapshot });
   await h.api.remoteHear(command({ command: "made" }));
   const text = h.replies[0].text;
