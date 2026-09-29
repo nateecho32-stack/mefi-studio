@@ -1,6 +1,7 @@
 # Changelog
 
-All notable changes to Mefi's Studio AI+ are recorded here. The format follows
+All notable changes to Mefi Studio (still named Mefi's Studio AI+ inside the
+app) are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 `package.json`. History before the extraction into this repository on
 2026-09-19 is not recorded.
@@ -30,6 +31,31 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   beyond clipped titles (no prompts, paths, keys or addresses). In a narrower
   window the inspector becomes a drawer under the tabs, and in the narrowest
   the page stacks, down to Studio's 600 px minimum.
+## [0.4.5] - 2026-09-28
+
+- **Mefi Studio.** The public name is now Mefi Studio, and the message is
+  "Bring an idea. Find your people. Make it together." The website, guide,
+  README and GitHub release titles use it. The rebrand is the site and the
+  message, not the app: in this release the window title, the startup card and
+  page headings, the tray tooltip, the program (`Mefi Studio AI+.exe`), the
+  zip and its folder, and the settings folder in `%APPDATA%` keep their
+  earlier names (Mefi's Studio AI+, and Mefi Studio AI+ in file names) on
+  purpose, so every install keeps its settings, keys and project list and
+  updates keep finding their download.
+- **In-app updates are fixed, but an installed 0.4.4 cannot update itself.** The
+  helper that installs an update was started as a detached PowerShell, which has
+  no console and exited without running its script. In 0.4.4 the Update button
+  therefore downloaded the build, Studio quit and nothing was installed. The
+  helper now starts through `start`, which gives it its own hidden console, so
+  it runs after Studio exits. The fix ships in the build you install, not the
+  one you have, so leave 0.4.4 by hand: extract the new zip into a new folder,
+  copy the old folder's `resources\app\data` into the new one (skip
+  `curated.json` and `models.json`, the two catalog files the new zip carries),
+  and open Studio from the new folder. Settings, keys, the project list and the
+  Discord link live in `%APPDATA%\Mefi's Studio AI+` and carry over on their
+  own.
+- **Release zips no longer carry Electron's `debug.log`,** which named the
+  folder the build ran in.
 - **A merge that drops another branch's work is caught before it is pushed.**
   On 2026-09-27 a merge kept one PC's copy of every file both sides had
   changed, and the next commit put the rest of the tree back to that copy:
@@ -98,6 +124,67 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   page · 1 needs you · 4 done today". The line travels sealed in the vault
   like the rest, holds only clipped titles and counts, and is refreshed when
   the agents' work changes, at most every ten minutes.
+- **Plans opens sooner and moves one step at a time.** Opening Plans no
+  longer waits on the folder scan: the list shows first, and the scan, a warm
+  read of the project's files and its Project map areas arrive behind it
+  ("Reading your project…", then "Project ready"). Interview turns answer
+  from that read instead of scanning the folder again (2.1 s down to 0.13 s
+  from the cache, measured on Studio's own folder). The quick model answers
+  the interview first, a reply it could not use is asked once of the deep
+  model, and the spec and any turn with **Think harder** go to the deep model
+  at once. The sheet shows one step at a time with an **Up next** button and a
+  progress track, and the interview reads as a chat. **That's right — record
+  it** turns Mefi's reading of your answer into your decision in one click,
+  and **Mefi keeps the conversation going** (on by default, remembered on this
+  PC) asks the next question once you record that reading, and the first
+  question as soon as a new idea is saved. A new idea needs no name, since its
+  first words name it, and offers starters. The **Project ready** chip shows
+  how much of the project Mefi has read, and **Where this lives** pins a plan
+  to an area of your Project map before the spec needs it.
+- **Typing goes to the open menu's box.** A letter typed while a menu with a
+  text box is open (focus inside it, or the pointer resting on it), or while
+  a sheet is open, now lands in that box instead of firing the single-letter
+  keys that open other menus. Clicking out of the menu gives the keys back.
+  It covers the companion panel and hub (Talk, Suggest work, and an open
+  room's message box), Music & video and its web browser, Command's chat
+  panels and Ask cards, Vibe's side panel and ask drawer, the Project map's
+  Browse, and Home's queue search. Space, ? and Ctrl, Alt or Meta shortcuts
+  still act as shortcuts, and password, number and key fields never take
+  stray typing. Choosing "Enter a model ID…" in a picker keeps the caret in
+  the box it opened.
+- **Startup opens even when the window paints nothing.** A window that is
+  covered or parked in the tray gets no animation frames and lays no text
+  out, and the startup gate waited for both. A reload there left Studio on
+  "Picking up where you left off" with every step ready, and after a minute
+  the view step failed into "A little more setup is needed", so Vibe looked
+  broken. The gate now caps its wait for frames at 300 ms and gives up on the
+  fonts after 4 s, opening on fallback fonts. A hidden-window test that sat
+  at "loading" for 75 s now completes in 1.2 s.
+- **Less work for surfaces nobody can see.** Command's chat log and Ask
+  cards were rebuilt on every assistant update (up to four a second) while
+  Command was closed; they now paint when you open it. Board lists and machine
+  status sent to a window in the tray or minimized are held, only the newest
+  of each is kept, and it arrives when the window comes back. A burst of
+  agent status updates shares one push after the first goes out at once. A
+  closed Explorer keeps its updates instead of repainting, and an open one
+  repaints only when something changed, keeping a half-typed detail draft and
+  the focused row. The queue-settings refresh behind Agents and the companion
+  panel runs only when the queue changed, Vibe's flow bar animates with a
+  transform instead of a layout per frame, and Studio's styled pickers no
+  longer re-walk the whole page for their labels. None of it was profiled
+  change by change; [docs/performance.md](docs/performance.md) has the
+  measurements behind it.
+- **Groundwork for a Fleet view.** Studio's host now keeps a model of the
+  open project's agent seats: a lasting seat for each agent (such as
+  `builder-2@mefi-studio`), the runs it has worked, and the wires between
+  seats (dispatch, hand-off, delegation, verification, rework, the desk,
+  escalation, reports and mail). It is fed by events the host already had,
+  kept per project in `fleet.json`, and reachable through new `fleet:*`
+  calls; stopping a seat's run goes through the same stop as the task card.
+  No screen shows it yet, so nothing looks different in this release.
+- The desk and Studio tools servers and the MCP client report the app's real
+  version from `package.json` instead of a fixed number (the desk server said
+  0.4.0).
 - **Answered asks leave the Needs you list.** An ask you answered in the
   companion menu used to stay on screen after it closed (the count already
   lower), and clicking it again only said "That question is no longer
@@ -194,9 +281,6 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   habits, efforts, subtasks). Preferences from your other PCs are checked like
   the Settings controls that write them, and an ask that needs your
   confirmation to switch off stays on.
-- **Approvals survive the references gathered after them.** Approving a new
-  task before its automatic file, session and context references landed no
-  longer drops the approval or a named Start as "the brief changed".
 - **Rooms show the right room.** Opening one room right after another no
   longer shows the first one's chat (or reports and deletes its messages).
   Leaving a room in Rooms no longer stops Listen together, and the reverse.
@@ -208,10 +292,6 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 - **The loop status follows a project switch.** Home, Vibe and the tray count
   the new project's board at once, instead of saying "2 tasks need your OK"
   about the old one until the next board change.
-- **"What changed while I was away?" is more careful.** Without a key, a card
-  matched only by file and commit names now says it "may already be done",
-  as its Ask card does, and a task like "When the user logs out, clear the
-  cache" is no longer answered with the away report.
 - **Your PCs is more exact about what is only on this PC.** A file whose only
   difference is line endings Git would undo no longer counts as uncommitted
   work, and a branch whose commits are all on GitHub already (on another
@@ -267,6 +347,10 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   together reach the hub without `setx` or a restart. Save says whether the
   hub answered. The environment variables still win for test setups, and
   every "not connected yet" message now says where to add the missing value.
+  This build ships with both values empty, so Rooms, Playground, Listen
+  together, cowork claims and the Discord remote do nothing until you enter
+  them, and they also need a linked Discord account and a rooms hub to
+  connect to ([docs/friends-setup.md](docs/friends-setup.md)).
 - **Share between my PCs no longer gets stuck.** A PC whose push lost the
   race to another PC's status line kept its change unsent and then could
   neither send nor receive anything, so the other PCs got nothing. The vault
@@ -291,11 +375,13 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   The free coding model's one-at-a-time limit now shows as the reason
   instead of "nothing ready".
 - **Approvals are no longer cancelled silently.** Approving a new task before
-  its automatic references finished gathering used to drop the approval
-  without a word. Gathered file, session and context references (now stamped
-  `auto`) no longer count as reviewed scope, while web references and anything
-  you or a planner wrote still do. Existing approvals hash exactly as before.
-  An approval that is cleared because the brief really changed now says so in
+  its automatic references finished gathering used to drop the approval, or
+  a named Start, without a word, as if the brief had changed. Gathered file,
+  session and context references (now stamped `auto`) no longer count as
+  reviewed scope, while web references and anything you or a planner wrote
+  still do. That holds for every card, including the ones Studio admits with
+  an empty reference list. Existing approvals hash exactly as before. An
+  approval that is cleared because the brief really changed now says so in
   the task's log.
 - **Permission modes keep their meaning.** The old Auto build switch (brain
   maps, older screens) used to overwrite the permission mode with Auto or
@@ -378,9 +464,14 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   by system and progress, keeps their lineage, and reorganizes as agents
   discover files and work advances.
 - **Asking what changed while you were away works without a model.** The
-  chat answers from the report of work done outside Studio. A card that only
-  matched on files and commit subjects now says "may already be done" on its
-  hold, its Evidence tab and the thread, as its Ask card already did.
+  chat answers from the report of work done outside Studio: the commits,
+  uncommitted files and other agents' sessions, and any queued cards waiting
+  for you. A card that only matched on files and commit subjects says "may
+  already be done" (not "looks already done") on its hold, its Evidence tab,
+  the thread and that answer, as its Ask card already did. The away wording
+  now has to name you, the assistant or Studio as the one that was away
+  ("while I was out", "when the app was closed"), so a task like "When the
+  user logs out, clear the cache" is no longer answered with the away report.
 - First-time setup and agent choice. **Install**: `npm ci` fetches the
   Electron binary again (Electron 44 stopped doing it), the launcher fetches
   it itself when missing, `npm ci` stops on a Node older than 24, and
@@ -432,8 +523,9 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   (docs/community.md).
 - Second bug-hunt pass over the newest features. **Guided CLI setup** opens
   its terminal again (a detached PowerShell never ran its script), and the
-  **release updater**'s install helper now actually runs after Studio exits.
-  The **built-in browser** keeps playing when a dropped file or link is
+  **release updater**'s install helper now actually runs after Studio exits
+  (see the update entry at the top). The **built-in browser** keeps playing
+  when a dropped file or link is
   refused, and embedded players may load their own blob/data frames.
   **Vibe**: the Needs you drawer recovers after a project switch mid-action,
   typed answers and task notes survive repaints and failed saves, and the
@@ -1874,7 +1966,8 @@ which installed copies pick up through the in-app updater.
   locked or the cover window is destroyed.
 - Project switch drains background work instead of refusing it.
 
-[Unreleased]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.4.4...main
+[Unreleased]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.4.5...main
+[0.4.5]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.4.4...v0.4.5
 [0.4.4]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.4.0...v0.4.2

@@ -58,6 +58,8 @@ async function fileDigest(file) {
 async function copyRuntime(source, target) {
   await mkdir(target, { recursive: true });
   for (const entry of await readdir(source, { withFileTypes: true })) {
+    // electron's own debug.log names the builder's user folder; never ship it
+    if (source === ELECTRON_DIST && entry.name === "debug.log") continue;
     const from = path.join(source, entry.name);
     const to = path.join(target, source === ELECTRON_DIST && entry.name === "electron.exe" ? EXE_NAME : entry.name);
     if (entry.isDirectory()) { await copyRuntime(from, to); continue; }
