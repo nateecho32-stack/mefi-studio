@@ -6,6 +6,12 @@
   const el = {};
   let initialized = false;
   let ideaRevision = 0;
+  let cardLayout = null;
+
+  function layoutCards(immediate = false) {
+    cardLayout ??= window.MefiCardLayout?.create({ lists: () => [el.list], visible: () => !el.overlay.hidden });
+    cardLayout?.refresh({ immediate });
+  }
 
   const unreadCount = () => state.ideas.filter((idea) => !idea.read).length;
   // #ideas-open binds straight to open(), so arg 0 can be a click Event.
@@ -104,15 +110,25 @@
       li.className = "muted";
       li.textContent = state.clusterFilter ? `No ideas tagged "${state.clusterFilter}". Select the tag again to show every idea.` : "No ideas yet. Choose Tools › Scan chats to collect them from recent conversations.";
       el.list.append(li);
+      layoutCards();
       return;
     }
     for (const idea of filtered.slice(0, 60)) {
       const li = document.createElement("li");
-      li.classList.add("task-row");
+      li.classList.add("task-row", "idea-card");
       li.style.setProperty("--task-color", idea.read ? "var(--gold-dim)" : "var(--gold-bright)");
       if (idea.id === state.selected) li.classList.add("selected");
       li.append(statusTag(idea));
-      li.append(document.createTextNode(` ${idea.title || idea.detail || "Untitled idea"}`));
+      const title = document.createElement("strong");
+      title.className = "idea-card-title";
+      title.textContent = idea.title || idea.detail || "Untitled idea";
+      li.append(title);
+      if (idea.detail && idea.title && idea.detail !== idea.title) {
+        const excerpt = document.createElement("p");
+        excerpt.className = "idea-card-excerpt";
+        excerpt.textContent = idea.detail;
+        li.append(excerpt);
+      }
       const meta = document.createElement("div");
       meta.className = "who";
       // A sparse row (no source, no time) leaves those parts out rather than
@@ -132,6 +148,7 @@
       });
       el.list.append(li);
     }
+    layoutCards();
   }
 
   function select(id) {
@@ -414,9 +431,12 @@
     window.MefiNav?.claim?.("ideas");
     const params = optionsOf(options);
     el.overlay.hidden = false;
+    // Retained cards still need sizing if a reload fails after a resize.
+    layoutCards(true);
     // load() is async; a deep-linked idea can only be selected once it exists.
     load().then(() => {
       if (typeof params.ideaId === "string" && params.ideaId) select(params.ideaId);
+      layoutCards(true);
       el.list?.querySelector("li.selected")?.scrollIntoView({ block: "nearest" });
     });
   }
@@ -424,6 +444,7 @@
   function close() {
     if (el.overlay.hidden) return;
     el.overlay.hidden = true;
+    cardLayout?.stop();
     if (el.tools) el.tools.open = false;
     window.MefiNav?.release?.("ideas");
   }
@@ -463,7 +484,7 @@
       if (event.key === "Escape" && el.tools.open) { event.preventDefault(); event.stopPropagation(); el.tools.open = false; el.tools.querySelector("summary")?.focus(); }
     });
     document.addEventListener("pointerdown", (event) => { if (el.tools?.open && !el.tools.contains(event.target)) el.tools.open = false; });
-    el.back?.addEventListener("click", () => { el.overlay.dataset.detail = "false"; el.list?.querySelector("li.selected")?.focus(); });
+    el.back?.addEventListener("click", () => { el.overlay.dataset.detail = "false"; layoutCards(true); el.list?.querySelector("li.selected")?.focus(); });
     const clean = async () => {
       if (window.mefiStudio?.ideasAction) {
         if (await act("clean", { ideaIds: state.ideas.filter((idea) => idea.status === "done").map((idea) => idea.id) })) el.status.textContent = "Removed finished ideas; accepted work stays available.";
@@ -486,6 +507,7 @@
       el.overlay.dataset.detail = "false";
       // `hidden`, not display: it is what drawGraph()'s early return reads.
       el.canvas.hidden = state.view !== "graph";
+      layoutCards();
       drawGraph();
     });
     window.mefiStudio?.onIdeas?.((ideas) => {

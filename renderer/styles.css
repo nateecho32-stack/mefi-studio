@@ -1522,11 +1522,21 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
 #task-detail .task-detail-panel > h4 { margin: 18px 0 8px; font-size: 13px; }
 #task-detail .task-detail-panel > h4:first-child { margin-top: 0; }
 #task-reference-controls { margin-top: 18px; border-top: 1px solid var(--hairline); padding-top: 12px; }
-#ideas-overlay .explorer-grid { grid-template-columns: minmax(230px, 34%) minmax(0, 1fr); }
+#ideas-overlay .explorer-grid { grid-template-columns: minmax(260px, 58%) minmax(0, 1fr); }
 #ideas-overlay[data-view="graph"] .explorer-grid { grid-template-columns: minmax(200px, 25%) minmax(0, 1fr) minmax(240px, 28%); }
 #ideas-overlay .explorer-col:last-child { grid-column: auto; }
 #ideas-graph-col[hidden] { display: none !important; }
 #ideas-overlay .explorer-col { min-width: 0; }
+/* The inbox uses the Task board's compact card layout. DOM order still
+   follows unread first, then newest, including keyboard navigation. */
+#ideas-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); grid-auto-rows: 4px; column-gap: 12px; row-gap: 0; align-content: start; align-items: start; }
+#ideas-list > .idea-card { display: block; min-width: 0; margin: 0; padding: 14px; border: 1px solid var(--hairline-strong); border-left: 3px solid var(--task-color, var(--gold-dim)); border-radius: var(--r-md); background: color-mix(in srgb, var(--ivory) 3%, var(--panel-solid)); overflow-wrap: anywhere; transition: border-color var(--dur-1) var(--ease), background var(--dur-1) var(--ease); }
+#ideas-list > .idea-card:hover { border-color: var(--gold); }
+#ideas-list > .idea-card.selected { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 10%, var(--panel-solid)); }
+#ideas-list .idea-card-title { display: block; margin: 8px 0 5px; font-size: 14px; line-height: 1.4; font-weight: 600; color: var(--ivory); }
+#ideas-list .idea-card-excerpt { margin: 0 0 9px; font-size: 12px; line-height: 1.5; color: var(--muted); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+#ideas-list .who { font-size: 11px; line-height: 1.5; }
+#ideas-list > .muted { grid-column: 1 / -1; border: 0; padding: 10px 0; cursor: default; }
 #explorer-overlay .explorer-grid { grid-template-columns: minmax(200px, 27%) minmax(0, 1fr); }
 #explorer-overlay[data-tools="true"] .explorer-grid { grid-template-columns: minmax(200px, 23%) minmax(0, 1fr) minmax(300px, 31%); }
 #explorer-overlay .explorer-col:last-child { grid-column: auto; }
@@ -3125,7 +3135,7 @@ html[data-no-blur] {
 #tasks-overlay.task-overview-mode:not(.task-detail-open) .explorer-grid > section.explorer-col { display: none; }
 #tasks-overlay.task-overview-mode #task-list { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,320px),1fr)); gap: 12px; align-content: start; align-items: start; }
 #tasks-overlay.task-detail-open #task-list { grid-template-columns: minmax(0,1fr); }
-/* Masonry: 4px rows that tasks.js spans per card (MASONRY_ROW, with the
+/* Masonry: 4px rows that card-layout.js spans per card (with the
    12px gap folded into the span), so cards slide up into free space. */
 #tasks-overlay.task-overview-mode:not(.task-detail-open) :is(#task-list, .task-overview-finished-list) { grid-auto-rows: 4px; row-gap: 0; }
 #task-list > .task-overview-summary { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; border: 0; padding: 2px 0 2px; color: var(--muted); font-size: 11px; cursor: default; }
@@ -4811,6 +4821,8 @@ html[data-rail-pinned] #app-rail .app-rail-head .count { position: static; margi
 #app-rail .app-rail-search { margin-bottom: 16px; }
 #app-rail .app-rail-recent { display: flex; flex-direction: column; margin-top: 26px; gap: 8px; }
 #app-rail .app-rail-heading { padding: 0 12px; color: var(--dim); font: 500 11px/1.5 var(--font-ui); }
+#app-rail .app-rail-friends { display: flex; flex-direction: column; gap: 1px; }
+#app-rail .app-rail-friends .app-rail-item { min-height: 34px; padding-left: 20px; font-size: 13px; }
 #app-rail-recent-list { display: flex; flex-direction: column; gap: 1px; }
 #app-rail .app-rail-recent-task { min-height: 36px; font-size: 13px; font-weight: 400; }
 #app-rail .app-rail-recent-task[aria-pressed="true"] { color: var(--ivory); background: color-mix(in srgb, var(--ivory) 6%, transparent); }
@@ -4836,6 +4848,7 @@ html[data-rail-pinned] #app-rail .app-rail-head .count { position: static; margi
    keycaps and counts wait for the rail to open instead of peeking out clipped. */
 html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) :is(.app-rail-brand, .app-rail-foot-item, .app-rail-pin, .app-rail-compose, .app-rail-search) :is(.label, .key, .app-rail-text, .count) { display: none; }
 html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-recent { display: none; }
+html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-friends { display: none; }
 /* ...except the foot's Settings and Help and the update dot: at rest they keep
    a word under the icon, as the sections above do, instead of bare glyphs. */
 html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) :is(.app-rail-foot-item, #app-rail-foot .update-pill) {

@@ -7,6 +7,19 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Friends is easy to find.** Build's main menu and Vibe's rail now have
+  Friends. Build also links straight to Rooms, Your PCs and Playground, and
+  Search finds each one. The links open and focus the existing Friends cards;
+  the companion's Friends bubble remains available.
+- **Compact cards for Ideas.** The inbox now shows each idea's title, a short
+  detail preview and its source in responsive cards that fill the space under
+  shorter neighbours. Ideas and the Task board share the same resize-aware
+  layout, respect reduced motion, and stop their layout watchers when closed.
+- **The 0.4.5 boundary is recorded.** The public roadmap and guide separate
+  the included desktop work from features awaiting a rooms service and work
+  deferred to later releases. The existing Fleet page is included; agent
+  lanes, missions, Friends 2.0 and the wider overhauls remain later work.
+
 - **Live › Fleet: every seat on your team, and the wires between them.** A
   new page beside Command shows the open project's team the way OpenRig draws a
   rig. An explorer lists it as pods (Lead, Build, Check, Keep) of seats such as

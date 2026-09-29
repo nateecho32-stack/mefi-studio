@@ -1,8 +1,11 @@
 # Unified Studio
 
-Studio has three main places: **Home** for conversation and task actions,
+Studio has four main places: **Home** for conversation and task actions,
 **Work** for Tasks, Plans, Ideas and Analyzer, and **Agents** for the team and
-its work. Settings keeps personal appearance, audio and system preferences;
+its work, plus **Friends** for Rooms, Your PCs and Playground. Friends reuses
+the companion's Friends menu; its direct links focus the matching card. These
+actions also appear in Search, and the companion's Friends bubble still works.
+Settings keeps personal appearance, audio and system preferences;
 Help keeps onboarding and shortcuts. Existing destination IDs and keyboard
 shortcuts still resolve through the navigation registry.
 

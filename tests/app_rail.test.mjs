@@ -114,14 +114,14 @@ test("classic stays one switch away, and turning it on leaves the old chromes un
   assert.equal(load({ search: "?shell=rail", stored: { "mefiStudio.shell": "classic" } }).nav.applyShell(), true, "the URL wins over the stored choice");
 });
 
-test("three sections in order, each head going straight to its main destination", () => {
+test("four sections in order, each head going straight to its main destination", () => {
   const { nav, rail } = load({ search: "?shell=rail" });
   nav.applyShell();
-  assert.deepEqual(heads(rail()), ["home", "work", "agents"]);
+  assert.deepEqual(heads(rail()), ["home", "work", "agents", "friends"]);
   const targets = Object.fromEntries(rail().querySelectorAll(".app-rail-head").map((head) => [head.dataset.section, head.dataset.nav]));
-  assert.deepEqual(targets, { home: "workspace", work: "tasks", agents: "agents" });
+  assert.deepEqual(targets, { home: "workspace", work: "tasks", agents: "agents", friends: "friends" });
   const labels = rail().querySelectorAll(".app-rail-head .app-rail-text").map((label) => label.textContent);
-  assert.deepEqual(labels, ["Home", "Work", "Agents"]);
+  assert.deepEqual(labels, ["Home", "Work", "Agents", "Friends"]);
   for (const head of rail().querySelectorAll(".app-rail-head")) {
     assert.equal(head.getAttribute("aria-label"), head.querySelector(".app-rail-text").textContent, "accessible names match the visible destination labels");
   }
@@ -158,6 +158,30 @@ test("main rail buttons reopen the last view in each section", async () => {
   assert.equal(opened.at(-1)[0], "command", "a second click on Agents returns to Command");
 });
 
+test("Friends menu and Search open the existing hub's precise cards after closing other sheets", async () => {
+  const loaded = load({ init: true });
+  const calls = [];
+  loaded.window.MefiCompanionHub = { open: (params) => calls.push(["hub", { ...params }]) };
+  loaded.window.MefiTasks = { close: () => { calls.push(["close-tasks"]); loaded.nav.release("tasks"); } };
+  loaded.window.MefiPalette = { close: () => { calls.push(["close-search"]); loaded.nav.release("palette"); } };
+  loaded.nav.state.sheet = "tasks"; loaded.nav.state.transient = "palette";
+  loaded.nav.go("rooms");
+  assert.deepEqual(calls, [["close-search"], ["close-tasks"], ["hub", { section: "friends", target: "rooms" }]]);
+  const children = loaded.rail().querySelector('.app-rail-section[data-section="friends"] .app-rail-children');
+  assert.deepEqual(children.querySelectorAll("[data-nav]").map((button) => button.dataset.nav), ["rooms", "your-pcs", "playground"]);
+  for (const [id, target] of [["rooms", "rooms"], ["your-pcs", "pcs"], ["playground", "playground"]]) {
+    await loaded.document.body.trigger("click", { target: children.querySelector(`[data-nav="${id}"]`) });
+    assert.deepEqual(calls.at(-1), ["hub", { section: "friends", target }]);
+    assert.ok(loaded.nav.list({ showIn: "palette" }).some((entry) => entry.id === id), `${id} stays searchable in both modes`);
+    assert.equal(loaded.nav.sectionLabel(loaded.nav.get(id)), "Friends");
+  }
+  assert.doesNotMatch(loaded.nav.get("your-pcs").searchTerms, /rooms|playground/i, "a narrow search returns the matching tool");
+  assert.doesNotMatch(loaded.nav.get("rooms").searchTerms, /GitHub|playground/i);
+  loaded.window.MefiVibe = { mode: () => "vibe" };
+  loaded.nav.go("playground");
+  assert.deepEqual(calls.at(-1), ["hub", { section: "friends", target: "playground" }]);
+});
+
 test("every destination in the registry lands in exactly one place, and actions without a RAIL_SLOTS place stay in the palette", async () => {
   const { nav, rail } = load({ search: "?shell=rail" });
   nav.applyShell();
@@ -179,7 +203,7 @@ test("every destination in the registry lands in exactly one place, and actions 
 test("each group has one local navigation row and the foot groups Help", () => {
   const { nav, rail, document } = load({ search: "?shell=rail" });
   nav.applyShell();
-  assert.equal(rail().querySelectorAll(".app-rail-children").length, 1, "only recent tasks expand with the rail");
+  assert.equal(rail().querySelectorAll(".app-rail-children").length, 2, "Friends tools and recent tasks expand with the rail");
   for (const [section, routes] of Object.entries({work: ["tasks", "plans", "ideas", "analyzer"], agents: ["agents", "command", "fleet", "eyes", "trace", "explorer", "overhead", "agent-brain", "brains", "context", "booklet", "graph", "usage"]})) {
     nav.paintLocalNav(section, routes[1]);
     const local = document.getElementById("app-local-nav");
@@ -327,7 +351,7 @@ test("sectionLabel names every record's section, the palette's result kinds", ()
   assert.equal(nav.sectionLabel({ id: "assistantTidy", kind: "action", group: "assistant" }), "Assistant");
   assert.equal(nav.sectionLabel({ id: "settings:settings-updates", kind: "action", group: "settings" }), "Settings", "the Settings cards booklet.js files");
   assert.equal(nav.sectionLabel(null), null);
-  assert.deepEqual({ ...nav.RAIL_SLOTS }, { community: "foot" });
+  assert.deepEqual({ ...nav.RAIL_SLOTS }, { community: "foot", friends: "friends", rooms: "friends", "your-pcs": "friends", playground: "friends" });
   assert.ok(Object.isFrozen(nav.RAIL_SLOTS), "only nav places destinations in the rail");
   const ranks = ["workspace", "tasks", "command", "booklet", "studio", "help"].map((id) => nav.sectionRank(nav.get(id)));
   assert.deepEqual(ranks, [...ranks].sort((a, b) => a - b), "ranks follow the rail from top to bottom");
@@ -360,7 +384,7 @@ test("the arrows walk the rail and stop there, so Command's canvas never sees th
   };
   const down = await press("ArrowDown", live);
   const activityItem = all[all.indexOf(live) + 1];
-  assert.equal(activityItem.dataset.nav, "studio");
+  assert.equal(activityItem.dataset.nav, "friends");
   assert.equal(activityItem.focused, true);
   assert.deepEqual(down, { prevented: true, stopped: true }, "the rail keeps the arrow");
   assert.deepEqual(tabStops(rail), [activityItem], "the stop follows the arrows");
@@ -374,6 +398,18 @@ test("the arrows walk the rail and stop there, so Command's canvas never sees th
   assert.deepEqual(await press("ArrowLeft", live), { prevented: false, stopped: false });
   await rail.trigger("focusout", { relatedTarget: null });
   assert.deepEqual(tabStops(rail), [live], "leaving hands the stop back to where you are");
+});
+
+test("the rail arrows reach every Friends child as one roving tab stop", async () => {
+  const loaded = load({ init: true });
+  const rail = loaded.rail();
+  let current = rail.querySelector('.app-rail-head[data-section="friends"]');
+  for (const id of ["rooms", "your-pcs", "playground"]) {
+    await rail.trigger("keydown", { key: "ArrowDown", target: current });
+    current = rail.querySelector(`.app-rail-friends [data-nav="${id}"]`);
+    assert.equal(current.focused, true);
+    assert.deepEqual(tabStops(rail), [current]);
+  }
 });
 
 test("exactly one aria-current, on where you are, and its section lights up", () => {

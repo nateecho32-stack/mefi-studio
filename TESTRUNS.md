@@ -35,6 +35,40 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-29 - 0.4.5 roadmap quick wins and release boundary
+
+Friends now has a primary menu entry, direct Rooms, Your PCs and Playground
+routes, and a Vibe rail stop. Ideas uses compact responsive cards through a
+layout helper shared with Tasks. The app docs and public site separate built
+0.4.5 work from deferred work and service-dependent features; the published
+download stays 0.4.4.
+
+- Final stable tree: `npm run build-booklet`, `npm run check` (196 targets,
+  406 specs), and `npm run audit` (0 findings) PASS.
+- Final `npm test` PASS: 379 Node suites, 4,586 tests (4,579 pass, 7 skipped,
+  0 failures, 574 s); Python contracts 248 tests (1 skipped, 0 failures,
+  47 s); normalized-path lock 6 checks PASS. The occlusion probe skipped
+  because the attended desktop did not sustain throttling, as documented.
+- The first full run caught outdated three-entry Vibe/Command expectations,
+  a Python build-order expectation missing the shared helper, and a real
+  fourth-menu clipping regression at 600x560 / 150% scale. Expectations are
+  updated; the compact rail preserves four visible 28px targets. Unified's
+  Electron fixture now checks keyboard access and actual card focus for all
+  three Friends links. Unified and Command passed solo before the final gate.
+- That first run also lacked resedit in this PC's old installed dependencies.
+  A fresh lockfile install in the isolated worktree restored all stamping
+  checks; existing app dependencies and user state were preserved.
+- Seeded Ideas Electron QA at 1360px and 600px passed without overlapping
+  cards, horizontal overflow, console errors or network requests. Back and
+  reopen measure cards before restoring selection/focus, including a failed
+  reload after a resize.
+- Full ESLint: 0 errors, 41 existing warnings. The final changed-source pass
+  has 0 errors and 2 existing fixture warnings.
+- Public-site validation PASS: 64 unique roadmap items, 35 wiki pages,
+  313 feature cards and 607 local references, with exact no-script roadmap
+  parity. Real Electron browser QA of six routes at 1440px, 390px and 320px
+  passed all 18 layouts with no missing images, console errors or overflow.
+
 ## 2026-09-29 - Live > Fleet, the branches view (fleet overhaul Phase 2)
 
 Phase 2 of docs/fleet-overhaul-plan.md: the Fleet page under Agents > Live
@@ -677,10 +711,6 @@ a loading vault instead of staying empty.
   4248 passed, 5 skipped, 0 failures; Electron stage 42 tests, 41 passed, 1
   skipped; `eyes_toggle_electron` 1/1; `occlusion_probe` 1 passed, 1
   capability skip; Python contracts OK; normalized-path lock passed.
-
-## 2026-09-28 - Merge all branches: hidden-surfaces onto the restored main; Friends across PCs verified end to end; 0.4.5
-
-Surveyed every branch and tree. gh-pages is the website (no shared history; not merged). perf/quick-wins is content-identical to aef5dfe on main (skipped). worktree-* branches and the cli-path-refresh clone are already in main. The 16:57 merge (65703a6) and "fixes" (7ba162c) losses were already restored on GitHub main by dc85f68, which keeps the docked video player the other PC is developing; this merge keeps that and the fuller Friends › Rooms (4ee6891). Merged perf/hidden-surfaces (docs/performance.md kept both). Added tests/companion_e2e.test.mjs: three Studios (main's real Companion friends block and hub client, three Discord accounts) against the Void Engine Bot's real hub with its companion relay: make a room, ask, let in, play-only default, a friend rule keeping a token-bearing title home, share-back ask, mirrored playdate, stay home; 1/1 with MEFI_STUDIO_BOT_ROOT set (hub relay patch, 462/462 bot tests). Version 0.4.5. Full npm test: 4209 passed, 1 failed (command_render, known load-sensitive; passed solo in 51 s); Python contracts and path lock passed. check ok, audit 0 errors.
 
 ## Read Before Any Tests
 

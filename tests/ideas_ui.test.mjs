@@ -120,3 +120,45 @@ test("a sparse idea row leaves out its missing source and time instead of printi
   assert.doesNotMatch(text, /unread/, "so its row does not repeat it");
   assert.match(text, /chat · /);
 });
+
+test("idea cards preview the detail, keep unread-first order and open the existing actions by keyboard", async () => {
+  const env = environment([
+    { id: "read", title: "Recent read", detail: "Already seen", at: 30, read: true, tags: [] },
+    { id: "unread", title: "Older unread", detail: "Keep the full description in the inspector", at: 1, read: false, tags: [] },
+  ]);
+  env.ui.open(); await flush();
+  const cards = env.get("list").children;
+  assert.ok(cards[0].classes.has("idea-card"));
+  assert.equal(cards[0].children.find((child) => child.className === "idea-card-title").textContent, "Older unread");
+  assert.equal(cards[0].children.find((child) => child.className === "idea-card-excerpt").textContent, "Keep the full description in the inspector");
+  cards[0].dispatch("keydown", { key: "Enter" }); await flush();
+  assert.equal(env.actions[0].action, "read");
+  assert.equal(env.actions[0].ideaId, "unread");
+  assert.match(env.get("detail").textContent, /Keep the full description in the inspector/);
+  const actions = env.get("detail").children.find((child) => child.className === "row").children;
+  assert.deepEqual(actions.map((item) => item.textContent), ["Keep", "Done", "Make task", "Delete"]);
+  actions[0].click(); await flush();
+  assert.equal(env.actions[1].action, "keep");
+  assert.equal(env.actions[1].ideaId, "unread");
+});
+
+test("reopening and Back measure retained cards before scrolling or restoring focus", async () => {
+  const env = environment();
+  const steps = [];
+  env.window.MefiCardLayout = { create: () => ({ refresh: (options) => { if (options.immediate) steps.push("measured"); }, stop() {} }) };
+  env.ui.open(); await flush();
+  const selected = env.get("list").querySelector("li.selected");
+  selected.focus = () => steps.push("focus");
+  selected.scrollIntoView = () => steps.push("scroll");
+  env.ui.close();
+  env.window.mefiStudio.ideasList = async () => { throw new Error("Host unavailable"); };
+  steps.length = 0;
+  env.ui.open();
+  assert.deepEqual(steps, ["measured"], "retained cards remeasure before waiting on a failed reload");
+  await flush();
+  assert.deepEqual(steps.slice(-2), ["measured", "scroll"]);
+  steps.length = 0;
+  env.get("overlay").dataset.detail = "true";
+  env.get("back").click();
+  assert.deepEqual(steps, ["measured", "focus"]);
+});

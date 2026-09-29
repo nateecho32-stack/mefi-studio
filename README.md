@@ -96,7 +96,7 @@ tasks. Open other tools from its dock and return to Vibe from the top of the rai
 Switch to **Build** for the full workspace described below; Studio remembers
 which mode you use.
 
-The **menu** down the left edge opens **Home**, **Work** and **Agents**, with section-local Back/Forward navigation. Agents contains Overview, Setup, Live, Workflows, Models and Usage. It stays open by default in wide windows; **Keep menu open** saves your preference. **Settings**, **Search** (`Ctrl K`) and **Help** stay at its foot. Help contains Start here, Shortcuts (`?`) and Community. The project selector at the top switches projects, and `Ctrl ,` opens Settings from anywhere.
+The **menu** down the left edge opens **Home**, **Work**, **Agents** and **Friends**, with section-local Back/Forward navigation for pages. Friends opens the companion's existing Friends menu; its Rooms, Your PCs and Playground links go straight to the matching card. Agents contains Overview, Setup, Live, Workflows, Models and Usage. It stays open by default in wide windows; **Keep menu open** saves your preference. **Settings**, **Search** (`Ctrl K`) and **Help** stay at its foot. Help contains Start here, Shortcuts (`?`) and Community. The project selector at the top switches projects, and `Ctrl ,` opens Settings from anywhere.
 
 ### Your workspace (`H`)
 
@@ -124,7 +124,7 @@ Every session, task and agent is a node. Agents orbit the assistant, fly to the 
 
 Settings keeps **General**, **Appearance**, **Audio** and **System**. Connections, model routing, team roles and workflow behavior now live in **Agents › Setup**. **Find a setting** searches individual controls and opens the matching category and disclosure. Connection forms and advanced options expand in place. Appearance includes Focus, Studio and Atmosphere presets and the live canvas preview. Agents and the companion share confirmed operational controls.
 
-The main menu groups the app into **Home**, **Work** and **Agents**. See [Unified Studio](docs/unified-studio.md) for team presets, configuration scope, scrollbar-free navigation and the adaptive companion.
+The main menu groups the app into **Home**, **Work**, **Agents** and **Friends**. See [Unified Studio](docs/unified-studio.md) for team presets, configuration scope, scrollbar-free navigation and the adaptive companion. The [0.4.5 scope](docs/release-scope-0.4.5.md) records what is included in the next release and what is deferred.
 A local navigation row exposes each group's tools, while **Settings**, **Search**
 and **Help** stay available. See the [interface inventory](docs/interface-remaster.md)
 for the full set of screens and interior menus.

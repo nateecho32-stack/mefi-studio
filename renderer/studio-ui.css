@@ -45,7 +45,7 @@ span.catalog-expand { width: 16px; height: 16px; }
 .studio-field { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(120px, 1fr); align-items: center; gap: 16px; padding: 8px 0; }
 .studio-history { display: flex; align-items: center; gap: 4px; padding-right: 10px; border-right: 1px solid var(--hairline); flex-shrink: 0; }
 .studio-history button { min-width: 32px; font-size: 18px; }
-/* Keep the three primary destinations in view at increased display scaling. */
+/* Keep the primary destinations in view at increased display scaling. */
 @media (max-height: 600px) {
   #app-rail { padding-block: 3px; gap: 2px; }
   #app-rail .app-rail-brand { min-height: 34px; margin-bottom: 0; padding-block: 3px; }
@@ -62,6 +62,21 @@ span.catalog-expand { width: 16px; height: 16px; }
   #app-rail .app-rail-pin { min-height: 26px; margin-top: 2px; }
   html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) :is(.app-rail-foot-item, #app-rail-foot .update-pill) { flex-direction: row; min-height: 30px; padding: 2px; }
   html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) :is(.app-rail-foot-item, #app-rail-foot .update-pill) .label { display: none; }
+}
+/* The minimum window at 150% zoom has about 373 CSS pixels of height.
+   Keep four primary tiles visible; the expanded Friends tools still scroll
+   inside the existing section list, with 28px keyboard and pointer targets. */
+@media (max-height: 440px) {
+  #app-rail .app-rail-section > .app-rail-head,
+  #app-rail:hover .app-rail-section:has(> .app-rail-children) > .app-rail-head,
+  #app-rail:has(:focus-visible) .app-rail-section:has(> .app-rail-children) > .app-rail-head,
+  html[data-rail-pinned] #app-rail .app-rail-section:has(> .app-rail-children) > .app-rail-head,
+  html[data-rail-drawer] #app-rail .app-rail-section:has(> .app-rail-children) > .app-rail-head { min-height: 28px; margin-top: 0; padding-block: 2px; gap: 0; }
+  #app-rail .app-rail-head .glyph { width: 14px; height: 14px; }
+  #app-rail .app-rail-head .app-rail-text { line-height: 1; }
+  html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-head .app-rail-text { line-height: 1; }
+  #app-rail .app-rail-friends .app-rail-item { min-height: 28px; }
+  #app-rail :is(.app-rail-compose, .app-rail-search) { margin-bottom: 0; }
 }
 .studio-style-controls { width: 100%; }
 .studio-style-choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 10px 0; }

@@ -16,7 +16,7 @@
     return !Number.isFinite(number) ? fallback : /ms$/.test(value) ? number : /s$/.test(value) ? number * 1000 : number;
   }
   const glyphSvg = (id) => `<svg class="glyph" aria-hidden="true" focusable="false"><use href="#${id}"/></svg>`;
-  const hub = { open: false, closing: false, section: null, locked: new Map(), returnFocus: null, timer: 0 };
+  const hub = { open: false, closing: false, section: null, friendTarget: null, locked: new Map(), returnFocus: null, timer: 0 };
   const el = {};
   let host, data, bootPhase, audioFrame = 0, audioAt = 0, energy = 0, wakeTimer = 0, reactionIndex = 0, chatThinking = false, anticTimer = 0, lastTouch = Date.now();
   const plays = new WeakMap();
@@ -217,6 +217,8 @@
     ["friends", "Friends", "g-orbit", "Playdates, sharing, rooms and your PCs"],
     ["settings", "Personality", "g-ambience", "How I behave, and settings"],
   ];
+  const FRIENDS_ROUTES = new Set(["friends", "rooms", "your-pcs", "playground"]);
+  const FRIENDS_TARGETS = { rooms: "rooms-title", pcs: "pc-sync-title", playground: "friends-title" };
   function icon(glyph) { const span = node("span", "agent-hub-icon"); span.innerHTML = `<svg class="glyph" aria-hidden="true"><use href="#${glyph}"/></svg>`; return span; }
   function attach(value) {
     if (host) return;
@@ -269,7 +271,7 @@
       // than being dropped; either way Studio's shortcuts never see it.
       else if (!(event.key === "Tab" || event.key === "Enter" || event.key === " " || event.key.startsWith("Arrow") || event.target?.closest?.("input, textarea, select"))) { window.MefiNav?.typeInto?.(event); event.stopPropagation(); }
     }, true);
-    window.addEventListener("mefi:nav", () => { if (hub.open) close({ immediate: true, restore: false }); });
+    window.addEventListener("mefi:nav", (event) => { if (hub.open && !FRIENDS_ROUTES.has(event.detail?.id)) close({ immediate: true, restore: false }); });
     window.addEventListener("resize", resize);
     document.addEventListener("visibilitychange", () => { el.layer.toggleAttribute("data-suspended", document.hidden); if (document.hidden) for (const creature of document.querySelectorAll(".agent-creature")) clearPlay(creature); cancelAnimationFrame(audioFrame); audioFrame = 0; if (!document.hidden && hub.open) audioFrame = requestAnimationFrame(audioTick); });
     window.addEventListener("mefi-audio-change", updateAudio);
@@ -289,9 +291,16 @@
   function otherDialog() {
     return Array.from(document.querySelectorAll('[aria-modal="true"]')).some((item) => item !== el.layer && !el.layer?.contains(item) && !item.closest("[hidden]") && item.getClientRects().length);
   }
-  function open() {
+  function open(options = {}) {
     if (!host || window.MefiBoot?.isActive?.() || otherDialog()) return false;
-    if (hub.open) { if (hub.closing) { clearTimeout(hub.timer); hub.closing = false; el.layer.classList.remove("leaving"); } return true; }
+    const section = typeof options === "string" ? options : options?.section;
+    const target = typeof options === "object" ? options?.target : null;
+    const requested = items.some(([id]) => id === section) ? section : null;
+    if (hub.open) {
+      if (hub.closing) { clearTimeout(hub.timer); hub.closing = false; el.layer.classList.remove("leaving"); }
+      if (requested) { if (hub.section === requested) focusFriend(target); else select(requested, target); }
+      return true;
+    }
     host.toggle(false); window.MefiCompanionUI?.freeze(); window.MefiSelect?.close();
     lastTouch = Date.now(); wake();
     hub.returnFocus = document.activeElement; hub.open = true; hub.closing = false;
@@ -301,13 +310,13 @@
       if (child === el.layer || ["SCRIPT", "STYLE"].includes(child.tagName) || ["studio-floats", "toast-host"].includes(child.id)) continue;
       hub.locked.set(child, child.inert); child.inert = true;
     }
-    select(null); update(data); updateAudio();
+    select(requested, target); update(data); updateAudio();
     const from = host.orb.getBoundingClientRect(), to = el.center.getBoundingClientRect();
     if (!still()) {
       el.avatar.animate([{ transform: `translate(${from.left + from.width / 2 - to.left - to.width / 2}px,${from.top + from.height / 2 - to.top - to.height / 2}px) scale(.3)`, opacity: .4 }, { transform: "translate(0,0) scale(1)", opacity: 1 }], { duration: 540, easing: "cubic-bezier(.22,1,.36,1)" });
     }
     play(el.avatar.querySelector("svg"));
-    el.center.focus({ preventScroll: true });
+    if (!requested) el.center.focus({ preventScroll: true });
     if (!document.hidden) audioFrame = requestAnimationFrame(audioTick);
     host.refresh?.();
     return true;
@@ -328,8 +337,18 @@
   }
   function navigate(action) { close({ immediate: true, restore: false }); action(); }
   function action(title, run) { return button(title, () => navigate(run), "ghost agent-hub-action"); }
-  function select(section) {
+  function focusFriend(target) {
+    hub.friendTarget = Object.hasOwn(FRIENDS_TARGETS, target) ? target : null;
+    const id = hub.friendTarget ? FRIENDS_TARGETS[hub.friendTarget] : null;
+    if (!id || !hub.open || hub.section !== "friends") return;
+    const heading = el.extra.querySelector(`#${id}`);
+    if (!heading) return;
+    heading.tabIndex = -1;
+    heading.focus({ preventScroll: true }); heading.scrollIntoView?.({ block: "start", behavior: "instant" });
+  }
+  function select(section, target = null) {
     const previous = hub.section; hub.section = section;
+    hub.friendTarget = section === "friends" && Object.hasOwn(FRIENDS_TARGETS, target) ? target : null;
     if (host.panel.parentElement === el.detail) {
       host.toggle(false); document.body.append(host.panel); host.panel.inert = hub.locked.has(host.panel) ? true : false;
       host.panel.classList.remove("companion-in-hub"); host.panel.setAttribute("role", "dialog");
@@ -366,6 +385,9 @@
       } else {
         el.extra.append(...ideas());
       }
+      // A target can sit below a delayed section transition. Focus only after
+      // its actual card exists; the same cards own all Friends entry points.
+      if (section === "friends") requestAnimationFrame(() => focusFriend(hub.friendTarget));
     };
     // The section arrives from the bubbles' side, or across from the last one,
     // which fades where it was (renderer/motion.js); without layout it just paints.
