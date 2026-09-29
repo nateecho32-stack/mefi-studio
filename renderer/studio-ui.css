@@ -107,11 +107,12 @@ span.catalog-expand { width: 16px; height: 16px; }
   --line-strong: color-mix(in srgb, var(--ivory) 28%, transparent);
   --studio-glass-blur: blur(calc(14px + var(--studio-glass) * 18px)) saturate(1.2);
   --studio-menu-blur: blur(24px) saturate(1.12);
-  /* Floating menus and the navigation shell are frosted glass you can see
-     through: a lighter tint over a strong, dimmed blur keeps their text
-     readable while the page behind still shows. Headers that sit over
-     scrolling text keep the denser --studio-menu-fill above. */
-  --studio-float-fill: color-mix(in srgb, var(--theme-panel-solid) calc(80% - var(--studio-glass) * 28%), transparent);
+  /* A floating menu is a solid surface over the page: glass shows in its
+     blur, sheen and edge, but the page's fields and cards under it must not
+     read through (they looked clickable, and where the blur did not render
+     they sat on top of the menu's own rows). The shell at rest, beside the
+     page rather than over it, keeps the lighter --studio-shell-fill. */
+  --studio-float-fill: color-mix(in srgb, var(--theme-panel-solid) calc(97% - var(--studio-glass) * 5%), transparent);
   --studio-float-blur: blur(calc(16px + var(--studio-glass) * 16px)) saturate(1.45) brightness(.88);
   --studio-float-shadow: inset 0 1px var(--studio-glass-highlight), inset 0 -1px rgb(0 0 0 / .08), 0 12px 32px -10px rgb(0 0 0 / .36), 0 2px 8px rgb(0 0 0 / .1);
   --studio-glide: color-mix(in srgb, var(--ivory) 8%, transparent);
@@ -209,6 +210,12 @@ html[data-studio-style] :is(.pop, .palette-sheet, .studio-choice-popup, .surface
 #app-rail, #app-local-nav {
   background: var(--studio-wash), var(--studio-shell-fill);
   border-color: var(--studio-glass-edge); backdrop-filter: var(--studio-float-blur);
+}
+/* Open over the page (hovered, keyboard-opened, or the narrow-window drawer),
+   the rail and the project panel are menus covering content: solid fill. */
+html:not([data-rail-pinned]) #app-rail:is(:hover, :has(:focus-visible)), html[data-rail-drawer] #app-rail,
+html[data-studio-style] #workspace-sidebar-panel.ws-sidebar {
+  background: var(--studio-wash), var(--studio-sheen), var(--studio-menu-fill);
 }
 #app-rail [aria-current=page], #app-rail .app-rail-compose {
   background: var(--studio-selection); color: var(--ivory);
@@ -418,7 +425,7 @@ body[data-media-background="true"] {
   --studio-panel-bg: color-mix(in srgb, var(--theme-panel-solid) 92%, transparent);
   --studio-menu-fill: color-mix(in srgb, var(--theme-panel-solid) 98%, transparent);
   --studio-shell-fill: color-mix(in srgb, var(--studio-reading-bg) 94%, transparent);
-  --studio-float-fill: color-mix(in srgb, var(--theme-panel-solid) 90%, transparent); --studio-float-blur: none;
+  --studio-float-fill: color-mix(in srgb, var(--theme-panel-solid) 97%, transparent); --studio-float-blur: none;
 }
 html[data-studio-style][data-no-blur] :is(.overlay, .brains-overlay, .agent-brain-overlay, .profiler-overlay):not(.workspace-page) { backdrop-filter: none; }
 html[data-studio-theme-tone=light] {

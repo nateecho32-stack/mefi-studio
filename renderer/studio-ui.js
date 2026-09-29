@@ -110,7 +110,7 @@
     return document.body.classList.contains("command-active") ? [...document.querySelectorAll(COVERED)] : [];
   }
   const resize = typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
-  function arrowPosition(button, direction, left, top, width, height) {
+  function arrowPosition(region, button, direction, left, top, width, height) {
     if (button.dataset.holding) return;
     const horizontal = direction === "left" || direction === "right";
     const fixed = horizontal ? direction === "left" ? 3 : width - 33 : direction === "up" ? 3 : height - 29;
@@ -120,9 +120,12 @@
     candidates.push(...(horizontal ? [[fixed, -28], [fixed, height + 2]] : [[-32, fixed], [width + 2, fixed]]));
     const clear = ([x, y]) => {
       if (left + x < 2 || top + y < 2 || left + x + 30 > innerWidth - 2 || top + y + 26 > innerHeight - 2) return false;
+      // The spot must show the region or the panel around it: an arrow never
+      // sits on a menu, rail or popover that covers the region (floats paint
+      // above them all), where it would take the click meant for the menu.
       return [[2, 2], [28, 2], [2, 24], [28, 24], [15, 13]].every(([dx, dy]) => {
-        const hit = document.elementsFromPoint(left + x + dx, top + y + dy).find((el) => !el.closest("#studio-floats"));
-        return hit && !hit.closest("button, a, input, textarea, select, summary, [role=button], [role=tab], [contenteditable=true]");
+        const hit = document.elementsFromPoint(left + x + dx, top + y + dy).find((node) => !node.closest("#studio-floats"));
+        return hit && (region.contains(hit) || hit.contains(region)) && !hit.closest("button, a, input, textarea, select, summary, [role=button], [role=tab], [contenteditable=true]");
       });
     };
     return candidates.find(clear);
@@ -157,8 +160,9 @@
       const active = el.matches(":hover, :focus-within") || hint.contains(document.activeElement);
       const arrows = [];
       if (active || hint.classList.contains("engaged")) for (const [direction, button] of Object.entries(buttons)) if (directions[direction]) {
-        const point = arrowPosition(button, direction, left, top, right - left, bottom - top);
-        if (point) arrows.push({ button, point });
+        // No clear spot (all of them covered) hides the arrow rather than
+        // leaving it where it last stood, which may now be under a menu.
+        arrows.push({ button, point: arrowPosition(el, button, direction, left, top, right - left, bottom - top) });
       }
       Object.assign(update, { hidden: false, left, top, width: right - left, height: bottom - top, directions, active, arrows,
         owner: el.id || el.className || el.tagName,
@@ -179,12 +183,15 @@
         if (hint.style[key] !== value) hint.style[key] = value;
       }
       if (hint.dataset.scrollOwner !== update.owner) hint.dataset.scrollOwner = update.owner;
+      const unplaced = new Set(update.arrows.filter(({ button, point }) => !point && !button.dataset.holding).map(({ button }) => button));
       for (const [direction, can] of Object.entries(update.directions)) {
-        if (buttons[direction].hidden !== !can) buttons[direction].hidden = !can;
+        const hide = !can || unplaced.has(buttons[direction]);
+        if (buttons[direction].hidden !== hide) buttons[direction].hidden = hide;
         hint.classList.toggle(`can-${direction}`, can);
       }
       hint.classList.toggle("active", update.active);
       for (const { button, point } of update.arrows) {
+        if (!point) continue;
         const style = { left: `${point[0]}px`, top: `${point[1]}px`, right: "auto", bottom: "auto" };
         for (const [key, value] of Object.entries(style)) if (button.style[key] !== value) button.style[key] = value;
       }

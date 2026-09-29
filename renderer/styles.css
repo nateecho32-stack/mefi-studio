@@ -4712,6 +4712,12 @@ html[data-shell="rail"][data-rail-pinned] { --shell-rail-w: var(--shell-rail-ope
 /* Keyboard focus opens the rail; a mouse click on an item must not hold it
    open over the page afterwards, so this is :focus-visible, not :focus-within. */
 #app-rail:hover, #app-rail:has(:focus-visible), html[data-rail-drawer] #app-rail { width: var(--shell-rail-open); box-shadow: var(--shadow-2); }
+/* The open rail blocks the pointer across its whole open width at once. The
+   width animates (and lags further when the renderer is busy); until it
+   arrives the page under the strip took clicks, and a pointer that crossed
+   past the growing edge dropped the hover and folded the menu mid-reach. */
+#app-rail::before { content: ""; position: absolute; top: 0; bottom: 0; left: 0; z-index: -1; width: 100%; }
+#app-rail:hover::before, #app-rail:has(:focus-visible)::before, html[data-rail-drawer] #app-rail::before { width: var(--shell-rail-open); }
 
 /* One button look for everything in the rail, overriding the global button
    (its border, fill, centred content and hover lift). */
@@ -4917,6 +4923,14 @@ html[data-shell="rail"] #toast-host {
 /* The rail opens over the page, and toasts paint above it: while it is open
    they step aside to its edge instead of covering its foot. */
 html[data-shell="rail"]:has(#app-rail:hover, #app-rail :focus-visible) #toast-host { left: calc(var(--shell-rail-open) + 22px); }
+/* Nothing floats over the open rail or takes a click through it. Scroll
+   arrows and select popups (#studio-floats, z 180) are cut out of the strip
+   it covers; the roaming companion, its bubble and panel, and the media
+   window drop under the shell while it is open, and come back after. */
+html[data-shell="rail"]:has(#app-rail:hover, #app-rail :focus-visible) #studio-floats,
+html[data-shell="rail"][data-rail-drawer] #studio-floats { clip-path: inset(0 0 0 var(--shell-rail-open)); }
+html[data-shell="rail"]:has(#app-rail:hover, #app-rail :focus-visible) :is(.companion-orb[data-roaming], .companion-bubble, .companion-panel, .media-window),
+html[data-shell="rail"][data-rail-drawer] :is(.companion-orb[data-roaming], .companion-bubble, .companion-panel, .media-window) { z-index: calc(var(--z-shell) - 1); }
 html[data-shell="rail"] .explorer-sheet { width: min(1460px, calc(97vw - var(--shell-rail-w))); }
 html[data-shell="rail"] .overlay .walkthrough-sheet { width: min(740px, calc(94vw - var(--shell-rail-w))); }
 /* Primary destinations fill the workspace. Temporary tools remain sheets. */

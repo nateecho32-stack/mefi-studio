@@ -630,7 +630,7 @@ html[data-ui-mode="vibe"] {
   --studio-float-shadow: inset 0 1px color-mix(in srgb, var(--ivory) 10%, transparent), 0 0 0 1px color-mix(in srgb, var(--gold) 14%, transparent), 0 30px 70px -30px rgb(0 0 0 / .8), 0 0 50px -26px color-mix(in srgb, var(--gold) 45%, transparent);
 }
 @media not (prefers-reduced-transparency: reduce) {
-  html[data-ui-mode="vibe"]:not([data-no-blur], [data-studio-material="solid"]):not(:has([data-media-background="true"])) { --studio-float-fill: color-mix(in srgb, var(--theme-panel-solid) 86%, transparent); }
+  html[data-ui-mode="vibe"]:not([data-no-blur], [data-studio-material="solid"]):not(:has([data-media-background="true"])) { --studio-float-fill: color-mix(in srgb, var(--theme-panel-solid) 94%, transparent); }
   html[data-ui-mode="vibe"]:not([data-no-blur], [data-studio-material="solid"]):not([data-studio-theme-tone="light"]):not(:has([data-media-background="true"])) { --studio-float-blur: blur(26px) saturate(1.5) brightness(.9); }
 }
 
