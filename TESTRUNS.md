@@ -35,6 +35,48 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-29 - 0.4.5 release gate (main as it is, the rebrand)
+
+Gated in an isolated worktree (`C:\wt\rel`, GitHub main `2f0488b` plus two
+commits: `77a3895` the release fixes and `c36279f` the changelog cut, release
+notes, README/public docs, SECURITY data flows and handoff), because the
+shared checkout held other sessions' unfinished edits. The release commit adds
+no renderer code, so the booklet is the one main already carried.
+
+- What the two commits change in code: the `tests/remote_host.test.mjs`
+  fixture project "Ruins Runner" became "Quillfold" (the outbound scrubber
+  turns the CI user name `runner` into "[this PC]", which had kept Linux CI red
+  on every push since the Discord remote landed; checked with the real
+  `share-review` scrub), the zip no longer copies Electron's `debug.log`, the
+  release is titled "Mefi Studio", and `tests/update_apply_launch.test.mjs` pins
+  the update helper's `start` launch that v0.4.4 lacked.
+- `npm run build-booklet` then `git diff --exit-code renderer/booklet.html`:
+  identical. `npm run check` and `npm run audit` (0 findings): PASS.
+- `npm test` on that tree (8.6 min): Node parallel stage 4478 tests (4473
+  pass, 5 skipped, 0 fail), Python contracts 248 OK (1 skipped), normalized-path
+  lock PASS. Electron stage 41: 39 pass, 1 skipped, 1 fail:
+  `media_window_render` ("Media keeps its window controls reachable"), a hit-test
+  list at 600 px (`hits` began with the music iframe) after 20 s. Solo it passed
+  twice (45 s, 47 s). `command_render` passed at 49.7 s.
+- An earlier gate of the same content on `ba5a1ea` (before the rebase onto
+  `2f0488b`) failed `command_render` once in the full run ("Command task pixels
+  must be painted", 4 s) and three times solo ("Assistant narrow: pointer
+  reaches the switch track"), all while another session was running Electron
+  captures on this laptop (2.4 GB of 13.8 GB free, 56% CPU while idle). It then
+  passed six times in a row in this tree and in fresh checkouts of clean
+  `60c4abb`, `ba5a1ea`, `2f0488b` and of the release commit itself (54-62 s).
+  Same class as the known-flaky rows: a pointer or hit-test assertion that is
+  right when the machine is quiet and wrong when a sibling Electron process
+  starves the window's paint. Neither fixture was changed.
+- Restored-work spot check (the lesson of v0.4.4, which shipped without work a
+  bad merge dropped): `renderer/config-dialog.js`, `renderer/setup-helper.js`,
+  `scripts/habits.cjs`, `scripts/cowork.cjs`, `scripts/cli-accounts.cjs`,
+  `scripts/pc-setup.cjs`, `scripts/pc-vault.cjs`, `scripts/share-review.cjs` and
+  `scripts/remote.cjs` are all in the tree.
+- Not exercised: a live in-app update (the fix is only proven in a scratch
+  simulation and by the launch pin above), and `release.yml` on a hosted runner
+  (it has failed at the Electron fixtures on v0.4.0, v0.4.3 and v0.4.4).
+
 ## 2026-09-28 - Configuration indexes the setup helper; sync catches a merge that drops another branch's work
 
 Two changes from the fleet overhaul's Phase 0 (docs/fleet-overhaul-plan.md).
@@ -618,10 +660,6 @@ a loading vault instead of staying empty.
 ## 2026-09-28 - Merge all branches: hidden-surfaces onto the restored main; Friends across PCs verified end to end; 0.4.5
 
 Surveyed every branch and tree. gh-pages is the website (no shared history; not merged). perf/quick-wins is content-identical to aef5dfe on main (skipped). worktree-* branches and the cli-path-refresh clone are already in main. The 16:57 merge (65703a6) and "fixes" (7ba162c) losses were already restored on GitHub main by dc85f68, which keeps the docked video player the other PC is developing; this merge keeps that and the fuller Friends › Rooms (4ee6891). Merged perf/hidden-surfaces (docs/performance.md kept both). Added tests/companion_e2e.test.mjs: three Studios (main's real Companion friends block and hub client, three Discord accounts) against the Void Engine Bot's real hub with its companion relay: make a room, ask, let in, play-only default, a friend rule keeping a token-bearing title home, share-back ask, mirrored playdate, stay home; 1/1 with MEFI_STUDIO_BOT_ROOT set (hub relay patch, 462/462 bot tests). Version 0.4.5. Full npm test: 4209 passed, 1 failed (command_render, known load-sensitive; passed solo in 51 s); Python contracts and path lock passed. check ok, audit 0 errors.
-
-## 2026-09-27 night - Agent loop: one loop status, approval race, launch choice
-
-`npm run test:fast` on branch `overhaul/agents-menus-main` (GitHub main `421453f` plus this change): full `npm test` green (Node 4243 tests, 4238 pass, 0 fail, 5 skipped; Python contracts pass). `npm run check` is green. New: `loop_status` (9), plus approval-race, Auto build mapping and launch-choice cases in `build_approval` and `startup_screen`; `startup_hold` and `boot_poll_visibility` updated for the resume emit and the opt-in idle switch.
 
 ## Read Before Any Tests
 
