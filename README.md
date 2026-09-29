@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.4"><img src="https://img.shields.io/badge/release-v0.4.4-D8AE65?style=flat-square" alt="Release 0.4.4"></a>
+  <a href="https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.5"><img src="https://img.shields.io/badge/release-v0.4.5-D8AE65?style=flat-square" alt="Release 0.4.5"></a>
   <a href="https://github.com/nateecho32-stack/mefi-studio/actions/workflows/ci.yml"><img src="https://github.com/nateecho32-stack/mefi-studio/actions/workflows/ci.yml/badge.svg?branch=main&style=flat-square" alt="Studio checks"></a>
   <img src="https://img.shields.io/badge/platform-Windows-0078D4?style=flat-square&logo=windows&logoColor=white" alt="Platform: Windows">
   <img src="https://img.shields.io/badge/node-24-5FA04E?style=flat-square&logo=nodedotjs&logoColor=white" alt="Node 24">
@@ -21,25 +21,39 @@
   <img src="docs/images/workspace.png" width="900" alt="The workspace: a status strip, a conversation with the companion, and the project's work queue">
 </p>
 
-**[Download 0.4.4 for Windows](https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.4)** · [Watch the 40-second showreel](https://github.com/nateecho32-stack/mefi-studio/releases/download/v0.4.2/mefi-studio-v0.4.2-discord.mp4)
+**[Download 0.4.5 for Windows](https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.5)** · [Watch the 40-second showreel](https://github.com/nateecho32-stack/mefi-studio/releases/download/v0.4.2/mefi-studio-v0.4.2-discord.mp4)
 
 **[Explore Studio](https://nateecho32-stack.github.io/mefi-studio/)** · [Join our Discord](https://discord.gg/xgfKc5pVxG) · [Read the guide](https://nateecho32-stack.github.io/mefi-studio/wiki/)
 
 Build your ideas with coding agents, share work in progress with the community, or just come hang out. Studio is a free Windows app, shaped with the people who use it.
 
-**Quick links:** [What's new](#whats-new-in-044) · [Install](#install-and-run) · [First launch](#first-launch) · [Tour](#a-short-tour) · [Keys and privacy](#keys-and-privacy) · [Community](#community--perks) · [Docs](#documentation) · [Contributing](#contributing)
+**Quick links:** [What's new](#whats-new-in-045) · [Install](#install-and-run) · [First launch](#first-launch) · [Tour](#a-short-tour) · [Keys and privacy](#keys-and-privacy) · [Community](#community--perks) · [Docs](#documentation) · [Contributing](#contributing)
 
-## What's new in 0.4.4
+## What's new in 0.4.5
 
-- **One sign-in for the studio.** Guided setup can connect a supported coding CLI account to chat, planning and building.
-- **Bigger ideas become steps.** Vibe can split a request into a short plan and checks for work done outside Studio when you return.
-- **More control.** Permission modes, explanations and Undo help you decide how agents work.
-- **Free appearance choices.** Every theme and node style is included, including the Void collection.
-- **Everyday improvements.** Compact Vibe panels, a media player and queue, PC sync through GitHub and a log viewer.
+0.4.5 is the rebrand release. **Mefi Studio** is now the public name on the website, the guide, this README and the release page, with a community-first message: bring an idea, find your people, make it together. The app itself is not renamed in this release. Its window title, About card and boot screen still say "Mefi's Studio AI+", and its executable, zip and folder names (`Mefi Studio AI+`) and its settings folder (`Mefi's Studio AI+`) keep their existing names, on purpose, so every install keeps its settings and keys.
 
-Read the [0.4.4 release notes](docs/releases/0.4.4.md) or the full
-[changelog](CHANGELOG.md). Existing portable installations can check **App updates**.
-The showreel above uses sample tasks from the earlier 0.4.2 release.
+- **One Setup helper.** A single menu holds every setting that decides what the agents do: connecting an AI (subscription logins, API keys, local servers, automatic setup), team and models, routing, permissions and the machine. It opens first on a new install and once after updating. You can add more than one Claude Code or Codex login, and work moves to the next login when one reports its usage limit.
+- **Agents say why they are not working.** Home, Vibe, the Command header and the chat assistant read one status that names what is holding work back and the one control that clears it. **When Studio opens** (Resume what I had, Start agents or Keep agents off) decides what the agents do at launch, and Command view no longer takes over after five quiet minutes unless you switch that on.
+- **Watch Mefi think.** In Vibe, **Suggest a next step** and **Build it** show a live strip of what Mefi is reading, thinking and planning, and which model is at work. Plans opens one step at a time, the Task board is calmer, and a letter typed while a menu is open goes into that menu's box.
+- **Several PCs.** **Share between my PCs** carries chosen items through a private, sealed GitHub repository, **Share with friends** saves one item to a `.mefishare` file, **Keep this PC up to date** brings in what another PC pushed within about a minute when nothing of yours is in the way, **Set up this PC** lists what a PC needs, and **Start with Windows** opens Studio in the tray when you sign in. Each PC's line in Your PCs says what its agents are doing.
+- **Rooms, Playground and the Discord remote.** Friends › Rooms, the companion as a pet and a friend with a Playground, cowork claims that keep agents on several PCs off the same file, and the Discord remote (DMs that check on your PCs) are all in the app. They need a rooms hub and a linked Discord account. The built-in hub address and Mefi Studio Link app id are empty, so they do nothing until you enter both in **Settings › Community › Connection details**; see [Setting up Friends across PCs](docs/friends-setup.md).
+- **Everything in reach.** **Configuration** (`Ctrl Shift ,`) is one searchable tree of every setting, with an Interface scale. Each agent's Habits, calmer and steadier menus and a finishing beat for every node style in the Agent brain are new too.
+- **Fixes.** Startup no longer stalls when the window is covered or parked in the tray, an ask you answered leaves the Needs you list at once, and asks whose card is gone are cleared when the project loads.
+
+Read the [0.4.5 release notes](docs/releases/0.4.5.md) or the full
+[changelog](CHANGELOG.md). The showreel above uses sample tasks from the earlier 0.4.2 release.
+
+### Updating from 0.4.4
+
+An installed 0.4.4 cannot update itself. Its update helper never ran, so the **Update** button downloads about 165 MB, Studio quits and nothing is installed. 0.4.5 carries the fix, so in-app updates work from 0.4.5 onward. To move a portable 0.4.4 to 0.4.5 by hand:
+
+1. Close Studio. Opening a second copy while it runs only brings the running one forward.
+2. Download the Windows zip from the [0.4.5 release](https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.5) and extract it to a **new** folder.
+3. Copy the old folder's `resources\app\data` into the new folder's `resources\app`. It holds your tasks, ideas, plans and conversations. The release brings its own `curated.json` and `models.json`; keep the new ones if Windows asks.
+4. Open `Mefi Studio AI+.exe` from the new folder.
+
+Settings, saved keys and the project list live in `%APPDATA%\Mefi's Studio AI+`, so they carry over on their own. Keep the old folder until you have seen your work in the new one.
 
 ## What it does
 
@@ -72,13 +86,13 @@ npm start
 
 - `npm start` needs a normal shell. If `ELECTRON_RUN_AS_NODE` is set (some agent harnesses set it), Studio refuses to start and prints the fix.
 - `Run Mefi's Studio AI+.cmd` starts the portable build when one exists in `dist/`, otherwise the source install.
-- **Portable build:** [download 0.4.4](https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.4), extract the whole folder, then open `Mefi Studio AI+.exe`. Its tasks, ideas, plans and conversations stay in its own `resources\app\data` folder. Settings, saved keys, the project list, the Discord link and resume state live in `%APPDATA%\Mefi's Studio AI+`, shared with a source install on the same Windows account, so only one of the two runs at a time: opening the other brings the running one forward.
+- **Portable build:** [download 0.4.5](https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.5), extract the whole folder, then open `Mefi Studio AI+.exe`. Its tasks, ideas, plans and conversations stay in its own `resources\app\data` folder. Settings, saved keys, the project list, the Discord link and resume state live in `%APPDATA%\Mefi's Studio AI+`, shared with a source install on the same Windows account, so only one of the two runs at a time: opening the other brings the running one forward. Coming from an installed 0.4.4? It cannot update itself: see [Updating from 0.4.4](#updating-from-044).
 - `npm run start:web` serves a browser-only preview on <http://localhost:4173>; it cannot launch workers.
 
 ## First launch
 
 1. **Choose a project** on the launch screen, then **Open studio** (agents stay off) or **Open and start agents**. Nothing runs before you choose. If a crash or a restart interrupted work in the last ten minutes, Studio skips the question, reopens that folder and restarts the agents that were running; closing the studio yourself always brings the question back.
-2. **Follow the walkthrough.** *Start here* opens on the first launch with seven short stops: scan, workspace, first map, connections, create, monitor, review. Each stop's **Walk with me** opens the real menu and highlights the control. It remembers your place.
+2. **Follow the walkthrough.** *Start here* opens on the first launch with seven short stops: scan, workspace, first map, connections, create, monitor, review. Each stop's **Walk with me** opens the real menu and highlights the control. It remembers your place. On a new install the **Setup helper** opens first; **Continue to the guided tour** starts this walkthrough, and closing the helper leaves it waiting in Start here.
 
    At Scan or First map, choose an existing Codex, Claude Code, Grok or Antigravity login, or **Install and sign in**. **Check connection**, then **Use for the whole studio** routes mapping, chat, planning, agents and coding through that account. Have an API key (z.ai, OpenCode Go or Zen, OpenRouter, a custom endpoint) or a local server (LM Studio, Ollama) instead? **I have an API key or a local model server** takes you to Connections and scans again when you return. OpenCode is optional. See [guided CLI setup](docs/cli-setup.md) for installation and account limits.
 3. **Check the connection.** A fresh install runs **auto setup** by itself on the first launch, from the keys, CLIs and local servers already on the machine, and **Settings › Connections** says what it chose. Press **Run auto setup** again after adding a key or CLI, or configure a provider there. No key yet? The catalog, manual planning and saved work all work without one.
@@ -149,11 +163,11 @@ The full feature walkthrough, in Studio's own vocabulary with a glossary, is in 
 
 The [Void Engine Discord](https://discord.gg/xgfKc5pVxG) is where people share projects, ask for feedback and hang out while they build. Unfinished ideas are welcome. Come meet **Studio**, our new Discord bot, and help shape what it becomes.
 
-**Rooms** (Friends › Rooms, on the Void Engine room service) lists your rooms and the listed ones you can join. You can **Ask to join** with a short note, or accept or decline an invite. For rooms you own, you can let requesters in or decline them, invite people by name, lock or close the room, and make new rooms (hangout or cowork, open to requests or invite-only, listed or not). Each room has its chat, shown as plain text with @names; links are never clickable. A message that does not go through stays in the box with the reason. Invites and requests waiting for you are counted on the Friends bubble. Rooms need the room service's address in the build and a linked Discord account; until then the panel says what is missing.
+**Rooms** (Friends › Rooms, on the Void Engine room service) lists your rooms and the listed ones you can join. You can **Ask to join** with a short note, or accept or decline an invite. For rooms you own, you can let requesters in or decline them, invite people by name, lock or close the room, and make new rooms (hangout or cowork, open to requests or invite-only, listed or not). Each room has its chat, shown as plain text with @names; links are never clickable. A message that does not go through stays in the box with the reason. Invites and requests waiting for you are counted on the Friends bubble. Rooms need a rooms hub and a linked Discord account. Studio has neither the hub's address nor the Mefi Studio Link app id built in: enter both in **Settings › Community › Connection details** on each PC ([setup guide](docs/friends-setup.md)); until then the panel says what is missing.
 
-Every theme and node style is free in 0.4.4, including the Void collection. Discord membership is optional.
+Every theme and node style is free, including the Void collection. Discord membership is optional.
 
-Shared watch-and-listen rooms in the desktop app are still rolling out and need a configured rooms hub and Discord connection. The personal media player is available now. In-app cowork rooms and an optional **“Hey Studio”** voice popup are future ideas, not features included in 0.4.4.
+Rooms, Friends › Playground, Listen together, cowork claims for agents and the Discord remote all depend on that hub and a linked Discord account, so they do nothing until each PC has both values above. The Playground also needs a hub that carries the companion relay, and the Discord remote a hub with the remote turned on ([docs/remote.md](docs/remote.md)). The personal media player works without either. An optional **“Hey Studio”** voice popup is only a proposal and is not in 0.4.5.
 
 The [community guide](https://nateecho32-stack.github.io/mefi-studio/wiki/#/community) explains what's available. [Public site and voice direction](docs/public-site.md) records the website's location, public naming and proposed voice integration.
 
@@ -180,7 +194,7 @@ Claude Code sessions and local branches stay on the PC that made them. Anything 
 - **Keys and setup** are separate and strict. The screen says in capitals that you are sharing keys and setup information that can be stolen, you type the confirmation exactly, and Windows asks once more. On the other PC they are saved straight into protected storage and never shown. Take them out of the vault once your PCs have them, and replace a key at its provider if you think it leaked.
 - **Your PCs list** shows each paired PC, when it last synced, and what waits on it per project.
 - **Keep this PC up to date** (on by default) asks GitHub every minute whether another PC pushed, and fast-forwards when this PC has nothing of its own in the way and no builder is running.
-- **Agents on several PCs** coordinate through a cowork room linked to the project (Friends › Rooms): builders claim the files they will edit, every PC sees the claim within a second, and a task whose files another PC holds waits. Claims are held until the work is pushed.
+- **Agents on several PCs** coordinate through a cowork room linked to the project (Friends › Rooms): builders claim the files they will edit, every PC sees the claim within a second, and a task whose files another PC holds waits. Claims are held until the work is pushed. This needs the rooms hub and a Discord link (see Community); with no room, hub or link, nothing waits.
 
 **Share with friends** saves one item (a brain, a recipe, a team setup, model results, a memory note or your preferences) to a `.mefishare` file you send however you like. Studio removes paths, user and PC names, emails, addresses and the repository name, refuses anything with a secret in it, and shows you exactly what the file holds first. Opening a friend's file runs the same review; a risky one is kept out, and a clean one goes to your library for you to use.
 
@@ -208,7 +222,7 @@ npm run audit            # renderer/template contract audit
 | [docs/community.md](docs/community.md) | The Void Engine Discord link: the weekly card, the login, what is stored, unlinking and the fork switch |
 | [docs/remote.md](docs/remote.md) | Reach your PCs from Discord: what a DM can and cannot do, the PIN, alerts, and the hub protocol |
 | [docs/ux-audit.md](docs/ux-audit.md) | The UX audit and its phased plan |
-| [docs/fleet-overhaul-plan.md](docs/fleet-overhaul-plan.md) | The fleet overhaul: seats, pods, missions and Refocus from OpenRig, Live › Fleet, and the phase plan |
+| [docs/fleet-overhaul-plan.md](docs/fleet-overhaul-plan.md) | The fleet overhaul: seats, pods, missions and Refocus from OpenRig, Live › Fleet, and the phase plan. Not in 0.4.5: main has only the host model, and the Fleet view does not exist yet |
 | [docs/pi-provider-storage.md](docs/pi-provider-storage.md) | How pi's coding agent stores provider config, and the settings/auth split Studio adopted from it |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Check gates, test-file rules, parallel-session etiquette |
 | [SECURITY.md](SECURITY.md) · [CHANGELOG.md](CHANGELOG.md) | Reporting and what changed |

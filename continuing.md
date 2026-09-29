@@ -1,7 +1,9 @@
-# Continuing: handoff (2026-09-28, afternoon)
+# Continuing: handoff (2026-09-28, evening)
 
-Twelve things are open:
-1. **The 0.4.5 build.** It started today and paused at about 13:10, when the account hit its usage limit (it resets at 2:10 pm Central). The work is partial and uncommitted, in worktrees on this PC only.
+**0.4.5 is being released from `main` on 2026-09-28.** The owner asked to get it up as the rebrand release (the public name is Mefi Studio; the app's own window and files keep their names so settings carry over), and it ships `main` as it is. The tag `v0.4.5` goes on a gated commit, and anything pushed to `main` after that is 0.4.6. If you push from another PC, and the owner's `EchoNateRez` PC does: fetch and rebase before every push, put new CHANGELOG lines under `## [Unreleased]` above `[0.4.5]`, and leave the `[0.4.5]` section, `docs/releases/0.4.5.md` and the version in `package.json` alone until the tag exists.
+
+Fourteen things are open:
+1. **The 0.4.6 build (the plan that used to hold 0.4.5).** Agents send only what's new, logging, load times and Friends 2.0 moved to 0.4.6 when the owner chose to ship `main` as 0.4.5. It started today and paused at about 13:10, when the account hit its usage limit. The work is partial and uncommitted, in worktrees on this PC only (section 1).
 2. **Home PCs that keep working, and reaching them from Discord** (the co-work session). Start with Windows, the Your PCs agent lines and the Studio side of the Discord remote are on main. The bot side is parked as `wip/remote-dms`. The end-to-end test, the owner's setup and subscriptions-first routing are left (section 2).
 3. **Menu Batch 3.** This is the owner's decision, unchanged (section 3).
 4. **The website rebuild** (the "Continuing fixes" session). It is parked on the pushed branch `wip/site-rebuild` and is not published: the build agents hit the same usage limit (section 4).
@@ -13,8 +15,10 @@ Twelve things are open:
 10. **Void Engine Bot: fun, memory, release pings and model drops** (the "Discord community perks and verification" session). Built and mostly wired, parked on the bot's pushed branch `wip/bot-fun-memory` with 8 seam tests failing. The end-to-end test, a review and landing are left, and three sessions wait on it (section 10).
 11. **The launch screen, a welcome-back hub and a clean reload** (the "App loading screen animation" session). The plan is approved and no code is written: a project constellation that morphs into the studio, a full-screen hub after 10 minutes away, and a quiet emblem on reload. It owns the boot fade and release (C3); the "Build 4.5 roadmap" session owns the gate steps (section 11).
 12. **Agent Brain: child sessions on the Command tree.** The finish beats are on main. The Command-tree work, sub-agents and their return path, is built and gated in `C:\wt\cmd-kids` but uncommitted, waiting for the owner's OK to land (section 12).
+13. **The fleet overhaul** (the owner's other PC, which pushes straight to `main`). Phase 1, the host model, is on main; Live › Fleet and the later phases are next (section 13).
+14. **Findings from the 0.4.5 paperwork.** Small bugs and wording problems found while fact-checking the release docs; fix them in 0.4.6 (section 14).
 
-## 1. 0.4.5: agents send only what's new, logging, load times, Friends 2.0
+## 1. 0.4.6: agents send only what's new, logging, load times, Friends 2.0
 
 **Plan.** The owner approved it on 2026-09-28. The full text is at `C:\Users\echor\.claude\plans\enumerated-hugging-fern.md` on this PC; it isn't in Git. Its sections:
 - A: agent send and receive
@@ -30,14 +34,14 @@ Twelve things are open:
 - K: verification
 
 The owner's decisions:
-- **Hold the 0.4.5 tag** until A–D land.
+- **0.4.5 no longer waits for A–D.** On 2026-09-28 the owner asked to get 0.4.5 up as the rebrand release, so it ships `main` as it is. A–D and the commit skill (E) are the plan for 0.4.6. Their slices below were built for 0.4.5 and none is on `main`.
 - **Agents' older history** defaults to the whole project (`agentTools[role].history`).
 - **Old logs are archived and all kept,** in a local folder OneDrive doesn't sync.
 - **The hub** stays on the owner's PC, portable, and holds a YouTube Data API key.
 - **Same Wi-Fi connects automatically,** plus signed invite links and guest passes. Guest passes may slip to 0.4.6.
 - **A closed room's Discord thread** is deleted 7 days after the room closes, unless a report is open.
 - **The tool bridge** is roadmap only.
-- **Linux** is ported after 0.4.5.
+- **Linux** is ported after 0.4.5 (so 0.4.6 at the earliest).
 
 ### Where each slice stands
 
@@ -1038,3 +1042,26 @@ their own CHANGELOG and TESTRUNS entries. Then rebuild
 `renderer/booklet.html` and rerun the gate. The `idle.js` calls need no
 change: the hooks keep their signatures, and their tails now fade at the
 end of the window the frame gives them.
+
+## 13. The fleet overhaul (the owner's other PC)
+
+The `EchoNateRez` PC runs its own agent on `docs/fleet-overhaul-plan.md`: seats, pods and wires for every agent, then Live › Fleet and the plan's other phases. It pushes straight to `main` after gating in its own clone. Phase 1, the host model, is on main (`5438f6d` and `8a3dd13`, with its gate row in TESTRUNS.md): `scripts/fleet.cjs`, `scripts/fleet-host.cjs`, five guarded hooks in `main.cjs`, four `fleet:*` calls and the preload methods. It has no renderer, so nothing shows yet, and its clone had no Electron, so the Electron suites were skipped there; the 0.4.5 release gate runs them on the merged tree. It ships in 0.4.5 as groundwork only. Phase 2 (Live › Fleet) is next.
+
+No message channel reaches that PC: GitHub `main` is the only shared state. Read `git log` for what it did, fetch before you push, and expect its pushes to land at any time. If you edit `main.cjs`, `preload.cjs`, `tests/module_purity.test.mjs` or `TESTRUNS.md`, rebase with care.
+
+Remove this section when the fleet plan is done.
+
+## 14. Findings from the 0.4.5 paperwork
+
+Found by reading the code while fact-checking the 0.4.5 release notes and `SECURITY.md`. None blocked the release; each was documented or left as it was. Check each still holds before fixing it.
+- **The Discord remote can go silent.** `renderer/together.js` calls `hubDisconnect()` (about lines 131 and 350) when the Listen together room is cleared and Share is off. `client.disconnect()` sets `remote = null`, and nothing re-sends `setRemote`, so `remoteLook` sees the remote as off until a relaunch or a Settings toggle. Needs a test, then a fix.
+- **The vault status line always says risk 0.** `main.cjs` `vaultHeartbeat` reads `Array.isArray(result?.risk) ? result.risk.length : 0`, but `sync()` returns `risk` as a number.
+- **UI copy says Studio never sees your GitHub token, but it sends it.** `scripts/pc-setup.cjs` says so; `main.cjs` `resolveGithubToken` reads `gh auth token` and sends it as a Bearer token to `api.github.com` on every 20-minute release check and on asset downloads, even for a public repo. Reword the copy, or send the token only after a tokenless request fails.
+- **Keys and setup can share exported variables.** It offers whatever `decryptKey` resolves, including `GH_TOKEN`, `GITHUB_TOKEN` and `OPENROUTER_API_KEY` from the environment, which conflicts with the `credentials.cjs` rule that an exported variable never beats a saved key. Consider limiting the shelf to saved keys.
+- **Cowork claims send the task title and repo-relative paths unscrubbed** to every member of the room. `SECURITY.md` says so. Consider a warning in the UI or a scrubbed title.
+- **The vault's plaintext metadata is not obvious.** Commit messages carry `os.hostname()`, and file names carry slugs of preset, idea and memory-note names. Consider hashed ids and neutral commit messages.
+- **Smaller wording problems.** `shareReview.explain` labels warn-level findings "Removed" while `shareOpen` keeps and previews the unscrubbed text. `scripts/cowork.cjs` says the machine id is "never shared" but sends it in claims and `remoteHello`. `vaultRun` and `sync.mjs` pass the full `process.env` to `git` and `gh`.
+- **`SECURITY.md` says the release carries no built-in hub address or link app id.** That is true at the 0.4.5 cut. If either `HUB_URL` (`scripts/hub-client.cjs`) or `CLIENT_ID` (`scripts/community.cjs`) is filled in later, update `SECURITY.md`, `docs/friends-setup.md` and the release notes.
+- **The first live in-app update is untested.** The start-launched helper fix has only been proven in a scratch simulation and is pinned by `tests/update_apply_launch.test.mjs`. Update from 0.4.5 to the next release on a spare copy and check that it installs.
+
+Remove this section when each item is fixed or dropped.

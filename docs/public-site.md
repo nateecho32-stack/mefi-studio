@@ -2,15 +2,21 @@
 
 The public name is **Mefi Studio**. The desktop package, executable, launcher and application identity retain their existing names so installed settings and update assets continue to work.
 
+In 0.4.5 the rebrand covers the site, guide, README, docs and the GitHub release title. What the app shows about itself does not change: its window title, page title, boot and About cards and tray tooltip still say "Mefi's Studio AI+", the settings identity is unchanged, and the executable, zip and folder names stay `Mefi Studio AI+`. Do not describe the app's own screens as renamed, and do not rename identifiers.
+
 ## Website and guide
 
 [The website](https://nateecho32-stack.github.io/mefi-studio/) and [guide](https://nateecho32-stack.github.io/mefi-studio/wiki/) are published from the root of this repository's **gh-pages** branch. That branch has a separate history from the application on **main**. Edit the published branch, not an old local `website/` folder. GitHub Pages is configured to publish it automatically.
 
-The community refresh is commit `3fdf4b903ac9b4f47cbbfafe79b109bc6312949e` on gh-pages. It updates the landing page, community page, public name and link previews; rewrites the 21 existing guide pages for 0.4.4; and adds a media/community page. Download assets retain their actual filenames.
+The community refresh made while 0.4.4 was current is commit `3fdf4b903ac9b4f47cbbfafe79b109bc6312949e` on gh-pages. It updated the landing page, community page, public name and link previews, rewrote the 21 existing guide pages for 0.4.4, and added a media/community page. Version-specific copy (download links, What's new, guide notes) is updated on gh-pages with each release, so a newer commit there may supersede this one. Download assets retain their actual filenames.
 
 The share image is `assets/studio-community-card.jpg`, with editable HTML/CSS alongside it. Use a new filename when replacing it so sharing services can distinguish the asset. Existing shared cards can remain cached by the service that displays them.
 
-Current positioning: share ideas and work in progress in Discord, build with coding agents on your desktop, and help shape the project. The Discord bot is an external project. Shared desktop playback needs the rooms hub and Discord connection; cowork rooms and voice activation are future work. Do not advertise those future features as part of 0.4.4.
+Current positioning: share ideas and work in progress in Discord, build with coding agents on your desktop, and help shape the project. The Discord bot is an external project.
+
+Rooms, Friends › Playground, Listen together, cowork claims for agents on several PCs and the Discord remote are in the desktop app in 0.4.5, but each needs a rooms hub and a linked Discord account. The built-in hub address and Mefi Studio Link app id are empty, so each PC enters them in Settings › Community › Connection details. Say so wherever these are advertised, and do not present them as working out of the box.
+
+Do not advertise as part of 0.4.5 what moved to the next version: agents sending only what is new and the work journal, the logging rework, launch-time work, Friends 2.0 (lobby, fair shared-video queue, invite links, same-Wi-Fi discovery, tree sharing), the commit skill, the Command-tree sub-agent view, Vibe as the social mode, Build as a coding-agent desktop and the Fleet view (its host model is on main, but no Fleet screen exists yet). Voice activation (“Hey Studio”) is not implemented either; it is the proposal below.
 
 ## Proposed voice flow
 
