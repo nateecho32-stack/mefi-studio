@@ -35,6 +35,69 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-29 - Live > Fleet, the branches view (fleet overhaul Phase 2)
+
+Phase 2 of docs/fleet-overhaul-plan.md: the Fleet page under Agents > Live
+(`renderer/fleet.js`, `fleet-layout.js`, `fleet.css`: an explorer, Graph,
+Table, Recent, Tree, Health and a seat inspector), the three host changes an
+independent review of it asked for (an idle seat names its last run, Stop names
+the run it means, titles lose bidi marks) and `tools/verify_fleet.cjs`, a check
+of the real app. Gated in a clone (`.claude/worktrees/fleet-gate`, the fleet
+branch with Electron copied in so the render suites run), because the shared
+checkout carried other sessions' edits.
+
+- `npm run check` and `npm run audit` (0 findings): PASS. ESLint (the project's
+  flat config, on the changed files): 0 errors; the two warnings already on
+  main stay.
+- `npm run test:fast` on the final tree: PASS, 4511 pass, 0 fail, 5 skipped
+  (39 new since the Configuration and sync-guard gate: `fleet_layout` 11,
+  `fleet_ui` 25, `fleet` 2, `fleet_host` 1).
+- The review: a read-only subagent read the first version of the renderer and
+  found 7 bugs (the inspector was rebuilt on every push and took an armed Stop
+  with it; an idle seat offered no Open task; a click on the table's Stop also
+  selected the row and slid the drawer over it; quiet-run and ask-wait signals
+  never refreshed on a quiet fleet; a project switch left the old team
+  clickable and a stale read could beat the new one; an error line stuck; a page
+  opened on a seat never read its runs), 4 keyboard problems, 2 CSS problems and
+  a bidi risk in titles. All are fixed. Every fix has a test that fails on the
+  first version, and the Electron fixture fails on it too (a push destroyed the
+  armed Stop).
+- `npm test` with the Electron lane, run before the last test fix: Python
+  contracts (248 tests, 52 s) and the normalized-path lock PASS; Node suites
+  FAIL on two suites (577 s), both timing. `fleet_host` ("a project that is not
+  open is never pushed"): the test waited 25 event-loop turns for a file read,
+  which a loaded machine outran; reproduced by delaying every read 120 ms, fixed
+  by waiting for the host's own read and writes (8 of 8 runs under CPU load).
+  `planning_render` timed out waiting for the Plans field's focus ring under
+  load; it passes alone (twice in a row) and failed the same way in the previous
+  gate, before any Fleet page existed.
+- The final tree, quiet machine: the whole Electron lane at width two (42
+  tests, 41 pass, 0 fail, 1 skipped, 297 s: `fleet_render` 24 s,
+  `planning_render` and `tree_dynamics_render` both pass) and the three
+  serialized Electron suites (4 tests, 3 pass, 0 fail, 1 skipped:
+  `occlusion_probe` is capability-gated as documented, and `command_render`
+  passes with the Fleet route, 53 s).
+- The real app: `node_modules/.bin/electron tools/verify_fleet.cjs` boots
+  main.cjs in smoke mode on a throwaway profile and drives the page through the
+  real preload, handlers and fleet host: PASS, 10 steps (snapshot with no
+  project open, the first push after the watch, five views, the inspector, seat
+  and action replies, the lease returned on close, no console errors).
+- Real events: this PC's two recorded work-event streams (59 and 246 events
+  from real runs) replayed through the fleet reducer with nothing thrown; the
+  larger gives 14 builder runs over the builder seats (14 claimed, 9 completed,
+  5 failed rows) and one desk ask that escalated to you (Health: escalated).
+- Not done: a live builder run seen in the page. It needs an AI CLI signed in on
+  a real project, so the plan's end-to-end step stays open for the first real
+  run.
+- Rebased onto GitHub main `2f0488b` (another PC's task-board and menu-typing
+  change) before the push: check, audit, the fast lane (4511 pass, 0 fail), the
+  serialized Electron suites and the real-app check pass again. The Electron
+  lane has two failures that are not this change. `media_browser_render` ("page
+  visible": the embedded browser view reports 0x0 bounds) fails 3 of 3 runs on
+  GitHub main alone as well and passed once at 12 s, so it depends on this
+  desktop's state at the moment; `media_window_render` failed once under the
+  lane and passes alone (3 of 3 in a row).
+
 ## 2026-09-28 - Configuration indexes the setup helper; sync catches a merge that drops another branch's work
 
 Two changes from the fleet overhaul's Phase 0 (docs/fleet-overhaul-plan.md).
@@ -618,10 +681,6 @@ a loading vault instead of staying empty.
 ## 2026-09-28 - Merge all branches: hidden-surfaces onto the restored main; Friends across PCs verified end to end; 0.4.5
 
 Surveyed every branch and tree. gh-pages is the website (no shared history; not merged). perf/quick-wins is content-identical to aef5dfe on main (skipped). worktree-* branches and the cli-path-refresh clone are already in main. The 16:57 merge (65703a6) and "fixes" (7ba162c) losses were already restored on GitHub main by dc85f68, which keeps the docked video player the other PC is developing; this merge keeps that and the fuller Friends › Rooms (4ee6891). Merged perf/hidden-surfaces (docs/performance.md kept both). Added tests/companion_e2e.test.mjs: three Studios (main's real Companion friends block and hub client, three Discord accounts) against the Void Engine Bot's real hub with its companion relay: make a room, ask, let in, play-only default, a friend rule keeping a token-bearing title home, share-back ask, mirrored playdate, stay home; 1/1 with MEFI_STUDIO_BOT_ROOT set (hub relay patch, 462/462 bot tests). Version 0.4.5. Full npm test: 4209 passed, 1 failed (command_render, known load-sensitive; passed solo in 51 s); Python contracts and path lock passed. check ok, audit 0 errors.
-
-## 2026-09-27 night - Agent loop: one loop status, approval race, launch choice
-
-`npm run test:fast` on branch `overhaul/agents-menus-main` (GitHub main `421453f` plus this change): full `npm test` green (Node 4243 tests, 4238 pass, 0 fail, 5 skipped; Python contracts pass). `npm run check` is green. New: `loop_status` (9), plus approval-race, Auto build mapping and launch-choice cases in `build_approval` and `startup_screen`; `startup_hold` and `boot_poll_visibility` updated for the resume emit and the opt-in idle switch.
 
 ## Read Before Any Tests
 
