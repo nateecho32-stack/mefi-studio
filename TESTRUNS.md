@@ -35,6 +35,35 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-29 - Stamped executable and SignPath-ready release workflow
+
+The portable `Mefi Studio AI+.exe` gets Studio's name, version, copyright and
+icon (`scripts/stamp-exe.mjs`, `resedit` 3.1.0 as a dev dependency) in place
+of Electron's, and `release.yml` gains a smoke launch of the packaged app, a
+`gate: hosted` choice for hand-started runs, and SignPath signing that stays
+off until the repository variables exist (docs/code-signing.md). Gated in a
+detached worktree (`C:\wt\sign`, origin/main 10c6b97 plus this change,
+node_modules junctioned).
+
+- `npm run check` and `npm run audit` (0 findings): PASS.
+- `npm run test:fast`: PASS, 4511 pass, 0 fail, 5 skipped. The two packaging
+  suites read files from Electron's dist folder, so they sit in the heavy
+  lane; run directly: `stamp_exe` (6 new) and `package_privacy` PASS, 7 of 7.
+- Python contracts (248 tests, 1 skipped) and the normalized-path lock: PASS.
+- A real `node scripts/package-portable.mjs --release`: Windows reads the
+  stamped exe as ProductName and FileDescription "Mefi's Studio AI+", version
+  0.4.5.0, Studio's icon, unsigned. A copy launched with `--smoke` and a
+  scratch `--user-data-dir` exited 0 with the `[smoke]` line (39 cards). The
+  release folder kept only curated.json and models.json in its data folder.
+- The workflow's PowerShell steps, rehearsed locally under Windows PowerShell
+  5.1: the folder lookup and smoke launch pass; the signature check refuses
+  an unsigned file and a file whose product name and version differ. The
+  YAML parses. The SignPath steps themselves cannot run until the project is
+  accepted.
+- Not run: the 25 Electron render suites. The laptop had 0.9 GB free with
+  other sessions' Electron processes open, and this change touches neither
+  the renderer nor main.cjs.
+
 ## 2026-09-29 - Live > Fleet, the branches view (fleet overhaul Phase 2)
 
 Phase 2 of docs/fleet-overhaul-plan.md: the Fleet page under Agents > Live
@@ -677,10 +706,6 @@ a loading vault instead of staying empty.
   4248 passed, 5 skipped, 0 failures; Electron stage 42 tests, 41 passed, 1
   skipped; `eyes_toggle_electron` 1/1; `occlusion_probe` 1 passed, 1
   capability skip; Python contracts OK; normalized-path lock passed.
-
-## 2026-09-28 - Merge all branches: hidden-surfaces onto the restored main; Friends across PCs verified end to end; 0.4.5
-
-Surveyed every branch and tree. gh-pages is the website (no shared history; not merged). perf/quick-wins is content-identical to aef5dfe on main (skipped). worktree-* branches and the cli-path-refresh clone are already in main. The 16:57 merge (65703a6) and "fixes" (7ba162c) losses were already restored on GitHub main by dc85f68, which keeps the docked video player the other PC is developing; this merge keeps that and the fuller Friends › Rooms (4ee6891). Merged perf/hidden-surfaces (docs/performance.md kept both). Added tests/companion_e2e.test.mjs: three Studios (main's real Companion friends block and hub client, three Discord accounts) against the Void Engine Bot's real hub with its companion relay: make a room, ask, let in, play-only default, a friend rule keeping a token-bearing title home, share-back ask, mirrored playdate, stay home; 1/1 with MEFI_STUDIO_BOT_ROOT set (hub relay patch, 462/462 bot tests). Version 0.4.5. Full npm test: 4209 passed, 1 failed (command_render, known load-sensitive; passed solo in 51 s); Python contracts and path lock passed. check ok, audit 0 errors.
 
 ## Read Before Any Tests
 
