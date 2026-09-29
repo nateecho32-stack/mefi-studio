@@ -214,7 +214,9 @@ every append. `serve.mjs` serves `npm run start:web`.
 binary, which Electron 44 no longer downloads on install (skipped on CI and
 without devDependencies).
 `package-portable.mjs`, `package-release.mjs` and `make-icon.mjs` build
-releases, while `updater.mjs` (live source updates) and `release-updater.mjs`
+releases; `stamp-exe.mjs` gives the packaged executable Studio's name,
+version and icon in place of Electron's before it is signed
+([code-signing.md](code-signing.md)). Meanwhile `updater.mjs` (live source updates) and `release-updater.mjs`
 (GitHub releases) keep installed copies current.
 
 ## `renderer/` — classic scripts inlined into one HTML file

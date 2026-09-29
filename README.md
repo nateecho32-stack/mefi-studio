@@ -239,6 +239,14 @@ dashboard's Discord sign-in and setup wizard to connect the bot to a server.
 Rebuild the portable desktop app with `npm run package` after Studio source
 changes.
 
+## Code signing
+
+Releases so far are unsigned, so Windows SmartScreen asks before the first
+launch: **More info**, then **Run anyway**. Studio is moving to free code
+signing from the SignPath Foundation. The policy, including what gets signed,
+who approves it and what Studio sends over the network, is in
+[docs/code-signing.md](docs/code-signing.md).
+
 ## License
 
 [MIT](LICENSE) © 2026 MefiMaxi
