@@ -7,6 +7,18 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Build's Home can list your tasks like sessions, in a coding-agent desktop
+  layout (off by default).** Search › Switch Home layout turns it on. The menu
+  lists this project's tasks the way the Claude Code and Codex desktop apps list
+  sessions (Chat with Mefi, Pinned, Needs you, Working, then by day). The page
+  opens on a greeting card that counts what has been built here (tasks, runs,
+  tokens, active days, peak hour, top model and a heat map of the last twenty
+  weeks) over the composer, with chips for the project, its branch, the
+  permission mode, the coding worker and **Worktree**. A task opens as a session
+  with its brief, runs, checks and a Note / Ask / Change composer, and Activity,
+  Preview, Queue and Status become panes that dock beside the page or pop out as
+  windows. The composer stays on one line at 1920 wide and the Permissions menu
+  is no longer cut off.
 - **Tree brightness is much lighter on the graphics card.** Command, Home and
   Vibe paint brightened nodes and lines once per pass instead of once per shape
   (on the owner's laptop at 200%: Vibe 4.6 to 42 fps, Command 8.8 to 36, Home 4.1

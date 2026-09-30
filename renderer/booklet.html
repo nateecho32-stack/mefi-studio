@@ -83337,7 +83337,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 // turns it off for a launch. Diagnostic launches (?smoke=1, ?capture=1) also
 // fall back to the classic Home, so the render fixtures see the page they were
 // written for. Under the classic layout this module wires nothing at all: no
-// listener, timer or frame, no stored key, and no change to the page.
+// listener, timer or frame, no stored key, no host call and no change to the
+// page. The one thing it registers is Search's "Switch Home layout", the way in.
 //
 // Workspace (workspace.js) still owns Home's data, its composer and every
 // host call it made; this module reads its snapshot, adds the session's own
