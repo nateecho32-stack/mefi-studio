@@ -4928,6 +4928,7 @@ const OUTCOME_IGNORED = [
   [/^provider unavailable\b/i, "provider unavailable"],
   [/^worker never started\b/, "worker never started"],
   [/^stopped on request\b/, "stopped on request"],
+  [/^stopped at the time limit\b/, "stopped at the time limit"],
   [/^Studio resumed interrupted work\b/, "resumed after a restart"],
   [/^autopilot run lost — reopened\b/, "run lost"],
 ];

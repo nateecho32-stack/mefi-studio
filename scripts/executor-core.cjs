@@ -418,7 +418,12 @@ function settleAttemptRow(task, outcome, { now, maxHandoffs, startGrace, clip })
       delete row.pin;
       delete row.pinAt;
     }
-    executorResume.appendLog(row, `stopped on request (${run.sawDone ? "run had reported done" : "unfinished"}) — progress saved; ${run.ownerHold && !run.resumeRequested ? "held for you" : "ready to resume"}`, { at: now });
+    // A run that hit its per-task time limit (task-cap.cjs) is stopped the same way and says why.
+    const limited = Number.isFinite(run.capStop?.minutes) ? run.capStop.minutes : null;
+    const held = run.ownerHold && !run.resumeRequested ? "held for you" : "ready to resume";
+    executorResume.appendLog(row, limited === null
+      ? `stopped on request (${run.sawDone ? "run had reported done" : "unfinished"}) — progress saved; ${held}`
+      : `stopped at the time limit (${limited} min) (${run.sawDone ? "run had reported done" : "unfinished"}) — progress saved, nothing failed; ${held}`, { at: now });
   } else if (branch === "start-kill") {
     // No session, no output, killed by the start watchdog: the runner failed,
     // not the brief, so no attempt is charged. Start kills are counted apart,
@@ -545,6 +550,8 @@ function finishLogRecord({ run, job, ok, code, errorMessage = null, userStop = f
     code: code ?? null,
     error: errorMessage ? String(errorMessage).slice(0, 200) : null,
     stopped: userStop || undefined,
+    // Stopped at the per-task time limit: how long the limit was (task-cap.cjs).
+    ...(userStop && Number.isFinite(run.capStop?.minutes) ? { limitMinutes: run.capStop.minutes } : {}),
     sawDone: run.sawDone === true,
     spoke: run.spoke === true,
     startKilled: run.startKilled === true || undefined,

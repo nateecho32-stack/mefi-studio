@@ -3339,6 +3339,20 @@ html[data-no-blur] {
 .task-dependency-option > span { min-width: 0; overflow-wrap: anywhere; font-size: 12px; line-height: 1.5; }
 .task-dependency-option small { font-size: 10px; color: var(--muted); margin-left: auto; flex-shrink: 0; }
 .task-handoff-text { white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.75 var(--font-ui); color: var(--ivory); max-height: 320px; overflow-y: auto; background: var(--bg); border: 1px solid var(--hairline); padding: 12px; border-radius: 6px; }
+/* Usage & limit (renderer/tasks.js): this attempt, the whole task and the time limit, as small cards inside the fold. */
+.task-usage-card { padding: 11px 0 4px; border-top: 1px solid var(--hairline); }
+.task-usage-card > h4 { display: inline-block; margin: 0 8px 6px 0; color: var(--ivory); font-size: 12.5px; font-weight: 650; }
+.task-usage-tag { color: var(--muted); font-size: 12px; }
+.task-usage-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 3px 0; font-size: 13px; }
+.task-usage-row > span { color: var(--muted); }
+.task-usage-row > b { color: var(--ivory); font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+.task-usage-row > b[data-tone="dim"] { color: var(--muted); font-weight: 500; }
+.task-usage-limit { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.task-usage-limit > div:first-child { display: grid; gap: 2px; min-width: 0; }
+.task-usage-limit > div:first-child > b { color: var(--ivory); font-size: 13px; font-weight: 600; }
+.task-usage-limit > div:first-child > span { color: var(--muted); font-size: 12px; }
+.task-usage-stepper { display: inline-flex; align-items: center; gap: 8px; }
+.task-usage-stepper > b { min-width: 62px; color: var(--ivory); font-size: 13px; text-align: center; }
 .task-history-entry { padding: 13px 0; border-top: 1px solid var(--hairline); }
 .task-history-entry > strong { display: block; color: var(--ivory); font-size: 12px; line-height: 1.6; margin-bottom: 7px; }
 .task-history-preview { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); font-size: 12px; line-height: 1.65; max-height: 160px; overflow-y: auto; }

@@ -132,4 +132,4 @@ function validate(value) {
   }
   return null;
 }
-module.exports = { catalog, instructions, validate, rulesState, readRuleFile };
+module.exports = { catalog, inventory, instructions, validate, rulesState, readRuleFile };

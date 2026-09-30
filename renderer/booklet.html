@@ -3349,6 +3349,20 @@ html[data-no-blur] {
 .task-dependency-option > span { min-width: 0; overflow-wrap: anywhere; font-size: 12px; line-height: 1.5; }
 .task-dependency-option small { font-size: 10px; color: var(--muted); margin-left: auto; flex-shrink: 0; }
 .task-handoff-text { white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.75 var(--font-ui); color: var(--ivory); max-height: 320px; overflow-y: auto; background: var(--bg); border: 1px solid var(--hairline); padding: 12px; border-radius: 6px; }
+/* Usage & limit (renderer/tasks.js): this attempt, the whole task and the time limit, as small cards inside the fold. */
+.task-usage-card { padding: 11px 0 4px; border-top: 1px solid var(--hairline); }
+.task-usage-card > h4 { display: inline-block; margin: 0 8px 6px 0; color: var(--ivory); font-size: 12.5px; font-weight: 650; }
+.task-usage-tag { color: var(--muted); font-size: 12px; }
+.task-usage-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 3px 0; font-size: 13px; }
+.task-usage-row > span { color: var(--muted); }
+.task-usage-row > b { color: var(--ivory); font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+.task-usage-row > b[data-tone="dim"] { color: var(--muted); font-weight: 500; }
+.task-usage-limit { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.task-usage-limit > div:first-child { display: grid; gap: 2px; min-width: 0; }
+.task-usage-limit > div:first-child > b { color: var(--ivory); font-size: 13px; font-weight: 600; }
+.task-usage-limit > div:first-child > span { color: var(--muted); font-size: 12px; }
+.task-usage-stepper { display: inline-flex; align-items: center; gap: 8px; }
+.task-usage-stepper > b { min-width: 62px; color: var(--ivory); font-size: 13px; text-align: center; }
 .task-history-entry { padding: 13px 0; border-top: 1px solid var(--hairline); }
 .task-history-entry > strong { display: block; color: var(--ivory); font-size: 12px; line-height: 1.6; margin-bottom: 7px; }
 .task-history-preview { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); font-size: 12px; line-height: 1.65; max-height: 160px; overflow-y: auto; }
@@ -10902,6 +10916,59 @@ html[data-motion="off"] .pane-floating { animation: none; }
 }
 .pane-shelf { display: none !important; }
 
+/* Pictures on a message (renderer/composer-pictures.js): one row under the words with
+   the Attach picture button, the thumbnails and one plain sentence about what will
+   happen to them. Nothing here is smaller than 12px. */
+.composer-attach { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0; padding: 2px 16px 4px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.composer-attach[hidden], .composer-attach-note[hidden] { display: none; }
+.composer-attach-button { flex: 0 0 auto; }
+.composer-thumbs { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.composer-thumbs:empty { display: none; }
+.composer-thumb { position: relative; display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px; border: 1px solid var(--hairline-strong); border-radius: 10px; background: color-mix(in srgb, var(--ivory) 5%, transparent); color: var(--ivory); font-size: 12px; }
+.composer-thumb img, .composer-thumb-kind { flex: 0 0 auto; width: 36px; height: 36px; border-radius: 7px; object-fit: cover; }
+.composer-thumb-kind { display: inline-grid; place-items: center; background: color-mix(in srgb, var(--gold) 16%, transparent); color: var(--ivory); font-size: 12px; font-weight: 600; letter-spacing: .02em; }
+.composer-thumb-name { min-width: 0; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.composer-thumb-remove { flex: 0 0 auto; display: inline-grid; place-items: center; width: 24px; min-width: 24px; height: 24px; min-height: 24px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer; }
+.composer-thumb-remove:hover:not(:disabled), .composer-thumb-remove:focus-visible { background: color-mix(in srgb, var(--bad) 22%, transparent); color: var(--ivory); }
+.composer-thumb-remove:disabled { cursor: default; opacity: .5; }
+.composer-thumb-busy { padding: 9px 12px; color: var(--muted); }
+.composer-attach-note { flex: 1 1 100%; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+
+/* A message in the thread that carried pictures names them under its words. */
+.ws-message-images { margin-top: 6px; color: var(--muted); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+
+/* Sessions layout: the composer is one wrapping row of small controls. The thumbnails
+   and the note take a full line under the words; the Attach button joins the row. */
+html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-attach { display: contents; }
+html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-attach[hidden] { display: none; }
+html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-thumbs { order: 0; flex: 1 1 100%; padding: 0 8px; }
+html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-attach-note { order: 0; flex: 1 1 100%; padding: 0 8px; }
+html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-attach-button { order: 1; }
+
+/* @ # / suggestions in Home's message box (renderer/composer-picker.js): the chips
+   under the words, and the popup. The popup lives on <body> and the script places it,
+   because the composer clips (in the sessions layout, overflows) and must not decide
+   where it shows. Nothing here is smaller than 12px. */
+.composer-mentions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0; padding: 2px 16px 4px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.composer-mentions[hidden], .composer-picker[hidden] { display: none; }
+.composer-mentions-label { color: var(--muted); }
+.composer-mention { max-width: 100%; padding: 1px 9px; border: 1px solid var(--hairline-strong); border-radius: var(--r-pill, 999px); background: color-mix(in srgb, var(--ivory) 5%, transparent); color: var(--ivory); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.composer-mention.file { border-color: color-mix(in srgb, var(--gold) 55%, var(--hairline-strong)); }
+.composer-mention.task { border-color: color-mix(in srgb, var(--gold-bright) 40%, var(--hairline-strong)); }
+.composer-mention.skill { border-style: dashed; }
+
+/* Above #studio-floats (z 180): its scroll-fade gradients are drawn over whatever sits on a scrolling pane, including a popup. */
+.composer-picker { position: fixed; z-index: 200; display: flex; flex-direction: column; max-height: min(340px, 55vh); overflow: hidden auto; border: 1px solid var(--hairline-strong); border-radius: 14px; background: var(--panel-solid); box-shadow: 0 12px 34px rgb(0 0 0 / .4); color: var(--ivory); font-size: 12px; }
+.composer-picker-head { padding: 9px 12px 5px; color: var(--muted); font-size: 12px; }
+.composer-picker-item { display: flex; align-items: baseline; gap: 12px; width: 100%; min-height: 32px; padding: 6px 12px; border: 0; border-radius: 0; background: transparent; color: var(--ivory); font: 500 13px/1.35 var(--font-ui); text-align: left; cursor: pointer; }
+.composer-picker-item b { flex: 0 1 auto; min-width: 0; overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.composer-picker-item small { flex: 1 1 0; min-width: 0; overflow: hidden; color: var(--muted); font-size: 12px; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+.composer-picker-item.current, .composer-picker-item:hover { background: color-mix(in srgb, var(--gold) 18%, transparent); }
+.composer-picker-foot { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 6px 12px 8px; border-top: 1px solid var(--hairline); color: var(--muted); font-size: 12px; }
+
+/* Sessions layout: the chips take a full line under the words. */
+html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-mentions { order: 0; flex: 1 1 100%; padding: 0 8px 2px; }
+
 /* Worktrees (renderer/worktrees.js): Work's list of every git worktree of the
    open project. One card per worktree, worst first, with the verdict on a
    coloured edge and the actions on the right. Every colour is a theme token, so
@@ -11049,6 +11116,71 @@ html[data-motion="off"] .pane-floating { animation: none; }
 @media (max-width: 900px) {
   .review-shots { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Skills (renderer/skills.js): Agents' page for the reusable instructions a project
+   keeps as plain files. A list of skills with what each is for, a few starters, one
+   editor panel for a new or changed skill, and the skills other tools keep, read-only.
+   Every colour is a theme token, nothing here reserves scrollbar width (the page
+   scrolls under the shared indicator), and no text is under 12 px. */
+.skills-sheet { display: flex; flex-direction: column; }
+.skills-body { display: flex; flex: 1; flex-direction: column; gap: 12px; min-height: 0; padding: var(--s3, 10px) var(--s5, 16px) var(--s5, 16px); overflow-y: auto; }
+.skills-top { display: grid; gap: 8px; }
+.skills-headline { margin: 0; color: var(--ivory); font: 600 14px/1.45 var(--font-ui); }
+.skills-headline[data-tone="warn"] { color: var(--warn); }
+.skills-headline[data-tone="bad"] { color: var(--bad); }
+.skills-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.skills-about { color: var(--muted); font-size: 13px; line-height: 1.5; }
+.skills-about summary { width: fit-content; cursor: pointer; color: var(--gold-bright); font-weight: 600; }
+.skills-about p { max-width: 70ch; margin: 6px 0 0; }
+.skills-content { display: grid; gap: 14px; min-width: 0; }
+.skills-section { display: grid; gap: 8px; }
+.skills-section-head { margin: 0; color: var(--muted); font: 650 12px/1.3 var(--font-ui); letter-spacing: .04em; text-transform: uppercase; }
+.skills-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.skills-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 16px; padding: 12px 14px; border: 1px solid var(--hairline); border-left: 3px solid var(--line-strong, var(--hairline)); border-radius: var(--r-lg, 14px); background: var(--surface-raised, var(--glass)); }
+.skills-row[data-tone="warn"] { border-left-color: var(--warn); }
+.skills-main { display: grid; gap: 4px; min-width: 0; }
+.skills-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; min-width: 0; }
+.skills-name { overflow: hidden; color: var(--ivory); font: 650 14px/1.3 var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
+.skills-blurb { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+.skills-meta { color: var(--dim); font: 12px/1.4 var(--font-mono); overflow-wrap: anywhere; }
+.skills-flag { width: fit-content; max-width: 100%; padding: 2px 10px; border-radius: 999px; background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); font: 600 12px/1.4 var(--font-ui); overflow-wrap: anywhere; }
+.skills-flag[data-tone="info"] { background: color-mix(in srgb, var(--gold) 16%, transparent); color: var(--gold-bright); }
+.skills-buttons { display: flex; flex-wrap: wrap; align-content: flex-start; justify-content: flex-end; gap: 6px; }
+.skills-empty { padding: 20px 16px; border: 1px dashed var(--hairline); border-radius: var(--r-lg, 14px); color: var(--muted); font-size: 13px; line-height: 1.5; text-align: center; }
+.skills-starter { border-left-style: dashed; }
+
+.skills-note { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 8px 10px; border: 1px solid var(--hairline); border-radius: 10px; background: color-mix(in srgb, var(--ivory) 5%, transparent); color: var(--ivory); font-size: 13px; line-height: 1.45; }
+.skills-note[data-tone="bad"] { border-color: color-mix(in srgb, var(--bad) 45%, transparent); background: color-mix(in srgb, var(--bad) 10%, transparent); }
+.skills-note[data-tone="good"] { border-color: color-mix(in srgb, var(--good) 45%, transparent); background: color-mix(in srgb, var(--good) 10%, transparent); }
+
+.skills-editor { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--hairline-strong, var(--hairline)); border-radius: var(--r-lg, 14px); background: var(--surface-raised, var(--glass)); }
+.skills-editor-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; margin: 0; color: var(--ivory); font: 650 15px/1.3 var(--font-ui); }
+.skills-editor-path { color: var(--dim); font: 12px/1.4 var(--font-mono); overflow-wrap: anywhere; }
+.skills-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 10px 14px; }
+.skills-field { display: grid; gap: 4px; min-width: 0; align-content: start; }
+.skills-label { color: var(--muted); font: 600 12px/1.3 var(--font-ui); }
+.skills-input, .skills-text { width: 100%; min-width: 0; border: 1px solid var(--hairline); border-radius: 10px; background: var(--surface-field, color-mix(in srgb, var(--ivory) 5%, transparent)); color: var(--ivory); font: 13.5px/1.45 var(--font-ui); padding: 8px 10px; }
+.skills-input { min-height: 36px; }
+.skills-input:disabled { opacity: .7; }
+.skills-text { min-height: 160px; resize: vertical; font: 13px/1.5 var(--font-mono); }
+.skills-input:focus-visible, .skills-text:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 1px; }
+.skills-input[aria-invalid="true"] { border-color: var(--bad); }
+.skills-hint { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.skills-counter { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 14px; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.skills-counter[data-tone="bad"] { color: var(--bad); }
+.skills-error { margin: 0; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--bad) 45%, transparent); border-radius: 10px; background: color-mix(in srgb, var(--bad) 10%, transparent); color: var(--ivory); font-size: 13px; line-height: 1.45; }
+.skills-error[hidden] { display: none; }
+.skills-editor-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.skills-others { color: var(--muted); font-size: 13px; line-height: 1.5; }
+.skills-others summary { width: fit-content; cursor: pointer; color: var(--gold-bright); font-weight: 600; }
+.skills-other-list { display: grid; gap: 4px; margin: 8px 0 0; padding: 0; list-style: none; }
+.skills-other { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; color: var(--ivory); font-family: var(--font-mono); font-size: 13px; }
+@media (max-width: 900px) {
+  .skills-row { grid-template-columns: 1fr; }
+  .skills-buttons { justify-content: flex-start; }
+  .skills-fields { grid-template-columns: 1fr; }
+}
 </style>
 <div id="boot-layer" role="dialog" aria-modal="true" aria-labelledby="boot-title" aria-describedby="boot-detail" tabindex="-1">
   <section class="boot-card">
@@ -11129,6 +11261,7 @@ html[data-motion="off"] .pane-floating { animation: none; }
   <symbol id="g-community" viewBox="0 0 16 16"><circle cx="6" cy="5.25" r="2.25"/><path d="M1.75 13.5v-.75A3.25 3.25 0 0 1 5 9.5h2a3.25 3.25 0 0 1 3.25 3.25v.75"/><path d="M11 3a2.25 2.25 0 0 1 0 4.5M12.25 9.6a3.25 3.25 0 0 1 2 3.15v.75"/></symbol>
   <symbol id="g-key" viewBox="0 0 16 16"><circle cx="5.5" cy="8" r="3"/><path d="M8.5 8h5M11.5 8v2.5M13.5 8v1.5"/></symbol>
   <symbol id="g-route" viewBox="0 0 16 16"><circle cx="4" cy="4" r="1.6"/><circle cx="4" cy="12" r="1.6"/><circle cx="12" cy="8" r="1.6"/><path d="M5.6 4c2.6 0 2.6 4 4.8 4M5.6 12c2.6 0 2.6-4 4.8-4"/></symbol>
+  <symbol id="g-skills" viewBox="0 0 16 16"><path d="M9.25 1.5 3.5 9.25h3.75L6.5 14.5l6-7.75H8.5z"/></symbol>
   <symbol id="g-worktree" viewBox="0 0 16 16"><circle cx="4.25" cy="3.25" r="1.5"/><circle cx="4.25" cy="12.75" r="1.5"/><circle cx="11.75" cy="5.5" r="1.5"/><path d="M4.25 4.75v6.5M11.75 7c0 3.25-7.5 1.75-7.5 4.25"/></symbol>
   <symbol id="g-wrench" viewBox="0 0 24 24"><path stroke-width="2.25" d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
   <symbol id="g-plug" viewBox="0 0 16 16"><path d="M5 2.5v3.5M11 2.5v3.5"/><path d="M3.5 6h9v1.5a4.5 4.5 0 0 1-9 0z"/><path d="M8 12v2"/></symbol>
@@ -11673,6 +11806,7 @@ html[data-motion="off"] .pane-floating { animation: none; }
             <label class="switch" id="idle-home-switch" title="On: every launch lands on Home. Off: Studio reopens the last tab page you used. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span id="idle-home-label">Open Home on launch</span></label>
             <label class="switch" id="settings-start-vibe-switch" title="On: every launch starts in Vibe, even if you closed Studio in Build. Off: Studio keeps the mode you closed it in."><input type="checkbox" id="settings-start-vibe" checked><span class="track"></span><span>Always start in Vibe</span></label>
             <label class="switch" id="settings-key-tips-switch" title="Small pop-ups beside buttons and tabs that show the key that does the same thing. Click one to fade it away."><input type="checkbox" id="settings-key-tips" checked><span class="track"></span><span>Show key tips</span></label>
+            <label class="switch" id="settings-composer-picker-switch" title="Typing @ in Home's message box offers this project's files, # its tasks and / its skills, and the box shows what the message points at. Off leaves @, # and / as plain typing, and a /skill in a message is not expanded."><input type="checkbox" id="settings-composer-picker" checked><span class="track"></span><span>Suggest files, tasks and skills while I type</span></label>
             <label class="switch" title="On: after five minutes without input, Studio switches to Command view. Off: it stays on the page you left open."><input type="checkbox" id="idle-command-idle"><span class="track"></span><span>Show Command view after 5 quiet minutes</span></label>
           </div>
           <p class="muted" id="idle-home-hint">When disabled, Studio reopens the last tab page you used after the project chooser.</p>
@@ -12837,6 +12971,37 @@ html[data-motion="off"] .pane-floating { animation: none; }
         <p>Merging goes into your main checkout on this PC only; nothing is pushed from here. Removing a folder never deletes a branch that is not merged, and a folder with uncommitted files is kept as a copy first.</p>
       </details>
       <ol id="worktrees-list" class="worktrees-list" aria-label="Worktrees"></ol>
+    </div>
+  </div>
+</div>
+<div class="overlay explorer" id="skills-overlay" hidden>
+  <div class="explorer-sheet skills-sheet" role="dialog" aria-modal="true" aria-labelledby="skills-heading" tabindex="-1">
+    <header class="explorer-head sheet-head">
+      <button class="sheet-back ghost mini" data-nav-close="skills" title="Back (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Back</span></button>
+      <div class="sheet-title">
+        <div class="eyebrow">Agents</div>
+        <h2 id="skills-heading">Skills</h2>
+      </div>
+      <div class="sheet-links" data-sheet-links="skills" role="group" aria-label="Other tools"></div>
+      <div class="sheet-actions">
+        <button id="skills-close" class="ghost sheet-close" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
+      </div>
+    </header>
+    <div class="skills-body">
+      <section class="skills-top" aria-label="Skills at a glance">
+        <p id="skills-headline" class="skills-headline" role="status" aria-live="polite">Reading the skills…</p>
+        <div class="skills-tools">
+          <button id="skills-new" class="primary mini" type="button" title="Write a new skill">New skill</button>
+          <button id="skills-import" class="ghost mini" type="button" title="Choose a folder that holds a SKILL.md">Import</button>
+          <button id="skills-refresh" class="ghost mini" type="button" title="Read the skills again">Refresh</button>
+        </div>
+      </section>
+      <details class="skills-about">
+        <summary>What is a skill?</summary>
+        <p>A skill is a reusable set of instructions kept as a plain file in your project, under .agents/skills. Agents can load one when a task matches what it is for, and you can call any of them by typing / and its name in Home's message box.</p>
+        <p>Because a skill is a file in the project, it travels with it and shows up in Git. Studio only writes there, never to your home folder, and never replaces a skill that is already saved: a copy of the old text is kept on this PC first.</p>
+      </details>
+      <div id="skills-list" class="skills-content"></div>
     </div>
   </div>
 </div>
@@ -19873,7 +20038,7 @@ html[data-motion="off"] .pane-floating { animation: none; }
     const picker = document.createElement("input"); picker.type = "file"; picker.multiple = true; picker.hidden = true;
     const status = document.createElement("span"); status.setAttribute("role", "status"); status.textContent = "Drop text or code files into the box";
     bar.append(pick, picker, status); input.insertAdjacentElement("afterend", bar);
-    const state = { reading: false }; bindings.set(input, state);
+    const state = { reading: false, add: null }; bindings.set(input, state);
     const unavailable = () => input.disabled || input.readOnly || blocked();
     async function add(files, selectedScope = scope()) {
       if (unavailable() || state.reading) return;
@@ -19906,6 +20071,7 @@ html[data-motion="off"] .pane-floating { animation: none; }
         status.textContent = [blocks.length ? `${blocks.length} file${blocks.length === 1 ? "" : "s"} added to the draft. Review before sending.` : "No files added.", ...errors].join(" ");
       } finally { state.reading = false; pick.disabled = false; picker.value = ""; }
     }
+    state.add = (files) => add(files);
     let pickerScope;
     pick.addEventListener("click", () => { if (!unavailable()) { pickerScope = scope(); picker.click(); } });
     picker.addEventListener("change", () => { void add(picker.files, pickerScope); });
@@ -19915,7 +20081,8 @@ html[data-motion="off"] .pane-floating { animation: none; }
   }
   // A file dropped outside supported surfaces must never navigate away.
   for (const name of ["dragover", "drop"]) document.addEventListener(name, (event) => { if (hasFiles(event)) event.preventDefault(); });
-  window.MefiFileInputs = { bind, isReading: (input) => bindings.get(input)?.reading === true };
+  // The text and code files among a mixed drop (a picture goes to renderer/composer-inputs.js, the rest come here).
+  window.MefiFileInputs = { bind, isReading: (input) => bindings.get(input)?.reading === true, addFiles: (input, files) => bindings.get(input)?.add?.(files) };
 })();
 
 // Mefi's Studio AI+ — motion for menus (window.MefiMotion).
@@ -20774,6 +20941,26 @@ html[data-motion="off"] .pane-floating { animation: none; }
       isOpen: () => overlayOpen("worktrees-overlay"),
     },
     {
+      id: "skills",
+      label: "Skills",
+      short: "Skills",
+      kind: "overlay",
+      layer: "sheet",
+      section: "agents",
+      group: "tools",
+      key: null,
+      glyph: "g-skills",
+      badge: null,
+      desc: "Reusable instructions kept as plain files in this project, and the /names that call them",
+      searchTerms: "skills skill instructions slash command SKILL.md .agents reusable playbook import export starter agents",
+      showIn: showIn({ tools: true, palette: true, help: true }),
+      element: "skills-overlay",
+      focus: "#skills-new",
+      open: (params) => window.MefiSkills?.open?.(params),
+      close: () => window.MefiSkills?.close?.(),
+      isOpen: () => overlayOpen("skills-overlay"),
+    },
+    {
       id: "palette",
       commandPrimary: true,
       label: "Search Studio",
@@ -21022,7 +21209,7 @@ html[data-motion="off"] .pane-floating { animation: none; }
     window.MefiModelLab?.show?.(view);
   }
 
-  const WORKSPACE_PAGES = new Set(["tasks", "plans", "ideas", "brains", "analyzer", "worktrees", "explorer", "trace", "fleet", "overhead", "agent-brain", "agents"]);
+  const WORKSPACE_PAGES = new Set(["tasks", "plans", "ideas", "brains", "analyzer", "worktrees", "explorer", "trace", "fleet", "overhead", "agent-brain", "skills", "agents"]);
   const isWorkspacePage = (dest) => document.documentElement?.dataset?.shell === "rail" && WORKSPACE_PAGES.has(dest?.id);
   function syncPageInert() {
     const page = isWorkspacePage(get(state.sheet));
@@ -21680,7 +21867,7 @@ html[data-motion="off"] .pane-floating { animation: none; }
   const LOCAL_ROUTES = Object.freeze({
     home: ["workspace"],
     work: ["tasks", "plans", "ideas", "analyzer", "worktrees"],
-    agents: ["agents", "command", "fleet", "eyes", "trace", "explorer", "overhead", "agent-brain", "brains", "context", "booklet", "graph", "usage"],
+    agents: ["agents", "command", "fleet", "eyes", "trace", "explorer", "overhead", "agent-brain", "skills", "brains", "context", "booklet", "graph", "usage"],
     settings: ["studio"],
   });
 
@@ -51776,6 +51963,7 @@ html[data-motion="off"] .pane-floating { animation: none; }
   const dependencyDrafts = new Map();
   const contextReads = new Map();
   const attemptReads = new Map();
+  const usageReads = new Map();
   const detailExpanded = new Map();
   const detailViews = new Map();
   const projectSelections = new Map();
@@ -53256,6 +53444,138 @@ html[data-motion="off"] .pane-floating { animation: none; }
     (detailPanels.evidence || els.detail).append(fold);
   }
 
+  // Usage and the time limit (main.cjs "Task time limit"): this attempt and the
+  // whole task, in numbers the ledgers really hold, and "Stop an attempt after N
+  // min". A route that reports nothing says "Not reported", never a zero. Read
+  // only while the fold is open, so a task nobody looks at costs no ledger read.
+  const durationText = (seconds) => {
+    if (!Number.isFinite(seconds)) return "Not recorded";
+    if (seconds < 90) return `${Math.max(0, Math.round(seconds))} s`;
+    const minutes = Math.round(seconds / 60);
+    return minutes < 90 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, "0")} min`;
+  };
+  const countText = (value) => (value >= 1000 ? `${(value / 1000).toFixed(1)}k` : String(Math.round(value)));
+  const usageTokens = (tokens, plural = "") => {
+    if (!tokens) return "Not recorded";
+    if (tokens.state === "not-reported") return "Not reported";
+    if (tokens.state === "unavailable") return "Unavailable right now";
+    if (tokens.state !== "reported") return "None recorded yet";
+    const parts = [];
+    if (Number.isFinite(tokens.input)) parts.push(`${countText(tokens.input)} in`);
+    if (Number.isFinite(tokens.output)) parts.push(`${countText(tokens.output)} out`);
+    if (tokens.cacheRead > 0) parts.push(`${countText(tokens.cacheRead)} cached`);
+    if (!parts.length && Number.isFinite(tokens.total)) parts.push(`${countText(tokens.total)} total`);
+    return parts.join(" · ") + (tokens.partial ? `${plural} + some not reported` : "");
+  };
+  const usageCost = (cost) => {
+    if (!cost) return "Not recorded";
+    if (cost.state === "not-reported") return "Not reported";
+    if (cost.state === "unavailable") return "Unavailable right now";
+    const calls = (count) => `${count} call${count === 1 ? "" : "s"}`;
+    if (cost.state === "unpriced") return `Unpriced · ${calls(cost.unpricedCalls || 0)}`;
+    if (cost.state !== "reported") return "None recorded yet";
+    const usd = Number(cost.usd) || 0;
+    const money = `$${usd.toFixed(usd > 0 && usd < 0.01 ? 4 : 2)}`;
+    return `${money}${cost.unpricedCalls > 0 ? ` + ${cost.unpricedCalls} unpriced call${cost.unpricedCalls === 1 ? "" : "s"}` : ""}${cost.partial ? " + some not reported" : ""}`;
+  };
+  function requestTaskUsage(task) {
+    const api = window.mefiStudio;
+    if (!api?.taskMetrics) return null;
+    const key = taskKey(task);
+    const signature = JSON.stringify([task.runId, task.status, task.lastAttempt?.at, task.lastAttempt?.runId, task.updatedAt, task.capMinutes, taskRevision]);
+    const prior = usageReads.get(key);
+    if (prior?.signature === signature) return prior;
+    const record = { signature, loading: !prior?.report, report: prior?.report || null, error: "" };
+    usageReads.set(key, record);
+    const epoch = projectEpoch;
+    Promise.resolve(api.taskMetrics({ taskId: task.id, projectId: task.projectId || state.backlog?.projectId }))
+      .then((result) => { if (!result?.ok) throw new Error(result?.error || "The usage could not be read."); record.report = result; record.error = ""; })
+      .catch((error) => { record.error = error.message || "The usage could not be read."; })
+      .finally(() => {
+        if (usageReads.get(key) !== record || epoch !== projectEpoch) return;
+        record.loading = false;
+        if (!els.overlay.hidden && taskKey(selectedTask()) === key) refreshDetail();
+      });
+    return record;
+  }
+  async function changeTaskCap(task, minutes) {
+    const api = window.mefiStudio, key = taskKey(task);
+    if (!api?.tasksCap) return;
+    try {
+      const result = await api.tasksCap({ taskId: task.id, minutes, projectId: task.projectId || state.backlog?.projectId });
+      if (!result?.ok) throw new Error(result?.error || "The limit could not be saved.");
+      usageReads.delete(key);
+      if (!els.overlay.hidden && taskKey(selectedTask()) === key) refreshDetail();
+    } catch (error) { window.MefiToast?.(error.message || "The limit could not be saved.", "bad"); }
+  }
+  function renderTaskUsage(task) {
+    if (!window.mefiStudio?.taskMetrics) return;
+    const key = taskKey(task);
+    const fold = detailFold(task, "usage", "Usage & limit");
+    // Opening the fold is what asks for the read (after the fold's own toggle has run).
+    fold.children[0].addEventListener("click", () => { if (fold.open && !usageReads.get(key)?.report) { requestTaskUsage(task); refreshDetail(); } });
+    const read = fold.open ? requestTaskUsage(task) : usageReads.get(key) || null;
+    const report = read?.report;
+    if (report?.cap?.enabled) fold.children[0].textContent = `Usage & limit · stops an attempt after ${report.cap.effectiveMinutes} min`;
+    const row = (label, value, tone) => {
+      const line = node("div", "task-usage-row", "");
+      line.append(node("span", "", label), Object.assign(node("b", "", value), tone ? { dataset: { tone } } : {}));
+      return line;
+    };
+    const card = (title, hint) => { const box = node("section", "task-usage-card", ""); box.append(node("h4", "", title)); if (hint) box.append(node("span", "task-usage-tag", hint)); return box; };
+    if (!report) {
+      fold.append(node("p", "task-context-hint", read?.loading ? "Reading the usage…" : read?.error || "Open this to read what the task took."));
+      (detailPanels.evidence || els.detail).append(fold);
+      return;
+    }
+    const attempt = report.attempt;
+    const now = attempt ? card("This attempt", attempt.live ? "Running now" : attempt.stoppedAtLimit ? "Stopped at the time limit" : "") : null;
+    if (attempt) {
+      const seconds = attempt.live && Number.isFinite(attempt.startedAt) ? (Date.now() - attempt.startedAt) / 1000 : attempt.seconds;
+      now.append(row("Time", durationText(seconds)), row("Tokens", usageTokens(attempt.tokens), attempt.tokens?.state === "not-reported" ? "dim" : ""), row("Cost", usageCost(attempt.cost), attempt.cost?.state === "not-reported" ? "dim" : ""));
+      if (attempt.tokens?.state === "not-reported") now.append(node("p", "task-context-hint", `${attempt.route?.label || "This builder"} does not report tokens or cost to Studio. Time is measured here.`));
+      fold.append(now);
+    } else fold.append(node("p", "task-context-hint", "No attempt of this task is recorded yet."));
+    const whole = report.task;
+    if (whole?.attempts) {
+      const all = card("Whole task", whole.subtasks ? `with ${whole.subtasks} sub-task${whole.subtasks === 1 ? "" : "s"}` : "");
+      const timeOnly = whole.tokens?.state === "not-reported" && whole.cost?.state === "not-reported";
+      all.append(row("Attempts", String(whole.attempts)), row("Time", durationText(whole.seconds) + (whole.secondsUnknown ? " + some not recorded" : "")));
+      if (timeOnly) all.append(row("Tokens and cost", "Time only", "dim"));
+      else all.append(row("Tokens", usageTokens(whole.tokens)), row("Cost", usageCost(whole.cost)));
+      fold.append(all);
+    }
+    const cap = report.cap;
+    if (cap) {
+      const limit = card("Limit", "");
+      if (!cap.enabled) limit.append(node("p", "task-context-hint", "Time limits are switched off on this PC, so an attempt runs until Studio's own 25 minute limit."));
+      else {
+        const line = node("div", "task-usage-limit", "");
+        const words = node("div", "", "");
+        words.append(node("b", "", "Stop an attempt after"), node("span", "", "Saves progress and does not count as a failure."));
+        const stepper = node("div", "task-usage-stepper", "");
+        const step = (label, aria, delta) => {
+          const button = node("button", "ghost mini", label);
+          button.type = "button"; button.setAttribute("aria-label", aria); button.dataset.taskAction = delta < 0 ? "cap-shorter" : "cap-longer";
+          const next = Math.min(cap.ceilingMinutes, Math.max(cap.min, cap.effectiveMinutes + delta * cap.step));
+          button.disabled = next === cap.effectiveMinutes;
+          button.addEventListener("click", () => changeTaskCap(task, next));
+          return button;
+        };
+        stepper.append(step("−", "Shorter", -1), node("b", "", `${cap.effectiveMinutes} min`), step("+", "Longer", 1));
+        line.append(words, stepper);
+        limit.append(line);
+        if (cap.raised) limit.append(node("p", "task-context-hint", `This task asks for ${cap.minutes} min, but Studio ends every attempt at ${cap.ceilingMinutes} min at the latest.`));
+        else if (cap.effectiveMinutes >= cap.ceilingMinutes) limit.append(node("p", "task-context-hint", `${cap.ceilingMinutes} min is the longest Studio lets one attempt run.`));
+      }
+      fold.append(limit);
+    }
+    const reasons = Array.isArray(report.coverage?.reasons) ? report.coverage.reasons : [];
+    for (const reason of reasons.slice(0, 4)) fold.append(node("p", "task-context-hint", reason));
+    if (read?.error) fold.append(node("p", "task-context-hint", read.error));
+    (detailPanels.evidence || els.detail).append(fold);
+  }
+
   async function appendTaskEntry(task, field, input) {
     const text = input.value.trim(), key = taskKey(task), draftKey = `${key}/${field}`;
     if (!text || entryPending.has(key)) return;
@@ -53531,6 +53851,7 @@ html[data-motion="off"] .pane-floating { animation: none; }
       window.MefiReview.mount(review, { taskId: task.id, projectId: task.projectId || state.backlog?.projectId || state.projectId });
       body.append(review);
     }
+    renderTaskUsage(task);
     renderTaskAttempts(task);
     if (!body.children.length) body.append(node("p", "muted", "Evidence appears here after a worker runs and completion checks finish."));
     body = detailPanels.history;
@@ -63377,6 +63698,511 @@ html[data-motion="off"] .pane-floating { animation: none; }
   window.MefiStartup = { choose, begin, available, navigateProjects, relative, splitPath, state: () => ({ projects: state.projects.map((project) => project.id), selectedId: state.selectedId, busy: state.busy }) };
 })();
 
+// Pictures on a message (Home's composer; renderer/workspace.js binds it, and any
+// other message box can). An Attach picture button, and a picture pasted or dropped
+// into the box, are kept by the host (assistant:image: PNG, JPEG, WebP or GIF by its
+// bytes, up to 5 MB, four to a message) and shown as thumbnails with a remove button.
+//
+// The box says what will happen to them. A model that can read images is sent the
+// picture; one that can not is told so in the reply; a task's brief names the file.
+// Nothing leaves this PC until the message is sent, and the host keeps a picture
+// nobody sent only until it tidies up. The host can switch pictures off
+// (MEFI_STUDIO_NO_IMAGE_ATTACH=1); the row is then not shown at all.
+(() => {
+  "use strict";
+  const LIMITS = { bytes: 5 * 1024 * 1024, count: 4 };
+  const TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+  const bindings = new WeakMap();
+
+  const el = (tag, className, text) => {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  };
+  const megabytes = (bytes) => `${(bytes / 1048576).toFixed(bytes % 1048576 === 0 ? 0 : 1)} MB`;
+  const sizeText = (bytes) => (bytes >= 1048576 ? megabytes(bytes) : `${Math.max(1, Math.round(bytes / 1024))} KB`);
+  const api = () => window.mefiStudio;
+  const isImage = (file) => String(file?.type || "").startsWith("image/");
+
+  function readBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("That picture could not be read."));
+      reader.onload = () => { const text = String(reader.result ?? ""); resolve(text.slice(text.indexOf(",") + 1)); };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  /**
+   * Bind a message box. `options`:
+   *   scope()    a value that changes when the box's project does (its pictures are dropped then)
+   *   blocked()  true while the box can not take input (a send is in flight)
+   *   mode()     "chat" or "task": what the message becomes, for what the note under the pictures says
+   * Returns { take, clear, refresh, isBusy, count, addFiles }.
+   */
+  function bind(input, options = {}) {
+    if (!input) return null;
+    if (bindings.has(input)) return bindings.get(input);
+    const state = { images: [], busy: 0, vision: null, off: false, message: "", scope: options.scope?.(), previews: new Map() };
+    const blocked = () => input.disabled || input.readOnly || options.blocked?.() === true;
+
+    const row = el("div", "composer-attach");
+    const attach = el("button", "ghost mini composer-attach-button", "Attach picture");
+    attach.type = "button";
+    attach.title = "Add a PNG, JPEG, WebP or GIF, up to 5 MB, up to 4 to a message. You can also paste or drop one into the box.";
+    const chooser = el("input");
+    chooser.type = "file"; chooser.multiple = true; chooser.hidden = true;
+    chooser.setAttribute("accept", TYPES.join(","));
+    const thumbs = el("div", "composer-thumbs");
+    const note = el("p", "composer-attach-note");
+    note.setAttribute("role", "status");
+    row.append(attach, chooser, thumbs, note);
+    if (typeof input.insertAdjacentElement === "function") input.insertAdjacentElement("afterend", row);
+    else if (input.parentNode?.insertBefore) input.parentNode.insertBefore(row, input.nextSibling ?? null);
+
+    const noteText = () => {
+      if (state.message) return state.message;
+      if (!state.images.length) return "";
+      if (options.mode?.() === "task") return "Saved with the project. The task's brief names the file so a builder can open it.";
+      const vision = state.vision;
+      if (vision?.sees === true) return `Sent to ${vision.model || "this model"}, which can read images. A picture is not redacted the way text is, so check it first.`;
+      if (vision?.sees === false) return `${vision.model ? `${vision.model} can't` : "This model can't"} see images. The picture is saved with your message, and the reply will say so.`;
+      return "";
+    };
+    let drawn = "";
+    function render() {
+      const locked = blocked();
+      const said = noteText();
+      const signature = JSON.stringify([state.images.map((image) => [image.id, image.name, image.bytes, Boolean(image.thumb), state.previews.has(image.id)]), state.busy, locked, said, state.off]);
+      if (signature === drawn) return;
+      drawn = signature;
+      thumbs.replaceChildren();
+      for (const image of state.images) {
+        const chip = el("span", "composer-thumb");
+        chip.dataset.imageId = image.id;
+        const preview = image.thumb || state.previews.get(image.id);
+        if (preview) { const img = el("img"); img.setAttribute("src", preview); img.setAttribute("alt", ""); chip.append(img); }
+        else chip.append(el("span", "composer-thumb-kind", (image.mime || "").replace("image/", "").toUpperCase() || "IMG"));
+        chip.append(el("span", "composer-thumb-name", `${image.name} · ${sizeText(image.bytes)}`));
+        const remove = el("button", "composer-thumb-remove", "×");
+        remove.type = "button"; remove.setAttribute("aria-label", `Remove ${image.name}`); remove.title = "Remove this picture";
+        remove.disabled = locked;
+        remove.addEventListener("click", () => removeImage(image.id));
+        chip.append(remove);
+        thumbs.append(chip);
+      }
+      if (state.busy) thumbs.append(el("span", "composer-thumb composer-thumb-busy", "Adding…"));
+      note.textContent = said;
+      note.hidden = !said;
+      attach.disabled = locked || state.off || state.images.length + state.busy >= LIMITS.count;
+      row.hidden = state.off;
+    }
+    async function addFiles(files) {
+      if (blocked() || state.off) return;
+      const wanted = Array.from(files || []);
+      if (!wanted.length || !api()?.assistantImage) return;
+      const scope = options.scope?.();
+      state.message = "";
+      for (const file of wanted) {
+        if (state.images.length + state.busy >= LIMITS.count) { state.message = `A message can carry up to ${LIMITS.count} pictures.`; break; }
+        if (!TYPES.includes(String(file.type || "").toLowerCase())) { state.message = "Pictures can be PNG, JPEG, WebP or GIF."; continue; }
+        if (file.size > LIMITS.bytes) { state.message = `${file.name || "That picture"} is ${megabytes(file.size)}; the limit is ${megabytes(LIMITS.bytes)}.`; continue; }
+        state.busy += 1; render();
+        try {
+          const result = await api().assistantImage({ name: file.name || "picture", mime: file.type, data: await readBase64(file) });
+          if (options.scope?.() !== scope) continue;
+          if (!result?.ok) {
+            if (result?.off) state.off = true;
+            state.message = result?.error || "The picture could not be added.";
+            continue;
+          }
+          state.vision = result.vision ?? state.vision;
+          const image = { id: result.id, name: result.name || file.name || "picture", mime: result.mime || file.type, bytes: result.bytes || file.size, thumb: result.thumb || null };
+          if (!image.thumb && typeof URL !== "undefined" && URL.createObjectURL) { try { state.previews.set(image.id, URL.createObjectURL(file)); } catch { /* an icon will do */ } }
+          state.images.push(image);
+        } catch (error) { state.message = error?.message || "The picture could not be added."; }
+        finally { state.busy -= 1; render(); }
+      }
+      render();
+    }
+    function forget(id) {
+      const url = state.previews.get(id);
+      if (url && typeof URL !== "undefined" && URL.revokeObjectURL) { try { URL.revokeObjectURL(url); } catch { /* nothing to free */ } }
+      state.previews.delete(id);
+    }
+    function removeImage(id) {
+      // While a message is on its way its pictures stay: the host is reading them.
+      if (blocked()) return;
+      state.images = state.images.filter((image) => image.id !== id);
+      forget(id);
+      state.message = "";
+      // The host keeps nothing for a picture nobody sent; a failure to say so is not the person's concern.
+      Promise.resolve(api()?.assistantImageRemove?.({ id })).catch(() => {});
+      render();
+      input.focus?.();
+    }
+    attach.addEventListener("click", () => { if (!blocked()) chooser.click(); });
+    chooser.addEventListener("change", () => { const files = Array.from(chooser.files || []); chooser.value = ""; void addFiles(files); });
+    input.addEventListener("paste", (event) => {
+      const files = Array.from(event.clipboardData?.files || []).filter(isImage);
+      if (!files.length || state.off) return;
+      // Text copied together with a picture (a web page, a spreadsheet range) is text first: it pastes as it always did.
+      if (String(event.clipboardData?.getData?.("text/plain") ?? "").length) return;
+      event.preventDefault();
+      void addFiles(files);
+    });
+    // Capture phase, so a dropped picture is this box's before the text-file reader looks at the drop.
+    input.addEventListener("drop", (event) => {
+      const files = Array.from(event.dataTransfer?.files || []).filter(isImage);
+      if (!files.length || state.off) return;
+      event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation?.();
+      input.classList?.remove("file-drop-active");
+      const rest = Array.from(event.dataTransfer.files).filter((file) => !files.includes(file));
+      void addFiles(files);
+      if (rest.length) window.MefiFileInputs?.addFiles?.(input, rest);
+    }, true);
+    input.addEventListener("dragover", (event) => {
+      // While dragging, a browser shows the kinds but not the files.
+      const kinds = Array.from(event.dataTransfer?.items || []).some((item) => String(item?.type || "").startsWith("image/"));
+      if (state.off || (!kinds && !Array.from(event.dataTransfer?.files || []).some(isImage))) return;
+      event.preventDefault(); event.stopPropagation();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = blocked() ? "none" : "copy";
+    }, true);
+
+    // Ask the host once whether pictures are on at all, so a PC that switched them off never shows the button.
+    Promise.resolve(api()?.assistantImage?.({ probe: true })).then((result) => { if (result?.off) { state.off = true; render(); } }).catch(() => {});
+
+    render();
+    const controller = {
+      /** The ids of the pictures to send with the message. */
+      take: () => state.images.map((image) => image.id),
+      /** After a message went: the pictures now belong to it. */
+      clear: () => { for (const image of state.images) forget(image.id); state.images = []; state.message = ""; state.vision = null; render(); },
+      /** After the box's project or purpose changed (or a send began or ended). */
+      refresh: () => { const now = options.scope?.(); if (now !== state.scope) { state.scope = now; controller.clear(); } render(); },
+      isBusy: () => state.busy > 0,
+      count: () => state.images.length,
+      addFiles,
+    };
+    bindings.set(input, controller);
+    return controller;
+  }
+
+  window.MefiComposerPictures = { bind, get: (input) => bindings.get(input) ?? null, LIMITS, TYPES };
+})();
+
+// @ # / suggestions in a message box (Home's composer; renderer/workspace.js binds
+// it). Typing @ offers this project's files, # its tasks and / its skills, in a popup
+// that answers the keyboard first (arrows to move, Enter or Tab to pick, Esc to close)
+// and stays out of plain typing: an @ inside an email address or a word, a # after a
+// letter, a / inside a path or a URL open nothing. What a message points at shows as
+// chips under the box.
+//
+// Files come from the host (project:files: names only, never contents), skills from
+// agents:skills, tasks from what the page already holds. The grammar of a mention is
+// the one scripts/mentions.cjs reads on the host; tests/composer_picker.test.mjs holds
+// the two together. Settings key settings.ui.composerPicker (on unless it says false)
+// switches the popup and the chips off, and the host then ignores mentions too.
+(() => {
+  "use strict";
+  const PICK_MAX = 8;
+  const DEBOUNCE_MS = 90;
+  const SKILLS_FRESH_MS = 8000;
+  const bindings = new WeakMap();
+
+  // ---- the grammar (pure) ---------------------------------------------------------
+
+  /** The @, # or / the caret is in, when it starts a word: { trigger, query, start, end }, or null. */
+  function detectTrigger(value, caret) {
+    const text = String(value ?? "");
+    const at = Number.isInteger(caret) ? Math.max(0, Math.min(caret, text.length)) : text.length;
+    const match = /(^|\s)([@#/])([^\s]*)$/.exec(text.slice(0, at));
+    if (!match) return null;
+    const trigger = match[2], query = match[3];
+    if (query.length > 80) return null;
+    // A skill's name is letters, digits and dashes: a / followed by anything else is a path or an address.
+    if (trigger === "/" && !/^[a-z0-9-]*$/i.test(query)) return null;
+    return { trigger, query, start: at - query.length - 1, end: at };
+  }
+
+  /**
+   * How well `query` matches `text`: null for no match, higher is better. A substring beats a scattering;
+   * earlier and shorter win. Letters that only appear in order somewhere in the text count when `scatter` is on.
+   */
+  function fuzzy(query, text, { scatter = false } = {}) {
+    const q = String(query ?? "").toLowerCase(), t = String(text ?? "").toLowerCase();
+    if (!q) return 1;
+    const at = t.indexOf(q);
+    if (at >= 0) return 1000 - at + (at === 0 ? 200 : 0) - t.length / 100;
+    if (!scatter) return null;
+    let last = -1, gaps = 0;
+    for (const ch of q) {
+      const next = t.indexOf(ch, last + 1);
+      if (next < 0) return null;
+      if (last >= 0) gaps += next - last - 1;
+      last = next;
+    }
+    return 500 - gaps - t.length / 100;
+  }
+
+  /** The best `limit` items for `query`, matched on `item.label` (a leading / or # is not part of the name). */
+  function rank(items, query, limit = PICK_MAX, options = {}) {
+    const scored = [];
+    (Array.isArray(items) ? items : []).forEach((item, index) => {
+      const score = fuzzy(String(query ?? "").replace(/^"/, ""), String(item.label ?? "").replace(/^[/#]/, ""), options);
+      if (score !== null) scored.push({ item, score, index });
+    });
+    return scored.sort((a, b) => b.score - a.score || a.index - b.index).slice(0, limit).map((entry) => entry.item);
+  }
+
+  // A path with a space, or a bare name with no . or / in it (Makefile, LICENSE), is quoted: a bare @word is only a file when it looks like a path.
+  const fileText = (path) => (/\s/.test(path) || !/[/.\\]/.test(path) ? `@"${path}"` : `@${path}`);
+  const taskText = (title) => `#"${String(title ?? "").replace(/["\n\r]+/g, "'").trim().slice(0, 120)}"`;
+  const skillText = (name) => `/${name}`;
+
+  /** The text with the pick put in place of what was typed, and where the caret goes. */
+  function insertMention(value, pick, insert) {
+    const text = String(value ?? "");
+    const spaced = text[pick.end] === " " ? "" : " ";
+    return { value: `${text.slice(0, pick.start)}${insert}${spaced}${text.slice(pick.end)}`, caret: pick.start + insert.length + 1 };
+  }
+
+  /**
+   * What a message points at, in order: a file (@path or @"a path with spaces", only when it looks like a path),
+   * a task (#"its title") and a skill (/name, only one of `skills`). The same reading as scripts/mentions.cjs.
+   */
+  function parseMentions(text, { skills = [] } = {}) {
+    const source = String(text ?? "");
+    const found = [];
+    for (const match of source.matchAll(/(^|\s)@(?:"([^"\n]{1,300})"|([^\s"]{1,300}))/g)) {
+      const path = (match[2] ?? match[3] ?? "").replace(/[.,;:!?)\]}'"]+$/, "");
+      if (path && (match[2] !== undefined || /[/.\\]/.test(path))) found.push({ at: match.index + match[1].length, kind: "file", text: path });
+    }
+    for (const match of source.matchAll(/(^|\s)#"([^"\n]{1,200})"/g)) found.push({ at: match.index + match[1].length, kind: "task", text: match[2] });
+    const known = new Set(skills);
+    for (const match of source.matchAll(/(^|\s)\/([a-z0-9][a-z0-9-]{0,63})(?=$|[\s.,;:!?)\]}])/g)) if (known.has(match[2])) found.push({ at: match.index + match[1].length, kind: "skill", text: match[2] });
+    const seen = new Set();
+    return found.sort((a, b) => a.at - b.at).filter((row) => { const key = `${row.kind}:${row.text}`; if (seen.has(key)) return false; seen.add(key); return true; }).map(({ kind, text: label }) => ({ kind, text: label }));
+  }
+
+  // ---- one box ------------------------------------------------------------------------
+
+  const el = (tag, className, text) => {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  };
+  const api = () => window.mefiStudio;
+  const TITLES = { "@": "Project files", "#": "Tasks", "/": "Skills" };
+  const IDS = { "@": "composer-picker-files", "#": "composer-picker-tasks", "/": "composer-picker-skills" };
+
+  /**
+   * Bind a message box. `options`:
+   *   scope()    a value that changes when the box's project does (the skills list is read again then)
+   *   blocked()  true while the box can not take input
+   *   tasks()    the page's tasks ({ id, title, status }) for #
+   *   mode()     "chat" or "task": what the message becomes, for what a chip says will happen to it
+   *   on         false to start with the popup and chips off (setPicker switches them later)
+   * Returns { refresh, setPicker, close, isOpen }.
+   */
+  function bind(input, options = {}) {
+    if (!input) return null;
+    if (bindings.has(input)) return bindings.get(input);
+    const state = { on: options.on !== false, scope: options.scope?.() };
+    const blocked = () => input.disabled || input.readOnly || options.blocked?.() === true;
+
+    const chips = el("div", "composer-mentions");
+    chips.hidden = true;
+    if (typeof input.insertAdjacentElement === "function") input.insertAdjacentElement("afterend", chips);
+    else if (input.parentNode?.insertBefore) input.parentNode.insertBefore(chips, input.nextSibling ?? null);
+
+    const pick = { open: false, trigger: "", query: "", items: [], index: 0, request: 0, timer: null, pending: 0 };
+    const popup = el("div", "composer-picker");
+    popup.setAttribute("role", "listbox");
+    popup.hidden = true;
+    if (state.on) input.setAttribute?.("aria-autocomplete", "list");
+
+    const skills = { at: 0, list: null, pending: null };
+    const listSkills = async () => {
+      if (skills.list && Date.now() - skills.at < SKILLS_FRESH_MS) return skills.list;
+      if (!api()?.agentsSkills) return [];
+      skills.pending ??= Promise.resolve(api().agentsSkills())
+        .then((result) => { skills.list = Array.isArray(result?.skills) ? result.skills : []; skills.at = Date.now(); return skills.list; })
+        .catch(() => skills.list ?? [])
+        .finally(() => { skills.pending = null; });
+      return skills.pending;
+    };
+
+    function place() {
+      // Outside the composer, whose frosted, clipped box would cut a popup off: fixed to the page, above the box.
+      const box = input.getBoundingClientRect?.();
+      if (!box || !popup.style) return;
+      popup.style.left = `${Math.max(8, Math.round(box.left))}px`;
+      popup.style.width = `${Math.max(240, Math.min(480, Math.round(box.width)))}px`;
+      popup.style.bottom = `${Math.max(8, Math.round((window.innerHeight || 800) - box.top + 6))}px`;
+    }
+    function draw() {
+      popup.replaceChildren();
+      if (!pick.open || !pick.items.length) { popup.hidden = true; input.removeAttribute?.("aria-activedescendant"); input.removeAttribute?.("aria-controls"); return; }
+      popup.setAttribute("aria-label", TITLES[pick.trigger] || "Suggestions");
+      popup.id = IDS[pick.trigger] || "composer-picker";
+      popup.append(el("div", "composer-picker-head", `${TITLES[pick.trigger]} — keep typing to filter`));
+      pick.items.forEach((item, index) => {
+        const option = el("button", `composer-picker-item${index === pick.index ? " current" : ""}`);
+        option.type = "button"; option.id = `composer-pick-${index}`;
+        option.setAttribute("role", "option"); option.setAttribute("aria-selected", String(index === pick.index));
+        option.dataset.index = String(index);
+        option.append(el("b", "", item.label), ...(item.meta ? [el("small", "", item.meta)] : []));
+        // Pressing must not move focus out of the box, or the caret and the typing are lost.
+        option.addEventListener("mousedown", (event) => event.preventDefault());
+        option.addEventListener("click", () => choose(index));
+        popup.append(option);
+      });
+      const foot = el("div", "composer-picker-foot");
+      foot.append(el("span", "", "↑ ↓ move"), el("span", "", "Enter or Tab insert"), el("span", "", "Esc close"));
+      popup.append(foot);
+      popup.hidden = false;
+      input.setAttribute?.("aria-controls", popup.id);
+      input.setAttribute?.("aria-activedescendant", `composer-pick-${pick.index}`);
+      place();
+      // Arrowing past the end of a long list keeps the chosen row in view.
+      popup.querySelector?.(".composer-picker-item.current")?.scrollIntoView?.({ block: "nearest" });
+    }
+    function close() {
+      if (pick.timer) { clearTimeout(pick.timer); pick.timer = null; }
+      pick.request += 1; pick.pending = 0; pick.open = false; pick.items = []; pick.index = 0;
+      draw();
+    }
+    async function refill() {
+      const found = detectTrigger(input.value, input.selectionStart);
+      // A selection is not a word being typed.
+      const selecting = input.selectionEnd !== undefined && input.selectionStart !== input.selectionEnd;
+      if (!found || !state.on || blocked() || selecting) { if (pick.open) close(); return; }
+      const request = ++pick.request;
+      pick.pending = request;
+      const changed = found.trigger !== pick.trigger;
+      pick.trigger = found.trigger; pick.query = found.query;
+      let items = [];
+      try {
+        if (found.trigger === "@") {
+          const result = await api()?.projectFiles?.({ query: found.query.replace(/^"/, ""), limit: PICK_MAX });
+          items = (Array.isArray(result?.files) ? result.files : []).filter((file) => file && typeof file.path === "string" && file.path).slice(0, PICK_MAX)
+            .map((file) => ({ label: file.name || file.path.split("/").pop(), meta: file.dir ?? file.path.split("/").slice(0, -1).join("/"), insert: fileText(file.path) }));
+        } else if (found.trigger === "#") {
+          const all = (options.tasks?.() || []).filter((task) => task && typeof task.title === "string" && task.title.trim())
+            .map((task) => ({ label: task.title, meta: task.status ? String(task.status).replace(/_/g, " ") : "", insert: taskText(task.title) }));
+          items = rank(all, found.query);
+        } else {
+          const all = (await listSkills()).map((skill) => ({ label: `/${skill.name}`, meta: skill.description || "", insert: skillText(skill.name) }));
+          items = rank(all, found.query);
+        }
+      } catch { items = []; }
+      // A newer keystroke or a closed popup wins over this answer.
+      if (request !== pick.request) return;
+      pick.pending = 0;
+      pick.open = items.length > 0;
+      pick.items = items;
+      if (changed || pick.index >= items.length) pick.index = 0;
+      draw();
+    }
+    function refillSoon() {
+      if (pick.timer) clearTimeout(pick.timer);
+      const found = detectTrigger(input.value, input.selectionStart);
+      if (!found) { pick.timer = null; if (pick.open) close(); return; }
+      // Tasks and skills are local and answer at once; files ask the host, a few keystrokes at a time.
+      if (found.trigger !== "@") { pick.timer = null; void refill(); return; }
+      pick.timer = setTimeout(() => { pick.timer = null; void refill(); }, DEBOUNCE_MS);
+    }
+    function choose(index) {
+      const item = pick.items[index];
+      // Where the word is NOW: a key typed since the list was drawn moved it.
+      const now = detectTrigger(input.value, input.selectionStart);
+      if (!item || !now || now.trigger !== pick.trigger) { close(); return; }
+      const done = insertMention(input.value, now, item.insert);
+      input.value = done.value;
+      input.setSelectionRange?.(done.caret, done.caret);
+      close();
+      input.focus?.();
+      input.dispatchEvent?.(new Event("input", { bubbles: true }));
+      showChips();
+    }
+    input.addEventListener("keydown", (event) => {
+      // Esc while a question is still out calls it back (the key itself is not taken: nothing is showing).
+      if (event.key === "Escape" && pick.pending && !pick.open) { close(); return; }
+      if (!pick.open || !pick.items.length || event.isComposing) return;
+      const n = pick.items.length;
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault(); event.stopImmediatePropagation?.();
+        pick.index = (pick.index + (event.key === "ArrowDown" ? 1 : n - 1)) % n;
+        draw();
+      } else if ((event.key === "Enter" && !event.shiftKey) || event.key === "Tab") {
+        event.preventDefault(); event.stopImmediatePropagation?.();
+        choose(pick.index);
+      } else if (event.key === "Escape") {
+        event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation?.();
+        close();
+      }
+    }, true);
+    input.addEventListener("input", () => { refillSoon(); showChips(); });
+    input.addEventListener("click", refillSoon);
+    input.addEventListener("keyup", (event) => { if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) refillSoon(); });
+    input.addEventListener("blur", () => setTimeout(() => { if (pick.open && !popup.contains?.(document.activeElement)) close(); }, 160));
+    if (typeof document !== "undefined" && document.body?.append) document.body.append(popup);
+    window.addEventListener?.("resize", () => { if (pick.open) place(); });
+
+    // ---- what the message points at
+    let shown = "";
+    const TITLES_BY_MODE = {
+      chat: { file: "A project file Studio names to the model; its contents are not sent unless the model may read files.", task: "A task Studio names to the model.", skill: "This skill's instructions are sent with your message." },
+      task: { file: "Written into the task as you typed it, so a builder can open it.", task: "Written into the task as you typed it.", skill: "Written into the task as you typed it. A skill's instructions are added to chat messages only." },
+    };
+    function showChips() {
+      const list = state.on ? parseMentions(input.value, { skills: (skills.list || []).map((skill) => skill.name) }) : [];
+      const mode = options.mode?.() === "task" ? "task" : "chat";
+      const signature = JSON.stringify([mode, list]);
+      if (signature === shown) return;
+      shown = signature;
+      chips.replaceChildren();
+      chips.hidden = !list.length;
+      if (!list.length) return;
+      chips.append(el("span", "composer-mentions-label", "Sent with this message"));
+      for (const mention of list.slice(0, 12)) {
+        const chip = el("span", `composer-mention ${mention.kind}`, mention.kind === "skill" ? `/${mention.text}` : mention.kind === "task" ? `#${mention.text}` : `@${mention.text}`);
+        chip.title = TITLES_BY_MODE[mode][mention.kind];
+        chips.append(chip);
+      }
+    }
+    const warm = () => { if (state.on) void listSkills().then(showChips); };
+    warm();
+
+    const controller = {
+      /** After the box's project changed: the skills list is read again, and an open popup is closed. */
+      refresh: () => {
+        const now = options.scope?.();
+        if (now !== state.scope) { state.scope = now; close(); skills.list = null; skills.at = 0; shown = ""; warm(); }
+        showChips();
+      },
+      /** Switch the popup and the chips on or off (the settings key composerPicker). */
+      setPicker: (on) => {
+        state.on = on !== false;
+        if (state.on) input.setAttribute?.("aria-autocomplete", "list"); else { close(); input.removeAttribute?.("aria-autocomplete"); }
+        shown = ""; showChips(); warm();
+      },
+      close,
+      isOpen: () => pick.open,
+    };
+    bindings.set(input, controller);
+    return controller;
+  }
+
+  // The settings key behind the switch: settings.ui.composerPicker, on unless it says false.
+  const pickerPreference = (prefs) => prefs?.composerPicker !== false;
+
+  window.MefiComposerPicker = { bind, get: (input) => bindings.get(input) ?? null, pickerPreference, detectTrigger, fuzzy, rank, insertMention, parseMentions, fileText, taskText, skillText, PICK_MAX };
+})();
+
 // The working home: project context, a bottom composer, compact task progress,
 // an Activity panel, scoped starts, independent previews and durable results.
 // No model calls on navigation. Events keep it fresh; reads are only a backstop.
@@ -63414,6 +64240,8 @@ html[data-motion="off"] .pane-floating { animation: none; }
   let readSequence = 0;
   let readFailure = false;
   let createdTask = null;
+  // Pictures on a message (renderer/composer-pictures.js) and @ # / suggestions (renderer/composer-picker.js); null when a script is not loaded.
+  let composerPictures = null, composerPicker = null;
   let buildModeSaving = false;
   const buildMode = () => ({ autoBuild: state.status.autoBuild !== false, loaded: typeof state.status.autoBuild === "boolean", saving: buildModeSaving });
   let agentModeSaving = false;
@@ -63500,6 +64328,8 @@ html[data-motion="off"] .pane-floating { animation: none; }
     for (const button of $("work-list").querySelectorAll("button")) {
       if (button.dataset.backlogAction) button.disabled = !api()?.backlogControl || state.switching || Boolean(state.busyAction);
     }
+    // The pictures and the suggestions follow the project and the mode; a switch in flight or a send holds them still.
+    composerPictures?.refresh(); composerPicker?.refresh();
   }
   const accentForTheme = (theme) => theme === "forest" ? "sage" : theme;
   function personalize(accentChoice = accentForTheme(window.MefiMusic?.status?.()?.theme) || storage.get("accent", "aurora")) {
@@ -63633,6 +64463,8 @@ html[data-motion="off"] .pane-floating { animation: none; }
       const head = text("div", "ws-message-head", "");
       head.append(text("strong", "", message.role === "user" ? person() || "You" : companion()), text("time", "", when(message.at)));
       row.append(head, text("div", "ws-message-body", message.text));
+      const pictures = (Array.isArray(message.images) ? message.images : []).map((image) => String(image?.name ?? "").trim()).filter(Boolean);
+      if (pictures.length) row.append(text("div", "ws-message-images", `${pictures.length === 1 ? "Picture" : "Pictures"} attached: ${pictures.join(", ")}`));
       list.append(row);
     }
     // The welcome reads top-down; only a real conversation pins to its newest line.
@@ -64346,9 +65178,11 @@ html[data-motion="off"] .pane-floating { animation: none; }
   async function submit(event) {
     event?.preventDefault();
     if (window.MefiFileInputs?.isReading($("input"))) { feedback("Wait for the files to finish reading."); return; }
+    if (composerPictures?.isBusy()) { feedback("Wait for the picture to finish adding."); return; }
     const value = $("input").value.trim();
     if (!value || state.pending || state.switching || !state.activeId || !api()) return;
     const id = state.activeId; const mode = state.mode;
+    const images = composerPictures?.take() ?? [];
     if (mode === "work" && !hasRequirement(value)) {
       state.pending = false; controls();
       feedback("Describe what to change and how to check it, then create the task.", true);
@@ -64359,10 +65193,12 @@ html[data-motion="off"] .pane-floating { animation: none; }
     if ($("created-task")) $("created-task").hidden = true;
     let saved = false;
     try {
-      const result = guard(await (mode === "work" ? api().tasksCreate({ title: value.split("\n")[0].slice(0, 180), prompt: value, projectId: id }) : api().assistantMessage(value, id, { view: "Home", companion: companion() })));
+      const result = guard(await (mode === "work" ? api().tasksCreate({ title: value.split("\n")[0].slice(0, 180), prompt: value, projectId: id, ...(images.length ? { images } : {}) }) : api().assistantMessage(value, id, { view: "Home", companion: companion() }, ...(images.length ? [images] : []))));
       saved = true;
       if (id !== state.activeId) return;
       if ($("input").value.trim() === value) $("input").value = "";
+      // The pictures went with the message; they belong to it now.
+      composerPictures?.clear();
       saveDraft();
       if (result.state) { state.assistant = result.state; renderThread(); }
       if (mode === "work") {
@@ -64488,6 +65324,9 @@ html[data-motion="off"] .pane-floating { animation: none; }
     });
     $("form").addEventListener("submit", submit);
     window.MefiFileInputs?.bind($("input"), { scope: () => `${state.epoch}:${state.activeId}:${state.mode}`, blocked: () => state.pending || state.switching || !state.activeId });
+    const composerScope = () => `${state.epoch}:${state.activeId}`, composerBlocked = () => state.pending || state.switching || !state.activeId;
+    composerPictures = window.MefiComposerPictures?.bind($("input"), { scope: composerScope, blocked: composerBlocked, mode: () => state.mode === "work" ? "task" : "chat" }) ?? null;
+    composerPicker = window.MefiComposerPicker?.bind($("input"), { scope: composerScope, blocked: composerBlocked, tasks: () => scoped(state.tasks), mode: () => state.mode === "work" ? "task" : "chat" }) ?? null;
     $("activity-toggle")?.addEventListener("click", () => setActivityOpen($("activity-drawer").hidden, true));
     $("activity-close")?.addEventListener("click", () => setActivityOpen(false, true));
     $("progress-open")?.addEventListener("click", () => setActivityOpen(true, true));
@@ -64628,6 +65467,24 @@ html[data-motion="off"] .pane-floating { animation: none; }
           if (!result?.ok) throw new Error(result?.error || "The launch choice could not be saved.");
           feedback(launchAgents.value === "start" ? "Agents will start when Studio opens." : launchAgents.value === "off" ? "Agents will stay off until you start them." : "Agents will start again where they were running when you closed Studio.");
         } catch (error) { feedback(error.message, true); }
+      });
+    }
+    // "Suggest files, tasks and skills while I type" (settings.ui.composerPicker, on unless it says false): the @ # /
+    // popup and the chips under the message box. The host keeps the key and honours it too (main.cjs, "Mentions in a message").
+    const pickerSwitch = document.getElementById("settings-composer-picker");
+    if (pickerSwitch) {
+      Promise.resolve(api()?.prefsGet?.()).then((result) => {
+        const on = window.MefiComposerPicker?.pickerPreference?.(result?.prefs) !== false;
+        pickerSwitch.checked = on; composerPicker?.setPicker(on);
+      }).catch(() => {});
+      pickerSwitch.addEventListener("change", async () => {
+        const wanted = pickerSwitch.checked;
+        try {
+          const result = await api()?.prefsSet?.({ composerPicker: wanted });
+          if (!result?.ok) throw new Error(result?.error || "That choice could not be saved.");
+          composerPicker?.setPicker(wanted);
+          feedback(wanted ? "Typing @, # or / now suggests project files, tasks and skills." : "Typing @, # or / stays plain text, and a /skill in a message is not expanded.");
+        } catch (error) { pickerSwitch.checked = !wanted; feedback(error.message, true); }
       });
     }
     // "Start with Windows" (settings.ui.openAtLogin): the host reads back what
@@ -77660,7 +78517,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     ["models", "Models", "booklet", {}], ["usage", "Usage", "usage", {}],
   ];
   const children = {
-    setup: [["Team & models", "agents", { section: "setup", pane: "team" }], ["Providers", "agents", { section: "setup", pane: "connections" }], ["Routing & fallback", "agents", { section: "setup", pane: "routing" }], ["Run behavior", "agents", { section: "setup", pane: "behavior" }]],
+    setup: [["Team & models", "agents", { section: "setup", pane: "team" }], ["Providers", "agents", { section: "setup", pane: "connections" }], ["Routing & fallback", "agents", { section: "setup", pane: "routing" }], ["Run behavior", "agents", { section: "setup", pane: "behavior" }], ["Skills", "skills"]],
     live: [["Command", "command"], ["Fleet", "fleet"], ["Pipelines", "agent-brain", { tab: "live" }], ["Sessions", "explorer"], ["Activity", "eyes"], ["Trace", "trace"], ["Overhead", "overhead"]],
     workflows: [["Brain maps", "brains"], ["Playbook", "agent-brain", { tab: "playbook" }], ["Project map", "agent-brain", { tab: "map" }], ["Context", "context"]],
     models: [["Catalog", "booklet"], ["Performance", "graph"]],
@@ -77694,6 +78551,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (["brains", "context"].includes(id)) return { section: "workflows" };
     if (["booklet", "graph"].includes(id)) return { section: "models" };
     if (id === "usage") return { section: "usage" };
+    if (id === "skills") return { section: "setup" };
     return { section: "live" };
   }
   let closeNavMenu = () => {};
@@ -86331,6 +87189,466 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     refresh: (taskId) => { for (const record of records.values()) if (!taskId || record.taskId === taskId) { record.stamps = {}; wake(record, { force: true }); } },
     state: (taskId, projectId) => { const record = records.get(keyOf(projectId, taskId)); return record ? { tab: record.tab, attempt: chosen(record), open: record.open, changes: record.changes, checks: record.checks, evidence: record.evidence, errors: { ...record.errors } } : null; },
   };
+})();
+
+// Skills: Agents' page for the reusable instructions a project keeps as plain
+// files (Agents › Skills). A skill is <project>/.agents/skills/<name>/SKILL.md:
+// front matter with a name and a description, then the instructions. Agents can
+// load one when a task matches, and anyone can call one by typing /name in Home's
+// message box. The host reads and writes (main.cjs "Skills", scripts/skills.cjs,
+// the rules in scripts/skill-format.cjs); this page sends names and text, never a
+// path, and the only file a skill ever lives in is that SKILL.md.
+//
+//  - The list says what each skill is for, how big it is, and anything that keeps
+//    agents from using it (no description, too big, a name that does not agree).
+//  - New skill, Edit and the starters share one editor: name, when to use it,
+//    instructions, a byte counter and what the size means. Studio never overwrites
+//    a skill, so New refuses a name that is taken. A name can not change once a
+//    skill exists: it is the folder, and saved team settings point at it.
+//  - Delete asks twice, and the host keeps a copy of the old text first.
+//  - Import reads a folder you choose (its SKILL.md only); Export writes a folder
+//    or a zip where you choose.
+// The checks here are the host's own rules written again so the editor can say
+// what is wrong as you type (tests/skills_ui.test.mjs holds the two together);
+// the host checks everything again. With MEFI_STUDIO_NO_SKILL_EDIT=1 the page is
+// read-only and says so.
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(`skills-${id}`);
+  const api = () => window.mefiStudio;
+  const NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
+  const NAME_PROBLEM = "Use lowercase letters, numbers and dashes, up to 64 characters.";
+  const RESERVED = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])$/;
+  const RESERVED_PROBLEM = "Windows keeps that name for itself. Choose another.";
+  const MAX_BYTES = 32000;
+  const AUTO_LOAD_CHARS = 16000;
+  const MAX_DESCRIPTION = 300;
+  const OFF = "Editing skills is switched off on this PC.";
+  const state = { list: null, error: "", loading: false, editor: null, busy: new Set(), note: null, reading: null, signature: "", project: "" };
+  let initialized = false;
+
+  const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = String(text); return node; };
+  const isOpen = () => Boolean($("overlay")) && !$("overlay").hidden;
+  const plural = (count, word, many = `${word}s`) => `${count} ${count === 1 ? word : many}`;
+  const say = (error, fallback) => (window.MefiUi?.plainError ? window.MefiUi.plainError(error, fallback) : fallback);
+  const toast = (text, tone = "good") => window.MefiToast?.(text, tone);
+  const projectId = () => window.MefiWorkspace?.activeProjectId?.() || window.MefiWorkspace?.state?.activeId || "";
+  const kb = (bytes) => `${(bytes / 1024).toFixed(1)} KB`;
+  const bytesOf = (text) => new TextEncoder().encode(String(text ?? "")).length;
+  const writable = () => state.list?.writable !== false;
+
+  // ---- the rules, as the host has them (scripts/skill-format.cjs) ---------------------------------
+  function nameProblem(name) {
+    if (typeof name !== "string" || !name) return "Give the skill a name.";
+    if (!NAME_PATTERN.test(name)) return NAME_PROBLEM;
+    return RESERVED.test(name) ? RESERVED_PROBLEM : null;
+  }
+  function yamlValue(text) {
+    const plain = /^[A-Za-z0-9(][^\n]*$/.test(text) && !/(^|\s)#|:\s|:$|["'\\`{}[\],&*!|>%@]/.test(text) && !/^(true|false|null|yes|no|on|off|~|[-+]?[0-9][0-9._]*)$/i.test(text) && text === text.trim();
+    return plain ? text : JSON.stringify(text);
+  }
+  /** The file a draft would be saved as, the way the host builds it. */
+  function build({ name, description, body }) {
+    return `---\nname: ${name}\ndescription: ${yamlValue(String(description ?? "").trim())}\n---\n\n${String(body ?? "").replace(/\r\n?/g, "\n").replace(/^\n+/, "").replace(/\s+$/, "")}\n`;
+  }
+  /** What is wrong with a draft, most useful first: [{ field, message }]. */
+  function problems(draft, { taken = [] } = {}) {
+    const found = [];
+    if (draft.mode === "new") {
+      const bad = nameProblem(draft.name);
+      if (bad) found.push({ field: "name", message: bad });
+      else if (taken.includes(draft.name)) found.push({ field: "name", message: `A skill named ${draft.name} already exists. Studio never overwrites one.` });
+    }
+    const about = String(draft.description ?? "").trim();
+    if (!about) found.push({ field: "description", message: "Say when to use it, in one line an agent can match a task against." });
+    else if (about.length > MAX_DESCRIPTION) found.push({ field: "description", message: `Keep the description to ${MAX_DESCRIPTION} characters.` });
+    if (!String(draft.body ?? "").trim()) found.push({ field: "body", message: "Write the instructions." });
+    else if (bytesOf(build({ ...draft, description: about })) > MAX_BYTES) found.push({ field: "body", message: `This skill is ${kb(bytesOf(build({ ...draft, description: about })))}; the most is 32 KB.` });
+    return found;
+  }
+
+  // ---- reading --------------------------------------------------------------------------------
+  async function read({ quiet = false } = {}) {
+    if (!api()?.skillsList) { state.error = "Skills are listed in the desktop app."; render(); return null; }
+    if (state.reading) return state.reading;
+    if (!quiet) { state.loading = true; render(); }
+    const asked = projectId();
+    state.reading = (async () => {
+      try {
+        const result = await api().skillsList();
+        if (asked !== projectId()) return;
+        if (result?.ok) {
+          if (state.project && state.project !== asked) state.editor = null;
+          state.list = result; state.error = ""; state.project = asked;
+        } else { state.error = say(result?.error, "The skills could not be read."); if (result?.off) state.error = OFF; }
+      } catch (error) {
+        state.error = say(error, "The skills could not be read.");
+      }
+    })().finally(() => { state.reading = null; state.loading = false; render(); });
+    return state.reading;
+  }
+
+  // ---- painting ---------------------------------------------------------------------------------
+  function headline() {
+    const list = state.list;
+    if (state.error && !list) return state.error;
+    if (!list) return "Reading the skills…";
+    if (list.blocked) return list.blocked;
+    const count = list.skills.length;
+    const text = count ? `${plural(count, "skill")} in this project. Type / in Home's message box to call one.` : "No skills in this project yet. Start from one below, or make your own.";
+    return writable() ? text : `${text} ${OFF}`;
+  }
+
+  function chipsFor(skill) {
+    const chips = [];
+    if (skill.problem) { const chip = el("span", "skills-flag", skill.problem); chip.dataset.tone = "warn"; chips.push(chip); }
+    if (!skill.problem && skill.loadsByItself === false) { const chip = el("span", "skills-flag", `Over 16 KB: agents use it only when you call /${skill.name}`); chip.dataset.tone = "info"; chips.push(chip); }
+    return chips;
+  }
+
+  function rowNode(skill) {
+    const item = el("li", "skills-row");
+    item.dataset.name = skill.name;
+    item.dataset.tone = skill.problem ? "warn" : "";
+    const main = el("div", "skills-main");
+    const title = el("div", "skills-title");
+    title.append(el("strong", "skills-name", `/${skill.name}`));
+    main.append(title);
+    main.append(el("p", "skills-blurb", skill.description || "No description."));
+    main.append(el("div", "skills-meta", `${skill.path} · ${kb(skill.bytes)}`));
+    for (const chip of chipsFor(skill)) main.append(chip);
+    const side = el("div", "skills-buttons");
+    const busy = state.busy.has(skill.name);
+    const add = (label, run, { title = "", disabled = false, danger = false, armed = "" } = {}) => {
+      const button = el("button", "ghost mini", label);
+      button.type = "button";
+      button.disabled = busy || disabled;
+      if (title) button.title = title;
+      if (danger && window.MefiUi?.arm) window.MefiUi.arm(button, { run, armed: armed || `${label}: click again` });
+      else button.addEventListener("click", run);
+      side.append(button);
+    };
+    add("Edit", () => void edit(skill.name), { disabled: !skill.editable || !writable(), title: !writable() ? OFF : skill.editable ? "Change this skill" : skill.problem || "This skill can not be edited here" });
+    add("Export folder", () => void exportSkill(skill.name, "folder"), { title: "Save a copy as a folder you choose" });
+    add("Export zip", () => void exportSkill(skill.name, "zip"), { title: "Save a copy as a zip file you choose" });
+    add("Delete", () => void remove(skill.name), { danger: true, armed: "Delete: click again", disabled: !writable(), title: writable() ? "Delete this skill. A copy of its text is kept on this PC." : OFF });
+    item.append(main, side);
+    return item;
+  }
+
+  function starterNode(starter) {
+    const item = el("li", "skills-row skills-starter");
+    item.dataset.name = starter.name;
+    const main = el("div", "skills-main");
+    main.append(el("strong", "skills-name", `/${starter.name}`), el("p", "skills-blurb", starter.description));
+    const side = el("div", "skills-buttons");
+    const button = el("button", "ghost mini", "Add");
+    button.type = "button";
+    button.disabled = !writable() || state.busy.has(starter.name);
+    button.title = writable() ? `Save ${starter.name} into this project as it is. You can change it afterwards.` : OFF;
+    button.addEventListener("click", () => void addStarter(starter));
+    side.append(button);
+    item.append(main, side);
+    return item;
+  }
+
+  // The editor: one panel for a new skill and for a changed one.
+  function editorNode() {
+    const draft = state.editor;
+    const isNew = draft.mode === "new";
+    const panel = el("section", "skills-editor");
+    panel.setAttribute("aria-label", isNew ? "New skill" : `Edit ${draft.name}`);
+    const head = el("h3", "skills-editor-head", isNew ? "New skill" : `Edit /${draft.name}`);
+    const where = el("span", "skills-editor-path", "");
+    head.append(where);
+    panel.append(head);
+    const grid = el("div", "skills-fields");
+    const field = (id, label, control, hint) => {
+      const box = el("div", "skills-field");
+      const tag = el("label", "skills-label", label);
+      tag.htmlFor = `skills-${id}`;
+      control.id = `skills-${id}`;
+      box.append(tag, control);
+      if (hint) { const note = el("p", "skills-hint", hint); note.id = `skills-${id}-hint`; control.setAttribute("aria-describedby", note.id); box.append(note); }
+      return box;
+    };
+    const name = el("input", "skills-input");
+    name.type = "text"; name.value = draft.name; name.placeholder = "release-check"; name.autocomplete = "off"; name.spellcheck = false; name.maxLength = 64;
+    name.disabled = !isNew;
+    name.addEventListener("input", () => { draft.name = name.value.trim(); revalidate(); });
+    grid.append(field("name", "Name", name, isNew ? "This becomes the folder name and the /command." : "The name is the folder, and saved team settings point at it, so it can not change."));
+    const about = el("input", "skills-input");
+    about.type = "text"; about.value = draft.description; about.placeholder = "One line an agent can match a task against"; about.autocomplete = "off"; about.maxLength = MAX_DESCRIPTION;
+    about.addEventListener("input", () => { draft.description = about.value; revalidate(); });
+    grid.append(field("description", "When to use it", about));
+    panel.append(grid);
+    const body = el("textarea", "skills-text");
+    body.value = draft.body; body.rows = 9; body.spellcheck = false;
+    body.setAttribute("aria-label", "Skill instructions");
+    body.addEventListener("input", () => { draft.body = body.value; revalidate(); });
+    panel.append(field("body", "Instructions", body));
+    const counter = el("div", "skills-counter");
+    const size = el("span", "skills-size"); size.id = "skills-size";
+    const meaning = el("span", "skills-meaning"); meaning.id = "skills-meaning";
+    counter.append(size, meaning);
+    panel.append(counter);
+    if (draft.hasExtra) panel.append(el("p", "skills-hint", "This file has other front matter (for example another tool's allowed-tools). Saving keeps it exactly as it is."));
+    const error = el("p", "skills-error"); error.id = "skills-error"; error.setAttribute("role", "alert");
+    panel.append(error);
+    const buttons = el("div", "skills-editor-buttons");
+    const save = el("button", "primary", draft.saving ? "Saving…" : "Save skill"); save.type = "button"; save.id = "skills-save";
+    save.addEventListener("click", () => void saveDraft());
+    const cancel = el("button", "ghost", "Cancel"); cancel.type = "button"; cancel.id = "skills-cancel";
+    cancel.addEventListener("click", closeEditor);
+    buttons.append(save, cancel);
+    panel.append(buttons);
+    // What is said follows the words without drawing the panel again, so the caret stays where it is.
+    function revalidate() {
+      where.textContent = `.agents/skills/${draft.name || "name"}/SKILL.md`;
+      const now = problems(draft, { taken: (state.list?.skills ?? []).map((skill) => skill.name) });
+      const shown = now.find((item) => draft.touched?.has(item.field)) ?? now.find((item) => item.field === "name" && draft.name);
+      const bytes = bytesOf(draft.name && draft.description !== undefined ? build({ name: draft.name || "name", description: draft.description, body: draft.body }) : "");
+      size.textContent = `${kb(bytes)} of 32 KB`;
+      counter.dataset.tone = bytes > MAX_BYTES ? "bad" : "";
+      meaning.textContent = bytes > AUTO_LOAD_CHARS ? `Over 16 KB: agents skip it unless you call /${draft.name || "name"}` : "Loads by itself when a task matches";
+      error.textContent = shown ? shown.message : "";
+      error.hidden = !shown;
+      save.disabled = draft.saving === true || now.length > 0 || !writable();
+      name.setAttribute("aria-invalid", String(now.some((item) => item.field === "name" && Boolean(draft.name))));
+    }
+    for (const [control, key] of [[name, "name"], [about, "description"], [body, "body"]]) control.addEventListener("blur", () => { (draft.touched ??= new Set()).add(key); revalidate(); });
+    revalidate();
+    return panel;
+  }
+
+  function othersNode(others) {
+    const box = el("details", "skills-others");
+    const summary = el("summary", "", `Also available to agents: ${plural(others.length, "skill")} from other places`);
+    box.append(summary);
+    box.append(el("p", "skills-hint", "These live in other tools' folders or your home folder. Agents can use them, and /name calls them; Studio does not edit them from here."));
+    const list = el("ul", "skills-other-list");
+    for (const item of others) {
+      const row = el("li", "skills-other");
+      row.append(el("strong", "", `/${item.name}`), el("span", "skills-meta", `${item.scope === "user" ? "your home folder" : "this project"} · ${item.source || "other folder"}`));
+      list.append(row);
+    }
+    box.append(list);
+    return box;
+  }
+
+  function render() {
+    const overlay = $("overlay");
+    if (!overlay) return;
+    const list = state.list;
+    const box = $("list");
+    // Typing does not redraw: what marks an editor is which one it is, not what is in it.
+    const editing = state.editor ? [state.editor.mode, state.editor.key, Boolean(state.editor.saving)] : null;
+    const sign = JSON.stringify([state.error, state.loading && !list, list && [list.blocked, list.writable, list.skills?.map((skill) => [skill.name, skill.description, skill.bytes, skill.updatedAt, skill.problem, skill.editable, skill.loadsByItself]), list.starters?.map((starter) => starter.name), list.others?.map((item) => [item.name, item.scope, item.source])], [...state.busy], state.note, editing]);
+    if (sign === state.signature) return;
+    state.signature = sign;
+    const held = overlay.contains(document.activeElement) && box.contains(document.activeElement) && !document.activeElement.closest(".skills-editor") ? { name: document.activeElement.closest("[data-name]")?.dataset.name, label: document.activeElement.textContent } : null;
+    const failed = state.error && !list;
+    $("headline").textContent = headline();
+    $("headline").dataset.tone = failed || list?.blocked ? "bad" : list && !writable() ? "warn" : "";
+    const tools = [$("new"), $("import")];
+    for (const button of tools) { button.disabled = !list || !writable() || Boolean(list.blocked) || state.loading; button.title = !writable() && list ? OFF : button.id === "skills-import" ? "Choose a folder that holds a SKILL.md" : "Write a new skill"; }
+    const nodes = [];
+    if (state.note) nodes.push(noteNode(state.note));
+    if (state.editor) nodes.push(editorNode());
+    if (list && !failed) {
+      const section = el("section", "skills-section");
+      section.setAttribute("aria-label", "Skills in this project");
+      section.append(el("h3", "skills-section-head", "In this project"));
+      const rows = el("ul", "skills-list");
+      for (const skill of list.skills) rows.append(rowNode(skill));
+      if (!list.skills.length && !list.blocked) rows.append(el("li", "skills-empty", "Nothing here yet. Skills are plain files under .agents/skills, so they travel with the project and show up in Git."));
+      section.append(rows);
+      nodes.push(section);
+      if (list.starters?.length && writable() && !list.blocked) {
+        const starters = el("section", "skills-section");
+        starters.setAttribute("aria-label", "Starter skills");
+        starters.append(el("h3", "skills-section-head", "Starters"));
+        const starterRows = el("ul", "skills-list");
+        for (const starter of list.starters) starterRows.append(starterNode(starter));
+        starters.append(starterRows);
+        nodes.push(starters);
+      }
+      if (list.others?.length) nodes.push(othersNode(list.others));
+    }
+    // A redraw while someone is typing keeps their place in the editor.
+    const typing = document.activeElement?.closest?.(".skills-editor") && document.activeElement.id ? { id: document.activeElement.id, start: document.activeElement.selectionStart, end: document.activeElement.selectionEnd } : null;
+    box.replaceChildren(...nodes);
+    if (typing) {
+      const again = box.querySelector(`#${typing.id}`);
+      again?.focus?.({ preventScroll: true });
+      if (again && typing.start !== undefined && typing.start !== null) again.setSelectionRange?.(typing.start, typing.end);
+    }
+    if (held) {
+      const again = held.name ? [...box.querySelectorAll("[data-name]")].find((node) => node.dataset.name === held.name) : null;
+      const target = again ? [...again.querySelectorAll("button")].find((button) => button.textContent === held.label && !button.disabled) : null;
+      target?.focus?.({ preventScroll: true });
+    }
+  }
+
+  function noteNode(note) {
+    const box = el("div", "skills-note");
+    box.dataset.tone = note.tone ?? "info";
+    box.setAttribute("role", note.tone === "bad" ? "alert" : "status");
+    box.append(el("span", "", note.text));
+    const dismiss = el("button", "ghost mini", "Dismiss");
+    dismiss.type = "button";
+    dismiss.addEventListener("click", () => setNote(null));
+    box.append(dismiss);
+    return box;
+  }
+  function setNote(note) { state.note = note; state.signature = ""; render(); }
+
+  // ---- acting -----------------------------------------------------------------------------------
+  function closeEditor() { state.editor = null; state.signature = ""; render(); $("new")?.focus?.({ preventScroll: true }); }
+  function startEditor(draft) {
+    if (state.editor?.dirty) { toast("Save or cancel the skill you are editing first.", "bad"); return false; }
+    state.editor = { touched: new Set(), key: draft.mode === "new" ? "__new" : draft.name, ...draft };
+    state.note = null; state.signature = ""; render();
+    requestAnimationFrame(() => $("list")?.querySelector(draft.mode === "new" ? "#skills-name" : "#skills-description")?.focus?.({ preventScroll: true }));
+    return true;
+  }
+  function dirty() { if (state.editor) state.editor.dirty = true; }
+
+  function newSkill() {
+    if (!writable()) return;
+    startEditor({ mode: "new", name: "", description: "", body: "" });
+  }
+  async function edit(name) {
+    if (!api()?.skillsRead || !writable()) return;
+    state.busy.add(name); state.signature = ""; render();
+    let result = null;
+    try { result = await api().skillsRead(name); } catch (error) { result = { ok: false, error: say(error, "The skill could not be opened.") }; }
+    state.busy.delete(name); state.signature = "";
+    if (!result?.ok) { setNote({ tone: "bad", text: say(result?.error, "The skill could not be opened.") }); return; }
+    startEditor({ mode: "edit", name: result.name, description: result.description, body: result.body, hasExtra: result.hasExtra === true });
+  }
+  async function addStarter(starter) {
+    await create({ name: starter.name, description: starter.description, body: starter.body }, { starter: true });
+  }
+
+  // One create, for the editor and for a starter: the host says no to a name that is taken.
+  async function create(draft, { starter = false } = {}) {
+    if (!api()?.skillsCreate) return null;
+    const id = projectId();
+    state.busy.add(draft.name); state.signature = ""; render();
+    let result = null;
+    try { result = await api().skillsCreate({ name: draft.name, description: draft.description, body: draft.body }); } catch (error) { result = { ok: false, error: say(error, "The skill could not be saved.") }; }
+    state.busy.delete(draft.name);
+    if (id !== projectId()) return result;
+    if (result?.ok) {
+      toast(`Saved .agents/skills/${draft.name}/SKILL.md. Type /${draft.name} in Home's message box to use it.`);
+      if (!starter) state.editor = null;
+      state.signature = "";
+      await read({ quiet: true });
+      return result;
+    }
+    if (starter) setNote({ tone: "bad", text: say(result?.error, "The skill could not be saved.") });
+    else if (state.editor) { state.editor.saving = false; state.editor.serverError = result?.error; state.signature = ""; render(); showServerError(result); }
+    return result;
+  }
+  async function saveDraft() {
+    const draft = state.editor;
+    if (!draft || draft.saving) return;
+    if (problems(draft, { taken: (state.list?.skills ?? []).map((skill) => skill.name) }).length) return;
+    draft.saving = true; state.signature = ""; render();
+    if (draft.mode === "new") { await create({ name: draft.name, description: draft.description.trim(), body: draft.body }); return; }
+    const id = projectId();
+    let result = null;
+    try { result = await api().skillsSave({ name: draft.name, description: draft.description.trim(), body: draft.body }); } catch (error) { result = { ok: false, error: say(error, "The skill could not be saved.") }; }
+    if (id !== projectId()) return;
+    if (result?.ok) {
+      toast(result.unchanged ? `/${draft.name} is already saved this way.` : `Saved /${draft.name}. A copy of the old text is kept on this PC.`);
+      state.editor = null; state.signature = "";
+      await read({ quiet: true });
+      return;
+    }
+    draft.saving = false; state.signature = ""; render(); showServerError(result);
+  }
+  function showServerError(result) {
+    const error = $("list")?.querySelector("#skills-error");
+    if (!error) return;
+    error.textContent = say(result?.error, "The skill could not be saved.");
+    error.hidden = false;
+  }
+  async function remove(name) {
+    if (!api()?.skillsDelete || !writable()) return;
+    const id = projectId();
+    state.busy.add(name); state.signature = ""; render();
+    let result = null;
+    try { result = await api().skillsDelete(name); } catch (error) { result = { ok: false, error: say(error, "The skill could not be deleted.") }; }
+    state.busy.delete(name);
+    if (id !== projectId()) return;
+    if (result?.ok) {
+      toast(`Deleted /${name}. A copy of its text is kept on this PC.${result.keptFiles ? ` The folder stays, because it holds ${plural(result.keptFiles, "other file")}.` : ""}`);
+      if (state.editor?.name === name) state.editor = null;
+      state.signature = "";
+      await read({ quiet: true });
+      return;
+    }
+    state.signature = "";
+    setNote({ tone: "bad", text: say(result?.error, "The skill could not be deleted.") });
+    void read({ quiet: true });
+  }
+  async function importSkill() {
+    if (!api()?.skillsImport || !writable()) return;
+    const id = projectId();
+    let result = null;
+    try { result = await api().skillsImport(); } catch (error) { result = { ok: false, error: say(error, "The skill could not be imported.") }; }
+    if (id !== projectId() || result?.canceled) return;
+    if (result?.ok) {
+      const left = result.skipped ? ` ${plural(result.skipped, "other file")} in that folder ${result.skipped === 1 ? "was" : "were"} not imported; a skill is its SKILL.md.` : "";
+      setNote({ tone: "good", text: `Imported /${result.skill?.name}.${left}` });
+      await read({ quiet: true });
+      return;
+    }
+    setNote({ tone: "bad", text: say(result?.error, "The skill could not be imported.") });
+  }
+  async function exportSkill(name, kind) {
+    if (!api()?.skillsExport) return;
+    let result = null;
+    try { result = await api().skillsExport({ name, kind }); } catch (error) { result = { ok: false, error: say(error, "The skill could not be exported.") }; }
+    if (result?.canceled) return;
+    if (result?.ok) toast(`Exported /${name} as a ${kind === "zip" ? "zip file" : "folder"}.`);
+    else setNote({ tone: "bad", text: say(result?.error, "The skill could not be exported.") });
+  }
+
+  // ---- the sheet --------------------------------------------------------------------------------
+  function open(params = {}) {
+    init();
+    window.MefiNav?.claim?.("skills");
+    $("overlay").hidden = false;
+    state.signature = "";
+    void read({ quiet: Boolean(state.list) });
+    render();
+    if (params?.focus !== false) requestAnimationFrame(() => $("new")?.focus?.({ preventScroll: true }));
+  }
+  function close() {
+    if (!isOpen()) return;
+    $("overlay").hidden = true;
+    window.MefiNav?.release?.("skills");
+  }
+  function init() {
+    if (initialized || !$("overlay")) return;
+    initialized = true;
+    $("close").addEventListener("click", () => window.MefiNav?.close?.("skills") ?? close());
+    $("refresh").addEventListener("click", () => { void read(); });
+    $("new").addEventListener("click", newSkill);
+    $("import").addEventListener("click", () => void importSkill());
+    // Typing in the editor marks it as changed, so a second New or Edit does not throw the words away.
+    $("list").addEventListener("input", (event) => { if (event.target?.closest?.(".skills-editor")) dirty(); });
+    document.addEventListener("visibilitychange", () => { if (!document.hidden && isOpen()) void read({ quiet: true }); });
+    window.addEventListener("focus", () => { if (isOpen()) void read({ quiet: true }); });
+  }
+
+  window.MefiSkills = { open, close, isOpen, refresh: () => read(), problems, build, nameProblem, state: () => ({ list: state.list, error: state.error, editor: state.editor }) };
+  // nav.js holds the record (Agents, beside Agent Brain) and calls open/close.
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
 })();
 
 // Mefi's Studio AI+ — booklet renderer, filters, refresh-on-open, studio launcher UI.

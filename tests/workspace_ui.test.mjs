@@ -259,7 +259,7 @@ async function environment({ timerQueue = null, bridgeOverrides = {}, autoEnter 
   await flush();
   if (autoEnter) context.window.MefiWorkspace.enter();
   await flush();
-  return { workspace: context.window.MefiWorkspace, el, bridge, events, dispatched, storage, projects, nav: context.window.MefiNav,
+  return { workspace: context.window.MefiWorkspace, el, get, bridge, events, dispatched, storage, projects, nav: context.window.MefiNav,
     window: context.window, emit: (name, detail) => { for (const fn of windowListeners.get(name) || []) fn({ detail }); } };
 }
 
@@ -1013,4 +1013,139 @@ test("Home hands New task, a task's checks and a change request to Build's sessi
   const bareNav = []; bare.nav.go = (...args) => bareNav.push(args);
   bare.workspace.composeTask();
   assert.equal(bareNav.at(-1)[0], "workspace");
+});
+
+// ---- pictures on a message and the @ # / picker (renderer/composer-pictures.js, composer-picker.js) ----
+// Home binds both scripts to its message box; these tests give it recording stand-ins, so what is pinned is
+// what workspace.js does with them (the two scripts have their own suites).
+const plain = (value) => JSON.parse(JSON.stringify(value));
+function composerStubs({ ids = [], busy = false } = {}) {
+  const log = [], state = { ids, busy, pictureOptions: null, pickerOptions: null };
+  const pictures = { bind: (input, options) => { state.pictureOptions = options; return { take: () => state.ids, clear: () => { log.push("clear"); state.ids = []; }, refresh: () => log.push("pictures.refresh"), isBusy: () => state.busy }; } };
+  const picker = {
+    pickerPreference: (prefs) => prefs?.composerPicker !== false,
+    bind: (input, options) => { state.pickerOptions = options; return { refresh: () => log.push("picker.refresh"), setPicker: (on) => log.push(["setPicker", on]) }; },
+  };
+  return { log, state, windowOverrides: { MefiComposerPictures: pictures, MefiComposerPicker: picker } };
+}
+
+test("Home sends the ids of the attached pictures with a chat message, and lets them go once the message is saved", async () => {
+  const stubs = composerStubs({ ids: ["img_a", "img_b"] }), sent = [];
+  const env = await environment({ windowOverrides: stubs.windowOverrides, bridgeOverrides: { assistantMessage: async (...args) => { sent.push(args); return { ok: true, state: { messages: [] } }; } } });
+  env.el("input").value = "What is wrong on this screen?";
+  await env.el("form").trigger("submit"); await flush();
+  assert.equal(sent.length, 1);
+  assert.deepEqual(plain(sent[0].slice(0, 2)), ["What is wrong on this screen?", "project-a"]);
+  assert.deepEqual(plain(sent[0][3]), ["img_a", "img_b"], "the ids ride as the fourth argument, never a path or bytes");
+  assert.ok(stubs.log.includes("clear"), "the pictures belong to the message now");
+  assert.equal(env.el("input").value, "");
+});
+
+test("a message with no pictures is sent exactly as it was before pictures existed, and a failed send keeps the pictures", async () => {
+  const none = composerStubs(), sent = [];
+  const env = await environment({ windowOverrides: none.windowOverrides, bridgeOverrides: { assistantMessage: async (...args) => { sent.push(args); return { ok: true, state: { messages: [] } }; } } });
+  env.el("input").value = "Just words";
+  await env.el("form").trigger("submit"); await flush();
+  assert.equal(sent[0].length, 3, "no fourth argument");
+  const failing = composerStubs({ ids: ["img_a"] });
+  const failed = await environment({ windowOverrides: failing.windowOverrides, bridgeOverrides: { assistantMessage: async () => ({ ok: false, error: "The model route is down." }) } });
+  failed.el("input").value = "Look at this";
+  await failed.el("form").trigger("submit"); await flush();
+  assert.equal(failing.log.includes("clear"), false, "nothing was sent, so nothing is let go");
+  assert.deepEqual(failing.state.ids, ["img_a"]);
+  assert.match(failed.el("feedback").textContent, /Your draft is still here/);
+  assert.equal(failed.el("input").value, "Look at this");
+});
+
+test("a task made from the box carries the picture ids to the host, and only when there are some", async () => {
+  const stubs = composerStubs({ ids: ["img_a"] }), made = [];
+  const env = await environment({ windowOverrides: stubs.windowOverrides, bridgeOverrides: { tasksCreate: async (value) => { made.push(value); return { ok: true, task: { id: "t1", projectId: "project-a" } }; } } });
+  await env.el("mode-work").trigger("click");
+  assert.equal(stubs.state.pictureOptions.mode(), "task", "the box tells the note under the pictures what the message is becoming");
+  assert.equal(stubs.state.pickerOptions.mode(), "task", "and the chips what will happen to a mention");
+  env.el("input").value = "Fix the layout shown in the screenshot and check it with the render test.";
+  await env.el("form").trigger("submit"); await flush();
+  assert.deepEqual(plain(made[0].images), ["img_a"]);
+  assert.equal(made[0].projectId, "project-a");
+  await env.el("mode-chat").trigger("click");
+  assert.equal(stubs.state.pictureOptions.mode(), "chat");
+  await env.el("mode-work").trigger("click");
+  env.el("input").value = "Another task with no picture, described so it can be checked.";
+  await env.el("form").trigger("submit"); await flush();
+  assert.equal("images" in made[1], false, "no key at all when nothing is attached");
+});
+
+test("Send waits while a picture is still being added", async () => {
+  const stubs = composerStubs({ busy: true }), sent = [];
+  const env = await environment({ windowOverrides: stubs.windowOverrides, bridgeOverrides: { assistantMessage: async (...args) => { sent.push(args); return { ok: true, state: { messages: [] } }; } } });
+  env.el("input").value = "Here is the picture";
+  await env.el("form").trigger("submit"); await flush();
+  assert.equal(sent.length, 0);
+  assert.equal(env.el("feedback").textContent, "Wait for the picture to finish adding.");
+  assert.equal(env.el("input").value, "Here is the picture", "the words stay");
+  stubs.state.busy = false;
+  await env.el("form").trigger("submit"); await flush();
+  assert.equal(sent.length, 1);
+});
+
+test("the box's scope follows the project, and it is blocked while a send or a switch is in flight", async () => {
+  const stubs = composerStubs(), pending = deferred();
+  const env = await environment({ windowOverrides: stubs.windowOverrides, bridgeOverrides: { assistantMessage: () => pending.promise } });
+  const { scope, blocked } = stubs.state.pictureOptions;
+  assert.equal(stubs.state.pickerOptions.scope, scope, "one scope for both, so a project change drops the pictures and reads the skills again");
+  const first = scope();
+  assert.match(first, /:project-a$/);
+  assert.equal(blocked(), false);
+  env.el("input").value = "Sending";
+  const sending = env.el("form").trigger("submit"); await flush();
+  assert.equal(blocked(), true, "a send holds the pictures still");
+  pending.resolve({ ok: false, error: "no" }); await sending; await flush();
+  assert.equal(blocked(), false);
+  env.events.projects({ ok: true, activeId: "project-b", projects: env.projects.projects });
+  assert.match(scope(), /:project-b$/);
+  assert.notEqual(scope(), first);
+  assert.ok(stubs.log.includes("pictures.refresh") && stubs.log.includes("picker.refresh"), "both are told when the controls are redrawn");
+  assert.equal(typeof stubs.state.pickerOptions.tasks, "function");
+});
+
+test("a message that carried pictures names them under its words, by name and never by path", async () => {
+  const env = await environment({ bridgeOverrides: { assistantState: async () => ({ ok: true, state: { projectId: "project-a", messages: [
+    { id: "m1", role: "user", projectId: "project-a", at: 1, text: "Look", images: [{ id: "img_a", name: "crash.png", mime: "image/png", bytes: 10, path: "C:/secret/crash.png" }, { id: "img_b", name: "b.png" }] },
+    { id: "m2", role: "user", projectId: "project-a", at: 2, text: "One", images: [{ id: "img_c", name: "only.jpg" }] },
+    { id: "m3", role: "assistant", projectId: "project-a", at: 3, text: "Plain reply" },
+  ] } }) } });
+  await env.workspace.refresh(true);
+  const lines = env.el("thread").querySelectorAll(".ws-message-images").map((node) => node.textContent);
+  assert.deepEqual(plain(lines), ["Pictures attached: crash.png, b.png", "Picture attached: only.jpg"]);
+  assert.doesNotMatch(env.el("thread").textContent, /secret/);
+});
+
+test("Settings' switch for the suggestions reads settings.ui.composerPicker, saves it, and puts itself back when saving fails", async () => {
+  const stubs = composerStubs(), saved = [];
+  let fail = false;
+  const env = await environment({ windowOverrides: stubs.windowOverrides, bridgeOverrides: {
+    prefsGet: async () => ({ ok: true, prefs: { composerPicker: false } }),
+    prefsSet: async (prefs) => { saved.push(prefs); return fail ? { ok: false, error: "Settings could not be saved." } : { ok: true }; },
+  } });
+  const box = env.get("settings-composer-picker");
+  assert.equal(box.checked, false, "the saved choice is what the switch shows");
+  assert.deepEqual(plain(stubs.log.filter((entry) => Array.isArray(entry))), [["setPicker", false]], "and what the box does");
+  box.checked = true;
+  await box.trigger("change");
+  assert.deepEqual(plain(saved), [{ composerPicker: true }]);
+  assert.deepEqual(plain(stubs.log.filter((entry) => Array.isArray(entry)).at(-1)), ["setPicker", true]);
+  assert.match(env.el("feedback").textContent, /now suggests project files, tasks and skills/);
+  fail = true; box.checked = false;
+  await box.trigger("change");
+  assert.equal(box.checked, true, "not saved, so not changed");
+  assert.deepEqual(plain(stubs.log.filter((entry) => Array.isArray(entry)).at(-1)), ["setPicker", true]);
+  assert.equal(env.el("feedback").textContent, "Settings could not be saved.");
+});
+
+test("Home works with neither composer script present", async () => {
+  const env = await environment({ bridgeOverrides: { assistantMessage: async () => ({ ok: true, state: { messages: [] } }) } });
+  env.el("input").value = "Plain words";
+  await env.el("form").trigger("submit"); await flush();
+  assert.equal(env.el("input").value, "", "the message went and the box cleared, with no pictures script to ask");
+  assert.equal(env.el("feedback").textContent, "Reply received.");
 });

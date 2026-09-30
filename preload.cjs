@@ -67,6 +67,15 @@ const api = {
   agentModels: (provider) => ipcRenderer.invoke("agents:models", { provider }),
   agentsSave: (payload) => ipcRenderer.invoke("agents:save", payload),
   agentsPreset: (payload) => ipcRenderer.invoke("agents:preset", payload),
+  skillsList: () => ipcRenderer.invoke("skills:list"),
+  skillsRead: (name) => ipcRenderer.invoke("skills:read", { name: typeof name === "string" ? name.slice(0, 100) : "" }),
+  skillsSave: (draft) => ipcRenderer.invoke("skills:save", { name: typeof draft?.name === "string" ? draft.name.slice(0, 100) : "", description: typeof draft?.description === "string" ? draft.description : "", body: typeof draft?.body === "string" ? draft.body : "" }),
+  skillsCreate: (draft) => ipcRenderer.invoke("skills:create", { name: typeof draft?.name === "string" ? draft.name.slice(0, 100) : "", description: typeof draft?.description === "string" ? draft.description : "", body: typeof draft?.body === "string" ? draft.body : "" }),
+  skillsDelete: (name) => ipcRenderer.invoke("skills:delete", { name: typeof name === "string" ? name.slice(0, 100) : "" }),
+  skillsImport: () => ipcRenderer.invoke("skills:import"),
+  skillsExport: (payload) => ipcRenderer.invoke("skills:export", { name: typeof payload?.name === "string" ? payload.name.slice(0, 100) : "", kind: payload?.kind === "zip" ? "zip" : "folder" }),
+  projectFiles: (payload) => ipcRenderer.invoke("project:files", { query: typeof payload?.query === "string" ? payload.query.slice(0, 200) : "", limit: Number.isFinite(Number(payload?.limit)) ? Math.min(25, Math.max(1, Math.floor(Number(payload.limit)))) : 8 }),
+  agentsSkills: () => ipcRenderer.invoke("agents:skills"),
   openrouterModels: (options = {}) => ipcRenderer.invoke("openrouter:models", { refresh: options?.refresh === true }),
   autoSetup: () => ipcRenderer.invoke("settings:auto-setup"),
   // The first launch of a fresh install runs auto setup by itself (main.cjs
@@ -158,7 +167,10 @@ const api = {
   backlogStatus: () => ipcRenderer.invoke("assistant:backlog"),
   backlogControl: (payload) => ipcRenderer.invoke("assistant:backlog-control", payload ?? {}),
   assistantState: () => ipcRenderer.invoke("assistant:state"),
-  assistantMessage: (text, projectId, context) => ipcRenderer.invoke("assistant:message", { text, projectId, context }),
+  assistantMessage: (text, projectId, context, images) => ipcRenderer.invoke("assistant:message", { text, projectId, context, images }),
+  // Pictures on a message (main.cjs "Picture attachments"): keep one (its bytes as base64) and get an id back, or take one away.
+  assistantImage: (payload) => ipcRenderer.invoke("assistant:image", { name: typeof payload?.name === "string" ? payload.name.slice(0, 200) : "", mime: typeof payload?.mime === "string" ? payload.mime.slice(0, 100) : "", data: payload?.data, ...(payload?.probe === true ? { probe: true } : {}) }),
+  assistantImageRemove: (payload) => ipcRenderer.invoke("assistant:image-remove", { id: typeof payload?.id === "string" ? payload.id.slice(0, 80) : "" }),
   musicRecommend: (payload) => ipcRenderer.invoke("music:recommend", payload ?? {}),
   assistantWorkOn: (target) => ipcRenderer.invoke("assistant:work-on", target ?? {}),
   assistantFocus: (target) => ipcRenderer.invoke("assistant:focus", target ?? null),
@@ -210,6 +222,9 @@ const api = {
   tasksUndelete: (payload) => ipcRenderer.invoke("tasks:undelete", payload ?? {}),
   boardTrash: (payload) => ipcRenderer.invoke("board:trash", payload ?? {}),
   tasksAction: (payload) => ipcRenderer.invoke("tasks:action", payload ?? {}),
+  // The task's Usage tab (main.cjs "Task time limit"): what it took, and Stop an attempt after N minutes.
+  taskMetrics: (payload) => ipcRenderer.invoke("task:metrics", { taskId: typeof payload?.taskId === "string" ? payload.taskId.slice(0, 200) : "", ...(typeof payload?.projectId === "string" ? { projectId: payload.projectId.slice(0, 200) } : {}) }),
+  tasksCap: (payload) => ipcRenderer.invoke("tasks:cap", { taskId: typeof payload?.taskId === "string" ? payload.taskId.slice(0, 200) : "", minutes: payload?.minutes, ...(typeof payload?.projectId === "string" ? { projectId: payload.projectId.slice(0, 200) } : {}) }),
   tasksSave: (tasks) => ipcRenderer.invoke("tasks:save", tasks),
   // Changed files and what goes with them (scripts/attempt-snapshots-host.cjs, advisory-checks-host.cjs, attempt-evidence-host.cjs).
   tasksChanges: (payload) => ipcRenderer.invoke("tasks:changes", reviewBody(payload)),

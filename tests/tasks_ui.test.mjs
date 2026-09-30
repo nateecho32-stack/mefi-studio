@@ -1236,3 +1236,124 @@ test("a parent waiting on its follow-ups is not a review, and Drop closes a park
   assert.equal(env.api.summary().review, 1);
   assert.ok(env.notifications.some((text) => /^Dropped · Wire the toggle/.test(text)));
 });
+
+// ---- Usage & limit (renderer/tasks.js renderTaskUsage; host: main.cjs "Task time limit") ----
+const usageReport = (more = {}) => ({
+  ok: true, taskId: "fix", asOf: 1000, coverage: { complete: true, reasons: [] },
+  attempt: { runId: "run_2", taskId: "fix", startedAt: 100, endedAt: 800, live: false, seconds: 720, outcome: "finished-ok", stoppedAtLimit: false, limitMinutes: null,
+    route: { kind: "opencode", label: "OpenCode" }, tokens: { state: "reported", input: 38200, output: 4100, cacheRead: 0, total: 42300, calls: 5 }, cost: { state: "reported", usd: 0.31, unpricedCalls: 0, calls: 5 } },
+  task: { attempts: 2, seconds: 1260, secondsUnknown: 0, tokens: { state: "reported", input: 50000, output: 5000, total: 55000, calls: 8, partial: false }, cost: { state: "reported", usd: 0.4, unpricedCalls: 0, partial: false }, unreported: 0, unavailable: 0, subtasks: 1, stoppedAtLimit: 0 },
+  cap: { enabled: true, minutes: 25, effectiveMinutes: 25, ceilingMinutes: 25, raised: false, default: 25, min: 5, max: 240, step: 5 },
+  ...more,
+});
+const openUsage = async (env) => {
+  await env.api.open({ taskId: "fix" }); await settle();
+  const fold = descendants(env.get("task-detail")).find((element) => element.dataset.taskPanel === "usage");
+  return fold;
+};
+
+test("the Usage & limit fold reads nothing until it is opened, then shows this attempt, the whole task and the limit", async () => {
+  const calls = [];
+  const env = environment({ tasks: [{ id: "fix", projectId: "p", title: "Fix save", status: "open" }], bridge: { taskMetrics: async (payload) => { calls.push(payload); return usageReport(); } } });
+  const fold = await openUsage(env);
+  assert.ok(fold, "the fold is there");
+  assert.deepEqual(calls, [], "a task nobody looks at costs no ledger read");
+  assert.match(fold.textContent, /Open this to read what the task took/);
+  fold.children[0].click(); await settle();
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [{ taskId: "fix", projectId: "p" }], "asked once, for this task in this project");
+  const text = descendants(env.get("task-detail")).find((element) => element.dataset.taskPanel === "usage").textContent;
+  assert.match(text, /Usage & limit · stops an attempt after 25 min/);
+  assert.match(text, /This attempt/);
+  assert.match(text, /Time12 min/);
+  assert.match(text, /Tokens38\.2k in · 4\.1k out/);
+  assert.match(text, /Tokens50\.0k in · 5\.0k out/, "the whole task's total is its own row");
+  assert.match(text, /Cost\$0\.31/);
+  assert.match(text, /Whole taskwith 1 sub-task/);
+  assert.match(text, /Attempts2/);
+  assert.match(text, /Time21 min/);
+  assert.match(text, /Stop an attempt after/);
+  assert.match(text, /Saves progress and does not count as a failure\./);
+  assert.match(text, /25 min is the longest Studio lets one attempt run\./);
+});
+
+test("a builder that reports nothing says Not reported and that time is measured here, never a zero", async () => {
+  const cli = { runId: "run_2", startedAt: 100, endedAt: 800, live: false, seconds: 300, outcome: "finished-ok", route: { kind: "cli", label: "Claude Code" }, tokens: { state: "not-reported" }, cost: { state: "not-reported" } };
+  const env = environment({ tasks: [{ id: "fix", projectId: "p", title: "Fix save", status: "open" }], bridge: { taskMetrics: async () => usageReport({
+    attempt: cli, task: { attempts: 1, seconds: 300, secondsUnknown: 0, tokens: { state: "not-reported", partial: false }, cost: { state: "not-reported", partial: false }, unreported: 1, unavailable: 0, subtasks: 0, stoppedAtLimit: 0 } }) } });
+  const fold = await openUsage(env); fold.children[0].click(); await settle();
+  const text = descendants(env.get("task-detail")).find((element) => element.dataset.taskPanel === "usage").textContent;
+  assert.match(text, /TokensNot reported/);
+  assert.match(text, /CostNot reported/);
+  assert.match(text, /Claude Code does not report tokens or cost to Studio\. Time is measured here\./);
+  assert.match(text, /Tokens and costTime only/, "the whole task has time only");
+  assert.doesNotMatch(text, /\$0|0 in|0 out/, "no zero stands in for what nobody reported");
+  assert.doesNotMatch(text, /Whole task with/);
+});
+
+test("unpriced calls, a partial total and an unreadable store are each said, none as free", async () => {
+  const env = environment({ tasks: [{ id: "fix", projectId: "p", title: "Fix save", status: "open" }], bridge: { taskMetrics: async () => usageReport({
+    attempt: { runId: "run_2", startedAt: 100, endedAt: 400, live: false, seconds: 60, outcome: "finished-ok", route: { kind: "opencode", label: "OpenCode" }, tokens: { state: "reported", input: 900, output: 90, total: 990, calls: 2 }, cost: { state: "unpriced", usd: null, unpricedCalls: 2 } },
+    task: { attempts: 3, seconds: 400, secondsUnknown: 1, tokens: { state: "reported", input: 900, output: 90, total: 990, partial: true }, cost: { state: "reported", usd: 0.5, unpricedCalls: 2, partial: true }, unreported: 1, unavailable: 0, subtasks: 0, stoppedAtLimit: 0 },
+    coverage: { complete: false, reasons: ["Some attempts have no recorded end, so their time is missing."] },
+  }) } });
+  const fold = await openUsage(env); fold.children[0].click(); await settle();
+  const text = descendants(env.get("task-detail")).find((element) => element.dataset.taskPanel === "usage").textContent;
+  assert.match(text, /CostUnpriced · 2 calls/);
+  assert.match(text, /Cost\$0\.50 \+ 2 unpriced calls \+ some not reported/);
+  assert.match(text, /Time7 min \+ some not recorded/);
+  assert.match(text, /Some attempts have no recorded end/);
+});
+
+test("a running attempt reads as running and counts up from its start", async () => {
+  const clock = { now: 700 * 1000 };
+  const live = { runId: "run_3", startedAt: 100 * 1000, endedAt: null, live: true, seconds: 0, outcome: "running", route: { kind: "opencode", label: "OpenCode" }, tokens: { state: "none-recorded" }, cost: { state: "none-recorded" } };
+  const env = environment({ clock, tasks: [{ id: "fix", projectId: "p", title: "Fix save", status: "active", runId: "run_3" }], bridge: { taskMetrics: async () => usageReport({ attempt: live }) } });
+  const fold = await openUsage(env); fold.children[0].click(); await settle();
+  const text = descendants(env.get("task-detail")).find((element) => element.dataset.taskPanel === "usage").textContent;
+  assert.match(text, /This attemptRunning now/);
+  assert.match(text, /Time10 min/, "600 s since it started");
+  assert.match(text, /TokensNone recorded yet/);
+});
+
+test("the stepper changes the limit through tasks:cap, re-reads, and stops at the app's own ceiling", async () => {
+  const set = []; let cap = 25;
+  const env = environment({ tasks: [{ id: "fix", projectId: "p", title: "Fix save", status: "open" }], bridge: {
+    taskMetrics: async () => usageReport({ cap: { enabled: true, minutes: cap, effectiveMinutes: cap, ceilingMinutes: 25, raised: false, default: 25, min: 5, max: 240, step: 5 } }),
+    tasksCap: async (payload) => { set.push(payload); cap = payload.minutes; return { ok: true, minutes: cap }; },
+  } });
+  const fold = await openUsage(env); fold.children[0].click(); await settle();
+  const button = (name) => descendants(env.get("task-detail")).find((element) => element.dataset.taskAction === name);
+  assert.equal(button("cap-longer").disabled, true, "25 is as long as Studio lets an attempt run");
+  assert.equal(button("cap-shorter").disabled, false);
+  button("cap-shorter").click(); await settle();
+  assert.deepEqual(JSON.parse(JSON.stringify(set)), [{ taskId: "fix", minutes: 20, projectId: "p" }]);
+  assert.match(descendants(env.get("task-detail")).find((element) => element.dataset.taskPanel === "usage").textContent, /Usage & limit · stops an attempt after 20 min/, "read again after the change");
+  assert.equal(button("cap-longer").disabled, false);
+  cap = 5; env.broadcast([{ id: "fix", projectId: "p", title: "Fix save", status: "open", capMinutes: 5, updatedAt: 9 }]); await settle();
+  assert.equal(button("cap-shorter").disabled, true, "not under 5 minutes");
+  // A refusal shows as a toast, and the limit shown does not change.
+  env.window.mefiStudio.tasksCap = async () => ({ ok: false, error: "Task not found in this project." });
+  button("cap-longer").click(); await settle();
+  assert.ok(env.notifications.includes("Task not found in this project."));
+});
+
+test("a limit above the app's ceiling says which one wins, and a switched-off limit offers no stepper", async () => {
+  const raised = environment({ tasks: [{ id: "fix", projectId: "p", title: "Fix save", status: "open" }], bridge: { taskMetrics: async () => usageReport({ cap: { enabled: true, minutes: 60, effectiveMinutes: 25, ceilingMinutes: 25, raised: true, default: 25, min: 5, max: 240, step: 5 } }) } });
+  const fold = await openUsage(raised); fold.children[0].click(); await settle();
+  assert.match(descendants(raised.get("task-detail")).find((element) => element.dataset.taskPanel === "usage").textContent, /This task asks for 60 min, but Studio ends every attempt at 25 min at the latest\./);
+  const off = environment({ tasks: [{ id: "fix", projectId: "p", title: "Fix save", status: "open" }], bridge: { taskMetrics: async () => usageReport({ cap: { enabled: false, minutes: 25, effectiveMinutes: 25, ceilingMinutes: 25, raised: false, default: 25, min: 5, max: 240, step: 5 } }) } });
+  const offFold = await openUsage(off); offFold.children[0].click(); await settle();
+  const text = descendants(off.get("task-detail")).find((element) => element.dataset.taskPanel === "usage").textContent;
+  assert.match(text, /Time limits are switched off on this PC/);
+  assert.equal(descendants(off.get("task-detail")).some((element) => element.dataset.taskAction === "cap-shorter"), false);
+  assert.doesNotMatch(text, /stops an attempt after/);
+});
+
+test("a failed usage read is said in the fold, and a page without the bridge has no fold", async () => {
+  const env = environment({ tasks: [{ id: "fix", projectId: "p", title: "Fix save", status: "open" }], bridge: { taskMetrics: async () => ({ ok: false, error: "The usage could not be read: locked" }) } });
+  const fold = await openUsage(env); fold.children[0].click(); await settle();
+  assert.match(descendants(env.get("task-detail")).find((element) => element.dataset.taskPanel === "usage").textContent, /The usage could not be read: locked/);
+  const bare = environment({ tasks: [{ id: "fix", projectId: "p", title: "Fix save", status: "open" }] });
+  await bare.api.open({ taskId: "fix" }); await settle();
+  assert.equal(descendants(bare.get("task-detail")).some((element) => element.dataset.taskPanel === "usage"), false);
+});

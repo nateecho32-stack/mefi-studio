@@ -5670,7 +5670,7 @@ async function chatCompletion(endpoint, apiKey, model, body, { sessionHeader = n
 function responsesRequest(body) {
   const messages = Array.isArray(body.messages) ? body.messages : [];
   const instructions = messages.filter((message) => message.role === "system").map((message) => message.content).join("\n\n");
-  const request = { model: body.model, input: messages.filter((message) => message.role !== "system").map(({ role, content }) => ({ role, content })), max_output_tokens: body.max_tokens };
+  const request = { model: body.model, input: messages.filter((message) => message.role !== "system").map(({ role, content }) => ({ role, content: Array.isArray(content) ? require("./scripts/image-attach.cjs").responsesParts(content) : content })), max_output_tokens: body.max_tokens };
   if (instructions) request.instructions = instructions;
   if (body.reasoning_effort) request.reasoning = { effort: body.reasoning_effort };
   if (body.service_tier) request.service_tier = body.service_tier;
@@ -6217,11 +6217,13 @@ async function cliAssistantCall(route, system, user, maxTokens, { role = "routin
     // next (cliAccountTurn): every subscription login answers before the
     // keyed fallback below. Sliced hosts without the block run one login.
     const turn = typeof cliAccountTurn === "function" ? cliAccountTurn : (_provider, call) => call({});
+    // A picture on the message is only named to a CLI, in one plain line (the "Picture attachments" block).
+    const said = typeof imageCliText === "function" ? imageCliText(user) : user;
     try {
-      cli = await turn(route.provider, (login) => route.provider === "grok" ? grokCompletion(system, user, route.model)
-        : route.provider === "claude" ? claudeCompletion(system, user, route.model, login)
-          : route.provider === "codex" ? codexCompletion(system, user, route.model, login)
-            : antigravityCompletion(system, user, route.model));
+      cli = await turn(route.provider, (login) => route.provider === "grok" ? grokCompletion(system, said, route.model)
+        : route.provider === "claude" ? claudeCompletion(system, said, route.model, login)
+          : route.provider === "codex" ? codexCompletion(system, said, route.model, login)
+            : antigravityCompletion(system, said, route.model));
     } finally {
       settleProvider(route.provider, gate, cli);
     }
@@ -6300,7 +6302,9 @@ async function httpAssistantCall(route, system, user, maxTokens, { taskType = "r
     if (!gate.allowed) return providerSkipped(candidate.provider, gate);
     let result;
     try {
-      result = await chatCompletion(candidate.endpoint, candidate.apiKey, candidate.model, requestBody(candidate), {
+      // A picture on the message goes in only when this model can see it (the "Picture attachments" block).
+      const wire = typeof imageBodyFor === "function" ? await imageBodyFor(candidate, requestBody(candidate)) : requestBody(candidate);
+      result = await chatCompletion(candidate.endpoint, candidate.apiKey, candidate.model, wire, {
         sessionHeader: candidate.provider === "opencode" ? await assistantSessionId() : null,
         provider: candidate.provider, taskType, source, timeoutMs,
       });
@@ -11522,7 +11526,7 @@ async function assistantChatAction(action = {}, { focused = null, remote = false
 // order. Null when no model answered (no route, a timeout, a provider error):
 // the local reply then answers. A reply that came back as prose is still the
 // reply, with the local classifier's actions standing in for the missing ones.
-async function assistantOverseerTurn({ user, text, intent, facts, did, slot, focused, generation = assistantBrakeGeneration }) {
+async function assistantOverseerTurn({ user, text, intent, facts, did, slot, focused, generation = assistantBrakeGeneration, extras = null }) {
   let companionReady = false;
   if (typeof seatChoice === "function" && typeof readAgentSettings === "function") {
     try {
@@ -11555,19 +11559,24 @@ async function assistantOverseerTurn({ user, text, intent, facts, did, slot, foc
   }));
   // What the owner sees as "N need you", counted the way their badge is.
   const needsYou = typeof assistantNeedsYouDigest === "function" ? await assistantNeedsYouDigest() : null;
-  const body = taskOversight.packChatPayload({ message: text, did, ...(user?.ui ? { ui: user.ui } : {}), ...(needsYou ? { needsYou } : {}), decisionContext, asks, events, ...(outside ? { outside } : {}), board, thread, focus: focus ?? null, suggestions, facts: rest },
+  // Skills the owner named (/skill-name) ride the system prompt, and the files they pointed at (@path) are one line after
+  // their words: only for the model, never in the thread (the "Mentions in a message" block).
+  const chatSystem = ASSISTANT_CHAT_SYSTEM + (extras?.system ?? "");
+  const body = taskOversight.packChatPayload({ message: extras?.message ? `${text}\n\n${extras.message}` : text, did, ...(user?.ui ? { ui: user.ui } : {}), ...(needsYou ? { needsYou } : {}), decisionContext, asks, events, ...(outside ? { outside } : {}), board, thread, focus: focus ?? null, suggestions, facts: rest },
     CHAT_PAYLOAD_BUDGET, { sectionBudgets: CHAT_SECTION_BUDGETS });
   // A CLI answers slower than an endpoint. A slow reply is not an outage: only
   // a provider error takes the AI offline for the other roles. The whole turn
   // (model, ordering wait, actions) must fit the pool's 150 s job deadline.
   const budgetMs = route.cli ? 90000 : 45000;
   let timer = null;
-  const call = await Promise.race([
+  const ask = () => Promise.race([
     typeof seatFetch === "function"
-      ? seatFetch("companion", ASSISTANT_CHAT_SYSTEM, body, 1500, { fallback: (system = ASSISTANT_CHAT_SYSTEM) => assistantFetch(system, body, 1500, { taskType: "conversation", allowCli: DATA_ONLY_CLIS, skillRole: null }) })
-      : assistantFetch(ASSISTANT_CHAT_SYSTEM, body, 1500, { taskType: "conversation", allowCli: DATA_ONLY_CLIS }),
+      ? seatFetch("companion", chatSystem, body, 1500, { fallback: (system = chatSystem) => assistantFetch(system, body, 1500, { taskType: "conversation", allowCli: DATA_ONLY_CLIS, skillRole: null }) })
+      : assistantFetch(chatSystem, body, 1500, { taskType: "conversation", allowCli: DATA_ONLY_CLIS }),
     new Promise((resolve) => (timer = setTimeout(() => resolve({ ok: false, timedOut: true, error: `no reply within ${Math.round(budgetMs / 1000)} s` }), budgetMs))),
   ]);
+  // A picture on the message rides a scope around the call, so every request it makes can carry it.
+  const call = await (typeof extras?.run === "function" ? extras.run(ask) : ask());
   clearTimeout(timer);
   if (!call?.ok || !String(call.text ?? "").trim()) {
     if (call?.timedOut) logLine(`[assistant] chat reply abandoned: ${call.error}`);
@@ -11703,6 +11712,8 @@ async function assistantRespond(user, entry = null) {
   // reply survives any failure above it.
   let folderTarget = null;
   let offers = null;
+  // What the message brings beyond its words (a picture, the "Picture attachments" block): the model call runs inside its scope.
+  let extras = null;
   const done = [];
   const slot = assistantChatSlot();
   try {
@@ -11759,10 +11770,11 @@ async function assistantRespond(user, entry = null) {
       local = { ...local, actions: [] };
     }
     const generation = assistantBrakeGeneration;
+    try { extras = typeof messageExtras === "function" ? await messageExtras(user) : null; } catch (error) { logError(`message extras failed: ${error.message}`); }
     let turn = null;
     if (assistantAiUsable()) {
       try {
-        turn = await assistantOverseerTurn({ user, text, intent, facts, did: [...done], slot, focused: assistantFocusSubject(facts), generation });
+        turn = await assistantOverseerTurn({ user, text, intent, facts, did: [...done], slot, focused: assistantFocusSubject(facts), generation, extras });
       } catch (error) {
         // Nothing ran yet (the actions keep their own outcomes): the local
         // reply answers as if no model had.
@@ -11922,6 +11934,9 @@ async function assistantRespond(user, entry = null) {
       ? `${reply} ${confirmations.map((note) => (/[.!?]$/.test(note) ? note : `${note}.`)).join(" ")}`.trim()
       : `${reply} Done: ${confirmations.join("; ")}.`;
   }
+  // What the message brought that no model used (a picture a model cannot see), said once, plainly.
+  const extraNotes = typeof extras?.notes === "function" ? extras.notes() : [];
+  if (extraNotes.length) reply = `${reply} ${extraNotes.join(" ")}`.trim();
   // The owner switched projects while this reply ran: the thread in memory is
   // now the other project's, and this reply must not land in it.
   if (user.projectId && !assistantOwnsProject(user.projectId)) {
@@ -11973,12 +11988,16 @@ async function assistantMessage(raw, options = {}) {
     return { ok: false, error: `That message is ${say(text.length)} characters and Mefi reads up to ${say(limit)} at once, so nothing was sent. Cut it down or send it in parts.`, limit, length: text.length };
   }
   await ensureAssistant();
+  // Pictures ride along by id (the "Picture attachments" block); a message whose picture is gone is refused whole, like an over-long one.
+  const pictures = typeof attachedPictures === "function" ? await attachedPictures(options?.images) : { ok: true, images: [] };
+  if (!pictures.ok) return { ok: false, error: pictures.error };
   // The manner the owner chose for their companion rides every chat box's
   // message the same way (companion-pet.cjs; the model reads ui.personality).
   const manner = typeof agentBrain !== "undefined" && agentBrain?.companionManner ? await agentBrain.companionManner().catch(() => null) : null;
   const seen = assistantUiContext(options?.context);
   const ui = seen || manner ? { ...(seen ?? {}), ...(manner ? { personality: manner } : {}) } : null;
-  const user = { id: assistantMessageId(), projectId: projects.current().id, at: Date.now(), role: "user", text, via: "local", intent: "chat", ...(ui ? { ui } : {}) };
+  const user = { id: assistantMessageId(), projectId: projects.current().id, at: Date.now(), role: "user", text, via: "local", intent: "chat", ...(ui ? { ui } : {}),
+    ...(pictures.images.length ? { images: pictures.images.map(({ id, name, mime, bytes }) => ({ id, name, mime, bytes })) } : {}) };
   // Sent from Discord (the "Discord remote" block): the chat gate narrows what
   // it may do, and the work it files waits for the owner's OK.
   if (options?.remote === true) user.remote = true;
@@ -11995,6 +12014,294 @@ async function assistantMessage(raw, options = {}) {
   }
   return { ok: true, reply, state: assistantState };
 }
+
+// ---- Picture attachments: a picture on a message (docs/architecture.md, "Pictures on a message") ----
+// `assistant:image` saves one picture (PNG, JPEG, WebP or GIF by its bytes, at
+// most 5 MB, at most 4 a message) under the project's data folder and hands back
+// an id and a small preview; a message carries the ids (`images`), never paths.
+// When the model that answers can look at pictures (the model catalog says so:
+// agentProfiles.capabilities().vision) the picture goes in the provider's own
+// format (scripts/image-attach.cjs); a model that can not see says so once in
+// the reply, and the message and its picture are saved either way. A coding CLI
+// is never sent a picture, only one plain line naming the file. A task made
+// from the box carries the same line in its brief. The pictures a call carries
+// ride an AsyncLocalStorage scope opened around the model call
+// (messageExtras().run), so the request builders need no new parameter.
+// MEFI_STUDIO_NO_IMAGE_ATTACH=1 switches it all off. Modules load on first use.
+let imageLibLoaded = null, imageStoreLoaded = null, imageScopeLoaded = null, visionDocument = null;
+const imageLib = () => (imageLibLoaded ??= require("./scripts/image-attach.cjs"));
+const imageAttachOn = () => process.env.MEFI_STUDIO_NO_IMAGE_ATTACH !== "1";
+const imageScope = () => (imageScopeLoaded ??= new (require("node:async_hooks").AsyncLocalStorage)());
+const PICTURES_OFF = "Picture attachments are switched off on this PC.";
+function imageStore() {
+  return (imageStoreLoaded ??= require("./scripts/image-store.cjs").createImageStore({
+    dir: () => path.join(path.dirname(projectDataPath(TASKS_PATH)), "attachments"),
+    keep: imageNamedIds,
+    thumbnail: imageThumbnail,
+  }));
+}
+// Every picture a message or a task still names, so cleanup never removes one.
+async function imageNamedIds() {
+  const named = new Set();
+  const grab = (text) => { for (const match of String(text ?? "").matchAll(/img_[a-f0-9]{24}/g)) named.add(match[0]); };
+  for (const message of assistantState?.messages ?? []) for (const image of Array.isArray(message?.images) ? message.images : []) if (image?.id) named.add(image.id);
+  try {
+    for (const task of await (await getEyes()).readJson(TASKS_PATH, [])) { grab(task?.prompt); grab(task?.description); grab(task?.details); grab(task?.note); }
+  } catch { /* the thread alone keeps what it names */ }
+  return named;
+}
+// A small preview for the composer. Electron's nativeImage reads PNG and JPEG; the page makes its own for the rest.
+async function imageThumbnail(bytes, mime) {
+  if (mime !== "image/png" && mime !== "image/jpeg") return null;
+  const image = nativeImage.createFromBuffer(Buffer.from(bytes));
+  if (image.isEmpty()) return null;
+  const { width, height } = image.getSize();
+  const scale = Math.min(1, 96 / Math.max(width, height, 1));
+  const small = scale < 1 ? image.resize({ width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)), quality: "good" }) : image;
+  return mime === "image/jpeg" ? `data:image/jpeg;base64,${small.toJPEG(70).toString("base64")}` : small.toDataURL();
+}
+// The catalog says which models take pictures; the profiles module reads it through useCatalog.
+async function visionReady() {
+  try {
+    const document = await catalogDocument.read();
+    if (document !== visionDocument) { visionDocument = document; agentProfiles.useCatalog(document); }
+  } catch { /* until the catalog reads, no model is known to see */ }
+}
+// What the chat's own route will do with a picture, for the box to say before the message is sent.
+async function chatPictureHint() {
+  try {
+    await visionReady();
+    const settings = await (typeof readAgentSettings === "function" ? readAgentSettings() : readSettings());
+    const chosen = seatChoice(settings, "companion");
+    let provider = null, model = null;
+    if (chosen.provider === "zen" && decryptKey(settings, "zenApiKeyEncrypted")) { provider = "zen"; model = chosen.model || SEAT_DEFAULTS.companion.model; }
+    else {
+      const route = await resolveAiRoute("routine", { allowCli: DATA_ONLY_CLIS });
+      if (route?.ok) { provider = route.provider ?? null; model = route.model ?? null; }
+    }
+    if (!provider) return { sees: null, model: null };
+    return { sees: agentProfiles.capabilities(provider, model).vision === true, model: model || null };
+  } catch { return { sees: null, model: null }; }
+}
+// assistant:image { name, mime, data }: keep one picture, answer with its id and a preview.
+async function saveMessagePicture(payload = {}) {
+  if (!imageAttachOn()) return { ok: false, off: true, error: PICTURES_OFF };
+  // { probe: true }: the box asks once whether pictures are on at all, so a PC that switched them off never shows the button.
+  if (payload?.probe === true) return { ok: true, probe: true };
+  if (!projects.open()) return { ok: false, error: "Open a project folder first - pictures are kept with the project." };
+  const saved = await imageStore().save({ name: payload?.name, mime: payload?.mime, data: payload?.data });
+  if (!saved.ok) return saved;
+  return { ...saved, vision: await chatPictureHint() };
+}
+async function removeMessagePicture(payload = {}) {
+  if (!imageAttachOn()) return { ok: false, off: true, error: PICTURES_OFF };
+  return imageStore().remove(String(payload?.id ?? ""));
+}
+// The pictures a message names, checked and found: { ok, images: [{ id, name, mime, bytes, path }] }.
+async function attachedPictures(value) {
+  if (value === undefined || value === null || (Array.isArray(value) && !value.length)) return { ok: true, images: [] };
+  if (!imageAttachOn()) return { ok: false, error: PICTURES_OFF };
+  return imageStore().resolve(value);
+}
+// A brief that names its pictures in plain lines (a task's prompt, a CLI's request): where each one is.
+async function withPictureLines(text, value) {
+  const found = await attachedPictures(value);
+  if (!found.ok) return found;
+  return { ok: true, text: found.images.length ? `${text}\n\n${imageLib().attachedLines(found.images)}` : text, images: found.images };
+}
+// The request builder's half (httpAssistantCall): this call's request with the pictures in it when the model that
+// answers can see them, the request as it was when it can not. The call is told which happened.
+async function imageBodyFor(candidate, body) {
+  const state = imageScope().getStore();
+  if (!state?.images?.length) return body;
+  await visionReady();
+  const lib = imageLib();
+  if (agentProfiles.capabilities(candidate.provider, candidate.model).vision !== true) {
+    state.unseen ??= { model: String(candidate.model ?? "") };
+    return body;
+  }
+  try {
+    state.loaded ??= await Promise.all(state.images.map((image) => imageStore().load(image)));
+    const sent = lib.attachBody(body, state.loaded, lib.formatFor(candidate.endpoint));
+    state.seen = String(candidate.model ?? "") || "the model";
+    return sent;
+  } catch (error) {
+    logLine(`[assistant] a picture could not be added to the request: ${String(error?.message ?? error).slice(0, 160)}`);
+    state.unseen ??= { model: String(candidate.model ?? "") };
+    return body;
+  }
+}
+// The CLI's half (cliAssistantCall): a coding CLI gets one plain line per picture in its text, never the picture.
+function imageCliText(user) {
+  const state = imageScope().getStore();
+  if (!state?.images?.length) return user;
+  const lines = imageLib().attachedLines(state.images.filter((image) => !String(user).includes(imageLib().attachedLine(image))));
+  state.unseen ??= { model: "" };
+  return lines ? `${user}\n\n${lines}` : user;
+}
+// What a message brings beyond its words, for the reply to use: null when it brings nothing (the common case).
+// Pictures (this block) and mentions (the "Mentions in a message" block) each add what they have.
+async function messageExtras(user) {
+  const pictures = await pictureExtras(user);
+  let mention = null;
+  if (typeof mentionExtras === "function") { try { mention = await mentionExtras(user); } catch (error) { logLine(`[assistant] mentions could not be read: ${String(error?.message ?? error).slice(0, 160)}`); } }
+  if (!pictures && !mention) return null;
+  return {
+    images: pictures?.images ?? [],
+    run: pictures?.run ?? ((call) => call()),
+    system: mention?.system ?? "",
+    message: mention?.message ?? "",
+    notes: () => [...(pictures?.notes() ?? []), ...(mention?.notes() ?? [])],
+  };
+}
+async function pictureExtras(user) {
+  const named = (Array.isArray(user?.images) ? user.images : []).filter((image) => image && typeof image.id === "string");
+  if (!named.length || !imageAttachOn()) return null;
+  // Each picture is found on its own: one that has since been cleared does not take the others with it.
+  const images = [], gone = [];
+  for (const image of named) {
+    const found = await imageStore().resolve([image.id]);
+    if (found.ok && found.images.length) images.push(found.images[0]); else gone.push(String(image.name ?? "").trim());
+  }
+  const state = images.length ? { images, seen: null, unseen: null, loaded: null } : null;
+  return {
+    images,
+    // The model call runs inside this scope, so every request it makes can see the pictures.
+    run: (call) => (state ? imageScope().run(state, call) : call()),
+    // One plain sentence per thing that did not reach the model, each said once.
+    notes: () => {
+      const said = [];
+      if (gone.length) said.push(`${gone.length === 1 && gone[0] ? `"${gone[0]}" is` : gone.length === 1 ? "A picture is" : "Some pictures are"} no longer saved, so I answered without ${gone.length === 1 ? "it" : "them"}.`);
+      if (state && !state.seen) said.push(imageLib().unseenNote({ model: state.unseen?.model || "", count: state.images.length, noModel: !state.unseen }));
+      return said;
+    },
+  };
+}
+// ---- end of picture attachments ---------------------------------------------------------
+
+// ---- Skills: the Skills page's files (docs/architecture.md, "Skills") ----
+// skills:list / read / save / create / delete / import / export keep one project's skills as plain files,
+// <project>/.agents/skills/<name>/SKILL.md, and nowhere else inside the project (scripts/skills.cjs; the rules
+// are scripts/skill-format.cjs). The page sends a NAME, never a path; import and export take their folders from
+// a dialog opened here. A save that replaces text, and a delete, first keep the old text under the project's
+// data folder (skill-backups/, ten per skill). The inventory the agents read (agent-addons.cjs) is what lists
+// these files, so a saved skill is one the team can pick. MEFI_STUDIO_NO_SKILL_EDIT=1 makes the page read-only:
+// nothing is saved, created, deleted or imported. The module loads on first use.
+let skillsHostLoaded = null;
+function skillsHost() {
+  return (skillsHostLoaded ??= require("./scripts/skills.cjs").createSkills({
+    root: () => (projects.open() ? projectRoot() : null),
+    enabled: () => process.env.MEFI_STUDIO_NO_SKILL_EDIT !== "1",
+    backups: () => path.join(path.dirname(projectDataPath(TASKS_PATH)), "skill-backups"),
+    inventory: (root) => agentAddons.inventory(root),
+    zip: async (source, target, options) => (await loadModule("scripts/release-updater.mjs")).zipDirectory(source, target, options),
+  }));
+}
+// Import: the owner picks a folder; only its SKILL.md is read, under the rules of a save.
+async function skillsImport() {
+  const host = skillsHost();
+  if (!host.enabled()) return { ok: false, off: true, error: host.OFF };
+  const picked = await dialog.showOpenDialog(window, { title: "Import a skill: choose its folder", properties: ["openDirectory"], buttonLabel: "Import" });
+  if (picked.canceled || !picked.filePaths?.[0]) return { ok: false, canceled: true };
+  return host.importFrom(picked.filePaths[0]);
+}
+// Export: the skill is checked first (no dialog for a name that is not there), then the owner picks where it goes.
+async function skillsExport(payload = {}) {
+  const host = skillsHost();
+  const name = String(payload?.name ?? "");
+  const kind = payload?.kind === "zip" ? "zip" : "folder";
+  const found = await host.read(name);
+  if (!found.ok) return found;
+  const picked = await dialog.showSaveDialog(window, {
+    title: kind === "zip" ? "Export a skill as a zip" : "Export a skill as a folder", buttonLabel: "Export",
+    defaultPath: path.join(app.getPath("documents"), kind === "zip" ? `${name}.zip` : name),
+    ...(kind === "zip" ? { filters: [{ name: "Zip file", extensions: ["zip"] }] } : {}),
+  });
+  if (picked.canceled || !picked.filePath) return { ok: false, canceled: true };
+  return host.exportTo({ name, target: picked.filePath, kind });
+}
+// ---- end of skills ---------------------------------------------------------------------
+
+// ---- Mentions in a message: @ files, / skills (docs/architecture.md, "@ # / in a message") ----
+// The box (renderer/composer-picker.js) offers a project's files, its tasks and its skills as a person types
+// @ # /. The host's half:
+//  - project:files { query, limit }: file NAMES of the open project, fuzzy and bounded (scripts/project-files.cjs),
+//    leaving out what the read tool would refuse and what .gitignore leaves out. Never contents.
+//  - agents:skills: the skills the inventory (agent-addons.cjs) finds, each with its one-line description.
+//  - A chat message that says /skill-name gets that skill's own text in what the model is told (the system
+//    prompt), inside a budget (scripts/mentions.cjs); one that is missing, or too long, is said in the reply.
+//  - A chat message that says @path gets one sentence after its words naming the project files that exist:
+//    their names, never their contents (the model's own tools decide whether it may read them).
+// Nothing is added to the thread, and a Discord message gets none of it. settings.ui.composerPicker = false
+// (Settings) or MEFI_STUDIO_NO_COMPOSER_PICKER=1 switches all of it off. Modules load on first use.
+let mentionLibLoaded = null, projectFilesLoaded = null;
+const mentionLib = () => (mentionLibLoaded ??= require("./scripts/mentions.cjs"));
+const PICKER_OFF = "The @ # / suggestions are switched off. Turn them on in Settings.";
+async function composerPickerOn() {
+  if (process.env.MEFI_STUDIO_NO_COMPOSER_PICKER === "1") return false;
+  try { return (await readSettings())?.ui?.composerPicker !== false; } catch { return true; }
+}
+function projectFilesHost() {
+  return (projectFilesLoaded ??= require("./scripts/project-files.cjs").createProjectFiles({ root: () => (projects.open() ? projectRoot() : null) }));
+}
+async function searchProjectFiles(payload = {}) {
+  if (!(await composerPickerOn())) return { ok: false, off: true, error: PICKER_OFF };
+  return projectFilesHost().search({ query: payload?.query, limit: payload?.limit });
+}
+// The inventory's skills, one of each name: the project's before the home folder's, .agents before other tools' folders.
+async function mentionSkills() {
+  const seen = new Set(), rows = [];
+  for (const row of await agentAddons.inventory(projectRoot())) { if (!seen.has(row.name)) { seen.add(row.name); rows.push(row); } }
+  return rows;
+}
+async function listPickerSkills() {
+  if (!(await composerPickerOn())) return { ok: false, off: true, error: PICKER_OFF };
+  if (!projects.open()) return { ok: false, error: "Open a project first." };
+  const format = require("./scripts/skill-format.cjs");
+  const skills = [];
+  for (const row of (await mentionSkills()).slice(0, 100)) {
+    let head = "";
+    try {
+      const handle = await require("node:fs/promises").open(row.file, "r");
+      try { const { bytesRead, buffer } = await handle.read(Buffer.alloc(4096), 0, 4096, 0); head = buffer.subarray(0, bytesRead).toString("utf8"); } finally { await handle.close(); }
+    } catch { /* a skill that can not be read lists with no description */ }
+    skills.push({ name: row.name, description: format.describe(head), scope: row.scope });
+  }
+  return { ok: true, skills };
+}
+// What a chat message's mentions bring: { system, message, notes } for the reply path, or null when there is nothing.
+async function mentionExtras(user) {
+  const text = String(user?.text ?? "");
+  if (!text || user?.remote === true || !/[@/]/.test(text)) return null;
+  if (!projects.open() || !(await composerPickerOn())) return null;
+  const lib = mentionLib();
+  let system = "", message = "";
+  const missing = [];
+  let skipped = [];
+  const calls = lib.skillCalls(text);
+  if (calls.length) {
+    const rows = await mentionSkills().catch(() => []);
+    const found = [];
+    for (const call of calls) {
+      const row = rows.find((item) => item.name === call.name);
+      if (!row) { if (call.asked) missing.push(call.name); continue; }
+      let body = "";
+      try { body = await readFile(row.file, "utf8"); } catch { /* read again next time */ }
+      if (body) found.push({ name: row.name, text: body });
+    }
+    const section = lib.skillSection(found);
+    if (section.text) system = scrubOutbound(section.text);
+    skipped = section.skipped;
+  }
+  const paths = lib.files(text);
+  if (paths.length) {
+    const real = await projectFilesHost().resolve(paths).catch(() => []);
+    if (real.length) message = lib.fileLine(real);
+  }
+  if (!system && !message && !missing.length && !skipped.length) return null;
+  return { system, message, notes: () => lib.notes({ missing, skipped }) };
+}
+// ---- end of mentions in a message --------------------------------------------------------
 
 // The card's Work on it: the node becomes the assistant's NEXT piece of work.
 // It is focused (follow-ups and the gold ring follow), pinned to the front of
@@ -17005,7 +17312,7 @@ async function spawnNextJob(options) {
   // code is not the success signal; that sentinel line coming back is.
   const tail = executorCore.promptTail({
     runId: entry.id, taskId: job.ref?.id, depth: entry.depth, maxDepth: EXECUTOR_MAX_DEPTH, maxHandoffs: EXECUTOR_MAX_HANDOFFS,
-    nextMark: EXECUTOR_NEXT_MARK, callMark: EXECUTOR_CALL_MARK, budgetMinutes: EXECUTOR_BUDGET_MINUTES, doneMark: EXECUTOR_DONE_MARK,
+    nextMark: EXECUTOR_NEXT_MARK, callMark: EXECUTOR_CALL_MARK, budgetMinutes: typeof taskToldBudget === "function" ? taskToldBudget(job.ref, entry) : EXECUTOR_BUDGET_MINUTES, doneMark: EXECUTOR_DONE_MARK,
     protocol: brainHints.protocol,
   });
   // Push memory: the builder gets a compiled mini-index of what the studio
@@ -17512,8 +17819,9 @@ async function spawnNextJob(options) {
       runVerificationJobs().catch((error) => logLine(`[autopilot] verification run failed: ${error.message}`));
     } else if (userStop) {
       // The operator's stop is not the task's or the infrastructure's fault.
-      pushAutopilotHistory("stopped", `stopped on request: ${job.title} · progress saved`);
-      logLine(`[autopilot] stopped on request: "${assistantClip(job.title, 60)}" — progress saved`);
+      const limited = Number.isFinite(entry.capStop?.minutes) ? entry.capStop.minutes : null;
+      pushAutopilotHistory("stopped", limited === null ? `stopped on request: ${job.title} · progress saved` : `stopped at its ${limited} min time limit: ${job.title} · progress saved, nothing failed`);
+      logLine(limited === null ? `[autopilot] stopped on request: "${assistantClip(job.title, 60)}" — progress saved` : `[autopilot] stopped at the time limit (${limited} min): "${assistantClip(job.title, 60)}" — progress saved`);
     } else {
       // The last output line usually says what actually went wrong — keep it
       // so the feed and the chat reply can name the issue, not just "exit 1".
@@ -17811,11 +18119,24 @@ async function spawnNextJob(options) {
       inputError = String(error.message ?? error);
       logLine(`[autopilot] ${label} prompt input failed: ${inputError}`);
     });
-    if (timeout) clearTimeout(timeout);
-    timeout = setTimeout(() => {
-      stop("killed after budget", false, "budget");
-    }, EXECUTOR_KILL_MS);
-    timeout.unref?.();
+    // The attempt's time limit: min(EXECUTOR_KILL_MS, the task's own limit)
+    // (scripts/task-cap.cjs, the "Task time limit" block). A limit that ends the
+    // run stops it through the owner's stop path, so nothing is charged; the
+    // hard kill alone, or a limit switched off, ends it as a failure as before.
+    // A `tasks:cap` change while the run is live re-arms the timer (armLimit).
+    const limitedAt = Date.now();
+    const armLimit = () => {
+      if (timeout) clearTimeout(timeout);
+      const limit = typeof taskRunLimit === "function" ? taskRunLimit(job.ref, entry) : null;
+      const wait = Math.max(0, (limit ? limit.ms : EXECUTOR_KILL_MS) - (Date.now() - limitedAt));
+      timeout = setTimeout(() => {
+        if (limit?.byCap && typeof stopAtTimeLimit === "function" && stopAtTimeLimit(entry, limit.minutes)) return;
+        stop("killed after budget", false, "budget");
+      }, wait);
+      timeout.unref?.();
+    };
+    entry.armLimit = () => { if (current()) armLimit(); };
+    armLimit();
     if (startWatchdog) clearTimeout(startWatchdog);
     // Wedged-start watchdog. A run that has neither registered an OpenCode
     // session nor printed a line within the start budget is not slow, it is
@@ -19286,6 +19607,118 @@ async function stopTaskRun({ taskId, reason = "stopped by you" } = {}) {
   emitAutopilot();
   return { ok: true, stopped, held: true };
 }
+
+// ---- Task time limit: "Stop an attempt after N minutes" (docs/architecture.md, "A task's usage and its time limit") ----
+// One attempt of one task runs for at most min(EXECUTOR_KILL_MS, the task's own
+// limit, task.capMinutes: 5 to 240 in steps of 5, 25 when unset). The arithmetic
+// and the words are scripts/task-cap.cjs (pure). When the LIMIT is what ends the
+// run, spawnNextJob's timer calls stopAtTimeLimit, which is the owner's Stop
+// (stopExecutorJob): the checkpoint is saved, nothing is charged to the card or
+// to the model, no failure is asked about, and the card waits for the owner (an
+// ownerHold of kind "limit", so it does not simply start the same attempt again).
+// The hard kill with no limit in force is a failure as it always was.
+// MEFI_STUDIO_NO_TASK_CAP=1 switches all of it off. Loaded on first use.
+let taskCapLoaded = null;
+const taskCapLib = () => (taskCapLoaded ??= require("./scripts/task-cap.cjs"));
+const taskCapOn = () => taskCapLib().enabled(process.env);
+// What one attempt may take, { ms, byCap, minutes }; null when the limit cannot be worked out, which
+// leaves the hard kill exactly as it was (a side path never fails a run). `entry` carries a limit the
+// owner changed while it ran.
+function taskRunLimit(task, entry = null) {
+  try {
+    const lib = taskCapLib();
+    const capMinutes = Number.isFinite(entry?.capOverride) ? entry.capOverride : null;
+    return lib.limit({ killMs: EXECUTOR_KILL_MS, task, capMinutes, on: lib.enabled(process.env) });
+  } catch (error) {
+    logLine(`[autopilot] time limit unavailable, the hard kill applies: ${String(error?.message ?? error).slice(0, 160)}`);
+    return null;
+  }
+}
+// The minutes the worker is told it has: the usual budget, scaled down for a shorter limit.
+function taskToldBudget(task, entry = null) {
+  try {
+    const lib = taskCapLib();
+    return lib.enabled(process.env) ? lib.toldBudgetMinutes(EXECUTOR_BUDGET_MINUTES, taskRunLimit(task, entry).ms) : EXECUTOR_BUDGET_MINUTES;
+  } catch { return EXECUTOR_BUDGET_MINUTES; }
+}
+// The limit ends the run: stop it as the owner's Stop would. True when the stop was issued.
+function stopAtTimeLimit(job, minutes) {
+  if (!job || (job.finished && !job.settlementPending)) return false;
+  try {
+    const lib = taskCapLib();
+    const hold = lib.holdFor({ minutes, now: Date.now() });
+    const before = { ownerHold: job.ownerHold, capStop: job.capStop, stopUser: job.stopUser };
+    job.ownerHold = hold;
+    job.capStop = { minutes, at: hold.at };
+    delete job.resumeRequested;
+    if (!stopExecutorJob(job, lib.stopReason(minutes))) {
+      // Not stopped: the hard kill that follows is the failure it always was, so leave no trace of a stop.
+      job.ownerHold = before.ownerHold;
+      job.capStop = before.capStop;
+      if (before.stopUser === undefined) delete job.stopUser; else job.stopUser = before.stopUser;
+      return false;
+    }
+    assistantLog("control", `stopped the worker on ${job.taskId ?? job.id} at its ${minutes} min time limit — progress saved · held for you`);
+    logLine(`[autopilot] time limit: "${assistantClip(job.title, 60)}" stopped after ${minutes} min, progress saved`);
+    emitAutopilot();
+    return true;
+  } catch (error) {
+    logLine(`[autopilot] time limit stop failed, falling back to the hard kill: ${String(error?.message ?? error).slice(0, 160)}`);
+    return false;
+  }
+}
+// tasks:cap { taskId, minutes, projectId }: the owner's limit for this task's attempts.
+async function setTaskCap({ taskId, minutes, projectId } = {}) {
+  const error = taskProjectError(projectId);
+  if (error) return { ok: false, error };
+  const lib = taskCapLib();
+  if (!lib.enabled(process.env)) return { ok: false, off: true, error: "Time limits are switched off on this PC (MEFI_STUDIO_NO_TASK_CAP)." };
+  const wanted = lib.normalize(minutes);
+  if (!wanted.ok) return { ok: false, error: wanted.error };
+  const result = await mutateBoard((board) => {
+    const task = board.tasks.find((item) => item?.id === taskId);
+    if (!task) return { ok: false, error: "Task not found in this project." };
+    if (task.capMinutes !== wanted.minutes) {
+      task.capMinutes = wanted.minutes;
+      task.updatedAt = Date.now();
+    }
+    return { ok: true };
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  // An attempt that is running follows the new limit now: a shorter one may stop it at once.
+  for (const job of autopilot.jobs ?? []) {
+    if (job.taskId !== taskId || job.finished || typeof job.armLimit !== "function") continue;
+    job.capOverride = wanted.minutes;
+    job.armLimit();
+  }
+  const limit = taskRunLimit({ capMinutes: wanted.minutes });
+  return { ok: true, taskId, minutes: wanted.minutes, clamped: wanted.clamped, effectiveMinutes: limit.minutes, ceilingMinutes: lib.ceilingMinutes(EXECUTOR_KILL_MS), task: taskView(result.tasks.find((task) => task.id === taskId)) };
+}
+// task:metrics { taskId, projectId }: this attempt's and the whole task's time, tokens and cost.
+// The two ledgers usage:task reads (Studio's calls, OpenCode's turns) plus the executor ledger.
+async function readTaskMetrics({ taskId, projectId } = {}) {
+  const error = taskProjectError(projectId);
+  if (error) return { ok: false, error };
+  try {
+    const now = Date.now();
+    const eyes = await getEyes();
+    const tasks = await eyes.readJson(TASKS_PATH, []);
+    const task = tasks.find((row) => row?.id === taskId);
+    if (!task) return { ok: false, error: "That task is not on the board." };
+    let ledger = "";
+    try { ledger = await readFile(projectDataPath(EXECUTOR_LOG_PATH), "utf8"); } catch (failure) { if (failure?.code !== "ENOENT") throw failure; }
+    let usageRows = null, storeOk = false;
+    try {
+      const [state, store] = await Promise.all([modelPerformanceStore().read(), codingSessionUsage(now)]);
+      usageRows = mergeLedgers({ studio: state.observations, store: store.rows });
+      storeOk = store.ok === true;
+    } catch (failure) { logLine(`[usage] task metrics could not read the usage ledgers: ${String(failure?.message ?? failure).slice(0, 160)}`); }
+    return require("./scripts/task-metrics.cjs").taskMetrics({ task, tasks, ledger, usageRows, storeOk, now, killMs: EXECUTOR_KILL_MS, capOn: taskCapOn(), projectId: projects.current().id });
+  } catch (failure) {
+    return { ok: false, error: `The usage could not be read: ${String(failure?.message ?? failure).slice(0, 160)}` };
+  }
+}
+// ---- end of the task time limit ---------------------------------------------------
 
 async function stopAllAgents({ reason = "stopped by user", pauseAssistant = true, pauseExecutor = true, waitMs = 20000 } = {}) {
   if (stopAllPromise) return stopAllPromise;
@@ -21404,9 +21837,15 @@ function registerIpc() {
   ipcMain.handle("planning:prepare", (_event, payload) => planningRequest("prepare", payload));
   ipcMain.handle("tasks:create", (_event, payload = {}) => composerTask(payload ?? {}));
   ipcMain.handle("vibe:build", (_event, payload = {}) => vibeBuild(payload ?? {}));
-  async function composerTask({ title, prompt, projectId, intake = null, ideaId = null, ideaIds = null } = {}) {
+  async function composerTask({ title, prompt, projectId, intake = null, ideaId = null, ideaIds = null, images = null } = {}) {
     if (projectId && projectId !== projects.current().id) return { ok: false, error: "The selected project changed. Add this task again in its intended project." };
     if (!String(title ?? "").trim()) return { ok: false, error: "Give your task a title." };
+    // Pictures the owner attached are named in the brief, one plain line each, for a builder to open.
+    if (Array.isArray(images) && images.length) {
+      const briefed = await withPictureLines(prompt ?? title, images);
+      if (!briefed.ok) return { ok: false, error: briefed.error };
+      prompt = briefed.text;
+    }
     await ensureAssistant();
     // The same admission as chat work (the whole brief against the board, the
     // inbox and live workers), so a sentence sent in chat and pasted here is
@@ -21986,6 +22425,17 @@ function registerIpc() {
   }
   ipcMain.handle("agents:save", (_event, payload) => saveAgentTeam(payload, false));
   ipcMain.handle("agents:preset", (_event, payload) => saveAgentTeam(payload, true));
+  // The Skills page (the "Skills" block): names in, never paths.
+  ipcMain.handle("skills:list", () => skillsHost().list());
+  ipcMain.handle("skills:read", (_event, payload) => skillsHost().read(String(payload?.name ?? "")));
+  ipcMain.handle("skills:save", (_event, payload) => skillsHost().save({ name: payload?.name, description: payload?.description, body: payload?.body }));
+  ipcMain.handle("skills:create", (_event, payload) => skillsHost().create({ name: payload?.name, description: payload?.description, body: payload?.body }));
+  ipcMain.handle("skills:delete", (_event, payload) => skillsHost().delete(String(payload?.name ?? "")));
+  ipcMain.handle("skills:import", () => skillsImport());
+  ipcMain.handle("skills:export", (_event, payload) => skillsExport({ name: payload?.name, kind: payload?.kind }));
+  // The @ # / picker (the "Mentions in a message" block).
+  ipcMain.handle("project:files", (_event, payload) => searchProjectFiles(payload ?? {}));
+  ipcMain.handle("agents:skills", () => listPickerSkills());
 
   // The patch lands on the queue's fresh read, so a save landing beside it
   // keeps its change; a refusal writes nothing. The two endpoints are this
@@ -22628,11 +23078,14 @@ function registerIpc() {
     if (assistantExpireQuestions()) saveAssistant().catch(() => {});
     return { ok: true, state: assistantState };
   });
-  ipcMain.handle("assistant:message", async (_event, { text, projectId, context } = {}) => {
+  ipcMain.handle("assistant:message", async (_event, { text, projectId, context, images } = {}) => {
     if (projectId && projectId !== projects.current().id) return { ok: false, error: "The selected project changed. Send your message again in its intended project." };
     if (!projects.open()) return { ok: false, error: "Open a project folder first - the assistant works inside a project." };
-    return assistantMessage(text, { context });
+    return assistantMessage(text, { context, images });
   });
+  // Pictures on a message (the "Picture attachments" block): keep one, or take one away before it is sent.
+  ipcMain.handle("assistant:image", (_event, payload) => saveMessagePicture(payload ?? {}));
+  ipcMain.handle("assistant:image-remove", (_event, payload) => removeMessagePicture(payload ?? {}));
   // Suggestions are data-only, so a CLI login answers them the way it answers
   // planning: DATA_ONLY_CLIS through the CLI text call, tools disabled.
   const recommendMusic = createMusicRecommender({ resolveRoute: resolveAiRoute, allowCli: DATA_ONLY_CLIS,
@@ -22939,6 +23392,9 @@ function registerIpc() {
   ipcMain.handle("tasks:action", (_event, payload) => taskAction(payload ?? {}));
   // Changed files, Accept, Revert, advisory checks and before/after shots (the "Attempt review" block).
   registerAttemptReviewIpc();
+  // The task's time limit (the "Task time limit" block): tasks:cap sets it, task:metrics reads what the task took.
+  ipcMain.handle("tasks:cap", (_event, payload) => setTaskCap(payload ?? {}));
+  ipcMain.handle("task:metrics", (_event, payload) => readTaskMetrics(payload ?? {}));
   ipcMain.handle("tasks:save", async (_event, tasks) => {
     return saveTaskEdits(tasks);
   });

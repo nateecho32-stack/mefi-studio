@@ -49,7 +49,7 @@ function attemptsFromLedger(ledger, { taskId = null, sessionId = null, limit = 2
     const at = number(row.at);
     let attempt = byRun.get(row.runId);
     if (!attempt) {
-      attempt = { runId: row.runId, taskId: target, title: null, startedAt: null, via: null, pid: null, fallbacks: [], finishedAt: null, ok: null, code: null, error: null, stopped: false, startKilled: false, sawDone: false, sessionId: null, seconds: null, result: null, tail: [], release: null, firstAt: at };
+      attempt = { runId: row.runId, taskId: target, title: null, startedAt: null, via: null, pid: null, fallbacks: [], finishedAt: null, ok: null, code: null, error: null, stopped: false, stoppedAtLimit: false, limitMinutes: null, startKilled: false, sawDone: false, sessionId: null, seconds: null, result: null, tail: [], release: null, firstAt: at };
       byRun.set(row.runId, attempt);
     }
     attempt.title = text(row.title, 160) ?? attempt.title;
@@ -65,6 +65,9 @@ function attemptsFromLedger(ledger, { taskId = null, sessionId = null, limit = 2
       attempt.code = number(row.code);
       attempt.error = text(row.error, 200);
       attempt.stopped = row.stopped === true;
+      // A run stopped at its per-task time limit (task-cap.cjs) says so, and how long the limit was.
+      attempt.limitMinutes = attempt.stopped ? number(row.limitMinutes) : null;
+      attempt.stoppedAtLimit = attempt.limitMinutes !== null;
       attempt.startKilled = row.startKilled === true;
       attempt.sawDone = row.sawDone === true;
       attempt.sessionId = text(row.sessionId, 200);

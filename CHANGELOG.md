@@ -19,6 +19,34 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   Preview, Queue and Status become panes that dock beside the page or pop out as
   windows. The composer stays on one line at 1920 wide and the Permissions menu
   is no longer cut off.
+- **Each task can have its own time limit.** In a task's Evidence, pick Stop an
+  attempt after 5 to 240 minutes (25 unless you change it). A run that hits its
+  limit is stopped the way your Stop button stops it: progress is saved, it does
+  not count as a failure, and the card waits for you. Studio's own 25 minute
+  ceiling still applies, and the page says so if you ask for longer.
+  `MEFI_STUDIO_NO_TASK_CAP=1` switches limits off.
+- **A task's Evidence shows its usage.** A new Usage & limit section gives the
+  time, tokens and cost of this attempt and of the whole task. A builder that
+  reports nothing says Not reported, and a plan that does not price a call says
+  Unpriced, instead of showing zero.
+- **You can attach pictures to a message.** In Home's message box, use Attach
+  picture, paste one, or drop it in (PNG, JPEG, WebP or GIF, up to 5 MB each, four
+  per message). A model that can see pictures is sent them; one that cannot says
+  so once in its reply. Coding tools and tasks made from the box are told where
+  the file is, in one plain line. Pictures stay on this PC under the project's
+  data folder. `MEFI_STUDIO_NO_IMAGE_ATTACH=1` switches it off.
+- **Typing @, # or / in Home's message box suggests what you mean.** `@` offers
+  the project's files, `#` its tasks and `/` its skills, and what a message points
+  at shows as small chips under the box. Saying /skill-name in chat gives Mefi
+  that skill's instructions for that reply; `@path` tells Mefi the file exists
+  and never sends its contents. A Settings switch, "Suggest files, tasks and
+  skills while I type", turns it off (or `MEFI_STUDIO_NO_COMPOSER_PICKER=1`).
+- **A Skills page: Agents › Setup › Skills.** See the skills your project keeps,
+  write or edit one with checks as you type, start from a ready-made example,
+  import one from a folder, export one as a folder or zip, and delete one (it
+  asks twice; a copy of the old text is kept on this PC). Skills that other tools
+  keep are listed read-only. It writes only under `.agents/skills`, and
+  `MEFI_STUDIO_NO_SKILL_EDIT=1` makes it read-only.
 - **A task a worker has run shows what changed, and lets you take it back.** Its
   Evidence tab has a new "Changes and checks" section: the files the attempt
   changed with their changes, a before and after look at the preview, and the

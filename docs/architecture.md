@@ -979,6 +979,145 @@ failed process stays an error and cannot produce briefing requests.
   Build's task list a task whose run has a worktree wears a small branch mark
   (`MefiWorktrees.peek()`, at most one quiet read every 8 s; the page announces
   `mefi:worktrees` when its list changes, and a project change drops the list).
+- **A task's usage and its time limit** (the **Usage & limit** fold in a task's
+  Evidence; `renderer/tasks.js`, `scripts/task-metrics.cjs`,
+  `scripts/task-cap.cjs`, main.cjs "Task time limit"). `task:metrics` answers
+  for one task: this attempt's time, tokens and cost, and the whole task's
+  (every attempt, and its delegated sub-tasks), read from what Studio already
+  keeps: the executor ledger for which runs there were, how long each took and
+  which route ran it, Studio's own call ledger by run id, and OpenCode's store
+  by session inside each attempt's time window (a session a retry reused does
+  not charge the retry its predecessor's turns). A route that reports nothing
+  says **Not reported**: Claude Code, Codex, Grok and Antigravity run as
+  builders print no token counts and no price, so their attempts carry a
+  measured time only; a plan or subscription that prices no call is
+  **Unpriced**, never free; a store that could not be read is **Unavailable**,
+  and the whole task's total says when it is partial. The read happens when the
+  fold is opened. **Stop an attempt after N min** is a per-task limit
+  (`task.capMinutes`, 5 to 240 in steps of 5, 25 when unset, set by
+  `tasks:cap`). The timer is `min(EXECUTOR_KILL_MS, limit)`, so a limit can
+  shorten an attempt but not lengthen it: a longer number is kept and the fold
+  says the app's own 25 minutes wins. A run that reaches its limit is stopped
+  through the owner's stop path (`stopExecutorJob`): its progress is saved,
+  nothing is charged to the card or counted against the model, no failure is
+  asked about, the ledger row says `stopped` with `limitMinutes`, and the card
+  waits for you (an `ownerHold` of kind `limit`, worded "Stopped at the time
+  limit", not "Stopped by you") instead of starting the same attempt again;
+  "work on it" or "try again" carries on. Changing the limit while a run is
+  live moves its timer at once, and the worker is told a budget of 60% of its
+  limit (15 of the default 25 minutes, as before). The hard kill with no limit
+  in force is still a failure. `MEFI_STUDIO_NO_TASK_CAP=1` switches limits off
+  (the old single 25 minute failure kill, `tasks:cap` refuses, the fold says so).
+- **Pictures on a message** (Home's message box; `renderer/composer-pictures.js`,
+  `scripts/image-attach.cjs`, `scripts/image-store.cjs`, main.cjs "Picture
+  attachments"). **Attach picture**, a picture pasted with nothing else on the
+  clipboard, or a picture dropped into the box (a text file dropped with it still
+  goes to **Add files**) is sent to `assistant:image` as `{ name, mime, data }`.
+  The host decides by the file's own bytes, not its name or the declared type:
+  PNG, JPEG, WebP or GIF, at most 5 MB, at most 25 million pixels, four to a
+  message; SVG (which can carry script), PDF, BMP and everything else are
+  refused. It is kept under the project's data folder (`attachments/`, two files
+  per picture, written atomically, never in the repository, never in a problem
+  report) and answered with an opaque id (`img_` and 24 hex digits) and a small
+  preview. A message names its pictures by id (`assistant:message` `images`,
+  `tasks:create` `images`); the thread keeps id, name, type and size, never a
+  path, and a message whose picture has gone is refused whole, like an over-long
+  one. A picture nobody sent is removed after a day, one a message or a task
+  still names never is, and the folder is held to 300 pictures and 300 MB.
+  What reaches a model follows the catalog: `agentProfiles.capabilities().vision`
+  is true only when `data/models.json` lists `image` among the model's input
+  modalities (a model it does not list, and any custom or local one, is taken
+  as not seeing). A model that sees is sent the picture in the provider's own
+  request shape (an `image_url` data URL for chat completions, `input_image`
+  for the Responses API; an Anthropic `image` source block is built for the
+  day a Messages route exists, and none does yet). A model that does not see is
+  sent the request unchanged and the reply says once, by the model's name, that
+  it could not look at the picture. A coding CLI is never sent a picture: it
+  gets one plain line, "The owner attached <name> at <path>", and a task made
+  from the box carries the same line in its brief. The box shows what will
+  happen before the message goes ("Sent to <model>, which can read images", or
+  "<model> can't see images"), and a picture is not redacted the way text is,
+  which it says. `MEFI_STUDIO_NO_IMAGE_ATTACH=1` switches all of it off: the
+  channel refuses, a message naming a picture is refused, and the box asks once
+  at start and shows no button.
+- **@ # / in a message** (Home's message box: `renderer/composer-picker.js`,
+  `scripts/mentions.cjs`, `scripts/project-files.cjs`, `scripts/gitignore-lite.cjs`,
+  main.cjs "Mentions in a message"). Typing `@` offers the open project's files by
+  name, `#` its tasks and `/` its skills, in a popup that answers the keyboard
+  first (arrows, Enter or Tab to pick, Esc to close, and no key taken while it is
+  closed) and opens nothing for an email address, a word with `@`, `#` or `/`
+  inside it, a path or a URL. What a message points at shows as chips under the
+  box: `@src/app.js` (or `@"a file with spaces.md"`; a bare name such as a
+  Makefile is inserted quoted, because a bare `@word` only counts as a file when
+  it has a `.` or `/` in it), `#"a task's title"`, `/skill-name`. The grammar is
+  one (the page and the host read a message the same way; a test holds them
+  together). `project:files { query, limit }` answers **names only**: a bounded
+  breadth-first walk (30,000 files, 6,000 folders, 12 levels, 1.5 s, kept for
+  15 s), fuzzy on the name and then the path, never outside the project and
+  never through a link, leaving out what the read tool would refuse (hidden
+  paths, `data`, `dist`, `node_modules`, `.pem` `.key` `.db`
+  `credentials.json` `settings.json`; the picker never offers a path the model
+  would be refused) plus `build`, `out`, `coverage`, `__pycache__` and whatever
+  the project's `.gitignore` files ignore (a small reader that agrees with `git
+  check-ignore` on a real tree). `agents:skills` lists the skills the inventory
+  (`agent-addons.cjs`) finds with a one-line description each, one of each name
+  (the project's before the home folder's, `.agents/skills` before other tools'
+  folders). A chat message that says `/skill-name` is sent with that skill's own
+  text added to what the model is told (after the chat's instructions, through
+  the outbound scrubber): at most four skills, inside 16,000 characters shared
+  between them; the first one is added whatever its size (a skill over 16,000
+  characters "only loads when called", and this is that call), a later one that
+  does not fit is left out and the reply says so, and so does a skill that does
+  not exist, when it was plainly meant as one (it starts the message, or it has
+  a dash in its name; `/tmp` in the middle of a sentence is just a word). A chat
+  message that says `@path` gets one sentence after its words naming the files
+  that exist in the project, through real folders and not excluded, never their
+  contents: whether the model may read one is what its tools already decide (the
+  project-read switch, `docs/agent-tools.md`). The thread keeps exactly what was
+  typed, and a Discord message gets none of it. A task made in Create task mode
+  keeps its `@` and `/` words as typed; only chat expands them. `settings.ui.
+  composerPicker = false` (Settings › You, "Suggest files, tasks and skills
+  while I type"; on by default) or `MEFI_STUDIO_NO_COMPOSER_PICKER=1` switches
+  the popup, the chips, both channels and the expansion off.
+- **Skills** (`scripts/skill-format.cjs`, `scripts/skills.cjs`, main.cjs "Skills";
+  the page is Agents › Setup › Skills). A skill is `<project>/.agents/skills/<name>/
+  SKILL.md`: front matter with `name` and `description`, then the instructions.
+  The name is the folder and the `/command`: lowercase letters, numbers and
+  dashes, up to 64 (not a name Windows keeps for devices). The file is at most
+  32,000 bytes, which is what the inventory accepts, so a bigger one would save
+  and then never be listed; agents load skills by themselves only while the ones
+  they chose fit in 16,000 characters, and the page says when a skill is over
+  that and so loads only when called by name. `skills:list`, `read`, `save`,
+  `create`, `delete`, `import` and `export` take a **name**, never a path: the
+  host builds every path from the open project's root and a checked name, and
+  the only place it writes inside a project is that one file. `.agents`,
+  `.agents/skills` and the skill's own folder must be real folders (a link is
+  refused, and a `SKILL.md` that is a link is not a skill, as in the inventory).
+  `create` and `import` never overwrite (a new folder, made so that two made at
+  once cannot both succeed); `save` replaces an existing skill and keeps any
+  other front-matter keys it had (another tool's `allowed-tools`, say); every
+  write is a temporary file and a rename. A save that changes text, and a delete,
+  first keep the old text in `data/projects/<id>/skill-backups/<name>/` (ten per
+  skill, outside the project) and refuse to go on when that copy cannot be made.
+  Delete removes the `SKILL.md` and the folder only if nothing else is in it.
+  `import` opens a folder dialog here, reads that folder's `SKILL.md` only, and
+  holds it to exactly the rules of a save (front matter with a valid name and a
+  description, instructions, under 32 KB, text); the file goes in as it was
+  written and the page is told how many other files were left. `export` checks
+  the skill, opens a Save dialog and writes a new folder or a zip (`<name>/
+  SKILL.md`) where the owner chose. The page also lists the skills the inventory
+  finds elsewhere (other tools' folders, the home folder), read-only, and offers
+  a few starters. `MEFI_STUDIO_NO_SKILL_EDIT=1` makes the page read-only: no
+  save, create, delete or import, and no dialog for an import. The page
+  (`renderer/skills.js`, **Agents › Setup › Skills**, also in the palette) lists
+  each skill with what it is for, where it lives, its size and anything that keeps
+  agents from using it (no front matter, no description, a name that does not
+  agree with its folder, over 32 KB, over 16 KB so that it loads only when called);
+  **New skill** and **Edit** share one editor (name, when to use it, instructions,
+  a byte counter, and what the size means) that says what is wrong as you type
+  using the host's own rules written again (a test holds the two together), and a
+  name cannot change once a skill exists because it is the folder. Delete asks
+  twice. The page sends names and text, never a path.
 
 ### Command center and the node tree
 
