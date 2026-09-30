@@ -669,6 +669,30 @@ app.whenReady().then(async () => {
   await until("window.MefiSessions.selected() === null", "Ctrl N starts a new task from anywhere");
   step("a session opens from a tab, a notification and a click, and Ctrl N starts a new task");
 
+  // ---- from Vibe's Today ----------------------------------------------------------------------------------------------------------------
+  // Vibe's Home is Today. A card, or a notification, opens its task as a session: the thread over Today, in a tab of its own (the window's
+  // own modules meet here: Today asks the session panels, which ask the tab strip, which asks the router).
+  await run("await window.MefiVibe.setMode('vibe');");
+  await until("window.MefiToday && window.MefiToday.isOn() && document.getElementById('vibe-layer') && !document.getElementById('vibe-layer').hidden", "Today is up in Vibe");
+  assert.equal(await run("return window.MefiSessions.selected();"), null, "Today starts with no session open");
+  assert.equal(await run(`return window.MefiToday.openFromAlert({ kind: 'fail', id: 'task_failed', taskId: 'task_failed', projectId: ${q(projectId)}, count: 1 });`), true, "a notification for one task opens it");
+  await until("window.MefiSessions.selected() === 'task_failed' && !document.getElementById('sessions-thread').hidden && document.querySelector('#sessions-head .sx-title')?.textContent.includes('first paint')", "Today's task opens as a session, in its thread");
+  if (await run("return Boolean(window.MefiTabs && window.MefiTabs.list);")) {
+    const tab = await run("return window.MefiTabs.list().find((item) => item.route.id === 'workspace' && item.route.params.view === 'task' && item.route.params.taskId === 'task_failed') || null;");
+    assert.ok(tab && tab.active, `the session has a tab of its own, and it is the one showing: ${JSON.stringify(tab)}`);
+    assert.equal(await run("return window.MefiTabs.list().some((item) => item.route.id === 'tasks');"), false, "and no tab for the Task board, which could not say which task it was asked for");
+  }
+  assert.equal(await run("return document.getElementById('vibe-layer').hasAttribute('inert');"), true, "Today is covered while the thread shows");
+  assert.equal(await run("const r = document.getElementById('sessions-thread').getBoundingClientRect(); const node = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return Boolean(node && node.closest('#sessions-thread'));"), true, "and the thread, not Today, is what a press lands on");
+  await capture("sessions-from-today-1440.png");
+  // Home again puts the thread away and uncovers Today.
+  await run("window.MefiNav.go('workspace', { view: 'home' });");
+  await until("window.MefiSessions.selected() === null && document.getElementById('sessions-thread').hidden && !document.getElementById('vibe-layer').hasAttribute('inert')", "Home puts the thread away and uncovers Today");
+  // Back to Build the way this test began it (a mode change re-reads the rail's pin, which would open the rail and take the room the sizes below measure).
+  await run("await window.MefiVibe.setMode('build', { go: false }); window.MefiNav.applyShell(true); window.MefiNav.setRailPinned(false, { save: false }); window.MefiNav.go('workspace');");
+  await until("document.body.classList.contains('workspace-active') && !document.getElementById('workspace-layer').hasAttribute('inert')", "Build's Home is back");
+  step("Vibe's Today opens a task as a session in its own tab, and Home puts the thread away");
+
   // ---- sizes --------------------------------------------------------------------------------------------------------------------------------
   // The five of the window's contract, and a wide one that is short (the box folds for the height alone, not the width).
   const sizes = [[1920, 1080, 1], [1440, 900, 1], [1100, 720, 1], [600, 560, 1], [600, 560, 1.5], [1920, 480, 1]];
