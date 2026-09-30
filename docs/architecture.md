@@ -791,7 +791,10 @@ specification come back, but the confirmed reading and any approval belonged to
 the version they were given on, so both are asked for again before tasks can be
 made. Every version is kept (the store has always kept a full snapshot per edit;
 a hard cap would make the file unreadable to an older build after a **Roll
-back**), and the Plans sheet lists the newest twenty and pages older ones. A
+back**). In the Plans sheet the **Versions** section (formerly Plan history) lists
+the newest twenty, each with what it did, who made it and when, and **Show older
+versions** pages back through the rest; open one to read its wording, then
+**Restore this version**, which waits for unsaved changes to be saved or cleared. A
 plan saved with no history gets its current wording as version 1 the first time
 it is read; the first save after that keeps one copy of the old file beside it
 (`planning.json.before-versions.bak`).
