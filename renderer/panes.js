@@ -29,7 +29,9 @@
   let raise = 10;
   let saved = load();
 
-  function load() { try { const value = JSON.parse(localStorage.getItem(STORE) || "{}"); return value && typeof value === "object" ? value : {}; } catch { return {}; } }
+  // A stored array would take property writes that JSON.stringify then drops,
+  // so only a plain object is a layout.
+  function load() { try { const value = JSON.parse(localStorage.getItem(STORE) || "{}"); return value && typeof value === "object" && !Array.isArray(value) ? value : {}; } catch { return {}; } }
   function save() { try { localStorage.setItem(STORE, JSON.stringify(saved)); } catch { /* the layout is a convenience */ } }
   function memory(id) { if (!saved[id] || typeof saved[id] !== "object") saved[id] = {}; return saved[id]; }
   const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
