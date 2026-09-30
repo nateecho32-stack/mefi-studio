@@ -7,6 +7,20 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **An update can be undone, and a broken one undoes itself.** Before an
+  in-app update replaces the portable folder, Studio saves the build it is
+  replacing outside the install folder (`%LOCALAPPDATA%\MefiStudio\rollback`).
+  The installer helper then starts the new build and waits for it to say it
+  came up. A build that exits or never reports is started once more, and then
+  the saved build is put back and Studio says why on the next launch. **Roll
+  back** in Settings › Updates does the same by hand. Projects, tasks and
+  settings (`resources\app\data`) are never touched by an update or a
+  rollback, and a backup that cannot be made skips the update instead of
+  risking it. The update helper is also written with a byte order mark now, so
+  a Windows user name with a non-ASCII letter no longer points it at another
+  folder. `MEFI_STUDIO_NO_ROLLBACK=1` keeps the old plain swap. Only updates
+  made *from* a build that carries this are protected, so the first
+  protected update is the one after this release.
 - **Security fixes for remote approvals, catalogs and sharing.** Work filed
   from Discord retains its approval requirement through task admission and
   promotion. Concurrent PIN attempts count toward one lockout and approval

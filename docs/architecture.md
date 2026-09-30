@@ -1467,6 +1467,29 @@ script waits for the app to exit, copies the payload into place — never
 `resources/app/data` — and relaunches. In development the checker only
 reports; the live update above applies source changes.
 
+**The safety net.** The helper that installs an update is written by the build
+being replaced, so nothing inside that build can notice the new one is broken.
+It therefore keeps a copy of the running build first (everything but
+`resources/app/data`, in `%LOCALAPPDATA%\MefiStudio\rollback\<install key>`; a
+copy that cannot be made skips the update), starts the new build and waits up
+to two minutes for `data/boot-health.json` to carry a `healthyAt` from this
+launch. The renderer stamps it (`boot:healthy`, sent as the shell's scripts
+start); a window that loaded and stayed up for 45 seconds is the fallback, so a
+shell that forgot to report is not undone. A build that exits, or is silent, is
+stopped and started once more; the second failure mirrors the saved copy back
+over the install (`robocopy /MIR`, data excluded), writes
+`data/update-result.json` and starts the old build, whose next launch shows the
+note once and removes the file. **Roll back** (Settings › Updates,
+`release:rollback`) runs the same restore by hand while the copy still describes
+this install. The build is watched only if its own `main.cjs` still names
+`boot-health.json` (`releaseWritesHealth`), so an old build that cannot report is
+copied but never undone. The records' shapes are in `scripts/update-safety.cjs`,
+the helper's PowerShell in `scripts/release-updater.mjs`, and
+`tests/update_rehearsal.test.mjs` runs the real helper against a scratch install
+(Windows only). Because the helper is written by the installed build, a release
+protects the updates made from it, not the update that installs it.
+`MEFI_STUDIO_NO_ROLLBACK=1` restores the plain swap.
+
 Build and publish a release with `node scripts/package-release.mjs --version
 vX.Y.Z --publish`, or push a `v*` tag and let
 `.github/workflows/release.yml` run. A private repository needs a read-only

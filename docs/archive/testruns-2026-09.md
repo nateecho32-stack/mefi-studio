@@ -6,6 +6,34 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-28 - Sync counts only real local work; vault calls take turns
+
+Follow-ups from the Plan session's review. sync.mjs recounts a non-empty
+status from the diffs and untracked files (a line-ending-only difference
+is not uncommitted work), skips local branches whose commits are all on
+some GitHub branch, and runs Git with GIT_OPTIONAL_LOCKS=0. The vault runs
+one call at a time, resets only when a rebase stopped on unmerged paths and
+names the changes a clash dropped, keeps insights, learned and settings per
+PC (older shared files still read), and removes its folder after a failed
+pair or create (create carries on with an empty private repository). The
+renderer saves the previewed share and keeps Send, Use and the lists on
+the shelf they were read from.
+
+- `npm run build-booklet` (renderer/booklet.html rebuilt), `npm run check`
+  (187 targets, 385 specs) and `npm run audit` (zero findings): PASS.
+- New suites: sync_changes (5), pc_vault_turns (9; 8 fail on the old
+  pc-vault.cjs) and pc_vault_ui_turns (3; all fail on the old renderer).
+  sync.test.mjs's stranded-work fixture builds `published` from main so
+  `local-only` keeps a commit of its own.
+- `npm test` in a private worktree, exit 0: Node parallel stage 4290 tests,
+  4285 passed, 5 skipped, 0 failures; Electron stage 42 tests, 41 passed, 1
+  skipped; `eyes_toggle_electron` 1/1; `occlusion_probe` 1 passed, 1
+  capability skip; Python contracts OK (248); normalized-path lock passed.
+- Rebased onto the multi-login commits (07150aa, 732026f): CHANGELOG kept
+  both entries, booklet rebuilt; `npm run check` (188 targets, 387 specs),
+  `npm run audit` and the sync, vault, booklet, setup-helper and
+  cli_accounts suites (107 tests) pass on the combined tree.
+
 ## 2026-09-28 - More than one Claude Code or Codex login, swapped when one tops out
 
 Extra subscription logins (settings.cliAccounts, each a folder under user

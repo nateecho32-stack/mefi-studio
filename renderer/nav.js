@@ -2436,6 +2436,9 @@
 
   let liveUpdateStatus = null;
   let releaseUpdateState = null;
+  // The last "update did not stand" note that was toasted, so a repaint of the
+  // same status never announces it twice.
+  let releaseNoted = "";
 
   // Where the updater's controls live. The pill and every update toast that
   // sends you there name it and open it at that card.
@@ -2673,6 +2676,7 @@
       return { line: `downloading ${version}${Number.isFinite(percent) ? ` · ${percent}%` : ""}…`, button: "Downloading…", busy: true };
     }
     if (state === "applying") return { line: `installing ${version} · the app restarts`, button: "Installing…", busy: true };
+    if (state === "rollingback") return { line: `going back to v${status?.previous?.from ?? "the saved version"} · the app restarts`, busy: true };
     if (state === "installed") return { line: `updated to v${status?.installed?.version ?? ""} · running this build`, installed: true };
     if (state === "none") return { line: "no published release yet" };
     if (state === "current") return { line: `up to date${status?.current ? ` · v${status.current}` : ""}` };
@@ -2697,6 +2701,21 @@
     }
     const check = document.querySelector("#release-check");
     if (check) check.disabled = Boolean(view.busy);
+    // The saved copy of the build this one replaced, while it still describes
+    // this install; and the note an update that did not stand left behind.
+    const previousRow = document.querySelector("#release-previous-row");
+    if (previousRow) {
+      previousRow.hidden = !state?.previous?.from || !state?.supported;
+      const previous = document.querySelector("#release-previous");
+      if (previous && state?.previous?.from) previous.textContent = `saved · v${state.previous.from}, the build before this one`;
+      const rollback = document.querySelector("#release-rollback");
+      if (rollback) rollback.disabled = Boolean(view.busy);
+    }
+    const note = document.querySelector("#release-note");
+    if (note) {
+      note.hidden = !state?.rollback?.message;
+      note.textContent = state?.rollback?.message ?? "";
+    }
     const tokenRow = document.querySelector("#release-token-row");
     if (tokenRow) tokenRow.hidden = !view.token;
     paintPill();
@@ -2707,6 +2726,9 @@
       window.MefiToast?.(`Update available · v${payload.latest?.version} · ${UPDATES_PLACE}`, "info", { action: openUpdates() });
     } else if (payload?.state === "installed") {
       window.MefiToast?.(`Updated to v${payload.installed?.version}`, "good");
+    } else if (payload?.rollback?.message && payload.rollback.message !== releaseNoted) {
+      releaseNoted = payload.rollback.message;
+      window.MefiToast?.(payload.rollback.message, "bad");
     } else if (payload?.state === "error" && payload?.error) {
       window.MefiToast?.(`Release check failed · ${payload.error}`, "bad");
     }
@@ -2747,6 +2769,22 @@
     }
   }
 
+  async function rollbackReleaseNow() {
+    if (!window.mefiStudio?.releaseRollback) return;
+    const from = releaseUpdateState?.previous?.from;
+    if (typeof window.MefiConfirm === "function" && !(await window.MefiConfirm(`Go back to v${from ?? "the saved version"}? Studio restarts. Your projects, tasks and settings stay as they are.`, { label: "Roll back" }))) return;
+    const button = document.querySelector("#release-rollback");
+    if (button) button.disabled = true;
+    try {
+      const result = await window.mefiStudio.releaseRollback();
+      paintRelease(result?.status);
+      if (result?.ok === false) window.MefiToast?.(`Roll back failed · ${result.error}`, "bad");
+    } catch (error) {
+      window.MefiToast?.(`Roll back failed · ${String(error?.message ?? error)}`, "bad");
+      if (button) button.disabled = false;
+    }
+  }
+
   async function saveReleaseToken() {
     const input = document.querySelector("#release-token");
     const token = String(input?.value ?? "").trim();
@@ -2776,6 +2814,7 @@
     }
     document.querySelector("#release-check")?.addEventListener("click", () => checkReleaseNow());
     document.querySelector("#release-apply")?.addEventListener("click", () => applyReleaseNow());
+    document.querySelector("#release-rollback")?.addEventListener("click", () => rollbackReleaseNow());
     document.querySelector("#release-token-save")?.addEventListener("click", () => saveReleaseToken());
     window.mefiStudio.onReleaseEvent?.(onReleaseEvent);
     window.mefiStudio

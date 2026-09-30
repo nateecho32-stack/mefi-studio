@@ -35,6 +35,47 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-30 - Update safety net: a saved copy, a boot watch and Roll back (ZA7)
+
+The installing helper (`scripts/release-updater.mjs`) now saves the running
+build outside the install folder, starts the new build and waits for
+`data/boot-health.json`, starts it once more if it never reports, and restores
+the saved build on a second failure; `release:rollback` and a Roll back row in
+Settings › Updates do the same by hand. The records' shapes are in
+`scripts/update-safety.cjs`; `main.cjs` owns the I/O ("Release updates: the
+safety net"). Built and gated in an isolated worktree (`C:\wt\za7`) off
+`origin/main` at 519d656, from the Bezi-informed plan (ZA7).
+
+- New `tests/update_rehearsal.test.mjs` runs the real PowerShell helper and
+  robocopy against a scratch portable folder (a name with a space and a
+  non-ASCII letter) with a `.cmd` stand-in for the app: a good update keeps
+  `resources/app/data` and saves the old build; a build that exits at once and
+  one that hangs are each tried twice, then the old build comes back with the
+  files the update added removed and the owner's data untouched; a backup that
+  cannot be made skips the update and restarts the current build; Roll back
+  restores the saved build; the plain swap is unchanged without the option; the
+  script carries a byte order mark. 7 tests, about 70 s, Windows only. This is
+  the first time anything ran the helper before a release.
+- `tests/update_safety.test.mjs` (the pure records), `tests/boot_health_host.test.mjs`
+  (`main.cjs`'s block against stubs) and the wiring pins in
+  `tests/release_updater.test.mjs` and `tests/app_wide_ipc.test.mjs`
+  (`boot:healthy` answers through a project switch, `release:rollback` waits).
+  `scripts/update-safety.cjs` is registered in `tests/module_purity.test.mjs`.
+- `npm run check`, `npm run audit` (0 findings) and `npm run lint` (0 errors;
+  no new warnings in the touched files): PASS.
+- `npm test`: Node suites 4881 tests, 4872 pass, 7 skipped, 2 fail; the
+  serialized Electron lane 48 tests, 47 pass, 1 skipped; `eyes_toggle_electron`
+  fails ("show must snap exactly one immediate refresh (got 2)"). Python
+  contracts 248 tests OK (1 skipped); normalized-path lock PASS. The two Node
+  failures, `git_actions` ("a real index.lock that clears in time") and `sync`
+  ("diverged main is reported", a `git clone` that failed after 44 s), are load
+  flakes: both files pass alone, 87 of 87. `eyes_toggle_electron` fails the
+  same way on a clean `origin/main` checkout (control run at 519d656), so it is
+  not this change.
+- Not covered: the helper has not yet updated a real installed portable build.
+  The rehearsal drives the same PowerShell against a stand-in, and the first
+  protected update in the field is the one after the release that carries this.
+
 ## 2026-09-29 - GitHub link: the Git chip, Save and push, Publish and the Quiet-card launch screen
 
 The chip (`renderer/git-sync.js`), its host (`scripts/git-link.cjs`,
@@ -701,34 +742,6 @@ reorganized.
   skipped. `command_render` serialized 1/1 in 49.8 s (no cold-boot retry).
   `eyes_toggle_electron` 1/1, `occlusion_probe` 2/2. Python contracts OK
   (248, 1 skip). Normalized-path lock passed.
-
-## 2026-09-28 - Sync counts only real local work; vault calls take turns
-
-Follow-ups from the Plan session's review. sync.mjs recounts a non-empty
-status from the diffs and untracked files (a line-ending-only difference
-is not uncommitted work), skips local branches whose commits are all on
-some GitHub branch, and runs Git with GIT_OPTIONAL_LOCKS=0. The vault runs
-one call at a time, resets only when a rebase stopped on unmerged paths and
-names the changes a clash dropped, keeps insights, learned and settings per
-PC (older shared files still read), and removes its folder after a failed
-pair or create (create carries on with an empty private repository). The
-renderer saves the previewed share and keeps Send, Use and the lists on
-the shelf they were read from.
-
-- `npm run build-booklet` (renderer/booklet.html rebuilt), `npm run check`
-  (187 targets, 385 specs) and `npm run audit` (zero findings): PASS.
-- New suites: sync_changes (5), pc_vault_turns (9; 8 fail on the old
-  pc-vault.cjs) and pc_vault_ui_turns (3; all fail on the old renderer).
-  sync.test.mjs's stranded-work fixture builds `published` from main so
-  `local-only` keeps a commit of its own.
-- `npm test` in a private worktree, exit 0: Node parallel stage 4290 tests,
-  4285 passed, 5 skipped, 0 failures; Electron stage 42 tests, 41 passed, 1
-  skipped; `eyes_toggle_electron` 1/1; `occlusion_probe` 1 passed, 1
-  capability skip; Python contracts OK (248); normalized-path lock passed.
-- Rebased onto the multi-login commits (07150aa, 732026f): CHANGELOG kept
-  both entries, booklet rebuilt; `npm run check` (188 targets, 387 specs),
-  `npm run audit` and the sync, vault, booklet, setup-helper and
-  cli_accounts suites (107 tests) pass on the combined tree.
 
 ## Read Before Any Tests
 

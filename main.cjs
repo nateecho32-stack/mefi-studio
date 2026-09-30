@@ -120,6 +120,10 @@ const { windowsShim } = require("./scripts/agent-mcp.cjs");
 // saved state still reads but nothing can link or check. The login module
 // requires the rules module, so it loads only after the rules did.
 const community = optionalHelper("./scripts/community.cjs", () => require("./scripts/community.cjs"), null);
+// The records an installing helper and this app pass each other (boot health,
+// the saved copy's manifest, an update that did not stand). See "Release
+// updates: the safety net" below and scripts/update-safety.cjs.
+const updateSafety = optionalHelper("./scripts/update-safety.cjs", () => require("./scripts/update-safety.cjs"), null);
 const discordOAuth = community
   ? optionalHelper("./scripts/discord-oauth.cjs", () => require("./scripts/discord-oauth.cjs"), null)
   : null;
@@ -224,7 +228,7 @@ function handleProjectIpc(channel, handler) {
 // handler would wait on. (Declared beside the wrapper so the tests that load
 // it from here up to app.setName see it.)
 const APP_WIDE_PREFIXES = ["projects:", "project-preview:", "performance:", "startup:", "community:", "hub:", "remote:", "styler:", "catalog:", "speed:", "shell:", "pc-setup:"];
-const APP_WIDE_CHANNELS = new Set(["usage:accounts", "opencode:credits", "release:status", "release:check", "update:status", "update:set", "settings:get-key"]);
+const APP_WIDE_CHANNELS = new Set(["usage:accounts", "opencode:credits", "release:status", "release:check", "update:status", "update:set", "settings:get-key", "boot:healthy"]);
 ipcMain.handle = handleProjectIpc;
 
 app.setName("Mefi's Studio AI+");
@@ -558,7 +562,7 @@ function relaunchArgs() {
   const args = [];
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (arg === "--released") {
+    if (arg === "--released" || arg === "--rolled-back") {
       if (argv[index + 1] && !argv[index + 1].startsWith("--")) index += 1;
       continue;
     }
@@ -992,8 +996,12 @@ let releaseState = {
   repo: null,
   installed: null,
   staged: null,
+  rollback: null,
   at: Date.now(),
 };
+// The saved copy of the build this one replaced, while it still describes this
+// install: { from, to, at } or null. Read at boot and after each apply.
+let releasePrevious = null;
 let releaseCheckInFlight = null;
 // Set from the first await of an apply until it fails (success exits the
 // app): the state only reads "downloading" after the staging folder is reset,
@@ -1008,6 +1016,7 @@ function releaseStatus() {
     current: app.getVersion(),
     repo: releaseState.repo ?? RELEASE_REPO ?? "nateecho32-stack/mefi-studio",
     supported: app.isPackaged && process.platform === "win32",
+    previous: releasePrevious,
   };
 }
 
@@ -1022,6 +1031,8 @@ function releaseSignature(status) {
     status.error ?? null,
     Boolean(status.needsToken),
     status.installed?.version ?? null,
+    status.previous?.from ?? null,
+    status.rollback?.message ?? null,
   ]);
 }
 
@@ -1219,6 +1230,9 @@ async function downloadReleaseBuild() {
     version,
     cleanupRoot: root,
     logPath,
+    // A saved copy of this build and a watch on the new one (the safety net
+    // below); null keeps the plain swap.
+    safety: typeof releaseSafetyPlan === "function" ? await releaseSafetyPlan({ module, prepared, installRoot }) : null,
   });
   publishRelease({ progress: null, latest: { ...latest, sha256: downloaded.sha256, verified: Boolean(expected) } });
   return { version, scriptPath, installRoot, exePath: prepared.exePath, verified: Boolean(expected) };
@@ -1285,6 +1299,10 @@ async function applyReleaseUpdate() {
 
 // A boot that carries --released says which build the helper just installed.
 async function announceRelease() {
+  // Whatever an installing helper left behind is read on every boot, however
+  // this one was started: a note about an update that did not stand, and the
+  // saved copy the Roll back button would restore.
+  await releaseSafetyBoot().catch((error) => logLine(`[release] safety check failed: ${error?.message ?? error}`));
   const index = process.argv.indexOf("--released");
   if (index < 0) return;
   const settings = await readSettings();
@@ -1299,6 +1317,177 @@ async function announceRelease() {
     progress: null,
   }, { force: true });
   logLine(`[release] updated ${last?.from ?? "?"} -> ${version}`);
+}
+
+// ---- Release updates: the safety net ------------------------------------------
+// An in-app update swaps the portable folder while Studio is closed, so nothing
+// inside the old process can notice that the new build is broken. The apply
+// helper (scripts/release-updater.mjs) therefore copies the running build aside
+// first, starts the new one and waits for the flag this block raises; a build
+// that never raises it is started once more and then replaced by the copy.
+//   - data/boot-health.json: written at every boot of a packaged build. The
+//     renderer's boot:healthy stamps it; a window that loaded and stayed up for
+//     45 s is the fallback, so a shell that forgot to report is not undone.
+//   - the saved copy lives in %LOCALAPPDATA%\MefiStudio\rollback\<install key>
+//     and the Roll back button (release:rollback) restores it by hand.
+//   - data/update-result.json: what the helper leaves when an update did not
+//     stand. The next boot shows it once and removes it.
+// The shapes are in scripts/update-safety.cjs. MEFI_STUDIO_NO_ROLLBACK=1 turns
+// the copy and the watch off, leaving the plain swap.
+const BOOT_HEALTH_PATH = path.join(STUDIO_ROOT, "data", "boot-health.json");
+const UPDATE_RESULT_PATH = path.join(STUDIO_ROOT, "data", "update-result.json");
+let bootHealth = null;
+let bootHealthTimer = null;
+
+function bootHealthWrite() {
+  try {
+    mkdirSync(path.dirname(BOOT_HEALTH_PATH), { recursive: true });
+    writeFileSync(BOOT_HEALTH_PATH, JSON.stringify(bootHealth));
+  } catch (error) {
+    logLine(`[release] could not write the boot record: ${error?.message ?? error}`);
+  }
+}
+
+function bootHealthStart() {
+  if (SMOKE || CAPTURE || CLI_MODE || !app.isPackaged || typeof updateSafety?.beginBoot !== "function") return;
+  bootHealth = updateSafety.beginBoot({ version: app.getVersion(), pid: process.pid, now: Date.now() });
+  bootHealthWrite();
+}
+
+// The window finished loading. If the renderer never reports, a build that is
+// still up after the fallback delay counts as healthy.
+function bootHealthWatch() {
+  if (!bootHealth || bootHealthTimer) return;
+  bootHealthTimer = setTimeout(() => { bootHealthy("fallback"); }, Number(updateSafety?.HEALTHY_FALLBACK_MS) || 45000);
+  bootHealthTimer.unref?.();
+}
+
+function bootHealthy(via = "renderer") {
+  if (!bootHealth) return { ok: true, recorded: false };
+  const next = updateSafety.reportHealthy(bootHealth, { via, now: Date.now() });
+  if (next && next !== bootHealth) {
+    bootHealth = next;
+    bootHealthWrite();
+    clearTimeout(bootHealthTimer);
+  }
+  return { ok: true, recorded: true };
+}
+
+// What the apply helper is told about the safety net, or null for the plain
+// swap. The new build is watched only when its own main.cjs still raises the
+// flag, otherwise the helper would undo a healthy build that cannot report.
+async function releaseSafetyPlan({ module, prepared, installRoot }) {
+  if (process.env.MEFI_STUDIO_NO_ROLLBACK === "1" || typeof updateSafety?.installKey !== "function") return null;
+  try {
+    const backupRoot = module.rollbackFolder(installRoot, process.env, updateSafety.installKey);
+    if (!backupRoot) return null;
+    const watch = await module.stagedBuildWritesHealth(prepared.payloadRoot, updateSafety.releaseWritesHealth);
+    logLine(`[release] saving this build to ${backupRoot} first${watch ? "; the new build is watched until it reports healthy" : "; the new build does not report health, so it is not watched"}`);
+    return { backupRoot, from: app.getVersion(), resultPath: UPDATE_RESULT_PATH, healthPath: BOOT_HEALTH_PATH, watch };
+  } catch (error) {
+    logLine(`[release] this update has no rollback: ${error?.message ?? error}`);
+    return null;
+  }
+}
+
+async function releaseSafetyBoot() {
+  if (!updateSafety) return;
+  let result = null;
+  try {
+    result = updateSafety.parseResult(await readFile(UPDATE_RESULT_PATH, "utf8"));
+  } catch {}
+  if (result) {
+    await rm(UPDATE_RESULT_PATH, { force: true }).catch(() => {});
+    const message = updateSafety.describeResult(result);
+    if (message) {
+      publishRelease({ rollback: { message, stage: result.stage, at: result.at }, error: null, progress: null }, { force: true });
+      logLine(`[release] ${message}`);
+    }
+  }
+  await releaseScanPrevious();
+}
+
+// Whether a saved copy exists that still describes this install (same folder,
+// and the build that replaced it is the one running now).
+async function releaseScanPrevious() {
+  if (!updateSafety || !app.isPackaged || process.platform !== "win32") return;
+  const module = await getReleaseUpdater();
+  const installRoot = path.dirname(process.execPath);
+  const folder = module.rollbackFolder(installRoot, process.env, updateSafety.installKey);
+  let previous = null;
+  if (folder) {
+    try {
+      previous = updateSafety.usableBackup(await readFile(path.join(folder, updateSafety.MANIFEST_FILE), "utf8"), { installRoot, version: app.getVersion() });
+    } catch {}
+  }
+  releasePrevious = previous;
+  publishRelease({}, { force: true });
+}
+
+// The Roll back button: restore the saved copy through a helper that outlives
+// this process, the same way an update is applied.
+async function releaseRollback() {
+  const blocked = (error) => ({ ok: false, error, status: releaseStatus() });
+  if (SMOKE || CAPTURE || CLI_MODE) return blocked("rolling back is unavailable in this mode");
+  if (!app.isPackaged || process.platform !== "win32") return blocked("Rolling back applies to the portable Windows build.");
+  if (!updateSafety || !releasePrevious) return blocked("There is no saved version to go back to.");
+  if (releaseState.state === "applying" || releaseState.state === "rollingback" || releaseApplyInFlight) return blocked("an update is already in progress");
+  if (activeChild && activeChild.exitCode === null) return blocked("Love2D is running — close it and try again");
+  const running = autopilot.jobs.filter((job) => !job.finished || job.settlementPending);
+  if (running.length) return blocked(`${running.length} build job(s) still running — try again when they finish`);
+  releaseApplyInFlight = true;
+  try {
+    const module = await getReleaseUpdater();
+    const installRoot = path.dirname(process.execPath);
+    const backupRoot = module.rollbackFolder(installRoot, process.env, updateSafety.installKey);
+    if (!backupRoot || !existsSync(path.join(backupRoot, "install"))) throw new Error("the saved version is no longer on disk");
+    const root = path.join(app.getPath("temp"), "mefi-studio-update", `rollback-${Date.now()}`);
+    await mkdir(root, { recursive: true });
+    const scriptPath = path.join(root, "rollback-update.ps1");
+    await module.writeRollbackScript(scriptPath, {
+      installRoot,
+      exePath: process.execPath,
+      pid: process.pid,
+      restoreVersion: releasePrevious.from,
+      replacedVersion: app.getVersion(),
+      cleanupRoot: root,
+      logPath: path.join(root, "rollback-update.log"),
+      safety: { backupRoot, resultPath: UPDATE_RESULT_PATH },
+    });
+    publishRelease({ state: "rollingback", error: null, progress: null });
+    await updateSettings((settings) => {
+      if (window && !window.isDestroyed()) settings.window = { bounds: window.getBounds(), maximized: window.isMaximized() };
+    });
+    await saveResume();
+    try {
+      window?.webContents.session.flushStorageData();
+    } catch {}
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    stopReleaseWatch();
+    stopUpdateWatch();
+    stopEyesWatch();
+    stopMachineWatch();
+    stopCommunityWatch();
+    stopAssistant();
+    const rollbackLine = ["start", '""', "powershell.exe", ...["-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", scriptPath].map(quoteWindowsCmdArg)].join(" ");
+    const helper = spawn(process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", `"${rollbackLine}"`], {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true,
+      windowsVerbatimArguments: true,
+    });
+    helper.unref();
+    logLine(`[release] rolling back to v${releasePrevious.from}; helper pid ${helper.pid}`);
+    app.releaseSingleInstanceLock();
+    app.exit(0);
+    return { ok: true, applying: true, version: releasePrevious.from, status: releaseStatus() };
+  } catch (error) {
+    const message = String(error?.message ?? error).slice(0, 400);
+    releaseApplyInFlight = false;
+    publishRelease({ state: "error", error: message, progress: null });
+    logLine(`[release] rollback failed: ${message}`);
+    return blocked(message);
+  }
 }
 
 // ---- Discord community link: the Void Engine server ------------------------
@@ -21780,6 +21969,8 @@ function registerIpc() {
     return { ok: true, status: releaseStatus() };
   });
   ipcMain.handle("release:apply", async () => applyReleaseUpdate());
+  ipcMain.handle("release:rollback", async () => releaseRollback());
+  ipcMain.handle("boot:healthy", async () => bootHealthy("renderer"));
 
   // ---- Community ----------------------------------------------------------
   // The Void Engine Discord link (the "Discord community link" block beside
@@ -22394,6 +22585,7 @@ async function captureTabs() {
 
 app.whenReady().then(() => {
   registerIpc();
+  bootHealthStart();
   if (process.argv.includes("--set-key")) {
     (async () => {
       const key = process.env.MEFI_STUDIO_KEY;
@@ -22666,6 +22858,7 @@ app.whenReady().then(() => {
   if (!SMOKE && !CAPTURE && !CLI_MODE) setTimeout(() => { remoteApply(); }, 20000).unref?.();
   if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => announceRestart().catch(() => {}));
   if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => announceRelease().catch(() => {}));
+  if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => bootHealthWatch());
   // The assistant service runs on its own clock, renderer or not; the smoke
   // exercises its keyless path, the capture tour never needs it.
   if (!CAPTURE && !CLI_MODE) setTimeout(() => startAssistant().catch((error) => logLine(`[assistant] start failed: ${error?.message ?? error}`)), 1500);
