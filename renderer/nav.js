@@ -1100,6 +1100,12 @@
   function go(id, params = {}, options = {}) {
     const redirected = window.MefiAgents?.redirect?.(id, params);
     if (redirected) return go(redirected.id, redirected.params, options);
+    // ---- sessions (renderer/sessions.js) ----
+    // In the 0.5 layout a task opened by its id (the palette, a notification, a link) is a session: the thread shows it.
+    // The task board stays one press away (board: true).
+    const sessionRoute = window.MefiSessions?.redirect?.(id, params);
+    if (sessionRoute) return go(sessionRoute.id, sessionRoute.params, options);
+    // ---- end of sessions ----
     // In Vibe mode, Home is Vibe: every Home button, H and Esc out of Command land there.
     if (id === "workspace" && window.MefiVibe?.mode?.() === "vibe") id = "vibe";
     closeHelpMenu();
@@ -1941,6 +1947,10 @@
     wireLayout(Boolean(on));
     if (on) paintLayout(); else if (was) clearLayout();
     if (on || was) announceLayout(false);
+    // ---- sessions (renderer/sessions.js) ----
+    // Build's session list, thread and inspector are drawn only while the 0.5 layout is on.
+    if (on) window.MefiSessions?.attach?.(); else if (was) window.MefiSessions?.detach?.();
+    // ---- end of sessions ----
     return Boolean(on);
   }
   function setLayout(choice) {

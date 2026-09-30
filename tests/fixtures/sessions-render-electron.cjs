@@ -1,0 +1,810 @@
+"use strict";
+
+// Build's desktop inside the 0.5 frame (renderer/sessions.js), in a real Chromium: a copied booklet, the new layout
+// switched on (?layout=v2), a stand-in for the shell's regions (the real one, renderer/shell.js, is another slice's: this
+// fixture's MefiShell only gives the three panels a box each, placed from the same variables the pages read) and a synthetic
+// bridge that answers with a board that has a task in every stage, a run in its own worktree, an open question, a finished
+// attempt with changes (Accept, Revert and its Undo really change what the bridge answers next), pictures a brief and a
+// message carry, and the before and after shots of an attempt. It checks what the DOM tests cannot: the list, the thread
+// and the inspector fit five window sizes, no scroller reserves width for a bar, nothing is under 12 px, pictures and shots
+// are whole (never cropped) and open in the lightbox, the keys work, and with the layout off (v1) none of it exists.
+// Screenshots are kept when the test is given a capture folder. No application main process or live state is loaded;
+// network, permissions and child processes are blocked.
+const { app, BrowserWindow, session } = require("electron");
+const assert = require("node:assert/strict");
+const fs = require("node:fs"), path = require("node:path");
+const { fileURLToPath } = require("node:url");
+const root = process.env.MEFI_SESSIONS_FIXTURE;
+if (!root || !path.isAbsolute(root)) throw new Error("An isolated Sessions fixture directory is required");
+const report = { errors: [], networkAttempts: [], processAttempts: [], layouts: [], v1: null, steps: [] };
+app.setName("Sessions Fixture");
+for (const name of ["userData", "sessionData", "crashDumps"]) {
+  const directory = path.join(root, name); fs.mkdirSync(directory, { recursive: true }); app.setPath(name, directory);
+}
+app.disableHardwareAcceleration();
+app.commandLine.appendSwitch("force-prefers-reduced-motion", "reduce");
+const childProcess = require("node:child_process");
+for (const name of ["spawn", "spawnSync", "exec", "execSync", "execFile", "execFileSync", "fork"]) childProcess[name] = () => { report.processAttempts.push(name); throw new Error("Child execution is disabled in this fixture"); };
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+let finished = false;
+function finish(error) {
+  if (finished) return; finished = true;
+  if (error) { report.failure = error.stack || String(error); console.error(report.failure); }
+  fs.writeFileSync(path.join(root, "report.json"), JSON.stringify(report, null, 2));
+  app.exit(error ? 1 : 0);
+}
+process.on("uncaughtException", finish); process.on("unhandledRejection", finish);
+
+// ---- the board -----------------------------------------------------------------------------------------------------------------
+const projectId = "project_fixture";
+const now = Date.now();
+const mins = (count) => now - count * 60000;
+const hours = (count) => now - count * 3600000;
+const PIC_WIDE = "img_a1b2c3d4e5f60718293a4b5c", PIC_TALL = "img_0f1e2d3c4b5a69788796a5b4";
+const task = (id, title, extra = {}) => ({ id, projectId, title, prompt: `${title}.`, status: "open", createdAt: hours(30), updatedAt: hours(30), ...extra });
+const seed = {
+  projectId, root,
+  tasks: [
+    task("task_ask", "Add an empty state to the notes list", { status: "active", runId: "run_ask_1", updatedAt: mins(4), createdAt: mins(52), prompt: `Show a friendly empty state when there are no notes yet.\n\nThe owner attached empty-state.png at ${root}/attachments/${PIC_WIDE}.png\nThe owner attached toolbar.png at ${root}/attachments/${PIC_TALL}.png\n\nGoal:\nAn empty notes list says what to do next.\n\nDone when:\n- The list shows "No notes yet" with a Create note button\n- Existing tests still pass\n\nKeep unchanged:\nThe toolbar.`, acceptance: ["The list shows \"No notes yet\" with a Create note button", "Existing tests still pass"], lastAttempt: { runId: "run_ask_1", at: mins(46), route: "OpenCode" } }),
+    task("task_failed", "Speed up the first paint on the map", { updatedAt: hours(3), prompt: "The map takes too long to show its first frame.", verification: { state: "failed", reason: "The first-paint budget failed: 2.4 s against 1.5 s." }, verificationRun: { state: "failed", key: "run_fail_1", results: [{ name: "first paint under 1.5 s", ok: false, detail: "2.4 s" }, { name: "unit tests", ok: true }] }, lastAttempt: { runId: "run_fail_1", at: hours(3), route: "Codex" } }),
+    task("task_run", "Search notes by tag", { status: "active", runId: "run_run_1", updatedAt: mins(1), createdAt: mins(35), prompt: "Let me filter the notes list by tag.", runProgress: { outputTail: ["reading src/search/tags.ts", "writing parseTags()", "running npm test"] }, lastAttempt: { runId: "run_run_1", at: mins(31), route: "Claude Code" } }),
+    task("task_run2", "Keyboard shortcut for a new note", { status: "active", runId: "run_run2_1", updatedAt: mins(2), createdAt: mins(20), prompt: "Press n anywhere to start a note.", lastAttempt: { runId: "run_run2_1", at: mins(19), route: "OpenCode" } }),
+    task("task_review", "Export notes as Markdown", { status: "awaiting_verification", updatedAt: mins(12), createdAt: hours(2), prompt: "Add an Export button to the toolbar. It should write one .md file per note, with the tags as front matter.", acceptance: ["One .md file per note", "Tags become front matter"], verificationRun: { state: "running", key: "run_done_1", results: [{ name: "typecheck", ok: true }, { name: "export test", ok: true }, { name: "lint", ok: null }] }, lastAttempt: { runId: "run_done_1", at: mins(40), route: "Claude Code" } }),
+    task("task_queued", "Dark mode for the settings page", { updatedAt: hours(2), prompt: "Give the settings page a dark theme." }),
+    task("task_queued2", "Pin favourite notes", { updatedAt: hours(4), prompt: "Let me pin notes to the top of the list." }),
+    task("task_done", "Rename the export button", { status: "done", updatedAt: hours(26), doneAt: hours(26), prompt: "Rename Export to Export as Markdown.", verification: { state: "verified", reason: "The button reads Export as Markdown and the test that looks for it passes." }, lastAttempt: { runId: "run_old_1", at: hours(27), route: "OpenCode" } }),
+    task("task_done2", "Fix the login redirect loop", { status: "done", updatedAt: hours(50), doneAt: hours(50), prompt: "Logging in sends me round in circles.", verification: { state: "manual" } }),
+    task("task_done3", "Trim the changelog", { status: "done", updatedAt: hours(120), doneAt: hours(120), prompt: "Shorten old entries." }),
+  ],
+  ideas: [{ id: "idea_1", title: "Share a note as a link", detail: "A read-only link for a note", source: "Mefi", at: hours(9), status: "open" }, { id: "idea_2", title: "Tag suggestions", detail: "", source: "", at: hours(80), status: "open" }],
+  questions: [{ id: "q_1", status: "open", title: "Should the empty state also appear when a search has no matches?", detail: "The list can be empty for two reasons: no notes at all, or a search that found none.", at: mins(4), context: { taskId: "task_ask", suggestion: { optionId: "yes", reason: "it is the same component and the same words" }, evidence: ["src/notes/NotesList.tsx renders the list", "search results reuse it"] }, options: [{ id: "only", label: "Only when there are no notes" }, { id: "yes", label: "Yes, reuse it", recommended: true }] }],
+  messages: [
+    { id: "m_ask", role: "user", text: 'About the task "Export notes as Markdown" (task_review): Does this match the toolbar in my screenshot?', at: mins(30), projectId, images: [{ id: PIC_TALL, name: "toolbar.png" }] },
+    { id: "m_reply", role: "assistant", text: "The Export button sits in the same place as the one in your screenshot, to the right of Share.", at: mins(29), projectId },
+  ],
+  decisions: [{ id: "dec_1", taskId: "task_done", at: hours(27), label: "Keep the old name as an alias", reason: "existing links keep working", choice: "alias" }],
+  changes: { accepted: false, reverted: false, receipt: null },
+  history: [{ id: "rev_1", kind: "Edited brief", at: hours(1), note: "", snapshot: { prompt: "Add an Export button to the toolbar." } }, { id: "rev_2", kind: "First brief", at: hours(2), note: "", snapshot: { prompt: "Export notes." } }],
+};
+const base = { kind: "dev", detached: false, locked: false, lockedReason: "", missing: false, dirty: 0, ahead: 0, behind: 0, pushed: true, upstreamName: "origin/main", last: null, task: null, busy: false };
+seed.worktrees = { ok: true, repo: true, root: "/work/mefi-studio", main: "main", upstream: "origin/main", hasUpstream: true, projectId, enabled: { on: false, forced: false }, builders: true, summary: { total: 2, atRisk: 1, toLand: 0, safeToRemove: 0, missing: 0 }, headline: "2 worktrees.", rows: [
+  { ...base, kind: "primary", path: "/work/mefi-studio", name: "mefi-studio", branch: "main", head: "9f8e7d6", sha: "9f8e7d6".padEnd(40, "0"), state: "primary", action: "" },
+  { ...base, kind: "run", path: "/work/mefi-studio/.mefi/worktrees/run_run_1", name: "run_run_1", branch: "mefi/tag-search", head: "cc22dd3", sha: "cc22dd3".padEnd(40, "0"), ahead: 2, pushed: false, busy: true, state: "unpushed", action: "2 commits only on this PC.", task: { taskId: "task_run", title: "Search notes by tag", at: 1 } },
+] };
+
+// ---- the bridge: runs in the page, before any script there -------------------------------------------------------------------
+function bridge(seedData) {
+  const { contextBridge } = require("electron");
+  const calls = [];
+  const clone = (value) => JSON.parse(JSON.stringify(value));
+  const data = clone(seedData);
+  const { projectId: pid } = data;
+  const t = Date.now();
+  const hoursAgo = (n) => t - n * 3600000;
+  // A picture drawn here, so the page gets real pixels: a wide screenshot, a tall one, and a before / after pair of the preview.
+  const draw = (width, height, paint) => {
+    try {
+      const canvas = document.createElement("canvas"); canvas.width = width; canvas.height = height;
+      const g = canvas.getContext("2d"); paint(g, width, height);
+      return canvas.toDataURL("image/png");
+    } catch { return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="; }
+  };
+  const app = (g, w, h, empty) => {
+    g.fillStyle = "#101a22"; g.fillRect(0, 0, w, h);
+    g.fillStyle = "#1c2b36"; g.fillRect(0, 0, w, 64); g.fillStyle = "#8fe3cf"; g.font = "bold 28px sans-serif"; g.fillText("Notes", 24, 42);
+    g.fillStyle = "#2a3d4b"; g.fillRect(w - 220, 14, 90, 36); g.fillRect(w - 120, 14, 90, 36);
+    g.fillStyle = "#e7f5ee"; g.font = "22px sans-serif";
+    if (empty) { g.fillText("No notes yet.", w / 2 - 70, h / 2); g.fillStyle = "#8fe3cf"; g.fillRect(w / 2 - 70, h / 2 + 24, 140, 40); g.fillStyle = "#04130e"; g.fillText("Create note", w / 2 - 54, h / 2 + 52); }
+    else { for (let i = 0; i < 5; i += 1) { g.fillStyle = "#1c2b36"; g.fillRect(24, 90 + i * 70, w - 48, 56); } }
+  };
+  const pictures = {
+    [data.ids.wide]: { name: "empty-state.png", mime: "image/png", width: 960, height: 300, dataUrl: () => draw(960, 300, (g, w, h) => { g.fillStyle = "#223"; g.fillRect(0, 0, w, h); for (let i = 0; i < 12; i += 1) { g.fillStyle = i % 2 ? "#e85d75" : "#5de8b5"; g.fillRect(i * 80, 0, 40, h); } g.fillStyle = "#fff"; g.font = "bold 34px sans-serif"; g.fillText("WIDE 960 x 300", 330, 160); }) },
+    [data.ids.tall]: { name: "toolbar.png", mime: "image/png", width: 360, height: 720, dataUrl: () => draw(360, 720, (g, w, h) => { g.fillStyle = "#322"; g.fillRect(0, 0, w, h); for (let i = 0; i < 12; i += 1) { g.fillStyle = i % 2 ? "#e8b55d" : "#5d9be8"; g.fillRect(0, i * 60, w, 30); } g.fillStyle = "#fff"; g.font = "bold 30px sans-serif"; g.fillText("TALL 360 x 720", 60, 370); }) },
+  };
+  const live = (status) => data.running = status;
+  data.running = [
+    { id: "run_run_1", runId: "run_run_1", taskId: "task_run", title: "Search notes by tag", startedAt: t - 31 * 60000, phase: "building", route: "Claude Code", currentStep: "Writing parseTags()", progress: 0.6 },
+    { id: "run_run2_1", runId: "run_run2_1", taskId: "task_run2", title: "Keyboard shortcut for a new note", startedAt: t - 19 * 60000, phase: "building", route: "OpenCode", currentStep: "Reading the shortcut map", progress: 0.3 },
+    { id: "run_ask_1", runId: "run_ask_1", taskId: "task_ask", title: "Add an empty state to the notes list", startedAt: t - 46 * 60000, phase: "building", route: "OpenCode", currentStep: "Waiting for your answer", progress: 0.5 },
+  ];
+  void live;
+  const files = () => [
+    { path: "src/export/markdown.ts", dir: "src/export/", name: "markdown.ts", oldPath: null, status: "added", additions: 96, deletions: 0, binary: false, kind: "file", state: data.changes.reverted ? "reverted" : "can-revert" },
+    { path: "src/notes/Toolbar.tsx", dir: "src/notes/", name: "Toolbar.tsx", oldPath: null, status: "modified", additions: 31, deletions: 4, binary: false, kind: "file", state: data.changes.reverted ? "reverted" : "can-revert" },
+    { path: "src/export/names.ts", dir: "src/export/", name: "names.ts", oldPath: null, status: "added", additions: 52, deletions: 0, binary: false, kind: "file", state: data.changes.reverted ? "reverted" : "can-revert" },
+    { path: "tests/export.test.ts", dir: "tests/", name: "export.test.ts", oldPath: null, status: "added", additions: 33, deletions: 14, binary: false, kind: "file", state: data.changes.reverted ? "reverted" : "can-revert" },
+  ];
+  const handlers = {
+    projectsList: () => ({ ok: true, activeId: pid, projects: [{ id: pid, name: "Notes app", path: data.root }] }),
+    tasksList: () => ({ ok: true, projectId: pid, tasks: data.tasks }),
+    ideasList: () => ({ ok: true, ideas: data.ideas }),
+    planningList: () => ({ ok: true, projectId: pid, plans: [] }),
+    assistantState: () => ({ ok: true, state: { projectId: pid, status: "running", agents: [], messages: data.messages, prefs: { proactive: true, parallel: 8, aiParallel: 4, memoryAlign: true, loopGuard: true, loopGuardApply: true, compactHistory: true, keepAwake: true, background: true }, work: [], questions: data.questions } }),
+    assistantStatus: () => ({ ok: true, status: { projectId: pid, enabled: true, execute: true, autoBuild: true, minutes: 5, parallel: 3, adaptiveParallel: true, mode: "swarm", running: data.running, history: [] } }),
+    backlogStatus: () => ({ ok: true, projectId: pid, paused: false, draining: false, counts: {}, taskStates: [], next: [] }),
+    tasksAttempts: ({ taskId }) => {
+      const attempts = {
+        task_ask: [{ runId: "run_ask_1", startedAt: t - 46 * 60000, via: "OpenCode", fallbacks: [], finishedAt: null, ok: null, stopped: false, limitMinutes: 25, seconds: null, result: "", tail: [], release: null, outcome: "unrecorded" }],
+        task_run: [{ runId: "run_run_1", startedAt: t - 31 * 60000, via: "Claude Code", fallbacks: [{ at: t - 30 * 60000, reason: "the first worker was busy" }], finishedAt: null, ok: null, stopped: false, limitMinutes: 25, seconds: null, result: "", tail: [], release: null, outcome: "unrecorded" }],
+        task_review: [{ runId: "run_done_1", startedAt: t - 40 * 60000, via: "Claude Code", fallbacks: [], finishedAt: t - 14 * 60000, ok: true, stopped: false, stoppedAtLimit: false, limitMinutes: 25, seconds: 1560, result: "Added the Export button to the toolbar and wrote one Markdown file per note, with the tags as front matter.", tail: ["$ npm run check", "ok: 0 errors", "wrote 4 files"], release: null, outcome: "finished-ok" }],
+        task_failed: [{ runId: "run_fail_1", startedAt: hoursAgo(3.4), via: "Codex", fallbacks: [], finishedAt: hoursAgo(3.1), ok: false, stopped: false, limitMinutes: 25, seconds: 1100, result: "", error: "The first-paint budget failed.", tail: ["first paint 2.4 s"], release: null, outcome: "failed" }],
+      };
+      return { ok: true, taskId, attempts: attempts[taskId] || [] };
+    },
+    tasksChanges: ({ taskId }) => {
+      if (taskId !== "task_review") return { ok: true, available: true, taskId, attempt: null, state: "none", files: [], totals: { files: 0, additions: 0, deletions: 0 }, attempts: [] };
+      return { ok: true, available: true, taskId, projectId: pid, attempt: 1, runId: "run_done_1", state: "ended", attempts: [{ n: 1, runId: "run_done_1", startedAt: t - 40 * 60000, endedAt: t - 14 * 60000, ended: true, selected: true, reverts: data.changes.reverted ? [{ receipt: data.changes.receipt, at: t }] : [], accepted: data.changes.accepted, running: false }], files: files(), totals: { files: 4, additions: 212, deletions: 18, binary: 0 }, more: 0, skipped: { count: 0, files: [], sentence: "" }, overlap: [], worktree: false, accepted: data.changes.accepted, running: false, waiting: false, canAccept: !data.changes.reverted, canRevert: !data.changes.reverted };
+    },
+    tasksDiff: ({ path: file }) => ({ ok: true, path: file, status: "added", additions: 4, deletions: 0, binary: false, truncated: false, lines: [{ k: "h", t: `@@ ${file} @@` }, { k: "+", t: "export function toMarkdown(note) {", b: 1 }, { k: "+", t: "  return note.body;", b: 2 }, { k: "+", t: "}", b: 3 }] }),
+    tasksAccept: ({ accepted }) => { data.changes.accepted = accepted !== false; return { ok: true, accepted: data.changes.accepted, attempt: 1 }; },
+    tasksRevert: (payload) => {
+      if (payload.undo) { data.changes.reverted = false; data.changes.receipt = null; return { ok: true, undone: true, restored: 4 }; }
+      data.changes.reverted = true; data.changes.receipt = "R20260930"; data.changes.accepted = false;
+      return { ok: true, reverted: 4, files: 4, already: 0, refused: [], receipt: data.changes.receipt, scope: "attempt", reopened: true };
+    },
+    tasksChecks: ({ taskId }) => ({ ok: true, available: true, taskId, projectId: pid, attempt: 1, at: t - 60000, results: [{ id: "typecheck", label: "Typecheck", status: "ok", detail: "0 errors", ms: 900 }, { id: "lint", label: "Lint", status: "warn", detail: "2 warnings", ms: 400 }], detected: [{ id: "typecheck", label: "Typecheck", auto: true, writes: false }, { id: "lint", label: "Lint", auto: true, writes: false }], none: false, build: false }),
+    tasksEvidence: ({ taskId }) => (["task_review", "task_ask", "task_done"].includes(taskId)
+      ? { ok: true, taskId, projectId: pid, attempt: 1, runId: "run_done_1", enabled: true, forced: false, shots: [{ phase: "before", at: 1, bytes: 10, width: 1280, height: 800, dataUrl: draw(1280, 800, (g, w, h) => app(g, w, h, false)) }, { phase: "after", at: 2, bytes: 10, width: 1280, height: 800, dataUrl: draw(1280, 800, (g, w, h) => app(g, w, h, true)) }], notes: { before: "Captured when the task started.", after: "Captured when the task finished." }, privacy: "Screenshots stay on this PC. They can show secrets, so they are never added to a problem report." }
+      : { ok: true, taskId, projectId: pid, attempt: null, enabled: true, forced: false, shots: [], notes: {}, privacy: "" }),
+    reviewPrefs: () => ({ ok: true, prefs: { snapshots: true, advisory: true, advisoryBuild: false, shots: true }, saved: { snapshots: true, advisory: true, advisoryBuild: false, shots: true }, forced: { snapshots: false, advisory: false, shots: false } }),
+    assistantImageRead: ({ id }) => { const p = pictures[id]; if (!p) return { ok: false, error: "That picture is no longer saved." }; const dataUrl = p.dataUrl(); return { ok: true, id, name: p.name, mime: p.mime, bytes: dataUrl.length, width: p.width, height: p.height, dataUrl }; },
+    assistantImage: () => ({ ok: true, off: false }),
+    assistantAnswer: ({ id, optionId, text }) => { data.questions = data.questions.filter((q) => q.id !== id); return { ok: true, id, optionId, text }; },
+    assistantMessage: (text) => { data.messages.push({ id: `m_${data.messages.length}`, role: "user", text, at: Date.now(), projectId: pid }, { id: `m_${data.messages.length + 1}`, role: "assistant", text: "Yes: that matches.", at: Date.now() + 1, projectId: pid }); return { ok: true, state: { messages: data.messages } }; },
+    tasksSave: (list) => { for (const row of Array.isArray(list) ? list : [list]) { const at = data.tasks.findIndex((item) => item.id === row.id); if (at >= 0) data.tasks[at] = row; } return { ok: true }; },
+    tasksCreate: (payload) => { data.tasks.push({ id: `task_new_${data.tasks.length}`, projectId: pid, title: payload.title, prompt: payload.prompt, status: "open", createdAt: Date.now(), updatedAt: Date.now() }); return { ok: true }; },
+    tasksAction: (payload) => {
+      const row = data.tasks.find((item) => item.id === payload.taskId);
+      if (row && payload.action === "rename") row.title = payload.title;
+      if (row && payload.action === "status" && payload.status === "done") { row.status = "done"; row.doneAt = Date.now(); row.verification = { state: "manual" }; }
+      if (row && payload.action === "stop") { data.running = data.running.filter((job) => job.taskId !== payload.taskId); row.status = "open"; row.runId = null; }
+      return { ok: true };
+    },
+    tasksDelete: ({ taskId }) => { const row = data.tasks.find((item) => item.id === taskId); data.tasks = data.tasks.filter((item) => item.id !== taskId); (data.deleted ||= []).push(row); return { ok: true, trashed: [{ kind: "task", id: taskId }] }; },
+    tasksUndelete: ({ taskId }) => { const at = (data.deleted || []).findIndex((item) => item.id === taskId); if (at >= 0) data.tasks.push(...data.deleted.splice(at, 1)); return { ok: true }; },
+    autonomyState: () => ({ ok: true, projectId: pid, level: "auto", elevated: {}, categories: [], decisions: data.decisions }),
+    autonomyUndo: ({ id }) => { data.decisions = data.decisions.filter((row) => row.id !== id); return { ok: true }; },
+    tasksHistory: () => ({ ok: true, entries: data.history, hasMore: false }),
+    tasksRestore: () => ({ ok: true }),
+    taskMetrics: ({ taskId }) => ({ ok: true, taskId, attempt: { live: taskId === "task_run", startedAt: t - 31 * 60000, seconds: 1560, stoppedAtLimit: false, route: { label: "Claude Code" }, tokens: { state: "not-reported" }, cost: { state: "not-reported" } }, task: { attempts: 2, seconds: 2900, secondsUnknown: false, subtasks: 0, tokens: { state: "not-reported" }, cost: { state: "not-reported" } }, cap: { enabled: true, minutes: 25, effectiveMinutes: 25, min: 5, step: 5, ceilingMinutes: 60, raised: false }, coverage: { reasons: [] } }),
+    tasksCap: () => ({ ok: true }),
+    projectPreviewStatus: () => ({ ok: true, projectId: pid, phase: "ready", available: true, canStop: true, owned: true, url: "http://localhost:5173/" }),
+    projectPreviewStart: () => ({ ok: true, projectId: pid, phase: "ready", available: true, canStop: true, owned: true, url: "http://localhost:5173/" }),
+    projectPreviewOpen: () => ({ ok: true, projectId: pid, phase: "ready", available: true, canStop: true, owned: true, url: "http://localhost:5173/" }),
+    projectPreviewStop: () => ({ ok: true, projectId: pid, phase: "stopped", available: true, canStop: false, owned: true }),
+    workWhere: () => ({ ok: true, projectId: pid, repo: true, branch: "main", head: "996db71", dirty: 3, worktrees: { on: false, forced: false } }),
+    workWorktrees: (on) => ({ ok: true, worktrees: { on: Boolean(on), forced: false } }),
+    worktreesList: () => data.worktrees,
+    getAiRouting: () => ({ ok: true, provider: "auto", executorCli: "opencode", executorTier: "auto", executorTierDefaults: {}, executorModels: { opencode: "zai/glm-5.3" }, autoProviders: ["zai", "opencode"], hasZen: true }),
+    setAiRouting: () => ({ ok: true }),
+    cliStatus: () => [{ id: "opencode", installed: true }, { id: "claude", installed: true }],
+    prefsGet: () => ({ ok: true, prefs: { commandHome: false, autoReference: true, useReference: true, useTree: true, useWeb: false, composerPicker: true } }),
+    agentsSkills: () => ({ ok: true, skills: [{ name: "bug-triage", description: "Reproduce a bug" }] }),
+    projectFiles: () => ({ ok: true, files: [{ name: "Toolbar.tsx", path: "src/notes/Toolbar.tsx", dir: "src/notes" }] }),
+    shellReveal: () => ({ ok: true }),
+    readCatalog: () => data.catalog,
+    eyesState: () => ({ ok: true, sessions: [], todos: [], changes: [], pngs: [] }), eyesCheckpointsRead: () => ({ ok: true, checkpoints: {} }), eyesRequestsRead: () => ({ ok: true, requests: [] }), eyesBriefingRead: () => ({ ok: true, briefing: null }), eyesCollisions: () => ({ ok: true, collisions: [], presence: [] }), speedMeasurements: () => ({ ok: true, measurements: {} }),
+    jevStatus: () => ({ enabled: true, route: "zen", routes: { vercel: false, typesafe: false, zen: true, openrouter: false } }),
+    agentsState: () => ({ ok: true, projectId: pid, revision: 0, inherited: true, name: "Studio defaults", configuration: {}, defaults: {}, presets: [], skills: [], mcpTools: [], routing: {}, seats: {}, choices: {} }),
+    cliSetupStatus: () => ({ ok: true, selected: "auto", clis: [] }), firstRunStatus: () => ({ ok: true, firstRun: null }),
+    machineGet: () => ({ ok: true, machine: { autoKill: true, idleSeconds: 240, maxAgeMinutes: 20, maxMemMB: 1500 } }), updateStatus: () => ({ ok: true, status: { auto: true } }),
+    companionState: () => ({ ok: true, projectId: pid, projectName: "Notes app", state: "idle", look: "wisp", scope: "project", roaming: false, pinned: true, bubbles: false, growth: false, queue: { items: [], counts: { total: 0 } }, learning: {}, preferences: [], activity: [] }),
+    learningState: () => ({ ok: true, projectId: pid, decisions: { enabled: true, scope: "blend" }, models: "blend", profiles: {} }),
+    openrouterModels: () => ({ ok: true, models: [] }), agentModels: () => ({ ok: true, models: [] }),
+    workStats: () => ({ ok: true, projectId: pid, totals: { tasks: 12, runs: 31, tokens: 1234567, activeDays: 9, verified: 7 }, peakHour: 14, days: [], models: [], store: { ok: true, error: null } }),
+  };
+  const api = {};
+  for (const [name, handler] of Object.entries(handlers)) {
+    api[name] = async (...args) => { calls.push({ name, args: clone(args) }); return clone(handler(args[0] ?? {}, args)); };
+  }
+  const callbacks = {};
+  for (const name of ["onTasks", "onProjects", "onAssistant", "onAssistantStatus", "onProjectPreview", "onSettingsChanged", "onStudioLog", "onAutoSetup", "onReviewChanged"]) api[name] = (callback) => { (callbacks[name] ||= []).push(callback); return () => {}; };
+  contextBridge.exposeInMainWorld("mefiStudio", api);
+  contextBridge.exposeInMainWorld("sessionsFixture", {
+    calls: () => calls, clear: () => { calls.length = 0; }, state: () => clone({ changes: data.changes, tasks: data.tasks.map((row) => ({ id: row.id, title: row.title, status: row.status })), questions: data.questions.length, decisions: data.decisions.length, messages: data.messages.length }),
+    push: (name, payload) => { for (const callback of callbacks[name] || []) callback(payload); },
+  });
+}
+
+// ---- a stand-in for the shell's regions (renderer/shell.js is another slice's) -----------------------------------------------------
+function installShell() {
+  const css = document.createElement("style"); css.id = "fx-shell-style";
+  css.textContent = `.fx-region{position:fixed;z-index:var(--z-shell);box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
+    #fx-list{left:var(--shell-rail-w);width:var(--shell-list-w);top:0;bottom:var(--shell-y1)}
+    #fx-inspector{right:0;width:var(--shell-inspector-w);top:var(--shell-y0);bottom:var(--shell-y1)}
+    #fx-main{left:var(--shell-x0);right:var(--shell-x1);top:var(--shell-y0);bottom:var(--shell-y1);z-index:calc(var(--z-shell) - 1)}
+    .fx-region:empty{display:none}
+    html[data-layout-fold~="list"] #fx-list:not([data-drawer="open"]),html[data-layout-fold~="inspector"] #fx-inspector:not([data-drawer="open"]){display:none}
+    #fx-list[data-drawer="open"],#fx-inspector[data-drawer="open"]{display:flex;top:0;bottom:0;width:min(320px,90vw);z-index:calc(var(--z-shell) + 2);border:1px solid var(--hairline-strong)}
+    #fx-list[data-drawer="open"]{left:0;right:auto}#fx-inspector[data-drawer="open"]{right:0;left:auto}`;
+  document.head.append(css);
+  const regions = {}, asked = { list: 300, inspector: 380 }, panels = { list: new Map(), inspector: new Map(), main: new Map() };
+  for (const name of ["list", "inspector", "main"]) { const node = document.createElement("div"); node.id = `fx-${name}`; node.className = "fx-region"; node.dataset.region = name; document.body.append(node); regions[name] = node; }
+  const settle = (name) => {
+    const any = [...panels[name].values()].some((entry) => entry.shown);
+    regions[name].hidden = !any;
+    if (asked[name] !== undefined) window.MefiNav?.layout?.set?.(name, any ? asked[name] : 0);
+    window.dispatchEvent(new CustomEvent("mefi:shell-layout", { detail: { region: name, open: any } }));
+  };
+  window.MefiShell = {
+    active: () => true,
+    region: (name) => regions[name] ?? null,
+    mount(name, key, element) {
+      if (!regions[name]) return null;
+      const entry = { element, shown: true };
+      panels[name].set(key, entry);
+      regions[name].append(element);
+      settle(name);
+      return {
+        show() { entry.shown = true; element.hidden = false; settle(name); },
+        hide() { entry.shown = false; element.hidden = true; settle(name); },
+        unmount() { panels[name].delete(key); element.remove(); settle(name); },
+      };
+    },
+    size: (name) => Number(window.MefiNav?.layout?.used?.(name)) || 0,
+    // A folded region (html[data-layout-fold]) is a drawer: the stand-in opens it over the page the way the real shell will.
+    drawer(name, open) { regions[name].dataset.drawer = open ? "open" : ""; regions[name].hidden = false; },
+  };
+}
+
+// ---- what the page looks like right now, in real pixels ---------------------------------------------------------------------------------
+const measure = `
+  const box = (node) => { if (!node) return null; const r = node.getBoundingClientRect(); return { x: Math.round(r.left * 10) / 10, y: Math.round(r.top * 10) / 10, r: Math.round(r.right * 10) / 10, b: Math.round(r.bottom * 10) / 10, w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10 }; };
+  const visible = (node) => { const r = node.getBoundingClientRect(); const s = getComputedStyle(node); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
+  const mine = [...document.querySelectorAll('.sx-panel, .sx-panel *, .sx-lightbox, .sx-lightbox *')].filter((node) => node.closest('[hidden]') === null || node.hidden === false && visible(node));
+  const leafText = mine.filter((node) => visible(node) && [...node.childNodes].some((child) => child.nodeType === 3 && child.textContent.trim()));
+  const small = leafText.filter((node) => parseFloat(getComputedStyle(node).fontSize) < 12).map((node) => (node.id || node.className || node.tagName) + ':' + getComputedStyle(node).fontSize + ':' + node.textContent.trim().slice(0, 24));
+  const scrollers = mine.filter((node) => { const s = getComputedStyle(node); return /(auto|scroll)/.test(s.overflowY) || /(auto|scroll)/.test(s.overflowX); })
+    .map((node) => { const s = getComputedStyle(node); return { id: node.id, cls: String(node.className).slice(0, 40), reserved: Math.round((node.offsetWidth - node.clientWidth - parseFloat(s.borderLeftWidth) - parseFloat(s.borderRightWidth)) * 10) / 10, reservedY: Math.round((node.offsetHeight - node.clientHeight - parseFloat(s.borderTopWidth) - parseFloat(s.borderBottomWidth)) * 10) / 10 }; });
+  const wide = [...document.querySelectorAll('.sx-panel')].filter(visible).filter((node) => node.scrollWidth > node.clientWidth + 1).map((node) => node.id + ':' + node.scrollWidth + '>' + node.clientWidth);
+  const spill = [...document.querySelectorAll('.sx-panel *')].filter((node) => visible(node) && node.closest('.sx-groups, .sx-scroll, .sx-ibody, .sx-dock, .sx-menu, .sx-said pre') === null).map((node) => ({ node, r: node.getBoundingClientRect(), panel: node.closest('.sx-panel').getBoundingClientRect() })).filter(({ r, panel }) => r.right > panel.right + 1 || r.left < panel.left - 1).map(({ node }) => (node.id || node.className || node.tagName) + '');
+  return {
+    inner: { w: innerWidth, h: innerHeight },
+    pageOverflow: document.documentElement.scrollWidth > innerWidth + 1 || document.body.scrollWidth > innerWidth + 1,
+    scrollbarWidth: getComputedStyle(document.documentElement).scrollbarWidth,
+    regions: { list: box(document.getElementById('fx-list')), main: box(document.getElementById('fx-main')), inspector: box(document.getElementById('fx-inspector')) },
+    list: box(document.getElementById('sessions-list')), thread: box(document.getElementById('sessions-thread')), inspector: box(document.getElementById('sessions-inspector')),
+    head: box(document.getElementById('sessions-head')), scroll: box(document.getElementById('sessions-thread-scroll')), dock: box(document.getElementById('sessions-dock')), compose: box(document.getElementById('sessions-compose')), send: box(document.getElementById('sessions-send')), input: box(document.getElementById('sessions-input')),
+    itabs: box(document.getElementById('sessions-itabs')), ibody: box(document.getElementById('sessions-inspector-scroll')),
+    small, scrollers, wide, spill,
+    fold: document.documentElement.dataset.layoutFold || '',
+  };`;
+
+app.whenReady().then(async () => {
+  session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
+    let allowed = /^(data:|blob:|devtools:)/.test(details.url);
+    if (details.url.startsWith("file:")) { const relative = path.relative(root, fileURLToPath(details.url)); allowed = !relative.startsWith("..") && !path.isAbsolute(relative); }
+    if (!allowed) report.networkAttempts.push(details.url);
+    callback({ cancel: !allowed });
+  });
+  session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
+  session.defaultSession.setPermissionCheckHandler(() => false);
+  const catalog = JSON.parse(fs.readFileSync(path.join(root, "data", "models.json"), "utf8"));
+  seed.catalog = catalog; seed.ids = { wide: PIC_WIDE, tall: PIC_TALL };
+  const preload = path.join(root, "sessions-preload.cjs");
+  fs.writeFileSync(preload, `(${bridge.toString()})(${JSON.stringify(seed)});
+    localStorage.setItem('mefiStudio.commandHome','0');localStorage.setItem('mefiStudio.zen','0');localStorage.setItem('mefiStudio.zenReactive','0');localStorage.setItem('mefiStudio.keyHint.v1','1');localStorage.setItem('mefiStudio.walkthrough.v1',JSON.stringify({version:1,step:0,status:'complete'}));localStorage.setItem('mefiStudio.whatsNew.seen','vibe-build-1');
+  `);
+  const window = new BrowserWindow({ show: false, width: 1440, height: 900, frame: false, webPreferences: { preload, contextIsolation: true, nodeIntegration: false, sandbox: true, offscreen: true, backgroundThrottling: false } });
+  const contents = window.webContents; contents.setAudioMuted(true); contents.setFrameRate(30); contents.setWindowOpenHandler(() => ({ action: "deny" }));
+  contents.on("console-message", (_event, detail, oldMessage) => { const level = typeof detail === "object" ? detail.level : detail; if (level === "error" || level === 3) report.errors.push(String(typeof detail === "object" ? detail.message : oldMessage)); });
+  const run = (code) => contents.executeJavaScript(`(async()=>{${code}})()`, true);
+  const until = async (condition, label, ms = 12000) => {
+    const deadline = Date.now() + ms;
+    while (Date.now() < deadline) { assert.deepEqual(report.errors, [], JSON.stringify(report.errors)); if (await run(`return Boolean(${condition});`)) return; await sleep(40); }
+    fs.writeFileSync(path.join(root, "sessions-failure.png"), (await contents.capturePage()).toPNG());
+    throw new Error(`Timed out: ${label}`);
+  };
+  const capture = async (name) => {
+    await run("await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));");
+    await sleep(200);
+    fs.writeFileSync(path.join(root, name), (await contents.capturePage()).toPNG());
+    report.shots.push(name);
+  };
+  const size = async (width, height, zoom = 1) => { window.setContentSize(width, height); contents.setZoomFactor(zoom); await sleep(350); };
+  const step = (label) => report.steps.push(label);
+  report.shots = [];
+  // The phases are named so a failing one can be run alone while debugging: MEFI_SESSIONS_PHASE=v1|shots (default: all).
+  const only = process.env.MEFI_SESSIONS_PHASE || "all";
+
+  // ---- v1: the layout is off, and nothing of this module exists ------------------------------------------------------------------------
+  await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1" } });
+  await until("window.MefiNav && window.MefiWorkspace && window.MefiSessions && !window.MefiBoot?.isActive?.()", "studio ready (v1)");
+  await run("window.MefiNav.go('workspace');");
+  await until("document.body.classList.contains('workspace-active')", "Home is up (v1)");
+  await sleep(1200);
+  report.v1 = await run(`return {
+    layout: document.documentElement.dataset.layout || null, active: window.MefiSessions.active(), enabled: window.MefiSessions.enabled(),
+    elements: document.querySelectorAll('.sx-panel, #sessions-list, #sessions-thread, #sessions-inspector, .sx-lightbox').length,
+    stored: Object.keys(localStorage).filter((key) => key.startsWith('mefiStudio.sessions')),
+    calls: window.sessionsFixture.calls().map((call) => call.name),
+    redirect: window.MefiSessions.redirect('tasks', { taskId: 'task_run' }),
+    styles: [...document.styleSheets].length,
+  };`);
+  assert.equal(report.v1.layout, null, "v1 is the layout without the attribute");
+  assert.equal(report.v1.active, false, "the panels are not drawn in v1");
+  assert.equal(report.v1.elements, 0, "v1 has no session panel anywhere");
+  assert.deepEqual(report.v1.stored, [], "v1 stores nothing of this module's");
+  assert.equal(report.v1.redirect, null, "v1 leaves nav.go('tasks', { taskId }) alone");
+  const mine = ["assistantImageRead", "tasksHistory", "taskMetrics", "tasksEvidence", "tasksChanges", "tasksChecks", "tasksCap", "worktreesList"];
+  assert.deepEqual(report.v1.calls.filter((name) => mine.includes(name)), [], `v1 calls none of the host reads the panels make: ${report.v1.calls.join(",")}`);
+  step("v1 is untouched");
+  if (only === "v1") { finish(); return; }
+
+  // ---- v2 ----------------------------------------------------------------------------------------------------------------------------------
+  await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1", layout: "v2" } });
+  await until("window.MefiNav && window.MefiWorkspace && window.MefiSessions && !window.MefiBoot?.isActive?.()", "studio ready (v2)");
+  assert.equal(await run("return document.documentElement.dataset.layout;"), "v2");
+  assert.equal(await run("return window.MefiSessions.active();"), false, "with no shell there is nothing to draw into, and nothing is drawn");
+  assert.equal(await run("return document.querySelectorAll('.sx-panel').length;"), 0);
+  await run(`window.__installShell = ${installShell.toString()}; window.__installShell(); window.dispatchEvent(new CustomEvent('mefi:shell-layout', { detail: { region: 'all' } }));`);
+  await run("window.MefiVibe.setMode('build', { go: false }); window.MefiNav.applyShell(true); window.MefiNav.setRailPinned(false, { save: false });");
+  await run("window.MefiNav.go('workspace');");
+  await until("document.body.classList.contains('workspace-active')", "Home is up (v2)");
+  // The shell arrived after the layout was on: the panels draw as soon as it says its regions moved (or at the next look).
+  try { await until("window.MefiSessions.active()", "the panels are drawn once the shell is there", 8000); } catch (error) {
+    report.attachProbe = await run("try { return { attach: window.MefiSessions.attach(), active: window.MefiSessions.active(), layout: document.documentElement.dataset.layout, shell: typeof window.MefiShell, snapshot: typeof window.MefiWorkspace.snapshot, builder: typeof window.MefiBuilder } } catch (error) { return { error: String(error.stack) }; }");
+    console.error(JSON.stringify(report.attachProbe), JSON.stringify(report.errors));
+    throw error;
+  }
+  await until("document.querySelectorAll('#sessions-list .sx-row').length >= 9", "the list shows the board");
+  await sleep(500);
+  step("v2 draws into the shell's regions");
+  await size(1440, 900);
+  await capture("sessions-list-only-1440.png");
+  if (only === "shots") {
+    await run("window.MefiSessions.select('task_ask');");
+    await until("document.getElementById('sessions-thread') && !document.getElementById('sessions-thread').hidden && document.querySelector('#sessions-head .sx-title')?.textContent.includes('empty state')", "the thread shows the session");
+    await sleep(900);
+    await capture("sessions-ask-1440.png");
+    await run("window.MefiSessions.select('task_review');");
+    await until("document.querySelector('#sessions-head .sx-title')?.textContent.includes('Markdown')", "the review session shows");
+    await sleep(900);
+    await capture("sessions-review-1440.png");
+    await run("window.MefiSessions.select('task_run');");
+    await until("document.querySelector('#sessions-head .sx-title')?.textContent.includes('tag')", "the running session shows");
+    await sleep(900);
+    await capture("sessions-run-1440.png");
+    report.measure = await run(measure);
+    // MEFI_SESSIONS_PROBE_FILE: a file of script to run in the page at this point (debugging a layout), its answer kept in the report.
+    if (process.env.MEFI_SESSIONS_PROBE_FILE) { await run("window.MefiSessions.select('task_ask');"); await sleep(900); report.probe = await run(fs.readFileSync(process.env.MEFI_SESSIONS_PROBE_FILE, "utf8")); console.log("PROBE", JSON.stringify(report.probe, null, 1)); }
+    finish();
+    return;
+  }
+
+  // ---- helpers for what follows ---------------------------------------------------------------------------------------------------------
+  const press = async (key, modifiers = []) => {
+    contents.focus();
+    contents.sendInputEvent({ type: "keyDown", keyCode: key, modifiers });
+    if (key === "Enter") contents.sendInputEvent({ type: "char", keyCode: "\r", modifiers });
+    contents.sendInputEvent({ type: "keyUp", keyCode: key, modifiers });
+    await sleep(140);
+  };
+  const q = (selector) => JSON.stringify(selector);
+  const click = (selector) => run(`const node = document.querySelector(${q(selector)}); if (!node) throw new Error('nothing matches ' + ${q(selector)}); node.click();`);
+  const clickText = (selector, text) => run(`const node = [...document.querySelectorAll(${q(selector)})].find((item) => item.textContent.trim().startsWith(${q(text)})); if (!node) throw new Error('no ' + ${q(selector)} + ' starting ' + ${q(text)}); node.click();`);
+  const textOf = (selector) => run(`return document.querySelector(${q(selector)})?.textContent ?? null;`);
+  const count = (selector) => run(`return document.querySelectorAll(${q(selector)}).length;`);
+  const focusOn = (selector) => run(`const node = document.querySelector(${q(selector)}); if (!node) throw new Error('nothing matches ' + ${q(selector)}); node.focus(); return document.activeElement === node;`);
+  const focused = () => run("const a = document.activeElement; return a ? (a.closest('[data-key]')?.dataset.key || '') + '|' + (a.dataset.part || a.dataset.nav || a.id || a.tagName) : null;");
+  const callsOf = (names) => run(`return window.sessionsFixture.calls().filter((call) => ${JSON.stringify(names)}.includes(call.name));`);
+  const forget = () => run("window.sessionsFixture.clear();");
+  const rows = () => run("return [...document.querySelectorAll('#sessions-list .sx-row')].map((node) => node.dataset.key);");
+  const open = async (taskId, titlePart) => {
+    await run(`document.querySelector('#sessions-list .sx-row[data-key=${taskId}] .sx-row-main').click();`);
+    await until(`document.querySelector('#sessions-head .sx-title')?.textContent.includes(${q(titlePart)}) && !document.getElementById('sessions-thread').hidden`, `the thread shows ${taskId}`);
+  };
+  const settle = () => sleep(450);
+  const toastAction = (label) => run(`const node = [...document.querySelectorAll('#toast-host .toast-action')].find((item) => item.textContent.trim() === ${q(label)}); if (!node) throw new Error('no toast action ' + ${q(label)}); node.click();`);
+  const waitToast = (label) => until(`[...document.querySelectorAll('#toast-host .toast-action')].some((item) => item.textContent.trim() === ${q(label)})`, `a toast offers ${label}`);
+
+  // ---- the list ---------------------------------------------------------------------------------------------------------------------------
+  const groups = await run("return [...document.querySelectorAll('#sessions-list .sx-gh')].map((node) => [node.dataset.key, node.firstElementChild.textContent, node.querySelector('.sx-count').textContent]);");
+  assert.deepEqual(groups, [["group:needs", "Needs you", "2"], ["group:running", "Running", "2"], ["group:review", "Review", "1"], ["group:queued", "Queued", "2"], ["group:done", "Done", "3"]], "the board is grouped by where each task stands");
+  assert.deepEqual(await rows(), ["task_ask", "task_failed", "task_run", "task_run2", "task_review", "task_queued", "task_queued2", "task_done", "task_done2", "task_done3"], "newest first within each group");
+  const lines = await run("return Object.fromEntries([...document.querySelectorAll('#sessions-list .sx-row')].map((node) => [node.dataset.key, node.querySelector('.sx-row-meta')?.textContent || '']));");
+  assert.equal(lines.task_ask, "Asking a question · waiting 4m");
+  assert.equal(lines.task_run, "Claude Code · Writing parseTags()");
+  assert.match(lines.task_done, /^Verified · 1d/);
+  assert.equal(await textOf("#sessions-project .sx-proj-words b"), "Notes app");
+  assert.equal(await textOf("#sessions-project .sx-proj-words small"), "main");
+  assert.equal(await textOf("#sessions-tab-backlog"), "Backlog · 2");
+  step("the list is grouped and worded");
+
+  // What a row says follows html[data-detail]: titles, then status (the default), then everything.
+  const level = async (value) => {
+    await run(`${value ? `document.documentElement.dataset.detail = ${q(value)};` : "delete document.documentElement.dataset.detail;"} await new Promise((resolve) => requestAnimationFrame(resolve));`);
+    return run("const row = document.querySelector('#sessions-list .sx-row[data-key=task_run]'); const show = (selector) => { const node = row.querySelector(selector); return node ? getComputedStyle(node).display : null; }; return { meta: show('.sx-row-meta'), more: show('.sx-row-more'), bar: show('.sx-row-bar'), moreText: row.querySelector('.sx-row-more')?.textContent || '' };");
+  };
+  const titlesOnly = await level("titles"), statusToo = await level("status"), everything = await level("all"), plainDefault = await level("");
+  assert.deepEqual([titlesOnly.meta, titlesOnly.more, titlesOnly.bar], ["none", "none", "none"], "titles only: nothing under a title");
+  assert.deepEqual([statusToo.meta, statusToo.more, statusToo.bar], ["block", "none", "block"], "titles and status: one line and the bar");
+  assert.deepEqual([everything.meta, everything.more, everything.bar], ["block", "block", "block"], "everything: who, where and how far");
+  assert.match(everything.moreText, /Claude Code/); assert.match(everything.moreText, /mefi\/tag-search/); assert.match(everything.moreText, /own worktree|mefi\/tag-search/);
+  assert.deepEqual([plainDefault.meta, plainDefault.more], ["block", "none"], "no setting is the middle one");
+  step("rows follow html[data-detail]");
+
+  // A run in its own worktree wears the branch mark, and no other row does.
+  assert.equal(await count("#sessions-list .sx-row[data-key=task_run] .sx-branch"), 1);
+  assert.equal(await count("#sessions-list .sx-branch"), 1);
+  await capture("sessions-list-1440.png");
+
+  // The keys: arrows move between rows (past the row's own menu), Home and End go to the ends, Enter opens.
+  await focusOn("#sessions-list .sx-row[data-key=task_ask] .sx-row-main");
+  await press("Down"); assert.equal(await focused(), "task_failed|main", "Down goes to the next row");
+  await press("Up"); assert.equal(await focused(), "task_ask|main", "Up goes back");
+  await press("Right"); assert.equal(await focused(), "task_ask|menu", "Right reaches the row's menu button");
+  await press("Left"); assert.equal(await focused(), "task_ask|main");
+  await press("End"); assert.equal(await focused(), "task_done3|main", "End goes to the last row");
+  await press("Home"); assert.equal(await focused(), "group:needs|group", "Home goes to the first group");
+  await press("Down"); await press("Down"); await press("Enter");
+  await until("document.querySelector('#sessions-head .sx-title')?.textContent.includes('first paint')", "Enter opens the row that has focus");
+  assert.equal(await run("return window.MefiSessions.selected();"), "task_failed");
+  step("the list's keys work");
+
+  // The filter box.
+  await run("const input = document.getElementById('sessions-find'); input.value = 'by tag'; input.dispatchEvent(new Event('input', { bubbles: true }));");
+  assert.deepEqual(await rows(), ["task_run"], "a word narrows the list to the tasks that have it");
+  await run("const input = document.getElementById('sessions-find'); input.value = 'zzzz'; input.dispatchEvent(new Event('input', { bubbles: true }));");
+  assert.match(await textOf("#sessions-list .sx-empty"), /No session matches/);
+  await focusOn("#sessions-find"); await press("Escape");
+  assert.equal(await run("return document.getElementById('sessions-find').value;"), "", "Escape clears the filter");
+  assert.equal((await rows()).length, 10);
+  // Sessions | Backlog.
+  await click("#sessions-tab-backlog");
+  assert.deepEqual(await rows(), ["idea:idea_1", "idea:idea_2"], "the backlog lists the ideas nobody has made a task of");
+  await click("#sessions-tab-sessions");
+  assert.equal((await rows()).length, 10);
+  step("the filter and the Backlog tab work");
+
+  // The row's menu: pin, rename, delete with its confirm and its Undo.
+  await click("#sessions-list .sx-row[data-key=task_done2] .sx-row-menu");
+  const menu = await run("return [...document.querySelectorAll('.sx-menu .sx-menu-item')].map((node) => node.textContent.trim());");
+  const tabs = await run("return typeof window.MefiTabs?.open === 'function';");
+  assert.deepEqual(menu, [tabs ? "Open in a new tab" : "Open", "Pin to the top", "Rename", "Delete"], `the menu of a finished task: ${JSON.stringify(menu)}`);
+  await clickText(".sx-menu .sx-menu-item", "Pin to the top");
+  await until("document.querySelector('#sessions-list .sx-row[data-key=task_done2] .sx-pin')", "the pin shows");
+  assert.deepEqual((await rows()).slice(-3), ["task_done2", "task_done", "task_done3"], "a pinned task goes first in its group");
+  await click("#sessions-list .sx-row[data-key=task_done2] .sx-row-menu");
+  await clickText(".sx-menu .sx-menu-item", "Unpin");
+  await until("!document.querySelector('#sessions-list .sx-pin')", "the pin is gone");
+  await click("#sessions-list .sx-row[data-key=task_queued2] .sx-row-menu");
+  assert.equal(await run("return [...document.querySelectorAll('.sx-menu .sx-menu-item')].map((node) => node.textContent.trim()).includes('Stop this task');"), false, "a task nothing is running has no Stop");
+  await clickText(".sx-menu .sx-menu-item", "Rename");
+  await until("document.querySelector('#sessions-list .sx-rename')", "the row turns into a box for its new name");
+  await forget();
+  await run("const input = document.querySelector('#sessions-list .sx-rename'); input.value = 'Pin notes to the top'; input.dispatchEvent(new Event('input', { bubbles: true }));");
+  await focusOn("#sessions-list .sx-rename"); await press("Enter");
+  await until("window.sessionsFixture.calls().some((call) => call.name === 'tasksAction')", "the rename goes to the host");
+  assert.deepEqual((await callsOf(["tasksAction"]))[0].args[0], { taskId: "task_queued2", projectId, action: "rename", title: "Pin notes to the top" });
+  await until("document.querySelector('#sessions-list .sx-row[data-key=task_queued2] .sx-row-title')?.textContent === 'Pin notes to the top'", "the new name shows");
+  await forget();
+  await click("#sessions-list .sx-row[data-key=task_done3] .sx-row-menu");
+  await clickText(".sx-menu .sx-menu-item", "Delete");
+  await waitToast("Delete"); await toastAction("Delete");
+  await until("!document.querySelector('#sessions-list .sx-row[data-key=task_done3]')", "the deleted task leaves the list");
+  assert.equal((await callsOf(["tasksDelete"])).length, 1);
+  await waitToast("Undo"); await toastAction("Undo");
+  await until("document.querySelector('#sessions-list .sx-row[data-key=task_done3]')", "Undo puts it back");
+  assert.equal((await callsOf(["tasksUndelete"])).length, 1, "Undo goes through Recently deleted");
+  step("the row menu works: pin, rename, delete and Undo");
+
+  // ---- a question that waits on you ----------------------------------------------------------------------------------------------------
+  await forget();
+  await open("task_ask", "empty state");
+  await until("document.querySelectorAll('#sessions-thread .sx-thumb img').length >= 2", "the brief's two pictures arrive");
+  await settle();
+  const thumbs = await run("return [...document.querySelectorAll('#sessions-thread .sx-thumb img')].map((img) => ({ natural: [img.naturalWidth, img.naturalHeight], fit: getComputedStyle(img).objectFit, box: [Math.round(img.getBoundingClientRect().width), Math.round(img.getBoundingClientRect().height)] }));");
+  assert.deepEqual(thumbs.map((item) => item.natural), [[960, 300], [360, 720]], "the pictures a brief names are read back by their ids and shown whole");
+  assert.ok(thumbs.every((item) => item.fit === "contain" && item.box[0] > 20 && item.box[1] > 20), `they are scaled to fit, never cropped: ${JSON.stringify(thumbs)}`);
+  assert.deepEqual((await callsOf(["assistantImageRead"])).map((call) => call.args[0].id).sort(), [PIC_TALL, PIC_WIDE].sort(), "the host is asked for a picture by its opaque id, nothing else");
+  const dock = await run("return { options: [...document.querySelectorAll('#sessions-dock .sx-ask-opts button')].map((node) => node.textContent.trim()), suggest: document.querySelector('#sessions-dock .sx-ask-suggest')?.textContent || '', countdown: /auto|in \\d+ min/i.test(document.getElementById('sessions-dock').textContent), hidden: document.getElementById('sessions-dock').hidden };");
+  assert.deepEqual(dock.options, ["Yes, reuse it", "Only when there are no notes", "Decide later"], "the option it recommends comes first, then the others, then Decide later");
+  assert.match(dock.suggest, /Mefi suggests .Yes, reuse it./);
+  assert.equal(dock.countdown, false, "no countdown: this app has no auto-decide to count down to");
+  await capture("sessions-question-1440.png");
+  await clickText("#sessions-dock .sx-ask-opts button", "Decide later");
+  await until("document.querySelector('#sessions-dock .sx-ask.mini.later')", "Decide later puts the card away");
+  assert.equal(await run("const all = [...document.querySelectorAll('#sessions-list .sx-gh, #sessions-list .sx-row')]; return all.findIndex((node) => node.dataset.key === 'task_ask') < all.findIndex((node) => node.dataset.key === 'group:running');"), true, "it stays in Needs you");
+  await clickText("#sessions-dock button", "Answer now");
+  await until("document.querySelector('#sessions-dock .sx-ask:not(.mini)')", "the card comes back");
+  await forget();
+  await clickText("#sessions-dock .sx-ask-opts button", "Yes, reuse it");
+  await until("window.sessionsFixture.calls().some((call) => call.name === 'assistantAnswer')", "the answer goes to the host");
+  assert.deepEqual((await callsOf(["assistantAnswer"]))[0].args[0], { id: "q_1", optionId: "yes" });
+  await until("!document.querySelector('#sessions-dock .sx-ask')", "the answered question leaves the dock");
+  await until("document.querySelector('#sessions-list .sx-row[data-key=task_ask]')?.dataset.tone === 'run'", "the list follows the answer: the task is working again");
+  step("the question card answers, folds and comes back");
+
+  // ---- the box at the foot: Note, Ask, Change ----------------------------------------------------------------------------------------------
+  const box = () => run("return { intent: document.getElementById('sessions-compose').dataset.intent, pressed: [...document.querySelectorAll('#sessions-compose [data-intent][aria-pressed=true]')].map((node) => node.dataset.intent), send: document.getElementById('sessions-send').textContent.trim(), placeholder: document.getElementById('sessions-input').placeholder, attach: Boolean(document.querySelector('#sessions-compose .composer-attach-button')), attachShown: (() => { const node = document.querySelector('#sessions-compose .composer-attach-button'); return Boolean(node) && getComputedStyle(node).display !== 'none' && node.getBoundingClientRect().width > 0; })(), picker: Boolean(window.MefiComposerPicker.get(document.getElementById('sessions-input'))), pictures: Boolean(window.MefiComposerPictures.get(document.getElementById('sessions-input'))) };");
+  const first = await box();
+  assert.equal(first.intent, "ask", "a task with a worker on it starts as an Ask");
+  assert.deepEqual([first.send, first.attachShown, first.picker, first.pictures], ["Ask", true, true, true], "the picture button and the @ # / picker are bound to this box");
+  await click("#sessions-intent-note");
+  const note = await box();
+  assert.deepEqual([note.intent, note.pressed, note.send, note.attachShown], ["note", ["note"], "Save note", false], "a Note has no way to carry a picture, so its button is not drawn");
+  await forget();
+  await run("const input = document.getElementById('sessions-input'); input.value = 'Prefer rounded corners'; input.dispatchEvent(new Event('input', { bubbles: true }));");
+  await click("#sessions-send");
+  await until("window.sessionsFixture.calls().some((call) => call.name === 'tasksSave')", "the note is saved");
+  const saved = (await callsOf(["tasksSave"]))[0].args[0][0];
+  assert.match(saved.notes, /- Prefer rounded corners$/); assert.equal(saved.logs.at(-1).kind, "note");
+  await until("document.getElementById('sessions-input').value === ''", "the box is emptied once the note went");
+  // A draft belongs to its task and its purpose.
+  await run("const input = document.getElementById('sessions-input'); input.value = 'half a thought'; input.dispatchEvent(new Event('input', { bubbles: true }));");
+  await click("#sessions-intent-ask");
+  assert.equal(await run("return document.getElementById('sessions-input').value;"), "", "the Ask box starts empty");
+  await click("#sessions-intent-note");
+  assert.equal(await run("return document.getElementById('sessions-input').value;"), "half a thought", "the draft is still there when you come back");
+  await run("const input = document.getElementById('sessions-input'); input.value = ''; input.dispatchEvent(new Event('input', { bubbles: true }));");
+  await click("#sessions-intent-ask");
+  await forget();
+  await run("const input = document.getElementById('sessions-input'); input.value = 'Does it handle search?'; input.dispatchEvent(new Event('input', { bubbles: true }));");
+  await focusOn("#sessions-input"); await press("Enter");
+  await until("window.sessionsFixture.calls().some((call) => call.name === 'assistantMessage')", "Enter sends an Ask");
+  const asked = (await callsOf(["assistantMessage"]))[0].args;
+  assert.equal(asked[0], 'About the task "Add an empty state to the notes list" (task_ask): Does it handle search?');
+  assert.deepEqual(asked[2], { view: "Build · task", companion: "Mefi", taskId: "task_ask" });
+  await until("[...document.querySelectorAll('#sessions-thread .sx-item.is-ask')].some((node) => node.textContent.includes('Yes: that matches.'))", "the question and Mefi's answer show in the thread");
+  await click("#sessions-intent-change");
+  await forget();
+  await run("const input = document.getElementById('sessions-input'); input.value = 'Also show a tip'; input.dispatchEvent(new Event('input', { bubbles: true }));");
+  await click("#sessions-send");
+  await until("window.sessionsFixture.calls().some((call) => call.name === 'tasksCreate')", "a Change creates a linked follow-up");
+  const follow = (await callsOf(["tasksCreate"]))[0].args[0];
+  assert.match(follow.title, /^Change: Also show a tip/); assert.match(follow.prompt, /Follow-up to task "Add an empty state to the notes list" \(task_ask\)/);
+  step("the box sends a Note, an Ask and a Change");
+  // @ opens the picker over this box.
+  await click("#sessions-intent-note");
+  await run("const input = document.getElementById('sessions-input'); input.focus(); input.value = 'see @Tool'; input.setSelectionRange(9, 9); input.dispatchEvent(new Event('input', { bubbles: true }));");
+  await until("document.querySelector('.composer-picker:not([hidden]) .composer-picker-item')", "typing @ offers the project's files");
+  await press("Escape");
+  await run("const input = document.getElementById('sessions-input'); input.value = ''; input.dispatchEvent(new Event('input', { bubbles: true }));");
+  step("the picker opens in this box");
+
+  // ---- a finished attempt with changes: the inspector ----------------------------------------------------------------------------------
+  await open("task_review", "Markdown");
+  await until("document.querySelector('#sessions-itab-changes em')?.textContent === '4'", "the Changes tab counts the files");
+  assert.equal(await run("return document.getElementById('sessions-itab-changes').getAttribute('aria-selected');"), "true", "a task with changes opens on Changes");
+  assert.equal(await textOf("#sessions-itab-checks em"), "2/3", "Checks counts what passed");
+  await until("document.querySelector('#sessions-pane-changes .review-file')", "review.js draws the changed files");
+  assert.equal(await count("#sessions-pane-changes .review-file"), 4);
+  assert.match(await textOf("#sessions-pane-changes .review-totals"), /4 files changed/);
+  // Tab keys.
+  await focusOn("#sessions-itab-changes");
+  await press("Right"); assert.equal(await run("return document.activeElement.id;"), "sessions-itab-checks"); assert.equal(await run("return document.getElementById('sessions-pane-checks').hidden;"), false);
+  await press("End"); assert.equal(await run("return document.activeElement.id;"), "sessions-itab-agent");
+  await press("Home"); assert.equal(await run("return document.activeElement.id;"), "sessions-itab-plan");
+  await click("#sessions-itab-changes");
+  assert.equal(await run("return [...document.querySelectorAll('#sessions-inspector .sx-pane')].filter((node) => !node.hidden).map((node) => node.id);").then((value) => value.join()), "sessions-pane-changes", "only the tab that is chosen shows");
+  await capture("sessions-changes-1440.png");
+
+  // Accept, Revert with its second press, and Undo: review.js's panel, through the bridge.
+  await forget();
+  await clickText("#sessions-pane-changes button", "Accept changes");
+  await until("[...document.querySelectorAll('#sessions-pane-changes .review-chip')].some((node) => node.textContent.includes('Accepted'))", "Accept is recorded");
+  assert.equal((await callsOf(["tasksAccept"])).length, 1);
+  assert.equal((await run("return window.sessionsFixture.state().changes.accepted;")), true);
+  await clickText("#sessions-pane-changes button", "Undo accept");
+  await until("[...document.querySelectorAll('#sessions-pane-changes button')].some((node) => node.textContent.trim() === 'Accept changes')", "Undo accept puts the button back");
+  await forget();
+  await clickText("#sessions-pane-changes button", "Revert attempt");
+  await until("[...document.querySelectorAll('#sessions-pane-changes button')].some((node) => node.textContent.trim() === 'Revert all 4')", "the first press asks");
+  assert.equal((await callsOf(["tasksRevert"])).length, 0, "one press changes nothing");
+  await clickText("#sessions-pane-changes button", "Revert all 4");
+  await until("window.sessionsFixture.state().changes.reverted === true", "the second press reverts");
+  await until("[...document.querySelectorAll('#sessions-pane-changes button')].some((node) => node.textContent.includes('Undo the revert'))", "the revert offers its Undo");
+  assert.equal((await callsOf(["tasksRevert"])).length, 1);
+  await clickText("#sessions-pane-changes button", "Undo the revert");
+  await until("window.sessionsFixture.state().changes.reverted === false", "Undo puts the files back");
+  assert.equal((await callsOf(["tasksRevert"])).at(-1).args[0].undo, "R20260930", "Undo names the receipt the revert gave");
+  await until("document.querySelector('#sessions-itab-changes em')?.textContent === '4'", "the count is back");
+  step("Accept, Revert and Undo work through the bridge");
+
+  // The other tabs.
+  await click("#sessions-itab-checks");
+  await until("document.querySelector('#sessions-pane-checks .review-check')", "the advisory checks arrive");
+  const checks = await textOf("#sessions-pane-checks");
+  assert.match(checks, /Done when/); assert.match(checks, /One \.md file per note/); assert.match(checks, /Last check run/); assert.match(checks, /Typecheck/); assert.match(checks, /Advisory/);
+  await click("#sessions-itab-preview");
+  await until("document.querySelectorAll('#sessions-pane-preview .review-shot-image').length === 2", "the before and after shots arrive");
+  assert.match(await textOf("#sessions-pane-preview"), /Preview ready/);
+  assert.ok(await run("return [...document.querySelectorAll('#sessions-pane-preview button')].some((node) => node.textContent.trim() === 'Open app');"), "Open app is the existing path to the running preview");
+  await forget();
+  await clickText("#sessions-pane-preview button", "Open app");
+  await until("window.sessionsFixture.calls().some((call) => call.name === 'projectPreviewOpen')", "Open app asks the host to open the preview");
+  await click("#sessions-itab-agent");
+  await until("document.querySelector('#sessions-pane-agent .sx-stepper')", "the agent's usage and limit arrive");
+  const agent = await textOf("#sessions-pane-agent");
+  assert.match(agent, /Claude Code/); assert.match(agent, /Not reported/); assert.match(agent, /Stop an attempt after/); assert.match(agent, /25 min/);
+  await forget();
+  await clickText("#sessions-pane-agent .sx-stepper button", "+");
+  await until("window.sessionsFixture.calls().some((call) => call.name === 'tasksCap')", "the limit goes to the host");
+  assert.equal((await callsOf(["tasksCap"]))[0].args[0].minutes, 30);
+  await click("#sessions-itab-plan");
+  assert.match(await textOf("#sessions-pane-plan"), /Where it stands/); assert.match(await textOf("#sessions-pane-plan"), /One \.md file per note/);
+  step("Plan, Checks, Preview and Agent show the task's facts");
+
+  // ---- media in the thread ------------------------------------------------------------------------------------------------------------------
+  await open("task_review", "Markdown");
+  await until("document.querySelectorAll('#sessions-thread .sx-compare img').length === 2", "the before and after shots reach the thread");
+  await until("[...document.querySelectorAll('#sessions-thread .sx-compare img')].every((img) => img.naturalWidth === 1280)", "both shots decode");
+  await run("document.getElementById('sessions-thread-scroll').querySelector('.sx-media').scrollIntoView({ block: 'center' });"); await sleep(250);
+  const media = await run("const scroll = document.getElementById('sessions-thread-scroll').getBoundingClientRect(); const box = document.querySelector('#sessions-thread .sx-compare').getBoundingClientRect(); const imgs = [...document.querySelectorAll('#sessions-thread .sx-compare img')].map((img) => getComputedStyle(img).objectFit + ':' + img.getBoundingClientRect().width); return { box: [box.left, box.top, box.right, box.bottom, box.width, box.height], scroll: [scroll.left, scroll.top, scroll.right, scroll.bottom], imgs, ratio: box.width / box.height };");
+  assert.ok(media.box[0] >= media.scroll[0] - 1 && media.box[2] <= media.scroll[2] + 1, `the compare frame is inside the thread, not cut at its sides: ${JSON.stringify(media)}`);
+  assert.ok(media.box[4] > 200 && media.box[5] > 100, `and has a size: ${JSON.stringify(media.box)}`);
+  assert.ok(media.imgs.every((item) => item.startsWith("contain:")), "both shots are fitted whole");
+  await capture("sessions-media-1440.png");
+  await focusOn("#sessions-thread .sx-media .sx-link"); await press("Enter");
+  await until("document.getElementById('sessions-lightbox')", "Open larger opens the lightbox");
+  await sleep(300);
+  const lightbox = await run("const img = document.querySelector('#sessions-lightbox .sx-lb-img'); const r = img.getBoundingClientRect(); return { natural: [img.naturalWidth, img.naturalHeight], box: [r.left, r.top, r.right, r.bottom, r.width, r.height], win: [innerWidth, innerHeight], tabs: [...document.querySelectorAll('#sessions-lightbox .sx-lb-tabs button')].map((node) => node.textContent.trim() + ':' + node.getAttribute('aria-pressed')), focus: document.activeElement.className, dialog: document.getElementById('sessions-lightbox').getAttribute('role') + ':' + document.getElementById('sessions-lightbox').getAttribute('aria-modal') };");
+  assert.deepEqual(lightbox.natural, [1280, 800]); assert.deepEqual(lightbox.tabs, ["Before:true", "After:false"]); assert.equal(lightbox.dialog, "dialog:true");
+  assert.ok(lightbox.box[0] >= 0 && lightbox.box[1] >= 0 && lightbox.box[2] <= lightbox.win[0] && lightbox.box[3] <= lightbox.win[1], `the whole shot fits the window: ${JSON.stringify(lightbox)}`);
+  assert.ok(Math.abs(lightbox.box[4] / lightbox.box[5] - 1.6) < 0.02, `and keeps its shape: ${JSON.stringify(lightbox.box)}`);
+  assert.match(lightbox.focus, /sx-lb-close/, "focus moves into the dialog");
+  await capture("sessions-lightbox-1440.png");
+  await press("Right");
+  assert.equal(await run("return [...document.querySelectorAll('#sessions-lightbox .sx-lb-tabs button')].map((node) => node.getAttribute('aria-pressed')).join();"), "false,true", "an arrow key moves to the After shot");
+  await press("Tab"); await press("Tab"); await press("Tab");
+  assert.ok(await run("return document.getElementById('sessions-lightbox').contains(document.activeElement);"), "Tab stays inside the dialog");
+  await press("Escape");
+  await until("!document.getElementById('sessions-lightbox')", "Escape closes it");
+  assert.match(await run("return document.activeElement.textContent.trim();"), /Open larger/, "and focus goes back to what opened it");
+  // A picture in a message: the tall one, whole.
+  await run("document.querySelector('#sessions-thread .is-ask .sx-thumb, #sessions-thread .sx-thumb').scrollIntoView({ block: 'center' });"); await sleep(250);
+  await run("document.querySelector('#sessions-thread .sx-thumb').click();");
+  await until("document.getElementById('sessions-lightbox')", "a picture opens in the lightbox");
+  await sleep(300);
+  const tall = await run("const img = document.querySelector('#sessions-lightbox .sx-lb-img'); const r = img.getBoundingClientRect(); return { natural: [img.naturalWidth, img.naturalHeight], box: [r.left, r.top, r.right, r.bottom, r.width, r.height], win: [innerWidth, innerHeight], tabs: document.querySelectorAll('#sessions-lightbox .sx-lb-tabs button').length };");
+  assert.deepEqual(tall.natural, [360, 720]); assert.equal(tall.tabs, 0, "a single picture has no Before and After switch");
+  assert.ok(tall.box[1] >= 0 && tall.box[3] <= tall.win[1] && Math.abs(tall.box[4] / tall.box[5] - 0.5) < 0.02, `a tall picture is shown whole inside the window: ${JSON.stringify(tall)}`);
+  await click("#sessions-lightbox .sx-lb-scrim");
+  await until("!document.getElementById('sessions-lightbox')", "a click outside closes it");
+  step("media in the thread is whole and opens in the lightbox");
+
+  // ---- failure, review and done states ---------------------------------------------------------------------------------------------------
+  await open("task_failed", "first paint");
+  await until("document.querySelector('#sessions-thread .sx-banner[data-tone=bad]')", "a failed check shows its banner");
+  assert.match(await textOf("#sessions-thread .sx-banner[data-tone=bad]"), /first-paint budget/);
+  assert.ok(await run("return [...document.querySelectorAll('#sessions-head .sx-actions button')].some((node) => node.textContent.trim() === 'Try again');"), "and the way on");
+  await open("task_review", "Markdown");
+  assert.match(await textOf("#sessions-thread .sx-banner[data-tone=info]"), /Checking the result/);
+  assert.ok(await run("return [...document.querySelectorAll('#sessions-thread .sx-banner button')].map((node) => node.textContent.trim()).join('|');").then((value) => /See the changes\|Request changes\|Approve and finish/.test(value)), "the review banner offers the changes, a change and approval");
+  await clickText("#sessions-thread .sx-banner button", "Request changes");
+  assert.equal(await run("return document.getElementById('sessions-compose').dataset.intent;"), "change", "Request changes opens the Change box");
+  await click("#sessions-itab-plan");
+  await clickText("#sessions-thread .sx-banner button", "See the changes");
+  assert.equal(await run("return document.getElementById('sessions-itab-changes').getAttribute('aria-selected');"), "true", "See the changes shows the Changes tab");
+  assert.ok(await count("#sessions-thread .sx-evidence") === 1 && /4 files changed/.test(await textOf("#sessions-thread .sx-evidence")), "the thread links to the evidence after the run");
+  await open("task_done", "Rename the export button");
+  await until("document.querySelector('#sessions-thread .sx-decided')", "the record of what Mefi decided shows");
+  assert.match(await textOf("#sessions-thread .sx-decided"), /Mefi decided.*Keep the old name as an alias/);
+  assert.match(await textOf("#sessions-thread .sx-banner[data-tone=good]"), /Verified/);
+  await forget();
+  await clickText("#sessions-thread .sx-decided button", "Undo");
+  await until("window.sessionsFixture.calls().some((call) => call.name === 'autonomyUndo')", "Undo takes back what Mefi decided");
+  assert.equal((await callsOf(["autonomyUndo"]))[0].args[0].id, "dec_1");
+  step("failure, review and done states read right");
+
+  // ---- opening from anywhere ---------------------------------------------------------------------------------------------------------------
+  assert.equal(await run(`return window.MefiSessions.redirect('tasks', { taskId: 'task_run2', board: true });`), null, "the task board stays one press away");
+  assert.deepEqual(await run(`return window.MefiSessions.redirect('tasks', { taskId: 'task_run2', projectId: ${q(projectId)} });`), { id: "workspace", params: { view: "task", taskId: "task_run2", projectId } });
+  await run(`window.MefiNav.go('tasks', { taskId: 'task_run2', projectId: ${q(projectId)}, filter: 'all' });`);
+  await until("window.MefiSessions.selected() === 'task_run2' && document.querySelector('#sessions-head .sx-title')?.textContent.includes('Keyboard shortcut')", "nav.go('tasks', { taskId }) (a notification, the palette) lands in the thread");
+  assert.ok(await run("return document.querySelector('#sessions-list .sx-row[data-key=task_run2]').hasAttribute('data-selected') && document.querySelector('#sessions-list .sx-row[data-key=task_run2] .sx-row-main').getAttribute('aria-current') === 'true';"), "and selects it in the list");
+  await run(`window.MefiNav.go('workspace', { view: 'task', taskId: 'task_queued', projectId: ${q(projectId)} });`);
+  await until("window.MefiSessions.selected() === 'task_queued'", "a tab's route selects its session");
+  await run("window.MefiNav.go('workspace');");
+  await until("window.MefiSessions.selected() === null && document.getElementById('sessions-thread').hidden", "Home by itself puts the thread away");
+  assert.equal(await run("return document.getElementById('workspace-layer').hasAttribute('inert');"), false, "and uncovers Home");
+  await click("#sessions-new");
+  assert.equal(await run("return window.MefiSessions.selected();"), null);
+  await run("document.querySelector('#sessions-list .sx-row[data-key=task_done] .sx-row-main').click();");
+  await until("window.MefiSessions.selected() === 'task_done'", "a click selects");
+  assert.equal(await run("return document.getElementById('workspace-layer').hasAttribute('inert');"), true, "Home is covered (out of the tab order, no scroll fades over the thread) while a session shows");
+  await press("N", ["control"]);
+  await until("window.MefiSessions.selected() === null", "Ctrl N starts a new task from anywhere");
+  step("a session opens from a tab, a notification and a click, and Ctrl N starts a new task");
+
+  // ---- sizes --------------------------------------------------------------------------------------------------------------------------------
+  const sizes = [[1920, 1080, 1], [1440, 900, 1], [1100, 720, 1], [600, 560, 1], [600, 560, 1.5]];
+  for (const [width, height, zoom] of sizes) {
+    const label = `${width}x${height}@${zoom}`;
+    await size(width, height, zoom);
+    await run("window.MefiShell.drawer('list', false); window.MefiShell.drawer('inspector', false);");
+    for (const [id, part] of [["task_ask", "empty state"], ["task_review", "Markdown"]]) {
+      await run(`window.MefiSessions.select(${q(id)});`);
+      await until(`document.querySelector('#sessions-head .sx-title')?.textContent.includes(${q(part)}) && !document.getElementById('sessions-thread').hidden`, `${id} shows at ${label}`);
+      await sleep(500);
+      const folded = await run("return (document.documentElement.dataset.layoutFold || '').length > 0;");
+      const m = await run(measure);
+      await capture(`sessions-${id === "task_ask" ? "ask" : "review"}-${width}${zoom === 1 ? "" : "-zoom"}.png`);
+      report.layouts.push({ label, id, folded, thread: m.thread, list: m.list, inspector: m.inspector });
+      assert.equal(m.pageOverflow, false, `${label}: the page does not overflow`);
+      assert.equal(m.scrollbarWidth, "none", `${label}: native bars stay hidden`);
+      assert.deepEqual(m.small, [], `${label}: no text under 12 px: ${JSON.stringify(m.small)}`);
+      assert.deepEqual(m.scrollers.filter((item) => item.reserved > 0.75 || item.reservedY > 0.75), [], `${label}: no scroller reserves width for a bar: ${JSON.stringify(m.scrollers)}`);
+      assert.deepEqual(m.wide, [], `${label}: no panel is wider than its box`);
+      assert.deepEqual(m.spill, [], `${label}: nothing sticks out past its panel: ${JSON.stringify(m.spill)}`);
+      assert.ok(m.thread && m.thread.w > 280 && m.thread.h > 200, `${label}: the thread has a size: ${JSON.stringify(m.thread)}`);
+      assert.ok(m.thread.r <= m.inner.w + 1 && m.thread.b <= m.inner.h + 1, `${label}: the thread stays in the window`);
+      assert.ok(m.compose && m.compose.w > 200 && m.compose.b <= m.inner.h + 1 && m.send && m.send.b <= m.inner.h + 1 && m.send.r <= m.inner.w + 1, `${label}: the whole box, Send included, is on screen: ${JSON.stringify([m.compose, m.send])}`);
+      assert.ok(m.scroll && m.scroll.h >= 60, `${label}: the thread keeps room to be read (${m.scroll && m.scroll.h} px)`);
+      assert.ok(!m.dock || m.dock.h <= m.inner.h * 0.56, `${label}: the question does not crowd the thread out`);
+      if (!folded) {
+        assert.ok(m.list && m.list.w > 200 && m.list.r <= m.inner.w, `${label}: the list has its column: ${JSON.stringify(m.list)}`);
+        assert.ok(m.inspector && m.inspector.w > 200 && m.inspector.r <= m.inner.w + 1, `${label}: the inspector has its column: ${JSON.stringify(m.inspector)}`);
+        assert.ok(m.thread.x >= m.list.r - 1 && m.thread.r <= m.inspector.x + 1, `${label}: the thread sits between them`);
+        assert.ok(m.itabs && m.itabs.h <= 90, `${label}: the tabs take one or two rows`);
+      }
+      if (id === "task_review") {
+        assert.ok(await run("const box = document.querySelector('#sessions-thread .sx-compare'); return Boolean(box) && box.getBoundingClientRect().width > 100;"), `${label}: the before and after frame has a size`);
+      }
+    }
+    if (report.layouts.at(-1).folded) {
+      // A folded window (under 900 CSS px) has no columns: the list and the inspector are drawers, and each fits the window when opened.
+      for (const region of ["list", "inspector"]) {
+        await run(`window.MefiShell.drawer(${q(region)}, true);`);
+        await sleep(300);
+        const d = await run(measure);
+        const panel = region === "list" ? d.list : d.inspector;
+        assert.ok(panel && panel.w > 150 && panel.r <= d.inner.w + 1 && panel.b <= d.inner.h + 1, `${label}: the ${region} drawer fits the window: ${JSON.stringify(panel)}`);
+        assert.deepEqual(d.small, [], `${label}: no text under 12 px in the ${region} drawer`);
+        assert.deepEqual(d.scrollers.filter((item) => item.reserved > 0.75 || item.reservedY > 0.75), [], `${label}: no scroller reserves width in the ${region} drawer`);
+        assert.deepEqual(d.spill, [], `${label}: nothing sticks out of the ${region} drawer: ${JSON.stringify(d.spill)}`);
+        await capture(`sessions-${region}-drawer-${width}${zoom === 1 ? "" : "-zoom"}.png`);
+        await run(`window.MefiShell.drawer(${q(region)}, false);`);
+      }
+    }
+  }
+  assert.equal(report.layouts.length, 10, "two sessions at five sizes");
+  step("every panel fits five window sizes");
+  await size(1440, 900, 1);
+
+  // ---- switching it off, and on again ---------------------------------------------------------------------------------------------------------
+  assert.equal(await run("return window.MefiSessions.setEnabled(false);"), false);
+  assert.equal(await count(".sx-panel"), 0, "the kill switch puts the panels away at once");
+  assert.equal(await run("return document.getElementById('workspace-layer').hasAttribute('inert') || document.getElementById('vibe-layer').hasAttribute('inert');"), false, "and uncovers Home");
+  assert.equal(await run("return window.localStorage.getItem('mefiStudio.sessions');"), "off", "and keeps it off");
+  assert.equal(await run("return window.MefiSessions.attach();"), false, "attach does nothing while it is off");
+  assert.equal(await run("return window.MefiSessions.redirect('tasks', { taskId: 'task_run' });"), null, "nor does a link");
+  assert.equal(await run("return window.MefiSessions.setEnabled(true);"), true);
+  await until("document.querySelectorAll('.sx-panel').length === 3", "switching it on brings the panels back");
+  // Turning the layout off at run time takes everything away too (nav.js applyLayout calls detach).
+  assert.equal(await run("return window.MefiNav.setLayout('v1');"), false);
+  assert.equal(await count(".sx-panel"), 0, "v1 removes the panels");
+  assert.equal(await run("return window.MefiSessions.active();"), false);
+  assert.equal(await run("return window.MefiNav.setLayout('v2');"), true);
+  await until("window.MefiSessions.active() && document.querySelectorAll('.sx-panel').length === 3", "v2 brings them back");
+  await until("document.querySelectorAll('#sessions-list .sx-row').length >= 9", "with the board");
+  step("off and on, and v1 and v2 again");
+
+  // ---- a launch that says ?sessions=off, and one that restores the session ------------------------------------------------------------------
+  await run("window.MefiSessions.select('task_run2'); window.MefiNav.saveResume();");
+  await sleep(300);
+  await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1", layout: "v2" } });
+  await until("window.MefiNav && window.MefiWorkspace && window.MefiSessions && !window.MefiBoot?.isActive?.()", "studio ready again");
+  await run(`window.__installShell = ${installShell.toString()}; window.__installShell(); window.dispatchEvent(new CustomEvent('mefi:shell-layout', { detail: { region: 'all' } }));`);
+  await run("window.MefiVibe.setMode('build', { go: false }); window.MefiNav.applyShell(true);");
+  // The resume (nav.js resumeReady) enters Home directly, with no route: what remembers the session is this module's own memory.
+  await run("await window.MefiWorkspace.enter();");
+  await until("window.MefiSessions.active() && document.querySelectorAll('#sessions-list .sx-row').length >= 9", "the panels are back after a reload");
+  await until("window.MefiSessions.selected() === 'task_run2'", "the session that was open is open again");
+  await until("document.body.classList.contains('workspace-active') && !document.getElementById('sessions-thread').hidden && document.querySelector('#sessions-head .sx-title')?.textContent.includes('Keyboard shortcut')", "and the thread shows it");
+  await capture("sessions-restored-1440.png");
+  step("the selected session survives a reload");
+  await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1", layout: "v2", sessions: "off" } });
+  await until("window.MefiNav && window.MefiWorkspace && window.MefiSessions && !window.MefiBoot?.isActive?.()", "studio ready with ?sessions=off");
+  await run(`window.__installShell = ${installShell.toString()}; window.__installShell(); window.dispatchEvent(new CustomEvent('mefi:shell-layout', { detail: { region: 'all' } }));`);
+  await sleep(800);
+  assert.equal(await run("return window.MefiSessions.enabled();"), false);
+  assert.equal(await run("return window.MefiSessions.active();"), false, "?sessions=off leaves the panels out even with the shell there");
+  assert.equal(await count(".sx-panel"), 0);
+  step("?sessions=off is honoured");
+
+  assert.deepEqual(report.errors, [], "no console errors");
+  report.complete = true;
+  finish();
+}).catch(finish);

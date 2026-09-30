@@ -98,6 +98,7 @@ const CODE_SOURCES = [
   "skills.js",
   "shell.js",
   "tabs.js",
+  "sessions.js",
   "booklet.js",
 ];
 
@@ -223,6 +224,7 @@ export async function build({ root = ROOT } = {}) {
   const [shellCode, shellStyles] = await Promise.all([readFile(path.join(RENDERER, "shell.js"), "utf8"), readFile(path.join(RENDERER, "shell.css"), "utf8")]);
   // Tabs you add and pin (layout v2): the strip script and its stylesheet.
   const [tabsCode, tabsStyles] = await Promise.all([readFile(path.join(RENDERER, "tabs.js"), "utf8"), readFile(path.join(RENDERER, "tabs.css"), "utf8")]);
+  const [sessions, sessionsStyles] = await Promise.all([readFile(path.join(RENDERER, "sessions.js"), "utf8"), readFile(path.join(RENDERER, "sessions.css"), "utf8")]);
   const [setupHelper, setupHelperStyles] = await Promise.all([readFile(path.join(RENDERER, "setup-helper.js"), "utf8"), readFile(path.join(RENDERER, "setup-helper.css"), "utf8")]);
   // Today and the Inbox (layout v2), after Vibe: their stylesheet restyles the pieces of Vibe's front door that Today borrows.
   const [today, todayStyles] = await Promise.all([readFile(path.join(RENDERER, "today.js"), "utf8"), readFile(path.join(RENDERER, "today.css"), "utf8")]);
@@ -234,14 +236,14 @@ export async function build({ root = ROOT } = {}) {
   const [gitSyncCode, gitSyncStyles] = await Promise.all([readFile(path.join(RENDERER, "git-sync.js"), "utf8"), readFile(path.join(RENDERER, "git-sync.css"), "utf8")]);
   // What the host tells you (Notifications, Report a problem, What's new): their scripts and the one stylesheet they share.
   const [hostCardsStyles, whatsNewCode, reportCode, alertsCode] = await Promise.all([readFile(path.join(RENDERER, "host-cards.css"), "utf8"), readFile(path.join(RENDERER, "whats-new.js"), "utf8"), readFile(path.join(RENDERER, "report.js"), "utf8"), readFile(path.join(RENDERER, "alerts.js"), "utf8")]);
-  const codeParts = [stageLabels, nodeVisuals, performanceCore, profiler, taskGroups, studioUi, fileInputs, motion, cardLayout, nav, sidebar, graph, modelLab, tracker, nodeStyles, tree, treeDynamics, idle, modelCommunity, cameraTour, gitSyncCode, explorer, analyzer, tasks, ideas, overhead, brains, palette, configCode, sizeCode, eyes, traceCode, fleetLayoutCode, fleetCode, boot, startup, composerPictures, composerPicker, workspace, mediaWindow, mediaBrowser, music, together, pcSync, pcVault, whatsNewCode, reportCode, alertsCode, companionFriends, roomsCode, planning, onboarding, community, demoPanel, autonomyUi, companionUi, companionHub, projectMapView, agentBrain, agents, setupHelper, vibeFlow, vibePanels, vibe, today, keyTips, patch, panes, builder, worktrees, review, skills, shellCode, tabsCode, booklet];
+  const codeParts = [stageLabels, nodeVisuals, performanceCore, profiler, taskGroups, studioUi, fileInputs, motion, cardLayout, nav, sidebar, graph, modelLab, tracker, nodeStyles, tree, treeDynamics, idle, modelCommunity, cameraTour, gitSyncCode, explorer, analyzer, tasks, ideas, overhead, brains, palette, configCode, sizeCode, eyes, traceCode, fleetLayoutCode, fleetCode, boot, startup, composerPictures, composerPicker, workspace, mediaWindow, mediaBrowser, music, together, pcSync, pcVault, whatsNewCode, reportCode, alertsCode, companionFriends, roomsCode, planning, onboarding, community, demoPanel, autonomyUi, companionUi, companionHub, projectMapView, agentBrain, agents, setupHelper, vibeFlow, vibePanels, vibe, today, keyTips, patch, panes, builder, worktrees, review, skills, shellCode, tabsCode, sessions, booklet];
   const code = codeParts.join("\n");
   const html = template
     // "</" and "<!--" escaped: a fetched model name holding "</script>" would
     // otherwise end the data block and run as renderer script. JSON.parse
     // reads < back as "<"; a plain "<= 200K" is left as it was.
     .replace("__BOOKLET_DATA__", () => catalog.trim().replace(/<(?=\/|!--)/g, "\\u003c"))
-    .replace("__BOOKLET_STYLES__", () => `${styles}\n${musicStyles}\n${planningStyles}\n${brainStyles}\n${profilerStyles}\n${traceStyles}\n${fleetStyles}\n${configStyles}\n${hostCardsStyles}\n${agentBrainStyles}\n${agentsStyles}\n${companionStyles}\n${studioUiStyles}\n${companionHubStyles}\n${vibeStyles}\n${todayStyles}\n${setupHelperStyles}\n${gitSyncStyles}\n${builderStyles}\n${composerPicturesStyles}\n${composerPickerStyles}\n${worktreesStyles}\n${reviewStyles}\n${skillsStyles}\n${sizeStyles}\n${shellStyles}\n${tabsStyles}`)
+    .replace("__BOOKLET_STYLES__", () => `${styles}\n${musicStyles}\n${planningStyles}\n${brainStyles}\n${profilerStyles}\n${traceStyles}\n${fleetStyles}\n${configStyles}\n${hostCardsStyles}\n${agentBrainStyles}\n${agentsStyles}\n${companionStyles}\n${studioUiStyles}\n${companionHubStyles}\n${vibeStyles}\n${todayStyles}\n${setupHelperStyles}\n${gitSyncStyles}\n${builderStyles}\n${composerPicturesStyles}\n${composerPickerStyles}\n${worktreesStyles}\n${reviewStyles}\n${skillsStyles}\n${sizeStyles}\n${shellStyles}\n${tabsStyles}\n${sessionsStyles}`)
     .replace("__BOOKLET_CODE__", () => code);
 
   const out = path.join(RENDERER, "booklet.html");
