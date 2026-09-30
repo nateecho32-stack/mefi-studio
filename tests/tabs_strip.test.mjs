@@ -1330,3 +1330,17 @@ test("the Add menu lists sessions newest first, whether the board gives its time
   const sessionsAt = rowsOf(t).indexOf("Newest");
   assert.deepEqual(rowsOf(t).slice(sessionsAt, sessionsAt + 3), ["Newest", "Middle", "Oldest"]);
 });
+
+test("the small-window button is not rebuilt by a repaint that changes nothing it shows, and follows where you are when something does", async () => {
+  const t = await tabsEnv();
+  page(t, "fleet"); await t.settle();
+  const button = () => t.document.querySelector(".ts-menu");
+  const before = button().querySelector(".ts-title");
+  assert.equal(before.textContent, "Fleet");
+  t.tabs.setPrefs({ cap: 9 }); t.window.dispatchEvent({ type: "mefi:workspace-state" }); await t.settle();
+  assert.equal(button().querySelector(".ts-title"), before, "the same element: a change elsewhere did not touch it");
+  page(t, "plans"); await t.settle();
+  assert.equal(button().querySelector(".ts-title").textContent, "Plans");
+  assert.equal(button().querySelector(".ts-count").textContent, "3");
+  assert.match(button().getAttribute("aria-label"), /^Tabs, 3 open\. Current: Plans$/);
+});

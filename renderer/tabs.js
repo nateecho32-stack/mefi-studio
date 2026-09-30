@@ -718,7 +718,7 @@
   }
 
   // ---- the strip -----------------------------------------------------------------------------------
-  const ui = { root: null, list: null, more: null, menu: null, add: null, gap: null, suggest: null, suggestText: null, cfg: null, live: null, handle: null, items: new Map(), frame: 0, stale: false, pop: null, hidden: [], observer: null, resizeObserver: null, drag: null, panel: null, region: null };
+  const ui = { menuSig: "", root: null, list: null, more: null, menu: null, add: null, gap: null, suggest: null, suggestText: null, cfg: null, live: null, handle: null, items: new Map(), frame: 0, stale: false, pop: null, hidden: [], observer: null, resizeObserver: null, drag: null, panel: null, region: null };
   function build() {
     const root = el("div", "ts-strip");
     root.id = "mefi-tabs";
@@ -841,12 +841,16 @@
     const active = cur();
     const info = describe(active, ctx);
     S.compact = compactNow();
-    const menu = ui.menu;
-    menu.replaceChildren();
-    const icon = el("span", "ts-ico");
-    if (info.tone) icon.append(dotFor(info.tone)); else { const svg = info.glyph ? glyph(info.glyph) : null; if (svg) icon.append(svg); }
-    menu.append(icon, el("span", "ts-title", info.title), el("span", "ts-count", String(order().length)), glyph("g-chev") || el("span", "", "▾"));
-    menu.setAttribute("aria-label", `Tabs, ${order().length} open. Current: ${info.title}`);
+    // The small-window button says where you are and how many tabs there are; it is rebuilt only when that changes.
+    const menu = ui.menu, menuSig = [info.title, info.tone || info.glyph || "", order().length].join("\u0001");
+    if (ui.menuSig !== menuSig) {
+      ui.menuSig = menuSig;
+      menu.replaceChildren();
+      const icon = el("span", "ts-ico");
+      if (info.tone) icon.append(dotFor(info.tone)); else { const svg = info.glyph ? glyph(info.glyph) : null; if (svg) icon.append(svg); }
+      menu.append(icon, el("span", "ts-title", info.title), el("span", "ts-count", String(order().length)), glyph("g-chev") || el("span", "", "▾"));
+      menu.setAttribute("aria-label", `Tabs, ${order().length} open. Current: ${info.title}`);
+    }
     const suggestion = S.suggest && eff().suggest && !S.compact && S.shown && !byKey(S.suggest.key)?.pin ? S.suggest : null;
     ui.suggest.hidden = !suggestion;
     if (suggestion) {

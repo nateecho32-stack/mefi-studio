@@ -419,6 +419,21 @@ app.whenReady().then(async () => {
     assert.deepEqual(report.errors, [], `${label}: no console errors`);
   }
 
+  // A window that changes size re-fits the strip with nothing else happening: the tabs are opened once, at the widest size, and the window is narrowed and widened
+  await resize([1920, 1080, 1]); await setup("build"); await home(); await wipe();
+  await run(OPEN_DOZEN);
+  await sleep(300);
+  const hiddenNow = () => run("return [...document.querySelectorAll('.ts-list .ts-item')].filter((node) => node.hidden).length + ':' + (document.querySelector('.ts-more').hidden ? 'no-more' : document.querySelector('.ts-more').textContent);");
+  assert.equal(await hiddenNow(), "0:no-more", "wide: everything fits");
+  await resize([1100, 720, 1]);
+  await until("!document.querySelector('.ts-more').hidden", "narrowing the window folds what no longer fits, by itself");
+  const narrowed = await hiddenNow();
+  assert.match(narrowed, /^[1-9]\d*:\d+ more$/, narrowed);
+  await resize([600, 560, 1]);
+  await until("document.querySelector('.ts-more').hidden && getComputedStyle(document.querySelector('.ts-menu')).display !== 'none'", "below the fold the strip is one menu, by itself");
+  await resize([1920, 1080, 1]);
+  await until("document.querySelector('.ts-more').hidden && getComputedStyle(document.querySelector('.ts-list')).display !== 'none' && [...document.querySelectorAll('.ts-list .ts-item')].every((node) => !node.hidden)", "and widening it brings every tab back, by itself");
+
   // ===================================================================================================================================
   // 2. real input at 1440x900
   // ===================================================================================================================================
@@ -754,6 +769,10 @@ app.whenReady().then(async () => {
   await sleep(300);
   assert.deepEqual(await stored(), [], "v1 writes no tab key, whatever you do");
   assert.equal(await run("return document.querySelectorAll('.ts-strip, .ts-pop').length === 0 && window.MefiNav.state.transient === null;"), true, "and its keys are nobody's");
+  await run("await window.MefiConfig.open({ category: 'ui' });");
+  await until("document.querySelector('#config-pane input[type=\"range\"]')", "v1: Configuration › UI & Surfaces opens with its interface scale");
+  assert.equal(await run("return document.querySelector('#config-pane .ts-card') === null;"), true, "and without a Tab behaviour card: there is no strip to set");
+  await run("window.MefiNav.closeAll();");
   assert.equal(await run("return window.MefiNav.saveResume().tabs;"), null, "a v1 reload record has no tabs in it");
   assert.equal(await run("return JSON.parse(localStorage.getItem('mefiStudio.resume')).tabs;"), null, "and neither has what it stored");
   assert.deepEqual(report.errors, []);
