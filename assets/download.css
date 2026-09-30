@@ -13,7 +13,7 @@
 
 .on-page { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .on-page .label { font-size: 0.78rem; font-weight: 650; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); margin-right: 4px; }
-.on-page a { padding: 5px 12px; border-radius: var(--r-pill); border: 1px solid var(--hairline); color: var(--muted); font-size: 0.88rem; background: rgba(16, 31, 41, 0.5); }
+.on-page a { padding: 5px 12px; border-radius: var(--r-pill); border: 1px solid var(--hairline); color: var(--muted); font-size: 0.88rem; background: rgb(var(--panel-rgb) / 0.5); }
 .on-page a:hover { color: var(--ivory); border-color: var(--hairline-strong); text-decoration: none; }
 
 /* ---- the release card ---- */
@@ -22,7 +22,7 @@
   padding: 28px; border-radius: var(--r-lg);
   background:
     radial-gradient(520px 220px at 100% 0%, rgba(140, 123, 255, 0.13), transparent 70%),
-    radial-gradient(520px 260px at 0% 100%, rgba(113, 203, 183, 0.12), transparent 70%),
+    radial-gradient(520px 260px at 0% 100%, rgb(var(--accent-rgb) / 0.12), transparent 70%),
     var(--panel-solid);
   border: 1px solid var(--hairline-strong);
   box-shadow: var(--glow);
@@ -37,7 +37,7 @@
 .dl-main svg { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .dl-for { margin: 10px 0 0; text-align: center; font-size: 0.88rem; color: var(--dim); }
 .dl-facts { display: grid; grid-template-columns: 1.6fr 1fr 1fr; gap: 1px; margin: 22px 0 0; border-radius: var(--r); overflow: hidden; border: 1px solid var(--hairline); background: var(--hairline); }
-.dl-facts > div { min-width: 0; padding: 12px 14px; background: rgba(5, 13, 19, 0.72); }
+.dl-facts > div { min-width: 0; padding: 12px 14px; background: rgb(var(--bg-rgb) / 0.72); }
 .dl-facts dt { font-size: 0.72rem; font-weight: 650; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); margin-bottom: 2px; }
 .dl-facts dd { margin: 0; font-size: 0.9rem; color: var(--text); overflow-wrap: anywhere; }
 .dl-facts code { background: none; border: 0; padding: 0; color: var(--text); font-size: 0.86rem; }

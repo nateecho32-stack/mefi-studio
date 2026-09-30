@@ -34,7 +34,7 @@
 /* ---- sticky row of area chips ---- */
 .feat-jump {
   position: sticky; top: 65px; z-index: 40; margin-top: 18px;
-  background: rgba(5, 13, 19, 0.9);
+  background: rgb(var(--bg-rgb) / 0.9);
   backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   border-block: 1px solid var(--hairline);
 }
@@ -91,7 +91,7 @@
   padding: 14px 16px 15px; box-shadow: inset 3px 0 0 var(--feat-edge, transparent);
 }
 .feat[hidden] { display: none; }
-.feat[data-status="released"] { --feat-edge: rgba(113, 203, 183, 0.5); }
+.feat[data-status="released"] { --feat-edge: rgb(var(--accent-rgb) / 0.5); }
 .feat[data-status="next"] { --feat-edge: rgba(140, 123, 255, 0.7); }
 .feat[data-status="rolling"] { --feat-edge: rgba(255, 212, 121, 0.6); }
 .feat[data-status="experimental"] { --feat-edge: rgba(216, 179, 106, 0.6); }

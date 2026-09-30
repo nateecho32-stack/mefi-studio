@@ -18,7 +18,7 @@
 .rm-wrap { position: relative; }
 .rm-bar {
   position: sticky; top: 65px; z-index: 40; margin: 22px 0 24px;
-  background: rgba(5, 13, 19, 0.9);
+  background: rgb(var(--bg-rgb) / 0.9);
   backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   border-block: 1px solid var(--hairline);
 }
@@ -50,7 +50,7 @@
 .rm-items { display: grid; gap: 10px; }
 .rm-items > .item + .item { margin-top: 0; }
 .rm-item { --edge: transparent; box-shadow: inset 3px 0 0 var(--edge); scroll-margin-top: 136px; }
-.rm-item[data-status="released"] { --edge: rgba(113, 203, 183, 0.55); }
+.rm-item[data-status="released"] { --edge: rgb(var(--accent-rgb) / 0.55); }
 .rm-item[data-status="next"] { --edge: rgba(140, 123, 255, 0.7); }
 .rm-item[data-status="progress"] { --edge: rgba(87, 255, 154, 0.55); }
 .rm-item[data-status="rolling"] { --edge: rgba(255, 212, 121, 0.6); }
@@ -124,7 +124,7 @@
 .rm-wanted-list { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .rm-want {
   display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 14px; align-items: center; min-width: 0;
-  padding: 12px 14px; border: 1px solid var(--hairline); border-radius: var(--r); background: rgba(5, 13, 19, 0.45);
+  padding: 12px 14px; border: 1px solid var(--hairline); border-radius: var(--r); background: rgb(var(--bg-rgb) / 0.45);
 }
 .rm-votes {
   grid-row: span 2; display: grid; place-items: center; min-width: 60px; padding: 8px 6px;
@@ -147,7 +147,7 @@
   /* One lane at a time, picked above the board. */
   .rm-views {
     display: flex; gap: 4px; margin: 0 0 16px; padding: 4px;
-    border: 1px solid var(--hairline); border-radius: var(--r-pill); background: rgba(16, 31, 41, 0.55);
+    border: 1px solid var(--hairline); border-radius: var(--r-pill); background: rgb(var(--panel-rgb) / 0.55);
   }
   .rm-views button {
     flex: 1 1 auto; min-width: 0; padding: 9px 10px; border: 0; border-radius: var(--r-pill);

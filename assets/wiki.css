@@ -3,7 +3,7 @@
    the page list, the phone drawer, status notes and the page-swap motion. */
 
 /* ---- page list ---- */
-.wiki-side { scrollbar-width: thin; scrollbar-color: rgba(113, 203, 183, 0.28) transparent; overscroll-behavior: contain; }
+.wiki-side { scrollbar-width: thin; scrollbar-color: rgb(var(--accent-rgb) / 0.28) transparent; overscroll-behavior: contain; }
 .wiki-side:focus { outline: none; }
 .wiki-side:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: -2px; }
 .side-group {
@@ -44,7 +44,7 @@
 .prose h2 .status, .prose h3 .status, .prose h4 .status { vertical-align: middle; font-family: var(--font-ui); }
 .prose kbd {
   display: inline-block; padding: 1px 7px; border-radius: 6px; border: 1px solid var(--hairline-strong);
-  background: rgba(5, 13, 19, 0.7); color: var(--ivory); font-size: 0.82em; line-height: 1.5; box-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+  background: rgb(var(--bg-rgb) / 0.7); color: var(--ivory); font-size: 0.82em; line-height: 1.5; box-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
 }
 .prose .table-wrap { margin: 1em 0 1.5em; }
 .prose .table-wrap table { margin: 0; }
@@ -67,7 +67,7 @@
   font-family: var(--font-ui); font-size: 0.72rem; font-weight: 650; letter-spacing: 0.18em;
   text-transform: uppercase; color: var(--accent); margin: 0 0 8px;
 }
-.wiki-toc { max-height: calc(100vh - 110px); overflow: auto; scrollbar-width: thin; scrollbar-color: rgba(113, 203, 183, 0.28) transparent; }
+.wiki-toc { max-height: calc(100vh - 110px); overflow: auto; scrollbar-width: thin; scrollbar-color: rgb(var(--accent-rgb) / 0.28) transparent; }
 
 /* ---- previous / next and page foot ---- */
 .wiki-nav > span { flex: 1; }
@@ -89,7 +89,7 @@ html.wiki-flat .wiki-main { view-transition-name: none; }
   .wiki-bar {
     position: sticky; top: 64px; z-index: 30;
     margin: 0 calc(-1 * var(--gutter)) 18px; padding: 10px var(--gutter);
-    background: rgba(5, 13, 19, 0.98);
+    background: rgb(var(--bg-rgb) / 0.98);
     border-bottom: 1px solid var(--hairline);
   }
   .wiki-toggle { margin: 0; flex: none; }

@@ -24,7 +24,10 @@
 <meta name="theme-color" content="#050d13">
 <link rel="icon" href="assets/favicon.ico">
 <link rel="stylesheet" href="assets/site.css">
+<link rel="stylesheet" href="assets/fx.css">
+<script src="assets/theme.js"></script>
 <link rel="stylesheet" href="assets/home.css">
+<link rel="stylesheet" href="assets/demo.css">
 </head>
 <body class="home">
 <a class="skip-link" href="#main">Skip to content</a>
@@ -65,26 +68,45 @@
 <section class="hero" aria-labelledby="hero-title">
   <canvas class="hero-sky" aria-hidden="true"></canvas>
   <div class="container hero-copy">
-    <a class="pill" href="roadmap.html"><b>Roadmap</b> See what's done, what's being built and what's planned <span aria-hidden="true">→</span></a>
-    <h1 id="hero-title">Bring an idea.<br>Find your people.<br><span class="grad">Make it together.</span></h1>
-    <p class="lede">Mefi Studio is a free, open-source app for Windows. Build your ideas with coding agents, bring your work in progress to the Discord, and help decide what Studio becomes next.</p>
-    <div class="cta-row">
+    <a class="pill enter" style="--i:0" href="roadmap.html"><b>Roadmap</b> See what's done, what's being built and what's planned <span aria-hidden="true">→</span></a>
+    <h1 id="hero-title" class="enter" style="--i:1">Bring an idea.<br>Find your people.<br><span class="grad shine">Make it together.</span></h1>
+    <p class="lede enter" style="--i:2">Mefi Studio is a free, open-source app for Windows. Build your ideas with coding agents, bring your work in progress to the Discord, and help decide what Studio becomes next.</p>
+    <div class="cta-row enter" style="--i:3">
       <a class="btn btn-primary btn-lg" href="https://discord.gg/xgfKc5pVxG" rel="noopener">Join the Discord <span aria-hidden="true">↗</span></a>
       <a class="btn btn-lg" href="download.html">Download for Windows</a>
     </div>
-    <div class="hero-meta">
+    <div class="hero-meta enter" style="--i:4">
       <p class="pulse" data-discord-pulse hidden><span class="dot"></span><span data-pulse-text></span></p>
       <p class="fine" data-latest-hint>Latest release: <a href="https://github.com/nateecho32-stack/mefi-studio/releases/latest">see GitHub</a></p>
     </div>
-    <p class="fine">Free and open source · Windows 10 and 11 · No Studio account · Discord is optional</p>
+    <p class="fine enter" style="--i:5">Free and open source · Windows 10 and 11 · No Studio account · Discord is optional</p>
   </div>
-  <div class="container hero-shot">
+  <div class="container hero-shot enter" style="--i:6">
     <figure class="frame frame-hero">
       <a class="zoom" href="assets/shots/vibe.webp"><img src="assets/shots/vibe.webp" width="2400" height="1500" alt="Vibe mode: a box that asks What's next for Notes app?, with Needs you, Building now, Freshly done and Fresh ideas cards below it" fetchpriority="high" decoding="async"><span class="visually-hidden"> (open a larger view)</span></a>
     </figure>
     <div class="float-chip chip-a" aria-hidden="true"><i class="dot live"></i>2 agents building</div>
     <div class="float-chip chip-b" aria-hidden="true"><i class="dot warn"></i>1 decision needs you</div>
     <div class="float-chip chip-c" aria-hidden="true"><i class="dot info"></i>1 task checking its work</div>
+  </div>
+</section>
+
+<!-- WORKS WITH -->
+<section class="works-with" aria-labelledby="works-title">
+  <div class="container">
+    <p class="works-title" id="works-title">Bring the agent you already use</p>
+    <div class="marquee" data-marquee>
+      <ul class="marquee-track">
+        <li>Codex</li>
+        <li>Claude Code</li>
+        <li>Grok</li>
+        <li>Antigravity</li>
+        <li>Your own CLI login</li>
+        <li>Any API key</li>
+        <li>Local models</li>
+      </ul>
+    </div>
+    <p class="fine center">Start here can install and sign in the first four. Product names belong to their owners, and Studio isn't affiliated with them.</p>
   </div>
 </section>
 
@@ -121,6 +143,178 @@
         <p>Eleven colour themes, eight animated node styles, your own colours, and music or a video behind your work. Every look is free.</p>
         <span class="more">Themes and styles <span aria-hidden="true">→</span></span>
       </a>
+    </div>
+  </div>
+</section>
+
+<!-- WATCH IT WORK -->
+<section class="flow" id="flow" aria-labelledby="flow-title">
+  <div class="container">
+    <div class="section-head center" data-reveal>
+      <p class="eyebrow">Watch it work</p>
+      <h2 id="flow-title">From one sentence to finished work.</h2>
+      <p>An illustration of a single request moving through Studio, drawn with sample data from a made-up Notes app.</p>
+    </div>
+    <div class="flow-grid" data-flow data-reveal>
+      <div class="flow-side">
+        <div class="flow-steps" role="group" aria-label="Steps in the illustration">
+          <button type="button" class="flow-tab" data-tab="0" aria-current="step">
+            <span class="n">1</span>
+            <span class="t"><b>Say what you want</b><small>Type an idea, a fix or a question into Vibe. No setup ceremony, no ticket to file.</small></span>
+            <i class="bar"><i></i></i>
+          </button>
+          <button type="button" class="flow-tab" data-tab="1">
+            <span class="n">2</span>
+            <span class="t"><b>Agents get to work</b><small>Big requests become small steps. Builders work on them side by side while you keep going.</small></span>
+            <i class="bar"><i></i></i>
+          </button>
+          <button type="button" class="flow-tab" data-tab="2">
+            <span class="n">3</span>
+            <span class="t"><b>You make the calls</b><small>When an agent needs a decision it waits in <b>Needs you</b> with a recommended answer, or takes your own words.</small></span>
+            <i class="bar"><i></i></i>
+          </button>
+          <button type="button" class="flow-tab" data-tab="3">
+            <span class="n">4</span>
+            <span class="t"><b>Checked, then done</b><small>Finished work waits in Review until its checks pass, then lands in Freshly done.</small></span>
+            <i class="bar"><i></i></i>
+          </button>
+          <button type="button" class="flow-tab" data-tab="4">
+            <span class="n">5</span>
+            <span class="t"><b>See it as a tree</b><small>Command view draws the same work as a live tree of tasks and builders.</small></span>
+            <i class="bar"><i></i></i>
+          </button>
+        </div>
+        <button type="button" class="flow-toggle" aria-pressed="false"><svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg><svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5l12 7-12 7Z"/></svg><span>Pause</span></button>
+      </div>
+      <div class="flow-stage">
+        <p class="visually-hidden">Illustration: a request typed into Vibe becomes three tasks that agents build. One task asks a question and waits for an answer, then its checks pass and it moves to Freshly done. Command view then shows the same work as a tree.</p>
+        <div class="demo-wrap">
+          <div class="demo" data-beat="0" data-view="vibe" aria-hidden="true">
+            <div class="d-top">
+              <span class="d-dots"><i></i><i></i><i></i></span>
+              <span class="d-project"><i class="d-mark">M+</i>Notes app</span>
+              <span class="d-seg"><b data-seg="vibe">Vibe</b><b data-seg="cmd">Command</b></span>
+              <span class="d-live"><i></i><span data-map="0:Idle|1:3 agents building|2:3 agents · 1 needs you|3:2 agents building|4:1 agent building|5:1 agent building">Idle</span></span>
+            </div>
+
+            <div class="d-vibe">
+              <div class="d-title">What's next for Notes app?</div>
+              <div class="d-input">
+                <span class="d-typed" data-type="Show a friendly empty state when there are no notes"></span><i class="d-caret"></i>
+                <span class="d-ph swap" data-show="1-5">Describe what to build next…</span>
+                <span class="d-send">Build it</span>
+              </div>
+              <div class="d-needs" data-show="2-2"><div class="in"><div class="d-nbox">
+                <div class="d-q"><span class="d-chip warn">Needs you</span><span>Should the empty state also appear when a search has no matches?</span></div>
+                <div class="d-opts">
+                  <span class="d-opt rec"><b>Yes, one component for both</b><em>Recommended</em></span>
+                  <span class="d-opt"><b>No, only when there are no notes</b></span>
+                </div>
+                <div class="d-own">or answer in your own words</div>
+                <div class="d-answered"><span class="d-chip ok">✓ Answered</span> Yes, one component for both</div>
+              </div></div></div>
+              <div class="d-cols">
+                <div class="d-col">
+                  <h4>Building now <em data-map="0:0|1:3|2:3|3:2|4:1|5:1">0</em></h4>
+                  <div class="d-task" data-show="1-2"><div class="in"><div class="d-card">
+                    <div class="d-t">Empty-state component</div>
+                    <div class="d-s stack"><span data-show="1-1" class="swap">writing EmptyState.tsx</span><span data-show="2-2" class="swap"><span class="d-chip warn">Waiting for you</span></span></div>
+                    <div class="d-bar"><i data-w="1:44|2:70"></i></div>
+                  </div></div></div>
+                  <div class="d-task" data-show="1-3"><div class="in"><div class="d-card">
+                    <div class="d-t">Hook up search</div>
+                    <div class="d-s">reading Search.tsx</div>
+                    <div class="d-bar"><i data-w="1:28|2:52|3:88"></i></div>
+                  </div></div></div>
+                  <div class="d-task" data-show="1-4"><div class="in"><div class="d-card">
+                    <div class="d-t">Copy and tests</div>
+                    <div class="d-s">drafting the empty text</div>
+                    <div class="d-bar"><i data-w="1:18|2:36|3:64|4:92"></i></div>
+                  </div></div></div>
+                </div>
+                <div class="d-col">
+                  <h4>Review <em data-map="0:0|3:1|4:1|5:1">0</em></h4>
+                  <div class="d-task" data-show="3-3"><div class="in"><div class="d-card">
+                    <div class="d-t">Empty-state component</div>
+                    <ul class="d-checks">
+                      <li style="--k:0">Tests pass <em>14 of 14</em></li>
+                      <li style="--k:1">Lint is clean</li>
+                      <li style="--k:2">The app builds</li>
+                    </ul>
+                  </div></div></div>
+                  <div class="d-task" data-show="4-5"><div class="in"><div class="d-card">
+                    <div class="d-t">Hook up search</div>
+                    <div class="d-s"><span class="d-spin"></span>checking its work</div>
+                  </div></div></div>
+                </div>
+                <div class="d-col">
+                  <h4>Freshly done <em data-map="0:0|4:1|5:1">0</em></h4>
+                  <div class="d-task" data-show="4-5"><div class="in"><div class="d-card done">
+                    <div class="d-t">Empty-state component</div>
+                    <div class="d-s">3 files changed</div>
+                    <span class="d-chip ok">✓ Done</span>
+                  </div></div></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="d-cmd">
+              <div class="d-livework"><b>Live work</b><span><i class="g"></i>1 ready</span><span><i class="a"></i>1 verifying</span><span><i class="w"></i>1 building</span></div>
+              <svg viewBox="0 0 400 250" preserveAspectRatio="xMidYMid meet" focusable="false">
+                <defs>
+                  <radialGradient id="dg-done" cx=".35" cy=".3" r=".85"><stop offset="0" stop-color="#c9ffe0"/><stop offset=".55" stop-color="#28a862"/><stop offset="1" stop-color="#0c3e26"/></radialGradient>
+                  <radialGradient id="dg-check" cx=".35" cy=".3" r=".85"><stop offset="0" stop-color="#fff0bd"/><stop offset=".55" stop-color="#c9982f"/><stop offset="1" stop-color="#4d3910"/></radialGradient>
+                  <radialGradient id="dg-work" cx=".35" cy=".3" r=".85"><stop offset="0" style="stop-color:var(--accent-bright)"/><stop offset=".55" style="stop-color:var(--accent)"/><stop offset="1" style="stop-color:color-mix(in srgb, var(--accent) 30%, #000)"/></radialGradient>
+                </defs>
+                <g class="edges">
+                  <path d="M200 42 C200 81 85 81 85 120"/>
+                  <path d="M200 42 L200 134"/>
+                  <path d="M200 42 C200 81 315 81 315 120"/>
+                  <path d="M85 120 C85 158 48 158 48 196"/>
+                  <path d="M85 120 C85 160 122 160 122 200"/>
+                  <path d="M200 134 L200 205"/>
+                  <path d="M315 120 C315 159 285 159 285 198"/>
+                  <path d="M315 120 C315 155 348 155 348 190"/>
+                </g>
+                <g class="pulses">
+                  <path pathLength="100" d="M200 42 C200 81 315 81 315 120" style="--dl:0s"/>
+                  <path pathLength="100" d="M200 42 L200 134" style="--dl:.7s"/>
+                  <path pathLength="100" d="M315 120 C315 159 285 159 285 198" style="--dl:1.3s"/>
+                  <path pathLength="100" d="M200 134 L200 205" style="--dl:.3s"/>
+                  <path pathLength="100" d="M200 42 C200 81 85 81 85 120" style="--dl:1.9s"/>
+                </g>
+                <g class="nodes">
+                  <g transform="translate(200 42)"><g class="node root" style="--k:0"><circle class="halo" r="20"/><circle class="orb" r="15"/><text class="mono" y="3.6">M+</text></g></g>
+                  <g transform="translate(85 120)"><g class="node n-done" style="--k:1"><circle class="orb" r="12"/><path class="tick" d="M-4.5 0.5 L-1.3 3.6 L4.6 -3.4"/></g><text y="26">Empty state</text></g>
+                  <g transform="translate(200 134)"><g class="node n-check" style="--k:2"><circle class="halo" r="17"/><circle class="orb" r="12"/></g><text y="26">Search</text></g>
+                  <g transform="translate(315 120)"><g class="node n-work" style="--k:3"><circle class="halo" r="17"/><circle class="orb" r="12"/></g><text y="26">Copy + tests</text></g>
+                  <g transform="translate(48 196)"><g class="node n-done" style="--k:4"><circle class="orb" r="6.5"/></g></g>
+                  <g transform="translate(122 200)"><g class="node n-done" style="--k:5"><circle class="orb" r="6.5"/></g></g>
+                  <g transform="translate(200 205)"><g class="node n-done" style="--k:6"><circle class="orb" r="6.5"/></g></g>
+                  <g transform="translate(285 198)"><g class="node n-work" style="--k:7"><circle class="halo" r="12"/><circle class="orb" r="6.5"/></g></g>
+                  <g transform="translate(348 190)"><g class="node n-queue" style="--k:8"><circle class="orb" r="6.5"/></g></g>
+                </g>
+              </svg>
+            </div>
+
+            <i class="d-cursor"><svg viewBox="0 0 24 24"><path d="M5 3l14 7.5-6.2 1.6L9.6 19Z"/></svg></i>
+            <i class="d-ripple"></i>
+            <div class="d-toast" data-show="4-4"><span class="d-chip ok">✓</span> Empty-state component is done</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- AT A GLANCE -->
+<section class="glance" aria-label="Studio at a glance">
+  <div class="container">
+    <div class="stats" data-reveal>
+      <div class="stat"><b class="num" data-count="11">11</b><span>colour themes, all free</span></div>
+      <div class="stat"><b class="num" data-count="8">8</b><span>animated node styles</span></div>
+      <div class="stat"><b class="num" data-count="35">35</b><span>guides in the wiki</span></div>
+      <div class="stat" data-live-members hidden><b class="num" data-count="0">0</b><span>people in the Discord</span></div>
     </div>
   </div>
 </section>
@@ -186,6 +380,27 @@
       <figure class="frame" data-reveal>
         <a class="zoom" href="assets/shots/watch-bg.webp"><img src="assets/shots/watch-bg.webp" width="2400" height="1500" loading="lazy" decoding="async" alt="Command view in a violet theme with a music video playing behind the tree and its playback controls at the bottom"><span class="visually-hidden"> (open a larger view)</span></a>
         <figcaption><strong>A video behind the tree.</strong> Play something while you work, right behind your agents.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- MAKE IT YOURS -->
+<section class="skin" id="themes" aria-labelledby="skin-title">
+  <div class="container skin-grid">
+    <div class="skin-copy" data-reveal>
+      <p class="eyebrow">Make it yours</p>
+      <h2 id="skin-title">Pick a look. This whole page follows.</h2>
+      <p>Studio ships eleven colour themes and every one is free. Choose one here and the site wears it too, so you can see the mood before you download anything. Your pick is remembered on this device.</p>
+      <div class="skin-picker" data-swatches></div>
+      <noscript><p class="fine">The theme picker needs JavaScript.</p></noscript>
+    </div>
+    <div class="skin-shot" data-reveal>
+      <figure class="frame skin-frame">
+        <div class="skin-stack" data-skin-stack>
+          <img src="assets/shots/thumb-command-aurora.webp" width="960" height="680" loading="lazy" decoding="async" alt="Command view in the Aurora theme: tasks and builders drawn as a connected tree, with a Live work panel at the right" data-skin-theme="aurora" class="on">
+        </div>
+        <figcaption data-skin-cap><strong>Command view in Aurora.</strong> Studio's default theme.</figcaption>
       </figure>
     </div>
   </div>
@@ -429,6 +644,8 @@
   </div>
 </footer>
 <script src="assets/site.js"></script>
+<script src="assets/fx.js"></script>
 <script src="assets/home.js"></script>
+<script src="assets/demo.js"></script>
 </body>
 </html>

@@ -9,7 +9,17 @@
   const canvas = document.querySelector(".hero-sky");
   if (canvas && canvas.getContext) {
     const ctx = canvas.getContext("2d");
-    const colors = ["113,203,183", "167,243,218", "140,123,255", "54,209,255"];
+    // The sky wears the page's theme: accent, bright accent, and the two companions.
+    const CHANNELS = ["--accent-rgb", "--bright-rgb", "--accent-3-rgb", "--accent-2-rgb"];
+    const FALLBACK = ["113,203,183", "167,243,218", "140,123,255", "54,209,255"];
+    let colors = FALLBACK.slice();
+    const readColors = () => {
+      colors = CHANNELS.map((name, i) => {
+        const c = window.MefiTheme && window.MefiTheme.channel(name);
+        return c ? c.join(",") : FALLBACK[i];
+      });
+    };
+    readColors();
     let w = 0, h = 0, nodes = [], frame = 0, onScreen = true;
     const make = () => {
       const count = Math.round(Math.min(70, Math.max(24, (w * h) / 26000)));
@@ -17,7 +27,7 @@
         x: Math.random() * w, y: Math.random() * h,
         vx: (Math.random() - 0.5) * 0.18, vy: (Math.random() - 0.5) * 0.18,
         r: i % 9 === 0 ? 3.2 : 1.2 + Math.random() * 1.4,
-        c: colors[i % 7 === 0 ? 2 + (i % 2) : i % 2],
+        c: i % 7 === 0 ? 2 + (i % 2) : i % 2,
         p: Math.random() * Math.PI * 2,
       }));
     };
@@ -36,7 +46,7 @@
         for (let j = i + 1; j < nodes.length; j++) {
           const b = nodes[j], d = Math.hypot(a.x - b.x, a.y - b.y);
           if (d < reach) {
-            ctx.strokeStyle = `rgba(${a.c},${(1 - d / reach) * 0.22})`;
+            ctx.strokeStyle = `rgba(${colors[a.c]},${(1 - d / reach) * 0.22})`;
             ctx.lineWidth = 1;
             ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
           }
@@ -44,8 +54,8 @@
       }
       for (const n of nodes) {
         const pulse = 0.65 + 0.35 * Math.sin(t / 900 + n.p);
-        ctx.fillStyle = `rgba(${n.c},${0.55 * pulse + 0.2})`;
-        ctx.shadowColor = `rgba(${n.c},0.8)`; ctx.shadowBlur = n.r > 3 ? 14 : 6;
+        ctx.fillStyle = `rgba(${colors[n.c]},${0.55 * pulse + 0.2})`;
+        ctx.shadowColor = `rgba(${colors[n.c]},0.8)`; ctx.shadowBlur = n.r > 3 ? 14 : 6;
         ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2); ctx.fill();
       }
       ctx.shadowBlur = 0;
@@ -71,6 +81,8 @@
     }
     document.addEventListener("visibilitychange", wake);
     motion.addEventListener?.("change", wake);
+    // A new theme repaints the sky (a still sky needs an explicit redraw).
+    document.addEventListener("mefi-theme", () => { readColors(); if (!running()) draw(0); });
     wake();
     let resizeTimer = 0;
     window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { size(); draw(0); }, 150); });

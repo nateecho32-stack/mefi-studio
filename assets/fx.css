@@ -1,0 +1,101 @@
+/* Mefi Studio — shared motion and polish, loaded on every page after site.css.
+   Drifting glows, a scroll progress bar, cards that light up under the cursor,
+   button sheen and the theme picker in the header. Everything here is
+   decoration: the pages read the same without it, and prefers-reduced-motion
+   stops it (site.css already shortens every animation and transition). */
+
+/* ---- ambient glows ------------------------------------------------------- */
+/* Three big soft blooms that wander behind the whole page. Only transform and
+   opacity move, so they stay on the compositor. */
+.ambient { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; contain: paint; }
+.ambient i { position: absolute; border-radius: 50%; will-change: transform, opacity; }
+.ambient .b1 { width: min(66vw, 940px); aspect-ratio: 1; top: -28%; left: 2%; background: radial-gradient(circle, rgb(var(--accent-rgb) / 0.2), rgb(var(--accent-rgb) / 0.06) 48%, transparent 72%); animation: bloom-a 36s ease-in-out infinite; }
+.ambient .b2 { width: min(58vw, 820px); aspect-ratio: 1; bottom: -30%; right: -6%; background: radial-gradient(circle, rgb(var(--accent-3-rgb) / 0.16), rgb(var(--accent-3-rgb) / 0.05) 50%, transparent 72%); animation: bloom-b 44s ease-in-out infinite; }
+.ambient .b3 { width: min(44vw, 640px); aspect-ratio: 1; top: 32%; right: 14%; background: radial-gradient(circle, rgb(var(--accent-2-rgb) / 0.11), transparent 70%); animation: bloom-c 31s ease-in-out infinite; }
+@keyframes bloom-a { 0%, 100% { opacity: 0.55; transform: translate(-14%, -8%) scale(1); } 30% { opacity: 1; transform: translate(6%, 8%) scale(1.18); } 62% { opacity: 0.7; transform: translate(20%, -4%) scale(1.04); } }
+@keyframes bloom-b { 0%, 100% { opacity: 0.5; transform: translate(14%, 10%) scale(1.1); } 40% { opacity: 0.95; transform: translate(-10%, -4%) scale(0.92); } 70% { opacity: 0.6; transform: translate(-22%, 8%) scale(1.14); } }
+@keyframes bloom-c { 0%, 100% { opacity: 0.4; transform: translate(0, 0) scale(0.9); } 50% { opacity: 0.9; transform: translate(-16%, 14%) scale(1.2); } }
+
+/* ---- scroll progress ----------------------------------------------------- */
+.scroll-progress {
+  position: fixed; top: 0; left: 0; right: 0; height: 2px; z-index: 80; pointer-events: none;
+  transform-origin: 0 50%; transform: scaleX(var(--sp, 0)); opacity: 0; transition: opacity 0.3s ease;
+  background: linear-gradient(90deg, var(--accent-2), var(--accent), var(--accent-bright), var(--accent-3));
+  box-shadow: 0 0 12px rgb(var(--accent-rgb) / 0.6);
+}
+.scroll-progress.on { opacity: 1; }
+
+/* ---- cards that light up under the cursor -------------------------------- */
+.item, .faq details { position: relative; }
+.spot::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: radial-gradient(360px circle at var(--mx, 50%) var(--my, 50%), rgb(var(--accent-rgb) / 0.13), transparent 62%);
+  opacity: 0; transition: opacity 0.35s ease;
+}
+.spot:hover::after { opacity: 1; }
+
+/* ---- button sheen -------------------------------------------------------- */
+.btn-primary { position: relative; overflow: hidden; isolation: isolate; }
+.btn-primary::after {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: linear-gradient(108deg, transparent 32%, rgb(255 255 255 / 0.5) 48%, transparent 64%);
+  transform: translateX(-125%);
+}
+.btn-primary:hover::after { transform: translateX(125%); transition: transform 0.75s var(--ease); }
+
+/* ---- a headline word that catches the light ------------------------------ */
+.shine {
+  background-image: linear-gradient(104deg, transparent 38%, rgb(255 255 255 / 0.9) 50%, transparent 62%), var(--grad);
+  /* The highlight layer is 220% wide: at 100% it waits just off the left edge, at 0% it has crossed to just off the right. */
+  background-size: 220% 100%, 100% 100%; background-repeat: no-repeat; background-position: 100% 0, 0 0;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: shine 6.5s ease-in-out 1.6s infinite;
+}
+@keyframes shine { 0%, 8% { background-position: 100% 0, 0 0; } 44%, 100% { background-position: 0% 0, 0 0; } }
+
+/* ---- entrance for things that load with the page -------------------------- */
+.enter { animation: enter 0.95s var(--ease) both; animation-delay: calc(var(--i, 0) * 90ms); }
+@keyframes enter { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+
+/* ---- theme picker in the header ------------------------------------------ */
+.theme-wrap { position: relative; display: inline-flex; }
+.theme-btn {
+  display: inline-grid; place-items: center; width: 38px; height: 38px; border-radius: var(--r-pill); padding: 0;
+  color: var(--muted); border: 1px solid transparent; background: none; cursor: pointer; font: inherit;
+}
+.theme-btn:hover, .theme-btn[aria-expanded="true"] { color: var(--ivory); background: var(--accent-dim); border-color: var(--hairline); }
+.theme-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.theme-btn:focus-visible { outline: none; box-shadow: var(--ring); }
+.theme-pop {
+  position: absolute; right: -6px; top: calc(100% + 12px); z-index: 90; width: min(316px, calc(100vw - 24px)); padding: 16px;
+  border-radius: var(--r); background: var(--panel-solid); border: 1px solid var(--hairline-strong); box-shadow: var(--shadow-lg);
+  transform-origin: 92% 0; animation: pop-in 0.24s var(--ease) both; text-align: left;
+}
+.theme-pop[hidden] { display: none; }
+@keyframes pop-in { from { opacity: 0; transform: translateY(-6px) scale(0.96); } to { opacity: 1; transform: none; } }
+.theme-pop h2, .theme-pop h3 { font-family: var(--font-ui); font-size: 0.7rem; font-weight: 650; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.theme-pop h3 { margin-top: 14px; }
+.theme-pop p { margin: 12px 0 0; font-size: 0.8rem; color: var(--dim); line-height: 1.45; }
+.swatches { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.swatch {
+  display: grid; justify-items: center; gap: 6px; padding: 8px 2px 7px; border-radius: 12px; border: 1px solid transparent;
+  background: transparent; color: var(--muted); font: inherit; font-size: 0.7rem; line-height: 1.2; cursor: pointer; text-align: center;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.2s var(--ease);
+}
+.swatch:hover { background: var(--accent-dim); color: var(--ivory); transform: translateY(-2px); }
+.swatch:focus-visible { outline: none; box-shadow: var(--ring); }
+.swatch[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-dim); color: var(--ivory); }
+.swatch i {
+  width: 34px; height: 34px; border-radius: 50%; display: block;
+  background: radial-gradient(circle at 34% 28%, rgb(255 255 255 / 0.55), transparent 34%), conic-gradient(from 200deg, var(--s-bright), var(--s-accent), var(--s-2), var(--s-accent), var(--s-bright));
+  box-shadow: 0 0 0 3px var(--s-bg), 0 0 0 4px rgb(255 255 255 / 0.16), 0 6px 16px rgb(0 0 0 / 0.45);
+}
+
+@media (max-width: 720px) {
+  .theme-pop { right: -44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ambient i { animation: none; opacity: 0.7; }
+  .shine { animation: none; background-image: var(--grad); background-size: 100% 100%; }
+  .enter { animation: none; }
+}

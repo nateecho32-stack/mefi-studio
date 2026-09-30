@@ -8,7 +8,7 @@ GitHub Pages publishes the root of this repository's `gh-pages` branch. The `mai
 
 | Page | Files | What it is |
 | --- | --- | --- |
-| Home | `index.html`, `assets/home.css`, `assets/home.js` | Community first: what Studio is, a quick look, a few roadmap items, the Discord |
+| Home | `index.html`, `assets/home.css`, `assets/home.js`, `assets/demo.css`, `assets/demo.js` | Community first: what Studio is, a quick look, a few roadmap items, the Discord |
 | Features | `features.html`, `assets/features.css`, `assets/features.js` | Everything in Studio, by area, with a badge on each feature |
 | Roadmap | `roadmap.html`, `assets/roadmap.css`, `assets/roadmap.js`, `assets/roadmap.json` | Done (with the release timeline), being worked on, and planned, plus ways to ask for something |
 | Community | `community.html`, `assets/community.css`, `assets/community.js`, `assets/showcase.json` | Ways in, the live Discord count, the Made with Studio wall, how to help |
@@ -25,6 +25,14 @@ GitHub Pages publishes the root of this repository's `gh-pages` branch. The `mai
 - the `SITE` helpers: release lookup, feature requests by 👍, and links.
 
 Every page uses the same header and footer markup.
+
+## Motion and themes
+
+Decoration only: every page reads the same without it, and `prefers-reduced-motion` stops it.
+- `assets/theme.js` (loaded from `<head>` so a saved choice paints first) holds Studio's eleven palettes, copied from `THEMES` in the app's `renderer/music.js`. It rewrites the colour tokens on `<html>`. Aurora, the site's own look, is applied by clearing them. The pick is kept in `localStorage` (`mefiSite.theme.v1`), and `?theme=abyss` on any URL selects one.
+- Every translucent colour in the CSS is written `rgb(var(--accent-rgb) / .2)` (also `--bg-rgb`, `--bg-2-rgb`, `--panel-rgb`, `--panel-2-rgb`, `--accent-2-rgb`, `--accent-3-rgb`) so it follows the theme. Don't hard-code the teal. The violet, gold and status colours stay fixed on purpose: badges use them as meaning.
+- `assets/fx.css` and `assets/fx.js`, on every page: drifting background glows, the scroll progress bar, cards that light up under the cursor, button sheen, and the theme picker in the header.
+- `assets/demo.css` and `assets/demo.js`, on Home only: the "works with" marquee, the animated Studio walkthrough (drawn in HTML and CSS, driven by `data-show`, `data-map` and `data-w` attributes per "beat"), the count-up numbers, and the theme section. That section swaps in the real `thumb-command-<theme>.webp` screenshots; themes without one keep the Aurora shot.
 
 ## Status labels
 
