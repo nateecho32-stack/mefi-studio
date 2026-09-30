@@ -807,6 +807,8 @@
 
   const WORKSPACE_PAGES = new Set(["tasks", "plans", "ideas", "brains", "analyzer", "worktrees", "explorer", "trace", "fleet", "overhead", "agent-brain", "skills", "agents"]);
   const isWorkspacePage = (dest) => document.documentElement?.dataset?.shell === "rail" && WORKSPACE_PAGES.has(dest?.id);
+  // Settings' Size and density page (renderer/size.js, registered only in layout v2) is a page of the workspace too.
+  WORKSPACE_PAGES.add("size");
   function syncPageInert() {
     const page = isWorkspacePage(get(state.sheet));
     for (const node of document.querySelectorAll?.("body > header, #tab-booklet, #tab-graph, #tab-eyes, #tab-studio, #workspace-layer, #vibe-layer, #idle-layer, #idle-hud, #tree-rail") ?? []) {
@@ -1069,7 +1071,8 @@
       // In Vibe mode these pages open from Vibe, so Back with nothing behind
       // it goes there instead of stopping on Build's section home.
       if (vibeMode()) return go("vibe");
-      const home = sectionOf(get(id)) === "agents" ? "agents" : "tasks";
+      // A page of Settings (Size and density) has no history when it was opened from Configuration or Search: back to Settings.
+      const home = sectionOf(get(id)) === "agents" ? "agents" : sectionOf(get(id)) === "settings" ? "studio" : "tasks";
       if (id !== home) return go(home);
       return;
     }
@@ -1673,7 +1676,8 @@
     const section = sectionOf(get(id));
     for (const group of rail.querySelectorAll(".app-rail-section")) group.classList.toggle("current", group.dataset.section === section);
     for (const button of rail.querySelectorAll(".app-rail-head, .app-rail-foot-item[data-nav]")) {
-      const selected = button.classList.contains("app-rail-head") ? button.dataset.section === section : button.dataset.nav === id;
+      // Settings stays lit on its own pages (Size and density), as a section's head does.
+      const selected = button.classList.contains("app-rail-head") ? button.dataset.section === section : button.dataset.nav === id || (section === "settings" && button.dataset.nav === "studio");
       if (selected) button.setAttribute("aria-current", "page");
       else button.removeAttribute("aria-current");
     }

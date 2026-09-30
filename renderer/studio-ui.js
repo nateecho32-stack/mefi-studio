@@ -406,6 +406,11 @@
     select.addEventListener("focus", () => button.focus());
   }
   const appearanceKey = "mefiStudio.appearance";
+  // What html[data-density] says. Two levels, compact and comfortable, are all the window has
+  // known and any other value is comfortable; the 0.5 layout (html[data-layout="v2"], which
+  // renderer/size.js and size.css serve) adds "spacious". The store may hold a v2 choice while
+  // the window is v1: it is kept as it is and read as comfortable there.
+  const densityOf = (value) => (value === "compact" || (value === "spacious" && document.documentElement.dataset.layout === "v2") ? value : "comfortable");
   let appearance;
   try { appearance = JSON.parse(localStorage.getItem(appearanceKey) || "null"); } catch {}
   appearance = { preset: "studio", density: "comfortable", glass: 45, glow: 35, ...(appearance || {}) };
@@ -414,7 +419,7 @@
     appearance = { ...appearance, ...(patch.preset ? presets[patch.preset] : {}), ...patch };
     if (!presets[appearance.preset]) appearance.preset = "studio";
     const root = document.documentElement;
-    root.dataset.studioStyle = appearance.preset; root.dataset.density = appearance.density === "compact" ? "compact" : "comfortable";
+    root.dataset.studioStyle = appearance.preset; root.dataset.density = densityOf(appearance.density);
     root.dataset.studioMaterial = Number(appearance.glass) > 0 ? "glass" : "solid";
     root.style.setProperty("--studio-glass", String(Math.max(0, Math.min(100, Number(appearance.glass) || 0)) / 100));
     root.style.setProperty("--studio-glow", String(Math.max(0, Math.min(100, Number(appearance.glow) || 0)) / 100));
@@ -445,7 +450,7 @@
       control.setAttribute("aria-label", title); row.append(node("span", "", title), control); card.append(row); fields[key] = control;
       control.addEventListener("input", () => applyAppearance({ [key]: key === "density" ? control.value : Number(control.value) }));
     }
-    const sync = () => { for (const [key, field] of Object.entries(fields)) field.value = appearance[key]; schedule(); };
+    const sync = () => { for (const [key, field] of Object.entries(fields)) field.value = key === "density" ? densityOf(appearance.density) : appearance[key]; schedule(); };
     sync(); parent.prepend(card); applyAppearance({}, false); scan(card);
   }
   // ---- menus: one highlight that glides ------------------------------------

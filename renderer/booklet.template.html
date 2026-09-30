@@ -84,6 +84,7 @@
   <symbol id="g-plans" viewBox="0 0 16 16"><path d="M4 2.5h5.5L12 5v8.5H4z"/><path d="M9.5 2.5V5H12M6 8h4M6 10.5h4"/></symbol>
   <symbol id="g-more" viewBox="0 0 16 16"><circle cx="4.5" cy="4.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="11.5" cy="4.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="4.5" cy="11.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="11.5" cy="11.5" r="1.3" fill="currentColor" stroke="none"/></symbol>
   <symbol id="g-sliders" viewBox="0 0 16 16"><path d="M2.5 4.5h5.5M11 4.5h2.5M2.5 8h1.5M6.5 8h7M2.5 11.5h6.5M12 11.5h1.5"/><circle cx="9.3" cy="4.5" r="1.3"/><circle cx="5.2" cy="8" r="1.3"/><circle cx="10.3" cy="11.5" r="1.3"/></symbol>
+  <symbol id="g-textsize" viewBox="0 0 16 16"><path d="M1.75 13 5.5 3l3.75 10M2.95 9.75h5.1"/><path d="M10.5 13l2.25-6 2.25 6M11.3 11.25h2.9"/></symbol>
   <symbol id="g-agents" viewBox="0 0 16 16"><circle cx="8" cy="4" r="1.9"/><circle cx="3.8" cy="12" r="1.9"/><circle cx="12.2" cy="12" r="1.9"/><path d="M7.1 5.7 4.7 10.3M8.9 5.7l2.4 4.6M5.7 12h4.6"/></symbol>
   <symbol id="g-community" viewBox="0 0 16 16"><circle cx="6" cy="5.25" r="2.25"/><path d="M1.75 13.5v-.75A3.25 3.25 0 0 1 5 9.5h2a3.25 3.25 0 0 1 3.25 3.25v.75"/><path d="M11 3a2.25 2.25 0 0 1 0 4.5M12.25 9.6a3.25 3.25 0 0 1 2 3.15v.75"/></symbol>
   <symbol id="g-key" viewBox="0 0 16 16"><circle cx="5.5" cy="8" r="3"/><path d="M8.5 8h5M11.5 8v2.5M13.5 8v1.5"/></symbol>
@@ -1800,6 +1801,23 @@
       <nav id="config-tree" class="config-tree" aria-label="Categories"></nav>
       <section id="config-pane" class="config-pane" aria-live="polite"></section>
     </div>
+  </div>
+</div>
+<!-- Size and density (renderer/size.js, size.css; layout v2 only): interface scale, text size,
+     density and detail beside a live miniature of the window. The body is drawn on first open. -->
+<div class="overlay explorer" id="size-overlay" hidden>
+  <div class="explorer-sheet size-sheet" role="dialog" aria-modal="true" aria-labelledby="size-heading" tabindex="-1">
+    <header class="explorer-head sheet-head">
+      <button class="sheet-back ghost mini" data-nav-close="size" title="Back (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Back</span></button>
+      <div class="sheet-title">
+        <div class="eyebrow">Settings</div>
+        <h2 id="size-heading">Size and density</h2>
+      </div>
+      <div class="sheet-actions">
+        <button id="size-close" class="ghost sheet-close" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
+      </div>
+    </header>
+    <div id="size-body" class="size-body"></div>
   </div>
 </div>
 <!-- Trace (renderer/trace.js): Studio's logs as channels (the studio log, the

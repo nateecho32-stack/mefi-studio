@@ -1,0 +1,259 @@
+/* Size and density (renderer/size.js). Two jobs, both for the 0.5 layout
+   (html[data-layout="v2"]; with it off nothing here matches anything):
+
+   1. The tokens every 0.5 panel sizes itself with. Text is
+      max(12px, calc(Npx * var(--text-scale, 1))), so it never drops under 12 px
+      however small the setting; the --f12 .. --f22 ladder below names the steps
+      once. Spacing reads --d-* (density: Compact, Comfortable, Spacious) and what
+      a row or card says reads --dt-* (detail: titles, titles and status,
+      everything). size.js writes html[data-density], html[data-detail] and
+      --text-scale on the root; nothing else does.
+   2. The Size and density page and its miniature. The miniature is a picture of
+      the window drawn with these same tokens and the same rules, but under its
+      own scope (.size-mini[data-mini-density], [data-mini-detail] and
+      --mini-text-scale) instead of the root's, so it can show a draft the window
+      does not have yet. Each token below is declared for the root and for
+      .size-mini in one selector list: one set of values, one set of rules.
+
+   Every colour is a theme token (light themes and the custom palette included);
+   no scroller reserves width; no text is under 12 px; motion follows the
+   shared motion tokens. */
+
+/* ---- 1. the type ladder ---------------------------------------------------
+   Declared on the root and on .size-mini, because a custom property holding a
+   var() is resolved where it is declared: the miniature must resolve
+   --text-scale to its own value, not inherit the root's answer. */
+html[data-layout="v2"],
+.size-mini {
+  --f12: max(12px, calc(12px * var(--text-scale, 1)));
+  --f125: max(12px, calc(12.5px * var(--text-scale, 1)));
+  --f13: max(12px, calc(13px * var(--text-scale, 1)));
+  --f135: max(12px, calc(13.5px * var(--text-scale, 1)));
+  --f14: max(12px, calc(14px * var(--text-scale, 1)));
+  --f15: max(12px, calc(15px * var(--text-scale, 1)));
+  --f16: max(12px, calc(16px * var(--text-scale, 1)));
+  --f18: max(12px, calc(18px * var(--text-scale, 1)));
+  --f20: max(12px, calc(20px * var(--text-scale, 1)));
+  --f22: max(12px, calc(22px * var(--text-scale, 1)));
+}
+/* The miniature's own text size and zoom come from its scope attributes, set by
+   size.js from the draft: --mini-text-scale (0.8 to 1.4), --mini-zoom (draft
+   interface scale over the window's real one) and --mini-fit (how far the whole
+   picture is shrunk to fit its column). */
+.size-mini { --text-scale: var(--mini-text-scale, 1); }
+
+/* ---- 2. density: row heights, gaps and padding -----------------------------
+   --d-row     a session row's padding, top and bottom
+   --d-gh      space above a group heading in a list
+   --d-stp     a plan step's padding     --d-seat  a team seat row's padding
+   --d-set     a settings row's padding  --d-lrow  a row of Today's lists
+   --d-gap     the gap between blocks of a thread and of a column of cards
+   --d-pad     the inspector's padding   --d-bub   a message bubble's padding
+   --d-top     the top bar's height      --d-tab   the tab strip's height
+   --d-card    a board card's padding    --d-col   the gap between board cards
+   Comfortable is the default, and what html[data-density] says when the choice
+   is one the layout does not know. The older rules keyed on
+   html[data-density=compact] (agents.css, studio-ui.css) still see "compact". */
+html[data-layout="v2"],
+html[data-layout="v2"][data-density="comfortable"],
+.size-mini[data-mini-density="comfortable"] {
+  --d-row: 8px; --d-gh: 12px; --d-stp: 8px; --d-seat: 9px; --d-set: 10px; --d-gap: 14px; --d-lrow: 10px;
+  --d-pad: 14px; --d-bub: 12px; --d-top: 48px; --d-tab: 38px; --d-card: 12px; --d-col: 12px;
+}
+html[data-layout="v2"][data-density="compact"],
+.size-mini[data-mini-density="compact"] {
+  --d-row: 5px; --d-gh: 8px; --d-stp: 5px; --d-seat: 6px; --d-set: 7px; --d-gap: 10px; --d-lrow: 7px;
+  --d-pad: 11px; --d-bub: 9px; --d-top: 44px; --d-tab: 34px; --d-card: 9px; --d-col: 9px;
+}
+html[data-layout="v2"][data-density="spacious"],
+.size-mini[data-mini-density="spacious"] {
+  --d-row: 11px; --d-gh: 16px; --d-stp: 11px; --d-seat: 12px; --d-set: 13px; --d-gap: 20px; --d-lrow: 13px;
+  --d-pad: 18px; --d-bub: 15px; --d-top: 52px; --d-tab: 42px; --d-card: 15px; --d-col: 16px;
+}
+
+/* ---- 3. detail: what a row or a card says -----------------------------------
+   Each is the value of a display property: a row's status line reads
+   display: var(--dt-meta), its progress bar var(--dt-prog), its extra line
+   (worker, branch, changes, checks) var(--dt-more), a board card's open
+   question var(--dt-q) and its answer buttons var(--dt-qf). */
+html[data-layout="v2"],
+html[data-layout="v2"][data-detail="status"],
+.size-mini[data-mini-detail="status"] {
+  --dt-meta: block; --dt-prog: block; --dt-more: none; --dt-q: block; --dt-qf: flex;
+}
+html[data-layout="v2"][data-detail="titles"],
+.size-mini[data-mini-detail="titles"] {
+  --dt-meta: none; --dt-prog: none; --dt-more: none; --dt-q: none; --dt-qf: none;
+}
+html[data-layout="v2"][data-detail="all"],
+.size-mini[data-mini-detail="all"] {
+  --dt-meta: block; --dt-prog: block; --dt-more: flex; --dt-q: block; --dt-qf: flex;
+}
+
+/* ---- 4. the page ------------------------------------------------------------
+   A page of Settings like Worktrees: a sheet that the rail shell turns into a
+   page between the list and the inspector. It is itself a 0.5 component, so it
+   follows the tokens above once applied. */
+.size-sheet { display: flex; flex-direction: column; }
+/* The shared header's Esc key cap is a little under 12 px; on this page it is not. */
+.size-sheet .sheet-head .key { font-size: var(--f12, 12px); }
+.size-body { display: block; flex: 1; min-height: 0; padding: var(--d-pad, 14px) var(--s5, 20px) var(--s6, 24px); overflow-y: auto; container-type: inline-size; }
+.size-intro { grid-area: intro; max-width: 72ch; margin: 0; color: var(--muted); font-size: var(--f13, 13px); line-height: 1.5; }
+.size-wrap { display: grid; grid-template-columns: minmax(250px, 340px) minmax(0, 1fr); grid-template-areas: "intro intro" "controls preview"; gap: var(--d-gap, 14px) 18px; align-items: start; max-width: 1080px; margin: 0 auto; }
+.size-controls { grid-area: controls; display: grid; gap: var(--d-gap, 14px); min-width: 0; }
+.size-panel { min-width: 0; padding: var(--d-pad, 14px) calc(var(--d-pad, 14px) + 2px); border: 1px solid var(--hairline); border-radius: var(--r-lg, 10px); background: var(--surface-raised, var(--panel)); }
+.size-panel > h3 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; margin: 0 0 var(--d-set, 10px); color: var(--ivory); font: 650 var(--f135, 13.5px)/1.3 var(--font-ui); }
+.size-panel > h3 small { margin-left: auto; color: var(--dim); font: 500 var(--f125, 12.5px)/1.3 var(--font-ui); }
+.size-row { padding: var(--d-set, 10px) 0; }
+.size-row + .size-row { border-top: 1px solid color-mix(in srgb, var(--ivory) 7%, transparent); }
+.size-row:first-child { padding-top: 0; }
+.size-row:last-child { padding-bottom: 0; }
+.size-label { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.size-label > label, .size-label > b { color: var(--ivory); font: 600 var(--f135, 13.5px)/1.3 var(--font-ui); }
+.size-label output { color: var(--gold-bright); font: 650 var(--f13, 13px)/1.3 var(--font-ui); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.size-hint { margin: 1px 0 0; color: var(--dim); font-size: var(--f125, 12.5px); line-height: 1.45; }
+/* The track fills up to the thumb (--fill from size.js), like Configuration's scale. */
+.size-row input[type="range"] { display: block; width: 100%; height: 6px; margin: 14px 0 0; border-radius: 999px; background: linear-gradient(90deg, var(--gold) var(--fill, 50%), color-mix(in srgb, var(--ivory) 12%, transparent) var(--fill, 50%)); appearance: none; cursor: pointer; }
+.size-row input[type="range"]::-webkit-slider-thumb { width: 18px; height: 18px; border: 2px solid var(--panel-solid); border-radius: 50%; background: var(--gold-bright); box-shadow: 0 0 0 1px color-mix(in srgb, var(--gold) 50%, transparent), 0 4px 12px -4px var(--gold); appearance: none; transition: scale var(--motion-base) var(--ease-spring); }
+.size-row input[type="range"]:is(:hover, :active)::-webkit-slider-thumb { scale: 1.18; }
+.size-row input[type="range"]:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 6px; }
+.size-row input[type="range"]:disabled { opacity: .5; cursor: not-allowed; }
+/* A tick sits at its own share of the range (--at): 100% is not the middle of 70..150. */
+.size-ticks { position: relative; height: calc(var(--f12, 12px) * 1.3); margin-top: 8px; color: var(--dim); font-size: var(--f12, 12px); line-height: 1.3; }
+.size-ticks span { position: absolute; top: 0; left: var(--at, 0); translate: -50% 0; white-space: nowrap; }
+.size-ticks span:first-child { translate: 0 0; }
+.size-ticks span:last-child { translate: -100% 0; }
+.size-seg { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 9px; padding: 3px; border: 1px solid var(--hairline); border-radius: 10px; background: color-mix(in srgb, var(--surface-sunk, var(--bg)) 55%, transparent); }
+.size-seg > button { flex: 1 1 auto; min-height: 30px; padding: 3px 8px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted); font: 600 var(--f125, 12.5px)/1.2 var(--font-ui); white-space: nowrap; }
+.size-seg > button:hover { background: var(--tint-gold-2); color: var(--ivory); }
+.size-seg > button[aria-checked="true"] { border-color: var(--gold-dim); background: var(--tint-gold-3); color: var(--gold-bright); }
+.size-seg > button:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 1px; }
+.size-grid { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; margin: 0; color: var(--muted); font-size: var(--f13, 13px); line-height: 1.4; }
+.size-grid dt { color: var(--muted); }
+.size-grid dd { margin: 0; color: var(--ivory); font-weight: 600; font-variant-numeric: tabular-nums; }
+.size-note { margin: var(--d-set, 10px) 0 0; color: var(--dim); font-size: var(--f125, 12.5px); line-height: 1.45; }
+.size-aside { margin: 0; color: var(--dim); font-size: var(--f125, 12.5px); line-height: 1.5; }
+/* Settings > Appearance: the row that says where Density went and opens it. */
+.size-link-row > div { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px 12px; min-width: 0; }
+
+/* ---- 5. the preview column --------------------------------------------------- */
+.size-preview { grid-area: preview; position: sticky; top: 0; z-index: 3; min-width: 0; }
+.size-cap { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; margin: 0 2px 8px; color: var(--muted); font-size: var(--f125, 12.5px); }
+.size-cap > b { color: var(--ivory); font: 650 var(--f135, 13.5px)/1.3 var(--font-ui); }
+.size-sample { padding: 0 8px; border: 1px dashed var(--hairline-strong); border-radius: 999px; color: var(--dim); font-size: var(--f12, 12px); line-height: 1.5; }
+.size-state { margin-left: auto; color: var(--muted); font-weight: 500; }
+.size-state[data-dirty] { color: var(--warn); font-weight: 650; }
+.size-applied { margin: 8px 2px 0; color: var(--muted); font-size: var(--f125, 12.5px); line-height: 1.45; }
+.size-applied b { color: var(--ivory); font-weight: 600; }
+.size-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.size-actions > button { font-size: var(--f135, 13.5px); }
+.size-link { min-height: 0; padding: 4px 2px; border: 0; background: none; color: var(--gold-bright); font: 600 var(--f13, 13px)/1.3 var(--font-ui); text-decoration: underline; text-underline-offset: 3px; }
+.size-link:hover { background: none; text-decoration-color: var(--gold-bright); }
+.size-link:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; border-radius: 4px; }
+
+/* A narrow page: one column, the picture first and kept in view, so the effect
+   of a control is on screen while the control is under the thumb. In a window so
+   short that the picture would leave no room for the controls it is not kept. */
+@container (max-width: 720px) {
+  .size-wrap { grid-template-columns: minmax(0, 1fr); grid-template-areas: "preview" "intro" "controls"; }
+  .size-preview { margin: 0 -2px; padding: 2px 2px 8px; background: var(--bg); }
+  .size-preview .size-cap { margin-bottom: 6px; }
+  .size-preview .size-actions { margin-top: 8px; }
+}
+@media (max-height: 520px) { .size-preview { position: static; } }
+
+/* ---- 6. the miniature ---------------------------------------------------------
+   A 760 x 440 window drawn with the real regions' parts (rail, list, top bar, tab
+   strip, thread, inspector, status bar) on sample data, shrunk to fit its column
+   (--mini-fit) and zoomed to approximate the interface scale (--mini-zoom).
+   It is a picture: inert, never focusable, and its own text is at least 12 px in
+   its own coordinates like everywhere else (the picture is what is scaled). */
+.size-mini-host { display: flex; justify-content: center; width: fit-content; max-width: 100%; margin: 0 auto; overflow: hidden; border: 1px solid var(--hairline); border-radius: var(--r-xl, 12px); background: var(--bg); box-shadow: var(--shadow-2); }
+.size-mini {
+  --sm-rail: color-mix(in srgb, var(--panel-solid) 55%, var(--bg));
+  --sm-list: color-mix(in srgb, var(--panel-solid) 78%, var(--bg));
+  --sm-main: color-mix(in srgb, var(--panel-solid) 92%, var(--bg));
+  --sm-card: var(--panel-solid);
+  --sm-raised: color-mix(in srgb, var(--ivory) 8%, var(--panel-solid));
+  --sm-edge: color-mix(in srgb, var(--ivory) 10%, transparent);
+  --sm-soft: color-mix(in srgb, var(--ivory) 6%, transparent);
+  width: fit-content; color: var(--ivory); font-family: var(--font-ui); text-align: left;
+}
+.size-mini-fit { width: 760px; zoom: var(--mini-fit, 1); }
+.size-mini-win { position: relative; width: 760px; height: 440px; overflow: hidden; background: var(--bg); }
+.size-mini-z { zoom: var(--mini-zoom, 1); width: calc(760px / var(--mini-zoom, 1)); height: calc(440px / var(--mini-zoom, 1)); font-size: var(--f14); line-height: 1.5; }
+.size-mini *, .size-mini *::before, .size-mini *::after { box-sizing: border-box; }
+.size-mini p { margin: 0; }
+.sm-frame { display: grid; grid-template-columns: 48px 214px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) 24px; height: 100%; }
+.sm-rail { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px 0; border-right: 1px solid var(--sm-edge); background: var(--sm-rail); }
+.sm-rail i { display: block; width: 28px; height: 28px; border-radius: 8px; background: var(--sm-soft); }
+.sm-rail i.sm-logo { margin-bottom: 4px; background: linear-gradient(135deg, var(--gold-bright), var(--gold)); }
+.sm-rail i.sm-here { background: var(--tint-gold-3); box-shadow: inset 0 0 0 1px var(--gold-dim); }
+.sm-list { min-width: 0; padding: 4px 6px; overflow: hidden; border-right: 1px solid var(--sm-edge); background: var(--sm-list); }
+.sm-gh { display: flex; align-items: center; gap: 8px; padding: var(--d-gh) 8px 6px; color: var(--muted); font-size: var(--f12); font-weight: 650; }
+.sm-gh.sm-warn { color: var(--warn); }
+.sm-gh em { padding: 0 7px; border-radius: 9px; background: color-mix(in srgb, var(--ivory) 9%, transparent); font-style: normal; line-height: 18px; }
+.sm-gh.sm-warn em { background: color-mix(in srgb, var(--warn) 18%, transparent); }
+.sm-row { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 9px; padding: var(--d-row) 10px; border-radius: 10px; }
+.sm-row.sm-sel { background: var(--tint-gold-3); box-shadow: inset 0 0 0 1px var(--gold-dim); }
+.sm-dot { width: 9px; height: 9px; margin-top: 5px; border-radius: 50%; background: var(--dim); }
+.sm-dot.sm-need { background: var(--warn); box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn) 22%, transparent); }
+.sm-dot.sm-run { background: var(--live); box-shadow: 0 0 0 3px var(--live-dim); }
+.sm-dot.sm-rev { background: var(--info); box-shadow: 0 0 0 3px color-mix(in srgb, var(--info) 20%, transparent); }
+.sm-dot.sm-done { border: 2px solid var(--good); background: none; }
+.sm-rb { min-width: 0; }
+.sm-t { display: block; overflow: hidden; font-size: var(--f135); font-weight: 600; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
+.sm-m { display: var(--dt-meta); overflow: hidden; color: var(--dim); font-size: var(--f12); text-overflow: ellipsis; white-space: nowrap; }
+.sm-rp { display: var(--dt-prog); height: 3px; margin: 5px 0 1px; overflow: hidden; border-radius: 2px; background: color-mix(in srgb, var(--ivory) 10%, transparent); }
+.sm-rp i { display: block; height: 100%; background: var(--live); }
+.sm-rx { display: var(--dt-more); flex-wrap: wrap; gap: 0 8px; margin-top: 3px; color: var(--muted); font-size: var(--f12); }
+.sm-rx span { white-space: nowrap; }
+.sm-main { display: grid; grid-template-rows: var(--d-top) var(--d-tab) minmax(0, 1fr); min-width: 0; min-height: 0; background: var(--sm-main); }
+.sm-top { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 0 12px; overflow: hidden; border-bottom: 1px solid var(--sm-edge); color: var(--dim); font-size: var(--f13); white-space: nowrap; }
+.sm-top b { color: var(--muted); font-weight: 600; }
+.sm-seg { display: inline-flex; flex: none; padding: 3px; border: 1px solid var(--sm-edge); border-radius: 10px; background: var(--sm-soft); }
+.sm-seg span { padding: 0 9px; border-radius: 7px; color: var(--muted); font-size: var(--f125); line-height: 22px; }
+.sm-seg span.sm-on { background: var(--sm-raised); box-shadow: inset 0 0 0 1px var(--sm-edge); color: var(--ivory); font-weight: 650; }
+.sm-tabs { display: flex; align-items: center; gap: 3px; min-width: 0; padding: 0 8px; overflow: hidden; border-bottom: 1px solid var(--sm-edge); }
+.sm-tab { display: flex; align-items: center; gap: 7px; flex: 0 1 auto; min-width: 0; max-width: 170px; height: calc(var(--d-tab) - 10px); padding: 0 10px; overflow: hidden; border-radius: 9px; color: var(--muted); font-size: var(--f13); white-space: nowrap; }
+.sm-tab.sm-on { background: var(--sm-raised); box-shadow: inset 0 0 0 1px var(--sm-edge); color: var(--ivory); font-weight: 600; }
+.sm-tab.sm-pin { flex: none; }
+.sm-tab.sm-preview { font-style: italic; }
+.sm-tab span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.sm-tab .sm-dot { flex: none; width: 8px; height: 8px; margin: 0; }
+.sm-body { display: grid; grid-template-columns: minmax(0, 1fr) 250px; min-height: 0; }
+.sm-thread { display: flex; flex-direction: column; gap: var(--d-gap); min-width: 0; padding: 12px 16px; overflow: hidden; border-right: 1px solid var(--sm-edge); }
+.sm-title { font-size: var(--f16); font-weight: 650; line-height: 1.3; }
+.sm-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: -4px; }
+.sm-chip { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 9px; border: 1px solid var(--hairline-strong); border-radius: 12px; color: var(--muted); font-size: var(--f12); white-space: nowrap; }
+.sm-chip.sm-need { border-color: color-mix(in srgb, var(--warn) 55%, transparent); color: var(--warn); }
+.sm-who { display: flex; align-items: center; gap: 8px; margin: 0 0 6px 2px; color: var(--dim); font-size: var(--f12); }
+.sm-av { display: grid; flex: none; width: 24px; height: 24px; place-items: center; border-radius: 50%; background: var(--tint-gold-3); color: var(--gold-bright); font-size: var(--f12); font-weight: 700; }
+.sm-bubble { padding: var(--d-bub) calc(var(--d-bub) + 2px); border: 1px solid var(--sm-edge); border-radius: 13px; background: var(--sm-card); font-size: var(--f14); line-height: 1.55; }
+.sm-diff { overflow: hidden; border: 1px solid var(--sm-edge); border-radius: 11px; background: var(--bg); font: var(--f125)/1.65 var(--font-mono); }
+.sm-diff > div:first-child { padding: 8px 12px; border-bottom: 1px solid var(--sm-edge); color: var(--muted); font-size: var(--f12); }
+.sm-dl { display: grid; grid-template-columns: 34px minmax(0, 1fr); padding-right: 6px; overflow: hidden; background: color-mix(in srgb, var(--live) 9%, transparent); white-space: pre; }
+.sm-dl i { padding-right: 10px; color: var(--live); font-style: normal; text-align: right; }
+.sm-insp { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; background: var(--sm-list); }
+.sm-itabs { display: flex; flex: none; gap: 2px; height: 36px; padding: 0 8px; border-bottom: 1px solid var(--sm-edge); }
+.sm-itabs span { display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 8px; border-bottom: 2px solid transparent; color: var(--muted); font-size: var(--f125); white-space: nowrap; }
+.sm-itabs span.sm-on { border-bottom-color: var(--gold); color: var(--ivory); font-weight: 650; }
+.sm-itabs em { padding: 0 6px; border-radius: 8px; background: color-mix(in srgb, var(--ivory) 9%, transparent); font-size: var(--f12); font-style: normal; line-height: 17px; }
+.sm-ipad { display: flex; flex: 1; flex-direction: column; gap: calc(var(--d-pad) - 2px); min-height: 0; padding: var(--d-pad); overflow: hidden; }
+.sm-files { display: flex; flex-direction: column; gap: 2px; }
+.sm-file { display: flex; align-items: center; gap: 9px; padding: 7px 9px; border-radius: 9px; color: var(--muted); font: var(--f125) var(--font-mono); }
+.sm-file.sm-on { background: var(--tint-gold-3); box-shadow: inset 0 0 0 1px var(--gold-dim); }
+.sm-file span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sm-file b { color: var(--ivory); font-weight: 600; }
+.sm-file .sm-plus { margin-left: auto; color: var(--live); font-size: var(--f12); }
+.sm-card { padding: 12px 13px; border: 1px solid var(--sm-edge); border-radius: 12px; background: var(--sm-card); }
+.sm-card-title { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; color: var(--muted); font-size: var(--f125); font-weight: 650; }
+.sm-card-title small { margin-left: auto; color: var(--dim); font-size: var(--f12); font-weight: 500; }
+.sm-card p { display: flex; gap: 9px; color: var(--muted); font-size: var(--f13); }
+.sm-status { display: flex; align-items: center; gap: 14px; grid-column: 1 / -1; padding: 0 10px; overflow: hidden; border-top: 1px solid var(--sm-edge); background: var(--sm-rail); color: var(--muted); font-size: var(--f12); white-space: nowrap; }
+.sm-status i { display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 50%; background: var(--live); }
+.sm-status .sm-end { margin-left: auto; }
+
+@media (prefers-reduced-motion: reduce) {
+  .size-row input[type="range"]::-webkit-slider-thumb { transition: none; }
+}

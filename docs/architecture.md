@@ -184,6 +184,7 @@ settings and per-model work-kind summaries for the shared controls.
 | --- | --- |
 | **Menu** (the rail) | New task and Search sit above **Home**, **Work**, **Agents** and **Friends**, with one local row for the current group's views. Friends and its Rooms, Your PCs and Playground links open the existing companion menu at the matching card; Search finds them too. Recent tasks belong to the current project; Settings and Help stay at the foot. Help contains Start here, Shortcuts and Community. The project selector at the top opens the project panel. The registry in `renderer/nav.js` preserves existing shortcuts and destination IDs. |
 | **Layout contract** | The room the shell keeps for a session list, an inspector, a tab strip and a status bar that are not built yet: four `--shell-*` sizes (all 0), four derived edges the pages read, `html[data-layout="v2"]` to turn them on, one setter (`MefiNav.layout.set`) and one free-area rectangle (`MefiNav.usable()`). See `docs/unified-studio.md`. |
+| **Size and density** | The 0.5 layout's four size settings on one page, with a live miniature of the window beside the controls: **interface scale** (the window's zoom), **text size**, **density** (Compact, Comfortable, Spacious) and **detail** (Titles, Titles and status, Everything). Only in `html[data-layout="v2"]`; components size themselves with `--text-scale`, `--d-*` and `--dt-*`, and `window.MefiSize` is the model. See "Size and density (layout v2)" under Workspace and work. |
 | **Worktree** | Another folder holding the same project on its own branch, so two pieces of work never share files. Task runs make one each (`.mefi/worktrees/<runId>` on `mefi/<runId>`) while "Give each run its own worktree" is on; **Work › Worktrees** lists them all and merges or removes them. |
 | **Attempt review** | What Studio keeps around each builder attempt: a **picture** of the folder at its start and end (private git refs, only on this PC), the list of **changed files** with Accept and Revert, the **advisory checks** that ran after it and **before and after shots** of the project preview. It is the "Changes and checks" section of a task's Evidence tab. |
 | **Workspace** | The home screen (`H`): current task, app preview and conversation. Project queue, Studio status and setup information expand when needed. |
@@ -762,6 +763,96 @@ actions; the Graph view remains available. Tasks and Ideas share
 `renderer/card-layout.js` to reserve each card's measured height, update when
 cards or the window resize, respect reduced motion, and release observers
 and pending animations when the view closes.
+
+#### Size and density (layout v2)
+
+`renderer/size.js` (`window.MefiSize`) and `renderer/size.css` hold the 0.5
+layout's size settings and the tokens its components size themselves with.
+They exist only for `html[data-layout="v2"]`, which `size.js` checks once after
+`nav.js` has chosen it. With the layout off the file defines its object and
+does nothing else: no listener, no registry record, no host call and no
+storage, and `html[data-density]` keeps its two older values. The layout
+switch is the switch; nothing here reaches the person unasked.
+
+**The page.** Settings › Appearance has a **Size and density** row where its
+Density list was, and the page is also in Configuration › UI & Surfaces, in
+Search and in the status bar's Layout menu (`MefiSize.open()`, which enters
+through `MefiNav.go("size")`, so the page is a route of Settings). In the rail
+shell it is a page of Settings: Back leaves to Settings. Four controls sit on
+the left: **Interface scale** (the window's own zoom, 70 to 150 % in steps of
+5, `main.cjs` `ui:zoom`; Ctrl +, Ctrl − and Ctrl 0 move the same scale and the
+page follows them), **Text size** (80 to 140 % in steps of 10, named Smallest
+to Largest), **Density** and **Detail**. On the right a **miniature** of the
+window on invented sample data (rail, list, top bar, tab strip, thread,
+inspector and status bar) is drawn by the same tokens and rules as the real
+panels, under its own scope (`.size-mini[data-mini-density]`,
+`[data-mini-detail]`, `--mini-text-scale`; never the root's). It shows the
+**draft** while the window keeps what it has, and approximates the interface
+scale with CSS `zoom` (`--mini-zoom`). **Apply** (enabled only when something
+differs; Ctrl or Cmd + Enter does it too) puts the draft on the whole window
+and offers **Undo** in a toast; **Reset** applies the defaults (and has an
+Undo); **Discard changes** puts the window's own values back in the controls.
+Leaving the page keeps the draft until you return or discard it, and nothing
+is stored for a draft. A change made elsewhere (Ctrl +, a style preset) moves
+every control the person has not touched. A read-only **Panels** table says
+what the list, inspector, tab strip, status bar and rail take now
+(`MefiShell.size`, else `MefiNav.layout.used`). Pages from before the 0.5
+layout are drawn in fixed pixels, so the interface scale is what resizes them;
+the page says so.
+
+| Setting | Values | Kept in | Sets |
+| --- | --- | --- | --- |
+| Interface scale | 70 to 150 %, steps of 5; 100 | the host: `settings.ui.zoom` (`ui:zoom`, `ui:zoom-get`, `ui:zoom-changed`) | the window's zoom |
+| Text size | 0.8 to 1.4, steps of 0.1; 1 | `mefiStudio.appearance` `text`; `--text-scale` on the root | the words of the 0.5 panels |
+| Density | `compact`, `comfortable`, `spacious`; comfortable | `mefiStudio.appearance` `density`; `html[data-density]` | `--d-*` |
+| Detail | `titles`, `status`, `all`; status | `mefiStudio.appearance` `detail`; `html[data-detail]` | `--dt-*` |
+
+The last three live in the existing appearance store (`window.MefiAppearance`
+is its only reader and writer). The store gains `v: 2`, `text` and `detail`;
+`density` gains `spacious`, which a window without the 0.5 layout reads as
+comfortable, so the older rules keyed on `html[data-density="compact"]` are
+untouched; and every older key and value still reads (no `text` is 1, no
+`detail` is titles and status). Nothing is written until something is applied.
+The first write to a store that is not yet `v: 2` keeps its old text once under
+`mefiStudio.appearance.backup.v1`. Applying announces `mefi:appearance`, as
+every appearance change does, and `MefiSize.onChange(cb)` says what changed and
+why (`apply`, `undo`, `reset`, `keys`, `host`, `appearance` or `open`).
+
+**Tokens for components.** A 0.5 component follows the settings by using these,
+with no code of its own:
+
+| Token | Comfortable | Compact | Spacious | Used for |
+| --- | --- | --- | --- | --- |
+| `--d-row` | 8px | 5px | 11px | a session row's padding, top and bottom |
+| `--d-gh` | 12px | 8px | 16px | space above a group heading in a list |
+| `--d-stp` | 8px | 5px | 11px | a plan step's padding |
+| `--d-seat` | 9px | 6px | 12px | a team seat row's padding |
+| `--d-set` | 10px | 7px | 13px | a settings row's padding |
+| `--d-gap` | 14px | 10px | 20px | the gap between blocks of a thread or a column of cards |
+| `--d-lrow` | 10px | 7px | 13px | a row of Today's lists |
+| `--d-pad` | 14px | 11px | 18px | the inspector's padding |
+| `--d-bub` | 12px | 9px | 15px | a message bubble's padding |
+| `--d-top` | 48px | 44px | 52px | the top bar's height |
+| `--d-tab` | 38px | 34px | 42px | the tab strip's height |
+| `--d-card` | 12px | 9px | 15px | a board card's padding |
+| `--d-col` | 12px | 9px | 16px | the gap between board cards |
+
+| Token | Titles | Titles and status | Everything | Used as |
+| --- | --- | --- | --- | --- |
+| `--dt-meta` | none | block | block | `display` of a row's status line |
+| `--dt-prog` | none | block | block | `display` of a row's progress bar |
+| `--dt-more` | none | none | flex | `display` of a row's extra line (worker, branch, changes, checks) |
+| `--dt-q` | none | block | block | `display` of a board card's open question |
+| `--dt-qf` | none | flex | flex | `display` of its answer buttons |
+
+Text is `max(12px, calc(Npx * var(--text-scale, 1)))`, so it is never under
+12 px; the ladder `--f12`, `--f125`, `--f13`, `--f135`, `--f14`, `--f15`,
+`--f16`, `--f18`, `--f20` and `--f22` names each step once (`font-size:
+var(--f14)`). A height that is a token (`var(--d-top)`) needs no code. A region
+that must be told its size in numbers (`MefiNav.layout.set`) reads
+`MefiSize.metric("tab")` (a token in px, from `--d-tab`) and listens to
+`MefiSize.onChange`. `size.css` follows the layout contract and reads none of
+the `--shell-*` sizes.
 
 ### Planning
 
