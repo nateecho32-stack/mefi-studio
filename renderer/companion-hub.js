@@ -373,7 +373,7 @@
         // companions, playdates and what yours may share, answered in place.
         const playground = window.MefiCompanionFriends?.card?.({ name: name(), face: (look) => lookFace(look) });
         if (playground) el.extra.append(playground);
-        el.extra.append(action("Friends & listening rooms", () => { window.MefiMusic?.openAudio?.(); window.MefiMusic?.setSource?.("link"); window.MefiMusic?.togetherHost?.()?.scrollIntoView({ block: "nearest" }); }),
+        el.extra.append(action("Friends & listening rooms", () => { window.MefiMusic?.openAudio?.(); window.MefiMusic?.setSource?.("link"); window.MefiMusic?.openSection?.("more"); }),
           action("Connect with Discord", () => window.MefiNav?.go("community")));
         // Friends › Rooms (renderer/rooms.js) and Friends › Your PCs
         // (renderer/pc-sync.js) stay in the hub: they answer in place instead
