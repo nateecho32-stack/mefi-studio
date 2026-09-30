@@ -566,5 +566,6 @@ test("the build inlines the script after the Configuration dialog and the styles
   assert.equal(sources.indexOf("size.js"), sources.indexOf("config-dialog.js") + 1);
   assert.ok(sources.indexOf("size.js") > sources.indexOf("idle.js"), "after idle, which the updater pins");
   assert.match(build, /readFile\(path\.join\(RENDERER, "size\.js"\), "utf8"\), readFile\(path\.join\(RENDERER, "size\.css"\), "utf8"\)/);
-  assert.match(build, /\$\{skillsStyles\}\\n\$\{sizeStyles\}`/);
+  // Directly after the skills stylesheet; the slices built after it (the frame, the tabs) add theirs further along.
+  assert.match(build, /\$\{skillsStyles\}\\n\$\{sizeStyles\}/);
 });
