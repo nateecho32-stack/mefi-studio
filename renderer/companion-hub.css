@@ -47,8 +47,8 @@
 .agent-guide-greeting .agent-play { width: 64px; height: 64px; }
 .agent-guide-details { margin: 12px 0; padding: 10px 0; border-block: 1px solid var(--hairline); }
 .agent-guide-details > summary { color: var(--muted); cursor: pointer; font-size: 12px; }
-html[data-shell=rail] .overlay .walkthrough-sheet[data-agent-step], .overlay .walkthrough-sheet[data-agent-step] { width: min(660px, calc(100vw - var(--shell-rail-w, 0px) - 32px)); transition: width 420ms cubic-bezier(.22,1,.36,1); }
-html[data-shell=rail] .overlay .walkthrough-sheet[data-agent-step="2"], .overlay .walkthrough-sheet[data-agent-step="2"] { width: min(740px, calc(100vw - var(--shell-rail-w, 0px) - 32px)); }
+html[data-shell=rail] .overlay .walkthrough-sheet[data-agent-step], .overlay .walkthrough-sheet[data-agent-step] { width: min(660px, calc(100vw - var(--shell-x0, 0px) - var(--shell-x1, 0px) - 32px)); transition: width 420ms cubic-bezier(.22,1,.36,1); }
+html[data-shell=rail] .overlay .walkthrough-sheet[data-agent-step="2"], .overlay .walkthrough-sheet[data-agent-step="2"] { width: min(740px, calc(100vw - var(--shell-x0, 0px) - var(--shell-x1, 0px) - 32px)); }
 #walkthrough-cli-choice { max-width: 100%; }
 @media (max-width: 650px) {
   html[data-shell=rail] #walkthrough-overlay { left: 0; }

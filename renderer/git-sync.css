@@ -112,7 +112,7 @@ button.gs-held:hover { filter: none; }
 /* ---- dialogs: Save and push, Publish, Link, Sign in ------------------------------- */
 /* The rail shell moves .overlay over by the rail's width, so a sheet measures against what is left of the window (600px: 504, not 568). */
 .overlay.gs-overlay { z-index: 88; }
-.overlay.gs-overlay > .gs-sheet.sheet { display: flex; flex-direction: column; width: min(var(--gs-w, 480px), calc(100vw - var(--shell-rail-w, 0px) - 32px)); max-height: min(88vh, 900px); padding: 0; overflow: hidden; border: 1px solid var(--studio-glass-edge, var(--hairline-strong)); border-radius: var(--r-lg); background: var(--studio-float-fill, var(--panel-solid)); backdrop-filter: var(--studio-float-blur, none); box-shadow: var(--shadow-3), var(--studio-float-shadow, none); color: var(--ivory); }
+.overlay.gs-overlay > .gs-sheet.sheet { display: flex; flex-direction: column; width: min(var(--gs-w, 480px), calc(100vw - var(--shell-x0, 0px) - var(--shell-x1, 0px) - 32px)); max-height: min(88vh, 900px); padding: 0; overflow: hidden; border: 1px solid var(--studio-glass-edge, var(--hairline-strong)); border-radius: var(--r-lg); background: var(--studio-float-fill, var(--panel-solid)); backdrop-filter: var(--studio-float-blur, none); box-shadow: var(--shadow-3), var(--studio-float-shadow, none); color: var(--ivory); }
 .gs-dialog-head { display: flex; flex-wrap: nowrap; align-items: flex-start; justify-content: flex-start; gap: 12px; padding: 24px 24px 12px; border-bottom: 0; }
 .gs-dialog-words { display: grid; flex: 1; min-width: 0; gap: 4px; }
 .gs-eyebrow { margin: 0; overflow: hidden; color: var(--gold); font: 600 10.5px/1.4 var(--font-mono); letter-spacing: .08em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }

@@ -32,7 +32,7 @@
 .profiler-bottom { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 22px; }
 .profiler-incidents { list-style: none; padding: 0; margin: 14px 0; font-family: var(--font-mono); font-size: 11px; line-height: 1.7; }
 .profiler-incidents li { padding: 9px 0; border-bottom: 1px solid var(--hairline); overflow-wrap: anywhere; }
-.profiler-hud { position: fixed; right: 20px; bottom: 18px; z-index: calc(var(--z-sheet) - 1); padding: 10px 15px; border: 1px solid var(--gold); border-radius: 24px; background: var(--panel-solid); color: var(--gold-bright); box-shadow: var(--shadow-2); font-size: 12px; }
+.profiler-hud { position: fixed; right: calc(20px + var(--shell-x1)); bottom: calc(18px + var(--shell-y1)); z-index: calc(var(--z-sheet) - 1); padding: 10px 15px; border: 1px solid var(--gold); border-radius: 24px; background: var(--panel-solid); color: var(--gold-bright); box-shadow: var(--shadow-2); font-size: 12px; }
 @media (max-width: 700px) {
   .profiler-overlay { padding: 8px; }
   .profiler-head { padding: 14px; gap: 10px; }

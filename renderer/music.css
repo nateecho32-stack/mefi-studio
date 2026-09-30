@@ -28,12 +28,12 @@
    the menu on, it is measured beside the menu (the overlay starts at its
    edge), not across the whole window. */
 :root { --music-sheet-w: clamp(300px, 38vw, 480px); }
-html[data-shell="rail"] { --music-sheet-w: clamp(300px, calc((100vw - var(--shell-rail-w)) * .4), 500px); }
+html[data-shell="rail"] { --music-sheet-w: clamp(300px, calc((100vw - var(--shell-x0) - var(--shell-x1)) * .4), 500px); }
 .music-overlay { position: fixed; inset: 0; z-index: var(--z-sheet); padding: 16px; display: grid; grid-template-columns: var(--music-sheet-w) minmax(0, 1fr); gap: 24px; background: transparent; pointer-events: none; }
 .music-overlay[hidden], .music-overlay [hidden] { display: none !important; }
 /* While the sheet is open beside the tree, toasts (a locked Void tile's
    explanation among them) rise over the tree, clear of the sheet. */
-body.music-preview-active #toast-host { left: calc(var(--shell-rail-w) + var(--music-sheet-w) + 44px); }
+body.music-preview-active #toast-host { left: calc(var(--shell-x0) + var(--music-sheet-w) + 44px); }
 /* A size container, so the parts inside follow the sheet's width, not the window's. */
 .music-sheet { container: music-sheet / inline-size; width: 100%; height: 100%; min-height: 0; padding: 0; overflow: auto; overscroll-behavior: contain; scroll-padding-top: 132px; border: 1px solid var(--hairline); border-radius: 18px; background: var(--panel-solid); box-shadow: 8px 0 40px rgba(0,0,0,.28); outline: none; pointer-events: auto; }
 .music-header { position: sticky; top: 0; z-index: 2; display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 18px 22px 14px; border-bottom: 1px solid var(--hairline); background: var(--panel-solid); }
@@ -504,7 +504,7 @@ body.music-preview-active #idle-hud { display: none !important; }
   .music-header h2 { margin: 0; }
   .music-settings { padding-top: 18px; }
   .music-node-preview { margin-bottom: 0; }
-  body.music-preview-active #toast-host { left: calc(var(--shell-rail-w) + 22px); }
+  body.music-preview-active #toast-host { left: calc(var(--shell-x0) + 22px); }
 }
 @media (max-width: 1100px) {
   html[data-rail-pinned] .music-overlay { --presence-from: 0 10px; padding: 8px; gap: 8px; grid-template-columns: minmax(0, 1fr); grid-template-rows: max(215px, 32vh) minmax(0, 1fr); }
@@ -517,7 +517,7 @@ body.music-preview-active #idle-hud { display: none !important; }
   html[data-rail-pinned] .music-header h2 { margin: 0; }
   html[data-rail-pinned] .music-settings { padding-top: 18px; }
   html[data-rail-pinned] .music-node-preview { margin-bottom: 0; }
-  html[data-rail-pinned] body.music-preview-active #toast-host { left: calc(var(--shell-rail-w) + 22px); }
+  html[data-rail-pinned] body.music-preview-active #toast-host { left: calc(var(--shell-x0) + 22px); }
 }
 /* The sheet's own width, whatever the window and the menu: stacked and wide,
    the theme grids run four across; narrow, the Members pill folds to its lock
@@ -543,11 +543,13 @@ body.music-preview-active #idle-hud { display: none !important; }
 /* Appearance is a small editor beside the actual Command canvas. The same
    controls remain in Settings, so search, keyboard focus and saved values
    keep their usual owners. Only the drawer scrolls. */
-body { --appearance-w: clamp(320px, 28vw, 390px); --appearance-top: calc(var(--shell-local-h, 56px) + 12px); --appearance-left: calc(var(--shell-rail-w, 0px) + 12px); }
+body { --appearance-w: clamp(320px, 28vw, 390px); --appearance-top: calc(var(--shell-y0, 56px) + 12px); --appearance-left: calc(var(--shell-x0, 0px) + 12px); }
 html:not([data-shell="rail"]) body { --appearance-top: 12px; --appearance-left: 12px; }
+/* Layout v2: between the list and the inspector the editor may have less than its 28% of the window, so it takes what is there (v1 is untouched). */
+html[data-layout="v2"] body { --appearance-w: min(clamp(320px, 28vw, 390px), calc(100vw - var(--shell-x0, 0px) - var(--shell-x1, 0px) - 24px)); }
 .appearance-actions, .appearance-sections { display: none; }
 .appearance-stage[hidden] { display: none; }
-.appearance-stage { position: fixed; top: var(--appearance-top); bottom: 16px; left: calc(var(--appearance-left) + var(--appearance-w) + 28px); right: 28px; z-index: var(--z-hud); display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; pointer-events: none; }
+.appearance-stage { position: fixed; top: var(--appearance-top); bottom: calc(16px + var(--shell-y1)); left: calc(var(--appearance-left) + var(--appearance-w) + 28px); right: calc(28px + var(--shell-x1)); z-index: var(--z-hud); display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; pointer-events: none; }
 .appearance-stage-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 18px 10px 0; margin: 0; }
 .appearance-live-label { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; color: var(--gold-bright); font: 600 10px/1.3 var(--font-ui); letter-spacing: .14em; text-transform: uppercase; }
 .appearance-live-label::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--gold-bright); box-shadow: 0 0 12px var(--gold); }
@@ -556,7 +558,7 @@ html:not([data-shell="rail"]) body { --appearance-top: 12px; --appearance-left: 
 .appearance-stage-hint { margin: 10px 0 0; max-width: 340px; color: var(--canvas-muted, var(--muted)); font-size: 12px; line-height: 1.6; }
 .appearance-viewport { min-width: 0; min-height: 160px; }
 body.appearance-settings-active #idle-hud { display: none !important; }
-body.appearance-settings-active #tab-studio { position: fixed; z-index: var(--z-sheet); top: var(--appearance-top); bottom: 12px; left: var(--appearance-left); width: var(--appearance-w); min-width: 0; border: 1px solid var(--hairline-strong); border-radius: 18px; background: var(--panel-solid); box-shadow: 0 18px 64px rgb(0 0 0 / .32); overflow: hidden; }
+body.appearance-settings-active #tab-studio { position: fixed; z-index: var(--z-sheet); top: var(--appearance-top); bottom: calc(12px + var(--shell-y1)); left: var(--appearance-left); width: var(--appearance-w); min-width: 0; border: 1px solid var(--hairline-strong); border-radius: 18px; background: var(--panel-solid); box-shadow: 0 18px 64px rgb(0 0 0 / .32); overflow: hidden; }
 body.appearance-settings-active .settings-panel { height: 100%; margin: 0; }
 body.appearance-settings-active .settings-layout { display: flex; flex-direction: column; gap: 0; height: 100%; }
 body.appearance-settings-active #settings-nav { position: static; flex: none; width: 100%; max-height: none; margin: 0; padding: 12px; gap: 8px; border: 0; border-bottom: 1px solid var(--hairline); border-radius: 0; box-shadow: none; background: var(--tint-gold-1); overflow: visible; }
@@ -599,13 +601,13 @@ body.appearance-settings-active .music-effect input { grid-column: 3; grid-row: 
 body.appearance-settings-active .studio-field { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
 body.appearance-settings-active #settings-tree-controls > label { align-items: flex-start; flex-wrap: wrap; gap: 8px; }
 body.appearance-settings-active #settings-tree-controls select { max-width: 100%; }
-body.appearance-settings-active[data-appearance-dock="right"] #tab-studio { left: auto; right: 12px; }
-body.appearance-settings-active[data-appearance-dock="right"] .appearance-stage { left: calc(var(--appearance-left) + 12px); right: calc(var(--appearance-w) + 40px); }
+body.appearance-settings-active[data-appearance-dock="right"] #tab-studio { left: auto; right: calc(12px + var(--shell-x1)); }
+body.appearance-settings-active[data-appearance-dock="right"] .appearance-stage { left: calc(var(--appearance-left) + 12px); right: calc(var(--appearance-w) + 40px + var(--shell-x1)); }
 body.appearance-settings-active #toast-host { left: calc(var(--appearance-left) + var(--appearance-w) + 20px); }
-body.appearance-settings-active[data-appearance-dock="right"] #toast-host { left: calc(var(--appearance-left) + 12px); right: calc(var(--appearance-w) + 40px); }
+body.appearance-settings-active[data-appearance-dock="right"] #toast-host { left: calc(var(--appearance-left) + 12px); right: calc(var(--appearance-w) + 40px + var(--shell-x1)); }
 @media (max-width: 800px) {
-  body.appearance-settings-active[data-appearance-dock] #tab-studio { top: calc(var(--appearance-top) + 226px); left: var(--appearance-left); right: 12px; width: auto; }
-  body.appearance-settings-active[data-appearance-dock] .appearance-stage { top: var(--appearance-top); left: var(--appearance-left); right: 12px; height: 214px; bottom: auto; }
+  body.appearance-settings-active[data-appearance-dock] #tab-studio { top: calc(var(--appearance-top) + 226px); left: var(--appearance-left); right: calc(12px + var(--shell-x1)); width: auto; }
+  body.appearance-settings-active[data-appearance-dock] .appearance-stage { top: var(--appearance-top); left: var(--appearance-left); right: calc(12px + var(--shell-x1)); height: 214px; bottom: auto; }
   .appearance-stage-header { padding: 0 8px; gap: 10px; }
   .appearance-stage-header h2 { font-size: 18px; }
   .appearance-live-label { display: none; }
@@ -616,7 +618,7 @@ body.appearance-settings-active[data-appearance-dock="right"] #toast-host { left
   body.appearance-settings-active .appearance-sections { margin-top: 6px; }
   body.appearance-settings-active #settings-nav { padding: 8px 12px; }
   body.appearance-settings-active .settings-find { display: none; }
-  body.appearance-settings-active[data-appearance-dock] #toast-host { left: var(--appearance-left); right: 12px; }
+  body.appearance-settings-active[data-appearance-dock] #toast-host { left: var(--appearance-left); right: calc(12px + var(--shell-x1)); }
 }
 
 /* ---- The media menu (music.js): a mini player that unfolds. Folded, it is

@@ -422,7 +422,7 @@ html[data-density=compact] :is(.settings-card, .agents-card) { padding: 14px; }
 @media (max-width: 600px) {
   .sheet-actions { position: relative; }
   .sheet-actions > .surface-tools { position: static; }
-  .sheet-actions .surface-tools-menu { max-width: min(284px, calc(100vw - var(--shell-rail-w, 0px) - 32px)); }
+  .sheet-actions .surface-tools-menu { max-width: min(284px, calc(100vw - var(--shell-x0, 0px) - var(--shell-x1, 0px) - 32px)); }
 }
 @media (prefers-reduced-motion: reduce) { .studio-choice-popup { animation: none; } .studio-scroll-arrow, .studio-scroll-thumb { transition: none; } }
 html[data-motion=off] .studio-choice-popup { animation: none; }
