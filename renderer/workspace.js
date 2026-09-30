@@ -79,6 +79,19 @@
       sidebarFeedback.textContent = message; sidebarFeedback.classList.toggle("error", error);
     }
   }
+  // Build's sessions layout (builder.js) paints from this module's state; one
+  // event per burst of renders tells it the state moved.
+  let notifyQueued = false;
+  function notify() {
+    if (notifyQueued) return;
+    notifyQueued = true;
+    Promise.resolve().then(() => { notifyQueued = false; try { window.dispatchEvent(new CustomEvent("mefi:workspace-state")); } catch { /* no events */ } });
+  }
+  // What builder.js reads: this project's board, conversation and status as
+  // this module holds them. Pushed rows are shared; readers never edit them.
+  function snapshot() {
+    return { projectId: state.activeId, project: project() ?? null, projects: state.projects, tasks: scoped(state.tasks), ideas: scoped(state.ideas), assistant: state.assistant, status: state.status, backlog: state.backlog, preview: state.preview, mode: state.mode, pending: state.pending };
+  }
   function guard(result) { if (!result?.ok) throw new Error(result?.error || "The app couldn't complete that action. Try again."); return result; }
   function readWithDeadline(read) {
     // Status reads can fail independently. One unanswered IPC must not freeze
@@ -249,6 +262,7 @@
     // scrollTop, so Home opened on the oldest of the last 80 messages. The
     // observer in init() pins it once it has a size.
     threadPinPending = Boolean(messages.length) && pinned && !(list.clientHeight > 0);
+    notify();
   }
   const scoped = (rows) => rows.filter((row) => !row.projectId || row.projectId === state.activeId);
   function focusedTask() {
@@ -270,6 +284,7 @@
   function openTask(task, tab = "details") {
     if (!task) return;
     rememberTask(task);
+    if (window.MefiBuilder?.active?.()) { window.MefiBuilder.openTask(task.id, { pane: tab === "evidence" ? "checks" : null }); return; }
     window.MefiNav?.go?.("tasks", { taskId: task.id, projectId: state.activeId, filter: "all", panel: tab });
   }
   function setActivityOpen(value, focus = false) {
@@ -278,6 +293,8 @@
     if (focus) (value ? $("activity-close") : $("activity-toggle"))?.focus();
   }
   function composeTask() {
+    // Build's sessions layout opens its own New task page (builder.js).
+    if (window.MefiBuilder?.active?.()) { window.MefiBuilder.newTask(); return; }
     window.MefiNav?.go?.("workspace");
     setMode("work");
     $("input").focus();
@@ -357,6 +374,7 @@
   function requestChange(task) {
     if (!task || state.pending || state.switching || (task.projectId && task.projectId !== state.activeId)) return false;
     rememberTask(task);
+    if (window.MefiBuilder?.active?.()) return window.MefiBuilder.requestChange(task);
     window.MefiNav?.go?.("workspace");
     setMode("work");
     const draft = $("input").value.trim();
@@ -396,6 +414,7 @@
     $("preview-details").hidden = !logs;
     $("preview-log").textContent = logs;
     $("preview-panel").dataset.phase = phase;
+    notify();
   }
   async function previewAction(action, options = {}) {
     const method = { start: "projectPreviewStart", open: "projectPreviewOpen", stop: "projectPreviewStop", status: "projectPreviewStatus" }[action];
@@ -551,6 +570,7 @@
     }
     $("work-list").scrollTop = top;
     controls();
+    notify();
   }
   function renderBacklog() {
     renderDashboard();
@@ -765,6 +785,7 @@
       if (!logs.length) $("activity-list").append(text("li", "", "Real activity will appear here as the assistant works."));
       $("activity-count").textContent = logs.length || "";
     }
+    notify();
   }
   // The real run state. The host sends one answer for every surface
   // (status.loop, scripts/loop-status.cjs): the Agents switch, why work is or
@@ -1316,6 +1337,6 @@
     }, 15000);
     document.addEventListener("visibilitychange", () => { if (!document.hidden && active()) refresh(); });
   }
-  window.MefiWorkspace = { enter, exit, refresh, ready, isActive: active, activeProjectId: () => state.activeId, buildMode, setAutoBuild, agentMode, setAgentMode, composeTask, requestChange, startTask, previewAction, previewStatus: () => state.preview };
+  window.MefiWorkspace = { enter, exit, refresh, ready, isActive: active, activeProjectId: () => state.activeId, buildMode, setAutoBuild, agentMode, setAgentMode, composeTask, requestChange, startTask, previewAction, previewStatus: () => state.preview, snapshot, setComposerMode: setMode };
   init();
 })();

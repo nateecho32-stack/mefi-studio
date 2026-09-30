@@ -1455,6 +1455,8 @@
   }
 
   function paintRecentTasks() {
+    // Build's sessions layout lists the whole board itself (builder.js).
+    if (window.MefiBuilder?.paintRail?.()) return;
     const list = document.getElementById("app-rail-recent-list");
     if (!list) return;
     const projectId = (window.MefiWorkspace?.activeProjectId?.() || window.MefiWorkspace?.state?.activeId) || taskProjectId || recentProjectId;
@@ -1569,6 +1571,8 @@
       if (!menu.hidden) menu.querySelector("button")?.focus?.();
     });
     foot.append(help, menu, ...kept);
+    // Build's sessions layout adds the mode switch, the work list and you.
+    window.MefiBuilder?.decorateRail?.({ sections, foot });
     paintBadges(document.getElementById("app-rail"));
     paintRail();
   }
