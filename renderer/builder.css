@@ -69,9 +69,10 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 
 /* ---- the page ----------------------------------------------------------- */
 html[data-home-layout="sessions"] #workspace-layer .ws-main { padding: 0; overflow: hidden; }
-/* Home's local bar holds only "Home": the page's own title bar has the history. */
+/* Home's local bar holds only "Home": the page's own title bar has the history. With no local bar the page starts at the window's top, or under the
+   tab strip (layout v2) when there is one: --shell-tabs-h is 0px in v1, so nothing moves there. */
 html[data-home-layout="sessions"][data-shell="rail"] body.workspace-active:not(:has(.workspace-page:not([hidden]))) #app-local-nav { display: none; }
-html[data-home-layout="sessions"][data-shell="rail"] body.workspace-active:not(:has(.workspace-page:not([hidden]))) #workspace-layer { top: 0; }
+html[data-home-layout="sessions"][data-shell="rail"] body.workspace-active:not(:has(.workspace-page:not([hidden]))) #workspace-layer { top: var(--shell-tabs-h, 0px); }
 html[data-home-layout="sessions"] #workspace-layer .ws-conversation { background: none; border-color: transparent; box-shadow: none; backdrop-filter: none; }
 html[data-home-layout="sessions"] #workspace-layer .ws-topbar { height: 52px; padding: 0 16px 0 22px; border-bottom: 0; gap: 16px; }
 html[data-home-layout="sessions"] #workspace-layer :is(.ws-project-heading, #workspace-activity-toggle, #workspace-activity-drawer, .ws-home-intro, #workspace-progress, .ws-secondary) { display: none !important; }

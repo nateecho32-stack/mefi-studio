@@ -2279,6 +2279,11 @@ the script starts nothing: no element, listener, timer, stored key or host call
   button with every tab in it; above it, tabs that do not fit fold into "N more"
   (Home, pins and the tab you are on never fold). Its height comes from `--d-tab`
   (28 to 48, 38 without SIZE) through `MefiShell.resize("tabs", px)`.
+- **Where the page starts.** The strip is `--shell-tabs-h` high (0 in v1), under
+  the local navigation, or at the window's top where Build's session layout
+  hides that bar. Pages start at `--shell-y0`; that layout's own layer
+  (`#workspace-layer`, builder.css) starts at `--shell-tabs-h`, so the strip
+  never covers a page's top bar.
 - **Accessibility.** `tablist` / `tab` with one tab stop that follows focus, arrow
   keys, Home and End, Enter and Space, Delete, the menu key, a polite live region for
   moves and closings, the shell's main area as the `tabpanel` of the selected tab

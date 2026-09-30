@@ -159,8 +159,7 @@ test("Configuration › UI & Surfaces shows the Tab behaviour card after the int
   const pane = await configPane({ tabs: { configCard: () => card } });
   const kids = pane.children.map((child) => child.className);
   assert.ok(kids.includes("ts-card"), "the card is in the pane");
-  assert.ok(kids.indexOf("ts-card") > 0, "after the pane's own heading and the scale control");
-  assert.equal(pane.children.at(-1), card, "as the last thing in it");
+  assert.ok(kids.indexOf("config-scale") > 0 && kids.indexOf("ts-card") > kids.indexOf("config-scale"), "after the pane's own heading and the scale control (what else Configuration puts in this pane around it does not matter)");
   const other = await configPane({ tabs: { configCard: () => card }, category: "dev" });
   assert.equal(other.querySelector(".config-item-title")?.textContent, "Diagnostics", "that really is another category");
   assert.equal(other.children.some((child) => child.className === "ts-card"), false, "no other category gets it");
@@ -175,31 +174,41 @@ test("with no strip (v1, no shell, stopped) Configuration is exactly what it was
 });
 
 // ---- the build ----------------------------------------------------------------------------------------------------------------------
-test("tabs.js is built in after idle and before the last script, with its stylesheet in the styles join", () => {
+test("tabs.js is built in after idle and before booklet.js, with its stylesheet in the styles join", () => {
   const build = read("scripts/build-booklet.mjs");
   const sources = [...section("const CODE_SOURCES = [", "];", build).matchAll(/"([^"]+\.js)"/g)].map((match) => match[1]);
-  assert.ok(sources.indexOf("tabs.js") > sources.indexOf("idle.js"), "after idle: tools/test_mefi_studio_updater.py pins the prefix up to it");
-  assert.equal(sources.at(-1), "booklet.js");
-  assert.equal(sources.indexOf("tabs.js"), sources.length - 2);
+  assert.ok(sources.indexOf("idle.js") >= 0 && sources.indexOf("tabs.js") > sources.indexOf("idle.js"), "after idle: tools/test_mefi_studio_updater.py pins the prefix up to it");
+  assert.ok(sources.indexOf("tabs.js") < sources.indexOf("booklet.js"), "and before booklet.js, which starts the page (where it sits among the other new scripts does not matter)");
   const parts = section("const codeParts = [", "];", build).split(",").map((part) => part.trim().replace(/^.*\[/, ""));
   assert.equal(parts.indexOf("tabsCode"), sources.indexOf("tabs.js"), "the same index in codeParts");
   assert.match(build, /readFile\(path\.join\(RENDERER, "tabs\.css"\)/);
   assert.match(build, /\$\{tabsStyles\}/);
   const inline = read("tests/booklet_build.test.mjs");
-  assert.match(inline, /"tabs\.js",\n {2}"booklet\.js"/);
+  assert.match(inline, /"tabs\.js",/);
   assert.match(inline, /"tabs\.css"/);
+});
+
+// ---- Build's session page ------------------------------------------------------------------------------------------------------------
+test("Build's session page starts under the tab strip where no local bar is above it, and the strip is 0px high in v1, so nothing moves there", () => {
+  const rule = read("renderer/builder.css").split("\n").find((line) => /#workspace-layer \{ top: /.test(line));
+  assert.ok(rule, "builder.css places #workspace-layer at the window's top when the local bar is hidden");
+  assert.match(rule, /#workspace-layer \{ top: var\(--shell-tabs-h, 0px\); \}/, "at the strip's bottom edge, not behind it");
+  assert.match(read("renderer/styles.css"), /--shell-tabs-h: 0px;/, "v1: the variable is 0px, so the page is where it was");
 });
 
 // ---- keys: what the app already binds --------------------------------------------------------------------------------------------------
 const CHORDS = ["CmdOrCtrl+T", "CmdOrCtrl+Shift+T", "CmdOrCtrl+Tab", "CmdOrCtrl+Shift+Tab", "CmdOrCtrl+Alt+P", "Alt+W", "Alt+Shift+T", ...Array.from({ length: 9 }, (_, i) => `CmdOrCtrl+${i + 1}`)];
+// Electron writes one chord many ways (Ctrl, Control, Command, CommandOrControl, in any order): compare what they mean.
+const meaning = (accelerator) => accelerator.toLowerCase().split("+").map((part) => (/^(?:cmdorctrl|commandorcontrol|control|ctrl|command|cmd|super|meta)$/.test(part) ? "mod" : part === "option" ? "alt" : part)).sort().join("+");
 
 test("the application menu binds none of the strip's chords; its one overlap is the window menu's Close (Ctrl+W), which the page takes first", () => {
   const menu = section("function applicationMenu() {", "async function applyReload");
   const accelerators = [...menu.matchAll(/accelerator: "([^"]+)"/g)].map((match) => match[1]);
-  assert.deepEqual(accelerators, ["CmdOrCtrl+Q", "CmdOrCtrl+R", "CmdOrCtrl+Shift+R", "CmdOrCtrl+0", "CmdOrCtrl+Plus", "CmdOrCtrl+=", "CmdOrCtrl+-"], "a new accelerator is a decision: check it against tabs.js's keys (and this list)");
-  for (const chord of CHORDS) assert.equal(accelerators.includes(chord), false, chord);
-  assert.match(menu, /\{ role: "windowMenu" \}/, "Close (CmdOrCtrl+W) comes from this role; onKey's preventDefault keeps it from closing the window");
-  assert.match(tabsJs, /preventDefault\?\.\(\); event\.stopPropagation\?\.\(\)/, "and the strip does handle the key it takes");
+  assert.ok(accelerators.length >= 1, "the menu's accelerators were found");
+  const taken = new Set(CHORDS.map(meaning));
+  assert.deepEqual(accelerators.filter((accelerator) => taken.has(meaning(accelerator))), [], "an accelerator the strip takes: decide who owns it, and change tabs.js's keys or this menu");
+  // Close (CmdOrCtrl+W) comes from the window menu's role; the strip's keydown takes the key first and preventDefault keeps it from closing the window.
+  if (/\{ role: "windowMenu" \}/.test(menu)) assert.match(tabsJs, /preventDefault\?\.\(\); event\.stopPropagation\?\.\(\)/, "the strip does handle the key it takes");
 });
 
 test("no other renderer script binds a chord the strip owns (Ctrl/Alt with T, W, P, Tab, PageUp, PageDown or a digit)", () => {

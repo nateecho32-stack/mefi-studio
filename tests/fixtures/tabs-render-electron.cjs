@@ -138,6 +138,8 @@ const PAGE = `window.__fx = (() => {
       small: small(root), missing: missingGlyphs(root),
       page: { overflowX: document.documentElement.scrollWidth > innerWidth + 1 || document.body.scrollWidth > innerWidth + 1, overflowY: document.documentElement.scrollHeight > innerHeight + 1 },
       focus: document.activeElement ? (document.activeElement.className || document.activeElement.tagName) : null,
+      // Build's Home (its session layout) is a layer of its own: where it starts is where the strip ends, or the strip covers its top bar.
+      layer: (() => { const node = document.getElementById("workspace-layer"); return node && shown(node) ? rect(node) : null; })(),
     };
   };
   const pop = () => {
@@ -338,6 +340,8 @@ app.whenReady().then(async () => {
     // where it is: the contract's place, in the window, above the page
     assert.ok(s.strip.x >= -0.5 && s.strip.r <= s.inner[0] + 0.5 && s.strip.y >= -0.5 && s.strip.b <= s.inner[1] + 0.5, `${label}: the strip is in the window ${JSON.stringify(s.strip)}`);
     assert.ok(s.strip.b <= s.usable.top + 0.5, `${label}: and above the free area (${s.strip.b} vs ${s.usable.top})`);
+    assert.ok(s.layer, `${label}: the last tab opened is a session, so Build's session page is showing`);
+    assert.ok(s.layer.y >= s.strip.b - 0.5, `${label}: Build's session page starts under the strip, not behind it (${s.layer.y} vs ${s.strip.b})`);
     assert.ok(Math.abs(s.strip.h - 38) <= 1 || Math.abs(s.strip.h - s.used) <= 1, `${label}: the height it asked for`);
     assert.equal(s.page.overflowX, false, `${label}: the page does not overflow sideways`);
     assert.equal(s.list.overflowX, false, `${label}: nothing is cut off inside the list (what does not fit is folded)`);
