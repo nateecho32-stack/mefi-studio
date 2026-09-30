@@ -62,7 +62,7 @@
   function summary() {
     const list = state.list;
     if (!list?.repo) return { repo: Boolean(list?.repo), total: 0, atRisk: 0, toLand: 0, safeToRemove: 0, missing: 0, tasks: [] };
-    return { repo: true, ...list.summary, tasks: list.rows.filter((row) => row.task?.taskId).map((row) => row.task.taskId) };
+    return { repo: true, ...list.summary, tasks: (Array.isArray(list.rows) ? list.rows : []).filter((row) => row?.task?.taskId).map((row) => row.task.taskId) };
   }
   function announce() { window.dispatchEvent(new CustomEvent("mefi:worktrees", { detail: summary() })); }
   // A quiet look for the badges: at most every few seconds, never while a look is running.

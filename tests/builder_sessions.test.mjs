@@ -507,6 +507,8 @@ test("the menu looks for worktrees quietly: once per few seconds, again for anot
   const failing = await makeApp({ saved: "sessions", tasks: board(), worktrees: { peek: async () => { throw new Error("git is not installed"); } } });
   await failing.env.settle(); failing.env.flush();
   assert.equal(failing.document.getElementById("app-rail-sessions").querySelectorAll(".builder-worktree").length, 0);
+  const throwing = await makeApp({ saved: "sessions", tasks: board(), worktrees: { peek() { throw new Error("no answer"); } } });
+  assert.ok(throwing.document.getElementById("app-rail-sessions").querySelector('[data-key="today-a"]'), "a look that throws at once still leaves the menu drawn");
   const without = await makeApp({ saved: "sessions", tasks: board() });
   await without.env.settle(); without.env.flush();
   assert.equal(without.document.getElementById("app-rail-sessions").querySelectorAll(".builder-worktree").length, 0);

@@ -343,7 +343,7 @@
     const looker = window.MefiWorktrees;
     if (!looker?.peek || Date.now() - state.worktreeAt < 8000) return;
     state.worktreeAt = Date.now();
-    Promise.resolve(looker.peek()).then(haveWorktrees, () => {});
+    try { Promise.resolve(looker.peek()).then(haveWorktrees, () => {}); } catch { /* the marks are a courtesy: the menu is drawn without them */ }
   }
 
   // ---- adopting the classic Home's sections into panes -------------------
