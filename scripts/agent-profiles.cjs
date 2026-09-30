@@ -7,7 +7,7 @@ const tools = require("./agent-tools.cjs");
 const habits = require("./habits.cjs");
 const runtime = new AsyncLocalStorage();
 const FIELDS = Object.freeze(["aiProvider", "aiRoleProviders", "aiModels", "aiModelsByProvider", "aiAutoProviders", "aiAutoFallback", "aiFallbackOpenCode", "aiSubscriptionFirst", "modelSelection", "executorCli", "executorModel", "executorModels", "executorTier", "executorTierModels", "codexHarness", "agentSeats", "agentSubtasks", "agentSkills", "agentHabits", "agentTools", "agentBrain", "agentEfforts", "agentMode", "agentReporting"]);
-const PROVIDERS = Object.freeze(["auto", "zai", "opencode", "zen", "openrouter", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"]);
+const PROVIDERS = Object.freeze(["auto", "zai", "opencode", "zen", "openrouter", "grok", "claude", "codex", "chatgpt", "antigravity", "lmstudio", "custom"]);
 const CLIS = Object.freeze(["opencode", "grok", "claude", "codex", "antigravity"]);
 const EFFORTS = Object.freeze(["minimal", "low", "medium", "high", "xhigh", "max"]);
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -30,7 +30,8 @@ function effective(settings, projectId, snapshot) {
 function capabilities(provider, model = "") {
   const id = String(model).toLowerCase().replace(/^openai\//, "");
   const extended = /^gpt-6(?:\.\d+)?-/.test(id);
-  const reasoning = (provider === "zen" || provider === "openrouter" && /^openai\//i.test(model)) && (extended || /^(gpt-5(?:[.-]|$)|o[134](?:-|$))/.test(id));
+  // Zen and the ChatGPT plan both reach OpenAI's Responses API, which takes an effort.
+  const reasoning = (provider === "zen" || provider === "chatgpt" || provider === "openrouter" && /^openai\//i.test(model)) && (extended || /^(gpt-5(?:[.-]|$)|o[134](?:-|$))/.test(id));
   return { efforts: reasoning ? extended ? [...EFFORTS] : ["low", "medium", "high"] : [], fast: provider === "zen" && extended, note: reasoning ? "Reasoning is sent to the selected model." : "Effort is managed by this provider or CLI." };
 }
 function validate(configuration) {

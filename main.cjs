@@ -226,7 +226,7 @@ function handleProjectIpc(channel, handler) {
 // is the PC's own and may open a freshly cloned project, which a gated
 // handler would wait on. (Declared beside the wrapper so the tests that load
 // it from here up to app.setName see it.)
-const APP_WIDE_PREFIXES = ["projects:", "project-preview:", "performance:", "startup:", "community:", "hub:", "remote:", "styler:", "catalog:", "speed:", "shell:", "pc-setup:"];
+const APP_WIDE_PREFIXES = ["projects:", "project-preview:", "performance:", "startup:", "community:", "hub:", "remote:", "styler:", "catalog:", "speed:", "shell:", "pc-setup:", "chatgpt-plan:"];
 const APP_WIDE_CHANNELS = new Set(["usage:accounts", "opencode:credits", "release:status", "release:check", "update:status", "update:set", "settings:get-key"]);
 ipcMain.handle = handleProjectIpc;
 
@@ -3545,12 +3545,12 @@ const OPENROUTER_MODEL = "openrouter/free";
 // Any other OpenAI-compatible endpoint (Together, vLLM, a proxy,
 // a hosted gateway): its URL is a plain preference, its key lives in its own
 // encrypted field, and only a saved key makes the route usable.
-const AI_PROVIDERS = ["auto", "zai", "opencode", "zen", "openrouter", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"];
+const AI_PROVIDERS = ["auto", "zai", "opencode", "zen", "openrouter", "grok", "claude", "codex", "chatgpt", "antigravity", "lmstudio", "custom"];
 // Auto mode's provider pool. The owner saves an ordered subset in
 // aiAutoProviders; the first usable entry answers. "auto" itself is never a
 // candidate.
-const AI_AUTO_PROVIDERS = ["zai", "opencode", "zen", "openrouter", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"];
-const AUTO_PROVIDER_NAMES = { zai: "z.ai GLM", opencode: "OpenCode Go", zen: "OpenCode Zen", openrouter: "OpenRouter", grok: "Grok CLI", claude: "Claude Code CLI", codex: "Codex CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio", custom: "custom endpoint" };
+const AI_AUTO_PROVIDERS = ["zai", "opencode", "zen", "openrouter", "grok", "claude", "codex", "chatgpt", "antigravity", "lmstudio", "custom"];
+const AUTO_PROVIDER_NAMES = { zai: "z.ai GLM", opencode: "OpenCode Go", zen: "OpenCode Zen", openrouter: "OpenRouter", grok: "Grok CLI", claude: "Claude Code CLI", codex: "Codex CLI", chatgpt: "ChatGPT plan", antigravity: "Antigravity CLI", lmstudio: "LM Studio", custom: "custom endpoint" };
 
 // The roster talks to itself: every AI pass sees the exchange and may answer
 // it. The rule is shared so the three build prompts describe one protocol.
@@ -3794,7 +3794,7 @@ function keySourceFor(settings, field) {
 // their routine choice serves the heavy passes too. Their saved models also
 // never fall back to the role-wide overrides — a GLM id saved for z.ai must
 // not leak into a CLI or local server that never had it.
-const SINGLE_MODEL_PROVIDERS = new Set(["openrouter", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"]);
+const SINGLE_MODEL_PROVIDERS = new Set(["openrouter", "grok", "claude", "codex", "chatgpt", "antigravity", "lmstudio", "custom"]);
 
 // The assistant's model is the owner's choice, not a constant. Models are
 // saved per provider, so switching routes cannot carry a model id into a
@@ -3950,7 +3950,7 @@ function normalizeAutoProviders(value) {
 function autoProviderOrder(settings) {
   const saved = normalizeAutoProviders(settings.aiAutoProviders);
   if (settings.aiSubscriptionFirst === false) return saved;
-  return [...new Set(["claude", "codex", "grok", "antigravity", ...saved])];
+  return [...new Set(["claude", "chatgpt", "codex", "grok", "antigravity", ...saved])];
 }
 
 // Whether one Auto entry could answer from what is saved, with no network
@@ -3968,6 +3968,8 @@ function autoEntryReady(settings, id, { hasKey, clis = null } = {}) {
   if (id === "custom") return Boolean(normalizeCompatEndpoint(settings.customEndpoint));
   if (id === "lmstudio") return true;
   if (["grok", "claude", "codex", "antigravity"].includes(id)) return clis instanceof Set ? clis.has(id) : true;
+  // The ChatGPT plan answers while its sign-in holds plan usage and is not at its limit.
+  if (id === "chatgpt") return typeof chatgptPlanReadyCached === "function" && chatgptPlanReadyCached();
   return false;
 }
 
@@ -4210,7 +4212,90 @@ function openrouterRoute(settings, role, apiKey) {
   return { provider: "openrouter", endpoint: OPENROUTER_ENDPOINT,
     model: assistantModelOverride(settings, role, "openrouter") || OPENROUTER_MODEL, apiKey };
 }
+// ---- ChatGPT plan (scripts/chatgpt-plan.cjs) ------------------------------------
+// Sign in with ChatGPT (OpenAI's open-source token-sharing preview): the owner's
+// ChatGPT Plus/Pro plan pays for Responses calls instead of a metered key. The
+// saved sign-in, tokens included, is one safeStorage-encrypted blob in
+// userData; the module itself never writes or logs a token. It is built on
+// first use, and its status is cached briefly so the synchronous readiness
+// checks (autoEntryReady, the routing view) can read it.
+const CHATGPT_PLAN_STATUS_TTL_MS = 30000;
+const CHATGPT_PLAN_MODELS = Object.freeze({ heavy: ["gpt-6.1-sol", "gpt-6-sol", "gpt-6-astra"], routine: ["gpt-6-luna", "gpt-6.1-sol", "gpt-6-sol"] });
+let chatgptPlanInstance = null;
+let chatgptPlanState = { at: 0, status: null };
+function chatgptPlan() {
+  if (chatgptPlanInstance) return chatgptPlanInstance;
+  const { createChatGptPlan } = require("./scripts/chatgpt-plan.cjs");
+  const file = path.join(app.getPath("userData"), "chatgpt-plan-auth.json");
+  chatgptPlanInstance = createChatGptPlan({
+    openBrowser: (url) => shell.openExternal(url),
+    scrub: typeof scrubOutbound === "function" ? scrubOutbound : null,
+    log: logLine,
+    load: async () => {
+      let saved = null;
+      try { saved = JSON.parse(await readFile(file, "utf8")); } catch { return null; }
+      if (typeof saved?.recordEncrypted !== "string" || !safeStorage.isEncryptionAvailable()) return null;
+      try { return JSON.parse(safeStorage.decryptString(Buffer.from(saved.recordEncrypted, "base64"))); } catch { return null; }
+    },
+    save: async (record) => {
+      if (!safeStorage.isEncryptionAvailable()) throw new Error("the OS keystore is unavailable, so the ChatGPT sign-in was not kept");
+      await authStore.atomicWriteJson(file, { version: 1, recordEncrypted: safeStorage.encryptString(JSON.stringify(record)).toString("base64") });
+    },
+  });
+  return chatgptPlanInstance;
+}
+async function chatgptPlanStatus({ fresh = false } = {}) {
+  if (!fresh && chatgptPlanState.status && Date.now() - chatgptPlanState.at < CHATGPT_PLAN_STATUS_TTL_MS) return chatgptPlanState.status;
+  let status = null;
+  try { status = await chatgptPlan().status(); } catch (error) { status = { ok: false, error: String(error?.message ?? error).slice(0, 160) }; }
+  chatgptPlanState = { at: Date.now(), status };
+  return status;
+}
+// The last known answer, and a background refresh when it has aged: never a
+// wait on a synchronous path.
+function chatgptPlanReadyCached() {
+  if (!chatgptPlanState.status || Date.now() - chatgptPlanState.at >= CHATGPT_PLAN_STATUS_TTL_MS) void chatgptPlanStatus().catch(() => null);
+  const status = chatgptPlanState.status;
+  return Boolean(status?.signedIn && status.planUsage && !status.limited);
+}
+// The model a role answers on: the owner's saved pick for this route, else
+// the plan catalog's best match for the role, else a known slug.
+async function chatgptPlanModel(role, settings) {
+  const saved = assistantModelOverride(settings, role, "chatgpt");
+  if (saved) return saved;
+  const wanted = CHATGPT_PLAN_MODELS[role === "heavy" ? "heavy" : "routine"];
+  const listed = await chatgptPlan().listModels({}).catch(() => null);
+  const slugs = listed?.ok && Array.isArray(listed.models) ? listed.models.map((model) => model.slug) : [];
+  return wanted.find((slug) => slugs.includes(slug)) || slugs[0] || wanted[0];
+}
+async function chatgptPlanCandidate(role, settings) {
+  const status = await chatgptPlanStatus();
+  if (!status?.signedIn || !status.planUsage || status.limited) return null;
+  return { provider: "chatgpt", endpoint: null, model: await chatgptPlanModel(role, settings), apiKey: null };
+}
+// One Responses call on the plan, in chatCompletion's result shape, recorded
+// in the model ledger like every other call (no price: the plan pays). A limit
+// is a topped-out login, not a broken route: the breaker is left alone and
+// the walk moves on (settleProvider).
+async function chatgptPlanCall(candidate, body, { taskType = "routine", source = "request", timeoutMs = 120000, effort = null, serviceTier = null } = {}) {
+  const startedAt = Date.now();
+  const result = await chatgptPlan().respond({ model: candidate.model, messages: body.messages, effort, serviceTier, timeoutMs });
+  const kind = result.ok ? null : result.errorKind;
+  const errorKind = kind === null ? null : kind === "limit" ? "quota" : kind === "auth" || kind === "eligibility" ? "auth" : kind === "timeout" ? "timeout" : kind === "validation" ? "validation" : "transport";
+  await recordModelCall({ model: result.model || candidate.model, provider: "chatgpt", taskType, source, at: startedAt, elapsedMs: Date.now() - startedAt,
+    status: result.ok ? "ok" : "error", errorKind, requestedEffort: effort, appliedEffort: effort, costUsd: null, ...(result.tokenUsage ? { tokenUsage: result.tokenUsage } : {}) });
+  if (!result.ok) {
+    if (kind === "limit" || result.reauth) {
+      chatgptPlanState.at = 0;
+      if (typeof send === "function") send("accounts:changed", { id: "chatgpt" });
+    }
+    return { ok: false, errorKind, error: result.error, ...(kind === "limit" ? { toppedOut: true } : {}) };
+  }
+  return { ok: true, text: result.text, reasoning: result.reasoning, finish: result.finish, model: result.model || candidate.model, tokenUsage: result.tokenUsage ?? {}, costUsd: null };
+}
+
 async function resolveAiCandidate(provider, role, settings, { allowCli, zaiKey, goKey, zenKey, openrouterKey }) {
+  if (provider === "chatgpt") return typeof chatgptPlanCandidate === "function" ? chatgptPlanCandidate(role, settings) : null;
   if (provider === "zai" || provider === "opencode") {
     const apiKey = provider === "zai" ? zaiKey : goKey;
     if (!apiKey) return null;
@@ -4362,6 +4447,11 @@ async function resolveAiRoute(role = "routine", { allowCli = true } = {}) {
   if (provider === "opencode") {
     if (!goKey) return degrade("opencode", "no OpenCode Go key saved - add one on the OpenCode Go tile under Providers, or choose another route");
     return withFallbacks({ ok: true, provider: "opencode", endpoint: ASSISTANT_ENDPOINT, model: assistantModelOverride(settings, role, "opencode") || ASSISTANT_MODEL, apiKey: goKey });
+  }
+  if (provider === "chatgpt") {
+    const candidate = typeof chatgptPlanCandidate === "function" ? await chatgptPlanCandidate(role, settings) : null;
+    if (!candidate) return degrade("chatgpt", "the ChatGPT plan is not signed in, not granted or at its usage limit - use Continue with ChatGPT under Setup > Connect an AI");
+    return withFallbacks({ ok: true, ...candidate });
   }
   if (provider === "zai") {
     if (!zaiKey) return degrade("zai", "no z.ai key saved - add one in the Studio tab");
@@ -5117,6 +5207,8 @@ async function usageAccounts({ probe = false } = {}) {
   const installed = Promise.all([grokCliAvailable(), claudeCliAvailable(), codexCliAvailable(), antigravityCliAvailable()]);
   await Promise.all(reads);
   if (keyOf("zenApiKeyEncrypted")) none("opencode-zen", "OpenCode Zen has no balance or usage API; the balance lives in the OpenCode console. Recorded Zen calls and their reported cost are counted below.");
+  const plan = typeof chatgptPlanStatus === "function" ? await chatgptPlanStatus().catch(() => null) : null;
+  if (plan?.signedIn) none("chatgpt", plan.limited ? "Usage limit reached. Review your plan or this app's limit in ChatGPT settings." : plan.planUsage ? "Using ChatGPT plan. Manage usage in ChatGPT settings; ChatGPT, Codex and connected apps share its limits." : "Signed in, but ChatGPT plan usage was not granted.");
   if (keyOf("jevApiKeyEncrypted")) none("typesafe", "TypeSafe publishes no usage API; Jev calls are counted from the local ledger and bill the route they ride.");
   if (keyOf("customApiKeyEncrypted") && normalizeCompatEndpoint(settings.customEndpoint)) none("custom", "A custom endpoint has no account reading; its calls are counted from the local ledger.");
   const [grok, claude, codex, antigravity] = await installed;
@@ -6103,10 +6195,12 @@ async function httpAssistantCall(route, system, user, maxTokens, { taskType = "r
     if (!gate.allowed) return providerSkipped(candidate.provider, gate);
     let result;
     try {
-      result = await chatCompletion(candidate.endpoint, candidate.apiKey, candidate.model, requestBody(candidate), {
-        sessionHeader: candidate.provider === "opencode" ? await assistantSessionId() : null,
-        provider: candidate.provider, taskType, source, timeoutMs,
-      });
+      result = candidate.provider === "chatgpt"
+        ? await chatgptPlanCall(candidate, requestBody(candidate), { taskType, source, timeoutMs, effort: candidate === route ? effort : null, serviceTier: candidate === route ? serviceTier : null })
+        : await chatCompletion(candidate.endpoint, candidate.apiKey, candidate.model, requestBody(candidate), {
+          sessionHeader: candidate.provider === "opencode" ? await assistantSessionId() : null,
+          provider: candidate.provider, taskType, source, timeoutMs,
+        });
     } finally {
       settleProvider(candidate.provider, gate, result);
     }
@@ -13746,7 +13840,7 @@ function seatChoice(settings, seat) {
   const saved = settings?.agentSeats?.[seat];
   const base = SEAT_DEFAULTS[seat] ?? SEAT_DEFAULTS.lead;
   const effort = saved?.effort === "" || SEAT_EFFORTS.includes(saved?.effort) ? saved.effort : base.effort;
-  const provider = ["auto", "zai", "opencode", "zen", "openrouter", "claude", "codex", "grok", "antigravity", "lmstudio", "custom"].includes(saved?.provider) ? saved.provider : base.provider;
+  const provider = ["auto", "zai", "opencode", "zen", "openrouter", "claude", "codex", "chatgpt", "grok", "antigravity", "lmstudio", "custom"].includes(saved?.provider) ? saved.provider : base.provider;
   const model = typeof saved?.model === "string" ? saved.model.trim() : provider === "zen" ? base.model : "";
   const fast = provider === "zen" && (typeof saved?.fast === "boolean" ? saved.fast : base.fast);
   return { provider, model, effort, fast };
@@ -20647,6 +20741,7 @@ function registerIpc() {
       // settings only have the single-purpose aiFallbackOpenCode.
       autoProviders: normalizeAutoProviders(settings.aiAutoProviders),
       subscriptionFirst: settings.aiSubscriptionFirst !== false,
+      hasChatGptPlan: typeof chatgptPlanReadyCached === "function" && chatgptPlanReadyCached(),
       // The walk the resolver actually takes (signed-in CLIs first unless that
       // is off, then the saved order) and the saved keys outside it that still
       // answer when nothing listed can, so the page never re-derives either.
@@ -20702,6 +20797,29 @@ function registerIpc() {
       } : null,
     };
   }
+  // ---- ChatGPT plan sign-in (scripts/chatgpt-plan.cjs) ----
+  // App-wide (chatgpt-plan: is in APP_WIDE_PREFIXES): the browser sign-in can
+  // take minutes and belongs to no project. A change resets the breakers so
+  // the route is tried at once, and tells every page.
+  const chatgptPlanChanged = () => {
+    chatgptPlanState.at = 0;
+    providerBreaker.reset();
+    send("accounts:changed", { id: "chatgpt" });
+    send("settings:changed", {});
+  };
+  ipcMain.handle("chatgpt-plan:status", async () => chatgptPlanStatus({ fresh: true }));
+  ipcMain.handle("chatgpt-plan:sign-in", async () => {
+    const result = await chatgptPlan().signIn({});
+    if (result?.ok) chatgptPlanChanged();
+    return { ...result, status: await chatgptPlanStatus({ fresh: true }) };
+  });
+  ipcMain.handle("chatgpt-plan:cancel", async () => ({ ok: true, canceled: chatgptPlan().cancel() }));
+  ipcMain.handle("chatgpt-plan:sign-out", async () => {
+    const result = await chatgptPlan().signOut();
+    chatgptPlanChanged();
+    return { ...result, status: await chatgptPlanStatus({ fresh: true }) };
+  });
+  ipcMain.handle("chatgpt-plan:models", async () => chatgptPlan().listModels({}));
   ipcMain.handle("settings:get-ai-routing", async () => aiRoutingView(await (typeof readAgentSettings === "function" ? readAgentSettings() : readSettings())));
 
   async function agentsView(settings, projectId, scope = "project") {

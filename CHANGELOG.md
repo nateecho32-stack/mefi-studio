@@ -19,11 +19,13 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   server that cannot start retries over exec): MCP servers with
   credentials are no longer dropped, the owner's own Codex MCP servers stay
   out of Studio's runs, and token use and plan limits arrive live.
-- **ChatGPT plan provider (core).** `scripts/chatgpt-plan.cjs` signs in with
-  ChatGPT (OpenAI's open-source token-sharing preview) so a ChatGPT plan can pay
-  for Studio's Responses calls. Setup › Connect an AI shows its "Continue with
-  ChatGPT" card once the host wires the bridge.
-
+- **Use your ChatGPT plan.** Setup › Connect an AI has a "Continue with
+  ChatGPT" card (Sign in with ChatGPT, OpenAI's open-source token-sharing
+  preview from DevDay 2026). Once signed in, the ChatGPT Plus/Pro plan pays
+  for Studio's assistant calls instead of a metered key: pick "ChatGPT plan"
+  for a role or seat, or let Auto use it first among the subscriptions. The
+  plan's limits are shared with ChatGPT and Codex; at a limit Studio moves on
+  to the next route and links to ChatGPT's usage settings.
 - **Security fixes for remote approvals, catalogs and sharing.** Work filed
   from Discord retains its approval requirement through task admission and
   promotion. Concurrent PIN attempts count toward one lockout and approval

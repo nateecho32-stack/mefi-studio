@@ -27,9 +27,9 @@ function routeHost({ settings = {}, keys = {}, serve = null, now = null, clis = 
   let saved = { aiProvider: "auto", ...settings };
   const store = { zaiApiKeyEncrypted: "zai-fixture-key", apiKeyEncrypted: "go-fixture-key", openrouterApiKeyEncrypted: "or-fixture-key", customApiKeyEncrypted: "custom-fixture-key", ...keys };
   const context = vm.createContext({
-    AI_PROVIDERS: ["auto", "zai", "opencode", "openrouter", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"],
-    AI_AUTO_PROVIDERS: ["zai", "opencode", "openrouter", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"],
-    AUTO_PROVIDER_NAMES: { zai: "z.ai GLM", opencode: "OpenCode Go", openrouter: "OpenRouter", grok: "Grok CLI", claude: "Claude Code CLI", codex: "Codex CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio", custom: "custom endpoint" },
+    AI_PROVIDERS: ["auto", "zai", "opencode", "openrouter", "grok", "claude", "codex", "chatgpt", "antigravity", "lmstudio", "custom"],
+    AI_AUTO_PROVIDERS: ["zai", "opencode", "openrouter", "grok", "claude", "codex", "chatgpt", "antigravity", "lmstudio", "custom"],
+    AUTO_PROVIDER_NAMES: { zai: "z.ai GLM", opencode: "OpenCode Go", openrouter: "OpenRouter", grok: "Grok CLI", claude: "Claude Code CLI", codex: "Codex CLI", chatgpt: "ChatGPT plan", antigravity: "Antigravity CLI", lmstudio: "LM Studio", custom: "custom endpoint" },
     ZAI_ENDPOINT: "https://api.z.ai/api/coding/paas/v4/chat/completions",
     ZAI_MODEL_ROUTINE: "glm-5.3-flash", ZAI_MODEL_HEAVY: "glm-5.3",
     ASSISTANT_ENDPOINT: "https://opencode.ai/zen/go/v1/chat/completions", ASSISTANT_MODEL: "deepseek-v4.1-flash",
@@ -180,9 +180,69 @@ test("an auto route with nothing usable names the saved order and what to do", a
   const host = routeHost({ settings: { aiAutoProviders: ["zai", "opencode"] }, keys: { zaiApiKeyEncrypted: null, apiKeyEncrypted: null, openrouterApiKeyEncrypted: null, customApiKeyEncrypted: null } });
   const result = await host.resolve();
   assert.equal(result.ok, false);
-  assert.match(result.error, /no usable provider in the auto order \(Claude Code CLI > Codex CLI > Grok CLI > Antigravity CLI > z\.ai GLM > OpenCode Go\)/);
+  assert.match(result.error, /no usable provider in the auto order \(Claude Code CLI > ChatGPT plan > Codex CLI > Grok CLI > Antigravity CLI > z\.ai GLM > OpenCode Go\)/);
   assert.match(result.error, /save a key, install a CLI or change the order/);
   assert.deepEqual(host.fetches, []);
+});
+
+// The ChatGPT plan (Sign in with ChatGPT): a fake plan stands in for
+// scripts/chatgpt-plan.cjs, so no sign-in, token or network is involved.
+function planHost(status, { settings = {}, models = [{ slug: "gpt-6-luna" }, { slug: "gpt-6.1-sol" }], ...options } = {}) {
+  const host = routeHost({ settings, ...options });
+  host.context.chatgptPlan = () => ({ status: async () => ({ ok: true, ...status }), listModels: async () => ({ ok: true, models }) });
+  return host;
+}
+
+test("an explicit ChatGPT plan pick answers on the plan's own model per role once signed in", async () => {
+  const signedIn = { signedIn: true, planUsage: true, limited: false };
+  const routine = await planHost(signedIn, { settings: { aiProvider: "chatgpt" } }).resolve("routine");
+  assert.deepEqual({ ok: routine.ok, provider: routine.provider, model: routine.model, endpoint: routine.endpoint, apiKey: routine.apiKey }, { ok: true, provider: "chatgpt", model: "gpt-6-luna", endpoint: null, apiKey: null });
+  assert.equal((await planHost(signedIn, { settings: { aiProvider: "chatgpt" } }).resolve("heavy")).model, "gpt-6.1-sol");
+  const saved = await planHost(signedIn, { settings: { aiProvider: "chatgpt", aiModelsByProvider: { chatgpt: { routine: "gpt-6.1-sol" } } } }).resolve("routine");
+  assert.equal(saved.model, "gpt-6.1-sol", "the owner's saved pick for this route wins");
+});
+
+test("a ChatGPT plan that is signed out, not granted or at its limit keeps an honest error, or degrades once armed", async () => {
+  for (const status of [{ signedIn: false }, { signedIn: true, planUsage: false }, { signedIn: true, planUsage: true, limited: true }]) {
+    const result = await planHost(status, { settings: { aiProvider: "chatgpt" } }).resolve();
+    assert.equal(result.ok, false);
+    assert.match(result.error, /Continue with ChatGPT under Setup > Connect an AI/);
+  }
+  const armed = await planHost({ signedIn: false }, { settings: { aiProvider: "chatgpt", aiAutoFallback: true } }).resolve();
+  assert.equal(armed.ok, true);
+  assert.equal(armed.provider, "zai");
+});
+
+test("subscriptions first: Auto answers on the ChatGPT plan before any keyed route, and skips it while signed out", async () => {
+  const on = await planHost({ signedIn: true, planUsage: true, limited: false }, { settings: { aiAutoProviders: ["zai", "opencode"] } }).resolve();
+  assert.equal(on.provider, "chatgpt");
+  const off = await planHost({ signedIn: false }, { settings: { aiAutoProviders: ["zai", "opencode"] } }).resolve();
+  assert.equal(off.provider, "zai");
+  const unticked = await planHost({ signedIn: true, planUsage: true, limited: false }, { settings: { aiAutoProviders: ["zai", "opencode"], aiSubscriptionFirst: false } }).resolve();
+  assert.equal(unticked.provider, "zai", "the owner's own order when subscriptions-first is off");
+});
+
+test("a ChatGPT plan call answers in chatCompletion's shape, is recorded without a price, and a limit reads as a topped-out login", async () => {
+  const host = planHost({ signedIn: true, planUsage: true, limited: false });
+  const records = [], sent = [], asked = [];
+  let reply = { ok: true, text: "{\"ok\":true}", reasoning: "", finish: "completed", model: "gpt-6.1-sol", tokenUsage: { inputTokens: 12, outputTokens: 3 } };
+  host.context.chatgptPlan = () => ({ respond: async (options) => { asked.push(options); return reply; } });
+  host.context.recordModelCall = async (row) => { records.push(row); };
+  host.context.send = (channel, payload) => sent.push([channel, payload]);
+  const candidate = { provider: "chatgpt", model: "gpt-6.1-sol", endpoint: null, apiKey: null };
+  const body = { model: "gpt-6.1-sol", temperature: 0.2, max_tokens: 900, messages: [{ role: "system", content: "S" }, { role: "user", content: "U" }] };
+  const ok = await host.context.chatgptPlanCall(candidate, body, { taskType: "routine", source: "request", effort: "high" });
+  assert.deepEqual({ ok: ok.ok, text: ok.text, model: ok.model, costUsd: ok.costUsd }, { ok: true, text: "{\"ok\":true}", model: "gpt-6.1-sol", costUsd: null });
+  assert.deepEqual(asked[0].messages, body.messages);
+  assert.equal(asked[0].effort, "high");
+  assert.deepEqual({ provider: records[0].provider, status: records[0].status, costUsd: records[0].costUsd, tokens: records[0].tokenUsage.inputTokens }, { provider: "chatgpt", status: "ok", costUsd: null, tokens: 12 });
+  reply = { ok: false, errorKind: "limit", error: "ChatGPT plan: Usage limit reached." };
+  const limited = await host.context.chatgptPlanCall(candidate, body, {});
+  assert.deepEqual({ ok: limited.ok, errorKind: limited.errorKind, toppedOut: limited.toppedOut }, { ok: false, errorKind: "quota", toppedOut: true });
+  assert.deepEqual(JSON.parse(JSON.stringify(sent.at(-1))), ["accounts:changed", { id: "chatgpt" }]);
+  reply = { ok: false, errorKind: "eligibility", error: "not granted" };
+  assert.equal((await host.context.chatgptPlanCall(candidate, body, {})).errorKind, "auth");
+  assert.equal((await host.context.chatgptPlanCall(candidate, body, {})).toppedOut, undefined);
 });
 
 test("a custom endpoint that reports no model degrades to the keyed route once armed", async () => {

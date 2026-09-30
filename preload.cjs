@@ -109,6 +109,12 @@ const api = {
   usageForTask: (taskId) => ipcRenderer.invoke("usage:task", { taskId }),
   opencodeCredits: () => ipcRenderer.invoke("opencode:credits", {}),
   usageAccounts: (options = {}) => ipcRenderer.invoke("usage:accounts", { probe: options?.probe === true }),
+  // Sign in with ChatGPT: the owner's ChatGPT plan pays for Studio's Responses calls.
+  chatgptPlanStatus: () => ipcRenderer.invoke("chatgpt-plan:status"),
+  chatgptPlanSignIn: () => ipcRenderer.invoke("chatgpt-plan:sign-in"),
+  chatgptPlanCancel: () => ipcRenderer.invoke("chatgpt-plan:cancel"),
+  chatgptPlanSignOut: () => ipcRenderer.invoke("chatgpt-plan:sign-out"),
+  chatgptPlanModels: () => ipcRenderer.invoke("chatgpt-plan:models"),
   openExternal: (url) => ipcRenderer.invoke("shell:open", url),
   shellReveal: (filePath) => ipcRenderer.invoke("shell:reveal", filePath),
   shellCopy: (text) => ipcRenderer.invoke("shell:copy", text),

@@ -1392,8 +1392,8 @@ failed process stays an error and cannot produce briefing requests.
   setup (PowerShell): `$env:MEFI_STUDIO_KEY = "<key>"; npx electron . --set-key`,
   and the same with `MEFI_STUDIO_ZAI_KEY` / `--set-zai-key` and
   `MEFI_STUDIO_CUSTOM_KEY` / `--set-custom-key`; unset the variable afterwards.
-- **ChatGPT plan** (`scripts/chatgpt-plan.cjs`, core only; the host wiring
-  lands separately): Sign in with ChatGPT, OpenAI's open-source
+- **ChatGPT plan** (`scripts/chatgpt-plan.cjs`; main's "ChatGPT plan" block
+  and the `chatgpt-plan:*` channels): Sign in with ChatGPT, OpenAI's open-source
   token-sharing preview, lets the owner's ChatGPT plan pay for Studio's
   Responses API calls instead of a metered key. Setup › Connect an AI shows a
   "Use your ChatGPT plan" card with OpenAI's "Continue with ChatGPT" button
@@ -1406,7 +1406,13 @@ failed process stays an error and cannot produce briefing requests.
   Calls stream (`"stream": true`, `"store": false`) and count only on
   `response.completed`. A usage limit pauses the route and links to ChatGPT's
   usage settings, a 503 retries twice, and nothing falls back to other
-  billing. Tokens reach disk only through the host's encrypted save.
+  billing. Tokens reach disk only through the host's encrypted save
+  (`<userData>/chatgpt-plan-auth.json`, one safeStorage blob). The route is
+  provider `chatgpt`: an explicit pick, a seat, or Auto, where subscriptions
+  first puts it right after Claude Code (it bills the plan Codex uses without
+  starting a CLI) and skips it while signed out, not granted or limited. A
+  limit reads as a topped-out login, so the breaker stays shut and the walk
+  moves on.
 
 ### Verification, storage and experiments
 

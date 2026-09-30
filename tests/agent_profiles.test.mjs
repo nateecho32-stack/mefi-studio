@@ -62,6 +62,10 @@ test("stale saves and unsafe configuration leave the transaction untouched", () 
   // How a Codex worker connects: the app server (default) or classic exec.
   for (const codexHarness of ["app-server", "exec"]) assert.equal(profiles.validate({ codexHarness }), null);
   assert.match(profiles.validate({ codexHarness: "sdk" }), /Codex connection/);
+  // The ChatGPT plan reaches the same Responses API: efforts, but no Zen fast tier.
+  assert.deepEqual(profiles.capabilities("chatgpt", "gpt-6.1-sol").efforts, profiles.capabilities("zen", "gpt-6.1-sol").efforts);
+  assert.equal(profiles.capabilities("chatgpt", "gpt-6.1-sol").fast, false);
+  assert.equal(profiles.validate({ aiProvider: "chatgpt", agentSeats: { desk: { provider: "chatgpt", model: "gpt-6-luna", effort: "high" } } }), null);
 });
 
 test("concurrent calls and interrupted continuations retain their admitted team", async () => {
