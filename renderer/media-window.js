@@ -145,6 +145,14 @@
     document.body.append(root);
 
     function bounds() {
+      // The shell knows what chrome there is: the rail and the local navigation
+      // and, in layout v2, the list, the tab strip, the inspector and the status
+      // bar. In v1 that is the very measurement below.
+      const area = window.MefiNav?.usable?.();
+      if (area) {
+        const left = clamp(area.left, 0, Math.max(0, window.innerWidth - 320));
+        return { left: left + GAP, top: Math.max(GAP, area.top + GAP), right: area.right - GAP, bottom: area.bottom - GAP };
+      }
       // Keep the menu and local navigation reachable even at the 600px app minimum.
       const rail = document.getElementById("app-rail")?.getBoundingClientRect();
       const nav = document.getElementById("app-local-nav")?.getBoundingClientRect();

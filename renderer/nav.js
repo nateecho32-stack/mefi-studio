@@ -1766,6 +1766,217 @@
     return applyShell(Boolean(on) || vibeMode());
   }
 
+  // ---- the layout contract -----------------------------------------------
+  // docs/unified-studio.md, "Layout contract". html[data-layout="v2"] is the
+  // second attribute the 0.5.0 plan asks for (a third data-shell value would
+  // read as classic to every `=== "rail"` gate): it says four regions the
+  // shell can grow, a session list, an inspector, a tab strip and a status
+  // bar, may take room from the window. v1, the default, is the attribute
+  // absent, and nothing here is wired then: no listener, no stored key, no
+  // inline style. The regions themselves are built later; this is what they
+  // stand on: --shell-list-w, --shell-inspector-w, --shell-tabs-h and
+  // --shell-status-h (styles.css, all 0px, with the free area's edges derived
+  // from them and the rail), the one function that writes them (layout.set),
+  // the fold rule for small windows, and usable(), the rectangle a floating
+  // thing keeps inside. This is the only writer of html[data-layout] and of
+  // html[data-layout-fold]; tests/layout_contract_nav.test.mjs pins that.
+  const LAYOUT_KEY = "mefiStudio.layout";
+  const LAYOUT_REGIONS = Object.freeze({
+    list: Object.freeze({ variable: "--shell-list-w", max: 420, folds: true }),
+    inspector: Object.freeze({ variable: "--shell-inspector-w", max: 640, folds: true }),
+    tabs: Object.freeze({ variable: "--shell-tabs-h", max: 48, folds: false }),
+    status: Object.freeze({ variable: "--shell-status-h", max: 40, folds: false }),
+  });
+  // Below this width (CSS px) the list and the inspector stop being columns. The
+  // geometry is styles.css's (@media (max-width: 899.98px), instant and
+  // independent of any script, so usable() is right even when a resize handler
+  // reads it before this file's own); this keeps html[data-layout-fold] in
+  // step for the regions that become drawers.
+  const LAYOUT_FOLD_BELOW = 900;
+  // The main area never gets less than this from the list and the inspector.
+  const LAYOUT_MAIN_MIN = 320;
+  const layoutRequested = { list: 0, inspector: 0, tabs: 0, status: 0 };
+  let layoutApplied = { list: 0, inspector: 0, tabs: 0, status: 0 };
+  let layoutResize = null;
+
+  // ?layout=v1|v2 wins for one launch. A diagnostic launch (?smoke=1,
+  // ?capture=1) stays v1 unless it asks, so the render fixtures see the layout
+  // they were written for; otherwise the saved choice, and v1 by default.
+  function layoutChoice() {
+    try {
+      const search = String(location.search || "");
+      const param = new URLSearchParams(search).get("layout");
+      if (param === "v1" || param === "v2") return param;
+      if (/[?&](?:smoke|capture)=1(?:&|$)/.test(search)) return "v1";
+      return localStorage.getItem(LAYOUT_KEY) === "v2" ? "v2" : "v1";
+    } catch {
+      return "v1";
+    }
+  }
+  const layoutOn = () => document.documentElement?.dataset?.layout === "v2";
+  const viewportSize = () => ({
+    w: Number(window.innerWidth) || document.documentElement?.clientWidth || 0,
+    h: Number(window.innerHeight) || document.documentElement?.clientHeight || 0,
+  });
+  // The numbers in px of a custom property, or null where there is no computed style to ask.
+  function cssLength(name, from = document.documentElement) {
+    try {
+      const value = parseFloat(getComputedStyle(from).getPropertyValue(name));
+      return Number.isFinite(value) ? value : null;
+    } catch {
+      return null;
+    }
+  }
+  function layoutNarrow() {
+    try {
+      if (typeof window.matchMedia === "function") return Boolean(window.matchMedia(`(max-width: ${LAYOUT_FOLD_BELOW - 0.02}px)`).matches);
+    } catch { /* fall back to the width */ }
+    const { w } = viewportSize();
+    return w > 0 && w < LAYOUT_FOLD_BELOW;
+  }
+  // The regions that are drawers rather than columns at this width.
+  const layoutFolded = () => (layoutOn() && layoutNarrow() ? Object.keys(LAYOUT_REGIONS).filter((name) => LAYOUT_REGIONS[name].folds) : []);
+  // What the rail (Build's or Vibe's) takes at rest; the open rail covers the page instead.
+  function railRest() {
+    const shown = ["app-rail", "vibe-rail"].some((id) => {
+      const box = document.getElementById?.(id)?.getBoundingClientRect?.();
+      return Boolean(box && box.width > 0 && box.height > 0);
+    });
+    if (!shown) return 0;
+    return cssLength("--shell-rail-w") ?? (document.documentElement.dataset.railPinned !== undefined ? 256 : 64);
+  }
+  // What each region gets: the widths asked for, cut back so the rail, the list and
+  // the inspector leave the main area LAYOUT_MAIN_MIN (the inspector gives way
+  // first), and nothing at all for the regions that fold.
+  function layoutFit() {
+    const folded = layoutFolded();
+    let room = Math.max(0, viewportSize().w - railRest() - LAYOUT_MAIN_MIN);
+    const fit = { list: 0, inspector: 0, tabs: layoutRequested.tabs, status: layoutRequested.status };
+    for (const name of ["list", "inspector"]) {
+      if (folded.includes(name)) continue;
+      fit[name] = Math.min(layoutRequested[name], room);
+      room -= fit[name];
+    }
+    return fit;
+  }
+  // Writes the variables (only where they are not 0, so a region that is not
+  // there leaves no trace) and the fold attribute. True when anything changed.
+  function paintLayout() {
+    if (!layoutOn()) return false;
+    const root = document.documentElement;
+    const fit = layoutFit();
+    const folded = layoutFolded().join(" ");
+    let changed = false;
+    for (const [name, region] of Object.entries(LAYOUT_REGIONS)) {
+      if (fit[name] === layoutApplied[name]) continue;
+      changed = true;
+      if (fit[name] > 0) root.style?.setProperty?.(region.variable, `${fit[name]}px`);
+      else root.style?.removeProperty?.(region.variable);
+    }
+    if ((root.dataset.layoutFold || "") !== folded) {
+      changed = true;
+      if (folded) root.dataset.layoutFold = folded; else delete root.dataset.layoutFold;
+    }
+    layoutApplied = fit;
+    return changed;
+  }
+  function clearLayout() {
+    const root = document.documentElement;
+    for (const name of Object.keys(LAYOUT_REGIONS)) {
+      root.style?.removeProperty?.(LAYOUT_REGIONS[name].variable);
+      layoutRequested[name] = 0;
+    }
+    delete root.dataset.layoutFold;
+    layoutApplied = { list: 0, inspector: 0, tabs: 0, status: 0 };
+  }
+  // Tells whoever measures the window. A change of size dispatches a resize,
+  // as the rail's pin does, so the orb, the media window and Command's graph
+  // fit again without each learning a new event; mefi:layout carries the detail.
+  function announceLayout(resized) {
+    const detail = { on: layoutOn(), fold: layoutFolded(), ...layoutApplied };
+    try { window.dispatchEvent(new CustomEvent("mefi:layout", { detail })); } catch { /* no events here */ }
+    if (resized) { try { window.dispatchEvent(new Event("resize")); } catch { /* no events here */ } }
+  }
+  function wireLayout(on) {
+    if (on && !layoutResize) {
+      layoutResize = () => { if (paintLayout()) announceLayout(false); };
+      window.addEventListener("resize", layoutResize);
+    } else if (!on && layoutResize) {
+      window.removeEventListener("resize", layoutResize);
+      layoutResize = null;
+    }
+  }
+
+  // The writer of html[data-layout]: v2 on or off, now. init() asks the launch
+  // (layoutChoice), setLayout() the person's saved choice.
+  function applyLayout(on = layoutChoice() === "v2") {
+    const root = document.documentElement;
+    if (!root) return false;
+    const was = layoutOn();
+    if (on) root.dataset.layout = "v2"; else delete root.dataset.layout;
+    wireLayout(Boolean(on));
+    if (on) paintLayout(); else if (was) clearLayout();
+    if (on || was) announceLayout(false);
+    return Boolean(on);
+  }
+  function setLayout(choice) {
+    const next = choice === "v2" ? "v2" : "v1";
+    try { localStorage.setItem(LAYOUT_KEY, next); } catch { /* this launch only */ }
+    return applyLayout(next === "v2");
+  }
+
+  // The one way a region claims room: set("list", 280). The value is cut to
+  // the region's range and then to what the window can spare (layoutFit); it
+  // answers with what the region got. Nothing happens in v1.
+  function setRegion(name, value) {
+    const region = LAYOUT_REGIONS[name];
+    if (!region || !layoutOn()) return 0;
+    const number = Math.round(Number(value));
+    if (!Number.isFinite(number)) return layoutApplied[name];
+    layoutRequested[name] = Math.min(region.max, Math.max(0, number));
+    if (paintLayout()) announceLayout(true);
+    return layoutApplied[name];
+  }
+  const layout = Object.freeze({
+    on: layoutOn,
+    // What a region asked for, cut to its range; what it has now (folded, or cut back for room); the regions that are drawers now.
+    get: (name) => (name === undefined ? { ...layoutRequested } : layoutRequested[name] ?? 0),
+    used: (name) => { paintLayout(); return name === undefined ? { ...layoutApplied } : layoutApplied[name] ?? 0; },
+    fold: () => layoutFolded(),
+    set: setRegion,
+    reset: () => { for (const name of Object.keys(LAYOUT_REGIONS)) setRegion(name, 0); },
+    RANGES: Object.freeze(Object.fromEntries(Object.entries(LAYOUT_REGIONS).map(([name, region]) => [name, Object.freeze([0, region.max])]))),
+    FOLD_BELOW: LAYOUT_FOLD_BELOW,
+    MAIN_MIN: LAYOUT_MAIN_MIN,
+  });
+
+  // The rectangle of the window that chrome has left, in CSS px: what a
+  // floating thing (the companion's orb, the media window, a toast) stays inside.
+  // In v1 it is what each of those measured for itself: the right of the rail's
+  // real box (the open rail included, since it opens over the page) and
+  // below the local navigation's, to the window's other edges. In v2 it also
+  // clears the list, the tab strip, the inspector and the status bar, read from
+  // the same variables the layers use (so a fold is already in them).
+  function usable() {
+    const { w, h } = viewportSize();
+    const box = (id) => {
+      const rect = document.getElementById?.(id)?.getBoundingClientRect?.();
+      return rect && rect.width > 0 && rect.height > 0 ? rect : null;
+    };
+    const rail = box("app-rail"), bar = box("app-local-nav");
+    let left = rail ? rail.right : 0, top = bar ? bar.bottom : 0, right = w, bottom = h;
+    if (layoutOn()) {
+      paintLayout();
+      const length = (name, from) => cssLength(name, from) ?? 0;
+      left = Math.max(left, railRest() + (cssLength("--shell-list-w") ?? layoutApplied.list));
+      // The strip sits under the local navigation, or at the window's top where there is none (Vibe's own Home).
+      top = Math.max(top, (bar ? length("--shell-local-h", document.body || document.documentElement) : 0) + (cssLength("--shell-tabs-h") ?? layoutApplied.tabs));
+      right = w - (cssLength("--shell-inspector-w") ?? layoutApplied.inspector);
+      bottom = h - (cssLength("--shell-status-h") ?? layoutApplied.status);
+    }
+    return { left, top, right, bottom, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
+  }
+
   function wireRail() {
     const rail = document.getElementById("app-rail");
     if (!rail || rail.dataset.wired) return;
@@ -3027,6 +3238,7 @@
     renderTools();
     renderDock();
     applyShell();
+    applyLayout();
     wireRail();
     renderSheetLinks();
     paintCurrent();
@@ -3149,6 +3361,10 @@
     RAIL_SLOTS,
     applyShell,
     setShell,
+    applyLayout,
+    setLayout,
+    layout,
+    usable,
     setRailPinned,
     paintCurrent,
     current,

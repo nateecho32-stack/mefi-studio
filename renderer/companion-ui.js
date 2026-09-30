@@ -27,6 +27,12 @@
     ["playful", "Friendly & expressive", "Chatty and playful: little faces, idle play and celebrations."],
   ];
   let conversationTimer = 0;
+  // Where the orb and its panel may go. Layout v1 never kept them off the rail,
+  // so there it is the window; in v2 the shell's free area (nav.js usable()), which
+  // keeps them clear of the list, the tab strip, the inspector and the status bar.
+  const room = () => (window.MefiNav?.layout?.on?.() ? window.MefiNav.usable() : { left: 0, top: 0, right: innerWidth, bottom: innerHeight });
+  // The right edge of the menu, which the roaming orb stays beside.
+  const railEdge = () => { const area = window.MefiNav?.usable?.(); return (area ? area.left : document.getElementById("app-rail")?.getBoundingClientRect().right) || 72; };
   const inside = (rect, x, y, margin = 14) => x >= rect.left - margin && x <= rect.right + margin && y >= rect.top - margin && y <= rect.bottom + margin;
   const editing = () => host?.panel.contains(document.activeElement) && document.activeElement?.matches("input:not([type=checkbox]):not([type=range]), textarea, [contenteditable=true]");
   function near() {
@@ -58,21 +64,22 @@
   function position() {
     if (!host || host.panel.hidden) return;
     if (host.panel.classList.contains("companion-in-hub")) { window.MefiCompanionHub?.resize(); return; }
-    const box = host.orb.getBoundingClientRect(), panel = host.panel;
-    const width = Math.min(innerWidth - 24, tab === "status" ? 370 : tab === "now" ? 430 : 460);
+    const box = host.orb.getBoundingClientRect(), panel = host.panel, area = room();
+    const width = Math.min(area.right - area.left - 24, tab === "status" ? 370 : tab === "now" ? 430 : 460);
     panel.style.width = `${width}px`;
-    const cap = Math.max(180, innerHeight - 32), head = panel.querySelector(".companion-shell-head").offsetHeight + panel.querySelector(".companion-tabs").offsetHeight + 44;
+    const cap = Math.max(180, area.bottom - area.top - 32), head = panel.querySelector(".companion-shell-head").offsetHeight + panel.querySelector(".companion-tabs").offsetHeight + 44;
     const height = Math.min(cap, head + Math.max(80, panes[tab].scrollHeight));
     panel.style.height = `${height}px`; panel.style.maxHeight = `${cap}px`;
     // Keep the opening edge fixed while content, tabs and live state change.
     // Following the pointer here makes settings move beneath focused controls.
-    if (!panelAnchor) panelAnchor = { side: innerWidth - box.right >= box.left ? "right" : "left", bottom: box.top > innerHeight / 2, y: box.top > innerHeight / 2 ? box.bottom + 24 : box.top - 24 };
+    const middle = (area.top + area.bottom) / 2;
+    if (!panelAnchor) panelAnchor = { side: area.right - box.right >= box.left - area.left ? "right" : "left", bottom: box.top > middle, y: box.top > middle ? box.bottom + 24 : box.top - 24 };
     const left = panelAnchor.side === "right" ? box.right + 10 : box.left - width - 10;
-    const anchorY = panelAnchor.bottom ? Math.min(innerHeight - 12, panelAnchor.y) - height : panelAnchor.y;
-    const top = Math.max(12, Math.min(innerHeight - height - 12, anchorY));
+    const anchorY = panelAnchor.bottom ? Math.min(area.bottom - 12, panelAnchor.y) - height : panelAnchor.y;
+    const top = Math.max(area.top + 12, Math.min(area.bottom - height - 12, anchorY));
     const layout = `${width}:${height}:${left}:${top}`;
     if (layout !== lastLayout) { settleUntil = Date.now() + (reduced() ? 120 : 360); lastLayout = layout; }
-    Object.assign(panel.style, { left: `${Math.max(12, Math.min(innerWidth - width - 12, left))}px`, top: `${top}px`, bottom: "auto" });
+    Object.assign(panel.style, { left: `${Math.max(area.left + 12, Math.min(area.right - width - 12, left))}px`, top: `${top}px`, bottom: "auto" });
     window.MefiScroll?.refresh();
   }
   async function preference(patch) {
@@ -285,7 +292,8 @@
     const { orb } = host, before = orb.getBoundingClientRect();
     if (orb.parentElement !== document.body) { dock.hidden = false; document.body.append(orb); }
     orb.dataset.roaming = "true"; orb.classList.add("floating");
-    x = Math.max(8, Math.min(innerWidth - 48, x)); y = Math.max(8, Math.min(innerHeight - 48, y));
+    const area = room();
+    x = Math.max(area.left + 8, Math.min(area.right - 48, x)); y = Math.max(area.top + 8, Math.min(area.bottom - 48, y));
     Object.assign(orb.style, { left: `${x}px`, top: `${y}px`, bottom: "auto", margin: "0" });
     if (animate && !reduced()) {
       // A move between clear edges must not sweep across a form or a dialog.
@@ -310,8 +318,8 @@
     roamTimer = setTimeout(() => {
       const prefs = latest?.state || {};
       if (host && prefs.roaming !== false && !prefs.pinned && !reduced() && host.panel.hidden && !window.MefiCompanionHub?.isOpen() && !near() && !dragging && document.activeElement !== host.orb) {
-        const rail = document.getElementById("app-rail")?.getBoundingClientRect().right || 72;
-        const spots = [[innerWidth - 52, 110], [innerWidth - 52, innerHeight - 64], [rail + 14, innerHeight - 60], [innerWidth - 58, innerHeight * .46]];
+        const rail = railEdge(), area = room();
+        const spots = [[area.right - 52, Math.max(110, area.top + 54)], [area.right - 52, area.bottom - 64], [rail + 14, area.bottom - 60], [area.right - 58, area.bottom * .46]];
         const offset = Math.floor(Math.random() * spots.length);
         const choice = spots.map((_, index) => spots[(offset + index) % spots.length]).find(([x, y]) => safeSpot(x, y));
         if (choice) floatAt(choice[0], choice[1], true); else returnToDock();
