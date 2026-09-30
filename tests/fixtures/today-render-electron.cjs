@@ -281,6 +281,36 @@ function measureIn(rootSelector) {
   };
 }
 
+// The lowest contrast (WCAG ratio) of each kind of text in a surface, against the colours painted under it (translucent layers composited from the page down; gradients
+// and blurs are not seen, so it is a floor for a smoke test, not a verdict). One function, sent to the page as source.
+function contrastIn(groups) {
+  const canvas = document.createElement("canvas"); canvas.width = canvas.height = 1;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  const rgba = (css) => { ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = "#000"; ctx.fillStyle = css; ctx.fillRect(0, 0, 1, 1); const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data; return { r, g, b, a: a / 255 }; };
+  const over = (top, under) => ({ r: top.r * top.a + under.r * (1 - top.a), g: top.g * top.a + under.g * (1 - top.a), b: top.b * top.a + under.b * (1 - top.a), a: 1 });
+  const lum = ({ r, g, b }) => { const f = (v) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
+  const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+  const backdrop = (node) => {
+    const chain = []; for (let walk = node; walk; walk = walk.parentElement) chain.unshift(walk);
+    let base = over(rgba(getComputedStyle(document.documentElement).backgroundColor), { r: 255, g: 255, b: 255, a: 1 });
+    for (const link of chain) { const style = getComputedStyle(link); const paint = rgba(style.backgroundColor); if (paint.a > 0) base = over({ ...paint, a: paint.a * (Number(style.opacity) || 1) }, base); }
+    return base;
+  };
+  const out = {};
+  for (const [name, selector] of Object.entries(groups)) {
+    let lowest = null;
+    for (const node of document.querySelectorAll(selector)) {
+      const box = node.getBoundingClientRect();
+      if (!(box.width > 0 && box.height > 0) || getComputedStyle(node).visibility === "hidden" || !node.textContent.trim()) continue;
+      const style = getComputedStyle(node), under = backdrop(node), ink = over(rgba(style.color), under);
+      const value = ratio(ink, under);
+      if (lowest === null || value < lowest.ratio) lowest = { ratio: Math.round(value * 100) / 100, text: node.textContent.trim().slice(0, 24) };
+    }
+    out[name] = lowest;
+  }
+  return out;
+}
+
 // ---- the run -----------------------------------------------------------------------------------------------------
 app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
@@ -495,6 +525,20 @@ app.whenReady().then(async () => {
   check("a drawer moves Today over from 1400 px");
   check("five sizes: Today, the popover (under the pill and upward from the status bar) and the Inbox page");
 
+  // ---- detail follows html[data-detail] even when only the attribute changes (a preview on the Size and density page sends no event) ----
+  window.setContentSize(1440, 900); contents.setZoomFactor(1); await sleep(300);
+  const cardFacts = () => run("const card = document.querySelector('#today-board [data-key=\"run:t_run\"]'); return { meta: Boolean(card.querySelector('.today-card-meta')), bar: Boolean(card.querySelector('.today-bar')), more: card.querySelectorAll('.today-card-more').length, quick: Boolean(document.querySelector('#today-board .today-card-quick')) };");
+  await run("document.documentElement.dataset.detail = 'titles';");
+  await until("!document.querySelector('#today-board [data-key=\"run:t_run\"] .today-card-meta')", "titles: a title and nothing else, from the attribute alone");
+  assert.deepEqual(await cardFacts(), { meta: false, bar: false, more: 0, quick: false });
+  await run("document.documentElement.dataset.detail = 'status';");
+  await until("document.querySelector('#today-board [data-key=\"run:t_run\"] .today-card-meta')", "status: the line under the title");
+  await run("document.documentElement.dataset.detail = 'all';");
+  await until("document.querySelectorAll('#today-board [data-key=\"done:t_done2\"] .today-card-more').length === 1", "everything: what the checker said");
+  await run("delete document.documentElement.dataset.detail;");
+  await until("document.querySelectorAll('#today-board [data-key=\"done:t_done2\"] .today-card-more').length === 0", "no value reads as the default (status)");
+  check("detail follows html[data-detail] from the attribute alone");
+
   // ---- Build: the same board as a page ------------------------------------------------------------------------
   window.setContentSize(1440, 900); contents.setZoomFactor(1); await sleep(400);
   await run("await window.MefiVibe.setMode('build');");
@@ -523,6 +567,28 @@ app.whenReady().then(async () => {
   await run("await window.MefiVibe.setMode('vibe'); await window.MefiVibe.refresh();");
   await until("document.getElementById('vibe-layer').dataset.today === 'on' && !document.getElementById('vibe-layer').hidden", "Vibe is back");
   await sleep(300);
+
+  // ---- a light palette: every colour is a theme token, so the light ones keep their own (the app's own custom palette, light) ----
+  window.setContentSize(1440, 900); contents.setZoomFactor(1); await sleep(300);
+  const TEXT = { title: ".today-card-title", meta: ".today-card-meta", group: ".today-group > h3", chip: ".today-chip", button: "#today-board .today-btn:not(.primary)", link: "#today-board .today-link", muted: ".today-latest-row, .today-latest > h3" };
+  report.contrast = { dark: await run(`return (${contrastIn.toString()})(${JSON.stringify(TEXT)});`) };
+  assert.equal(await run("return window.MefiMusic.applyCustomColors({ accent: '#8A5A00', background: '#F4F0E6', surface: '#FFFFFF', text: '#1D1B17' });"), true);
+  await sleep(1800); // the theme's colours glide in; a picture taken sooner shows them half way
+  assert.equal(await run("return document.documentElement.dataset.studioThemeTone;"), "light", "the app itself calls this palette light");
+  await capture("today-light-1440x900.png");
+  report.contrast.light = await run(`return (${contrastIn.toString()})(${JSON.stringify(TEXT)});`);
+  for (const tone of ["dark", "light"]) for (const [kind, found] of Object.entries(report.contrast[tone])) if (found) assert.ok(found.ratio >= 3, `${kind} text reads against what is under it in a ${tone} palette: ${JSON.stringify(found)}`);
+  const lightSmall = await measure("#today-page");
+  assert.deepEqual(lightSmall.small, [], "no text under 12 px in a light palette either");
+  await click("#fixture-pill");
+  await until("!document.getElementById('today-inbox').hidden", "the Inbox opens in a light palette");
+  await sleep(600);
+  await capture("inbox-light-1440x900.png");
+  await run("document.getElementById('today-inbox').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));");
+  await until("document.getElementById('today-inbox').hidden", "closed again");
+  await run("window.MefiMusic.applyTheme('aurora', false);");
+  await sleep(600);
+  check("a light palette: the page and the popover read, with no text under 12 px");
 
   // ---- acting, the way a person does (1440x900) -----------------------------------------------------------------
   await run("window.todayFixture.clear();");

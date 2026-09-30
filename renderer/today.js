@@ -1091,6 +1091,8 @@
     window.addEventListener("mefi:layout", onLayout);
     window.addEventListener("keydown", onShortcut);
     window.MefiSize?.onChange?.(paint);
+    // The Size and density page previews a level while it is being chosen, without an event: the attribute itself is what is watched.
+    if (typeof MutationObserver === "function" && page()) { state.detailWatch = new MutationObserver(() => paint()); state.detailWatch.observe(page(), { attributes: true, attributeFilter: ["data-detail"] }); }
     // Vibe may already be up (a reload that resumed on it): its front door is the host.
     if (vibe()?.isActive?.()) show();
     return true;
@@ -1102,6 +1104,7 @@
     state.on = false;
     state.off?.(); state.off = null;
     stopClock(); clearTimeout(state.sweep);
+    state.detailWatch?.disconnect?.(); state.detailWatch = null;
     window.removeEventListener("mefi:project-changed", onProjectChanged);
     window.removeEventListener("mefi:appearance", paint);
     window.removeEventListener("mefi:layout", onLayout);
