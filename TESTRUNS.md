@@ -76,6 +76,33 @@ safety net"). Built and gated in an isolated worktree (`C:\wt\za7`) off
   The rehearsal drives the same PowerShell against a stand-in, and the first
   protected update in the field is the one after the release that carries this.
 
+## 2026-09-29 - Preserve concurrent main fixes while landing finished branches
+
+Integrated the update safety net (e9b8b79) and completed dogfood fixes
+(54640ea) from GitHub main into the finished-branch integration. Preserved
+models: and remote: app-wide routing together with boot:healthy, all module
+contracts, Command-tree children, Vibe plan review, and both kinds of result
+review: pending checks show their elapsed time; failed/unavailable checks
+keep confirmation and send-back. The pending-check fixture now includes its
+real pending reason. Imported test rows without discarding either archive,
+and regenerated booklet.html. Fixed the dogfood transport test's missing
+ReadableStream import with node:stream/web.
+
+- build-booklet, npm run check: PASS (205 targets, 425 specs).
+- npm run audit: PASS, 0 findings. Whitespace/conflict checks: PASS.
+- npm run lint: PASS, 0 errors and the same 42 existing warnings.
+- Update-safety and overlapping host/renderer suites: 154 tests passed.
+- All dogfood-changed suites plus overlapping Vibe, Command, model tracker,
+  app-wide IPC, boot health, purity, booklet and startup suites: 733 passed,
+  0 failed, 0 skipped (13 s, concurrency 4).
+- agent_tools after the explicit stream import: 28 passed, 0 failed (2.5 s).
+- Final combined Command Electron fixture: 1 passed, 0 failed (54.4 s).
+- The preceding combined full-run evidence remains in the finished-work row:
+  all 4,910 behavior tests completed with 0 failures; Python and exclusive
+  probes passed. Two documented desktop render flakes made that full command
+  exit 1; both affected suites subsequently passed alone. No additional full
+  rerun was needed for this targeted conflict resolution.
+
 ## 2026-09-29 night - Dogfood fixes: link reading, tool-call leaks, refused plans, owner asks
 
 The fixes from a live dogfood run (an isolated Studio copy, handed only the
@@ -696,36 +723,6 @@ most every ten minutes.
 - Browser-pane preview of the real `pc-vault.js` and the switch markup with a
   fake bridge: each PC's agents line under its sync line, and the switch
   beside When Studio opens.
-
-## 2026-09-28 - Typing goes to the open menu's box
-
-A printable key pressed outside any field while a menu is open (focus in it,
-or the pointer resting on it), or while a sheet is open, now lands in that
-menu's text box instead of firing the single-letter shortcuts that opened
-other menus (`typeInto` in `renderer/nav.js`; menus opt in with
-`data-type-scope`, `data-type-here` or `typeScope()`). Clicking out of a menu
-gives the keys back. Wired: the companion panel (from any tab to Talk) and
-hub (Talk and Suggest work open with the caret in their box; an open room's
-message box), Music & video (link box, YouTube search), Command's chat
-panels, Assistant pill and tab, Ask cards, Vibe's side panel and ask drawer,
-the project map's Browse, Home's queue search, Explorer's session tools and
-the media browser's address bar. MefiSelect no longer takes the caret back
-from a box its choice opened (Agents' "Enter a model ID…").
-
-- Browser pane, fake-bridge booklet, real key presses: the Task board took
-  "plan the demo" into its box with P not opening Plans; T still opened the
-  Task board with no menu up; the Music dropdown, the companion panel (from
-  Needs you) and the hub's Suggest work all took typing.
-- `npm run build-booklet` in C:\wt\type-into; `npm run check`, `npm run audit`
-  (0 errors, 0 warnings): PASS.
-- New suite type_into_menu (9); the new tests fail on the old code.
-- `npm test` in C:\wt\type-into on 6c1c940: Node parallel stage 0 failures;
-  Electron lane 37 of 41 passed, 1 skipped, 3 failed under load
-  (media_window_render "No media report", task_overview_render "No fixture
-  report", unified_studio_render on a MefiSelect focus rule since narrowed).
-  All three pass solo after the fix. Python contracts: only
-  test_electron_smoke_boots_when_installed timed out (120 s); the launcher
-  file passes solo (11 tests, 1 skipped).
 
 ## Read Before Any Tests
 

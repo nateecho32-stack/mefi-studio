@@ -655,7 +655,14 @@ test("Stop stays available for active builders while unsafe task edits remain lo
     assert.equal(buttons().find((button) => button.textContent === "Rename").disabled, false);
     assert.equal(buttons().find((button) => button.textContent === "Mark done").disabled, true);
     assert.equal(buttons().find((button) => button.textContent === "Delete").disabled, true);
+    stop.focus();
     stop.click();
+    const armed = buttons().find((button) => button.dataset.taskAction === "stop");
+    assert.equal(armed.textContent, "Stop it?", "the first press only arms Stop, as Fleet's does");
+    assert.equal(calls.length, 0, "an armed Stop has not stopped anything yet");
+    assert.notEqual(armed, stop, "arming rebuilds the button");
+    assert.equal(env.document.activeElement, armed, "a second Enter or Space confirms the armed Stop");
+    armed.click();
     assert.equal(buttons().find((button) => button.dataset.taskAction === "stop").disabled, true, "pending stop cannot be resubmitted");
     assert.equal(env.api.state.tasks[0].runId, task.runId, "running evidence stays until the host confirms");
     finish({ ok: true, task: { ...task, status: "open", runId: null }, backlog: { ok: true, projectId: "p", taskStates: [{ id: task.id, stage: "blocked", blockedBy: "owner", reason: "Stopped by you" }] } });
@@ -672,10 +679,33 @@ test("a refused targeted stop restores Stop without inventing a stopped worker",
   const env = environment({ tasks: [task], bridge: { tasksAction: async () => ({ ok: false, error: "Worker could not be reached" }) } });
   await env.api.open({ taskId: task.id });
   env.get("task-status-row").children.find((button) => button.dataset.taskAction === "stop").click();
+  env.get("task-status-row").children.find((button) => button.dataset.taskAction === "stop").click();
   await settle();
   assert.equal(env.api.state.tasks[0].runId, "running-worker");
   assert.equal(env.get("task-status-row").children.find((button) => button.dataset.taskAction === "stop").disabled, false);
   assert.match(env.get("task-detail").textContent, /Worker could not be reached/);
+});
+
+// The host refuses any status, title or delete change on a card its group
+// holds (absorbedInto), so Restore never landed: the card opens its group.
+test("a grouped member opens its group instead of offering changes the host refuses", async () => {
+  const calls = [];
+  const tasks = [
+    { id: "plan", projectId: "p", title: "Reliable retries", status: "open" },
+    { id: "member", projectId: "p", title: "Ideas retry helper", status: "absorbed", absorbedInto: "plan" },
+  ];
+  const env = environment({ tasks, bridge: { tasksAction: async (payload) => { calls.push(payload); return { ok: false, error: "This task belongs to a group." }; } } });
+  await env.api.open({ taskId: "member" });
+  const buttons = () => env.get("task-status-row").children;
+  assert.equal(buttons().some((button) => button.textContent === "Restore"), false, "Restore could never land on a grouped card");
+  assert.equal(buttons().some((button) => /Mark done|Confirm done/.test(button.textContent)), false);
+  assert.equal(buttons().find((button) => button.textContent === "Rename").disabled, true);
+  assert.equal(buttons().find((button) => button.textContent === "Delete").disabled, true);
+  const open = buttons().find((button) => button.dataset.taskAction === "view-group");
+  assert.ok(open && !open.disabled);
+  open.click();
+  assert.equal(env.api.saveState().taskId, "plan", "Open group selects the plan that holds the work");
+  assert.equal(calls.length, 0);
 });
 
 test("Retry and Confirm done use targeted actions and never change evidence before the server saves", async () => {

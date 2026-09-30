@@ -207,6 +207,9 @@
       canvas.width = Math.round(view.W * view.dpr);
       canvas.height = Math.round(view.H * view.dpr);
       paint();
+      // A paint outside the loop (this one) can leave motion mid-way: hand
+      // it to the loop, which runs only while the scene says it is hot.
+      if (view.hot()) view.kick();
     };
     const paint = () => {
       if (!view.W) return;
@@ -372,6 +375,7 @@
     const pipeline = scene.taskId ? data.pipelines[scene.taskId] : null;
     const task = scene.taskId ? taskById(scene.taskId) : null;
     ctx.fillStyle = P.bg; ctx.fillRect(0, 0, W, H);
+    scene.settling = false;
     if (!pipeline) {
       label(ctx, "No pipeline yet", W / 2, H / 2 - 10, { size: 15, weight: 650, color: P.ivory });
       label(ctx, "A task gets one the moment a worker is prepared for it.", W / 2, H / 2 + 14, { size: 12, color: P.muted });
@@ -380,7 +384,13 @@
     const L = layoutPipeline(pipeline, W, H);
     scene.layout = L;
     // Eased positions: a new step springs out of its parent, a folded one
-    // slides into the fold, so growing and shrinking read as motion.
+    // slides into the fold, so growing and shrinking read as motion. The
+    // spring needs frames, and the canvas keeps painting only while it is
+    // hot: `settling` holds it hot until every step has landed. Without it a
+    // pipeline with no active step painted once, a fifth of the way in, and
+    // stayed as small boxes whose titles (drawn from s > 0.7) never came.
+    const k = still() ? 1 : 0.18;
+    let settling = false;
     for (const step of L.steps) {
       const target = L.at.get(step.id);
       const held = scene.motion.get(step.id);
@@ -389,9 +399,11 @@
         scene.motion.set(step.id, { x: parent?.x ?? target.x, y: parent?.y ?? target.y, s: still() ? 1 : 0.2 });
       }
       const m = scene.motion.get(step.id);
-      const k = still() ? 1 : 0.18;
       m.x = lerp(m.x, target.x, k); m.y = lerp(m.y, target.y, k); m.s = lerp(m.s, 1, k);
+      if (Math.abs(m.x - target.x) < 0.5 && Math.abs(m.y - target.y) < 0.5 && 1 - m.s < 0.01) { m.x = target.x; m.y = target.y; m.s = 1; }
+      else settling = true;
     }
+    scene.settling = settling;
     for (const id of [...scene.motion.keys()]) if (!L.at.has(id)) scene.motion.delete(id);
     const pos = (id) => { const m = scene.motion.get(id); return m ? [m.x, m.y] : (L.fold ?? L.lead); };
 
@@ -952,7 +964,7 @@
     brainView = makeCanvas(el.canvas, drawPipeline, (width) => Math.max(360, layoutPipeline(data.pipelines[scene.taskId], width, 360).height));
     wirePipelineHover(el);
     initDetailPanes(el);
-    brainView.hot = () => fxAlive(performance.now() / 1000) || Object.values(data.pipelines).some((row) => row.steps?.some((step) => step.status === "active"));
+    brainView.hot = () => fxAlive(performance.now() / 1000) || scene.settling === true || Object.values(data.pipelines).some((row) => row.steps?.some((step) => step.status === "active"));
     sheetMap = mountMap({ canvas: el.mapCanvas, stage: el.mapCanvas.parentElement, tools: el.mapTools, minHeight: 440,
       onSelect: (system, part, file) => renderRegion(el.mapDetail, system, { part, file }),
       onNavigate: () => { if (el.panes.map.dataset.detail === "true") showDetails("map", false); },

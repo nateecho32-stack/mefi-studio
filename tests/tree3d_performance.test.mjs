@@ -8,7 +8,7 @@ const source = await readFile(new URL("../renderer/tree3d.js", import.meta.url),
 const flush = async () => { for (let i = 0; i < 20; i += 1) await Promise.resolve(); };
 const MINUTE = 60000, HOUR = 60 * MINUTE;
 
-async function environment({ classes = [], sessions, todos = [], profiler, assistant } = {}) {
+async function environment({ classes = [], sessions, todos = [], profiler, assistant, readStore, timers } = {}) {
   const bodyClasses = new Set(classes), frames = new Map(), documentEvents = new Map(), windowEvents = new Map(), bridgeEvents = {};
   let nextFrame = 0, now = 0, paints = 0, bitmapWrites = 0, stateReads = 0, bodyObserver, resizeObserver, paintError;
   const element = () => ({
@@ -45,7 +45,7 @@ async function environment({ classes = [], sessions, todos = [], profiler, assis
     addEventListener: (name, callback) => windowEvents.set(name, callback),
     dispatchEvent: (event) => { dispatched.push(event.type); return true; },
     mefiStudio: {
-      eyesState: async () => { stateReads += 1; return { ok: true, sessions: sessions ?? [{ id: "s1", title: "Current session", timeUpdated: Date.now() }], todos }; },
+      eyesState: async () => { stateReads += 1; return readStore?.(stateReads) ?? { ok: true, sessions: sessions ?? [{ id: "s1", title: "Current session", timeUpdated: Date.now() }], todos }; },
       assistantState: async () => ({ ok: true, state: assistant ?? { status: "idle", agents: [] } }),
       eyesCheckpointsRead: async () => ({ checkpoints: {} }),
       onEyesActivity: (callback) => { bridgeEvents.activity = callback; },
@@ -60,6 +60,8 @@ async function environment({ classes = [], sessions, todos = [], profiler, assis
     CustomEvent: class CustomEvent { constructor(type, options) { this.type = type; this.detail = options?.detail; } },
     MutationObserver: class { constructor(callback) { bodyObserver = callback; } observe() {} },
     ResizeObserver: class { constructor(callback) { resizeObserver = callback; } observe() {} },
+    // Timers stay inert unless a test collects them to fire by hand.
+    ...(timers ? { setTimeout: (fn, ms) => timers.push({ fn, ms }), clearTimeout: (id) => { if (timers[id - 1]) timers[id - 1].cleared = true; } } : {}),
   });
   vm.runInContext(source.replace("  window.MefiTree = {", "  window.__pulseCount = () => pulses.length;\n  window.__pulsesLive = () => pulses.every((pulse) => nodes.includes(pulse.from) && nodes.includes(pulse.to));\n  window.__hover = (id) => { if (id !== undefined) hover = findNodeById(id); return hover; };\n  window.__nodeLive = (node) => nodes.includes(node);\n  window.__skyCache = () => skyCache;\n  window.MefiTree = {"), context);
   await window.MefiTree.init();
@@ -527,4 +529,52 @@ test("the fixed sky is projected once and reused until the rail's size changes",
   env.resize();
   env.frame(80);
   assert.notEqual(env.skyCache().list, first, "a new height re-projects them");
+});
+
+// A store the host could not read at startup used to stay "offline" until some
+// push happened to reload it, and Command's hint read that status. The rail now
+// asks again on a backoff until the store answers, and a healthy store costs
+// no timer at all.
+test("an unreadable store is retried on a backoff until it answers, then the ladder stops", async () => {
+  const timers = [];
+  let offline = true;
+  const env = await environment({ timers, readStore: () => offline ? { ok: false, error: "database is locked" } : null });
+  assert.equal(env.tree.status(), "unavailable");
+  assert.deepEqual(timers.map((timer) => timer.ms), [5000]);
+  timers[0].fn(); await flush();
+  assert.equal(env.stateReads(), 2);
+  assert.equal(env.tree.status(), "unavailable");
+  assert.deepEqual(timers.map((timer) => timer.ms), [5000, 10000], "each failure doubles the wait");
+  offline = false;
+  const rebuilds = env.dispatched.filter((type) => type === "mefi:tree-rebuilt").length;
+  timers[1].fn(); await flush();
+  assert.equal(env.stateReads(), 3);
+  assert.equal(env.tree.status(), "ok");
+  assert.ok(env.dispatched.filter((type) => type === "mefi:tree-rebuilt").length > rebuilds, "Command hears the store come back");
+  assert.equal(timers.length, 2, "a healthy store schedules nothing");
+});
+
+test("a hidden window climbs the retry ladder instead of reading the store for nobody", async () => {
+  const timers = [];
+  let offline = true;
+  const env = await environment({ timers, readStore: () => offline ? { ok: false, error: "database is locked" } : null });
+  env.hide(true);
+  timers[0].fn(); await flush();
+  assert.equal(env.stateReads(), 1, "no read while hidden");
+  assert.equal(env.tree.status(), "unavailable");
+  assert.deepEqual(timers.map((timer) => timer.ms), [5000, 10000], "the wait still doubles");
+  env.hide(false);
+  offline = false;
+  timers[1].fn(); await flush();
+  assert.equal(env.stateReads(), 2, "the next turn in view reads");
+  assert.equal(env.tree.status(), "ok");
+  assert.equal(timers.length, 2);
+});
+
+test("a healthy store never starts the retry ladder", async () => {
+  const timers = [];
+  const env = await environment({ timers });
+  assert.equal(env.tree.status(), "ok");
+  await env.tree.reload();
+  assert.equal(timers.length, 0);
 });

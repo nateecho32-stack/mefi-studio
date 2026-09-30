@@ -153,3 +153,35 @@ test("the Agent brain's finish marks go round the body as it hops and swells, an
     assert.deepEqual(beats, [{ x: 70, y: 40, r: 12 }], `${name}: the absorb marks sit on the lead`);
   }
 });
+
+// The Live work canvas paints only while it is hot, and a new step springs in
+// from a fifth of its size with its title drawn from s > 0.7. A pipeline with
+// no active step used to paint once and stop: five small empty boxes under the
+// lead. `scene.settling` keeps it hot (brainView.hot reads it) until they land.
+test("the Live work pipeline stays hot until its steps land, then every box carries its title", async () => {
+  const brain = (await readFile(new URL("../renderer/agent-brain.js", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
+  const start = brain.indexOf("  function layoutPipeline("), end = brain.indexOf("  // ---- the project map", start);
+  assert.ok(start > 0 && end > start, "the pipeline scene is where this test expects it");
+  let labels = [];
+  const env = vm.createContext({
+    window: {}, data: { pipelines: {}, running: [] }, taskById: () => null, performance: { now: () => 0 },
+    clamp: (v, low = 0, high = 1) => Math.min(high, Math.max(low, v)), lerp: (a, b, t) => a + (b - a) * t, easeOut: (t) => t, easeInOut: (t) => t,
+    still: () => false, rgba: (color) => color, clip: (value, max) => String(value ?? "").slice(0, max), companionName: () => "Head", FONT: "sans-serif",
+    palette: () => ({ bg: "#000", panel: "#111", line: "#222", mint: "#71cbb7", ivory: "#eee", muted: "#999", dim: "#777", live: "#57ff9a", good: "#afdfc2", bad: "#f99", warn: "#ffd479", bright: "#a7f3da", info: "#9db7ff", violet: "#c7a8ff" }),
+    label: (ctx, text) => labels.push(String(text)), roundRect() {}, body() {}, popFx() {}, absorbFx() {},
+  });
+  vm.runInContext(`${brain.slice(start, end)};this.scene = scene; this.drawPipeline = drawPipeline;`, env);
+  const titles = ["Read the brief", "Plan the change", "Edit the renderer", "Run the tests", "Report back"];
+  env.data.pipelines.t1 = { steps: titles.map((title, i) => ({ id: `s${i + 1}`, title, status: "queued", parents: i ? [`s${i}`] : [] })), summary: { done: 0 } };
+  env.scene.taskId = "t1";
+  const ctx = new Proxy({}, { get: (target, key) => key in target ? target[key] : () => ({ addColorStop() {} }), set: (target, key, value) => { target[key] = value; return true; } });
+  env.drawPipeline(ctx, 640, 560, 0);
+  assert.equal(env.scene.settling, true, "the first paint is mid-spring, so the canvas must stay hot");
+  let frames = 1;
+  while (env.scene.settling && frames < 120) { labels = []; env.drawPipeline(ctx, 640, 560, frames / 60); frames += 1; }
+  assert.equal(env.scene.settling, false, `the steps land (after ${frames} frames) and the loop may rest`);
+  for (const title of titles) assert.ok(labels.includes(title), `${title} is drawn in its box`);
+  labels = []; env.drawPipeline(ctx, 640, 560, 3);
+  assert.equal(env.scene.settling, false, "a settled pipeline stays settled");
+  assert.ok(titles.every((title) => labels.includes(title)));
+});

@@ -210,6 +210,9 @@
   // ---- tasks ------------------------------------------------------------------------
   const isDone = (task) => ["done", "archived", "completed"].includes(task?.status) || Boolean(task?.dropped);
   const stamp = (task) => Number(task.updatedAt || task.createdAt) || Date.parse(task.updatedAt || task.createdAt || "") || 0;
+  // When a finished card closed (done, or dropped), not its last write.
+  const time = (value) => Number(value) || Date.parse(value || "") || 0;
+  const closedAt = (task) => time(task.doneAt) || time(task.dropped?.at) || time(task.verification?.at) || stamp(task);
   // What a task is doing, in Vibe's words, from the backlog's stage for it.
   function stage(task) {
     const data = state.data;
@@ -250,14 +253,14 @@
     const active = (data.tasks || []).filter((task) => !isDone(task) && !needing.has(task.id))
       .map((task) => ({ task, stage: stage(task) }))
       .sort((a, b) => (STAGE_ORDER[a.stage.key] ?? 9) - (STAGE_ORDER[b.stage.key] ?? 9) || stamp(b.task) - stamp(a.task));
-    const finished = (data.tasks || []).filter(isDone).sort((a, b) => stamp(b) - stamp(a)).slice(0, 30);
+    const finished = (data.tasks || []).filter(isDone).sort((a, b) => closedAt(b) - closedAt(a)).slice(0, 30);
     if (!needs.length && !active.length && !finished.length) {
       body.append(el("p", "vibe-panel-empty", "No tasks yet. Describe something in the box and press Build it; it shows up here."));
       return;
     }
     fold(body, "needs", "Needs you", needs.map((need) => row({ key: `need:${need.kind}:${need.id}`, tone: need.tone, title: need.title, meta: need.meta, action: { label: need.verb, run: () => vibe()?.openNeed?.({ kind: need.kind, id: need.id }) }, onOpen: () => vibe()?.openNeed?.({ kind: need.kind, id: need.id }) })), { empty: "Nothing is waiting on you." });
     fold(body, "active", "In progress", active.map(({ task, stage: now }) => row({ key: `task:${task.id}`, tone: now.tone, title: task.title || "A task", meta: now.text, onOpen: () => push({ view: "task", id: task.id }) })), { empty: "Nothing is queued or building." });
-    fold(body, "done", "Done", finished.map((task) => { const now = stage(task); return row({ key: `task:${task.id}`, tone: now.tone, title: task.title || "A task", meta: `${now.text} · ${ago(stamp(task))}`, onOpen: () => push({ view: "task", id: task.id }) }); }), { empty: "Finished work lands here." });
+    fold(body, "done", "Done", finished.map((task) => { const now = stage(task); return row({ key: `task:${task.id}`, tone: now.tone, title: task.title || "A task", meta: `${now.text} · ${ago(closedAt(task))}`, onOpen: () => push({ view: "task", id: task.id }) }); }), { empty: "Finished work lands here." });
   }
   function governor(body) {
     const data = state.data;
@@ -316,7 +319,7 @@
     if (!task) { body.append(el("p", "vibe-panel-empty", "This task is no longer on the board.")); return; }
     const now = stage(task);
     const need = (data.needs || []).find((item) => item.kind !== "question" && (item.id === id || item.kind === "family" && item.rows?.some((row) => row.id === id)));
-    heading(body, task.title || "A task", [chip(now.text, now.key === "blocked" ? "blocker" : now.key === "approval" ? "decision" : ""), el("span", "vibe-ask-when", ago(stamp(task)))]);
+    heading(body, task.title || "A task", [chip(now.text, now.key === "blocked" ? "blocker" : now.key === "approval" ? "decision" : ""), el("span", "vibe-ask-when", ago(isDone(task) ? closedAt(task) : stamp(task)))]);
     if (now.reason) body.append(el("p", "vibe-ask-detail vibe-panel-reason", now.reason));
     text(body, "The brief", task.prompt && task.prompt !== task.title ? task.prompt : "");
     const error = String(task.lastRunError || "").trim();
@@ -409,14 +412,11 @@
     });
     body.append(form);
   }
+  // The follow-up goes into the box through Vibe (vibe.js requestChange): it
+  // keeps the draft, cites the task and closes this panel, or says why not.
   function askChange(task) {
-    const input = document.getElementById("vibe-input");
-    if (!input) return;
-    input.value = `Change "${task.title || "the last result"}": `;
-    close({ quiet: true });
-    input.focus?.();
-    try { input.setSelectionRange?.(input.value.length, input.value.length); } catch { /* not a text field */ }
-    input.dispatchEvent?.(new Event("input", { bubbles: true }));
+    const result = vibe()?.requestChange?.(task);
+    if (result?.ok === false) note(result.error, "warn");
   }
 
   // ---- plans ------------------------------------------------------------------------
@@ -474,7 +474,7 @@
     if (need) buttons.push({ label: "Start all steps", primary: true, run: () => vibe()?.openNeed?.({ kind: "family", id }) });
     // One host transaction, as the drawer's: dropping steps one at a time is
     // refused for a step another one waits on.
-    if (unstarted.length) buttons.push({ label: "Make it one task", title: "Drop the steps that have not started; the request is built as one task", run: () => act(() => api().tasksAction({ taskId: id, projectId: state.data.projectId, action: "merge-steps" }), "Kept as one task. It builds as a whole.") });
+    if (unstarted.length) buttons.push({ label: "Make it one task", confirm: "Drop the unstarted steps?", title: "Drop the steps that have not started; the request is built as one task", run: () => act(() => api().tasksAction({ taskId: id, projectId: state.data.projectId, action: "merge-steps" }), "Kept as one task. It builds as a whole.") });
     if (buttons.length) body.append(actions(buttons));
   }
 
@@ -1083,6 +1083,7 @@
   window.addEventListener("mefi:autonomy-changed", () => { state.signature = ""; if (["settings", "decisions", "team"].includes(state.kind)) render(); });
   // A thinking run starting, moving on or ending repaints Team's list of them.
   window.MefiVibeFlow?.on?.(() => { if (state.kind === "team") render(); });
+  let armedPaint = 0;
   function render() {
     if (aside.hidden || !state.kind) return;
     const view = top();
@@ -1091,6 +1092,9 @@
     const typing = aside.contains(document.activeElement) && /^(TEXTAREA|INPUT)$/.test(document.activeElement?.tagName || "") && document.activeElement?.type !== "checkbox";
     const signature = JSON.stringify([state.kind, state.stack, state.folds, state.busy, digest()]);
     if (signature === state.signature || typing) return;
+    // Nor is a button that asks (MefiUi.arm's 3 s): a push would swap it for
+    // a fresh one, so the panel waits, then catches up. Your own moves paint.
+    if (state.signature && $("body")?.querySelector?.(".danger-armed")) { clearTimeout(armedPaint); armedPaint = setTimeout(render, 3200); return; }
     state.signature = signature;
     $("kicker").textContent = state.data.projectName || "Vibe";
     $("title").textContent = view?.view === "task" ? "Task" : view?.view === "idea" ? "Idea" : view?.view === "family" ? "Plan" : TITLES[state.kind];

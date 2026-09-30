@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import oversight from "../scripts/task-oversight.cjs";
 import backlog from "../scripts/backlog.cjs";
+import workAdmission from "../scripts/work-admission.cjs";
 
 const {
   STAGE_RANK, boardDigest, taskEvents, CHAT_ACTION_KINDS, validateChatActions,
@@ -732,6 +733,92 @@ test("validateChatActions creates only asked-for work and offers the rest", () =
   assert.equal(request.run[0].ownerText, "can you give the app a dark mode");
   const offered = gate([...idea, { kind: "create_task", title: "Dark mode", brief: "again" }, { kind: "create_task", title: "Light mode" }], "hmm");
   assert.deepEqual(offered.offer, [{ title: "Dark mode" }, { title: "Light mode" }], "offers are deduplicated by title");
+});
+
+// The fields main.cjs assistantChatAction files a create_task with, through the real admission gate.
+let filedSerial = 0;
+const fileChat = (board, action) => {
+  const prompt = String(action.ownerText || action.brief || action.title || "");
+  const task = { title: action.title, prompt, source: "chat", ...(action.brief && action.brief !== prompt ? { details: `Assistant's reading (not the owner's words): ${action.brief}` } : {}) };
+  const result = workAdmission.admitTask(board, task, { origin: { kind: "chat", by: "owner" }, match: {}, inbox: true, jobs: [], titles: false, now: NOW, allocateId: () => `task_${++filedSerial}` });
+  return resultLine(action, result.created ? { ok: true, created: result.created, title: result.created.title } : { ok: true, existing: { title: result.existing.item.title, status: result.existing.item.status } });
+};
+const LISTED = "This is one of the tasks listed in the message below; the others have their own cards.";
+const THREE_SAID = "Add three tasks: 1) dark mode toggle 2) CSV export 3) shortcut help page";
+const THREE = [
+  { kind: "create_task", title: "Dark mode toggle", brief: "Add a dark mode toggle to settings" },
+  { kind: "create_task", title: "CSV export", brief: "Export the task list as CSV" },
+  { kind: "create_task", title: "Shortcut help page", brief: "Add a keyboard shortcut help page" },
+];
+const fileAll = (board, actions, said) => gate(actions, said, { intent: "request" }).run.map((action) => fileChat(board, action));
+const again = (lines) => lines.map((line) => line.includes("already on the board"));
+
+// Live 2026-09-29: every create_task of one message carried the whole message
+// as its brief, so admission read the second card as the first ("already on
+// the board") and one message could file only one card.
+test("one message can file several cards, and asking again still files none twice", () => {
+  const board = { tasks: [], requests: [] };
+  const filed = gate(THREE, THREE_SAID, { intent: "request" });
+  assert.equal(filed.run.length, 3);
+  assert.deepEqual(filed.run.map((action) => fileChat(board, action)), ['Created "Dark mode toggle"', 'Created "CSV export"', 'Created "Shortcut help page"']);
+  assert.ok(board.tasks.every((task) => task.prompt.endsWith(`\n\n${LISTED}\n\n${THREE_SAID}`)), "each brief keeps the owner's whole message");
+  assert.equal(board.tasks.find((task) => task.title === "CSV export").prompt.split("\n")[0], "CSV export", "and leads with the item in the owner's words");
+  assert.deepEqual(again(fileAll(board, THREE, THREE_SAID)), [true, true, true], "the same message again files nothing new");
+  // One title asked twice in a message is one card; a single card keeps the owner's words as they are.
+  const twice = gate([THREE[1], { ...THREE[1], brief: "CSV download of the tasks" }], "add a CSV export", { intent: "request" });
+  assert.deepEqual(twice.run.map((action) => action.ownerText), ["add a CSV export", "add a CSV export"]);
+  const fresh = { tasks: [], requests: [] };
+  assert.deepEqual(twice.run.map((action) => fileChat(fresh, action)), ['Created "CSV export"', '"CSV export" is already on the board (open)']);
+});
+
+test("asking again files nothing new when the model rewords a title or files fewer of the items", () => {
+  const board = { tasks: [], requests: [] };
+  fileAll(board, THREE, THREE_SAID);
+  const reworded = [{ ...THREE[0], title: "Dark mode switch" }, { ...THREE[1], title: "Export tasks to CSV" }, THREE[2]];
+  assert.deepEqual(again(fileAll(board, reworded, THREE_SAID)), [true, true, true], "a reworded title is still its item");
+  assert.deepEqual(again(fileAll(board, [THREE[0], THREE[2]], THREE_SAID)), [true, true], "fewer items");
+  assert.deepEqual(again(fileAll(board, [THREE[1]], THREE_SAID)), [true], "one card for the whole message");
+  assert.equal(board.tasks.length, 3);
+  // The message filed whole once already covers its items when split later.
+  const whole = { tasks: [], requests: [] };
+  assert.deepEqual(fileAll(whole, [THREE[0]], THREE_SAID), ['Created "Dark mode toggle"']);
+  assert.deepEqual(again(fileAll(whole, THREE, THREE_SAID)), [true, true, true]);
+});
+
+test("the model splitting one ask into several titles still files one card", () => {
+  for (const [said, titles] of [
+    ["Add a settings page where I can pick the theme", ["Settings page", "Theme picker"]],
+    ["Add a settings page with a theme picker and a font size slider", ["Settings page", "Theme picker", "Font size slider"]],
+    ["Build a CSV export. It should include task titles and statuses.", ["CSV export", "Include titles and statuses"]],
+    // A bare "and" joins one request's clauses; titles that follow the clauses stay one card.
+    ["Add a settings page where I can change the theme and font size", ["Settings page", "Theme and font size options"]],
+    ["Add a login page and hook it up to the auth API", ["Login page", "Hook login page to auth API"]],
+    ["Make the sidebar collapsible and remember its state", ["Collapsible sidebar", "Remember sidebar state"]],
+    ["Fix the crash when saving and add a regression test for it", ["Fix save crash", "Regression test for save crash"]],
+    ["Build a CSV export. It should include task titles and statuses.", ["CSV export", "Task statuses column"]],
+  ]) {
+    const checked = gate(titles.map((title) => ({ kind: "create_task", title })), said, { intent: "request" });
+    assert.ok(checked.run.every((action) => action.ownerText === said), said);
+    const board = { tasks: [], requests: [] };
+    assert.deepEqual(checked.run.map((action) => fileChat(board, action)), [`Created "${titles[0]}"`, ...titles.slice(1).map(() => `"${titles[0]}" is already on the board (open)`)], said);
+  }
+  // A comma, "and" or bullet list the owner wrote splits; each title lands on its own item.
+  for (const [said, titles] of [
+    ["please add dark mode, a CSV export and a help page", ["Dark mode", "CSV export", "Help page"]],
+    ["Two things:\n- dark mode\n- CSV export", ["Dark mode", "CSV export"]],
+  ]) {
+    const board = { tasks: [], requests: [] };
+    assert.deepEqual(fileAll(board, titles.map((title) => ({ kind: "create_task", title })), said), titles.map((title) => `Created "${title}"`), said);
+  }
+});
+
+test("a long message that lists several tasks keeps every word of the owner's on each card", () => {
+  const said = `${"Some background on the release first. ".repeat(50)}Two tasks: 1) dark mode toggle 2) CSV export`;
+  assert.ok(said.length > 1900 && said.length <= 2000);
+  const board = { tasks: [], requests: [] };
+  assert.deepEqual(fileAll(board, THREE.slice(0, 2), said), ['Created "Dark mode toggle"', 'Created "CSV export"']);
+  assert.ok(board.tasks.every((task) => task.prompt.endsWith(`\n\n${said}`)), "the owner's words are never cut to make room");
+  assert.deepEqual(board.tasks.map((task) => task.prompt), ["CSV export", "dark mode toggle"].map((item) => `${item}\n\n${LISTED}\n\n${said}`));
 });
 
 test("validateChatActions runs a role only on its own words, one per message, and pause only when plainly asked", () => {

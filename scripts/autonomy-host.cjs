@@ -10,6 +10,12 @@ const backlog = require("./backlog.cjs");
 const issues = require("./agent-issues.cjs");
 const memory = require("./decision-memory.cjs");
 const rows = (value) => Array.isArray(value) ? value : [];
+// An ask only the owner may close: agent-issues' "owner" kind, something only
+// they can do (a merge, a push, a login, a physical step).
+const ownerOnly = (question) => question?.context?.issueKind === "owner";
+// An answer that closes an ask without acting on it ("Leave it for review").
+const closes = (option) => Boolean(option?.dismiss) || option?.action?.action === "hold";
+const OWNER_LEFT = "Only you can decide this one, so it stays on your list.";
 
 function createAutonomyHost(io) {
   const now = io.now ?? Date.now;
@@ -120,6 +126,14 @@ function createAutonomyHost(io) {
     if (project() !== projectId) return { ok: false, error: "The selected project changed." };
     const option = rows(question.options).find((row) => row.id === choice.optionId);
     if (!option && !todoText) return { ok: false, error: "That option is no longer offered." };
+    // Leaving an ask for review closes it. Chosen for the owner on an ask only
+    // they can answer, it would take the ask off Needs you before they see it,
+    // so such an ask stays open with the desk's note on it (main.cjs refuses
+    // the same in assistantAnswer).
+    if (ownerOnly(question) && closes(option)) {
+      question.context = { ...question.context, suggestion: { optionId: null, reason: choice.reason || OWNER_LEFT, at: now() } };
+      return { ok: false, left: true, error: OWNER_LEFT };
+    }
     const decision = { id: io.id(), at: now(), level: config.level, by: "desk", source: question.source, questionId: question.id,
       taskId: question.context?.taskId ?? ids[0] ?? null, kind: question.context?.issueKind ?? question.source,
       choice: choice.optionId, label: todoText ? "Added to your For you list" : option.label,
@@ -325,7 +339,9 @@ function createAutonomyHost(io) {
         }
         const options = rows(question.options).filter((option) => {
           if (option.action?.choice === "keep-oldest" && config.elevated["drop-owned"] && affected.some((row) => row.origin?.by === "owner" && row.id !== option.action.keepId)) return false;
-          if (humanClassify) return option.action?.action !== "retry-deep" || !config.elevated["pricier-model"];
+          // An owner leftover is never closed for the owner: the desk leaves
+          // it with optionId null, so "Leave it for review" is not offered.
+          if (humanClassify) return !closes(option) && (option.action?.action !== "retry-deep" || !config.elevated["pricier-model"]);
           const elevated = autonomy.classify({ question, task, option });
           return !elevated || config.elevated[elevated] === false;
         });

@@ -6,6 +6,36 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-28 - Typing goes to the open menu's box
+
+A printable key pressed outside any field while a menu is open (focus in it,
+or the pointer resting on it), or while a sheet is open, now lands in that
+menu's text box instead of firing the single-letter shortcuts that opened
+other menus (`typeInto` in `renderer/nav.js`; menus opt in with
+`data-type-scope`, `data-type-here` or `typeScope()`). Clicking out of a menu
+gives the keys back. Wired: the companion panel (from any tab to Talk) and
+hub (Talk and Suggest work open with the caret in their box; an open room's
+message box), Music & video (link box, YouTube search), Command's chat
+panels, Assistant pill and tab, Ask cards, Vibe's side panel and ask drawer,
+the project map's Browse, Home's queue search, Explorer's session tools and
+the media browser's address bar. MefiSelect no longer takes the caret back
+from a box its choice opened (Agents' "Enter a model ID…").
+
+- Browser pane, fake-bridge booklet, real key presses: the Task board took
+  "plan the demo" into its box with P not opening Plans; T still opened the
+  Task board with no menu up; the Music dropdown, the companion panel (from
+  Needs you) and the hub's Suggest work all took typing.
+- `npm run build-booklet` in C:\wt\type-into; `npm run check`, `npm run audit`
+  (0 errors, 0 warnings): PASS.
+- New suite type_into_menu (9); the new tests fail on the old code.
+- `npm test` in C:\wt\type-into on 6c1c940: Node parallel stage 0 failures;
+  Electron lane 37 of 41 passed, 1 skipped, 3 failed under load
+  (media_window_render "No media report", task_overview_render "No fixture
+  report", unified_studio_render on a MefiSelect focus rule since narrowed).
+  All three pass solo after the fix. Python contracts: only
+  test_electron_smoke_boots_when_installed timed out (120 s); the launcher
+  file passes solo (11 tests, 1 skipped).
+
 ## 2026-09-28 - Needs you: answered asks leave the list, no dead asks after a reload
 
 The owner reported that answered asks in the companion's Needs you list hung

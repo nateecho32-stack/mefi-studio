@@ -40,6 +40,9 @@
   const state = { tasks: [], plans: [], plansError: null, selected: null, filter: "all", readiness: "all", projectId: null, query: "", doneCollapsed: false, renaming: false, prefs: { blurMenu: true, useWeb: false, useTree: true, autoReference: true, useReference: true }, references: null };
   // Two-step delete: the id of the task whose Delete button is armed right now.
   let deleteArmed = null;
+  // Two-step Stop, kept here rather than on the button for the same reason:
+  // a running card re-renders while its worker reports.
+  let stopArmed = null;
   const els = {};
   let initialized = false;
   // tasks:save overwrites the whole store, so this module must never write a
@@ -907,6 +910,24 @@
     renderDetail();
   }
 
+  // Stopping a worker ends its run, so the first press only arms the button
+  // (as Fleet's Stop does); a second within 4 s stops it.
+  function stopTask(task) {
+    if (stopArmed !== task.id) {
+      stopArmed = task.id;
+      renderDetail();
+      setTimeout(() => {
+        if (stopArmed === task.id) {
+          stopArmed = null;
+          if (!els.overlay.hidden) renderDetail();
+        }
+      }, 4000);
+      return;
+    }
+    stopArmed = null;
+    return runTaskAction(task, "stop");
+  }
+
   function deleteTask(task) {
     if (deleteArmed !== task.id) {
       // First click arms: the button asks for a confirmation instead of
@@ -1022,12 +1043,17 @@
     const release = holdAction(task);
     if (awaitingApproval) actions.push({ label: "Approve build", action: "approve", className: "primary", title: "Approve the brief shown here so this task can build when scheduling and prerequisites allow", disabled: !window.mefiStudio?.backlogControl || scheduled.canApprove !== true || !task.buildScope, run: () => runTaskAction(task, "approve", { expectedScope: task.buildScope }) });
     if (release && !(release.action === "resume" && window.MefiWorkspace?.startTask)) actions.push(release);
+    // A grouped member belongs to its plan: the host refuses any status,
+    // title or delete change while absorbedInto holds it (the plan releases
+    // it), so the card offers its group instead of buttons that cannot land.
+    const grouped = Boolean(task.absorbedInto) && Boolean(window.mefiStudio?.tasksAction);
+    const groupedWhy = "This task belongs to a group. Work with the group's plan until it releases the member.";
     if (isDone(task)) {
       actions.push({ label: "Reopen", className: "primary", title: "Put this task back on the open board", run: () => setTaskStatus(task, "open") });
-    } else {
+    } else if (!grouped) {
       actions.push({ label: needsReview(task) && !release ? "Confirm done" : "Mark done", className: awaitingApproval || release ? "ghost" : "primary", title: "Mark this task complete after reviewing its result", run: () => setTaskStatus(task, "done") });
     }
-    if (!release && (needsReview(task) || scheduled?.stage === "cooling")) actions.push({ label: scheduled?.stage === "cooling" ? "Retry now" : "Retry", className: "ghost", title: scheduled?.blockedBy ? scheduled.reason : "Return this task to the queue for another attempt", disabled: ["verifying", "awaiting_verification"].includes(task.status) || scheduled?.canRetry === false, run: () => {
+    if (!release && !grouped && (needsReview(task) || scheduled?.stage === "cooling")) actions.push({ label: scheduled?.stage === "cooling" ? "Retry now" : "Retry", className: "ghost", title: scheduled?.blockedBy ? scheduled.reason : "Return this task to the queue for another attempt", disabled: ["verifying", "awaiting_verification"].includes(task.status) || scheduled?.canRetry === false, run: () => {
       if (window.mefiStudio?.tasksAction) return runTaskAction(task, "retry");
       delete task.verification;
       delete task.verifyAttempts;
@@ -1040,16 +1066,23 @@
     if (task.status === "open" && window.mefiStudio?.backlogControl && (!scheduled || scheduled.stage === "ready")) actions.push({ label: "Do next", className: "ghost", title: "Prioritize this task when its prerequisites and a worker are ready", run: () => runTaskAction(task, "prioritize") });
     // A running worker is stopped, not released: its progress is saved and the
     // card waits for you instead of being picked up again at once.
-    if (task.status === "active" && task.runId && window.mefiStudio?.tasksAction) actions.push({ label: "Stop", action: "stop", allowDuringRun: true, className: "ghost", title: "Stop this task's worker. Its progress is saved and the card waits for you; other workers keep running.", run: () => runTaskAction(task, "stop") });
-    else if (task.status === "active") actions.push({ label: "Back to open", className: "ghost", title: "Release the active claim", run: () => setTaskStatus(task, "open") });
-    if (task.status === "absorbed") actions.push({ label: "Restore", className: "ghost", title: "Pull this task out of the grouped plan and back onto the open board", run: () => setTaskStatus(task, "open") });
+    // It asks twice, like Fleet's Stop and Delete here: the first press arms it.
+    if (task.status === "active" && task.runId && window.mefiStudio?.tasksAction) {
+      const stopping = stopArmed === task.id;
+      actions.push({ label: stopping ? "Stop it?" : "Stop", action: "stop", allowDuringRun: true, className: stopping ? "ghost danger danger-armed" : "ghost danger", title: "Stop this task's worker. Its progress is saved and the card waits for you; other workers keep running.", run: () => stopTask(task) });
+    } else if (task.status === "active") actions.push({ label: "Back to open", className: "ghost", title: "Release the active claim", run: () => setTaskStatus(task, "open") });
+    if (grouped) {
+      const group = state.tasks.find((entry) => entry.id === task.absorbedInto);
+      actions.push({ label: "Open group", action: "view-group", className: "primary", title: group ? `Open "${shortTitle(group)}", the grouped plan that holds this task's work` : "The grouped plan that holds this task is not on this board", disabled: !group, run: () => window.MefiTasks.selectTask(task.absorbedInto) });
+    } else if (task.status === "absorbed") actions.push({ label: "Restore", className: "ghost", title: "Pull this task out of the grouped plan and back onto the open board", run: () => setTaskStatus(task, "open") });
     if (task.status === "done") actions.push({ label: "Archive", className: "ghost", title: "Shelve the finished task", run: () => setTaskStatus(task, "archived") });
     if (task.status === "archived") actions.push({ label: "Mark done", className: "ghost", title: "Back to done, still under the Done mark", run: () => setTaskStatus(task, "done") });
     actions.push({
       label: "Rename",
       allowDuringRun: true,
       className: "ghost mini",
-      title: "Edit the title",
+      title: grouped ? groupedWhy : "Edit the title",
+      disabled: grouped,
       run: () => {
         state.renaming = true;
         renderTitle(task);
@@ -1059,7 +1092,8 @@
     actions.push({
       label: armed ? "Really delete?" : "Delete",
       className: armed ? "ghost mini danger danger-armed" : "ghost mini danger",
-      title: "Remove this task for good",
+      title: grouped ? groupedWhy : "Remove this task for good",
+      disabled: grouped,
       run: () => deleteTask(task),
     });
     return actions;
@@ -1509,6 +1543,9 @@
     const focused = document.activeElement;
     const focusedEntry = ["logs", "ideas"].find((field) => focused?.dataset?.taskEntryKey === `${taskKey(task)}/${field}`);
     const selection = focusedEntry ? { start: focused.selectionStart, end: focused.selectionEnd, direction: focused.selectionDirection } : null;
+    // An armed Stop is rebuilt as "Stop it?": a keyboard press confirms it
+    // only if focus follows the button across the rebuild.
+    const focusedAction = els.statusRow.contains?.(focused) ? focused.dataset?.taskAction : "";
     if (els.overviewBack) els.overviewBack.hidden = !task;
     els.detail.textContent = "";
     detailPanels = {};
@@ -1733,7 +1770,7 @@
       const input = focusedEntry === "logs" ? logInput : ideaInput;
       input.focus({ preventScroll: true });
       if (Number.isInteger(selection.start) && Number.isInteger(selection.end)) input.setSelectionRange(selection.start, selection.end, selection.direction);
-    }
+    } else if (focusedAction) [...els.statusRow.children].find((button) => button.dataset?.taskAction === focusedAction)?.focus({ preventScroll: true });
   }
 
   // ---------- reference menu ----------

@@ -18,11 +18,12 @@ const settle = async () => { for (let turn = 0; turn < 12; turn += 1) await new 
 
 // A desktop bridge holding one project's state. Every call is logged, and
 // the calls Vibe makes change that state the way the host would.
-function bridge({ held = false, execute = true, paused = false, keyPresent = true, autoBuild = false, questions = true, approvals = true, stuck = true } = {}) {
+function bridge({ held = false, execute = true, paused = false, keyPresent = true, autoBuild = false, questions = true, approvals = true, stuck = true, checkingLong = false } = {}) {
   const calls = [];
+  const now = Date.now();
   const status = { held, execute, autoBuild, running: [] };
   const tasks = [
-    { id: "t2", projectId: P, title: "Fix the login redirect loop", status: "awaiting_verification" },
+    { id: "t2", projectId: P, title: "Fix the login redirect loop", status: "awaiting_verification", verification: { state: "pending", reason: "Checking the recorded result." } },
     { id: "t6", projectId: P, title: "Add a CSV export", status: "open", prompt: "Add a CSV export to the reports page, next to the date filter." },
     { id: "t7", projectId: P, title: "Upgrade the charts", status: "open", lastRunError: "peer dependency conflict" },
   ];
@@ -30,7 +31,14 @@ function bridge({ held = false, execute = true, paused = false, keyPresent = tru
   let approval = approvals ? [{ id: "t6", kind: "task", title: "Add a CSV export", stage: "approval", canApprove: true, buildScope: "scope-t6" }] : [];
   let blocked = stuck ? [{ id: "t7", kind: "task", title: "Upgrade the charts", stage: "blocked", blockedBy: "loop", reason: "The same failure repeated." }] : [];
   const backlog = () => ({ ok: true, projectId: P, counts: { ready: 1 }, next: [{ id: "t5", kind: "task", title: "Add a sitemap", stage: "ready" }], approval, blocked });
-  const assistant = () => ({ projectId: P, status: paused ? "paused" : "running", questions: open, messages: [], ai: { keyPresent } });
+  // The companion's queue (scripts/companion.cjs queue): a finished attempt
+  // still waiting on its check after half an hour is listed as "review".
+  const needsYou = () => {
+    const waiting = tasks.find((task) => task.id === "t2" && task.status === "awaiting_verification");
+    const items = checkingLong && waiting ? [{ id: "review:t2", kind: "review", taskId: "t2", title: waiting.title, at: now - 45 * 60000, actions: [{ id: "checks", label: "View checks" }] }] : [];
+    return { items, counts: { total: items.length, review: items.length } };
+  };
+  const assistant = () => ({ projectId: P, status: paused ? "paused" : "running", questions: open, messages: [], ai: { keyPresent }, ...(checkingLong ? { needsYou: needsYou() } : {}) });
   const api = {
     projectsList: async () => ({ projects: [{ id: P, name: "Sunrise" }], activeId: P }),
     tasksList: async () => ({ ok: true, projectId: P, tasks }),
@@ -40,7 +48,12 @@ function bridge({ held = false, execute = true, paused = false, keyPresent = tru
     tasksCreate: async (args) => { calls.push(["tasksCreate", args.title]); return { ok: true, task: { id: "t9", projectId: P, title: args.title, status: "open" } }; },
     assistantControl: async (action) => { calls.push(["assistantControl", action]); status.held = false; status.execute = true; paused = false; return { ok: true, state: assistant(), autopilot: { ...status } }; },
     backlogControl: async (args) => { calls.push(["backlogControl", args.action, args.taskId, args.expectedScope]); approval = approval.filter((row) => row.id !== args.taskId); return { ok: true, backlog: backlog() }; },
-    tasksAction: async (args) => { calls.push(["tasksAction", args.action, args.taskId]); blocked = blocked.filter((row) => row.id !== args.taskId); return { ok: true, backlog: backlog() }; },
+    tasksAction: async (args) => {
+      calls.push(["tasksAction", args.action, args.taskId]); blocked = blocked.filter((row) => row.id !== args.taskId);
+      const task = tasks.find((item) => item.id === args.taskId);
+      if (args.action === "status" && task) task.status = args.status;
+      return { ok: true, backlog: backlog(), ...(args.action === "status" && task ? { task: { ...task } } : {}) };
+    },
     assistantAnswer: async ({ id, optionId }) => { calls.push(["assistantAnswer", id, optionId]); open = open.map((item) => item.id === id ? { ...item, status: "answered" } : item); return { ok: true, state: assistant() }; },
   };
   return { api, calls };
@@ -61,6 +74,8 @@ async function load(options = {}) {
     addEventListener(name, callback) { (events[name] ||= []).push(callback); }, dispatchEvent(event) { for (const callback of events[event.type] || []) callback(event); return true; },
     mefiStudio: api,
     MefiNav: { register() {}, current: () => "vibe", go: (id, params) => gone.push([id, params ?? null]) },
+    // studio-ui.js MefiUi.arm's contract: the first press shows the question (.danger-armed), the second runs it.
+    ...(options.ui ? { MefiUi: { arm(button, { run, armed }) { let ready = false, resting = ""; button.addEventListener("click", (event) => { if (!ready) { ready = true; resting = button.textContent; button.textContent = armed; button.classList.add("danger-armed"); return; } ready = false; button.textContent = resting; button.classList.remove("danger-armed"); run(event); }); return button; } } } : {}),
   };
   const context = vm.createContext({
     window, document, console,
@@ -142,6 +157,119 @@ test("approve, retry and answer from the drawer, in order, without leaving Vibe"
   assert.equal(vibe.snapshot().open, null, "the drawer closes when nothing is left");
   assert.deepEqual(vibe.snapshot().needs, []);
   assert.equal(gone.length, 0, "nothing navigated away from Vibe");
+});
+
+test("Drop it and It's done in the drawer ask first, then act, as the Tasks panel's Drop does", async () => {
+  const { vibe, calls, get } = await load({ ui: true, questions: false });
+  const buttons = () => get("vibe-ask-body").querySelector(".vibe-ask-actions").children;
+  vibe.openNeed({ kind: "approval", id: "t6" });
+  assert.deepEqual(buttons().map((button) => button.textContent), ["Approve build", "Drop it"]);
+  buttons()[1].click();
+  assert.equal(buttons()[1].textContent, "Drop this task?");
+  assert.equal(calls.length, 0, "one press only asks");
+  vibe.openNeed({ kind: "blocked", id: "t7" });
+  assert.deepEqual(buttons().map((button) => button.textContent), ["Try again", "It's done", "Drop it"]);
+  buttons()[1].click();
+  assert.equal(buttons()[1].textContent, "Mark it done?");
+  assert.equal(calls.length, 0);
+  buttons()[1].click();
+  await settle();
+  assert.deepEqual(calls, [["tasksAction", "status", "t7"]], "the second press acts");
+  vibe.openNeed({ kind: "approval", id: "t6" });
+  buttons()[1].click(); buttons()[1].click();
+  await settle();
+  assert.deepEqual(calls.at(-1), ["tasksAction", "drop", "t6"]);
+});
+
+test("a check that runs long says Studio is still checking, how long, and never offers Drop", async () => {
+  const { vibe, calls, get, gone } = await load({ checkingLong: true, questions: false, approvals: false, stuck: false });
+  assert.deepEqual(vibe.snapshot().needs, [{ kind: "review", id: "t2", title: "Fix the login redirect loop" }]);
+  const row = get("vibe-lane-needs").children[0];
+  assert.ok(row.classList.contains("is-check"));
+  assert.equal(row.children[0].children[2].textContent, "checking its work · 45 min so far");
+  assert.equal(row.children[1].textContent, "Check on it");
+  row.children[1].click();
+  assert.deepEqual(vibe.snapshot().open, { kind: "review", id: "t2" });
+  assert.equal(get("vibe-ask-kicker").textContent, "Still checking");
+  const body = get("vibe-ask-body");
+  assert.deepEqual(body.querySelector(".vibe-ask-chips").children.map((node) => node.textContent), ["Checking its work", "for 45 min"]);
+  assert.equal(body.querySelector(".vibe-ask-detail").textContent, "The worker finished, and Studio has been checking the result for 45 min, longer than usual. You can look at the checks, or mark it done if you have checked it yourself.");
+  assert.doesNotMatch(body.textContent, /Stuck|needed from you/, "it is listed under Needs you, so it never says you are not needed");
+  const buttons = body.querySelector(".vibe-ask-actions").children;
+  assert.deepEqual(buttons.map((button) => button.textContent), ["View checks", "It's done"], "no Try again, no Drop: the check holds the card");
+  buttons[0].click();
+  assert.deepEqual(plain(gone.at(-1)), ["tasks", { taskId: "t2", filter: "all" }]);
+  assert.equal(get("vibe-ask").hidden, true);
+  // Confirming it yourself closes it, and it does not come back.
+  vibe.openNeed({ kind: "review", id: "t2" });
+  get("vibe-ask-body").querySelector(".vibe-ask-actions").children[1].click();
+  await settle();
+  assert.deepEqual(calls, [["tasksAction", "status", "t2"]]);
+  assert.deepEqual(vibe.snapshot().needs, []);
+});
+
+test("a push while It's done asks keeps the question up, and the second press marks it done", async () => {
+  const { vibe, calls, get, window } = await load({ ui: true, checkingLong: true, questions: false, approvals: false, stuck: false });
+  vibe.openNeed({ kind: "review", id: "t2" });
+  const done = () => get("vibe-ask-body").querySelector(".vibe-ask-actions").children[1];
+  const asking = done();
+  asking.click();
+  assert.equal(asking.textContent, "Mark it done?");
+  // The check writes the card while the button asks.
+  const list = await window.mefiStudio.tasksList();
+  window.mefiStudio.tasksList = async () => ({ ...list, tasks: list.tasks.map((task) => task.id === "t2" ? { ...task, updatedAt: Date.now() } : task) });
+  await vibe.refresh(); await settle();
+  assert.equal(done(), asking, "the asking button is not swapped for a fresh one");
+  assert.equal(asking.textContent, "Mark it done?");
+  asking.click(); await settle();
+  assert.deepEqual(calls, [["tasksAction", "status", "t2"]]);
+});
+
+test("Ask for a change waits while a request is still sending, so the follow-up is not joined to it", async () => {
+  const { vibe, calls, get, fire, window } = await load({ questions: false, approvals: false, stuck: false });
+  const input = get("vibe-input");
+  let land;
+  window.mefiStudio.tasksCreate = (args) => { calls.push(["tasksCreate", args.title]); return new Promise((resolve) => { land = () => resolve({ ok: true, task: { id: "t9", projectId: P, title: args.title, status: "open" } }); }); };
+  input.value = "Add a dark mode toggle";
+  fire(get("vibe-compose"), "submit");
+  await settle();
+  const refused = plain(vibe.requestChange({ id: "t1", projectId: P, title: "Login page", status: "done" }));
+  assert.equal(refused.ok, false);
+  assert.match(refused.error, /^Wait for the request you just sent/);
+  assert.equal(input.value, "Add a dark mode toggle", "the text being sent is left alone");
+  land(); await settle();
+  assert.equal(input.value, "", "the sent text clears once it lands");
+  assert.equal(plain(vibe.requestChange({ id: "t1", projectId: P, title: "Login page", status: "done" })).ok, true);
+  assert.equal(input.value, 'Follow-up to task "Login page" (t1).\n\nRequested change:\n\nDone when:\n- ');
+  assert.deepEqual(calls, [["tasksCreate", "Add a dark mode toggle"]], "the first request is created once");
+});
+
+test("a follow-up is added under this project's draft only, and the bare scaffold is not sent", async () => {
+  const storage = new Map([["mefiStudio.vibe.draft.p1", "First project's draft"]]);
+  const env = await load({ storage, questions: false, approvals: false, stuck: false });
+  const input = env.get("vibe-input");
+  assert.equal(input.value, "First project's draft");
+  // Another project opens without a project-changed event reaching Vibe yet.
+  env.window.MefiWorkspace = { activeProjectId: () => "p2" };
+  assert.equal(plain(env.vibe.requestChange({ id: "t1", projectId: "p1", title: "Login page", status: "done" })).ok, false, "p1's task is refused while p2 is open");
+  assert.equal(plain(env.vibe.requestChange({ id: "t8", projectId: "p2", title: "Header", status: "done" })).ok, true);
+  assert.equal(input.value, 'Follow-up to task "Header" (t8).\n\nRequested change:\n\nDone when:\n- ');
+  assert.equal(env.storage.get("mefiStudio.vibe.draft.p1"), "First project's draft", "the first project's saved draft is untouched");
+  assert.equal(env.storage.get("mefiStudio.vibe.draft.p2"), input.value);
+  env.window.MefiWorkspace = { activeProjectId: () => "p1" };
+  assert.equal(plain(env.vibe.requestChange({ id: "t1", projectId: "p1", title: "Login page", status: "done" })).ok, true);
+  assert.equal(input.value, 'First project\'s draft\n\nFollow-up to task "Login page" (t1).\n\nRequested change:\n\nDone when:\n- ');
+  assert.equal(env.storage.get("mefiStudio.vibe.draft.p2"), 'Follow-up to task "Header" (t8).\n\nRequested change:\n\nDone when:\n- ', "p2's draft stays p2's");
+  // The scaffold alone says nothing to build.
+  input.value = 'Follow-up to task "Login page" (t1).\n\nRequested change:\n\nDone when:\n- ';
+  env.fire(env.get("vibe-compose"), "submit");
+  await settle();
+  assert.deepEqual(env.calls, []);
+  assert.match(env.get("vibe-feedback").textContent, /Say what to change first/);
+  input.value = 'Follow-up to task "Login page" (t1).\n\nRequested change:\nKeep the email after a failed sign-in.\n\nDone when:\n- ';
+  env.fire(env.get("vibe-compose"), "submit");
+  await settle();
+  assert.deepEqual(env.calls, [["tasksCreate", 'Follow-up to task "Login page" (t1).']]);
 });
 
 

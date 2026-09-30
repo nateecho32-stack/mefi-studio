@@ -589,6 +589,28 @@ test("Drop closes unfinished work without claiming it finished, and the parent t
   assert.equal((await dependent.env.taskAction({ action: "drop", taskId: "base" })).ok, false, "a card other work waits on is not dropped");
 });
 
+// A dropped card the owner then marks done is finished: it kept its dropped
+// stamp, and Tasks read "dropped by you — not finished" on a completed card.
+test("marking a dropped card done clears the drop and says so in its log", async () => {
+  const { env, board } = controlHost({ tasks: [{ id: "drop-me", title: "Wire the toggle", prompt: "Add the toggle.", status: "open", createdAt: 1 }] });
+  assert.equal((await env.taskAction({ action: "drop", taskId: "drop-me", projectId: "project-a" })).ok, true);
+  assert.equal(backlog.droppedTask(board().tasks[0]), true);
+  const done = await env.taskAction({ action: "status", status: "done", taskId: "drop-me", projectId: "project-a" });
+  assert.equal(done.ok, true);
+  const saved = board().tasks[0];
+  assert.equal(saved.status, "done");
+  assert.equal(saved.dropped, undefined, "no longer dropped");
+  assert.equal(saved.verification.state, "manual");
+  assert.equal(backlog.completedTask(saved), true);
+  assert.equal(backlog.droppedTask(saved), false);
+  assert.equal(done.task.dropped, undefined);
+  assert.equal(saved.logs.at(-1).text, "Completion confirmed by you (it was dropped before)");
+  // A card that was never dropped keeps the plain line.
+  const plain = controlHost({ tasks: [{ id: "plain", title: "Plain", prompt: "Plain.", status: "open", createdAt: 1 }] });
+  assert.equal((await plain.env.taskAction({ action: "status", status: "done", taskId: "plain", projectId: "project-a" })).ok, true);
+  assert.equal(plain.board().tasks[0].logs.at(-1).text, "Completion confirmed by you");
+});
+
 test("stop ends backlog mode only: pause and the executor switch stay as they were", async () => {
   const { env, state, autopilot, effects } = controlHost();
   await env.backlogControl({ action: "run", projectId: "project-a" });

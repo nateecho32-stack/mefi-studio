@@ -123,4 +123,31 @@ test("a lead that cannot be used keeps it one card and says so in its sized step
   assert.equal(result.steps, undefined);
   const sized = h.progress().find((event) => event.stage === "sized");
   assert.equal(sized.size, "kept");
+  assert.equal(sized.why, "no-answer");
+});
+
+// The page tells a lead that chose one task from a sizing that failed, so the
+// sized step names why sizing kept it one card.
+test("a kept card's sized step says why: a timeout, no answer, too many steps or an unusable reply", async () => {
+  const seven = JSON.stringify({ size: "steps", steps: Array.from({ length: 7 }, (_, index) => ({ id: `s${index + 1}`, title: `Step ${index + 1}`, prompt: "Do it.", acceptance: ["Done"], dependsOn: [] })) });
+  const cases = [
+    [{ ok: false, errorKind: "timeout", error: "assistant call failed: This operation was aborted" }, "timeout"],
+    [{ ok: false, error: "The lead timed out" }, "timeout"],
+    [{ ok: false, error: "No AI route is connected" }, "no-answer"],
+    [null, "no-answer"],
+    [{ ok: true, text: seven }, "too-many"],
+    [{ ok: true, text: "I would split this into a few parts." }, "unusable"],
+  ];
+  for (const [reply, why] of cases) {
+    const h = host({ reply });
+    const result = await h.context.vibeBuild({ prompt: big, projectId: "p1", requestId: `vibe-size-${why}` });
+    assert.equal(result.ok, true, why);
+    const sized = h.progress().find((event) => event.stage === "sized");
+    assert.deepEqual({ size: sized.size, why: sized.why }, { size: "kept", why }, JSON.stringify(reply)?.slice(0, 60));
+  }
+  const one = host({ reply: { ok: true, text: JSON.stringify({ size: "one" }) } });
+  await one.context.vibeBuild({ prompt: big, projectId: "p1", requestId: "vibe-size-one" });
+  const chosen = one.progress().find((event) => event.stage === "sized");
+  assert.equal(chosen.size, "one", "the lead's own answer");
+  assert.equal(chosen.why, undefined);
 });

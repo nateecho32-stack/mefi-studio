@@ -1035,7 +1035,16 @@
     }
     state.hoverNode = state.hoverNode ? state.nodes.find((entry) => entry.id === state.hoverNode.id) ?? null : null;
     state.hoverBubble = state.hoverBubble ? state.nodes.find((entry) => entry.id === state.hoverBubble.id) ?? null : null;
+    const treeWas = state.treeStatus;
     state.treeStatus = window.MefiTree?.status?.() ?? (window.mefiStudio ? "ok" : "desktop-only");
+    // The store coming back (or dropping) changes the hint, the pills and the
+    // autopilot switch, none of which repaint on a rebuild by themselves: the
+    // offline hint stayed up after the rail had drawn the recovered store.
+    if (treeWas !== state.treeStatus && state.active) {
+      renderHint();
+      renderSettingsPanel();
+      updateTelemetry(true);
+    }
     renderEmpty();
     updateAssistantPill();
     if (state.query) applyQuery();
@@ -3330,8 +3339,11 @@
       } else if (action === "start-work") window.MefiToast?.("new work is on · queued work can start when ready", "good");
       else if (action === "pause") window.MefiToast?.("new work is off · current jobs can finish", "info");
       else if (action === "stop-all") {
+        // `stopped` counts kill requests; `idle: false` says a worker was
+        // still alive when the host stopped waiting, so that is not "stopped".
         const stopped = Number(result.stopped) || 0;
-        window.MefiToast?.(stopped ? `stopped ${stopped} agent(s) · progress saved, work stays queued` : "no agents were running · new work is off", stopped ? "good" : "info");
+        if (result.idle === false) window.MefiToast?.(`${stopped ? `asked ${stopped} agent(s) to stop` : "new work is off"} · a run is still finishing · progress saved`, "warn");
+        else window.MefiToast?.(stopped ? `stopped ${stopped} agent(s) · progress saved, work stays queued` : "no agents were running · new work is off", stopped ? "good" : "info");
       }
       else window.MefiToast?.(`assistant ${full?.status ?? action}`, "info");
       return result;
@@ -10264,6 +10276,16 @@
     return true;
   }
 
+  // A task's place on the graph, most alive first: its running builder, its
+  // own node, then the plan group that holds it as a member.
+  function selectTaskNode(taskId) {
+    const id = String(taskId ?? "");
+    if (!id) return false;
+    if (select(`builder:${id}`) || select(`task:${id}`)) return true;
+    const group = state.nodes.find((node) => !node.dying && node.taskGroup?.members?.some((member) => String(member?.id) === id));
+    return group ? select(group.id) : false;
+  }
+
   function selection() {
     const current = state.selected;
     if (!current) return null;
@@ -10273,7 +10295,9 @@
       kind: node.kind,
       label: node.label ?? null,
       sessionId: node.kind === "session" ? node.id : node.kind === "todo" ? node.sessionId ?? null : null,
-      taskId: node.kind === "task" ? node.task?.id ?? null : null,
+      // A builder stands for the task it is building: Live's "same task" and
+      // the T key read this after nav lands a task on its running builder.
+      taskId: node.kind === "task" ? node.task?.id ?? null : node.builder ? node.job?.taskId ?? null : null,
       anchorSessionId: node.anchorSessionId ?? null,
       assistant: node.kind === "assistant",
       folded: node.kind === "folded" ? node.sessionIds ?? [] : null,
@@ -12120,7 +12144,19 @@
     let applied = false;
     if (typeof params?.rail === "string" && typeof setRailTab === "function") { setRailTab(params.rail, { focus: true }); applied = true; }
     const selectedId = typeof params?.selected === "string" ? params.selected : "";
-    if (selectedId && select(selectedId)) applied = true;
+    // A task named by id (the Agents page's running builds; nav also turns it
+    // into selected "task:<id>") lands on its live builder first. A builder or
+    // task id that is not on the graph falls back the same way: a builder node
+    // lives only while its job runs, so Fleet's Open in Command on an idle
+    // seat used to select nothing.
+    const taskId = typeof params?.taskId === "string" || typeof params?.taskId === "number" ? String(params.taskId).trim() : "";
+    if (taskId && (!selectedId || selectedId === `task:${taskId}`)) {
+      if (selectTaskNode(taskId)) applied = true;
+      else window.MefiToast?.("That task is not on the Command board right now", "info");
+    } else if (selectedId) {
+      const workId = /^(builder|task):/.test(selectedId) ? selectedId.slice(selectedId.indexOf(":") + 1) : "";
+      if (select(selectedId) || (workId && selectTaskNode(workId))) applied = true;
+    }
     if (typeof params?.zoom === "number" && Number.isFinite(params.zoom)) {
       setZoom(params.zoom);
       applied = true;
@@ -12935,8 +12971,15 @@
     el.feedBuildMode?.addEventListener("change", () => void changeBuildMode(el.feedBuildMode.value));
     el.feedAgentMode?.addEventListener("change", () => void changeAgentMode(el.feedAgentMode.value));
     el.settingsAgentMode?.addEventListener("change", () => void changeAgentMode(el.settingsAgentMode.value));
-    el.stopAll?.addEventListener("click", () => void stopAllAgents());
-    el.restart?.addEventListener("click", () => void restartStudio());
+    // Both brakes ask first, as the Explorer's do: the first press arms the
+    // question on the button, a second press within a few seconds acts.
+    const armBrake = (button, run, question) => {
+      if (!button) return;
+      if (window.MefiUi?.arm) window.MefiUi.arm(button, { run, armed: question });
+      else button.addEventListener("click", run);
+    };
+    armBrake(el.stopAll, () => void stopAllAgents(), "Stop every run?");
+    armBrake(el.restart, () => void restartStudio(), "Restart Studio?");
     setFeedMenu(state.feedMenuOpen);
     window.addEventListener("mefi:project-changed", projectChanged);
     el.emptyRetry?.addEventListener("click", async () => {
