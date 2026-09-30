@@ -1,8 +1,8 @@
 "use strict";
 
 // Build's desktop inside the 0.5 frame (renderer/sessions.js), in a real Chromium: a copied booklet, the new layout
-// switched on (?layout=v2), a stand-in for the shell's regions (the real one, renderer/shell.js, is another slice's: this
-// fixture's MefiShell only gives the three panels a box each, placed from the same variables the pages read) and a synthetic
+// switched on (?layout=v2), the real shell (renderer/shell.js: its list, main and inspector regions, its drawers below
+// 900 CSS px, its bars) and a synthetic
 // bridge that answers with a board that has a task in every stage, a run in its own worktree, an open question, a finished
 // attempt with changes (Accept, Revert and its Undo really change what the bridge answers next), pictures a brief and a
 // message carry, and the before and after shots of an attempt. It checks what the DOM tests cannot: the list, the thread
@@ -206,47 +206,6 @@ function bridge(seedData) {
   });
 }
 
-// ---- a stand-in for the shell's regions (renderer/shell.js is another slice's) -----------------------------------------------------
-function installShell() {
-  const css = document.createElement("style"); css.id = "fx-shell-style";
-  css.textContent = `.fx-region{position:fixed;z-index:var(--z-shell);box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
-    #fx-list{left:var(--shell-rail-w);width:var(--shell-list-w);top:0;bottom:var(--shell-y1)}
-    #fx-inspector{right:0;width:var(--shell-inspector-w);top:var(--shell-y0);bottom:var(--shell-y1)}
-    #fx-main{left:var(--shell-x0);right:var(--shell-x1);top:var(--shell-y0);bottom:var(--shell-y1);z-index:calc(var(--z-shell) - 1)}
-    .fx-region:empty{display:none}
-    html[data-layout-fold~="list"] #fx-list:not([data-drawer="open"]),html[data-layout-fold~="inspector"] #fx-inspector:not([data-drawer="open"]){display:none}
-    #fx-list[data-drawer="open"],#fx-inspector[data-drawer="open"]{display:flex;top:0;bottom:0;width:min(320px,90vw);z-index:calc(var(--z-shell) + 2);border:1px solid var(--hairline-strong)}
-    #fx-list[data-drawer="open"]{left:0;right:auto}#fx-inspector[data-drawer="open"]{right:0;left:auto}`;
-  document.head.append(css);
-  const regions = {}, asked = { list: 300, inspector: 380 }, panels = { list: new Map(), inspector: new Map(), main: new Map() };
-  for (const name of ["list", "inspector", "main"]) { const node = document.createElement("div"); node.id = `fx-${name}`; node.className = "fx-region"; node.dataset.region = name; document.body.append(node); regions[name] = node; }
-  const settle = (name) => {
-    const any = [...panels[name].values()].some((entry) => entry.shown);
-    regions[name].hidden = !any;
-    if (asked[name] !== undefined) window.MefiNav?.layout?.set?.(name, any ? asked[name] : 0);
-    window.dispatchEvent(new CustomEvent("mefi:shell-layout", { detail: { region: name, open: any } }));
-  };
-  window.MefiShell = {
-    active: () => true,
-    region: (name) => regions[name] ?? null,
-    mount(name, key, element) {
-      if (!regions[name]) return null;
-      const entry = { element, shown: true };
-      panels[name].set(key, entry);
-      regions[name].append(element);
-      settle(name);
-      return {
-        show() { entry.shown = true; element.hidden = false; settle(name); },
-        hide() { entry.shown = false; element.hidden = true; settle(name); },
-        unmount() { panels[name].delete(key); element.remove(); settle(name); },
-      };
-    },
-    size: (name) => Number(window.MefiNav?.layout?.used?.(name)) || 0,
-    // A folded region (html[data-layout-fold]) is a drawer: the stand-in opens it over the page the way the real shell will.
-    drawer(name, open) { regions[name].dataset.drawer = open ? "open" : ""; regions[name].hidden = false; },
-  };
-}
-
 // ---- what the page looks like right now, in real pixels ---------------------------------------------------------------------------------
 const measure = `
   const box = (node) => { if (!node) return null; const r = node.getBoundingClientRect(); return { x: Math.round(r.left * 10) / 10, y: Math.round(r.top * 10) / 10, r: Math.round(r.right * 10) / 10, b: Math.round(r.bottom * 10) / 10, w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10 }; };
@@ -262,7 +221,7 @@ const measure = `
     inner: { w: innerWidth, h: innerHeight },
     pageOverflow: document.documentElement.scrollWidth > innerWidth + 1 || document.body.scrollWidth > innerWidth + 1,
     scrollbarWidth: getComputedStyle(document.documentElement).scrollbarWidth,
-    regions: { list: box(document.getElementById('fx-list')), main: box(document.getElementById('fx-main')), inspector: box(document.getElementById('fx-inspector')) },
+    regions: { list: box(document.querySelector('.shell-list')), main: box(document.querySelector('.shell-main')), inspector: box(document.querySelector('.shell-inspector')) },
     list: box(document.getElementById('sessions-list')), thread: box(document.getElementById('sessions-thread')), inspector: box(document.getElementById('sessions-inspector')),
     head: box(document.getElementById('sessions-head')), scroll: box(document.getElementById('sessions-thread-scroll')), dock: box(document.getElementById('sessions-dock')), compose: box(document.getElementById('sessions-compose')), send: box(document.getElementById('sessions-send')), input: box(document.getElementById('sessions-input')),
     itabs: box(document.getElementById('sessions-itabs')), ibody: box(document.getElementById('sessions-inspector-scroll')),
@@ -335,9 +294,7 @@ app.whenReady().then(async () => {
   await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1", layout: "v2" } });
   await until("window.MefiNav && window.MefiWorkspace && window.MefiSessions && !window.MefiBoot?.isActive?.()", "studio ready (v2)");
   assert.equal(await run("return document.documentElement.dataset.layout;"), "v2");
-  assert.equal(await run("return window.MefiSessions.active();"), false, "with no shell there is nothing to draw into, and nothing is drawn");
-  assert.equal(await run("return document.querySelectorAll('.sx-panel').length;"), 0);
-  await run(`window.__installShell = ${installShell.toString()}; window.__installShell(); window.dispatchEvent(new CustomEvent('mefi:shell-layout', { detail: { region: 'all' } }));`);
+  await until("window.MefiShell && window.MefiShell.active()", "the shell's frame is up (v2)");
   await run("window.MefiVibe.setMode('build', { go: false }); window.MefiNav.applyShell(true); window.MefiNav.setRailPinned(false, { save: false });");
   await run("window.MefiNav.go('workspace');");
   await until("document.body.classList.contains('workspace-active')", "Home is up (v2)");
@@ -718,7 +675,9 @@ app.whenReady().then(async () => {
   for (const [width, height, zoom] of sizes) {
     const label = `${width}x${height}@${zoom}`;
     await size(width, height, zoom);
-    await run("window.MefiShell.drawer('list', false); window.MefiShell.drawer('inspector', false);");
+    // Columns dock when the window has room for them (and are opened if an earlier size closed them); a folded one is a drawer, put away here.
+    await run("for (const name of ['list', 'inspector']) { const info = window.MefiShell.info(name); if (info && info.drawer) window.MefiShell.close(name); else window.MefiShell.open(name); }");
+    await sleep(250);
     for (const [id, part] of [["task_ask", "empty state"], ["task_review", "Markdown"]]) {
       await run(`window.MefiSessions.select(${q(id)});`);
       await until(`document.querySelector('#sessions-head .sx-title')?.textContent.includes(${q(part)}) && !document.getElementById('sessions-thread').hidden`, `${id} shows at ${label}`);
@@ -762,8 +721,9 @@ app.whenReady().then(async () => {
         const opened = await run(boxState);
         assert.equal(opened.open, "true"); assert.equal(opened.chips, true, `${label}: More brings the chips back: ${JSON.stringify(opened)}`); assert.equal(opened.worker, true);
         assert.equal(opened.top, true, `${label}: and the row of purposes: ${JSON.stringify(opened)}`);
-        const inside = await run("const form = document.getElementById('sessions-compose').getBoundingClientRect(); const send = document.getElementById('sessions-send').getBoundingClientRect(); return form.bottom <= innerHeight + 1 && send.bottom <= innerHeight + 1;");
-        assert.equal(inside, true, `${label}: opened, the whole box is still on screen`);
+        await capture(`sessions-more-${id === "task_ask" ? "ask" : "review"}-${width}${height < 520 ? "-short" : ""}${zoom === 1 ? "" : "-zoom"}.png`);
+        const inside = await run("const form = document.getElementById('sessions-compose').getBoundingClientRect(); const send = document.getElementById('sessions-send').getBoundingClientRect(); const bar = document.querySelector('.shell-status')?.getBoundingClientRect(); const free = bar ? bar.top : innerHeight; return { ok: form.bottom <= free + 1 && send.bottom <= free + 1 && form.top >= 0, form: [Math.round(form.top), Math.round(form.bottom)], send: [Math.round(send.top), Math.round(send.bottom)], free, inner: innerHeight };");
+        assert.equal(inside.ok, true, `${label}: opened, the whole box is still on screen and clear of the status bar: ${JSON.stringify(inside)}`);
         await click("#sessions-compose .sx-more");
         assert.equal((await run(boxState)).chips, false, `${label}: and More folds it again`);
       }
@@ -771,7 +731,7 @@ app.whenReady().then(async () => {
     if (report.layouts.at(-1).folded) {
       // A folded window (under 900 CSS px) has no columns: the list and the inspector are drawers, and each fits the window when opened.
       for (const region of ["list", "inspector"]) {
-        await run(`window.MefiShell.drawer(${q(region)}, true);`);
+        await run(`window.MefiShell.open(${q(region)});`);
         await sleep(300);
         const d = await run(measure);
         const panel = region === "list" ? d.list : d.inspector;
@@ -780,7 +740,7 @@ app.whenReady().then(async () => {
         assert.deepEqual(d.scrollers.filter((item) => item.reserved > 0.75 || item.reservedY > 0.75), [], `${label}: no scroller reserves width in the ${region} drawer`);
         assert.deepEqual(d.spill, [], `${label}: nothing sticks out of the ${region} drawer: ${JSON.stringify(d.spill)}`);
         await capture(`sessions-${region}-drawer-${width}${zoom === 1 ? "" : "-zoom"}.png`);
-        await run(`window.MefiShell.drawer(${q(region)}, false);`);
+        await run(`window.MefiShell.close(${q(region)});`);
       }
     }
   }
@@ -802,6 +762,8 @@ app.whenReady().then(async () => {
   assert.equal(await count(".sx-panel"), 0, "v1 removes the panels");
   assert.equal(await run("return window.MefiSessions.active();"), false);
   assert.equal(await run("return window.MefiNav.setLayout('v2');"), true);
+  // A live switch back to v2 does not build the frame (a reload does, or MefiShell.enable() at once): the panels wait for it and draw when it is up.
+  await run("if (!window.MefiShell.active()) window.MefiShell.enable();");
   await until("window.MefiSessions.active() && document.querySelectorAll('.sx-panel').length === 3", "v2 brings them back");
   await until("document.querySelectorAll('#sessions-list .sx-row').length >= 9", "with the board");
   step("off and on, and v1 and v2 again");
@@ -811,7 +773,7 @@ app.whenReady().then(async () => {
   await sleep(300);
   await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1", layout: "v2" } });
   await until("window.MefiNav && window.MefiWorkspace && window.MefiSessions && !window.MefiBoot?.isActive?.()", "studio ready again");
-  await run(`window.__installShell = ${installShell.toString()}; window.__installShell(); window.dispatchEvent(new CustomEvent('mefi:shell-layout', { detail: { region: 'all' } }));`);
+  await until("window.MefiShell && window.MefiShell.active()", "the shell's frame is up again");
   await run("window.MefiVibe.setMode('build', { go: false }); window.MefiNav.applyShell(true);");
   // The resume (nav.js resumeReady) enters Home directly, with no route: what remembers the session is this module's own memory.
   await run("await window.MefiWorkspace.enter();");
@@ -822,7 +784,7 @@ app.whenReady().then(async () => {
   step("the selected session survives a reload");
   await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1", layout: "v2", sessions: "off" } });
   await until("window.MefiNav && window.MefiWorkspace && window.MefiSessions && !window.MefiBoot?.isActive?.()", "studio ready with ?sessions=off");
-  await run(`window.__installShell = ${installShell.toString()}; window.__installShell(); window.dispatchEvent(new CustomEvent('mefi:shell-layout', { detail: { region: 'all' } }));`);
+  await until("window.MefiShell && window.MefiShell.active()", "the shell's frame is up again");
   await sleep(800);
   assert.equal(await run("return window.MefiSessions.enabled();"), false);
   assert.equal(await run("return window.MefiSessions.active();"), false, "?sessions=off leaves the panels out even with the shell there");

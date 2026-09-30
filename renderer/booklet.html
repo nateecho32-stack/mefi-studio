@@ -12496,7 +12496,7 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
 .sx-thread[data-short="true"] .sx-actions :is(.sx-icon, [data-spec="watch"], [data-spec="drop"]) { display: none; }
 .sx-thread[data-short="true"] .sx-chips .sx-chip:not(:first-child) { display: none; }
 .sx-thread[data-short="true"] .sx-dock { max-height: 40%; }
-.sx-thread[data-short="true"] .sx-compose { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px; margin-bottom: 8px; padding: 6px 8px 8px; }
+.sx-thread[data-short="true"] .sx-compose { display: flex; flex: 0 1 auto; flex-wrap: wrap; align-items: flex-end; gap: 6px; min-height: 0; margin-bottom: 8px; padding: 6px 8px 8px; overflow-y: auto; overscroll-behavior: contain; }
 .sx-thread[data-short="true"] #sessions-input { order: 1; flex: 1 1 0; min-width: 0; height: 44px; min-height: 44px; }
 .sx-thread[data-short="true"] .sx-tools { display: contents; }
 .sx-thread[data-short="true"] :is(.sx-send, .sx-more) { order: 2; margin: 0 0 3px; }

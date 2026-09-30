@@ -1,5 +1,5 @@
 // Build's desktop inside the 0.5 frame (renderer/sessions.js) in a real renderer: a copied booklet, the layout switched on,
-// a stand-in for the shell's regions and a synthetic bridge (tests/fixtures/sessions-render-electron.cjs). Set
+// the real shell's regions and a synthetic bridge (tests/fixtures/sessions-render-electron.cjs). Set
 // MEFI_SESSIONS_CAPTURE_DIR to an absolute folder to keep the screenshots.
 import test from "node:test";
 import assert from "node:assert/strict";
