@@ -123,6 +123,9 @@ app.whenReady().then(async () => {
   await sleep(4500);
   report.borderless = await run("const w=document.getElementById('media-window');return w.parentElement===document.body&&!w.hidden&&getComputedStyle(w).borderTopWidth==='0px'&&getComputedStyle(document.querySelector('.media-window-controls')).opacity==='1'&&w.contains(window.fixtureMedia);");
   assert.ok(report.borderless, "player is a borderless body surface with window controls");
+  // A loaded link is shown no picture while the menu is closed: it has asked YouTube's image host for nothing
+  // (this is the request tests/unified_studio_render.test.mjs once caught). The stub only counts what is asked.
+  assert.equal(report.thumbnails || 0, 0, "a loaded link asks for no picture until the menu opens");
   await layout(); await capture("media-window-rest.png");
   await run("document.body.classList.add('command-zen');");
   assert.equal(await run("return getComputedStyle(document.querySelector('.media-window-toolbar')).visibility==='hidden'&&getComputedStyle(window.fixtureMedia).visibility==='visible';"), true, "Zen hides floating window controls while preserving playback");
@@ -237,7 +240,9 @@ app.whenReady().then(async () => {
   await run("document.getElementById('media-window-background').click();");
   await mouse(10, 10);
   const mediaButton = await run("window.fixtureHoverFocus=document.activeElement;const r=document.getElementById('idle-music-toggle').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};");
-  await mouse(mediaButton.x, mediaButton.y); await sleep(300);
+  await mouse(mediaButton.x, mediaButton.y);
+  // Hover opens the menu after a short delay; a busy box can take longer than a fixed wait, so wait for it.
+  await until("return !document.getElementById('music-dropdown').hidden;", "a native hover to open the mini player");
   assert.equal(await run("const menu=document.getElementById('music-dropdown');return !menu.hidden&&menu.dataset.source==='link'&&menu.dataset.size==='compact'&&document.activeElement===window.fixtureHoverFocus;"), true, "native hover opens the mini player on the current video, folded, without moving keyboard focus");
   // Every visit starts at the top of the card with the video docked in its stage (carried there, not
   // reloaded), so nothing needs scrolling into view, however far the card was scrolled last time.
@@ -253,11 +258,15 @@ app.whenReady().then(async () => {
   await mouse(10, 10); await sleep(550);
   assert.equal(await run("return document.getElementById('music-dropdown').hidden;"), false, "using the provider keeps its menu open until dismissed");
   await click("music-dropdown-close");
-  await mouse(10, 10); await mouse(mediaButton.x, mediaButton.y); await sleep(300);
-  await mouse(10, 10); await sleep(550);
+  await mouse(10, 10); await mouse(mediaButton.x, mediaButton.y);
+  await until("return !document.getElementById('music-dropdown').hidden;", "a second native hover to open the menu");
+  await mouse(10, 10);
+  await until("return document.getElementById('music-dropdown').hidden;", "leaving an untouched hover to dismiss it");
   assert.equal(await run("return document.getElementById('music-dropdown').hidden;"), true, "leaving an untouched hover dismisses it");
-  await mouse(mediaButton.x, mediaButton.y); await sleep(300);
-  await sleep(250);
+  await mouse(mediaButton.x, mediaButton.y);
+  await until("return !document.getElementById('music-dropdown').hidden;", "a third native hover to open the menu");
+  // The card eases open over a moment: measure once it has finished rather than after a guessed delay.
+  await run("await Promise.all(document.getElementById('music-dropdown').getAnimations().map(animation=>animation.finished.catch(()=>{})));");
   const volumePoint = await run("const input=document.getElementById('music-volume'),r=input.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,clear:input===document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)};");
   assert.ok(volumePoint.clear, `hover exposes the card's volume slider without scrolling: ${JSON.stringify(volumePoint)}`);
   await mouse(volumePoint.x, volumePoint.y); await mouse(volumePoint.x, volumePoint.y, "mouseDown");
