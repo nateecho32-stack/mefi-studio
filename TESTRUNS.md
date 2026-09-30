@@ -35,6 +35,57 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-29 - Land finished parked Studio work and Command-tree children
+
+Integrated off GitHub main 519d656 in isolated worktrees: issue links
+(92f5e26), the commit checklist (bc2dc19), release packaging fixes
+(cherry-picked 77a3895), the signing/smoke workflow (8c08f90), the Studio
+model tracker and community evidence (a7e6294), Vibe defaults and key tips
+(47940db), and the finished Command-tree children. The latter were preserved
+with an alternate-index snapshot (4d3b3b5): all 11 source files still matched
+that snapshot before landing, and the original index/files were not edited.
+
+Conflicts retained both sides' application changes: models: and remote:
+remain app-wide; the booklet includes Fleet, Git sync, card layout, model
+community and key tips. Regenerated booklet.html rather than selecting a
+parent. Test rows were reconciled across the live file and archive, imported
+with append-testruns-row and rotated. The older release announcement stays
+parked because current scope/docs still describe 0.4.5 as upcoming. Unfinished
+builder, media, GPU, startup, logging, CLI, row-push and bot/service work stays
+separate. No tag or release was published.
+
+- build-booklet, check (204 targets, 419 specs), audit (0 findings), diff
+  whitespace check and the lost-work guard over origin/main..HEAD: PASS.
+- Final lint: 0 errors, 42 existing warnings, identical to clean main.
+- The first full run exposed two existing git_actions fixture assumptions,
+  both reproduced on unchanged main: a fixed 800 ms timer removed index.lock
+  before commit preflight finished; a plain copied Windows environment held
+  Path rather than PATH. The lock now persists until real retry backoff, and
+  executable-path presence is checked case-insensitively. Both tests passed
+  focused, then in the final full behavior stage.
+- Final npm test ran every suite, with only its own process affinity limited
+  to four CPUs to reduce worker memory pressure. Behavior stage: 4,910 tests,
+  4,903 passed, 7 skipped, 0 failures (596 s). Electron lane: 48 tests,
+  45 passed, 1 skipped, 2 failures (440 s). Exclusive Command and eyes probes
+  passed; occlusion passed its control and capability-skipped its other test.
+  Python: 248 tests OK, 1 skipped (58 s). Normalized-path lock: 6 checks PASS.
+- The full invocation exited 1, not a clean full-run pass: performance_render
+  hit the documented Profiler JSON download timeout (5,320 ms, 1.06x pace);
+  planning_render sampled glass transmission 12 against >35. Both suites
+  passed in the earlier combined full run. After all test lanes drained,
+  unchanged final sources passed alone: performance_render 2 active tests,
+  1 opt-in skip, 0 failures (24 s); planning_render 1/1 (33 s). The profiler
+  matches the known download flake; the Plans capture is consistent with
+  frame/load-sensitive capture, not an observed persistent regression.
+
+Complete logs and synthetic profiler captures are retained locally under the
+OS temporary directory (mefi-final-merged-test.log, mefi-final-merged-lint.log,
+mefi-final-profiler-solo.log, mefi-final-planning-solo.log and
+mefi-merged-profiler-solo/). Local data and portable dist folders were not
+committed or replaced. The optional model-review feed/signing services still
+need their separate service setup; merging their Studio support does not
+deploy those services.
+
 ## 2026-09-29 - Stamped executable and SignPath-ready release workflow
 
 The portable `Mefi Studio AI+.exe` gets Studio's name, version, copyright and
@@ -676,41 +727,6 @@ Build it's feedback moved under the box.
   bridge replaying the host's steps): planner strip over placeholder cards,
   sizing strip under the box, plan track and now line, plan timeline, Team,
   New app; a light custom palette too.
-
-## 2026-09-28 - Menu polish pass: plain words, two-step confirms, steadier menus
-
-The "Menu polish review" session's uncommitted work in C:\wt\menu-polish,
-finished and landed as six commits on efdc015. Its stuck ux-clarity port was
-resolved: the fixture and test halves no longer apply, since the startup
-fixture has no Projects-menu check now, and sidebar.test pins the behaviour.
-The branch was rebased over the Rooms rewrite (companion-hub select() keeps the
-dispose over a copy, media-window keeps setMinimized with the SVG close, and
-Your PCs sends the previewed shelf with the count in words), then over the
-onboarding landing (setup-helper merged cleanly). Rooms got REASONS for auth,
-version and unsupported, plainError, and two-step Close, Leave and Delete.
-Connection details are named as Settings › General › Community. Batch 3 (one
-page frame) was not done: hiding #tree-rail outside Command conflicts with
-command_render's "visible rail resumes painting" contract, so it waits for
-the owner.
-
-- `npm run build-booklet` (fresh), `npm run check`, `npm run lint` (0
-  errors, 41 warnings, none new) and `npm run audit` (0 findings): PASS.
-- New tests: rooms_ui (hub codes as sentences; Delete and Leave ask twice)
-  and sidebar (M+ focuses the selected project). The session's pins were
-  updated in ideas_ui, overhead_poll_backoff, pc_vault_ui, together_ui,
-  vibe_panels and the companion-hub render fixture.
-- `npm test` in C:\wt\menu-polish, exit 0: Node parallel stage 4348 tests,
-  4343 passed, 5 skipped, 0 failures. Electron lane 41 tests, 40 passed, 1
-  skipped. `command_render` 1/1 in 53.8 s, `eyes_toggle_electron` 1/1.
-  `occlusion_probe` skipped because its window was closed externally during
-  the cover wait (desktop in use). Python contracts OK (248, 1 skip). The
-  normalized-path lock passed.
-- Visual: the seeded fake-bridge preview was captured offscreen at 1920x1080,
-  48 menus each from efdc015 and from this branch. The same single
-  fake-bridge console error appears in both. The largest pixel change is
-  2.1% (the live tree preview). Trace reads "All 0" with its empty state in
-  the log pane, Context shows its own subtitle and "4,000 token budget", and
-  Friends shows the new Settings path.
 
 ## Read Before Any Tests
 

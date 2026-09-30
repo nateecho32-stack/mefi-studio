@@ -6,6 +6,41 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-28 - Menu polish pass: plain words, two-step confirms, steadier menus
+
+The "Menu polish review" session's uncommitted work in C:\wt\menu-polish,
+finished and landed as six commits on efdc015. Its stuck ux-clarity port was
+resolved: the fixture and test halves no longer apply, since the startup
+fixture has no Projects-menu check now, and sidebar.test pins the behaviour.
+The branch was rebased over the Rooms rewrite (companion-hub select() keeps the
+dispose over a copy, media-window keeps setMinimized with the SVG close, and
+Your PCs sends the previewed shelf with the count in words), then over the
+onboarding landing (setup-helper merged cleanly). Rooms got REASONS for auth,
+version and unsupported, plainError, and two-step Close, Leave and Delete.
+Connection details are named as Settings › General › Community. Batch 3 (one
+page frame) was not done: hiding #tree-rail outside Command conflicts with
+command_render's "visible rail resumes painting" contract, so it waits for
+the owner.
+
+- `npm run build-booklet` (fresh), `npm run check`, `npm run lint` (0
+  errors, 41 warnings, none new) and `npm run audit` (0 findings): PASS.
+- New tests: rooms_ui (hub codes as sentences; Delete and Leave ask twice)
+  and sidebar (M+ focuses the selected project). The session's pins were
+  updated in ideas_ui, overhead_poll_backoff, pc_vault_ui, together_ui,
+  vibe_panels and the companion-hub render fixture.
+- `npm test` in C:\wt\menu-polish, exit 0: Node parallel stage 4348 tests,
+  4343 passed, 5 skipped, 0 failures. Electron lane 41 tests, 40 passed, 1
+  skipped. `command_render` 1/1 in 53.8 s, `eyes_toggle_electron` 1/1.
+  `occlusion_probe` skipped because its window was closed externally during
+  the cover wait (desktop in use). Python contracts OK (248, 1 skip). The
+  normalized-path lock passed.
+- Visual: the seeded fake-bridge preview was captured offscreen at 1920x1080,
+  48 menus each from efdc015 and from this branch. The same single
+  fake-bridge console error appears in both. The largest pixel change is
+  2.1% (the live tree preview). Trace reads "All 0" with its empty state in
+  the log pane, Context shows its own subtitle and "4,000 token budget", and
+  Friends shows the new Settings path.
+
 ## 2026-09-28 - New-user onboarding: no AI connected, real logins, one welcome
 
 The "New user onboarding experience" session's fresh-profile findings,
