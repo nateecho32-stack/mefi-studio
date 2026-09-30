@@ -16,10 +16,12 @@
 
 html[data-frame] .shell-frame { display: contents; }
 html[data-frame] .shell-region[hidden], html[data-frame] .shell-scrim[hidden], html[data-frame] .shell-split[hidden] { display: none !important; }
-html[data-frame] .shell-region {
+html[data-frame] .shell-region, html[data-frame] .shell-split {
   --frame-rail-w: calc(var(--shell-x0) - var(--shell-list-w));
   --frame-top-h: calc(var(--shell-y0) - var(--shell-tabs-h));
   --frame-x0: calc(var(--frame-rail-w) + var(--shell-list-w));
+}
+html[data-frame] .shell-region {
   --frame-fs: max(12px, calc(13px * var(--text-scale, 1)));
   --frame-fs-s: max(12px, calc(12px * var(--text-scale, 1)));
   box-sizing: border-box;
@@ -27,7 +29,7 @@ html[data-frame] .shell-region {
   color: var(--ivory);
 }
 /* Vibe's own Home has no rail on screen: the list starts at the window's edge there. */
-html[data-frame] body.vibe-active:not(:has(.workspace-page:not([hidden]))) .shell-region { --frame-rail-w: 0px; }
+html[data-frame] body.vibe-active:not(:has(.workspace-page:not([hidden]))) :is(.shell-region, .shell-split) { --frame-rail-w: 0px; }
 
 /* Vibe's own layer starts under the bar; its header keeps the project, new app, update, conversation
    and settings buttons and drops the mode switch, the pulse and the search the bar carries now. */
@@ -165,6 +167,8 @@ html[data-frame] .shell-stack { flex: 1 1 auto; min-height: 0; min-width: 0; dis
 html[data-frame] .shell-panel { flex: 1 1 auto; min-height: 0; min-width: 0; display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden; }
 html[data-frame] .shell-panel[hidden] { display: none; }
 /* A column with nothing mounted says so, quietly, and only then. */
+/* what other modules mount into the bars' own slots sits in a row, not in a column's stack */
+html[data-frame] .shell-top-extra .shell-panel, html[data-frame] .shell-status-extra .shell-panel { flex: none; flex-direction: row; align-items: center; gap: 6px; overflow: visible; }
 html[data-frame] .shell-empty { display: none; flex-direction: column; gap: 4px; padding: 26px 18px; text-align: center; color: var(--dim); font-size: var(--frame-fs); }
 html[data-frame] .shell-empty b { color: var(--muted); font-weight: 600; }
 html[data-frame] .shell-column[data-empty="true"] .shell-empty { display: flex; }
@@ -188,7 +192,7 @@ html[data-frame] .shell-split::after { content: ""; position: absolute; top: 0; 
 html[data-frame] .shell-split:hover::after, html[data-frame] .shell-split.is-drag::after { left: 4px; width: 3px; background: color-mix(in srgb, var(--gold) 75%, transparent); }
 html[data-frame] .shell-split:focus-visible::after { left: 4px; width: 3px; background: var(--gold-bright); }
 html[data-frame] .shell-split:focus-visible::before { content: ""; position: absolute; top: 50%; left: 1px; width: 9px; height: 36px; margin-top: -18px; border-radius: 5px; background: var(--panel-solid); box-shadow: 0 0 0 2px var(--gold-bright); }
-html[data-frame] .shell-split-rail { top: 0; left: var(--frame-rail-w); }
+html[data-frame] .shell-split-rail { top: 0; left: calc(var(--frame-rail-w) - 5px); }
 html[data-frame] .shell-split-list { top: 0; left: calc(var(--frame-rail-w) + var(--shell-list-w) - 5px); }
 html[data-frame] .shell-split-inspector { top: var(--shell-y0); right: calc(var(--shell-inspector-w) - 5px); }
 html[data-frame] .shell-frame.is-dragging, html[data-frame] .shell-frame.is-dragging * { cursor: col-resize !important; user-select: none !important; }

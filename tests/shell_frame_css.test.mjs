@@ -36,7 +36,7 @@ function rules() {
   return found;
 }
 const all = rules();
-const rule = (selector) => all.filter((entry) => entry.selector.split(",").map((one) => one.trim()).includes(selector));
+const rule = (selector) => all.filter((entry) => entry.selector.split(/,(?![^(]*\))/).map((one) => one.trim()).includes(selector));
 const decl = (selector, property) => {
   for (const entry of rule(selector)) { const found = new RegExp(`(?:^|;|\\s)${property}\\s*:\\s*([^;]+)`).exec(entry.body); if (found) return found[1].trim(); }
   return null;
@@ -53,6 +53,7 @@ test("a splitter is a 1 px line with a wide invisible hit area, pointer capture 
   assert.match(decl("html[data-frame] .shell-split:focus-visible::before", "box-shadow"), /var\(--gold-bright\)/);
   assert.ok(rule("html[data-frame] .shell-frame.is-dragging, html[data-frame] .shell-frame.is-dragging *").length || rule("html[data-frame] .shell-frame.is-dragging").length, "a drag holds the cursor");
   // Each splitter sits on its column's edge, centred on it (11 px, so 5 px either side of the line).
+  assert.equal(decl("html[data-frame] .shell-split-rail", "left"), "calc(var(--frame-rail-w) - 5px)");
   assert.equal(decl("html[data-frame] .shell-split-list", "left"), "calc(var(--frame-rail-w) + var(--shell-list-w) - 5px)");
   assert.equal(decl("html[data-frame] .shell-split-inspector", "right"), "calc(var(--shell-inspector-w) - 5px)");
 });
@@ -110,7 +111,12 @@ test("geometry comes from the contract's derived edges only, and the layers are 
   assert.equal(decl("html[data-frame] .shell-inspector", "width"), "var(--shell-inspector-w)");
   assert.equal(decl("html[data-frame] .shell-list", "width"), "var(--shell-list-w)");
   // Vibe's own Home has no rail: the list starts at the window's edge there.
-  assert.match(css, /html\[data-frame\] body\.vibe-active:not\(:has\(\.workspace-page:not\(\[hidden\]\)\)\) \.shell-region \{ --frame-rail-w: 0px; \}/);
+  assert.match(css, /html\[data-frame\] body\.vibe-active:not\(:has\(\.workspace-page:not\(\[hidden\]\)\)\) :is\(\.shell-region, \.shell-split\) \{ --frame-rail-w: 0px; \}/);
+  // The splitters are placed from the same three values, so they must be given them: a custom property that is
+  // not defined on the element makes its whole calc() invalid, and the splitter falls back to where it would sit in the flow.
+  for (const selector of ["html[data-frame] .shell-region", "html[data-frame] .shell-split"]) for (const name of ["--frame-rail-w", "--frame-top-h", "--frame-x0"]) assert.ok(decl(selector, name), `${selector} defines ${name}`);
+  const geometry = all.filter((entry) => /\.shell-split/.test(entry.selector)).flatMap((entry) => [...entry.body.matchAll(/var\((--frame-[a-z0-9-]+)/g)].map((match) => match[1]));
+  assert.ok(geometry.length >= 3, "the splitters read the frame's geometry");
   assert.equal(decl("html[data-frame] #vibe-layer", "top"), "var(--shell-y0)", "Vibe's layer starts under the bar");
 });
 

@@ -222,7 +222,7 @@
   // variables (renderer/shell.css).
   function buildRegions() {
     if (state.els.frame) return;
-    // A previous copy of this module (a live update swaps modules in place) leaves nothing behind.
+    // A frame left by an earlier run of this script (a page that loads it twice) is replaced, not doubled.
     document.getElementById?.("shell-frame")?.remove?.();
     const frame = el("div", "shell-frame");
     frame.id = "shell-frame";
@@ -938,7 +938,7 @@
   function openMenu() {
     if (!state.on || state.menu) return;
     closeDrawer(false);
-    const menu = el("div", "shell-menu", { role: "dialog", "aria-label": "Layout" });
+    const menu = el("div", "shell-region shell-menu", { role: "dialog", "aria-label": "Layout" });
     menu.id = "shell-menu";
     const head = el("div", "shell-menu-head");
     head.append(icon("layout"), text("b", "", "Layout"), text("span", "shell-menu-mode", ""));

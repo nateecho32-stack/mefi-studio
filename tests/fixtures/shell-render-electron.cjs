@@ -338,7 +338,16 @@ app.whenReady().then(async () => {
         assert.equal(split.cursor, "col-resize");
         assert.equal(split.line, "1px", `${tag}: a 1px line`);
         assert.ok(near(split.box[2], 11, 0.5), `${tag}: and an 11px hit area`);
+        // It sits on its column's edge, centred on it, and is a control of its own: nothing else of the frame is under it.
+        const edge = name === "list" ? b.list[0] + b.list[2] : b.inspector[0];
+        assert.ok(near(split.box[0] + split.box[2] / 2, edge, 1), `${tag}: the ${name} separator is on its column's edge (${split.box[0] + split.box[2] / 2} vs ${edge})`);
+        assert.ok(split.box[1] <= 1 && near(split.box[1] + split.box[3], H - state.contract.used.status, 1) || name === "inspector", `${tag}: and runs the column's height`);
       } else assert.equal(split, null, `${tag}: no ${name} separator while it is not docked`);
+    }
+    // The rail's edge: on the rail's right edge, and clear of the bar's controls.
+    if (state.splitters.rail) {
+      const rail = state.splitters.rail;
+      assert.ok(near(rail.box[0] + rail.box[2] / 2, state.rest, 1), `${tag}: the rail separator is on the rail's edge (${rail.box[0] + rail.box[2] / 2} vs ${state.rest})`);
     }
     if (folded) { assert.equal(state.fold, "list inspector", `${tag}: the contract's fold`); assert.ok(!state.info.list.docked && !state.info.inspector.docked, `${tag}: folded columns are drawers`); }
   };
@@ -562,8 +571,10 @@ app.whenReady().then(async () => {
     await resize(size);
     await setup({ mode: "build", rail: "closed" });
     await click("shell-layout-button");
-    const menu = await run(`const node = document.getElementById("shell-menu"); if (!node) return null; const box = node.getBoundingClientRect(); const small = [...node.querySelectorAll("*")].filter((child) => child.getClientRects().length && [...child.childNodes].some((text) => text.nodeType === 3 && text.textContent.trim()) && parseFloat(getComputedStyle(child).fontSize) < 11.99).map((child) => child.className); return { box: [box.left, box.top, box.right, box.bottom], inner: [innerWidth, innerHeight], small, expanded: document.getElementById("shell-layout-button").getAttribute("aria-expanded"), focused: node.contains(document.activeElement) };`);
+    const menu = await run(`const node = document.getElementById("shell-menu"); if (!node) return null; const box = node.getBoundingClientRect(); const sizes = { menu: getComputedStyle(node).fontSize, hint: getComputedStyle(node.querySelector("small")).fontSize, bar: getComputedStyle(document.getElementById("shell-search")).fontSize, item: getComputedStyle(document.querySelector("#shell-status [data-item]")).fontSize }; const small = [...node.querySelectorAll("*")].filter((child) => child.getClientRects().length && [...child.childNodes].some((text) => text.nodeType === 3 && text.textContent.trim()) && parseFloat(getComputedStyle(child).fontSize) < 11.99).map((child) => child.className); return { box: [box.left, box.top, box.right, box.bottom], inner: [innerWidth, innerHeight], small, expanded: document.getElementById("shell-layout-button").getAttribute("aria-expanded"), focused: node.contains(document.activeElement), sizes };`);
     assert.ok(menu, `${label(size)}: the menu opens`);
+    // The sizes the stylesheet intends (13 px for text, 12 px for the small print, at a text scale of 1): a variable that was never defined for an element would quietly fall back to the page's own.
+    assert.deepEqual(menu.sizes, { menu: "13px", hint: "12px", bar: "13px", item: "12px" }, `${label(size)}: the bars and the menu are set in the frame's own sizes`);
     assert.ok(menu.box[0] >= -1 && menu.box[1] >= -1 && menu.box[2] <= menu.inner[0] + 1 && menu.box[3] <= menu.inner[1] + 1, `${label(size)}: the menu is inside the window ${JSON.stringify(menu)}`);
     assert.deepEqual(menu.small, [], `${label(size)}: no menu text under 12px`);
     assert.equal(menu.expanded, "true"); assert.equal(menu.focused, true, "focus moves into the menu");
@@ -617,7 +628,11 @@ app.whenReady().then(async () => {
       assert.equal(name === "list" ? state.inList : state.inInspector, true, `${tag}: focus moves into the drawer`);
       assert.deepEqual(state.usable, usableBefore, `${tag}: a drawer takes no room from the page`);
       assert.ok(state.boxes.status && state.boxes.top, `${tag}: the bar and the status bar stay rows`);
-      assert.equal(await run(`return getComputedStyle(document.getElementById("shell-${name}")).backgroundColor;`).then((color) => !/rgba\(.*,\s*0(\.\d+)?\)$/.test(color) && color !== "transparent"), true, `${tag}: the drawer is opaque`);
+      // The bar stays in reach while a drawer is open: the scrim dims the page, not the controls that close the drawer.
+      await centre(toggle); await centre("shell-search");
+      // Opaque: a colour with an alpha of 1, written as rgb(), rgba() or color(... / alpha), and no backdrop showing through.
+      const fill = await run(`const style = getComputedStyle(document.getElementById("shell-${name}")); const color = style.backgroundColor; const alpha = /\\/\\s*([\\d.]+%?)\\s*\\)$/.exec(color) || /^rgba\\(.*,\\s*([\\d.]+)\\)$/.exec(color); return { color, alpha: alpha ? (alpha[1].endsWith("%") ? parseFloat(alpha[1]) / 100 : parseFloat(alpha[1])) : color === "transparent" ? 0 : 1, image: style.backgroundImage };`);
+      assert.ok(fill.alpha >= 0.99 && fill.image === "none", `${tag}: the ${name} drawer is opaque, the page must not show through it (${JSON.stringify(fill)})`);
       if (size[2] === 1.5 && mode === "build") await capture(`drawer-${name}.png`);
       await key("Escape");
       state = await p();

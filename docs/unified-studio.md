@@ -224,10 +224,10 @@ local navigation (Back, Forward, the section's pages), which the script fits
 between the bar's two ends, or, when there is none or the band is narrower than
 640 CSS px (`html[data-frame-narrow]`), the trail project / page / item read
 from `MefiNav`, `MefiWorkspace` and Build's task view (while there is room for
-it). Right: the Search pill
-(opens the palette, shows Ctrl K), "N need you" and "N working" with its
-pause or resume button, and the inspector toggle. Below about 470 CSS px the
-bar keeps icons and counts. The pills read what the app already holds: the
+it). Right: the Search pill (opens the palette, shows Ctrl K), "N need you" and
+"N working" with its pause or resume button, and the inspector toggle. Below
+about 470 CSS px the bar keeps icons and counts. The pills read what the app
+already holds: the
 digest total (or the open questions) for "need you", or `MefiToday.count()`
 when that module is there, and `MefiWorkspace.snapshot().status.running` for
 "working". Pause and resume click Home's own `#workspace-pause`, which keeps
@@ -274,16 +274,19 @@ moves in and returns, and only one is open at a time. The tab strip and the
 status bar stay rows.
 
 **Keys**: Ctrl M the mode, Ctrl B the list, `[` the inspector (not while
-typing), Escape the Layout menu and then a drawer. They are listed in the
-shortcut sheet for display; the frame's own listener acts.
+typing), and Escape closes the Layout menu or the open drawer (a sheet or the
+palette over it has its own Escape first). They are listed in the shortcut
+sheet for display; the frame's own listener acts.
 
-**For other modules.** `MefiShell.region(name)` answers the element;
+**For other modules.** `MefiShell.region(name)` answers the element (null until
+the frame is built, and `onChange` hears `enable` when it is);
 `MefiShell.mount(region, key, elementOrFactory, { title, order })` puts
 content in a region and answers `{ show, hide, unmount, shown, element }` (a
 factory runs once, the first time the region exists; a list or inspector with
 nothing shown says "Nothing listed yet" or "Nothing to inspect yet", never
-sample data); `MefiShell.resize("tabs", px)` is how the tab strip says how tall
-it is; `MefiShell.onInbox = fn(anchor)` is how the Inbox opens from the pill;
+sample data; a mount into `top` or `status` lands in that bar's own slot, between
+the trail and the search, or before the player); `MefiShell.resize("tabs", px)`
+is how the tab strip says how tall it is; `MefiShell.onInbox = fn(anchor)` is how the Inbox opens from the pill;
 `MefiShell.open`, `close`, `toggle`, `isOpen`, `size`, `info`, `setMode`,
 `mode`, `status`, `sync`, `layout`, `resetLayout`, `onChange` and the
 constants `LIMITS`, `DEFAULTS`, `PRESETS`, `REGIONS` and `MODES` complete it.

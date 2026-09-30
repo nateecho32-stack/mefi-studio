@@ -241,8 +241,11 @@ test("mount(): content in a region, in order, shown and hidden and removed, with
   shell.mount("tabs", "strip", node("strip-node"));
   assert.ok(page.$("strip-node"));
   shell.mount("top", "extra", node("extra-node"));
-  assert.ok(page.$("extra-node"));
-  assert.ok(page.$("shell-status").querySelector(".shell-status-extra"), "the status bar has a place for items");
+  shell.mount("status", "item", node("item-node"));
+  const slot = (id) => page.$(id)?.parentNode?.parentNode;
+  assert.equal(slot("extra-node")?.className, "shell-top-extra", "the bar has a slot for other modules' controls");
+  assert.equal(slot("item-node")?.className, "shell-status-extra", "and the status bar one for their items");
+  assert.equal(page.$("shell-top").children[0].className, "shell-top-left", "the slot is between the bar's two ends");
 });
 
 test("mount() refuses what it cannot hold, and a factory that fails leaves an empty panel and no crash", () => {
@@ -306,7 +309,7 @@ test("shell.css: everything is under html[data-frame], so with v2 off no rule ma
       while (close < text.length && depth) { if (text[close] === "{") depth += 1; else if (text[close] === "}") depth -= 1; close += 1; }
       const body = text.slice(open + 1, close - 1);
       if (head.startsWith("@keyframes")) { /* animation steps */ } else if (head.startsWith("@")) walk(body);
-      else for (const one of head.split(",")) selectors.push(one.trim());
+      else for (const one of head.split(/,(?![^(]*\))/)) selectors.push(one.trim());
       at = close;
     }
   };
