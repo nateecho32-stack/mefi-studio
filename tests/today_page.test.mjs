@@ -312,6 +312,28 @@ test("a host that is away, or has no project, or no bridge: the page still draws
   assert.equal(bare.today.count(), 4, "and nothing was decided");
 });
 
+test("switching back to v1 live gives the front door back at once, and a layout change while v2 stays re-places the popover", async () => {
+  const t = await up();
+  const pill = t.document.createElement("button");
+  let bottom = 42;
+  pill.getBoundingClientRect = () => ({ left: 900, right: 1040, top: 10, bottom, width: 140, height: 32 });
+  t.today.openInbox(pill); await t.settle();
+  assert.equal(t.inbox().style.top, "50px");
+  bottom = 82;
+  t.window.dispatchEvent({ type: "mefi:layout", detail: { on: true } });
+  assert.equal(t.inbox().style.top, "90px", "a region opening moves the free area: the popover follows");
+  delete t.documentElement.dataset.layout;
+  t.window.dispatchEvent({ type: "mefi:layout", detail: { on: false } });
+  await t.settle();
+  assert.equal(t.today.isOn(), false);
+  assert.equal(byId(t, "today-page"), null, "the page is gone");
+  assert.equal(byId(t, "vibe-layer").dataset.today, undefined);
+  assert.equal(byId(t, "vibe-compose").parentNode, t.front.stage, "and the box is back where v1 draws it");
+  assert.equal(t.inbox(), null, "the popover is gone with it");
+  assert.equal(t.timers.filter((timer) => timer.every && !timer.cancelled).length, 0);
+  assert.equal(t.vibe.watchers.size, 0, "Vibe is not asked to tell it anything any more");
+});
+
 test("v1 is untouched: nothing borrowed, nothing drawn, nothing heard, nothing asked of the host", async () => {
   const t = await loadToday({ layout: null, layer: true, active: true, data: everything() });
   await t.settle();

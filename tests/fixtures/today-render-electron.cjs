@@ -477,7 +477,22 @@ app.whenReady().then(async () => {
     await run("window.MefiNav.close('inbox');");
     await until("document.getElementById('inbox-overlay').hidden", "the Inbox page closes");
     await until("!document.getElementById('vibe-layer').hidden && document.getElementById('vibe-layer').dataset.today === 'on'", "Vibe is back under it");
+    // A drawer (the conversation) moves Today over from 1400 px instead of covering the board, as it does Vibe's own stage; under 1400 it lies over it, as in v1.
+    if (width === 1920 || width === 1440) {
+      await click("#vibe-chat-toggle");
+      await until("!document.getElementById('vibe-chat').hidden", `the conversation drawer opens over Today at ${label}`);
+      await sleep(500);
+      const drawer = await run("const chat = document.getElementById('vibe-chat'), col = document.querySelector('#today-page .today-col'); const c = chat.getBoundingClientRect(), k = col.getBoundingClientRect(); return { inner: innerWidth, chatLeft: c.left, colRight: k.right, colLeft: k.left };");
+      assert.ok(drawer.colRight <= drawer.chatLeft - 8 && drawer.colLeft >= 0, `the board moves over for the drawer at ${label}: ${JSON.stringify(drawer)}`);
+      await capture(`today-drawer-${label}.png`);
+      await click("#vibe-chat-toggle");
+      await until("document.getElementById('vibe-chat').hidden", "and closes");
+      await sleep(400);
+      assert.ok(await run(`return document.querySelector('#today-page .today-col').getBoundingClientRect().right > ${drawer.colRight} + 40;`), `the board takes its room back when the drawer closes at ${label}`);
+      report.drawer = { ...(report.drawer || {}), [label]: drawer };
+    }
   }
+  check("a drawer moves Today over from 1400 px");
   check("five sizes: Today, the popover (under the pill and upward from the status bar) and the Inbox page");
 
   // ---- Build: the same board as a page ------------------------------------------------------------------------
@@ -508,36 +523,6 @@ app.whenReady().then(async () => {
   await run("await window.MefiVibe.setMode('vibe'); await window.MefiVibe.refresh();");
   await until("document.getElementById('vibe-layer').dataset.today === 'on' && !document.getElementById('vibe-layer').hidden", "Vibe is back");
   await sleep(300);
-
-  // ---- the keyboard: real Tab presses walk the page in the order it reads, and every stop of Today's own shows a ring -------------------
-  // A click on the empty page gives the window the keyboard (an unfocused page matches no :focus-visible, so no ring could show).
-  window.show(); window.focus(); contents.focus();
-  await sleep(300);
-  contents.sendInputEvent({ type: "mouseDown", button: "left", clickCount: 1, x: 40, y: 500 }); contents.sendInputEvent({ type: "mouseUp", button: "left", clickCount: 1, x: 40, y: 500 });
-  await sleep(120);
-  report.documentFocus = await run("return document.hasFocus();");
-  assert.equal(report.documentFocus, true, "the window has the keyboard, so :focus-visible can match and a ring can show");
-  await run("document.activeElement?.blur?.(); document.getElementById('vibe-layer').focus({ preventScroll: true });");
-  const stops = [];
-  for (let index = 0; index < 60; index += 1) {
-    contents.sendInputEvent({ type: "keyDown", keyCode: "Tab" }); contents.sendInputEvent({ type: "keyUp", keyCode: "Tab" });
-    await sleep(40);
-    stops.push(await run(`const node = document.activeElement; if (!node || node === document.body) return null; const r = node.getBoundingClientRect(), style = getComputedStyle(node); return { id: node.id || '', cls: typeof node.className === 'string' ? node.className.split(' ')[0] : '', text: (node.textContent || '').trim().slice(0, 28), x: Math.round(r.left), y: Math.round(r.top), ring: style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0, today: Boolean(node.closest('#today-page')), ours: /^today-/.test(typeof node.className === 'string' ? node.className.split(' ')[0] : '') };`));
-  }
-  report.tabStops = stops.map((stop) => (stop ? `${stop.id || stop.cls}:${stop.text}@${stop.x},${stop.y}` : null));
-  assert.ok(stops.every(Boolean), "focus never falls out to the page while tabbing through Today");
-  const at = (match) => stops.findIndex((stop) => stop && match(stop));
-  const order = [at((stop) => stop.id === "vibe-project"), at((stop) => stop.id === "vibe-new-app"), at((stop) => stop.id === "vibe-chat-toggle"), at((stop) => stop.cls === "today-chip"), at((stop) => stop.id === "vibe-input"), at((stop) => stop.id === "vibe-talk"), at((stop) => stop.id === "vibe-build"), at((stop) => stop.cls === "vibe-evolution-intent"), at((stop) => stop.cls === "today-card-open")];
-  assert.ok(order.every((found) => found >= 0), `every stop is reached by Tab: ${JSON.stringify(order)} in ${JSON.stringify(report.tabStops)}`);
-  assert.deepEqual([...order].sort((a, b) => a - b), order, "in the order the page reads: project, the summary, the box, its buttons, the starting points, the board");
-  const firstCards = stops.filter((stop) => stop.cls === "today-card-open" || stop.cls === "today-btn" || stop.cls === "today-link" || stop.cls === "today-chip");
-  assert.ok(firstCards.length >= 4, "the board's own controls are in the tab order");
-  assert.ok(firstCards.every((stop) => stop.ring), `a focus ring on every stop of Today's own: ${JSON.stringify(firstCards.filter((stop) => !stop.ring))}`);
-  // Down the board the order follows the columns: the first card of Needs you comes before the first of Running.
-  const needsAt = at((stop) => stop.cls === "today-card-open" && stop.x < 500), runningAt = at((stop) => stop.cls === "today-card-open" && stop.x >= 500);
-  assert.ok(needsAt >= 0 && (runningAt < 0 || needsAt < runningAt), "the Needs you column is walked before Running");
-  await run("document.activeElement?.blur?.();");
-  check("Tab walks Today in reading order with a ring on its own stops");
 
   // ---- acting, the way a person does (1440x900) -----------------------------------------------------------------
   await run("window.todayFixture.clear();");
@@ -688,6 +673,37 @@ app.whenReady().then(async () => {
   await run("await window.MefiVibe.refresh();");
   await sleep(300);
   assert.equal(await run("return document.querySelector('#today-board [data-key=\"run:t_run\"]') === window.__kept && document.querySelector('#today-board [data-key=\"next:t_next\"]') === window.__keptNext;"), true, "a read that changes nothing rebuilds nothing");
+
+  // ---- the keyboard: real Tab presses walk the page in the order it reads, and every stop of Today's own shows a ring -------------------
+  // The window is shown for this (a hidden page has no focus, so no :focus-visible and no ring), which the window system then holds to the screen's size: it is the last thing done in this window.
+  // A click on the empty page gives the window the keyboard (an unfocused page matches no :focus-visible, so no ring could show).
+  window.show(); window.focus(); contents.focus();
+  await sleep(300);
+  contents.sendInputEvent({ type: "mouseDown", button: "left", clickCount: 1, x: 40, y: 500 }); contents.sendInputEvent({ type: "mouseUp", button: "left", clickCount: 1, x: 40, y: 500 });
+  await sleep(120);
+  report.documentFocus = await run("return document.hasFocus();");
+  assert.equal(report.documentFocus, true, "the window has the keyboard, so :focus-visible can match and a ring can show");
+  await run("document.activeElement?.blur?.(); document.getElementById('vibe-layer').focus({ preventScroll: true });");
+  const stops = [];
+  for (let index = 0; index < 60; index += 1) {
+    contents.sendInputEvent({ type: "keyDown", keyCode: "Tab" }); contents.sendInputEvent({ type: "keyUp", keyCode: "Tab" });
+    await sleep(40);
+    stops.push(await run(`const node = document.activeElement; if (!node || node === document.body) return null; const r = node.getBoundingClientRect(), style = getComputedStyle(node); return { id: node.id || '', cls: typeof node.className === 'string' ? node.className.split(' ')[0] : '', text: (node.textContent || '').trim().slice(0, 28), x: Math.round(r.left), y: Math.round(r.top), ring: style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0, today: Boolean(node.closest('#today-page')), ours: /^today-/.test(typeof node.className === 'string' ? node.className.split(' ')[0] : '') };`));
+  }
+  report.tabStops = stops.map((stop) => (stop ? `${stop.id || stop.cls}:${stop.text}@${stop.x},${stop.y}` : null));
+  assert.ok(stops.every(Boolean), "focus never falls out to the page while tabbing through Today");
+  const at = (match) => stops.findIndex((stop) => stop && match(stop));
+  const order = [at((stop) => stop.id === "vibe-project"), at((stop) => stop.id === "vibe-new-app"), at((stop) => stop.id === "vibe-chat-toggle"), at((stop) => stop.cls === "today-chip"), at((stop) => stop.id === "vibe-input"), at((stop) => stop.id === "vibe-talk"), at((stop) => stop.id === "vibe-build"), at((stop) => stop.cls === "vibe-evolution-intent"), at((stop) => stop.cls === "today-card-open")];
+  assert.ok(order.every((found) => found >= 0), `every stop is reached by Tab: ${JSON.stringify(order)} in ${JSON.stringify(report.tabStops)}`);
+  assert.deepEqual([...order].sort((a, b) => a - b), order, "in the order the page reads: project, the summary, the box, its buttons, the starting points, the board");
+  const firstCards = stops.filter((stop) => stop.cls === "today-card-open" || stop.cls === "today-btn" || stop.cls === "today-link" || stop.cls === "today-chip");
+  assert.ok(firstCards.length >= 4, "the board's own controls are in the tab order");
+  assert.ok(firstCards.every((stop) => stop.ring), `a focus ring on every stop of Today's own: ${JSON.stringify(firstCards.filter((stop) => !stop.ring))}`);
+  // Down the board the order follows the columns: the first card of Needs you comes before the first of Running.
+  const needsAt = at((stop) => stop.cls === "today-card-open" && stop.x < 500), runningAt = at((stop) => stop.cls === "today-card-open" && stop.x >= 500);
+  assert.ok(needsAt >= 0 && (runningAt < 0 || needsAt < runningAt), "the Needs you column is walked before Running");
+  await run("document.activeElement?.blur?.();");
+  check("Tab walks Today in reading order with a ring on its own stops");
 
   // ---- v1 is untouched ---------------------------------------------------------------------------------------------
   const v2Window = window;

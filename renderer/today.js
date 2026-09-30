@@ -254,7 +254,7 @@
   const state = {
     on: false, data: null, off: null, host: null, handled: new Map(), busy: new Set(), errors: new Map(), later: new Set(), drafts: new Map(),
     inbox: { open: false, anchor: null, index: 0, node: null, opener: null, focusKey: null }, pageOpen: null, anchor: null, clock: 0, sweep: 0,
-    listeners: new Set(), signature: "", parts: null, painted: new Map(),
+    listeners: new Set(), signature: "", parts: null, painted: new WeakMap(),
   };
   const NOT_DONE = "That did not go through. You can also open the task.";
   const DECIDED_SHOW_MS = 8000;
@@ -644,6 +644,8 @@
     return openInbox(anchor);
   }
   function onResize() { if (state.inbox.open) placePopover(state.inbox.node, state.inbox.anchor); }
+  // The layout changed (a region opened or closed, a window fold) or was switched off live: back to v1 gives the front door back at once.
+  function onLayout() { if (!v2()) { stop(); return; } onResize(); }
   // A press anywhere else closes it, as every popover does. A press on the thing that opened it closes it too, and
   // the click that follows does not open it again: the pill is a toggle whoever wires it.
   function outside(event) {
@@ -1086,7 +1088,7 @@
     state.signature = signatureOf();
     window.addEventListener("mefi:project-changed", onProjectChanged);
     window.addEventListener("mefi:appearance", paint);
-    window.addEventListener("mefi:layout", onResize);
+    window.addEventListener("mefi:layout", onLayout);
     window.addEventListener("keydown", onShortcut);
     window.MefiSize?.onChange?.(paint);
     // Vibe may already be up (a reload that resumed on it): its front door is the host.
@@ -1102,7 +1104,7 @@
     stopClock(); clearTimeout(state.sweep);
     window.removeEventListener("mefi:project-changed", onProjectChanged);
     window.removeEventListener("mefi:appearance", paint);
-    window.removeEventListener("mefi:layout", onResize);
+    window.removeEventListener("mefi:layout", onLayout);
     window.removeEventListener("keydown", onShortcut);
     state.inbox.node?.remove(); state.inbox.node = null;
     return true;
