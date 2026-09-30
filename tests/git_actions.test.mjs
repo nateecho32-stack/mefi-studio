@@ -607,15 +607,18 @@ test("a busy index is retried at 250 ms and 1.5 s, then the save says another se
 
 test("a real index.lock that clears in time lets the save through", async (t) => {
   const box = sandbox(t);
-  const noSleep = harness(t, box, { sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) });
   const cwd = repoWith(box, "app");
   put(cwd, "README.md", "# app\nedited\n");
   const lock = path.join(cwd, ".git", "index.lock");
   writeFileSync(lock, "");
-  setTimeout(() => { try { unlinkSync(lock); } catch { /* already gone */ } }, 800);
-  const saved = await noSleep.actions.save(cwd, { paths: ["README.md"] });
+  // The other session lets go of the lock while this one waits for it, not on a wall-clock timer: a timer
+  // races the steps before the commit, and on a loaded machine the lock could be gone before the first try.
+  const waits = [];
+  const clears = harness(t, box, { sleep: async (ms) => { waits.push(ms); try { unlinkSync(lock); } catch { /* already gone */ } } });
+  const saved = await clears.actions.save(cwd, { paths: ["README.md"] });
   assert.equal(saved.ok, true, saved.error);
-  assert.equal(noSleep.gitCalls("commit").length >= 2, true, "it did retry");
+  assert.deepEqual(waits, [250], "it waited once, for the first refusal, and the lock was gone by the retry");
+  assert.equal(clears.gitCalls("commit").length, 2, "the real git refused the first commit and took the second");
 });
 
 test("a very long list of paths goes to git on stdin, still one path-limited commit", async (t) => {
