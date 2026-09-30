@@ -517,6 +517,26 @@
       isOpen: () => overlayOpen("analyzer-overlay"),
     },
     {
+      id: "worktrees",
+      label: "Worktrees",
+      short: "Worktrees",
+      kind: "overlay",
+      layer: "sheet",
+      section: "work",
+      group: "tools",
+      key: null,
+      glyph: "g-worktree",
+      badge: null,
+      desc: "Every worktree of this project: which hold work only this PC has, and which are safe to merge or remove",
+      searchTerms: "worktrees worktree branches runs folders checkout merge remove forget prune parallel isolated stranded git",
+      showIn: showIn({ tools: true, palette: true, help: true }),
+      element: "worktrees-overlay",
+      focus: "#worktrees-refresh",
+      open: (params) => window.MefiWorktrees?.open?.(params),
+      close: () => window.MefiWorktrees?.close?.(),
+      isOpen: () => overlayOpen("worktrees-overlay"),
+    },
+    {
       id: "palette",
       commandPrimary: true,
       label: "Search Studio",
@@ -765,7 +785,7 @@
     window.MefiModelLab?.show?.(view);
   }
 
-  const WORKSPACE_PAGES = new Set(["tasks", "plans", "ideas", "brains", "analyzer", "explorer", "trace", "fleet", "overhead", "agent-brain", "agents"]);
+  const WORKSPACE_PAGES = new Set(["tasks", "plans", "ideas", "brains", "analyzer", "worktrees", "explorer", "trace", "fleet", "overhead", "agent-brain", "agents"]);
   const isWorkspacePage = (dest) => document.documentElement?.dataset?.shell === "rail" && WORKSPACE_PAGES.has(dest?.id);
   function syncPageInert() {
     const page = isWorkspacePage(get(state.sheet));
@@ -1422,7 +1442,7 @@
   ];
   const LOCAL_ROUTES = Object.freeze({
     home: ["workspace"],
-    work: ["tasks", "plans", "ideas", "analyzer"],
+    work: ["tasks", "plans", "ideas", "analyzer", "worktrees"],
     agents: ["agents", "command", "fleet", "eyes", "trace", "explorer", "overhead", "agent-brain", "brains", "context", "booklet", "graph", "usage"],
     settings: ["studio"],
   });

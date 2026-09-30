@@ -88,6 +88,7 @@
   <symbol id="g-community" viewBox="0 0 16 16"><circle cx="6" cy="5.25" r="2.25"/><path d="M1.75 13.5v-.75A3.25 3.25 0 0 1 5 9.5h2a3.25 3.25 0 0 1 3.25 3.25v.75"/><path d="M11 3a2.25 2.25 0 0 1 0 4.5M12.25 9.6a3.25 3.25 0 0 1 2 3.15v.75"/></symbol>
   <symbol id="g-key" viewBox="0 0 16 16"><circle cx="5.5" cy="8" r="3"/><path d="M8.5 8h5M11.5 8v2.5M13.5 8v1.5"/></symbol>
   <symbol id="g-route" viewBox="0 0 16 16"><circle cx="4" cy="4" r="1.6"/><circle cx="4" cy="12" r="1.6"/><circle cx="12" cy="8" r="1.6"/><path d="M5.6 4c2.6 0 2.6 4 4.8 4M5.6 12c2.6 0 2.6-4 4.8-4"/></symbol>
+  <symbol id="g-worktree" viewBox="0 0 16 16"><circle cx="4.25" cy="3.25" r="1.5"/><circle cx="4.25" cy="12.75" r="1.5"/><circle cx="11.75" cy="5.5" r="1.5"/><path d="M4.25 4.75v6.5M11.75 7c0 3.25-7.5 1.75-7.5 4.25"/></symbol>
   <symbol id="g-wrench" viewBox="0 0 24 24"><path stroke-width="2.25" d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
   <symbol id="g-plug" viewBox="0 0 16 16"><path d="M5 2.5v3.5M11 2.5v3.5"/><path d="M3.5 6h9v1.5a4.5 4.5 0 0 1-9 0z"/><path d="M8 12v2"/></symbol>
   <symbol id="g-spark" viewBox="0 0 16 16"><path d="M8 2.5 9.4 6.6 13.5 8l-4.1 1.4L8 13.5 6.6 9.4 2.5 8l4.1-1.4z"/></symbol>
@@ -1759,6 +1760,38 @@
         <p id="trace-status" class="trace-hint" role="status" aria-live="polite"></p>
         <ol id="trace-lines" class="trace-lines"></ol>
       </section>
+    </div>
+  </div>
+</div>
+<div class="overlay explorer" id="worktrees-overlay" hidden>
+  <div class="explorer-sheet worktrees-sheet" role="dialog" aria-modal="true" aria-labelledby="worktrees-heading" tabindex="-1">
+    <header class="explorer-head sheet-head">
+      <button class="sheet-back ghost mini" data-nav-close="worktrees" title="Back (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Back</span></button>
+      <div class="sheet-title">
+        <div class="eyebrow">Work</div>
+        <h2 id="worktrees-heading">Worktrees</h2>
+      </div>
+      <div class="sheet-links" data-sheet-links="worktrees" role="group" aria-label="Other tools"></div>
+      <div class="sheet-actions">
+        <button id="worktrees-close" class="ghost sheet-close" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
+      </div>
+    </header>
+    <div class="worktrees-body">
+      <section class="worktrees-top" aria-label="Worktrees at a glance">
+        <p id="worktrees-headline" class="worktrees-headline" role="status" aria-live="polite">Reading the worktrees…</p>
+        <div id="worktrees-counts" class="worktrees-counts" role="group" aria-label="Worktrees by state"></div>
+        <div class="worktrees-tools">
+          <label class="switch worktrees-runs" title="Each task run works in its own folder under .mefi/worktrees and is merged back when it finishes"><input type="checkbox" id="worktrees-runs"><span class="track"></span><span>Give each run its own worktree</span></label>
+          <button id="worktrees-forget" class="ghost mini" type="button" hidden title="Ask git to forget worktrees whose folder is gone">Forget missing folders</button>
+          <button id="worktrees-refresh" class="ghost mini" type="button" title="Read every worktree again">Refresh</button>
+        </div>
+      </section>
+      <details class="worktrees-about">
+        <summary>What is a worktree?</summary>
+        <p>A worktree is another folder that holds this project on its own branch, so two pieces of work never share files. Task runs make one each when the switch above is on; side investigations make the rest. Git only lists their folders. This page says which hold work that exists nowhere else, which are on GitHub but not merged, and which are finished and safe to remove.</p>
+        <p>Merging goes into your main checkout on this PC only; nothing is pushed from here. Removing a folder never deletes a branch that is not merged, and a folder with uncommitted files is kept as a copy first.</p>
+      </details>
+      <ol id="worktrees-list" class="worktrees-list" aria-label="Worktrees"></ol>
     </div>
   </div>
 </div>

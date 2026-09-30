@@ -7,6 +7,16 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Worktrees have a page in Studio: Work › Worktrees.** It lists every
+  worktree of the open project, worst first: which hold work that only this PC
+  has, which are on GitHub but not merged and which are merged and safe to
+  remove, with the task a run belongs to. From it you can open a folder, merge a
+  branch into main (a fast-forward; a merge commit only when you ask for one,
+  and never while the worktree or the main checkout has uncommitted files),
+  remove a folder (two presses; a folder holding uncommitted files or commits on
+  no branch keeps a copy as `refs/mefi/rescue/…` first) and forget folders that
+  are gone, and turn on "Give each run its own worktree". Nothing on the page
+  pushes, and a run's folder is left alone while it works.
 - **Panes that can scroll show a slim indicator.** Scrollbars stay hidden
   everywhere, so it was easy to miss that a pane scrolled. While the pointer is
   over a pane that overflows, and for a moment after you scroll it, a thin
