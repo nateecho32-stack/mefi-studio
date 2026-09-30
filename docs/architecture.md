@@ -776,6 +776,21 @@ question, confirm the understanding or approve work, and planning itself cannot
 launch coding workers. Manual controls work without an AI key; plans and their
 revision history stay in the project's ignored local `planning.json`.
 
+Every edit of a plan is a **version**: the whole plan as saved, with when, who
+(you, Mefi's own suggestion, or Studio) and a one-line note of what it did.
+`restore-version` brings an earlier version back as a *new* one (restoring
+version 2 of 3 makes version 4), so history is only ever added to and nothing is
+lost. Only you can restore, and not over a plan that is archived or has begun
+creating tasks. The restored wording, your recorded decisions and its
+specification come back, but the confirmed reading and any approval belonged to
+the version they were given on, so both are asked for again before tasks can be
+made. Every version is kept (the store has always kept a full snapshot per edit;
+a hard cap would make the file unreadable to an older build after a **Roll
+back**), and the Plans sheet lists the newest twenty and pages older ones. A
+plan saved with no history gets its current wording as version 1 the first time
+it is read; the first save after that keeps one copy of the old file beside it
+(`planning.json.before-versions.bak`).
+
 **Archive plan** sets a plan aside without deleting it: it becomes read-only,
 folds under **Show archived** in the list, and drops out of the assistant's
 plan summary and the Analyzer. **Restore plan** brings it back exactly as it
