@@ -639,3 +639,32 @@ test("a decided line keeps its place when the host's push reaches the page befor
   assert.match(words(cardOf(t, "question:q1")), /^Decided · Answered: Yes, ignore case/);
   assert.equal(t.today.count(), 2);
 });
+
+// Every button of every kind: pressed again and again in one turn it makes exactly the host calls one press makes, no more.
+const EVERY_ACTION = [
+  ["an approval is approved", () => board({ needs: [needApproval()] }), "approval:t5", "Approve build", "backlogControl", 1],
+  ["an approval is dropped", () => board({ needs: [needApproval()] }), "approval:t5", "Drop it", "tasksAction", 1],
+  ["steps are started", () => board({ needs: [needFamily()] }), "family:t10", "Start all 2 steps", "backlogControl", 2],
+  ["steps become one task", () => board({ needs: [needFamily()] }), "family:t10", "Make it one task", "tasksAction", 1],
+  ["a stuck task is tried again", () => board({ needs: [needBlocked()] }), "blocked:t6", "Try again", "tasksAction", 1],
+  ["a stuck task is marked done", () => board({ needs: [needBlocked()] }), "blocked:t6", "It's done", "tasksAction", 1],
+  ["a stuck task is dropped", () => board({ needs: [needBlocked()] }), "blocked:t6", "Drop it", "tasksAction", 1],
+  ["a result is confirmed", () => board({ needs: [needReview()] }), "review:t7", "Confirm done", "tasksAction", 1],
+  ["a result is sent back", () => board({ needs: [needReview()] }), "review:t7", "Send it back", "tasksAction", 1],
+  ["a long check is marked done", () => board({ needs: [needReview({ checking: true, since: NOW - 50 * 60000 })] }), "review:t7", "It's done", "tasksAction", 1],
+];
+for (const [what, data, key, label, call, times] of EVERY_ACTION) {
+  test(`${what}: pressed three times in one turn it reaches the host ${times === 1 ? "once" : `${times} times, once each`}, and a stale press after it landed does nothing`, async () => {
+    const t = await loadToday({ data: data() });
+    await open(t);
+    const button = buttonNamed(cardOf(t, key), label);
+    assert.ok(button, `${label} is offered`);
+    button.click(); button.click(); button.click();
+    await t.settle();
+    assert.equal(t.callsOf(call).length, times, `${call} was called ${times} time(s), not more`);
+    assert.equal(t.callsOf(call === "tasksAction" ? "backlogControl" : "tasksAction").length, 0, "and only the right call");
+    button.click(); await t.settle();
+    assert.equal(t.callsOf(call).length, times, "a press on the old button after it landed does nothing");
+    assert.match(words(cardOf(t, key)), /^Decided/, "it reads as decided");
+  });
+}
