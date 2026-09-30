@@ -139,9 +139,11 @@
   }
 
   // ---- the click on a notification (main has already brought Studio up) ---------------------------
-  /** Opens what a clicked notification was about: its task, else Home, where what needs you is shown. The test just leaves Studio in front. */
+  /** Opens what a clicked notification was about: its task, else Home, where what needs you is shown (in layout v2, the Inbox when it told several). The test just leaves Studio in front. */
   function openTarget(payload) {
     if (String(payload?.kind ?? "") === "test") return true;
+    // Layout v2: a burst opens the Inbox, one thing its task (renderer/today.js); in v1 it says it did not handle it.
+    if (window.MefiToday?.openFromAlert?.(payload)) return true;
     const nav = window.MefiNav;
     if (payload?.taskId && typeof nav?.go === "function") {
       nav.go("tasks", { taskId: String(payload.taskId), ...(payload.projectId ? { projectId: String(payload.projectId) } : {}), filter: "all" });

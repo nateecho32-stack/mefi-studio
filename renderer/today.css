@@ -1,0 +1,236 @@
+/* Today and the Inbox (renderer/today.js), layout v2 only: nothing here matches
+   until the script draws it, and the two rules that change Vibe's front door
+   wait for #vibe-layer[data-today="on"], which only that script sets.
+   Every colour is a theme token, so the eleven themes, the custom palette and
+   the light ones keep their own; text is never under 12px, at any text size
+   (--text-scale, the Size and density page's); spacing follows the density
+   tokens where they exist (--d-gap, --d-pad). Nothing reserves scrollbar
+   width: the page and the popover scroll under the shared slim indicator. */
+
+.today, .today-inbox, .today-sheet, .inbox-sheet {
+  --t-f12: max(12px, calc(12px * var(--text-scale, 1)));
+  --t-f13: max(12px, calc(13px * var(--text-scale, 1)));
+  --t-f14: max(12px, calc(14px * var(--text-scale, 1)));
+  --t-f15: max(12px, calc(15px * var(--text-scale, 1)));
+  --t-f24: max(12px, calc(24px * var(--text-scale, 1)));
+  --t-ink: var(--ivory);
+  --t-soft: var(--muted);
+  --t-faint: var(--dim);
+  --t-edge: color-mix(in srgb, var(--ivory) 12%, transparent);
+  --t-edge-hi: color-mix(in srgb, var(--gold) 42%, transparent);
+  --t-card: color-mix(in srgb, var(--panel-solid) 62%, transparent);
+  --t-well: color-mix(in srgb, var(--bg-deep) 38%, transparent);
+  --t-gap: var(--d-gap, 12px);
+  --t-pad: var(--d-pad, 12px);
+  --t-blur: var(--studio-glass-blur, blur(16px) saturate(1.3));
+}
+
+/* ---- Vibe's Home in v2: the front door's own top bar, stage and dock step aside ---------------------------------- */
+#vibe-layer[data-today="on"] > :is(.vibe-top, .vibe-stage, .vibe-dock) { display: none; }
+.today { grid-row: 1 / -1; grid-column: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+.today-scroll { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: var(--t-gap) clamp(14px, 3vw, 28px) 28px; overscroll-behavior: contain; }
+.today-col { display: grid; align-content: start; gap: var(--t-gap); width: min(1180px, 100%); margin: 0 auto; }
+/* A drawer (the conversation, a panel) moves the page over on a wide window instead of covering the board. */
+@media (min-width: 1400px) {
+  #vibe-layer:has(> .vibe-chat:not([hidden])) .today-scroll { padding-right: calc(min(420px, 100vw - 48px) + 44px); }
+}
+.today-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; }
+.today-head .vibe-top-left { min-width: 0; }
+.today .vibe-project-text small { font-size: var(--t-f12); }
+.today .vibe-project-text b { font-size: var(--t-f14); }
+.today-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; min-width: 0; }
+.today-page-lead { flex: 1 1 260px; margin: 0; color: var(--t-soft); font-size: var(--t-f14); line-height: 1.5; }
+
+/* The greeting, compact: the orb beside the words, left-aligned, as the prototype's Today. */
+.today .vibe-hero { flex: 1 1 280px; min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 14px; row-gap: 2px; align-items: center; justify-items: start; text-align: left; animation: none; }
+.today .vibe-orb { grid-row: 1 / span 2; width: 46px; height: 46px; margin: 0; }
+.today .vibe-orb i:nth-child(2) { inset: -8px; }
+.today .vibe-orb i:nth-child(3) { inset: -16px; }
+.today .vibe-kicker { font-size: var(--t-f13); }
+.today .vibe-hero h1 { max-width: none; font-size: var(--t-f24); line-height: 1.2; }
+.today-summary { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.today-chip { display: inline-flex; align-items: center; gap: 8px; min-height: 30px; padding: 0 12px; border: 1px solid var(--t-edge); border-radius: 999px; background: var(--t-card); color: var(--t-soft); font: 600 var(--t-f13)/1 var(--font-ui); white-space: nowrap; }
+.today-chip[hidden] { display: none; }
+.today-chip > i { width: 8px; height: 8px; border-radius: 50%; background: var(--t-faint); }
+.today-chip.is-need { border-color: color-mix(in srgb, var(--warn) 55%, transparent); background: color-mix(in srgb, var(--warn) 10%, transparent); color: var(--warn); cursor: pointer; }
+.today-chip.is-need > i { background: var(--warn); }
+.today-chip.is-need:hover { background: color-mix(in srgb, var(--warn) 18%, transparent); }
+.today-chip.is-clear > i { background: var(--good); }
+.today-chip.is-run > i { background: var(--live); box-shadow: 0 0 8px var(--live); }
+.today-chip.is-rev > i { background: var(--info); }
+
+/* The box, the starting points and the line that says what holds the agents back: Vibe's own, sized for this column. */
+.today-box { display: grid; gap: 8px; min-width: 0; }
+.today .vibe-compose { width: 100% !important; margin-top: 0; padding: 14px 16px 12px 18px; border-radius: 18px; animation: none; }
+.today .vibe-compose textarea { font-size: var(--t-f15); line-height: 1.5; }
+.today .vibe-hint, .today .vibe-hint .key { font-size: var(--t-f12); }
+.today .vibe-feedback { margin: 0; text-align: left; font-size: var(--t-f13); }
+.today .vibe-gate { width: 100% !important; margin: 0; }
+.today .vibe-last { width: 100% !important; margin-top: 0; animation: none; }
+.today .vibe-last-open { font-size: var(--t-f12); }
+#today-decisions, .today #vibe-decisions { justify-self: start; }
+/* Starting points as chips: the four approaches and Suggest a next step in one row. */
+.today .vibe-sparks { width: 100% !important; margin: 0; padding: 0; border: 0; background: none; backdrop-filter: none; box-shadow: none; animation: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; justify-content: flex-start; }
+.today .vibe-evolution-head, .today .vibe-evolution-intents, .today .vibe-evolution-foot { display: contents; }
+.today .vibe-evolution-head > div:first-child { display: none; }
+.today .vibe-evolution-links { order: 5; display: flex; flex-wrap: wrap; gap: 6px 12px; margin-left: auto; }
+.today .vibe-evolution-intent { flex: none; padding: 0 14px; min-height: 32px; border-radius: 999px; }
+.today .vibe-evolution-intent .vibe-evolution-letter, .today .vibe-evolution-intent small { display: none; }
+.today .vibe-evolution-intent b { font-size: var(--t-f13); }
+.today .vibe-evolution-suggest { min-height: 32px; border-radius: 999px; padding: 0 14px; font-size: var(--t-f13); }
+.today .vibe-evolution-scope { order: 6; flex: 1 0 100%; min-width: 0; font-size: var(--t-f12); }
+.today .vibe-evolution-results, .today .vibe-evolution > .sr-only { order: 7; flex: 1 0 100%; }
+.today .vibe-evolution-results { padding: 12px; border: 1px solid var(--t-edge); border-radius: 14px; background: var(--t-card); backdrop-filter: var(--t-blur); }
+.today :is(.vibe-evolution-note, .vibe-evolution-why, .vibe-evolution-stale, .vibe-evolution-facts, .vibe-evolution-num, .vibe-evolution-file, .vibe-evolution-suggestion > p, .vibe-evolution-suggestion h3, .vibe-evolution-actions .vibe-btn, .vibe-inline-error, .vibe-ask-link) { font-size: var(--t-f12); }
+.today .vibe-evolution-suggestion h3, .today .vibe-evolution-suggestion > p { font-size: var(--t-f13); }
+.today :is(.autonomy-chip, .autonomy-note) { font-size: var(--t-f12); }
+
+/* ---- the board: one line per session, in four groups ------------------------------------------------------------ */
+.today-quiet { margin: 6px 0 0; padding: 0; color: var(--t-faint); font-size: var(--t-f14); line-height: 1.5; }
+.today-quiet[hidden] { display: none; }
+.today-board { display: grid; gap: var(--t-gap); min-width: 0; }
+.today-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: var(--t-gap); align-items: start; min-width: 0; }
+.today-groups:empty { display: none; }
+.today-group { display: grid; align-content: start; gap: 8px; min-width: 0; padding: 10px; border: 1px solid var(--t-edge); border-radius: 14px; background: color-mix(in srgb, var(--panel-solid) 34%, transparent); backdrop-filter: var(--t-blur); }
+.today-group > h3 { display: flex; align-items: center; gap: 8px; margin: 0; padding: 2px 4px; color: var(--t-soft); font: 650 var(--t-f13)/1.2 var(--font-ui); }
+.today-group[data-group="needs"] > h3 { color: var(--warn); }
+.today-group[data-group="running"] > h3 { color: var(--live); }
+.today-group[data-group="review"] > h3 { color: var(--info); }
+.today-group[data-group="done"] > h3 { color: var(--good); }
+.today-count { min-width: 22px; padding: 0 7px; border-radius: 999px; background: color-mix(in srgb, var(--ivory) 9%, transparent); font: 650 var(--t-f12)/1.6 var(--font-ui); text-align: center; }
+.today-count:empty { display: none; }
+.today-cards { display: grid; gap: 8px; min-width: 0; }
+.today-card { position: relative; display: grid; gap: 6px; min-width: 0; padding: var(--t-pad); border: 1px solid var(--t-edge); border-radius: 12px; background: var(--t-card); transition: border-color var(--motion-fast, 140ms); }
+.today-card:hover { border-color: color-mix(in srgb, var(--ivory) 22%, transparent); }
+.today-card-head { display: flex; align-items: flex-start; gap: 9px; min-width: 0; }
+.today-card-head .today-dot { margin-top: 6px; }
+.today-card-open { flex: 1 1 auto; min-width: 0; padding: 0; border: 0; background: none; color: var(--t-ink); text-align: left; cursor: pointer; }
+.today-card-open:disabled { cursor: default; }
+.today-card-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font: 600 var(--t-f14)/1.35 var(--font-ui); }
+.today-wt { flex: none; display: inline-grid; place-items: center; width: 22px; height: 22px; color: var(--t-soft); }
+.today-wt .glyph { width: 14px; height: 14px; }
+.today-card-meta { color: var(--t-faint); font-size: var(--t-f12); line-height: 1.4; overflow-wrap: anywhere; }
+.today-card-more { color: var(--t-soft); font-size: var(--t-f12); line-height: 1.4; overflow-wrap: anywhere; }
+.today-card.is-next .today-card-title { color: var(--t-soft); font-weight: 500; }
+.today-card-quick { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.today-card-quick .today-btn { max-width: 100%; height: auto; min-height: 30px; padding-block: 5px; text-align: left; white-space: normal; }
+.today-card.is-need[data-tone="warn"] { border-color: color-mix(in srgb, var(--warn) 38%, transparent); }
+.today-card.is-need[data-tone="bad"] { border-color: color-mix(in srgb, var(--bad) 38%, transparent); }
+.today-card.is-busy { opacity: .75; }
+.today-bar { position: relative; height: 3px; border-radius: 3px; background: color-mix(in srgb, var(--ivory) 10%, transparent); overflow: hidden; }
+.today-bar > i { position: absolute; inset: 0 auto 0 0; width: 40%; border-radius: inherit; background: linear-gradient(90deg, color-mix(in srgb, var(--live) 60%, transparent), var(--live)); }
+.today-bar.is-flowing > i { width: 34%; }
+@media (prefers-reduced-motion: no-preference) {
+  .today-bar > i { transition: width var(--motion-slow, 280ms) var(--ease-out, ease-out); }
+  .today-bar.is-flowing > i { animation: today-flow 1.8s var(--ease-in-out, ease-in-out) infinite; }
+}
+@keyframes today-flow { 0% { transform: translateX(-100%); } 100% { transform: translateX(294%); } }
+
+/* What an item is: one dot, in the colour of its kind. */
+.today-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--t-faint); }
+.today-card.is-live .today-dot { background: var(--live); box-shadow: 0 0 8px var(--live); }
+.today-card.is-next .today-dot { background: transparent; border: 1.5px solid var(--t-faint); }
+.today-card.is-check .today-dot { background: var(--info); box-shadow: 0 0 8px var(--info); }
+.today-card.is-idea .today-dot { background: var(--idea, var(--gold)); }
+.today-card.is-done .today-dot { background: var(--good); }
+[data-tone="warn"] .today-dot { background: var(--warn); box-shadow: 0 0 8px var(--warn); }
+[data-tone="bad"] .today-dot { background: var(--bad); box-shadow: 0 0 8px var(--bad); }
+[data-tone="info"] .today-dot { background: var(--info); }
+
+.today-latest { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--t-edge); border-radius: 14px; background: color-mix(in srgb, var(--panel-solid) 28%, transparent); }
+.today-latest[hidden] { display: none; }
+.today-latest > h3 { margin: 0; color: var(--t-soft); font: 650 var(--t-f13)/1.2 var(--font-ui); }
+.today-latest-rows { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.today-latest-row { display: flex; align-items: baseline; gap: 9px; min-width: 0; color: var(--t-soft); font-size: var(--t-f13); line-height: 1.4; }
+.today-latest-row > span { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.today-latest-row > time { flex: none; color: var(--t-faint); font-size: var(--t-f12); }
+
+/* ---- buttons and links ------------------------------------------------------------------------------------------ */
+.today-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 30px; padding: 0 12px; border: 1px solid var(--t-edge); border-radius: 10px; background: color-mix(in srgb, var(--ivory) 6%, transparent); color: var(--t-ink); font: 600 var(--t-f13)/1.25 var(--font-ui); cursor: pointer; }
+.today-btn:hover:not(:disabled) { border-color: var(--t-edge-hi); background: color-mix(in srgb, var(--ivory) 10%, transparent); }
+.today-btn.primary { border-color: transparent; background: linear-gradient(135deg, var(--gold-bright), var(--gold)); color: var(--ink); }
+.today-btn:disabled { opacity: .5; cursor: not-allowed; }
+.today-btn.danger-armed { border-color: color-mix(in srgb, var(--bad) 55%, transparent); background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--t-ink); }
+.today-link { padding: 4px 2px; border: 0; background: none; color: var(--t-soft); font: 600 var(--t-f12)/1.3 var(--font-ui); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--ivory) 28%, transparent); text-underline-offset: 3px; cursor: pointer; }
+.today-link:hover:not(:disabled) { color: var(--t-ink); text-decoration-color: var(--gold-bright); }
+.today-link:disabled { opacity: .5; cursor: progress; }
+.today :is(.today-btn, .today-link, .today-option, .today-card-open, .today-chip):focus-visible,
+.today-inbox :is(.today-btn, .today-link, .today-option, .today-need-input):focus-visible,
+.today-sheet :is(.today-btn, .today-link, .today-card-open):focus-visible,
+.inbox-sheet :is(.today-btn, .today-link, .today-option, .today-need-input):focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
+.today-need:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 1px; }
+.today-key { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border: 1px solid color-mix(in srgb, var(--ivory) 20%, transparent); border-radius: 5px; background: color-mix(in srgb, var(--ivory) 6%, transparent); color: var(--t-soft); font: 600 var(--t-f12)/1 var(--font-mono); }
+
+/* ---- one thing that waits on you: the popover's row and the page's card ----------------------------------------- */
+.today-need { display: grid; gap: 7px; min-width: 0; padding: 11px 12px; border: 1px solid var(--t-edge); border-radius: 12px; background: var(--t-well); }
+.today-need.is-current { border-color: var(--t-edge-hi); box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold) 18%, transparent); }
+.today-need.is-later { opacity: .72; }
+.today-need.is-busy { opacity: .75; }
+.today-need-kind { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; color: var(--t-soft); font-size: var(--t-f12); font-weight: 650; }
+.today-need[data-tone="warn"] .today-need-label { color: var(--warn); }
+.today-need[data-tone="bad"] .today-need-label { color: var(--bad); }
+.today-need[data-tone="info"] .today-need-label { color: var(--info); }
+.today-need-from { min-width: 0; overflow-wrap: anywhere; color: var(--t-soft); font-weight: 500; }
+.today-need-time { margin-left: auto; color: var(--t-faint); font-weight: 500; }
+.today-need-title { margin: 0; color: var(--t-ink); font: 600 var(--t-f14)/1.4 var(--font-ui); overflow-wrap: anywhere; }
+.today-need-detail, .today-need-hint { margin: 0; color: var(--t-soft); font-size: var(--t-f13); line-height: 1.5; overflow-wrap: anywhere; }
+.today-need-hint { color: var(--info); }
+.today-need-evidence { margin: 0; padding: 8px 10px; max-height: 6.5em; overflow: auto; border-radius: 8px; background: var(--t-well); color: var(--t-soft); font: var(--t-f12)/1.45 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.today-need-steps { margin: 0; padding-left: 1.3em; color: var(--t-soft); font-size: var(--t-f13); line-height: 1.5; }
+.today-need-options { display: flex; flex-wrap: wrap; gap: 6px; }
+.today-option { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; min-height: 32px; padding: 5px 11px; border: 1px solid var(--t-edge); border-radius: 10px; background: color-mix(in srgb, var(--ivory) 6%, transparent); color: var(--t-ink); font: 550 var(--t-f13)/1.3 var(--font-ui); text-align: left; cursor: pointer; }
+.today-option:hover:not(:disabled) { border-color: var(--t-edge-hi); background: color-mix(in srgb, var(--ivory) 10%, transparent); }
+.today-option.is-recommended { border-color: color-mix(in srgb, var(--gold) 45%, transparent); background: color-mix(in srgb, var(--gold) 10%, transparent); }
+.today-option:disabled { opacity: .55; cursor: progress; }
+.today-option-label { min-width: 0; overflow-wrap: anywhere; }
+.today-rec { flex: none; padding: 1px 7px; border-radius: 999px; background: color-mix(in srgb, var(--gold) 20%, transparent); color: var(--gold-bright); font-size: var(--t-f12); font-weight: 650; }
+.today-need-free { display: flex; gap: 6px; min-width: 0; }
+.today-need-input { flex: 1 1 auto; min-width: 0; min-height: 32px; padding: 0 10px; border: 1px solid var(--t-edge); border-radius: 10px; background: var(--t-well); color: var(--t-ink); font: var(--t-f13)/1.3 var(--font-ui); }
+.today-need-input::placeholder { color: var(--t-faint); }
+.today-need-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 14px; }
+.today-need-note { margin: 0; color: var(--bad); font-size: var(--t-f12); line-height: 1.4; }
+.today-decided { display: flex; align-items: center; gap: 9px; min-width: 0; color: var(--t-soft); font-size: var(--t-f13); }
+.today-decided-words { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.today-decided-words > b { color: var(--good); font-weight: 650; }
+.today-decided-words > small { display: block; margin-top: 2px; color: var(--t-faint); font-size: var(--t-f12); }
+.today-tick { flex: none; width: 10px; height: 6px; margin: 0 3px; border-left: 2px solid var(--good); border-bottom: 2px solid var(--good); transform: rotate(-45deg) translateY(-2px); }
+.today-need.is-decided { background: color-mix(in srgb, var(--good) 7%, transparent); border-color: color-mix(in srgb, var(--good) 28%, transparent); }
+.today-card > .today-decided, .today-groups .today-need.is-decided { padding: 4px 2px; }
+.today-empty { display: grid; gap: 4px; padding: 26px 16px; border: 1px dashed var(--t-edge); border-radius: 12px; color: var(--t-soft); font-size: var(--t-f13); line-height: 1.5; text-align: center; }
+.today-empty[hidden] { display: none; }
+.today-empty > b { color: var(--t-ink); font-size: var(--t-f14); }
+
+/* ---- the popover under the pill --------------------------------------------------------------------------------- */
+.today-inbox { position: fixed; z-index: calc(var(--z-transient, 90) - 1); display: flex; flex-direction: column; box-sizing: border-box; border: 1px solid var(--t-edge); border-radius: 16px; background: var(--studio-float-fill, var(--panel-solid)); backdrop-filter: var(--studio-float-blur, var(--t-blur)); box-shadow: var(--shadow-3, 0 24px 60px rgba(0, 0, 0, .5)); color: var(--t-ink); font-family: var(--font-ui); overflow: hidden; }
+.today-inbox[hidden] { display: none; }
+.today-inbox-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 12px 14px 10px; border-bottom: 1px solid var(--t-edge); }
+.today-inbox-title { display: inline-flex; align-items: center; gap: 8px; font-size: var(--t-f14); }
+.today-inbox-title .glyph { width: 16px; height: 16px; color: var(--gold-bright); }
+.today-inbox-count { min-width: 20px; padding: 0 7px; border-radius: 999px; background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); font: 650 var(--t-f12)/1.6 var(--font-ui); text-align: center; }
+.today-inbox-count:empty { display: none; }
+.today-inbox-keys { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; color: var(--t-faint); font-size: var(--t-f12); }
+.today-inbox-body { display: grid; align-content: start; gap: 8px; flex: 1 1 auto; min-height: 0; padding: 10px 12px; overflow-y: auto; overscroll-behavior: contain; }
+.today-inbox-body[hidden] { display: none; }
+.today-inbox > .today-empty { margin: 12px; }
+.today-inbox-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 9px 14px; border-top: 1px solid var(--t-edge); color: var(--t-soft); font-size: var(--t-f12); }
+.today-inbox-foot[hidden] { display: none; }
+.today-inbox-decided { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.today-inbox-decided > b { color: var(--t-ink); font-weight: 650; }
+
+/* ---- pages: Today in Build, and the Inbox kept open ------------------------------------------------------------- */
+.today-sheet, .inbox-sheet { display: flex; flex-direction: column; }
+.today-page-body, .inbox-body { display: grid; align-content: start; gap: var(--t-gap); flex: 1 1 auto; min-height: 0; padding: var(--s3, 12px) var(--s5, 20px) var(--s5, 20px); overflow-x: hidden; overflow-y: auto; }
+.inbox-lead { margin: 0; color: var(--t-soft); font-size: var(--t-f14); line-height: 1.5; }
+.inbox-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 10px; align-items: start; min-width: 0; }
+.inbox-list[hidden] { display: none; }
+.inbox-list .today-need { background: var(--surface-raised, var(--t-card)); }
+.inbox-decided-wrap { min-width: 0; }
+.inbox-decided { min-width: 0; color: var(--t-soft); font-size: var(--t-f13); }
+.inbox-decided :is(h3, .autonomy-hint, .autonomy-note, .autonomy-button, p, strong, summary) { font-size: var(--t-f13); }
+.inbox-decided h3 { margin: 10px 0 6px; color: var(--t-ink); font: 650 var(--t-f14)/1.3 var(--font-ui); }
+
+@media (max-width: 680px) {
+  .today-scroll { padding-inline: 14px; }
+  .today .vibe-evolution-links { margin-left: 0; }
+  .today-inbox-keys { display: none; }
+}

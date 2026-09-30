@@ -373,6 +373,54 @@
     <button id="vibe-rail-build" type="button" data-ui-mode="build" title="Switch to Build: the full studio"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Build</span></button>
   </div>
 </nav>
+<!-- Today and the Inbox (layout v2; renderer/today.js registers both routes only then). Vibe's Home draws the same board
+     itself, so #today-overlay is the page Build opens from its pinned Today tab; #inbox-overlay is the Inbox kept open as a
+     page, the same list as the popover under the top bar's "N need you" pill. -->
+<div class="overlay explorer" id="today-overlay" hidden>
+  <div class="explorer-sheet today-sheet" role="dialog" aria-modal="true" aria-labelledby="today-heading" tabindex="-1">
+    <header class="explorer-head sheet-head">
+      <button class="sheet-back ghost mini" data-nav-close="today" title="Back (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Back</span></button>
+      <div class="sheet-title">
+        <div class="eyebrow">Home</div>
+        <h2 id="today-heading">Today</h2>
+      </div>
+      <div class="sheet-actions">
+        <button id="today-close" class="ghost sheet-close" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
+      </div>
+    </header>
+    <div class="today-page-body">
+      <div class="today-top">
+        <p class="today-page-lead">What needs you, what is running, what is ready to review and what finished today.</p>
+        <div id="today-overlay-summary" class="today-summary" role="group" aria-label="What is happening"></div>
+      </div>
+      <p id="today-overlay-quiet" class="today-quiet" role="status" hidden></p>
+      <div id="today-overlay-board" class="today-board">
+        <div class="today-groups"></div>
+        <section class="today-latest" hidden aria-label="Latest"><h3>Latest</h3><ul class="today-latest-rows"></ul></section>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="overlay explorer" id="inbox-overlay" hidden>
+  <div class="explorer-sheet inbox-sheet" role="dialog" aria-modal="true" aria-labelledby="inbox-heading" tabindex="-1">
+    <header class="explorer-head sheet-head">
+      <button class="sheet-back ghost mini" data-nav-close="inbox" title="Back (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Back</span></button>
+      <div class="sheet-title">
+        <div class="eyebrow">Home</div>
+        <h2 id="inbox-heading">Inbox</h2>
+      </div>
+      <div class="sheet-actions">
+        <button id="inbox-close" class="ghost sheet-close" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
+      </div>
+    </header>
+    <div class="inbox-body">
+      <p id="inbox-lead" class="inbox-lead" role="status" aria-live="polite">Everything waiting on you in one place: questions, permissions, approvals, reviews and tasks that stopped.</p>
+      <div id="inbox-list" class="inbox-list" role="list" aria-label="Waiting on you"></div>
+      <div id="inbox-empty" class="today-empty" hidden><b>All clear</b><span>Questions, permissions, approvals and failures land here, in one place.</span></div>
+      <section class="inbox-decided-wrap" aria-label="Decided for you"><div id="inbox-decided" class="inbox-decided"></div></section>
+    </div>
+  </div>
+</div>
 <!-- The one-time "what's new" card an existing user sees on the first launch
      with Vibe (renderer/vibe.js decides; it never shows on a first run). -->
 <div id="vibe-notes" class="vibe-notes" hidden>
