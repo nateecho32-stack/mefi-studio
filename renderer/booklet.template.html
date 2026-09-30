@@ -88,6 +88,7 @@
   <symbol id="g-community" viewBox="0 0 16 16"><circle cx="6" cy="5.25" r="2.25"/><path d="M1.75 13.5v-.75A3.25 3.25 0 0 1 5 9.5h2a3.25 3.25 0 0 1 3.25 3.25v.75"/><path d="M11 3a2.25 2.25 0 0 1 0 4.5M12.25 9.6a3.25 3.25 0 0 1 2 3.15v.75"/></symbol>
   <symbol id="g-key" viewBox="0 0 16 16"><circle cx="5.5" cy="8" r="3"/><path d="M8.5 8h5M11.5 8v2.5M13.5 8v1.5"/></symbol>
   <symbol id="g-route" viewBox="0 0 16 16"><circle cx="4" cy="4" r="1.6"/><circle cx="4" cy="12" r="1.6"/><circle cx="12" cy="8" r="1.6"/><path d="M5.6 4c2.6 0 2.6 4 4.8 4M5.6 12c2.6 0 2.6-4 4.8-4"/></symbol>
+  <symbol id="g-skills" viewBox="0 0 16 16"><path d="M9.25 1.5 3.5 9.25h3.75L6.5 14.5l6-7.75H8.5z"/></symbol>
   <symbol id="g-worktree" viewBox="0 0 16 16"><circle cx="4.25" cy="3.25" r="1.5"/><circle cx="4.25" cy="12.75" r="1.5"/><circle cx="11.75" cy="5.5" r="1.5"/><path d="M4.25 4.75v6.5M11.75 7c0 3.25-7.5 1.75-7.5 4.25"/></symbol>
   <symbol id="g-wrench" viewBox="0 0 24 24"><path stroke-width="2.25" d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
   <symbol id="g-plug" viewBox="0 0 16 16"><path d="M5 2.5v3.5M11 2.5v3.5"/><path d="M3.5 6h9v1.5a4.5 4.5 0 0 1-9 0z"/><path d="M8 12v2"/></symbol>
@@ -1793,6 +1794,37 @@
         <p>Merging goes into your main checkout on this PC only; nothing is pushed from here. Removing a folder never deletes a branch that is not merged, and a folder with uncommitted files is kept as a copy first.</p>
       </details>
       <ol id="worktrees-list" class="worktrees-list" aria-label="Worktrees"></ol>
+    </div>
+  </div>
+</div>
+<div class="overlay explorer" id="skills-overlay" hidden>
+  <div class="explorer-sheet skills-sheet" role="dialog" aria-modal="true" aria-labelledby="skills-heading" tabindex="-1">
+    <header class="explorer-head sheet-head">
+      <button class="sheet-back ghost mini" data-nav-close="skills" title="Back (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Back</span></button>
+      <div class="sheet-title">
+        <div class="eyebrow">Agents</div>
+        <h2 id="skills-heading">Skills</h2>
+      </div>
+      <div class="sheet-links" data-sheet-links="skills" role="group" aria-label="Other tools"></div>
+      <div class="sheet-actions">
+        <button id="skills-close" class="ghost sheet-close" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
+      </div>
+    </header>
+    <div class="skills-body">
+      <section class="skills-top" aria-label="Skills at a glance">
+        <p id="skills-headline" class="skills-headline" role="status" aria-live="polite">Reading the skills…</p>
+        <div class="skills-tools">
+          <button id="skills-new" class="primary mini" type="button" title="Write a new skill">New skill</button>
+          <button id="skills-import" class="ghost mini" type="button" title="Choose a folder that holds a SKILL.md">Import</button>
+          <button id="skills-refresh" class="ghost mini" type="button" title="Read the skills again">Refresh</button>
+        </div>
+      </section>
+      <details class="skills-about">
+        <summary>What is a skill?</summary>
+        <p>A skill is a reusable set of instructions kept as a plain file in your project, under .agents/skills. Agents can load one when a task matches what it is for, and you can call any of them by typing / and its name in Home's message box.</p>
+        <p>Because a skill is a file in the project, it travels with it and shows up in Git. Studio only writes there, never to your home folder, and never replaces a skill that is already saved: a copy of the old text is kept on this PC first.</p>
+      </details>
+      <div id="skills-list" class="skills-content"></div>
     </div>
   </div>
 </div>

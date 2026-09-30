@@ -182,7 +182,7 @@ function createSkills({ root, fs = fsp, enabled = () => true, backups = null, no
     try { folder = await skillsFolder(real, { create: false }); } catch (error) { if (error instanceof Refusal) blocked = error.message; else throw error; }
     const skills = [];
     if (folder) {
-      const dirents = (await fs.readdir(folder, { withFileTypes: true }).catch(() => [])).filter((dirent) => dirent.isDirectory() && !dirent.name.startsWith(".")).sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+      const dirents = (await fs.readdir(folder, { withFileTypes: true }).catch(() => [])).filter((dirent) => dirent.isDirectory() && !dirent.name.startsWith(".")).sort((a, b) => { const x = a.name.toLowerCase(), y = b.name.toLowerCase(); return x < y ? -1 : x > y ? 1 : a.name < b.name ? -1 : a.name > b.name ? 1 : 0; });
       for (const dirent of dirents.slice(0, MAX_LISTED)) {
         try { const row = await entry(folder, dirent.name); if (row) skills.push(row); } catch { /* one unreadable folder does not hide the rest */ }
       }

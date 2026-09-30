@@ -279,7 +279,7 @@ test("listing shows what is there, honestly: problems, what agents skip, what ca
     await put("from-home", "---\nname: from-home\ndescription: d\n---\nB", path.join(w.home, ".claude", "skills"));
     const listed = plain(await w.skills.list());
     const row = (name) => listed.skills.find((skill) => skill.name === name);
-    assert.deepEqual(listed.skills.map((skill) => skill.name), ["Bad_Name", "big-but-readable", "good", "mismatch", "no-description", "no-front-matter", "over-the-auto-load", "too-big-to-open"].sort((a, b) => (a < b ? -1 : 1)), "sorted, hidden folders, empty folders and loose files left out");
+    assert.deepEqual(listed.skills.map((skill) => skill.name), ["Bad_Name", "big-but-readable", "good", "mismatch", "no-description", "no-front-matter", "over-the-auto-load", "too-big-to-open"], "sorted by name whatever the case, hidden folders, empty folders and loose files left out");
     assert.equal(row("good").problem, undefined);
     assert.match(row("no-front-matter").problem, /^It has no front matter\. Saving adds a name and a description\.$/);
     assert.equal(row("no-front-matter").description, "Just some words, no front matter.", "a description is taken from the words when none is given");

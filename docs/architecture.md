@@ -1024,7 +1024,16 @@ failed process stays an error and cannot produce briefing requests.
   SKILL.md`) where the owner chose. The page also lists the skills the inventory
   finds elsewhere (other tools' folders, the home folder), read-only, and offers
   a few starters. `MEFI_STUDIO_NO_SKILL_EDIT=1` makes the page read-only: no
-  save, create, delete or import, and no dialog for an import.
+  save, create, delete or import, and no dialog for an import. The page
+  (`renderer/skills.js`, **Agents › Setup › Skills**, also in the palette) lists
+  each skill with what it is for, where it lives, its size and anything that keeps
+  agents from using it (no front matter, no description, a name that does not
+  agree with its folder, over 32 KB, over 16 KB so that it loads only when called);
+  **New skill** and **Edit** share one editor (name, when to use it, instructions,
+  a byte counter, and what the size means) that says what is wrong as you type
+  using the host's own rules written again (a test holds the two together), and a
+  name cannot change once a skill exists because it is the folder. Delete asks
+  twice. The page sends names and text, never a path.
 
 ### Command center and the node tree
 

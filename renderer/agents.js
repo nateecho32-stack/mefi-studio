@@ -66,7 +66,7 @@
     ["models", "Models", "booklet", {}], ["usage", "Usage", "usage", {}],
   ];
   const children = {
-    setup: [["Team & models", "agents", { section: "setup", pane: "team" }], ["Providers", "agents", { section: "setup", pane: "connections" }], ["Routing & fallback", "agents", { section: "setup", pane: "routing" }], ["Run behavior", "agents", { section: "setup", pane: "behavior" }]],
+    setup: [["Team & models", "agents", { section: "setup", pane: "team" }], ["Providers", "agents", { section: "setup", pane: "connections" }], ["Routing & fallback", "agents", { section: "setup", pane: "routing" }], ["Run behavior", "agents", { section: "setup", pane: "behavior" }], ["Skills", "skills"]],
     live: [["Command", "command"], ["Fleet", "fleet"], ["Pipelines", "agent-brain", { tab: "live" }], ["Sessions", "explorer"], ["Activity", "eyes"], ["Trace", "trace"], ["Overhead", "overhead"]],
     workflows: [["Brain maps", "brains"], ["Playbook", "agent-brain", { tab: "playbook" }], ["Project map", "agent-brain", { tab: "map" }], ["Context", "context"]],
     models: [["Catalog", "booklet"], ["Performance", "graph"]],
@@ -88,6 +88,7 @@
     if (["brains", "context"].includes(id)) return { section: "workflows" };
     if (["booklet", "graph"].includes(id)) return { section: "models" };
     if (id === "usage") return { section: "usage" };
+    if (id === "skills") return { section: "setup" };
     return { section: "live" };
   }
   let closeNavMenu = () => {};

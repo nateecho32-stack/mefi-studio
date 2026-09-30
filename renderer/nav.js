@@ -537,6 +537,26 @@
       isOpen: () => overlayOpen("worktrees-overlay"),
     },
     {
+      id: "skills",
+      label: "Skills",
+      short: "Skills",
+      kind: "overlay",
+      layer: "sheet",
+      section: "agents",
+      group: "tools",
+      key: null,
+      glyph: "g-skills",
+      badge: null,
+      desc: "Reusable instructions kept as plain files in this project, and the /names that call them",
+      searchTerms: "skills skill instructions slash command SKILL.md .agents reusable playbook import export starter agents",
+      showIn: showIn({ tools: true, palette: true, help: true }),
+      element: "skills-overlay",
+      focus: "#skills-new",
+      open: (params) => window.MefiSkills?.open?.(params),
+      close: () => window.MefiSkills?.close?.(),
+      isOpen: () => overlayOpen("skills-overlay"),
+    },
+    {
       id: "palette",
       commandPrimary: true,
       label: "Search Studio",
@@ -785,7 +805,7 @@
     window.MefiModelLab?.show?.(view);
   }
 
-  const WORKSPACE_PAGES = new Set(["tasks", "plans", "ideas", "brains", "analyzer", "worktrees", "explorer", "trace", "fleet", "overhead", "agent-brain", "agents"]);
+  const WORKSPACE_PAGES = new Set(["tasks", "plans", "ideas", "brains", "analyzer", "worktrees", "explorer", "trace", "fleet", "overhead", "agent-brain", "skills", "agents"]);
   const isWorkspacePage = (dest) => document.documentElement?.dataset?.shell === "rail" && WORKSPACE_PAGES.has(dest?.id);
   function syncPageInert() {
     const page = isWorkspacePage(get(state.sheet));
@@ -1443,7 +1463,7 @@
   const LOCAL_ROUTES = Object.freeze({
     home: ["workspace"],
     work: ["tasks", "plans", "ideas", "analyzer", "worktrees"],
-    agents: ["agents", "command", "fleet", "eyes", "trace", "explorer", "overhead", "agent-brain", "brains", "context", "booklet", "graph", "usage"],
+    agents: ["agents", "command", "fleet", "eyes", "trace", "explorer", "overhead", "agent-brain", "skills", "brains", "context", "booklet", "graph", "usage"],
     settings: ["studio"],
   });
 
