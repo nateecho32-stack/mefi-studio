@@ -7,6 +7,24 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Panes that can scroll show a slim indicator.** Scrollbars stay hidden
+  everywhere, so it was easy to miss that a pane scrolled. While the pointer is
+  over a pane that overflows, and for a moment after you scroll it, a thin
+  indicator on its edge shows where you are. It takes no room from the pane,
+  never catches a click, and does not exist on panes that fit.
+- **`npm run worktrees` lists every worktree of a project.** Each row shows the
+  branch, how far it is from `main`, what is uncommitted or unpushed and what to
+  do about it (push it, land it, or remove it because it is merged). `--json`
+  gives the same rows to other tools. It changes nothing.
+- **The multi-PC sync report no longer cries wolf.** A shallow clone (such as a
+  cloud session's) reported its whole history as "not pushed yet"; the check now
+  fetches back far enough to compare `main` with GitHub's, or says they were not
+  compared. Branches built on `gh-pages` are listed as site branches, not as work
+  to bring into `main`.
+- **Security notes are up to date.** `SECURITY.md` now says what coding workers
+  (approval prompts off), link reading, the update safety net's saved copy and
+  audio-reactive input do with your data, and the Friends setup guide names the
+  0.5.0 release.
 - **Agents can read the web pages you link.** A new `web_read` tool, with its
   own **Read web pages you link** switch (in Agents › Setup and the setup
   helper's Tools & skills; it starts wherever the role's search switch is),
