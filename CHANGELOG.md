@@ -33,6 +33,10 @@ app) are recorded here. The format follows
   own.
 - **Release zips no longer carry Electron's `debug.log`,** which named the
   folder the build ran in.
+- **The portable app has Studio's name and icon.** The build's executable was
+  Electron's, renamed, so Windows showed Electron's icon and Task Manager,
+  Properties and SmartScreen said "Electron" by "GitHub, Inc.". The packager now
+  stamps the file with Studio's name, version and icon before anything signs it.
 - **Security fixes for remote approvals, catalogs and sharing.** Work filed
   from Discord retains its approval requirement through task admission and
   promotion. Concurrent PIN attempts count toward one lockout and approval

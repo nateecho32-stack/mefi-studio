@@ -23,6 +23,11 @@ This quick-win pass adds Friends to the main menu with direct Rooms, Your PCs
 and Playground links, and extends the Task board's compact sliding cards to
 Ideas through one shared layout helper.
 
+GitHub linking is included: the Git chip (status, Push, Pull, Save and
+push, Publish to GitHub, Link to a repository), New app's GitHub choice and
+the quieter launch screen. It has run only against local test repositories,
+never against GitHub itself; in-app device-code sign-in is not part of it.
+
 ## Included with a service dependency
 
 Rooms, shared playback, playdates, cowork file claims, Discord linking and
