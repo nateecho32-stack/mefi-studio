@@ -968,3 +968,49 @@ test("status pushes leave unchanged work tabs untouched and read the backlog at 
   assert.equal(text, "2", "a real change still updates the count");
   assert.equal(pending().slice(before).length, 1, "and joins the same queued read");
 });
+
+test("Home hands New task, a task's checks and a change request to Build's sessions layout only while it is active", async () => {
+  const handed = [];
+  let active = false;
+  const builder = {
+    active: () => active,
+    newTask: () => handed.push(["newTask"]),
+    openTask: (id, options) => handed.push(["openTask", id, options]),
+    requestChange: (row) => { handed.push(["requestChange", row.id]); return true; },
+  };
+  const env = await environment({ windowOverrides: { MefiBuilder: builder } });
+  const plain = (value) => JSON.parse(JSON.stringify(value));
+  const navigations = []; env.nav.go = (...args) => navigations.push(args);
+  env.events.tasks([{ id: "original", projectId: "project-a", title: "Original task", status: "done" }]);
+
+  // Classic Home (the default): the builder is never asked, and every path is the one it always was.
+  await env.el("focus-check").trigger("click");
+  assert.deepEqual(JSON.parse(JSON.stringify(navigations.at(-1))), ["tasks", { taskId: "original", projectId: "project-a", filter: "all", panel: "evidence" }], "View checks opens the task board");
+  env.workspace.composeTask();
+  assert.equal(navigations.at(-1)[0], "workspace", "New task goes to Home's own composer");
+  assert.equal(env.workspace.requestChange({ id: "original", projectId: "project-a", title: "Original task", status: "done" }), true);
+  assert.deepEqual(plain(handed), [], "an inactive layout is handed nothing");
+
+  // Sessions layout adopted: the same three actions go to it, with the pane the checks belong to.
+  active = true;
+  const before = navigations.length;
+  await env.el("focus-check").trigger("click");
+  assert.deepEqual(plain(handed.at(-1)), ["openTask", "original", { pane: "checks" }], "View checks opens the task with its Checks pane");
+  await env.el("focus-change").trigger("click");
+  assert.deepEqual(plain(handed.at(-1)), ["requestChange", "original"], "Request a change opens the task's composer set to make a follow-up");
+  env.workspace.composeTask();
+  assert.deepEqual(plain(handed.at(-1)), ["newTask"], "New task is the builder's New task page");
+  assert.equal(env.workspace.requestChange({ id: "original", projectId: "project-a", title: "Original task", status: "done" }), true);
+  assert.equal(handed.at(-1)[0], "requestChange");
+  assert.equal(navigations.length, before, "and Home navigates nowhere itself");
+  // A change request for another project's task is refused before the builder hears of it.
+  const count = handed.length;
+  assert.equal(env.workspace.requestChange({ id: "elsewhere", projectId: "project-b", title: "Other", status: "done" }), false);
+  assert.equal(env.workspace.requestChange(null), false);
+  assert.equal(handed.length, count);
+  // Home without a builder at all is the classic Home.
+  const bare = await environment();
+  const bareNav = []; bare.nav.go = (...args) => bareNav.push(args);
+  bare.workspace.composeTask();
+  assert.equal(bareNav.at(-1)[0], "workspace");
+});
