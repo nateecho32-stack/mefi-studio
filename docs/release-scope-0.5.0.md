@@ -51,16 +51,31 @@ limit and usage on each task, pictures on a message, the `@ # /` picker and the
 Skills page. The room the new shell needs (four derived edges, `MefiNav.layout`
 and `MefiNav.usable()`) is in and off by default: `?layout=v2` shows it.
 
+The new shell itself, built in pieces on the same branch and off by default
+(`?layout=v2`, or `MEFI_STUDIO_LAYOUT=v2`; every piece draws, stores and asks for
+nothing without it): the frame (a top bar with the Vibe | Build switch, Search and
+the need pill; a session-list column and an inspector you resize by dragging or
+with keys, or fold into drawers in a small window; a status bar; Reset layout),
+tabs you add and pin that Studio keeps tidy (a preview tab, a background tab with
+a badge when an agent needs you, at most 8, Recently closed, Ctrl+T, Ctrl+W,
+Ctrl+Tab and Ctrl+1 to 9), Size and density with a live miniature of the window,
+Today (Vibe's home) with one Inbox for everything waiting on you, and Build's
+session list, thread and inspector (Plan, Changes, Checks, Preview, Agent).
+
 ## Planned for 0.5.0
 
 In this order. Anything not finished and tested at the first release candidate
 moves to 0.5.x instead of holding the release.
 
-- **The new shell.** Vibe (calm, glanceable) and Build (in depth) share one menu,
-  one tab set, one inbox and one status bar. Tabs can be added and pinned and
-  Studio manages the rest; panels resize; text and information size have a live
-  preview; scrollbars show only while a pane can scroll and take no width; media
-  and previews stay visible. Design source: `docs/prototype/`.
+- **The new shell:** built and off by default (see above): Vibe (calm,
+  glanceable) and Build (in depth) share one menu, one tab set, one inbox and one
+  status bar; tabs can be added and pinned and Studio manages the rest; panels
+  resize; text and information size have a live preview; scrollbars show only
+  while a pane can scroll and take no width. What remains is the owner's look at
+  it on the PC, fixing what that shows, and turning it on by default. Not built:
+  an embedded live Preview tab (the inspector's Preview has the project's
+  controls and Before and After), the pinned tree strip as a panel, and Drafts in
+  the session list (the app keeps none). Design source: `docs/prototype/`.
 - **Load times, agents sending only what is new, logging and Friends 2.0** (the
   work planned for the skipped 0.4.5 and 0.4.6): measured first, then fixed.
 - **Worktrees in Studio:** landed (see above), with the mark on Build's task
@@ -108,6 +123,33 @@ decision, and each has an owner-side default already in the code.
   try a folder junction, a differently-cased path and a `.gitignore` saved by
   Notepad.
 
+**Try by hand: the new layout** (`?layout=v2`, or `MEFI_STUDIO_LAYOUT=v2`; the
+real-window tests ran on Linux fonts and Linux zoom only)
+
+- Keys on a real keyboard: Ctrl+M (mode), Ctrl+B and `[` (list, inspector),
+  Ctrl+T, Ctrl+W (closes a tab and never the window, also on Today), Ctrl+Tab,
+  Ctrl+1 to 9, Ctrl+Shift+T, Ctrl+N (new task), Ctrl+J (Inbox). On an AltGr layout
+  (German, Polish, Czech) check that characters typed with AltGr are not swallowed.
+- Display scaling 125, 150 and 175% at the smallest window (600x560): the bar, the
+  tab strip's "N more" and one-menu forms, the drawers, the Layout menu and the
+  Size page stay inside the window with no text under 12 px; Segoe UI text at
+  Size › Largest.
+- Drag the list and inspector edges (mouse, then touch or pen), double-click to
+  reset, Reset layout and its Undo; restart and let Studio update itself: the
+  panels, tabs, pins and the open session come back.
+- A real agent asking a question: a background tab with a badge and the need
+  pill; a Windows notification whose click opens that task (one) or the Inbox
+  (several); the tab card's Badge only and Open and focus choices.
+- A session thread with real pictures (Attach picture, paste, the lightbox with a
+  very large PNG), Accept, Revert and Undo in the inspector, a worktree run's
+  branch mark on a Windows path.
+- Interface scale: Ctrl +, Ctrl - and Ctrl 0 following the page, and the real
+  window zoom against the Size page's miniature; a light theme and a custom
+  palette (the badge, the count chip, focus rings). Windows high-contrast mode is
+  not handled anywhere in the app.
+- Start Studio with `MEFI_STUDIO_NO_TAB_MANAGER=1` from a shortcut: the tab card
+  says so and its master switch stays off.
+
 **Decisions**
 
 - Notifications: the defaults (finished tasks off, quiet hours off, sound off)
@@ -139,7 +181,16 @@ decision, and each has an owner-side default already in the code.
 - The new shell: the two modes' labels (keep Vibe and Build, or rename), whether
   the classic chrome is deleted at 0.5.0 or 0.5.1, the pinned tree strip as an
   optional panel, and publishing the site's motion work after it is retargeted
-  from 0.4.5 to 0.5.0.
+  from 0.4.5 to 0.5.0. In the tabs: that Ctrl+W never closes the window in the new
+  layout, even on Today (or lets Ctrl+W on Today fall through to Close), whether
+  the tab keys get a switch of their own, and that Home is titled Today in Build
+  too. In Today: "Answer all" (named in the brief, in no plan or prototype) is not
+  built, the count leaves out plans waiting on you, and "Decide later" lasts for
+  the session. In the sessions: a Queued group was added, there is no decision
+  countdown (the host decides at once where the permission mode allows it, and
+  waits otherwise), a Note cannot carry a picture and Ctrl+N is not bound in
+  Vibe. In Size: Configuration keeps its own live Interface scale slider beside
+  the page's draft and Apply (one home per control if you want a chip later).
 
 **At release time only**
 
