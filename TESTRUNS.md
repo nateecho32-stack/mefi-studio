@@ -27,7 +27,7 @@ the guide are the frozen archive.
 | `command_render` | Killed at its 120 s child limit with no fixture report | One fixture of 60 routes, 16 settings categories, 12 session tabs, audio and motion: 45–53 s alone. It now runs serialized after the Electron lane, and reports its duration and any cold-boot retry as diagnostics | Rerun solo: `node --test tests/command_render.test.mjs`. |
 | `command_render` (narrow) | "Assistant narrow: pointer reaches the switch track", once, in a lane run with other Electron processes going; the same file passes alone (53 s) | Something transient (a toast or hint) sat over the New work switch at 600 px when the fixture measured it | Rerun solo. The fixture now names the element on top of the switch, so a repeat says what it is. |
 | `project_map_render` (Linux lane) | Fails at 600×560 zoom 1.5: the map stage's content is 9 px taller than its 52 px box (the fixture allows 2) | Fails the same way on db63e15, before the 2026-09-30 landing; Linux fallback fonts are the likely difference from Windows | Judge it on the PC's Windows run. Not a regression from the landing. |
-| `run_node_tests_fast` | "fast run keeps this guard", rarely, in a full `npm run test:fast` on a busy machine; passes alone and on rerun | Not found: the guard lists the suites twice and once the fast list lacked its own file. The assertion now prints both list sizes and whether the full list had the file | Rerun. If it repeats, the message says whether the listing or the Electron classification is at fault. |
+| `run_node_tests_fast` (fixed 2026-09-30) | "fast run keeps this guard", at random, when other suites ran beside it (up to 5 of 12 runs; passes alone) | `scripts/run-node-tests.mjs --list` called `process.exit(0)` right after printing the list, and Node drops what a pipe has not taken yet, so the list came back cut off part way (171 of 385 lines, ending at any suite) | Fixed: the list is written once and the process exits from the write's callback. `tests/run_node_tests_fast.test.mjs` now reads a 4,000-suite list through a slow reader. If it ever fails again, the message prints both list sizes. |
 | `task_overview_render`, `startup_render`, `renderer_recovery`, `node_paint_cache` | Painted-position or capture assertions off by a frame | GPU-contended Electron captures in the parallel stage | Rerun the one file solo. |
 | `eyes_worker` | "read past the timeout" | Load-dependent worker read budget | Rerun solo. |
 | `expand_finished_guard` | One-off failure in the parallel stage, passes solo | Parallel-load timing | Rerun. |
@@ -58,8 +58,9 @@ touched.
   27 skipped, 99 s. In a `core.autocrlf=true` clone (CRLF checkout, as on the PC)
   at 3d877f3: 5,213 tests, 5,186 pass, 0 fail, 27 skipped, 111 s. One earlier
   run of the same tree failed only `run_node_tests_fast` ("fast run keeps this
-  guard"); it passes alone and in the rerun, and the test now prints the list
-  sizes if it happens again (see the table above).
+  guard"); it passes alone and in the rerun. Cause found afterwards and fixed
+  (see the table above): the runner's `--list` output was cut off by
+  `process.exit()` when a pipe was slow.
 - Windows CI (`ci.yml`, windows-latest: build-booklet and its diff, spec audit,
   check, lint, `npm test`, audit): green on f271343 (run 156), 8ce81a4 (157)
   and 9d10828 (160). Hosted Windows skips every Electron-launching fixture, so
