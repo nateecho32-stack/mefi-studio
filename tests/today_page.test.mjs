@@ -157,11 +157,11 @@ test("detail follows html[data-detail]: titles only, plus status, or everything"
   assert.ok(running().querySelector(".today-card-meta"));
 });
 
-test("a card opens its session: through the tab strip when there is one, else through the route", async () => {
-  const tabs = [];
-  const t = await up({ extras: { MefiTabs: { open: (...args) => tabs.push(plain(args)) } } });
+test("a card opens its session: in its thread when the session panels are there, else through the route", async () => {
+  const sessions = [];
+  const t = await up({ extras: { MefiSessions: { active: () => true, open: (...args) => { sessions.push(plain(args)); return true; } } } });
   await cardsOf(t, "running")[0].querySelector(".today-card-open").click();
-  assert.deepEqual(tabs, [["tasks", { taskId: "t3", projectId: "p1", filter: "all" }, { preview: true }]]);
+  assert.deepEqual(sessions, [["t3", { preview: true }]]);
   assert.deepEqual(t.nav.gone, []);
   const u = await up();
   await cardsOf(u, "running")[0].querySelector(".today-card-open").click();

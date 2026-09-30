@@ -360,7 +360,7 @@ app.whenReady().then(async () => {
   const popCard = (key) => `#today-inbox [data-key="${key}"]`;
   const click = (selector) => run(`const node = document.querySelector(${JSON.stringify(selector)}); if (!node || node.disabled) return false; node.focus(); node.click(); return true;`);
   const press = (selector, label) => run(`const node = [...document.querySelectorAll(${JSON.stringify(selector)})].find((item) => item.textContent.trim() === ${JSON.stringify(label)}); if (!node || node.disabled) return false; node.focus(); node.click(); return true;`);
-  const pillCount = () => text("#fixture-pill .fixture-pill-text");
+  const pillCount = () => run("const n = document.querySelector('#shell-need .shell-pill-n'), l = document.querySelector('#shell-need .shell-pill-l'); return n && l ? (n.textContent + ' ' + l.textContent).replace(/\\s+/g, ' ').trim() : null;");
 
   await until("window.MefiVibe && window.MefiNav && window.MefiToday && !window.MefiBoot?.isActive?.()", "studio ready");
   assert.equal(await run("return document.documentElement.dataset.layout;"), "v2", "layout v2 is on for this window");
@@ -375,24 +375,9 @@ app.whenReady().then(async () => {
   assert.equal(bridgeQueue.counts.total, realQueue.counts.total);
   report.digest = bridgeQueue.items.map((item) => `${item.kind}:${item.id}`);
 
-  // A stand-in for the top bar's pill and for a status-bar item (the top bar is another slice): a 40px bar and a 28px status bar that take their room from the
-  // window the way the real regions do (MefiNav.layout.set), with the pill and the item in them, reading count() and opening the Inbox where theirs will.
-  await run(`
-    const style = document.createElement("style");
-    style.textContent = ".fixture-bar { position: fixed; left: 0; right: 0; z-index: 70; display: flex; align-items: center; padding: 0 12px; background: color-mix(in srgb, var(--bg-deep) 88%, transparent); border-color: var(--hairline); } #fixture-top { top: 0; height: 40px; justify-content: flex-end; border-bottom: 1px solid var(--hairline); } #fixture-bottom { bottom: 0; height: 28px; border-top: 1px solid var(--hairline); } .fixture-chrome { display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 14px; border: 1px solid var(--hairline); border-radius: 999px; background: var(--surface-raised); color: var(--ivory); font: 600 13px var(--font-ui); cursor: pointer; } #fixture-status { height: 22px; border-radius: 8px; font-size: 12px; }";
-    document.head.append(style);
-    const top = document.createElement("div"); top.id = "fixture-top"; top.className = "fixture-bar";
-    const bottom = document.createElement("div"); bottom.id = "fixture-bottom"; bottom.className = "fixture-bar";
-    const pill = document.createElement("button"); pill.id = "fixture-pill"; pill.className = "fixture-chrome"; pill.type = "button"; pill.setAttribute("aria-haspopup", "dialog");
-    pill.innerHTML = '<span class="fixture-pill-text"></span>';
-    const status = document.createElement("button"); status.id = "fixture-status"; status.className = "fixture-chrome"; status.type = "button"; status.textContent = "Waiting on you";
-    const paintPill = () => { const n = window.MefiToday.count(); pill.querySelector(".fixture-pill-text").textContent = n + " need you"; };
-    pill.addEventListener("click", () => window.MefiToday.openInbox(pill));
-    status.addEventListener("click", () => window.MefiToday.openInbox(status));
-    window.MefiToday.onChange(paintPill); paintPill();
-    top.append(pill); bottom.append(status); document.body.append(top, bottom);
-    window.MefiNav.layout.set("tabs", 40); window.MefiNav.layout.set("status", 28);
-  `);
+  // The top bar's pill is the frame's own (renderer/shell.js, in this window): it reads count() and opens the Inbox; the bars take their room from
+  // the window the way the real regions do.
+  await until("window.MefiShell && window.MefiShell.active() && document.getElementById('shell-need')", "the frame's bar and its need pill are up");
 
   // ---- Today, at five sizes ----------------------------------------------------------------------------------
   await run("await window.MefiVibe.setMode('vibe'); await window.MefiVibe.refresh();");
@@ -464,11 +449,11 @@ app.whenReady().then(async () => {
     await capture(`today-${label}@${zoom}.png`);
 
     // The Inbox popover under the pill, then from the status-bar item, then as a page.
-    await click("#fixture-pill");
+    await click("#shell-need");
     await until("!document.getElementById('today-inbox').hidden && document.querySelectorAll('#today-inbox .today-need').length === 7", `the Inbox opens at ${label}@${zoom}`);
     await sleep(150);
     const popover = await measure("#today-inbox");
-    const placed = await run(`const node = document.getElementById('today-inbox'), pill = document.getElementById('fixture-pill'); const b = node.getBoundingClientRect(), p = pill.getBoundingClientRect(); return { x: b.left, y: b.top, r: b.right, b: b.bottom, w: b.width, h: b.height, pill: { x: p.left, r: p.right, b: p.bottom }, expanded: pill.getAttribute('aria-expanded'), focusIn: node.contains(document.activeElement), side: node.dataset.side, open: node.querySelectorAll('.today-need').length };`);
+    const placed = await run(`const node = document.getElementById('today-inbox'), pill = document.getElementById('shell-need'); const b = node.getBoundingClientRect(), p = pill.getBoundingClientRect(); return { x: b.left, y: b.top, r: b.right, b: b.bottom, w: b.width, h: b.height, pill: { x: p.left, r: p.right, b: p.bottom }, expanded: pill.getAttribute('aria-expanded'), focusIn: node.contains(document.activeElement), side: node.dataset.side, open: node.querySelectorAll('.today-need').length };`);
     report.layouts.at(-1).popover = { small: popover.small, scrollers: popover.scrollers, box: placed };
     assert.deepEqual(popover.small, [], `no text under 12 px in the popover at ${label}@${zoom}`);
     assert.equal(popover.pageOverflow, false, `the popover overflows the page at ${label}@${zoom}`);
@@ -482,12 +467,12 @@ app.whenReady().then(async () => {
     await capture(`inbox-${label}@${zoom}.png`);
     await run("document.getElementById('today-inbox').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));");
     await until("document.getElementById('today-inbox').hidden", `Esc closes the Inbox at ${label}@${zoom}`);
-    assert.equal(await run("return document.activeElement === document.getElementById('fixture-pill');"), true, "and the keyboard goes back to the pill");
+    assert.equal(await run("return document.activeElement === document.getElementById('shell-need');"), true, "and the keyboard goes back to the pill");
     // From the status bar it opens upward.
-    await click("#fixture-status");
+    await click(".shell-waiting");
     await until("!document.getElementById('today-inbox').hidden", `the Inbox opens from the status item at ${label}@${zoom}`);
     await sleep(120);
-    const up = await run(`const node = document.getElementById('today-inbox'), item = document.getElementById('fixture-status'); const b = node.getBoundingClientRect(), s = item.getBoundingClientRect(); return { y: b.top, b: b.bottom, r: b.right, x: b.left, statusTop: s.top, side: node.dataset.side };`);
+    const up = await run(`const node = document.getElementById('today-inbox'), item = document.querySelector('.shell-waiting'); const b = node.getBoundingClientRect(), s = item.getBoundingClientRect(); return { y: b.top, b: b.bottom, r: b.right, x: b.left, statusTop: s.top, side: node.dataset.side };`);
     assert.equal(up.side, "above", `a pill at the bottom opens it upward at ${label}@${zoom}`);
     assert.ok(up.y >= 0 && up.b <= up.statusTop + 1 && up.x >= 0, `the popover stays above the status item at ${label}@${zoom}: ${JSON.stringify(up)}`);
     await run("document.getElementById('today-inbox').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));");
@@ -559,7 +544,7 @@ app.whenReady().then(async () => {
   await run("window.MefiNav.close('today');");
   await until("document.getElementById('today-overlay').hidden", "the Build host closes");
   assert.equal(await run("return document.getElementById('vibe-layer').dataset.today === 'on' && !document.getElementById('vibe-layer').hidden;"), false, "Vibe's Today does not draw in Build");
-  await click("#fixture-pill");
+  await click("#shell-need");
   await until("!document.getElementById('today-inbox').hidden", "in Build the Inbox opens as a popover");
   await capture("inbox-build-1440x900.png");
   await run("document.getElementById('today-inbox').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));");
@@ -580,7 +565,7 @@ app.whenReady().then(async () => {
   for (const tone of ["dark", "light"]) for (const [kind, found] of Object.entries(report.contrast[tone])) if (found) assert.ok(found.ratio >= 3, `${kind} text reads against what is under it in a ${tone} palette: ${JSON.stringify(found)}`);
   const lightSmall = await measure("#today-page");
   assert.deepEqual(lightSmall.small, [], "no text under 12 px in a light palette either");
-  await click("#fixture-pill");
+  await click("#shell-need");
   await until("!document.getElementById('today-inbox').hidden", "the Inbox opens in a light palette");
   await sleep(600);
   await capture("inbox-light-1440x900.png");
@@ -606,7 +591,7 @@ app.whenReady().then(async () => {
   check("answering on a card: one host call, a Decided line, the count follows");
 
   // The Inbox popover: a free answer, Decide later, the keys.
-  await click("#fixture-pill");
+  await click("#shell-need");
   await until("!document.getElementById('today-inbox').hidden && document.querySelectorAll('#today-inbox .today-need').length === 6", "the popover lists what is left");
   assert.deepEqual(await run("return [...document.querySelectorAll('#today-inbox .today-need')].map((card) => card.dataset.key);"), ["question:q_failure", "question:q_permission", "family:t_family", "approval:t_approve", "blocked:t_stuck", "review:t_review"], "the list the app keeps: questions first, the longest waiting first");
   assert.equal(await text(`${popCard("question:q_permission")} .today-need-label`), "Permission");
@@ -618,7 +603,7 @@ app.whenReady().then(async () => {
   await until(`document.querySelector(${JSON.stringify(popCard("question:q_failure"))})?.classList.contains('is-decided')`, "a Decided line in the popover");
   await capture("inbox-decided-1440x900.png");
   // Keys: J moves, a number answers with that option, Enter opens the task, Esc gives the keyboard back.
-  await run(`window.__tabs = []; window.MefiTabs = { open: (...args) => window.__tabs.push(args) };`);
+  await run(`window.__sessions = []; window.__realSessions = window.MefiSessions; window.MefiSessions = { active: () => true, open: (...args) => { window.__sessions.push(args); return true; } };`);
   await run("window.todayFixture.clear();");
   await run("document.getElementById('today-inbox').dispatchEvent(new KeyboardEvent('keydown', { key: 'j', bubbles: true, cancelable: true }));");
   assert.equal(await run("return [...document.querySelectorAll('#today-inbox .today-need')].findIndex((card) => card.classList.contains('is-current'));"), 1, "J moves down one");
@@ -670,7 +655,7 @@ app.whenReady().then(async () => {
   // Esc, and the keyboard returns to the pill.
   await run("document.getElementById('today-inbox').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));");
   await until("document.getElementById('today-inbox').hidden", "Esc closes");
-  assert.equal(await run("return document.activeElement === document.getElementById('fixture-pill');"), true);
+  assert.equal(await run("return document.activeElement === document.getElementById('shell-need');"), true);
   check("the popover: drop twice, Undo, confirm, Mefi's own Undo, Esc returns to the pill");
   // Ctrl J opens it from anywhere and closes it again.
   await run("window.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', ctrlKey: true, bubbles: true, cancelable: true }));");
@@ -678,9 +663,9 @@ app.whenReady().then(async () => {
   await run("window.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', ctrlKey: true, bubbles: true, cancelable: true }));");
   await until("document.getElementById('today-inbox').hidden", "and closes it");
   // The pill is a toggle: a real press on it while open closes it, and the click that follows does not reopen it.
-  await click("#fixture-pill");
+  await click("#shell-need");
   await until("!document.getElementById('today-inbox').hidden", "open again");
-  const point = await run("const r = document.getElementById('fixture-pill').getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };");
+  const point = await run("const r = document.getElementById('shell-need').getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };");
   contents.sendInputEvent({ type: "mouseDown", button: "left", clickCount: 1, ...point }); contents.sendInputEvent({ type: "mouseUp", button: "left", clickCount: 1, ...point });
   await sleep(300);
   assert.equal(await run("return document.getElementById('today-inbox').hidden;"), true, "a real press on the pill while it is open closes it, and stays closed");
@@ -716,21 +701,22 @@ app.whenReady().then(async () => {
   await run("const input = document.getElementById('vibe-input'); input.value = ''; input.dispatchEvent(new Event('input', { bubbles: true }));");
 
   // ---- opening a session, and the notification hand-off -------------------------------------------------------
-  await run("delete window.MefiTabs; window.__went = []; window.__go = window.MefiNav.go; window.MefiNav.go = (...args) => { window.__went.push(args); return true; };");
+  await run("delete window.MefiSessions; window.__went = []; window.__go = window.MefiNav.go; window.MefiNav.go = (...args) => { window.__went.push(args); return true; };");
   await click(`${cardOf("run:t_run")} .today-card-open`);
-  assert.deepEqual(await run("return window.__went.map((args) => [args[0], args[1].taskId, args[1].projectId, args[1].filter]);"), [["tasks", "t_run", "today-project", "all"]], "a card opens its session through the route when there is no tab strip");
-  await run("window.__went.length = 0; window.MefiTabs = { open: (...args) => window.__tabs.push(args) }; window.__tabs = [];");
+  assert.deepEqual(await run("return window.__went.map((args) => [args[0], args[1].taskId, args[1].projectId, args[1].filter]);"), [["tasks", "t_run", "today-project", "all"]], "a card opens its session through the route when the session panels are not there");
+  await run("window.__went.length = 0; window.__sessions.length = 0; window.MefiSessions = { active: () => true, open: (...args) => { window.__sessions.push(args); return true; } };");
   await click(`${cardOf("done:t_done1")} .today-card-open`);
-  assert.deepEqual(await run("return window.__tabs.map((args) => [args[0], args[1].taskId, args[2]]);"), [["tasks", "t_done1", { preview: true }]], "through the tab strip when there is one");
-  await run("window.__tabs.length = 0;");
+  assert.deepEqual(await run("return window.__sessions;"), [["t_done1", { preview: true }]], "in its thread when the session panels are there");
+  assert.deepEqual(await run("return window.__went;"), [], "and the router is not asked");
+  await run("window.__sessions.length = 0;");
   assert.equal(await run("return window.MefiToday.openFromAlert({ kind: 'need', id: 'a', taskId: 't_run', projectId: 'today-project', count: 3 });"), true);
   await until("!document.getElementById('today-inbox').hidden", "a burst of notifications lands on the Inbox");
-  assert.deepEqual(await run("return window.__tabs;"), []);
+  assert.deepEqual(await run("return window.__sessions;"), []);
   await run("document.getElementById('today-inbox').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));");
   assert.equal(await run("return window.MefiToday.openFromAlert({ kind: 'fail', id: 't_next', taskId: 't_next', projectId: 'today-project' });"), true);
-  assert.deepEqual(await run("return window.__tabs.map((args) => [args[0], args[1].taskId]);"), [["tasks", "t_next"]], "one notification lands on its task");
+  assert.deepEqual(await run("return window.__sessions;"), [["t_next", { preview: true }]], "one notification lands on its task");
   assert.equal(await run("return window.MefiToday.openFromAlert({ kind: 'test' });"), false, "the test notification is alerts.js's own");
-  await run("window.MefiNav.go = window.__go;");
+  await run("window.MefiNav.go = window.__go; window.MefiSessions = window.__realSessions;");
   check("cards open their sessions; a notification lands on the task, or the Inbox when it told several");
 
   // ---- a reload resumes in Vibe with Today up, and a push repaints without rebuilding ---------------------------

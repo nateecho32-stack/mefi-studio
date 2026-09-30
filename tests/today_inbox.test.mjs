@@ -341,14 +341,24 @@ test("Decide later puts a thing last for now, it still needs you, and Decide now
   assert.deepEqual(plain(t.today.snapshot()).later, []);
 });
 
-test("a thing opens its task through the tab strip when there is one, else through the route", async () => {
-  const tabs = [];
-  const t = await loadToday({ data: board({ needs: [needBlocked()] }), extras: { MefiTabs: { open: (...args) => tabs.push(plain(args)) } } });
+test("a thing opens its task in its thread when the session panels are there, else through the route", async () => {
+  const sessions = [], tabs = [];
+  const panels = { active: () => true, open: (...args) => { sessions.push(plain(args)); return true; } };
+  const t = await loadToday({ data: board({ needs: [needBlocked()] }), extras: { MefiSessions: panels, MefiTabs: { open: (...args) => tabs.push(plain(args)) } } });
   await open(t);
   await press(t, buttonNamed(cardOf(t, "blocked:t6"), "Open task"));
-  assert.deepEqual(tabs, [["tasks", { taskId: "t6", projectId: "p1", filter: "all" }, { preview: true }]], "a preview tab, like every page you look at");
+  assert.deepEqual(sessions, [["t6", { preview: true }]], "a session, in a preview tab like every page you look at");
+  assert.deepEqual(tabs, [], "the strip is not asked for a board page that could not say which task it shows");
   assert.deepEqual(t.nav.gone, []);
   assert.equal(inboxOf(t).hidden, true, "and the popover gets out of the way");
+  // Panels that are not drawn, or that cannot show this task (another project's), leave it to the route.
+  for (const extras of [{ MefiSessions: { active: () => false, open: () => { throw new Error("not drawn"); } } }, { MefiSessions: { active: () => true, open: () => false } }, { MefiTabs: { open: (...args) => tabs.push(plain(args)) } }]) {
+    const v = await loadToday({ data: board({ needs: [needBlocked()] }), extras });
+    await open(v);
+    await press(v, buttonNamed(cardOf(v, "blocked:t6"), "Open task"));
+    assert.deepEqual(v.nav.gone, [["tasks", { taskId: "t6", projectId: "p1", filter: "all" }]]);
+  }
+  assert.deepEqual(tabs, [], "a strip with no session panels is followed, never asked for a tasks tab with no task in it");
   const u = await loadToday({ data: board({ needs: [needBlocked()] }) });
   await open(u);
   await press(u, buttonNamed(cardOf(u, "blocked:t6"), "Open task"));
@@ -361,7 +371,7 @@ test("a thing opens its task through the tab strip when there is one, else throu
 
 test("J and K move, a number picks an option, Enter opens the task, Esc closes and gives the keyboard back", async () => {
   const tabs = [];
-  const t = await loadToday({ data: board({ needs: [needQuestion(), needApproval(), needBlocked()] }), extras: { MefiTabs: { open: (...args) => tabs.push(plain(args)) } } });
+  const t = await loadToday({ data: board({ needs: [needQuestion(), needApproval(), needBlocked()] }), extras: { MefiSessions: { active: () => true, open: (...args) => { tabs.push(plain(args)); return true; } } } });
   const pill = t.document.createElement("button");
   t.document.activeElement = pill;
   t.today.openInbox(pill); await t.settle();
@@ -403,7 +413,7 @@ test("J and K move, a number picks an option, Enter opens the task, Esc closes a
   // Enter on a card opens its task.
   const card = inboxOf(t).querySelectorAll(".today-need")[1];
   t.inboxKey("j"); t.inboxKey("Enter", { target: card }); await t.settle();
-  assert.deepEqual(tabs, [["tasks", { taskId: "t5", projectId: "p1", filter: "all" }, { preview: true }]]);
+  assert.deepEqual(tabs, [["t5", { preview: true }]]);
   // Esc closes and the keyboard goes back to where it was.
   const v = await loadToday({ data: board({ needs: [needQuestion()] }) });
   const opener = v.document.createElement("button");
@@ -517,7 +527,7 @@ test("a need raised anywhere opens the Inbox on it: by kind and id, and when it 
 
 test("a click on a Windows notification: a burst opens the Inbox, one thing its task, a question with no task that question", async () => {
   const tabs = [];
-  const t = await loadToday({ data: board({ needs: [needBlocked(), needQuestion()] }), extras: { MefiTabs: { open: (...args) => tabs.push(plain(args)) } } });
+  const t = await loadToday({ data: board({ needs: [needBlocked(), needQuestion()] }), extras: { MefiSessions: { active: () => true, open: (...args) => { tabs.push(plain(args)); return true; } } } });
   assert.equal(t.today.openFromAlert({ kind: "test", id: null }), false, "the test notification is alerts.js's own: it just leaves Studio in front");
   assert.equal(t.today.openFromAlert({ kind: "need", id: "a", taskId: "ta", projectId: "p1", count: 3 }), true);
   await t.settle();
@@ -525,7 +535,7 @@ test("a click on a Windows notification: a burst opens the Inbox, one thing its 
   assert.deepEqual(tabs, []);
   t.today.closeInbox();
   assert.equal(t.today.openFromAlert({ kind: "fail", id: "t6", taskId: "t6", projectId: "p1" }), true);
-  assert.deepEqual(tabs, [["tasks", { taskId: "t6", projectId: "p1", filter: "all" }, { preview: true }]], "one thing: its task, in the project it belongs to");
+  assert.deepEqual(tabs, [["t6", { preview: true }]], "one thing: its task");
   assert.equal(inboxOf(t).hidden, true);
   assert.equal(t.today.openFromAlert({ kind: "fail", id: "t6", taskId: "t6", projectId: "p1", count: 1 }), true, "a count of one is one thing");
   assert.equal(tabs.length, 2);

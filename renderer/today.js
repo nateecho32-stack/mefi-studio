@@ -373,11 +373,14 @@
   function openTask(taskId, { projectId = null, from = null } = {}) {
     if (!taskId) return false;
     closeInbox({ restore: false });
-    // The one place that knows which route a session is: a task's own page (the thread route waits for the sessions slice).
-    const params = { taskId: String(taskId), ...((projectId || (state.data || {}).projectId) ? { projectId: projectId || state.data.projectId } : {}), filter: "all" };
     if (from && typeof from.focus === "function") state.anchor = state.anchor || from;
-    if (window.MefiTabs?.open) { window.MefiTabs.open("tasks", params, { preview: true }); return true; }
-    window.MefiNav?.go?.("tasks", params);
+    // The one place that knows which route a session is: the session panels (layout v2) show a task as a thread, in a tab of
+    // its own (the preview tab until you use it). Without them the task's own page is asked of the router, with the task: a
+    // tab cannot say which task a board page shows (only a session is a place of its own), so the strip follows the route.
+    const sessions = window.MefiSessions;
+    if (sessions?.active?.() && sessions.open?.(String(taskId), { preview: true })) return true;
+    const pid = projectId || (state.data || {}).projectId;
+    window.MefiNav?.go?.("tasks", { taskId: String(taskId), ...(pid ? { projectId: pid } : {}), filter: "all" });
     return true;
   }
   function openPlan(planId) { window.MefiNav?.go?.("plans", { planId }); }
