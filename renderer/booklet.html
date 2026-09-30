@@ -59477,6 +59477,16 @@ html[data-motion="off"] .pane-floating { animation: none; }
     if (initialized || !$("overlay")) return;
     initialized = true;
     $("close").addEventListener("click", () => close());
+    // Ctrl +, Ctrl - and Ctrl 0 move the scale without this dialog (main.cjs stepUiZoom): keep
+    // the slider in step, and say the result once the presses settle rather than once per press.
+    let zoomTold = 0;
+    api()?.onUiZoom?.((payload) => {
+      if (!Number.isFinite(payload?.factor)) return;
+      state.zoom = payload.factor;
+      if (isOpen() && state.category === "ui" && !state.query) render();
+      clearTimeout(zoomTold);
+      zoomTold = setTimeout(() => window.MefiToast?.(`Interface scale ${Math.round(payload.factor * 100)}%`), 350);
+    });
     $("search").addEventListener("input", () => { state.query = $("search").value; render(); });
     $("search").addEventListener("keydown", (event) => {
       if (event.key === "Enter") { const first = $("pane").querySelector(".config-item"); if (first) { event.preventDefault(); first.click(); } }

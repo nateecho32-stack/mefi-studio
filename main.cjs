@@ -734,9 +734,13 @@ function applicationMenu() {
         { label: "Force Reload", accelerator: "CmdOrCtrl+Shift+R", click: () => reloadKeepingPlace({ ignoreCache: true }).catch(() => {}) },
         { role: "toggleDevTools" },
         { type: "separator" },
-        { role: "resetZoom" },
-        { role: "zoomIn" },
-        { role: "zoomOut" },
+        // The interface scale (Configuration › UI & Surfaces) by keyboard: the same
+        // 70% to 150% ladder, saved, so a reload does not undo it. The roles these
+        // replace zoomed without saving and without a limit.
+        { label: "Actual size", accelerator: "CmdOrCtrl+0", click: () => { stepUiZoom(0).catch(() => {}); } },
+        { label: "Zoom in", accelerator: "CmdOrCtrl+Plus", click: () => { stepUiZoom(1).catch(() => {}); } },
+        { label: "Zoom in (=)", accelerator: "CmdOrCtrl+=", visible: false, click: () => { stepUiZoom(1).catch(() => {}); } },
+        { label: "Zoom out", accelerator: "CmdOrCtrl+-", click: () => { stepUiZoom(-1).catch(() => {}); } },
         { type: "separator" },
         { role: "togglefullscreen" },
       ],
@@ -19411,6 +19415,23 @@ async function traceRows(id, { tail = 250 } = {}) {
 function zoomFactorOf(value) {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? Math.min(1.5, Math.max(0.7, Math.round(number * 20) / 20)) : 1;
+}
+// Ctrl +, Ctrl - and Ctrl 0 walk this ladder (fine below 130%, coarser above), from
+// wherever the slider left the scale; 0 is back to 100%.
+const ZOOM_STEPS = [0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1, 1.05, 1.1, 1.15, 1.2, 1.25, 1.3, 1.4, 1.5];
+function zoomStepOf(current, direction) {
+  const at = zoomFactorOf(current);
+  if (!direction) return 1;
+  return direction > 0
+    ? ZOOM_STEPS.find((step) => step > at + 0.0005) ?? ZOOM_STEPS[ZOOM_STEPS.length - 1]
+    : [...ZOOM_STEPS].reverse().find((step) => step < at - 0.0005) ?? ZOOM_STEPS[0];
+}
+async function stepUiZoom(direction) {
+  if (!window || window.isDestroyed()) return;
+  const next = zoomStepOf(window.webContents.getZoomFactor(), direction);
+  window.webContents.setZoomFactor(next);
+  await updateSettings((settings) => { settings.ui = { ...(settings.ui ?? {}), zoom: next }; });
+  send("ui:zoom-changed", { factor: next });
 }
 async function traceChannels() {
   const channels = [];

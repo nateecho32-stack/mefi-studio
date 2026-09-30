@@ -45,12 +45,19 @@ function load({ zoom = true, helper = false } = {}) {
   }
   const { document, get } = createDom({ ids: templateIds((id) => id.startsWith("config-")) });
   get("config-overlay").hidden = true;
-  const api = zoom ? { uiZoom: async ({ factor }) => { zoomed.push(factor); return { ok: true, factor }; }, uiZoomGet: async () => ({ ok: true, factor: 1.1 }) } : {};
-  const window = { mefiStudio: api, MefiNav: { list: () => records }, MefiToast() {}, ...(helper ? { MefiSetupHelper: { open: (id) => opened.push(id) } } : {}) };
-  vm.runInContext(source, vm.createContext({ window, document, console, requestAnimationFrame: () => 0 }));
+  // The scale changed from the keyboard (main.cjs stepUiZoom) arrives as a push; timers wait for flush().
+  let pushed = null;
+  const toasts = [];
+  const timers = [];
+  const api = zoom ? { uiZoom: async ({ factor }) => { zoomed.push(factor); return { ok: true, factor }; }, uiZoomGet: async () => ({ ok: true, factor: 1.1 }), onUiZoom: (callback) => { pushed = callback; } } : {};
+  const window = { mefiStudio: api, MefiNav: { list: () => records }, MefiToast: (text) => toasts.push(text), ...(helper ? { MefiSetupHelper: { open: (id) => opened.push(id) } } : {}) };
+  const setTimeout = (run) => { timers.push(run); return timers.length; };
+  const clearTimeout = (id) => { if (id) timers[id - 1] = null; };
+  vm.runInContext(source, vm.createContext({ window, document, console, requestAnimationFrame: () => 0, setTimeout, clearTimeout }));
+  const flush = () => { for (const run of timers.splice(0)) run?.(); };
   const titles = () => get("config-pane").querySelectorAll(".config-item-title").map((node) => node.textContent);
   const categories = () => get("config-tree").querySelectorAll(".config-category").filter((button) => !button.hidden).map((button) => [button.dataset.category, button.children[1].textContent]);
-  return { config: window.MefiConfig, get, ran, opened, zoomed, titles, categories };
+  return { config: window.MefiConfig, get, ran, opened, zoomed, titles, categories, push: (payload) => pushed?.(payload), toasts, flush };
 }
 
 test("every settings record is filed once, by the page it lives on and then by its words", () => {
@@ -152,4 +159,48 @@ test("search reaches the helper's sections, and a match opens the helper at that
   assert.deepEqual(titles(), ["Routing"]);
   for (const fn of search.listeners.keydown) fn({ key: "Enter", preventDefault() {}, stopPropagation() {} });
   assert.deepEqual(ran, ["setup-helper:routing"]);
+});
+
+test("Ctrl +, Ctrl - and Ctrl 0 walk the scale's ladder from wherever it stands, and are saved like the slider", async () => {
+  const main = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
+  const slice = (start, end) => main.slice(main.indexOf(start), main.indexOf(end, main.indexOf(start)) + end.length);
+  const code = `${slice("function zoomFactorOf(value) {", "\n}")}\n${slice("const ZOOM_STEPS = ", ";")}\n${slice("function zoomStepOf(current, direction) {", "\n}")}\n({ zoomFactorOf, ZOOM_STEPS, zoomStepOf })`;
+  const { ZOOM_STEPS, zoomStepOf } = vm.runInNewContext(code);
+  // The ladder is inside the slider's range, in order, and holds 100%.
+  assert.ok(ZOOM_STEPS.every((step, index) => step >= 0.7 && step <= 1.5 && (index === 0 || step > ZOOM_STEPS[index - 1])));
+  assert.ok(ZOOM_STEPS.includes(1));
+  const up = (from) => zoomStepOf(from, 1);
+  const down = (from) => zoomStepOf(from, -1);
+  assert.deepEqual([1, 1.05, 1.3, 1.4].map(up), [1.05, 1.1, 1.4, 1.5], "in: one rung at a time");
+  assert.deepEqual([1, 0.95, 0.75, 1.4].map(down), [0.95, 0.9, 0.7, 1.3], "out: one rung at a time");
+  assert.equal(up(1.5), 1.5, "the top stays the top");
+  assert.equal(down(0.7), 0.7, "and the bottom the bottom");
+  assert.equal(up(1.35), 1.4, "a scale the slider left between rungs goes to the next one up");
+  assert.equal(down(1.35), 1.3, "or the next one down");
+  assert.equal(zoomStepOf(1.25, 0), 1, "Ctrl 0 is 100%");
+  assert.equal(up("x"), 1.05, "an unreadable scale counts as 100%");
+  // The menu carries all three chords, the hidden = for a keyboard without a plus, and they are saved and announced.
+  assert.match(main, /label: "Actual size", accelerator: "CmdOrCtrl\+0", click: \(\) => \{ stepUiZoom\(0\)/);
+  assert.match(main, /label: "Zoom in", accelerator: "CmdOrCtrl\+Plus", click: \(\) => \{ stepUiZoom\(1\)/);
+  assert.match(main, /label: "Zoom in \(=\)", accelerator: "CmdOrCtrl\+=", visible: false, click: \(\) => \{ stepUiZoom\(1\)/);
+  assert.match(main, /label: "Zoom out", accelerator: "CmdOrCtrl\+-", click: \(\) => \{ stepUiZoom\(-1\)/);
+  assert.doesNotMatch(main, /role: "zoomIn"|role: "zoomOut"|role: "resetZoom"/, "the unsaved, unclamped roles are gone");
+  assert.match(main, /const next = zoomStepOf\(window\.webContents\.getZoomFactor\(\), direction\);[\s\S]{0,200}settings\.ui = \{ \.\.\.\(settings\.ui \?\? \{\}\), zoom: next \}[\s\S]{0,120}send\("ui:zoom-changed", \{ factor: next \}\)/);
+});
+
+test("a scale changed from the keyboard moves an open slider and says the result once the presses settle", async () => {
+  const { config, get, push, toasts, flush } = load();
+  await config.open({ category: "ui" });
+  await settle();
+  const slider = () => get("config-pane").querySelector("input");
+  assert.equal(slider().value, "110");
+  push({ factor: 1.15 });
+  push({ factor: 1.2 });
+  assert.equal(slider().value, "120", "the open slider follows the keys");
+  assert.deepEqual(toasts, [], "nothing is said while the keys are still going");
+  flush();
+  assert.deepEqual(toasts, ["Interface scale 120%"], "one line with where it ended");
+  push({ factor: "x" });
+  flush();
+  assert.equal(toasts.length, 1, "a push with no scale in it says nothing");
 });

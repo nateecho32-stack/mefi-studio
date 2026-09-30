@@ -7,6 +7,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Ctrl +, Ctrl − and Ctrl 0 change the interface scale, and it is remembered.**
+  They walk the same 70% to 150% ladder as the slider in Configuration › UI &
+  Surfaces (fine below 130%), from wherever the slider left it, and Ctrl 0 is
+  100%. They used to zoom without saving and without a limit, so a reload put
+  the scale back. A short line says where it ended, and an open slider follows.
 - **Worktrees have a page in Studio: Work › Worktrees.** It lists every
   worktree of the open project, worst first: which hold work that only this PC
   has, which are on GitHub but not merged and which are merged and safe to
