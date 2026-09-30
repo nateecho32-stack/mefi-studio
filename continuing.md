@@ -5,10 +5,14 @@
 > 0.5.0 scope, and its slices (`s1-boot`, `s2-log`, `s3-rows`, `s12-cli`,
 > `fh2-queue`) still exist only in worktrees on the owner's PCs, uncommitted:
 > push them as `wip/*` branches. `wip/builder-mode`, `wip/media-player-redesign`
-> and `wip/tree-brightness-gpu` (sections 6-8) are merged on the integration
-> branch and being finished; `wip/release-0.4.5` is kept for reference only (its
-> SECURITY.md and Friends setup guide are taken; its changelog cut is not). No
-> exe is built and no `v*` tag is pushed until the owner says so.
+> and `wip/tree-brightness-gpu` (sections 6-8) are on `main`, finished with the
+> tests they were missing (see the 2026-09-30 "Phase 0 landing" row in
+> `TESTRUNS.md`); the local branches can be deleted once a PC has pulled `main`.
+> `wip/release-0.4.5` is kept for reference only (its SECURITY.md and Friends
+> setup guide are taken; its changelog cut is not). The shell prototype's latest
+> revision is `docs/prototype/mefi-studio-0.5-v5.html`, waiting on the owner's
+> approval before any of it is built. No exe is built and no `v*` tag is pushed
+> until the owner says so.
 >
 > Integration update, 2026-09-29: the finished issue links, commit checklist,
 > packaging fixes, signing workflow, Studio model tracker, Vibe/key tips and
