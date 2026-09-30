@@ -116,6 +116,9 @@ const api = {
   chatgptPlanSignOut: () => ipcRenderer.invoke("chatgpt-plan:sign-out"),
   chatgptPlanModels: () => ipcRenderer.invoke("chatgpt-plan:models"),
   openExternal: (url) => ipcRenderer.invoke("shell:open", url),
+  // The Studio Daily: the launch screen's newspaper and its updates.
+  newsEdition: (options) => ipcRenderer.invoke("news:edition", { refresh: options?.refresh === true }),
+  onNewsEdition: (callback) => ipcRenderer.on("news:edition", (_event, edition) => callback(edition)),
   shellReveal: (filePath) => ipcRenderer.invoke("shell:reveal", filePath),
   shellCopy: (text) => ipcRenderer.invoke("shell:copy", text),
   eyesPickPng: () => ipcRenderer.invoke("eyes:pick-png"),

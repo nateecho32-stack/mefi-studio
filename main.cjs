@@ -102,6 +102,8 @@ const { createPlanningService } = require("./scripts/planning-service.cjs");
 const projectWork = require("./scripts/project-work.cjs");
 const { applyIdeaAction, applyRequestAction } = require("./scripts/idea-actions.cjs");
 const { createMusicRecommender } = require("./scripts/music-recommendations.cjs");
+// The Studio Daily, the launch screen's newspaper (renderer/daily-paper.js).
+const dailyNewsHost = require("./scripts/daily-news-host.cjs");
 const { attachRendererRecovery } = require("./scripts/renderer-recovery.cjs");
 const { createEyesClient, wrapEyes } = require("./scripts/eyes-client.cjs");
 const { createModelPerformanceStore } = require("./scripts/model-performance.cjs");
@@ -20131,6 +20133,61 @@ function createCatalogFileReader(fileName) {
 }
 
 const catalogDocument = createCatalogFileReader("models.json");
+
+// ---- The Studio Daily: Studio's own wire ----------------------------------------------
+// Items the news wires cannot know: a coding CLI on this PC behind its latest
+// npm release, and OpenCode Go models released this week (the catalog's
+// releaseDate). Each read is bounded; one that fails adds nothing.
+const DAILY_NEWS_CLIS = Object.freeze([
+  { cmd: "codex", name: "Codex CLI", pkg: "@openai/codex", url: "https://github.com/openai/codex/releases", update: "codex update" },
+  { cmd: "claude", name: "Claude Code", pkg: "@anthropic-ai/claude-code", url: "https://github.com/anthropics/claude-code/releases", update: "claude update" },
+]);
+function cliVersionOf(cmd) {
+  return new Promise((resolve) => {
+    let out = "", done = false;
+    const finish = (value) => { if (!done) { done = true; clearTimeout(timer); resolve(value); } };
+    let child;
+    try { child = spawn(`${cmd} --version`, { shell: true, windowsHide: true, stdio: ["ignore", "pipe", "ignore"] }); } catch { resolve(null); return; }
+    const timer = setTimeout(() => { if (typeof endCliTree === "function") endCliTree(child); finish(null); }, 15000);
+    child.stdout?.on("data", (chunk) => { out += chunk; if (out.length > 4096) out = out.slice(0, 4096); });
+    child.on("error", () => finish(null));
+    child.on("close", (code) => finish(code === 0 ? (/(\d+\.\d+\.\d+)/.exec(out) ?? [])[1] ?? null : null));
+  });
+}
+async function npmLatestVersion(pkg) {
+  try {
+    const response = await fetch(`https://registry.npmjs.org/${pkg}/latest`, { headers: { accept: "application/json", "user-agent": `MefiStudio/${app.getVersion()}` }, signal: AbortSignal.timeout(8000) });
+    if (!response.ok) return null;
+    const version = String((await response.json())?.version ?? "");
+    return /^\d+\.\d+\.\d+$/.test(version) ? version : null;
+  } catch { return null; }
+}
+function versionAhead(latest, installed) {
+  const a = latest.split(".").map(Number), b = installed.split(".").map(Number);
+  for (let index = 0; index < 3; index += 1) if (a[index] !== b[index]) return a[index] > b[index];
+  return false;
+}
+async function dailyNewsStudioItems() {
+  const now = Date.now();
+  const items = [];
+  await Promise.all(DAILY_NEWS_CLIS.map(async (cli) => {
+    const installed = await cliVersionOf(cli.cmd);
+    if (!installed) return;
+    const latest = await npmLatestVersion(cli.pkg);
+    if (!latest || !versionAhead(latest, installed)) return;
+    items.push({ kind: "studio", title: `${cli.name} ${latest} is out; this PC has ${installed}`, summary: `Run ${cli.update} in a terminal when no task is using it.`, url: cli.url, source: "Studio", publishedAt: now });
+  }));
+  try {
+    const catalog = await catalogDocument.read();
+    const week = now - 7 * 24 * 3600000;
+    for (const model of Array.isArray(catalog?.models) ? catalog.models : []) {
+      const released = Date.parse(String(model?.releaseDate ?? ""));
+      if (!model?.onRoster || !Number.isFinite(released) || released < week || released > now) continue;
+      items.push({ kind: "model", title: `${model.name} is on your OpenCode Go plan`, summary: String(model.verdict ?? "").slice(0, 200) || undefined, source: "Your providers", publishedAt: released });
+    }
+  } catch { /* no catalog, no model items */ }
+  return items;
+}
 const speedMeasurementDocument = createCatalogFileReader("speed-measurements.json");
 let catalogRefreshPromise = null;
 
@@ -20277,7 +20334,7 @@ function registerIpc() {
   // the folder this launch reopened on its own, so the gate can say so
   // instead of asking a question it has already answered.
   ipcMain.handle("startup:state", async () => ({ ...(await projectLaunchFacts(projects.list())), interactive: !SMOKE && !CAPTURE && !CLI_MODE, chosen: startupChosen, resumed: startupResumed, held: autopilot.held === true, started: assistantLoop,
-    launch: launchAgentsInfo(await readSettings().catch(() => ({}))) }));
+    ...(await (async () => { const settings = await readSettings().catch(() => ({})); return { launch: launchAgentsInfo(settings), news: settings?.ui?.dailyNews !== false }; })()) }));
   ipcMain.handle("startup:choose", async (_event, payload) => {
     const id = typeof payload?.id === "string" && payload.id ? payload.id : null;
     let result = projects.list();
@@ -21470,6 +21527,35 @@ function registerIpc() {
   const recommendMusic = createMusicRecommender({ resolveRoute: resolveAiRoute, allowCli: DATA_ONLY_CLIS,
     complete: (route, ...args) => (route.cli ? cliAssistantCall : httpAssistantCall)(route, ...args) });
   ipcMain.handle("music:recommend", (_event, payload) => recommendMusic(payload));
+  // ---- The Studio Daily (scripts/daily-news-host.cjs) ----
+  // The launch screen's newspaper: public AI and developer-tool news wires,
+  // fetched once a local day (and after 06:00 while Studio runs), cached in
+  // userData/news. Settings › General "Daily news on the launch screen" off
+  // means no fetch at all. The editor is one routine, tool-free AI call per
+  // edition on whatever route the assistant uses; it only picks the lead and
+  // tightens headlines, and the paper prints without it.
+  const dailyNews = dailyNewsHost.createDailyNews({
+    fetch: globalThis.fetch, readFile, writeFile, mkdir,
+    dir: path.join(app.getPath("userData"), "news"), log: logLine, version: app.getVersion(),
+    enabled: async () => !SMOKE && !CAPTURE && (await readSettings().catch(() => ({})))?.ui?.dailyNews !== false,
+    edit: async (system, user) => {
+      const route = await resolveAiRoute("routine", { allowCli: DATA_ONLY_CLIS });
+      if (!route?.ok) return null;
+      // Headlines are untrusted text: the editor runs with no Studio tools
+      // (an active tool store makes agentTools.run a plain call) and a
+      // data-only CLI, so a feed can never drive a search or an MCP action.
+      const call = () => (route.cli ? cliAssistantCall : httpAssistantCall)(route, system, user, 1800, { role: "routine", taskType: "daily-news", source: "daily-news" });
+      const reply = typeof agentTools !== "undefined" ? await agentTools.active.run(true, call) : await call();
+      return reply?.ok ? reply.text : null;
+    },
+    extraItems: () => dailyNewsStudioItems(),
+  });
+  dailyNews.onChange((edition) => send("news:edition", edition));
+  ipcMain.handle("news:edition", (_event, payload) => dailyNews.edition({ refresh: payload?.refresh === true }));
+  if (!SMOKE && !CAPTURE && !CLI_MODE) {
+    dailyNews.start();
+    app.on("before-quit", () => dailyNews.stop());
+  }
   // Work on it: the node becomes the assistant's next piece of work — pinned,
   // threaded, and dispatched on the spot.
   ipcMain.handle("assistant:work-on", async (_event, target) => assistantWorkOn(target ?? {}));
