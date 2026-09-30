@@ -16699,6 +16699,11 @@ async function spawnNextJob(options) {
 
     depth: Number(job.ref?.depth) || 0, // how far down a handoff chain this run sits
   };
+  // Attempt review's hooks (the "Attempt review" block): a picture of the run's folder and a shot of the preview around the
+  // worker. The typeof guard keeps the vm-sliced test hosts inert, and nothing a hook does can reach the run: a throw or a
+  // rejection is dropped here, so a failed picture can never fail, hold or re-queue the work.
+  const reviewing = typeof attemptReview === "object" && attemptReview !== null ? attemptReview : null;
+  const reviewHook = (name, ...args) => { try { return reviewing ? reviewing[name](...args) : null; } catch { return null; } };
   // Resolve against this dispatch's selected project, and retain the module
   // that owns the registry: a live module reload must not strand its claims.
   const claimRegistry = assistantModule;
@@ -16724,6 +16729,7 @@ async function spawnNextJob(options) {
     if (typeof agentBrain !== "undefined" && agentBrain && entry?.deskTool) agentBrain.releaseDeskTool(entry.id);
     if (typeof agentToolConfigs !== "undefined" && entry?.toolConfigs) agentToolConfigs.remove(entry.toolConfigs).catch(() => {});
     if (entry?.promptFile) rm(entry.promptFile, { force: true }).catch(() => {});
+    if (entry?.attemptStart) reviewHook("discard", entry);
     if (entry.releaseReason == null) {
       entry.releaseReason = (typeof reason === "string" && reason) || (typeof reapReason === "string" && reapReason) || null;
       if (entry.releaseReason && charged === true && job.ref?.id) {
@@ -16935,6 +16941,9 @@ async function spawnNextJob(options) {
       }
     }
   }
+  // Attempt review (ZB1, ZB5): a picture of the run's folder and a shot of the preview, begun now and finished (or given up
+  // on, after 25 s) before the worker starts, so neither can miss what it changes. The "Attempt review" block owns the rest.
+  if (reviewing) entry.attemptStart = Promise.resolve(reviewHook("begin", entry, job)).catch(() => null);
   // Merge-back for whichever terminal path the run takes (normal finish or a
   // stale-run discard): serialized per repository by the module's queue, and
   // every non-success outcome keeps the branch — and the checkout too when the
@@ -16943,14 +16952,18 @@ async function spawnNextJob(options) {
   // hosts that do not carry this prologue.
   const settleEntryWorktree = () => {
     if (!entry.worktree || !worktreeManager) return;
-    worktreeManager.settle(entry.worktree)
+    // Attempt review: the end picture, the checks and the shot read the run's own checkout, so they finish before it is merged back and removed.
+    Promise.resolve(reviewHook("beforeMerge", entry)).catch(() => null)
+      .then(() => worktreeManager.settle(entry.worktree))
       .then((result) => {
         // Merged, or kept on its branch: the fleet shows it on the seat.
         if (typeof fleetHost !== "undefined" && fleetHost) fleetHost.observeMerge({ runId: entry.id, branch: entry.worktree.branch, merged: result?.merged === true, reason: result?.reason });
         if (!result?.merged) logLine(`[autopilot] worktree merge-back kept branch ${entry.worktree.branch}: ${String(result?.reason ?? "unknown").slice(0, 160)}`);
         else if (result.keptWorktree) logLine(`[autopilot] worktree kept for recovery (${String(result.reason ?? "").slice(0, 120)}): ${result.keptWorktree}`);
+        reviewHook("afterMerge", entry, result);
       })
-      .catch((error) => logLine(`[autopilot] worktree merge-back failed: ${String(error?.message ?? error).slice(0, 160)}`));
+      .catch((error) => logLine(`[autopilot] worktree merge-back failed: ${String(error?.message ?? error).slice(0, 160)}`))
+      .finally(() => { reviewHook("mergeDone", entry); });
   };
   // Policy Lab PR1 — the attempt's identity: handoff lineage, the claim, the
   // route and the acceptance baseline it will be judged against. The prompt
@@ -17102,7 +17115,7 @@ async function spawnNextJob(options) {
       // A folder that cannot be written is no reason to drop the work: the
       // run goes ahead without Studio tools, and the log says so.
       entry.toolConfigs = await agentToolConfigs.prepare({ root: entry.worktree?.path || projectRoot(), settings: entry.agentConfiguration?.configuration || await readAgentSettings(), desk: entry.deskTool,
-        script: path.join(STUDIO_ROOT, "scripts", "agent-tools-mcp.cjs") }).catch((error) => {
+        script: path.join(STUDIO_ROOT, "scripts", "agent-tools-mcp.cjs"), ...(typeof reviewToolOptions === "function" ? reviewToolOptions(entry) : {}) }).catch((error) => {
         logLine(`[autopilot] Studio tools not attached to "${assistantClip(job.title, 60)}": ${String(error?.message ?? error).slice(0, 160)}`);
         return null;
       });
@@ -17154,6 +17167,17 @@ async function spawnNextJob(options) {
       logLine(`[autopilot] could not write the grok prompt file for "${assistantClip(job.title, 60)}": ${String(error?.message ?? error).slice(0, 160)}`);
     }
   }
+  // Attempt review: the start picture and shot are done (or given up on, after 25 s) before the worker is created, so neither
+  // can miss what it changes. The wait can be long, so the gates are read again like after a slow checkout: a stop, a pause or a
+  // project switch that landed meanwhile cancels the claim instead of starting a worker nobody tracks.
+  if (entry.attemptStart) {
+    await entry.attemptStart;
+    if (entry.finished || projectSwitching || !launchAllowed(entry)) {
+      if (entry.worktree && typeof worktreeManager === "object" && worktreeManager) await worktreeManager.discard(entry.worktree).catch(() => {});
+      await cancelClaim("paused while the start picture was taken");
+      return "lost";
+    }
+  }
   // finish() sits above the spawn so a synchronous spawn failure (argument
   // rejects, resource exhaustion — 'error' is the normal channel) still
   // unclaims through the same path a dead process would take.
@@ -17189,6 +17213,8 @@ async function spawnNextJob(options) {
     // (autopilotHousekeeping) marks it done.
     const ok = errorMessage == null && (entry.sawDone || code === 0);
     if (!ok && errorMessage && !userStop) autopilot.lastError = errorMessage;
+    // Attempt review (ZB1, ZB3, ZB5): the end picture, the after shot and the advisory checks, in the background. A worktree run's merge-back waits for them (settleEntryWorktree); nothing else does.
+    if (entry.attemptStart) Promise.resolve(reviewHook("end", entry, { ok, userStop })).catch(() => {});
     // What the run actually said: the sentinel and the MEFI_RESULT line are
     // recorded as sawDone/result, so neither stands in for its last words.
     const lastWords = executorCore.lastWords(entry.outputTail, EXECUTOR_DONE_MARK);
@@ -20704,7 +20730,7 @@ function projectPreviewService() {
     const { createProjectPreview } = require("./scripts/project-preview.cjs");
     projectPreviewManager = createProjectPreview({
       openExternal: (url) => shell.openExternal(url),
-      onChange: (state) => send("project-preview:changed", state),
+      onChange: (state) => { send("project-preview:changed", state); if (typeof reviewMirrorPreviewLogs === "function") reviewMirrorPreviewLogs(state); },
     });
   }
   return projectPreviewManager;
@@ -20769,6 +20795,410 @@ function registerProjectPreviewIpc() {
   // app.exit (live updates) bypasses before-quit; terminate only owned trees.
   process.on("exit", () => projectPreviewManager?.disposeSync());
 }
+
+// ---- Attempt review: before and after pictures, changed files, advisory checks and shots ----
+// ZB1 and ZB2 (Changed files, Accept, Revert file, Revert attempt), ZB3 (advisory checks) and ZB5 (before and after
+// shots of the preview); docs/architecture.md "Attempt review". Around every builder attempt this block keeps a picture
+// of the folder the run works in (scripts/attempt-snapshots-host.cjs: refs/mefi/attempts/<task>/<n>/before and after,
+// local, never pushed), a screenshot of the project preview when one is running (scripts/attempt-evidence-host.cjs,
+// scripts/evidence-window.cjs) and the advisory lint and typecheck results (scripts/advisory-checks-host.cjs), and answers
+// the page's tasks:changes, tasks:diff, tasks:accept, tasks:revert, tasks:checks, tasks:check-run, tasks:evidence and
+// review:prefs. Each of the three has a setting (settings.review) and a kill switch (MEFI_STUDIO_NO_ATTEMPT_SNAPSHOTS,
+// MEFI_STUDIO_NO_ADVISORY_CHECKS, MEFI_STUDIO_NO_EVIDENCE_SHOTS; scripts/review-prefs.cjs), and none can fail or stop a
+// run: each step has its own time limit, the run waits only for the start picture and shot (25 s at most), and a failure
+// is one log line without a path in it. spawnNextJob reaches attemptReview through `typeof` guards, because the vm-sliced
+// executor hosts do not carry this block. Nothing here changes a task's Done state: Accept records the owner's word on
+// the card (acceptedAttempts), and a whole-attempt Revert reopens the task through the ordinary status path.
+const REVIEW_START_CAP_MS = 25000;
+const REVIEW_SHOT_WAIT_MS = 8000;
+const REVIEW_END_CAP_MS = 6 * 60 * 1000;
+const reviewHosts = {};
+const reviewText = (value, max = 200) => (typeof value === "string" ? value.slice(0, max) : "");
+const reviewNumber = (value) => (Number.isSafeInteger(value) && value >= 1 && value <= 999999 ? value : null);
+const reviewDelay = (ms) => new Promise((resolve) => { const timer = setTimeout(resolve, ms); timer.unref?.(); });
+const reviewKey = (folder) => { const resolved = path.resolve(String(folder ?? "")); return process.platform === "win32" ? resolved.toLowerCase() : resolved; };
+const reviewFailure = (error) => String(error?.message ?? error).replace(/([a-z][a-z0-9+.-]*:\/\/)[^/@\s]+@/gi, "$1").slice(0, 200);
+const reviewRules = () => (reviewHosts.rules ??= require("./scripts/attempt-snapshots.cjs"));
+
+// The owner's choices and the environment's, as last read (the kill switches are read on every use).
+let reviewPrefsCache = null;
+const reviewPrefs = () => reviewPrefsCache ?? require("./scripts/review-prefs.cjs").prefsFrom(null, process.env);
+async function readReviewPrefs() {
+  try { reviewPrefsCache = require("./scripts/review-prefs.cjs").prefsFrom((await readSettings()).review, process.env); } catch { /* the last view stands */ }
+  return reviewPrefs();
+}
+
+const attemptSnapshotsHost = () => (reviewHosts.snapshots ??= require("./scripts/attempt-snapshots-host.cjs").createAttemptSnapshots({ disabled: () => !reviewPrefs().snapshots, log: (line) => logLine(line) }));
+const attemptEvidenceHost = () => (reviewHosts.evidence ??= require("./scripts/attempt-evidence-host.cjs").createAttemptEvidence({
+  // The project's own data folder (never the repository): attempt-evidence/<task>/<n>/ goes inside it.
+  root: () => path.dirname(projectDataPath(TASKS_PATH)),
+  capture: (url, options) => (window && !window.isDestroyed()
+    ? (reviewHosts.window ??= require("./scripts/evidence-window.cjs").createEvidenceWindow({ electron: require("electron"), log: (line) => logLine(line) })).capture(url, options)
+    : Promise.resolve({ ok: false, error: "no window" })),
+  log: (line) => logLine(line),
+}));
+const advisoryHost = () => (reviewHosts.advisory ??= require("./scripts/advisory-checks-host.cjs").createAdvisoryChecks({ disabled: () => !reviewPrefs().advisory, log: (line) => logLine(line) }));
+
+// What is working in a folder right now. A run in its own worktree edits that folder, not the project's; the project's
+// folder is also busy while a finished run is being merged into it.
+const reviewJobs = () => (typeof autopilot !== "undefined" ? autopilot.jobs ?? [] : []).filter((job) => job && !job.finished);
+const reviewFolder = (job) => job.worktree?.path || job.projectPath;
+const reviewSettling = new Map();
+const reviewBusy = (root) => reviewJobs().some((job) => reviewKey(reviewFolder(job)) === reviewKey(root)) || (reviewSettling.get(reviewKey(root)) ?? 0) > 0;
+
+// The project preview's own status, read without starting or probing anything new.
+async function reviewPreviewStatus(project) {
+  if (!projectPreviewManager || projectPreviewQuit === true || !project?.id) return null;
+  try { const state = await projectPreviewManager.status(project, { urls: [] }); return { phase: state.phase, url: state.url }; } catch { return null; }
+}
+const reviewChanged = (entry, what) => { try { send("review:changed", { projectId: entry?.projectId ?? projects.current().id, taskId: entry?.attempt?.taskId ?? entry?.taskId ?? null, attempt: entry?.attempt?.n ?? null, what }); } catch { /* a missing window is not a failure */ } };
+
+async function reviewShot(entry, phase, cancelled = null) {
+  const attempt = entry.attempt;
+  if (!attempt || !reviewPrefs().shots) return null;
+  const preview = await reviewPreviewStatus(entry.project ?? projects.current());
+  const result = await attemptEvidenceHost().shot({ taskId: attempt.taskId, n: attempt.n, runId: entry.id, phase, preview, prefs: reviewPrefs(), cancelled });
+  if (result?.captured) reviewChanged(entry, "shot");
+  return result;
+}
+async function reviewAdvisory(entry) {
+  const attempt = entry.attempt;
+  const results = await advisoryHost().runAll(attempt.root, { prefs: reviewPrefs() });
+  if (!results.length) return null;
+  await attemptEvidenceHost().saveChecks({ taskId: attempt.taskId, n: attempt.n, runId: entry.id, results });
+  reviewChanged(entry, "checks");
+  return results;
+}
+
+const attemptReview = {
+  // The run's start: a picture of its folder, then a shot of the preview. The worker starts when this answers (at most
+  // REVIEW_START_CAP_MS later), so neither can miss what the worker changes; the work itself goes on if it is slow.
+  begin(entry, job) {
+    if (!entry || job?.kind !== "task" || !job.ref?.id) return Promise.resolve(null);
+    const work = projects.run(entry.project ?? projects.current(), async () => {
+      const prefs = await readReviewPrefs();
+      if (!prefs.snapshots && !prefs.shots && !prefs.advisory) return null;
+      const taskId = job.ref.id;
+      const folder = entry.worktree?.path || entry.projectPath;
+      const numbers = await attemptEvidenceHost().numbers(taskId);
+      // Runs sharing this folder see each other's changes in their lists: both say so.
+      const together = reviewJobs().filter((other) => other !== entry && Boolean(other.worktree) === Boolean(entry.worktree) && reviewKey(reviewFolder(other)) === reviewKey(folder));
+      entry.attemptOverlap = new Set(together.map((other) => other.id));
+      for (const other of together) other.attemptOverlap?.add?.(entry.id);
+      let n = null;
+      let snapshots = false;
+      if (prefs.snapshots) {
+        // A picture that cannot be taken is one log line: the attempt still has its number and its shot.
+        try {
+          const started = await attemptSnapshotsHost().begin({ root: folder, taskId, runId: entry.id, worktree: Boolean(entry.worktree), overlap: [...entry.attemptOverlap], numbers });
+          if (started?.ok) { n = started.n; snapshots = true; }
+        } catch (error) { logLine(`[review] the start picture was not taken (${error?.code || error?.name || "error"}) run ${entry.id}`); }
+      }
+      n ??= reviewRules().nextAttempt(numbers);
+      entry.attempt = { n, taskId, root: folder, snapshots };
+      reviewChanged(entry, "started");
+      let gaveUp = false;
+      await Promise.race([reviewShot(entry, "before", () => gaveUp), reviewDelay(REVIEW_SHOT_WAIT_MS).then(() => { gaveUp = true; })]);
+      return entry.attempt;
+    }).catch((error) => { logLine(`[review] the start of an attempt was not recorded (${error?.code || error?.name || "error"}) run ${entry.id}`); return null; });
+    entry.attemptStartWork = work;
+    return Promise.race([work, reviewDelay(REVIEW_START_CAP_MS).then(() => null)]);
+  },
+  // The run's end: the end picture, the after shot (a worktree run's waits for its merge) and the advisory checks. Answers
+  // when they are done or after REVIEW_END_CAP_MS; a worktree run's merge-back waits for that, nothing else does.
+  end(entry, { ok = false, userStop = false } = {}) {
+    if (!entry?.attemptStartWork) return Promise.resolve(null);
+    const work = projects.run(entry.project ?? projects.current(), async () => {
+      await entry.attemptStartWork;
+      const attempt = entry.attempt;
+      if (!attempt) return null;
+      let changed = null;
+      if (attempt.snapshots) {
+        try {
+          const ended = await attemptSnapshotsHost().end({ root: attempt.root, taskId: attempt.taskId, n: attempt.n, runId: entry.id, worktree: Boolean(entry.worktree), overlap: [...(entry.attemptOverlap ?? [])] });
+          attempt.ended = ended?.ok === true;
+          if (ended?.ok) changed = ended.changed;
+          reviewChanged(entry, "ended");
+        } catch (error) { logLine(`[review] the end picture was not taken (${error?.code || error?.name || "error"}) run ${entry.id}`); }
+      }
+      if (!entry.worktree) await reviewShot(entry, "after");
+      // Checks look at a run that changed something (or, with no pictures, one that reported it was done), and never at one the owner stopped.
+      if (reviewPrefs().advisory && !userStop && changed !== false && (attempt.snapshots || ok)) await reviewAdvisory(entry);
+      return attempt;
+    }).catch((error) => { logLine(`[review] the end of an attempt was not recorded (${error?.code || error?.name || "error"}) run ${entry.id}`); return null; });
+    entry.attemptEnd = Promise.race([work, reviewDelay(REVIEW_END_CAP_MS).then(() => null)]);
+    return entry.attemptEnd;
+  },
+  // A worktree run's merge waits for the end picture, the checks and the shot, which read the run's own folder.
+  beforeMerge(entry) {
+    const key = reviewKey(entry?.projectPath);
+    reviewSettling.set(key, (reviewSettling.get(key) ?? 0) + 1);
+    entry.attemptMerging = true;
+    return Promise.resolve(entry.attemptEnd ?? null).catch(() => null);
+  },
+  // The merge is over (merged, kept on its branch or failed): the project's folder is free again, and a merged run is shot.
+  afterMerge(entry, result) {
+    if (!entry?.attempt || !entry.worktree) return;
+    projects.run(entry.project ?? projects.current(), async () => {
+      if (result?.merged) await reviewShot(entry, "after");
+      else await attemptEvidenceHost().skip({ taskId: entry.attempt.taskId, n: entry.attempt.n, runId: entry.id, phase: "after", reason: "not-merged" });
+    }).catch(() => {});
+  },
+  mergeDone(entry) {
+    if (!entry?.attemptMerging) return;
+    entry.attemptMerging = false;
+    const key = reviewKey(entry.projectPath);
+    reviewSettling.set(key, Math.max(0, (reviewSettling.get(key) ?? 1) - 1));
+  },
+  // A claim cancelled before its worker started has no attempt to show: its start picture, and the start shot's folder, go.
+  discard(entry) {
+    const work = entry?.attemptStartWork;
+    if (!work || entry.attemptEnd) return;
+    work.then(async (attempt) => {
+      if (!attempt) return;
+      if (attempt.snapshots) await attemptSnapshotsHost().drop({ root: attempt.root, taskId: attempt.taskId, n: attempt.n });
+      await attemptEvidenceHost().drop({ taskId: attempt.taskId, n: attempt.n });
+      reviewChanged(entry, "dropped");
+    }).catch(() => {});
+  },
+};
+
+// What a builder's per-run tool folder gets for run_check and project_logs: whether they are on, and the preview output so far.
+const reviewLogsText = (project) => {
+  const tail = projectPreviewManager?.tail?.(project, 200);
+  return tail?.lines?.length ? `${tail.lines.join("\n")}\n` : "";
+};
+function reviewToolOptions(entry) {
+  // Called while a run's prompt is built: a failure here must not look like a prompt that could not be built.
+  try { return { review: { advisory: reviewPrefs().advisory }, logs: reviewLogsText(entry?.project) }; } catch { return {}; }
+}
+// The preview printed something: the files running builders read their project_logs from are replaced whole, after a short pause.
+const reviewLogTimers = new Map();
+function reviewMirrorPreviewLogs(state) {
+  if (!state?.projectId) return;
+  for (const job of reviewJobs()) {
+    if (job.projectId !== state.projectId || !job.toolConfigs?.logs || reviewLogTimers.has(job.id)) continue;
+    const timer = setTimeout(() => {
+      reviewLogTimers.delete(job.id);
+      const text = reviewLogsText(job.project);
+      if (job.finished || text === job.toolConfigs?.logsSent) return;
+      if (job.toolConfigs) job.toolConfigs.logsSent = text;
+      agentToolConfigs.updateLogs(job.toolConfigs, text).catch(() => {});
+    }, 600);
+    timer.unref?.();
+    reviewLogTimers.set(job.id, timer);
+  }
+}
+
+// ---- what the page asks ----
+const reviewTask = async (taskId) => {
+  const tasks = await (await getEyes()).readJson(TASKS_PATH, []);
+  return (Array.isArray(tasks) ? tasks : []).find((item) => item?.id === taskId) ?? null;
+};
+const reviewOff = async (feature) => {
+  const prefs = await readReviewPrefs();
+  return prefs[feature] ? null : { off: true, forced: prefs.forced[feature] === true };
+};
+
+async function reviewChanges(body, root) {
+  const taskId = reviewText(body.taskId);
+  if (!taskId) return { ok: false, error: "Choose a task first." };
+  const off = await reviewOff("snapshots");
+  if (off) return { ok: true, available: false, reason: "off", forced: off.forced, note: reviewRules().unavailable("off"), taskId };
+  const live = reviewJobs().find((job) => job.taskId === taskId) ?? null;
+  const result = await attemptSnapshotsHost().changes({ root, taskId, attempt: reviewNumber(body.attempt), runId: reviewText(body.runId, 80) || null, running: Boolean(live) });
+  if (!result.ok || result.available === false) return { ...result, taskId };
+  const task = await reviewTask(taskId);
+  const accepted = new Set((Array.isArray(task?.acceptedAttempts) ? task.acceptedAttempts : []).map((row) => row?.n));
+  const waiting = Boolean(live) || reviewBusy(root);
+  const running = Boolean(live) && live.id === result.runId;
+  const pickable = result.state === "ended" && !waiting;
+  return {
+    ...result, taskId, projectId: projects.current().id,
+    attempts: (result.attempts ?? []).map((row) => ({ ...row, accepted: accepted.has(row.n), running: Boolean(live) && live.id === row.runId })),
+    accepted: result.attempt != null && accepted.has(result.attempt), running, waiting,
+    canAccept: pickable && result.files.length > 0,
+    canRevert: pickable && result.files.some((file) => file.state === "can-revert"),
+  };
+}
+
+async function reviewDiff(body, root) {
+  const taskId = reviewText(body.taskId);
+  const off = await reviewOff("snapshots");
+  if (off) return { ok: false, reason: "off", error: reviewRules().unavailable("off") };
+  return attemptSnapshotsHost().diff({ root, taskId, attempt: reviewNumber(body.attempt), runId: reviewText(body.runId, 80) || null, path: reviewText(body.path, 1024), running: reviewJobs().some((job) => job.taskId === taskId) });
+}
+
+// The owner's word on an attempt, kept on the card (acceptedAttempts: { n, runId, at, by }). No other field changes, and
+// nothing about Done: Accept is a record, not a verdict.
+async function reviewAccept(body, root) {
+  const taskId = reviewText(body.taskId);
+  const n = reviewNumber(body.attempt);
+  if (!taskId || !n) return { ok: false, error: "Choose an attempt first." };
+  if (reviewJobs().some((job) => job.taskId === taskId)) return { ok: false, busy: true, error: "Accept waits until the task is paused or finished, so nothing changes under a running agent." };
+  const found = await attemptSnapshotsHost().attempts({ root, taskId });
+  const attempt = found.attempts?.find((row) => row.n === n);
+  if (!attempt) return { ok: false, error: "That attempt has no record to accept." };
+  const accepted = body.accepted !== false;
+  const now = Date.now();
+  const result = await mutateBoard((board) => {
+    const task = board.tasks.find((item) => item?.id === taskId);
+    if (!task) return { ok: false, error: "Task not found in this project." };
+    const rows = (Array.isArray(task.acceptedAttempts) ? task.acceptedAttempts : []).filter((row) => row && row.n !== n);
+    const next = accepted ? [...rows, { n, runId: attempt.runId ?? null, at: now, by: "owner" }].slice(-20) : rows;
+    if (next.length) task.acceptedAttempts = next; else delete task.acceptedAttempts;
+    return { ok: true };
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  reviewChanged({ projectId: projects.current().id, attempt: { taskId, n } }, "accept");
+  return { ok: true, accepted, attempt: n, at: accepted ? now : null, task: taskView(result.tasks.find((task) => task.id === taskId)) };
+}
+
+// Why a whole-attempt revert cannot reopen the task right now (the same refusals the status path has), so the files are
+// not put back and the card left as it was.
+async function reviewReopenBlocker(taskId) {
+  const task = await reviewTask(taskId);
+  if (!task) return "Task not found in this project.";
+  if (reviewJobs().some((job) => job.taskId === taskId) || (task.runId && !["awaiting_verification", "verifying"].includes(task.status))) return "This task has a worker. Let it finish before reverting its attempt.";
+  if (["awaiting_verification", "verifying"].includes(task.status)) return "This task is being checked. Let the check finish, then revert.";
+  if (task.absorbedInto) return "This task belongs to a group. Work with the group's plan until it releases the member.";
+  const tasks = await (await getEyes()).readJson(TASKS_PATH, []);
+  const readiness = backlog.workState(task, Date.now(), { tasks });
+  if (readiness.blockedBy === "dependencies") return readiness.reason;
+  return null;
+}
+
+async function reviewRevert(body, root) {
+  const taskId = reviewText(body.taskId);
+  if (!taskId) return { ok: false, error: "Choose a task first." };
+  const off = await reviewOff("snapshots");
+  if (off) return { ok: false, reason: "off", error: reviewRules().unavailable("off") };
+  const attempt = reviewNumber(body.attempt);
+  const runId = reviewText(body.runId, 80) || null;
+  const snaps = attemptSnapshotsHost();
+  if (reviewJobs().some((job) => job.taskId === taskId)) return { ok: false, busy: true, error: "This task has a worker. Revert waits until it is paused or finished, so nothing changes under a running agent." };
+  if (typeof body.undo === "string" && body.undo) {
+    const undone = await snaps.undo({ root, taskId, attempt, runId, receipt: body.undo, busy: reviewBusy });
+    if (undone.ok) reviewChanged({ projectId: projects.current().id, attempt: { taskId, n: attempt } }, "revert");
+    return { ...undone, undo: true };
+  }
+  const scope = body.scope === "file" ? "file" : body.scope === "attempt" ? "attempt" : null;
+  const file = scope === "file" ? reviewText(body.path, 1024) : null;
+  if (!scope || (scope === "file" && !file)) return { ok: false, error: "Choose one file or the whole attempt." };
+  const whole = scope === "attempt" && body.partial !== true;
+  if (whole) {
+    const blocker = await reviewReopenBlocker(taskId);
+    if (blocker) return { ok: false, blocked: true, error: blocker };
+  }
+  const result = await snaps.revert({ root, taskId, attempt, runId, scope, path: file, partial: body.partial === true, busy: reviewBusy });
+  if (!result.ok) return result;
+  let reopened = null;
+  if (whole) {
+    // The whole attempt is back: the task is open again through the ordinary status path, without the owner's Accept for it.
+    reopened = await taskAction({ taskId, projectId: projects.current().id, action: "status", status: "open" });
+    await mutateBoard((board) => {
+      const task = board.tasks.find((item) => item?.id === taskId);
+      if (!task) return { ok: false };
+      if (Array.isArray(task.acceptedAttempts)) { task.acceptedAttempts = task.acceptedAttempts.filter((row) => row?.n !== attempt); if (!task.acceptedAttempts.length) delete task.acceptedAttempts; }
+      task.logs = [...(Array.isArray(task.logs) ? task.logs : []), { at: Date.now(), kind: "status", text: `Attempt ${attempt ?? ""} reverted by you: ${result.files ?? result.reverted} file${(result.files ?? result.reverted) === 1 ? "" : "s"} put back${reopened?.ok ? ". The task was reopened." : "."}` }].slice(-40);
+      return { ok: true };
+    }).catch(() => {});
+  }
+  reviewChanged({ projectId: projects.current().id, attempt: { taskId, n: attempt } }, "revert");
+  return { ...result, scope, reopened: reopened?.ok === true, ...(reopened && !reopened.ok ? { reopenError: reopened.error } : {}) };
+}
+
+// The attempt a page means when it names none: the newest one any record holds.
+async function reviewLatestAttempt(root, taskId) {
+  const found = await attemptSnapshotsHost().attempts({ root, taskId });
+  const numbers = [...(found.attempts ?? []).map((row) => row.n), ...(await attemptEvidenceHost().numbers(taskId))];
+  return numbers.length ? Math.max(...numbers) : null;
+}
+
+async function reviewChecks(body, root) {
+  const taskId = reviewText(body.taskId);
+  if (!taskId) return { ok: false, error: "Choose a task first." };
+  const off = await reviewOff("advisory");
+  if (off) return { ok: true, available: false, reason: "off", forced: off.forced, taskId };
+  const n = reviewNumber(body.attempt) ?? await reviewLatestAttempt(root, taskId);
+  const advisory = require("./scripts/advisory-checks.cjs");
+  const prefs = reviewPrefs();
+  const saved = n ? await attemptEvidenceHost().readChecks({ taskId, n }) : { results: [], at: null };
+  const detected = await advisoryHost().detect(root);
+  return {
+    ok: true, available: true, taskId, projectId: projects.current().id, attempt: n, at: saved.at ?? null,
+    results: saved.results.length ? saved.results : detected.map((check) => advisory.placeholder(check, prefs)),
+    detected: detected.map(({ id, label, kind, auto, writes, skip }) => ({ id, label, kind, auto, writes, ...(skip ? { skip } : {}) })),
+    none: detected.length === 0, build: prefs.advisoryBuild,
+  };
+}
+
+// Run one check now, in the project's folder (a builder's own run_check goes through its tool folder instead). A build
+// writes files, so it waits while a builder works in the folder.
+async function reviewCheckRun(body, root) {
+  const taskId = reviewText(body.taskId);
+  const id = reviewText(body.id, 40);
+  if (!taskId || !/^[a-z][a-z0-9-]{0,30}$/.test(id)) return { ok: false, error: "Choose a check first." };
+  const off = await reviewOff("advisory");
+  if (off) return { ok: false, reason: "off", error: "Advisory checks are switched off on this PC." };
+  const check = (await advisoryHost().detect(root)).find((item) => item.id === id);
+  if (!check) return { ok: false, error: "This project does not have that check." };
+  if (check.writes && (reviewJobs().length || reviewBusy(root))) return { ok: false, busy: true, error: "A build writes files, so it waits until no builder is working on this project." };
+  const n = reviewNumber(body.attempt) ?? await reviewLatestAttempt(root, taskId);
+  const { result } = await advisoryHost().run(root, check);
+  let results = [result];
+  if (n) {
+    const evidence = attemptEvidenceHost();
+    const saved = await evidence.readChecks({ taskId, n });
+    results = [...saved.results.filter((row) => row?.id !== id), result];
+    await evidence.saveChecks({ taskId, n, runId: saved.runId ?? null, results, ranAt: Date.now() });
+    reviewChanged({ projectId: projects.current().id, attempt: { taskId, n } }, "checks");
+  }
+  return { ok: true, attempt: n, result, results };
+}
+
+async function reviewEvidence(body, root) {
+  const taskId = reviewText(body.taskId);
+  if (!taskId) return { ok: false, error: "Choose a task first." };
+  const prefs = await readReviewPrefs();
+  const n = reviewNumber(body.attempt) ?? await reviewLatestAttempt(root, taskId);
+  const read = n ? await attemptEvidenceHost().read({ taskId, n }) : { ok: true, attempt: null, shots: [], notes: {}, privacy: require("./scripts/attempt-evidence.cjs").PRIVACY };
+  return { ...read, taskId, projectId: projects.current().id, enabled: prefs.shots, forced: prefs.forced.shots };
+}
+
+function registerAttemptReviewIpc() {
+  const call = (run) => async (_event, payload) => {
+    const body = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
+    try {
+      const wrong = taskProjectError(body.projectId);
+      if (wrong) return { ok: false, error: wrong };
+      if (!projects.open()) return { ok: false, error: "Open a project first." };
+      return await run(body, projectRoot());
+    } catch (error) { return { ok: false, error: reviewFailure(error) }; }
+  };
+  ipcMain.handle("tasks:changes", call(reviewChanges));
+  ipcMain.handle("tasks:diff", call(reviewDiff));
+  ipcMain.handle("tasks:accept", call(reviewAccept));
+  ipcMain.handle("tasks:revert", call(reviewRevert));
+  ipcMain.handle("tasks:checks", call(reviewChecks));
+  ipcMain.handle("tasks:check-run", call(reviewCheckRun));
+  ipcMain.handle("tasks:evidence", call(reviewEvidence));
+  // The three switches (Settings' review.* and the page's own toggles); the environment's kill switches show as `forced`.
+  ipcMain.handle("review:prefs", async (_event, payload) => {
+    try {
+      const { projectId: _project, ...choices } = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
+      if (Object.keys(choices).length) {
+        const patch = require("./scripts/review-prefs.cjs").patchFrom(choices);
+        if (!patch.ok) return { ok: false, error: patch.error };
+        await updateSettings((saved) => { saved.review = { ...(saved.review && typeof saved.review === "object" ? saved.review : {}), ...patch.patch }; });
+      }
+      const { snapshots, advisory, advisoryBuild, shots, saved, forced } = await readReviewPrefs();
+      return { ok: true, prefs: { snapshots, advisory, advisoryBuild, shots }, saved, forced };
+    } catch (error) { return { ok: false, error: reviewFailure(error) }; }
+  });
+  readReviewPrefs().catch(() => {});
+}
+// ---- end of attempt review ----
 
 // Catalogs are shared across projects. Keep parsed documents while their file
 // identity is unchanged and share concurrent reads, including the stat check.
@@ -22507,6 +22937,8 @@ function registerIpc() {
   ipcMain.handle("board:trash", (_event, payload) => boardTrashList(payload ?? {}));
   // ---- end of Board trash channels ----
   ipcMain.handle("tasks:action", (_event, payload) => taskAction(payload ?? {}));
+  // Changed files, Accept, Revert, advisory checks and before/after shots (the "Attempt review" block).
+  registerAttemptReviewIpc();
   ipcMain.handle("tasks:save", async (_event, tasks) => {
     return saveTaskEdits(tasks);
   });

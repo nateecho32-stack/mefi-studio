@@ -8,7 +8,8 @@ async function serve() {
   const config = JSON.parse(await fs.readFile(process.env.MEFI_TOOLS_CONFIG, "utf8"));
   // A coding worker has its own file listing and search: project_list and
   // project_search are for Studio's own models, so this server never offers them.
-  const context = { root: config.root, settings: { agentTools: { builder: config.policy } }, role: "builder", worker: true };
+  // `review` (whether run_check and project_logs are on) and `logs` (the preview output file) come from the run's policy file.
+  const context = { root: config.root, settings: { agentTools: { builder: config.policy }, ...(config.review ? { review: config.review } : {}) }, role: "builder", worker: true, logs: typeof config.logs === "string" ? config.logs : null };
   const definitions = await tools.definitions(context.settings, context.role, { worker: true });
   let buffer = "", chain = Promise.resolve();
   const send = (message) => process.stdout.write(`${JSON.stringify(message)}\n`);

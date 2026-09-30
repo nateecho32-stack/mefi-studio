@@ -19,6 +19,25 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   Preview, Queue and Status become panes that dock beside the page or pop out as
   windows. The composer stays on one line at 1920 wide and the Permissions menu
   is no longer cut off.
+- **A task a worker has run shows what changed, and lets you take it back.** Its
+  Evidence tab has a new "Changes and checks" section: the files the attempt
+  changed with their changes, a before and after look at the preview, and the
+  checks that ran. Accept changes, put one file back, or put the whole attempt
+  back: Revert attempt asks twice, reopens the task and keeps a copy of the
+  folder first so it can be undone, and Studio never overwrites a file you
+  edited after the attempt ended.
+- **Studio keeps a private before and after picture of the folder for each
+  attempt.** It is local git data, only on this PC and never pushed, and it does
+  not touch your index, branch or files.
+- **After an attempt, Studio runs the project's lint and typecheck and shows the
+  result as advice.** It never stops a task from being done. Builders can run the
+  same checks and read the preview's output themselves.
+- **When Studio's own preview is running, it takes a before and after screenshot
+  for each attempt.** Screenshots stay on this PC and are never added to a
+  problem report. Three switches (pictures, checks and their build, screenshots)
+  sit under "What Studio keeps for each attempt", and each can be turned off with
+  an environment variable (`MEFI_STUDIO_NO_ATTEMPT_SNAPSHOTS=1`,
+  `MEFI_STUDIO_NO_ADVISORY_CHECKS=1`, `MEFI_STUDIO_NO_EVIDENCE_SHOTS=1`).
 - **Deleting a task or an idea can be undone.** A toast with Undo stays for about
   eight seconds on the Task board and in Ideas, and Clear finished ideas gets one
   Undo for all of them. A new Recently deleted list (Task board › More for tasks

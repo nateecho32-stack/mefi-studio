@@ -154,9 +154,10 @@ test("the read switch says what it now allows, for Studio's own models and, diff
 
 // ---- Studio's own models only ------------------------------------------------------------------
 
-test("a coding worker is never offered them: the MCP server lists project_read and no more, and refuses a call for them", () => fixture((root) => withSwitch(undefined, async () => {
+test("a coding worker is never offered them: the MCP server lists project_read and the builder's own two check tools and no more, and refuses a call for them", () => fixture((root) => withSwitch(undefined, async () => {
   // The definitions and the execution both know a worker.
-  assert.deepEqual(await offered({ agentTools: { builder: { webSearch: false, webRead: false, projectRead: true } } }, "builder", { worker: true }), ["project_read"]);
+  // (A builder is also offered run_check and project_logs, the advisory checks' tools; it is never offered the two project tools.)
+  assert.deepEqual(await offered({ agentTools: { builder: { webSearch: false, webRead: false, projectRead: true } } }, "builder", { worker: true }), ["project_read", "run_check", "project_logs"]);
   await assert.rejects(tools.execute("project_search", { query: "needle" }, { root, settings: { agentTools: { builder: { projectRead: true } } }, role: "builder", worker: true }), /not allowed/);
   await assert.rejects(tools.execute("project_list", {}, { root, settings: { agentTools: { builder: { projectRead: true } } }, role: "builder", worker: true }), /not allowed/);
   // The real server, over stdio, the way Claude Code, Codex and OpenCode talk to it.
@@ -170,7 +171,7 @@ test("a coding worker is never offered them: the MCP server lists project_read a
     const call = (id, method, params) => new Promise((resolve, reject) => { const timer = setTimeout(() => reject(new Error(`no reply to ${method}`)), 10000); waiting.push((message) => { clearTimeout(timer); resolve(message); }); child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`); });
     await call(1, "initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "1" } });
     const listed = await call(2, "tools/list", {});
-    assert.deepEqual(listed.result.tools.map((tool) => tool.name), ["project_read"]);
+    assert.deepEqual(listed.result.tools.map((tool) => tool.name), ["project_read", "run_check", "project_logs"]);
     const refused = await call(3, "tools/call", { name: "project_search", arguments: { query: "needle" } });
     assert.equal(refused.result.isError, true); assert.match(refused.result.content[0].text, /not allowed/);
     const read = await call(4, "tools/call", { name: "project_read", arguments: { path: "README.md" } });
