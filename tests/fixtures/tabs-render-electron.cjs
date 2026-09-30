@@ -302,6 +302,11 @@ app.whenReady().then(async () => {
   assert.equal(booted.used, 38, "the strip asked for its height and the contract gave it");
   assert.equal(booted.variable, "38px", "as html's own variable");
   assert.equal(booted.height, 38);
+  // SIZE's density token may be a calc() or a rem: the strip asks for the height it really has
+  await run("document.documentElement.style.setProperty('--d-tab', 'calc(20px + 14px)'); window.dispatchEvent(new Event('mefi:appearance'));");
+  await until("window.MefiNav.layout.used('tabs') === 34 && document.querySelector('.ts-strip').getBoundingClientRect().height === 34", "a density token of calc(20px + 14px) makes a strip 34px high and a region to match");
+  await run("document.documentElement.style.removeProperty('--d-tab'); window.dispatchEvent(new Event('mefi:appearance'));");
+  await until("window.MefiNav.layout.used('tabs') === 38", "and taking the token away gives the 38px back");
   assert.equal(booted.strip.y + booted.strip.h <= booted.usable.top + 0.5, true, "the page starts under the strip");
   assert.deepEqual(booted.items.map((item) => [item.title, item.pinned, item.home, item.active]), [["Home", true, true, true]]);
   assert.deepEqual(booted.missing, [], "every glyph the strip draws is in the sprite");

@@ -43,6 +43,12 @@ test("the strip is drawn into the shell's tab region, and the region is given th
   t.css["--d-tab"] = "tall";
   t.window.dispatchEvent({ type: "mefi:appearance" });
   assert.deepEqual(t.resizes.at(-1), ["tabs", 38], "and a value that is not a length is ignored");
+  t.css["--d-tab"] = "calc(2rem + 2px)"; t.css.__height = "34px";
+  t.window.dispatchEvent({ type: "mefi:appearance" });
+  assert.deepEqual(t.resizes.at(-1), ["tabs", 34], "a token that is a calc() or a rem is read as the height the strip really has");
+  t.css.__height = "0px";
+  t.window.dispatchEvent({ type: "mefi:appearance" });
+  assert.deepEqual(t.resizes.at(-1), ["tabs", 38], "and a strip with no height to read falls back to the token's own number, else 38");
 });
 
 test("hiding the strip gives its height back and show() takes it again; the tabs stay in the model and the keys keep working", async () => {

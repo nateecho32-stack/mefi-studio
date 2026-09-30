@@ -892,8 +892,12 @@
   function restTabStop() {
     for (const entry of ui.items.values()) entry.tab.tabIndex = entry.tab.getAttribute("aria-selected") === "true" ? 0 : -1;
   }
+  // The density token decides (--d-tab, SIZE's): read as the strip's own resolved height, which is right when the token is a calc() or
+  // a rem; else as the token's own number; else 38. Never outside the contract's 28 to 48.
   function stripHeight() {
-    const value = safe(() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--d-tab")), NaN);
+    const own = ui.root && ui.root.isConnected !== false && !ui.root.hidden ? safe(() => parseFloat(getComputedStyle(ui.root).height), NaN) : NaN;
+    const token = safe(() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--d-tab")), NaN);
+    const value = Number.isFinite(own) && own > 0 ? own : token;
     return clamp(Math.round(Number.isFinite(value) && value > 0 ? value : HEIGHT.fallback), HEIGHT.min, HEIGHT.max);
   }
   function sizeRegion() {

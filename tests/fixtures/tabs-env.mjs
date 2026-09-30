@@ -75,7 +75,7 @@ export async function tabsEnv({ layout = "v2", shell = true, storage = new Map()
   context.MutationObserver = class { constructor(callback) { this.callback = callback; mutationObservers.push(this); } observe(target, options) { this.target = target; this.options = options; } disconnect() { this.disconnected = true; } };
   context.ResizeObserver = class { constructor(callback) { this.callback = callback; resizeObservers.push(this); } observe(target) { this.target = target; } disconnect() { this.disconnected = true; } };
   const css = {};
-  context.getComputedStyle = () => ({ getPropertyValue: (name) => css[name] ?? "" });
+  context.getComputedStyle = () => ({ getPropertyValue: (name) => css[name] ?? "", height: css.__height ?? "" });
   // focus() moves document.activeElement, as a browser's does
   MovableElement.prototype.focus = function focus() { this.focused = true; document.activeElement = this; };
   MovableElement.prototype.blur = function blur() { this.focused = false; if (document.activeElement === this) document.activeElement = null; };
