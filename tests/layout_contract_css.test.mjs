@@ -26,11 +26,12 @@ function evaluate(text, env, view) {
   const peek = () => { while (source[at] === " ") at += 1; return source[at]; };
   const word = () => { const found = /^[a-z-]+(?=\()/.exec(source.slice(at)); return found ? found[0] : null; };
   function number() {
-    const found = /^-?(\d*\.?\d+)(px|vw|vh|)/.exec(source.slice(at));
+    const found = /^-?(\d*\.?\d+)(px|vw|vh|%|)/.exec(source.slice(at));
     if (!found) fail();
     at += found[0].length;
     const value = Number.parseFloat(found[0]);
-    return found[2] === "vw" ? (value * view.w) / 100 : found[2] === "vh" ? (value * view.h) / 100 : value;
+    // A percentage is taken of a 1000px box: the comparison is of the same formula before and after, never of one box.
+    return found[2] === "vw" ? (value * view.w) / 100 : found[2] === "vh" ? (value * view.h) / 100 : found[2] === "%" ? value * 10 : value;
   }
   function call(name) {
     at += name.length + 1;
@@ -124,7 +125,7 @@ const DELTAS = {
 };
 
 test("the ledger is the whole set of declarations that moved, and each is in the stylesheet as written", () => {
-  assert.ok(ledger.length >= 70, "the ledger lists every declaration that moved");
+  assert.ok(ledger.length >= 74, "the ledger lists every declaration that moved");
   const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   for (const [file, property, , after] of ledger) {
     assert.ok(css[file], `${file} exists`);

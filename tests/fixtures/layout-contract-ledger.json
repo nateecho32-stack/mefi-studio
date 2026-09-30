@@ -71,5 +71,6 @@
 ["vibe.css", "bottom", "104px", "calc(104px + var(--shell-y1))"],
 ["vibe.css", "left", "24px", "calc(var(--shell-list-w) + 24px)"],
 ["vibe.css", "bottom", "24px", "calc(24px + var(--shell-y1))"],
-["vibe.css", "bottom", "10px", "calc(10px + var(--shell-y1))"]
+["vibe.css", "bottom", "10px", "calc(10px + var(--shell-y1))"],
+["styles.css", "height", "100%", "calc(100% - var(--shell-y1))"]
 ]
