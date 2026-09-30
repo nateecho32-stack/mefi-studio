@@ -41,6 +41,9 @@ const PROVIDERS = Object.freeze([
   { key: "claude", label: "Claude Code CLI", kind: "subscription", account: "limits", aliases: ["claude", "claude-code", "anthropic"] },
   { key: "grok", label: "Grok CLI", kind: "subscription", account: "limits", aliases: ["grok", "xai", "x-ai"] },
   { key: "codex", label: "Codex CLI", kind: "subscription", account: "limits", aliases: ["codex", "codex-cli", "openai-codex"] },
+  // Sign in with ChatGPT (scripts/chatgpt-plan.cjs): the owner's ChatGPT plan pays, so its
+  // calls are never priced; OpenAI publishes no usage read for it (Manage usage links out).
+  { key: "chatgpt", label: "ChatGPT plan", kind: "subscription", account: null, aliases: ["chatgpt", "chatgpt-plan"] },
   { key: "antigravity", label: "Antigravity CLI", kind: "subscription", account: "limits", aliases: ["antigravity", "agy"] },
   { key: "google", label: "Google Gemini", kind: "metered", account: null, aliases: ["google", "gemini", "google-vertex", "vertex"] },
   { key: "openai", label: "OpenAI", kind: "metered", account: null, aliases: ["openai"] },

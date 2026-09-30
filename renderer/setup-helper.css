@@ -95,6 +95,12 @@
 .setup-helper-key-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); color: var(--ivory); }
 .setup-helper-badge { padding: 1px var(--s2); border: 1px solid var(--hairline); border-radius: var(--r-pill); font-size: var(--fs-xs); color: var(--muted); }
 .setup-helper-badge[data-tone="good"] { border-color: color-mix(in srgb, var(--good) 45%, transparent); color: var(--good); }
+/* Sign in with ChatGPT: OpenAI's approved "Continue with ChatGPT" button,
+   white on dark in every theme (developers.openai.com/siwc/ui-ux-guidelines). */
+.setup-helper-chatgpt { justify-self: start; border: 1px solid rgba(255, 255, 255, .24); background: #0d0d0d; color: #fff; font-weight: 600; }
+.setup-helper-chatgpt:hover:not(:disabled), .setup-helper-chatgpt:focus-visible { background: #2a2a2a; color: #fff; }
+.setup-helper-chatgpt-welcome { display: grid; gap: var(--s2); justify-items: start; padding: var(--s3); border: 1px solid var(--gold-dim); border-radius: var(--r-md); background: var(--frost-well); }
+.setup-helper-chatgpt-welcome h4 { margin: 0; font: 600 var(--fs-md)/1.3 var(--font-display); letter-spacing: normal; text-transform: none; color: var(--ivory); }
 
 .setup-helper-scope {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); padding: var(--s3) var(--s4);

@@ -44,12 +44,17 @@
   // ---- vocabulary -----------------------------------------------------------
   const PROVIDERS = [
     ["auto", "Automatic", "Follows the routing order below"], ["claude", "Claude Code", "Your Claude subscription (CLI login)"],
-    ["codex", "Codex", "Your ChatGPT subscription (CLI login)"], ["grok", "Grok", "Your Grok subscription (CLI login)"],
+    ["codex", "Codex", "Your ChatGPT subscription (CLI login)"], ["chatgpt", "ChatGPT plan", "Your ChatGPT plan (Sign in with ChatGPT)"], ["grok", "Grok", "Your Grok subscription (CLI login)"],
     ["antigravity", "Antigravity", "Your Google subscription (CLI login)"], ["opencode", "OpenCode Go", "API key"],
     ["zen", "OpenCode Zen", "API key"], ["zai", "z.ai", "API key (GLM coding plan)"], ["openrouter", "OpenRouter", "API key"],
     ["lmstudio", "LM Studio", "A model running on this computer"], ["custom", "Custom endpoint", "Any OpenAI-compatible server"],
   ];
   const providerName = (id) => PROVIDERS.find(([key]) => key === id)?.[1] || id || "Automatic";
+  // The ChatGPT plan route (scripts/chatgpt-plan.cjs) exists only where the
+  // host wires its bridge; anywhere else it is neither shown nor offered.
+  const chatgptBridge = () => ["chatgptPlanStatus", "chatgptPlanSignIn", "chatgptPlanSignOut"].every((name) => typeof api()?.[name] === "function");
+  const offered = () => PROVIDERS.filter(([id]) => id !== "chatgpt" || chatgptBridge());
+  const CHATGPT_USAGE_URL = "https://chatgpt.com/settings/usage";
   const SUBSCRIPTIONS = ["claude", "codex", "grok", "antigravity"];
   const CLIS = [["opencode", "OpenCode"], ["claude", "Claude Code"], ["codex", "Codex"], ["grok", "Grok"], ["antigravity", "Antigravity"]];
   const cliName = (id) => CLIS.find(([key]) => key === id)?.[1] || id;
@@ -79,6 +84,8 @@
     const id = String(model).toLowerCase().replace(/^openai\//, "");
     const extended = /^gpt-6-/.test(id);
     const reasoning = (provider === "zen" || provider === "openrouter" && /^openai\//i.test(model)) && (extended || /^(gpt-5(?:[.-]|$)|o[134](?:-|$))/.test(id));
+    // The ChatGPT plan's catalog slugs (gpt-6.1-sol, gpt-6-luna …) take an effort.
+    if (provider === "chatgpt") return { list: /^gpt-6(?:[.-]|$)/.test(id) ? EFFORTS : /^(gpt-5(?:[.-]|$)|o[134](?:-|$))/.test(id) ? ["low", "medium", "high"] : [], fast: false };
     return { list: reasoning ? extended ? EFFORTS : ["low", "medium", "high"] : [], fast: provider === "zen" && extended };
   }
 
@@ -202,7 +209,7 @@
   };
 
   // ---- the host's view, read per visit --------------------------------------
-  const data = { team: null, scope: null, routing: null, keys: {}, cli: null, scan: null, logins: null };
+  const data = { team: null, scope: null, routing: null, keys: {}, cli: null, scan: null, logins: null, chatgpt: null };
   const projectId = () => window.MefiWorkspace?.activeProjectId?.() || window.MefiTasks?.state?.projectId || null;
   const projectName = () => window.MefiWorkspace?.activeProject?.()?.name || window.MefiWorkspace?.state?.projects?.find?.((item) => item.id === projectId())?.name || "this project";
   async function loadTeam() {
@@ -374,7 +381,9 @@
   function routeReady() {
     const routing = data.routing || {};
     const subscription = (id) => SUBSCRIPTIONS.includes(id) && loggedIn(id);
-    return Boolean(routing.hasZai || routing.hasOpenCode || routing.hasZen || routing.hasOpenRouter || routing.hasCustom
+    // A ChatGPT plan sign-in counts only while plan usage was granted.
+    const chatgpt = routing.hasChatGptPlan === true || Boolean(data.chatgpt?.signedIn && data.chatgpt?.planUsage);
+    return Boolean(routing.hasZai || routing.hasOpenCode || routing.hasZen || routing.hasOpenRouter || routing.hasCustom || chatgpt
       || subscription(routing.provider) || routing.provider === "lmstudio" || subscription(routing.executorCli));
   }
   function keyRow(which, title, detail, rerender) {
@@ -452,6 +461,81 @@
     }
     return box;
   }
+  async function refreshChatgpt() {
+    if (!chatgptBridge()) { data.chatgpt = null; return; }
+    try { data.chatgpt = await api().chatgptPlanStatus(); } catch { data.chatgpt = null; }
+  }
+  // "Use your ChatGPT plan": Sign in with ChatGPT lets the owner's ChatGPT
+  // plan pay for Studio's Responses calls (scripts/chatgpt-plan.cjs). The
+  // words are OpenAI's Sign in with ChatGPT UI guidelines, verbatim: the
+  // settings heading and body, the "Continue with ChatGPT" button (white on
+  // dark), "Using ChatGPT plan" while it is in use, "Manage usage" to ChatGPT's
+  // usage settings (the primary action once "Usage limit reached"), and the
+  // one-time "You're using your ChatGPT plan" / "Got it" welcome, which the
+  // host reports only after the first sign-in that granted plan usage.
+  function chatgptCard(rerender) {
+    if (!chatgptBridge()) return null;
+    const plan = data.chatgpt || {};
+    const box = card("Use your ChatGPT plan", "Complete eligible AI requests in this app with usage included in your ChatGPT plan or credits balance.", "setup-helper-card setup-helper-chatgpt-card");
+    const manage = (className) => button("Manage usage", () => { void api()?.openExternal?.(plan.manageUsageUrl || CHATGPT_USAGE_URL); }, className);
+    if (state.chatgptWelcome) {
+      const welcome = node("div", "setup-helper-chatgpt-welcome");
+      welcome.setAttribute("role", "dialog");
+      welcome.setAttribute("aria-label", "You're using your ChatGPT plan");
+      welcome.append(node("h4", "", "You're using your ChatGPT plan"),
+        node("p", "setup-helper-hint", "Eligible usage in this app uses your ChatGPT plan. Manage usage in your ChatGPT settings."),
+        button("Got it", () => { state.chatgptWelcome = false; rerender(); }, "primary mini"));
+      box.append(welcome);
+    }
+    // Shown while the browser is out, where the host can call the wait off.
+    const cancel = button("Cancel sign-in", async () => { try { await api()?.chatgptPlanCancel?.(); } catch { /* the sign-in answers for itself */ } }, "ghost mini");
+    cancel.hidden = !(plan.signingIn && typeof api()?.chatgptPlanCancel === "function");
+    const signIn = button("Continue with ChatGPT", async (event) => {
+      const control = event?.currentTarget || signIn;
+      control.disabled = true;
+      cancel.hidden = typeof api()?.chatgptPlanCancel !== "function";
+      say("Finish signing in with ChatGPT in your browser. This page updates when you are done.");
+      let result;
+      try { result = await need("chatgptPlanSignIn")(); } catch (error) { result = { ok: false, error: plain(error, "Signing in with ChatGPT did not finish.") }; }
+      control.disabled = false;
+      cancel.hidden = true;
+      if (result?.status) data.chatgpt = result.status; else await refreshChatgpt();
+      if (result?.ok) {
+        if (result.welcome === true) state.chatgptWelcome = true;
+        say(data.chatgpt?.planUsage ? "Signed in with ChatGPT. Choose ChatGPT plan in Team & models to put it to work." : "Signed in with ChatGPT, but ChatGPT plan usage was not allowed.", data.chatgpt?.planUsage ? "good" : "");
+        await loadRouting().catch(() => {});
+        window.dispatchEvent(new CustomEvent("mefi:connection-saved", { detail: { which: "chatgpt" } }));
+      } else if (result?.errorKind === "canceled") say("Sign-in canceled.");
+      else say(result?.error || "Signing in with ChatGPT did not finish.", "bad");
+      rerender();
+    }, "setup-helper-chatgpt");
+    const actions = node("div", "setup-helper-row");
+    if (plan.signedIn) {
+      const heading = node("div", "setup-helper-key-head");
+      const badge = node("span", "setup-helper-badge", plan.limited ? "Usage limit reached" : plan.planUsage ? "Using ChatGPT plan" : "ChatGPT plan usage off");
+      if (plan.planUsage && !plan.limited) badge.dataset.tone = "good";
+      heading.append(node("strong", "", plan.email ? `Signed in as ${plan.email}` : "Signed in with ChatGPT"), badge);
+      box.append(heading);
+      if (plan.limited) {
+        box.append(node("p", "setup-helper-hint", "Review your plan or this app's limit in ChatGPT settings."));
+        actions.append(manage("primary"));
+      } else if (!plan.planUsage) {
+        box.append(node("p", "setup-helper-hint", "ChatGPT plan usage was not allowed when you signed in, so Studio does not use it. Continue with ChatGPT again and allow it."));
+        actions.append(signIn);
+      } else actions.append(manage("ghost"));
+      const out = risky("Sign out", async () => {
+        const result = await run(out, () => need("chatgptPlanSignOut")(), "Signed out of ChatGPT.");
+        if (result) { await refreshChatgpt(); await loadRouting().catch(() => {}); rerender(); }
+      }, "Sign out of ChatGPT?");
+      actions.append(out);
+    } else {
+      if (plan.needsSignIn) box.append(node("p", "setup-helper-hint", "Your ChatGPT sign-in has ended. Continue with ChatGPT to sign in again."));
+      actions.append(signIn);
+    }
+    actions.append(cancel);
+    box.append(actions);
+    return box;
+  }
   async function refreshKeys(which = ["opencode", "zen", "zai", "openrouter", "custom", "github", "gateway", "jev"]) {
     const fn = api()?.getApiKey;
     if (typeof fn !== "function") return;
@@ -464,7 +548,7 @@
     async render(body, context) {
       const rerender = () => { if (context.current()) void show("providers", { focus: false, keepScroll: true }); };
       await Promise.all([loadRouting().catch(() => {}), refreshKeys(), (async () => { try { data.cli = await api()?.cliSetupStatus?.(); } catch { data.cli = null; } })(),
-        (async () => { try { data.logins = await api()?.cliAccounts?.(); } catch { data.logins = null; } })()]);
+        (async () => { try { data.logins = await api()?.cliAccounts?.(); } catch { data.logins = null; } })(), refreshChatgpt()]);
       if (!context.current()) return;
       const routing = data.routing || {};
 
@@ -528,6 +612,8 @@
       }
       subscription.append(button("Setup instructions", cliAction("docs"), "ghost mini"));
       body.append(subscription);
+      const chatgpt = chatgptCard(rerender);
+      if (chatgpt) body.append(chatgpt);
       const logins = loginsCard(rerender);
       if (logins) body.append(logins);
 
@@ -576,7 +662,7 @@
     const effective = provider || configuration.aiProvider || "auto";
     const model = configuration.aiModelsByProvider?.[effective]?.[role] ?? (["auto", "zen", "zai", "opencode"].includes(effective) ? configuration.aiModels?.[role] || "" : "");
     const box = card(title, detail, "setup-helper-card setup-helper-agent");
-    box.append(field("Provider", select([["", `Same as the main assistant (${providerName(configuration.aiProvider || "auto")})`], ...PROVIDERS.map(([id, name]) => [id, name])], provider, (value) => {
+    box.append(field("Provider", select([["", `Same as the main assistant (${providerName(configuration.aiProvider || "auto")})`], ...offered().map(([id, name]) => [id, name])], provider, (value) => {
       void saveTeam((next) => {
         next.aiRoleProviders = { ...next.aiRoleProviders, [role]: value };
         if (!value) delete next.aiRoleProviders[role];
@@ -600,7 +686,7 @@
     const value = { ...seatDefaults(seat), ...saved, ...configuration.agentSeats?.[seat] };
     const set = (patch) => saveTeam((next) => { next.agentSeats = { ...next.agentSeats, [seat]: { ...value, ...next.agentSeats?.[seat], ...patch } }; }).then(() => rerenderSoon());
     const box = card(title, detail, "setup-helper-card setup-helper-agent");
-    box.append(field("Provider", select(PROVIDERS.filter(([id]) => !SEAT_BLOCKED.includes(id)).map(([id, name]) => [id, id === "auto" ? "Follow the planning & review route" : name]), value.provider, (provider) => {
+    box.append(field("Provider", select(offered().filter(([id]) => !SEAT_BLOCKED.includes(id)).map(([id, name]) => [id, id === "auto" ? "Follow the planning & review route" : name]), value.provider, (provider) => {
       const modelsByProvider = { ...value.modelsByProvider, [value.provider]: value.model };
       void set({ provider, model: modelsByProvider[provider] ?? "", modelsByProvider, effort: "", fast: false });
     }, `${title} provider`)));
@@ -629,7 +715,7 @@
       scopeBar(body, () => rerenderSoon());
       const configuration = config();
       const main = card("Main assistant", "The default provider for every text role below.");
-      main.append(field("Provider", select(PROVIDERS.map(([id, name, note]) => [id, `${name} — ${note}`]), configuration.aiProvider || "auto", (value) => {
+      main.append(field("Provider", select(offered().map(([id, name, note]) => [id, `${name} — ${note}`]), configuration.aiProvider || "auto", (value) => {
         void saveTeam((next) => { next.aiProvider = value; next.agentEfforts = {}; }).then(() => rerenderSoon());
       }, "Main assistant provider")));
       body.append(main);
@@ -720,7 +806,7 @@
         item.append(up, down, drop); listBox.append(item);
       });
       order.append(listBox);
-      const addable = PROVIDERS.filter(([id]) => id !== "auto" && !auto.includes(id));
+      const addable = offered().filter(([id]) => id !== "auto" && !auto.includes(id));
       if (addable.length) order.append(field("Add a provider", select([["", "Choose…"], ...addable.map(([id, name]) => [id, name])], "", (value) => { if (value) saveOrder([...auto, value]); }, "Add provider to the order")));
       order.append(toggle("Fall back when a provider fails", configuration.aiAutoFallback === true || configuration.aiFallbackOpenCode === true, (value) => { void saveTeam((next) => { next.aiAutoFallback = value; delete next.aiFallbackOpenCode; }); },
         "A failed or rate-limited call moves on to the next provider in the order instead of waiting."));

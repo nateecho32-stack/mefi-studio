@@ -1385,6 +1385,21 @@ failed process stays an error and cannot produce briefing requests.
   setup (PowerShell): `$env:MEFI_STUDIO_KEY = "<key>"; npx electron . --set-key`,
   and the same with `MEFI_STUDIO_ZAI_KEY` / `--set-zai-key` and
   `MEFI_STUDIO_CUSTOM_KEY` / `--set-custom-key`; unset the variable afterwards.
+- **ChatGPT plan** (`scripts/chatgpt-plan.cjs`, core only; the host wiring
+  lands separately): Sign in with ChatGPT, OpenAI's open-source
+  token-sharing preview, lets the owner's ChatGPT plan pay for Studio's
+  Responses API calls instead of a metered key. Setup › Connect an AI shows a
+  "Use your ChatGPT plan" card with OpenAI's "Continue with ChatGPT" button
+  only when the host exposes `chatgptPlanSignIn` / `chatgptPlanStatus` /
+  `chatgptPlanSignOut`. The sign-in is OAuth + PKCE through a one-shot
+  `127.0.0.1:<port>/callback` listener: the first one registers the install
+  (`dynamic_agent_client`, a stable `urn:uuid:` host id) and keeps the issued
+  client id, and the ID token is checked against OpenAI's JWKS. Without the
+  `chatgpt.tokens.use.direct` scope the sign-in stays but plan usage is off.
+  Calls stream (`"stream": true`, `"store": false`) and count only on
+  `response.completed`. A usage limit pauses the route and links to ChatGPT's
+  usage settings, a 503 retries twice, and nothing falls back to other
+  billing. Tokens reach disk only through the host's encrypted save.
 
 ### Verification, storage and experiments
 
