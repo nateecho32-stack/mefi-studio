@@ -32,9 +32,9 @@ function host({ settings = {}, keys = [], clis = [], serve = null } = {}) {
   const fetches = [], lookups = [];
   const cli = (id) => async () => { lookups.push(id); return clis.includes(id); };
   const context = vm.createContext({
-    AI_PROVIDERS: ["auto", "zai", "opencode", "zen", "openrouter", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"],
-    AI_AUTO_PROVIDERS: ["zai", "opencode", "zen", "openrouter", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"],
-    AUTO_PROVIDER_NAMES: { zai: "z.ai GLM", opencode: "OpenCode Go", zen: "OpenCode Zen", openrouter: "OpenRouter", grok: "Grok CLI", claude: "Claude Code CLI", codex: "Codex CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio", custom: "custom endpoint" },
+    AI_PROVIDERS: ["auto", "zai", "opencode", "zen", "openrouter", "grok", "claude", "codex", "chatgpt", "antigravity", "lmstudio", "custom"],
+    AI_AUTO_PROVIDERS: ["zai", "opencode", "zen", "openrouter", "grok", "claude", "codex", "chatgpt", "antigravity", "lmstudio", "custom"],
+    AUTO_PROVIDER_NAMES: { zai: "z.ai GLM", opencode: "OpenCode Go", zen: "OpenCode Zen", openrouter: "OpenRouter", grok: "Grok CLI", claude: "Claude Code CLI", codex: "Codex CLI", chatgpt: "ChatGPT plan", antigravity: "Antigravity CLI", lmstudio: "LM Studio", custom: "custom endpoint" },
     ZAI_ENDPOINT: "https://zai.example/chat", ZAI_MODEL_ROUTINE: "glm-5.3-flash", ZAI_MODEL_HEAVY: "glm-5.3",
     ASSISTANT_ENDPOINT: "https://go.example/chat", ASSISTANT_MODEL: "deepseek-v4.1-flash",
     ZEN_MODEL_ROUTINE: "gpt-6-luna", ZEN_MODEL_HEAVY: "gpt-6-sol", zenEndpoint: () => "https://zen.example/responses",
@@ -56,6 +56,27 @@ function host({ settings = {}, keys = [], clis = [], serve = null } = {}) {
     resolve: (role = "routine", options) => context.resolveAiRoute(role, options),
   };
 }
+
+// A ChatGPT plan sign-in (scripts/chatgpt-plan.cjs, faked here) is a
+// connected AI on its own, from a cold start: the gate reads the plan's
+// status before its synchronous check, so a fresh launch never reads as
+// "not connected" while the resolver would answer on the plan.
+test("a ChatGPT plan sign-in counts as connected, picked or on Auto, from a cold start", async () => {
+  const plan = (status) => () => ({ status: async () => ({ ok: true, ...status }), listModels: async () => ({ ok: true, models: [{ slug: "gpt-6-luna" }, { slug: "gpt-6.1-sol" }] }) });
+  const on = { signedIn: true, planUsage: true, limited: false };
+  for (const [label, settings, status, expected] of [
+    ["an explicit ChatGPT plan pick", { aiProvider: "chatgpt" }, on, true],
+    ["the ChatGPT plan on the default Auto walk", {}, on, true],
+    ["a signed-out ChatGPT plan pick", { aiProvider: "chatgpt" }, { signedIn: false }, false],
+    ["a ChatGPT plan at its limit", { aiProvider: "chatgpt" }, { ...on, limited: true }, false],
+  ]) {
+    const h = host({ settings });
+    h.context.chatgptPlan = plan(status);
+    assert.equal(await h.ready(), expected, `gate: ${label}`);
+    const route = await h.resolve();
+    assert.equal(route.ok ? route.provider : null, expected ? "chatgpt" : null, `resolver: ${label}`);
+  }
+});
 
 test("the gate and the resolver agree on every setup that needs no network", async () => {
   const cases = [

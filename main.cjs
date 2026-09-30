@@ -228,7 +228,7 @@ function handleProjectIpc(channel, handler) {
 // is the PC's own and may open a freshly cloned project, which a gated
 // handler would wait on. (Declared beside the wrapper so the tests that load
 // it from here up to app.setName see it.)
-const APP_WIDE_PREFIXES = ["projects:", "project-preview:", "performance:", "startup:", "community:", "hub:", "remote:", "styler:", "catalog:", "speed:", "shell:", "pc-setup:", "chatgpt-plan:"];
+const APP_WIDE_PREFIXES = ["projects:", "project-preview:", "performance:", "startup:", "community:", "hub:", "remote:", "styler:", "catalog:", "speed:", "shell:", "pc-setup:", "chatgpt-plan:", "news:"];
 const APP_WIDE_CHANNELS = new Set(["usage:accounts", "opencode:credits", "release:status", "release:check", "update:status", "update:set", "settings:get-key"]);
 ipcMain.handle = handleProjectIpc;
 
@@ -4284,7 +4284,9 @@ async function chatgptPlanCall(candidate, body, { taskType = "routine", source =
   const result = await chatgptPlan().respond({ model: candidate.model, messages: body.messages, effort, serviceTier, timeoutMs });
   const kind = result.ok ? null : result.errorKind;
   const errorKind = kind === null ? null : kind === "limit" ? "quota" : kind === "auth" || kind === "eligibility" ? "auth" : kind === "timeout" ? "timeout" : kind === "validation" ? "validation" : "transport";
-  await recordModelCall({ model: result.model || candidate.model, provider: "chatgpt", taskType, source, at: startedAt, elapsedMs: Date.now() - startedAt,
+  // A call the plan's own limit pause refused never reached OpenAI, so it
+  // is no measurement (like a topped-out CLI login's turn).
+  if (!result.toppedOut) await recordModelCall({ model: result.model || candidate.model, provider: "chatgpt", taskType, source, at: startedAt, elapsedMs: Date.now() - startedAt,
     status: result.ok ? "ok" : "error", errorKind, requestedEffort: effort, appliedEffort: effort, costUsd: null, ...(result.tokenUsage ? { tokenUsage: result.tokenUsage } : {}) });
   if (!result.ok) {
     if (kind === "limit" || result.reauth) {
@@ -6326,7 +6328,8 @@ function aiRouteConfigured(settings, { clis = null } = {}) {
   const hasKey = (saved, field) => keyAvailable(saved, field);
   const routeReady = (id) => id === "auto"
     ? autoProviderOrder(settings).some((entry) => autoEntryReady(settings, entry, { hasKey, clis })) || autoRescueProviders(settings, { hasKey }).length > 0
-    : keyless.includes(id) || (id === "custom" && Boolean(normalizeCompatEndpoint(settings.customEndpoint)));
+    : keyless.includes(id) || (id === "custom" && Boolean(normalizeCompatEndpoint(settings.customEndpoint)))
+      || (id === "chatgpt" && typeof chatgptPlanReadyCached === "function" && chatgptPlanReadyCached());
   // roleProvider falls back to the main pick, so the two roles cover it.
   const answers = ["routine", "heavy"].some((role) => routeReady(roleProvider(settings, role)))
     || ["lmstudio", "claude"].includes(settings.agentSeats?.companion?.provider);
@@ -6340,6 +6343,9 @@ function aiRouteConfigured(settings, { clis = null } = {}) {
 // "configured" forever. A key or another keyless route answers first, and
 // then no lookup runs at all.
 async function aiRouteReady(settings) {
+  // The ChatGPT plan's status is read from its store, so a fresh launch
+  // does not read as "not connected" before the cache is warm.
+  if (typeof chatgptPlanStatus === "function") await chatgptPlanStatus().catch(() => null);
   if (aiRouteConfigured(settings, { clis: new Set() })) return true;
   const probes = { grok: grokCliAvailable, claude: claudeCliAvailable, codex: codexCliAvailable, antigravity: antigravityCliAvailable };
   const found = await Promise.all(Object.entries(probes).map(async ([id, probe]) => ((await probe().catch(() => false)) ? id : null)));
@@ -17275,6 +17281,7 @@ async function spawnNextJob(options) {
       if (!current()) return;
       if (stopRetry) clearTimeout(stopRetry);
       if (stopAttempt?.timer) clearTimeout(stopAttempt.timer);
+      if (!stopReason && nextChild.codex?.startFailed && retryOverExec(`codex app-server exited ${code ?? "?"} before its session started`)) return;
       if (stopReason && stopForFallback && fallbackToOpencode(stopReason)) return;
       // A CLI that exits nonzero at once without a word on stdout never got
       // going (cmd's "is not recognized", a login prompt, an unknown flag):
@@ -17342,6 +17349,19 @@ async function spawnNextJob(options) {
       } catch (error) { retry(error); }
     };
     entry.stop = stop;
+    // A Codex app-server attempt that never got its session going (an
+    // older or newer Codex, a refused handshake, a server that exited during
+    // it) runs once more over `codex exec` on the same claim.
+    function retryOverExec(why) {
+      if (route?.cli !== "codex" || entry.codexExecOnly || entry.finished) return false;
+      entry.codexExecOnly = true;
+      entry.spoke = false;
+      entry.spokeOut = false;
+      logLine(`[autopilot] ${String(why ?? "codex app-server did not start").slice(0, 200)} — retrying "${assistantClip(job.title, 60)}" over codex exec`);
+      pushAutopilotHistory("fallback", `codex app-server did not start — retried over codex exec: ${assistantClip(job.title, 40)}`);
+      try { attach(spawnAttempt(route, "codex", "exec"), label, route, allowFallback); return true; }
+      catch (retryError) { logLine(`[autopilot] codex exec retry could not start: ${retryError.message}`); return false; }
+    }
     wire(child.stdout, nextChild, true);
     wire(child.stderr, nextChild);
     // An early CLI exit can break the piped prompt before the child emits
@@ -17428,17 +17448,10 @@ async function spawnNextJob(options) {
       if (entry.child !== nextChild || entry.finished) return;
       logLine(`[autopilot] ${runLabel} failed: ${error.message}`);
       if (stopReason) return; // termination still owns the live process and its claim
-      // `codex app-server` never got going (an older or newer Codex, a refused
-      // handshake): the same attempt once more over `codex exec`, before any
-      // OpenCode fallback. The facade has already ended its server.
-      if (typeof codexHarness !== "undefined" && error?.code === codexHarness.START_FAILED && route?.cli === "codex" && !entry.codexExecOnly) {
-        entry.codexExecOnly = true;
-        entry.spoke = false;
-        entry.spokeOut = false;
-        pushAutopilotHistory("fallback", `codex app-server did not start — retried over codex exec: ${assistantClip(job.title, 40)}`);
-        try { attach(spawnAttempt(route, "codex", "exec"), label, route, allowFallback); return; }
-        catch (retryError) { logLine(`[autopilot] codex exec retry could not start: ${retryError.message}`); }
-      }
+      // `codex app-server` never got going (a refused handshake, no answer):
+      // the same attempt once more over `codex exec`, before any OpenCode
+      // fallback. The facade has already ended its server.
+      if (typeof codexHarness !== "undefined" && error?.code === codexHarness.START_FAILED && retryOverExec(error.message)) return;
       if (allowFallback && fallbackToOpencode(`spawn failed: ${error.message}`)) return;
       entry.endKind = "spawn";
       finish(1, error.message).catch(() => {});
@@ -20872,7 +20885,8 @@ function registerIpc() {
   });
   ipcMain.handle("chatgpt-plan:cancel", async () => ({ ok: true, canceled: chatgptPlan().cancel() }));
   ipcMain.handle("chatgpt-plan:sign-out", async () => {
-    const result = await chatgptPlan().signOut();
+    // forget: the next sign-in registers afresh and may be another account.
+    const result = await chatgptPlan().signOut({ forget: true });
     chatgptPlanChanged();
     return { ...result, status: await chatgptPlanStatus({ fresh: true }) };
   });

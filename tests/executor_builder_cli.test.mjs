@@ -97,6 +97,29 @@ test("a Codex route runs over codex app-server, and a server that cannot start r
   await h.finish("cx");
 });
 
+test("an app server that exits during its handshake (a Codex without app-server) also retries over codex exec", async () => {
+  const h = executorHost({ tasks: [boardTask("old")] });
+  vm.runInContext(filters, h.env);
+  h.env.executorRunEnv = async () => ({ via: "codex cli", cli: "codex", codex: true, model: "", codexHarness: "app-server", modelArgs: "", env: {}, opencode: opencodeFallback });
+  const wrapped = [];
+  h.env.codexHarness = { ...codexHarness, wrapChild: (child, plan) => {
+    const facade = Object.assign(new EventEmitter(), { pid: child.pid, stdout: child.stdout, stderr: child.stderr, stdin: child.stdin, codex: { startFailed: false } });
+    wrapped.push({ child, plan, facade });
+    return facade;
+  } };
+  const seen = recordSpawns(h);
+  assert.equal(await h.env.spawnNextJob(), "spawned");
+  wrapped[0].facade.codex.startFailed = true;
+  wrapped[0].facade.stderr.emit("data", "error: unrecognized subcommand 'app-server'\n");
+  wrapped[0].facade.emit("close", 2);
+  assert.equal(seen.length, 2, "one retry, not an OpenCode fallback");
+  assert.match(seen[1].args.join(" "), /codex exec /);
+  assert.equal(h.autopilot.jobs[0].codexExecOnly, true);
+  assert.equal(h.autopilot.jobs[0].fallbackTried, undefined);
+  // The retry is exec: a second failure there is the run's own, not another retry.
+  await h.finish("old");
+});
+
 test("a grok that is a native binary still spawns directly, with the same prompt file", async () => {
   const h = executorHost({ tasks: [boardTask("native")] });
   vm.runInContext(filters, h.env);

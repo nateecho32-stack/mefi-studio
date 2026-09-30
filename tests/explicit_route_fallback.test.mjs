@@ -243,6 +243,11 @@ test("a ChatGPT plan call answers in chatCompletion's shape, is recorded without
   reply = { ok: false, errorKind: "eligibility", error: "not granted" };
   assert.equal((await host.context.chatgptPlanCall(candidate, body, {})).errorKind, "auth");
   assert.equal((await host.context.chatgptPlanCall(candidate, body, {})).toppedOut, undefined);
+  // The limit pause refusing locally never reached OpenAI: no ledger row.
+  const before = records.length;
+  reply = { ok: false, errorKind: "limit", error: "ChatGPT plan: Usage limit reached.", toppedOut: true };
+  assert.equal((await host.context.chatgptPlanCall(candidate, body, {})).toppedOut, true);
+  assert.equal(records.length, before, "a paused call is not a measurement");
 });
 
 test("a custom endpoint that reports no model degrades to the keyed route once armed", async () => {
