@@ -52,6 +52,9 @@ Claude Code sessions and Claude's memory stay on the PC that made them.
   overrides one push.
 - Park unfinished work that another PC may need on a pushed `wip/<topic>`
   branch. Its commit message should say what is missing and which tests fail.
+  `npm run worktrees` lists every worktree of the project with its branch, how far
+  it is from `main`, what is uncommitted or unpushed and what to do about it
+  (`--json` for tools). Run it on each PC before landing, and again after.
 - Other sessions may be working in the same checkout. Check `git status` and
   the running sessions before switching branches, stashing or resetting.
   Isolated work belongs in a separate worktree or clone.

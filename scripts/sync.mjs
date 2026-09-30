@@ -64,7 +64,7 @@ export const fetchFailure = (result) => (result?.timedOut || NETWORK_FAILURE.tes
 
 const lines = (text) => (text ? text.split(/\r?\n/).filter(Boolean) : []);
 
-async function defaultBranch(git) {
+export async function defaultBranch(git) {
   const head = await git(["symbolic-ref", "--quiet", "--short", `refs/remotes/${REMOTE}/HEAD`]);
   if (head.ok && head.stdout.startsWith(`${REMOTE}/`)) return head.stdout.slice(REMOTE.length + 1);
   for (const name of ["main", "master"]) if ((await git(["rev-parse", "--verify", "--quiet", `refs/remotes/${REMOTE}/${name}`])).ok) return name;

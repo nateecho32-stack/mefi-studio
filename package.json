@@ -28,6 +28,7 @@
     "reconcile-board": "node scripts/reconcile-board.mjs",
     "policy-lab": "node scripts/policy-lab.mjs",
     "sync": "node scripts/sync.mjs",
+    "worktrees": "node scripts/worktrees.mjs",
     "jev:status": "electron . --jev-status",
     "jev:models": "electron . --jev-models",
     "jev:probe": "electron . --jev-probe",
