@@ -967,8 +967,90 @@
         window.MefiToast?.(`Task not deleted · ${result?.error || "the task store could not be written"}`, "bad");
         return;
       }
-      window.MefiToast?.(`Task deleted · ${task.title}`, "good");
+      // Recently deleted (main.cjs "Board trash") kept it: the toast can undo the delete
+      // for a few seconds, and the list under More brings it back after that. With
+      // the switch off (MEFI_STUDIO_NO_BOARD_TRASH) nothing was kept and the toast says only that.
+      const kept = Array.isArray(result?.trashed) && result.trashed.some((row) => row?.kind === "task" && row.id === task.id);
+      if (kept && window.mefiStudio?.tasksUndelete) window.MefiToast?.(`Deleted “${clipName(task.title)}”`, "good", { duration: UNDO_MS, action: { label: "Undo", run: () => undoDelete(task) } });
+      else window.MefiToast?.(`Task deleted · ${task.title}`, "good");
     });
+  }
+
+  // ---------- Recently deleted ----------
+  // How long a delete toast offers Undo. After it is gone the same button waits in
+  // More › Recently deleted for 30 days.
+  const UNDO_MS = 8000;
+  const clipName = (value) => { const flat = String(value ?? "").replace(/\s+/g, " ").trim(); return flat.length > 40 ? `${flat.slice(0, 39).trimEnd()}…` : flat || "Untitled"; };
+  async function undoDelete(task) {
+    const projectId = task.projectId || state.backlog?.projectId || state.projectId || undefined;
+    let result;
+    try { result = await window.mefiStudio.tasksUndelete({ taskId: task.id, projectId }); } catch (error) { result = { ok: false, error: error?.message }; }
+    if (!result?.ok) { window.MefiToast?.(`Not put back · ${result?.error || "Recently deleted could not be read"}`, "bad"); return; }
+    if (Array.isArray(result.tasks) && (!result.projectId || !state.projectId || result.projectId === state.projectId)) { taskRevision += 1; state.tasks = result.tasks; hydrated = true; }
+    state.selected = task.id;
+    syncBadge();
+    if (!els.overlay?.hidden) { renderList(); renderDetail(); revealSelected(); }
+    window.MefiToast?.(`Put back “${clipName(task.title)}”${result.warning ? ` · ${result.warning}` : ""}`, result.warning ? "warn" : "good");
+  }
+  // One list per place that shows it: the Task board's More menu (tasks and ideas)
+  // and the Ideas sheet's Tools menu (ideas). A read that lands after a newer one
+  // for the same place is dropped.
+  const trashReads = new WeakMap();
+  async function showRecentlyDeleted(container, options = {}) {
+    if (!container) return;
+    const api = window.mefiStudio;
+    if (typeof api?.boardTrash !== "function") { container.hidden = true; return; }
+    const token = (trashReads.get(container) || 0) + 1;
+    trashReads.set(container, token);
+    const kinds = Array.isArray(options.kinds) && options.kinds.length ? options.kinds : null;
+    container.hidden = false;
+    container.textContent = "";
+    const list = node("ul", "recent-deleted-list");
+    const note = node("p", "recent-deleted-note", "Looking…");
+    note.setAttribute("role", "status");
+    container.append(node("h4", "recent-deleted-heading", "Recently deleted"), list, note);
+    const asked = options.projectId || state.projectId || null;
+    let result;
+    try { result = await api.boardTrash({ ...(asked ? { projectId: asked } : {}), ...(kinds ? { kinds } : {}) }); } catch (error) { result = { ok: false, error: error?.message }; }
+    if (trashReads.get(container) !== token) return;
+    // Switched off (MEFI_STUDIO_NO_BOARD_TRASH): nothing was kept, and the list says why it is empty.
+    if (result?.ok && result.enabled === false) { note.textContent = "Switched off for this run of Studio, so deletes are for good."; return; }
+    if (!result?.ok) { note.textContent = `Recently deleted could not be read · ${result?.error || "try again"}`; return; }
+    const days = Number(result.keptDays) || 30;
+    const items = Array.isArray(result.items) ? result.items : [];
+    note.textContent = items.length ? `Kept for ${days} days, then let go.` : `Nothing deleted lately. What you delete stays here for ${days} days.`;
+    const scope = { ...options, projectId: result.projectId || asked };
+    for (const item of items) list.append(trashRow(item, container, scope));
+  }
+  function trashRow(item, container, options) {
+    const row = node("li", "recent-deleted-row");
+    row.dataset.kind = item.kind;
+    row.dataset.id = item.id;
+    const name = node("span", "recent-deleted-name", item.title || "Untitled");
+    name.title = item.title || "";
+    const button = node("button", "ghost mini", "Restore");
+    button.type = "button";
+    button.setAttribute("aria-label", `Restore ${item.kind === "idea" ? "the idea" : "the task"} ${item.title || ""}`.trim());
+    if (item.restorable === false) {
+      button.disabled = true;
+      button.title = "It is already back, so the deleted copy is kept and not put over it.";
+    }
+    button.addEventListener("click", () => { void restoreDeleted(item, container, options, button); });
+    row.append(node("span", "recent-deleted-kind", item.kind === "idea" ? "Idea" : "Task"), name, node("span", "recent-deleted-when", `Deleted ${relTime(Number(item.deletedAt) || Date.now())}`), button);
+    return row;
+  }
+  async function restoreDeleted(item, container, options, button) {
+    const api = window.mefiStudio;
+    button.disabled = true;
+    let result;
+    try {
+      result = item.kind === "idea"
+        ? await api.ideasAction({ action: "restore", ideaId: item.id, projectId: options.projectId })
+        : await api.tasksUndelete({ taskId: item.id, projectId: options.projectId });
+    } catch (error) { result = { ok: false, error: error?.message }; }
+    if (!result?.ok) window.MefiToast?.(`Not put back · ${result?.error || "Recently deleted could not be read"}`, "bad");
+    else window.MefiToast?.(`Put back “${clipName(item.title)}”${result.warning ? ` · ${result.warning}` : ""}`, result.warning ? "warn" : "good");
+    void showRecentlyDeleted(container, options);
   }
 
   // Who filed a card. Promotion keeps a request's own source (it used to
@@ -1983,6 +2065,7 @@
     if (els.overlay.hidden) return;
     els.overlay.hidden = true;
     cardLayout?.stop();
+    if (els.tools) els.tools.open = false;
     window.MefiNav?.release?.("tasks");
   }
 
@@ -2021,6 +2104,8 @@
       prefAuto: "pref-auto",
       close: "tasks-close",
       overhead: "tasks-overhead",
+      tools: "tasks-tools",
+      recent: "tasks-recent",
       openButton: "tasks-open",
       filters: "task-filters",
       overviewBack: "task-overview-back",
@@ -2089,6 +2174,14 @@
       if (!chip || !FILTERS.includes(chip.dataset.filter)) return;
       selectFilter(chip.dataset.filter);
     });
+    // More: Recently deleted. The list is read each time the menu opens; Esc and a
+    // click outside close it, and it never stays open behind a closed sheet.
+    if (els.tools && typeof window.mefiStudio?.boardTrash !== "function") els.tools.hidden = true;
+    els.tools?.addEventListener("toggle", () => { if (els.tools.open) void showRecentlyDeleted(els.recent); });
+    els.tools?.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && els.tools.open) { event.preventDefault(); event.stopPropagation(); els.tools.open = false; els.tools.querySelector("summary")?.focus?.(); }
+    });
+    document.addEventListener("pointerdown", (event) => { if (els.tools?.open && !els.tools.contains(event.target)) els.tools.open = false; });
     // The single owner of #tasks-overhead; overhead.js no longer binds it too.
     els.overhead?.addEventListener("click", () => {
       if (window.MefiNav) window.MefiNav.go("overhead");
@@ -2164,6 +2257,8 @@
     open,
     close,
     addTask,
+    // Recently deleted, for the Ideas sheet's own menu (it lists ideas only).
+    showRecentlyDeleted,
     state,
     describe,
     shortTitle,

@@ -188,7 +188,7 @@ settings and per-model work-kind summaries for the shared controls.
 | **Search Studio** | The palette (`Ctrl K`), once called Key commands. It finds any page, tool, Settings card, action, task, node or model by familiar terms, and groups its results by menu section. |
 | **Help** | The menu-foot popover containing onboarding, shortcuts and Community. These destinations are also available through Search; late-registered Community remains supported by the navigation registry. |
 | **Task** | One unit of work on the project board, with a brief, acceptance checks, prerequisites, attempts and evidence. New cards gather local references automatically when Automatic references is on; the configurable scout can use GPT-6 Luna on the fast tier to choose one verified starting file. |
-| **Idea** | A note in the feature-idea inbox; it becomes a task only when you or **Work through backlog** promote it. |
+| **Idea** | A note in the feature-idea inbox; it becomes a task only when you or **Work through backlog** promote it. One you typed yourself (Search's `idea …`) reads **From you**. |
 | **Plan** | A structured route from an unclear idea to tasks: unknowns, decisions, a specification you approve, then tasks. |
 | **Recently deleted** | The list of tasks and ideas you deleted in this project, kept 30 days (at most 50, oldest dropped first). Each keeps its whole record and its place, so it comes back as it was, never over a card that is there again. |
 | **Session** | One coding-worker run recorded in the OpenCode store. Tasks map to sessions in **Overhead**. A session another one spawned (its `parentId`) is a **sub-agent session**: the tree and the Command view hang the newest three busy in the last six hours under their parent, count the rest as "+n sub-agents", and fly each home into its parent when it leaves; they are not counted as sessions. |
@@ -688,8 +688,13 @@ settings and per-model work-kind summaries for the shared controls.
   A running task's **Stop** asks twice. A task a grouped plan holds offers
   **Open group** instead of status, rename or delete changes, which the host
   refuses until the plan releases it.
-- **Deleting a task or an idea can be undone.** Delete first keeps the whole
-  record (`scripts/board-trash.cjs`; `main.cjs`, "Board trash") in the project's
+- **Deleting a task or an idea can be undone.** Delete on the Task board or in
+  Ideas answers with **Deleted “…”** and an **Undo** for about eight seconds;
+  after that, **Task board › More › Recently deleted** (and **Ideas › Tools ›
+  Recently deleted**, ideas only) lists what can still be put back, each with a
+  **Restore**, and a row whose card is back is greyed out. **Clear finished
+  ideas** offers one Undo for all of them. Behind that, delete first keeps the
+  whole record (`scripts/board-trash.cjs`; `main.cjs`, "Board trash") in the project's
   own `board-trash.json`, beside its board files: 30 days, at most 50 items,
   oldest dropped first, with who deleted it and when. That copy is written
   before the board write that removes the card (`mutateBoard`'s `beforeWrite`,

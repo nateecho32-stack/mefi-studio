@@ -1508,6 +1508,20 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
 .surface-tools-menu { position: absolute; right: 0; top: calc(100% + 5px); z-index: 10; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; width: 284px; max-width: min(284px, 75vw); padding: 7px; border: 1px solid var(--hairline-strong); border-radius: var(--r-md); background: var(--panel-solid); box-shadow: var(--shadow-2); }
 .surface-tools-menu > button { justify-content: flex-start; text-align: left; white-space: normal; min-width: 0; padding: 8px 10px; border: 1px solid var(--hairline); min-height: 38px; font-size: var(--fs-sm); }
 .surface-tools-menu > .danger { grid-column: 1 / -1; color: var(--bad); background: color-mix(in srgb, var(--bad) 5%, transparent); }
+/* Recently deleted (Task board › More, Ideas › Tools): what was deleted here, with Restore on each row. */
+/* The head's glass makes its own layer; without a rank the tab strip below paints over the end of a tall menu. */
+#tasks-overlay .explorer-head, #ideas-overlay .explorer-head { position: relative; z-index: 6; }
+.surface-tools-menu > .recent-deleted { grid-column: 1 / -1; display: grid; gap: 6px; padding-top: 6px; border-top: 1px solid var(--hairline); }
+.surface-tools-menu > .recent-deleted[hidden] { display: none; }
+.recent-deleted-heading { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.recent-deleted-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; max-height: min(320px, 46vh); overflow-y: auto; }
+.recent-deleted-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "kind name button" ". when button"; column-gap: 8px; align-items: center; padding: 5px 2px; border-radius: var(--r-sm); }
+.recent-deleted-row:hover { background: color-mix(in srgb, var(--ivory) 5%, transparent); }
+.recent-deleted-kind { grid-area: kind; font-size: 12px; color: var(--muted); }
+.recent-deleted-name { grid-area: name; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); color: var(--ivory); }
+.recent-deleted-when { grid-area: when; font-size: 12px; color: var(--muted); }
+.recent-deleted-row > button { grid-area: button; }
+.recent-deleted-note { margin: 0; font-size: 12px; color: var(--muted); }
 .surface-detail-back { display: none; margin-bottom: 12px; }
 /* All cards closes the open task: the board goes back to its full-width
    card grid (and, under 760px, the list comes back at all). */
