@@ -190,6 +190,7 @@ settings and per-model work-kind summaries for the shared controls.
 | **Task** | One unit of work on the project board, with a brief, acceptance checks, prerequisites, attempts and evidence. New cards gather local references automatically when Automatic references is on; the configurable scout can use GPT-6 Luna on the fast tier to choose one verified starting file. |
 | **Idea** | A note in the feature-idea inbox; it becomes a task only when you or **Work through backlog** promote it. |
 | **Plan** | A structured route from an unclear idea to tasks: unknowns, decisions, a specification you approve, then tasks. |
+| **Recently deleted** | The list of tasks and ideas you deleted in this project, kept 30 days (at most 50, oldest dropped first). Each keeps its whole record and its place, so it comes back as it was, never over a card that is there again. |
 | **Session** | One coding-worker run recorded in the OpenCode store. Tasks map to sessions in **Overhead**. A session another one spawned (its `parentId`) is a **sub-agent session**: the tree and the Command view hang the newest three busy in the last six hours under their parent, count the rest as "+n sub-agents", and fly each home into its parent when it leaves; they are not counted as sessions. |
 | **Builder / coding worker** | The CLI that edits your files: `opencode` (preferred), `claude`, `codex`, `grok` or `agy`. |
 | **Agent roles** | The service loop's satellites: **watcher** (stale sessions), **machine** (CPU, memory, leases), **auditor** (findings), **keeper** (pruning), **thinker** (what next), **briefer** (summaries), **responder** (chat), **foreman** (hands out work), **compactor** (context), **overseer** (reviews the loop), **scout** (finds task context). Agents share work state and messages in the Agents work hub. |
@@ -687,6 +688,21 @@ settings and per-model work-kind summaries for the shared controls.
   A running task's **Stop** asks twice. A task a grouped plan holds offers
   **Open group** instead of status, rename or delete changes, which the host
   refuses until the plan releases it.
+- **Deleting a task or an idea can be undone.** Delete first keeps the whole
+  record (`scripts/board-trash.cjs`; `main.cjs`, "Board trash") in the project's
+  own `board-trash.json`, beside its board files: 30 days, at most 50 items,
+  oldest dropped first, with who deleted it and when. That copy is written
+  before the board write that removes the card (`mutateBoard`'s `beforeWrite`,
+  inside the board lock), so a crash between the two can leave the card in both
+  places and never in neither, and a copy that cannot be written stops the
+  delete. `tasks:undelete`, an ideas `restore` action and `board:trash` put one
+  back or list what can be. A restore returns the record under its own id at its
+  old place and never overwrites a card that is there again: it says so and keeps
+  the copy. `MEFI_STUDIO_NO_BOARD_TRASH=1` gives the old delete-for-good
+  behaviour back (the list is empty and nothing is read or written); what was
+  already kept stays in the file until it is lifted. Housekeeping never puts
+  anything here: only deletes you make do, and the compactor's clean-ups of
+  duplicate cards, which nobody deleted, are not among them.
 - **Search Studio** (`Ctrl K`) finds pages, tools, tasks and settings by
   familiar terms. **Settings › General** holds names and startup behavior;
   **Appearance** holds themes, motion, panel blur and canvas presentation.
