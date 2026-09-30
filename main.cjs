@@ -94,6 +94,9 @@ const requestSizing = require("./scripts/request-sizing.cjs");
 const newApp = require("./scripts/new-app.cjs");
 const executorResume = require("./scripts/executor-resume.cjs");
 const executorCore = require("./scripts/executor-core.cjs");
+// Codex workers over `codex app-server` (settings.codexHarness): a facade
+// shaped like the child spawnAttempt handles (scripts/codex-harness.cjs).
+const codexHarness = require("./scripts/codex-harness.cjs");
 const { createPlanningStore } = require("./scripts/planning.cjs");
 const { createPlanningService } = require("./scripts/planning-service.cjs");
 const projectWork = require("./scripts/project-work.cjs");
@@ -4551,7 +4554,7 @@ async function applyModelRouting(route, { role = "routine", taskType = role, wei
 
 // One builder attempt in the model ledger (source "worker"), keyed by its run
 // id so the verifier's verdict can settle it later.
-function recordWorkerAttempt(entry, route, { ok = false, durationMs = null, outcome = null, cancelled = false } = {}) {
+function recordWorkerAttempt(entry, route, { ok = false, durationMs = null, outcome = null, cancelled = false, tokenUsage = null } = {}) {
   if (SMOKE || CAPTURE || !entry?.id) return;
   const cli = ["grok", "claude", "codex", "antigravity"].includes(route?.cli) ? route.cli : "opencode";
   // A z.ai coding-plan run names its model "mefi-zai/<id>" and, on the
@@ -4576,7 +4579,7 @@ function recordWorkerAttempt(entry, route, { ok = false, durationMs = null, outc
     // error: the ledger's error rate (the judge's reliability evidence and
     // Model Lab's score) leaves it out.
     at: entry.startedAt, status: ok ? "ok" : cancelled ? "cancelled" : "error", errorKind: ok || cancelled ? null : "worker", elapsedMs: durationMs, runId: entry.id,
-    ...(outcome ? { outcome } : {}) }).catch(() => {});
+    ...(outcome ? { outcome } : {}), ...(tokenUsage ? { tokenUsage } : {}) }).catch(() => {});
 }
 
 // The verifier's verdict on an attempt, settled onto its ledger row.
@@ -5287,6 +5290,20 @@ function cliAccountReading(account, result) {
 function cliAccountPlanKey(account) {
   return account.main ? account.provider : `${account.provider}:${account.id}`;
 }
+// A Codex worker on the app-server route reports its plan windows as it
+// runs (account/rateLimits/updated): the same reading the probe takes, for
+// the login the run used. The plan entry is updated in place, because a
+// probe already in flight holds it.
+function codexRunReading(route, snapshot, observedAt) {
+  const account = route?.account ?? cliAccounts.mainAccount("codex");
+  if (!account || !snapshot || typeof snapshot !== "object") return;
+  const reading = { at: Date.now(), ...parsedLimits("Codex rate limits", () => parseCodexRateLimits({ rateLimits: snapshot }, { observedAt, source: "app-server" })) };
+  const key = cliAccountPlanKey(account);
+  const entry = cliPlanState.get(key) ?? { result: null, inFlight: null };
+  entry.result = reading;
+  cliPlanState.set(key, entry);
+  cliAccountReading(account, reading);
+}
 function cliAccountProbe(account) {
   const env = cliAccounts.accountEnv(account);
   const probe = account.provider === "claude" ? () => probeClaudeUsage(env) : () => probeCodexLimits(env);
@@ -5930,7 +5947,7 @@ async function executorRunEnv({ cliOverride = null } = {}) {
     }
     const login = await cliLoginRoute("codex", opencode);
     if (login.route) return login.route;
-    return { cli: "codex", env: login.env, account: login.account, logins: login.logins, modelArgs: "", via: `codex cli${login.tag}${buildModel.note ? ` · ${buildModel.note}` : ""}`, codex: true, model: buildModel.model, tier, opencode };
+    return { cli: "codex", env: login.env, account: login.account, logins: login.logins, modelArgs: "", via: `codex cli${login.tag}${buildModel.note ? ` · ${buildModel.note}` : ""}`, codex: true, model: buildModel.model, codexHarness: settings.codexHarness === "exec" ? "exec" : "app-server", tier, opencode };
   }
   if (chosenCli === "antigravity") {
     const buildModel = cliBuildModel("antigravity");
@@ -16755,7 +16772,9 @@ async function spawnNextJob(options) {
           spoke: entry.spoke === true, ageMs: attemptDurationMs }, { providerSaid, errorMessage, lastWords });
         // The route that actually ran: a CLI that fell back to OpenCode did no
         // work, so its verdict belongs to the fallback's model.
-        recordWorkerAttempt(entry, entry.ranRoute ?? runRoute, { ok, durationMs: attemptDurationMs, outcome, cancelled: userStop === true });
+        // A Codex app-server run reported its token use (codex-harness facade).
+        const tokenUsage = typeof codexHarness !== "undefined" ? codexHarness.ledgerTokenUsage(entry.child?.codex?.usage) : null;
+        recordWorkerAttempt(entry, entry.ranRoute ?? runRoute, { ok, durationMs: attemptDurationMs, outcome, cancelled: userStop === true, tokenUsage });
       }
     } catch (error) { logLine(`[autopilot] model record failed: ${String(error?.message ?? error).slice(0, 160)}`); }
     try { policyRecord("attempt-finish", executorCore.attemptFinishRecord({ run: entry, job, ok, code, sessionId, durationMs: attemptDurationMs, titleKey: workTitleKey, maxHandoffs: EXECUTOR_MAX_HANDOFFS })); } catch (error) { logLine(`[autopilot] attempt record failed: ${String(error?.message ?? error).slice(0, 160)}`); }
@@ -17091,13 +17110,17 @@ async function spawnNextJob(options) {
   // A line built for cmd.exe is handed over verbatim, and a grok or agy
   // installed as a batch shim is found on PATH (windowsShim) and run through
   // it. An MCP server the command line could not carry is named in the log.
-  const spawnAttempt = (route, cli) => {
+  // A Codex route runs over `codex app-server` unless the owner chose classic
+  // exec, or this run already fell back to exec after the app server could
+  // not start (entry.codexExecOnly).
+  const spawnAttempt = (route, cli, harness = route?.codexHarness) => {
     const invocation = executorCore.cliInvocation(route, cli, prompt, {
       modelArg: (value) => cliModelArg(value), agyModelArg: (value) => agyModelArg(value), desk: entry.toolConfigs ?? entry.deskTool ?? null,
       platform: process.platform, shim: (name) => typeof windowsShim === "function" ? windowsShim(name, process.env) : null, promptFile: entry.promptFile ?? null,
+      codexHarness: cli === "codex" && harness === "app-server" && !entry.codexExecOnly ? "app-server" : "exec",
     });
     if (invocation.dropped?.length) logLine(`[autopilot] ${cli ?? "opencode"} run of "${assistantClip(job.title, 60)}" goes without MCP server(s) ${invocation.dropped.join(", ")}: not safe to pass on its command line`);
-    const child = spawn(invocation.command, invocation.args, {
+    let child = spawn(invocation.command, invocation.args, {
       cwd: entry.worktree?.path || runRoot,
       env: { ...process.env, ...invocation.env },
       windowsHide: true,
@@ -17107,6 +17130,14 @@ async function spawnNextJob(options) {
     if (invocation.stdin !== null) {
       child.stdin.write(invocation.stdin);
       child.stdin.end();
+    }
+    // The app server speaks JSON-RPC; the facade hands the executor the same
+    // text lines, exit code and pid `codex exec` would, and reports the plan
+    // windows live so a full window sets this login aside at once.
+    if (invocation.harness === "codex-app-server" && typeof codexHarness !== "undefined") {
+      child = codexHarness.wrapChild(child, { ...invocation.plan, cwd: entry.worktree?.path || runRoot, log: logLine, killTree: typeof endCliTree === "function" ? endCliTree : null });
+      const facade = child;
+      facade.on("rateLimits", (snapshot) => codexRunReading(route, snapshot, facade.codex?.rateLimitsAt));
     }
     return child;
   };
@@ -17301,6 +17332,17 @@ async function spawnNextJob(options) {
       if (entry.child !== nextChild || entry.finished) return;
       logLine(`[autopilot] ${runLabel} failed: ${error.message}`);
       if (stopReason) return; // termination still owns the live process and its claim
+      // `codex app-server` never got going (an older or newer Codex, a refused
+      // handshake): the same attempt once more over `codex exec`, before any
+      // OpenCode fallback. The facade has already ended its server.
+      if (typeof codexHarness !== "undefined" && error?.code === codexHarness.START_FAILED && route?.cli === "codex" && !entry.codexExecOnly) {
+        entry.codexExecOnly = true;
+        entry.spoke = false;
+        entry.spokeOut = false;
+        pushAutopilotHistory("fallback", `codex app-server did not start — retried over codex exec: ${assistantClip(job.title, 40)}`);
+        try { attach(spawnAttempt(route, "codex", "exec"), label, route, allowFallback); return; }
+        catch (retryError) { logLine(`[autopilot] codex exec retry could not start: ${retryError.message}`); }
+      }
       if (allowFallback && fallbackToOpencode(`spawn failed: ${error.message}`)) return;
       entry.endKind = "spawn";
       finish(1, error.message).catch(() => {});

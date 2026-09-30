@@ -639,6 +639,7 @@
       const cli = configuration.executorCli || "opencode", tier = configuration.executorTier || "auto";
       const builder = card("Coding worker", "The tool that edits your project. OpenCode runs on your OpenCode plan, a z.ai key or free models; the others use your subscription login.", "setup-helper-card setup-helper-agent");
       builder.append(field("Tool", select(CLIS, cli, (value) => { void saveTeam((next) => { next.executorCli = value; next.executorModel = ""; }).then(() => rerenderSoon()); }, "Coding tool")));
+      if (cli === "codex") builder.append(field("Connection", select([["app-server", "App server · live usage, private tool keys"], ["exec", "Classic · codex exec"]], configuration.codexHarness === "exec" ? "exec" : "app-server", (value) => { void saveTeam((next) => { next.codexHarness = value; }); }, "Codex connection"), "The app server falls back to codex exec when it cannot start."));
       builder.append(field("Tier", select([["auto", "Auto · Studio picks per task"], ["free", "Free · free models only, one worker"], ["fast", "Fast · quick, cheaper models"], ["heavy", "Heavy · the strongest models"]], tier, (value) => { void saveTeam((next) => { next.executorTier = value; }).then(() => rerenderSoon()); }, "Coding tier")));
       const model = tier === "auto" ? configuration.executorModels?.[cli] ?? configuration.executorModel ?? "" : configuration.executorTierModels?.[cli]?.[tier] || "";
       const fallback = tier === "auto" ? "Tool default" : data.team.routing?.executorTierDefaults?.[cli]?.[tier] || "Tool default";

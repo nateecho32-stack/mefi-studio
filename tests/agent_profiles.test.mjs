@@ -59,6 +59,9 @@ test("stale saves and unsafe configuration leave the transaction untouched", () 
   assert.deepEqual(profiles.capabilities("zen", "gpt-6.1-sol"), profiles.capabilities("zen", "gpt-6-sol"));
   assert.equal(profiles.capabilities("zen", "gpt-6.1-sol").fast, true);
   assert.equal(profiles.validate({ agentSeats: { lead: { provider: "zen", model: "gpt-6.1-sol", effort: "max", fast: true } } }), null);
+  // How a Codex worker connects: the app server (default) or classic exec.
+  for (const codexHarness of ["app-server", "exec"]) assert.equal(profiles.validate({ codexHarness }), null);
+  assert.match(profiles.validate({ codexHarness: "sdk" }), /Codex connection/);
 });
 
 test("concurrent calls and interrupted continuations retain their admitted team", async () => {

@@ -6,7 +6,11 @@ import assert from "node:assert/strict";
 import vm from "node:vm";
 import path from "node:path";
 import { readFile } from "node:fs/promises";
+import { EventEmitter } from "node:events";
+import { createRequire } from "node:module";
 import { executorHost } from "./fixtures/host_executor.mjs";
+
+const codexHarness = createRequire(import.meta.url)("../scripts/codex-harness.cjs");
 
 const source = (await readFile(new URL("../main.cjs", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const section = (start, end) => {
@@ -57,6 +61,40 @@ test("a grok installed as npm's grok.cmd runs through cmd.exe, its brief in a pr
   assert.equal(h.starts[0].child.prompt, undefined, "grok reads no prompt on stdin");
   await h.finish("grok");
   assert.equal(h.runFiles().has(entry.promptFile), false, "the prompt file goes with the run");
+});
+
+// The Codex route over `codex app-server` (scripts/codex-harness.cjs): the
+// host wraps the child in the harness facade with the run's plan, writes no
+// prompt on stdin (the facade sends it as the turn), and a server that never
+// got going runs the same attempt once more over `codex exec`, on the same
+// claim, before any OpenCode fallback.
+test("a Codex route runs over codex app-server, and a server that cannot start retries the attempt over codex exec", async () => {
+  const h = executorHost({ tasks: [boardTask("cx")] });
+  vm.runInContext(filters, h.env);
+  h.env.executorRunEnv = async () => ({ via: "codex cli", cli: "codex", codex: true, model: "gpt-6.1-sol", codexHarness: "app-server", modelArgs: "", env: {}, opencode: opencodeFallback });
+  const wrapped = [];
+  h.env.codexHarness = { ...codexHarness, wrapChild: (child, plan) => {
+    const facade = Object.assign(new EventEmitter(), { pid: child.pid, stdout: child.stdout, stderr: child.stderr, stdin: child.stdin, codex: {} });
+    wrapped.push({ child, plan, facade });
+    return facade;
+  } };
+  const seen = recordSpawns(h);
+  assert.equal(await h.env.spawnNextJob(), "spawned");
+  assert.equal(seen.length, 1);
+  assert.match(seen[0].args.join(" "), /codex app-server/);
+  assert.equal(wrapped.length, 1, "the app-server child is wrapped");
+  assert.equal(wrapped[0].plan.model, "gpt-6.1-sol");
+  assert.match(wrapped[0].plan.prompt, /Build cx as its brief says\./);
+  assert.equal(wrapped[0].plan.approvalPolicy, "never");
+  assert.equal(h.starts[0].child.prompt, undefined, "the harness owns the server's stdin");
+  wrapped[0].facade.emit("error", Object.assign(new Error("codex app-server could not start: no answer to initialize"), { code: codexHarness.START_FAILED }));
+  assert.equal(seen.length, 2, "one retry");
+  assert.match(seen[1].args.join(" "), /codex exec --dangerously-bypass-approvals-and-sandbox/);
+  assert.match(h.starts[1].child.prompt, /Build cx as its brief says\./, "exec reads the brief on stdin");
+  assert.equal(wrapped.length, 1, "the retry is not wrapped");
+  assert.equal(h.autopilot.jobs[0].codexExecOnly, true);
+  assert.equal(h.autopilot.jobs[0].fallbackTried, undefined, "OpenCode is still the run's last resort");
+  await h.finish("cx");
 });
 
 test("a grok that is a native binary still spawns directly, with the same prompt file", async () => {

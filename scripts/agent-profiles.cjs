@@ -6,7 +6,7 @@ const addons = require("./agent-addons.cjs");
 const tools = require("./agent-tools.cjs");
 const habits = require("./habits.cjs");
 const runtime = new AsyncLocalStorage();
-const FIELDS = Object.freeze(["aiProvider", "aiRoleProviders", "aiModels", "aiModelsByProvider", "aiAutoProviders", "aiAutoFallback", "aiFallbackOpenCode", "aiSubscriptionFirst", "modelSelection", "executorCli", "executorModel", "executorModels", "executorTier", "executorTierModels", "agentSeats", "agentSubtasks", "agentSkills", "agentHabits", "agentTools", "agentBrain", "agentEfforts", "agentMode", "agentReporting"]);
+const FIELDS = Object.freeze(["aiProvider", "aiRoleProviders", "aiModels", "aiModelsByProvider", "aiAutoProviders", "aiAutoFallback", "aiFallbackOpenCode", "aiSubscriptionFirst", "modelSelection", "executorCli", "executorModel", "executorModels", "executorTier", "executorTierModels", "codexHarness", "agentSeats", "agentSubtasks", "agentSkills", "agentHabits", "agentTools", "agentBrain", "agentEfforts", "agentMode", "agentReporting"]);
 const PROVIDERS = Object.freeze(["auto", "zai", "opencode", "zen", "openrouter", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"]);
 const CLIS = Object.freeze(["opencode", "grok", "claude", "codex", "antigravity"]);
 const EFFORTS = Object.freeze(["minimal", "low", "medium", "high", "xhigh", "max"]);
@@ -38,6 +38,7 @@ function validate(configuration) {
   for (const field of Object.keys(configuration)) if (!FIELDS.includes(field)) return `Unknown team setting: ${field}`;
   if (configuration.aiProvider !== undefined && !PROVIDERS.includes(configuration.aiProvider)) return "Unknown assistant provider.";
   if (configuration.executorCli !== undefined && !CLIS.includes(configuration.executorCli)) return "Unknown builder CLI.";
+  if (configuration.codexHarness !== undefined && !["app-server", "exec"].includes(configuration.codexHarness)) return "Unknown Codex connection.";
   if (configuration.modelSelection !== undefined && !["fixed", "jev"].includes(configuration.modelSelection)) return "Choose fixed or automatic model selection.";
   if (configuration.executorTier !== undefined && !["auto", "free", "fast", "heavy"].includes(configuration.executorTier)) return "Unknown builder tier.";
   if (configuration.agentMode !== undefined && !["swarm", "cluster"].includes(configuration.agentMode)) return "Unknown coordination mode.";

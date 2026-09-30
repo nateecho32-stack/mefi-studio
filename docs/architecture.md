@@ -1356,7 +1356,9 @@ failed process stays an error and cannot produce briefing requests.
   or a quick exit with nothing on stdout that is not a usage limit). A CLI
   installed as an npm `.cmd` shim (Grok from the guided installer) runs
   through `cmd.exe`; Grok's brief goes in a prompt file. Codex can instead
-  run over `codex app-server` (`scripts/codex-harness.cjs`, off by default):
+  run over `codex app-server` (`scripts/codex-harness.cjs`, the default; Setup ›
+  Coding worker › Connection switches back to classic `codex exec`, and a server
+  that cannot start retries the attempt over exec):
   the same brief and sentinel lines, but the run's MCP servers travel over
   stdin (so none is dropped for carrying a credential), the owner's own
   Codex MCP servers, plugins and apps stay out of the run, and the run
