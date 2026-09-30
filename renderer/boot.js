@@ -76,7 +76,7 @@
       // The launch question hides the companion; a Tab stop that cannot take focus would end the cycle.
       const agent = window.MefiCompanionHub ? document.getElementById("boot-agent") : null;
       const drawn = agent && agent.getClientRects?.().length !== 0 ? agent : null;
-      const buttons = [drawn, ...(boot.phase === "error" ? [el.retry, el.continue].filter(Boolean) : boot.phase === "choose" ? chooserControls() : [])].filter(Boolean);
+      const buttons = [drawn, ...(boot.phase === "error" ? [el.retry, el.continue].filter(Boolean) : boot.phase === "choose" ? [...chooserControls(), ...paperControls()] : [])].filter(Boolean);
       if (!buttons.length) el.layer?.focus({ preventScroll: true });
       else {
         const index = buttons.indexOf(document.activeElement);
@@ -89,6 +89,12 @@
   function chooserControls() {
     const nodes = el.choose?.querySelectorAll?.("button:not([disabled]), input:not([disabled]), textarea:not([disabled])") ?? [];
     return Array.from(nodes).filter((node) => node.tabIndex !== -1 && !node.hidden && !node.closest?.("[hidden]"));
+  }
+  // Then the day's paper beside it (renderer/daily-paper.js), when it is up:
+  // its stories in reading order and its Refresh, always after the chooser.
+  function paperControls() {
+    try { return Array.from(window.MefiDailyPaper?.controls?.() ?? []); }
+    catch { return []; }
   }
 
   function blockOutside(event) {

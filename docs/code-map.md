@@ -184,6 +184,8 @@ worker's claim).
 | `assistant-push.cjs` | 63 | What one `eyes:assistant` push carries: once the page's bridge listens, state keys it already holds ride as `same` references by content, and `preload.cjs` puts its kept copies back. |
 | `performance-profiler.cjs` | 250 | Opt-in, in-memory host diagnostics. |
 | `music-recommendations.cjs` | 66 | Validates a mood request and parses a model's music suggestions. |
+| `daily-news.cjs` | 513 | The Studio Daily, pure: parses RSS, Atom, the Hacker News front page and GitHub release lists into items (headline, short plain summary, link), clusters one story across outlets, ranks the day's biggest, composes the edition, and checks an AI editor's reply (`applyEditor`: known ids only, no links, no new numbers, else the heuristic paper). |
+| `daily-news-host.cjs` | 250 | `createDailyNews`: fetches the ten wires in parallel (8 s and 1 MB each) once a local day, keeps `edition.json` under the news folder, marks yesterday's paper stale offline, runs the optional editor in the background and refreshes after 06:00 while Studio runs. With `enabled()` false it touches neither network nor disk. |
 
 ### The community link
 
@@ -257,6 +259,7 @@ imports. See [Unified Studio](unified-studio.md) for the interfaces and fixture 
 | `together.js` | 476 | `window.MefiTogether`: Listen together and the now-playing share, drawn into the Links panel (`MefiMusic.togetherHost`). It picks a room, follows its shared player (a file to the second, YouTube/Vimeo/SoundCloud through their postMessage APIs, Spotify by loading the same link) and sends the share only when the member turns it on. Talks to main only through `hub*` on the bridge. Bundled after `music.js`. |
 | `rooms.js` | 588 | `window.MefiRooms`: Friends › Rooms. Lists rooms with the one action each needs (open, ask to join, accept or decline an invite, cancel a request); has Requests and Invites tabs, making a room, and a room view with chat (text only, `<@id>` shown as @name), invite by member search, lock/unlock, close and leave. Everything goes through main's `hub:room` channel (`HUB_ROOM_METHODS`) plus `hubStatus`/`hubConnect`/`hubRooms`/`hubSubscribe`; the hub's refusal reasons read as plain sentences. `pending()` feeds the Friends badge. Bundled after `companion-friends.js`. |
 | `git-sync.js` / `git-sync.css` | 1,591 · 246 | `window.MefiGitSync`: the Git chip, its popover and the Save and push, Publish, Link and Sign in dialogs, drawn from the model `git-host.cjs` pushes on `git:state`. Mounted by `nav.js` (the section bar's tail) and `vibe.js` (the project cluster); bundled after `camera-tour.js`. |
+| `daily-paper.js` / `daily-paper.css` | 369 · 139 | `window.MefiDailyPaper`: the launch screen as The Studio Daily. `startup.js` calls `show()` before it draws the chooser; the paper fills `#paper-mast`, `#paper-news` and `#paper-note` around the untouched `.boot-card` from `newsEdition` / `onNewsEdition`, and `boot.js` puts its `controls()` after the chooser's in the Tab cycle. Also keeps Settings › General's Daily news switch (`settings.ui.dailyNews`). Bundled after `startup.js`. |
 | `pc-sync.js` | 439 | `window.MefiPcSync`: the Your PCs card that `companion-hub.js` mounts in Friends, and the count it badges the Friends bubble with. It shows this PC against GitHub and offers Sync this PC and, when both sides moved, Put my commits on top of GitHub's. Its wording comes from `scripts/sync.mjs` through `syncStatus`, `syncRun` and `onSyncEvent`. Its Set up this PC section (the `pcSetup*` bridge methods, `scripts/pc-setup.cjs`) checks nothing until opened. Bundled after `together.js`. Its Reach this PC from Discord section (`remote:*`) holds the switch, this PC's name, the alerts, quiet hours, the digest hour, the approval PIN and the last commands this PC answered. |
 | `pc-vault.js` | 468 | `window.MefiPcVault`: the two sharing sections in the Your PCs card. Share between my PCs (make or pair the vault, the pairing code on request, every PC's line, shelves with what Studio found, what the other PCs shared, the library, keys and setup behind the exact typed phrase) and Share with friends (preview then save a scrubbed `.mefishare`, or open one for review). Text only; key values never reach it. Bundled after `pc-sync.js`. |
 | `camera-tour.js` | | `window.MefiCameraTour`: Zen's branch tour through `idle.js.setDirector`, plus automatic Overview's bounded pan/scale lens. Uses painted layout anchors and the real canvas projection; the overview lens fits every branch without moving anchors. The tour's `velocity()` carries pan, zoom and tilt into the glide home. Bundled right after `idle.js`. |
@@ -284,7 +287,7 @@ Its bounds follow the visible viewport as the panel scrolls, keeping website
 controls inside the panel without reloading the page.
 The main preload exposes controls only to Studio; websites have no preload.
 
-Sixteen stylesheets are inlined, in this order, so a later one wins a tie
+Seventeen stylesheets are inlined, in this order, so a later one wins a tie
 with an earlier one:
 
 | File | Lines | Purpose |
@@ -297,8 +300,9 @@ with an earlier one:
 | `studio-ui.css` | 623 | Shared overflow, dropdown and glass recipes, after the page styles. |
 | `companion-hub.css` · `vibe.css` · `setup-helper.css` | 313 · 732 · 161 | The companion bubble and its menu, Vibe, and the setup helper. |
 | `git-sync.css` | 246 | The Git chip, its popover and dialogs. |
+| `daily-paper.css` | 139 | The launch screen's front page, only while the gate asks for a project with the paper on. |
 
-`npm run check` runs `check-css.mjs --unused` over all sixteen, and `--merge`
+`npm run check` runs `check-css.mjs --unused` over all seventeen, and `--merge`
 over `styles.css` while a merge is in progress (see
 [CONTRIBUTING.md](../CONTRIBUTING.md)).
 

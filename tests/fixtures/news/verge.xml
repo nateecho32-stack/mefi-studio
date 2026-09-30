@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?><feed
+	xmlns="http://www.w3.org/2005/Atom"
+	xmlns:thr="http://purl.org/syndication/thread/1.0"
+	xml:lang="en-US"
+	>
+	<title type="text">AI | The Verge</title>
+	<subtitle type="text">The Verge is about technology and how it makes us feel. Founded in 2011, we offer our audience everything from breaking news to reviews to award-winning features and investigations, on our site, in video, and in podcasts.</subtitle>
+
+	<updated>2026-09-30T00:26:57+00:00</updated>
+
+	<link rel="alternate" type="text/html" href="https://www.theverge.com/ai-artificial-intelligence" />
+	<id>https://www.theverge.com/rss/ai-artificial-intelligence/index.xml</id>
+	<link rel="self" type="application/atom+xml" href="https://www.theverge.com/rss/ai-artificial-intelligence/index.xml" />
+
+	<icon>https://platform.theverge.com/wp-content/uploads/sites/2/2025/01/verge-rss-large_80b47e.png?w=150&amp;h=150&amp;crop=1</icon>
+		<entry>
+			
+			<author>
+				<name>Hayden Field</name>
+			</author>
+			
+			<title type="html"><![CDATA[Sam Altman says OpenAI won’t go public until its models are safe]]></title>
+			<link rel="alternate" type="text/html" href="https://www.theverge.com/ai-artificial-intelligence/1002505/sam-altman-openai-ipo-devday-ai-safety" />
+			<id>https://www.theverge.com/?p=1002505</id>
+			<updated>2026-09-29T20:26:57-04:00</updated>
+			<published>2026-09-29T20:19:13-04:00</published>
+			<category scheme="https://www.theverge.com" term="AI" /><category scheme="https://www.theverge.com" term="OpenAI" /><category scheme="https://www.theverge.com" term="Report" />
+							<summary type="html"><![CDATA[For months, people have wondered when OpenAI will go public. CEO Sam Altman says it won't happen until the company can make better promises about model safety, with no firm timeline in sight. "We intend to continue with AI progress … but as the models have had this surge forward in capability, and we see [&#8230;]]]></summary>
+			
+					</entry>
+<entry>
+			
+			<author>
+				<name>Lauren Feiner</name>
+			</author>
+			
+			<title type="html"><![CDATA[Trump orders US government to call AI ‘Super Intelligence’]]></title>
+			<link rel="alternate" type="text/html" href="https://www.theverge.com/policy/1002468/trump-ai-superintelligence-executive-order-ai" />
+			<id>https://www.theverge.com/?p=1002468</id>
+			<updated>2026-09-29T19:34:43-04:00</updated>
+			<published>2026-09-29T18:25:45-04:00</published>
+			<category scheme="https://www.theverge.com" term="AI" /><category scheme="https://www.theverge.com" term="News" /><category scheme="https://www.theverge.com" term="Policy" /><category scheme="https://www.theverge.com" term="Politics" />
+							<summary type="html"><![CDATA[The US executive branch is no longer acknowledging the existence of "artificial intelligence." Going forward, official policy websites, policy documents, and press releases will refer only to "Super Intelligence," thanks to a new executive order signed by President Donald Trump. "The word super is the best word of all, and it's the simplest," Trump said [&#8230;]]]></summary>
+			
+					</entry>
+<entry>
+			
+			<author>
+				<name>Jay Peters</name>
+			</author>
+			
+			<title type="html"><![CDATA[Elon Musk&#8217;s AI-powered Grokipedia is updating again]]></title>
+			<link rel="alternate" type="text/html" href="https://www.theverge.com/tech/1002448/elon-musk-grokipedia-ai-updating-again" />
+			<id>https://www.theverge.com/?p=1002448</id>
+			<updated>2026-09-29T17:49:09-04:00</updated>
+			<published>2026-09-29T17:49:09-04:00</published>
+			<category scheme="https://www.theverge.com" term="AI" /><category scheme="https://www.theverge.com" term="Elon Musk" /><category scheme="https://www.theverge.com" term="News" /><category scheme="https://www.theverge.com" term="Tech" />
+							<summary type="html"><![CDATA[Grokipedia, the AI-powered online encyclopedia from SpaceXAI, appears to be updating articles once again after a months-long pause. In August, Lawfare reported that articles on Grokipedia hadn't reviewed edits since April, but the platform's live updates site is now showing various recent changes to pages - though as I write this, many are just a [&#8230;]]]></summary>
+			
+					</entry>
+<entry>
+			
+			<author>
+				<name>Stevie Bonifield</name>
+			</author>
+			
+			<title type="html"><![CDATA[AI researchers put out videos saying superintelligence is ‘exactly as dangerous as it sounds’]]></title>
+			<link rel="alternate" type="text/html" href="https://www.theverge.com/ai-artificial-intelligence/1002238/openai-google-anthropic-ai-researchers-safety-interviews" />
+			<id>https://www.theverge.com/?p=1002238</id>
+			<updated>2026-09-29T13:54:51-04:00</updated>
+			<published>2026-09-29T13:35:03-04:00</published>
+			<category scheme="https://www.theverge.com" term="AI" /><category scheme="https://www.theverge.com" term="Anthropic" /><category scheme="https://www.theverge.com" term="Google" /><category scheme="https://www.theverge.com" term="News" /><category scheme="https://www.theverge.com" term="OpenAI" /><category scheme="https://www.theverge.com" term="Tech" />
+							<summary type="html"><![CDATA["The chance of human extinction is about a coin flip, in my view," Geoffrey Irving, a former OpenAI and Google DeepMind employee, said in a new interview. It's one of a dozen interviews with AI researchers, including current and former employees at OpenAI, Google, and Anthropic. Palisade Research, which says it's a nonprofit studying AIs' [&#8230;]]]></summary>
+			
+					</entry>
+<entry>
+			
+			<author>
+				<name>Emma Roth</name>
+			</author>
+			
+			<title type="html"><![CDATA[OpenAI launches Dots, its Muse competitor]]></title>
+			<link rel="alternate" type="text/html" href="https://www.theverge.com/ai-artificial-intelligence/1002033/openai-dots-launch-muse-competitor" />
+			<id>https://www.theverge.com/?p=1002033</id>
+			<updated>2026-09-29T16:55:06-04:00</updated>
+			<published>2026-09-29T13:15:00-04:00</published>
+			<category scheme="https://www.theverge.com" term="AI" /><category scheme="https://www.theverge.com" term="Apps" /><category scheme="https://www.theverge.com" term="News" /><category scheme="https://www.theverge.com" term="OpenAI" /><category scheme="https://www.theverge.com" term="Tech" />
+							<summary type="html"><![CDATA[OpenAI is responding to Meta's buzzy Muse AI with agentic helpers of its own: Dots. During its DevDay keynote on Tuesday, OpenAI announced that Dots will serve as always-on AI assistants that can "do nearly anything" across connected apps in the background while learning your preferences over time. The company's capable GPT-6 Astra model powers [&#8230;]]]></summary>
+			
+					</entry>
+</feed>

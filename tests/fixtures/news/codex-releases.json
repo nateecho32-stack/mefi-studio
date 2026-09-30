@@ -1,0 +1,44 @@
+[
+ {
+  "url": "https://api.github.com/repos/openai/codex/releases/399667754",
+  "html_url": "https://github.com/openai/codex/releases/tag/rust-v0.161.0-alpha.3",
+  "id": 399667754,
+  "tag_name": "rust-v0.161.0-alpha.3",
+  "target_commitish": "main",
+  "name": "0.161.0-alpha.3",
+  "draft": false,
+  "prerelease": true,
+  "created_at": "2026-09-30T01:29:21Z",
+  "published_at": "2026-09-30T02:24:58Z",
+  "assets": [],
+  "body": "Release 0.161.0-alpha.3\n\n"
+ },
+ {
+  "url": "https://api.github.com/repos/openai/codex/releases/399637447",
+  "html_url": "https://github.com/openai/codex/releases/tag/rust-v0.160.0-alpha.6.1",
+  "id": 399637447,
+  "tag_name": "rust-v0.160.0-alpha.6.1",
+  "target_commitish": "main",
+  "name": "0.160.0-alpha.6.1",
+  "draft": false,
+  "prerelease": true,
+  "created_at": "2026-09-30T00:07:20Z",
+  "published_at": "2026-09-30T01:09:54Z",
+  "assets": [],
+  "body": "Release 0.160.0-alpha.6.1\n\n"
+ },
+ {
+  "url": "https://api.github.com/repos/openai/codex/releases/399607589",
+  "html_url": "https://github.com/openai/codex/releases/tag/rust-v0.159.2",
+  "id": 399607589,
+  "tag_name": "rust-v0.159.2",
+  "target_commitish": "main",
+  "name": "0.159.2",
+  "draft": false,
+  "prerelease": false,
+  "created_at": "2026-09-29T22:57:05Z",
+  "published_at": "2026-09-29T23:57:16Z",
+  "assets": [],
+  "body": "## Bug Fixes\n\n- Suppressed console windows flashing on Windows when Codex launches background processes and sandboxed commands. (#49385)\n\n## Changelog\n\nFull Changelog: https://github.com/openai/codex/compare/rust-v0.159.1...rust-v0.159.2\n\n- #49385 [0.159] Backport Windows console suppression for 0.159.2 @andrewgu-oai\n\n\n"
+ }
+]

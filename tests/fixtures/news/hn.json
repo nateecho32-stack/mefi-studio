@@ -1,0 +1,262 @@
+{
+ "hits": [
+  {
+   "created_at": "2026-09-29T17:06:45Z",
+   "title": "GPT 6.1 Sol: Near-Astra intelligence for a fifth of the price",
+   "url": "https://openai.com/index/introducing-gpt-6-1-sol/",
+   "author": "crorella",
+   "points": 824,
+   "story_text": null,
+   "num_comments": 753,
+   "story_id": 49896586,
+   "created_at_i": 1790701605,
+   "_tags": [
+    "story",
+    "author_crorella",
+    "story_49896586",
+    "front_page"
+   ],
+   "objectID": "49896586"
+  },
+  {
+   "created_at": "2026-09-29T11:14:45Z",
+   "title": "Everybody’s home. No one’s coming over",
+   "url": "https://www.derekthompson.org/p/the-death-of-the-american-host",
+   "author": "barry-cotter",
+   "points": 759,
+   "story_text": null,
+   "num_comments": 683,
+   "story_id": 49891295,
+   "created_at_i": 1790680485,
+   "_tags": [
+    "story",
+    "author_barry-cotter",
+    "story_49891295",
+    "front_page"
+   ],
+   "objectID": "49891295"
+  },
+  {
+   "created_at": "2026-09-29T17:07:57Z",
+   "title": "Dots: Always-on agents",
+   "url": "https://openai.com/index/introducing-dots/",
+   "author": "alvis",
+   "points": 479,
+   "story_text": null,
+   "num_comments": 360,
+   "story_id": 49896604,
+   "created_at_i": 1790701677,
+   "_tags": [
+    "story",
+    "author_alvis",
+    "story_49896604",
+    "front_page"
+   ],
+   "objectID": "49896604"
+  },
+  {
+   "created_at": "2026-09-29T12:43:29Z",
+   "title": "How Delhi cut electricity loss from 50 to 5 percent",
+   "url": "https://spectrum.ieee.org/delhi-electricity-loss",
+   "author": "rbanffy",
+   "points": 454,
+   "story_text": null,
+   "num_comments": 266,
+   "story_id": 49892245,
+   "created_at_i": 1790685809,
+   "_tags": [
+    "story",
+    "author_rbanffy",
+    "story_49892245",
+    "front_page"
+   ],
+   "objectID": "49892245"
+  },
+  {
+   "created_at": "2026-09-29T14:04:57Z",
+   "title": "America.gov",
+   "url": "https://america.gov/",
+   "author": "plesiv",
+   "points": 417,
+   "story_text": null,
+   "num_comments": 344,
+   "story_id": 49893509,
+   "created_at_i": 1790690697,
+   "_tags": [
+    "story",
+    "author_plesiv",
+    "story_49893509",
+    "front_page"
+   ],
+   "objectID": "49893509"
+  },
+  {
+   "created_at": "2026-09-29T22:36:14Z",
+   "title": "Livenerf: Has Opus 5.5 been nerfed yet?",
+   "url": "https://github.com/ninjahawk/livenerf",
+   "author": "bryan0",
+   "points": 331,
+   "story_text": null,
+   "num_comments": 143,
+   "story_id": 49901736,
+   "created_at_i": 1790721374,
+   "_tags": [
+    "story",
+    "author_bryan0",
+    "story_49901736",
+    "front_page"
+   ],
+   "objectID": "49901736"
+  },
+  {
+   "created_at": "2026-09-28T16:18:57Z",
+   "title": "Phyllotaxis: An audio-reactive LED display",
+   "url": "https://jagi.studio/posts/phyllotaxis/",
+   "author": "evakhoury",
+   "points": 267,
+   "story_text": null,
+   "num_comments": 45,
+   "story_id": 49880411,
+   "created_at_i": 1790612337,
+   "_tags": [
+    "story",
+    "author_evakhoury",
+    "story_49880411",
+    "front_page"
+   ],
+   "objectID": "49880411"
+  },
+  {
+   "created_at": "2026-09-29T17:13:38Z",
+   "title": "Tcl/Tk 9.1",
+   "url": "https://www.tcl-lang.org/software/tcltk/9.1.html",
+   "author": "dmux",
+   "points": 252,
+   "story_text": null,
+   "num_comments": 91,
+   "story_id": 49896712,
+   "created_at_i": 1790702018,
+   "_tags": [
+    "story",
+    "author_dmux",
+    "story_49896712",
+    "front_page"
+   ],
+   "objectID": "49896712"
+  },
+  {
+   "created_at": "2026-09-29T15:44:41Z",
+   "title": "PS5 Relapse Exploit",
+   "url": "https://github.com/ntfargo/Relapse-Exploit",
+   "author": "therepanic",
+   "points": 251,
+   "story_text": null,
+   "num_comments": 135,
+   "story_id": 49895304,
+   "created_at_i": 1790696681,
+   "_tags": [
+    "story",
+    "author_therepanic",
+    "story_49895304",
+    "front_page"
+   ],
+   "objectID": "49895304"
+  },
+  {
+   "created_at": "2026-09-29T11:13:54Z",
+   "title": "Jeeves. Reasoning improves Jev-like decision models",
+   "url": "https://github.com/PostHog/jeeves",
+   "author": "nicowaltz",
+   "points": 232,
+   "story_text": null,
+   "num_comments": 89,
+   "story_id": 49891290,
+   "created_at_i": 1790680434,
+   "_tags": [
+    "story",
+    "author_nicowaltz",
+    "story_49891290",
+    "front_page"
+   ],
+   "objectID": "49891290"
+  },
+  {
+   "created_at": "2026-09-28T14:46:07Z",
+   "title": "A Staff Engineer's Guide to Inventing Work",
+   "url": "https://sujithjay.com/inventing-work",
+   "author": "amortize",
+   "points": 207,
+   "story_text": null,
+   "num_comments": 44,
+   "story_id": 49878857,
+   "created_at_i": 1790606767,
+   "_tags": [
+    "story",
+    "author_amortize",
+    "story_49878857",
+    "front_page"
+   ],
+   "objectID": "49878857"
+  },
+  {
+   "created_at": "2026-09-29T19:30:17Z",
+   "title": "U.S. postal inspectors shut down website selling counterfeit postage labels",
+   "url": "https://postalemployeenetwork.com/news/2026/09/26/u-s-postal-inspectors-shut-down-website-selling-millions-of-counterfeit-postage-labels/",
+   "author": "ilamont",
+   "points": 187,
+   "story_text": null,
+   "num_comments": 112,
+   "story_id": 49899090,
+   "created_at_i": 1790710217,
+   "_tags": [
+    "story",
+    "author_ilamont",
+    "story_49899090",
+    "front_page"
+   ],
+   "objectID": "49899090"
+  },
+  {
+   "created_at": "2026-09-29T13:44:43Z",
+   "title": "Ask HN: What are you reading?",
+   "author": "dan-bailey",
+   "points": 170,
+   "story_text": "I&#x27;m plowing through the Dungeon Crawler Carl series, which is not particularly challenging as sci-fi&#x2F;LitRPG goes, but entertaining enough.  I&#x27;m also wrapping up Doctorow&#x27;s _Enshittification_, and I&#x27;m looking for something a little meaty to keep the brain working...",
+   "num_comments": 417,
+   "story_id": 49893157,
+   "created_at_i": 1790689483,
+   "_tags": [
+    "story",
+    "author_dan-bailey",
+    "story_49893157",
+    "ask_hn",
+    "front_page"
+   ],
+   "objectID": "49893157"
+  },
+  {
+   "created_at": "2026-09-29T19:08:01Z",
+   "title": "Show HN: Real-time Solar System with 526k asteroids and all tracked satellites",
+   "url": "https://space.bl2.net/",
+   "author": "wanick",
+   "points": 148,
+   "story_text": null,
+   "num_comments": 35,
+   "story_id": 49898778,
+   "created_at_i": 1790708881,
+   "_tags": [
+    "story",
+    "author_wanick",
+    "story_49898778",
+    "show_hn",
+    "front_page"
+   ],
+   "objectID": "49898778"
+  }
+ ],
+ "nbHits": 14,
+ "page": 0,
+ "nbPages": 1,
+ "hitsPerPage": 14,
+ "params": "tags=front_page&hitsPerPage=30&advancedSyntax=true&analyticsTags=backend"
+}

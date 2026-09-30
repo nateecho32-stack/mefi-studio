@@ -10314,11 +10314,154 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
   :is(.gs-pop, .gs-sheet) :is(button, a.gs-link, .gs-input, .gs-ack) { min-height: 44px; }
   :is(.gs-pop, .gs-sheet) button.gs-icon { min-width: 44px; }
 }
+
+/* The Studio Daily (renderer/daily-paper.js): the launch screen as a morning
+   front page. Only while the boot gate asks which project to open
+   (#boot-layer[data-phase="choose"]) and the paper is on ([data-paper="on"]):
+   a masthead across the top, the news in the left two thirds, and the
+   project chooser (.boot-card, drawn by startup.js) as the right-hand column.
+   Below 1100px it is one column with the chooser first. The card keeps its
+   place whatever the news does: the grid fixes the columns, the masthead has
+   a fixed shape, and only the news column scrolls. Theme tokens only, so the
+   light tone reads as well as the dark. */
+#boot-layer { --paper-serif: "Iowan Old Style", "Charter", "Georgia", serif; }
+#paper-mast, #paper-note, #paper-news, .boot-paper-kicker { display: none; }
+#boot-layer[data-phase="choose"][data-paper="on"] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(372px, 32vw, 520px);
+  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-areas: "mast mast" "news card" "news note";
+  place-items: start stretch;
+  column-gap: clamp(24px, 2.6vw, 48px);
+  padding: clamp(16px, 2.6vh, 32px) max(clamp(20px, 3.2vw, 64px), calc((100vw - 1760px) / 2)) clamp(16px, 2.6vh, 32px);
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% -20%, var(--tint-gold-1), transparent 60%), var(--bg-deep);
+}
+#boot-layer[data-phase="choose"][data-paper="on"] > #paper-mast { display: grid; grid-area: mast; align-self: stretch; }
+#boot-layer[data-phase="choose"][data-paper="on"] > #paper-news { display: block; grid-area: news; align-self: stretch; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; scrollbar-width: thin; padding-right: clamp(20px, 2.2vw, 40px); border-right: 1px solid var(--line); }
+/* The card takes its column at once: companion-hub.css animates its width
+   between the loading and choose sizes, which here would read as the chooser
+   stretching after it appeared. */
+#boot-layer[data-phase="choose"][data-paper="on"] > .boot-card { grid-area: card; width: 100%; max-height: calc(100vh - 150px); overflow-y: auto; scrollbar-width: none; align-self: start; border-color: var(--line); background: color-mix(in srgb, var(--panel-solid) 88%, transparent); box-shadow: none; transition-property: transform; }
+#boot-layer[data-phase="choose"][data-paper="on"] > #paper-note { display: block; grid-area: note; align-self: end; margin: 16px 0 0; padding-top: 10px; border-top: 1px solid var(--line); font: 12px/1.55 var(--font-ui); color: var(--muted); text-wrap: pretty; }
+#boot-layer[data-phase="choose"][data-paper="on"] .boot-paper-kicker { display: block; margin: 0; padding: 22px 24px 0; }
+#boot-layer[data-phase="choose"][data-paper="on"] .boot-title { padding-top: 6px; font: 700 26px/1.15 var(--paper-serif); letter-spacing: -0.01em; }
+#boot-layer[data-phase="choose"][data-paper="on"] .boot-projects { max-height: clamp(150px, calc(100vh - 470px), 354px); }
+
+/* ---- masthead ---- */
+#paper-mast { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: end; column-gap: 24px; margin-bottom: clamp(14px, 2.4vh, 26px); padding: 0 0 12px; border-bottom: 3px double var(--line-strong); }
+.paper-ear { display: grid; gap: 5px; min-width: 0; font: 12.5px/1.35 var(--font-ui); color: var(--muted); }
+.paper-ear p { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.paper-ear-end { justify-items: end; text-align: right; }
+.paper-date { color: var(--ivory); font-weight: 600; }
+.paper-issue { font-variant-numeric: tabular-nums; }
+.paper-status[data-tone="stale"] { color: var(--warn); }
+.paper-plate { display: grid; justify-items: center; gap: 6px; text-align: center; }
+.paper-nameplate { margin: 0; font: 700 clamp(32px, 3.3vw, 58px)/1 var(--paper-serif); letter-spacing: -0.015em; color: var(--ivory); white-space: nowrap; }
+.paper-motto { margin: 0; font: 600 10.5px/1.2 var(--font-ui); letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.paper-refresh { gap: 6px; min-height: 28px; padding: 3px 10px; border-color: var(--line); background: transparent; color: var(--muted); font: 12px/1.2 var(--font-ui); }
+.paper-refresh:hover { border-color: var(--line-strong); background: var(--tint-gold-1); color: var(--ivory); }
+.paper-refresh[aria-disabled="true"] { cursor: default; opacity: 0.7; }
+.paper-refresh[aria-busy="true"] .paper-glyph { animation: boot-spin 1s linear infinite; }
+
+/* ---- news: lead, the three below it, in brief and the wire ---- */
+.paper-kicker { margin: 0 0 8px; font: 650 11px/1.2 var(--font-ui); letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); }
+.paper-link { color: inherit; text-decoration: none; border-radius: 2px; }
+.paper-link:hover { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 0.18em; text-decoration-color: color-mix(in srgb, currentColor 45%, transparent); }
+.paper-link:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; text-decoration: none; }
+.paper-lead { padding-bottom: clamp(14px, 2.2vh, 22px); border-bottom: 1px solid var(--line); }
+.paper-lead-title { margin: 0; max-width: 30ch; font: 700 clamp(30px, 2.9vw, 52px)/1.06 var(--paper-serif); letter-spacing: -0.015em; color: var(--ivory); text-wrap: balance; }
+.paper-dek { margin: 12px 0 0; max-width: 68ch; font: 400 clamp(15px, 1.05vw, 18px)/1.5 var(--paper-serif); color: var(--muted); text-wrap: pretty; }
+.paper-dek-small { margin-top: 8px; font-size: 14.5px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.paper-byline { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin: 10px 0 0; font: 12px/1.4 var(--font-ui); color: var(--muted); }
+.paper-also { display: inline-flex; flex-wrap: wrap; gap: 4px 10px; }
+.paper-also-label { color: var(--dim); }
+.paper-also-link { color: var(--ivory); text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 0.2em; }
+.paper-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: clamp(14px, 2vh, 20px) 0; border-bottom: 1px solid var(--line); }
+.paper-story { min-width: 0; padding: 0 clamp(14px, 1.3vw, 22px); }
+.paper-story:first-child { padding-left: 0; }
+.paper-story:last-child { padding-right: 0; }
+.paper-story + .paper-story { border-left: 1px solid var(--line); }
+.paper-story-title { margin: 0; font: 650 clamp(17px, 1.25vw, 21px)/1.25 var(--paper-serif); color: var(--ivory); text-wrap: balance; }
+.paper-story .paper-byline { margin-top: 8px; }
+.paper-lower { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); padding-top: clamp(14px, 2vh, 20px); }
+.paper-briefs { min-width: 0; padding-right: clamp(14px, 1.3vw, 22px); }
+.paper-wire { min-width: 0; padding-left: clamp(14px, 1.3vw, 22px); border-left: 1px solid var(--line); }
+.paper-briefs:only-child, .paper-wire:only-child { grid-column: 1 / -1; max-width: 760px; padding: 0; border: 0; }
+.paper-section-title { margin: 0 0 4px; padding-bottom: 7px; border-bottom: 1px solid var(--line-strong); font: 650 11px/1.2 var(--font-ui); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ivory); }
+.paper-brief-list, .paper-wire-list { list-style: none; margin: 0; padding: 0; }
+.paper-brief { display: flex; align-items: baseline; gap: 12px; min-width: 0; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.paper-brief-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 15px/1.4 var(--paper-serif); color: var(--ivory); }
+.paper-brief-meta { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 11.5px/1.4 var(--font-ui); color: var(--muted); }
+.paper-wire-item { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 10px; align-items: start; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.paper-wire-tag { justify-self: start; margin-top: 2px; padding: 2px 6px; border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent); border-radius: var(--r-xs); font: 650 9.5px/1.3 var(--font-ui); letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold); white-space: nowrap; }
+.paper-wire-item[data-kind="studio"] .paper-wire-tag { border-color: var(--line-strong); color: var(--ivory); }
+.paper-wire-body { display: grid; gap: 2px; min-width: 0; }
+.paper-wire-title { font: 600 13.5px/1.35 var(--font-ui); color: var(--ivory); }
+.paper-wire-dek { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font: 12.5px/1.4 var(--font-ui); color: var(--muted); }
+.paper-wire-meta { font: 11.5px/1.4 var(--font-ui); color: var(--muted); }
+.paper-wire-empty { margin: 10px 0 0; font: 13px/1.5 var(--font-ui); color: var(--muted); }
+.paper-waiting .paper-lead-title { max-width: 22ch; }
+
+/* ---- loading ---- */
+.paper-skeleton { display: grid; gap: clamp(16px, 2.4vh, 24px); }
+.paper-skel { display: block; height: 12px; border-radius: 3px; background: color-mix(in srgb, var(--ivory) 9%, transparent); animation: boot-pulse 1.4s ease-in-out infinite; }
+.paper-skel-lead, .paper-skel-column { display: grid; gap: 10px; align-content: start; }
+.paper-skel-lead { padding-bottom: 22px; border-bottom: 1px solid var(--line); }
+.paper-skel-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; padding-bottom: 22px; border-bottom: 1px solid var(--line); }
+.paper-skel-lower { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); border-bottom: 0; }
+.paper-skel-kicker { width: 72px; height: 9px; background: color-mix(in srgb, var(--gold) 28%, transparent); }
+.paper-skel-head { width: 82%; height: clamp(26px, 2.6vw, 44px); }
+.paper-skel-title { width: 92%; height: 16px; }
+.paper-skel-short { width: 54%; }
+.paper-enter { animation: paper-in var(--motion-slow, 280ms) var(--ease-out, ease-out) both; }
+@keyframes paper-in { from { opacity: 0; } to { opacity: 1; } }
+body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html[data-motion="off"] :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph) { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph) { animation: none; }
+}
+
+/* ---- smaller windows ---- */
+/* Below 1600px the brief column is narrow: a headline wraps (two lines at
+   most) with its source under it, and the news column scrolls on its own. */
+@media (max-width: 1599px) {
+  .paper-brief { display: grid; gap: 2px; }
+  .paper-brief-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: normal; }
+  .paper-brief-meta { max-width: none; }
+}
+/* Short windows keep all four project rows: a smaller masthead, no colophon. */
+@media (max-height: 800px) {
+  #boot-layer[data-phase="choose"][data-paper="on"] .paper-nameplate { font-size: clamp(28px, 2.8vw, 44px); }
+  #boot-layer[data-phase="choose"][data-paper="on"] .paper-lead-title { font-size: clamp(26px, 2.5vw, 40px); }
+  #boot-layer[data-phase="choose"][data-paper="on"] .boot-paper-kicker { padding-top: 18px; }
+  #boot-layer[data-phase="choose"][data-paper="on"] .boot-projects { max-height: clamp(150px, calc(100vh - 400px), 354px); }
+  #boot-layer[data-phase="choose"][data-paper="on"] > #paper-note { display: none; }
+}
+@media (max-width: 1099px) {
+  #boot-layer[data-phase="choose"][data-paper="on"] { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto auto; grid-template-areas: "card" "note" "mast" "news"; overflow-y: auto; }
+  #boot-layer[data-phase="choose"][data-paper="on"] > .boot-card { justify-self: center; width: min(100%, 560px); max-height: none; overflow: visible; }
+  #boot-layer[data-phase="choose"][data-paper="on"] > #paper-note { justify-self: center; width: min(100%, 552px); }
+  #boot-layer[data-phase="choose"][data-paper="on"] > #paper-mast { margin-top: 36px; }
+  #boot-layer[data-phase="choose"][data-paper="on"] > #paper-news { overflow: visible; padding-right: 0; border-right: 0; }
+  .paper-row, .paper-lower, .paper-skel-row, .paper-skel-lower { grid-template-columns: minmax(0, 1fr); }
+  .paper-story, .paper-story:first-child, .paper-story:last-child { padding: 0; }
+  .paper-story + .paper-story { margin-top: 14px; padding-top: 14px; border-left: 0; border-top: 1px solid var(--line); }
+  .paper-briefs { padding-right: 0; }
+  .paper-wire { margin-top: 18px; padding-left: 0; border-left: 0; }
+}
+@media (max-width: 720px) {
+  #paper-mast { grid-template-columns: minmax(0, 1fr); row-gap: 10px; justify-items: center; }
+  .paper-ear, .paper-ear-end { justify-items: center; text-align: center; }
+  .paper-plate { order: -1; }
+}
 </style>
 <div id="boot-layer" role="dialog" aria-modal="true" aria-labelledby="boot-title" aria-describedby="boot-detail" tabindex="-1">
+  <!-- The Studio Daily (renderer/daily-paper.js): the launch question as a front page; the card below stays the chooser. -->
+  <header id="paper-mast" hidden></header>
   <section class="boot-card">
     <div class="boot-mark" aria-hidden="true"><span class="boot-spinner"></span><span class="boot-monogram">M<span>+</span></span></div>
     <p class="eyebrow">Mefi's Studio AI+</p>
+    <p class="paper-kicker boot-paper-kicker" aria-hidden="true">Your projects</p>
     <h1 id="boot-title" class="boot-title">Opening your studio</h1>
     <p id="boot-detail" class="boot-detail" role="status" aria-live="polite" aria-atomic="true">Preparing your workspace before you begin.</p>
     <div id="boot-progress-heading" class="boot-progress-heading"><span>Getting ready</span><span id="boot-count" class="boot-count">0%</span></div>
@@ -10350,6 +10493,8 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
       <button id="boot-continue" class="ghost" type="button">Open with available data</button>
     </div>
   </section>
+  <p id="paper-note" hidden></p>
+  <section id="paper-news" aria-labelledby="paper-nameplate" hidden></section>
 </div>
 <svg id="nav-glyphs" class="glyph-sprite" aria-hidden="true" focusable="false" width="0" height="0">
   <symbol id="g-style" viewBox="0 0 16 16"><path d="M8 2.2c3.3 0 5.8 2.3 5.8 5.1 0 1.7-1.3 2.6-2.6 2.6h-1c-.8 0-1.4.6-1.4 1.3 0 .3.1.6.3.9.2.3.3.6.3.9 0 .5-.4.8-1.1.8-3.3 0-6.1-2.6-6.1-5.9S4.7 2.2 8 2.2Z"/><circle cx="5.9" cy="6" r=".9" fill="currentColor" stroke="none"/><circle cx="9.1" cy="5.2" r=".9" fill="currentColor" stroke="none"/><circle cx="11.4" cy="7.2" r=".9" fill="currentColor" stroke="none"/></symbol>
@@ -10930,6 +11075,10 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
           <p class="muted" id="idle-home-hint">When disabled, Studio opens Command view after the project chooser.</p>
           <!-- settings.ui.launchAgents (main.cjs launchAgentsInfo); the launch screen's default button follows it. -->
           <label class="field"><span class="field-label">When Studio opens</span><select id="launch-agents" aria-describedby="launch-agents-hint"><option value="resume">Resume what I had</option><option value="start">Start agents</option><option value="off">Keep agents off</option></select><span class="field-hint" id="launch-agents-hint">Resume starts agents on a project where they were running when you closed Studio. The launch screen still offers both choices.</span></label>
+          <!-- settings.ui.dailyNews (main.cjs news:edition, startup:state news); renderer/daily-paper.js keeps it. -->
+          <div class="settings-you-switches" id="launch-daily-news-row">
+            <label class="switch" title="On: the launch screen is a front page with the day's biggest AI and developer-tool news beside your projects, fetched once a day. Off: only the project chooser, and Studio fetches no news."><input type="checkbox" id="launch-daily-news" checked><span class="track"></span><span>Daily news on the launch screen</span></label>
+          </div>
           <!-- settings.ui.openAtLogin (main.cjs "Start with Windows"); Windows holds the real switch. -->
           <div class="settings-you-switches" id="open-at-login-row" hidden>
             <label class="switch" title="Studio opens in the tray when you sign in to Windows, on the project you had open."><input type="checkbox" id="open-at-login"><span class="track"></span><span>Start with Windows</span></label>
@@ -58664,7 +58813,7 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
       // The launch question hides the companion; a Tab stop that cannot take focus would end the cycle.
       const agent = window.MefiCompanionHub ? document.getElementById("boot-agent") : null;
       const drawn = agent && agent.getClientRects?.().length !== 0 ? agent : null;
-      const buttons = [drawn, ...(boot.phase === "error" ? [el.retry, el.continue].filter(Boolean) : boot.phase === "choose" ? chooserControls() : [])].filter(Boolean);
+      const buttons = [drawn, ...(boot.phase === "error" ? [el.retry, el.continue].filter(Boolean) : boot.phase === "choose" ? [...chooserControls(), ...paperControls()] : [])].filter(Boolean);
       if (!buttons.length) el.layer?.focus({ preventScroll: true });
       else {
         const index = buttons.indexOf(document.activeElement);
@@ -58677,6 +58826,12 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
   function chooserControls() {
     const nodes = el.choose?.querySelectorAll?.("button:not([disabled]), input:not([disabled]), textarea:not([disabled])") ?? [];
     return Array.from(nodes).filter((node) => node.tabIndex !== -1 && !node.hidden && !node.closest?.("[hidden]"));
+  }
+  // Then the day's paper beside it (renderer/daily-paper.js), when it is up:
+  // its stories in reading order and its Refresh, always after the chooser.
+  function paperControls() {
+    try { return Array.from(window.MefiDailyPaper?.controls?.() ?? []); }
+    catch { return []; }
   }
 
   function blockOutside(event) {
@@ -58881,7 +59036,9 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
 // add one: Open a folder, Start a new app and Get from GitHub. It draws what
 // the host says and never guesses, so a chip nobody could read shows nothing.
 // Pinned by tests/startup_screen.test.mjs and tests/startup_resume.test.mjs;
-// the card's look is the launch block of styles.css.
+// the card's look is the launch block of styles.css. When the host carries
+// the day's news, renderer/daily-paper.js sets a front page around the card
+// (tests/daily_paper.test.mjs); nothing in the card changes for it.
 (function () {
   "use strict";
   const $ = (id) => document.getElementById("boot-" + id);
@@ -59590,6 +59747,10 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
     if (ui.newApp) face(ui.newApp, "Start a new app", "plus");
     if (ui.github) face(ui.github, "Get from GitHub", "cloud-download");
     adopt({ projects: info.projects, activeId: info.activeId });
+    // The day's paper (renderer/daily-paper.js) lays out around this card
+    // before it draws, so the first focus lands where the card will stay.
+    // `news` false is the owner's "off"; a host without news skips it.
+    window.MefiDailyPaper?.show?.({ enabled: info.news });
     render();
     note("");
     void requestGlance();
@@ -59645,6 +59806,376 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
   }
 
   window.MefiStartup = { choose, begin, available, navigateProjects, relative, splitPath, state: () => ({ projects: state.projects.map((project) => project.id), selectedId: state.selectedId, busy: state.busy }) };
+})();
+
+// The Studio Daily: the launch screen (the boot gate's choose phase) as a
+// morning front page. startup.js calls show() once it knows the chooser will
+// be asked; the paper then fills #paper-mast and #paper-news inside
+// #boot-layer, beside the .boot-card it never touches. The chooser stays
+// interactive from the first frame: the paper takes no focus, moves no node
+// of the card, and news arriving late only redraws the news column.
+//
+// The host keeps one edition a day (scripts/daily-news-host.cjs) and answers
+// window.mefiStudio.newsEdition({ refresh }); onNewsEdition pushes a newer
+// one (the AI editor's pass, the morning refresh). Without newsEdition, or
+// with Settings › General "Daily news on the launch screen" off, show() does
+// nothing and the launch screen is the plain card. Stories open in the
+// browser through openExternal, and boot.js puts them after the chooser's
+// controls in its Tab cycle (controls()). Pinned by tests/daily_paper.test.mjs;
+// the look is renderer/daily-paper.css.
+(function () {
+  "use strict";
+  const api = () => window.mefiStudio;
+  const $ = (id) => document.getElementById(id);
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const SECTIONS = { MODELS: "Models", TOOLS: "Tools", RESEARCH: "Research", INDUSTRY: "Industry", STUDIO: "Studio" };
+  const WIRE_TAGS = { release: "Release", model: "New model", studio: "Studio", news: "News" };
+  const state = { on: false, run: 0, edition: null, stamp: "", loading: false, refreshing: false, listening: false, links: [], els: null };
+
+  function node(tag, className, text) {
+    const element = document.createElement(tag);
+    if (className) element.className = className;
+    if (text !== undefined) element.textContent = text;
+    return element;
+  }
+  const supported = () => typeof api()?.newsEdition === "function";
+  const safeUrl = (url) => (typeof url === "string" && url.length <= 2048 && /^https?:\/\//i.test(url) ? url : null);
+
+  // ---- words ----
+  const pad = (value) => String(value).padStart(2, "0");
+  const today = (at = Date.now()) => { const date = new Date(at); return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`; };
+  const dayOf = (text) => { const [year, month, day] = String(text).split("-").map(Number); return new Date(year, month - 1, day); };
+  function longDate(date) {
+    try { return date.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" }); }
+    catch { return date.toDateString(); }
+  }
+  function clock(at) {
+    try { return new Date(at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }); }
+    catch { return ""; }
+  }
+  // "just now", "12 min ago", "5 h ago", "yesterday", "Sep 24".
+  function ago(at, now = Date.now()) {
+    if (!Number.isFinite(at)) return "";
+    const minutes = Math.max(0, Math.round((now - at) / 60000));
+    if (minutes < 1) return "just now";
+    if (minutes < 60) return `${minutes} min ago`;
+    const hours = Math.round(minutes / 60);
+    if (hours < 24) return `${hours} h ago`;
+    if (hours < 48) return "yesterday";
+    const date = new Date(at);
+    return `${MONTHS[date.getMonth()]} ${date.getDate()}`;
+  }
+  function staleNote(date) {
+    const days = Math.round((dayOf(today()) - dayOf(date)) / 86400000);
+    if (days === 1) return "Yesterday's edition · offline";
+    const when = dayOf(date);
+    return `Edition of ${MONTHS[when.getMonth()] ?? ""} ${when.getDate()} · offline`;
+  }
+
+  // ---- links ----
+  function open(url) {
+    const call = api()?.openExternal;
+    if (typeof call !== "function") return;
+    Promise.resolve(call(url)).catch((error) => console.warn("The story could not be opened", error));
+  }
+  // A story's words as a link; a story without a web address stays text.
+  function link(story, className, text = story.title) {
+    const url = safeUrl(story.url);
+    if (!url) return node("span", className, text);
+    const anchor = node("a", `${className} paper-link`, text);
+    anchor.href = url;
+    anchor.rel = "noopener noreferrer";
+    anchor.dataset.storyId = String(story.id ?? "");
+    anchor.addEventListener("click", (event) => { event.preventDefault?.(); open(url); });
+    state.links.push(anchor);
+    return anchor;
+  }
+  const kicker = (story) => node("p", "paper-kicker", SECTIONS[story.section] ?? "News");
+  function byline(story, { also = false } = {}) {
+    const line = node("p", "paper-byline");
+    line.append(node("span", "paper-byline-text", [story.source, story.points ? `${story.points} points` : "", ago(story.publishedAt)].filter(Boolean).join(" · ")));
+    // The Hacker News thread first when there is one: that is where builders talk it over.
+    const more = also ? (story.also ?? []).filter((entry) => safeUrl(entry?.url)).sort((a, b) => (b.points ?? 0) - (a.points ?? 0)).slice(0, 2) : [];
+    if (more.length) {
+      const wrap = node("span", "paper-also");
+      wrap.append(node("span", "paper-also-label", "Also"));
+      more.forEach((entry, index) => wrap.append(link({ id: `${story.id}:also:${index}`, url: entry.url }, "paper-also-link", String(entry.source ?? "Source"))));
+      line.append(wrap);
+    }
+    return line;
+  }
+
+  // ---- the page ----
+  function lead(story) {
+    const article = node("article", "paper-lead");
+    article.dataset.section = String(story.section ?? "");
+    const title = node("h2", "paper-lead-title");
+    title.append(link(story, "paper-headline"));
+    article.append(kicker(story), title);
+    if (story.dek) article.append(node("p", "paper-dek", story.dek));
+    article.append(byline(story, { also: true }));
+    return article;
+  }
+  function waiting() {
+    const article = node("article", "paper-lead paper-waiting");
+    article.append(node("p", "paper-kicker", "Today"), node("h2", "paper-lead-title", "Today's paper is on its way"),
+      node("p", "paper-dek", "Studio prints the day's biggest AI and developer-tool news here once it can reach the news wires. Your projects are ready."));
+    return article;
+  }
+  function row(stories) {
+    const wrap = node("div", "paper-row");
+    for (const story of stories) {
+      const article = node("article", "paper-story");
+      const title = node("h3", "paper-story-title");
+      title.append(link(story, "paper-headline"));
+      article.append(kicker(story), title);
+      if (story.dek) article.append(node("p", "paper-dek paper-dek-small", story.dek));
+      article.append(byline(story, { also: true }));
+      wrap.append(article);
+    }
+    return wrap;
+  }
+  function briefs(stories) {
+    const section = node("section", "paper-briefs");
+    section.setAttribute("aria-labelledby", "paper-briefs-title");
+    const head = node("h3", "paper-section-title", "In brief");
+    head.id = "paper-briefs-title";
+    const list = node("ol", "paper-brief-list");
+    for (const story of stories) {
+      const item = node("li", "paper-brief");
+      const title = link(story, "paper-brief-title");
+      title.title = story.title;
+      item.append(title, node("span", "paper-brief-meta", [story.source, ago(story.publishedAt)].filter(Boolean).join(" · ")));
+      list.append(item);
+    }
+    section.append(head, list);
+    return section;
+  }
+  function wire(entries) {
+    const section = node("section", "paper-wire");
+    section.setAttribute("aria-labelledby", "paper-wire-title");
+    const head = node("h3", "paper-section-title", "Studio wire");
+    head.id = "paper-wire-title";
+    section.append(head);
+    if (!entries.length) { section.append(node("p", "paper-wire-empty", "No new releases or models on the wire today.")); return section; }
+    const list = node("ul", "paper-wire-list");
+    for (const entry of entries) {
+      const item = node("li", "paper-wire-item");
+      item.dataset.kind = String(entry.kind ?? "");
+      const body = node("span", "paper-wire-body");
+      body.append(link(entry, "paper-wire-title"));
+      if (entry.dek) body.append(node("span", "paper-wire-dek", entry.dek));
+      body.append(node("span", "paper-wire-meta", [entry.source, ago(entry.publishedAt)].filter(Boolean).join(" · ")));
+      item.append(node("span", "paper-wire-tag", WIRE_TAGS[entry.kind] ?? "News"), body);
+      list.append(item);
+    }
+    section.append(list);
+    return section;
+  }
+  // Typographic placeholders in the paper's own shape while the wires answer.
+  function skeleton() {
+    const wrap = node("div", "paper-skeleton");
+    wrap.setAttribute("aria-hidden", "true");
+    const bars = (...names) => names.map((name) => node("span", `paper-skel ${name}`));
+    const top = node("div", "paper-skel-lead");
+    top.append(...bars("paper-skel-kicker", "paper-skel-head", "paper-skel-head paper-skel-short", "paper-skel-line", "paper-skel-line paper-skel-short"));
+    const stories = node("div", "paper-skel-row");
+    for (let count = 0; count < 3; count += 1) {
+      const column = node("div", "paper-skel-column");
+      column.append(...bars("paper-skel-kicker", "paper-skel-title", "paper-skel-title paper-skel-short", "paper-skel-line", "paper-skel-line"));
+      stories.append(column);
+    }
+    const lower = node("div", "paper-skel-row paper-skel-lower");
+    for (let count = 0; count < 2; count += 1) {
+      const column = node("div", "paper-skel-column");
+      column.append(...bars("paper-skel-kicker", "paper-skel-line", "paper-skel-line", "paper-skel-line paper-skel-short", "paper-skel-line"));
+      lower.append(column);
+    }
+    wrap.append(top, stories, lower);
+    return wrap;
+  }
+
+  // ---- drawing ----
+  function glyph() {
+    if (typeof document.createElementNS !== "function") return null;
+    const ns = "http://www.w3.org/2000/svg";
+    const root = document.createElementNS(ns, "svg");
+    for (const [key, value] of Object.entries({ width: 14, height: 14, viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", "stroke-width": 1.5, "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true", focusable: "false", class: "paper-glyph" })) root.setAttribute(key, String(value));
+    for (const d of ["M13.5 8a5.5 5.5 0 1 1-1.6-3.9", "M13.5 2.5v3h-3"]) { const part = document.createElementNS(ns, "path"); part.setAttribute("d", d); root.append(part); }
+    return root;
+  }
+  // The masthead's nodes are made once and only their words change, so a
+  // Refresh with the keyboard on it keeps the focus.
+  function buildMast(mast) {
+    const date = node("p", "paper-date"), issue = node("p", "paper-issue");
+    const start = node("div", "paper-ear paper-ear-start");
+    start.append(date, issue);
+    const plate = node("div", "paper-plate");
+    const name = node("p", "paper-nameplate", "The Studio Daily");
+    name.id = "paper-nameplate";
+    plate.append(name, node("p", "paper-motto", "AI, developer tools and your studio"));
+    const status = node("p", "paper-status");
+    const refresh = node("button", "ghost mini paper-refresh");
+    refresh.type = "button";
+    refresh.id = "paper-refresh";
+    const label = node("span", "paper-refresh-label", "Refresh");
+    refresh.append(...[glyph(), label].filter(Boolean));
+    refresh.addEventListener("click", () => { if (!state.loading && !state.refreshing) void load(true); });
+    const end = node("div", "paper-ear paper-ear-end");
+    end.append(status, refresh);
+    mast.replaceChildren(start, plate, end);
+    state.els = { mast, date, issue, status, refresh, label };
+  }
+  function paintMast() {
+    const els = state.els;
+    if (!els) return;
+    const edition = state.edition;
+    els.date.textContent = longDate(edition?.date ? dayOf(edition.date) : new Date());
+    const wires = (edition?.sources ?? []).filter((source) => source?.ok).length;
+    els.issue.textContent = [edition?.number ? `No. ${edition.number}` : "Morning edition", wires ? `${wires} wire${wires === 1 ? "" : "s"}` : "", edition?.editor === "ai" ? "AI-edited" : ""].filter(Boolean).join(" · ");
+    const stale = Boolean(edition?.stale);
+    els.status.textContent = state.refreshing ? "Refreshing…" : state.loading ? "Printing today's edition…"
+      : stale ? staleNote(edition.date) : !edition || edition.offline || !edition.lead ? "Waiting for the news wires" : `Updated ${clock(edition.generatedAt)}`;
+    els.status.dataset.tone = stale ? "stale" : "";
+    const busy = state.loading || state.refreshing;
+    // aria-disabled, not disabled: a focused button that disables drops the keyboard to the page.
+    els.refresh.setAttribute("aria-disabled", String(busy));
+    els.refresh.setAttribute("aria-busy", String(state.refreshing));
+    els.label.textContent = state.refreshing ? "Refreshing" : "Refresh";
+    // What the paper is and is not, under the chooser.
+    const note = $("paper-note");
+    if (note) note.textContent = [
+      wires ? `Headlines and short summaries from ${wires} news wire${wires === 1 ? "" : "s"}, gathered once a day.` : "Studio gathers the news once a day.",
+      edition?.editor === "ai" ? "An AI editor chose the lead and tightened the headlines." : "",
+      "Stories open in your browser. Settings › General turns the paper off.",
+    ].filter(Boolean).join(" ");
+  }
+  function paintLoading() {
+    const news = $("paper-news");
+    if (!news) return;
+    state.links = [];
+    news.dataset.state = "loading";
+    news.setAttribute("aria-busy", "true");
+    news.replaceChildren(skeleton());
+  }
+  // Redraws the news column only. A story link that had the keyboard hands
+  // it to the same story in the new paper, or to Refresh.
+  function paintNews() {
+    const news = $("paper-news"), edition = state.edition;
+    if (!news || !edition) return;
+    const active = document.activeElement;
+    const held = active && typeof news.contains === "function" && news.contains(active) ? String(active.dataset?.storyId ?? "") : null;
+    state.links = [];
+    const parts = [edition.lead ? lead(edition.lead) : waiting()];
+    if (edition.top?.length) parts.push(row(edition.top));
+    const lower = node("div", "paper-lower");
+    if (edition.briefs?.length) lower.append(briefs(edition.briefs));
+    lower.append(wire(edition.wire ?? []));
+    parts.push(lower);
+    for (const part of parts) part.classList?.add?.("paper-enter");
+    news.dataset.state = edition.lead ? "ready" : "empty";
+    news.setAttribute("aria-busy", "false");
+    news.replaceChildren(...parts);
+    if (held !== null) (state.links.find((anchor) => anchor.dataset.storyId === held) ?? state.els?.refresh)?.focus?.({ preventScroll: true });
+  }
+  const valid = (edition) => Boolean(edition && typeof edition === "object" && typeof edition.date === "string" && Array.isArray(edition.top) && Array.isArray(edition.briefs));
+  function accept(edition) {
+    if (!valid(edition)) return false;
+    const stamp = [edition.date, edition.generatedAt, edition.editor, edition.stale ? "stale" : "", edition.offline ? "offline" : ""].join("|");
+    if (stamp === state.stamp) return true;
+    state.stamp = stamp;
+    state.edition = edition;
+    paintNews();
+    return true;
+  }
+  const choosing = () => $("boot-layer")?.dataset?.phase === "choose";
+
+  // ---- the host ----
+  async function load(refresh) {
+    const run = state.run;
+    if (refresh) state.refreshing = true; else state.loading = !state.edition;
+    paintMast();
+    let answer = null;
+    try { answer = await api().newsEdition(refresh ? { refresh: true } : {}); }
+    catch (error) { console.warn("Today's paper is unavailable", error); }
+    if (run !== state.run || !state.on) return;
+    state.loading = false;
+    state.refreshing = false;
+    if (answer?.disabled) { withdraw(); return; }
+    if (!(answer?.ok !== false && accept(answer?.edition)) && !state.edition) accept({ date: today(), generatedAt: Date.now(), lead: null, top: [], briefs: [], wire: [], sources: [], editor: "heuristic", offline: true });
+    paintMast();
+  }
+  function listen() {
+    if (state.listening || typeof api()?.onNewsEdition !== "function") return;
+    state.listening = true;
+    api().onNewsEdition((payload) => {
+      if (!state.on || !choosing()) return;
+      if (payload?.disabled) { withdraw(); return; }
+      if (accept(payload?.edition ?? payload)) paintMast();
+    });
+  }
+  // The host said the paper is off (older host that did not tell startup:state):
+  // the launch screen goes back to the plain card; its nodes stay where they are.
+  function withdraw() {
+    state.on = false;
+    state.run += 1;
+    state.links = [];
+    const layer = $("boot-layer");
+    if (layer?.dataset) delete layer.dataset.paper;
+    for (const part of [$("paper-mast"), $("paper-note"), $("paper-news")]) if (part) { part.hidden = true; part.replaceChildren(); }
+  }
+  // Called by startup.js when the chooser is about to be drawn. `enabled` is
+  // startup:state's `news` (false: the owner switched the paper off).
+  function show({ enabled } = {}) {
+    if (enabled === false || !supported()) return false;
+    const layer = $("boot-layer"), mast = $("paper-mast"), news = $("paper-news");
+    if (!layer || !mast || !news) return false;
+    state.run += 1;
+    state.on = true;
+    state.edition = null;
+    state.stamp = "";
+    state.loading = true;
+    state.refreshing = false;
+    layer.dataset.paper = "on";
+    for (const part of [mast, $("paper-note"), news]) if (part) part.hidden = false;
+    buildMast(mast);
+    paintLoading();
+    paintMast();
+    listen();
+    void load(false);
+    return true;
+  }
+  // boot.js's Tab cycle: the stories in reading order, then Refresh.
+  function controls() {
+    if (!state.on) return [];
+    return [...state.links, state.els?.refresh].filter((element) => element && !element.hidden && element.isConnected !== false);
+  }
+
+  // ---- Settings › General › Profile & startup ----
+  // settings.ui.dailyNews, saved like "When Studio opens" (prefs:set). Off:
+  // the plain chooser, and the host fetches nothing. Hidden without the host.
+  function wireSettings() {
+    const box = $("launch-daily-news"), row = $("launch-daily-news-row");
+    if (!box || box.dataset.wired) return;
+    box.dataset.wired = "true";
+    if (row) row.hidden = !supported();
+    Promise.resolve(api()?.prefsGet?.()).then((result) => { if (result?.prefs) box.checked = result.prefs.dailyNews !== false; }).catch(() => {});
+    box.addEventListener("change", async () => {
+      const wanted = Boolean(box.checked);
+      try {
+        const result = await api()?.prefsSet?.({ dailyNews: wanted });
+        if (!result?.ok) throw new Error(result?.error || "The launch screen setting could not be saved.");
+        window.MefiToast?.(wanted ? "The launch screen will carry the day's news." : "The launch screen will show only your projects, and Studio fetches no news.", "info");
+      } catch (error) {
+        box.checked = !wanted;
+        window.MefiToast?.(error?.message || "The launch screen setting could not be saved.", "warn");
+      }
+    });
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", wireSettings, { once: true });
+  else wireSettings();
+
+  window.MefiDailyPaper = { show, controls, isOn: () => state.on, ago };
 })();
 
 // The working home: project context, a bottom composer, compact task progress,

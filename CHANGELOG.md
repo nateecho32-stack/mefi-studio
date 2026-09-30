@@ -26,6 +26,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   for a role or seat, or let Auto use it first among the subscriptions. The
   plan's limits are shared with ChatGPT and Codex; at a limit Studio moves on
   to the next route and links to ChatGPT's usage settings.
+- **The launch screen is a daily paper.** The Studio Daily prints the day's
+  biggest AI and developer-tool news beside your projects: a lead, three
+  stories, In brief and a Studio wire of CLI releases, gathered once a day
+  from ten news wires, headlines and short summaries only. Offline it shows
+  yesterday's edition; Settings › General turns it off.
 - **Security fixes for remote approvals, catalogs and sharing.** Work filed
   from Discord retains its approval requirement through task admission and
   promotion. Concurrent PIN attempts count toward one lockout and approval
