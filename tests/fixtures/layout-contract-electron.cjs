@@ -61,6 +61,8 @@ process.on("uncaughtException", finish); process.on("unhandledRejection", finish
 // person would have. 600x560 at 150% is about 400 CSS px, the smallest window.
 const SIZES = [[1920, 1080, 1], [1440, 900, 1], [1100, 720, 1], [600, 560, 1.5]];
 const MODES = ["build", "vibe"];
+// Pages added after the base commit the record was made on (996db71): Skills came with the Skills page.
+const ADDED_SINCE_RECORD = ["skills"];
 const RAILS = ["closed", "pinned"];
 const sizeLabel = ([width, height, zoom]) => `${width}x${height}@${zoom}`;
 
@@ -263,6 +265,7 @@ app.whenReady().then(async () => {
     learningState: { ok: true, projectId, decisions: { enabled: true, scope: "blend" }, models: "blend", profiles: {} },
     brainState: { ok: true, tasks: [], recent: [], pipelines: {} }, brainPlaybook: { ok: true, shelf: [], recipes: [] }, brainMap: { ok: true, map: { systems: [], edges: [], files: [] } },
     worktreesList: { ok: true, repo: false, projectId, enabled: { on: false, forced: false } },
+    skillsList: { ok: true, projectId, writable: true, blocked: "", skills: [], starters: [], others: [] },
   };
   const names = await bridgeNames();
   const preload = path.join(root, "layout-preload.cjs");
@@ -363,7 +366,14 @@ app.whenReady().then(async () => {
   const baseline = JSON.parse(fs.readFileSync(baselinePath, "utf8"));
   if (phase === "v2") Object.assign(recorded, baseline.configs);
   else {
-    const moved = differences(recorded, Object.fromEntries(Object.keys(recorded).map((label) => [label, baseline.configs[label]])));
+    // Destinations that did not exist on the base commit have no record: v1 is measured for them (the v2 checks compare v2 with this run's v1) but not compared with the file. Naming them keeps a renamed or vanished page from slipping through.
+    const comparable = JSON.parse(JSON.stringify(recorded));
+    for (const [label, config] of Object.entries(comparable)) for (const id of ADDED_SINCE_RECORD) {
+      assert.equal(baseline.configs[label]?.pages?.[id], undefined, `${id} is listed as added since the record, but ${label} records it`);
+      assert.ok(config.pages?.[id], `${id} is listed as added since the record, but ${label} did not open it`);
+      delete config.pages[id];
+    }
+    const moved = differences(comparable, Object.fromEntries(Object.keys(comparable).map((label) => [label, baseline.configs[label]])));
     assert.deepEqual(moved, [], `v1 geometry moved:\n${moved.join("\n")}`);
     report.v1Identical = true;
   }
