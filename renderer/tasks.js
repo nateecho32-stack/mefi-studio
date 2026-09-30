@@ -1716,6 +1716,13 @@
         entryList(task.remaining, (line) => Object.assign(document.createElement("li"), { textContent: String(line) }));
       }
     }
+    // What the last attempt changed, its advisory checks and its before and after shots (renderer/review.js).
+    if (window.MefiReview?.mount && (task.lastAttempt || task.runId || task.verification || isDone(task) || needsReview(task))) {
+      const review = detailFold(task, "review", "Changes and checks");
+      if (!detailExpanded.has(`${taskKey(task)}/review`) && (task.lastAttempt || task.runId)) review.open = true;
+      window.MefiReview.mount(review, { taskId: task.id, projectId: task.projectId || state.backlog?.projectId || state.projectId });
+      body.append(review);
+    }
     renderTaskAttempts(task);
     if (!body.children.length) body.append(node("p", "muted", "Evidence appears here after a worker runs and completion checks finish."));
     body = detailPanels.history;
