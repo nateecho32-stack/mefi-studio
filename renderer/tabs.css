@@ -143,7 +143,7 @@
 .ts-stepper { display: inline-flex; align-items: center; gap: 6px; }
 .ts-card .ts-step { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; min-height: 0; padding: 0; border: 1px solid var(--hairline); border-radius: 8px; background: transparent; color: var(--ivory); font: 600 var(--ts-fs)/1 var(--font-ui); cursor: pointer; }
 .ts-card .ts-step:disabled { opacity: .4; cursor: default; }
-.ts-stepvalue { min-width: 28px; font-variant-numeric: tabular-nums; font-weight: 650; text-align: center; }
+.ts-stepvalue { min-width: 28px; font-variant-numeric: tabular-nums; font-weight: 650; text-align: center; white-space: nowrap; }
 .ts-closed { display: grid; gap: 4px; }
 .ts-closedrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .ts-closedlabel { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

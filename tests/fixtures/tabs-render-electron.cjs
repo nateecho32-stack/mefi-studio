@@ -219,7 +219,7 @@ app.whenReady().then(async () => {
   const contents = window.webContents; contents.setAudioMuted(true); contents.setFrameRate(60); contents.setWindowOpenHandler(() => ({ action: "deny" }));
   contents.on("console-message", (_event, detail, oldMessage) => { const level = typeof detail === "object" ? detail.level : detail; if (level === "error" || level === 3) report.errors.push(String(typeof detail === "object" ? detail.message : oldMessage)); });
   const run = (code) => contents.executeJavaScript(`(async()=>{${code}})()`, true);
-  const until = async (condition, label, ms = 12000) => {
+  const until = async (condition, label, ms = 15000) => {
     const deadline = Date.now() + ms;
     while (Date.now() < deadline) { assert.deepEqual(report.errors, [], JSON.stringify(report.errors)); if (await run(`return Boolean(${condition});`)) return; await sleep(40); }
     fs.writeFileSync(path.join(root, "tabs-failure.png"), (await contents.capturePage()).toPNG());

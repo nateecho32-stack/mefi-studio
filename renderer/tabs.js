@@ -50,7 +50,7 @@
   const DEFAULTS = Object.freeze({ manage: true, preview: true, agent: "bg", idle: 30, cap: 8, suggest: true });
   const AGENT_MODES = Object.freeze(["badge", "bg", "focus"]);
   const IDLE_CHOICES = Object.freeze([0, 10, 30, 60]);
-  const CAP_RANGE = Object.freeze([3, 12]);
+  const CAP_RANGE = Object.freeze([3, 12]); // and 0, "no limit", one step past the top
   // Which params say which place. Everything else (a filter, a task selected on the
   // Task board, a card to scroll to) is where you are inside the page, not another tab.
   // Agents is one sheet with two faces: its overview, and Setup with four panes.
@@ -213,12 +213,13 @@
   }
   function sanitizePrefs(raw) {
     const p = isObject(raw) ? raw : {};
-    const cap = Number(p.cap);
+    // A number, or text that is one: null, "" and false are not a cap of 0 (no limit), they are nothing said.
+    const cap = typeof p.cap === "number" ? p.cap : typeof p.cap === "string" && p.cap.trim() ? Number(p.cap) : NaN;
     return {
       manage: p.manage !== false, preview: p.preview !== false, suggest: p.suggest !== false,
       agent: AGENT_MODES.includes(p.agent) ? p.agent : DEFAULTS.agent,
       idle: IDLE_CHOICES.includes(Number(p.idle)) ? Number(p.idle) : DEFAULTS.idle,
-      cap: Number.isFinite(cap) ? clamp(Math.round(cap), CAP_RANGE[0], CAP_RANGE[1]) : DEFAULTS.cap,
+      cap: Number.isFinite(cap) ? (Math.round(cap) === 0 ? 0 : clamp(Math.round(cap), CAP_RANGE[0], CAP_RANGE[1])) : DEFAULTS.cap,
     };
   }
 
@@ -387,8 +388,9 @@
   }
   function open(routeId, params = {}, options = {}) {
     const route = place(routeId, params);
-    if (!S.running) { if (typeof routeId === "string") safe(() => window.MefiNav?.go?.(routeId, params)); return null; }
-    if (!route) return null;
+    // Not running, or not a place (Friends opens a window over whatever is showing; Search and Configuration are layers):
+    // whoever asked wanted it shown, so it is opened the way it always was, and no tab is made.
+    if (!S.running || !route) { if (typeof routeId === "string") safe(() => window.MefiNav?.go?.(routeId, params)); return null; }
     let rec = byKey(keyOf(route));
     const preview = options.preview !== false && eff().preview && !options.pin && !options.background;
     if (!rec) {
@@ -1300,6 +1302,7 @@
   // Typing on a page keeps its preview tab, and so does a double-click in the session list.
   function onInput(event) {
     const target = event.target;
+    if (event.isTrusted === false) return; // the app replaying a draft into a field is not you typing
     if (!target || !isTyping(target) || target.closest?.(".ts-pop, .ts-strip, #palette-overlay, #config-overlay, #help-overlay, #walkthrough-overlay, #app-rail, #app-local-nav")) return;
     if (cur().prev) keep(S.active);
   }
@@ -1358,13 +1361,18 @@
       idle.append(el("b", "", "Close tabs of finished work after"), el("small", "", "Only sessions that are done and that you have not opened for that long."), choices("Close finished sessions after", "idle", [[0, "Never"], [10, "10 min"], [30, "30 min"], [60, "1 hour"]], p.idle, (id) => setPrefs({ idle: Number(id) }), off));
       const cap = el("div", "ts-setting ts-setting-row");
       const capWords = el("span", "ts-setting-words");
-      capWords.append(el("b", "", `Keep at most ${p.cap} tabs open`), el("small", "", "Pinned tabs do not count. When there are more, the one you used longest ago closes, with Undo."));
+      capWords.append(
+        el("b", "", p.cap ? `Keep at most ${p.cap} tabs open` : "Keep as many tabs open as you like"),
+        el("small", "", p.cap ? "Pinned tabs do not count. When there are more, the one you used longest ago closes, with Undo." : "No tab is closed to make room. Past the top of the range, here, is no limit; step back down to set one."),
+      );
       const stepper = el("span", "ts-stepper");
       const less = el("button", "ts-step", "−"), more = el("button", "ts-step", "+");
-      less.type = "button"; less.setAttribute("aria-label", "Fewer tabs"); less.dataset.key = "cap:-"; less.disabled = off || p.cap <= CAP_RANGE[0];
-      more.type = "button"; more.setAttribute("aria-label", "More tabs"); more.dataset.key = "cap:+"; more.disabled = off || p.cap >= CAP_RANGE[1];
-      less.addEventListener("click", () => setPrefs({ cap: S.prefs.cap - 1 })); more.addEventListener("click", () => setPrefs({ cap: S.prefs.cap + 1 }));
-      stepper.append(less, el("output", "ts-stepvalue", String(p.cap)), more);
+      // 3 to 12, and one step past 12 is no limit (0): the plus goes there, the minus comes back to 12
+      less.type = "button"; less.setAttribute("aria-label", "Fewer tabs"); less.dataset.key = "cap:-"; less.disabled = off || (p.cap !== 0 && p.cap <= CAP_RANGE[0]);
+      more.type = "button"; more.setAttribute("aria-label", p.cap === CAP_RANGE[1] ? "No limit" : "More tabs"); more.dataset.key = "cap:+"; more.disabled = off || p.cap === 0;
+      less.addEventListener("click", () => setPrefs({ cap: S.prefs.cap === 0 ? CAP_RANGE[1] : S.prefs.cap - 1 }));
+      more.addEventListener("click", () => setPrefs({ cap: S.prefs.cap >= CAP_RANGE[1] ? 0 : S.prefs.cap + 1 }));
+      stepper.append(less, el("output", "ts-stepvalue", p.cap ? String(p.cap) : "No limit"), more);
       cap.append(capWords, stepper);
       body.append(
         switchRow("Preview tab", "A single click opens a page in one italic tab that the next click reuses. Typing, pinning or a double-click keeps it.", "preview", p.preview, (on) => setPrefs({ preview: on }), off),

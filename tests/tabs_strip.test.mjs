@@ -202,6 +202,9 @@ test("pinned tabs are never folded away, however narrow the strip gets", async (
   assert.equal(t.itemOf("Plans").hidden, false);
   assert.equal(hiddenTitles(t).some((title) => ["Fleet", "Plans", "Home"].includes(title)), false);
   assert.equal(more(t).hidden, false);
+  t.measure({ width: 170 }); // Home and the two pins alone are wider than this: they are still not what folds
+  assert.deepEqual(t.titles().slice(0, 3), ["Home", "Fleet", "Plans"], "they stay, and the strip is left to be clipped rather than lose them");
+  assert.equal(hiddenTitles(t).some((title) => ["Fleet", "Plans", "Home"].includes(title)), false);
 });
 
 test("the 'more' menu lists what is folded, and choosing one brings it into view", async () => {
@@ -1099,19 +1102,34 @@ test("every switch on the card is a setting: it changes what Studio does, is sav
   assert.equal(next.tabs.configCard().querySelector(".ts-stepvalue").textContent, "9");
 });
 
-test("the stepper stops at 3 and at 12", async () => {
+test("the stepper runs from 3 to 12, one more step is no limit, and the minus comes back down", async () => {
   const t = await tabsEnv();
   const card = t.tabs.configCard();
   const minus = () => card.querySelectorAll("button").find((button) => button.dataset.key === "cap:-");
   const plus = () => card.querySelectorAll("button").find((button) => button.dataset.key === "cap:+");
+  const value = () => card.querySelector(".ts-stepvalue").textContent;
   for (let i = 0; i < 12; i += 1) if (!minus().disabled) await minus().click();
   assert.equal(t.tabs.prefs().cap, 3);
-  assert.equal(minus().disabled, true);
+  assert.equal(minus().disabled, true, "nothing fewer than three");
   assert.equal(plus().disabled, false);
-  for (let i = 0; i < 20; i += 1) if (!plus().disabled) await plus().click();
+  for (let i = 0; i < 9; i += 1) await plus().click();
   assert.equal(t.tabs.prefs().cap, 12);
-  assert.equal(plus().disabled, true);
+  assert.equal(value(), "12");
+  assert.equal(plus().getAttribute("aria-label"), "No limit", "the last step says where it goes");
   assert.equal(minus().getAttribute("aria-label"), "Fewer tabs");
+  await plus().click();
+  assert.equal(t.tabs.prefs().cap, 0, "past 12 is no limit");
+  assert.equal(value(), "No limit");
+  assert.match(card.textContent, /Keep as many tabs open as you like/);
+  assert.match(card.textContent, /No tab is closed to make room/);
+  assert.equal(plus().disabled, true);
+  assert.equal(minus().disabled, false, "and the minus comes back");
+  await minus().click();
+  assert.equal(t.tabs.prefs().cap, 12);
+  assert.equal(value(), "12");
+  assert.match(card.textContent, /Keep at most 12 tabs open/);
+  assert.equal(plus().getAttribute("aria-label"), "No limit");
+  await minus().click();
   assert.equal(plus().getAttribute("aria-label"), "More tabs");
 });
 

@@ -187,6 +187,7 @@ settings and per-model work-kind summaries for the shared controls.
 | **Today** | Vibe's Home in the 0.5 layout (`html[data-layout="v2"]`, `renderer/today.js`): the greeting and the box that builds or talks, then one line per session in four groups, **Needs you**, **Running**, **Review** and **Done today**. In Build the same board is a page, reached from its pinned tab. See Getting around. |
 | **Inbox** | Everything that waits on the owner in one list (`MefiToday.openInbox`): open questions and permissions, approvals, finished work to check and tasks that stopped. "N need you" is the digest the app already keeps (`assistantState.needsYou`, the list the taskbar count is read from), never a second counter. It opens as a popover under the top bar's pill (Ctrl J) or stays open as a page. See Getting around. |
 | **Frame (layout v2)** | What `renderer/shell.js` (`window.MefiShell`) draws in the contract's room when the 0.5 layout is on: a top bar (list toggle, Vibe and Build switch, where you are, Search, "N need you", "N working", inspector toggle), the list and inspector columns with splitters and, in a small window, drawers, the tab strip's row, `main` for other modules' pages, and a status bar with the Layout menu. Vibe and Build each keep their own widths. Turned on in Settings ("Try the 0.5 layout"), in Search ("Switch layout"), by `?layout=v2` or by `MEFI_STUDIO_LAYOUT=v2`. See `docs/unified-studio.md`. |
+| **Tab strip** (layout v2) | The row of tabs in the shell's tab region: Home pinned at the left, the pages and sessions you add, pins that stay, one italic preview tab, and Studio closing what you finished with (Undo, Recently closed, Ctrl+Shift+T). A tab is a remembered place, not a live page. Switches in Configuration › UI & Surfaces › Tab behaviour; see "Tabs you add and pin". |
 | **Worktree** | Another folder holding the same project on its own branch, so two pieces of work never share files. Task runs make one each (`.mefi/worktrees/<runId>` on `mefi/<runId>`) while "Give each run its own worktree" is on; **Work › Worktrees** lists them all and merges or removes them. |
 | **Attempt review** | What Studio keeps around each builder attempt: a **picture** of the folder at its start and end (private git refs, only on this PC), the list of **changed files** with Accept and Revert, the **advisory checks** that ran after it and **before and after shots** of the project preview. It is the "Changes and checks" section of a task's Evidence tab. |
 | **Workspace** | The home screen (`H`): current task, app preview and conversation. Project queue, Studio status and setup information expand when needed. |
@@ -2203,6 +2204,90 @@ no pictures (the outer project owns the list). Parallel runs sharing one
 folder are flagged, not separated. The build writes files, so it is off by
 default and, run by hand, may leave a kept worktree dirty. Shots need Studio's
 own preview; an app the person runs elsewhere is not captured.
+
+### Tabs you add and pin (layout v2)
+
+With layout v2 on (`html[data-layout="v2"]`) the shell's tab region holds a
+strip of tabs (`renderer/tabs.js`, `window.MefiTabs`, and `tabs.css`, whose
+classes all start with `ts-`). The owner adds the tabs they want, pins the ones
+that stay, and Studio keeps the rest tidy. With v2 off, or without `MefiShell`,
+the script starts nothing: no element, listener, timer, stored key or host call
+(`start()` declines and `open()` is plain `MefiNav.go`).
+
+- **A tab is a remembered place, not a live page.** Pages are singletons, so a
+  tab is `{ route: { id, params } }`: a registry id plus the few params that say
+  which place. Only those are identity: Home (`workspace`, no view), Chat, one
+  session (`view: "task"`, `taskId`) and, for Agents, its overview or one of
+  its four Setup panes. A filter or a card to scroll to is where you are inside
+  a page, never another tab. Vibe is Home in another mode, so it is the same
+  tab. Friends, Search and Configuration are not places and never get a tab.
+  Opening a tab asks `MefiNav.go(id, params)` for the page; Home asks for its own
+  view (`{ view: "home" }`), because in Build a bare `go("workspace")` brings
+  back the session you last had open. The add button lists every page the
+  registry offers, this project's sessions and Recently closed, with one search
+  box (Enter opens, Shift+Enter opens and pins).
+- **The strip follows where the app is.** `MefiNav.go` is not the only way a
+  page opens, so the strip reads `mefi:nav`, a watcher on the body's `class` and
+  `data-sheet`, and `MefiNav.current()`. A place with no tab of its own becomes
+  (or replaces) the italic **preview tab**. The pages whose own view is not in
+  `current()` have readers (`MefiTabs.reader(id, fn)`; built in: `MefiBuilder.view()`
+  for Home and `MefiAgents.params()`), and what a page was last opened with is
+  remembered for when it comes back from under another. A page that was just
+  asked for has a short grace window (800 ms) before the strip trusts what is
+  showing, and nothing is read while the launch screen is up.
+- **Managed behaviours, each with a switch** in Configuration › UI & Surfaces ›
+  Tab behaviour (also from the strip's settings button and Search), one master
+  switch above them, all on by default and kept in `mefiStudio.tabs.prefs.v1`:
+  the preview tab (typing, pinning, a double-click or arranging it keeps it);
+  what an agent that needs you does (badge only, **a background tab with a
+  badge**, or open and focus; the first look at the board is only a baseline, so
+  old questions are not announced); closing tabs of finished sessions after an
+  idle time (Never, 10, **30**, 60 minutes; one timer set for the next tab that
+  could be due, never polling); at most **8** unpinned tabs (3 to 12, or no
+  limit), the one used longest ago closing with an Undo toast; Recently closed (10 per project)
+  with Ctrl+Shift+T; and a quiet "Pin Fleet?" chip after three visits, never
+  twice for the same page, and not used up while nobody could see it. A pinned
+  tab is never closed by Studio, and everything Studio closes can be reopened.
+  `MEFI_STUDIO_NO_TAB_MANAGER=1` turns all of it off for one run (main.cjs "Tab
+  switches" puts `tabsManage: false` on `prefs:get`; the settings cannot turn it
+  back on), and the card says so.
+- **Keys** (window capture, nothing taken while Search or Configuration is up,
+  from IME composition, or from a field that needs it): Ctrl+T add, Ctrl+W
+  close (Home stays), Ctrl+Tab and Ctrl+Shift+Tab (or PageDown and PageUp)
+  cycle, Ctrl+1 to 9 jump (9 is the last), Ctrl+Shift+T reopen, Ctrl+Alt+P pin,
+  Alt+W and Alt+Shift+T where no text is being typed; a tab is moved with
+  Ctrl+Shift+Left and Right, or dragged. AltGr chords (Ctrl+Alt) are never
+  taken. Alt+Left and Right stay Back and Forward (nav.js). The application
+  menu's Close (Ctrl+W) is the window's: the page takes the key first
+  (`preventDefault`), which `tests/tabs_render.test.mjs` checks against the real
+  menu template.
+- **Stored per project, with pins that follow you.** `mefiStudio.tabs.v1.<projectId>`
+  holds that project's tabs, its Recently closed list and the tab that was showing;
+  `mefiStudio.tabs.global.v1` holds the pins of pages (a session's pin stays with its
+  project), the id counter and what the suggestion has counted and offered. A tab is
+  `{ id, route, title, pin, prev, used, at }`; a record the strip cannot use
+  (a page that has left the registry, a deleted session) is skipped without a word.
+  A burst of changes is written once, 300 ms after the last; saveResume (nav.js),
+  the window hiding and `stop()` write at once. The launch page decides which tab is
+  showing. Nothing is written until something changes, and every storage access is
+  guarded.
+- **Small windows.** Below 900 CSS px (the contract's fold) the strip is one menu
+  button with every tab in it; above it, tabs that do not fit fold into "N more"
+  (Home, pins and the tab you are on never fold). Its height comes from `--d-tab`
+  (28 to 48, 38 without SIZE) through `MefiShell.resize("tabs", px)`.
+- **Accessibility.** `tablist` / `tab` with one tab stop that follows focus, arrow
+  keys, Home and End, Enter and Space, Delete, the menu key, a polite live region for
+  moves and closings, the shell's main area as the `tabpanel` of the selected tab
+  (unless FRAME gave it a role), a visible focus ring, text never under 12px.
+
+`tests/tabs_model.test.mjs`, `tabs_observer.test.mjs`, `tabs_persist.test.mjs`,
+`tabs_strip.test.mjs` and `tabs_host.test.mjs` run the script over a fake DOM with
+a stub nav and shell (`tests/fixtures/tabs-env.mjs`); `tabs_render.test.mjs` runs
+it in a real window at five sizes with real input. **Known limits:** an in-page
+view change that nothing announces (Build's view switch) is seen at the next
+trigger, not instantly (`MefiTabs.reader` is the hook for a page that can say);
+Friends opens as a window over whatever is showing and gets no tab; after Enter
+on a tab the page it opens takes the keyboard, as any page does.
 
 ### Community
 

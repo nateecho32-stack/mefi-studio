@@ -34,6 +34,7 @@ test("layout v1 (the default): the strip does nothing at all, and open() is plai
   assertNothingRan(t, "v1");
   assert.equal(t.tabs.open("fleet", { any: 1 }), null);
   assert.deepEqual(plain(t.nav.calls), [["fleet", { any: 1 }]], "it only navigated");
+  assert.equal(t.tabs.start(), false, "asking it to start, by hand, says no: v1 is decided by the page, not by who asks");
   await t.go("plans"); await t.go("workspace");
   assertNothingRan(t, "v1 after navigating");
 });
@@ -83,6 +84,8 @@ test("a MefiShell that has not drawn its tab region yet is given one more look a
   await t.advance(1);
   assert.equal(t.tabs.running(), true, "the region appeared: it started");
   assert.equal(t.regions.tabs.children.length, 1, "and drew itself into it");
+  t.tabs.stop();
+  assert.equal(t.regions.tabs.children.length, 0, "stopping takes the strip out of a region it was put into directly, with no mount handle to do it");
   const never = await tabsEnv({ lateRegion: true });
   await never.advance(50);
   assert.equal(never.tabs.running(), false, "one look, not a poll");

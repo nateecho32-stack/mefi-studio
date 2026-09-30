@@ -514,13 +514,67 @@ test("a pin offer you ignore is not made again, even after a restart", async () 
 test("the pin suggestion is a setting, and sessions and Home are never offered", async () => {
   const t = await tabsEnv({ tasks: [task("a", { title: "A" })] });
   t.tabs.setPrefs({ suggest: false });
-  for (let i = 0; i < 4; i += 1) { await t.go("fleet"); await t.go("plans"); }
-  assert.equal(t.strip().querySelector(".ts-suggest").hidden, true);
+  for (let i = 0; i < 4; i += 1) {
+    await t.go("fleet"); assert.equal(t.strip().querySelector(".ts-suggest").hidden, true, `visit ${i + 1} to Fleet: switched off, nothing offered`);
+    await t.go("plans"); assert.equal(t.strip().querySelector(".ts-suggest").hidden, true, `visit ${i + 1} to Plans`);
+  }
+  t.tabs.flush();
+  assert.deepEqual(t.stored("mefiStudio.tabs.global.v1").offered, {}, "and nothing was used up while it was off");
   t.tabs.setPrefs({ suggest: true });
   for (let i = 0; i < 4; i += 1) { t.tabs.activate("home"); await t.settle(); openSession(t, "a"); await t.settle(); }
   assert.equal(t.strip().querySelector(".ts-suggest").hidden, true, "a session is not a page you would pin this way");
   t.tabs.activate("home"); await t.settle();
   assert.equal(t.strip().querySelector(".ts-suggest").hidden, true);
+});
+
+test("a need that arrives for the session you are looking at is not badged, now or after you have left it", async () => {
+  const t = await tabsEnv({ tasks: [task("a", { title: "Mine" })], assistant: { questions: [] } });
+  openSession(t, "a"); await t.settle();
+  t.board.assistant = { questions: [{ id: "q1", status: "open", context: { taskId: "a" } }] };
+  t.window.dispatchEvent({ type: "mefi:workspace-state" }); await t.settle();
+  assert.equal(t.itemOf("Mine").dataset.attn, undefined, "you are on it: nothing to flag");
+  t.board.assistant = { questions: [] }; // answered while you were there
+  t.window.dispatchEvent({ type: "mefi:workspace-state" }); await t.settle();
+  t.tabs.activate("home"); await t.settle();
+  assert.equal(t.itemOf("Mine").dataset.attn, undefined, "and when you leave it, the question you saw and answered does not come back as a badge");
+  assert.equal(plain(t.tabs.list().find((tab) => tab.route.params.taskId === "a")).badge, false);
+});
+
+test("the same place closed twice is in Recently closed once", async () => {
+  const t = await tabsEnv();
+  t.tabs.open("fleet", {}, { preview: false });
+  t.tabs.close(t.tabs.list().find((tab) => tab.route.id === "fleet").id);
+  t.tabs.open("fleet", {}, { preview: false });
+  t.tabs.close(t.tabs.list().find((tab) => tab.route.id === "fleet").id);
+  assert.deepEqual(plain(t.tabs.recentlyClosed()).map((item) => item.route.id), ["fleet"]);
+});
+
+test("a session you pin stays with the project's pins: arranged among them, and the rest stay behind", async () => {
+  const t = await tabsEnv({ tasks: ["a", "b", "c"].map((id) => task(id, { title: id.toUpperCase() })) });
+  for (const id of ["a", "b", "c"]) openSession(t, id);
+  t.tabs.open("fleet", {}, { preview: false });
+  const idOf = (taskId) => t.tabs.list().find((tab) => tab.route.params.taskId === taskId).id;
+  t.tabs.pin(idOf("b"), true); t.tabs.pin(idOf("c"), true);
+  const order = () => plain(t.tabs.list().map((tab) => tab.route.params.taskId || tab.route.id));
+  assert.deepEqual(order(), ["workspace", "b", "c", "a", "fleet"], "the project's pins first, in the order they were pinned");
+  t.tabs.move(idOf("a"), 0);
+  assert.deepEqual(order(), ["workspace", "b", "c", "a", "fleet"], "a tab that is not pinned cannot be put in front of a pin");
+  t.tabs.move(idOf("c"), 0);
+  assert.deepEqual(order(), ["workspace", "c", "b", "a", "fleet"], "a pinned session moves among the pins");
+  t.tabs.move(idOf("c"), 9);
+  assert.deepEqual(order(), ["workspace", "b", "c", "a", "fleet"], "and stops at the last of them, not among the rest");
+  t.tabs.move(t.tabs.list().find((tab) => tab.route.id === "fleet").id, 0);
+  assert.deepEqual(order(), ["workspace", "b", "c", "fleet", "a"], "the rest are arranged among themselves");
+});
+
+test("Vibe is another name for Home: opening it is opening Home, not a second tab", async () => {
+  const t = await tabsEnv({ vibe: true });
+  t.tabs.open("fleet", {}, { preview: false }); await t.settle();
+  const home = t.tabs.open("vibe", {}, { preview: false });
+  assert.equal(home.home, true);
+  assert.equal(t.tabs.list().length, 2, "Home and Fleet: no tab called Vibe");
+  assert.equal(t.tabs.active(), "home");
+  assert.equal(t.nav.calls.at(-1)[0], "workspace", "the app is asked for Home, which is Vibe in this window");
 });
 
 test("the master switch turns every managed behaviour off at once, and back on", async () => {
@@ -549,13 +603,64 @@ test("the settings are validated and kept: defaults, bad values, ranges", async 
   const storage = new Map([["mefiStudio.tabs.prefs.v1", JSON.stringify({ v: 1, manage: "no", preview: false, agent: "teleport", idle: 7, cap: 99, suggest: false })]]);
   const t = await tabsEnv({ storage });
   assert.deepEqual({ ...t.tabs.prefs() }, { manage: true, preview: false, suggest: false, agent: "bg", idle: 30, cap: 12, forcedOff: false }, "what is not a valid choice falls back to the default; the cap is cut to 3 to 12");
-  const low = t.tabs.setPrefs({ cap: 0 });
-  assert.equal(low.cap, 3);
+  assert.equal(t.tabs.setPrefs({ cap: 1 }).cap, 3, "too few is three");
+  assert.equal(t.tabs.setPrefs({ cap: -4 }).cap, 3);
+  assert.equal(t.tabs.setPrefs({ cap: 0 }).cap, 0, "0 is 'no limit': one step past the top of the range");
+  assert.equal(t.tabs.setPrefs({ cap: 7.6 }).cap, 8, "a fraction is rounded");
+  assert.equal(t.tabs.setPrefs({ cap: "5" }).cap, 5, "text that is a number is one");
+  assert.equal(t.tabs.setPrefs({ cap: "lots" }).cap, 8, "and text that is not is nothing said: the default");
+  assert.equal(t.tabs.setPrefs({ cap: null }).cap, 8, "null is not 0, and so not 'no limit'");
+  assert.equal(t.tabs.setPrefs({ cap: "" }).cap, 8);
+  assert.equal(t.tabs.setPrefs({ cap: false }).cap, 8);
+  t.tabs.setPrefs({ cap: 3 });
   t.tabs.setPrefs({ idle: 10, agent: "focus", preview: true, suggest: true });
   assert.deepEqual(t.stored("mefiStudio.tabs.prefs.v1"), { v: 1, manage: true, preview: true, suggest: true, agent: "focus", idle: 10, cap: 3 });
+  for (const [value, cap] of [[0, 0], ["0", 0], [null, 8], ["", 8], [false, 8], [[], 8], [{}, 8], [2, 3], [13, 12]]) {
+    const again = await tabsEnv({ storage: new Map([["mefiStudio.tabs.prefs.v1", JSON.stringify({ v: 1, cap: value })]]) });
+    assert.equal(again.tabs.prefs().cap, cap, `a stored cap of ${JSON.stringify(value)}`);
+  }
   const fresh = await tabsEnv();
   assert.deepEqual({ ...fresh.tabs.prefs() }, { manage: true, preview: true, suggest: true, agent: "bg", idle: 30, cap: 8, forcedOff: false }, "the defaults the owner asked for: a preview tab, badge and a background tab, 30 minutes, eight, suggestions");
   assert.equal(fresh.storage.has("mefiStudio.tabs.prefs.v1"), false, "a default nobody changed is not written down");
+});
+
+test("no limit: nothing is closed to make room, and choosing a limit afterwards closes the surplus at once, with Undo", async () => {
+  const tasks = Array.from({ length: 15 }, (_, i) => task(`n${i}`, { title: `N${i}` }));
+  const t = await tabsEnv({ tasks });
+  t.tabs.setPrefs({ cap: 0 });
+  for (let i = 0; i < 15; i += 1) openSession(t, `n${i}`);
+  await t.settle();
+  assert.equal(t.tabs.list().length, 16, "Home and fifteen sessions");
+  assert.equal(t.toasts.length, 0, "and not a word about closing");
+  assert.equal(t.tabs.recentlyClosed().length, 0);
+  t.tabs.setPrefs({ cap: 8 });
+  await t.settle();
+  assert.equal(t.tabs.list().length, 9, "eight and Home");
+  assert.match(t.toasts.at(-1).message, /^Closed 7 old tabs to keep 8 open\.$/);
+  assert.equal(t.toasts.at(-1).options.action.label, "Undo");
+  assert.equal(t.itemOf("N14") !== null, true, "the one you were on stayed");
+});
+
+test("open() of something that is not a place (Friends, Search) is plain MefiNav.go, and makes no tab", async () => {
+  const t = await tabsEnv();
+  assert.equal(t.tabs.open("friends", { room: "x" }), null);
+  assert.deepEqual(plain(t.nav.calls.at(-1)), ["friends", { room: "x" }], "it was opened, the way it always was");
+  assert.equal(t.tabs.open("palette"), null);
+  assert.deepEqual(plain(t.nav.calls.at(-1)), ["palette", {}]);
+  await t.settle();
+  assert.deepEqual(t.titles(), ["Home"], "and Home is still the only tab");
+});
+
+test("the app replaying a draft into a field is not you typing: only real input keeps the preview", async () => {
+  const t = await tabsEnv();
+  await t.go("fleet");
+  const box = textBox(t);
+  await t.document.body.trigger("input", { target: box, isTrusted: false });
+  await t.settle();
+  assert.equal(t.itemOf("Fleet").dataset.preview, "true", "still a preview tab");
+  await t.document.body.trigger("input", { target: box, isTrusted: true });
+  await t.settle();
+  assert.equal(t.itemOf("Fleet").dataset.preview, undefined, "you typing keeps it");
 });
 
 test("MEFI_STUDIO_NO_TAB_MANAGER=1 (the host's word) turns management off for the run and the card says so", async () => {

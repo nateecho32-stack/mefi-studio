@@ -154,6 +154,20 @@ test("the id counter keeps going across launches, and across a store that lost i
   assert.equal(new Set(third.tabs.list().map((tab) => tab.id)).size, third.tabs.list().length, "every id is its own");
 });
 
+test("an id that a closed tab had is not given to a new tab after a restart", async () => {
+  const storage = new Map();
+  const first = await tabsEnv({ storage });
+  first.tabs.open("fleet", {}, { preview: false });
+  first.tabs.open("plans", {}, { preview: false });
+  first.tabs.close(first.tabs.list().find((tab) => tab.route.id === "plans").id); // t2 is in Recently closed
+  await first.settle(); first.tabs.flush();
+  const second = await tabsEnv({ storage });
+  const made = second.tabs.open("worktrees", {}, { preview: false });
+  assert.equal(made.id, "t3", "t2 belongs to a tab that was closed: the counter is kept, not worked out from the tabs that are open");
+  second.tabs.restore();
+  assert.equal(second.tabs.recentlyClosed().length, 0, "and reopening what was closed is unaffected");
+});
+
 test("a burst of changes is written once, a moment later; before a reload, when the window hides and on saveState() it is written at once", async () => {
   class Counting extends Map { constructor() { super(); this.writes = 0; } set(key, value) { if (key.startsWith("mefiStudio.tabs.")) this.writes += 1; return super.set(key, value); } }
   const storage = new Counting();
