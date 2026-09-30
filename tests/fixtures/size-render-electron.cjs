@@ -132,14 +132,31 @@ app.whenReady().then(async () => {
   const dip = (x, y) => ({ x: Math.round(x * pageZoom()), y: Math.round(y * pageZoom()) });
   const rectOf = (selector) => run(`const node = document.querySelector(${JSON.stringify(selector)}); if (!node) return null; const box = node.getBoundingClientRect(); return { x: box.left, y: box.top, r: box.right, b: box.bottom, w: box.width, h: box.height };`);
   const click = async (selector) => {
-    await run(`document.querySelector(${JSON.stringify(selector)})?.scrollIntoView({ block: "center", behavior: "instant" });`); await sleep(80);
+    // Where the page has one column a picture is kept in view above the controls, so the middle of the pane may be under it: try where a
+    // pointer reaches the control (the frame leaves the page less room than the window has).
+    let reached = false;
+    for (const block of ["center", "end", "start"]) {
+      await run(`document.querySelector(${JSON.stringify(selector)})?.scrollIntoView({ block: ${JSON.stringify(block)}, behavior: "instant" }); await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));`); await sleep(80);
+      reached = await run(`const node = document.querySelector(${JSON.stringify(selector)}); if (!node) return false; const r = node.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return Boolean(hit) && (hit === node || node.contains(hit));`);
+      if (reached) break;
+    }
     const box = await rectOf(selector); assert.ok(box && box.w > 0, `${selector} is on screen to be clicked`);
+    assert.equal(reached, true, `${selector} can be reached by a pointer (not under the kept picture or a bar)`);
     const point = dip(box.x + box.w / 2, box.y + box.h / 2);
     contents.sendInputEvent({ type: "mouseMove", ...point }); contents.sendInputEvent({ type: "mouseDown", button: "left", clickCount: 1, ...point }); contents.sendInputEvent({ type: "mouseUp", button: "left", clickCount: 1, ...point });
     await sleep(120);
   };
   // A real drag of a range input's thumb to a value: press it where it is, move, release.
   const drag = async (id, to) => {
+    // The page scrolls inside itself, and where it has one column a picture is kept in view above the controls: bring the slider to
+    // somewhere a pointer can reach it (the frame leaves the page less room than the window has, so the controls are not always in view).
+    let reached = false;
+    for (const block of ["end", "center", "start"]) {
+      await run(`document.getElementById(${JSON.stringify(id)}).scrollIntoView({ block: ${JSON.stringify(block)}, behavior: "instant" }); await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));`);
+      reached = await run(`const input = document.getElementById(${JSON.stringify(id)}); const r = input.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return hit === input || input.contains(hit);`);
+      if (reached) break;
+    }
+    assert.equal(reached, true, `a pointer reaches the ${id} slider`);
     const box = await rectOf(`#${id}`); const { min, max, value } = await run(`const input = document.getElementById(${JSON.stringify(id)}); return { min: Number(input.min), max: Number(input.max), value: Number(input.value) };`);
     const at = (v) => ({ x: box.x + 9 + (box.w - 18) * ((v - min) / (max - min)), y: box.y + box.h / 2 });
     const start = dip(at(value).x, at(value).y), end = dip(at(to).x, at(to).y);
@@ -174,14 +191,14 @@ app.whenReady().then(async () => {
     const visible = (node) => { for (let n = node; n && n !== overlay; n = n.parentElement) if (getComputedStyle(n).display === 'none') return false; return true; };
     const scrollers = all.filter((node) => /(auto|scroll)/.test(getComputedStyle(node).overflowY + getComputedStyle(node).overflowX)).map((node) => ({ name: node.className || node.id, gutter: node.offsetWidth - node.clientWidth, vgutter: node.offsetHeight - node.clientHeight }));
     const small = all.filter((node) => textOf(node) && visible(node) && parseFloat(getComputedStyle(node).fontSize) < 12).map((node) => (node.className || node.tagName) + ':' + getComputedStyle(node).fontSize);
-    const bodyBox = box(body);
+    const bodyBox = box(body), bodyStyle = getComputedStyle(body);
     const wide = all.filter((node) => !node.closest('.size-mini-host') && visible(node) && node.getBoundingClientRect().width > 0 && node.getBoundingClientRect().right > bodyBox.r + 1).map((node) => (node.className || node.tagName) + ' ' + Math.round(node.getBoundingClientRect().right) + '>' + Math.round(bodyBox.r));
     return {
       inner: { w: innerWidth, h: innerHeight }, sheet: box(sheet), body: bodyBox, side: box(side), host: box(host), win: box(win),
       pageOverflow: document.documentElement.scrollWidth > innerWidth + 1 || document.body.scrollWidth > innerWidth + 1,
       bodyOverflowX: body.scrollWidth > body.clientWidth + 1, scrollbarWidth: getComputedStyle(body).scrollbarWidth,
       scrollers, small, wide, fit: parseFloat(document.getElementById('size-mini').style.getPropertyValue('--mini-fit')) || 1, paneHeight: body.clientHeight,
-      stuck: getComputedStyle(side).position, columns: getComputedStyle(document.querySelector('.size-wrap')).gridTemplateColumns.split(' ').length,
+      room: body.clientWidth - parseFloat(bodyStyle.paddingLeft) - parseFloat(bodyStyle.paddingRight), stuck: getComputedStyle(side).position, columns: getComputedStyle(document.querySelector('.size-wrap')).gridTemplateColumns.split(' ').length,
     };`;
   const assertFits = (m, tag) => {
     assert.equal(m.pageOverflow, false, `${tag}: the page overflows`);
@@ -255,10 +272,12 @@ app.whenReady().then(async () => {
     report.layouts.push({ label: tag, columns: m.columns, sticky: m.stuck, fit: m.fit, win: [Math.round(m.win.w), Math.round(m.win.h)] });
     assertFits(m, tag);
     await assertTicks("size-zoom", tag); await assertTicks("size-text", tag);
-    assert.equal(m.columns === 2, size[0] / size[2] >= 1000, `${tag}: two columns when there is room for them, one when there is not`);
+    // The page lays itself out by the room it is given (a container query at 720 px), and with the new layout's frame that is what the
+    // window leaves beside the rail, the list and the inspector, not the window's own width.
+    assert.equal(m.columns === 2, m.room > 720, `${tag}: two columns when the page has room for them, one when it has not (${Math.round(m.room)} px of room)`);
     if (m.columns === 1) assert.equal(m.stuck, size[1] / size[2] > 520 ? "sticky" : "static", `${tag}: the picture is kept in view unless the window is too short`);
     if (m.stuck === "sticky") assert.ok(m.side.h <= m.paneHeight * 0.68, `${tag}: a picture that is kept in view leaves room for the controls: ${Math.round(m.side.h)} of ${m.paneHeight}`);
-    if (size[0] / size[2] >= 1000) assert.ok(m.fit > 0.5, `${tag}: a wide page draws the picture large: ${m.fit}`);
+    if (m.columns === 2) assert.ok(m.fit > 0.5, `${tag}: a wide page draws the picture large: ${m.fit}`);
     assert.equal(await run("return document.activeElement.id;"), "size-zoom", `${tag}: the first control has the keyboard`);
     assert.deepEqual(await run("return [...document.querySelectorAll('#size-overlay [hidden]')].map((node) => node.id);"), ["size-discard"], `${tag}: only Discard is hidden, and only because there is no draft`);
     await capture(`size-${tag}.png`);
