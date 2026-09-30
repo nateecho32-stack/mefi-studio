@@ -675,6 +675,7 @@ test("nothing the project holds is read as markup, the section draws no scrollba
   assert.ok(sizes.length > 10 && sizes.every((size) => size >= 12), `font sizes: ${[...new Set(sizes)].join(", ")}`);
   assert.doesNotMatch(css, /overflow(?:-x|-y)?:\s*(?:auto|scroll)/, "long lines wrap instead of scrolling");
   assert.doesNotMatch(css, /#[0-9a-fA-F]{3,8}\b|rgba?\(/, "every colour is a theme token");
+  assert.doesNotMatch(source, /el\("(?:ul|ol|li)"/, "no list elements: the task pane styles every <ul> and <li> in it as flex rows, so lists are blocks with list roles");
   assert.match(source, /MefiUi\.arm\(node, \{ run, armed \}\)/, "the destructive button is the shared two-step one");
   assert.match(source, /armed: `Revert all \$\{count\}`/);
 });

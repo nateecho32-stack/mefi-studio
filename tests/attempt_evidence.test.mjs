@@ -235,6 +235,19 @@ test("attempt numbers already used by a folder are listed, so a run's number is 
   assert.deepEqual(await h.evidence.numbers(""), []);
 });
 
+test("the capture window is built hidden, unfocusable, off the taskbar, offscreen, sandboxed, without Node and with an in-memory session", () => {
+  // The real window is proven in tests/evidence_capture.test.mjs where Electron can run; this holds the same lines everywhere.
+  const source = readFileSync(new URL("../scripts/evidence-window.cjs", import.meta.url), "utf8").split("\n").filter((line) => !line.trim().startsWith("//")).join("\n");
+  for (const option of ["show: false", "skipTaskbar: true", "focusable: false", "frame: false", "offscreen: true", "sandbox: true", "contextIsolation: true", "nodeIntegration: false", "nodeIntegrationInWorker: false", "nodeIntegrationInSubFrames: false", "webSecurity: true", "webviewTag: false", "plugins: false", "allowRunningInsecureContent: false"]) assert.ok(source.includes(option), option);
+  assert.match(source, /fromPartition\(`mefi-evidence-\$\{random\(\)\}`\)/, "a session of its own with no persist: prefix, gone with the window");
+  assert.doesNotMatch(source, /persist:/);
+  assert.match(source, /onBeforeRequest\(\(details, callback\) => callback\(\{ cancel: !rules\.allowRequest\(details\.url, allow\) \}\)\)/, "every request goes through the planner's origin rule");
+  assert.match(source, /setWindowOpenHandler\(\(\) => \(\{ action: "deny" \}\)\)/);
+  assert.match(source, /setPermissionRequestHandler\(\(_contents, _permission, callback\) => callback\(false\)\)/);
+  assert.match(source, /will-download", \(event\) => event\.preventDefault\(\)/);
+  assert.match(source, /window\.destroy\(\)/);
+});
+
 test("a side that will get no shot says why in the approved words, and only a known reason is written", async (t) => {
   const h = host(t);
   assert.deepEqual(await h.evidence.skip({ taskId: "task_1", n: 1, runId: "run_1_1", phase: "after", reason: "not-merged" }), { ok: true });

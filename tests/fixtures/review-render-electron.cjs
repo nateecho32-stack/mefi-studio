@@ -192,6 +192,10 @@ localStorage.setItem("mefiStudio.zen", "0"); localStorage.setItem("mefiStudio.co
   assert.match(report.diffText, /<script>alert\('a line of the project is text'\)<\/script>/);
   assert.equal(await run("return document.querySelectorAll('.task-review script').length;"), 0, "a line of the project is never markup");
   assert.deepEqual(await callsNamed("diff"), [{ taskId: "built", projectId: "fixture", attempt: 2, path: "src/components/NotesHeader.tsx" }]);
+  // The pane styles every <ul> and <li> as flex rows; the section's rows are grids whose diff spans the row, below the file.
+  report.rowLayout = await run(`const row = document.querySelector('.task-review .review-file'); const diff = row.querySelector('.review-diff'); const main = row.querySelector('.review-file-main'); const a = row.getBoundingClientRect(); const d = diff.getBoundingClientRect(); const m = main.getBoundingClientRect(); return { display: getComputedStyle(row).display, diffBelow: d.top >= m.bottom - 1, diffWidthShare: d.width / a.width };`);
+  assert.equal(report.rowLayout.display, "grid", "a file row is a grid, whatever the pane says about list items");
+  assert.ok(report.rowLayout.diffBelow && report.rowLayout.diffWidthShare > 0.95, `the diff spans the row under its file: ${JSON.stringify(report.rowLayout)}`);
   await inspect("diff, wide");
   await capture("review-diff-wide.png");
 
