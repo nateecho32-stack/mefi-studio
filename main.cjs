@@ -22576,6 +22576,67 @@ function registerIpc() {
   }));
   ipcMain.handle("projects:glance", gitCall((host, payload) => host.glance(Array.isArray(payload.ids) ? payload.ids.filter((id) => typeof id === "string").slice(0, 100) : undefined)));
 
+  // ---- Worktrees (scripts/worktrees.mjs reads, scripts/worktree-actions.mjs writes) ----
+  // The Worktrees page under Work: every worktree of the open project, and Merge
+  // into main, Remove and Forget missing folders on the ones git lists for it.
+  // Project-gated like git:* (a switch waits), one writer at a time. The renderer
+  // names a folder from the last list; the module acts only on a folder git itself
+  // lists, so a path from outside the list does nothing. Nothing here pushes,
+  // fetches or forces; a run's own folder is never touched while it works.
+  let worktreeWrites = Promise.resolve();
+  const worktreeJobs = () => (typeof autopilot !== "undefined" ? autopilot.jobs ?? [] : []).filter((job) => job && !job.finished);
+  const worktreeInUse = (folder) => worktreeJobs().some((job) => job.worktree?.path && (path.basename(job.worktree.path) === path.basename(String(folder)) || path.resolve(job.worktree.path).toLowerCase() === path.resolve(String(folder)).toLowerCase()));
+  const worktreeCall = (run) => async (_event, payload) => {
+    const open = projects.open();
+    const root = open ? projectRoot() : null;
+    if (!root) return { ok: false, error: "Open a project first." };
+    const body = payload && typeof payload === "object" ? payload : {};
+    if (typeof body.projectId === "string" && body.projectId !== projects.active().id) return { ok: false, error: "The selected project changed. Try again in its intended project." };
+    try { return await run(root, body); }
+    catch (error) { return { ok: false, error: String(error?.message ?? error).replace(/([a-z][a-z0-9+.-]*:\/\/)[^/@\s]+@/gi, "$1").slice(0, 300) }; }
+  };
+  const worktreeWrite = (task) => {
+    const next = worktreeWrites.then(task);
+    worktreeWrites = next.catch(() => {});
+    return next;
+  };
+  // The task a run worktree belongs to, from the executor ledger's start row
+  // (runId, task id, title); the ledger is read only when a run worktree is listed.
+  const worktreeTasks = async (rows) => {
+    if (!rows.some((row) => row.kind === "run")) return new Map();
+    let ledger = "";
+    try { ledger = await readFile(projectDataPath(EXECUTOR_LOG_PATH), "utf8"); } catch { return new Map(); }
+    const wanted = new Set(rows.filter((row) => row.kind === "run").map((row) => path.basename(row.path)));
+    const found = new Map();
+    for (const line of ledger.split("\n")) {
+      if (!line.includes('"start"')) continue;
+      let record = null;
+      try { record = JSON.parse(line); } catch { continue; }
+      if (record?.event === "start" && wanted.has(record.runId)) found.set(record.runId, { taskId: typeof record.task === "string" ? record.task : null, title: String(record.title ?? "").slice(0, 160), at: Number(record.at) || null });
+    }
+    return found;
+  };
+  ipcMain.handle("worktrees:list", worktreeCall(async (root) => {
+    const list = await (await loadModule("scripts/worktrees.mjs")).listWorktrees(root);
+    if (!list.repo) return { ok: true, repo: false, projectId: projects.active().id, enabled: worktreeView() };
+    const tasks = await worktreeTasks(list.rows);
+    const rows = list.rows.map((row) => ({ ...row, task: row.kind === "run" ? tasks.get(path.basename(row.path)) ?? null : null, busy: row.kind !== "primary" && worktreeInUse(row.path) }));
+    return { ok: true, ...list, rows, projectId: projects.active().id, enabled: worktreeView(), builders: worktreeJobs().length > 0 };
+  }));
+  ipcMain.handle("worktrees:merge", worktreeCall((root, payload) => worktreeWrite(async () => (await loadModule("scripts/worktree-actions.mjs")).mergeWorktree(root, String(payload.path ?? ""), {
+    mode: payload.mode === "merge" ? "merge" : "ff", remove: payload.remove === true, anyway: payload.anyway === true, builders: worktreeJobs().length > 0, inUse: worktreeInUse,
+  }))));
+  ipcMain.handle("worktrees:remove", worktreeCall((root, payload) => worktreeWrite(async () => (await loadModule("scripts/worktree-actions.mjs")).removeWorktree(root, String(payload.path ?? ""), {
+    force: payload.force === true, deleteBranch: payload.deleteBranch === true, inUse: worktreeInUse,
+  }))));
+  ipcMain.handle("worktrees:forget", worktreeCall((root) => worktreeWrite(async () => (await loadModule("scripts/worktree-actions.mjs")).pruneWorktrees(root))));
+  ipcMain.handle("worktrees:open", worktreeCall(async (root, payload) => {
+    const found = await (await loadModule("scripts/worktree-actions.mjs")).worktreeFolder(root, String(payload.path ?? ""));
+    if (!found.ok) return found;
+    const failed = await shell.openPath(found.path);
+    return failed ? { ok: false, error: String(failed).slice(0, 200) } : { ok: true };
+  }));
+
   // ---- Your PCs vault (the "Your PCs vault" block) ----------------------------
   // Friends › Your PCs › Share between my PCs. Project-gated: brains, recipes,
   // notes and ideas act on the open project, so a switch waits for them.

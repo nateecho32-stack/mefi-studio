@@ -416,6 +416,13 @@ const api = {
   }),
   gitLinkRepos: () => ipcRenderer.invoke("git:link-repos"),
   gitLink: (repo, options) => ipcRenderer.invoke("git:link", { repo: gitText(repo, 200), ...gitProject(options) }),
+  // The Worktrees page (main.cjs "Worktrees"): every worktree of the open project,
+  // and what may be done to one. A folder is only ever one the last list returned.
+  worktreesList: (options) => ipcRenderer.invoke("worktrees:list", gitProject(options)),
+  worktreesMerge: (payload) => ipcRenderer.invoke("worktrees:merge", { path: gitText(payload?.path, 1024), mode: payload?.mode === "merge" ? "merge" : "ff", remove: payload?.remove === true, anyway: payload?.anyway === true, ...gitProject(payload) }),
+  worktreesRemove: (payload) => ipcRenderer.invoke("worktrees:remove", { path: gitText(payload?.path, 1024), force: payload?.force === true, deleteBranch: payload?.deleteBranch === true, ...gitProject(payload) }),
+  worktreesForget: (options) => ipcRenderer.invoke("worktrees:forget", gitProject(options)),
+  worktreesOpen: (payload) => ipcRenderer.invoke("worktrees:open", { path: gitText(payload?.path, 1024), ...gitProject(payload) }),
   // The signed-in GitHub account's NAME (never a token) and whether git and gh exist.
   githubAccount: () => ipcRenderer.invoke("pc-setup:account"),
   // The launch screen's per-project glance (branch, ahead/behind, the chip), by project id.
