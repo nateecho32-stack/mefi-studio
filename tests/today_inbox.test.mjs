@@ -275,6 +275,13 @@ test("when the host says no the card says why, keeps its buttons and still count
   await press(gone, cardOf(gone, "question:q1").querySelector('[data-option="no"]'));
   assert.match(words(cardOf(gone, "question:q1")), /Decided · That question is no longer waiting\./);
   assert.equal(gone.today.count(), 0, "it is not waiting any more");
+  // The host had already dropped it (its push came first): the notice still stands where the question was.
+  let late = null;
+  late = await loadToday({ data: board({ needs: [needQuestion(), needBlocked()] }), bridge: { assistantAnswer: async () => { await late.push(board({ needs: [needBlocked()] })); return { ok: false, gone: true, error: "That question is no longer waiting." }; } } });
+  await open(late);
+  await press(late, cardOf(late, "question:q1").querySelector('[data-option="no"]'));
+  assert.deepEqual(inboxOf(late).querySelectorAll(".today-need").map((card) => card.dataset.key), ["question:q1", "blocked:t6"]);
+  assert.match(words(cardOf(late, "question:q1")), /^Decided · That question is no longer waiting\./);
 });
 
 test("a decided line leaves by itself, the count does not come back, and a need the host never settled returns", async () => {
@@ -373,6 +380,20 @@ test("J and K move, a number picks an option, Enter opens the task, Esc closes a
   await open(u);
   u.inboxKey("3"); u.inboxKey("7"); await u.settle();
   assert.deepEqual(u.callsOf("assistantAnswer"), []);
+  // A letter or a digit typed in here is for here, used or not: Studio's own one-key places (2) and Vibe's panels (T) stay out of it.
+  assert.equal(u.inboxKey("9"), true, "a digit past the options is still not a place");
+  assert.equal(u.inboxKey("x"), true, "nor is a letter");
+  assert.equal(u.inboxKey("Tab"), false, "Tab still walks the buttons");
+  assert.equal(u.inboxKey(" "), false, "and Space still presses the one that has the focus");
+  // The keyboard is the popover's while it is inside it, which is what tells Vibe's shortcuts to wait.
+  const inside = inboxOf(u).querySelector("button");
+  u.document.activeElement = inside;
+  assert.equal(u.today.ownsKeys(), true);
+  u.document.activeElement = u.body;
+  assert.equal(u.today.ownsKeys(), false, "focus elsewhere: Vibe's keys are Vibe's");
+  u.document.activeElement = inside; u.today.closeInbox();
+  assert.equal(u.today.ownsKeys(), false, "closed: nobody's");
+  u.today.openInbox(null); await u.settle();
   // Typing in the answer box is typing: no keys are taken.
   const box = cardOf(u, "question:q1").querySelector(".today-need-input");
   u.inboxKey("1", { target: box }); u.inboxKey("j", { target: box }); await u.settle();
@@ -606,4 +627,15 @@ test("an answer that lands after the project changed decides nothing in the new 
   assert.equal(t.today.count(), 1, "the other project's question still waits on you");
   assert.ok(cardOf(t, "question:q1").querySelector(".today-need-options"), "as a card, not a decided line");
   assert.equal(t.vibe.refreshes, 0, "and nothing is re-read for an answer that belongs to a project that is gone");
+});
+
+test("a decided line keeps its place when the host's push reaches the page before its reply does", async () => {
+  let t = null;
+  const after = board({ needs: [needApproval(), needBlocked()] });
+  t = await loadToday({ data: board({ needs: [needQuestion(), needApproval(), needBlocked()] }), bridge: { assistantAnswer: async () => { await t.push(after); return { ok: true }; } } });
+  await open(t);
+  await press(t, cardOf(t, "question:q1").querySelector('[data-option="yes"]'));
+  assert.deepEqual(inboxOf(t).querySelectorAll(".today-need").map((card) => card.dataset.key), ["question:q1", "approval:t5", "blocked:t6"], "the question was first, so its Decided line is first, not sent to the end");
+  assert.match(words(cardOf(t, "question:q1")), /^Decided · Answered: Yes, ignore case/);
+  assert.equal(t.today.count(), 2);
 });

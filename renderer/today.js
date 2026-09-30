@@ -294,9 +294,10 @@
   // ---- doing something about a need --------------------------------------------------------------
   // What is handled stays out of the count at once and reads as a "Decided" line, in the place it had, until the host
   // has dropped it from its list and the line has been seen.
-  function decided(item, label, { undo: back = null, note = "" } = {}) {
+  function decided(item, label, { undo: back = null, note = "", index: was = -1 } = {}) {
     const now = Date.now();
-    const index = model().items.findIndex((entry) => entry.key === item.key);
+    // Its place is the one it had when the action began: the host's push can reach the page before its reply does, and the need is gone from the list by then.
+    const index = was >= 0 ? was : model().items.findIndex((entry) => entry.key === item.key);
     state.handled.set(item.key, { at: now, showUntil: now + DECIDED_SHOW_MS, holdUntil: now + DECIDED_HOLD_MS, label, undo: back, title: item.title, note, kind: item.kind, tone: item.tone, kindLabel: item.label, taskId: item.taskId, index: index < 0 ? undefined : index });
     state.errors.delete(item.key);
     scheduleSweep();
@@ -310,6 +311,7 @@
     const key = item.key;
     if (!action || action.disabled || state.busy.has(key) || holding(key)) return { ok: false, skipped: true };
     const project = (state.data || {}).projectId ?? null;
+    const place = model().items.findIndex((entry) => entry.key === key);
     state.busy.add(key); state.errors.delete(key);
     paint();
     let result = null;
@@ -319,11 +321,11 @@
     if (project !== ((state.data || {}).projectId ?? null)) { paint(); return result; }
     if (result && result.ok !== false) {
       const label = typeof action.decided === "function" ? action.decided(extra) : action.decided;
-      decided(item, label || "Done", { undo: action.undo || null, note: clip(window.MefiAutonomy?.outcome?.(result, "") || "", 140) });
+      decided(item, label || "Done", { undo: action.undo || null, note: clip(window.MefiAutonomy?.outcome?.(result, "") || "", 140), index: place });
       return result;
     }
     // A question that closed meanwhile, or whose card left the board, is cleared by the host: a notice, not a failure.
-    if (result?.gone) { decided(item, clip(result.error, 120) || "That was settled already"); return result; }
+    if (result?.gone) { decided(item, clip(result.error, 120) || "That was settled already", { index: place }); return result; }
     state.errors.set(key, say(result, NOT_DONE));
     paint();
     return result;
@@ -379,9 +381,9 @@
   }
   function openPlan(planId) { window.MefiNav?.go?.("plans", { planId }); }
 
-  function renderDecided(item, entry) {
+  function renderDecided(item, entry, key = item.key) {
     const node = el("article", "today-need is-decided");
-    node.dataset.key = item.key; node.dataset.kind = item.kind;
+    node.dataset.key = key; node.dataset.kind = item.kind;
     const line = el("div", "today-decided");
     line.setAttribute("role", "status");
     line.append(el("i", "today-tick"));
@@ -634,6 +636,8 @@
     return true;
   }
   const inboxIsOpen = () => Boolean(state.inbox.open);
+  // True while the keyboard is inside the popover: Vibe's own one-key shortcuts (renderer/vibe.js vibeKeysOpen) wait then, as they do in its drawers.
+  const ownsKeys = () => Boolean(state.on && state.inbox.open && state.inbox.node && document.activeElement && state.inbox.node.contains?.(document.activeElement));
   function toggleInbox(anchor = null) {
     if (inboxIsOpen()) { closeInbox(); return false; }
     return openInbox(anchor);
@@ -653,6 +657,8 @@
     const node = state.inbox.node;
     if (event.key === "Escape") { event.preventDefault?.(); event.stopPropagation?.(); closeInbox(); return; }
     if (typing(event.target) || event.ctrlKey || event.metaKey || event.altKey) return;
+    // A letter or a digit typed in here is for here: Studio's one-key shortcuts (2 is a place, T a panel) stay out of it.
+    if (String(event.key || "").length === 1 && event.key !== " ") { event.preventDefault?.(); event.stopPropagation?.(); }
     const body = node.querySelector(".today-inbox-body");
     const cards = [...body.children];
     const step = (by) => {
@@ -726,7 +732,7 @@
 
   // ---- Today: the board ------------------------------------------------------------------------------
   function renderCard(card, detail) {
-    if (card.decided) return renderDecided(card.item, card.item.handled);
+    if (card.decided) return renderDecided(card.item, card.item.handled, card.key);
     if (card.item) return renderBoardNeed(card, detail);
     const node = el("article", `today-card is-${card.tone}`);
     node.dataset.key = card.key;
@@ -1104,7 +1110,7 @@
 
   window.MefiToday = {
     start, stop, show, hide, isOn: () => state.on, takesNeeds: () => state.on,
-    count, items, onChange, openInbox, closeInbox, toggleInbox, isInboxOpen: inboxIsOpen, openInboxPage, closeInboxPage, openPage: openTodayPage, closePage: closeTodayPage,
+    count, items, onChange, openInbox, closeInbox, toggleInbox, isInboxOpen: inboxIsOpen, ownsKeys, openInboxPage, closeInboxPage, openPage: openTodayPage, closePage: closeTodayPage,
     openNeed, openFromAlert, refresh: () => Promise.resolve(vibe()?.refresh?.()).then(() => { onData(); }),
     // For tests and anything driving Studio: the pure model, and what is in flight.
     build, snapshot: () => { const current = model(); return { count: current.count, items: current.items.map((item) => ({ key: item.key, kind: item.kind, handled: Boolean(item.handled) })), groups: Object.fromEntries(GROUPS.map(([key]) => [key, current.board[key].map((card) => card.key)])), host: state.host, inbox: state.inbox.open, later: [...state.later], busy: [...state.busy] }; },

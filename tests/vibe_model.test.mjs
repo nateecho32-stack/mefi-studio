@@ -19,7 +19,7 @@ const settle = async () => { for (let turn = 0; turn < 12; turn += 1) await new 
 
 const QUESTION = { id: "q1", status: "open", title: "Should #Work and #work count as the same tag?", at: 1, context: { taskId: "t1", taskTitle: "Search notes by tag" }, options: [{ id: "yes", label: "Yes, ignore case", recommended: true }, { id: "no", label: "Keep them separate" }] };
 
-async function load({ mefiToday, needsYou = null } = {}) {
+async function load({ mefiToday, needsYou = null, extras = {} } = {}) {
   const calls = { backlog: 0, list: 0 };
   const subscribers = {};
   const tasks = [{ id: "t1", projectId: P, title: "Search notes by tag", status: "active" }, { id: "t2", projectId: P, title: "Fix the login redirect loop", status: "awaiting_verification" }];
@@ -45,6 +45,7 @@ async function load({ mefiToday, needsYou = null } = {}) {
     location: { search: "" }, mefiStudio: api,
     MefiNav: { register() {}, current: () => "vibe", go() {}, state: { sheet: null, transient: null } },
     ...(mefiToday ? { MefiToday: mefiToday } : {}),
+    ...extras,
   };
   const context = vm.createContext({
     window, document, console, location: { search: "" },
@@ -55,7 +56,13 @@ async function load({ mefiToday, needsYou = null } = {}) {
   vm.runInContext(source, context);
   const push = (name, payload) => { for (const callback of subscribers[name] || []) callback(payload); };
   const fireTimers = async () => { while (timers.length) { await timers.shift()(); } await settle(); };
-  return { window, get, calls, push, subscribers, fireTimers, tasks, assistant, document };
+  const key = (value, target = document.body) => {
+    let prevented = false;
+    const event = { type: "keydown", key: value, target, altKey: false, ctrlKey: false, metaKey: false, isComposing: false, get defaultPrevented() { return prevented; }, preventDefault() { prevented = true; }, stopPropagation() {} };
+    for (const callback of events.keydown || []) callback(event);
+    return prevented;
+  };
+  return { window, get, calls, push, subscribers, fireTimers, tasks, assistant, document, key };
 }
 
 test("with nobody watching, Vibe reads nothing while it is not up", async () => {
@@ -157,4 +164,24 @@ test("without Today in the page (v1), Vibe's enter and exit and openNeed are wha
   assert.equal(loaded.get("vibe-ask").hidden, false);
   loaded.window.MefiVibe.exit();
   assert.equal(loaded.window.MefiVibe.isActive(), false);
+});
+
+test("Vibe's one-key shortcuts wait while the Inbox popover holds the keyboard, and are Vibe's again when it lets go", async () => {
+  let panel = null;
+  const opened = [];
+  let owns = false;
+  const loaded = await load({ mefiToday: { ownsKeys: () => owns }, extras: { MefiVibePanels: { open: (kind) => { panel = kind; opened.push(kind); }, close: () => { panel = null; }, current: () => panel, isOpen: () => panel !== null } } });
+  await loaded.window.MefiVibe.enter(); await settle();
+  owns = true;
+  assert.equal(loaded.key("t"), false, "T typed in the popover is not Vibe's tasks key");
+  assert.equal(loaded.key("n"), false, "nor N");
+  assert.deepEqual(opened, []);
+  owns = false;
+  assert.equal(loaded.key("t"), true, "with the popover closed, T is Vibe's");
+  assert.deepEqual(opened, ["tasks"]);
+  // v1 has no MefiToday at all: the shortcuts are exactly what they were.
+  const v1 = await load({ extras: { MefiVibePanels: { open: (kind) => opened.push(`v1:${kind}`), close() {}, current: () => null, isOpen: () => false } } });
+  await v1.window.MefiVibe.enter(); await settle();
+  assert.equal(v1.key("t"), true);
+  assert.equal(opened.at(-1), "v1:tasks");
 });

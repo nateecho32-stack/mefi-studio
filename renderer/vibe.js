@@ -1686,6 +1686,8 @@
     const nav = window.MefiNav?.state;
     if (!active() || nav?.sheet || nav?.transient || window.MefiBoot?.isActive?.()) return false;
     if (window.MefiCompanionHub?.isOpen?.() || window.MefiSidebar?.isOpen?.() || (notes && !notes.hidden)) return false;
+    // The Inbox popover (renderer/today.js, layout v2) takes what is typed while the keyboard is inside it.
+    if (window.MefiToday?.ownsKeys?.()) return false;
     // A drawer you are in (focus inside it, or the pointer on it) takes what
     // you type (nav.js typeInto): its letters are writing, not these keys.
     for (const id of ["panel", "ask", "chat"]) {
