@@ -12,14 +12,15 @@ The share image is `assets/studio-community-card.jpg`, with editable HTML/CSS al
 
 Current positioning: share ideas and work in progress in Discord, build with coding agents on your desktop, and help shape the project. The Discord bot is an external project. Shared desktop playback needs the rooms hub and Discord connection; cowork rooms and voice activation are future work. Do not advertise those future features as part of 0.4.4.
 
-## 0.4.5 scope
+## 0.5.0 scope
 
-The [release scope](release-scope-0.4.5.md) records the included desktop
-work, service-dependent room features and deferred work. The public roadmap
-and coming-in-0-4-5 guide on `gh-pages` show the same boundary. The Fleet
-page already on `main` belongs to 0.4.5; its later lanes, missions and
-cross-PC expansion are separate. Download links stay on 0.4.4 until a new
-release is published.
+The [release scope](release-scope-0.5.0.md) records the included desktop
+work, service-dependent room features and deferred work. 0.4.5 and 0.4.6 are
+skipped, so the public roadmap and the coming-in-0-4-5 guide on `gh-pages`
+still describe a release that will not happen: retarget them to 0.5.0 before
+anything is published there. The Fleet page already on `main` ships in 0.5.0;
+its later lanes, missions and cross-PC expansion are separate. Download links
+stay on 0.4.4 until a new release is published.
 
 ## Proposed voice flow
 
