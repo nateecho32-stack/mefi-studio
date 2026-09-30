@@ -528,14 +528,12 @@ app.whenReady().then(async () => {
   const countBefore = (await routes()).length;
   await key("W", ["control"]);
   await until(`window.MefiTabs.list().length === ${countBefore - 1}`, "Ctrl+W closes the tab you are on");
-  assert.equal(window.isDestroyed(), false, "and not the window");
-  report.keys.ctrlWClosedATabNotTheWindow = true;
+  report.keys.ctrlWClosesTheTab = true; // (this window is hidden, and a hidden window's menu does not act on keys: what happens to a window is the last step's)
   await key("1", ["control"]);
   await until("window.MefiTabs.active() === 'home'", "Ctrl+1 is Home");
   await key("W", ["control"]);
   await sleep(150);
   assert.equal(await run("return window.MefiTabs.active() === 'home' && window.MefiTabs.list().length > 0;"), true, "Ctrl+W on Home closes nothing");
-  assert.equal(window.isDestroyed(), false);
   assert.equal(await run("return document.querySelector('.ts-live').textContent;"), "Home stays open");
 
   // Ctrl+K and Ctrl+, are not the strip's; and Escape in a menu leaves the page under it alone
@@ -779,8 +777,13 @@ app.whenReady().then(async () => {
   report.v1Untouched = true;
 
   // ===================================================================================================================================
-  // 9. Ctrl+W and the window's own menu (a visible window: the application menu needs one)
+  // 9. Ctrl+W and the window's own menu. Only a visible, focused window acts on a menu accelerator (a hidden, inactive or offscreen one does
+  //    not, which a probe on this platform showed), so two small windows are shown for a moment: the real application menu template from
+  //    main.cjs is set, and Ctrl+W is sent to a page that ignores it (its window must close: the control, which proves the check can
+  //    see a close at all) and to a page that takes it with preventDefault, as the strip does (its window must stay).
+  //    MEFI_TABS_SKIP_WINDOW_PROBE=1 leaves this step out (it puts two windows on screen for about two seconds).
   // ===================================================================================================================================
+  if (process.env.MEFI_TABS_SKIP_WINDOW_PROBE === "1") { report.keys.windowProbe = "skipped"; assert.deepEqual(report.errors, []); report.complete = true; finish(); return; }
   const menuSource = fs.readFileSync(path.join(studio, "main.cjs"), "utf8").replace(/\r\n/g, "\n");
   const from0 = menuSource.indexOf("function applicationMenu() {"), to0 = menuSource.indexOf("async function applyReload");
   assert.ok(from0 > 0 && to0 > from0, "the application menu is in main.cjs");
