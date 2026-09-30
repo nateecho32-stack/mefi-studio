@@ -35,6 +35,36 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-29 - Codex Security fixes for five validated findings
+
+Remote task admission and promotion now retain the approval boundary. PIN
+checks, lockout changes, settings toggles and one-use approval handles share
+the settings queue. Catalog limits are validated and rendered safely. Legacy
+idea scans reject linked paths, validate opened files and redact complete
+credential context before clipping. Friend exports and Discord replies remove
+home-path tails and local file links while preserving surrounding references.
+
+- New pre-fix regressions reproduced remote provenance loss, concurrent PIN
+  undercounting, stale PIN replacement, catalog HTML, outside-project junction
+  reads and credential/path-tail disclosure. A fresh read-only reviewer found
+  multiline JSON credentials and sharing representation/prose cases; these
+  were reproduced, corrected and covered by regressions.
+- Final focused security/compatibility run: 153 tests, 151 passed, 2 skipped
+  because this Windows account cannot create file symlinks (EPERM). Initial
+  and nested junctions and cached-directory replacement ran and passed.
+- Final stable tree: `npm run build-booklet`, `npm run check` (196 targets,
+  406 specs), `git diff --check` and `npm run audit` (0 findings) PASS.
+- Final `npm test` PASS: Node 4,607 tests, 4,598 passed, 9 skipped, 0 failures
+  (563 s); Python 248 tests, 1 skipped, 0 failures (47 s); normalized-path
+  lock 6 checks PASS. Existing opt-in/platform skips remain; the occlusion
+  fixture capability-gated because this desktop never emitted occlusion.
+- An earlier full run was deliberately stopped after its passing CPU stage
+  to incorporate the independent review corrections; it is not counted as a
+  completed gate. The final full run above used the settled final sources.
+- All fixtures used synthetic data. No paid workers or live Discord/model
+  operations ran, and existing user data and installed app dependencies stayed
+  intact. Complete local logs were retained in the security artifact collection.
+
 ## 2026-09-29 - 0.4.5 roadmap quick wins and release boundary
 
 Friends now has a primary menu entry, direct Rooms, Your PCs and Playground
@@ -682,35 +712,6 @@ this PC; a hub naming its studioAppId fills the link app ID.
   4268 passed, 5 skipped, 0 failures; Electron stage 42 tests, 41 passed, 1
   skipped; `eyes_toggle_electron` 1/1; `occlusion_probe` 1 passed, 1
   capability skip; Python contracts OK (248); normalized-path lock passed.
-
-## 2026-09-28 - Discord linking without environment variables; vault kept in step
-
-Settings › Community › Connection details saves the Mefi Studio Link
-Application ID and the rooms hub's address (settings.communitySetup, checked
-by community.normalizeSetup and the hub client's address rule) and uses them
-at once; the environment variables still win. The Your PCs vault now rebases
-its own commits onto GitHub's instead of pulling fast-forward only, so a push
-that loses the race to another PC is sent again and a copy is never left
-stuck; a clash on the same item keeps GitHub's. Keys and setup queues behind
-a loading vault instead of staying empty.
-
-- `npm run build-booklet`, `npm run check` (186 targets, 379 specs) and
-  `npm run audit` (zero findings): PASS.
-- New and changed suites: community_rules (normalizeSetup), hub_host
-  (save, refuse, clear, environment wins, hub answering or not, a new hub
-  address rebuilds the client), community_bridge, community_ui (Connection
-  details opens while not set up, reasons, Link my Discord at once),
-  pc_vault (a push losing the race goes on top; a same-item clash keeps
-  GitHub's; a copy left behind catches up and sends its commit), and
-  pc_vault_ui (Keys and setup opened while loading, the phrase hint, a
-  failed list).
-- A throwaway Electron probe of Settings › Community with a fake bridge:
-  the details open while not set up, a bad id gives its reason, Save shows
-  Link my Discord and the hub line, no overflow at 1280 or 620 px.
-- `npm test` in a private worktree, exit 0: Node parallel stage 4253 tests,
-  4248 passed, 5 skipped, 0 failures; Electron stage 42 tests, 41 passed, 1
-  skipped; `eyes_toggle_electron` 1/1; `occlusion_probe` 1 passed, 1
-  capability skip; Python contracts OK; normalized-path lock passed.
 
 ## Read Before Any Tests
 

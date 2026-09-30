@@ -10,9 +10,9 @@ const flush = async () => { for (let i = 0; i < 30; i++) await Promise.resolve()
 const deferred = () => { let resolve; const promise = new Promise((done) => { resolve = done; }); return { promise, resolve }; };
 
 function environment(overrides = {}, options = {}) {
-  const elements = new Map(), frames = new Map(), calls = [];
+  const elements = new Map(), frames = new Map(), calls = [], arcs = [];
   let frameId = 0, formatCalls = 0, paints = 0;
-  const ctx = new Proxy({}, { get: (_, name) => name === "measureText" ? (text) => ({ width: String(text).length * 7 }) : () => { if (name === "clearRect") paints++; }, set: () => true });
+  const ctx = new Proxy({}, { get: (_, name) => name === "measureText" ? (text) => ({ width: String(text).length * 7 }) : (...args) => { if (name === "clearRect") paints++; if (name === "arc") arcs.push(args); }, set: () => true });
   class Element {
     constructor() { this.value = ""; this.textContent = ""; this.html = ""; this.writes = 0; this.hidden = false; this.children = []; this.listeners = {}; this.style = {}; this.dataset = {}; this.parentElement = { clientWidth: 1000 }; this.classList = { toggle() {}, add() {}, remove() {} }; }
     get innerHTML() { return this.html; }
@@ -45,10 +45,34 @@ function environment(overrides = {}, options = {}) {
   const money = window.MefiGraph.fmt.money;
   window.MefiGraph.fmt.money = (...args) => { formatCalls++; return money(...args); };
   vm.runInContext(source, context);
-  return { get, calls, window, context, frames, formats: () => formatCalls, paints: () => paints,
+  return { get, calls, window, context, frames, formats: () => formatCalls, paints: () => paints, arcs: () => arcs,
     frame() { const pending = [...frames.values()]; frames.clear(); pending.forEach((fn) => fn()); },
   };
 }
+
+test("catalog context formatter rejects malformed limits and preserves numeric controls", () => {
+  const { ctx } = environment().window.MefiGraph.fmt;
+  for (const [value, expected] of [[0, "0"], [999, "999"], [200000, "200K"], [1000000, "1M"], [1500000, "1.5M"]]) assert.equal(ctx(value), expected);
+  for (const value of [null, undefined, "<img src=x onerror=alert(1)>", "200000", { tokens: 200000 }, [200000], true, -1, Infinity, NaN]) assert.equal(ctx(value), "—");
+});
+
+test("loaded catalog limits stay inert in model cards, graph table and tooltip", async () => {
+  const unsafe = structuredClone(catalog);
+  unsafe.hash = "malformed-context-fixture";
+  unsafe.models = [{ ...unsafe.models[0], quality: { ...unsafe.models[0].quality, index: 45 }, typicalCostUSD: 0.01, limits: { context: "<img src=x onerror=alert(1)>", output: { tokens: 16000 } } }];
+  const env = environment({ readCatalog: async () => unsafe }); await flush();
+  await env.window.MefiBooklet.refresh("test"); await flush();
+  assert.doesNotMatch(env.get("cards").innerHTML, /<img|onerror|\[object Object\]/);
+  assert.match(env.get("cards").innerHTML, /<small>Context<\/small><b>—<\/b>/);
+  env.window.MefiBooklet.showTab("graph");
+  env.get("model-lab-catalog").open = true; env.get("model-lab-catalog").dispatch("toggle"); env.frame();
+  assert.doesNotMatch(env.get("table-body").innerHTML, /<img|onerror/);
+  const [x, y] = env.arcs().at(-1);
+  env.get("map").dispatch("mousemove", { clientX: x, clientY: y });
+  assert.equal(env.get("map-tip").hidden, false);
+  assert.doesNotMatch(env.get("map-tip").innerHTML, /<img|onerror/);
+  assert.match(env.get("map-tip").innerHTML, /— ctx/);
+});
 
 test("startup defers connection and CLI checks until Settings opens, then initializes once", async () => {
   const env = environment(); await flush();

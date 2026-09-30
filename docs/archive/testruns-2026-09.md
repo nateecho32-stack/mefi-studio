@@ -6,6 +6,35 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-28 - Discord linking without environment variables; vault kept in step
+
+Settings › Community › Connection details saves the Mefi Studio Link
+Application ID and the rooms hub's address (settings.communitySetup, checked
+by community.normalizeSetup and the hub client's address rule) and uses them
+at once; the environment variables still win. The Your PCs vault now rebases
+its own commits onto GitHub's instead of pulling fast-forward only, so a push
+that loses the race to another PC is sent again and a copy is never left
+stuck; a clash on the same item keeps GitHub's. Keys and setup queues behind
+a loading vault instead of staying empty.
+
+- `npm run build-booklet`, `npm run check` (186 targets, 379 specs) and
+  `npm run audit` (zero findings): PASS.
+- New and changed suites: community_rules (normalizeSetup), hub_host
+  (save, refuse, clear, environment wins, hub answering or not, a new hub
+  address rebuilds the client), community_bridge, community_ui (Connection
+  details opens while not set up, reasons, Link my Discord at once),
+  pc_vault (a push losing the race goes on top; a same-item clash keeps
+  GitHub's; a copy left behind catches up and sends its commit), and
+  pc_vault_ui (Keys and setup opened while loading, the phrase hint, a
+  failed list).
+- A throwaway Electron probe of Settings › Community with a fake bridge:
+  the details open while not set up, a bad id gives its reason, Save shows
+  Link my Discord and the hub line, no overflow at 1280 or 620 px.
+- `npm test` in a private worktree, exit 0: Node parallel stage 4253 tests,
+  4248 passed, 5 skipped, 0 failures; Electron stage 42 tests, 41 passed, 1
+  skipped; `eyes_toggle_electron` 1/1; `occlusion_probe` 1 passed, 1
+  capability skip; Python contracts OK; normalized-path lock passed.
+
 ## 2026-09-28 - Merge all branches: hidden-surfaces onto the restored main; Friends across PCs verified end to end; 0.4.5
 
 Surveyed every branch and tree. gh-pages is the website (no shared history; not merged). perf/quick-wins is content-identical to aef5dfe on main (skipped). worktree-* branches and the cli-path-refresh clone are already in main. The 16:57 merge (65703a6) and "fixes" (7ba162c) losses were already restored on GitHub main by dc85f68, which keeps the docked video player the other PC is developing; this merge keeps that and the fuller Friends › Rooms (4ee6891). Merged perf/hidden-surfaces (docs/performance.md kept both). Added tests/companion_e2e.test.mjs: three Studios (main's real Companion friends block and hub client, three Discord accounts) against the Void Engine Bot's real hub with its companion relay: make a room, ask, let in, play-only default, a friend rule keeping a token-bearing title home, share-back ask, mirrored playdate, stay home; 1/1 with MEFI_STUDIO_BOT_ROOT set (hub relay patch, 462/462 bot tests). Version 0.4.5. Full npm test: 4209 passed, 1 failed (command_render, known load-sensitive; passed solo in 51 s); Python contracts and path lock passed. check ok, audit 0 errors.

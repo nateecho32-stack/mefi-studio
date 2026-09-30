@@ -75,3 +75,31 @@ test("the explanation reads plainly, blocked first", () => {
   const scan = review.scan({ a: "mail a@b.com", b: "sk-abcdefghijklmnopqrstuvwx" }, { names: NAMES });
   assert.deepEqual(review.explain(scan.findings), ["Stopped: an API key or token (b).", "Removed: an email address (a)."]);
 });
+
+test("friend sharing removes complete home paths and normalized tails while keeping URLs and relative references", () => {
+  for (const value of [String.raw`C:\Users\alice\ConfidentialClient\contract.md`, "C:/Users/alice/ConfidentialClient/contract.md", "/home/alice/ConfidentialClient/contract.md", "/Users/alice/ConfidentialClient/contract.md", "~/ConfidentialClient/contract.md", String.raw`~\ConfidentialClient\contract.md`, '"C:/Users/alice/Confidential Client/contract.md"', '"/home/alice/Confidential Client/contract.md"', '"~/Confidential Client/contract.md"', String.raw`C:\Users\alice\Confidential Client\Mefi's Studio\contract.md`, "~/Confidential Client/Mefi's Studio/contract.md"]) {
+    const clean = review.scrub({ [value]: [value] }, { names: [] });
+    assert.doesNotMatch(JSON.stringify(clean), /Confidential|contract\.md|alice/);
+    assert.deepEqual(review.scan(clean, { names: [] }).findings, []);
+    assert.ok(review.scan(value, { names: [], received: false }).findings.some((item) => /path/.test(item.id)), value);
+  }
+  const ordinary = "See https://example.com/home/alice/guide and docs/architecture.md; use ~/ only as a shell home marker.";
+  assert.equal(review.scrub(ordinary, { names: [] }), ordinary);
+});
+
+test("share paths following labels and local file URLs are removed without swallowing surrounding prose", () => {
+  for (const path of ["/home/alice/ConfidentialClient/contract.md", "/Users/alice/ConfidentialClient/contract.md", "~/ConfidentialClient/contract.md", String.raw`~\ConfidentialClient\contract.md`]) {
+    assert.equal(review.scrub(`Location:${path}`, { names: [] }), "Location:[path]");
+  }
+  for (const path of ["file:///home/alice/ConfidentialClient/contract.md", "file:///Users/alice/ConfidentialClient/contract.md", "file:///C:/Users/alice/ConfidentialClient/contract.md", "file:///home/alice/Confidential%20Client/contract.md"]) {
+    assert.equal(review.scrub(path, { names: [] }), "[path]");
+    assert.ok(ids(path).includes("warn:file-url"));
+  }
+  assert.equal(review.scrub("Open C:/project/file.md and see https://example.com/docs/guide", { names: [] }), "Open [path] and see https://example.com/docs/guide");
+  assert.equal(review.scrub("Open /home/alice/project/file.md then read docs/architecture.md for instructions.", { names: [] }), "Open [path] then read docs/architecture.md for instructions.");
+  assert.equal(review.scrub("`~/Confidential Client/report.md`", { names: [] }), "`[path]`");
+  assert.equal(review.scrub("~/Confidential Client/Secret Contract.md", { names: [] }), "[path]");
+  assert.equal(review.scrub("Open ~/folder then read docs/file.md for instructions.", { names: [] }), "Open [path] then read docs/file.md for instructions.");
+  assert.equal(review.scrub("See https://example.com/foo:/home/alice/guide", { names: [] }), "See https://example.com/foo:/home/alice/guide");
+  assert.equal(review.scrub("Open C:/project/file.md then /home/alice/ConfidentialClient/contract.md", { names: [] }), "Open [path] then [path]");
+});

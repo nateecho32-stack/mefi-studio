@@ -21,6 +21,8 @@ const from = main.indexOf("// ---- Discord remote: your PCs from Discord DMs");
 const to = main.indexOf("// ---- end of the Discord remote", from);
 assert.ok(from > 0 && to > from, "main.cjs has a Discord remote block");
 const block = main.slice(from, to);
+const settingsFrom = main.indexOf("function updateSettings(mutate) {");
+const settingsBlock = main.slice(settingsFrom, main.indexOf("\nfunction send(", settingsFrom));
 const plain = (value) => JSON.parse(JSON.stringify(value));
 const ME = "123456789012345678";
 const settle = async () => { for (let i = 0; i < 20; i += 1) await new Promise((done) => setImmediate(done)); };
@@ -44,7 +46,8 @@ function host({ settings = {}, tasks = [], needs = { total: 0, counts: {}, items
     optionalHelper: () => remoteRules,
     require: () => remoteRules,
     readSettings: async () => JSON.parse(JSON.stringify(saved)),
-    updateSettings: async (edit) => { edit(saved); saved = JSON.parse(JSON.stringify(saved)); return saved; },
+    settingsDisk: { queue: Promise.resolve() },
+    writeSettings: async (value) => { saved = JSON.parse(JSON.stringify(value)); },
     hubClient: client, hubInstance: () => client,
     hubModule: { hubAddress: () => ({ http: "https://hub", ws: "wss://hub/v1/ws" }) }, communityHubUrl: () => "https://hub",
     communityRead: async () => ({ state: { link: { userId: ME } } }),
@@ -72,7 +75,7 @@ function host({ settings = {}, tasks = [], needs = { total: 0, counts: {}, items
     },
     agentBrain: { events: async () => ({ ok: true, events: [] }) },
   });
-  vm.runInContext(`${block}\nthis.api = { remoteHear, remoteLook, remoteApply, remoteSet, remotePin, remoteStatus, approvals: remoteApprovals, log: remoteLog };`, context);
+  vm.runInContext(`${settingsBlock}\n${block}\nthis.api = { remoteHear, remoteLook, remoteApply, remoteSet, remotePin, remoteStatus, approvals: remoteApprovals, log: remoteLog };`, context);
   return { api: context.api, context, calls, replies, notices, sent, board, client, saved: () => saved };
 }
 const command = (fields) => ({ requestId: `req_${Math.random().toString(36).slice(2, 8)}`, from: ME, sentAt: Date.now(), ...fields });
@@ -117,6 +120,49 @@ function approvalBoard() {
   const task = { id: "t1", title: "Ship the settings page", prompt: "Ship it", status: "open", origin: { by: "owner", via: "remote" } };
   return { task, needs: { total: 1, counts: { approval: 1 }, items: [{ kind: "approval", title: "Ship the settings page", taskId: "t1" }] } };
 }
+
+test("concurrent PIN attempts share one lockout counter and an approval button is consumed once", async () => {
+  const { task, needs } = approvalBoard();
+  const h = host({ settings: { on: true, pin: remoteRules.hashPin("4321") }, tasks: [task], needs });
+  await h.api.remoteHear(command({ command: "needs" }));
+  const [button] = h.replies[0].buttons;
+  await Promise.all(Array.from({ length: 8 }, () => h.api.remoteHear(command({ command: "button", buttonId: button.id, pin: "0000" }))));
+  assert.equal(h.saved().remote.lock.failures, 5);
+  assert.equal(h.notices.length, 1, "only the transition to locked sends a notice");
+  await h.api.remoteHear(command({ command: "button", buttonId: button.id, pin: "4321" }));
+  assert.equal(h.calls.some(([kind]) => kind === "approve"), false);
+  await h.api.remotePin({ unlock: true });
+  await h.api.remoteHear(command({ command: "button", buttonId: button.id, pin: "0000" }));
+  await Promise.all(Array.from({ length: 3 }, () => h.api.remoteHear(command({ command: "button", buttonId: button.id, pin: "4321" }))));
+  assert.equal(h.calls.filter(([kind]) => kind === "approve").length, 1);
+  assert.equal(h.saved().remote.lock.failures, 0);
+});
+
+test("a settings toggle cannot restore a stale PIN or lockout snapshot", async () => {
+  const h = host({ settings: { on: true, pin: remoteRules.hashPin("4321"), lock: { failures: 4 } } });
+  await Promise.all([h.api.remotePin({ pin: "9876" }), h.api.remoteSet({ name: "Renamed PC" })]);
+  assert.equal(remoteRules.checkPin("9876", h.saved().remote.pin), true);
+  assert.equal(h.saved().remote.name, "Renamed PC");
+  assert.equal(h.saved().remote.lock.failures, 0);
+});
+
+test("queued approval observes disabling, PIN replacement and handle expiry", async () => {
+  for (const action of ["disable", "replace", "clear", "expire"]) {
+    const { task, needs } = approvalBoard();
+    const h = host({ settings: { on: true, pin: remoteRules.hashPin("4321") }, tasks: [task], needs });
+    await h.api.remoteHear(command({ command: "needs" }));
+    const [button] = h.replies[0].buttons;
+    let release;
+    h.context.settingsDisk.queue = new Promise((done) => { release = done; });
+    const change = action === "disable" ? h.api.remoteSet({ on: false }) : action === "replace" ? h.api.remotePin({ pin: "9876" }) : action === "clear" ? h.api.remotePin({ clear: true }) : Promise.resolve();
+    const approve = h.api.remoteHear(command({ command: "button", buttonId: button.id, pin: "4321" }));
+    await settle();
+    if (action === "expire") h.api.approvals.get(button.id).at -= 2 * 24 * 60 * 60 * 1000;
+    release();
+    await Promise.all([change, approve]);
+    assert.equal(h.calls.some(([kind]) => kind === "approve"), false, action);
+  }
+});
 
 test("needs offers Approve only with a PIN, and the PIN approves exactly the scope that was shown", async () => {
   const { task, needs } = approvalBoard();
@@ -223,5 +269,5 @@ test("what goes to Discord is scrubbed of paths, emails and keys first", async (
   await h.api.remoteHear(command({ command: "made" }));
   const text = h.replies[0].text;
   assert.match(text, /Fix the loader/);
-  assert.doesNotMatch(text, /echor|secret|sk-ant-api03|me@example\.com/);
+  assert.doesNotMatch(text, /echor|secret|build\.js|sk-ant-api03|me@example\.com/);
 });

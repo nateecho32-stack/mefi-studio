@@ -7,6 +7,15 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Security fixes for remote approvals, catalogs and sharing.** Work filed
+  from Discord retains its approval requirement through task admission and
+  promotion. Concurrent PIN attempts count toward one lockout and approval
+  buttons can be used once. Catalog token limits accept finite nonnegative
+  numbers and render safely. Idea scans stay inside the selected project,
+  skip linked paths and redact credentials before clipping excerpts. Friend
+  exports and Discord messages remove complete home paths, including paths
+  already shortened to `~`.
+
 - **Friends is easy to find.** Build's main menu and Vibe's rail now have
   Friends. Build also links straight to Rooms, Your PCs and Playground, and
   Search finds each one. The links open and focus the existing Friends cards;

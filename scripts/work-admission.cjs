@@ -199,7 +199,9 @@ function originOf(value) {
   if (!value || typeof value !== "object") return null;
   const kind = text(value.kind).slice(0, 24);
   const by = text(value.by).slice(0, 24);
-  return kind && by ? { kind, by } : null;
+  // Remote work must retain its approval boundary through every admission
+  // and promotion. No other transport or caller-supplied fields are copied.
+  return kind && by ? { kind, by, ...(value.via === "remote" ? { via: "remote" } : {}) } : null;
 }
 
 // ---- inbox requests ------------------------------------------------------------------

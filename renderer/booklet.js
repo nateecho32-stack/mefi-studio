@@ -221,7 +221,7 @@
         <div><h3>${esc(model.name)}</h3><div class="vendor">${esc(model.vendor)} · opencode-go/${esc(model.id)}</div></div>
         <div class="badges">${badgeHtml(model)}</div>
       </div>
-      <div class="catalog-metrics"><span><small>Cost / request</small><b>${fmt.money(model.typicalCostUSD)}</b></span><span><small>Quality</small><b>${esc(model.quality?.index ?? "—")}</b></span><span><small>Context</small><b>${fmt.ctx(model.limits?.context)}</b></span></div>
+      <div class="catalog-metrics"><span><small>Cost / request</small><b>${fmt.money(model.typicalCostUSD)}</b></span><span><small>Quality</small><b>${esc(model.quality?.index ?? "—")}</b></span><span><small>Context</small><b>${esc(fmt.ctx(model.limits?.context))}</b></span></div>
       <span class="catalog-expand" aria-hidden="true">⌄</span></summary>
       <div class="catalog-body">
       <p class="verdict">${esc(model.verdict ?? "No curated verdict yet.")}</p>

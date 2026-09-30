@@ -6,10 +6,12 @@
 // The UI runs this in "read time": every drop analyzes immediately, no key needed.
 
 import { readFile, readdir, stat, lstat, realpath, open, opendir } from "node:fs/promises";
+import { constants as fsConstants } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import studioPaths from "./paths.cjs";
 import { safeExcerpt } from "./redaction.cjs";
+import { maskCredentials } from "./redaction.cjs";
 
 const STUDIO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const { repoRoot: DEFAULT_ROOT } = studioPaths.resolveStudioPaths({ studioRoot: STUDIO });
@@ -181,34 +183,72 @@ function keywordsOf(text) {
 }
 
 // Idea checks run on every claim, so file text is kept between scans while its
-// size and modification time hold. Bounded by total characters, oldest out.
+// identity and change metadata hold. Bounded by total characters, oldest out.
 const SCAN_TEXT_LIMIT = 16 * 1024 * 1024;
+const SCAN_FILE_BYTES = 260000;
 const scanTextCache = new Map();
 let scanTextChars = 0;
 
-async function scanText(full, info) {
-  const cached = scanTextCache.get(full);
-  if (cached && cached.mtimeMs === info.mtimeMs && cached.size === info.size) {
-    scanTextCache.delete(full);
-    scanTextCache.set(full, cached);
-    return cached;
+function sameScanIdentity(left, right) {
+  return ["dev", "ino", "mode", "size", "mtimeNs", "ctimeNs"].every((key) => left[key] === right[key]);
+}
+
+async function scanPath(root, full, directory = false) {
+  const info = await lstat(full, { bigint: true });
+  if (info.isSymbolicLink() || !(directory ? info.isDirectory() : info.isFile())) return null;
+  const canonical = await realpath(full);
+  // Reject aliases as well as escapes: an ancestor junction can redirect a
+  // normal-looking entry even when that entry is not itself a symbolic link.
+  if (!insideProject(root, canonical) || path.relative(full, canonical) !== "") return null;
+  if (!sameScanIdentity(info, await lstat(canonical, { bigint: true }))) return null;
+  return { canonical, info };
+}
+
+async function scanText(root, full, checked) {
+  const { canonical, info } = checked;
+  const handle = await open(canonical, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0));
+  try {
+    // Validate the opened object before reading any bytes. A path replaced
+    // between validation and open must not turn into an outside-file read.
+    if (!sameScanIdentity(info, await handle.stat({ bigint: true }))) return null;
+    const current = await scanPath(root, full);
+    if (!current || !sameScanIdentity(info, current.info)) return null;
+    const cached = scanTextCache.get(canonical);
+    if (cached && sameScanIdentity(cached.info, info)) {
+      scanTextCache.delete(canonical);
+      scanTextCache.set(canonical, cached);
+      return cached;
+    }
+    if (cached) {
+      scanTextCache.delete(canonical);
+      scanTextChars -= cached.text.length + cached.lower.length;
+    }
+    // The extra byte detects growth without allowing an unbounded read.
+    const buffer = Buffer.alloc(Math.min(Number(info.size) + 1, SCAN_FILE_BYTES + 1));
+    let bytesRead = 0;
+    while (bytesRead < buffer.length) {
+      const next = await handle.read(buffer, bytesRead, buffer.length - bytesRead, bytesRead);
+      if (!next.bytesRead) break;
+      bytesRead += next.bytesRead;
+    }
+    if (bytesRead > SCAN_FILE_BYTES || !sameScanIdentity(info, await handle.stat({ bigint: true }))) return null;
+    const after = await scanPath(root, full);
+    if (!after || !sameScanIdentity(info, after.info)) return null;
+    const text = buffer.subarray(0, bytesRead).toString("utf8");
+    const entry = { info, text, lower: text.toLowerCase() };
+    const chars = text.length + entry.lower.length;
+    if (chars > SCAN_TEXT_LIMIT / 8) return entry;
+    scanTextCache.set(canonical, entry);
+    scanTextChars += chars;
+    for (const [key, old] of scanTextCache) {
+      if (scanTextChars <= SCAN_TEXT_LIMIT) break;
+      scanTextCache.delete(key);
+      scanTextChars -= old.text.length + old.lower.length;
+    }
+    return entry;
+  } finally {
+    await handle.close();
   }
-  const text = await readFile(full, "utf8");
-  const entry = { mtimeMs: info.mtimeMs, size: info.size, text, lower: text.toLowerCase() };
-  if (cached) {
-    scanTextCache.delete(full);
-    scanTextChars -= cached.text.length + cached.lower.length;
-  }
-  const chars = text.length + entry.lower.length;
-  if (chars > SCAN_TEXT_LIMIT / 8) return entry;
-  scanTextCache.set(full, entry);
-  scanTextChars += chars;
-  for (const [key, old] of scanTextCache) {
-    if (scanTextChars <= SCAN_TEXT_LIMIT) break;
-    scanTextCache.delete(key);
-    scanTextChars -= old.text.length + old.lower.length;
-  }
-  return entry;
 }
 
 async function scanTree(root, keywords) {
@@ -219,19 +259,26 @@ async function scanTree(root, keywords) {
     if (depth > 5 || scanned > 600 || hits.length > 80) return;
     let entries = [];
     try {
-      entries = await readdir(dir, { withFileTypes: true });
+      const checked = await scanPath(root, dir, true);
+      if (!checked) return;
+      entries = await readdir(checked.canonical, { withFileTypes: true });
+      const after = await scanPath(root, dir, true);
+      if (!after || !sameScanIdentity(checked.info, after.info)) return;
     } catch {
       return;
     }
     for (const entry of entries) {
       if (hits.length > 80 || scanned > 600) return;
       const full = path.join(dir, entry.name);
-      if (SKIP.test(full) || entry.name.startsWith(".")) continue;
+      if (SKIP.test(full) || entry.name.startsWith(".") || entry.isSymbolicLink()) continue;
       if (entry.isDirectory()) {
         await walk(full, depth + 1);
         continue;
       }
       if (!/\.(lua|py|js|mjs|cjs|md|json|css|ps1)$/.test(entry.name)) continue;
+      let checked;
+      try { checked = await scanPath(root, full); } catch { continue; }
+      if (!checked) continue;
       const relative = path.relative(root, full).replace(/\\/g, "/");
       for (const keyword of keywords) {
         if (relative.toLowerCase().includes(keyword)) {
@@ -240,9 +287,10 @@ async function scanTree(root, keywords) {
         }
       }
       try {
-        const info = await stat(full);
-        if (info.size > 260000) continue;
-        const { text, lower } = await scanText(full, info);
+        if (checked.info.size > BigInt(SCAN_FILE_BYTES)) continue;
+        const content = await scanText(root, full, checked);
+        if (!content) continue;
+        const { text, lower } = content;
         scanned += 1;
         let lines = null;
         for (const keyword of keywords) {
@@ -254,8 +302,10 @@ async function scanTree(root, keywords) {
           if (at < 0) continue;
           let index = 0;
           for (let cut = lower.indexOf("\n"); cut !== -1 && cut < at; cut = lower.indexOf("\n", cut + 1)) index += 1;
-          lines ??= text.split("\n");
-          hits.push({ keyword, file: relative, line: index + 1, snippet: lines[index].trim().slice(0, 110) });
+          // Redact with the surrounding assignment context before extracting
+          // one line; pretty JSON can put a password on the following line.
+          lines ??= maskCredentials(text, { preserveLines: true }).split("\n");
+          hits.push({ keyword, file: relative, line: index + 1, snippet: safeExcerpt(lines[index], 110) });
           keywordHits[keyword] += 1;
         }
       } catch {}
@@ -266,6 +316,7 @@ async function scanTree(root, keywords) {
 }
 
 export async function verifyIdea(text, { root = DEFAULT_ROOT } = {}) {
+  root = await realpath(root);
   const keywords = keywordsOf(text);
   const { hits, keywordHits, scanned } = await scanTree(root, keywords);
   const files = [...new Set(hits.map((hit) => hit.file))];
