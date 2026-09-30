@@ -1015,7 +1015,12 @@
     if (trashReads.get(container) !== token) return;
     // Switched off (MEFI_STUDIO_NO_BOARD_TRASH): nothing was kept, and the list says why it is empty.
     if (result?.ok && result.enabled === false) { note.textContent = "Switched off for this run of Studio, so deletes are for good."; return; }
-    if (!result?.ok) { note.textContent = `Recently deleted could not be read · ${result?.error || "try again"}`; return; }
+    if (!result?.ok) {
+      // The host says "Recently deleted could not be read: why"; the heading above already names the list.
+      const why = String(result?.error || "").replace(/^Recently deleted could not be read:?\s*/i, "").trim();
+      note.textContent = `Could not be read · ${why || "try again"}`;
+      return;
+    }
     const days = Number(result.keptDays) || 30;
     const items = Array.isArray(result.items) ? result.items : [];
     note.textContent = items.length ? `Kept for ${days} days, then let go.` : `Nothing deleted lately. What you delete stays here for ${days} days.`;

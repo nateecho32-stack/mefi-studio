@@ -57,7 +57,7 @@ async function host(t, { tasks = [], ideas = [], projectId = "project-a" } = {})
   t.after(() => rmSync(root, { recursive: true, force: true, maxRetries: 6, retryDelay: 100 }));
   const board = { tasks: copy(tasks), requests: [], ideas: copy(ideas) };
   const project = { id: projectId, path: "C:/fixture" };
-  const state = { project, failTrashWrite: false, failBoardWrite: null, boardMutateCalls: 0, storeOn: false };
+  const state = { project, failTrashWrite: false, failTrashRead: null, failBoardWrite: null, boardMutateCalls: 0, storeOn: false };
   const logs = [];
   const order = [];
   const effects = [];
@@ -73,7 +73,8 @@ async function host(t, { tasks = [], ideas = [], projectId = "project-a" } = {})
     readJson: async (key, fallback) => (key in board ? copy(board[key]) : fallback),
     writeJson: async (key, value) => {
       if (String(key).endsWith("board-trash.json")) {
-        if (state.failTrashWrite) throw new Error("disk full");
+        const failure = typeof state.failTrashWrite === "function" ? state.failTrashWrite() : state.failTrashWrite;
+        if (failure) throw failure instanceof Error ? failure : new Error("disk full");
         const target = projects.dataPath(key);
         await mkdir(path.dirname(target), { recursive: true });
         await writeFile(target, JSON.stringify(value));
@@ -93,7 +94,8 @@ async function host(t, { tasks = [], ideas = [], projectId = "project-a" } = {})
   const autopilot = { jobs: [] };
   const handlers = new Map();
   const env = vm.createContext({
-    Date, console, backlog, taskContext, taskDelegation, boardTrash, applyIdeaAction, structuredClone, path, readFile, writeFile, process: { env: {} },
+    Date, console, backlog, taskContext, taskDelegation, boardTrash, applyIdeaAction, structuredClone, path, writeFile, process: { env: {} },
+    readFile: async (file, ...rest) => { if (state.failTrashRead && String(file).endsWith("board-trash.json")) throw state.failTrashRead; return readFile(file, ...rest); },
     autopilot, projects, STUDIO_ROOT: root, TASKS_PATH: "tasks", REQUESTS_PATH: "requests", IDEAS_PATH: "ideas",
     getEyes: async () => eyes,
     withBoardLock: (fn) => { const run = chain.then(fn); chain = run.catch(() => {}); return run; },
@@ -205,6 +207,51 @@ test("a copy that cannot be written stops the delete: the card stays and the rep
   h.state.failTrashWrite = false;
   assert.equal((await h.call("tasks:delete", { taskId: "a", projectId: "project-a" })).ok, true);
   assert.deepEqual(h.ids(), ["b"]);
+});
+
+test("a failure's reason names no path, in the reply or the log: a code becomes words, anything else loses its quoted file names", async (t) => {
+  const file = "C:\\Users\\Jane\\Mefi's Studio\\data\\projects\\project-a\\board-trash.json";
+  const fsError = (code, text) => Object.assign(new Error(`${code}: ${text}, open '${file}.tmp'`), { code });
+  const named = /Jane|Users|Studio\\data|board-trash/;
+  const h = await host(t, { tasks: [task("a"), task("b"), task("c"), task("d")] });
+  const refuse = async (failure, taskId) => { h.state.failTrashWrite = failure; const out = await h.call("tasks:delete", { taskId, projectId: "project-a" }); h.state.failTrashWrite = false; return out; };
+  let out = await refuse(fsError("ENOSPC", "no space left on device"), "a");
+  assert.equal(out.error, "Nothing was deleted: Studio could not keep a copy in Recently deleted first (the disk is full).");
+  out = await refuse(fsError("EACCES", "permission denied"), "a");
+  assert.match(out.error, /\(permission denied\)\.$/);
+  out = await refuse(fsError("EXDEV", "cross-device link not permitted"), "a");
+  assert.match(out.error, /\(EXDEV: cross-device link not permitted\)\.$/, "an unknown code is kept, the file it names is not (the folder here has an apostrophe in its name)");
+  out = await refuse(new Error(`odd failure at '${file}' and "${file}"`), "a");
+  assert.match(out.error, /\(odd failure at\)\.$/, "what follows the first quoted name goes with it");
+  out = await refuse(new Error(`could not write ${file} at all`), "a");
+  assert.match(out.error, /\(could not write\)\.$/, "and so does a drive path with no quotes round it");
+  out = await refuse(Object.assign(new Error("something went wrong"), { code: "EWEIRD" }), "a");
+  assert.match(out.error, /\(EWEIRD · something went wrong\)\.$/);
+  for (const line of h.logs) assert.doesNotMatch(line, named, line);
+  assert.ok(h.logs.some((line) => /so nothing was deleted: the disk is full$/.test(line)));
+  assert.deepEqual(h.ids(), ["a", "b", "c", "d"], "every one of those left the card alone");
+  // A copy that cannot be taken off the list after a restore says why in the log, without the path.
+  assert.equal((await h.call("tasks:delete", { taskId: "b", projectId: "project-a" })).ok, true);
+  h.state.failTrashWrite = fsError("EACCES", "permission denied");
+  assert.equal((await h.call("tasks:undelete", { taskId: "b", projectId: "project-a" })).ok, true, "the card is back even though its copy stayed");
+  h.state.failTrashWrite = false;
+  assert.ok(h.logs.some((line) => /a task was put back but its copy stayed in Recently deleted: permission denied$/.test(line)));
+  // A delete whose board write fails, and whose kept copy then cannot be taken out again, says why in the log without the path.
+  let writes = 0;
+  h.state.failTrashWrite = () => (++writes >= 2 ? fsError("EPERM", "operation not permitted") : null);
+  h.state.failBoardWrite = "tasks";
+  await assert.rejects(h.env.deleteTask({ taskId: "c", projectId: "project-a" }), /board write failed/);
+  h.state.failTrashWrite = false; h.state.failBoardWrite = null;
+  assert.ok(h.logs.some((line) => /could not tidy Recently deleted after a delete that did not land: permission denied$/.test(line)));
+  // A list that cannot be read says why, without the path.
+  h.state.failTrashRead = fsError("EBUSY", "resource busy or locked");
+  const list = await h.call("board:trash", { projectId: "project-a" });
+  assert.equal(list.ok, false);
+  assert.equal(list.error, "Recently deleted could not be read: the file is in use");
+  h.state.failTrashRead = new Error("no code here");
+  assert.equal((await h.call("board:trash", { projectId: "project-a" })).error, "Recently deleted could not be read: no code here");
+  h.state.failTrashRead = null;
+  for (const line of h.logs) assert.doesNotMatch(line, named, line);
 });
 
 test("a delete whose board write fails leaves the card, and the copy kept for it is taken out again", async (t) => {

@@ -14698,6 +14698,21 @@ function workTitleKey(value) {
 const boardTrashPath = () => path.join(STUDIO_ROOT, "data", "board-trash.json");
 const BOARD_TRASH_OFF = "Recently deleted is switched off for this run of Studio (MEFI_STUDIO_NO_BOARD_TRASH), so nothing was kept and nothing can be put back.";
 const boardTrashOn = () => process.env.MEFI_STUDIO_NO_BOARD_TRASH !== "1";
+// A short reason for a log line or a message, with no path in it: an fs error's text
+// names the file ("EACCES: permission denied, open 'C:\Users\…'"), and logs and
+// messages must not carry personal paths. A known code becomes words; anything else
+// keeps what comes before the first quoted name or drive path (a folder called
+// Mefi's Studio has an apostrophe in it, so quotes cannot be matched in pairs).
+function boardTrashWhy(failure) {
+  const code = typeof failure?.code === "string" ? failure.code : "";
+  const words = { ENOSPC: "the disk is full", EACCES: "permission denied", EPERM: "permission denied", EBUSY: "the file is in use", EROFS: "the disk is read-only" };
+  if (words[code]) return words[code];
+  const whole = String(failure?.message ?? failure ?? "").replace(/\s+/g, " ").trim();
+  let text = whole.split(/['"`]|\b[A-Za-z]:[\\/]|\\\\\S/)[0];
+  if (text !== whole) text = text.replace(/,\s*\w+\s*$/, "");
+  text = text.trim().slice(0, 120);
+  return code && !text.includes(code) ? `${code}${text ? ` · ${text}` : ""}` : text || "unknown error";
+}
 const boardTrashStores = new Map();
 // One store per project file, bound to the project it was made for: a switch
 // while a call is in flight cannot move it to another project's file.
@@ -14740,7 +14755,7 @@ function boardTrashBefore(kind, { via, by = "owner" } = {}, sink = { kept: [], r
       let out;
       try { out = await boardTrashStore().keep(rows); }
       catch (failure) {
-        const why = String(failure?.message ?? failure).slice(0, 160);
+        const why = boardTrashWhy(failure);
         logLine(`[board] Recently deleted failed to keep ${rows.length} ${kind}${rows.length === 1 ? "" : "s"}, so nothing was deleted: ${why}`);
         throw Object.assign(new Error(`Nothing was deleted: Studio could not keep a copy in Recently deleted first (${why}).`), { boardTrash: true });
       }
@@ -14764,7 +14779,7 @@ async function boardTrashReconcile(kind, sink) {
     const store = boardTrashStore();
     for (const item of sink.kept) if (present.has(item.id)) await store.remove(kind, item.id);
   } catch (failure) {
-    logLine(`[board] could not tidy Recently deleted after a delete that did not land: ${String(failure?.message ?? failure).slice(0, 160)}`);
+    logLine(`[board] could not tidy Recently deleted after a delete that did not land: ${boardTrashWhy(failure)}`);
   }
 }
 
@@ -14790,7 +14805,7 @@ async function boardTrashPutBack(kind, id) {
   });
   if (!result.ok) return { ok: false, error: result.error };
   try { await store.remove(kind, id); }
-  catch (failure) { logLine(`[board] a ${kind} was put back but its copy stayed in Recently deleted: ${String(failure?.message ?? failure).slice(0, 160)}`); }
+  catch (failure) { logLine(`[board] a ${kind} was put back but its copy stayed in Recently deleted: ${boardTrashWhy(failure)}`); }
   logLine(`[board] put back ${kind} ${id} from Recently deleted`);
   return { ok: true, item, result, missing };
 }
@@ -14834,7 +14849,7 @@ async function boardTrashList({ projectId, kinds = null } = {}) {
     const items = await boardTrashStore().list({ exists: (kind, id) => present.has(`${kind}:${id}`), kinds: Array.isArray(kinds) ? kinds.filter((kind) => boardTrash.KINDS.includes(kind)) : null });
     return { ok: true, enabled: true, items, ...base };
   } catch (failure) {
-    return { ok: false, error: `Recently deleted could not be read: ${String(failure?.message ?? failure).slice(0, 200)}`, ...base };
+    return { ok: false, error: `Recently deleted could not be read: ${boardTrashWhy(failure)}`, ...base };
   }
 }
 // ---- end of Board trash ------------------------------------------------------

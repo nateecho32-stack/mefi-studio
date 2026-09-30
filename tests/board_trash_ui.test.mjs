@@ -260,12 +260,15 @@ test("the list says so when Recently deleted is switched off, when it cannot be 
   off.get("tasks-tools").open = true; off.get("tasks-tools").dispatch("toggle"); await settle();
   assert.match(off.get("tasks-recent").children[2].textContent, /Switched off for this run of Studio, so deletes are for good\./);
   assert.equal(rows(off.get("tasks-recent").children[1]).length, 0);
-  const broken = tasksEnvironment({ bridge: { boardTrash: async () => ({ ok: false, error: "Recently deleted could not be read: EACCES" }) } });
+  const broken = tasksEnvironment({ bridge: { boardTrash: async () => ({ ok: false, error: "Recently deleted could not be read: permission denied" }) } });
   broken.get("tasks-tools").open = true; broken.get("tasks-tools").dispatch("toggle"); await settle();
-  assert.match(broken.get("tasks-recent").children[2].textContent, /Recently deleted could not be read · Recently deleted could not be read: EACCES/);
+  assert.equal(broken.get("tasks-recent").children[2].textContent, "Could not be read · permission denied", "the host's own words, without the list's name said twice");
   const thrown = tasksEnvironment({ bridge: { boardTrash: async () => { throw new Error("bridge down"); } } });
   thrown.get("tasks-tools").open = true; thrown.get("tasks-tools").dispatch("toggle"); await settle();
-  assert.match(thrown.get("tasks-recent").children[2].textContent, /could not be read · bridge down/);
+  assert.equal(thrown.get("tasks-recent").children[2].textContent, "Could not be read · bridge down");
+  const bare = tasksEnvironment({ bridge: { boardTrash: async () => ({ ok: false }) } });
+  bare.get("tasks-tools").open = true; bare.get("tasks-tools").dispatch("toggle"); await settle();
+  assert.equal(bare.get("tasks-recent").children[2].textContent, "Could not be read · try again");
   const plain = tasksEnvironment({ plainBridge: true });
   assert.equal(plain.get("tasks-tools").hidden, true, "a browser preview has no list, so it has no More menu");
 });
