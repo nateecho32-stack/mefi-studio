@@ -192,7 +192,8 @@ settings and per-model work-kind summaries for the shared controls.
 | **Activity & evidence** (A-Eyes) | Tab `3`: a read-only view of the OpenCode session store: change feed, diffs, screenshots with pins, log tail. The "eyes worker" is the thread that reads that store. |
 | **Settings** | `4` or `Ctrl ,`: four single-pane categories, **General**, **Appearance**, **Audio** and **System**. Providers, routing and run behavior moved to **Agents › Setup** (Team & models, Providers, Routing & fallback, Run behavior); the old Connections, Models and Automation links redirect there. Search finds individual controls and opens their category and containing disclosures. `MefiNav.go("studio", { category: "appearance" })` opens a category; legacy section links such as `settings-updates` still work. |
 | **Preferences** | General holds names and startup. Appearance holds themes, motion, blur, node styles and canvas effects; Audio links to the music dropdown and holds sound effects. Older Preferences and Your Studio links resolve to General. |
-| **Diagnostics** | Settings › System: speed probe, profiler, auditor, machine tools and connection log. Auditor and machine links reveal Sessions' Diagnostics panel. |
+| **Diagnostics** | Settings › System: speed probe, profiler, auditor, machine tools, connection log and Report a problem. Auditor and machine links reveal Sessions' Diagnostics panel. |
+| **Notifications** | Settings › General: Windows alerts for what waits on you (only while Studio is not in front), the taskbar flash and count, and quiet hours shared with the Discord remote. |
 | **Search Studio** | The palette (`Ctrl K`), once called Key commands. It finds any page, tool, Settings card, action, task, node or model by familiar terms, and groups its results by menu section. Empty, it lists what you last opened (**Recent**); `task …` or `idea …` adds one on Enter. |
 | **Help** | The menu-foot popover containing onboarding, shortcuts and Community. These destinations are also available through Search; late-registered Community remains supported by the navigation registry. |
 | **Task** | One unit of work on the project board, with a brief, acceptance checks, prerequisites, attempts and evidence. New cards gather local references automatically when Automatic references is on; the configurable scout can use GPT-6 Luna on the fast tier to choose one verified starting file. |
@@ -1732,8 +1733,70 @@ failed process stays an error and cannot produce briefing requests.
   logs and references, a feature-idea inbox and graph, task-to-session mapping,
   and in-app frame/scope/hitch capture with JSON export.
 - **Settings › Diagnostics** gathers the speed probe, **Open profiler**, **Run
-  auditor** and **Machine**. The auditor's findings and the machine readout
-  open in the Explorer, where the machine controls stay.
+  auditor**, **Machine** and **Report a problem**. The auditor's findings and
+  the machine readout open in the Explorer, where the machine controls stay.
+- **Report a problem** (`renderer/report.js`) builds a small bundle on this PC
+  that the owner reads in full before anything is saved: `manifest.json`
+  (Studio's version, the install kind, the OS, the model route and the builder
+  in use), `tasks-summary.json` (one line per task: state, builder, checks),
+  `trace-tail.log` (the last 1,000 rows of Studio's log), `builders.log`
+  (recent builder output) and, after a crash, `crash.jsonl`. Every file is
+  redacted the same way: `scripts/redaction.cjs`, then this PC's user and PC
+  names, e-mail and network addresses, more token shapes, the project's and
+  Studio's folders, and long drive paths cut to their last two steps; **Replace
+  task titles with numbers** swaps every task title and the project's name for
+  `Task N` and `Project 1`. **Save zip…** (`report:save`) asks where to save
+  (Documents may live in OneDrive), writes exactly the bundle that was
+  previewed (`report:preview`) and shows it in Explorer. Nothing is uploaded or
+  sent: the owner attaches the file to a message. A report never holds
+  `settings.json`, the sign-in files, the vault, screenshots and evidence or
+  project files; that list is in `crash-report.cjs` (`NEVER_INCLUDED`), shown
+  beside the file list and tested against it. The rules are pure
+  (`scripts/crash-report.cjs`), the zip writer is `scripts/zip-lite.cjs`, the
+  host is `scripts/report-host.cjs` and main.cjs's "Report a problem" block.
+- **Notifications** (Settings › General, `renderer/alerts.js`) tell Windows
+  when something waits on the owner: a question, an approval or a permission
+  (`need`, `perm`), a task that failed after Mefi stopped retrying (`fail`) and,
+  when switched on, one that finished (`done`). Nothing is sent while a Studio
+  window is in front (shown, not minimized, focused) with somebody at the PC (a
+  locked screen, or ten minutes without input, counts as away), nothing inside
+  quiet hours, nothing about the same task and kind twice in fifteen minutes, and no
+  more than twelve an hour; the words are generic ("Something needs you")
+  unless the owner chose task titles, because Windows keeps notification text
+  in its history. A thing must still be waiting twenty seconds after it came up,
+  so a question the assistant answers by itself never pings, and a burst is one
+  notification. The taskbar button flashes until Studio is focused and carries a
+  red count of what waits on the owner (the needs-you digest): the numbered
+  overlay icon is drawn in `scripts/badge-icon.cjs`, without a canvas, at 16 px
+  or 32 px for a scaled display. Quiet hours are the Discord remote's own
+  (`settings.remote.quiet`): one clock, shown and changed from both cards. The
+  defaults are need and failed on, finished off, flash and count on, sound off,
+  quiet hours off. The rules are pure (`scripts/alerts.cjs`: `decide`), the host
+  is `scripts/alerts-host.cjs` (queue, settle, look, show, click) and main.cjs's
+  "Notifications" block holds four one-line hooks (a question asked or
+  answered, the tasks the owner cares about, a project switch, the window's
+  focus). The bridge is `alerts:get`, `alerts:set` (validated) and `alerts:test`
+  (it waits up to a minute for the owner to look away), and one push,
+  `alerts:open { kind, id, taskId, projectId }`, when a notification is clicked:
+  main brings Studio up first and the page opens the task (else Home).
+  Windows needs an application user model id for a toast; it is fixed at
+  `MefiStudio.StudioAIPlus` so a portable, a moved and an updated copy are one
+  app. `MEFI_STUDIO_NO_ALERTS=1` or the master switch turns all of it off, the
+  id included; `MEFI_STUDIO_KEEP_APP_ID=1` leaves only the id to Electron (for a
+  taskbar button pinned under the old id, which Windows groups by it).
+- **Studio closed unexpectedly.** Studio writes `data/session-marker.json`
+  (`running`) at launch and closes it with a reason on a quit, on any exit with
+  code 0 (the update restart and the roll back are `app.exit(0)`) and when
+  Windows signs out; a marker still `running` at the next start is a session
+  that never closed. A row goes to `data/crash.jsonl` (the last 50 rows of the
+  last 7 days) when the window dies or hangs, main throws or the GPU process is
+  lost. The next start says so once (`report:crashed`, sent when the page is up
+  and, in the page, when the startup gate is gone): one toast with **Review the
+  report**, which opens the card, and **Dismiss**. A clean quit, an update
+  restart, an update that was rolled back (its own note says so) and a
+  development run that was only stopped never say it.
+  `MEFI_STUDIO_NO_CRASH_PROMPT=1` or the switch in the card silences the toast;
+  the record is still written.
 - **Settings › Discord Server Styler** starts the bot and local dashboard from
   a sibling `discord-server-styler/` checkout or `MEFI_STYLER_ROOT`, shows
   whether the bot is online or needs setup, and can open the dashboard or bot
@@ -1797,6 +1860,32 @@ the helper's PowerShell in `scripts/release-updater.mjs`, and
 (Windows only). Because the helper is written by the installed build, a release
 protects the updates made from it, not the update that installs it.
 `MEFI_STUDIO_NO_ROLLBACK=1` restores the plain swap.
+
+**What's new.** After an update installs, Studio says what changed, once, in
+plain words: one toast, "Studio updated to 0.5.0", with a **What's new** action
+that opens a small sheet with that version's notes and **Got it**. It never
+opens a window by itself, and a first install is silent. The words are
+`assets/whats-new.json`, `{ "<version>": ["one plain sentence", ...] }` for the
+last five versions with notes, written from `CHANGELOG.md` by
+`scripts/release-notes.mjs` whenever `scripts/package-portable.mjs` runs (so a
+package carries the notes of its own version; the file is committed, and
+`node scripts/release-notes.mjs --check` fails when it no longer matches the
+changelog's released sections; `tests/release_notes.test.mjs` runs that check on
+the repository). A bullet's sentence is its bold lead; a bold label such as
+"**Trace** (Live, beside Activity): ..." joins the bullet's first sentence;
+`<!-- notes: ... -->` inside a bullet says the sentence itself, and
+`<!-- internal -->`, an "Internal:" or "Tests:" lead or a "### Internal"
+heading keeps a bullet out. At most six sentences a version. The host side is
+main.cjs's "What's new" block (`release:whats-new`, `release:whats-new-seen`
+and `release:whats-new-set`, all app-wide) over `scripts/whats-new.cjs`: what
+has been read is `settings.whatsNew` `{ on, seen, announced }`; a missing
+`settings.json` at launch is a fresh install and its version is sealed as read;
+a build older than the one already read (a roll back) says nothing; a toast that
+was shown is not shown again at the next launch, and the notes stay in
+**Settings › Updates**, marked New until read. The page waits for a visible
+window and for the startup gate before it makes the toast (the gate hides the
+page and sits above every toast). `MEFI_STUDIO_NO_WHATS_NEW=1` or the "Tell me
+what's new after an update" switch there turns the toast off.
 
 Build and publish a release with `node scripts/package-release.mjs --version
 vX.Y.Z --publish`, or push a `v*` tag and let

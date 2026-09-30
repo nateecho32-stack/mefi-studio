@@ -96,6 +96,7 @@
   <symbol id="g-home" viewBox="0 0 16 16"><path d="M2.5 7.4 8 2.8l5.5 4.6"/><path d="M4 6.3v7h3v-3.8h2v3.8h3v-7"/></symbol>
   <symbol id="g-flag" viewBox="0 0 16 16"><path d="M3.75 14V2.25"/><path d="M3.75 2.75h8.5l-1.9 2.9 1.9 2.9h-8.5"/></symbol>
   <symbol id="g-gauge" viewBox="0 0 16 16"><path d="M2.6 11.75a5.6 5.6 0 1 1 10.8 0"/><path d="M8 9.9 10.6 6.5M4.3 7.2l.9.55M8 4.4v1M11.7 7.2l-.9.55"/><circle cx="8" cy="9.9" r="1.05" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="g-bell" viewBox="0 0 16 16"><path d="M3.5 11.6c1-.95 1.45-2 1.45-3.4V6.9a3.05 3.05 0 0 1 6.1 0v1.3c0 1.4.45 2.45 1.45 3.4Z"/><path d="M8 2.1v1.7M6.6 13.4a1.5 1.5 0 0 0 2.8 0"/></symbol>
 </svg>
 <!-- The one navigation rail (docs/ux-audit.md, Phase 3). Every destination in
      nav.js's registry, grouped Home / Work / Live / Models / Settings, built by
@@ -390,6 +391,16 @@
     <footer class="vibe-notes-foot"><button id="vibe-notes-changelog" class="vibe-notes-link" type="button">Full changelog<svg class="glyph" aria-hidden="true"><use href="#g-external"/></svg></button><button id="vibe-notes-build" class="vibe-btn quiet" type="button">Keep Build</button><button id="vibe-notes-ok" class="vibe-btn primary" type="button">Try Vibe</button></footer>
   </div>
 </div>
+<!-- What's new (renderer/whats-new.js): opens from the toast after an update, from Settings › Updates or from Search; never by itself at launch. -->
+<div id="whats-new-sheet" class="whats-new-sheet" hidden>
+  <div class="whats-new-card" role="dialog" aria-modal="true" aria-labelledby="whats-new-title">
+    <header class="whats-new-head"><span class="whats-new-tag"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg>What's new</span><button id="whats-new-close" class="ghost mini" type="button" aria-label="Close what's new" title="Close (Esc)"><svg class="glyph" aria-hidden="true"><use href="#g-close"/></svg></button></header>
+    <h2 id="whats-new-title">What's new</h2>
+    <ul id="whats-new-notes" class="whats-new-notes"></ul>
+    <div id="whats-new-before" class="whats-new-before" hidden><p id="whats-new-before-head" class="whats-new-before-head"></p><ul id="whats-new-before-notes" class="whats-new-notes is-dim"></ul></div>
+    <footer class="whats-new-foot"><button id="whats-new-changelog" class="ghost" type="button">Full changelog<svg class="glyph" aria-hidden="true"><use href="#g-external"/></svg></button><button id="whats-new-ok" class="primary" type="button">Got it</button></footer>
+  </div>
+</div>
 <!-- The tab pages' header: the page you are on and, when Command sent you here,
      the way back to it (nav.js paints both on mefi:nav). On the rail shell the
      menu carries the brand, Shortcuts and the update badge, so the screen shows
@@ -610,7 +621,7 @@
         <div id="settings-sections" class="settings-sections">
           <div id="settings-search-results" class="settings-search-results" aria-label="Setting search results" hidden></div>
           <p id="settings-find-empty" class="settings-find-empty" hidden>No settings match. Try a different name.</p>
-<section class="settings-category" id="settings-category-general" data-settings-category-pane="general" aria-labelledby="settings-category-general-heading"><header class="settings-category-head"><h2 id="settings-category-general-heading" tabindex="-1">General</h2><p>Names, startup and community</p></header>
+<section class="settings-category" id="settings-category-general" data-settings-category-pane="general" aria-labelledby="settings-category-general-heading"><header class="settings-category-head"><h2 id="settings-category-general-heading" tabindex="-1">General</h2><p>Names, startup, notifications and community</p></header>
 <details class="settings-optional settings-card settings-you" id="settings-studio" open><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-studio"/></svg></span><span class="settings-summary-text"><b>Profile &amp; startup</b><span>Names and launch destination</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
           <div class="settings-you-fields">
             <label class="field"><span class="field-label">Your name</span><input id="workspace-person-name" type="text" maxlength="40" placeholder="What should I call you?" autocomplete="off"></label>
@@ -649,6 +660,32 @@
             <span class="settings-mode-text"><b>Studio mode</b><span id="settings-mode-hint">Vibe is the calm front door. Build is the full studio.</span></span>
             <div class="mode-switch" role="radiogroup" aria-label="Studio mode" data-mode="vibe" data-mode-stay><i class="mode-thumb" aria-hidden="true"></i><button type="button" role="radio" data-ui-mode="vibe" aria-checked="true" title="Vibe: the calm front door"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Vibe</span></button><button type="button" role="radio" data-ui-mode="build" aria-checked="false" title="Build: the full studio"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Build</span></button></div>
           </div>
+        </details>
+<details class="settings-optional settings-card" id="settings-notifications" data-desktop-only><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-bell"/></svg></span><span class="settings-summary-text"><b>Notifications</b><span>Windows alerts, taskbar flash and count, quiet hours</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
+          <!-- Notifications (renderer/alerts.js, main.cjs "Notifications"): Studio tells Windows when something waits on you, only while Studio is not the window you are looking at. -->
+          <p class="muted alerts-lead">Studio tells Windows when something waits on you, and only while Studio isn't the window you are looking at.</p>
+          <p class="settings-status alerts-note" id="alerts-note" role="status" hidden></p>
+          <div class="settings-control-list alerts-rows" id="alerts-rows">
+            <label class="settings-control"><span><b>Send Windows notifications</b><small>Only while Studio isn't the window you are looking at.</small></span><input id="alerts-on" type="checkbox" role="switch" data-alerts="on"></label>
+            <label class="settings-control"><span><b>A task needs me</b><small>A question, an approval or a permission.</small></span><input id="alerts-need" type="checkbox" role="switch" data-alerts="need"></label>
+            <label class="settings-control"><span><b>A task fails</b><small>After Mefi has stopped retrying.</small></span><input id="alerts-fail" type="checkbox" role="switch" data-alerts="fail"></label>
+            <label class="settings-control"><span><b>A task finishes</b><small>Ready for review, or verified. Off by default, because the inbox already shows it.</small></span><input id="alerts-done" type="checkbox" role="switch" data-alerts="done"></label>
+            <label class="settings-control"><span><b>Flash the taskbar icon</b><small>Until you switch back to Studio.</small></span><input id="alerts-flash" type="checkbox" role="switch" data-alerts="flash"></label>
+            <label class="settings-control"><span><b>Show a count on the taskbar icon</b><small>The number of things waiting on you.</small></span><input id="alerts-badge" type="checkbox" role="switch" data-alerts="badge"></label>
+            <label class="settings-control"><span><b>Play a sound</b><small>Windows' own notification sound, for anything that needs you.</small></span><input id="alerts-sound" type="checkbox" role="switch" data-alerts="sound"></label>
+          </div>
+          <p class="settings-eyebrow">Quiet hours <span class="muted">shared with the Discord remote</span></p>
+          <div class="settings-control-list">
+            <label class="settings-control"><span><b>Stay quiet at night</b><small>No notifications inside this window. The inbox still fills, and the count still shows.</small></span><input id="alerts-quiet" type="checkbox" role="switch"></label>
+            <div class="settings-control alerts-times" id="alerts-quiet-times" hidden><span><b>Quiet between</b><small id="alerts-quiet-note">The Discord remote keeps the same hours.</small></span><span class="alerts-time-pair"><select id="alerts-quiet-from" aria-label="Quiet hours start"><option value="00:00">12:00 AM</option><option value="01:00">1:00 AM</option><option value="02:00">2:00 AM</option><option value="03:00">3:00 AM</option><option value="04:00">4:00 AM</option><option value="05:00">5:00 AM</option><option value="06:00">6:00 AM</option><option value="07:00">7:00 AM</option><option value="08:00">8:00 AM</option><option value="09:00">9:00 AM</option><option value="10:00">10:00 AM</option><option value="11:00">11:00 AM</option><option value="12:00">12:00 PM</option><option value="13:00">1:00 PM</option><option value="14:00">2:00 PM</option><option value="15:00">3:00 PM</option><option value="16:00">4:00 PM</option><option value="17:00">5:00 PM</option><option value="18:00">6:00 PM</option><option value="19:00">7:00 PM</option><option value="20:00">8:00 PM</option><option value="21:00">9:00 PM</option><option value="22:00">10:00 PM</option><option value="23:00">11:00 PM</option></select><span class="muted">until</span><select id="alerts-quiet-to" aria-label="Quiet hours end"><option value="00:00">12:00 AM</option><option value="01:00">1:00 AM</option><option value="02:00">2:00 AM</option><option value="03:00">3:00 AM</option><option value="04:00">4:00 AM</option><option value="05:00">5:00 AM</option><option value="06:00">6:00 AM</option><option value="07:00">7:00 AM</option><option value="08:00">8:00 AM</option><option value="09:00">9:00 AM</option><option value="10:00">10:00 AM</option><option value="11:00">11:00 AM</option><option value="12:00">12:00 PM</option><option value="13:00">1:00 PM</option><option value="14:00">2:00 PM</option><option value="15:00">3:00 PM</option><option value="16:00">4:00 PM</option><option value="17:00">5:00 PM</option><option value="18:00">6:00 PM</option><option value="19:00">7:00 PM</option><option value="20:00">8:00 PM</option><option value="21:00">9:00 PM</option><option value="22:00">10:00 PM</option><option value="23:00">11:00 PM</option></select></span></div>
+          </div>
+          <p class="settings-eyebrow">What a notification says</p>
+          <div class="segmented alerts-titles" id="alerts-titles" role="group" aria-label="What a notification says"><button type="button" data-value="generic" aria-pressed="true">Generic</button><button type="button" data-value="titles" aria-pressed="false">Task titles</button></div>
+          <p class="muted" id="alerts-titles-note">Windows keeps notification text in its history and can show it on the lock screen, so Studio says only that something needs you.</p>
+          <div class="alerts-sample" aria-hidden="true"><span class="alerts-sample-from">Mefi Studio · now</span><b id="alerts-sample-title">Something needs you</b><span id="alerts-sample-body">A task is waiting for your answer.</span></div>
+          <p class="settings-eyebrow">Try it</p>
+          <p class="muted">Studio never sends a notification while you are looking at it. Send the test, then switch to another window: it arrives as you do, and waits up to a minute for that.</p>
+          <div class="row tight alerts-actions"><button id="alerts-test" class="primary" type="button">Send me a test notification</button><span class="settings-status" id="alerts-status" role="status"></span></div>
         </details>
 <details class="settings-optional settings-card" id="settings-community"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-community"/></svg></span><span class="settings-summary-text"><b>Community</b><span>Your link to the Void Engine Discord</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
           
@@ -972,9 +1009,14 @@
             <input type="password" id="release-token" placeholder="GitHub token (read-only, for a private repo)" autocomplete="off" aria-label="GitHub update token">
             <button id="release-token-save" class="ghost mini">Save token</button>
           </div>
+          <p class="settings-eyebrow">What's new</p>
+          <!-- renderer/whats-new.js: the versions up to this one, in plain words (assets/whats-new.json). -->
+          <div id="whats-new-list" class="whats-new-list" role="list" aria-label="What's new, version by version"><p class="muted whats-new-empty">Reading this build's notes…</p></div>
+          <label class="switch" title="After an update installs, Studio shows one toast with What's new. It never opens a window by itself."><input type="checkbox" id="whats-new-on" checked><span class="track"></span><span>Tell me what's new after an update</span></label>
+          <p class="muted" id="whats-new-note" role="status" hidden></p>
         </div>
         </details>
-<details class="settings-optional settings-card" id="settings-diagnostics"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-gauge"/></svg></span><span class="settings-summary-text"><b>Diagnostics</b><span>Performance, checks and machine status</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
+<details class="settings-optional settings-card" id="settings-diagnostics"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-gauge"/></svg></span><span class="settings-summary-text"><b>Diagnostics</b><span>Performance, checks, machine status and Report a problem</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
           <div class="row settings-probe" data-desktop-only>
             <label class="muted">Speed probe <select id="speed-model"></select></label>
             <button id="speed-go">Measure tokens/s</button>
@@ -986,6 +1028,39 @@
             <button type="button" class="ghost" data-settings-nav="machine" data-desktop-only title="Test leases, LÖVE runs and auto-kill, in the Explorer">Machine <span aria-hidden="true">↗</span></button>
           </div>
           <p class="muted">A capture stays in memory until you export it. The auditor's findings and the machine readout open in the Explorer.</p>
+          <!-- Report a problem (renderer/report.js, main.cjs "Report a problem"): a small bundle built on this PC, read in full, then saved as a zip. Nothing is uploaded. -->
+          <div id="settings-report" class="settings-report" data-desktop-only>
+            <p class="settings-eyebrow">Report a problem</p>
+            <h3 class="report-title">Read it, then save it</h3>
+            <p class="muted">Studio builds a small bundle on this PC. Read every file first, then save it as a zip. Nothing is uploaded: you attach it to a message yourself.</p>
+            <p class="settings-status report-crash" id="report-crash" role="status" hidden></p>
+            <div class="report-files" id="report-files" role="list" aria-label="What would be in the zip"><p class="muted report-empty">Building the report…</p></div>
+            <p class="muted report-total" id="report-total"></p>
+            <div class="settings-you-switches report-switches">
+              <label class="switch" title="Titles can give away what you are building. With this on, every task and the project are Task 1, Task 2 … and Project 1 in every file."><input type="checkbox" id="report-replace"><span class="track"></span><span>Replace task titles with numbers</span></label>
+              <label class="switch" id="report-crash-switch" title="What Studio wrote down when it closed unexpectedly, kept for a week." hidden><input type="checkbox" id="report-crash-on" checked><span class="track"></span><span id="report-crash-label">Include the crash record</span></label>
+              <label class="switch" title="After a crash or a hang, the next start says so once and offers this report."><input type="checkbox" id="report-prompt" checked><span class="track"></span><span>Tell me when Studio closes unexpectedly</span></label>
+            </div>
+            <p class="muted" id="report-prompt-note" role="status" hidden></p>
+            <div class="report-preview">
+              <p class="report-preview-head"><b class="report-file-name" id="report-preview-name">manifest.json</b><span class="muted"> · read-only preview</span></p>
+              <pre class="log report-pre" id="report-pre" tabindex="0" aria-label="Preview of the selected file"></pre>
+            </div>
+            <div class="row tight report-actions">
+              <button id="report-save" class="primary" type="button" disabled>Save zip…</button>
+              <button id="report-refresh" class="ghost" type="button" title="Build the report again from what Studio knows now">Read it again</button>
+              <span class="settings-status" id="report-status" role="status"></span>
+            </div>
+            <p class="settings-eyebrow">Never included</p>
+            <ul class="report-never" id="report-never" aria-label="What a report never holds"></ul>
+            <p class="settings-eyebrow">What happens next</p>
+            <ol class="report-next">
+              <li><b>Studio saves the zip where you choose.</b> A Save dialog, because Documents may live in OneDrive.</li>
+              <li><b>It shows the file in Explorer.</b> So you can look inside it once more.</li>
+              <li><b>You attach it to a message yourself.</b> The Void Engine Discord is one place. Studio never sends it.</li>
+            </ol>
+            <button id="report-discord" class="ghost mini" type="button">Open the Discord invite <span aria-hidden="true">↗</span></button>
+          </div>
         </details>
 <details class="settings-optional settings-card" id="settings-integrations"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-plug"/></svg></span><span class="settings-summary-text"><b>Integrations</b><span>Optional: Ruins Runner and Love2D</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary><p class="muted">Requires a separate game project and its LÖVE runtime. This integration is optional for Studio.</p><div class="row studio-actions" id="studio-actions"><button data-action="launch">Launch Love2D studio</button><button data-action="smoke">Run smoke</button><button data-action="game">Launch Ruins Runner</button><button data-action="stop">Stop game</button></div><p class="muted" id="studio-hint"></p></details>
 <details class="settings-optional settings-card" id="settings-styler" data-desktop-only><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-plug"/></svg></span><span class="settings-summary-text"><b>Discord Server Styler</b><span>Bot and local dashboard</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary><p class="muted">Run the bot and its local dashboard from this desktop. Bot credentials stay in the separate Server Styler project's <code>.env</code>.</p><div class="row studio-actions" id="server-styler-actions"><button class="primary" data-styler-action="start">Start Server Styler</button><button data-styler-action="open">Open dashboard</button><button data-styler-action="folder">Open bot folder</button><button data-styler-action="stop">Stop</button></div><p class="eyes-status" id="server-styler-status" role="status">Checking Server Styler…</p></details>

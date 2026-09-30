@@ -72,6 +72,9 @@ const CODE_SOURCES = [
   "together.js",
   "pc-sync.js",
   "pc-vault.js",
+  "whats-new.js",
+  "report.js",
+  "alerts.js",
   "companion-friends.js",
   "rooms.js",
   "planning.js",
@@ -218,14 +221,16 @@ export async function build({ root = ROOT } = {}) {
   const [configCode, configStyles] = await Promise.all([readFile(path.join(RENDERER, "config-dialog.js"), "utf8"), readFile(path.join(RENDERER, "config-dialog.css"), "utf8")]);
   const [fleetLayoutCode, fleetCode, fleetStyles] = await Promise.all([readFile(path.join(RENDERER, "fleet-layout.js"), "utf8"), readFile(path.join(RENDERER, "fleet.js"), "utf8"), readFile(path.join(RENDERER, "fleet.css"), "utf8")]);
   const [gitSyncCode, gitSyncStyles] = await Promise.all([readFile(path.join(RENDERER, "git-sync.js"), "utf8"), readFile(path.join(RENDERER, "git-sync.css"), "utf8")]);
-  const codeParts = [stageLabels, nodeVisuals, performanceCore, profiler, taskGroups, studioUi, fileInputs, motion, cardLayout, nav, sidebar, graph, modelLab, tracker, nodeStyles, tree, treeDynamics, idle, modelCommunity, cameraTour, gitSyncCode, explorer, analyzer, tasks, ideas, overhead, brains, palette, configCode, eyes, traceCode, fleetLayoutCode, fleetCode, boot, startup, composerPictures, composerPicker, workspace, mediaWindow, mediaBrowser, music, together, pcSync, pcVault, companionFriends, roomsCode, planning, onboarding, community, demoPanel, autonomyUi, companionUi, companionHub, projectMapView, agentBrain, agents, setupHelper, vibeFlow, vibePanels, vibe, keyTips, patch, panes, builder, worktrees, review, skills, booklet];
+  // What the host tells you (Notifications, Report a problem, What's new): their scripts and the one stylesheet they share.
+  const [hostCardsStyles, whatsNewCode, reportCode, alertsCode] = await Promise.all([readFile(path.join(RENDERER, "host-cards.css"), "utf8"), readFile(path.join(RENDERER, "whats-new.js"), "utf8"), readFile(path.join(RENDERER, "report.js"), "utf8"), readFile(path.join(RENDERER, "alerts.js"), "utf8")]);
+  const codeParts = [stageLabels, nodeVisuals, performanceCore, profiler, taskGroups, studioUi, fileInputs, motion, cardLayout, nav, sidebar, graph, modelLab, tracker, nodeStyles, tree, treeDynamics, idle, modelCommunity, cameraTour, gitSyncCode, explorer, analyzer, tasks, ideas, overhead, brains, palette, configCode, eyes, traceCode, fleetLayoutCode, fleetCode, boot, startup, composerPictures, composerPicker, workspace, mediaWindow, mediaBrowser, music, together, pcSync, pcVault, whatsNewCode, reportCode, alertsCode, companionFriends, roomsCode, planning, onboarding, community, demoPanel, autonomyUi, companionUi, companionHub, projectMapView, agentBrain, agents, setupHelper, vibeFlow, vibePanels, vibe, keyTips, patch, panes, builder, worktrees, review, skills, booklet];
   const code = codeParts.join("\n");
   const html = template
     // "</" and "<!--" escaped: a fetched model name holding "</script>" would
     // otherwise end the data block and run as renderer script. JSON.parse
     // reads < back as "<"; a plain "<= 200K" is left as it was.
     .replace("__BOOKLET_DATA__", () => catalog.trim().replace(/<(?=\/|!--)/g, "\\u003c"))
-    .replace("__BOOKLET_STYLES__", () => `${styles}\n${musicStyles}\n${planningStyles}\n${brainStyles}\n${profilerStyles}\n${traceStyles}\n${fleetStyles}\n${configStyles}\n${agentBrainStyles}\n${agentsStyles}\n${companionStyles}\n${studioUiStyles}\n${companionHubStyles}\n${vibeStyles}\n${setupHelperStyles}\n${gitSyncStyles}\n${builderStyles}\n${composerPicturesStyles}\n${composerPickerStyles}\n${worktreesStyles}\n${reviewStyles}\n${skillsStyles}`)
+    .replace("__BOOKLET_STYLES__", () => `${styles}\n${musicStyles}\n${planningStyles}\n${brainStyles}\n${profilerStyles}\n${traceStyles}\n${fleetStyles}\n${configStyles}\n${hostCardsStyles}\n${agentBrainStyles}\n${agentsStyles}\n${companionStyles}\n${studioUiStyles}\n${companionHubStyles}\n${vibeStyles}\n${setupHelperStyles}\n${gitSyncStyles}\n${builderStyles}\n${composerPicturesStyles}\n${composerPickerStyles}\n${worktreesStyles}\n${reviewStyles}\n${skillsStyles}`)
     .replace("__BOOKLET_CODE__", () => code);
 
   const out = path.join(RENDERER, "booklet.html");

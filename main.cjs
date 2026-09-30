@@ -135,6 +135,23 @@ const community = optionalHelper("./scripts/community.cjs", () => require("./scr
 // the saved copy's manifest, an update that did not stand). See "Release
 // updates: the safety net" below and scripts/update-safety.cjs.
 const updateSafety = optionalHelper("./scripts/update-safety.cjs", () => require("./scripts/update-safety.cjs"), null);
+// The rules for "What's new" after an update (which version has been read, when
+// the toast may speak). Without them the feature is simply absent.
+const whatsNew = optionalHelper("./scripts/whats-new.cjs", () => require("./scripts/whats-new.cjs"), null);
+// Report a problem and the crash prompt: what a report holds and how a session
+// ended (crash-report), the host that reads and writes for it (report-host) and
+// the zip it is saved as (zip-lite). See "Report a problem" below; without any
+// of the three the feature is simply absent.
+const crashReport = optionalHelper("./scripts/crash-report.cjs", () => require("./scripts/crash-report.cjs"), null);
+const reportHostModule = crashReport ? optionalHelper("./scripts/report-host.cjs", () => require("./scripts/report-host.cjs"), null) : null;
+const zipLite = reportHostModule ? optionalHelper("./scripts/zip-lite.cjs", () => require("./scripts/zip-lite.cjs"), null) : null;
+// Windows notifications, the taskbar flash and the count on the taskbar icon:
+// the rules (alerts), the host that watches and shows (alerts-host) and the
+// drawn overlay icon (badge-icon). See "Notifications" below; without the rules
+// or the host the feature is simply absent, without the icon there is no count.
+const alertsRules = optionalHelper("./scripts/alerts.cjs", () => require("./scripts/alerts.cjs"), null);
+const alertsHostModule = alertsRules ? optionalHelper("./scripts/alerts-host.cjs", () => require("./scripts/alerts-host.cjs"), null) : null;
+const badgeIcon = alertsHostModule ? optionalHelper("./scripts/badge-icon.cjs", () => require("./scripts/badge-icon.cjs"), null) : null;
 const discordOAuth = community
   ? optionalHelper("./scripts/discord-oauth.cjs", () => require("./scripts/discord-oauth.cjs"), null)
   : null;
@@ -149,7 +166,7 @@ if (typeof electron === "string" || !electron.app) {
   process.exit(1);
 }
 
-const { app, BrowserWindow, ipcMain, safeStorage, shell, dialog, clipboard, desktopCapturer, powerSaveBlocker, Tray, Menu, nativeImage, screen } = electron;
+const { app, BrowserWindow, ipcMain, safeStorage, shell, dialog, clipboard, desktopCapturer, powerSaveBlocker, powerMonitor, Tray, Menu, nativeImage, screen, Notification } = electron;
 const performanceProfiler = createPerformanceProfiler({ getAppMetrics: () => app.getAppMetrics() });
 
 const STUDIO_ROOT = __dirname;
@@ -238,13 +255,26 @@ function handleProjectIpc(channel, handler) {
 // is the PC's own and may open a freshly cloned project, which a gated
 // handler would wait on. The community model feed and the probe results
 // (models:) live in this PC's user data, and a probe run lasts minutes, which
-// a gated handler would hold every project switch for. (Declared beside the
-// wrapper so the tests that load it from here up to app.setName see it.)
-const APP_WIDE_PREFIXES = ["projects:", "project-preview:", "performance:", "startup:", "community:", "hub:", "remote:", "styler:", "catalog:", "speed:", "shell:", "pc-setup:", "models:"];
-const APP_WIDE_CHANNELS = new Set(["usage:accounts", "opencode:credits", "release:status", "release:check", "update:status", "update:set", "settings:get-key", "boot:healthy"]);
+// a gated handler would hold every project switch for. Notifications (alerts:)
+// are the PC's own: their card works with no project open, and a test
+// notification waits up to a minute for the owner to look away from Studio.
+// (Declared beside the wrapper so the tests that load it from here up to
+// app.setName see it.)
+const APP_WIDE_PREFIXES = ["projects:", "project-preview:", "performance:", "startup:", "community:", "hub:", "remote:", "styler:", "catalog:", "speed:", "shell:", "pc-setup:", "models:", "alerts:"];
+const APP_WIDE_CHANNELS = new Set(["usage:accounts", "opencode:credits", "release:status", "release:check", "update:status", "update:set", "settings:get-key", "boot:healthy", "release:whats-new", "release:whats-new-seen", "release:whats-new-set", "report:dismiss", "report:set"]);
 ipcMain.handle = handleProjectIpc;
 
 app.setName("Mefi's Studio AI+");
+// Windows shows a toast under an application user model id, and groups the
+// taskbar button by it. The id is fixed here so it never follows the product
+// name or the install folder: a portable copy, a moved copy and an updated copy
+// are one app to Windows. MEFI_STUDIO_NO_ALERTS=1 leaves the id to Electron, as
+// before alerts existed, and so does MEFI_STUDIO_KEEP_APP_ID=1 (for a taskbar
+// button pinned before this id existed, which Windows groups by the old id).
+const ALERTS_APP_ID = "MefiStudio.StudioAIPlus";
+if (process.platform === "win32" && process.env.MEFI_STUDIO_NO_ALERTS !== "1" && process.env.MEFI_STUDIO_KEEP_APP_ID !== "1") {
+  try { app.setAppUserModelId(ALERTS_APP_ID); } catch { /* Windows keeps the id Electron chose */ }
+}
 
 let window = null;
 let rendererRecovery = null;
@@ -2326,6 +2356,231 @@ async function stampProjectOpened(id) {
   }).catch(() => {});
 }
 // ---- end of the GitHub link ---------------------------------------------------
+
+// ---- What's new: the notes for the version that is running ----------------------
+// After an update installs, Studio says what changed, once, in plain words: one
+// toast with a What's new action, never a window at launch, never on a first
+// install. The words are assets/whats-new.json (scripts/release-notes.mjs writes
+// it from CHANGELOG.md when the app is packaged); what has been read is
+// settings.whatsNew { on, seen, announced }; scripts/whats-new.cjs holds the
+// rules. MEFI_STUDIO_NO_WHATS_NEW=1 and the switch in Settings › Updates turn it
+// off. A missing settings.json at launch is a fresh install (settingsFromDisk
+// reads it as {}): that version is sealed as read, so its second launch is not
+// mistaken for an update. A build older than the one already read (a roll back)
+// says nothing.
+const WHATS_NEW_PATH = path.join(STUDIO_ROOT, "assets", "whats-new.json");
+const WHATS_NEW_FRESH_INSTALL = settingsDisk.good === null && settingsDisk.unreadable !== true;
+let whatsNewTable = null;
+
+// Harness windows (smoke, capture, the CLI modes) and the kill switch never announce.
+const whatsNewOff = () => SMOKE || CAPTURE || CLI_MODE || process.env.MEFI_STUDIO_NO_WHATS_NEW === "1";
+
+async function whatsNewRead() {
+  if (whatsNewTable) return whatsNewTable;
+  let raw = null;
+  try { raw = JSON.parse(String(await readFile(WHATS_NEW_PATH, "utf8")).replace(/^\uFEFF/, "")); } catch {}
+  whatsNewTable = whatsNew.normalizeTable(raw);
+  return whatsNewTable;
+}
+
+async function releaseWhatsNew() {
+  if (!whatsNew) return { ok: false, error: "unavailable" };
+  try {
+    const current = app.getVersion();
+    let saved = (await readSettings()).whatsNew;
+    if (WHATS_NEW_FRESH_INSTALL && !whatsNewOff()) {
+      const sealed = whatsNew.sealFirstInstall({ settings: saved, current });
+      if (sealed) {
+        await updateSettings((settings) => { settings.whatsNew = whatsNew.sealFirstInstall({ settings: settings.whatsNew, current }) ?? whatsNew.settingsFrom(settings.whatsNew); });
+        saved = sealed;
+      }
+    }
+    return { ok: true, ...whatsNew.view({ table: await whatsNewRead(), current, settings: saved, killed: whatsNewOff() }) };
+  } catch (error) {
+    return { ok: false, error: String(error?.message ?? error).slice(0, 200) };
+  }
+}
+
+// `how` "announce" records that the toast was shown; "read" that the owner read
+// the notes (never backwards, and never past the running version).
+async function releaseWhatsNewSeen(payload = {}) {
+  if (!whatsNew) return { ok: false, error: "unavailable" };
+  const current = whatsNew.cleanVersion(app.getVersion());
+  const version = whatsNew.cleanVersion(payload?.version);
+  if (!version || !current || whatsNew.compareVersions(version, current) > 0) return { ok: false, error: "That is not a version this build knows." };
+  const how = payload?.how === "announce" ? "announce" : "read";
+  await updateSettings((settings) => {
+    const next = whatsNew.markVersion({ settings: settings.whatsNew, version, how });
+    if (!next) return false;
+    settings.whatsNew = next;
+  });
+  return releaseWhatsNew();
+}
+
+async function releaseWhatsNewSet(payload = {}) {
+  if (!whatsNew) return { ok: false, error: "unavailable" };
+  if (typeof payload?.on !== "boolean") return { ok: false, error: "The switch is on or off." };
+  await updateSettings((settings) => {
+    const saved = whatsNew.settingsFrom(settings.whatsNew);
+    if (saved.on === payload.on) return false;
+    settings.whatsNew = { ...saved, on: payload.on };
+  });
+  return releaseWhatsNew();
+}
+// ---- end of what's new ----------------------------------------------------------
+
+// ---- Report a problem: the report, the session marker and the crash prompt ---------
+// Settings › System › Diagnostics builds a small report on this PC: the owner
+// reads every file, then saves it as a zip where a Save dialog says. Nothing is
+// uploaded or sent. scripts/crash-report.cjs decides what is in it (and what
+// never is: settings.json, the sign-in files, the vault, screenshots, project
+// files); scripts/report-host.cjs does the reading and writing.
+//   - data/session-marker.json: "running" while Studio runs, "closed" with a
+//     reason when Studio chose to close (a quit, a Windows sign-out, and any
+//     exit with code 0: the update restarts and the roll back are app.exit(0)
+//     paths). A marker still "running" at the next start is a session that
+//     never closed.
+//   - data/crash.jsonl: a row when the window dies or hangs, main throws or the
+//     GPU process is lost, kept to the last 50 rows of the last 7 days.
+//   - the next start says "Studio closed unexpectedly" once (report:crashed),
+//     unless MEFI_STUDIO_NO_CRASH_PROMPT=1 or the switch in the card is off. A
+//     clean quit, an update restart, a roll back and a development run that was
+//     only stopped never say it.
+let reportHost = null;
+
+function reportCollect() {
+  return (async () => {
+    const settings = await readSettings();
+    const project = projects.current();
+    let tasks = [];
+    try { tasks = (await (await getEyes()).readJson(TASKS_PATH, [])).filter((task) => task && typeof task === "object" && !task.archived); } catch {}
+    tasks.sort((a, b) => (Number(b.updatedAt) || 0) - (Number(a.updatedAt) || 0));
+    const ledger = await brainLedgerTail(projectDataPath(EXECUTOR_LOG_PATH), 1024 * 1024);
+    const trace = [...traceStudio.rows().map((row) => ({ ...row, source: row.source })), ...traceRenderer.rows().map((row) => ({ ...row, source: `window:${row.source}` }))]
+      .sort((a, b) => (Number(a.at) || 0) - (Number(b.at) || 0));
+    let user = "";
+    try { user = os.userInfo().username; } catch {}
+    return {
+      studio: { version: app.getVersion(), install: app.isPackaged ? "portable" : "source" },
+      os: { platform: process.platform, release: os.release(), arch: process.arch },
+      runtime: { electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node },
+      project: { name: project?.name ?? "" },
+      route: { provider: settings.aiProvider ?? "auto", models: Object.fromEntries(Object.entries(settings.aiModels && typeof settings.aiModels === "object" ? settings.aiModels : {}).filter(([, model]) => typeof model === "string")) },
+      builder: { cli: settings.executorCli ?? "opencode", tier: settings.executorTier ?? "auto" },
+      tasks: tasks.slice(0, crashReport.LIMITS.tasks).map((task) => ({ id: task.id, title: task.title, status: task.status, verification: task.verification ? { state: task.verification.state, checks: task.verification.checks } : null, builder: task.lastAttempt?.route ?? null, updatedAt: task.updatedAt })),
+      trace: trace.slice(-crashReport.LIMITS.traceRows),
+      builderRuns: ledger.filter((row) => row?.event === "finish").slice(-crashReport.LIMITS.builderRuns).map((row) => ({ at: row.at, runId: row.runId, taskId: typeof row.task === "string" ? row.task : null, title: row.title, ok: row.ok, code: row.code, seconds: row.seconds, tail: Array.isArray(row.tail) ? row.tail.slice(-40) : [] })),
+      scrub: {
+        roots: [{ path: projectRoot(), label: "<project>" }, { path: STUDIO_ROOT, label: "<studio>" }, { path: os.homedir(), label: "~" }],
+        names: [{ name: user, label: "<user>" }, { name: os.hostname(), label: "<pc>" }],
+      },
+    };
+  })();
+}
+
+// Called once Electron is ready, before the window: judges the last session and
+// starts this one's marker. Harness windows and the CLI modes keep none.
+function reportStart() {
+  if (SMOKE || CAPTURE || CLI_MODE || !reportHostModule || !zipLite || reportHost) return;
+  try {
+    reportHost = reportHostModule.createReportHost({
+      fs: require("node:fs"), rep: crashReport, zip: zipLite, dataDir: path.join(STUDIO_ROOT, "data"), updateResultPath: UPDATE_RESULT_PATH, env: process.env,
+      pid: process.pid, version: app.getVersion(), install: app.isPackaged ? "portable" : "source",
+      collect: reportCollect, getWindow: () => (window && !window.isDestroyed() ? window : null),
+      showSaveDialog: (parent, options) => (parent ? dialog.showSaveDialog(parent, options) : dialog.showSaveDialog(options)),
+      showItemInFolder: (file) => shell.showItemInFolder(file), documentsPath: () => app.getPath("documents"),
+      send: (payload) => send("report:crashed", payload), readSettings, updateSettings, log: (line) => logLine(line), id: () => crypto.randomBytes(6).toString("hex"),
+    });
+    reportHost.boot();
+  } catch (error) {
+    reportHost = null;
+    logLine(`[report] could not start (${String(error?.code ?? error?.name ?? "error").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40) || "error"})`);
+  }
+}
+// Each of these is one guarded line at the place that knows: a failure is never Studio's.
+const reportRecord = (kind, detail, extra) => { try { reportHost?.record(kind, detail, extra); } catch {} };
+const reportEnd = (why) => { try { reportHost?.end(why); } catch {} };
+process.on("uncaughtExceptionMonitor", (error, origin) => reportRecord("main-exception", `${error?.name ?? "Error"}: ${String(error?.message ?? error).slice(0, 160)}`, { origin: String(origin ?? "") }));
+// An exit with code 0 is Studio's own choice (app.quit, app.exit for an update
+// restart or a roll back); a crash never reaches here, and a failing exit code
+// leaves the marker "running" so the next start says so.
+process.on("exit", (code) => { if (code === 0) reportEnd("exit"); });
+app.on("child-process-gone", (_event, details) => { if (details?.type === "GPU" && details.reason !== "clean-exit") reportRecord("gpu-gone", details.reason, { exitCode: details.exitCode }); });
+// ---- end of report a problem ------------------------------------------------------
+
+// ---- Notifications: Windows alerts, the taskbar flash and the count ------------------
+// Settings › General › Notifications (renderer/alerts.js). Studio tells Windows
+// when something waits on the owner (a question, an approval, a permission, a
+// task that failed after the retries, and a finished one when asked), only while
+// Studio is not the window being looked at, never inside quiet hours (the
+// Discord remote's own, settings.remote.quiet), at most twelve an hour, and in
+// generic words unless the owner chose task titles. The taskbar button flashes
+// until Studio is focused and carries the count of what waits on the owner.
+// scripts/alerts.cjs decides, scripts/alerts-host.cjs watches and shows, and the
+// hooks below only tell it what main already knows: a question asked or
+// answered (assistantQuestion, assistantEmit), the tasks the owner cares about
+// moving (assistantObserveTasks), another project's queue (selectProject) and
+// the window's own focus. They set a timer and return: nothing runs per line
+// or per write. MEFI_STUDIO_NO_ALERTS=1 or the master switch turns it all off.
+let alertsHost = null;
+
+// The page must be there to hear a click: a window that had to be made again is still loading.
+function alertsSendOpen(payload) {
+  const contents = window?.webContents;
+  if (!contents || contents.isDestroyed?.()) return;
+  if (contents.isLoading?.()) {
+    contents.once("did-finish-load", () => setTimeout(() => send("alerts:open", payload), 1500).unref?.());
+    return;
+  }
+  send("alerts:open", payload);
+}
+
+// Studio is "being looked at" when one of its windows is in front (shown, not
+// minimized, focused) and somebody is at the PC: a locked screen, or ten
+// minutes without a key or a click, is nobody looking even when Studio is the
+// window in front, and a PC left working is the point of all this.
+const ALERTS_IDLE_SECONDS = 600;
+function alertsLooked() {
+  const inFront = BrowserWindow.getAllWindows().some((win) => !win.isDestroyed() && win.isVisible() && !win.isMinimized() && win.isFocused());
+  if (!inFront) return false;
+  try {
+    const state = powerMonitor.getSystemIdleState(ALERTS_IDLE_SECONDS);
+    return state !== "locked" && state !== "idle";
+  } catch {
+    return true;
+  }
+}
+
+function alertsStart() {
+  if (SMOKE || CAPTURE || CLI_MODE || !alertsRules || !alertsHostModule || alertsHost) return;
+  try {
+    const iconFile = path.join(STUDIO_ROOT, "assets", "icon-256.png");
+    alertsHost = alertsHostModule.createAlertsHost({
+      rules: alertsRules, icon: badgeIcon, Notification, nativeImage, iconPath: existsSync(iconFile) ? iconFile : "", platform: process.platform, env: process.env,
+      getWindow: () => (window && !window.isDestroyed() ? window : null),
+      isLooked: alertsLooked,
+      showWindow, send: alertsSendOpen, readSettings, updateSettings, log: (line) => logLine(line),
+      digest: (now) => (projects.open() ? assistantNeedsYouDigest(now) : null),
+      questionOpen: (id) => (assistantState?.questions ?? []).some((question) => question?.id === id && question.status === "open"),
+      projectId: () => (projects.open() ? projects.current().id : null),
+      scale: () => { try { return screen.getPrimaryDisplay().scaleFactor; } catch { return 1; } },
+      remotePush: () => { if (typeof remotePush === "function") remotePush(); },
+    });
+    void alertsHost.start();
+  } catch (error) {
+    alertsHost = null;
+    logLine(`[alerts] could not start (${String(error?.code ?? error?.name ?? "error").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40) || "error"})`);
+  }
+}
+// Each of these is one guarded line at the place that knows: a failure is never Studio's.
+const alertsQuestion = (question) => { try { alertsHost?.question(question); } catch {} };
+const alertsTasks = (events, attention, projectId) => { try { alertsHost?.tasks(events, attention, projectId); } catch {} };
+const alertsPoke = () => { try { alertsHost?.poke(); } catch {} };
+const alertsFocus = () => { try { alertsHost?.focus(); } catch {} };
+const alertsAway = () => { try { alertsHost?.away(); } catch {} };
+const alertsWindow = () => { try { alertsHost?.windowMade(); } catch {} };
+const alertsStop = () => { try { alertsHost?.close(); } catch {} };
+// ---- end of notifications ---------------------------------------------------------
 
 // ---- Your PCs vault: memory and setup between the owner's PCs ------------------
 // Friends › Your PCs › Share between my PCs (renderer/pc-vault.js). One private
@@ -7255,6 +7510,8 @@ function assistantFix(kind, text, ok = true) {
 // either way), so the renderer never sees more than ~4 pushes a second.
 // State keys the page already holds ride by reference (assistantPush).
 function assistantEmit(event) {
+  // A question asked, answered or expired changes what waits on the owner: the taskbar count looks again.
+  if (event?.kind === "question" && typeof alertsPoke === "function") alertsPoke();
   if (assistantEmitTimer) {
     if (!assistantEmitPending || (ASSISTANT_EVENT_RANK[event.kind] ?? 1) >= (ASSISTANT_EVENT_RANK[assistantEmitPending.kind] ?? 1)) assistantEmitPending = event;
     return;
@@ -11100,6 +11357,8 @@ function assistantObserveTasks(tasks) {
     const result = taskOversight.taskEvents(taskEventIndexes.get(projectId) ?? null, tasks, { now: Date.now(), isOwned: assistantOwnsTask, autoBuild: autopilot.autoBuild !== false, approve: autopilot.approve, watchAll: true });
     taskEventIndexes.set(projectId, result.index);
     events = result.events;
+    // Notifications hears the same events: a parked task, an approval wait, a finished one.
+    if (typeof alertsTasks === "function") alertsTasks(result.events, result.attention, projectId);
     // The agents' own cards the owner never touched still reach the owner
     // when only the owner can move them: one rolling "needs you" line.
     if (Array.isArray(result.attention) && result.attention.length) assistantNeedsYouNotice(result.attention, projectId);
@@ -13625,6 +13884,8 @@ function assistantQuestion(payload = {}) {
   assistantTrim(assistantState.questions, assistantCaps().questions);
   assistantLog("question", `${question.kind === "suggestion" ? "suggested" : "asked"}: ${title}`);
   assistantEmit({ kind: "question", ...question });
+  // Windows hears of it only if it is still waiting in twenty seconds (Notifications).
+  if (typeof alertsQuestion === "function") alertsQuestion(question);
   saveAssistant({ force: true }).catch(() => {});
   return question;
 }
@@ -21152,6 +21413,8 @@ async function selectProject(id, { saveProgress = false } = {}) {
   } finally {
     projectSwitching = false;
     if (assistantLoop) projects.run(projects.active(), () => assistantSchedule());
+    // Another project has another queue: the taskbar count looks again.
+    if (typeof alertsPoke === "function") alertsPoke();
   }
 }
 
@@ -23589,6 +23852,26 @@ function registerIpc() {
   ipcMain.handle("release:apply", async () => applyReleaseUpdate());
   ipcMain.handle("release:rollback", async () => releaseRollback());
   ipcMain.handle("boot:healthy", async () => bootHealthy("renderer"));
+  // ---- What's new (the "What's new" block) ------------------------------------
+  // App-wide: about the running build, not the open project.
+  ipcMain.handle("release:whats-new", async () => releaseWhatsNew());
+  ipcMain.handle("release:whats-new-seen", async (_event, payload) => releaseWhatsNewSeen(payload ?? {}));
+  ipcMain.handle("release:whats-new-set", async (_event, payload) => releaseWhatsNewSet(payload ?? {}));
+  // ---- Report a problem (the "Report a problem" block) --------------------------
+  // preview and save read the open project's tasks and log, so a project switch
+  // waits for them; the prompt's own state (dismiss, the switch) is the app's.
+  const reportOff = { ok: false, error: "Reports are not available in this build." };
+  ipcMain.handle("report:preview", async (_event, options) => (reportHost ? reportHost.preview({ replaceTitles: options?.replaceTitles === true, includeCrash: options?.includeCrash !== false }) : reportOff));
+  ipcMain.handle("report:save", async (_event, payload) => (reportHost ? reportHost.save({ token: typeof payload?.token === "string" ? payload.token : "" }) : reportOff));
+  ipcMain.handle("report:dismiss", async () => (reportHost ? reportHost.dismiss() : reportOff));
+  ipcMain.handle("report:set", async (_event, payload) => (reportHost ? reportHost.setPrompt(payload?.prompt) : reportOff));
+  // ---- Notifications (the "Notifications" block) --------------------------------
+  // The PC's own (alerts: is app-wide): the card works with no project open.
+  // alerts:test may take up to a minute: it waits for the owner to look away.
+  const alertsOff = { ok: false, error: "Notifications are not available in this build." };
+  ipcMain.handle("alerts:get", async () => (alertsHost ? alertsHost.state() : alertsOff));
+  ipcMain.handle("alerts:set", async (_event, patch) => (alertsHost ? alertsHost.set(patch) : alertsOff));
+  ipcMain.handle("alerts:test", async () => (alertsHost ? alertsHost.test() : alertsOff));
 
   // ---- Community ----------------------------------------------------------
   // The Void Engine Discord link (the "Discord community link" block beside
@@ -24062,6 +24345,15 @@ function createWindow() {
     },
   });
   loadView().catch(() => {}); // did-fail-load owns the bounded recovery path.
+  // What went wrong is written down for Report a problem (data/crash.jsonl).
+  window.webContents.on("render-process-gone", (_event, details) => { if (details?.reason !== "clean-exit") reportRecord("renderer-gone", details?.reason, { exitCode: details?.exitCode }); });
+  window.on("unresponsive", () => reportRecord("renderer-unresponsive", "the window stopped responding"));
+  // Windows signing out or shutting down closes Studio without a quit.
+  window.on("session-end", () => reportEnd("session-end"));
+  // Notifications: coming to the front ends the taskbar flash; leaving it (or hiding, or minimizing) lets a waiting test go.
+  window.on("focus", () => { if (typeof alertsFocus === "function") alertsFocus(); });
+  for (const name of ["blur", "hide", "minimize"]) window.on(name, () => { if (typeof alertsAway === "function") alertsAway(); });
+  if (typeof alertsWindow === "function") alertsWindow();
   // Background mode: closing parks the app in the tray and the assistant
   // keeps ticking; Quit lives in the tray menu.
   window.on("close", (event) => {
@@ -24265,6 +24557,8 @@ async function captureTabs() {
 app.whenReady().then(() => {
   registerIpc();
   bootHealthStart();
+  reportStart();
+  alertsStart();
   if (process.argv.includes("--set-key")) {
     (async () => {
       const key = process.env.MEFI_STUDIO_KEY;
@@ -24525,6 +24819,8 @@ app.whenReady().then(() => {
   // Both are fire-and-forget: a failure is logged, never an unhandled rejection.
   if (!SMOKE && !CAPTURE && !CLI_MODE) setTimeout(() => startUpdateWatch().catch((error) => logLine(`[update] watch failed: ${error?.message ?? error}`)), 3500);
   if (!SMOKE && !CAPTURE && !CLI_MODE) setTimeout(() => startReleaseWatch(), 6000);
+  // A fresh install's first launch seals its version as read (releaseWhatsNew), even if no page asks.
+  if (WHATS_NEW_FRESH_INSTALL && !whatsNewOff()) setTimeout(() => { releaseWhatsNew().catch(() => {}); }, 6000).unref?.();
   // Its first look is 15 s in; nothing reaches Discord unless a link exists.
   if (!SMOKE && !CAPTURE && !CLI_MODE) startCommunityWatch();
   // Friends › Your PCs badge: a fetch-only look 45 s in, then every 15 minutes.
@@ -24537,6 +24833,8 @@ app.whenReady().then(() => {
   if (!SMOKE && !CAPTURE && !CLI_MODE) setTimeout(() => { remoteApply(); }, 20000).unref?.();
   if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => announceRestart().catch(() => {}));
   if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => announceRelease().catch(() => {}));
+  // "Studio closed unexpectedly", once, after the page has had a moment to come up.
+  if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => setTimeout(() => { reportHost?.pageUp().catch(() => {}); }, reportHostModule?.PROMPT_DELAY_MS ?? 2500).unref?.());
   if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => bootHealthWatch());
   // The assistant service runs on its own clock, renderer or not; the smoke
   // exercises its keyless path, the capture tour never needs it.
@@ -24612,6 +24910,8 @@ app.on("before-quit", (event) => {
   // relaunch calls app.exit and never reaches this listener, so it keeps its
   // place; so does a crash, which never gets to write anything at all.
   endSession("quit");
+  if (typeof reportEnd === "function") reportEnd("quit");
+  if (typeof alertsStop === "function") alertsStop();
   if (typeof outsideWorkQuit === "function") outsideWorkQuit();
   executorClosing = true;
   performanceProfiler.stop();

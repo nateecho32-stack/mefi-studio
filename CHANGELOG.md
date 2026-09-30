@@ -19,6 +19,41 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   Preview, Queue and Status become panes that dock beside the page or pop out as
   windows. The composer stays on one line at 1920 wide and the Permissions menu
   is no longer cut off.
+- **Windows tells you when something needs you.** When a question, an approval, a
+  permission or a task that failed after Mefi stopped retrying is still waiting 20
+  seconds on, and Studio is not the window you are looking at, Windows shows one
+  notification (a finished task only if you switch that on). Nothing is sent while
+  you are looking at Studio, inside quiet hours, twice for the same task within 15
+  minutes, or more than 12 an hour. The words are generic ("Something needs you")
+  unless you choose task titles in Settings › General › Notifications, which also
+  has a test button. Clicking a notification brings Studio up and opens the task.
+- **The taskbar icon flashes and shows a count.** It flashes until you switch back
+  to Studio and shows a number for what is waiting on you. Both can be switched
+  off, and so can all notifications (the master switch, or
+  `MEFI_STUDIO_NO_ALERTS=1`).
+- **Quiet hours are shared with the Discord remote.** The hours you set for one now
+  keep the other quiet too; change them in either place.
+- **Windows knows Studio by a fixed name.** Notifications and the taskbar button
+  use the id `MefiStudio.StudioAIPlus`, so a portable, a moved and an updated copy
+  are one app. A taskbar button pinned earlier may need pinning again;
+  `MEFI_STUDIO_KEEP_APP_ID=1` keeps the old id.
+- **Report a problem.** Settings › System › Diagnostics builds a small report on this
+  PC: Studio's version, one line per task, the last 1,000 log rows, what the
+  builders said and, after a crash, what Studio wrote down. Keys, home folders, this
+  PC's names, e-mail and network addresses are removed; you can read every file
+  first, swap task titles for numbers, and save it as a zip where you choose.
+  Nothing is uploaded, and settings, sign-in files, the vault, screenshots and
+  project files never go in.
+- **Studio tells you when it closed unexpectedly.** After a crash, a freeze or a lost
+  window, the next start shows one toast with Review the report and Dismiss, once
+  per crash. A normal quit, an update restart and a rolled-back update never show
+  it. Switch it off in the Report a problem card or with
+  `MEFI_STUDIO_NO_CRASH_PROMPT=1`.
+- **Studio says what changed after an update.** A toast "Studio updated to X" with a
+  What's new button opens a short sheet of that version's notes, once. It never
+  opens a window by itself and is silent on a first install. The notes stay in
+  Settings › Updates, marked New until read; "Tell me what's new after an update"
+  turns the toast off (or `MEFI_STUDIO_NO_WHATS_NEW=1`).
 - **Each task can have its own time limit.** In a task's Evidence, pick Stop an
   attempt after 5 to 240 minutes (25 unless you change it). A run that hits its
   limit is stopped the way your Stop button stops it: progress is saved, it does

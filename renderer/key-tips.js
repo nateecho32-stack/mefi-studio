@@ -43,12 +43,13 @@
   const remaining = () => TIPS.filter((tip) => !state.seen.has(tip.id));
 
   // Nothing pops over the boot gate, the setup helper, the walkthrough,
-  // What's new, an open sheet or dialog, the companion or a menu.
+  // What's new (Vibe's card, and the sheet renderer/whats-new.js opens after an
+  // update), an open sheet or dialog, the companion or a menu.
   function busy() {
     const nav = window.MefiNav?.state;
     if (nav?.sheet || nav?.transient) return true;
     if (window.MefiBoot?.isActive?.() || window.MefiSetupHelper?.isOpen?.() || window.MefiCompanionHub?.isOpen?.() || window.MefiSidebar?.isOpen?.()) return true;
-    for (const id of ["walkthrough-overlay", "walkthrough-coach", "vibe-notes", "boot-layer"]) {
+    for (const id of ["walkthrough-overlay", "walkthrough-coach", "vibe-notes", "whats-new-sheet", "boot-layer"]) {
       const node = document.getElementById(id);
       if (node && !node.hidden && node.getClientRects?.().length) return true;
     }

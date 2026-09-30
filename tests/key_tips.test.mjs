@@ -52,6 +52,20 @@ test("a first launch shows two Vibe tips beside their controls, with keycaps", (
   assert.ok(env.registered.some((dest) => dest.id === "keyTipsToggle") && env.registered.some((dest) => dest.id === "keyTipsAgain"), "Search can switch them off and bring them back");
 });
 
+test("a tip never pops over the What's new sheet that opens after an update", () => {
+  const env = load();
+  const sheet = new Element("div");
+  sheet.setAttribute("id", "whats-new-sheet");
+  sheet.id = "whats-new-sheet";
+  sheet.hidden = false;
+  env.document.body.append(sheet);
+  env.tips.tick();
+  assert.deepEqual([...env.tips.shown()], [], "nothing pops over the sheet that says what changed");
+  sheet.hidden = true;
+  env.tips.tick();
+  assert.equal(env.tips.shown().length, 2, "and the tips come once it is closed");
+});
+
 test("a click fades a tip away for good; pressing its key does too", () => {
   const env = load();
   env.tips.tick();

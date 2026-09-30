@@ -61,6 +61,9 @@ const INLINE_SCRIPTS = [
   "together.js",
   "pc-sync.js",
   "pc-vault.js",
+  "whats-new.js",
+  "report.js",
+  "alerts.js",
   "companion-friends.js",
   "rooms.js",
   "onboarding.js",
@@ -116,7 +119,7 @@ async function makeFixtureRoot() {
   await copyFile(path.join(RENDERER, "profiler.css"), path.join(renderer, "profiler.css"));
   await copyFile(path.join(RENDERER, "brains.css"), path.join(renderer, "brains.css"));
   await copyFile(path.join(RENDERER, "agent-brain.css"), path.join(renderer, "agent-brain.css"));
-  for (const name of ["studio-ui.css", "agents.css", "companion-ui.css", "companion-hub.css", "vibe.css", "trace.css", "fleet.css", "setup-helper.css", "config-dialog.css", "git-sync.css", "builder.css", "composer-pictures.css", "composer-picker.css", "worktrees.css", "review.css", "skills.css"]) await copyFile(path.join(RENDERER, name), path.join(renderer, name));
+  for (const name of ["studio-ui.css", "agents.css", "companion-ui.css", "companion-hub.css", "vibe.css", "trace.css", "fleet.css", "setup-helper.css", "config-dialog.css", "git-sync.css", "builder.css", "composer-pictures.css", "composer-picker.css", "worktrees.css", "review.css", "skills.css", "host-cards.css"]) await copyFile(path.join(RENDERER, name), path.join(renderer, name));
   for (const name of INLINE_SCRIPTS) {
     await copyFile(path.join(RENDERER, name), path.join(renderer, name));
   }

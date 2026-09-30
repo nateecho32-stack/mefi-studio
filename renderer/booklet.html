@@ -7564,6 +7564,79 @@ button.fleet-tnode:focus-visible { outline: 2px solid var(--gold-bright); outlin
   .config-sheet, .config-tree-mark, .config-item-go { transition: none; }
 }
 
+/* Settings cards and small sheets for what the host tells you: Notifications
+   (renderer/alerts.js), Report a problem and the crash prompt
+   (renderer/report.js) and What's new (renderer/whats-new.js). Theme tokens
+   only, nothing under 12px, no scroll gutters: the app hides scrollbars and
+   draws its own indicator. */
+
+/* ---- What's new: Settings › Updates ---------------------------------------- */
+.whats-new-list { display: grid; gap: 2px; margin: 0 0 10px; }
+.whats-new-row { display: flex; align-items: center; gap: var(--s3); padding: 8px 0; border-bottom: 1px solid color-mix(in srgb, var(--hairline) 60%, transparent); }
+.whats-new-words { display: grid; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.whats-new-words b { color: var(--ivory); font-size: var(--fs-md); font-weight: 600; }
+.whats-new-words small { color: var(--muted); font-size: var(--fs-sm); line-height: 1.45; overflow-wrap: anywhere; }
+.whats-new-fresh { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: var(--r-pill); background: color-mix(in srgb, var(--gold) 20%, transparent); color: var(--gold-bright); font-size: var(--fs-sm); font-weight: 600; vertical-align: 1px; }
+.whats-new-link { justify-self: start; margin-top: 6px; }
+.whats-new-empty { margin: 4px 0; }
+
+/* ---- What's new: the sheet --------------------------------------------------- */
+.whats-new-sheet { position: fixed; inset: 0; z-index: calc(var(--z-toast) - 2); display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--bg-deep) 52%, transparent); backdrop-filter: blur(6px); }
+.whats-new-sheet[hidden] { display: none; }
+.whats-new-card { position: relative; width: min(520px, 100%); max-height: calc(100vh - 32px); padding: 20px 22px 18px; overflow: auto; border: 1px solid color-mix(in srgb, var(--ivory) 12%, transparent); border-radius: var(--r-xl); background: color-mix(in srgb, var(--panel-solid) 97%, transparent); color: var(--ivory); box-shadow: 0 40px 100px -40px color-mix(in srgb, var(--bg-deep) 95%, transparent); }
+.whats-new-head { display: flex; align-items: center; justify-content: space-between; }
+.whats-new-tag { display: inline-flex; align-items: center; gap: 7px; min-height: 28px; padding: 0 12px; border-radius: var(--r-pill); background: color-mix(in srgb, var(--gold) 18%, transparent); color: var(--gold-bright); font-size: var(--fs-sm); font-weight: 650; letter-spacing: .04em; text-transform: uppercase; }
+.whats-new-tag .glyph { width: 13px; height: 13px; }
+.whats-new-card h2 { margin: 14px 0 8px; font: 650 22px/1.25 var(--font-display); letter-spacing: -.01em; }
+.whats-new-notes { display: grid; gap: 8px; margin: 0 0 14px; padding-left: 18px; color: var(--ivory); font-size: var(--fs-md); line-height: 1.5; }
+.whats-new-notes.is-dim { color: var(--muted); }
+.whats-new-before { margin: 4px 0 12px; }
+.whats-new-before-head { margin: 0 0 6px; color: var(--gold); font-size: var(--fs-sm); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.whats-new-foot { display: flex; align-items: center; justify-content: flex-end; gap: var(--s3); flex-wrap: wrap; }
+.whats-new-foot .ghost { margin-right: auto; }
+.whats-new-sheet button:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
+
+/* ---- Report a problem: Settings › System › Diagnostics ---------------------------- */
+.settings-report { margin-top: 18px; padding-top: 4px; border-top: 1px solid color-mix(in srgb, var(--hairline) 60%, transparent); }
+.settings-report[hidden] { display: none; }
+.report-title { margin: 0 0 4px; }
+.report-crash { padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); border-radius: var(--r-md); background: color-mix(in srgb, var(--warn) 10%, transparent); color: var(--ivory); font-size: var(--fs-sm); }
+.report-files { display: grid; gap: 2px; margin: 10px 0 4px; }
+.report-file { display: flex; align-items: center; gap: var(--s3); padding: 8px 10px; border: 1px solid transparent; border-radius: var(--r-md); }
+.report-file.is-selected { border-color: color-mix(in srgb, var(--gold) 38%, transparent); background: color-mix(in srgb, var(--gold) 8%, transparent); }
+.report-file-words { display: grid; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.report-file-name { font: 600 var(--fs-md)/1.3 ui-monospace, Consolas, "Cascadia Mono", monospace; color: var(--ivory); }
+.report-file-words small { color: var(--muted); font-size: var(--fs-sm); line-height: 1.4; }
+.report-file-size { flex: none; min-width: 58px; text-align: right; color: var(--muted); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.report-total { margin: 2px 0 10px; }
+.report-switches { margin-bottom: 8px; }
+.report-preview { margin: 12px 0; border: 1px solid var(--hairline); border-radius: var(--r-lg); background: color-mix(in srgb, var(--bg-deep) 40%, transparent); }
+.report-preview-head { margin: 0; padding: 8px 12px; border-bottom: 1px solid color-mix(in srgb, var(--hairline) 60%, transparent); font-size: var(--fs-sm); }
+.report-pre { margin: 0; max-height: 300px; padding: 10px 12px; overflow: auto; border: 0; background: transparent; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--fs-sm); line-height: 1.5; }
+.report-actions { align-items: center; flex-wrap: wrap; }
+.report-never { display: grid; gap: 6px; margin: 0 0 8px; padding: 0; list-style: none; }
+.report-never-row { display: block; padding: 6px 10px; border-left: 2px solid color-mix(in srgb, var(--gold) 40%, transparent); color: var(--ivory); font-size: var(--fs-sm); }
+.report-never-row small { color: var(--muted); font-size: var(--fs-sm); }
+.report-next { display: grid; gap: 6px; margin: 0 0 10px; padding-left: 20px; color: var(--muted); font-size: var(--fs-sm); line-height: 1.5; }
+.report-next b { color: var(--ivory); font-weight: 600; }
+
+/* ---- Notifications: Settings › General ------------------------------------------------ */
+.alerts-lead { margin: 0 0 8px; }
+.alerts-note { margin: 0 0 10px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); border-radius: var(--r-md); background: color-mix(in srgb, var(--warn) 10%, transparent); color: var(--ivory); font-size: var(--fs-sm); }
+.alerts-note[hidden] { display: none; }
+.alerts-rows.is-dim .settings-control + .settings-control { opacity: .55; }
+.alerts-times[hidden] { display: none; }
+/* .settings-control > span makes every direct span a grid: the pair of times needs to outweigh it. */
+.settings-control > .alerts-time-pair { display: flex; flex: none; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.alerts-time-pair select { width: auto; min-width: 104px; }
+.alerts-titles { max-width: 360px; margin-bottom: 8px; }
+.alerts-titles > button { min-height: 36px; justify-items: center; text-align: center; }
+.alerts-sample { display: grid; gap: 2px; max-width: 360px; margin: 6px 0 12px; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: var(--r-md); background: color-mix(in srgb, var(--surface-sunk) 70%, transparent); }
+.alerts-sample b { color: var(--ivory); font-size: var(--fs-md); font-weight: 600; }
+.alerts-sample span { color: var(--muted); font-size: var(--fs-sm); line-height: 1.4; overflow-wrap: anywhere; }
+.alerts-sample .alerts-sample-from { color: var(--dim); font-size: var(--fs-sm); }
+.alerts-actions { align-items: center; flex-wrap: wrap; }
+
 /* The Agent Brain's surfaces (renderer/agent-brain.js): the Agent brain sheet,
    the project map hub on Home and the docked companion. Every colour comes
    from the theme tokens, so each theme and the Void collection carry over. */
@@ -11269,6 +11342,7 @@ html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-mentio
   <symbol id="g-home" viewBox="0 0 16 16"><path d="M2.5 7.4 8 2.8l5.5 4.6"/><path d="M4 6.3v7h3v-3.8h2v3.8h3v-7"/></symbol>
   <symbol id="g-flag" viewBox="0 0 16 16"><path d="M3.75 14V2.25"/><path d="M3.75 2.75h8.5l-1.9 2.9 1.9 2.9h-8.5"/></symbol>
   <symbol id="g-gauge" viewBox="0 0 16 16"><path d="M2.6 11.75a5.6 5.6 0 1 1 10.8 0"/><path d="M8 9.9 10.6 6.5M4.3 7.2l.9.55M8 4.4v1M11.7 7.2l-.9.55"/><circle cx="8" cy="9.9" r="1.05" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="g-bell" viewBox="0 0 16 16"><path d="M3.5 11.6c1-.95 1.45-2 1.45-3.4V6.9a3.05 3.05 0 0 1 6.1 0v1.3c0 1.4.45 2.45 1.45 3.4Z"/><path d="M8 2.1v1.7M6.6 13.4a1.5 1.5 0 0 0 2.8 0"/></symbol>
 </svg>
 <!-- The one navigation rail (docs/ux-audit.md, Phase 3). Every destination in
      nav.js's registry, grouped Home / Work / Live / Models / Settings, built by
@@ -11563,6 +11637,16 @@ html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-mentio
     <footer class="vibe-notes-foot"><button id="vibe-notes-changelog" class="vibe-notes-link" type="button">Full changelog<svg class="glyph" aria-hidden="true"><use href="#g-external"/></svg></button><button id="vibe-notes-build" class="vibe-btn quiet" type="button">Keep Build</button><button id="vibe-notes-ok" class="vibe-btn primary" type="button">Try Vibe</button></footer>
   </div>
 </div>
+<!-- What's new (renderer/whats-new.js): opens from the toast after an update, from Settings › Updates or from Search; never by itself at launch. -->
+<div id="whats-new-sheet" class="whats-new-sheet" hidden>
+  <div class="whats-new-card" role="dialog" aria-modal="true" aria-labelledby="whats-new-title">
+    <header class="whats-new-head"><span class="whats-new-tag"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg>What's new</span><button id="whats-new-close" class="ghost mini" type="button" aria-label="Close what's new" title="Close (Esc)"><svg class="glyph" aria-hidden="true"><use href="#g-close"/></svg></button></header>
+    <h2 id="whats-new-title">What's new</h2>
+    <ul id="whats-new-notes" class="whats-new-notes"></ul>
+    <div id="whats-new-before" class="whats-new-before" hidden><p id="whats-new-before-head" class="whats-new-before-head"></p><ul id="whats-new-before-notes" class="whats-new-notes is-dim"></ul></div>
+    <footer class="whats-new-foot"><button id="whats-new-changelog" class="ghost" type="button">Full changelog<svg class="glyph" aria-hidden="true"><use href="#g-external"/></svg></button><button id="whats-new-ok" class="primary" type="button">Got it</button></footer>
+  </div>
+</div>
 <!-- The tab pages' header: the page you are on and, when Command sent you here,
      the way back to it (nav.js paints both on mefi:nav). On the rail shell the
      menu carries the brand, Shortcuts and the update badge, so the screen shows
@@ -11783,7 +11867,7 @@ html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-mentio
         <div id="settings-sections" class="settings-sections">
           <div id="settings-search-results" class="settings-search-results" aria-label="Setting search results" hidden></div>
           <p id="settings-find-empty" class="settings-find-empty" hidden>No settings match. Try a different name.</p>
-<section class="settings-category" id="settings-category-general" data-settings-category-pane="general" aria-labelledby="settings-category-general-heading"><header class="settings-category-head"><h2 id="settings-category-general-heading" tabindex="-1">General</h2><p>Names, startup and community</p></header>
+<section class="settings-category" id="settings-category-general" data-settings-category-pane="general" aria-labelledby="settings-category-general-heading"><header class="settings-category-head"><h2 id="settings-category-general-heading" tabindex="-1">General</h2><p>Names, startup, notifications and community</p></header>
 <details class="settings-optional settings-card settings-you" id="settings-studio" open><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-studio"/></svg></span><span class="settings-summary-text"><b>Profile &amp; startup</b><span>Names and launch destination</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
           <div class="settings-you-fields">
             <label class="field"><span class="field-label">Your name</span><input id="workspace-person-name" type="text" maxlength="40" placeholder="What should I call you?" autocomplete="off"></label>
@@ -11822,6 +11906,32 @@ html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-mentio
             <span class="settings-mode-text"><b>Studio mode</b><span id="settings-mode-hint">Vibe is the calm front door. Build is the full studio.</span></span>
             <div class="mode-switch" role="radiogroup" aria-label="Studio mode" data-mode="vibe" data-mode-stay><i class="mode-thumb" aria-hidden="true"></i><button type="button" role="radio" data-ui-mode="vibe" aria-checked="true" title="Vibe: the calm front door"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Vibe</span></button><button type="button" role="radio" data-ui-mode="build" aria-checked="false" title="Build: the full studio"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Build</span></button></div>
           </div>
+        </details>
+<details class="settings-optional settings-card" id="settings-notifications" data-desktop-only><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-bell"/></svg></span><span class="settings-summary-text"><b>Notifications</b><span>Windows alerts, taskbar flash and count, quiet hours</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
+          <!-- Notifications (renderer/alerts.js, main.cjs "Notifications"): Studio tells Windows when something waits on you, only while Studio is not the window you are looking at. -->
+          <p class="muted alerts-lead">Studio tells Windows when something waits on you, and only while Studio isn't the window you are looking at.</p>
+          <p class="settings-status alerts-note" id="alerts-note" role="status" hidden></p>
+          <div class="settings-control-list alerts-rows" id="alerts-rows">
+            <label class="settings-control"><span><b>Send Windows notifications</b><small>Only while Studio isn't the window you are looking at.</small></span><input id="alerts-on" type="checkbox" role="switch" data-alerts="on"></label>
+            <label class="settings-control"><span><b>A task needs me</b><small>A question, an approval or a permission.</small></span><input id="alerts-need" type="checkbox" role="switch" data-alerts="need"></label>
+            <label class="settings-control"><span><b>A task fails</b><small>After Mefi has stopped retrying.</small></span><input id="alerts-fail" type="checkbox" role="switch" data-alerts="fail"></label>
+            <label class="settings-control"><span><b>A task finishes</b><small>Ready for review, or verified. Off by default, because the inbox already shows it.</small></span><input id="alerts-done" type="checkbox" role="switch" data-alerts="done"></label>
+            <label class="settings-control"><span><b>Flash the taskbar icon</b><small>Until you switch back to Studio.</small></span><input id="alerts-flash" type="checkbox" role="switch" data-alerts="flash"></label>
+            <label class="settings-control"><span><b>Show a count on the taskbar icon</b><small>The number of things waiting on you.</small></span><input id="alerts-badge" type="checkbox" role="switch" data-alerts="badge"></label>
+            <label class="settings-control"><span><b>Play a sound</b><small>Windows' own notification sound, for anything that needs you.</small></span><input id="alerts-sound" type="checkbox" role="switch" data-alerts="sound"></label>
+          </div>
+          <p class="settings-eyebrow">Quiet hours <span class="muted">shared with the Discord remote</span></p>
+          <div class="settings-control-list">
+            <label class="settings-control"><span><b>Stay quiet at night</b><small>No notifications inside this window. The inbox still fills, and the count still shows.</small></span><input id="alerts-quiet" type="checkbox" role="switch"></label>
+            <div class="settings-control alerts-times" id="alerts-quiet-times" hidden><span><b>Quiet between</b><small id="alerts-quiet-note">The Discord remote keeps the same hours.</small></span><span class="alerts-time-pair"><select id="alerts-quiet-from" aria-label="Quiet hours start"><option value="00:00">12:00 AM</option><option value="01:00">1:00 AM</option><option value="02:00">2:00 AM</option><option value="03:00">3:00 AM</option><option value="04:00">4:00 AM</option><option value="05:00">5:00 AM</option><option value="06:00">6:00 AM</option><option value="07:00">7:00 AM</option><option value="08:00">8:00 AM</option><option value="09:00">9:00 AM</option><option value="10:00">10:00 AM</option><option value="11:00">11:00 AM</option><option value="12:00">12:00 PM</option><option value="13:00">1:00 PM</option><option value="14:00">2:00 PM</option><option value="15:00">3:00 PM</option><option value="16:00">4:00 PM</option><option value="17:00">5:00 PM</option><option value="18:00">6:00 PM</option><option value="19:00">7:00 PM</option><option value="20:00">8:00 PM</option><option value="21:00">9:00 PM</option><option value="22:00">10:00 PM</option><option value="23:00">11:00 PM</option></select><span class="muted">until</span><select id="alerts-quiet-to" aria-label="Quiet hours end"><option value="00:00">12:00 AM</option><option value="01:00">1:00 AM</option><option value="02:00">2:00 AM</option><option value="03:00">3:00 AM</option><option value="04:00">4:00 AM</option><option value="05:00">5:00 AM</option><option value="06:00">6:00 AM</option><option value="07:00">7:00 AM</option><option value="08:00">8:00 AM</option><option value="09:00">9:00 AM</option><option value="10:00">10:00 AM</option><option value="11:00">11:00 AM</option><option value="12:00">12:00 PM</option><option value="13:00">1:00 PM</option><option value="14:00">2:00 PM</option><option value="15:00">3:00 PM</option><option value="16:00">4:00 PM</option><option value="17:00">5:00 PM</option><option value="18:00">6:00 PM</option><option value="19:00">7:00 PM</option><option value="20:00">8:00 PM</option><option value="21:00">9:00 PM</option><option value="22:00">10:00 PM</option><option value="23:00">11:00 PM</option></select></span></div>
+          </div>
+          <p class="settings-eyebrow">What a notification says</p>
+          <div class="segmented alerts-titles" id="alerts-titles" role="group" aria-label="What a notification says"><button type="button" data-value="generic" aria-pressed="true">Generic</button><button type="button" data-value="titles" aria-pressed="false">Task titles</button></div>
+          <p class="muted" id="alerts-titles-note">Windows keeps notification text in its history and can show it on the lock screen, so Studio says only that something needs you.</p>
+          <div class="alerts-sample" aria-hidden="true"><span class="alerts-sample-from">Mefi Studio · now</span><b id="alerts-sample-title">Something needs you</b><span id="alerts-sample-body">A task is waiting for your answer.</span></div>
+          <p class="settings-eyebrow">Try it</p>
+          <p class="muted">Studio never sends a notification while you are looking at it. Send the test, then switch to another window: it arrives as you do, and waits up to a minute for that.</p>
+          <div class="row tight alerts-actions"><button id="alerts-test" class="primary" type="button">Send me a test notification</button><span class="settings-status" id="alerts-status" role="status"></span></div>
         </details>
 <details class="settings-optional settings-card" id="settings-community"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-community"/></svg></span><span class="settings-summary-text"><b>Community</b><span>Your link to the Void Engine Discord</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
           
@@ -12145,9 +12255,14 @@ html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-mentio
             <input type="password" id="release-token" placeholder="GitHub token (read-only, for a private repo)" autocomplete="off" aria-label="GitHub update token">
             <button id="release-token-save" class="ghost mini">Save token</button>
           </div>
+          <p class="settings-eyebrow">What's new</p>
+          <!-- renderer/whats-new.js: the versions up to this one, in plain words (assets/whats-new.json). -->
+          <div id="whats-new-list" class="whats-new-list" role="list" aria-label="What's new, version by version"><p class="muted whats-new-empty">Reading this build's notes…</p></div>
+          <label class="switch" title="After an update installs, Studio shows one toast with What's new. It never opens a window by itself."><input type="checkbox" id="whats-new-on" checked><span class="track"></span><span>Tell me what's new after an update</span></label>
+          <p class="muted" id="whats-new-note" role="status" hidden></p>
         </div>
         </details>
-<details class="settings-optional settings-card" id="settings-diagnostics"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-gauge"/></svg></span><span class="settings-summary-text"><b>Diagnostics</b><span>Performance, checks and machine status</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
+<details class="settings-optional settings-card" id="settings-diagnostics"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-gauge"/></svg></span><span class="settings-summary-text"><b>Diagnostics</b><span>Performance, checks, machine status and Report a problem</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
           <div class="row settings-probe" data-desktop-only>
             <label class="muted">Speed probe <select id="speed-model"></select></label>
             <button id="speed-go">Measure tokens/s</button>
@@ -12159,6 +12274,39 @@ html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-mentio
             <button type="button" class="ghost" data-settings-nav="machine" data-desktop-only title="Test leases, LÖVE runs and auto-kill, in the Explorer">Machine <span aria-hidden="true">↗</span></button>
           </div>
           <p class="muted">A capture stays in memory until you export it. The auditor's findings and the machine readout open in the Explorer.</p>
+          <!-- Report a problem (renderer/report.js, main.cjs "Report a problem"): a small bundle built on this PC, read in full, then saved as a zip. Nothing is uploaded. -->
+          <div id="settings-report" class="settings-report" data-desktop-only>
+            <p class="settings-eyebrow">Report a problem</p>
+            <h3 class="report-title">Read it, then save it</h3>
+            <p class="muted">Studio builds a small bundle on this PC. Read every file first, then save it as a zip. Nothing is uploaded: you attach it to a message yourself.</p>
+            <p class="settings-status report-crash" id="report-crash" role="status" hidden></p>
+            <div class="report-files" id="report-files" role="list" aria-label="What would be in the zip"><p class="muted report-empty">Building the report…</p></div>
+            <p class="muted report-total" id="report-total"></p>
+            <div class="settings-you-switches report-switches">
+              <label class="switch" title="Titles can give away what you are building. With this on, every task and the project are Task 1, Task 2 … and Project 1 in every file."><input type="checkbox" id="report-replace"><span class="track"></span><span>Replace task titles with numbers</span></label>
+              <label class="switch" id="report-crash-switch" title="What Studio wrote down when it closed unexpectedly, kept for a week." hidden><input type="checkbox" id="report-crash-on" checked><span class="track"></span><span id="report-crash-label">Include the crash record</span></label>
+              <label class="switch" title="After a crash or a hang, the next start says so once and offers this report."><input type="checkbox" id="report-prompt" checked><span class="track"></span><span>Tell me when Studio closes unexpectedly</span></label>
+            </div>
+            <p class="muted" id="report-prompt-note" role="status" hidden></p>
+            <div class="report-preview">
+              <p class="report-preview-head"><b class="report-file-name" id="report-preview-name">manifest.json</b><span class="muted"> · read-only preview</span></p>
+              <pre class="log report-pre" id="report-pre" tabindex="0" aria-label="Preview of the selected file"></pre>
+            </div>
+            <div class="row tight report-actions">
+              <button id="report-save" class="primary" type="button" disabled>Save zip…</button>
+              <button id="report-refresh" class="ghost" type="button" title="Build the report again from what Studio knows now">Read it again</button>
+              <span class="settings-status" id="report-status" role="status"></span>
+            </div>
+            <p class="settings-eyebrow">Never included</p>
+            <ul class="report-never" id="report-never" aria-label="What a report never holds"></ul>
+            <p class="settings-eyebrow">What happens next</p>
+            <ol class="report-next">
+              <li><b>Studio saves the zip where you choose.</b> A Save dialog, because Documents may live in OneDrive.</li>
+              <li><b>It shows the file in Explorer.</b> So you can look inside it once more.</li>
+              <li><b>You attach it to a message yourself.</b> The Void Engine Discord is one place. Studio never sends it.</li>
+            </ol>
+            <button id="report-discord" class="ghost mini" type="button">Open the Discord invite <span aria-hidden="true">↗</span></button>
+          </div>
         </details>
 <details class="settings-optional settings-card" id="settings-integrations"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-plug"/></svg></span><span class="settings-summary-text"><b>Integrations</b><span>Optional: Ruins Runner and Love2D</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary><p class="muted">Requires a separate game project and its LÖVE runtime. This integration is optional for Studio.</p><div class="row studio-actions" id="studio-actions"><button data-action="launch">Launch Love2D studio</button><button data-action="smoke">Run smoke</button><button data-action="game">Launch Ruins Runner</button><button data-action="stop">Stop game</button></div><p class="muted" id="studio-hint"></p></details>
 <details class="settings-optional settings-card" id="settings-styler" data-desktop-only><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-plug"/></svg></span><span class="settings-summary-text"><b>Discord Server Styler</b><span>Bot and local dashboard</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary><p class="muted">Run the bot and its local dashboard from this desktop. Bot credentials stay in the separate Server Styler project's <code>.env</code>.</p><div class="row studio-actions" id="server-styler-actions"><button class="primary" data-styler-action="start">Start Server Styler</button><button data-styler-action="open">Open dashboard</button><button data-styler-action="folder">Open bot folder</button><button data-styler-action="stop">Stop</button></div><p class="eyes-status" id="server-styler-status" role="status">Checking Server Styler…</p></details>
@@ -70527,6 +70675,594 @@ html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-mentio
   window.MefiPcVault = { section, shareSection };
 })();
 
+// What's new: what changed in the version you are running, in plain words.
+//
+// After an update installs, Studio says so once: a toast with a "What's new"
+// action that opens a small sheet with that version's notes and "Got it". It
+// never opens a modal by itself, never speaks on a first install (the host
+// seals that version as read) and never repeats a toast it already showed;
+// Settings › Updates keeps every version's notes, and the same sheet opens
+// from a Read button there or from Search. Everything it says comes from the
+// host (main.cjs "What's new", scripts/whats-new.cjs): this file draws the
+// answer and asks for two things, "I showed the toast" and "I read it". The
+// switch in Settings › Updates and MEFI_STUDIO_NO_WHATS_NEW=1 turn it off.
+(function () {
+  "use strict";
+  const CHANGELOG_URL = "https://github.com/nateecho32-stack/mefi-studio/blob/main/CHANGELOG.md";
+  const api = () => window.mefiStudio;
+  const $ = (id) => document.getElementById(id);
+  const headless = /[?&](?:smoke|capture)=1(?:&|$)/.test(String(window.location?.search || ""));
+  const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = String(text); return node; };
+  const state = { view: null, toasted: false, shown: null, returnFocus: null };
+
+  // ---- what the host says ------------------------------------------------------------
+  async function refresh(call = "releaseWhatsNew", ...args) {
+    const bridge = api();
+    if (typeof bridge?.[call] !== "function") return null;
+    try {
+      const view = await bridge[call](...args);
+      if (view?.ok) { state.view = view; paint(); }
+      return view?.ok ? view : null;
+    } catch {
+      return null;
+    }
+  }
+
+  // ---- Settings › Updates: every version, in plain words ------------------------------
+  function paint() {
+    const view = state.view;
+    const list = $("whats-new-list");
+    if (list && view) {
+      list.replaceChildren();
+      for (const entry of view.history ?? []) {
+        const row = el("div", "whats-new-row");
+        row.setAttribute("role", "listitem");
+        const words = el("div", "whats-new-words");
+        const title = el("b", "", `${entry.version}${entry.current ? " · installed" : ""}`);
+        if (entry.current && entry.unread) title.append(el("span", "whats-new-fresh", "New"));
+        words.append(title, el("small", "", entry.notes[0] ?? ""));
+        const read = el("button", "ghost mini", "Read");
+        read.type = "button";
+        read.dataset.version = entry.version;
+        read.setAttribute("aria-label", `Read what's new in ${entry.version}`);
+        read.addEventListener("click", () => open(entry.version));
+        row.append(words, read);
+        list.append(row);
+      }
+      if (!list.children.length) list.append(el("p", "muted whats-new-empty", view.current ? `This build carries no notes for ${view.current}. The full changelog has every change.` : "This build does not know its own version."));
+      list.append(fullChangelog());
+    }
+    const on = $("whats-new-on");
+    if (on && view) {
+      on.checked = view.enabled;
+      on.disabled = view.disabled === "env";
+    }
+    const note = $("whats-new-note");
+    if (note && view) {
+      note.hidden = view.disabled !== "env";
+      note.textContent = view.disabled === "env" ? "Turned off for this session by MEFI_STUDIO_NO_WHATS_NEW." : "";
+    }
+  }
+  function fullChangelog() {
+    const link = el("button", "ghost mini whats-new-link", "Full changelog");
+    link.type = "button";
+    link.addEventListener("click", openChangelog);
+    return link;
+  }
+  function openChangelog() {
+    const opened = api()?.openExternal?.(CHANGELOG_URL);
+    if (!opened) window.open?.(CHANGELOG_URL, "_blank", "noopener");
+  }
+
+  // ---- the sheet ---------------------------------------------------------------------
+  const sheet = () => $("whats-new-sheet");
+  function keys(event) {
+    const node = sheet();
+    if (!node || node.hidden) return;
+    if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(); return; }
+    if (event.key !== "Tab") return;
+    const stops = [...node.querySelectorAll("button")].filter((button) => !button.disabled);
+    const first = stops[0], last = stops[stops.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  }
+  function fill(list, notes) {
+    list.replaceChildren(...notes.map((text) => el("li", "", text)));
+  }
+  /** Open the sheet for a version the host listed; false when it has nothing to say about it. */
+  function open(version) {
+    const node = sheet();
+    const view = state.view;
+    const entry = (view?.history ?? []).find((row) => row.version === version) ?? (view?.current === version && view.notes?.length ? { version, notes: view.notes, current: true } : null);
+    if (!node || !entry) return false;
+    // The history is newest first, so the entry after this one is the one before it.
+    const history = view.history ?? [];
+    const at = history.findIndex((row) => row.version === version);
+    const older = at >= 0 ? history[at + 1] ?? null : null;
+    $("whats-new-title").textContent = `What's new in ${entry.version}`;
+    fill($("whats-new-notes"), entry.notes);
+    const before = $("whats-new-before");
+    if (older && before) {
+      before.hidden = false;
+      $("whats-new-before-head").textContent = `Before that · ${older.version}`;
+      fill($("whats-new-before-notes"), older.notes);
+    } else if (before) before.hidden = true;
+    state.shown = entry;
+    state.returnFocus = document.activeElement ?? null;
+    node.hidden = false;
+    document.addEventListener("keydown", keys, true);
+    const focus = () => $("whats-new-ok")?.focus?.({ preventScroll: true });
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(focus); else focus();
+    return true;
+  }
+  // Any way of closing counts as having read it: the notes were on the screen.
+  function close() {
+    const node = sheet();
+    if (!node || node.hidden) return;
+    node.hidden = true;
+    document.removeEventListener("keydown", keys, true);
+    const entry = state.shown;
+    state.shown = null;
+    if (entry?.current) void refresh("releaseWhatsNewSeen", { version: entry.version, how: "read" });
+    const back = state.returnFocus;
+    state.returnFocus = null;
+    if (back && back.isConnected !== false) back.focus?.({ preventScroll: true });
+  }
+
+  // ---- after an update: one toast ----------------------------------------------------
+  /** The one place the rule lives on this side: the host said `show`, and this page has not toasted yet. */
+  const toastText = (view) => (view?.ok && view.show && !state.toasted ? `Studio updated to ${view.current}.` : null);
+  async function announce() {
+    if (headless) return false;
+    const view = await refresh();
+    const text = toastText(view);
+    if (!text || typeof window.MefiToast !== "function") return false;
+    state.toasted = true;
+    window.MefiToast(text, "info", { duration: 14000, action: { label: "What's new", run: () => open(view.current) } });
+    // Said once: a toast nobody clicked is not repeated at the next launch. The
+    // notes stay in Settings › Updates, marked New until they are read.
+    void refresh("releaseWhatsNewSeen", { version: view.current, how: "announce" });
+    return true;
+  }
+  // A window parked in the tray at sign-in has nobody to tell yet, and neither
+  // does one still behind the startup gate: #boot-layer hides the page and sits
+  // above every toast, so a toast made under it is neither seen nor clickable
+  // and "announced" would be a lie. The wait after the gate is a slow poll of one
+  // cheap read that stops; a launch that never leaves the gate says nothing, and
+  // Settings › Updates still marks the version New.
+  function whenVisible(run) {
+    if (!document.hidden) { run(); return; }
+    const wake = () => { if (document.hidden) return; document.removeEventListener("visibilitychange", wake); run(); };
+    document.addEventListener("visibilitychange", wake);
+  }
+  const BOOT_POLL_MS = 1500;
+  const BOOT_POLL_TRIES = 400;
+  function booting() {
+    const gate = $("boot-layer");
+    if (!gate || gate.hidden) return false;
+    if (typeof getComputedStyle !== "function") return true;
+    try { return getComputedStyle(gate).display !== "none"; } catch { return true; }
+  }
+  function whenBooted(run, tries = 0) {
+    if (!booting()) { run(); return; }
+    if (tries < BOOT_POLL_TRIES) setTimeout(() => whenBooted(run, tries + 1), BOOT_POLL_MS);
+  }
+
+  function init() {
+    if (typeof api()?.releaseWhatsNew !== "function") return;
+    $("whats-new-close")?.addEventListener("click", close);
+    $("whats-new-ok")?.addEventListener("click", close);
+    $("whats-new-changelog")?.addEventListener("click", openChangelog);
+    $("whats-new-sheet")?.addEventListener("click", (event) => { if (event.target === $("whats-new-sheet")) close(); });
+    $("whats-new-on")?.addEventListener("change", (event) => { void refresh("releaseWhatsNewSet", event.target.checked === true); });
+    window.MefiNav?.register?.({
+      id: "release-notes", label: "What's new in this version", short: "Release notes", kind: "action", layer: null, section: "help", group: "system",
+      glyph: "g-spark", badge: null, desc: "What changed in the version you are running, in plain words",
+      searchTerms: "whats new release notes changelog updated update version",
+      showIn: { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false },
+      hidden: () => !(state.view?.notes?.length),
+      run: () => { if (state.view?.current) open(state.view.current); },
+    });
+    void refresh();
+    // The studio has had a few seconds to come up before anything speaks.
+    setTimeout(() => whenVisible(() => whenBooted(() => { void announce(); })), 4000);
+  }
+
+  window.MefiWhatsNew = { open, close, refresh, announce, toastText, state };
+  init();
+})();
+
+// Report a problem, and the prompt after a crash (Settings › System › Diagnostics).
+//
+// Studio builds a small report on this PC: a manifest, a one-line-per-task
+// summary, the tail of its log, what the builders said and, when Studio
+// closed unexpectedly, what it wrote down then. The owner reads every file
+// here, can swap task titles for numbers, and only then saves it as a zip
+// (the host asks where, because Documents may live in OneDrive, and shows the
+// file in the file manager). Nothing is uploaded or sent: the owner attaches
+// the file to a message themselves. What a report never holds is listed beside
+// it. After a crash or a hang the next start shows one toast, "Studio closed
+// unexpectedly", with Review the report and Dismiss; the host says it once per
+// crash and MEFI_STUDIO_NO_CRASH_PROMPT=1 or the switch below silences it.
+// Everything comes from main.cjs's "Report a problem" block
+// (scripts/crash-report.cjs); this file draws it.
+(function () {
+  "use strict";
+  const DISCORD_URL = "https://discord.gg/xgfKc5pVxG";
+  const REPORT_SECTION = "settings-report";
+  const api = () => window.mefiStudio;
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = String(text); return node; };
+  const state = { view: null, selected: "manifest.json", busy: false, loading: false, again: false };
+  // What a crash row's kind means to a person.
+  const WORDS = {
+    "renderer-gone": "Studio's window crashed",
+    "renderer-unresponsive": "Studio's window stopped responding",
+    "main-exception": "Studio hit an internal error",
+    "gpu-gone": "the graphics process was lost",
+    "no-clean-exit": "Studio closed without saying goodbye",
+    "update-rolled-back": "an update did not start and Studio went back",
+  };
+  const sentence = (kind) => { const text = WORDS[kind] ?? "Studio closed unexpectedly"; return `${text[0].toUpperCase()}${text.slice(1)}`; };
+  const kb = (bytes) => `${bytes < 1024 ? Math.max(1, Math.round(bytes / 102.4) / 10) : Math.round(bytes / 1024)} KB`;
+  const when = (at) => { try { return new Date(at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); } catch { return ""; } };
+  const say = (text, bad = false) => { const line = $("report-status"); if (line) { line.textContent = text; line.classList.toggle("bad-text", bad); } };
+
+  // ---- the options the two switches make ------------------------------------------------
+  const options = () => ({ replaceTitles: $("report-replace")?.checked === true, includeCrash: $("report-crash-on")?.checked !== false });
+
+  // ---- reading the report ----------------------------------------------------------------
+  async function load() {
+    if (typeof api()?.reportPreview !== "function") return null;
+    if (state.loading) { state.again = true; return null; }
+    state.loading = true;
+    say("Building the report…");
+    try {
+      const view = await api().reportPreview(options());
+      if (!view?.ok) { say(view?.error || "The report could not be built.", true); return null; }
+      state.view = view;
+      if (!view.files.some((file) => file.name === state.selected)) state.selected = view.files[0]?.name ?? "manifest.json";
+      paint();
+      say("");
+      return view;
+    } catch (error) {
+      say(`The report could not be built: ${String(error?.message ?? error)}`, true);
+      return null;
+    } finally {
+      state.loading = false;
+      if (state.again) { state.again = false; void load(); }
+    }
+  }
+
+  function paint() {
+    const view = state.view;
+    if (!view) return;
+    const list = $("report-files");
+    list.replaceChildren();
+    for (const file of view.files) {
+      const row = el("div", `report-file${file.name === state.selected ? " is-selected" : ""}`);
+      row.setAttribute("role", "listitem");
+      const words = el("div", "report-file-words");
+      words.append(el("b", "report-file-name", file.name), el("small", "", `${file.about}${file.truncated ? " (older lines left out to keep it small)" : ""}`));
+      const size = el("span", "report-file-size", kb(file.bytes));
+      const show = el("button", "ghost mini", file.name === state.selected ? "Viewing" : "Preview");
+      show.type = "button";
+      show.disabled = file.name === state.selected;
+      show.setAttribute("aria-label", `Preview ${file.name}`);
+      show.addEventListener("click", () => { state.selected = file.name; paint(); });
+      row.append(words, size, show);
+      list.append(row);
+    }
+    $("report-total").textContent = `${view.files.length} files, ${kb(view.total)} in all. ${view.replaceTitles ? "Task titles are numbers." : "Task titles are as you wrote them."}`;
+    const shown = view.files.find((file) => file.name === state.selected) ?? view.files[0];
+    $("report-preview-name").textContent = shown?.name ?? "";
+    $("report-pre").textContent = shown?.text ?? "";
+    // The crash record: a switch only while there is one, and a line saying when.
+    const crashSwitch = $("report-crash-switch");
+    if (crashSwitch) {
+      crashSwitch.hidden = !view.crash;
+      $("report-crash-label").textContent = view.crash ? `Include the crash record · from ${when(view.crash.at)}` : "Include the crash record";
+    }
+    const crash = $("report-crash");
+    if (crash) {
+      crash.hidden = !view.crash;
+      crash.textContent = view.crash ? `${sentence(view.crash.kind)} on ${when(view.crash.at)}. Studio wrote a small record; it is in this report unless you switch it off.` : "";
+    }
+    const prompt = $("report-prompt");
+    if (prompt) { prompt.checked = view.prompt !== false; prompt.disabled = view.killed === true; }
+    const note = $("report-prompt-note");
+    if (note) { note.hidden = view.killed !== true; note.textContent = view.killed ? "Turned off for this session by MEFI_STUDIO_NO_CRASH_PROMPT." : ""; }
+    const never = $("report-never");
+    never.replaceChildren(...view.never.map((item) => { const row = el("li", "report-never-row"); row.append(el("b", "", item.name), el("small", "", ` ${item.why}`)); return row; }));
+    $("report-save").disabled = state.busy;
+  }
+
+  // ---- saving it ------------------------------------------------------------------------------
+  async function save() {
+    const view = state.view;
+    if (!view || state.busy) return;
+    state.busy = true;
+    $("report-save").disabled = true;
+    say("Choose where to save it…");
+    try {
+      const result = await api().reportSave({ token: view.token });
+      if (result?.ok) {
+        const name = String(result.path ?? "").split(/[\\/]/).pop();
+        say(`Saved ${name} (${kb(result.bytes)}) and showed it in your file manager. Nothing was uploaded.`);
+        window.MefiToast?.(`Saved ${name}. Nothing was uploaded: attach it to a message yourself.`, "good");
+      } else if (result?.canceled) say("Not saved.");
+      else if (result?.stale) { say("That report is no longer held. Studio is building a fresh one: read it, then save again.", true); void load(); }
+      else say(result?.error || "The report was not saved.", true);
+    } catch (error) {
+      say(`The report was not saved: ${String(error?.message ?? error)}`, true);
+    } finally {
+      state.busy = false;
+      const button = $("report-save");
+      if (button) button.disabled = !state.view;
+    }
+  }
+
+  // ---- the prompt after a crash -------------------------------------------------------------------
+  function openCard() {
+    window.MefiNav?.go?.("studio", { section: REPORT_SECTION });
+    setTimeout(() => { void load(); }, 0);
+  }
+  // The startup gate (#boot-layer) hides the page and sits above every toast, so
+  // a toast made while it is up is neither seen nor clickable, and the host has
+  // already said its once. The prompt waits for a visible window (one parked in
+  // the tray at sign-in has nobody to tell yet) and for the gate; the wait after
+  // the gate is a slow poll of one cheap read that stops. A launch that never
+  // leaves the gate says nothing: the card in Settings still has the record.
+  function whenVisible(run) {
+    if (!document.hidden) { run(); return; }
+    const wake = () => { if (document.hidden) return; document.removeEventListener("visibilitychange", wake); run(); };
+    document.addEventListener("visibilitychange", wake);
+  }
+  const BOOT_POLL_MS = 1500;
+  const BOOT_POLL_TRIES = 400;
+  function booting() {
+    const gate = $("boot-layer");
+    if (!gate || gate.hidden) return false;
+    if (typeof getComputedStyle !== "function") return true;
+    try { return getComputedStyle(gate).display !== "none"; } catch { return true; }
+  }
+  function whenBooted(run, tries = 0) {
+    if (!booting()) { run(); return; }
+    if (tries < BOOT_POLL_TRIES) setTimeout(() => whenBooted(run, tries + 1), BOOT_POLL_MS);
+  }
+  /**
+   * The host says the last session did not close: one toast, and either button
+   * clears it. It is one short line because the toast lays its text beside two
+   * buttons in 380 px; what happened and when is in the card it opens.
+   */
+  function crashed() {
+    if (typeof window.MefiToast !== "function") return false;
+    const clear = () => { void Promise.resolve(api()?.reportDismiss?.()).catch(() => {}); };
+    window.MefiToast("Studio closed unexpectedly.", "warn", {
+      duration: 30000,
+      action: { label: "Review the report", run: () => { clear(); openCard(); } },
+      secondary: { label: "Dismiss", run: clear },
+    });
+    return true;
+  }
+
+  function init() {
+    const block = $(REPORT_SECTION);
+    if (typeof api()?.reportPreview !== "function") { if (block) block.hidden = true; return; }
+    $("report-save")?.addEventListener("click", () => { void save(); });
+    $("report-refresh")?.addEventListener("click", () => { void load(); });
+    $("report-replace")?.addEventListener("change", () => { void load(); });
+    $("report-crash-on")?.addEventListener("change", () => { void load(); });
+    $("report-prompt")?.addEventListener("change", async (event) => {
+      const on = event.target.checked === true;
+      const result = await Promise.resolve(api().reportSet?.({ prompt: on })).catch(() => null);
+      say(result?.ok === false ? result.error || "That did not change." : on ? "Studio will say so after a crash or a hang." : "Studio will not say anything after a crash or a hang. The record is still kept.", result?.ok === false);
+    });
+    $("report-discord")?.addEventListener("click", () => {
+      const opened = api()?.openExternal?.(DISCORD_URL);
+      if (!opened) window.open?.(DISCORD_URL, "_blank", "noopener");
+    });
+    // The report is built when the card is opened, not at launch.
+    const card = $("settings-diagnostics");
+    card?.addEventListener("toggle", () => { if (card.open && !state.view) void load(); });
+    if (card?.open) void load();
+    api().onReportCrashed?.(() => whenVisible(() => whenBooted(crashed)));
+    window.MefiNav?.register?.({
+      id: "settings:report", label: "Settings › System › Report a problem", short: "Report a problem", kind: "action", layer: null, section: "settings", group: "system",
+      glyph: "g-gauge", badge: null, desc: "Build a report you can read before you save it. Nothing is uploaded",
+      searchTerms: "report a problem bug crash closed unexpectedly diagnostics zip support save log",
+      showIn: { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false },
+      run: openCard,
+    });
+  }
+
+  window.MefiReport = { load, save, crashed, state, options };
+  init();
+})();
+
+// Notifications: Settings › General › Notifications, and the click that comes back.
+//
+// Studio tells Windows when something waits on you, and only while Studio is not
+// the window you are looking at: a question, an approval, a permission, a task
+// that failed after Mefi stopped retrying, and (when you ask) one that finished.
+// It never sends one inside quiet hours (the Discord remote's own: change them
+// here or in Friends and both follow), no more than twelve an hour, and in
+// generic words unless you chose task titles, because Windows keeps
+// notification text in its history. The taskbar button can flash and carry a
+// count of what waits on you. The test button sends one on purpose and, because
+// nothing is ever sent to the window you are looking at, waits for you to look
+// away. Everything it says and decides comes from the host (main.cjs
+// "Notifications", scripts/alerts.cjs): this file draws the choices and saves
+// them, and opens what a clicked notification was about (alerts:open). The
+// switch at the top and MEFI_STUDIO_NO_ALERTS=1 turn it all off.
+(function () {
+  "use strict";
+  const api = () => window.mefiStudio;
+  const $ = (id) => document.getElementById(id);
+  const SWITCHES = ["on", "need", "fail", "done", "flash", "badge", "sound"];
+  const state = { view: null, loading: false, again: false, testing: false };
+  // The words of the two kinds of notification, as the card shows them.
+  const SAMPLE = {
+    generic: ["Something needs you", "A task is waiting for your answer."],
+    titles: ["Something needs you", "Search notes by tag: Should #Work and #work count as the same tag?"],
+  };
+  const NOTES = {
+    generic: "Windows keeps notification text in its history and can show it on the lock screen, so Studio says only that something needs you.",
+    titles: "The notification names the task and the question. Anyone who can see your screen or your notification history can read it.",
+  };
+  const clock12 = (hhmm) => {
+    const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(String(hhmm));
+    return match ? `${Number(match[1]) % 12 || 12}:${match[2]} ${Number(match[1]) < 12 ? "AM" : "PM"}` : String(hhmm);
+  };
+  const say = (text, bad = false) => { const line = $("alerts-status"); if (line) { line.textContent = text; line.classList.toggle("bad-text", bad); } };
+  const note = (text) => { const node = $("alerts-note"); if (node) { node.hidden = !text; node.textContent = text || ""; } };
+  const reason = (error) => String(error?.message ?? error ?? "").slice(0, 160);
+
+  // ---- reading and drawing the choices ---------------------------------------------------------
+  async function load() {
+    if (typeof api()?.alertsGet !== "function") return null;
+    if (state.loading) { state.again = true; return null; }
+    state.loading = true;
+    try {
+      const view = await api().alertsGet();
+      if (!view?.ok) { state.view = null; note(view?.error || "Notifications are not available in this build."); return null; }
+      state.view = view;
+      paint();
+      return view;
+    } catch (error) {
+      note(`Notifications could not be read: ${reason(error)}`);
+      return null;
+    } finally {
+      state.loading = false;
+      if (state.again) { state.again = false; void load(); }
+    }
+  }
+
+  // A select that holds hours on the hour shows a saved half hour too, rather than a wrong one.
+  function setHour(select, value) {
+    if (!select) return;
+    if (![...select.querySelectorAll("option")].some((option) => option.value === value)) {
+      const extra = document.createElement("option");
+      extra.value = value;
+      extra.textContent = clock12(value);
+      select.append(extra);
+    }
+    select.value = value;
+  }
+
+  function paint() {
+    const view = state.view;
+    if (!view) return;
+    const off = view.killed === true;
+    for (const key of SWITCHES) {
+      const box = $(`alerts-${key}`);
+      if (!box) continue;
+      box.checked = view.prefs?.[key] === true;
+      box.disabled = off;
+    }
+    $("alerts-rows")?.classList.toggle("is-dim", view.prefs?.on !== true);
+    const quiet = $("alerts-quiet");
+    if (quiet) { quiet.checked = view.quiet?.on === true; quiet.disabled = off; }
+    const times = $("alerts-quiet-times");
+    if (times) times.hidden = view.quiet?.on !== true;
+    setHour($("alerts-quiet-from"), view.quiet?.from ?? "22:00");
+    setHour($("alerts-quiet-to"), view.quiet?.to ?? "07:00");
+    for (const id of ["alerts-quiet-from", "alerts-quiet-to"]) { const select = $(id); if (select) select.disabled = off; }
+    const words = view.prefs?.titles === "titles" ? "titles" : "generic";
+    for (const button of $("alerts-titles")?.querySelectorAll("button") ?? []) { button.setAttribute("aria-pressed", String(button.dataset.value === words)); button.disabled = off; }
+    const titles = $("alerts-titles-note");
+    if (titles) titles.textContent = NOTES[words];
+    const sample = $("alerts-sample-title");
+    if (sample) sample.textContent = SAMPLE[words][0];
+    const body = $("alerts-sample-body");
+    if (body) body.textContent = SAMPLE[words][1];
+    const test = $("alerts-test");
+    if (test) test.disabled = off || state.testing;
+    note(off ? "Turned off for this session by MEFI_STUDIO_NO_ALERTS." : view.supported === false ? "Windows notifications are not available on this PC." : "");
+  }
+
+  // ---- changing them -------------------------------------------------------------------------------
+  async function change(patch) {
+    if (typeof api()?.alertsSet !== "function") return null;
+    try {
+      const result = await api().alertsSet(patch);
+      if (result?.ok === false) { say(result.error || "That did not change.", true); await load(); return null; }
+      state.view = result;
+      paint();
+      say("");
+      return result;
+    } catch (error) {
+      say(`That did not change: ${reason(error)}`, true);
+      await load();
+      return null;
+    }
+  }
+
+  // ---- the test --------------------------------------------------------------------------------------
+  async function test() {
+    if (state.testing || typeof api()?.alertsTest !== "function") return null;
+    state.testing = true;
+    const button = $("alerts-test");
+    if (button) button.disabled = true;
+    say("Sending… If Studio is in front, switch to another window: the test arrives as you do (Studio waits up to a minute).");
+    try {
+      const result = await api().alertsTest();
+      if (result?.sent) say("Sent. If it did not appear, Windows may be holding notifications back (Focus assist or Do not disturb).");
+      else if (result?.superseded) say("");
+      else say(result?.why || result?.error || "The test was not sent.", result?.ok === false);
+      return result;
+    } catch (error) {
+      say(`The test was not sent: ${reason(error)}`, true);
+      return null;
+    } finally {
+      state.testing = false;
+      if (button) button.disabled = state.view?.killed === true;
+    }
+  }
+
+  // ---- the click on a notification (main has already brought Studio up) ---------------------------
+  /** Opens what a clicked notification was about: its task, else Home, where what needs you is shown. The test just leaves Studio in front. */
+  function openTarget(payload) {
+    if (String(payload?.kind ?? "") === "test") return true;
+    const nav = window.MefiNav;
+    if (payload?.taskId && typeof nav?.go === "function") {
+      nav.go("tasks", { taskId: String(payload.taskId), ...(payload.projectId ? { projectId: String(payload.projectId) } : {}), filter: "all" });
+      return true;
+    }
+    if (window.MefiVibe?.landing?.() === "vibe" && typeof window.MefiVibe.enter === "function") { window.MefiVibe.enter(); return true; }
+    if (typeof window.MefiWorkspace?.enter === "function") { window.MefiWorkspace.enter(); return true; }
+    return false;
+  }
+
+  function init() {
+    const card = $("settings-notifications");
+    if (typeof api()?.alertsGet !== "function") { if (card) card.hidden = true; return; }
+    for (const key of SWITCHES) $(`alerts-${key}`)?.addEventListener("change", (event) => { void change({ [key]: event.target.checked === true }); });
+    $("alerts-quiet")?.addEventListener("change", (event) => { void change({ quiet: { on: event.target.checked === true } }); });
+    for (const id of ["alerts-quiet-from", "alerts-quiet-to"]) {
+      $(id)?.addEventListener("change", () => { void change({ quiet: { on: true, from: $("alerts-quiet-from")?.value, to: $("alerts-quiet-to")?.value } }); });
+    }
+    for (const button of $("alerts-titles")?.querySelectorAll("button") ?? []) button.addEventListener("click", () => { void change({ titles: button.dataset.value }); });
+    $("alerts-test")?.addEventListener("click", () => { void test(); });
+    // Read when the card is opened, not at launch.
+    card?.addEventListener("toggle", () => { if (card.open) void load(); });
+    if (card?.open) void load();
+    // The quiet hours are the Discord remote's: a change made in Friends shows here without reopening the card.
+    api().onRemoteEvent?.((status) => {
+      if (!state.view || !status?.settings || !("quiet" in status.settings)) return;
+      const quiet = status.settings.quiet;
+      const next = quiet ? { on: true, from: quiet.from, to: quiet.to } : { ...state.view.quiet, on: false };
+      if (JSON.stringify(next) === JSON.stringify(state.view.quiet)) return;
+      state.view = { ...state.view, quiet: next };
+      paint();
+    });
+    api().onAlertsOpen?.((payload) => { try { openTarget(payload); } catch { /* a click that goes nowhere is not an error */ } });
+  }
+
+  window.MefiAlerts = { load, change, test, openTarget, state };
+  init();
+})();
+
 // Friends › Playground: friends' companions out in your rooms, playdates with
 // them (or with Pip, the practice buddy that never leaves this PC), and what
 // your own companion may tell them. The rules, the cards and the scenes all
@@ -84018,12 +84754,13 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   const remaining = () => TIPS.filter((tip) => !state.seen.has(tip.id));
 
   // Nothing pops over the boot gate, the setup helper, the walkthrough,
-  // What's new, an open sheet or dialog, the companion or a menu.
+  // What's new (Vibe's card, and the sheet renderer/whats-new.js opens after an
+  // update), an open sheet or dialog, the companion or a menu.
   function busy() {
     const nav = window.MefiNav?.state;
     if (nav?.sheet || nav?.transient) return true;
     if (window.MefiBoot?.isActive?.() || window.MefiSetupHelper?.isOpen?.() || window.MefiCompanionHub?.isOpen?.() || window.MefiSidebar?.isOpen?.()) return true;
-    for (const id of ["walkthrough-overlay", "walkthrough-coach", "vibe-notes", "boot-layer"]) {
+    for (const id of ["walkthrough-overlay", "walkthrough-coach", "vibe-notes", "whats-new-sheet", "boot-layer"]) {
       const node = document.getElementById(id);
       if (node && !node.hidden && node.getClientRects?.().length) return true;
     }
