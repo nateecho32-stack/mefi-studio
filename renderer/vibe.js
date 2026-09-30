@@ -9,6 +9,9 @@
 // In Vibe mode every other page opens inside Vibe's own rail (#vibe-rail)
 // instead of Build's, and Home is always Vibe, so no click leaves the mode;
 // only the Build switch does.
+// In layout v2 (renderer/today.js) Vibe's Home is the Today page and its
+// decisions are made in the Inbox; both read what this file holds through
+// MefiVibe.data() and watch(), and Today borrows the box and the sparks below.
 (function () {
   "use strict";
   const MODE_KEY = "mefiStudio.uiMode";
@@ -125,6 +128,23 @@
   const companion = () => { try { return (localStorage.getItem("mefiStudio.workspace.companion") || "Mefi").trim() || "Mefi"; } catch { return "Mefi"; } };
   const person = () => { try { return (localStorage.getItem("mefiStudio.workspace.person") || "").trim(); } catch { return ""; } };
 
+  // A second reader of the same data (layout v2). Today and the Inbox
+  // (renderer/today.js) show what the front door holds while the front door
+  // itself is not up: Build, another page. watch() starts the subscriptions
+  // below (wireData) and a first read; each callback is told, once per burst of
+  // pushes, that the data moved and reads it back with data(). With no watcher
+  // nothing here runs, so Vibe as it was (v1) does exactly what it did.
+  const watchers = new Set();
+  let notifyQueued = false;
+  function notify() {
+    if (!watchers.size || notifyQueued) return;
+    notifyQueued = true;
+    Promise.resolve().then(() => {
+      notifyQueued = false;
+      for (const callback of [...watchers]) { try { callback(); } catch { /* one reader never stops another */ } }
+    });
+  }
+
   async function refresh() {
     if (!api()) { render(); return; }
     if (refreshFlight) return refreshFlight;
@@ -141,6 +161,7 @@
       // Plans name their project, so they are read once the project is known.
       await readPlans();
       render();
+      notify();
     }).finally(() => { refreshFlight = null; });
     return refreshFlight;
   }
@@ -162,7 +183,7 @@
       backlogReadAt = Date.now();
       try {
         const result = await api().backlogStatus();
-        if (result?.ok && belongs(result)) { state.backlog = result; if (active()) { renderLanes(); renderAsk(); } }
+        if (result?.ok && belongs(result)) { state.backlog = result; if (active()) { renderLanes(); renderAsk(); } notify(); }
       } catch { /* the next push tries again */ }
       finally { backlogTimer = 0; }
     }, Math.max(0, 3500 - (Date.now() - backlogReadAt)));
@@ -1505,6 +1526,8 @@
     if (window.MefiBoot?.isActive?.()) Promise.resolve(window.MefiBoot.ready?.()).then(sky, sky); else sky();
     signatures.clear();
     render();
+    // Layout v2: Today draws the front door's own pieces where it wants them (renderer/today.js); nothing in v1.
+    window.MefiToday?.show?.();
     paintRail();
     if (!window.MefiBoot?.isActive?.()) layer.focus({ preventScroll: true });
     return refresh();
@@ -1513,6 +1536,7 @@
     if (layer.hidden) return;
     layer.hidden = true;
     document.body.classList.remove("vibe-active");
+    window.MefiToday?.hide?.();
     closeAsk({ quiet: true });
     window.MefiVibePanels?.close?.({ quiet: true });
     paintRail();
@@ -1564,21 +1588,62 @@
       if (trigger.dataset.vibeStop && window.MefiVibePanels?.current?.() === kind) { window.MefiVibePanels.close(); return; }
       openPanel(kind, trigger.dataset.vibeFold ? { fold: trigger.dataset.vibeFold } : {});
     });
-    // Unread ideas change with the ideas page and the scanners; the card and
-    // the dock follow them.
-    api()?.onIdeas?.((ideas) => { if (!Array.isArray(ideas)) return; state.ideas = ideas; if (active()) renderLanes(); });
+    wireData();
     layer.addEventListener("keydown", (event) => {
       if (event.key !== "Escape") return;
       if (window.MefiVibePanels?.isOpen?.()) { event.preventDefault(); event.stopPropagation(); window.MefiVibePanels.escape(); return; }
       if (!$("ask").hidden) { event.preventDefault(); event.stopPropagation(); closeAsk(); return; }
       if (state.chatOpen) { event.preventDefault(); event.stopPropagation(); closeChat(); $("chat-toggle").focus(); }
     });
-    api()?.onProjects?.((payload) => { if (payload?.projects) { state.projects = payload.projects; state.activeId = payload.activeId ?? state.activeId; } signatures.clear(); if (active()) void refresh(); });
-    api()?.onTasks?.((tasks) => { if (!Array.isArray(tasks) || tasks.some((task) => task.projectId && task.projectId !== projectId())) return; state.tasks = tasks; if (active()) { renderLanes(); renderHead(); renderAsk(); scheduleBacklog(); } });
-    api()?.onAssistant?.((payload) => { if (!payload?.state || !belongs(payload.state)) return; state.assistant = payload.state; if (active()) { renderLanes(); renderChat(); renderAsk(); } });
-    api()?.onAssistantStatus?.((status) => { if (!status || !belongs(status)) return; state.status = status; if (active()) { renderLanes(); scheduleBacklog(); } });
+  }
+
+  // The pushes that keep `state` current: the front door's own (init wires them
+  // with the rest of it) and a watcher's (layout v2, without the front door). Once.
+  let dataWired = false;
+  function wireData() {
+    if (dataWired) return;
+    dataWired = true;
+    // Unread ideas change with the ideas page and the scanners; the card and
+    // the dock follow them.
+    api()?.onIdeas?.((ideas) => { if (!Array.isArray(ideas)) return; state.ideas = ideas; if (active()) renderLanes(); notify(); });
+    api()?.onProjects?.((payload) => {
+      if (payload?.projects) { state.projects = payload.projects; state.activeId = payload.activeId ?? state.activeId; }
+      signatures.clear();
+      if (active() || watchers.size) void refresh();
+      notify();
+    });
+    api()?.onTasks?.((tasks) => {
+      if (!Array.isArray(tasks) || tasks.some((task) => task.projectId && task.projectId !== projectId())) return;
+      state.tasks = tasks;
+      if (active()) { renderLanes(); renderHead(); renderAsk(); scheduleBacklog(); } else if (watchers.size) scheduleBacklog();
+      notify();
+    });
+    api()?.onAssistant?.((payload) => {
+      if (!payload?.state || !belongs(payload.state)) return;
+      state.assistant = payload.state;
+      if (active()) { renderLanes(); renderChat(); renderAsk(); }
+      notify();
+    });
+    api()?.onAssistantStatus?.((status) => {
+      if (!status || !belongs(status)) return;
+      state.status = status;
+      if (active()) { renderLanes(); scheduleBacklog(); } else if (watchers.size) scheduleBacklog();
+      notify();
+    });
     // The greeting follows the clock without a timer of its own.
-    document.addEventListener("visibilitychange", () => { if (!document.hidden && active()) { renderHead(); void refresh(); } });
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) return;
+      if (active()) { renderHead(); void refresh(); } else if (watchers.size) void refresh();
+    });
+  }
+  // What the front door holds, as one read-only picture: the one its panels get.
+  const readModel = () => shared();
+  function watch(callback) {
+    if (typeof callback !== "function") return () => {};
+    watchers.add(callback);
+    wireData();
+    if (watchers.size === 1) void refresh();
+    return () => { watchers.delete(callback); };
   }
 
   // ---- mode switches everywhere ---------------------------------------------
@@ -1775,6 +1840,8 @@
   function openNeedById(ref = {}) {
     const wanted = typeof ref === "string" ? { kind: "question", id: ref } : ref;
     if (wanted.projectId && wanted.projectId !== projectId()) { feedback("Open this project before answering its request.", "warn"); return false; }
+    // Layout v2: decisions are made in the Inbox (renderer/today.js), which answers for a need by kind and id.
+    if (window.MefiToday?.openNeed?.(wanted)) return true;
     if (!active()) go("vibe");
     const need = needs().find((item) => item.kind === (wanted.kind || "question") && item.id === wanted.id);
     if (need) { openNeed(need); return true; }
@@ -1782,5 +1849,5 @@
     void refresh().then(() => { const late = needs().find((item) => item.kind === (wanted.kind || "question") && item.id === wanted.id); if (late) openNeed(late); });
     return false;
   }
-  window.MefiVibe = { enter, exit, isActive: active, refresh, mode, setMode, landing, startup, showNotes, closeNotes, snapshot, openPanel, closeDrawers, composeEvolution, suggestEvolution, openNeed: openNeedById, requestChange, paintDock: () => renderDock(lanes()), promoteIdea: (idea) => promoteIdea(idea), feedback: (text, tone) => feedback(text, tone), ready: () => refreshFlight ?? Promise.resolve() };
+  window.MefiVibe = { enter, exit, isActive: active, refresh, mode, setMode, landing, startup, showNotes, closeNotes, snapshot, openPanel, closeDrawers, composeEvolution, suggestEvolution, openNeed: openNeedById, requestChange, paintDock: () => renderDock(lanes()), promoteIdea: (idea) => promoteIdea(idea), feedback: (text, tone) => feedback(text, tone), ready: () => refreshFlight ?? Promise.resolve(), data: readModel, watch };
 })();
