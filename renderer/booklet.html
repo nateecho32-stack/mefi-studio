@@ -659,19 +659,10 @@ body.command-active .home-tab {
   width: 100%; height: 1px;
   background: var(--hairline);
 }
-.plan-strip {
-  display: flex;
-  gap: var(--s5);
-  flex-wrap: wrap;
-  background: var(--panel-solid);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius);
-  padding: 12px var(--s4);
-  margin: var(--s1) 0 var(--s3);
-  font-size: var(--fs-md);
-  color: var(--muted);
-}
-.plan-strip b { color: var(--gold-bright); font-size: var(--fs-base); font-weight: 600; }
+/* The catalog's plan line: context for the prices, one quiet line. */
+.plan-strip { display: flex; flex-wrap: wrap; gap: 2px var(--s3); margin: 0 0 var(--s4); font-size: var(--fs-sm); color: var(--muted); }
+.plan-strip > span + span::before { content: "·"; margin-right: var(--s3); color: var(--dim); }
+.plan-strip b { color: var(--ivory); font-weight: 600; }
 .banner {
   margin: 10px 0;
   padding: 11px var(--s3);
@@ -710,26 +701,102 @@ body.command-active .home-tab {
 .card-head { display: flex; justify-content: space-between; gap: var(--s3); align-items: center; }
 .card h3 { margin: 0; }
 .vendor { color: var(--muted); font-size: 12px; }
-.catalog-row { padding: 0; }
-.catalog-summary { display: grid; grid-template-columns: minmax(220px, 1fr) auto 20px; gap: 24px; align-items: center; padding: 16px; list-style: none; }
+/* ---- Model catalog: picks, the sticky toolbar and one comparison table ----
+   The toolbar's last row is the table's column header and shares the rows'
+   column template (--catalog-cols), so names, numbers and bars line up down
+   the page. Numbers are right-aligned in tabular figures. */
+#tab-booklet { --catalog-cols: minmax(0, 1fr) 180px 108px 108px 72px 16px; --catalog-gap: var(--s4); --catalog-pad: var(--s4); }
+
+.catalog-picks { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s3); margin: 0 0 var(--s5); }
+#tab-booklet .catalog-pick {
+  display: grid; align-content: start; justify-content: stretch; justify-items: start; gap: 2px; min-width: 0; min-height: 0;
+  padding: 12px 14px 13px; text-align: left; white-space: normal;
+  border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface-raised); color: var(--ivory);
+}
+#tab-booklet .catalog-pick:hover { border-color: var(--line-strong); background: color-mix(in srgb, var(--gold) 6%, var(--surface-raised)); }
+.catalog-pick > span, .catalog-pick > strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.catalog-pick-label { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: var(--fs-xs); color: var(--muted); }
+.catalog-pick-label::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--gold); flex: none; }
+.catalog-pick-name { font-size: var(--fs-base); font-weight: 600; }
+.catalog-pick-value { font-size: var(--fs-xl); font-weight: 600; line-height: 1.25; letter-spacing: -0.01em; }
+.catalog-pick-value small { font-size: var(--fs-xs); font-weight: 400; letter-spacing: 0; color: var(--muted); }
+.catalog-pick-note { font-size: var(--fs-xs); color: var(--muted); }
+
+/* Sticky under the local navigation; dense material, since rows scroll under it. */
+#tab-booklet .catalog-toolbar {
+  position: sticky; top: var(--shell-local-h, 0px); z-index: 3;
+  display: grid; gap: 10px; margin: 0; padding: 12px var(--catalog-pad) 0;
+  border: 1px solid var(--line); border-bottom: 0; border-radius: var(--r-lg) var(--r-lg) 0 0;
+  background: var(--studio-menu-fill, var(--panel-solid)); backdrop-filter: var(--studio-menu-blur, none);
+}
+.catalog-toolbar-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; min-width: 0; }
+.catalog-toolbar input[type="search"] { flex: 1 1 260px; min-width: 200px; min-height: var(--ctl-h-hud); padding-block: 6px; }
+.catalog-sort { display: inline-flex; align-items: center; gap: var(--s2); font-size: var(--fs-sm); }
+.catalog-filter-label { font-size: var(--fs-xs); color: var(--muted); }
+#tab-booklet #count { margin: 0 0 0 auto; font-size: var(--fs-xs); white-space: nowrap; }
+.catalog-head { display: grid; grid-template-columns: var(--catalog-cols); gap: var(--catalog-gap); align-items: center; margin: 0 calc(-1 * var(--catalog-pad)); padding: 0 var(--catalog-pad); border-top: 1px solid var(--line); }
+#tab-booklet .catalog-head button {
+  min-height: 34px; padding: 0; gap: 4px; justify-content: flex-start; border: 0; border-radius: 0; background: none;
+  color: var(--muted); font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.01em;
+}
+#tab-booklet .catalog-head button.num { justify-content: flex-end; }
+#tab-booklet .catalog-head button:hover, #tab-booklet .catalog-head button[aria-pressed="true"] { color: var(--ivory); background: none; }
+.catalog-head button[aria-pressed="true"]::after { content: "↓"; color: var(--gold); }
+.catalog-head button:is([data-sort="cost"], [data-sort="name"])[aria-pressed="true"]::after { content: "↑"; }
+
+/* The rows: one surface, hairline dividers, the full card folded under each. */
+#cards.catalog-list { gap: 0; margin-bottom: var(--s5); border: 1px solid var(--line); border-top: 0; border-radius: 0 0 var(--r-lg) var(--r-lg); background: var(--surface-raised); overflow: clip; }
+#cards > .catalog-row { padding: 0; gap: 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; box-shadow: none; overflow: visible; scroll-margin: calc(var(--shell-local-h, 0px) + 150px) 0 24px; }
+#cards > .catalog-row:first-child { border-top: 0; }
+#cards > .catalog-row::before { content: none; }
+.catalog-summary { display: grid; grid-template-columns: var(--catalog-cols); gap: var(--catalog-gap); align-items: center; padding: 9px var(--catalog-pad); list-style: none; transition: background-color var(--motion-fast) var(--ease-out); }
 .catalog-summary::-webkit-details-marker { display: none; }
-.catalog-summary .card-head { flex-wrap: wrap; }
-.catalog-summary h3 { color: var(--ivory); font-size: 15px; }
-.catalog-summary .vendor { margin-top: 4px; overflow-wrap: anywhere; }
-.catalog-metrics { display: flex; gap: 28px; color: var(--ivory); }
-.catalog-metrics > span { display: grid; gap: 4px; min-width: 60px; }
-.catalog-metrics small { color: var(--muted); font-size: 11px; }
-.catalog-metrics b { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.catalog-expand { color: var(--muted); font-size: 20px; transition: rotate var(--motion-fast); }
-.catalog-model[open] > .catalog-summary { background: var(--tint-gold-1); border-bottom: 1px solid var(--hairline); }
+.catalog-summary:hover { background: color-mix(in srgb, var(--ivory) 4%, transparent); }
+.catalog-summary:focus-visible { outline-offset: -2px; }
+.catalog-name { min-width: 0; }
+.catalog-title { display: flex; align-items: center; flex-wrap: wrap; gap: 3px var(--s2); }
+.catalog-title h3 { margin: 0; color: var(--ivory); font-size: var(--fs-base); font-weight: 600; }
+.catalog-title .badge { padding: 1px 6px; font-size: 9.5px; }
+.catalog-summary .vendor { margin-top: 2px; font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.catalog-cell { display: grid; justify-items: end; gap: 4px; min-width: 0; text-align: right; }
+.catalog-cell b { color: var(--ivory); font-size: var(--fs-md); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.catalog-cell small { font-size: var(--fs-2xs); color: var(--muted); }
+.catalog-quality { grid-template-columns: minmax(0, 1fr) 2.4em; align-items: center; column-gap: 10px; }
+.catalog-quality > b { grid-column: 2; grid-row: 1; }
+.catalog-bar { grid-column: 1; grid-row: 1; display: block; width: 100%; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--gold) 14%, transparent); overflow: hidden; }
+.catalog-bar > i { display: block; width: var(--v, 0%); height: 100%; border-radius: 0 2px 2px 0; background: var(--gold); }
+.catalog-expand { justify-self: end; color: var(--muted); transition: rotate var(--motion-fast); }
+.catalog-model[open] > .catalog-summary { background: color-mix(in srgb, var(--gold) 7%, transparent); }
 .catalog-model[open] .catalog-expand { rotate: 180deg; }
-.catalog-body { display: grid; gap: 16px; padding: 16px; }
-.catalog-body .stat-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.catalog-body { display: grid; gap: 14px; padding: 6px var(--catalog-pad) 18px; background: color-mix(in srgb, var(--gold) 3%, transparent); }
+.catalog-body .stat-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0; }
+#cards .catalog-body .stat { padding: 2px var(--s3); border: 0; border-left: 1px solid var(--line); border-radius: 0; background: none; }
+#cards .catalog-body .stat:first-child { padding-left: 0; border-left: 0; }
+.catalog-empty { margin: 0; padding: 22px var(--catalog-pad); }
+/* A pick lands on its row; the row says so once. */
+@keyframes catalog-reveal { from { background-color: color-mix(in srgb, var(--gold) 24%, transparent); } }
+@media (prefers-reduced-motion: no-preference) {
+  body:not(.no-motion) #cards > .catalog-row.is-revealed > .catalog-model > .catalog-summary { animation: catalog-reveal 1.4s var(--ease-out); }
+}
+/* Wide windows name the columns once, in the header; the cells keep their
+   labels for screen readers. Narrow windows and print show them in place. */
+@media screen and (min-width: 1001px) {
+  .catalog-cell > small { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
 @media (max-width: 1000px) {
-  .catalog-summary { grid-template-columns: minmax(0, 1fr) 20px; gap: 12px; }
-  .catalog-metrics { grid-column: 1; grid-row: 2; gap: 24px; }
-  .catalog-expand { grid-column: 2; grid-row: 1 / 3; }
-  .catalog-body .stat-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .catalog-picks { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .catalog-head { display: none; }
+  #tab-booklet .catalog-toolbar { padding-bottom: 12px; }
+  .catalog-summary { grid-template-columns: repeat(4, minmax(0, 1fr)) 16px; row-gap: 10px; }
+  .catalog-name { grid-column: 1 / 5; }
+  .catalog-expand { grid-column: 5; grid-row: 1 / 3; }
+  .catalog-cell { justify-items: start; text-align: left; }
+  .catalog-quality { grid-template-columns: 2.4em minmax(0, 1fr); }
+  .catalog-quality > small { grid-column: 1 / -1; grid-row: 1; }
+  .catalog-quality > b { grid-column: 1; grid-row: 2; }
+  .catalog-quality > .catalog-bar { grid-column: 2; grid-row: 2; }
+  .catalog-body .stat-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 10px; }
+  #cards .catalog-body .stat:nth-child(3n + 1) { padding-left: 0; border-left: 0; }
 }
 
 /* badges (unchanged palette: .free = done, .premium = in progress) */
@@ -790,7 +857,6 @@ table.detail th { color: var(--dim); font-weight: 600; }
 table.detail td.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* toolbar / chips */
-.toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 6px 0 var(--s3); }
 .toolbar-actions { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
 .toolbar-actions .glyph { color: var(--gold); }
 input[type="search"] { flex: 1; min-width: 220px; }
@@ -812,7 +878,16 @@ input[type="search"] { flex: 1; min-width: 220px; }
   border-color: var(--gold);
   color: var(--gold-bright);
 }
-#chips .chip { min-height: var(--pill-h); line-height: var(--lh-tight); } /* catalog filters are buttons: keep their pill height */
+/* The catalog's filters: one quiet group of toggles, not a row of loud pills. */
+#chips.chips { gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--surface-field); }
+#chips .chip { min-height: 24px; padding: 2px 10px; line-height: var(--lh-tight); border-color: transparent; background: transparent; font-size: var(--fs-xs); }
+#chips .chip:hover { color: var(--ivory); background: color-mix(in srgb, var(--ivory) 6%, transparent); }
+#chips .chip.on { color: var(--ivory); border-color: color-mix(in srgb, var(--gold) 42%, transparent); background: color-mix(in srgb, var(--gold) 16%, transparent); }
+/* The badges' pale hues are made for dark surfaces; on a light page they take
+   some of the ink so TRAINS and NEW stay readable in the catalog's rows. */
+:root[data-studio-theme-tone="light"] .catalog-title .badge.new { color: color-mix(in srgb, var(--info) 45%, var(--ivory)); }
+:root[data-studio-theme-tone="light"] .catalog-title .badge.trains { color: color-mix(in srgb, var(--warn) 45%, var(--ivory)); }
+:root[data-studio-theme-tone="light"] .catalog-title .badge.free { color: color-mix(in srgb, var(--good) 45%, var(--ivory)); }
 
 /* graph */
 .graph-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); gap: var(--s3); }
@@ -2677,13 +2752,31 @@ body.no-motion :is(.boot-spinner, .boot-chip-skeleton), body.no-motion #boot-ope
   .card { border: 1px solid #bbb; background: #fff; break-inside: avoid; backdrop-filter: none; }
   .catalog-model::details-content { content-visibility: visible; block-size: auto; }
   .catalog-expand { display: none; }
+  /* The catalog prints as cards with every fold open; the picks stay on top. */
+  #tab-booklet .catalog-pick { border-color: #ccc; background: #fff; color: #111; break-inside: avoid; }
+  .catalog-pick-label, .catalog-pick-note, .catalog-pick-value small { color: #555; }
+  #cards.catalog-list { border: 0; border-radius: 0; background: none; overflow: visible; }
+  #cards > .catalog-row { margin-bottom: 8px; border: 1px solid #bbb; border-radius: 6px; break-inside: avoid; }
+  .catalog-summary { grid-template-columns: minmax(0, 1fr) repeat(4, 96px); }
+  .catalog-name { grid-column: auto; }
+  #cards .catalog-expand { display: none; } /* studio-ui.css draws the chevron as span.catalog-expand */
+  .catalog-model[open] > .catalog-summary, .catalog-body { background: none; }
+  .catalog-title h3, .catalog-cell b { color: #111; }
+  .catalog-cell small { color: #555; }
+  .catalog-quality { grid-template-columns: 2.4em minmax(0, 1fr); }
+  .catalog-quality > small { grid-column: 1 / -1; grid-row: 1; }
+  .catalog-quality > b { grid-column: 1; grid-row: 2; }
+  .catalog-quality > .catalog-bar { grid-column: 2; grid-row: 2; }
+  .catalog-bar { background: #e4e4e4; }
+  .catalog-bar > i { background: #555; }
+  #cards .catalog-body .stat { border-color: #ddd; }
   .stat { background: #f6f4ef; border-color: #ddd; }
   .chip, .badge { background: #f2f2f2; color: #333; border-color: #ccc; }
   .badge.premium, .badge.free, .badge.legacy, .badge.new, .badge.trains, .badge.unlimited { color: #333; border-color: #bbb; }
   .use-avoid span { background: #f6f8f5; color: #333; border-color: #ccc; }
   .use-avoid span.avoid { background: #faf3f3; color: #7a2020; }
   table.detail td, table.detail th { color: #333; border-color: #ddd; }
-  .plan-strip { background: #f7f7f7; color: #333; }
+  .plan-strip { color: #333; }
   .plan-strip b { color: #000; }
 }
 
@@ -3655,14 +3748,26 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 
                                                                                 
 .model-lab { border: 0; border-radius: 0; padding: 0; background: transparent; margin-bottom: 16px; }
-.model-lab .lab-head { position: static; padding: 0 0 16px; margin: 0; display: flex; align-items: center; justify-content: space-between; gap: 16px; border: 0; background: none; box-shadow: none; backdrop-filter: none; }
+.model-lab .lab-head { position: static; padding: var(--s2) 0 var(--s5); margin: 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; border: 0; background: none; box-shadow: none; backdrop-filter: none; }
 .lab-head h2 { font-size: 32px; margin: 4px 0 9px; }
 .lab-head p { margin: 0; }
-.lab-head > button { flex-shrink: 0; margin-top: 8px; }
-.lab-summary { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; margin-bottom: 16px; }
-.lab-stat { padding: 12px 16px; border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--panel-solid); display: flex; justify-content: space-between; gap: 12px; align-items: center; }
-.lab-stat > span { font-size: 12px; color: var(--muted); }
-.lab-stat > strong { font-size: 22px; color: var(--gold-bright); font-variant-numeric: tabular-nums; }
+.lab-head > button { flex-shrink: 0; }
+.lab-head .lab-status { min-height: 0; margin: 4px 0 0; font-size: var(--fs-xs); color: var(--dim); }
+.lab-head .lab-status:empty { display: none; }
+/* KPI tiles: label, value, what the value covers. Values keep proportional
+   figures; only columns of numbers use tabular ones. */
+.lab-summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--s3); margin-bottom: var(--s6); }
+.lab-stat { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 13px 16px 14px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface-raised); }
+.lab-stat > span { font-size: var(--fs-xs); color: var(--muted); }
+.lab-stat > strong { font-size: 24px; font-weight: 600; line-height: 1.2; letter-spacing: -0.01em; color: var(--ivory); }
+.lab-stat > small { font-size: var(--fs-xs); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lab-stat > .lab-bar { margin-top: 6px; max-width: none; }
+.lab-stat.is-empty > strong { font-size: var(--fs-lg); font-weight: 500; color: var(--muted); }
+/* Before the first call the tiles read as one quiet strip, not five boxes. */
+.lab-summary[data-empty="true"] { gap: 0; border: 1px solid var(--line); border-radius: var(--r-lg); }
+.lab-summary[data-empty="true"] .lab-stat { border: 0; border-left: 1px solid var(--line); border-radius: 0; background: none; padding-block: 12px; }
+.lab-summary[data-empty="true"] .lab-stat:first-child { border-left: 0; }
+.lab-summary[data-empty="true"] .lab-stat > small { white-space: normal; }
 .lab-tabs { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 14px; border-bottom: 1px solid var(--hairline); }
 .lab-tabs > button { background: transparent; border-color: transparent; padding: 9px 17px; }
 .lab-tabs > button[aria-selected="true"] { background: var(--gold-dim); border-color: var(--gold); color: var(--gold-bright); }
@@ -3673,25 +3778,86 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 .lab-toolbar p { margin: 0; max-width: 660px; }
 .model-lab label { display: flex; flex-direction: column; gap: 7px; color: var(--muted); font-size: 12px; }
 .model-lab select { max-width: 100%; }
+/* The task type filter: a quiet group of pressed buttons over its select. */
+.lab-task-filter { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2) 10px; }
+.lab-filter-label { font-size: var(--fs-xs); color: var(--muted); }
+.lab-segmented { display: flex; flex-wrap: wrap; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--surface-field); }
+.model-lab .lab-segmented > button { min-height: 26px; padding: 0 12px; border: 1px solid transparent; border-radius: var(--r-pill); background: transparent; color: var(--muted); font-size: var(--fs-xs); }
+.model-lab .lab-segmented > button:hover { color: var(--ivory); background: color-mix(in srgb, var(--ivory) 6%, transparent); }
+.model-lab .lab-segmented > button[aria-pressed="true"] { color: var(--ivory); border-color: color-mix(in srgb, var(--gold) 42%, transparent); background: color-mix(in srgb, var(--gold) 16%, transparent); }
 .lab-note { font-size: 12px; line-height: 1.7; padding: 12px 15px; border-left: 2px solid var(--gold-dim); background: color-mix(in srgb, var(--ivory) 3%, transparent); color: var(--muted); margin-bottom: 18px; }
+/* Under the leaderboard the ranking's notes are a footnote. */
+#model-lab-ranking-notes.lab-note { margin: 10px 2px 0; padding: 0; border: 0; background: none; font-size: var(--fs-xs); line-height: 1.6; }
 .lab-table-wrap { max-width: 100%; overflow-x: auto; border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--panel-solid); }
+#model-lab-ranking-list.lab-table-wrap { border-color: var(--line); border-radius: var(--r-lg); background: var(--surface-raised); }
+/* An empty state brings its own card; the frame steps back. */
+#model-lab .lab-table-wrap:has(> .lab-empty) { border: 0; border-radius: 0; background: none; overflow: visible; }
 .lab-table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; }
-.lab-table th { color: var(--muted); background: var(--tint-gold-1); font-weight: 500; padding: 12px; white-space: nowrap; }
-.lab-table td { border-top: 1px solid var(--hairline); padding: 12px; line-height: 1.5; vertical-align: top; min-width: 96px; font-variant-numeric: tabular-nums; }
+.lab-table th { color: var(--muted); font-size: var(--fs-xs); font-weight: 600; padding: 11px 12px; white-space: nowrap; border-bottom: 1px solid var(--line); }
+.lab-table td { border-top: 1px solid var(--line); padding: 12px; line-height: 1.5; vertical-align: top; min-width: 96px; font-variant-numeric: tabular-nums; }
+.lab-table tbody tr:first-child td { border-top: 0; }
 .lab-table td:first-child { min-width: 175px; }
 .lab-table tbody tr:hover { background: color-mix(in srgb, var(--ivory) 3%, transparent); }
+.lab-table :is(th, td).lab-col-rank { width: 56px; min-width: 56px; padding-right: 0; }
+.lab-table td.lab-col-metric { min-width: 112px; }
+.lab-table td.lab-col-model { min-width: 180px; }
+.lab-table td.lab-col-ratings { min-width: 176px; }
+/* A window of 1280 with the menu pinned still fits the leaderboard. */
+@media (max-width: 1400px) { .lab-table :is(th, td) { padding-inline: 8px; } .lab-table td.lab-col-metric { min-width: 100px; } .lab-table td.lab-col-model { min-width: 164px; } .lab-table td.lab-col-ratings { min-width: 156px; } }
+/* A leaderboard cell: value, a thin bar on its column's scale, a quiet note.
+   One accent for magnitude; errors wear the status colour; model judging is
+   the grey beside your own ratings. */
+.lab-metric { display: grid; gap: 5px; }
+.lab-metric-value { color: var(--ivory); font-weight: 600; white-space: nowrap; }
+.lab-metric.is-quiet .lab-metric-value { color: var(--muted); font-weight: 400; }
+.lab-metric small { font-size: var(--fs-2xs); color: var(--muted); }
+.lab-bar { display: block; width: 100%; max-width: 140px; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--gold) 14%, transparent); overflow: hidden; }
+.lab-bar > i { display: block; width: var(--v, 0%); height: 100%; border-radius: 0 2px 2px 0; background: var(--gold); }
+.lab-bar.is-bad { background: color-mix(in srgb, var(--bad) 14%, transparent); }
+.lab-bar.is-bad > i { background: var(--bad); }
+.lab-bar.is-judge { background: color-mix(in srgb, var(--muted) 16%, transparent); }
+.lab-bar.is-judge > i { background: var(--muted); }
+.lab-rank { display: inline-grid; place-items: center; min-width: 34px; height: 24px; padding: 0 7px; border: 1px solid var(--line); border-radius: var(--r-pill); color: var(--muted); font-size: var(--fs-xs); font-weight: 600; }
+.lab-rank.is-top { color: var(--ivory); border-color: color-mix(in srgb, var(--gold) 45%, transparent); background: color-mix(in srgb, var(--gold) 14%, transparent); }
+.lab-rank.is-unranked { border-color: transparent; }
+.lab-ratings { display: grid; gap: 8px; }
+.lab-rating-line { display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: start; column-gap: 6px; }
+.lab-rating-who { padding-top: 1px; font-size: var(--fs-2xs); color: var(--muted); }
 .lab-model-name { display: flex; flex-direction: column; gap: 5px; overflow-wrap: anywhere; }
-.lab-model-name strong { font-weight: 600; color: var(--gold-bright); }
+.lab-model-name strong { font-weight: 600; color: var(--ivory); }
 .lab-model-name .muted { font-size: 11px; }
 .lab-model-evidence { margin-top: 4px; font-size: 11px; max-width: 280px; color: var(--muted); }
 .lab-model-evidence summary { cursor: pointer; color: var(--gold); }
 .lab-model-evidence p { margin: 9px 0 0; line-height: 1.7; }
-.lab-empty { padding: 30px; max-width: 680px; border: 1px dashed var(--line); border-radius: var(--r-lg, 14px); background: color-mix(in srgb, var(--surface-sunk) 35%, transparent); }
+.lab-empty { padding: 26px 28px; max-width: 680px; border: 1px solid var(--line); border-radius: var(--r-lg, 14px); background: color-mix(in srgb, var(--surface-sunk) 35%, transparent); }
 .lab-empty p { color: var(--muted); line-height: 1.8; margin-bottom: 0; }
-.lab-disclosure { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--hairline); }
+/* The leaderboard before its first call: one card that says how it fills in. */
+.lab-empty-ranking { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--s6); max-width: none; background: var(--surface-raised); }
+.lab-empty-text { max-width: 860px; }
+.lab-empty-text > p { margin: 4px 0 18px; line-height: 1.6; }
+.lab-empty-art { display: grid; align-content: center; gap: 7px; width: 72px; height: 72px; padding: 0 14px; border-radius: var(--r-lg); background: color-mix(in srgb, var(--gold) 10%, transparent); }
+.lab-empty-art > i { display: block; height: 6px; border-radius: 0 3px 3px 0; background: color-mix(in srgb, var(--gold) 72%, transparent); }
+.lab-empty-art > i:nth-child(2) { width: 72%; opacity: .75; }
+.lab-empty-art > i:nth-child(3) { width: 44%; opacity: .5; }
+.lab-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s4); margin: 0; padding: 0; list-style: none; counter-reset: lab-step; }
+.lab-steps > li { display: grid; grid-template-columns: 24px minmax(0, 1fr); column-gap: 10px; row-gap: 2px; align-content: start; counter-increment: lab-step; }
+.lab-steps > li::before { content: counter(lab-step); grid-row: 1 / 3; display: grid; place-items: center; width: 22px; height: 22px; border: 1px solid var(--line-strong); border-radius: 50%; color: var(--ivory); font-size: 11px; font-weight: 600; }
+.lab-steps strong { color: var(--ivory); font-size: var(--fs-sm); font-weight: 600; }
+.lab-steps span { color: var(--muted); font-size: var(--fs-sm); line-height: 1.5; }
+/* Rate recent work: a secondary section whose heading says what waits. */
+.lab-disclosure { margin-top: var(--s6); border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface-raised); }
 .lab-disclosure > summary, .lab-catalog > summary { cursor: pointer; color: var(--gold-bright); padding: 5px 0; }
-.lab-disclosure > p { font-size: 12px; margin: 14px 0; }
-.lab-rating-row { display: grid; grid-template-columns: minmax(170px,1fr) 132px minmax(100px,1fr) auto; align-items: center; gap: 12px; border-top: 1px solid var(--hairline); padding: 15px 0; }
+.lab-disclosure > summary { display: flex; align-items: center; gap: var(--s3); padding: 14px 16px; list-style: none; color: var(--ivory); }
+.lab-disclosure > summary::-webkit-details-marker { display: none; }
+.lab-disclosure > summary::after { content: ""; flex: none; width: 16px; height: 16px; background: var(--muted); -webkit-mask: var(--chev-mask) center / contain no-repeat; mask: var(--chev-mask) center / contain no-repeat; transition: rotate var(--motion-fast); }
+.lab-disclosure[open] > summary::after { rotate: 180deg; }
+.lab-disclosure-text { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.lab-disclosure-text strong { font-size: var(--fs-base); font-weight: 600; }
+.lab-disclosure-text .muted { font-size: var(--fs-sm); }
+.lab-count { flex: none; padding: 2px 9px; border: 1px solid color-mix(in srgb, var(--gold) 35%, transparent); border-radius: var(--r-pill); background: color-mix(in srgb, var(--gold) 12%, transparent); color: var(--ivory); font-size: var(--fs-xs); white-space: nowrap; }
+#model-lab-recent { padding: 0 16px 6px; }
+#model-lab-recent > .lab-empty { max-width: none; margin: 0 0 12px; padding: 16px 18px; }
+.lab-rating-row { display: grid; grid-template-columns: minmax(170px,1fr) 132px minmax(100px,1fr) auto; align-items: center; gap: 12px; border-top: 1px solid var(--line); padding: 12px 0; }
 .lab-rating-row input { min-width: 0; width: 100%; }
 .lab-rating-status { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
 .lab-rating-status:empty { display: none; }
@@ -3714,8 +3880,8 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 .lab-catalog > summary { font-size: 16px; }
 .lab-catalog > summary span { display: inline-block; margin-left: 12px; font-size: 12px; color: var(--muted); }
 .lab-catalog[open] > summary { margin-bottom: 22px; }
-@media (max-width: 1000px) { .model-lab { padding: 20px; }.lab-usage-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }.lab-rating-row { grid-template-columns: minmax(150px,1fr) 132px auto; }.lab-rating-row input { grid-row: 2; grid-column: 1 / -1; } }
-@media (max-width: 680px) { .model-lab { padding: 16px; }.model-lab .lab-head { flex-direction: column; gap: 8px; }.lab-head h2 { font-size: 27px; }.lab-summary { gap: 8px; }.lab-stat { padding: 12px; flex-direction: column; align-items: flex-start; }.lab-stat > strong { font-size: 23px; }.lab-tabs > button { padding: 8px 10px; }.lab-soon { display: none; }.lab-context-controls { width: 100%; }.lab-context-controls label:first-child { max-width: 100%; width: 100%; }.lab-rating-row { grid-template-columns: minmax(0,1fr) 124px; }.lab-rating-row button { grid-column: 2; }.lab-catalog { padding: 15px; }.lab-catalog > summary span { display: block; margin: 8px 0 0; } }
+@media (max-width: 1000px) { .model-lab { padding: 20px; }.lab-usage-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }.lab-summary { grid-template-columns: repeat(3,minmax(0,1fr)); }.lab-summary[data-empty="true"] .lab-stat:nth-child(3n + 1) { border-left: 0; }.lab-summary[data-empty="true"] .lab-stat:nth-child(n + 4) { border-top: 1px solid var(--line); }.lab-empty-ranking { grid-template-columns: minmax(0,1fr); }.lab-steps { grid-template-columns: minmax(0,1fr); }.lab-rating-row { grid-template-columns: minmax(150px,1fr) 132px auto; }.lab-rating-row input { grid-row: 2; grid-column: 1 / -1; } }
+@media (max-width: 680px) { .model-lab { padding: 16px; }.model-lab .lab-head { flex-direction: column; gap: 8px; }.lab-head h2 { font-size: 27px; }.lab-summary { gap: 8px; grid-template-columns: repeat(2,minmax(0,1fr)); }.lab-summary[data-empty="true"] .lab-stat { border-left: 1px solid var(--line); }.lab-summary[data-empty="true"] .lab-stat:nth-child(2n + 1) { border-left: 0; }.lab-summary[data-empty="true"] .lab-stat:nth-child(n + 3) { border-top: 1px solid var(--line); }.lab-stat { padding: 12px; flex-direction: column; align-items: flex-start; }.lab-stat > strong { font-size: 23px; }.lab-tabs > button { padding: 8px 10px; }.lab-soon { display: none; }.lab-context-controls { width: 100%; }.lab-context-controls label:first-child { max-width: 100%; width: 100%; }.lab-rating-row { grid-template-columns: minmax(0,1fr) 124px; }.lab-rating-row button { grid-column: 2; }.lab-catalog { padding: 15px; }.lab-catalog > summary span { display: block; margin: 8px 0 0; } }
 
                                                                            
                                                                                
@@ -8192,7 +8358,7 @@ html[data-studio-style] :is(.sheet, .explorer-sheet, .brains-sheet, .agent-brain
   background: var(--studio-wash), var(--studio-sheen), var(--studio-panel-bg);
   border-color: var(--studio-glass-edge); box-shadow: var(--studio-glass-shadow); backdrop-filter: var(--studio-glass-blur);
 }
-html[data-studio-style] :is(.panel, .card, .plan-strip, .settings-card, .agents-card, .agents-model-row, .task-overview-card, .lab-usage-card, .tracker-section, .ws-workflow, .ws-idea-card, .ws-backlog, .ws-dash-tile) {
+html[data-studio-style] :is(.panel, .card, .settings-card, .agents-card, .agents-model-row, .task-overview-card, .lab-usage-card, .tracker-section, .ws-workflow, .ws-idea-card, .ws-backlog, .ws-dash-tile) {
   background: var(--studio-sheen), var(--studio-panel-bg);
   border-color: var(--studio-glass-edge); box-shadow: var(--studio-glass-shadow);
   border-radius: var(--r-lg);
@@ -10869,29 +11035,48 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
 <div id="banner" class="banner" hidden></div>
 <main>
   <section id="tab-booklet">
-    <div class="plan-strip" id="plan-strip"></div>
-    <div class="toolbar">
-      <input id="search" type="search" placeholder="Search model, vendor, tag… (press /)" autocomplete="off">
-      <div class="chips" id="chips"></div>
-      <label class="muted">Sort <select id="sort">
-        <option value="quality">Quality (AA)</option>
-        <option value="cost">Cheapest / request</option>
-        <option value="speed">Most requests / 5h</option>
-        <option value="context">Largest context</option>
-        <option value="name">Name</option>
-        <option value="pool">Monthly pool</option>
-      </select></label>
-      <span class="toolbar-actions">
-        <button id="refresh-btn" class="ghost mini" title="Re-read data/models.json (R)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-refresh"/></svg><span class="label">Refresh</span><kbd class="key">R</kbd></button>
-        <button id="print-btn" class="ghost mini" title="Print / PDF"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-print"/></svg><span class="label">Print / PDF</span></button>
-      </span>
+    <!-- The catalog reads top down: the plan in one quiet line, a few picks
+         worked out from the same data, then one sticky toolbar whose last row
+         is the table's column header, so the columns stay named while the
+         rows scroll. booklet.js paints the picks, the header's sort state and
+         the rows. -->
+    <p class="plan-strip" id="plan-strip"></p>
+    <section id="catalog-picks" class="catalog-picks" aria-label="Picks from the catalog"></section>
+    <div class="toolbar catalog-toolbar">
+      <div class="catalog-toolbar-row">
+        <input id="search" type="search" placeholder="Search model, vendor, tag… (press /)" autocomplete="off" aria-label="Search the catalog">
+        <label class="muted catalog-sort">Sort <select id="sort">
+          <option value="quality">Quality (AA)</option>
+          <option value="cost">Cheapest / request</option>
+          <option value="speed">Most requests / 5h</option>
+          <option value="context">Largest context</option>
+          <option value="name">Name</option>
+          <option value="pool">Monthly pool</option>
+        </select></label>
+        <span class="toolbar-actions">
+          <button id="refresh-btn" class="ghost mini" title="Re-read data/models.json (R)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-refresh"/></svg><span class="label">Refresh</span><kbd class="key">R</kbd></button>
+          <button id="print-btn" class="ghost mini" title="Print / PDF"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-print"/></svg><span class="label">Print / PDF</span></button>
+        </span>
+      </div>
+      <div class="catalog-toolbar-row catalog-filter-row">
+        <span id="chips-label" class="catalog-filter-label">Show only</span>
+        <div class="chips" id="chips" role="group" aria-labelledby="chips-label"></div>
+        <p id="count" class="muted" aria-live="polite"></p>
+      </div>
+      <div id="catalog-head" class="catalog-head" role="group" aria-label="Sort by column">
+        <button type="button" data-sort="name">Model</button>
+        <button type="button" data-sort="quality" class="num">Quality</button>
+        <button type="button" data-sort="cost" class="num">Cost / request</button>
+        <button type="button" data-sort="speed" class="num">Requests / 5h</button>
+        <button type="button" data-sort="context" class="num">Context</button>
+        <span aria-hidden="true"></span>
+      </div>
     </div>
-    <div id="cards" class="cards"></div>
-    <p id="count" class="muted"></p>
+    <div id="cards" class="cards catalog-list"></div>
   </section>
   <section id="tab-graph" hidden>
     <section id="model-lab" class="model-lab" aria-label="Model measurements">
-      <header class="lab-head"><div><h2 class="sr-only">Model measurements</h2><p id="model-lab-lede" class="muted">Compare performance, usage and context from your project's model calls.</p></div><button id="model-lab-refresh" class="ghost">Refresh measurements</button></header>
+      <header class="lab-head"><div><h2 class="sr-only">Model measurements</h2><p id="model-lab-lede" class="muted">Compare performance, usage and context from your project's model calls.</p><p id="model-lab-status" class="lab-status" role="status" aria-live="polite"></p></div><button id="model-lab-refresh" class="ghost mini"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-refresh"/></svg><span class="label">Refresh measurements</span></button></header>
       <div id="model-lab-summary" class="lab-summary"></div>
       <div class="lab-tabs" role="tablist" aria-label="Model measurement views">
         <button id="model-lab-tab-rankings" role="tab" aria-selected="true" aria-controls="model-lab-rankings" data-lab-view="rankings">Rankings</button>
@@ -10901,12 +11086,14 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
         <button id="model-lab-tab-compare" role="tab" aria-selected="false" aria-controls="model-lab-compare" tabindex="-1" data-lab-view="compare" hidden>Compare <span class="lab-soon">Planned</span></button>
       </div>
       <div id="model-lab-usage-switch" class="lab-usage-switch" role="tablist" aria-label="Usage source" hidden><button id="model-lab-recorded" role="tab" aria-controls="model-lab-usage" aria-selected="true" type="button">Recorded calls</button><button id="model-lab-accounts" role="tab" aria-controls="model-lab-tracker" aria-selected="false" tabindex="-1" type="button">Provider accounts</button></div>
-      <p id="model-lab-status" class="lab-status" role="status" aria-live="polite"></p>
       <section id="model-lab-rankings" role="tabpanel" aria-labelledby="model-lab-tab-rankings">
-        <div class="lab-toolbar"><div><h3>Performance on your work</h3><p class="muted">Measured calls and your ratings. Published benchmarks are under Catalog insights.</p></div><label>Task type <select id="model-lab-task-type"><option value="">All task types</option></select></label></div>
-        <div id="model-lab-ranking-notes" class="lab-note"></div>
+        <!-- The task type filter is a row of pressed buttons; the hidden select
+             beside it stays the value model-lab.js reads and a change on it
+             (from code or a harness) still re-reads the snapshot. -->
+        <div class="lab-toolbar"><div><h3>Performance on your work</h3><p class="muted">Measured calls and your ratings. Published benchmarks are under Catalog insights.</p></div><div id="model-lab-task-filter" class="lab-task-filter"><span id="model-lab-task-label" class="lab-filter-label">Task type</span><div id="model-lab-task-types" class="lab-segmented" role="group" aria-labelledby="model-lab-task-label"></div><select id="model-lab-task-type" class="segmented-source" aria-hidden="true" tabindex="-1"><option value="">All task types</option></select></div></div>
         <div id="model-lab-ranking-list" class="lab-table-wrap"></div>
-        <details id="model-lab-ratings" class="lab-disclosure"><summary>Rate recent work</summary><p class="muted">Rate a result you have reviewed. Your score stays separate from model judging and error counts.</p><div id="model-lab-recent"></div></details>
+        <p id="model-lab-ranking-notes" class="lab-note"></p>
+        <details id="model-lab-ratings" class="lab-disclosure"><summary><span class="lab-disclosure-text"><strong>Rate recent work</strong><span class="muted">Score results you have reviewed. Your score stays separate from model judging and error counts.</span></span><span id="model-lab-rate-count" class="lab-count" hidden></span></summary><div id="model-lab-recent"></div></details>
       </section>
       <section id="model-lab-usage" role="tabpanel" aria-labelledby="model-lab-tab-usage" hidden><h3>Recorded usage</h3><p id="model-lab-usage-coverage" class="muted">Missing provider usage stays unknown. These totals cover calls recorded by Studio; they are not an account balance.</p><p id="model-lab-usage-range" class="lab-status"></p><div id="model-lab-usage-totals" class="lab-usage-grid"></div><div id="model-lab-usage-list" class="lab-table-wrap"></div></section>
       <section id="model-lab-tracker" role="tabpanel" aria-labelledby="model-lab-tab-tracker" hidden>
@@ -21433,13 +21620,14 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
 // Local evidence about Studio's models, separate from published catalog claims.
 (function () {
   "use strict";
-  const state = { initialized: false, view: "rankings", snapshot: null, read: 0, contextRead: 0, taskRead: 0, types: new Set(), tasks: [], at: 0 };
+  const state = { initialized: false, view: "rankings", snapshot: null, read: 0, contextRead: 0, taskRead: 0, types: new Set(), typesKey: "", tasks: [], at: 0 };
   const $ = (id) => document.getElementById(`model-lab-${id}`);
   const api = () => window.mefiStudio;
   const rows = (value) => Array.isArray(value) ? value : [];
   const finite = (value) => typeof value === "number" && Number.isFinite(value);
   const number = (value, digits = 0) => finite(value) ? value.toLocaleString("en-US", { maximumFractionDigits: digits }) : "Unknown";
   const duration = (value) => finite(value) ? value < 1000 ? `${number(value)} ms` : `${number(value / 1000, 1)} s` : "Unmeasured";
+  const callCount = (value) => `${number(value)} ${value === 1 ? "call" : "calls"}`;
   const money = (value) => finite(value) ? `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: value < 0.01 ? 6 : 4 })}` : "Unknown";
   // Each view names what it measures; one shared line read the same on three pages.
   const LEDES = {
@@ -21473,20 +21661,84 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     if (!((value?.wins || 0) + (value?.losses || 0))) return value?.unsettled > 0 ? `${number(value.unsettled)} awaiting verification` : "No verified tasks";
     return `${number(value.wins)} won / ${number(value.losses)} lost${finite(value.winProbability) ? ` · ${number(value.winProbability * 100)}% win chance` : ""}`;
   }
+  // A header is a title, or [title, class] when its column needs one (the
+  // leaderboard's columns carry their class onto every cell).
   function table(headers, entries, rowOf) {
     const node = element("table", "lab-table");
     const head = element("thead");
     const headRow = element("tr");
-    for (const title of headers) { const th = element("th", "", title); th.scope = "col"; headRow.append(th); }
+    const columns = headers.map((header) => (Array.isArray(header) ? header : [header, ""]));
+    for (const [title, className] of columns) { const th = element("th", className, title); th.scope = "col"; headRow.append(th); }
     head.append(headRow);
     const body = element("tbody");
     entries.forEach((entry) => {
       const tr = element("tr");
-      for (const value of rowOf(entry)) { const cell = element("td"); cell.append(typeof value === "object" ? value : element("span", "", String(value))); tr.append(cell); }
+      rowOf(entry).forEach((value, index) => { const cell = element("td", columns[index]?.[1] || ""); cell.append(typeof value === "object" ? value : element("span", "", String(value))); tr.append(cell); });
       body.append(tr);
     });
     node.append(head, body);
     return node;
+  }
+  // A thin inline bar: zero at the left, its share of the column's scale as
+  // its length. It repeats the number beside it, so screen readers skip it;
+  // the style attribute keeps it one write.
+  function bar(fraction, tone = "") {
+    const node = element("span", tone ? `lab-bar ${tone}` : "lab-bar");
+    node.setAttribute("aria-hidden", "true");
+    node.setAttribute("style", `--v:${(Math.max(0, Math.min(1, fraction)) * 100).toFixed(1)}%`);
+    node.append(element("i"));
+    return node;
+  }
+  // A leaderboard cell: the value, its bar when it has a scale, a quiet note.
+  function metric(text, fraction = null, { tone = "", note = "", quiet = false } = {}) {
+    const cell = element("div", quiet ? "lab-metric is-quiet" : "lab-metric");
+    cell.append(element("span", "lab-metric-value", text));
+    if (finite(fraction)) cell.append(bar(fraction, tone));
+    if (note) cell.append(element("small", "", note));
+    return cell;
+  }
+  function rankCell(model) {
+    if (model.rank == null || !finite(model.score)) return element("span", "lab-rank is-unranked", "—");
+    return element("span", model.rank <= 3 ? "lab-rank is-top" : "lab-rank", `#${model.rank}`);
+  }
+  // Speed leads with output tokens per second (longer bar, faster model) and
+  // keeps the median response time beside it; without token counts the
+  // response time stands alone.
+  function speedCell(model, fastest) {
+    const median = model.latencyMs?.count ? `${duration(model.latencyMs?.p50)} median` : duration(model.latencyMs?.p50);
+    if (finite(model.throughput?.p50)) return metric(`${number(model.throughput.p50, 1)} tokens/s`, fastest > 0 ? model.throughput.p50 / fastest : null, { note: `${median} response` });
+    return metric(median, null, { quiet: !finite(model.latencyMs?.p50), note: model.samples > 0 ? "Output speed unmeasured" : "" });
+  }
+  function costCell(model, dearest) {
+    if (model.costUsd?.count > 0 && finite(model.costUsd.mean)) {
+      const unreported = Number(model.usage?.costUsd?.unknownRecords) || 0;
+      return metric(money(model.costUsd.mean), dearest > 0 ? model.costUsd.mean / dearest : null, { note: unreported ? `${callCount(unreported)} unreported` : "per call" });
+    }
+    return model.samples > 0 ? metric("Unknown", null, { quiet: true, note: "Not reported by the provider" }) : metric("Unmeasured", null, { quiet: true });
+  }
+  function errorsCell(model) {
+    if (!(model.samples > 0)) return metric("Unmeasured", null, { quiet: true });
+    if (!finite(model.errorRate)) return metric(`${number(model.errors)} / ${number(model.samples)}`, null, { note: "No finished calls" });
+    return metric(`${number(model.errorRate * 100, 1)}%`, model.errorRate, { tone: model.errors ? "is-bad" : "", note: `${number(model.errors)} of ${callCount(model.samples)} failed` });
+  }
+  function ratingCell(value, tone = "") {
+    return value?.count > 0 && finite(value.mean) ? metric(quality(value), value.mean / 5, { tone }) : metric(quality(value), null, { quiet: true });
+  }
+  // Your ratings and a model judge's, one line each and never averaged.
+  function ratingsCell(model) {
+    const cell = element("div", "lab-ratings");
+    for (const [who, value, tone] of [["You", model.quality?.human, ""], ["Model", model.quality?.model, "is-judge"]]) {
+      const line = element("div", "lab-rating-line");
+      line.append(element("span", "lab-rating-who", who), ratingCell(value, tone));
+      cell.append(line);
+    }
+    return cell;
+  }
+  // Verified task wins, with the win chance as the bar; nothing verified yet
+  // reads as a quiet line.
+  function winsCell(model) {
+    if (!((model.wins || 0) + (model.losses || 0))) return metric(verdicts(model), null, { quiet: true });
+    return metric(`${number(model.wins)} won / ${number(model.losses)} lost`, finite(model.winProbability) ? model.winProbability : null, { note: finite(model.winProbability) ? `${number(model.winProbability * 100)}% win chance` : "" });
   }
   function modelName(model) {
     const cell = element("div", "lab-model-name");
@@ -21500,27 +21752,81 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     }
     return cell;
   }
+  // The KPI row. Before the first call each tile says what will fill it
+  // instead of showing a row of zeros.
   function renderSummary(snapshot) {
+    const totals = $("summary"); if (!totals) return;
     const models = rows(snapshot.models);
-    const totals = $("summary"); totals.replaceChildren();
-    const stats = [["Recorded calls", number(finite(snapshot.calls) ? snapshot.calls : models.reduce((sum, model) => sum + (model.samples || 0), 0))], ["Models observed", number(models.filter((model) => model.samples > 0).length)], ["Errors recorded", number(models.reduce((sum, model) => sum + (model.errors || 0), 0))]];
-    for (const [label, value] of stats) { const card = element("div", "lab-stat"); card.append(element("span", "", label), element("strong", "", value)); totals.append(card); }
+    const calls = finite(snapshot.calls) ? snapshot.calls : models.reduce((sum, model) => sum + (model.samples || 0), 0);
+    const observed = models.filter((model) => model.samples > 0);
+    const ranked = observed.filter((model) => model.rank != null).length;
+    const errors = models.reduce((sum, model) => sum + (model.errors || 0), 0);
+    const finished = models.reduce((sum, model) => sum + (model.successes || 0) + (model.errors || 0), 0);
+    // The ledger's own median: the lower middle of the recent successful calls.
+    const times = rows(snapshot.recent).filter((call) => ["ok", "success"].includes(call.status) && finite(call.elapsedMs)).map((call) => call.elapsedMs).sort((a, b) => a - b);
+    const median = times.length ? times[Math.ceil(times.length / 2) - 1] : null;
+    const cost = snapshot.usage?.costUsd;
+    const unreported = Math.max(0, Number(cost?.unknownRecords) || 0);
+    const since = new Date(snapshot.range?.from ?? NaN);
+    const tiles = calls > 0 ? [
+      ["Recorded calls", number(calls), Number.isFinite(since.getTime()) ? `since ${since.toLocaleDateString(undefined, { month: "short", day: "numeric" })}` : "on this computer"],
+      ["Models observed", number(observed.length), ranked ? `${number(ranked)} ranked` : "none ranked yet"],
+      ["Error rate", finished ? `${number((errors / finished) * 100, 1)}%` : "—", finished ? `${number(errors)} of ${number(finished)} finished calls` : "no finished calls yet", finished ? errors / finished : null],
+      ["Median response", median !== null ? duration(median) : "—", median !== null ? `last ${callCount(times.length)} that succeeded` : "no successful calls yet"],
+      ["Recorded cost", cost && finite(cost.known) ? money(cost.known) : "Unknown", unreported ? `${callCount(unreported)} did not report cost` : `across ${callCount(calls)}`],
+    ] : [
+      ["Recorded calls", "No calls yet", "Studio counts every model call it makes"],
+      ["Models observed", "None yet", "A model appears after its first call"],
+      ["Error rate", "—", "Nothing to count yet"],
+      ["Median response", "—", "Measured on successful calls"],
+      ["Recorded cost", "—", "Counted when a provider reports it"],
+    ];
+    totals.dataset.empty = String(!(calls > 0));
+    totals.replaceChildren(...tiles.map(([label, value, note, share]) => {
+      const tile = element("div", calls > 0 && value !== "—" ? "lab-stat" : "lab-stat is-empty");
+      tile.append(element("span", "", label), element("strong", "", value), element("small", "", note));
+      if (finite(share)) tile.append(bar(share, errors ? "is-bad" : ""));
+      return tile;
+    }));
+  }
+  // Before any call is measured, one card says how the leaderboard fills in.
+  function emptyRanking(target) {
+    const box = element("div", "lab-empty lab-empty-ranking");
+    const art = element("span", "lab-empty-art"); art.setAttribute("aria-hidden", "true"); art.append(element("i"), element("i"), element("i"));
+    const text = element("div", "lab-empty-text");
+    const steps = element("ol", "lab-steps");
+    for (const [title, detail] of [
+      ["Use a model", "Chats, plans and builds record each call's response time, cost and errors on this computer."],
+      ["Rate what you reviewed", "Score finished results under Rate recent work. Your score stays separate from model judging."],
+      ["See the ranking", "Measured models are ranked on the same evidence. Anything not measured stays unknown."],
+    ]) { const step = element("li"); step.append(element("strong", "", title), element("span", "", detail)); steps.append(step); }
+    text.append(element("h3", "", "Your results will build the ranking"), element("p", "", "Studio has no measured calls for this selection yet. Unmeasured models are not treated as fast, free, or reliable."), steps);
+    box.append(art, text);
+    target.replaceChildren(box);
   }
   function renderRankings(snapshot) {
     const models = rows(snapshot.models);
     const target = $("ranking-list");
-    if (!models.some((model) => model.samples > 0)) empty(target, "Your results will build the ranking", "Studio has no measured calls for this selection yet. Unmeasured models are not treated as fast, free, or reliable.");
-    else target.replaceChildren(table(["Model", "Rank / score", "Response time", "Output speed", "Cost / call", "Errors", "Task wins", "Your quality", "Model judged"], models, (model) => [
-      modelName(model), model.rank != null && finite(model.score) ? `#${model.rank} · ${number(model.score, 1)} / 100` : "Not ranked",
-      `${duration(model.latencyMs?.p50)}${model.latencyMs?.count ? " median" : ""}`,
-      finite(model.throughput?.p50) ? `${number(model.throughput.p50, 1)} tokens/s` : "Unmeasured",
-      model.costUsd?.count > 0 ? money(model.costUsd.mean) : model.samples > 0 ? "Unknown" : "Unmeasured",
-      model.samples > 0 ? `${number(model.errors)} / ${number(model.samples)}${finite(model.errorRate) ? ` · ${number(model.errorRate * 100, 1)}%` : ""}` : "Unmeasured",
-      verdicts(model), quality(model.quality?.human), quality(model.quality?.model),
-    ]));
+    const measured = models.some((model) => model.samples > 0);
+    if (!measured) emptyRanking(target);
+    else {
+      // Bars share one scale per column: the fastest output speed and the
+      // highest cost per call are full length; errors and ratings use their
+      // own fixed ranges (0-100%, 0-5).
+      const fastest = Math.max(0, ...models.map((model) => (finite(model.throughput?.p50) ? model.throughput.p50 : 0)));
+      const dearest = Math.max(0, ...models.map((model) => (model.costUsd?.count > 0 && finite(model.costUsd.mean) ? model.costUsd.mean : 0)));
+      const col = "lab-col-metric";
+      target.replaceChildren(table([["Rank", "lab-col-rank"], ["Model", "lab-col-model"], ["Score", col], ["Speed", col], ["Cost / call", col], ["Errors", col], ["Task wins", col], ["Ratings", "lab-col-ratings"]], models, (model) => [
+        rankCell(model), modelName(model),
+        model.rank != null && finite(model.score) ? metric(`${number(model.score, 1)} / 100`, model.score / 100) : metric("Not ranked", null, { quiet: true }),
+        speedCell(model, fastest), costCell(model, dearest), errorsCell(model), winsCell(model), ratingsCell(model),
+      ]));
+    }
     const notes = rows(snapshot.ranking?.notes).filter((note) => typeof note === "string");
     const metrics = rows(snapshot.ranking?.metrics).map((key) => key === "speed" ? "response time" : key === "quality" ? `${snapshot.ranking.qualitySource || "human"} ratings` : key);
     $("ranking-notes").textContent = `${metrics.length ? `Rank uses ${metrics.join(", ")}. ` : ""}${notes.join(" ") || "Rank reflects available evidence. Human and model ratings stay separate; missing measurements remain unknown."}`;
+    // The empty card already explains the ranking; the footnote waits for rows.
+    $("ranking-notes").hidden = !measured;
     renderRecent(snapshot);
   }
   // Once calls exist, a value they did not report reads "Unknown". Before the
@@ -21551,6 +21857,13 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
   function renderRecent(snapshot) {
     const target = $("recent"); target.replaceChildren();
     const recent = rows(snapshot.recent).filter((call) => ["success", "ok"].includes(call.status)).slice(0, 12);
+    // The fold's heading says how much is waiting, so it can stay folded.
+    const count = $("rate-count");
+    if (count) {
+      const unrated = recent.filter((call) => !rows(call.ratings?.human).length).length;
+      count.hidden = !recent.length;
+      count.textContent = !recent.length ? "" : unrated ? `${number(unrated)} to rate` : "All rated";
+    }
     if (!recent.length) { empty(target, "No completed results to rate", "Rate successful work after reviewing the result in its conversation or task."); return; }
     for (const call of recent) {
       const card = element("form", "lab-rating-row");
@@ -21588,6 +21901,27 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     const first = element("option", "", "All task types"); first.value = ""; filter.replaceChildren(first);
     for (const type of [...state.types].sort()) { const option = element("option", "", type); option.value = type; filter.append(option); }
     filter.value = selected;
+    paintTypes();
+  }
+  // The task types as a row of pressed buttons over the hidden select. The
+  // row is rebuilt only when the set of types changes, so a click keeps focus.
+  const typeLabel = (type) => { const text = String(type).replace(/[-_]+/g, " "); return text.charAt(0).toUpperCase() + text.slice(1); };
+  function paintTypes() {
+    const group = $("task-types"), filter = $("task-type");
+    if (!group || !filter) return;
+    const types = [...state.types].sort();
+    const key = JSON.stringify(types);
+    if (state.typesKey !== key) {
+      state.typesKey = key;
+      const choice = (value, label) => {
+        const button = element("button", "", label); button.type = "button"; button.dataset.value = value;
+        button.addEventListener("click", () => { if (filter.value === value) return; filter.value = value; paintTypes(); refresh(); });
+        return button;
+      };
+      group.replaceChildren(choice("", "All"), ...types.map((type) => choice(type, typeLabel(type))));
+    }
+    for (const button of Array.from(group.children || [])) button.setAttribute("aria-pressed", String((button.dataset?.value ?? "") === filter.value));
+    if ($("task-filter")) $("task-filter").hidden = !types.length;
   }
   async function refresh() {
     if (!state.initialized) return;
@@ -21709,7 +22043,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
         $(accounts ? "accounts" : "recorded")?.focus();
       });
     }
-    $("task-type").addEventListener("change", refresh);
+    $("task-type").addEventListener("change", () => { paintTypes(); refresh(); });
     $("context-refresh").addEventListener("click", previewContext);
     $("context-task").addEventListener("change", previewContext);
     $("context-budget").addEventListener("change", previewContext);
@@ -21718,7 +22052,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       // A read cut off by this switch no longer owns the button (its finally
       // checks the token just bumped), so it is released here.
       $("refresh").disabled = false;
-      $("task-type").value = "";
+      $("task-type").value = ""; paintTypes();
       $("context-task").value = ""; $("context-sections").replaceChildren();
       if (!document.getElementById("tab-graph")?.hidden) { refresh(); if (state.view === "context") show("context"); }
     });
@@ -78817,6 +79151,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     status: document.getElementById("status"),
     banner: document.getElementById("banner"),
     plan: document.getElementById("plan-strip"),
+    picks: document.getElementById("catalog-picks"),
+    head: document.getElementById("catalog-head"),
     search: document.getElementById("search"),
     chips: document.getElementById("chips"),
     sort: document.getElementById("sort"),
@@ -78867,6 +79203,31 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     return `<div class="stat"><div class="k">${esc(key)}</div><div class="v">${esc(value)}</div><div class="s">${esc(sub)}</div></div>`;
   }
 
+  // The quality bar runs from zero to the catalog's best index rounded up to
+  // the next ten, so every bar starts at zero and bars compare within this
+  // catalog. Worked out once per catalog document.
+  const qualityScales = new WeakMap();
+  const qualityOf = (model) => (typeof model.quality?.index === "number" && Number.isFinite(model.quality.index) ? model.quality.index : null);
+  function qualityScale(doc = state.doc) {
+    if (!qualityScales.has(doc)) {
+      const top = Math.max(0, ...doc.models.map((model) => qualityOf(model) ?? 0));
+      qualityScales.set(doc, top > 0 ? Math.ceil(top / 10) * 10 : 100);
+    }
+    return qualityScales.get(doc);
+  }
+  function qualityCell(model) {
+    const index = qualityOf(model);
+    if (index === null) return `<span class="catalog-cell catalog-quality" title="No published quality index"><small>Quality</small><b>${esc(model.quality?.index ?? "—")}</b></span>`;
+    const scale = qualityScale();
+    const share = Math.max(0, Math.min(100, (index / scale) * 100));
+    const version = model.quality?.declared === "AA" && model.quality.indexVersion ? ` (${model.quality.indexVersion})` : "";
+    const title = `${index} on the Artificial Analysis Intelligence Index${version}. The bar runs from 0 to ${scale}.`;
+    return `<span class="catalog-cell catalog-quality" title="${esc(title)}"><small>Quality</small><b>${esc(index)}</b><span class="catalog-bar" style="--v:${share.toFixed(1)}%" aria-hidden="true"><i></i></span></span>`;
+  }
+
+  // One row of the comparison table: the summary holds the columns the header
+  // names (each cell keeps its own label for screen readers, narrow windows and
+  // print), and the fold below it holds the full card.
   function cardHtml(model) {
     const price = model.pricing?.default;
     const requests = model.usage?.requests;
@@ -78881,11 +79242,14 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const modalities = esc(model.capabilities?.modalities?.input?.join(" + ") ?? "—");
     return `<article class="card catalog-row" data-id="${esc(model.id)}">
       <details class="catalog-model"><summary class="catalog-summary">
-      <div class="card-head">
-        <div><h3>${esc(model.name)}</h3><div class="vendor">${esc(model.vendor)} · opencode-go/${esc(model.id)}</div></div>
-        <div class="badges">${badgeHtml(model)}</div>
+      <div class="catalog-name">
+        <div class="catalog-title"><h3>${esc(model.name)}</h3><span class="badges">${badgeHtml(model)}</span></div>
+        <div class="vendor">${esc(model.vendor)} · opencode-go/${esc(model.id)}</div>
       </div>
-      <div class="catalog-metrics"><span><small>Cost / request</small><b>${fmt.money(model.typicalCostUSD)}</b></span><span><small>Quality</small><b>${esc(model.quality?.index ?? "—")}</b></span><span><small>Context</small><b>${esc(fmt.ctx(model.limits?.context))}</b></span></div>
+      ${qualityCell(model)}
+      <span class="catalog-cell"><small>Cost / request</small><b>${fmt.money(model.typicalCostUSD)}</b></span>
+      <span class="catalog-cell"><small>Requests / 5h</small><b>${esc(req5)}</b></span>
+      <span class="catalog-cell"><small>Context</small><b>${esc(fmt.ctx(model.limits?.context))}</b></span>
       <span class="catalog-expand" aria-hidden="true">⌄</span></summary>
       <div class="catalog-body">
       <p class="verdict">${esc(model.verdict ?? "No curated verdict yet.")}</p>
@@ -78932,9 +79296,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       return searchCache.get(model).includes(query);
     });
     const num = (v) => (v == null ? -Infinity : typeof v === "number" ? v : v === "unlimited" ? Infinity : -Infinity);
+    const requestCost = (model) => model.typicalCostUSD ?? (model.pricing?.default?.input === 0 ? 0 : Infinity);
     const sorters = {
       quality: (a, b) => num(b.quality?.index) - num(a.quality?.index) || a.name.localeCompare(b.name),
-      cost: (a, b) => num(a.typicalCostUSD ?? 0) - num(b.typicalCostUSD ?? 0) || a.name.localeCompare(b.name),
+      // A free model with no typical request cost leads; an unknown cost trails
+      // instead of passing for free.
+      cost: (a, b) => num(requestCost(a)) - num(requestCost(b)) || a.name.localeCompare(b.name),
       speed: (a, b) => num(b.usage?.requests?.h5) - num(a.usage?.requests?.h5) || a.name.localeCompare(b.name),
       context: (a, b) => num(b.limits?.context) - num(a.limits?.context) || a.name.localeCompare(b.name),
       pool: (a, b) => num(b.usage?.monthlyCapUSD) - num(a.usage?.monthlyCapUSD) || a.name.localeCompare(b.name),
@@ -78949,20 +79316,97 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     els.chips.innerHTML = FILTERS.map((f) => `<button type="button" class="chip ${state.filters.has(f.id) ? "on" : ""}" data-id="${f.id}" aria-pressed="${state.filters.has(f.id)}">${f.label}</button>`).join("");
   }
 
+  // The plan is context for the prices, not a headline: one quiet line.
   function renderPlan() {
     const plan = state.doc.plan;
-    els.plan.innerHTML = `
-      <span><b>${plan.name}</b> · ${fmt.money(plan.priceUSDMonth)}/month</span>
-      <span>windows: <b>${fmt.money(plan.window5hUSD)}</b>/5h · <b>${fmt.money(plan.weekUSD)}</b>/week · <b>${fmt.money(plan.monthUSD)}</b>/month</span>
-      <span>per-model pool: 5h = 20%, week = 50%, month = 100%</span>`;
+    els.plan.hidden = !plan;
+    if (!plan) return;
+    const share = plan.windowFractionOfMonthly ?? {};
+    const pct = (value, fallback) => `${Math.round((typeof value === "number" && Number.isFinite(value) ? value : fallback) * 100)}%`;
+    els.plan.innerHTML = `<span><b>${esc(plan.name)}</b> ${fmt.money(plan.priceUSDMonth)} / month</span>`
+      + `<span>Plan limits ${fmt.money(plan.window5hUSD)} per 5 hours · ${fmt.money(plan.weekUSD)} per week · ${fmt.money(plan.monthUSD)} per month</span>`
+      + `<span>Each model's own pool: 5h ${pct(share["5h"], 0.2)} · week ${pct(share.week, 0.5)} · month ${pct(share.month, 1)}</span>`;
   }
 
+  // One line under the page title: how many, how fresh, from where. The hash
+  // stays on hover and in the footer.
   function renderStatus() {
     const doc = state.doc;
     const roster = doc.models.filter((m) => m.onRoster).length;
-    const built = dateText(doc.generatedAt);
-    els.status.textContent = `${doc.models.length} models (${roster} live) · data: ${state.source}${built ? ` · built ${built}` : ""} · hash ${doc.hash.slice(0, 8)}`;
+    const built = new Date(doc.generatedAt ?? NaN);
+    const when = Number.isFinite(built.getTime()) ? built.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "";
+    const source = state.source === "baked" ? "built-in data" : `the ${state.source}`;
+    els.status.textContent = `${doc.models.length} models · ${roster} live${when ? ` · updated ${when}` : ""} · from ${source}`;
+    els.status.title = `Catalog hash ${doc.hash.slice(0, 8)}`;
     els.footer.textContent = `catalog hash ${doc.hash.slice(0, 12)} · roster ${doc.rosterHash.slice(0, 12)}`;
+  }
+
+  // Picks: four highlights worked out from the catalog itself, legacy models
+  // left out, so their numbers always agree with the rows. They follow the
+  // whole catalog rather than the filters and repaint only with a new document.
+  let picksDoc = null;
+  const releasedAt = (model) => { const at = Date.parse(model.releaseDate ?? ""); return Number.isNaN(at) ? null : at; };
+  function pickBest(models, score) {
+    let best = null, top = -Infinity;
+    for (const model of models) {
+      const value = score(model);
+      if (typeof value !== "number" || !Number.isFinite(value)) continue;
+      if (value > top || (value === top && String(model.name).localeCompare(String(best.name)) < 0)) { best = model; top = value; }
+    }
+    return best;
+  }
+  function renderPicks() {
+    if (!els.picks || picksDoc === state.doc) return;
+    picksDoc = state.doc;
+    const models = state.doc.models.filter((model) => !model.legacy);
+    const cost = (model) => (typeof model.typicalCostUSD === "number" && model.typicalCostUSD > 0 ? model.typicalCostUSD : null);
+    const context = (model) => { const value = model.limits?.context; return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null; };
+    const released = (at) => new Date(at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+    const ago = (at) => { const days = Math.max(0, Math.round((Date.now() - at) / 86400000)); return days === 0 ? "released today" : days === 1 ? "released yesterday" : `released ${days} days ago`; };
+    const picks = [
+      { key: "quality", label: "Top quality", model: pickBest(models, qualityOf), value: (m) => [qualityOf(m), "AA index"], note: (m) => `${m.vendor} · ${fmt.money(m.typicalCostUSD)} / request` },
+      { key: "value", label: "Best value", model: pickBest(models, (m) => (qualityOf(m) !== null && cost(m) !== null ? qualityOf(m) / cost(m) : null)), value: (m) => [fmt.money(m.typicalCostUSD), "/ request"], note: (m) => `Quality ${qualityOf(m)} · ${m.privacy?.training ? "trains on your prompts" : "lowest cost per point"}` },
+      { key: "context", label: "Biggest context", model: pickBest(models, context), value: (m) => [fmt.ctx(context(m)), "tokens"], note: (m) => `${m.vendor} · ${fmt.int(context(m))} tokens` },
+      { key: "newest", label: "Newest", model: pickBest(models, releasedAt), value: (m) => [released(releasedAt(m)), ""], note: (m) => `${m.vendor} · ${ago(releasedAt(m))}` },
+    ].filter((pick) => pick.model);
+    els.picks.hidden = picks.length < 2;
+    els.picks.innerHTML = picks.map((pick) => {
+      const [value, unit] = pick.value(pick.model);
+      return `<button type="button" class="catalog-pick" data-pick="${pick.key}" data-id="${esc(pick.model.id)}" title="Show ${esc(pick.model.name)} in the table">`
+        + `<span class="catalog-pick-label">${esc(pick.label)}</span><strong class="catalog-pick-name">${esc(pick.model.name)}</strong>`
+        + `<span class="catalog-pick-value">${esc(value)}${unit ? ` <small>${esc(unit)}</small>` : ""}</span><span class="catalog-pick-note">${esc(pick.note(pick.model))}</span></button>`;
+    }).join("");
+  }
+
+  // Opens a model's row in place, bringing it back first when a search or a
+  // filter hides it, and moves focus to it.
+  function revealModel(id) {
+    const find = () => Array.from(els.cards.querySelectorAll?.(".catalog-row") ?? []).find((row) => row.dataset.id === id);
+    let row = find();
+    if (!row && (state.search || state.filters.size)) {
+      state.search = ""; els.search.value = ""; state.filters.clear();
+      renderChips(); renderCards(); row = find();
+    }
+    const fold = row?.querySelector(".catalog-model");
+    if (!fold) return;
+    fold.open = true;
+    const still = document.body.classList.contains("no-motion") || window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    row.scrollIntoView({ block: "center", behavior: still ? "auto" : "smooth" });
+    fold.querySelector("summary")?.focus({ preventScroll: true });
+    row.classList.remove("is-revealed");
+    void row.offsetWidth;
+    row.classList.add("is-revealed");
+    setTimeout(() => row.classList.remove("is-revealed"), 1600);
+  }
+
+  // The column header doubles as the sort control; the Sort select stays the
+  // one source of truth, so both always agree.
+  function renderSortHead() {
+    for (const button of els.head?.querySelectorAll?.("button[data-sort]") ?? []) {
+      const on = button.dataset.sort === state.sort;
+      button.setAttribute("aria-pressed", String(on));
+      button.title = on ? "Sorted by this column" : `Sort by ${button.textContent.trim().toLowerCase()}`;
+    }
   }
 
   function renderCards() {
@@ -78980,13 +79424,15 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       for (const fold of els.cards.querySelectorAll?.(".catalog-model") ?? []) fold.open = expanded.has(fold.closest("[data-id]").dataset.id);
       renderedCardMarkup = markup;
     }
-    els.count.textContent = `${models.length} of ${state.doc.models.length} models shown`;
+    els.count.textContent = models.length === state.doc.models.length ? `All ${models.length} models shown` : `${models.length} of ${state.doc.models.length} models shown`;
   }
 
   function renderAll() {
     renderPlan();
     renderStatus();
+    renderPicks();
     renderChips();
+    renderSortHead();
     renderCards();
     if (state.graph) state.graph.redraw();
   }
@@ -80532,7 +80978,20 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   });
   els.sort.addEventListener("change", (event) => {
     state.sort = event.target.value;
+    renderSortHead();
     renderCards();
+  });
+  // A column name sorts by that column through the Sort select, so the
+  // select's own picker and the header show the same choice.
+  els.head?.addEventListener("click", (event) => {
+    const button = event.target.closest?.("button[data-sort]");
+    if (!button || button.dataset.sort === state.sort) return;
+    els.sort.value = button.dataset.sort;
+    els.sort.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  els.picks?.addEventListener("click", (event) => {
+    const pick = event.target.closest?.(".catalog-pick[data-id]");
+    if (pick) revealModel(pick.dataset.id);
   });
   document.getElementById("tabs").addEventListener("click", (event) => {
     const tab = event.target.closest(".tab");

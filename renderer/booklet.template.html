@@ -423,29 +423,48 @@
 <div id="banner" class="banner" hidden></div>
 <main>
   <section id="tab-booklet">
-    <div class="plan-strip" id="plan-strip"></div>
-    <div class="toolbar">
-      <input id="search" type="search" placeholder="Search model, vendor, tag… (press /)" autocomplete="off">
-      <div class="chips" id="chips"></div>
-      <label class="muted">Sort <select id="sort">
-        <option value="quality">Quality (AA)</option>
-        <option value="cost">Cheapest / request</option>
-        <option value="speed">Most requests / 5h</option>
-        <option value="context">Largest context</option>
-        <option value="name">Name</option>
-        <option value="pool">Monthly pool</option>
-      </select></label>
-      <span class="toolbar-actions">
-        <button id="refresh-btn" class="ghost mini" title="Re-read data/models.json (R)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-refresh"/></svg><span class="label">Refresh</span><kbd class="key">R</kbd></button>
-        <button id="print-btn" class="ghost mini" title="Print / PDF"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-print"/></svg><span class="label">Print / PDF</span></button>
-      </span>
+    <!-- The catalog reads top down: the plan in one quiet line, a few picks
+         worked out from the same data, then one sticky toolbar whose last row
+         is the table's column header, so the columns stay named while the
+         rows scroll. booklet.js paints the picks, the header's sort state and
+         the rows. -->
+    <p class="plan-strip" id="plan-strip"></p>
+    <section id="catalog-picks" class="catalog-picks" aria-label="Picks from the catalog"></section>
+    <div class="toolbar catalog-toolbar">
+      <div class="catalog-toolbar-row">
+        <input id="search" type="search" placeholder="Search model, vendor, tag… (press /)" autocomplete="off" aria-label="Search the catalog">
+        <label class="muted catalog-sort">Sort <select id="sort">
+          <option value="quality">Quality (AA)</option>
+          <option value="cost">Cheapest / request</option>
+          <option value="speed">Most requests / 5h</option>
+          <option value="context">Largest context</option>
+          <option value="name">Name</option>
+          <option value="pool">Monthly pool</option>
+        </select></label>
+        <span class="toolbar-actions">
+          <button id="refresh-btn" class="ghost mini" title="Re-read data/models.json (R)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-refresh"/></svg><span class="label">Refresh</span><kbd class="key">R</kbd></button>
+          <button id="print-btn" class="ghost mini" title="Print / PDF"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-print"/></svg><span class="label">Print / PDF</span></button>
+        </span>
+      </div>
+      <div class="catalog-toolbar-row catalog-filter-row">
+        <span id="chips-label" class="catalog-filter-label">Show only</span>
+        <div class="chips" id="chips" role="group" aria-labelledby="chips-label"></div>
+        <p id="count" class="muted" aria-live="polite"></p>
+      </div>
+      <div id="catalog-head" class="catalog-head" role="group" aria-label="Sort by column">
+        <button type="button" data-sort="name">Model</button>
+        <button type="button" data-sort="quality" class="num">Quality</button>
+        <button type="button" data-sort="cost" class="num">Cost / request</button>
+        <button type="button" data-sort="speed" class="num">Requests / 5h</button>
+        <button type="button" data-sort="context" class="num">Context</button>
+        <span aria-hidden="true"></span>
+      </div>
     </div>
-    <div id="cards" class="cards"></div>
-    <p id="count" class="muted"></p>
+    <div id="cards" class="cards catalog-list"></div>
   </section>
   <section id="tab-graph" hidden>
     <section id="model-lab" class="model-lab" aria-label="Model measurements">
-      <header class="lab-head"><div><h2 class="sr-only">Model measurements</h2><p id="model-lab-lede" class="muted">Compare performance, usage and context from your project's model calls.</p></div><button id="model-lab-refresh" class="ghost">Refresh measurements</button></header>
+      <header class="lab-head"><div><h2 class="sr-only">Model measurements</h2><p id="model-lab-lede" class="muted">Compare performance, usage and context from your project's model calls.</p><p id="model-lab-status" class="lab-status" role="status" aria-live="polite"></p></div><button id="model-lab-refresh" class="ghost mini"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-refresh"/></svg><span class="label">Refresh measurements</span></button></header>
       <div id="model-lab-summary" class="lab-summary"></div>
       <div class="lab-tabs" role="tablist" aria-label="Model measurement views">
         <button id="model-lab-tab-rankings" role="tab" aria-selected="true" aria-controls="model-lab-rankings" data-lab-view="rankings">Rankings</button>
@@ -455,12 +474,14 @@
         <button id="model-lab-tab-compare" role="tab" aria-selected="false" aria-controls="model-lab-compare" tabindex="-1" data-lab-view="compare" hidden>Compare <span class="lab-soon">Planned</span></button>
       </div>
       <div id="model-lab-usage-switch" class="lab-usage-switch" role="tablist" aria-label="Usage source" hidden><button id="model-lab-recorded" role="tab" aria-controls="model-lab-usage" aria-selected="true" type="button">Recorded calls</button><button id="model-lab-accounts" role="tab" aria-controls="model-lab-tracker" aria-selected="false" tabindex="-1" type="button">Provider accounts</button></div>
-      <p id="model-lab-status" class="lab-status" role="status" aria-live="polite"></p>
       <section id="model-lab-rankings" role="tabpanel" aria-labelledby="model-lab-tab-rankings">
-        <div class="lab-toolbar"><div><h3>Performance on your work</h3><p class="muted">Measured calls and your ratings. Published benchmarks are under Catalog insights.</p></div><label>Task type <select id="model-lab-task-type"><option value="">All task types</option></select></label></div>
-        <div id="model-lab-ranking-notes" class="lab-note"></div>
+        <!-- The task type filter is a row of pressed buttons; the hidden select
+             beside it stays the value model-lab.js reads and a change on it
+             (from code or a harness) still re-reads the snapshot. -->
+        <div class="lab-toolbar"><div><h3>Performance on your work</h3><p class="muted">Measured calls and your ratings. Published benchmarks are under Catalog insights.</p></div><div id="model-lab-task-filter" class="lab-task-filter"><span id="model-lab-task-label" class="lab-filter-label">Task type</span><div id="model-lab-task-types" class="lab-segmented" role="group" aria-labelledby="model-lab-task-label"></div><select id="model-lab-task-type" class="segmented-source" aria-hidden="true" tabindex="-1"><option value="">All task types</option></select></div></div>
         <div id="model-lab-ranking-list" class="lab-table-wrap"></div>
-        <details id="model-lab-ratings" class="lab-disclosure"><summary>Rate recent work</summary><p class="muted">Rate a result you have reviewed. Your score stays separate from model judging and error counts.</p><div id="model-lab-recent"></div></details>
+        <p id="model-lab-ranking-notes" class="lab-note"></p>
+        <details id="model-lab-ratings" class="lab-disclosure"><summary><span class="lab-disclosure-text"><strong>Rate recent work</strong><span class="muted">Score results you have reviewed. Your score stays separate from model judging and error counts.</span></span><span id="model-lab-rate-count" class="lab-count" hidden></span></summary><div id="model-lab-recent"></div></details>
       </section>
       <section id="model-lab-usage" role="tabpanel" aria-labelledby="model-lab-tab-usage" hidden><h3>Recorded usage</h3><p id="model-lab-usage-coverage" class="muted">Missing provider usage stays unknown. These totals cover calls recorded by Studio; they are not an account balance.</p><p id="model-lab-usage-range" class="lab-status"></p><div id="model-lab-usage-totals" class="lab-usage-grid"></div><div id="model-lab-usage-list" class="lab-table-wrap"></div></section>
       <section id="model-lab-tracker" role="tabpanel" aria-labelledby="model-lab-tab-tracker" hidden>

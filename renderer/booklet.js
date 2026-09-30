@@ -153,6 +153,8 @@
     status: document.getElementById("status"),
     banner: document.getElementById("banner"),
     plan: document.getElementById("plan-strip"),
+    picks: document.getElementById("catalog-picks"),
+    head: document.getElementById("catalog-head"),
     search: document.getElementById("search"),
     chips: document.getElementById("chips"),
     sort: document.getElementById("sort"),
@@ -203,6 +205,31 @@
     return `<div class="stat"><div class="k">${esc(key)}</div><div class="v">${esc(value)}</div><div class="s">${esc(sub)}</div></div>`;
   }
 
+  // The quality bar runs from zero to the catalog's best index rounded up to
+  // the next ten, so every bar starts at zero and bars compare within this
+  // catalog. Worked out once per catalog document.
+  const qualityScales = new WeakMap();
+  const qualityOf = (model) => (typeof model.quality?.index === "number" && Number.isFinite(model.quality.index) ? model.quality.index : null);
+  function qualityScale(doc = state.doc) {
+    if (!qualityScales.has(doc)) {
+      const top = Math.max(0, ...doc.models.map((model) => qualityOf(model) ?? 0));
+      qualityScales.set(doc, top > 0 ? Math.ceil(top / 10) * 10 : 100);
+    }
+    return qualityScales.get(doc);
+  }
+  function qualityCell(model) {
+    const index = qualityOf(model);
+    if (index === null) return `<span class="catalog-cell catalog-quality" title="No published quality index"><small>Quality</small><b>${esc(model.quality?.index ?? "—")}</b></span>`;
+    const scale = qualityScale();
+    const share = Math.max(0, Math.min(100, (index / scale) * 100));
+    const version = model.quality?.declared === "AA" && model.quality.indexVersion ? ` (${model.quality.indexVersion})` : "";
+    const title = `${index} on the Artificial Analysis Intelligence Index${version}. The bar runs from 0 to ${scale}.`;
+    return `<span class="catalog-cell catalog-quality" title="${esc(title)}"><small>Quality</small><b>${esc(index)}</b><span class="catalog-bar" style="--v:${share.toFixed(1)}%" aria-hidden="true"><i></i></span></span>`;
+  }
+
+  // One row of the comparison table: the summary holds the columns the header
+  // names (each cell keeps its own label for screen readers, narrow windows and
+  // print), and the fold below it holds the full card.
   function cardHtml(model) {
     const price = model.pricing?.default;
     const requests = model.usage?.requests;
@@ -217,11 +244,14 @@
     const modalities = esc(model.capabilities?.modalities?.input?.join(" + ") ?? "—");
     return `<article class="card catalog-row" data-id="${esc(model.id)}">
       <details class="catalog-model"><summary class="catalog-summary">
-      <div class="card-head">
-        <div><h3>${esc(model.name)}</h3><div class="vendor">${esc(model.vendor)} · opencode-go/${esc(model.id)}</div></div>
-        <div class="badges">${badgeHtml(model)}</div>
+      <div class="catalog-name">
+        <div class="catalog-title"><h3>${esc(model.name)}</h3><span class="badges">${badgeHtml(model)}</span></div>
+        <div class="vendor">${esc(model.vendor)} · opencode-go/${esc(model.id)}</div>
       </div>
-      <div class="catalog-metrics"><span><small>Cost / request</small><b>${fmt.money(model.typicalCostUSD)}</b></span><span><small>Quality</small><b>${esc(model.quality?.index ?? "—")}</b></span><span><small>Context</small><b>${esc(fmt.ctx(model.limits?.context))}</b></span></div>
+      ${qualityCell(model)}
+      <span class="catalog-cell"><small>Cost / request</small><b>${fmt.money(model.typicalCostUSD)}</b></span>
+      <span class="catalog-cell"><small>Requests / 5h</small><b>${esc(req5)}</b></span>
+      <span class="catalog-cell"><small>Context</small><b>${esc(fmt.ctx(model.limits?.context))}</b></span>
       <span class="catalog-expand" aria-hidden="true">⌄</span></summary>
       <div class="catalog-body">
       <p class="verdict">${esc(model.verdict ?? "No curated verdict yet.")}</p>
@@ -268,9 +298,12 @@
       return searchCache.get(model).includes(query);
     });
     const num = (v) => (v == null ? -Infinity : typeof v === "number" ? v : v === "unlimited" ? Infinity : -Infinity);
+    const requestCost = (model) => model.typicalCostUSD ?? (model.pricing?.default?.input === 0 ? 0 : Infinity);
     const sorters = {
       quality: (a, b) => num(b.quality?.index) - num(a.quality?.index) || a.name.localeCompare(b.name),
-      cost: (a, b) => num(a.typicalCostUSD ?? 0) - num(b.typicalCostUSD ?? 0) || a.name.localeCompare(b.name),
+      // A free model with no typical request cost leads; an unknown cost trails
+      // instead of passing for free.
+      cost: (a, b) => num(requestCost(a)) - num(requestCost(b)) || a.name.localeCompare(b.name),
       speed: (a, b) => num(b.usage?.requests?.h5) - num(a.usage?.requests?.h5) || a.name.localeCompare(b.name),
       context: (a, b) => num(b.limits?.context) - num(a.limits?.context) || a.name.localeCompare(b.name),
       pool: (a, b) => num(b.usage?.monthlyCapUSD) - num(a.usage?.monthlyCapUSD) || a.name.localeCompare(b.name),
@@ -285,20 +318,97 @@
     els.chips.innerHTML = FILTERS.map((f) => `<button type="button" class="chip ${state.filters.has(f.id) ? "on" : ""}" data-id="${f.id}" aria-pressed="${state.filters.has(f.id)}">${f.label}</button>`).join("");
   }
 
+  // The plan is context for the prices, not a headline: one quiet line.
   function renderPlan() {
     const plan = state.doc.plan;
-    els.plan.innerHTML = `
-      <span><b>${plan.name}</b> · ${fmt.money(plan.priceUSDMonth)}/month</span>
-      <span>windows: <b>${fmt.money(plan.window5hUSD)}</b>/5h · <b>${fmt.money(plan.weekUSD)}</b>/week · <b>${fmt.money(plan.monthUSD)}</b>/month</span>
-      <span>per-model pool: 5h = 20%, week = 50%, month = 100%</span>`;
+    els.plan.hidden = !plan;
+    if (!plan) return;
+    const share = plan.windowFractionOfMonthly ?? {};
+    const pct = (value, fallback) => `${Math.round((typeof value === "number" && Number.isFinite(value) ? value : fallback) * 100)}%`;
+    els.plan.innerHTML = `<span><b>${esc(plan.name)}</b> ${fmt.money(plan.priceUSDMonth)} / month</span>`
+      + `<span>Plan limits ${fmt.money(plan.window5hUSD)} per 5 hours · ${fmt.money(plan.weekUSD)} per week · ${fmt.money(plan.monthUSD)} per month</span>`
+      + `<span>Each model's own pool: 5h ${pct(share["5h"], 0.2)} · week ${pct(share.week, 0.5)} · month ${pct(share.month, 1)}</span>`;
   }
 
+  // One line under the page title: how many, how fresh, from where. The hash
+  // stays on hover and in the footer.
   function renderStatus() {
     const doc = state.doc;
     const roster = doc.models.filter((m) => m.onRoster).length;
-    const built = dateText(doc.generatedAt);
-    els.status.textContent = `${doc.models.length} models (${roster} live) · data: ${state.source}${built ? ` · built ${built}` : ""} · hash ${doc.hash.slice(0, 8)}`;
+    const built = new Date(doc.generatedAt ?? NaN);
+    const when = Number.isFinite(built.getTime()) ? built.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "";
+    const source = state.source === "baked" ? "built-in data" : `the ${state.source}`;
+    els.status.textContent = `${doc.models.length} models · ${roster} live${when ? ` · updated ${when}` : ""} · from ${source}`;
+    els.status.title = `Catalog hash ${doc.hash.slice(0, 8)}`;
     els.footer.textContent = `catalog hash ${doc.hash.slice(0, 12)} · roster ${doc.rosterHash.slice(0, 12)}`;
+  }
+
+  // Picks: four highlights worked out from the catalog itself, legacy models
+  // left out, so their numbers always agree with the rows. They follow the
+  // whole catalog rather than the filters and repaint only with a new document.
+  let picksDoc = null;
+  const releasedAt = (model) => { const at = Date.parse(model.releaseDate ?? ""); return Number.isNaN(at) ? null : at; };
+  function pickBest(models, score) {
+    let best = null, top = -Infinity;
+    for (const model of models) {
+      const value = score(model);
+      if (typeof value !== "number" || !Number.isFinite(value)) continue;
+      if (value > top || (value === top && String(model.name).localeCompare(String(best.name)) < 0)) { best = model; top = value; }
+    }
+    return best;
+  }
+  function renderPicks() {
+    if (!els.picks || picksDoc === state.doc) return;
+    picksDoc = state.doc;
+    const models = state.doc.models.filter((model) => !model.legacy);
+    const cost = (model) => (typeof model.typicalCostUSD === "number" && model.typicalCostUSD > 0 ? model.typicalCostUSD : null);
+    const context = (model) => { const value = model.limits?.context; return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null; };
+    const released = (at) => new Date(at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+    const ago = (at) => { const days = Math.max(0, Math.round((Date.now() - at) / 86400000)); return days === 0 ? "released today" : days === 1 ? "released yesterday" : `released ${days} days ago`; };
+    const picks = [
+      { key: "quality", label: "Top quality", model: pickBest(models, qualityOf), value: (m) => [qualityOf(m), "AA index"], note: (m) => `${m.vendor} · ${fmt.money(m.typicalCostUSD)} / request` },
+      { key: "value", label: "Best value", model: pickBest(models, (m) => (qualityOf(m) !== null && cost(m) !== null ? qualityOf(m) / cost(m) : null)), value: (m) => [fmt.money(m.typicalCostUSD), "/ request"], note: (m) => `Quality ${qualityOf(m)} · ${m.privacy?.training ? "trains on your prompts" : "lowest cost per point"}` },
+      { key: "context", label: "Biggest context", model: pickBest(models, context), value: (m) => [fmt.ctx(context(m)), "tokens"], note: (m) => `${m.vendor} · ${fmt.int(context(m))} tokens` },
+      { key: "newest", label: "Newest", model: pickBest(models, releasedAt), value: (m) => [released(releasedAt(m)), ""], note: (m) => `${m.vendor} · ${ago(releasedAt(m))}` },
+    ].filter((pick) => pick.model);
+    els.picks.hidden = picks.length < 2;
+    els.picks.innerHTML = picks.map((pick) => {
+      const [value, unit] = pick.value(pick.model);
+      return `<button type="button" class="catalog-pick" data-pick="${pick.key}" data-id="${esc(pick.model.id)}" title="Show ${esc(pick.model.name)} in the table">`
+        + `<span class="catalog-pick-label">${esc(pick.label)}</span><strong class="catalog-pick-name">${esc(pick.model.name)}</strong>`
+        + `<span class="catalog-pick-value">${esc(value)}${unit ? ` <small>${esc(unit)}</small>` : ""}</span><span class="catalog-pick-note">${esc(pick.note(pick.model))}</span></button>`;
+    }).join("");
+  }
+
+  // Opens a model's row in place, bringing it back first when a search or a
+  // filter hides it, and moves focus to it.
+  function revealModel(id) {
+    const find = () => Array.from(els.cards.querySelectorAll?.(".catalog-row") ?? []).find((row) => row.dataset.id === id);
+    let row = find();
+    if (!row && (state.search || state.filters.size)) {
+      state.search = ""; els.search.value = ""; state.filters.clear();
+      renderChips(); renderCards(); row = find();
+    }
+    const fold = row?.querySelector(".catalog-model");
+    if (!fold) return;
+    fold.open = true;
+    const still = document.body.classList.contains("no-motion") || window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    row.scrollIntoView({ block: "center", behavior: still ? "auto" : "smooth" });
+    fold.querySelector("summary")?.focus({ preventScroll: true });
+    row.classList.remove("is-revealed");
+    void row.offsetWidth;
+    row.classList.add("is-revealed");
+    setTimeout(() => row.classList.remove("is-revealed"), 1600);
+  }
+
+  // The column header doubles as the sort control; the Sort select stays the
+  // one source of truth, so both always agree.
+  function renderSortHead() {
+    for (const button of els.head?.querySelectorAll?.("button[data-sort]") ?? []) {
+      const on = button.dataset.sort === state.sort;
+      button.setAttribute("aria-pressed", String(on));
+      button.title = on ? "Sorted by this column" : `Sort by ${button.textContent.trim().toLowerCase()}`;
+    }
   }
 
   function renderCards() {
@@ -316,13 +426,15 @@
       for (const fold of els.cards.querySelectorAll?.(".catalog-model") ?? []) fold.open = expanded.has(fold.closest("[data-id]").dataset.id);
       renderedCardMarkup = markup;
     }
-    els.count.textContent = `${models.length} of ${state.doc.models.length} models shown`;
+    els.count.textContent = models.length === state.doc.models.length ? `All ${models.length} models shown` : `${models.length} of ${state.doc.models.length} models shown`;
   }
 
   function renderAll() {
     renderPlan();
     renderStatus();
+    renderPicks();
     renderChips();
+    renderSortHead();
     renderCards();
     if (state.graph) state.graph.redraw();
   }
@@ -1868,7 +1980,20 @@
   });
   els.sort.addEventListener("change", (event) => {
     state.sort = event.target.value;
+    renderSortHead();
     renderCards();
+  });
+  // A column name sorts by that column through the Sort select, so the
+  // select's own picker and the header show the same choice.
+  els.head?.addEventListener("click", (event) => {
+    const button = event.target.closest?.("button[data-sort]");
+    if (!button || button.dataset.sort === state.sort) return;
+    els.sort.value = button.dataset.sort;
+    els.sort.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  els.picks?.addEventListener("click", (event) => {
+    const pick = event.target.closest?.(".catalog-pick[data-id]");
+    if (pick) revealModel(pick.dataset.id);
   });
   document.getElementById("tabs").addEventListener("click", (event) => {
     const tab = event.target.closest(".tab");
