@@ -783,3 +783,114 @@ test("the strip tells its listeners what changed, and stops when they let go", a
   assert.equal(seen.length, count, "unsubscribed");
   assert.equal(typeof t.tabs.onChange(null), "function", "a bad callback is harmless");
 });
+
+// ---- what needs you, how it is read, and the hooks other modules use ------------------------------------------------------
+const attn = (t, title) => t.itemOf(title)?.dataset.attn === "true";
+
+test("what needs you is read from the host's digest when it sends one, else from the open questions and the tasks waiting for a go-ahead or stuck", async () => {
+  const tasks = ["a", "b", "c", "d", "e"].map((id) => task(id, { title: id.toUpperCase() }));
+  const t = await tabsEnv({ tasks, assistant: { questions: [{ id: "q-a", status: "open", context: { taskId: "a" } }] } });
+  for (const id of ["a", "b", "c", "d", "e"]) openSession(t, id);
+  t.tabs.activate("home"); await t.settle();
+  const look = async () => { t.window.dispatchEvent({ type: "mefi:workspace-state" }); await t.settle(); return ["A", "B", "C", "D", "E"].filter((title) => attn(t, title)); };
+  assert.deepEqual(await look(), ["A"], "an open question names its task");
+  t.board.backlog = { approval: [{ id: "b" }, { id: "x", kind: "idea" }], blocked: [{ id: "c", kind: "task" }] };
+  assert.deepEqual(await look(), ["A", "B", "C"], "a task waiting for a go-ahead, and one that is stuck; an idea is not a task");
+  t.board.assistant = { questions: [{ id: "q-e", status: "open", context: { taskId: "e" } }], needsYou: { items: [{ taskId: "d" }, { kind: "question", id: "q-e" }, { kind: "note" }] } };
+  assert.deepEqual(await look(), ["D", "E"], "the host's own digest is the word when it sends one: a task id, or a question that names its task");
+  t.board.assistant = { questions: [], needsYou: { items: [] } };
+  assert.deepEqual(await look(), [], "and an empty digest is nothing needing you");
+});
+
+test("a badge goes when the need does: answered somewhere else, the tab stops asking", async () => {
+  const t = await tabsEnv({ tasks: [task("a", { title: "Mine" })], assistant: { questions: [] } });
+  openSession(t, "a"); t.tabs.activate("home"); await t.settle();
+  t.board.assistant = { questions: [{ id: "q1", status: "open", context: { taskId: "a" } }] };
+  t.window.dispatchEvent({ type: "mefi:workspace-state" }); await t.settle();
+  assert.equal(attn(t, "Mine"), true);
+  t.board.assistant = { questions: [{ id: "q1", status: "answered", context: { taskId: "a" } }] };
+  t.window.dispatchEvent({ type: "mefi:workspace-state" }); await t.settle();
+  assert.equal(attn(t, "Mine"), false, "answered in the Inbox: nothing left to be asked");
+  assert.equal(plain(t.tabs.list().find((tab) => tab.route.params.taskId === "a")).badge, false);
+});
+
+test("MefiTabs.needs() badges a tab by hand, takes it off, and makes a background tab when that is what you asked for", async () => {
+  const t = await tabsEnv();
+  t.tabs.open("fleet", {}, { preview: false }); t.tabs.activate("home"); await t.settle();
+  assert.equal(t.tabs.needs("fleet"), true);
+  await t.settle();
+  assert.equal(attn(t, "Fleet"), true);
+  assert.equal(t.tabs.needs("fleet", {}, false), true);
+  await t.settle();
+  assert.equal(attn(t, "Fleet"), false, "taken off");
+  assert.equal(t.tabs.needs("friends"), false, "an action is not a place that can ask");
+  t.tabs.needs("plans"); await t.settle();
+  assert.deepEqual(t.titles(), ["Home", "Fleet", "Plans"], "the default makes a background tab for a place that has none");
+  assert.equal(attn(t, "Plans"), true);
+  assert.equal(t.tabs.active(), "home", "and stays where you are");
+  t.tabs.setPrefs({ agent: "badge" });
+  t.tabs.needs("worktrees"); await t.settle();
+  assert.equal(t.titles().includes("Worktrees"), false, "Badge only opens nothing");
+  t.tabs.stop();
+  assert.equal(t.tabs.needs("fleet"), false, "a stopped strip has nothing to badge");
+});
+
+test("a page can say which of its views is showing (MefiTabs.reader), and taking the answer back reads the page the way it was", async () => {
+  const t = await tabsEnv({ extras: { MefiAgents: { params: () => ({ section: "setup", pane: "team" }) } } });
+  await t.go("agents"); t.tabs.keep();
+  assert.deepEqual(t.titles(), ["Home", "Agents · Team"], "the page's own say, built in");
+  const off = t.tabs.reader("agents", () => ({ section: "setup", pane: "routing" }));
+  t.window.dispatchEvent({ type: "mefi:model-view" }); await t.settle();
+  assert.deepEqual(t.titles(), ["Home", "Agents · Team", "Agents · Routing"], "a reader registered by another module wins");
+  off();
+  t.window.dispatchEvent({ type: "mefi:model-view" }); await t.settle();
+  assert.equal(t.active(), "Agents · Team", "and when it is taken back the built-in one is read again");
+  assert.equal(typeof t.tabs.reader("", () => ({})), "function", "a reader with no page is ignored, and still gives back something callable");
+  const mine = t.tabs.reader("agents", () => ({ section: "setup", pane: "behavior" }));
+  const theirs = t.tabs.reader("agents", () => ({ section: "setup", pane: "connections" }));
+  mine();
+  t.window.dispatchEvent({ type: "mefi:model-view" }); await t.settle();
+  assert.equal(t.active(), "Agents · Connections", "taking back a reader that was already replaced leaves the newer one alone");
+  theirs();
+});
+
+test("Build's own reading of a session (MefiBuilder.reading) is the dot's colour when it has one", async () => {
+  const t = await tabsEnv({ tasks: [task("a", { title: "Mine", status: "open" })], extras: { MefiBuilder: { active: () => false, reading: (taskRow) => ({ tone: taskRow.id === "a" ? "check" : "ready", label: "x" }) } } });
+  openSession(t, "a"); await t.settle();
+  assert.equal(t.itemOf("Mine").querySelector(".ts-dot").dataset.tone, "info", "the reading Build's list uses, through the same colours");
+});
+
+test("a go() that throws or rejects does not stop the strip: the tab is still there and still the one you chose", async () => {
+  const t = await tabsEnv();
+  t.nav.go = () => { throw new Error("the page could not open"); };
+  const made = t.tabs.open("fleet", {}, { preview: false });
+  assert.equal(made.active, true);
+  t.nav.go = () => Promise.reject(new Error("later"));
+  t.tabs.open("plans", {}, { preview: false });
+  await t.settle();
+  assert.deepEqual(plain(t.tabs.list().map((tab) => tab.route.id)), ["workspace", "fleet", "plans"]);
+});
+
+test("a tab that is not there is not acted on: activate, close, pin, move and keep all say no", async () => {
+  const t = await tabsEnv();
+  assert.deepEqual([t.tabs.activate("nope"), t.tabs.close("nope"), t.tabs.pin("nope", true), t.tabs.move("nope", 0), t.tabs.keep("nope")], [false, false, false, false, false]);
+  assert.deepEqual(t.titles(), ["Home"]);
+});
+
+test("pinning the page that is being suggested takes the suggestion away, whichever way it is pinned", async () => {
+  const t = await tabsEnv();
+  for (let i = 0; i < 2; i += 1) { await t.go("fleet"); await t.go("plans"); }
+  await t.go("fleet");
+  assert.equal(t.strip().querySelector(".ts-suggest").hidden, false, "the third visit: Fleet is being offered");
+  t.tabs.pin(t.tabs.list().find((tab) => tab.route.id === "fleet").id, true); await t.settle();
+  assert.equal(t.strip().querySelector(".ts-suggest").hidden, true, "pinned from its menu or with the key: the chip has nothing left to ask");
+});
+
+test("a page that has left the registry while its tab is open keeps the name the tab was given", async () => {
+  const t = await tabsEnv();
+  await t.go("fleet"); t.tabs.keep(); await t.go("plans"); t.tabs.keep();
+  const get = t.nav.get;
+  t.nav.get = (id) => (id === "fleet" ? null : get(id));
+  t.tabs.flush();
+  assert.deepEqual(t.titles(), ["Home", "Fleet", "Plans"], "the stored name, not a blank one");
+});

@@ -330,3 +330,17 @@ test("a place changing under a project switch does not leak the last project's m
   assert.equal(t.active(), "Home", "in the other project, Home is Home: the session of p1 is not remembered");
   assert.deepEqual(t.titles(), ["Home"]);
 });
+
+test("a moment when the app reports no page at all leaves the strip where it was", async () => {
+  const t = await tabsEnv();
+  await t.go("fleet"); t.tabs.keep();
+  const real = t.nav.current;
+  t.nav.current = () => null;
+  t.window.dispatchEvent({ type: "mefi:nav", detail: { id: "x", action: "open", params: {} } });
+  await t.settle();
+  assert.equal(t.active(), "Fleet");
+  t.nav.current = () => "";
+  t.mutate(); await t.settle();
+  assert.equal(t.active(), "Fleet");
+  t.nav.current = real;
+});

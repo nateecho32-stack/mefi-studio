@@ -188,6 +188,13 @@ export async function tabsEnv({ layout = "v2", shell = true, storage = new Map()
       window.MefiTabs.flush();
       return geometry;
     },
+    /** The strip's box changed width and nothing asked for a repaint: what the ResizeObserver tells it, and the frame after. */
+    resizeTo(width) {
+      geometry.width = width;
+      for (const observer of resizeObservers) if (!observer.disconnected) observer.callback([]);
+      bench.frames();
+      return geometry;
+    },
     /** The page that go() was asked for arrives, the way a view that opens after a beat does. */
     arrive() { const { id, params } = nav.pending; nav.pending = null; nav.deferGo = false; nav.go(id, params); },
     revealRegion() { revealed = true; },

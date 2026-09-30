@@ -1256,3 +1256,77 @@ test("a hidden window paints nothing, and catches up when it is shown", async ()
   await t.settle();
   assert.equal(t.titles().includes("Fleet"), true, "and it is drawn when it is back");
 });
+
+// ---- the strip and the rest of the window ---------------------------------------------------------------------------------------
+test("a change of the strip's own width is fitted again by the next frame, with no other trigger", async () => {
+  const t = await crowded(1800);
+  assert.equal(more(t).hidden, true, "everything fits");
+  t.resizeTo(420);
+  assert.equal(more(t).hidden, false, "the window got narrower: what does not fit folds");
+  assert.ok(hiddenTitles(t).length >= 5);
+  t.resizeTo(1800);
+  assert.equal(more(t).hidden, true, "and wider: it comes back");
+  assert.deepEqual(hiddenTitles(t), []);
+});
+
+test("with nothing that can fold, there is no 'more' button however little room there is", async () => {
+  const t = await tabsEnv();
+  page(t, "fleet"); page(t, "plans");
+  t.tabs.pin(idOf(t, "fleet"), true); t.tabs.pin(idOf(t, "plans"), true);
+  await t.settle();
+  t.measure({ width: 120 });
+  assert.equal(more(t).hidden, true, "Home, two pins and the tab you are on are all there is");
+  assert.deepEqual(hiddenTitles(t), []);
+});
+
+test("the Today board's count is followed while the strip runs, and let go of when it stops", async () => {
+  let count = 0, heard = null, off = 0;
+  const today = { count: () => count, onChange: (callback) => { heard = callback; return () => { off += 1; }; } };
+  const t = await tabsEnv({ extras: { MefiToday: today } });
+  assert.equal(t.itemOf("Today").querySelector(".ts-count").hidden, true);
+  count = 3; heard(); t.frames();
+  assert.equal(t.itemOf("Today").querySelector(".ts-count").textContent, "3", "the board said it changed: the badge follows, with no other trigger");
+  t.tabs.stop();
+  assert.equal(off, 1, "and stopping lets go of it");
+});
+
+test("openAddMenu() and openBehaviour() are the strip's own doors for other modules; a stopped strip has none", async () => {
+  const t = await tabsEnv();
+  t.tabs.openAddMenu();
+  assert.equal(t.popover()?.id, "mefi-tabs-pop-add");
+  t.tabs.openAddMenu();
+  assert.equal(t.popover(), null, "the same door toggles");
+  t.tabs.openBehaviour();
+  assert.equal(t.popover()?.id, "mefi-tabs-pop-behaviour");
+  await press(t.popover(), "Escape");
+  t.tabs.stop();
+  t.tabs.openAddMenu(); t.tabs.openBehaviour();
+  assert.equal(t.popover(), null);
+});
+
+test("the small-window menu marks the preview tab, and the main area gets an id of its own when FRAME gave it none", async () => {
+  const t = await tabsEnv();
+  await t.go("fleet");
+  t.window.innerWidth = 700; t.window.dispatchEvent({ type: "resize" }); await t.settle();
+  await t.click(t.document.querySelector(".ts-menu"));
+  const row = t.popover().querySelectorAll(".ts-menurow").find((node) => node.querySelector(".ts-menulabel").textContent === "Fleet");
+  assert.equal(row.querySelector(".ts-menuitem").dataset.preview, "true", "the italic one, as on the strip");
+  assert.match(t.popover().querySelector(".ts-group").textContent, /the italic one is a preview/);
+  await press(t.popover(), "Escape");
+  t.tabs.stop();
+  t.regions.main.id = "";
+  t.tabs.start(); await t.settle();
+  assert.equal(t.regions.main.id, "mefi-tabpanel");
+  assert.equal(t.document.querySelector(".ts-tab").getAttribute("aria-controls"), "mefi-tabpanel");
+});
+
+test("the Add menu lists sessions newest first, whether the board gives its times as numbers or as dates", async () => {
+  const t = await tabsEnv({ tasks: [
+    task("o", { title: "Oldest", updatedAt: "2026-09-01T10:00:00Z", createdAt: "2026-09-01T10:00:00Z" }),
+    task("n", { title: "Newest", updatedAt: "2026-09-29T10:00:00Z", createdAt: "2026-09-29T10:00:00Z" }),
+    task("m", { title: "Middle", updatedAt: Date.parse("2026-09-15T10:00:00Z") }),
+  ] });
+  await openAdd(t);
+  const sessionsAt = rowsOf(t).indexOf("Newest");
+  assert.deepEqual(rowsOf(t).slice(sessionsAt, sessionsAt + 3), ["Newest", "Middle", "Oldest"]);
+});

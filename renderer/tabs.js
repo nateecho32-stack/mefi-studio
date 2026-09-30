@@ -344,12 +344,23 @@
       return true;
     } catch { return false; }
   }
+  // What the strip can ask the app itself about a page that has views of its own: Build's view of Home (a task, the chat, or the
+  // new-task page) when its sessions layout is the one showing, and which section of the Agents sheet is open.
+  const DEFAULT_READERS = new Map([
+    ["workspace", () => {
+      const builder = window.MefiBuilder;
+      if (!builder || !safe(() => builder.active?.(), false)) return null;
+      const view = safe(() => builder.view?.(), null);
+      return view && view.view ? { view: view.view, taskId: view.taskId, projectId: projectId() } : null;
+    }],
+    ["agents", () => safe(() => window.MefiAgents?.params?.(), null)],
+  ]);
   function readPlace() {
     const nav = window.MefiNav;
     let id = safe(() => nav?.current?.(), null);
     if (typeof id !== "string" || !id) return null;
     if (id === "vibe") id = "workspace";
-    const reader = S.readers.get(id);
+    const reader = S.readers.get(id) || DEFAULT_READERS.get(id);
     const params = (reader ? safe(reader, null) : null) ?? S.lastSeen[id] ?? {};
     const route = place(id, params);
     return route ? { route, key: keyOf(route) } : null;
@@ -602,6 +613,8 @@
     const fresh = S.needsKnown ? [...ids].filter((id) => !S.needsKnown.has(id)) : [];
     S.needs = ids;
     if (arrived) S.needsKnown = new Set(ids);
+    // A badge says what is being asked now: once the question is answered (here, in the Inbox, anywhere) the tab stops asking.
+    if (arrived) for (const rec of S.tabs) if ((rec.badge || rec.fresh) && isSession(rec.route) && !ids.has(rec.route.params.taskId)) { rec.badge = false; rec.fresh = false; }
     for (const id of fresh) safe(() => onNeeds(sessionRoute(id, data.projectId)));
     pruneMissing();
     scheduleRender();
@@ -1578,20 +1591,16 @@
     S.listeners.add(callback);
     return () => S.listeners.delete(callback);
   }
+  // A page that can say which of its own views is showing says so here: fn() answers the params that make a place (the same
+  // ones open() takes), or null when it cannot tell. The answer replaces what the strip knows by itself; the function this
+  // returns takes it back and the page is read the way it was before. (A page that announces its views through mefi:nav
+  // needs none.)
   function reader(id, read2) {
     if (typeof id !== "string" || !id) return () => {};
-    if (typeof read2 === "function") S.readers.set(id === "vibe" ? "workspace" : id, read2); else S.readers.delete(id);
-    return () => S.readers.delete(id);
+    const key = id === "vibe" ? "workspace" : id;
+    if (typeof read2 === "function") S.readers.set(key, read2); else S.readers.delete(key);
+    return () => { if (S.readers.get(key) === read2) S.readers.delete(key); };
   }
-  // Build's own view of Home (a task, the chat, or the new-task page) when its sessions layout is the one showing.
-  S.readers.set("workspace", () => {
-    const builder = window.MefiBuilder;
-    if (!builder || !safe(() => builder.active?.(), false)) return null;
-    const view = safe(() => builder.view?.(), null);
-    return view && view.view ? { view: view.view, taskId: view.taskId, projectId: projectId() } : null;
-  });
-  // The agents page is one sheet with sections: which one is open is the page's own to say.
-  S.readers.set("agents", () => safe(() => window.MefiAgents?.params?.(), null));
   function show(on = true) {
     S.shown = on !== false;
     if (ui.root) ui.root.hidden = !S.shown;
