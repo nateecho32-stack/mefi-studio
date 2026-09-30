@@ -895,6 +895,35 @@ failed process stays an error and cannot produce briefing requests.
   `git worktree prune`. Every action names a folder from the list and the host
   only acts on a folder git lists for the open project. `npm run worktrees`
   prints the same table (`--json` for other tools); it changes nothing.
+- **A task's usage and its time limit** (the **Usage & limit** fold in a task's
+  Evidence; `renderer/tasks.js`, `scripts/task-metrics.cjs`,
+  `scripts/task-cap.cjs`, main.cjs "Task time limit"). `task:metrics` answers
+  for one task: this attempt's time, tokens and cost, and the whole task's
+  (every attempt, and its delegated sub-tasks), read from what Studio already
+  keeps: the executor ledger for which runs there were, how long each took and
+  which route ran it, Studio's own call ledger by run id, and OpenCode's store
+  by session inside each attempt's time window (a session a retry reused does
+  not charge the retry its predecessor's turns). A route that reports nothing
+  says **Not reported**: Claude Code, Codex, Grok and Antigravity run as
+  builders print no token counts and no price, so their attempts carry a
+  measured time only; a plan or subscription that prices no call is
+  **Unpriced**, never free; a store that could not be read is **Unavailable**,
+  and the whole task's total says when it is partial. The read happens when the
+  fold is opened. **Stop an attempt after N min** is a per-task limit
+  (`task.capMinutes`, 5 to 240 in steps of 5, 25 when unset, set by
+  `tasks:cap`). The timer is `min(EXECUTOR_KILL_MS, limit)`, so a limit can
+  shorten an attempt but not lengthen it: a longer number is kept and the fold
+  says the app's own 25 minutes wins. A run that reaches its limit is stopped
+  through the owner's stop path (`stopExecutorJob`): its progress is saved,
+  nothing is charged to the card or counted against the model, no failure is
+  asked about, the ledger row says `stopped` with `limitMinutes`, and the card
+  waits for you (an `ownerHold` of kind `limit`, worded "Stopped at the time
+  limit", not "Stopped by you") instead of starting the same attempt again;
+  "work on it" or "try again" carries on. Changing the limit while a run is
+  live moves its timer at once, and the worker is told a budget of 60% of its
+  limit (15 of the default 25 minutes, as before). The hard kill with no limit
+  in force is still a failure. `MEFI_STUDIO_NO_TASK_CAP=1` switches limits off
+  (the old single 25 minute failure kill, `tasks:cap` refuses, the fold says so).
 
 ### Command center and the node tree
 

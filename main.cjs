@@ -16783,7 +16783,7 @@ async function spawnNextJob(options) {
   // code is not the success signal; that sentinel line coming back is.
   const tail = executorCore.promptTail({
     runId: entry.id, taskId: job.ref?.id, depth: entry.depth, maxDepth: EXECUTOR_MAX_DEPTH, maxHandoffs: EXECUTOR_MAX_HANDOFFS,
-    nextMark: EXECUTOR_NEXT_MARK, callMark: EXECUTOR_CALL_MARK, budgetMinutes: EXECUTOR_BUDGET_MINUTES, doneMark: EXECUTOR_DONE_MARK,
+    nextMark: EXECUTOR_NEXT_MARK, callMark: EXECUTOR_CALL_MARK, budgetMinutes: typeof taskToldBudget === "function" ? taskToldBudget(job.ref, entry) : EXECUTOR_BUDGET_MINUTES, doneMark: EXECUTOR_DONE_MARK,
     protocol: brainHints.protocol,
   });
   // Push memory: the builder gets a compiled mini-index of what the studio
@@ -17274,8 +17274,9 @@ async function spawnNextJob(options) {
       runVerificationJobs().catch((error) => logLine(`[autopilot] verification run failed: ${error.message}`));
     } else if (userStop) {
       // The operator's stop is not the task's or the infrastructure's fault.
-      pushAutopilotHistory("stopped", `stopped on request: ${job.title} · progress saved`);
-      logLine(`[autopilot] stopped on request: "${assistantClip(job.title, 60)}" — progress saved`);
+      const limited = Number.isFinite(entry.capStop?.minutes) ? entry.capStop.minutes : null;
+      pushAutopilotHistory("stopped", limited === null ? `stopped on request: ${job.title} · progress saved` : `stopped at its ${limited} min time limit: ${job.title} · progress saved, nothing failed`);
+      logLine(limited === null ? `[autopilot] stopped on request: "${assistantClip(job.title, 60)}" — progress saved` : `[autopilot] stopped at the time limit (${limited} min): "${assistantClip(job.title, 60)}" — progress saved`);
     } else {
       // The last output line usually says what actually went wrong — keep it
       // so the feed and the chat reply can name the issue, not just "exit 1".
@@ -17573,11 +17574,24 @@ async function spawnNextJob(options) {
       inputError = String(error.message ?? error);
       logLine(`[autopilot] ${label} prompt input failed: ${inputError}`);
     });
-    if (timeout) clearTimeout(timeout);
-    timeout = setTimeout(() => {
-      stop("killed after budget", false, "budget");
-    }, EXECUTOR_KILL_MS);
-    timeout.unref?.();
+    // The attempt's time limit: min(EXECUTOR_KILL_MS, the task's own limit)
+    // (scripts/task-cap.cjs, the "Task time limit" block). A limit that ends the
+    // run stops it through the owner's stop path, so nothing is charged; the
+    // hard kill alone, or a limit switched off, ends it as a failure as before.
+    // A `tasks:cap` change while the run is live re-arms the timer (armLimit).
+    const limitedAt = Date.now();
+    const armLimit = () => {
+      if (timeout) clearTimeout(timeout);
+      const limit = typeof taskRunLimit === "function" ? taskRunLimit(job.ref, entry) : null;
+      const wait = Math.max(0, (limit ? limit.ms : EXECUTOR_KILL_MS) - (Date.now() - limitedAt));
+      timeout = setTimeout(() => {
+        if (limit?.byCap && typeof stopAtTimeLimit === "function" && stopAtTimeLimit(entry, limit.minutes)) return;
+        stop("killed after budget", false, "budget");
+      }, wait);
+      timeout.unref?.();
+    };
+    entry.armLimit = () => { if (current()) armLimit(); };
+    armLimit();
     if (startWatchdog) clearTimeout(startWatchdog);
     // Wedged-start watchdog. A run that has neither registered an OpenCode
     // session nor printed a line within the start budget is not slow, it is
@@ -19048,6 +19062,118 @@ async function stopTaskRun({ taskId, reason = "stopped by you" } = {}) {
   emitAutopilot();
   return { ok: true, stopped, held: true };
 }
+
+// ---- Task time limit: "Stop an attempt after N minutes" (docs/architecture.md, "A task's usage and its time limit") ----
+// One attempt of one task runs for at most min(EXECUTOR_KILL_MS, the task's own
+// limit, task.capMinutes: 5 to 240 in steps of 5, 25 when unset). The arithmetic
+// and the words are scripts/task-cap.cjs (pure). When the LIMIT is what ends the
+// run, spawnNextJob's timer calls stopAtTimeLimit, which is the owner's Stop
+// (stopExecutorJob): the checkpoint is saved, nothing is charged to the card or
+// to the model, no failure is asked about, and the card waits for the owner (an
+// ownerHold of kind "limit", so it does not simply start the same attempt again).
+// The hard kill with no limit in force is a failure as it always was.
+// MEFI_STUDIO_NO_TASK_CAP=1 switches all of it off. Loaded on first use.
+let taskCapLoaded = null;
+const taskCapLib = () => (taskCapLoaded ??= require("./scripts/task-cap.cjs"));
+const taskCapOn = () => taskCapLib().enabled(process.env);
+// What one attempt may take, { ms, byCap, minutes }; null when the limit cannot be worked out, which
+// leaves the hard kill exactly as it was (a side path never fails a run). `entry` carries a limit the
+// owner changed while it ran.
+function taskRunLimit(task, entry = null) {
+  try {
+    const lib = taskCapLib();
+    const capMinutes = Number.isFinite(entry?.capOverride) ? entry.capOverride : null;
+    return lib.limit({ killMs: EXECUTOR_KILL_MS, task, capMinutes, on: lib.enabled(process.env) });
+  } catch (error) {
+    logLine(`[autopilot] time limit unavailable, the hard kill applies: ${String(error?.message ?? error).slice(0, 160)}`);
+    return null;
+  }
+}
+// The minutes the worker is told it has: the usual budget, scaled down for a shorter limit.
+function taskToldBudget(task, entry = null) {
+  try {
+    const lib = taskCapLib();
+    return lib.enabled(process.env) ? lib.toldBudgetMinutes(EXECUTOR_BUDGET_MINUTES, taskRunLimit(task, entry).ms) : EXECUTOR_BUDGET_MINUTES;
+  } catch { return EXECUTOR_BUDGET_MINUTES; }
+}
+// The limit ends the run: stop it as the owner's Stop would. True when the stop was issued.
+function stopAtTimeLimit(job, minutes) {
+  if (!job || (job.finished && !job.settlementPending)) return false;
+  try {
+    const lib = taskCapLib();
+    const hold = lib.holdFor({ minutes, now: Date.now() });
+    const before = { ownerHold: job.ownerHold, capStop: job.capStop, stopUser: job.stopUser };
+    job.ownerHold = hold;
+    job.capStop = { minutes, at: hold.at };
+    delete job.resumeRequested;
+    if (!stopExecutorJob(job, lib.stopReason(minutes))) {
+      // Not stopped: the hard kill that follows is the failure it always was, so leave no trace of a stop.
+      job.ownerHold = before.ownerHold;
+      job.capStop = before.capStop;
+      if (before.stopUser === undefined) delete job.stopUser; else job.stopUser = before.stopUser;
+      return false;
+    }
+    assistantLog("control", `stopped the worker on ${job.taskId ?? job.id} at its ${minutes} min time limit — progress saved · held for you`);
+    logLine(`[autopilot] time limit: "${assistantClip(job.title, 60)}" stopped after ${minutes} min, progress saved`);
+    emitAutopilot();
+    return true;
+  } catch (error) {
+    logLine(`[autopilot] time limit stop failed, falling back to the hard kill: ${String(error?.message ?? error).slice(0, 160)}`);
+    return false;
+  }
+}
+// tasks:cap { taskId, minutes, projectId }: the owner's limit for this task's attempts.
+async function setTaskCap({ taskId, minutes, projectId } = {}) {
+  const error = taskProjectError(projectId);
+  if (error) return { ok: false, error };
+  const lib = taskCapLib();
+  if (!lib.enabled(process.env)) return { ok: false, off: true, error: "Time limits are switched off on this PC (MEFI_STUDIO_NO_TASK_CAP)." };
+  const wanted = lib.normalize(minutes);
+  if (!wanted.ok) return { ok: false, error: wanted.error };
+  const result = await mutateBoard((board) => {
+    const task = board.tasks.find((item) => item?.id === taskId);
+    if (!task) return { ok: false, error: "Task not found in this project." };
+    if (task.capMinutes !== wanted.minutes) {
+      task.capMinutes = wanted.minutes;
+      task.updatedAt = Date.now();
+    }
+    return { ok: true };
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  // An attempt that is running follows the new limit now: a shorter one may stop it at once.
+  for (const job of autopilot.jobs ?? []) {
+    if (job.taskId !== taskId || job.finished || typeof job.armLimit !== "function") continue;
+    job.capOverride = wanted.minutes;
+    job.armLimit();
+  }
+  const limit = taskRunLimit({ capMinutes: wanted.minutes });
+  return { ok: true, taskId, minutes: wanted.minutes, clamped: wanted.clamped, effectiveMinutes: limit.minutes, ceilingMinutes: lib.ceilingMinutes(EXECUTOR_KILL_MS), task: taskView(result.tasks.find((task) => task.id === taskId)) };
+}
+// task:metrics { taskId, projectId }: this attempt's and the whole task's time, tokens and cost.
+// The two ledgers usage:task reads (Studio's calls, OpenCode's turns) plus the executor ledger.
+async function readTaskMetrics({ taskId, projectId } = {}) {
+  const error = taskProjectError(projectId);
+  if (error) return { ok: false, error };
+  try {
+    const now = Date.now();
+    const eyes = await getEyes();
+    const tasks = await eyes.readJson(TASKS_PATH, []);
+    const task = tasks.find((row) => row?.id === taskId);
+    if (!task) return { ok: false, error: "That task is not on the board." };
+    let ledger = "";
+    try { ledger = await readFile(projectDataPath(EXECUTOR_LOG_PATH), "utf8"); } catch (failure) { if (failure?.code !== "ENOENT") throw failure; }
+    let usageRows = null, storeOk = false;
+    try {
+      const [state, store] = await Promise.all([modelPerformanceStore().read(), codingSessionUsage(now)]);
+      usageRows = mergeLedgers({ studio: state.observations, store: store.rows });
+      storeOk = store.ok === true;
+    } catch (failure) { logLine(`[usage] task metrics could not read the usage ledgers: ${String(failure?.message ?? failure).slice(0, 160)}`); }
+    return require("./scripts/task-metrics.cjs").taskMetrics({ task, tasks, ledger, usageRows, storeOk, now, killMs: EXECUTOR_KILL_MS, capOn: taskCapOn(), projectId: projects.current().id });
+  } catch (failure) {
+    return { ok: false, error: `The usage could not be read: ${String(failure?.message ?? failure).slice(0, 160)}` };
+  }
+}
+// ---- end of the task time limit ---------------------------------------------------
 
 async function stopAllAgents({ reason = "stopped by user", pauseAssistant = true, pauseExecutor = true, waitMs = 20000 } = {}) {
   if (stopAllPromise) return stopAllPromise;
@@ -22285,6 +22411,9 @@ function registerIpc() {
   ipcMain.handle("tasks:restore", (_event, payload) => restoreTaskContext(payload ?? {}));
   ipcMain.handle("tasks:delete", (_event, payload) => deleteTask(payload ?? {}));
   ipcMain.handle("tasks:action", (_event, payload) => taskAction(payload ?? {}));
+  // The task's time limit (the "Task time limit" block): tasks:cap sets it, task:metrics reads what the task took.
+  ipcMain.handle("tasks:cap", (_event, payload) => setTaskCap(payload ?? {}));
+  ipcMain.handle("task:metrics", (_event, payload) => readTaskMetrics(payload ?? {}));
   ipcMain.handle("tasks:save", async (_event, tasks) => {
     return saveTaskEdits(tasks);
   });

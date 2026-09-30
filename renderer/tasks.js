@@ -55,6 +55,7 @@
   const dependencyDrafts = new Map();
   const contextReads = new Map();
   const attemptReads = new Map();
+  const usageReads = new Map();
   const detailExpanded = new Map();
   const detailViews = new Map();
   const projectSelections = new Map();
@@ -1448,6 +1449,138 @@
     (detailPanels.evidence || els.detail).append(fold);
   }
 
+  // Usage and the time limit (main.cjs "Task time limit"): this attempt and the
+  // whole task, in numbers the ledgers really hold, and "Stop an attempt after N
+  // min". A route that reports nothing says "Not reported", never a zero. Read
+  // only while the fold is open, so a task nobody looks at costs no ledger read.
+  const durationText = (seconds) => {
+    if (!Number.isFinite(seconds)) return "Not recorded";
+    if (seconds < 90) return `${Math.max(0, Math.round(seconds))} s`;
+    const minutes = Math.round(seconds / 60);
+    return minutes < 90 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, "0")} min`;
+  };
+  const countText = (value) => (value >= 1000 ? `${(value / 1000).toFixed(1)}k` : String(Math.round(value)));
+  const usageTokens = (tokens, plural = "") => {
+    if (!tokens) return "Not recorded";
+    if (tokens.state === "not-reported") return "Not reported";
+    if (tokens.state === "unavailable") return "Unavailable right now";
+    if (tokens.state !== "reported") return "None recorded yet";
+    const parts = [];
+    if (Number.isFinite(tokens.input)) parts.push(`${countText(tokens.input)} in`);
+    if (Number.isFinite(tokens.output)) parts.push(`${countText(tokens.output)} out`);
+    if (tokens.cacheRead > 0) parts.push(`${countText(tokens.cacheRead)} cached`);
+    if (!parts.length && Number.isFinite(tokens.total)) parts.push(`${countText(tokens.total)} total`);
+    return parts.join(" · ") + (tokens.partial ? `${plural} + some not reported` : "");
+  };
+  const usageCost = (cost) => {
+    if (!cost) return "Not recorded";
+    if (cost.state === "not-reported") return "Not reported";
+    if (cost.state === "unavailable") return "Unavailable right now";
+    const calls = (count) => `${count} call${count === 1 ? "" : "s"}`;
+    if (cost.state === "unpriced") return `Unpriced · ${calls(cost.unpricedCalls || 0)}`;
+    if (cost.state !== "reported") return "None recorded yet";
+    const usd = Number(cost.usd) || 0;
+    const money = `$${usd.toFixed(usd > 0 && usd < 0.01 ? 4 : 2)}`;
+    return `${money}${cost.unpricedCalls > 0 ? ` + ${cost.unpricedCalls} unpriced call${cost.unpricedCalls === 1 ? "" : "s"}` : ""}${cost.partial ? " + some not reported" : ""}`;
+  };
+  function requestTaskUsage(task) {
+    const api = window.mefiStudio;
+    if (!api?.taskMetrics) return null;
+    const key = taskKey(task);
+    const signature = JSON.stringify([task.runId, task.status, task.lastAttempt?.at, task.lastAttempt?.runId, task.updatedAt, task.capMinutes, taskRevision]);
+    const prior = usageReads.get(key);
+    if (prior?.signature === signature) return prior;
+    const record = { signature, loading: !prior?.report, report: prior?.report || null, error: "" };
+    usageReads.set(key, record);
+    const epoch = projectEpoch;
+    Promise.resolve(api.taskMetrics({ taskId: task.id, projectId: task.projectId || state.backlog?.projectId }))
+      .then((result) => { if (!result?.ok) throw new Error(result?.error || "The usage could not be read."); record.report = result; record.error = ""; })
+      .catch((error) => { record.error = error.message || "The usage could not be read."; })
+      .finally(() => {
+        if (usageReads.get(key) !== record || epoch !== projectEpoch) return;
+        record.loading = false;
+        if (!els.overlay.hidden && taskKey(selectedTask()) === key) refreshDetail();
+      });
+    return record;
+  }
+  async function changeTaskCap(task, minutes) {
+    const api = window.mefiStudio, key = taskKey(task);
+    if (!api?.tasksCap) return;
+    try {
+      const result = await api.tasksCap({ taskId: task.id, minutes, projectId: task.projectId || state.backlog?.projectId });
+      if (!result?.ok) throw new Error(result?.error || "The limit could not be saved.");
+      usageReads.delete(key);
+      if (!els.overlay.hidden && taskKey(selectedTask()) === key) refreshDetail();
+    } catch (error) { window.MefiToast?.(error.message || "The limit could not be saved.", "bad"); }
+  }
+  function renderTaskUsage(task) {
+    if (!window.mefiStudio?.taskMetrics) return;
+    const key = taskKey(task);
+    const fold = detailFold(task, "usage", "Usage & limit");
+    // Opening the fold is what asks for the read (after the fold's own toggle has run).
+    fold.children[0].addEventListener("click", () => { if (fold.open && !usageReads.get(key)?.report) { requestTaskUsage(task); refreshDetail(); } });
+    const read = fold.open ? requestTaskUsage(task) : usageReads.get(key) || null;
+    const report = read?.report;
+    if (report?.cap?.enabled) fold.children[0].textContent = `Usage & limit · stops an attempt after ${report.cap.effectiveMinutes} min`;
+    const row = (label, value, tone) => {
+      const line = node("div", "task-usage-row", "");
+      line.append(node("span", "", label), Object.assign(node("b", "", value), tone ? { dataset: { tone } } : {}));
+      return line;
+    };
+    const card = (title, hint) => { const box = node("section", "task-usage-card", ""); box.append(node("h4", "", title)); if (hint) box.append(node("span", "task-usage-tag", hint)); return box; };
+    if (!report) {
+      fold.append(node("p", "task-context-hint", read?.loading ? "Reading the usage…" : read?.error || "Open this to read what the task took."));
+      (detailPanels.evidence || els.detail).append(fold);
+      return;
+    }
+    const attempt = report.attempt;
+    const now = attempt ? card("This attempt", attempt.live ? "Running now" : attempt.stoppedAtLimit ? "Stopped at the time limit" : "") : null;
+    if (attempt) {
+      const seconds = attempt.live && Number.isFinite(attempt.startedAt) ? (Date.now() - attempt.startedAt) / 1000 : attempt.seconds;
+      now.append(row("Time", durationText(seconds)), row("Tokens", usageTokens(attempt.tokens), attempt.tokens?.state === "not-reported" ? "dim" : ""), row("Cost", usageCost(attempt.cost), attempt.cost?.state === "not-reported" ? "dim" : ""));
+      if (attempt.tokens?.state === "not-reported") now.append(node("p", "task-context-hint", `${attempt.route?.label || "This builder"} does not report tokens or cost to Studio. Time is measured here.`));
+      fold.append(now);
+    } else fold.append(node("p", "task-context-hint", "No attempt of this task is recorded yet."));
+    const whole = report.task;
+    if (whole?.attempts) {
+      const all = card("Whole task", whole.subtasks ? `with ${whole.subtasks} sub-task${whole.subtasks === 1 ? "" : "s"}` : "");
+      const timeOnly = whole.tokens?.state === "not-reported" && whole.cost?.state === "not-reported";
+      all.append(row("Attempts", String(whole.attempts)), row("Time", durationText(whole.seconds) + (whole.secondsUnknown ? " + some not recorded" : "")));
+      if (timeOnly) all.append(row("Tokens and cost", "Time only", "dim"));
+      else all.append(row("Tokens", usageTokens(whole.tokens)), row("Cost", usageCost(whole.cost)));
+      fold.append(all);
+    }
+    const cap = report.cap;
+    if (cap) {
+      const limit = card("Limit", "");
+      if (!cap.enabled) limit.append(node("p", "task-context-hint", "Time limits are switched off on this PC, so an attempt runs until Studio's own 25 minute limit."));
+      else {
+        const line = node("div", "task-usage-limit", "");
+        const words = node("div", "", "");
+        words.append(node("b", "", "Stop an attempt after"), node("span", "", "Saves progress and does not count as a failure."));
+        const stepper = node("div", "task-usage-stepper", "");
+        const step = (label, aria, delta) => {
+          const button = node("button", "ghost mini", label);
+          button.type = "button"; button.setAttribute("aria-label", aria); button.dataset.taskAction = delta < 0 ? "cap-shorter" : "cap-longer";
+          const next = Math.min(cap.ceilingMinutes, Math.max(cap.min, cap.effectiveMinutes + delta * cap.step));
+          button.disabled = next === cap.effectiveMinutes;
+          button.addEventListener("click", () => changeTaskCap(task, next));
+          return button;
+        };
+        stepper.append(step("−", "Shorter", -1), node("b", "", `${cap.effectiveMinutes} min`), step("+", "Longer", 1));
+        line.append(words, stepper);
+        limit.append(line);
+        if (cap.raised) limit.append(node("p", "task-context-hint", `This task asks for ${cap.minutes} min, but Studio ends every attempt at ${cap.ceilingMinutes} min at the latest.`));
+        else if (cap.effectiveMinutes >= cap.ceilingMinutes) limit.append(node("p", "task-context-hint", `${cap.ceilingMinutes} min is the longest Studio lets one attempt run.`));
+      }
+      fold.append(limit);
+    }
+    const reasons = Array.isArray(report.coverage?.reasons) ? report.coverage.reasons : [];
+    for (const reason of reasons.slice(0, 4)) fold.append(node("p", "task-context-hint", reason));
+    if (read?.error) fold.append(node("p", "task-context-hint", read.error));
+    (detailPanels.evidence || els.detail).append(fold);
+  }
+
   async function appendTaskEntry(task, field, input) {
     const text = input.value.trim(), key = taskKey(task), draftKey = `${key}/${field}`;
     if (!text || entryPending.has(key)) return;
@@ -1716,6 +1849,7 @@
         entryList(task.remaining, (line) => Object.assign(document.createElement("li"), { textContent: String(line) }));
       }
     }
+    renderTaskUsage(task);
     renderTaskAttempts(task);
     if (!body.children.length) body.append(node("p", "muted", "Evidence appears here after a worker runs and completion checks finish."));
     body = detailPanels.history;

@@ -483,6 +483,13 @@ function transition(prev, cur, state, fresh = false) {
   return null;
 }
 
+// A run that reached its per-task time limit (task-cap.cjs) was stopped by Studio, not by the owner:
+// nothing failed, its progress is saved, and it waits for the owner's word.
+function limitStopText(name, hold) {
+  const minutes = Number.isFinite(Number(hold?.minutes)) ? ` (${Math.round(Number(hold.minutes))} min)` : "";
+  return `${name} reached its time limit${minutes} and was stopped — progress saved, nothing failed; it waits for you. Say "work on it" or "try again" to carry on.`;
+}
+
 function eventText(kind, task, prev, cur, state, now) {
   const name = `"${clip(task.title ?? cur.title, 60) || "Untitled task"}"`;
   const verification = plainObject(task.verification) ?? {};
@@ -507,6 +514,7 @@ function eventText(kind, task, prev, cur, state, now) {
     // Only the owner's stop waits for them; any other interruption (a restart,
     // a lost worker) picks up again by itself.
     case "stopped":
+      if (plainObject(task.ownerHold)?.kind === "limit") return limitStopText(name, task.ownerHold);
       return plainObject(task.ownerHold)
         ? `Stopped ${name} — progress saved; it waits for you. Say "work on it" or "try again" to resume.`
         : `${name} was interrupted; it resumes from its saved progress`;
@@ -518,6 +526,7 @@ function eventText(kind, task, prev, cur, state, now) {
       return `${name} is parked: ${(why || "it needs your review").replace(/[.\s]+$/, "")}. Say "try again" to re-arm it.`;
     }
     case "held": {
+      if (state.blockedBy === "owner" && plainObject(task.ownerHold)?.kind === "limit") return limitStopText(name, task.ownerHold);
       if (state.blockedBy === "owner") return `Stopped ${name}; it waits for you. Say "work on it" or "try again" to resume.`;
       const why = clip(plainObject(task.loopGuard)?.reason, 120) || "it kept repeating without verified progress";
       return `${name} is on hold: ${why.replace(/[.\s]+$/, "")}. Say "try again" to run it anyway.`;

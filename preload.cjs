@@ -196,6 +196,9 @@ const api = {
   tasksRestore: (payload) => ipcRenderer.invoke("tasks:restore", payload ?? {}),
   tasksDelete: (payload) => ipcRenderer.invoke("tasks:delete", payload ?? {}),
   tasksAction: (payload) => ipcRenderer.invoke("tasks:action", payload ?? {}),
+  // The task's Usage tab (main.cjs "Task time limit"): what it took, and Stop an attempt after N minutes.
+  taskMetrics: (payload) => ipcRenderer.invoke("task:metrics", { taskId: typeof payload?.taskId === "string" ? payload.taskId.slice(0, 200) : "", ...(typeof payload?.projectId === "string" ? { projectId: payload.projectId.slice(0, 200) } : {}) }),
+  tasksCap: (payload) => ipcRenderer.invoke("tasks:cap", { taskId: typeof payload?.taskId === "string" ? payload.taskId.slice(0, 200) : "", minutes: payload?.minutes, ...(typeof payload?.projectId === "string" ? { projectId: payload.projectId.slice(0, 200) } : {}) }),
   tasksSave: (tasks) => ipcRenderer.invoke("tasks:save", tasks),
   ideasList: () => ipcRenderer.invoke("ideas:list"),
   ideasSave: (ideas) => ipcRenderer.invoke("ideas:save", ideas),
