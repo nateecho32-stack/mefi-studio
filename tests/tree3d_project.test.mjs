@@ -204,3 +204,79 @@ test("a project switch reads fresh and a superseded load's late answer is droppe
   assert.ok(ids.includes("b1"), "the new folder stays on the rail");
   assert.ok(!ids.includes("a-late"), "the superseded load's answer is dropped");
 });
+
+// Sub-agent sessions (a session the store records with a parentId) hang under
+// the shown session that spawned them: the newest three busy in the last
+// hours, marked as children, with the rest counted on the parent. They stay
+// out of the session count and the hub's todo meter.
+test("sub-agent sessions hang under their shown parent, newest three, outside the counts", async () => {
+  const canvas = element("tree-canvas");
+  const gradient = { addColorStop() {} };
+  canvas.getContext = () => new Proxy({}, {
+    get: (target, prop) => (prop in target ? target[prop] : () => gradient),
+    set: (target, prop, value) => { target[prop] = value; return true; },
+  });
+  const stats = element("tree-stats");
+  const registry = { "tree-canvas": canvas, "tree-rail": element("tree-rail"), "tree-stats": stats };
+  const listeners = {};
+  const now = Date.now();
+  const minute = 60 * 1000;
+  const sessions = [
+    { id: "root", title: "Root session", timeUpdated: now, parentId: null },
+    ...[1, 2, 3, 4, 5].map((n) => ({ id: `child-${n}`, title: `Explore part ${n}`, timeUpdated: now - n * minute, parentId: "root" })),
+    { id: "child-old", title: "Yesterday's helper", timeUpdated: now - 30 * 60 * minute, parentId: "root" },
+    { id: "child-stray", title: "Helper of a session not shown", timeUpdated: now, parentId: "elsewhere" },
+  ];
+  const todos = [
+    { sessionId: "root", position: 0, content: "Plan", status: "completed" },
+    { sessionId: "child-1", position: 0, content: "Read the files", status: "in_progress" },
+    { sessionId: "child-2", position: 0, content: "Write the summary", status: "completed" },
+  ];
+  globalThis.window = {
+    addEventListener(type, fn) { (listeners[type] ??= []).push(fn); },
+    removeEventListener() {},
+    dispatchEvent(event) { for (const fn of listeners[event.type] ?? []) fn(event); return true; },
+    matchMedia: () => ({ matches: false }),
+    mefiStudio: {
+      eyesState: async () => ({ ok: true, sessions, todos }),
+      assistantState: async () => ({ ok: false }),
+      assistantFocus: () => null,
+      onCheckpoints: () => {},
+      onEyesActivity: () => {},
+      onAssistant: () => {},
+      eyesCheckpointsRead: async () => ({ checkpoints: {} }),
+    },
+  };
+  globalThis.document = {
+    hidden: false,
+    body: { classList: { contains: () => false } },
+    getElementById: (id) => registry[id] ?? null,
+    createElement: () => element(null),
+  };
+  globalThis.CustomEvent = class CustomEvent { constructor(type, options) { this.type = type; this.detail = options?.detail; } };
+  globalThis.localStorage = { getItem: () => null, setItem: () => {} };
+  globalThis.requestAnimationFrame = () => 0;
+
+  await import(new URL("../renderer/tree3d.js?child-sessions-test", import.meta.url).href);
+  const tree = globalThis.window.MefiTree;
+  await tree.init();
+  await tree.ready();
+  const { nodes, edges } = tree.snapshot();
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const children = nodes.filter((node) => node.child);
+  assert.deepEqual(children.map((node) => node.id), ["child-1", "child-2", "child-3"], "the newest three, newest first");
+  for (const child of children) {
+    assert.equal(child.kind, "session");
+    assert.equal(child.parentSessionId, "root");
+    assert.ok(child.r < byId.get("root").r, "a sub-agent is a smaller orb than its parent");
+    const index = nodes.indexOf(child);
+    assert.ok(edges.some((edge) => nodes[edge.a]?.id === "root" && edge.b === index), `${child.id} hangs from its parent`);
+  }
+  assert.equal(byId.get("child-1").state, "active", "a sub-agent with a todo in progress is working");
+  assert.equal(byId.get("child-2").state, "done", "one whose todos all closed is done");
+  assert.equal(byId.get("root").childMore, 2, "the parent counts the two it does not draw");
+  assert.ok(!byId.has("child-old") && !byId.has("child-stray"), "old helpers and helpers of sessions off the rail stay off");
+  assert.ok(!nodes.some((node) => node.kind === "todo" && node.sessionId?.startsWith("child-")), "sub-agents draw no todo nodes");
+  assert.match(stats.textContent, /^1 session · 1 task · 100% done/, "the counts are the shown sessions' own");
+  assert.equal(byId.get("__assistant__").progress, 1, "the hub meter stays a number");
+});

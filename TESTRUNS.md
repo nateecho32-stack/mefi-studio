@@ -35,6 +35,28 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-28 (evening) - Sub-agents, the return path and the finish beats on the Command tree
+
+Gated in the worktree `C:\wt\cmd-kids` (branch `claude/command-children`,
+based on `origin/main` `60c4abb`, which already has the finish beats from
+`7450479`). It covers:
+- sub-agent sessions on the tree and in Command: `tree3d.js` children, the
+  `idle.js` `childSession` life cycle, "+n sub-agents", and session counts
+  without them in `idle.js` and `nav.js`;
+- a delegated part flying home into its parent task (`fx.delegated`);
+- the node style's `done`/`absorb` beats over every Command flight home.
+
+- `npm run check` and `npm run audit`: clean.
+- `npm test` (8.6 min): the Node suites ran 4496 tests (4490 pass, 6
+  skipped, 0 fail), and the Python contracts and the normalized-path lock
+  pass.
+- An earlier full run on `79d892d` failed three `task_groups` tests with
+  `delegatedParentOf is not defined`. That suite slices `takeTasks` out of
+  `idle.js` on its own, so the helper now lives inside `takeTasks`.
+- A seeded offscreen preview of Command at 1920x1080 in Prism and Sigil
+  showed the sub-agents under their session, "+1 sub-agent", and the beats
+  as one sub-agent and one delegated part flew home. No renderer errors.
+
 ## 2026-09-28 (afternoon) - Every node style's finish beats, and Agent brain list/shelf fixes
 
 Gated in an isolated worktree (`C:\wt\land-beats`, GitHub main `f85681b`,
@@ -584,32 +606,6 @@ files; opened ones reviewed before they can be kept).
   passed, 1 capability skip; Python contracts OK; normalized-path lock
   passed. Rebased onto aacf276 as d516312 with check and the booklet,
   first-install and vault UI suites passing again.
-
-## 2026-09-27 night - Restore the work the 16:57 merge dropped: full gate on dc85f68
-
-The 16:57 merge of GitHub main (65703a6) kept this PC's copy of 15 conflicted
-files whole and the next commit (7ba162c "fixes") reset the rest of the tree
-to it, so main lost 3e0e1e0..2dd1ff8 (Configuration and Habits, the other
-PC's bug hunt and CLI setup, sync hardening, Set up this PC, the companion
-pet and friend, first-time setup, still-video sampling and a lighter Command
-over video). dc85f68 redoes that merge (local fcc3343) on top of 1dd9518,
-keeping 0.4.4, the free Void collection, the public docs, the MEFI work, the
-setup helper and the media player work. Music & video keeps main's docked
-player (music.js, music.css, media-window.js, media-browser.js and their
-tests as on 1dd9518), because the other PC is still developing it; the
-morning's floating-player redesign from 95bd61c is not carried over.
-
-- `npm run build-booklet`, `npm run check` (179 targets, 368 specs) and
-  `npm run audit` (zero findings): PASS. Focused music, media, scene,
-  browser, booklet, onboarding and scroll-hint suites: 160/160.
-- `npm test` in a private worktree: Node parallel stage 4172 tests, 4168
-  passed, 4 skipped, 0 failures; Electron stage 42 tests, 41 passed, 1
-  skipped; `eyes_toggle_electron` 1/1; Python contracts 248 tests OK (1 skip);
-  normalized-path lock passed. `occlusion_probe` failed "visible probe lag
-  should be ~0, got 108.6ms (samples=[108.6,0,0])" in the serialized stage
-  on an unattended desktop and solo gave 1 pass plus the capability skip.
-  Earlier runs of the same restore on 052a1ec and 937e244 differed only in
-  those two timing-sensitive fixtures.
 
 ## Read Before Any Tests
 

@@ -6,6 +6,32 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-27 night - Restore the work the 16:57 merge dropped: full gate on dc85f68
+
+The 16:57 merge of GitHub main (65703a6) kept this PC's copy of 15 conflicted
+files whole and the next commit (7ba162c "fixes") reset the rest of the tree
+to it, so main lost 3e0e1e0..2dd1ff8 (Configuration and Habits, the other
+PC's bug hunt and CLI setup, sync hardening, Set up this PC, the companion
+pet and friend, first-time setup, still-video sampling and a lighter Command
+over video). dc85f68 redoes that merge (local fcc3343) on top of 1dd9518,
+keeping 0.4.4, the free Void collection, the public docs, the MEFI work, the
+setup helper and the media player work. Music & video keeps main's docked
+player (music.js, music.css, media-window.js, media-browser.js and their
+tests as on 1dd9518), because the other PC is still developing it; the
+morning's floating-player redesign from 95bd61c is not carried over.
+
+- `npm run build-booklet`, `npm run check` (179 targets, 368 specs) and
+  `npm run audit` (zero findings): PASS. Focused music, media, scene,
+  browser, booklet, onboarding and scroll-hint suites: 160/160.
+- `npm test` in a private worktree: Node parallel stage 4172 tests, 4168
+  passed, 4 skipped, 0 failures; Electron stage 42 tests, 41 passed, 1
+  skipped; `eyes_toggle_electron` 1/1; Python contracts 248 tests OK (1 skip);
+  normalized-path lock passed. `occlusion_probe` failed "visible probe lag
+  should be ~0, got 108.6ms (samples=[108.6,0,0])" in the serialized stage
+  on an unattended desktop and solo gave 1 pass plus the capability skip.
+  Earlier runs of the same restore on 052a1ec and 937e244 differed only in
+  those two timing-sensitive fixtures.
+
 ## 2026-09-27 late - Media player controls and native browser usability
 
 Validated media changes in `93ee12e`, rebased on the incoming setup-helper and

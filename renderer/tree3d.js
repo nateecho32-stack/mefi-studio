@@ -230,6 +230,10 @@
     return luminance > 140 ? "#0b1016" : "#f3f6fa";
   }
   const AGENT_RING = 34;
+  // Sub-agent sessions hang under the shown session that spawned them: at
+  // most this many per parent, and only ones busy within this window.
+  const CHILD_SESSION_LIMIT = 3;
+  const CHILD_SESSION_WINDOW_MS = 1000 * 60 * 60 * 6;
   // The last store answer, so a roster change can rebuild without a re-read.
   const cache = { sessions: [], todos: [], fallback: null };
   let sessionSlots = new Map();
@@ -1008,6 +1012,7 @@
     nodes.push(rootNode);
     const golden = Math.PI * (3 - Math.sqrt(5));
     sessionSlots = stableNodeSlots(roots.map((session) => session.id), sessionSlots);
+    const rootNodes = new Map();
     roots.forEach((session) => {
       const index = sessionSlots.get(session.id);
       const baseAngle = index * golden;
@@ -1029,6 +1034,7 @@
         todos: [],
       };
       nodes.push(node);
+      rootNodes.set(session.id, node);
       edges.push({ a: rootNode, b: node });
       const allTodos = (todosBySession.get(session.id) ?? []).sort((a, b) => a.position - b.position);
       const sessionTodos = allTodos.slice(0, maxTodos);
@@ -1074,6 +1080,53 @@
       node.todoTotal = allTodos.length;
       node.todoDone = done;
     });
+    // Sub-agent sessions (the store records the session that spawned each as
+    // its parentId) hang under a shown, live parent: the newest few busy in
+    // the last hours, smaller, with no todo nodes of their own (their state
+    // still comes from their todos). The Command view pops each out of its
+    // parent and flies it home when it leaves (idle.js, childSession).
+    const childrenOf = new Map();
+    for (const session of sessions) {
+      const parent = session.parentId ? rootNodes.get(session.parentId) : null;
+      if (!parent || parent.stale || !(session.timeUpdated > now - CHILD_SESSION_WINDOW_MS)) continue;
+      if (!childrenOf.has(parent.id)) childrenOf.set(parent.id, []);
+      childrenOf.get(parent.id).push(session);
+    }
+    if (childrenOf.size) {
+      const childTodos = new Map([...childrenOf.values()].flat().map((session) => [session.id, []]));
+      for (const todo of todos) childTodos.get(todo.sessionId)?.push(todo);
+      for (const [parentId, list] of childrenOf) {
+        const parent = rootNodes.get(parentId);
+        list.sort((a, b) => (b.timeUpdated ?? 0) - (a.timeUpdated ?? 0) || String(a.id).localeCompare(String(b.id)));
+        const shown = list.slice(0, CHILD_SESSION_LIMIT);
+        if (list.length > shown.length) parent.childMore = list.length - shown.length;
+        shown.forEach((session, index) => {
+          const own = childTodos.get(session.id) ?? [];
+          const closed = own.filter(isClosedTodo).length;
+          const spread = (index - (shown.length - 1) / 2) * 30;
+          const child = {
+            id: session.id,
+            kind: "session",
+            child: true,
+            parentSessionId: parentId,
+            label: session.title || session.id,
+            agent: session.agent,
+            model: session.model?.id,
+            updated: session.timeUpdated,
+            stale: false,
+            x: parent.x + spread,
+            y: parent.y + 78,
+            z: parent.z + spread * 0.4,
+            state: own.some((todo) => todo.status === "in_progress") ? "active" : own.length && closed === own.length ? "done" : "session",
+            progress: own.length ? closed / own.length : 0,
+            r: 4.2,
+            todos: [],
+          };
+          nodes.push(child);
+          edges.push({ a: parent, b: child, sessionId: parentId });
+        });
+      }
+    }
     if (foldedIds.length) {
       const foldAngle = roots.length * golden;
       const foldedNode = {
@@ -1169,7 +1222,7 @@
     let taskTotal = 0;
     let doneCount = 0;
     for (const node of nodes) {
-      if (node.kind !== "session" || node.stale) continue;
+      if (node.kind !== "session" || node.stale || node.child) continue;
       taskTotal += node.todoTotal;
       doneCount += node.todoDone;
     }
@@ -2408,6 +2461,8 @@
           status: node.status ?? null,
           state: node.state,
           stale: node.stale ?? false,
+          ...(node.child ? { child: true, parentSessionId: node.parentSessionId } : {}),
+          ...(node.childMore ? { childMore: node.childMore } : {}),
           count: node.count ?? null,
           sessionIds: node.sessionIds ?? null,
           titles: node.titles ?? null,
