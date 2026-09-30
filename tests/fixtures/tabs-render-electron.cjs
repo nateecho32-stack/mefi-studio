@@ -317,7 +317,9 @@ app.whenReady().then(async () => {
   await run("document.documentElement.style.removeProperty('--d-tab'); window.dispatchEvent(new Event('mefi:appearance'));");
   await until("window.MefiNav.layout.used('tabs') === 38", "and taking the token away gives the 38px back");
   assert.equal(booted.strip.y + booted.strip.h <= booted.usable.top + 0.5, true, "the page starts under the strip");
-  assert.deepEqual(booted.items.map((item) => [item.title, item.pinned, item.home, item.active]), [["Home", true, true, true]]);
+  // Home's tab is titled Today where the Today module is part of the window (Vibe's home in the 0.5 layout).
+  const homeTitle = await run("return window.MefiToday ? 'Today' : 'Home';");
+  assert.deepEqual(booted.items.map((item) => [item.title, item.pinned, item.home, item.active]), [[homeTitle, true, true, true]]);
   assert.deepEqual(booted.missing, [], "every glyph the strip draws is in the sprite");
   const panel = await run("const main = window.MefiShell.region('main'); const tab = document.querySelector('.ts-tab[aria-selected=\"true\"]'); return { tag: main.tagName, role: main.getAttribute('role'), labelledby: main.getAttribute('aria-labelledby') === tab.id, controls: tab.getAttribute('aria-controls') === main.id };");
   // A main area that has a meaning of its own (a <main>, or another role) is left alone: then the tabs name no panel, and that is said.
@@ -553,7 +555,7 @@ app.whenReady().then(async () => {
   await key("W", ["control"]);
   await sleep(150);
   assert.equal(await run("return window.MefiTabs.active() === 'home' && window.MefiTabs.list().length > 0;"), true, "Ctrl+W on Home closes nothing");
-  assert.equal(await run("return document.querySelector('.ts-live').textContent;"), "Home stays open");
+  assert.equal(await run("return document.querySelector('.ts-live').textContent;"), `${homeTitle} stays open`);
 
   // Ctrl+K and Ctrl+, are not the strip's; and Escape in a menu leaves the page under it alone
   await key("K", ["control"]);
