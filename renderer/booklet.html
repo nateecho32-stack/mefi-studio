@@ -10782,6 +10782,10 @@ html[data-home-layout="sessions"] #workspace-layer .builder-home[hidden], html[d
 html[data-home-layout="sessions"] #workspace-layer .ws-composer { order: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 10px 10px; border-radius: 18px; overflow: visible; }
 html[data-home-layout="sessions"] #workspace-layer .ws-composer :is(.ws-compose-top, .ws-compose-bottom, .file-input-tools, .builder-compose-tools) { display: contents; }
 html[data-home-layout="sessions"] #workspace-layer .ws-composer textarea { order: 0; flex: 1 1 100%; min-height: 70px; max-height: 280px; padding: 16px 8px 6px; font-size: 14.5px; }
+/* A short window (the smallest one, at 150% zoom, is about 373 px tall) keeps the whole composer on screen: the words box is one line high, and a person can still drag it taller. */
+@media (max-height: 480px) {
+  html[data-home-layout="sessions"] #workspace-layer .ws-composer textarea { height: 44px; min-height: 44px; padding: 10px 8px 4px; }
+}
 html[data-home-layout="sessions"] #workspace-layer .ws-composer .file-input-tools > button { order: 1; }
 html[data-home-layout="sessions"] #workspace-layer .ws-composer .ws-modes { order: 2; }
 html[data-home-layout="sessions"] #workspace-layer .ws-composer .builder-autonomy { order: 3; position: relative; }

@@ -149,7 +149,10 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   count beside the branch, the hints under the composer, the labels on panes, the
   "you" line at the foot of the menu and a few other notes were 10.5 to 11.5 px.
   A real-window test now opens that layout at five window sizes and checks the
-  task list, the branch mark, the composer's one-line row and this size.
+  task list, the branch mark, the composer's one-line row and this size. In a
+  very short window (the smallest one at 150% zoom) the words box is one line
+  high, so the whole message box, with its Attach picture button and Send, stays
+  on screen; drag the box taller when there is room.
 - **Tree brightness is much lighter on the graphics card.** Command, Home and
   Vibe paint brightened nodes and lines once per pass instead of once per shape
   (on the owner's laptop at 200%: Vibe 4.6 to 42 fps, Command 8.8 to 36, Home 4.1

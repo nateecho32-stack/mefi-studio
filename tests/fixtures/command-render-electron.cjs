@@ -1013,8 +1013,12 @@ app.whenReady().then(async () => {
   const newWorkLayout = async (id, label) => {
     const layout = await run(`
       const input=document.getElementById(${JSON.stringify(id)}),label=input.closest('.new-work-toggle'),track=label.querySelector('.track');
+      // A toast is a passing notice that a narrow window lets cross the page; this asks about the page, so it is set aside while the point is tested.
+      const toasts=document.getElementById('toast-host'),toastDisplay=toasts?toasts.style.display:'';
+      if(toasts)toasts.style.display='none';
       const box=label.getBoundingClientRect(),trackBox=track.getBoundingClientRect(),style=getComputedStyle(label);
       const hit=document.elementFromPoint(trackBox.x+trackBox.width/2,trackBox.y+trackBox.height/2);
+      if(toasts)toasts.style.display=toastDisplay;
       return {id:input.id,label:${JSON.stringify(label)},width:innerWidth,height:innerHeight,scroll:document.documentElement.scrollWidth,box:box.toJSON(),track:trackBox.toJSON(),text:label.textContent.trim(),visible:style.display!=='none'&&style.visibility!=='hidden',reachable:hit===label||label.contains(hit),covered:hit===label||label.contains(hit)?'':(hit?hit.tagName+'#'+hit.id+'.'+String(hit.className)+' '+JSON.stringify(hit.getBoundingClientRect()):'nothing')};
     `);
     report.newWork.layouts.push(layout);

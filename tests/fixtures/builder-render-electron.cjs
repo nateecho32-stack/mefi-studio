@@ -173,7 +173,8 @@ app.whenReady().then(async () => {
     await sleep(200);
     const label = `${width}x${height}@${zoom}`;
     const m = await run(measure);
-    report.layouts.push({ label, layout: m.layout, pageOverflow: m.pageOverflow, oneLine: m.oneLine, rows: m.rows.length, rail: m.rail });
+    if (zoom !== 1) await capture(`builder-home-${width}-zoom.png`);
+    report.layouts.push({ label, layout: m.layout, pageOverflow: m.pageOverflow, oneLine: m.oneLine, rows: m.rows.length, rail: m.rail, composer: m.composer });
     assert.equal(m.layout, "sessions", `${label}: the layout stays on`);
     assert.equal(m.pageOverflow, false, `the page overflows at ${label}`);
     assert.equal(m.scrollbarWidth, "none", `native bars stay hidden at ${label}`);
