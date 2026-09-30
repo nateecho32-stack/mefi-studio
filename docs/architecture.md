@@ -610,7 +610,8 @@ settings and per-model work-kind summaries for the shared controls.
   scout, and builders on Grok or Antigravity), reading each file fresh for the
   request, at most 8,000 characters of it, and once when CLAUDE.md repeats
   AGENTS.md. Claude Code, Codex and OpenCode builders read those two files
-  themselves, so they get the owner's text only. The card has its own Save and
+  themselves, so they get the owner's text only. The files go to the models as
+  instructions, so they are switched on per project, off until the owner does. The card has its own Save and
   Discard (`agents:save` with `action: "rules"`, so the rest of a half-edited
   team is not applied), counts a draft the way the prompt does (headings plus
   text, four characters a token) and lists who reads what from the same table

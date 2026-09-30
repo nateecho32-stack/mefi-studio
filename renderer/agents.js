@@ -583,7 +583,7 @@
     const discard = risky("Discard", () => discardRules(), "Discard your rules edits?"); discard.id = "agents-rules-discard";
     const actions = node("div", "agents-actions agents-rules-actions"); actions.append(save, discard);
     const readers = node("div", "agents-rules-readers"); readers.id = "agents-rules-readers"; const list = node("div", "agents-rules-reader-list"); readers.append(node("h4", "", "Who reads what"), list);
-    const fine = node("p", "muted agents-rules-fine", "Claude Code, Codex and OpenCode already read AGENTS.md and CLAUDE.md on their own, so Studio only adds your text for them. A running task keeps the rules it started with; a file is read again for each new request.");
+    const fine = node("p", "muted agents-rules-fine", "Claude Code, Codex and OpenCode already read AGENTS.md and CLAUDE.md on their own, so Studio only adds your text for them. A running task keeps the rules it started with; a file is read again for each new request. Switch the files on only for a project you trust: their text goes to the models as instructions.");
     box.append(state, scopeNote, area, count, warn, files, total, actions, readers, fine);
     Object.assign(rulesUi, { box, state, scopeNote, area, chars, tokens, warn, switches, sum, save, discard, readers, list, flash: null });
     return box;
