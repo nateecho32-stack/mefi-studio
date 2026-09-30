@@ -317,7 +317,7 @@ test("the channels are project-gated, the bridge carries the pictures, and the r
   assert.match(source, /extras\.notes\(\)/);
   const gate = source.match(/const APP_WIDE_PREFIXES = \[([^\]]*)\]/)[1];
   assert.ok(!/assistant:/.test(gate), "the chat is the open project's, so a project switch waits");
-  const preload = readFileSync(new URL("../preload.cjs", import.meta.url), "utf8");
+  const preload = readFileSync(new URL("../preload.cjs", import.meta.url), "utf8").replace(/\r\n/g, "\n");
   assert.match(preload, /assistantMessage: \(text, projectId, context, images\) => ipcRenderer\.invoke\("assistant:message", \{ text, projectId, context, images \}\)/);
   assert.match(preload, /assistantImage: \(payload\) => ipcRenderer\.invoke\("assistant:image"/);
   assert.match(preload, /data: payload\?\.data, \.\.\.\(payload\?\.probe === true \? \{ probe: true \} : \{\}\) \}\),\n  assistantImageRemove:/, "the box's question whether pictures are on reaches the host");
