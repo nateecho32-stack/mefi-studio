@@ -205,12 +205,15 @@ app.whenReady().then(async () => {
     await settle();
   };
   // The middle of an element, after checking that it is the element that is there: a pointer acts on what is under it.
-  const centre = async (id) => {
-    const at = await run(`const box = document.getElementById(${JSON.stringify(id)}).getBoundingClientRect(), x = box.left + box.width / 2, y = box.top + box.height / 2, top = document.elementFromPoint(x, y); return [x, y, Boolean(top && top.closest("#" + ${JSON.stringify(id)})), top ? (top.id || top.className || top.tagName) : null];`);
-    assert.ok(at[2], `${id} can be reached by a pointer: ${at[3]} is over its middle (${Math.round(at[0])}, ${Math.round(at[1])})`);
+  const centreOf = async (selector) => {
+    const at = await run(`const node = document.querySelector(${JSON.stringify(selector)}); if (!node) return null; const box = node.getBoundingClientRect(), x = box.left + box.width / 2, y = box.top + box.height / 2, top = document.elementFromPoint(x, y); return [x, y, Boolean(top && (top === node || node.contains(top))), top ? (top.id || top.className || top.tagName) : null];`);
+    assert.ok(at, `${selector} is on the page`);
+    assert.ok(at[2], `${selector} can be reached by a pointer: ${at[3]} is over its middle (${Math.round(at[0])}, ${Math.round(at[1])})`);
     return at.slice(0, 2);
   };
-  const click = async (id) => { const [x, y] = await centre(id); await pointer("mouseMoved", x, y, { button: "none", buttons: 0 }); await pointer("mousePressed", x, y); await pointer("mouseReleased", x, y); await settle(); };
+  const centre = (id) => centreOf(`#${id}`);
+  const clickAt = async (selector) => { const [x, y] = await centreOf(selector); await pointer("mouseMoved", x, y, { button: "none", buttons: 0 }); await pointer("mousePressed", x, y); await pointer("mouseReleased", x, y); await settle(); };
+  const click = (id) => clickAt(`#${id}`);
   // A drag with pointer capture: down on the splitter, move in steps, up somewhere else.
   const drag = async (id, dx) => {
     const [x, y] = await centre(id);
@@ -443,6 +446,40 @@ app.whenReady().then(async () => {
     const ids = order.map((one) => one.id);
     assert.ok(ids.indexOf("shell-list-toggle") < ids.indexOf("shell-search") && ids.indexOf("shell-search") < ids.indexOf("shell-inspector-toggle"), `the bar is walked left to right (${JSON.stringify(ids)})`);
     report.interactions.tab = ids;
+  }
+
+  // ============ 4c. the bar, with a real pointer ============
+  {
+    const columns = async () => { const state = await p(); return [state.boxes.list?.[2] ?? 0, state.boxes.inspector?.[2] ?? 0]; };
+    assert.deepEqual(await columns(), [280, 388]);
+    await click("shell-list-toggle");
+    assert.deepEqual(await columns(), [0, 388], "a click on the list toggle closes the list");
+    await click("shell-list-toggle");
+    assert.deepEqual(await columns(), [280, 388], "and another opens it");
+    await click("shell-inspector-toggle");
+    assert.deepEqual(await columns(), [280, 0], "the inspector toggle closes the inspector");
+    await click("shell-inspector-toggle");
+    assert.deepEqual(await columns(), [280, 388]);
+    // The mode switch by its two buttons.
+    await clickAt('#shell-top .mode-switch [data-ui-mode="vibe"]');
+    await until("document.body.classList.contains('vibe-active')", "Vibe's Home, by a click");
+    assert.equal((await p()).mode, "vibe");
+    await clickAt('#shell-top .mode-switch [data-ui-mode="build"]');
+    await until("document.body.classList.contains('workspace-active')", "Build's Home, by a click");
+    assert.equal((await p()).mode, "build");
+    // Search opens the palette and Escape closes it.
+    await click("shell-search");
+    await until("window.MefiNav.get('palette').isOpen()", "the palette is open");
+    await key("Escape");
+    await until("!window.MefiNav.get('palette').isOpen()", "the palette is closed");
+    // The need pill takes you to what needs you (here Command's Ask rail: no inbox module is part of this frame).
+    await click("shell-need");
+    await until("window.MefiNav.current() === 'command'", "the pill opened Command");
+    await clear(); await run("await window.MefiNav.go('workspace');"); await settle();
+    assert.equal((await p()).frameOn, "on");
+    report.interactions.pointer = "ok";
+    // Switching mode re-reads the menu's saved pin (Studio keeps it open by default in a wide window): the sections below want it closed.
+    await setup({ mode: "build", rail: "closed" });
   }
 
   // ============ 5. keys on the splitters, a real drag, the double-click, the saved widths ============
