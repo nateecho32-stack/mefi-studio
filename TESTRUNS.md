@@ -35,6 +35,59 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-29 - GitHub link: the Git chip, Save and push, Publish and the Quiet-card launch screen
+
+The chip (`renderer/git-sync.js`), its host (`scripts/git-link.cjs`,
+`git-actions.cjs`, `git-host.cjs`, wired in `main.cjs` and `preload.cjs`), New
+app's GitHub choice and the Quiet-card launch screen. Built and gated in an
+isolated worktree (`C:\wt\ghl`, branch `gh-link`) off `origin/main`, merged
+with `origin/main` twice: at ab206be (CHANGELOG and `build-booklet.mjs`
+conflicted, both resolved by keeping both sides) and at 147710d (only
+TESTRUNS conflicted: main's TESTRUNS and archive were taken as the base and
+this row appended through the helper).
+
+- `npm run check` (0.4.5, 200 targets, 411 specs, 16 stylesheets, and
+  `MERGE-CSS-RESOLVED` on the first merge) and `npm run audit` (0 findings):
+  PASS on the final merged tree. The auditor now also reads
+  `scripts/git-host.cjs` for the events main hands it to send (`git:state`).
+  The repo's lost-work guard over `origin/main..HEAD`: 0 findings.
+- `npm test` on the final merged tree: Node suites 4855 tests, 4848 pass, 0
+  fail, 7 skipped (parallel stage); the serialized Electron lane 48 tests, 46
+  pass, 1 skipped, 1 fail: `unified_studio_render` ("holding an arrow continues
+  scrolling", a key-repeat timing check at
+  `unified-studio-render-electron.cjs:297`), which passes alone (208 s on a
+  loaded machine) and passed in the previous full run of the same code, so it
+  is the known load flake, not this change. Python contracts 248 tests OK (1
+  skipped, 86 s); normalized-path lock PASS. The previous full run, on the tree
+  before the second merge, was clean: Node 4834 tests, 4829 pass, 0 fail.
+- New suites: `git_link` 59, `git_actions` 65 (real git in temp folders, a local
+  bare repository as "GitHub" and a fake `gh`), `git_host` 53, `git_link_host`
+  11, `git_sync_ui` 60, and `startup_screen` (rewritten deliberately: the two
+  open buttons became one Open and a Start agents switch), `vibe_panels` 48.
+  Nothing in them reaches GitHub or an account.
+- Independent reviews (three reviewers who had not written the code, host only)
+  found and fixed 41 defects, each with a regression test that fails without the
+  fix. The serious ones: a save followed a Windows junction out of the project
+  and committed a file from outside it; a branch named `-f` became a force push;
+  `scrub()` was quadratic and took 8 s on 80 KB, enough to freeze the main
+  process; key scanning was skipped for changed files when `diff.noprefix` was
+  set and for files over 1 MiB; a sync-backed step queued behind another writer
+  ran on a project opened meanwhile; an unset commit identity and a throwing
+  project check failed open. A later pass found the renderer never sent the
+  project id the host guards on, and its model sanitiser dropped the id the host
+  adds; both are fixed and pinned.
+- Left open on purpose (noted in the reviews): a file edited between the scan and
+  the commit is not re-scanned; a repository's own `.git/config` runs for reads
+  as it already does for `sync.mjs`; files over 1 MiB are warned about, not read
+  for keys; the glance has no merge/rebase-in-progress flag (Save and Publish do
+  refuse there); in-app device-code sign-in is not built (the setup window is
+  polled instead). Publishing has never been run against real GitHub: the first
+  real one should be a throwaway project.
+- Real-app look, not only fakes: the built booklet was opened in offscreen
+  Electron at 1920x1080 with a fake bridge whose chip models come from the real
+  `describe()`: the launch card (four projects with chips, 600x560 too), the chip
+  and its popover on Vibe's home and on Build's section bar.
+
 ## 2026-09-29 - Codex Security fixes for five validated findings
 
 Remote task admission and promotion now retain the approval boundary. PIN
@@ -685,33 +738,6 @@ Gated in the detached-style worktree C:\wt\multi-acct on the rebased commit
   tops out on the main login and runs again at once on the second).
 - Updated pins: `test_mefi_studio_routing.py` now asserts
   `claudeCompletion(system, user, route.model, login)` and `cliAccountTurn`.
-
-## 2026-09-28 - Cowork file claims between PCs; keep this PC up to date
-
-A cowork room linked to the project (settings.cowork) carries live file
-claims through the rooms hub: the dispatch's write-lock step also claims the
-run's files there, and claimWork treats other PCs' exclusive claims as
-in-flight jobs, so a pick on those files defers. Claims are renewed every
-minute and held until this PC's next push (or 30 minutes) when the run did
-its work. Keep this PC up to date asks GitHub once a minute (sync.mjs
-remoteMoved) and fast-forwards when nothing is in the way and no builder
-runs. Rooms say moderators can read them; Set up this PC lists what links
-this PC; a hub naming its studioAppId fills the link app ID.
-
-- `npm run build-booklet` (no change), `npm run check` (187 targets, 382
-  specs) and `npm run audit` (zero findings): PASS.
-- New suites: cowork (claim paths, overlap, leases, held jobs, settings),
-  cowork_host (claim before a run, defer on conflict, hub silent in 5 s
-  never holds work, release and hold until push, renew and drop gone),
-  sync_follow (remoteMoved and the follow pull's conditions). Additions to
-  hub_rooms (claims calls and frame, a refusal's conflict list), hub_host
-  (studioAppId fill), rooms_ui (privacy line, cowork link and claims),
-  pc_sync_ui (follow switch, Linking this PC) and sync_host (follow timer,
-  release on push).
-- `npm test` in a private worktree, exit 0: Node parallel stage 4273 tests,
-  4268 passed, 5 skipped, 0 failures; Electron stage 42 tests, 41 passed, 1
-  skipped; `eyes_toggle_electron` 1/1; `occlusion_probe` 1 passed, 1
-  capability skip; Python contracts OK (248); normalized-path lock passed.
 
 ## Read Before Any Tests
 

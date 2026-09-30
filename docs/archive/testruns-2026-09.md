@@ -6,6 +6,33 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-28 - Cowork file claims between PCs; keep this PC up to date
+
+A cowork room linked to the project (settings.cowork) carries live file
+claims through the rooms hub: the dispatch's write-lock step also claims the
+run's files there, and claimWork treats other PCs' exclusive claims as
+in-flight jobs, so a pick on those files defers. Claims are renewed every
+minute and held until this PC's next push (or 30 minutes) when the run did
+its work. Keep this PC up to date asks GitHub once a minute (sync.mjs
+remoteMoved) and fast-forwards when nothing is in the way and no builder
+runs. Rooms say moderators can read them; Set up this PC lists what links
+this PC; a hub naming its studioAppId fills the link app ID.
+
+- `npm run build-booklet` (no change), `npm run check` (187 targets, 382
+  specs) and `npm run audit` (zero findings): PASS.
+- New suites: cowork (claim paths, overlap, leases, held jobs, settings),
+  cowork_host (claim before a run, defer on conflict, hub silent in 5 s
+  never holds work, release and hold until push, renew and drop gone),
+  sync_follow (remoteMoved and the follow pull's conditions). Additions to
+  hub_rooms (claims calls and frame, a refusal's conflict list), hub_host
+  (studioAppId fill), rooms_ui (privacy line, cowork link and claims),
+  pc_sync_ui (follow switch, Linking this PC) and sync_host (follow timer,
+  release on push).
+- `npm test` in a private worktree, exit 0: Node parallel stage 4273 tests,
+  4268 passed, 5 skipped, 0 failures; Electron stage 42 tests, 41 passed, 1
+  skipped; `eyes_toggle_electron` 1/1; `occlusion_probe` 1 passed, 1
+  capability skip; Python contracts OK (248); normalized-path lock passed.
+
 ## 2026-09-28 - Discord linking without environment variables; vault kept in step
 
 Settings › Community › Connection details saves the Mefi Studio Link
