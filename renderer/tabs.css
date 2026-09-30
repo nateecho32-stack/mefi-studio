@@ -13,6 +13,8 @@
 /* ---- the strip ---- */
 .ts-strip { position: relative; display: flex; align-items: center; gap: 4px; box-sizing: border-box; width: 100%; height: var(--ts-h); min-width: 0; padding: 0 8px; background: var(--surface-page, var(--bg)); border-bottom: 1px solid var(--hairline); color: var(--muted); font: 450 var(--ts-fs)/1.2 var(--font-ui); }
 .ts-strip[hidden] { display: none; }
+/* The height the strip asks its row for, measured (renderer/tabs.js stripHeight): as tall as the token, whatever the row allows. */
+.ts-strip .ts-probe { position: absolute; left: 0; top: 0; width: 0; height: var(--ts-h); visibility: hidden; pointer-events: none; }
 .ts-list { position: relative; display: flex; align-items: center; gap: 3px; flex: 0 1 auto; min-width: 0; height: 100%; padding: 0 2px; overflow: hidden; }
 .ts-item { position: relative; display: flex; align-items: center; flex: 0 1 auto; min-width: 132px; max-width: 290px; height: calc(var(--ts-h) - 10px); border-radius: 9px; touch-action: none; color: var(--muted); transition: background var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out); }
 .ts-item[hidden] { display: none; }

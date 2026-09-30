@@ -718,7 +718,7 @@
   }
 
   // ---- the strip -----------------------------------------------------------------------------------
-  const ui = { menuSig: "", root: null, list: null, more: null, menu: null, add: null, gap: null, suggest: null, suggestText: null, cfg: null, live: null, handle: null, items: new Map(), frame: 0, stale: false, pop: null, hidden: [], observer: null, resizeObserver: null, drag: null, panel: null, region: null };
+  const ui = { menuSig: "", root: null, probe: null, list: null, more: null, menu: null, add: null, gap: null, suggest: null, suggestText: null, cfg: null, live: null, handle: null, items: new Map(), frame: 0, stale: false, pop: null, hidden: [], observer: null, resizeObserver: null, drag: null, panel: null, region: null };
   function build() {
     const root = el("div", "ts-strip");
     root.id = "mefi-tabs";
@@ -751,8 +751,12 @@
     cfg.append(glyph("g-sliders") || el("span", "", "…"));
     const live = el("span", "ts-live");
     live.setAttribute("role", "status"); live.setAttribute("aria-live", "polite");
-    root.append(list, more, menu, add, gap, suggest, cfg, live);
-    Object.assign(ui, { root, list, more, menu, add, gap, suggest, suggestText, cfg, live });
+    // A hidden box as tall as the strip's own height token: the height the strip asks its row for, read without asking the strip itself
+    // (see stripHeight).
+    const probe = el("span", "ts-probe");
+    probe.setAttribute("aria-hidden", "true");
+    root.append(list, more, menu, add, gap, suggest, cfg, live, probe);
+    Object.assign(ui, { root, probe, list, more, menu, add, gap, suggest, suggestText, cfg, live });
     list.addEventListener("click", onListClick);
     list.addEventListener("dblclick", onListDouble);
     list.addEventListener("auxclick", onListAux);
@@ -892,10 +896,12 @@
   function restTabStop() {
     for (const entry of ui.items.values()) entry.tab.tabIndex = entry.tab.getAttribute("aria-selected") === "true" ? 0 : -1;
   }
-  // The density token decides (--d-tab, SIZE's): read as the strip's own resolved height, which is right when the token is a calc() or
-  // a rem; else as the token's own number; else 38. Never outside the contract's 28 to 48.
+  // The density token decides (--d-tab, SIZE's): read as the height of a probe that takes the strip's own height token, which is right when
+  // the token is a calc() or a rem; else as the token's own number; else 38. Never outside the contract's 28 to 48. The strip's own used
+  // height is not asked: in the frame its row is whatever the strip last asked for, so asking the strip could only give that back, and it
+  // could never grow again (Compact, then Comfortable, would leave it compact).
   function stripHeight() {
-    const own = ui.root && ui.root.isConnected !== false && !ui.root.hidden ? safe(() => parseFloat(getComputedStyle(ui.root).height), NaN) : NaN;
+    const own = ui.probe && ui.root && ui.root.isConnected !== false && !ui.root.hidden ? safe(() => parseFloat(getComputedStyle(ui.probe).height), NaN) : NaN;
     const token = safe(() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--d-tab")), NaN);
     const value = Number.isFinite(own) && own > 0 ? own : token;
     return clamp(Math.round(Number.isFinite(value) && value > 0 ? value : HEIGHT.fallback), HEIGHT.min, HEIGHT.max);

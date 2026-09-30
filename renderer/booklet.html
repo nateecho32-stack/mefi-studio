@@ -12098,6 +12098,8 @@ html[data-motion="off"][data-frame] .shell-column[data-state="drawer"], html[dat
 /* ---- the strip ---- */
 .ts-strip { position: relative; display: flex; align-items: center; gap: 4px; box-sizing: border-box; width: 100%; height: var(--ts-h); min-width: 0; padding: 0 8px; background: var(--surface-page, var(--bg)); border-bottom: 1px solid var(--hairline); color: var(--muted); font: 450 var(--ts-fs)/1.2 var(--font-ui); }
 .ts-strip[hidden] { display: none; }
+/* The height the strip asks its row for, measured (renderer/tabs.js stripHeight): as tall as the token, whatever the row allows. */
+.ts-strip .ts-probe { position: absolute; left: 0; top: 0; width: 0; height: var(--ts-h); visibility: hidden; pointer-events: none; }
 .ts-list { position: relative; display: flex; align-items: center; gap: 3px; flex: 0 1 auto; min-width: 0; height: 100%; padding: 0 2px; overflow: hidden; }
 .ts-item { position: relative; display: flex; align-items: center; flex: 0 1 auto; min-width: 132px; max-width: 290px; height: calc(var(--ts-h) - 10px); border-radius: 9px; touch-action: none; color: var(--muted); transition: background var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out); }
 .ts-item[hidden] { display: none; }
@@ -93672,7 +93674,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
 
   // ---- the strip -----------------------------------------------------------------------------------
-  const ui = { menuSig: "", root: null, list: null, more: null, menu: null, add: null, gap: null, suggest: null, suggestText: null, cfg: null, live: null, handle: null, items: new Map(), frame: 0, stale: false, pop: null, hidden: [], observer: null, resizeObserver: null, drag: null, panel: null, region: null };
+  const ui = { menuSig: "", root: null, probe: null, list: null, more: null, menu: null, add: null, gap: null, suggest: null, suggestText: null, cfg: null, live: null, handle: null, items: new Map(), frame: 0, stale: false, pop: null, hidden: [], observer: null, resizeObserver: null, drag: null, panel: null, region: null };
   function build() {
     const root = el("div", "ts-strip");
     root.id = "mefi-tabs";
@@ -93705,8 +93707,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     cfg.append(glyph("g-sliders") || el("span", "", "…"));
     const live = el("span", "ts-live");
     live.setAttribute("role", "status"); live.setAttribute("aria-live", "polite");
-    root.append(list, more, menu, add, gap, suggest, cfg, live);
-    Object.assign(ui, { root, list, more, menu, add, gap, suggest, suggestText, cfg, live });
+    // A hidden box as tall as the strip's own height token: the height the strip asks its row for, read without asking the strip itself
+    // (see stripHeight).
+    const probe = el("span", "ts-probe");
+    probe.setAttribute("aria-hidden", "true");
+    root.append(list, more, menu, add, gap, suggest, cfg, live, probe);
+    Object.assign(ui, { root, probe, list, more, menu, add, gap, suggest, suggestText, cfg, live });
     list.addEventListener("click", onListClick);
     list.addEventListener("dblclick", onListDouble);
     list.addEventListener("auxclick", onListAux);
@@ -93846,10 +93852,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   function restTabStop() {
     for (const entry of ui.items.values()) entry.tab.tabIndex = entry.tab.getAttribute("aria-selected") === "true" ? 0 : -1;
   }
-  // The density token decides (--d-tab, SIZE's): read as the strip's own resolved height, which is right when the token is a calc() or
-  // a rem; else as the token's own number; else 38. Never outside the contract's 28 to 48.
+  // The density token decides (--d-tab, SIZE's): read as the height of a probe that takes the strip's own height token, which is right when
+  // the token is a calc() or a rem; else as the token's own number; else 38. Never outside the contract's 28 to 48. The strip's own used
+  // height is not asked: in the frame its row is whatever the strip last asked for, so asking the strip could only give that back, and it
+  // could never grow again (Compact, then Comfortable, would leave it compact).
   function stripHeight() {
-    const own = ui.root && ui.root.isConnected !== false && !ui.root.hidden ? safe(() => parseFloat(getComputedStyle(ui.root).height), NaN) : NaN;
+    const own = ui.probe && ui.root && ui.root.isConnected !== false && !ui.root.hidden ? safe(() => parseFloat(getComputedStyle(ui.probe).height), NaN) : NaN;
     const token = safe(() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--d-tab")), NaN);
     const value = Number.isFinite(own) && own > 0 ? own : token;
     return clamp(Math.round(Number.isFinite(value) && value > 0 ? value : HEIGHT.fallback), HEIGHT.min, HEIGHT.max);
