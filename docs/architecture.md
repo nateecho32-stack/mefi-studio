@@ -2374,10 +2374,14 @@ never disagree. Nothing is drawn unless the layout is on and a shell is there.
   leaves Home as it is; `?sessions=on` wins for one launch. With the layout off
   nothing of this is drawn, listened to, stored or asked of the host.
 
-Tests: `tests/sessions_list.test.mjs`, `tests/sessions_thread.test.mjs` and
-`tests/sessions_inspector.test.mjs` run the real builder.js in the shared fake DOM
-(`tests/fixtures/sessions-env.mjs`); `tests/sessions_render.test.mjs` runs the lot
-in a real window at five sizes with a stand-in for the shell's regions.
+Tests: `tests/sessions_list.test.mjs`, `tests/sessions_thread.test.mjs`,
+`tests/sessions_inspector.test.mjs` and `tests/sessions_edges.test.mjs` (the host's
+pushes, the clock tick, the page's signals, refusals and failures, and the keys
+that need real focus) run the real builder.js in the shared fake DOM
+(`tests/fixtures/sessions-env.mjs`); `tests/builder_kit.test.mjs` and
+`tests/review_panels.test.mjs` pin what builder.js and review.js hand the panels;
+`tests/sessions_render.test.mjs` runs the lot in a real window at five sizes with
+a stand-in for the shell's regions.
 
 **Known limits.** The panels depend on the shell to place them and to fold them into
 drawers below 900 CSS px; "See the changes" asks the shell to open a closed

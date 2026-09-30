@@ -75,6 +75,12 @@ test("finished work shows twelve rows and offers twenty-five more at a time; a g
   assert.equal(again.all("list", ".sx-row").filter((node) => node.dataset.tone === "done").length, 0, "the next launch keeps it folded");
 });
 
+test("motion is opt-in: every animation and transition in the stylesheet sits inside prefers-reduced-motion: no-preference and yields to data-motion=off", () => {
+  const moving = css.split(/\r?\n/).filter((line) => /(^|[\s{;])(animation|transition)\s*:/.test(line));
+  assert.ok(moving.length >= 3, "there is motion to check: the pulse, the fade and the chevron");
+  for (const line of moving) assert.match(line, /^@media \(prefers-reduced-motion: no-preference\) \{ html:not\(\[data-motion="off"\]\) /, `not gated: ${line.trim()}`);
+});
+
 test("every line of a row is drawn, and what a row says follows html[data-detail] in the stylesheet: titles, then status, then everything", async () => {
   const a = await open({ worktrees: { state: () => ({ list: { repo: true, rows: [{ kind: "run", branch: "mefi/tags", task: { taskId: "working" } }] } }), summary: () => ({ repo: true, tasks: ["working"] }), peek: () => Promise.resolve() } });
   await a.settle();

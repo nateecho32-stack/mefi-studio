@@ -395,8 +395,8 @@ test("before and after shots of an attempt show in the thread on one frame, read
   assert.deepEqual(media.querySelectorAll(".sx-compare img").map((img) => img.getAttribute("src")), [shot("before", 1).dataUrl, shot("after", 1).dataUrl], "a link or a file path is never loaded as a shot");
   assert.equal(media.querySelector(".sx-card-head b").textContent, "Before and after");
   assert.equal(a.api.of("tasksEvidence").length, 1, "read once");
-  a.env.emit("mefi:workspace-state"); await a.settle(3); a.env.emit("mefi:workspace-state"); await a.settle(3);
-  assert.equal(a.api.of("tasksEvidence").length, 1, "and not again while the attempt is the same");
+  a.S.refresh(); await a.settle(3); a.S.refresh(); await a.settle(3);
+  assert.equal(a.api.of("tasksEvidence").length, 1, "and not again while the attempt is the same, even when the thread is drawn from scratch");
   assert.ok(media.querySelector(".sx-compare").style["--ratio"].includes("1280 / 800"), "the frame has the shot's own shape");
   // Only one shot: shown alone, named for what it is.
   const one = await withShots([shot("after", 2)]);
@@ -415,7 +415,7 @@ test("the comparison's position is the person's, kept for the task, and reachabl
   assert.equal(range.type, "range"); assert.equal(range.value, "50"); assert.equal(range.getAttribute("aria-label"), "Compare before and after");
   range.value = "20"; await range.trigger("input");
   assert.equal(a.one("main", ".sx-compare").style["--pos"], "20%"); assert.match(range.getAttribute("aria-valuetext"), /20% of the width shows before/);
-  a.env.emit("mefi:workspace-state"); a.S.select("t1", { route: false }); await a.settle(4);
+  a.S.refresh(); a.S.select("t1", { route: false }); await a.settle(4);
   assert.equal(a.one("main", ".sx-cmp-range").value, "20", "it is where it was left when the thread is drawn again");
 });
 

@@ -41,9 +41,9 @@ function bridge(seed = {}) {
 }
 
 /** builder.js loaded into a classic-layout page: the way the v2 panels find it. */
-async function app({ tasks = [], stages = {}, questions = [], running = [], messages = [], backlog = null, preview = null, api = bridge() } = {}) {
+async function app({ tasks = [], stages = {}, questions = [], running = [], messages = [], backlog = null, preview = null, api = bridge(), search = "", panes = false } = {}) {
   for (const rows of [tasks, questions, running, messages]) rows.forEach(deepFreeze);
-  const env = createEnv({ storage: new Map(), now: NOW });
+  const env = createEnv({ storage: new Map(), now: NOW, search });
   createPage(env);
   const calls = { go: [], toasts: [], refresh: 0, started: [] };
   const data = { projectId: "p1", project: { id: "p1", name: "Snake trial" }, projects: [], tasks, ideas: [], assistant: { messages, questions }, status: { running }, backlog, preview, mode: "work", pending: false };
@@ -54,6 +54,7 @@ async function app({ tasks = [], stages = {}, questions = [], running = [], mess
   window.MefiTasks = { workflowSummary: (item) => summary(stages[item.id] ?? (item.status === "done" ? "done" : item.status === "active" ? "running" : item.status === "awaiting_verification" ? "review" : "ready")), shortTitle: (item) => String(item.title || item.prompt || "").slice(0, 60) };
   window.MefiToast = (message, kind) => calls.toasts.push([message, kind]);
   window.mefiStudio = api;
+  if (panes) await env.load("panes.js");
   await env.load("builder.js");
   return { env, window, B: window.MefiBuilder, calls, api, data, settle: async () => { env.flush(); await env.settle(); env.flush(); } };
 }
@@ -154,6 +155,15 @@ test("what a task offers is described once: the sessions layout's buttons and th
   assert.equal(drop("finished"), null, "not once it is done");
   assert.equal(drop("checking"), null, "not while it is being checked");
   assert.equal(a.B.dropSpec(task("claimed", { runId: "r9" }), undefined, a.data), null, "nor with a worker's claim on it");
+  for (const status of ["active", "running", "awaiting_verification", "verifying"]) assert.equal(a.B.dropSpec(task("held", { status }), undefined, a.data), null, `nor while its status is ${status}`);
+  assert.ok(a.B.dropSpec(task("idle", { status: "open" }), undefined, a.data), "an open task nobody holds can be dropped");
+  a.data.preview = { phase: "starting" };
+  assert.deepEqual(labels("finished"), ["Request a change"], "Open app only when the preview is ready");
+  a.data.preview = { phase: "ready" };
+  a.window.MefiAutonomy = { state: () => ({ level: "accept" }) };
+  assert.deepEqual(labels("approval"), ["Accept this task"], "where the permission mode accepts for you, the approval says so");
+  a.window.MefiAutonomy = { state: () => ({ level: "auto" }) };
+  assert.deepEqual(labels("approval"), ["Approve build"]);
   await drop("ready").call();
   assert.deepEqual(clean(a.api.calls.at(-1)), ["tasksAction", { taskId: "ready", projectId: "p1", action: "drop" }]);
 });
@@ -211,6 +221,18 @@ test("sendWords does what each purpose of the box means: a dated note, a questio
   assert.deepEqual(clean(a.api.calls.find((call) => call[0] === "tasksCreate")), ["tasksCreate", { title: "Change: Make it smaller", prompt: 'Follow-up to task "Add a sitemap" (t1).\n\nRequested change:\nMake it smaller\nand faster', projectId: "p1" }]);
   assert.deepEqual(clean(a.calls.toasts.at(-1)), ["Follow-up task created. It shows in the menu.", "good"]);
   assert.equal(a.calls.refresh, 3, "after each one the board is read again");
+});
+
+test("a note is kept to the last four thousand characters and the log to its last forty lines, so a long-lived task does not grow without end", async () => {
+  const logs = Array.from({ length: 45 }, (_, index) => ({ at: at(2, 9, index), kind: "log", text: `line ${index}` }));
+  const a = await app({ tasks: [task("t1", { notes: "x".repeat(3990), logs })] });
+  assert.equal(await a.B.sendWords(a.data.tasks[0], "note", "y".repeat(50), { data: a.data }), true);
+  const saved = a.api.calls.find((call) => call[0] === "tasksSave")[1][0];
+  assert.equal(saved.notes.length, 4000);
+  assert.ok(saved.notes.endsWith(`- ${"y".repeat(50)}`), "the newest words are the ones kept");
+  assert.equal(saved.logs.length, 40);
+  assert.equal(saved.logs.at(-1).kind, "note", "with the new note last");
+  assert.equal(saved.logs[0].text, "line 6", "and the oldest lines dropped");
 });
 
 test("sendWords carries the box's pictures with an Ask and a Change, and never with a note", async () => {
@@ -283,21 +305,67 @@ test("checksNodes says what a task must pass and how the last run went, the same
 
 // ---- a task's runs, and being told when anything moved ------------------------------------------------------------------
 
+test("a host that refuses a note or a follow-up without saying why gets our words, and a task with no title is still named", async () => {
+  const api = bridge();
+  api.tasksSave = async () => ({ ok: false });
+  api.tasksCreate = async () => ({ ok: false });
+  const a = await app({ tasks: [task("t1", { title: "", prompt: "" }), task("t2", { title: "", prompt: "Fix the thing" })], api });
+  const [bare, worded] = a.data.tasks;
+  assert.equal(await a.B.sendWords(bare, "note", "Hello", { data: a.data }), false);
+  assert.deepEqual(clean(a.calls.toasts.at(-1)), ["The note could not be saved.", "bad"]);
+  assert.equal(await a.B.sendWords(bare, "change", "Do more", { data: a.data }), false);
+  assert.deepEqual(clean(a.calls.toasts.at(-1)), ["The follow-up could not be created.", "bad"]);
+  assert.equal(await a.B.sendWords(bare, "ask", "And this?", { data: a.data }), true);
+  assert.equal(a.api.calls.find((call) => call[0] === "assistantMessage")[1], 'About the task "this task" (t1): And this?', "no title and no words: still a name to ask about");
+  api.tasksCreate = async (payload) => { a.api.calls.push(["tasksCreate", payload]); return { ok: true }; };
+  await a.B.sendWords(bare, "change", "Do more", { data: a.data });
+  assert.match(a.api.calls.find((call) => call[0] === "tasksCreate")[1].prompt, /^Follow-up to task "the last result" \(t1\)\./);
+  await a.B.sendWords(worded, "ask", "What now?", { data: a.data });
+  assert.equal(a.api.calls.filter((call) => call[0] === "assistantMessage").at(-1)[1], 'About the task "Fix the thing" (t2): What now?', "the short title the board uses stands in for a missing one");
+});
+
 test("a task's runs are read once per change, kept with the task, and the timeline lists them with its notes in the order they happened", async () => {
   const attempts = [{ runId: "r1", outcome: "failed", startedAt: at(2, 11), seconds: 95, via: "claude cli", error: "Tests failed", tail: ["npm test"] }, { runId: "r2", outcome: "finished-ok", startedAt: at(2, 14), seconds: 3700, via: "opencode", result: "Done." }];
   const api = bridge({ attempts });
   const row = task("t1", { title: "Add a sitemap", status: "done", createdAt: at(3), doneAt: at(1), logs: [{ at: at(3, 13), kind: "note", text: "Prefer the static generator" }], verification: { state: "verified", at: at(1, 9), reason: "21 tests passed" } });
-  const a = await app({ tasks: [row], api });
+  const messages = [{ kind: "notice", taskId: "t1", text: "Picked up by a worker", at: at(2, 10) }, { kind: "notice", taskId: "t2", text: "Another task's notice", at: at(2, 10) }];
+  const a = await app({ tasks: [row], api, messages });
   assert.equal(a.B.attempts("t1"), null, "nothing is read until somebody asks");
   a.B.loadAttempts(a.data.tasks[0]);
   a.B.loadAttempts(a.data.tasks[0]);
   await a.settle();
   assert.equal(api.calls.filter((call) => call[0] === "tasksAttempts").length, 1, "the same task in the same state is read once");
   assert.equal(a.B.attempts("t1").attempts.length, 2);
-  assert.deepEqual(clean(a.B.timeline(a.data.tasks[0], a.data).map((item) => item.kind)), ["brief", "note", "run", "run", "verdict"], "the clock decides the order");
+  assert.deepEqual(clean(a.B.timeline(a.data.tasks[0], a.data).map((item) => item.kind)), ["brief", "note", "notice", "run", "run", "verdict"], "the clock decides the order, and only this task's notices are in it");
+  assert.equal(a.B.timeline(a.data.tasks[0], a.data).find((item) => item.kind === "notice").text, "Picked up by a worker");
+  // A question asked here is kept for the feed, and a project change forgets it with the runs.
+  await a.B.sendWords(a.data.tasks[0], "ask", "What is left?", { data: a.data });
+  assert.equal(a.B.asks("t1").length, 1);
   a.B.resetProject();
   assert.equal(a.B.attempts("t1"), null, "a project change forgets them");
-  assert.deepEqual(clean(a.B.asks("t1")), []);
+  assert.deepEqual(clean(a.B.asks("t1")), [], "and the questions asked");
+});
+
+test("a task whose state moved is read again without the runs it had being forgotten meanwhile, and a read that fails says why", async () => {
+  const api = bridge({ attempts: [{ runId: "r1", outcome: "finished-ok", startedAt: at(2, 11), seconds: 95, via: "opencode", result: "Done." }] });
+  const row = task("t1", { status: "active", runId: "r1" });
+  const a = await app({ tasks: [row], api });
+  a.B.loadAttempts(a.data.tasks[0]);
+  await a.settle();
+  assert.equal(a.B.attempts("t1").attempts.length, 1);
+  const moved = { ...row, status: "done", runId: null, lastAttempt: { at: at(1), runId: "r1" } };
+  a.B.loadAttempts(moved);
+  assert.equal(a.B.attempts("t1").loading, true, "a new read is under way");
+  assert.equal(a.B.attempts("t1").attempts.length, 1, "and what was known stays on screen until it lands");
+  await a.settle();
+  // A host that refuses, with or without words, and one that throws.
+  for (const [answer, words] of [[async () => ({ ok: false, error: "The ledger is locked." }), "The ledger is locked."], [async () => ({ ok: false }), "The run history could not be loaded."], [async () => { throw new Error("no window"); }, "no window"]]) {
+    const failing = await app({ tasks: [task("t1")], api: Object.assign(bridge(), { tasksAttempts: answer }) });
+    failing.B.loadAttempts(failing.data.tasks[0]);
+    await failing.settle();
+    assert.equal(failing.B.attempts("t1").error, words);
+    assert.equal(failing.B.attempts("t1").loading, false);
+  }
 });
 
 test("subscribe is told once per frame when the kit's own state moved, stops when asked, and one listener never stops another", async () => {
@@ -352,4 +420,38 @@ test("tasks.js hands the words of its Usage & limit fold to the inspector's Agen
   assert.deepEqual(exported[1].split(", "), ["durationText", "usageTokens", "usageCost", "countText"]);
   const words = source.slice(source.indexOf("  const durationText = "), source.indexOf("  function requestTaskUsage("));
   for (const name of ["durationText", "usageTokens", "usageCost", "countText"]) assert.match(words, new RegExp(`const ${name} = `), `${name} is one of the fold's own`);
+});
+
+test("the classic sessions layout's Checks pane still says what a task must pass and how its last check run went, from the same nodes the inspector draws", async () => {
+  const row = task("t1", { acceptance: ["The list says No notes yet"], verificationRun: { state: "failed", results: [{ name: "unit tests", ok: true }, { name: "first paint", ok: false, detail: "2.4 s" }] }, verification: { state: "failed", reason: "The budget failed." } });
+  const a = await app({ tasks: [row], search: "?home=sessions", panes: true });
+  assert.equal(a.B.layout(), "sessions");
+  await a.settle();
+  a.window.MefiPanes.open("checks");
+  a.B.openTask("t1");
+  await a.settle(); await a.settle();
+  const box = a.env.document.getElementById("builder-checks");
+  assert.ok(box, "the pane is on the page");
+  assert.match(box.textContent, /The list says No notes yet/);
+  assert.match(box.textContent, /Passed/); assert.match(box.textContent, /unit tests/); assert.match(box.textContent, /Failed/); assert.match(box.textContent, /first paint/); assert.match(box.textContent, /2\.4 s/);
+  assert.match(box.textContent, /Not accepted: The budget failed\./);
+  const nodes = a.B.checksNodes(row, a.data);
+  assert.equal(box.children.length, nodes.length, "the pane is exactly what the kit gives");
+  const none = await app({ tasks: [row], search: "?home=sessions", panes: true });
+  await none.settle();
+  none.window.MefiPanes.open("checks");
+  await none.settle(); await none.settle();
+  assert.equal(none.env.document.getElementById("builder-checks").textContent, "Open a task to see what it must pass.", "with no task open it says what it is for");
+});
+
+test("the classic sessions layout's Request a change turns its box to a Change", async () => {
+  const a = await app({ tasks: [task("t1", { status: "done", doneAt: at(1) })], search: "?home=sessions", panes: true });
+  await a.settle();
+  a.B.openTask("t1");
+  await a.settle(); await a.settle();
+  const change = a.env.document.querySelectorAll("button").find((node) => node.textContent === "Request a change");
+  assert.ok(change, "a finished task offers it");
+  await change.click(); await a.settle();
+  assert.equal(a.env.document.getElementById("builder-intent-change").getAttribute("aria-pressed"), "true");
+  assert.equal(a.env.document.getElementById("builder-intent-note").getAttribute("aria-pressed"), "false");
 });

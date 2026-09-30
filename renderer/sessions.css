@@ -48,7 +48,8 @@
 .sx-gh:first-child { margin-top: 4px; }
 .sx-gh.warn { color: var(--warn); }
 .sx-count { min-width: 20px; padding: 2px 6px; border-radius: var(--r-pill); background: var(--tint-gold-2); color: var(--muted); font-size: var(--x12); text-align: center; }
-.sx-car { flex: none; width: 14px; height: 14px; margin-left: auto; transition: rotate var(--motion-fast) var(--ease-out); }
+.sx-car { flex: none; width: 14px; height: 14px; margin-left: auto; }
+@media (prefers-reduced-motion: no-preference) { html:not([data-motion="off"]) .sx-car { transition: rotate var(--motion-fast) var(--ease-out); } }
 .sx-gh.closed .sx-car { rotate: -90deg; }
 .sx-row { display: flex; align-items: stretch; border: 1px solid transparent; border-radius: var(--r-md); }
 .sx-row:hover, .sx-row:focus-within { background: var(--tint-gold-1); }

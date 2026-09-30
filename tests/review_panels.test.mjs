@@ -279,3 +279,48 @@ test("a task with a panel on screen is never the one forgotten when the page has
   assert.ok(p.window.MefiReview.state("first", "p1")?.changes, "and still holds what was read");
   assert.equal(p.window.MefiReview.counts("first", "p1")?.files, 7, "and the refresh reached it");
 });
+
+test("mounting a panel on a box that already has one replaces it, and a handle that was replaced cannot take the new panel down", async () => {
+  const p = page();
+  const box = p.host();
+  const first = await p.mount(box, "changes");
+  const second = await p.mount(box, "changes");
+  assert.equal(box.querySelectorAll(".review-bare").length, 1, "one panel in the box, not two");
+  first.unmount();
+  assert.equal(box.querySelectorAll(".review-bare").length, 1, "the old handle lets go of nothing");
+  p.api.tasksChanges = async () => ({ ...changed(), totals: { files: 9, additions: 1, deletions: 1, binary: 0 } });
+  p.window.MefiReview.refresh("t1"); await settle();
+  assert.match(text(box.querySelector(".review-panel")), /9 files changed/, "and the panel is still kept up to date");
+  second.unmount();
+  assert.equal(box.querySelectorAll(".review-bare").length, 0);
+});
+
+test("one listener that throws does not stop the next from being told", async () => {
+  const p = page();
+  const heard = [];
+  p.window.MefiReview.onChange(() => { throw new Error("a bad listener"); });
+  p.window.MefiReview.onChange((detail) => heard.push(detail));
+  await p.mount(p.host(), "changes");
+  assert.ok(heard.length >= 1, "the second is told though the first fell over");
+});
+
+test("counts() falls back to the length of the file list when the host sent no totals", async () => {
+  const listed = changed({ files: [file("a.js"), file("b.js"), file("c.js")] });
+  delete listed.totals;
+  const p = page({ changes: listed });
+  await p.mount(p.host(), "changes");
+  assert.deepEqual(clone(p.window.MefiReview.counts("t1", "p1")), { files: 3, additions: 0, deletions: 0, running: false, accepted: false });
+});
+
+test("a panel drawn before the settings were read shows the switches once they have arrived", async () => {
+  const p = page();
+  let open;
+  const gate = new Promise((resolve) => { open = resolve; });
+  p.api.reviewPrefs = async () => { await gate; return clone(prefs()); };
+  const box = p.host();
+  await p.mount(box, "changes");
+  assert.match(text(box.querySelector(".review-settings")), /Reading the settings…/);
+  assert.equal(box.querySelectorAll(".review-switch").length, 0);
+  open(); await settle();
+  assert.ok(box.querySelectorAll(".review-switch").length >= 3, "the panel that is on its own is drawn again, not only the section with a fold");
+});

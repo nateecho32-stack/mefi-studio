@@ -86,6 +86,23 @@ export function stubShell({ mount = null, document = null } = {}) {
   return { shell, mounts, of: (region) => mounts.find((entry) => entry.region === region) };
 }
 
+/**
+ * Real focus for the fake DOM: every element made after this call moves document.activeElement when it is focused, and gives it up
+ * when it is blurred or taken out of the page. Call it before the panels draw what should be tracked.
+ */
+export function trackFocus(document) {
+  const make = document.createElement.bind(document);
+  document.createElement = (tag) => {
+    const node = make(tag);
+    const focus = node.focus.bind(node), blur = node.blur.bind(node), remove = node.remove.bind(node);
+    node.focus = (...args) => { document.activeElement = node; return focus(...args); };
+    node.blur = (...args) => { if (document.activeElement === node) document.activeElement = null; return blur(...args); };
+    node.remove = (...args) => { if (document.activeElement === node) document.activeElement = null; return remove(...args); };
+    return node;
+  };
+  return { active: () => document.activeElement };
+}
+
 /** review.js's panels, as far as the inspector is concerned: what was mounted where, for which task, and what it says it holds. */
 export function stubReview() {
   const mounts = [], watchers = new Set();
@@ -107,10 +124,11 @@ export function stubReview() {
  *   layout      "v2" (default) or "v1": what html[data-layout] says
  *   shell       false for a page with no MefiShell
  *   lateShell   true to install the shell after sessions.js ran
+ *   focus       true for real focus: document.activeElement follows what was focused (see trackFocus)
  */
 export async function sessionsApp({
   tasks = [], ideas = [], questions = [], running = [], messages = [], stages = {}, backlog = null, preview = null, decisions = [], worktrees = null, layout = "v2", shell = true,
-  api = bridge(), storage = new Map(), search = "", innerHeight = 1080, detail = null, load = true, status = {}, tabs = true, review = true, pictures = true, picker = true, sessionsOff = false,
+  api = bridge(), storage = new Map(), search = "", innerHeight = 1080, detail = null, load = true, status = {}, tabs = true, review = true, pictures = true, picker = true, sessionsOff = false, focus = false,
 } = {}) {
   const env = createEnv({ storage, now: NOW, search });
   const { window, document } = env;
@@ -121,6 +139,7 @@ export async function sessionsApp({
   const clock = { t: NOW };
   env.context.Date = class extends Date { constructor(...args) { if (args.length) super(...args); else super(clock.t); } static now() { return clock.t; } };
   createPage(env);
+  if (focus) trackFocus(document);
   window.innerHeight = innerHeight;
   if (layout === "v2") document.documentElement.dataset.layout = "v2";
   if (detail) document.documentElement.dataset.detail = detail;

@@ -170,13 +170,19 @@
   // ---- opening a session --------------------------------------------------------------------------------------------------
   // The route a session is: Home with view: "task". A tab remembers exactly this, and the page follows it.
   const routeOf = (taskId, extra = {}) => ({ view: "task", taskId, projectId: S.projectId || snap().projectId, ...extra });
-  function select(taskId, { tab = null, focus = false, route = true, preview = true } = {}) {
+  // The inspector tab a route or a person named for a task: theirs from now on (whoever calls this remembers it).
+  function pickTab(taskId, tab) {
+    if (!TABS.some(([id]) => id === tab)) return false;
+    S.itab.set(taskId, tab); S.itabChosen.add(taskId);
+    return true;
+  }
+  function select(taskId, { tab = null, route = true, preview = true } = {}) {
     const task = S.wired ? taskById(taskId) : null;
     if (!task) return false;
     const changed = S.open !== taskId;
     S.open = taskId;
     if (changed) { S.openedAt = Date.now(); S.itabChosen.delete(taskId); S.menu = null; S.renaming = null; S.focus = null; S.painted.delete("thread"); dropPainted("inspector"); }
-    if (tab && TABS.some(([id]) => id === tab)) { S.itab.set(taskId, tab); S.itabChosen.add(taskId); }
+    if (tab) pickTab(taskId, tab);
     remember({ open: taskId, itab: Object.fromEntries([...S.itab].slice(-40)) });
     try { window.MefiNav?.selectTask?.({ taskId, projectId: S.projectId, title: window.MefiTasks?.shortTitle?.(task) || task.title }); } catch { /* the selection is shared, not required */ }
     if (route) {
@@ -185,7 +191,6 @@
       else window.MefiNav?.go?.("workspace", routeOf(taskId));
     }
     schedule();
-    if (focus) frame(() => byId("sessions-input")?.focus?.({ preventScroll: true }));
     return true;
   }
   function deselect({ remembered = true } = {}) {
@@ -211,7 +216,7 @@
       if (params.view === "task" && typeof params.taskId === "string" && params.taskId) {
         if (params.projectId && S.projectId && params.projectId !== S.projectId) { schedule(); return; }
         if (S.open !== params.taskId) select(params.taskId, { tab: params.tab || null, route: false });
-        else if (params.tab) { S.itab.set(params.taskId, params.tab); S.itabChosen.add(params.taskId); dropPainted("inspector"); }
+        else if (pickTab(params.taskId, params.tab)) { remember({ itab: Object.fromEntries([...S.itab].slice(-40)) }); dropPainted("inspector"); }
       } else if (S.open) deselect();
     }
     schedule();
@@ -1508,8 +1513,7 @@
     return auto;
   }
   function setTab(task, tab, { reveal = true } = {}) {
-    if (!task || !TABS.some(([id]) => id === tab)) return;
-    S.itab.set(task.id, tab); S.itabChosen.add(task.id);
+    if (!task || !pickTab(task.id, tab)) return;
     remember({ itab: Object.fromEntries([...S.itab].slice(-40)) });
     dropPainted("inspector");
     if (reveal) revealInspector();
