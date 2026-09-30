@@ -125,7 +125,7 @@ app.whenReady().then(async () => {
   };
   const calls = (name) => run(`return window.worktreesFixture.calls().filter((call) => call.name === ${JSON.stringify(name)}).map((call) => call.args[0]);`);
   const rowOf = (name) => `document.querySelector('.worktrees-row[data-path$="/${name}"]')`;
-  const press = (name, label) => run(`const button = [...${rowOf(name)}.querySelectorAll('button')].find((node) => node.textContent === ${JSON.stringify(label)}); if (!button) return false; button.click(); return true;`);
+  const press = (name, label) => run(`const button = [...${rowOf(name)}.querySelectorAll('button')].find((node) => node.textContent === ${JSON.stringify(label)}); if (!button) return false; button.focus(); button.click(); return true;`);
   const buttonsOf = (name) => run(`return [...${rowOf(name)}.querySelectorAll('.worktrees-buttons button')].map((node) => ({ text: node.textContent, disabled: node.disabled }));`);
 
   // What the page looks like right now, in real pixels.
@@ -233,6 +233,8 @@ app.whenReady().then(async () => {
   assert.equal((await calls("worktreesMerge")).at(-1).mode, "merge", "the second ask is for a merge commit");
   assert.match((await notes("wt-pushed"))[0].text, /^Merged on this PC only\./);
   assert.match(await run("return document.getElementById('toast-host')?.textContent || '';"), /Merged wip\/wt-pushed into main \(merge commit\)\. Not pushed yet\./);
+  // The button that was pressed is held while it works and, having nothing left to do, hands the keyboard to the row's first one.
+  assert.equal(await run(`return document.activeElement?.closest('.worktrees-row')?.dataset.path === '/work/wt-pushed' && document.activeElement.textContent;`), "Open folder", "the keyboard stays in the row that was worked on");
   assert.equal((await buttonsOf("wt-pushed")).find((item) => item.text === "Merge into main").disabled, true, "nothing is left to merge");
 
   // Remove is two presses; a folder that holds uncommitted files asks once more, and keeps a copy.
@@ -258,6 +260,7 @@ app.whenReady().then(async () => {
   await until(`${rowOf("wt-dirty")} === null`, "the removed row goes");
   assert.equal((await calls("worktreesRemove")).at(-1).force, true, "the second ask is forced");
   assert.match(await run("return document.getElementById('toast-host')?.textContent || '';"), /Removed wt-dirty\. A copy of what it held is kept as refs\/mefi\/rescue\/wt-dirty-20260930T120000\./);
+  assert.equal(await run("return document.activeElement === document.getElementById('worktrees-refresh');"), true, "a row that went takes its focus to Refresh rather than to the page");
 
   // A merged run's folder goes with its branch (the host is asked for it); a plain branch keeps its branch.
   await run("window.worktreesFixture.clear();");

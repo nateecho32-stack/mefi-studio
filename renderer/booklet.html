@@ -84579,9 +84579,25 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // ---- acting -------------------------------------------------------------------------
   function toast(text, tone = "good") { window.MefiToast?.(text, tone); }
 
+  // Where the keyboard was when an action started: rows are rebuilt while it works (its buttons are
+  // held), so focus returns to the same button, else the row's first one, else Refresh.
+  function refocus(where) {
+    if (!where) return;
+    const box = $("list");
+    const item = [...box.querySelectorAll("[data-path]")].find((node) => node.dataset.path === where.path);
+    const buttons = item ? [...item.querySelectorAll("button")].filter((button) => !button.disabled) : [];
+    const target = buttons.find((button) => button.textContent === where.label) ?? buttons[0] ?? $("refresh");
+    target?.focus?.({ preventScroll: true });
+  }
+  function focusOf() {
+    const at = document.activeElement;
+    return at && $("list").contains(at) ? { path: at.closest("[data-path]")?.dataset.path, label: at.textContent } : null;
+  }
+
   async function act(row, what, extra = {}) {
     if (!api()) return;
     const id = projectId();
+    const where = focusOf();
     state.busy.add(row.path);
     setNote(row.path, null);
     let result = null;
@@ -84597,6 +84613,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (what === "open") {
       if (result?.ok === false) setNote(row.path, { tone: "bad", text: say(result.error, "The folder could not be opened.") });
       else render();
+      refocus(where);
       return;
     }
     if (result?.ok) {
@@ -84607,9 +84624,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       state.signature = "";
       await read({ quiet: true });
       if (what === "merge") setNote(row.path, { tone: "good", text: `${result.note}${result.removed?.ok === false ? ` It could not be removed: ${result.removed.error}` : ""}` });
+      refocus(where);
       return;
     }
     follow(row, what, result ?? { ok: false, error: "That did not work. Try again." });
+    refocus(where);
   }
 
   // A refusal is a sentence, and where there is a next step the sentence carries it.
