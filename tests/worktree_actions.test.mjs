@@ -339,3 +339,23 @@ test("a folder that is not a repository is said so, and the module never reaches
   assert.doesNotMatch(source, /"(?:fetch|push|pull|clone|ls-remote)"/, "no network verb is ever spelled in a git call");
   assert.doesNotMatch(source, /--force-with-lease|push --force|reset --hard|clean -f|checkout --/, "nothing destructive on a shared branch");
 });
+
+test("a worktree whose folder is gone is still found when the caller spells its path another way", async (t) => {
+  // Windows names a temp folder both ways (C:\Users\RUNNER~1 and C:\Users\runneradmin) and git lists the long
+  // one; a symlink to the folder is the same difference on any system.
+  const { root, repo } = await project(t);
+  const real = path.join(root, "real");
+  mkdirSync(real);
+  const link = path.join(root, "link");
+  symlinkSync(real, link, "junction");
+  await run(repo, "worktree", "add", "-q", "-b", "wip/vanished", path.join(real, "vanished"));
+  rmSync(path.join(real, "vanished"), { recursive: true, force: true });
+  const asked = path.join(link, "vanished");
+  const opened = await worktreeFolder(repo, asked);
+  assert.equal(opened.ok, false);
+  assert.match(opened.error, /folder is gone/, "found, and said to be gone, not 'not one of this project's worktrees'");
+  const removed = await removeWorktree(repo, asked);
+  assert.equal(removed.ok, true, removed.error);
+  assert.equal(removed.pruned, 1, "removing a folder that is gone is forgetting it");
+  assert.equal((await worktreeFolder(repo, path.join(link, "never-was"))).error, "That folder is not one of this project's worktrees.", "a folder git never listed is still refused");
+});

@@ -130,11 +130,22 @@ async function lookAt(cwd, run) {
 
 // Windows hands out 8.3 short paths for a temp folder while git lists the long
 // form, and a case-insensitive disk differs only by case: compare what is on disk.
+// A worktree whose folder is gone cannot be resolved itself, so its deepest folder
+// that still exists is resolved and the rest of the name put back on it.
 function canonical(value) {
   const resolved = path.resolve(String(value ?? ""));
-  let real = resolved;
-  try { real = realpathSync.native(resolved); } catch { /* not on disk (a missing worktree): compare as written */ }
-  return process.platform === "win32" ? real.toLowerCase() : real;
+  let ancestor = resolved;
+  const rest = [];
+  let real = null;
+  for (;;) {
+    try { real = realpathSync.native(ancestor); break; } catch { /* not on disk: go up one */ }
+    const parent = path.dirname(ancestor);
+    if (parent === ancestor) break;
+    rest.unshift(path.basename(ancestor));
+    ancestor = parent;
+  }
+  const whole = real === null ? resolved : path.join(real, ...rest);
+  return process.platform === "win32" ? whole.toLowerCase() : whole;
 }
 
 // One worktree and the primary checkout, without inspecting the others: what a
