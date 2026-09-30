@@ -114,12 +114,13 @@ with a safe reading background when canvas and panel tones differ.
 
 ## Layout contract
 
-The shell keeps room in its geometry for four regions that later work draws: a
-session list beside the rail, an inspector at the right, a tab strip under the
-local navigation and a status bar along the bottom. None is built yet. With
-every region at 0 (the default, "layout v1") each page, sheet and floating
-thing is exactly where it was: `tests/fixtures/layout-contract-v1.json` holds
-the boxes of the base commit and the render fixture compares them.
+The shell keeps room in its geometry for four regions: a session list beside
+the rail, an inspector at the right, a tab strip under the local navigation
+and a status bar along the bottom. `renderer/shell.js` draws the frame in them
+(see "The frame" below); the contract is what it stands on. With every region
+at 0 (the default, "layout v1") each page, sheet and floating thing is exactly
+where it was: `tests/fixtures/layout-contract-v1.json` holds the boxes of the
+base commit and the render fixture compares them.
 
 | Variable | Range | Meaning |
 | --- | --- | --- |
@@ -177,6 +178,120 @@ rail's box (the open rail included, since it opens over the page), the bottom
 of the local navigation's, and the window's other edges. In v2 it is also
 clear of the list, the tab strip, the inspector and the status bar. Ask it
 each time something is placed, not once.
+
+**Turning it on.** Three ways, each ending in `html[data-layout="v2"]`, and
+classic is always one switch away. In Settings (the You section, which
+Configuration › UI & Surfaces lists too) the switch "Try the 0.5 layout"; in
+Search the action "Switch layout: 0.5 or classic". Both save the choice through
+`MefiNav.setLayout` and reload the window, the way Build's sessions-layout
+switch does, so every module starts in the layout it was asked for. For one
+launch, `?layout=v2` (or `v1`) on the page's address wins over the saved
+choice, and so does the environment variable `MEFI_STUDIO_LAYOUT=v2` (or
+`v1`) for the desktop app: `main.cjs` passes it to the window as that query.
+`MEFI_STUDIO_LAYOUT=v1` is the kill switch, since it opens classic whatever was
+saved; any other value is ignored.
+
+## The frame
+
+`renderer/shell.js` (`window.MefiShell`) and `renderer/shell.css` draw the 0.5
+shell's frame in the contract's regions. Everything in the stylesheet is under
+`html[data-frame]`, which only the script writes, and only while
+`html[data-layout="v2"]` is on and the rail shell is the shell (classic has no
+room for regions). With v2 off nothing is drawn, nothing listens, polls or
+stores, and nothing calls the host; the one thing the script always does is the
+way in above. The frame is built at launch when v2 is on, follows a live v2-off
+or a loss of the rail shell by removing itself, and is built again by
+`MefiShell.enable()` (a live `setLayout("v2")` does not build it: the switch
+reloads the window).
+
+Regions, each a `position: fixed` element placed from the contract's derived
+edges and nothing else (`--shell-rail-w` and `--shell-local-h` are read back
+from them, so the ledger in `tests/layout_contract_css.test.mjs` does not
+grow): the **top bar**, the **list**, the **inspector**, the **tab strip**'s
+row, the **status bar**, and **main**, a host over the free area that
+transparent pages are not drawn into but other modules may mount into. They sit
+in the same layer as the local navigation (`--z-shell` minus one), the rail
+opens over them, the status bar sits above them, and the Layout menu above
+the sheets. Each region's size is reported through `MefiNav.layout.set`
+only when it changes from what was asked last, and a column the window has
+folded is left to the contract, which remembers what was asked.
+
+**The top bar** is the local navigation's row: there is one band at the top, not
+two. Left: the list toggle and the Vibe | Build switch, a radiogroup (Ctrl M)
+that calls `MefiVibe.setMode` and adds no `uiMode` value; from a mode's Home it
+goes to the other mode's Home, from any other page the page stays. Middle: the
+local navigation (Back, Forward, the section's pages), which the script fits
+between the bar's two ends, or, when there is none or the band is narrower than
+640 CSS px (`html[data-frame-narrow]`), the trail project / page / item read
+from `MefiNav`, `MefiWorkspace` and Build's task view (while there is room for
+it). Right: the Search pill
+(opens the palette, shows Ctrl K), "N need you" and "N working" with its
+pause or resume button, and the inspector toggle. Below about 470 CSS px the
+bar keeps icons and counts. The pills read what the app already holds: the
+digest total (or the open questions) for "need you", or `MefiToday.count()`
+when that module is there, and `MefiWorkspace.snapshot().status.running` for
+"working". Pause and resume click Home's own `#workspace-pause`, which keeps
+the rules for a launch hold. "N need you" opens `MefiShell.onInbox(anchor)`
+when something set it, then `MefiToday.openInbox(anchor)`, and until one of
+them does, Work's own needs-you views (Vibe's drawer for a decision, Command's
+Ask rail, the Task board's Review filter).
+
+**The status bar**: the Layout menu button (the list, the inspector and the
+tab strip as switches, each mode's widths side by side, Reset layout with
+Undo, Size and density, and Worktrees when that page exists), what is running,
+what waits on you, and on the right only what a module has: the usage meters
+(`MefiUsageTracker.brief()`, the last reading, no new read), the player
+pill (opens the music and video menu), the permission mode and today's cost
+when the ledger has recorded one. An item nobody has data for is not drawn,
+and nothing here polls: it repaints, coalesced to 60 ms and only while the
+window is visible, from the pushes the page already gets (`onTasks`,
+`onAssistant`, `onAssistantStatus`, `onProjects`), the events of the modules it
+reads and `MefiToday.onChange`.
+
+**Modes.** Vibe and Build are the modes of one shell (`MefiVibe.mode()`). Each
+keeps its own list, inspector and tab strip, and switching applies the other's
+in the same turn (no flash, no shift). Build starts with the list (280 px) and
+the inspector (388 px) open; Vibe starts with both closed; both keep the tab
+strip. The choice is saved in `mefiStudio.shell.layout.v1` as `{ v: 1, build:
+{ list: { open, w }, inspector: { open, w }, tabs: { open } }, vibe: {...} }`;
+an unreadable or out-of-range value falls back to the mode's preset, and every
+storage access is guarded. Reset layout puts this mode's preset back.
+
+**Splitters**: rail | list, list | main and main | inspector. A drag uses
+pointer capture; the arrow keys move a column's edge by 8 px (Shift 32), Home
+and End go to the narrowest and widest, a double-click resets (list 280,
+inspector 388). Each is `role="separator"` with `aria-valuenow`, `-min` and
+`-max`, a 1 px line and an 11 px hit area. Limits: list 220 to 420, inspector
+320 to 640, and the main area keeps 320 (`MefiNav.layout.MAIN_MIN`), so the
+inspector shrinks with the window and is a drawer where it cannot have 320
+beside the list. The rail's edge is the rail's own pin (64 or 256 px), and the
+frame never writes its width.
+
+**Drawers.** Where `data-layout-fold` names a column, or the inspector cannot
+dock, the column is a drawer over the page, under the bar: the bar's toggles
+open and close it, Escape, a press outside or going somewhere closes it, focus
+moves in and returns, and only one is open at a time. The tab strip and the
+status bar stay rows.
+
+**Keys**: Ctrl M the mode, Ctrl B the list, `[` the inspector (not while
+typing), Escape the Layout menu and then a drawer. They are listed in the
+shortcut sheet for display; the frame's own listener acts.
+
+**For other modules.** `MefiShell.region(name)` answers the element;
+`MefiShell.mount(region, key, elementOrFactory, { title, order })` puts
+content in a region and answers `{ show, hide, unmount, shown, element }` (a
+factory runs once, the first time the region exists; a list or inspector with
+nothing shown says "Nothing listed yet" or "Nothing to inspect yet", never
+sample data); `MefiShell.resize("tabs", px)` is how the tab strip says how tall
+it is; `MefiShell.onInbox = fn(anchor)` is how the Inbox opens from the pill;
+`MefiShell.open`, `close`, `toggle`, `isOpen`, `size`, `info`, `setMode`,
+`mode`, `status`, `sync`, `layout`, `resetLayout`, `onChange` and the
+constants `LIMITS`, `DEFAULTS`, `PRESETS`, `REGIONS` and `MODES` complete it.
+The window hears `mefi:shell-layout` when a region opens, closes or resizes,
+when a drawer opens, when the mode changes and when the frame comes or goes.
+Tests: `tests/shell_frame_*.test.mjs` (fake DOM, the contract as a stand-in and
+as the real `nav.js`), `tests/shell_render.test.mjs` (a real window at five
+sizes).
 
 ## The companion
 

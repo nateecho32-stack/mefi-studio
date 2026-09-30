@@ -1993,8 +1993,9 @@
       paintLayout();
       const length = (name, from) => cssLength(name, from) ?? 0;
       left = Math.max(left, railRest() + (cssLength("--shell-list-w") ?? layoutApplied.list));
-      // The strip sits under the local navigation, or at the window's top where there is none (Vibe's own Home).
-      top = Math.max(top, (bar ? length("--shell-local-h", document.body || document.documentElement) : 0) + (cssLength("--shell-tabs-h") ?? layoutApplied.tabs));
+      // The strip sits under the local navigation, or at the window's top where there is none (Vibe's own Home);
+      // the 0.5 shell's top bar (renderer/shell.js) is that row on every page, so with it the strip sits under it.
+      top = Math.max(top, (bar || box("shell-top") ? length("--shell-local-h", document.body || document.documentElement) : 0) + (cssLength("--shell-tabs-h") ?? layoutApplied.tabs));
       right = w - (cssLength("--shell-inspector-w") ?? layoutApplied.inspector);
       bottom = h - (cssLength("--shell-status-h") ?? layoutApplied.status);
     }
