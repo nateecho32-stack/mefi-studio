@@ -83,6 +83,8 @@
     svg.append(use);
     return svg;
   }
+  // A session's state as a dot in the state's colour (the tone names are the app's; TONES says which colour each gets).
+  const dotFor = (tone) => { const dot = el("span", "ts-dot"); dot.dataset.tone = TONES[tone] || "dim"; return dot; };
   const v2 = () => document.documentElement?.dataset?.layout === "v2";
   // Somewhere text is being written: a text box, a text area, or an editable region. A switch, a slider or a button is not.
   const NOT_TEXT = new Set(["checkbox", "radio", "range", "button", "submit", "reset", "file", "color", "image"]);
@@ -294,9 +296,10 @@
 
   // ---- changes --------------------------------------------------------------------------
   // Every change to the set goes through here: one repaint, one write, the sweep re-planned, listeners told.
-  function changed(reason) {
+  function changed(reason, { write = true } = {}) {
     if (S.suggest && S.suggest.key !== keyOf(cur().route)) S.suggest = null;
-    persistSoon(); scheduleRender(); planSweep();
+    if (write) persistSoon();
+    scheduleRender(); planSweep();
     for (const listener of [...S.listeners]) safe(() => listener({ reason, active: S.active, count: order().length }));
     repaintCards();
     return true;
@@ -333,7 +336,9 @@
     if (!nav || typeof nav.go !== "function") return false;
     S.going = { key: keyOf(route), from: from ? keyOf(from.route) : null, at: now() };
     try {
-      const result = isHomeRoute(route) ? nav.go("workspace") : nav.go(route.id, { ...route.params });
+      // Home asks for its own view: Build's Home would otherwise bring back the session you last had open, and the Home tab
+      // could never be the one you are on. Vibe and the classic layout ignore the parameter.
+      const result = isHomeRoute(route) ? nav.go("workspace", { view: "home" }) : nav.go(route.id, { ...route.params });
       if (result && typeof result.catch === "function") result.catch(() => {});
       return true;
     } catch { return false; }
@@ -667,7 +672,9 @@
       const route = place(detail.id, detail.params);
       if (route) S.lastSeen[route.id] = route.params;
     }
-    if (ui.pop && detail.action === "open") closePop();
+    // A page opening closes a menu (Search, a page, a sheet); the nav announces an action after it has run it, and the one
+    // action that opens a menu here is Search's "Tab behaviour", which must not close what it just opened.
+    if (ui.pop && detail.action === "open" && detail.id !== "tabBehaviour") closePop();
     queueSync();
   }
   function onProject(event) {
@@ -687,9 +694,11 @@
     S.project = next;
     S.lastSeen = {}; S.needs = new Set(); S.needsKnown = null; S.suggest = null; S.going = null;
     adoptSet(carry || loadSet(next));
-    if (carry) S.dirty = true;
+    // What was read is not written back; a set carried over from before the project was known is, once it has anything in it.
+    const carried = Boolean(carry && (carry.tabs.length || carry.closed.length));
+    if (carried) S.dirty = true;
     refreshNeeds();
-    changed("project");
+    changed("project", { write: carried });
     queueSync();
   }
 
@@ -764,7 +773,7 @@
     const key = info.tone ? `dot:${info.tone}` : info.glyph || "";
     if (entry.iconKey === key) return;
     entry.iconKey = key;
-    if (info.tone) { const dot = el("span", "ts-dot"); dot.dataset.tone = TONES[info.tone] || "dim"; entry.icon.replaceChildren(dot); }
+    if (info.tone) entry.icon.replaceChildren(dotFor(info.tone));
     else { const svg = info.glyph ? glyph(info.glyph) : null; if (svg) entry.icon.replaceChildren(svg); else entry.icon.replaceChildren(); }
   }
   function paintItem(entry, rec, info, n, total, ctx) {
@@ -820,7 +829,7 @@
     const menu = ui.menu;
     menu.replaceChildren();
     const icon = el("span", "ts-ico");
-    if (info.tone) { const dot = el("span", "ts-dot"); dot.dataset.tone = TONES[info.tone] || "dim"; icon.append(dot); } else { const svg = info.glyph ? glyph(info.glyph) : null; if (svg) icon.append(svg); }
+    if (info.tone) icon.append(dotFor(info.tone)); else { const svg = info.glyph ? glyph(info.glyph) : null; if (svg) icon.append(svg); }
     menu.append(icon, el("span", "ts-title", info.title), el("span", "ts-count", String(order().length)), glyph("g-chev") || el("span", "", "▾"));
     menu.setAttribute("aria-label", `Tabs, ${order().length} open. Current: ${info.title}`);
     const suggestion = S.suggest && eff().suggest && !S.compact && S.shown && !byKey(S.suggest.key)?.pin ? S.suggest : null;
@@ -1084,11 +1093,11 @@
     const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : (at + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
     items[next]?.focus?.();
   }
-  function menuItem(label, run, { key = "", icon = "", id = "" } = {}) {
+  function menuItem(label, run, { key = "", icon = "", id = "", tone = "" } = {}) {
     const item = el("button", "ts-menuitem");
     item.type = "button"; item.setAttribute("role", "menuitem");
     if (id) item.dataset.act = id;
-    const face = icon ? glyph(icon) : null;
+    const face = tone ? dotFor(tone) : icon ? glyph(icon) : null;
     if (face) item.append(face);
     item.append(el("span", "ts-menulabel", label));
     if (key) item.append(el("kbd", "ts-key", key));
@@ -1130,7 +1139,7 @@
         const rec = byId(id);
         if (!rec) continue;
         const info = describe(rec, ctx);
-        const item = menuItem(info.title, () => activate(rec.id), { icon: info.glyph || "" });
+        const item = menuItem(info.title, () => activate(rec.id), { icon: info.glyph || "", tone: info.tone || "" });
         item.dataset.id = rec.id;
         host.append(item);
       }
@@ -1145,7 +1154,7 @@
       for (const rec of order()) {
         const info = describe(rec, ctx);
         const row = el("div", "ts-menurow");
-        const go = menuItem(info.title, () => activate(rec.id), { icon: info.glyph || "" });
+        const go = menuItem(info.title, () => activate(rec.id), { icon: info.glyph || "", tone: info.tone || "" });
         go.dataset.id = rec.id;
         if (rec.id === S.active) go.setAttribute("aria-current", "true");
         if (rec.prev) go.dataset.preview = "true";
@@ -1189,7 +1198,8 @@
   function addRows(query) {
     const q = words(query, 60).toLowerCase().split(" ").filter(Boolean);
     const match = (row) => q.every((word) => `${row.title} ${row.group} ${row.terms || ""}`.toLowerCase().includes(word));
-    const closed = q.length ? [] : validClosed().slice(0, 4).map((item) => ({ group: "Recently closed", route: item.route, title: item.title || describe({ route: item.route }, context()).title, closed: item, hint: "Reopen" }));
+    const ctx = context();
+    const closed = q.length ? [] : validClosed().slice(0, 4).map((item) => { const info = describe({ route: item.route, title: item.title }, ctx); return { group: "Recently closed", route: item.route, title: item.title || info.title, glyph: info.glyph, tone: info.tone, closed: item, hint: "Reopen" }; });
     const home = { group: "Home", route: { id: "workspace", params: {} }, title: homeTitle(), glyph: "g-home", terms: "home today vibe front door" };
     const rows = [...closed, ...[home, ...sessionRows(query), ...destinations()].filter(match)];
     const have = new Map(order().map((rec) => [keyOf(rec.route), rec]));
@@ -1228,7 +1238,7 @@
         const option = el("button", "ts-row");
         option.type = "button"; option.id = `mefi-tabs-row-${i}`; option.tabIndex = -1;
         option.setAttribute("role", "option"); option.setAttribute("aria-selected", String(i === view.index));
-        if (row.tone) { const dot = el("span", "ts-dot"); dot.dataset.tone = TONES[row.tone] || "dim"; option.append(dot); } else { const face = row.glyph ? glyph(row.glyph) : null; if (face) option.append(face); }
+        if (row.tone) option.append(dotFor(row.tone)); else { const face = row.glyph ? glyph(row.glyph) : null; if (face) option.append(face); }
         option.append(el("span", "ts-rowlabel", row.title), el("span", "ts-rowhint", row.hint || ""));
         option.addEventListener("click", (event) => choose(i, event.shiftKey));
         view.rows.append(option);

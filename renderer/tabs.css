@@ -40,7 +40,7 @@
 .ts-dot[data-tone="live"] { background: var(--live); box-shadow: var(--glow-live); }
 .ts-dot[data-tone="info"] { background: var(--info); }
 .ts-dot[data-tone="good"] { background: var(--good); }
-.ts-count { flex: none; padding: 0 6px; border-radius: 8px; background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); font-size: var(--ts-fs-small); font-weight: 650; line-height: 17px; }
+.ts-count { flex: none; padding: 0 6px; border-radius: 8px; background: color-mix(in srgb, var(--warn) 26%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn) 55%, transparent); color: var(--ivory); font-size: var(--ts-fs-small); font-weight: 650; line-height: 17px; }
 .ts-count[hidden], .ts-flag[hidden] { display: none; }
 .ts-flag { position: absolute; top: 3px; right: 3px; width: 8px; height: 8px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 0 2px var(--surface-page, var(--bg)); pointer-events: none; }
 
@@ -61,7 +61,7 @@
 .ts-strip .ts-more[hidden] { display: none; }
 /* Small windows: one button with the current tab and the count opens a menu of them all. */
 .ts-strip .ts-menu { display: none; flex: 0 1 auto; min-width: 0; max-width: calc(100% - 76px); padding: 0 8px 0 10px; background: var(--surface-raised); box-shadow: inset 0 0 0 1px var(--hairline-strong); color: var(--ivory); font-size: var(--ts-fs); font-weight: 600; }
-.ts-strip .ts-menu .ts-count { background: color-mix(in srgb, var(--ivory) 8%, transparent); color: var(--muted); }
+.ts-strip .ts-menu .ts-count { background: color-mix(in srgb, var(--ivory) 8%, transparent); box-shadow: none; color: var(--muted); }
 .ts-strip .ts-menu > .glyph { width: 14px; height: 14px; color: var(--muted); }
 .ts-gap { flex: 1 1 0; min-width: 4px; }
 .ts-suggest { flex: none; display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 3px 0 10px; border: 1px dashed var(--hairline-strong); border-radius: 13px; color: var(--muted); font-size: var(--ts-fs-small); white-space: nowrap; }
@@ -78,8 +78,9 @@
 }
 
 /* ---- menus: the Add menu, a tab's menu, the overflow list, the small-window menu ---- */
-.ts-pop { position: fixed; z-index: calc(var(--z-transient, 90) - 2); display: flex; flex-direction: column; box-sizing: border-box; min-width: 200px; max-width: calc(100vw - 16px); padding: 6px; border: 1px solid var(--studio-glass-edge, var(--hairline)); border-radius: var(--r-xl, 12px); background: var(--studio-float-fill, var(--panel-solid)); box-shadow: var(--studio-float-shadow, var(--shadow-2)); color: var(--ivory); font: 450 var(--ts-fs)/1.3 var(--font-ui); overflow-y: auto; overscroll-behavior: contain; }
-.ts-pop-tab, .ts-pop-more { width: 270px; }
+.ts-pop { position: fixed; z-index: calc(var(--z-transient, 90) - 2); display: flex; flex-direction: column; box-sizing: border-box; min-width: 200px; max-width: calc(100vw - 16px); padding: 6px; border: 1px solid var(--studio-glass-edge, var(--hairline)); border-radius: var(--r-xl, 12px); background: var(--studio-float-fill, var(--panel-solid)); box-shadow: var(--studio-float-shadow, var(--shadow-2)); color: var(--ivory); font: 450 var(--ts-fs)/1.3 var(--font-ui); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
+.ts-pop-tab { width: 304px; }
+.ts-pop-more { width: 290px; }
 .ts-pop-menu { width: min(320px, calc(100vw - 16px)); }
 .ts-pop-add { width: min(340px, calc(100vw - 16px)); padding: 0; }
 .ts-pop-behaviour { width: min(420px, calc(100vw - 16px)); padding: 10px; }
@@ -90,6 +91,7 @@
 .ts-pop .ts-menuitem[aria-current="true"] { background: var(--surface-raised); font-weight: 600; }
 .ts-pop .ts-menuitem[data-preview] .ts-menulabel { font-style: italic; }
 .ts-pop .ts-menuitem .glyph { width: 16px; height: 16px; flex: none; color: var(--muted); }
+.ts-pop .ts-menuitem .ts-dot { flex: none; margin: 0 4px; }
 .ts-menulabel { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ts-pop .ts-key, .ts-card .ts-key { margin-left: auto; padding: 0 6px; font: 600 var(--ts-fs-small)/1.5 var(--font-mono); }
 .ts-card .ts-key { margin-left: 0; }
@@ -103,7 +105,9 @@
 .ts-searchrow .glyph { width: 15px; height: 15px; color: var(--dim); }
 .ts-searchrow .ts-search { flex: 1 1 auto; min-width: 0; min-height: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; outline: 0; color: var(--ivory); font: inherit; }
 .ts-searchrow .ts-search::placeholder { color: var(--dim); }
-.ts-rows { flex: 1 1 auto; min-height: 0; padding: 0 6px 6px; overflow-y: auto; }
+/* The row shows the focus ring (:focus-within above), as the palette's capsule does; the app's own input rules (styles.css, studio-ui.css) are stronger than one class, so this repeats the parent. */
+.ts-pop .ts-searchrow .ts-search:is(:focus, :focus-visible) { outline: none; box-shadow: none; border: 0; }
+.ts-rows { flex: 1 1 auto; min-height: 0; padding: 0 6px 6px; overflow-x: hidden; overflow-y: auto; }
 .ts-pop .ts-row { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 0; margin: 0; padding: 7px 10px; border: 0; border-radius: 9px; background: transparent; box-shadow: none; transform: none; color: var(--ivory); font: inherit; text-align: left; cursor: pointer; }
 .ts-pop .ts-row:hover, .ts-pop .ts-row[aria-selected="true"] { background: color-mix(in srgb, var(--ivory) 7%, transparent); border: 0; }
 .ts-pop .ts-row[aria-selected="true"] { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 35%, transparent); }

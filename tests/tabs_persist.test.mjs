@@ -181,6 +181,25 @@ test("a burst of changes is written once, a moment later; before a reload, when 
   assert.equal(storage.writes, 8, "nothing pending, nothing written");
 });
 
+test("nothing is written until something changes: not at launch, not when the project becomes known, not when another project is opened", async () => {
+  class Counting extends Map { constructor() { super(); this.writes = []; } set(key, value) { if (key.startsWith("mefiStudio.tabs.")) this.writes.push(key); return super.set(key, value); } }
+  const storage = new Counting();
+  const t = await tabsEnv({ storage, project: null });
+  await t.advance(1000);
+  assert.deepEqual(storage.writes, [], "a launch that has changed nothing has written nothing");
+  t.board.projectId = "p1";
+  t.window.dispatchEvent({ type: "mefi:project-changed", detail: { projectId: "p1" } });
+  await t.advance(1000);
+  assert.deepEqual(storage.writes, [], "the project becoming known is not a change either: there was nothing to carry");
+  t.board.projectId = "p2";
+  t.window.dispatchEvent({ type: "mefi:project-changed", detail: { projectId: "p2" } });
+  await t.advance(1000);
+  assert.deepEqual(storage.writes, [], "and neither is opening another project that has no tabs yet");
+  await t.go("fleet"); t.tabs.keep();
+  await t.advance(1000);
+  assert.deepEqual([...new Set(storage.writes)].sort(), [GLOBAL, PROJECT("p2")], "the first change is written, to the project it was made in");
+});
+
 test("stop() writes what is pending", async () => {
   const t = await tabsEnv();
   t.tabs.open("fleet", {}, { preview: false });

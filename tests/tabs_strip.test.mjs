@@ -214,6 +214,8 @@ test("the 'more' menu lists what is folded, and choosing one brings it into view
   assert.equal(pop.getAttribute("aria-label"), "More tabs");
   assert.equal(more(t).getAttribute("aria-expanded"), "true");
   assert.deepEqual(labelsOf(menuItems(t)), folded, "the same tabs, in the same order");
+  assert.equal(menuItems(t).filter((node) => node.querySelector(".ts-dot")).length, folded.filter((title) => title.startsWith("Session")).length, "a session has its state's dot here too, as on its tab");
+  assert.equal(menuItems(t).filter((node) => node.querySelector("svg")).length, folded.filter((title) => !title.startsWith("Session")).length, "and a page its glyph");
   const first = menuItems(t)[0];
   await t.click(first);
   assert.equal(t.popover(), null, "the menu closes");
@@ -871,6 +873,7 @@ test("the Add menu lists the places the registry offers, this project's sessions
     "Settings",
   ]);
   for (const hidden of ["Vibe", "Search", "Configuration", "Friends", "Appearance", "Hidden", "Shelved", "Done long ago"]) assert.equal(rowsOf(t).includes(hidden), false, `${hidden} is not a place a tab can be`);
+  assert.ok(pop.querySelectorAll(".ts-row")[0].querySelector("svg"), "a closed page has its glyph in the list, like every other row");
   assert.equal(hintOf(t, "Fleet"), "Open", "what already has a tab says so");
   assert.equal(hintOf(t, "Home"), "Pinned", "Home is always pinned");
   assert.equal(hintOf(t, "Worktrees"), "");
@@ -1188,6 +1191,10 @@ test("Tab behaviour opens from the strip's own button and from Search; Search fa
   assert.match(record.searchTerms, /preview/);
   record.run();
   assert.equal(t.popover().id, "mefi-tabs-pop-behaviour", "from Search it opens where the tabs are");
+  t.window.dispatchEvent({ type: "mefi:nav", detail: { id: "tabBehaviour", action: "open", params: {} } });
+  assert.ok(t.popover(), "and the nav announcing the action it has just run does not close it again");
+  t.window.dispatchEvent({ type: "mefi:nav", detail: { id: "palette", action: "open", params: {} } });
+  assert.equal(t.popover(), null, "while any other page or layer opening does");
   t.tabs.stop(); t.tabs.start();
   const opened = [];
   t.window.MefiConfig = { open: (options) => opened.push(options) };

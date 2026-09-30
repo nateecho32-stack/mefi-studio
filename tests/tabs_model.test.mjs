@@ -154,7 +154,7 @@ test("closing the tab you are on goes to its right neighbour, else its left, els
   assert.equal(t.active(), "Fleet", "nothing to the right: the one to the left");
   t.tabs.close(idOf("fleet")); await t.settle();
   assert.equal(t.active(), "Home", "nothing left: Home");
-  assert.equal(t.nav.calls.at(-1)[0], "workspace");
+  assert.deepEqual(plain(t.nav.calls.at(-1)), ["workspace", { view: "home" }], "Home asks for its own view: in Build a bare go('workspace') brings back the session you last had open");
   assert.equal(t.tabs.close("home"), false);
   assert.deepEqual(t.titles(), ["Home"]);
   const before = t.nav.calls.length;
