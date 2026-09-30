@@ -67,6 +67,12 @@ and limit-paused calls recorded as ledger errors.
   `gpt-6-sol`; a real Studio Daily edition from all 10 wires in 0.7 s, with the
   Studio wire reporting Codex 0.154.0 < 0.159.2 and Claude Code 2.1.280 <
   2.1.285 from the npm registry.
+- After merging origin/main db63e15 (20 more commits: Command-tree children,
+  Vibe key tips, signing, the model tracker and community feed; conflicts
+  resolved file by file, `check-css --merge` honors every diverged winner):
+  `npm run check` ok (210 targets), `npm run audit` 0/0, `npm test` Node
+  parallel stage 5079 tests, 5072 pass, 0 fail, 7 skipped; serialized Electron
+  suites pass; Python contracts 248, OK (1 skipped).
 - Not run: a real ChatGPT sign-in (the owner's first), a real Codex turn over
   the app server (the plan's weekly window was at 99%), and
   `tools/verify_model_lab.py`, which already times out on clean main because
