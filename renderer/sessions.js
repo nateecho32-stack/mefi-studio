@@ -181,7 +181,7 @@
     try { window.MefiNav?.selectTask?.({ taskId, projectId: S.projectId, title: window.MefiTasks?.shortTitle?.(task) || task.title }); } catch { /* the selection is shared, not required */ }
     if (route) {
       const tabs = window.MefiTabs;
-      if (preview && typeof tabs?.open === "function") tabs.open("workspace", routeOf(taskId), { preview: true });
+      if (typeof tabs?.open === "function") tabs.open("workspace", routeOf(taskId), { preview });
       else window.MefiNav?.go?.("workspace", routeOf(taskId));
     }
     schedule();
@@ -409,7 +409,7 @@
   // The list as data: groups with their rows, nothing drawn (what a row says of itself follows html[data-detail], in the stylesheet).
   function listModel(data, { query = "", closed = {}, doneMore = 0, now = Date.now(), pinned = new Set(), open = null, worktrees = new Map(), counts = () => null } = {}) {
     const needle = String(query).trim().toLowerCase();
-    const all = tasksOf(data);
+    const all = tasksOf(data).filter((task) => task?.id && !task.archived && task.status !== "archived");
     const tasks = needle ? all.filter((task) => `${task?.title || ""} ${task?.prompt || ""}`.toLowerCase().includes(needle)) : all;
     const ctx = { now, pinned, open, worktrees, counts };
     const groups = [];
@@ -442,7 +442,7 @@
     fresh.id = "sessions-new"; fresh.append(el("kbd", "", "Ctrl N"));
     const tabs = el("div", "sx-switch"); tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "What to list");
     for (const [id, label] of [["sessions", "Sessions"], ["backlog", "Backlog"]]) {
-      const tab = button(label, "", () => { S.tab = id; remember({ tab: id }); S.painted.delete("list"); paintList(); byId(`sessions-tab-${id}`)?.focus?.(); }); tab.id = `sessions-tab-${id}`; tab.setAttribute("role", "tab"); tab.dataset.tab = id;
+      const tab = button(label, "", () => { S.tab = id; remember({ tab: id }); S.painted.delete("list"); paintList(); byId(`sessions-tab-${id}`)?.focus?.(); }); tab.id = `sessions-tab-${id}`; tab.setAttribute("role", "tab"); tab.setAttribute("aria-controls", "sessions-list-scroll"); tab.dataset.tab = id;
       tabs.append(tab);
     }
     const find = el("div", "sx-find");
@@ -453,7 +453,7 @@
       else if (event.key === "ArrowDown") { event.preventDefault(); focusRow(0); }
     });
     find.append(input);
-    const groups = el("div", "sx-groups"); groups.id = "sessions-list-scroll"; groups.setAttribute("role", "list"); groups.setAttribute("aria-label", "Sessions");
+    const groups = el("div", "sx-groups"); groups.id = "sessions-list-scroll"; groups.setAttribute("role", "tabpanel"); groups.setAttribute("aria-labelledby", "sessions-tab-sessions");
     groups.addEventListener("keydown", onListKey);
     const foot = el("div", "sx-foot"); foot.id = "sessions-foot";
     root.append(project, fresh, tabs, find, groups, foot);
@@ -481,9 +481,11 @@
     for (const tab of panel.tabs.querySelectorAll("[data-tab]")) {
       const on = tab.dataset.tab === S.tab;
       tab.setAttribute("aria-selected", String(on)); tab.classList.toggle("on", on);
+      if (on) panel.groups.setAttribute("aria-labelledby", tab.id);
       tab.replaceChildren(el("span", "", tab.dataset.tab === "backlog" ? (ideasCount ? `Backlog · ${ideasCount}` : "Backlog") : "Sessions"));
     }
     panel.input.placeholder = S.tab === "backlog" ? "Filter the backlog…" : "Filter sessions…";
+    if (panel.input.value !== S.query) panel.input.value = S.query; // a project switch clears the filter, and the box says so
     // Body: the groups, or the backlog.
     const held = document.activeElement && panel.groups.contains?.(document.activeElement) ? document.activeElement : null;
     const heldKey = S.focus ?? (held ? `${held.closest?.("[data-key]")?.dataset?.key ?? ""}|${held.dataset?.part ?? "main"}` : null);
@@ -528,7 +530,7 @@
     return nodes;
   }
   function rowNode(row) {
-    const box = el("div", "sx-row"); box.dataset.key = row.id; box.dataset.tone = row.tone; box.setAttribute("role", "listitem");
+    const box = el("div", "sx-row"); box.dataset.key = row.id; box.dataset.tone = row.tone;
     if (row.selected) { box.dataset.selected = ""; }
     if (S.renaming?.id === row.id) return renameNode(row, box);
     const main = el("button", "sx-row-main"); main.type = "button"; main.dataset.nav = "row"; main.dataset.part = "main"; main.tabIndex = -1;
@@ -556,7 +558,7 @@
     return box;
   }
   function ideaRow(idea) {
-    const box = el("div", "sx-row"); box.dataset.key = `idea:${idea.id}`; box.dataset.tone = "idea"; box.setAttribute("role", "listitem");
+    const box = el("div", "sx-row"); box.dataset.key = `idea:${idea.id}`; box.dataset.tone = "idea";
     const main = el("button", "sx-row-main"); main.type = "button"; main.dataset.nav = "row"; main.dataset.part = "main"; main.tabIndex = -1;
     main.title = `${idea.title} · ${idea.meta}`;
     main.setAttribute("aria-label", `Idea: ${idea.title}. ${idea.meta}`);
@@ -697,9 +699,8 @@
     const target = event.target;
     const row = target?.closest?.(".sx-row");
     const id = row?.dataset?.key;
-    if (S.renaming || target?.matches?.("input")) return;
+    if (S.renaming) return;
     const items = navItems();
-    const at = items.indexOf(target);
     const mains = items.filter((node) => node.dataset.nav !== "menu");
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
@@ -724,7 +725,6 @@
     } else if (event.key === "Escape" && S.menu) {
       event.preventDefault(); closeMenu(true);
     }
-    void at;
   }
   // Ctrl N starts a task from wherever the person is, as long as these panels are the Build desktop and nothing has a hold on the keys.
   function onGlobalKey(event) {
@@ -892,7 +892,7 @@
       let placed = false;
       const lastRun = items.map((item) => item.kind).lastIndexOf("run");
       items.forEach((item, index) => {
-        feed.append(feedNode(item, task, data, used));
+        feed.append(feedNode(item, task, used));
         if (index === lastRun) {
           const link = evidenceLink(task, counts);
           if (link) feed.append(link);
@@ -903,9 +903,9 @@
       if (record?.loading && !record.attempts.length) feed.append(el("li", "sx-note", "Loading its runs…"));
       else if (record?.error) feed.append(el("li", "sx-note", record.error));
       out.push(feed);
-      if (run) out.push(nowNode(task, run), liveNode(task, run));
+      if (run) out.push(nowNode(run), liveNode(task));
       panel.col.replaceChildren(...out);
-      panel.dock.replaceChildren(...dockNodes(task, questions, folded, data));
+      panel.dock.replaceChildren(...dockNodes(questions, folded));
       panel.dock.hidden = !panel.dock.childElementCount && !panel.dock.children?.length;
       if (stick) panel.scroll.scrollTop = panel.scroll.scrollHeight;
     }
@@ -995,7 +995,6 @@
     };
     const ghost = (label, run2, title = "") => button(label, "sx-btn ghost mini", run2, { title });
     const spec = (row) => specButton(row, task);
-    const busy = Boolean(B.busy()) || S.sending;
     if (B.isDone(task)) {
       if (task.dropped) return [banner("dim", "Dropped", "Closed without finishing. Reopen puts it back on the board.", [spec(statusSpec(task, "open", "Reopen", "Reopened. It is back in the queue."))])];
       const verified = task.verification?.state === "verified";
@@ -1010,7 +1009,6 @@
       return [banner("bad", task.verification?.state === "failed" ? "Its checks did not pass" : "It is blocked", why, [ghost("See the checks", () => setTab(task, "checks")), ghost("Request a change", () => setIntent(task, "change", true))])];
     }
     if (reading.stage === "approval") return [banner("warn", "Waiting for your approval", summary.blocker || "Review the brief, then approve the build.")];
-    void busy;
     return [];
   }
 
@@ -1063,8 +1061,7 @@
     if (extra) node.append(extra);
     return node;
   }
-  function feedNode(item, task, data, used) {
-    const B = builder();
+  function feedNode(item, task, used) {
     const li = el("li", `sx-item is-${item.kind}`);
     const companion = String(read("mefiStudio.workspace.companion", "Mefi") || "Mefi").trim() || "Mefi";
     if (item.kind === "brief") {
@@ -1087,7 +1084,7 @@
     } else if (item.kind === "notice") {
       li.append(who(companion, item.at, "m"), bubble(item.text));
     } else if (item.kind === "run") {
-      li.append(runCard(item, task, data));
+      li.append(runCard(item));
     } else if (item.kind === "verdict") {
       li.dataset.outcome = item.state === "verified" ? "good" : item.state === "failed" ? "bad" : "";
       const line = el("div", "sx-line"); line.append(el("b", "", item.state === "verified" ? "Verified" : item.state === "failed" ? "Not accepted" : "Checked"), el("span", "", item.text)); li.append(line);
@@ -1096,7 +1093,6 @@
     } else {
       const line = el("div", "sx-line"); line.append(el("b", "", item.kind === "result" ? "Result" : "Update"), el("span", "", item.text)); li.append(line);
     }
-    void B;
     return li;
   }
   // One run: how it began, what it fell back to, how it ended and what it said.
@@ -1114,7 +1110,7 @@
     }
     return steps;
   }
-  function runCard(item, task, data) {
+  function runCard(item) {
     const attempt = item.attempt;
     const card = el("section", "sx-card sx-run"); card.dataset.outcome = item.live ? "running" : attempt.outcome;
     const head = el("div", "sx-card-head");
@@ -1135,7 +1131,6 @@
       const said = el("details", "sx-said"); said.append(el("summary", "", "What it said"), el("pre", "", attempt.tail.slice(-24).join("\n")));
       card.append(said);
     }
-    void data; void task;
     return card;
   }
   function decidedCard(decision) {
@@ -1159,21 +1154,19 @@
     } catch (error) { toast(plain(error, "That could not be undone."), "bad"); }
   }
   // The worker's live line: what it is doing, since when, how far, and its last output.
-  function nowNode(task, run) {
+  function nowNode(run) {
     const node = el("div", "sx-now"); node.setAttribute("role", "status");
     const label = run.stopping ? "Stopping safely" : run.phase === "preparing" ? "Preparing" : run.phase === "finishing" ? "Finishing" : "Working now";
     node.append(el("i", "sx-now-dot"), el("span", "sx-now-words", `${label} · ${clip(run.currentStep || run.activity || "Waiting for the worker's first line", 120)}`));
     const since = Number(run.startedAt) || 0;
     if (since) node.append(el("span", "sx-now-r", `since ${clockOf(since)} · ${howLong(Date.now() - since)}`));
     if (Number.isFinite(Number(run.progress))) { const bar = document.createElement("progress"); bar.max = 1; bar.value = Math.max(0, Math.min(1, Number(run.progress))); bar.className = "sx-progress"; bar.setAttribute("aria-label", `Reported progress: ${Math.round(bar.value * 100)} percent`); node.append(bar); }
-    void task;
     return node;
   }
-  function liveNode(task, run) {
+  function liveNode(task) {
     const tail = Array.isArray(task.runProgress?.outputTail) ? task.runProgress.outputTail.slice(-10) : [];
     const fold = el("details", "sx-said sx-live"); fold.open = true;
     fold.append(el("summary", "", "Live output"), el("pre", "", tail.length ? tail.join("\n") : "Nothing yet. A run's output shows here while it works."));
-    void run;
     return fold;
   }
 
@@ -1182,9 +1175,9 @@
   // suggestion Mefi made is named, never acted on; "Decide later" only puts the card away for now (it stays in Needs you).
   // The host decides for you at once where your permission mode allows it and keeps the record under "Mefi decided", so there
   // is no countdown here: there is nothing that counts down.
-  function dockNodes(task, questions, folded, data) {
+  function dockNodes(questions, folded) {
     const out = [];
-    for (const question of questions) out.push(questionNode(task, question, data));
+    for (const question of questions) out.push(questionNode(question));
     for (const question of folded) {
       const node = el("div", "sx-ask mini later");
       node.append(el("span", "sx-ask-k", "Decide later"), el("span", "sx-q1", clip(question.title || question.question || "A decision", 90)), button("Answer now", "sx-btn primary mini", () => { S.later.delete(question.id); S.painted.delete("thread"); schedule(); }));
@@ -1192,7 +1185,7 @@
     }
     return out;
   }
-  function questionNode(task, question, data) {
+  function questionNode(question) {
     const B = builder();
     const card = el("section", "sx-ask"); card.dataset.qid = question.id; card.setAttribute("aria-label", "A decision this session is waiting on");
     const waited = question.at ? howLong(Date.now() - stampOf(question.at)) : "";
@@ -1230,7 +1223,6 @@
     own.append(input, send);
     own.addEventListener("submit", (event) => { event.preventDefault(); const text = input.value.trim(); if (!text) { input.focus?.(); return; } void B.answerQuestion(question, { text }, text); });
     card.append(own);
-    void task; void data;
     return card;
   }
 
@@ -1364,9 +1356,10 @@
       const key = `${task.id}:${intent}`;
       if (box.input.dataset.key !== key) {
         // What a reload put back into the box (renderer/nav.js keeps the words in a field) is this session's draft, not something to wipe.
-        const first = box.input.dataset.key === undefined;
+        const kept = box.input.dataset.key === undefined ? box.input.value : "";
         box.input.dataset.key = key;
-        box.input.value = S.drafts.get(key) ?? (first ? box.input.value : "");
+        if (kept && !S.drafts.has(key)) S.drafts.set(key, kept);
+        box.input.value = S.drafts.get(key) ?? "";
       }
       box.input.placeholder = intent === "ask" ? `Ask ${name} about this task…` : spec.placeholder;
       box.hint.textContent = intent === "note" ? (run ? "Saved now, read by its next run" : "Its next run reads this") : intent === "ask" ? `${name} answers here and in the chat` : "Makes a new task linked to this one";

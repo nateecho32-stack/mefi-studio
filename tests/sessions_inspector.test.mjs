@@ -59,7 +59,7 @@ test("a task opens on its plan, and on its changes once it has any; the choice i
   assert.equal(b.S.tab(), "plan", "a file appearing while someone reads the plan never moves the page under them");
   // After a moment with nothing read, the plan is settled too.
   const c = await open("t1", { tasks: [task("t1")] });
-  c.tick(3000); c.S.refresh(); await c.settle(3);
+  c.tick(3000); c.env.emit("mefi:workspace-state"); await c.settle(3);
   c.reviews.setCounts("t1", counts(2)); await c.settle(3);
   assert.equal(c.S.tab(), "plan");
 });
@@ -111,7 +111,7 @@ test("the tab labels carry live counts: the files changed, and the checks that p
   assert.equal(number(1).textContent, "1"); assert.equal(tabs(a)[1].getAttribute("aria-label"), "Changes, 1 file changed");
   a.reviews.setCounts("t1", counts(0)); await a.settle(3);
   assert.equal(number(1).hidden, true, "nothing changed, nothing to count");
-  a.data.tasks = [task("t1", { verificationRun: { results: [{ ok: true }, { ok: true }, { ok: true }, { ok: true }] } })]; a.S.refresh(); await a.settle(3);
+  a.data.tasks = [task("t1", { verificationRun: { results: [{ ok: true }, { ok: true }, { ok: true }, { ok: true }] } })]; a.env.emit("mefi:workspace-state"); await a.settle(3);
   assert.equal(number(2).textContent, "4/4", "the checks follow the task");
   assert.equal(tabs(a)[0].getAttribute("aria-label"), "Plan");
 });
@@ -130,7 +130,7 @@ test("review.js's panels are mounted for the session: Changes at once (so its co
   assert.equal(pane(a, "checks").children.includes(a.reviews.live()[1].host), true);
   await tabs(a)[3].click(); await a.settle();
   assert.deepEqual(live(), ["changes", "checks", "preview"]);
-  for (let round = 0; round < 3; round += 1) { a.S.refresh(); await a.settle(2); }
+  for (let round = 0; round < 3; round += 1) { a.env.emit("mefi:workspace-state"); await a.settle(2); }
   assert.equal(a.reviews.mounts.length, 3, "drawing again mounts nothing again");
   // Another session: the old ones are taken down and new ones mounted for it.
   a.data.tasks.push(task("t2")); a.S.select("t2", { route: false }); await a.settle(4);
@@ -173,9 +173,12 @@ test("Plan says where the task stands, what it was asked, what it is done when a
   const b = await open("t1", { tasks: [task("t1", { prompt })] });
   assert.deepEqual(texts(card(b, "plan", "Done when").querySelectorAll("li")), ["The list says No notes yet", "Tests pass"]);
   // A brief that is just words is shown as they are; a blocker is said.
-  const c = await open("t1", { tasks: [task("t1", { prompt: "Just fix it." })], stages: { t1: "blocked" }, backlog: { taskStates: [{ id: "t1", stage: "blocked", reason: "Waiting for the owner." }] } });
+  const c = await open("t1", { tasks: [task("t1", { prompt: "Just fix it." })], stages: { t1: { stage: "blocked", blocker: "Waiting for the owner." } } });
   assert.equal(card(c, "plan", "Brief").querySelector(".sx-text").textContent, "Just fix it.");
   assert.equal(card(c, "plan", "Done when"), undefined, "no lines, no card");
+  assert.match(card(c, "plan", "Where it stands").textContent, /Waiting for the owner\./, "what is in the way is said, in the warning's tone");
+  assert.ok(card(c, "plan", "Where it stands").querySelector(".sx-fine.warn"));
+  assert.equal(card(a, "plan", "Where it stands").querySelector(".sx-fine.warn"), null, "and only when something is");
 });
 
 test("the outline reads back the way Home writes it: Goal, Done when, Keep unchanged, in any case, with bullets or without", async () => {
@@ -236,7 +239,7 @@ test("Checks says what the task must pass and how its last check run went, with 
   assert.match(own.textContent, /Not accepted: The budget failed\./);
   assert.equal(a.reviews.live().find((entry) => entry.options.panel === "checks").host.parentNode, pane(a, "checks"), "review.js's checks sit under it, in the same tab");
   // It follows the task.
-  a.data.tasks = [task("t1", { acceptance: ["Changed"], verificationRun: { results: [{ name: "all", ok: true }] }, verification: { state: "verified", reason: "All good." } })]; a.S.refresh(); await a.settle(3);
+  a.data.tasks = [task("t1", { acceptance: ["Changed"], verificationRun: { results: [{ name: "all", ok: true }] }, verification: { state: "verified", reason: "All good." } })]; a.env.emit("mefi:workspace-state"); await a.settle(3);
   assert.match(pane(a, "checks").querySelector(".sx-own").textContent, /Verified: All good\./);
 });
 
@@ -250,21 +253,38 @@ test("Preview shows the project preview's state and its controls (Start, Open ap
   assert.equal(buttons()[1].disabled, true, "nothing to stop");
   await buttons()[0].click(); await a.settle();
   assert.deepEqual(a.calls.preview, ["start"]);
-  a.data.preview = { phase: "ready", available: true, canStop: true, url: "http://localhost:5173/" }; a.S.refresh(); await a.settle(3);
+  a.data.preview = { phase: "ready", available: true, canStop: true, url: "http://localhost:5173/" }; a.env.emit("mefi:workspace-state"); await a.settle(3);
   assert.match(own().textContent, /Preview ready/); assert.match(own().textContent, /http:\/\/localhost:5173\//);
   assert.deepEqual(texts(buttons()), ["Open app", "Stop preview", "Check again"]);
   await buttons()[0].click(); await a.settle();
   await buttons()[1].click(); await a.settle();
   await buttons()[2].click(); await a.settle();
   assert.deepEqual(a.calls.preview, ["start", "open", "stop", "status"], "each is the workspace's own action");
-  a.data.preview = { phase: "failed", error: "The dev server exited.", available: true }; a.S.refresh(); await a.settle(3);
+  a.data.preview = { phase: "failed", error: "The dev server exited.", available: true }; a.env.emit("mefi:workspace-state"); await a.settle(3);
   assert.match(own().textContent, /Preview failed/); assert.match(own().textContent, /The dev server exited\./); assert.equal(buttons()[0].textContent, "Retry preview");
-  a.data.preview = { phase: "starting", available: true }; a.S.refresh(); await a.settle(3);
+  a.data.preview = { phase: "starting", available: true }; a.env.emit("mefi:workspace-state"); await a.settle(3);
   assert.equal(buttons()[0].textContent, "Starting…"); assert.equal(buttons()[0].disabled, true);
-  a.data.preview = null; a.S.refresh(); await a.settle(3);
+  a.data.preview = null; a.env.emit("mefi:workspace-state"); await a.settle(3);
   assert.match(own().textContent, /Checking…/);
-  a.window.MefiWorkspace.previewAction = undefined; a.S.refresh(); await a.settle(3);
+  a.window.MefiWorkspace.previewAction = undefined; a.env.emit("mefi:workspace-state"); await a.settle(3);
   assert.ok(buttons().every((node) => node.disabled), "no workspace, no controls");
+});
+
+test("Preview does one thing at a time: while an action is out the controls wait, and a press that gets through is not sent twice", async () => {
+  const a = await open("t1", { tasks: [task("t1")], preview: { phase: "stopped", available: true, canStop: true } });
+  await tabs(a)[3].click(); await a.settle();
+  let finish; const seen = [];
+  a.window.MefiWorkspace.previewAction = (name) => { seen.push(name); return new Promise((resolve) => { finish = resolve; }); };
+  const buttons = () => pane(a, "preview").querySelector(".sx-own").querySelectorAll("button");
+  const start = buttons()[0];
+  await start.click(); await a.settle();
+  assert.ok(buttons().every((node) => node.disabled), "the controls wait for the action that is out");
+  await start.click(); await buttons()[2].click(); await a.settle();
+  assert.deepEqual(seen, ["start"], "a second press is not sent");
+  finish(true); await a.settle(4);
+  assert.ok(buttons().some((node) => !node.disabled), "and they come back when it is done");
+  await buttons()[2].click(); await a.settle();
+  assert.deepEqual(seen, ["start", "status"]);
 });
 
 test("Preview's Before and After are review.js's, mounted under the controls when the tab is first shown", async () => {
@@ -332,7 +352,7 @@ test("a usage report that cannot be read says so and is not read on every paint;
   await tabs(a)[4].click(); await a.settle(4);
   assert.match(pane(a, "agent").textContent, /The ledger is busy\./);
   const reads = a.api.of("taskMetrics").length;
-  for (let round = 0; round < 4; round += 1) { a.S.refresh(); await a.settle(2); }
+  for (let round = 0; round < 4; round += 1) { a.env.emit("mefi:workspace-state"); await a.settle(2); }
   assert.equal(a.api.of("taskMetrics").length, reads, "the same answer is not asked for again and again");
   const bare = await sessionsApp({ tasks: [task("t1")] });
   delete bare.api.taskMetrics; await bare.settle(); bare.S.select("t1", { route: false }); await bare.settle(4);

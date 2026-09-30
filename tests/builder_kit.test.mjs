@@ -6,6 +6,7 @@
 // is pinned, unchanged, by tests/builder_sessions.test.mjs.
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 import { createEnv, createPage } from "./fixtures/builder-env.mjs";
 
@@ -342,4 +343,13 @@ test("the chips' host calls are the kit's: where the folder is, the worker and i
   assert.match(a.calls.toasts.at(-1)[0], /Claude Code builds your tasks now\. This project's team keeps it\./);
   a.B.resetProject();
   assert.equal(chips.state.where, null, "a project change forgets where the last one's folder was");
+});
+
+test("tasks.js hands the words of its Usage & limit fold to the inspector's Agent tab, so the two say a time, a token count and a cost the same way", () => {
+  const source = readFileSync(new URL("../renderer/tasks.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+  const exported = /\n    usage: \{ ([^}]*) \},/.exec(source);
+  assert.ok(exported, "the object window.MefiTasks is assigned carries them");
+  assert.deepEqual(exported[1].split(", "), ["durationText", "usageTokens", "usageCost", "countText"]);
+  const words = source.slice(source.indexOf("  const durationText = "), source.indexOf("  function requestTaskUsage("));
+  for (const name of ["durationText", "usageTokens", "usageCost", "countText"]) assert.match(words, new RegExp(`const ${name} = `), `${name} is one of the fold's own`);
 });

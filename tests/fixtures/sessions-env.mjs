@@ -114,6 +114,9 @@ export async function sessionsApp({
 } = {}) {
   const env = createEnv({ storage, now: NOW, search });
   const { window, document } = env;
+  // The page's intervals are the env's list; which of them the page cleared is kept here (env.cleared: the ids, as setInterval handed them out).
+  env.cleared = [];
+  env.context.clearInterval = (id) => { env.cleared.push(id); };
   // The page's clock is the test's: `clock.t` moves by hand, and `new Date()` and `Date.now()` answer it.
   const clock = { t: NOW };
   env.context.Date = class extends Date { constructor(...args) { if (args.length) super(...args); else super(clock.t); } static now() { return clock.t; } };
@@ -134,7 +137,7 @@ export async function sessionsApp({
     isActive: () => nav.current === "workspace", snapshot: () => data, setComposerMode() {}, refresh: () => { calls.refresh += 1; }, startTask: (row) => { calls.started.push(row.id); return Promise.resolve(); },
     previewAction: (name) => { calls.preview.push(name); return Promise.resolve(true); }, composeTask: () => { calls.compose += 1; },
   };
-  window.MefiTasks = { workflowSummary: (item) => summary(stages[item.id] ?? (item.status === "done" ? "done" : item.status === "active" ? "running" : item.status === "awaiting_verification" ? "review" : "ready")), shortTitle: (item) => String(item.title || item.prompt || "").slice(0, 60) };
+  window.MefiTasks = { workflowSummary: (item) => { const said = stages[item.id]; const stage = (said && typeof said === "object" ? said.stage : said) ?? (item.status === "done" ? "done" : item.status === "active" ? "running" : item.status === "awaiting_verification" ? "review" : "ready"); return summary(stage, said && typeof said === "object" ? said : {}); }, shortTitle: (item) => String(item.title || item.prompt || "").slice(0, 60) };
   window.MefiToast = (message, kind, options) => { calls.toasts.push({ message, kind, options }); return { element: null }; };
   window.MefiConfirm = async (message, options) => { calls.confirms.push([message, options]); return window.__confirmWith !== false; };
   window.MefiSidebar = { open: (options) => calls.sidebar.push(options) };
@@ -145,7 +148,7 @@ export async function sessionsApp({
   const bench = { shell: stubShell({ document }), review: stubReview() };
   if (shell) window.MefiShell = bench.shell.shell;
   if (review) window.MefiReview = bench.review.review;
-  if (pictures) window.MefiComposerPictures = { bind(input, options) { const box = { input, options, images: [], busy: false, cleared: 0, refreshed: 0 }; calls.picked.push(box); window.MefiComposerPictures.box = box; return window.MefiComposerPictures.lookup.set(input, { take: () => box.images.map((image) => image.id), clear: () => { box.cleared += 1; box.images = []; }, refresh: () => { box.refreshed += 1; }, isBusy: () => box.busy, count: () => box.images.length, addFiles() {} }).get(input); }, lookup: new Map(), get(input) { return this.lookup.get(input) ?? null; }, box: null };
+  if (pictures) window.MefiComposerPictures = { bind(input, options) { const box = { input, options, images: [], busy: false, cleared: 0, refreshed: 0, row: document.createElement("div") }; box.row.className = "composer-attach"; input.parentNode?.append(box.row); calls.picked.push(box); window.MefiComposerPictures.box = box; return window.MefiComposerPictures.lookup.set(input, { take: () => box.images.map((image) => image.id), clear: () => { box.cleared += 1; box.images = []; }, refresh: () => { box.refreshed += 1; }, isBusy: () => box.busy, count: () => box.images.length, addFiles() {} }).get(input); }, lookup: new Map(), get(input) { return this.lookup.get(input) ?? null; }, box: null };
   if (picker) window.MefiComposerPicker = { bind(input, options) { const box = { input, options, on: true, refreshed: 0 }; window.MefiComposerPicker.box = box; return window.MefiComposerPicker.lookup.set(input, { refresh: () => { box.refreshed += 1; }, setPicker: (on) => { box.on = on; }, close() {}, isOpen: () => false }).get(input); }, lookup: new Map(), get(input) { return this.lookup.get(input) ?? null; }, pickerPreference: (prefs) => prefs?.composerPicker !== false, box: null };
   vm_run(env, `${controls}\nwindow.MefiUi = { arm, plainError };`);
   vm_run(env, `(function () { "use strict"; ${usageWords}\n window.MefiTasks.usage = { durationText, usageTokens, usageCost, countText }; })();`);

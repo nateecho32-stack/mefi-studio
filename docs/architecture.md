@@ -1166,7 +1166,11 @@ failed process stays an error and cannot produce briefing requests.
   "<model> can't see images"), and a picture is not redacted the way text is,
   which it says. `MEFI_STUDIO_NO_IMAGE_ATTACH=1` switches all of it off: the
   channel refuses, a message naming a picture is refused, and the box asks once
-  at start and shows no button.
+  at start and shows no button. `assistant:image-read { id }` gives one saved
+  picture back as a data URL (with its name, type, size and dimensions, never a
+  path) so Build's thread can show what a message or a brief carries: only an id
+  the store saved, only while a project is open, only when the record and the
+  bytes still agree, and refused by the same switch.
 - **@ # / in a message** (Home's message box: `renderer/composer-picker.js`,
   `scripts/mentions.cjs`, `scripts/project-files.cjs`, `scripts/gitignore-lite.cjs`,
   main.cjs "Mentions in a message"). Typing `@` offers the open project's files by
@@ -2297,6 +2301,90 @@ view change that nothing announces (Build's view switch) is seen at the next
 trigger, not instantly (`MefiTabs.reader` is the hook for a page that can say);
 Friends opens as a window over whatever is showing and gets no tab; after Enter
 on a tab the page it opens takes the keyboard, as any page does.
+
+### Build's desktop in the 0.5 frame: the session list, the thread and the inspector
+
+With the new layout on (`html[data-layout="v2"]`, off by default; `?layout=v2`
+or `MefiNav.setLayout("v2")`) Build's Home is three panels that
+`renderer/sessions.js` (`window.MefiSessions`, with `renderer/sessions.css`)
+hands to the shell's regions (`MefiShell.mount("list" | "main" | "inspector",
+key, element, { title, order })`). The panels only read what the page already
+holds (`MefiWorkspace.snapshot()` and the pushes it gets) and what
+`renderer/builder.js` and `renderer/review.js` export for them; the session
+logic (what a task is reading as, the groups, what a task offers, how a question,
+a note, an Ask and a Change go through, what "Done when" says, the chips' host
+calls) stays in builder.js, so the Sessions layout of Home and these panels can
+never disagree. Nothing is drawn unless the layout is on and a shell is there.
+
+- **The list.** This project's tasks as sessions, grouped Needs you, Running,
+  Review, Queued and Done, newest first (pinned first), one status dot, a title
+  and one line of words each; what a row says follows `html[data-detail]`
+  (titles, plus status, everything: the stylesheet decides, the row always
+  draws every line). A run in its own worktree wears a branch mark, from the
+  list `MefiWorktrees` already holds. Above it: the project and its branch (the
+  project switcher), **New task** (Ctrl N: Home's own message box in its task
+  purpose), and **Sessions | Backlog** (the backlog lists ideas nobody has made
+  a task of); under it a filter. A row's menu is open in a new tab, pin, rename
+  (`tasks:action rename`), stop and delete (the board's own `tasks:delete` behind
+  the styled confirm, with Undo from Recently deleted). Finished work shows twelve
+  rows and offers twenty-five more at a time.
+- **The thread.** The selected task's title and chips, then what happened in order:
+  the brief (with the pictures it names, read back by opaque id through
+  `assistant:image-read`, never as a path), each run as a card with its steps and
+  what it said, the live "now" line, notes, Asks and their answers (rebuilt from
+  the conversation, so they survive a reload, pictures included), the record of
+  what Mefi decided with its Undo (`autonomy:undo`), banners for review, failure,
+  approval and done, a line linking to the Changes tab and the before and after
+  shots of the attempt (`tasks:evidence`) on one comparison frame with a
+  lightbox. A question that waits on you is docked above the box: the option it
+  recommends first, what Mefi suggests and why (named, never acted on), your own
+  words, and **Decide later**, which only puts the card away (the task stays in
+  Needs you). There is no countdown, because this app's host decides at once
+  where the permission mode allows it and keeps the record, and waits otherwise;
+  a countdown would count to nothing. The box takes a Note, an Ask or a Change
+  through `MefiBuilder.sendWords`, with Attach picture and the `@ # /` picker
+  bound to it (a Note cannot carry a picture), and the chips for the branch, the
+  Worktree switch, the permission mode and the coding worker and its tier.
+- **The inspector.** Plan (where the task stands, the brief read back as its
+  outline, what it is done when, the earlier versions of the brief with Restore:
+  `tasks:history`, `tasks:restore`), Changes and Checks (review.js's own panels,
+  mounted one at a time with `MefiReview.mount(host, { taskId, projectId, panel })`,
+  Changes whenever a session is open so its count is live), Preview (the project
+  preview's controls through the workspace's own `previewAction`, and review.js's
+  Before and After; an embedded live preview is not here) and Agent (who is on it,
+  what it is doing, usage and the time limit in tasks.js's own words, Stop). A task
+  opens on its changes once it has any and on its plan before that, settled when
+  the list has been read; the tab a person picks is theirs and is remembered.
+- **Selection and memory.** The selected session follows the router:
+  `mefi:nav` for Home with `{ view: "task", taskId }`, and `nav.go("tasks",
+  { taskId })` (the palette, a notification's `alerts:open`, Home's "View task") is
+  redirected to it by one marked block in `nav.js`; the task board stays one press
+  away (`board: true`, which the thread's board button sets). What is open, the
+  list it was on, the folded groups and each task's tab are remembered per project
+  (`mefiStudio.sessions.v1`, twelve projects). A session that is no longer on the
+  board is let go of with one line.
+- **Coming and going.** `nav.js applyLayout` calls `MefiSessions.attach()` when the
+  layout turns on and `detach()` when it turns off, so turning v2 on or off at run
+  time draws or removes the panels; a shell that is not there yet is waited for
+  (its `mefi:shell-layout` event, and a short retry). While the thread shows, Home
+  is covered (`inert`) so its scroll fades and tab stops stay out of the way. A
+  window nobody can see is not drawn; it is drawn once, current, when it comes back.
+- **Kill switch.** `?sessions=off` for one launch, or `mefiStudio.sessions` saved as
+  `off` (`MefiSessions.setEnabled(false)` writes it), puts the panels away and
+  leaves Home as it is; `?sessions=on` wins for one launch. With the layout off
+  nothing of this is drawn, listened to, stored or asked of the host.
+
+Tests: `tests/sessions_list.test.mjs`, `tests/sessions_thread.test.mjs` and
+`tests/sessions_inspector.test.mjs` run the real builder.js in the shared fake DOM
+(`tests/fixtures/sessions-env.mjs`); `tests/sessions_render.test.mjs` runs the lot
+in a real window at five sizes with a stand-in for the shell's regions.
+
+**Known limits.** The panels depend on the shell to place them and to fold them into
+drawers below 900 CSS px; "See the changes" asks the shell to open a closed
+inspector only when it offers a way (`reveal`, or `resize` when the column is at
+0 and not folded). With Home's own Sessions layout (`homeLayout=sessions`) also on,
+its menu list repeats this list: leave Home on its default. There are no Drafts
+(the app keeps none); Ctrl N is not bound in Vibe; a Note cannot carry a picture.
 
 ### Community
 

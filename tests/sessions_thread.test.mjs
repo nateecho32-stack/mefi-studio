@@ -100,8 +100,9 @@ test("a picture that cannot be read says why, in words, instead of leaving a hol
   const a = await open("t1", { tasks: [task("t1", { prompt: `Look at this.\nThe owner attached x.png at /p/${pic}.png` })], api: bridge({ pictures: {} }) });
   assert.match(feed(a)[0].querySelector(".sx-thumb").textContent, /x\.png · That picture is no longer saved\./);
   assert.equal(feed(a)[0].querySelector(".sx-thumb").tagName, "span", "it is a line, not a button that opens nothing");
-  const off = await open("t1", { tasks: [task("t1", { prompt: `Look.\nThe owner attached x.png at /p/${pic}.png` })], api: bridge({ pictures: { [pic]: { ok: false, off: true, error: "Picture attachments are switched off on this PC." } } }) });
-  assert.match(feed(off)[0].querySelector(".sx-thumb").textContent, /switched off on this PC/);
+  const off = await open("t1", { tasks: [task("t1", { prompt: `Look.\nThe owner attached x.png at /p/${pic}.png` })], api: bridge({ pictures: { [pic]: { ok: false, off: true, error: "PICTURES_OFF (the host's own wording)" } } }) });
+  assert.match(feed(off)[0].querySelector(".sx-thumb").textContent, /x\.png · Pictures are switched off on this PC\./, "the switch is named in the thread's words, whatever the host adds");
+  assert.doesNotMatch(feed(off)[0].querySelector(".sx-thumb").textContent, /PICTURES_OFF/);
   const bare = await sessionsApp({ tasks: [task("t1", { prompt: `Look.\nThe owner attached x.png at /p/${pic}.png` })] });
   delete bare.api.assistantImageRead;
   await bare.settle(); bare.S.select("t1", { route: false }); await bare.settle(4);
@@ -135,21 +136,24 @@ test("a note, an ask and its answer are in the feed in the order they happened; 
     { id: "m1", role: "user", text: 'About the task "Task t1" (t1): Does this match?', at: mins(30), projectId: "p1", images: [{ id: pic, name: "toolbar.png" }] },
     { id: "m2", role: "assistant", text: "Yes, it does.", at: mins(29), projectId: "p1" },
     { id: "m3", role: "user", text: 'About the task "Task t2" (t2): Something else', at: mins(28), projectId: "p1" },
+    { id: "m3b", role: "user", text: 'About the task "Task t1" (t1): Asked in another project', at: mins(27), projectId: "p9" },
+    { id: "m3c", role: "user", text: 'About the task "Task t1" (t1): Asked before messages kept their project', at: mins(20) },
     { id: "m4", role: "user", text: 'About the task "Task t1" (t1): And now?', at: mins(10), projectId: "p1" },
     { id: "m5", role: "assistant", text: "Not yet.", at: mins(9), projectId: "p1", kind: "notice-not" },
     { id: "m6", role: "assistant", text: "A notice", at: mins(8), projectId: "p1", kind: "notice", taskId: "t1" },
   ];
   const row = task("t1", { createdAt: mins(60), logs: [{ at: mins(45), kind: "note", text: "Prefer rounded corners" }, { at: mins(44), kind: "result", text: "Checked it" }, { at: mins(43), kind: "log", text: "Picked up by a worker" }, { at: mins(42), text: "task created" }] });
   const a = await open("t1", { tasks: [row, task("t2")], messages, api: bridge({ pictures: { [pic]: picture(4, { id: pic, name: "toolbar.png" }) } }) });
-  assert.deepEqual(feed(a).map((node) => node.className.replace("sx-item ", "")), ["is-brief", "is-note", "is-result", "is-log", "is-ask", "is-ask", "is-notice"], "in the order they happened, and nothing about the other task");
+  assert.deepEqual(feed(a).map((node) => node.className.replace("sx-item ", "")), ["is-brief", "is-note", "is-result", "is-log", "is-ask", "is-ask", "is-ask", "is-notice"], "in the order they happened, and nothing about the other task or another project's words");
   const asks = feed(a).filter((node) => node.classList.contains("is-ask"));
   assert.match(asks[0].textContent, /Does this match\?/); assert.match(asks[0].textContent, /Yes, it does\./);
   assert.ok(asks[0].querySelector(".sx-thumb img"), "the picture the question carried shows under it");
-  assert.match(asks[1].textContent, /And now\?/); assert.match(asks[1].textContent, /Not yet\./);
+  assert.match(asks[1].textContent, /before messages kept their project/, "a message with no project on it is this project's");
+  assert.match(asks[2].textContent, /And now\?/); assert.match(asks[2].textContent, /Not yet\./);
+  assert.doesNotMatch(feed(a).map((node) => node.textContent).join("|"), /another project/);
   assert.match(feed(a)[1].textContent, /Prefer rounded corners/); assert.match(feed(a)[1].textContent, /Note/);
   assert.doesNotMatch(feed(a).map((node) => node.textContent).join("|"), /task created/i, "the bookkeeping line is left out");
   // A question that has been sent and not answered, and one that failed.
-  a.B.asks("t1");
   const local = await open("t1", { tasks: [task("t1")] });
   await local.one("main", "#sessions-input").trigger("input");
   local.one("main", "#sessions-input").value = "Is it done?";
@@ -200,11 +204,11 @@ test("a run that is working shows the live line: what it is doing, since when an
   assert.equal(a.one("main", ".sx-live pre").textContent, "a\nb\nc");
   assert.equal(a.one("main", ".sx-live").open, true, "the live output is open while it works");
   // Phases and a stop in progress change the word.
-  a.data.status.running = [{ taskId: "t1", runId: "r1", phase: "preparing", activity: "Setting up", startedAt: mins(1) }]; a.S.refresh(); await a.settle(3);
+  a.data.status.running = [{ taskId: "t1", runId: "r1", phase: "preparing", activity: "Setting up", startedAt: mins(1) }]; a.env.emit("mefi:workspace-state"); await a.settle(3);
   assert.match(a.one("main", ".sx-now-words").textContent, /^Preparing · Setting up$/);
-  a.data.status.running = [{ taskId: "t1", runId: "r1", stopping: true, startedAt: mins(1) }]; a.S.refresh(); await a.settle(3);
+  a.data.status.running = [{ taskId: "t1", runId: "r1", stopping: true, startedAt: mins(1) }]; a.env.emit("mefi:workspace-state"); await a.settle(3);
   assert.match(a.one("main", ".sx-now-words").textContent, /^Stopping safely · Waiting for the worker's first line$/);
-  a.data.status.running = []; a.data.tasks = [task("t1", { status: "open" })]; a.S.refresh(); await a.settle(3);
+  a.data.status.running = []; a.data.tasks = [task("t1", { status: "open" })]; a.env.emit("mefi:workspace-state"); await a.settle(3);
   assert.equal(a.one("main", ".sx-now"), null, "nothing is live when nothing runs");
 });
 
@@ -391,7 +395,7 @@ test("before and after shots of an attempt show in the thread on one frame, read
   assert.deepEqual(media.querySelectorAll(".sx-compare img").map((img) => img.getAttribute("src")), [shot("before", 1).dataUrl, shot("after", 1).dataUrl], "a link or a file path is never loaded as a shot");
   assert.equal(media.querySelector(".sx-card-head b").textContent, "Before and after");
   assert.equal(a.api.of("tasksEvidence").length, 1, "read once");
-  a.S.refresh(); await a.settle(3); a.S.refresh(); await a.settle(3);
+  a.env.emit("mefi:workspace-state"); await a.settle(3); a.env.emit("mefi:workspace-state"); await a.settle(3);
   assert.equal(a.api.of("tasksEvidence").length, 1, "and not again while the attempt is the same");
   assert.ok(media.querySelector(".sx-compare").style["--ratio"].includes("1280 / 800"), "the frame has the shot's own shape");
   // Only one shot: shown alone, named for what it is.
@@ -411,8 +415,23 @@ test("the comparison's position is the person's, kept for the task, and reachabl
   assert.equal(range.type, "range"); assert.equal(range.value, "50"); assert.equal(range.getAttribute("aria-label"), "Compare before and after");
   range.value = "20"; await range.trigger("input");
   assert.equal(a.one("main", ".sx-compare").style["--pos"], "20%"); assert.match(range.getAttribute("aria-valuetext"), /20% of the width shows before/);
-  a.S.refresh(); a.S.select("t1", { route: false }); await a.settle(4);
+  a.env.emit("mefi:workspace-state"); a.S.select("t1", { route: false }); await a.settle(4);
   assert.equal(a.one("main", ".sx-cmp-range").value, "20", "it is where it was left when the thread is drawn again");
+});
+
+test("the lightbox keeps the page's single-key shortcuts from firing behind it, leaves chords alone, and goes when the page moves on", async () => {
+  const a = await withShots([shot("before", 1), shot("after", 1)]);
+  await a.one("main", ".sx-media .sx-link").click();
+  const log = [];
+  const send = async (event) => { for (const listener of [...a.document.body.listeners.keydown]) await listener({ preventDefault() { log.push(["prevented", event.key]); }, stopPropagation() { log.push(["stopped", event.key]); }, ...event }); };
+  await send({ key: "h" });
+  assert.deepEqual(log, [["prevented", "h"], ["stopped", "h"]], "a letter is swallowed: nav.js's H would otherwise go Home behind it");
+  log.length = 0;
+  await send({ key: "r", ctrlKey: true });
+  assert.deepEqual(log, [], "Ctrl R is the app's");
+  a.navigate("tasks", {}); await a.settle();
+  assert.equal(a.document.body.querySelector("#sessions-lightbox"), null, "a navigation closes it");
+  assert.equal(a.document.body.listeners.keydown?.length ?? 0, 0);
 });
 
 test("Open larger opens the lightbox on the shots: Before and After, arrows between them, Escape and a press outside close it, focus goes back", async () => {
@@ -469,13 +488,15 @@ test("the box starts as a Note, an Ask while a worker is on the task and a Chang
   assert.equal(box(a).intent, "note"); assert.equal(box(a).send.textContent, "Save note"); assert.equal(box(a).input.placeholder, "Tell it something for its next run…");
   a.S.select("busy", { route: false }); await a.settle(4);
   assert.equal(box(a).intent, "ask"); assert.equal(box(a).send.textContent, "Ask"); assert.equal(box(a).input.placeholder, "Ask Mefi about this task…");
+  assert.equal(a.one("main", "#sessions-hint").textContent, "Mefi answers here and in the chat");
   a.S.select("fin", { route: false }); await a.settle(4);
   assert.equal(box(a).intent, "change"); assert.equal(box(a).send.textContent, "Create follow-up");
   assert.equal(a.one("main", "#sessions-hint").textContent, "Makes a new task linked to this one");
   a.S.select("busy", { route: false }); await a.settle(4);
   await a.one("main", "#sessions-intent-note").click();
   assert.equal(box(a).intent, "note"); assert.equal(a.one("main", "#sessions-intent-note").getAttribute("aria-pressed"), "true"); assert.equal(a.one("main", "#sessions-intent-ask").getAttribute("aria-pressed"), "false");
-  a.data.status.running = []; a.S.refresh(); await a.settle(3);
+  assert.equal(a.one("main", "#sessions-hint").textContent, "Saved now, read by its next run", "a worker is on it: the note is read by the run after this one");
+  a.data.status.running = []; a.env.emit("mefi:workspace-state"); await a.settle(3);
   assert.equal(box(a).intent, "note", "a task that stops working does not change a choice that was made");
   assert.equal(a.one("main", "#sessions-hint").textContent, "Its next run reads this");
   assert.equal(a.one("main", "#sessions-compose").hidden, false);
@@ -495,10 +516,19 @@ test("a draft belongs to its task and its purpose, and is not lost by looking at
   assert.equal(box(a).input.value, "half a thought");
   await a.one("main", "#sessions-intent-ask").click();
   assert.equal(box(a).input.value, "a question");
-  // Words a reload put back into the box (renderer/nav.js keeps fields) are this session's draft and are not wiped.
-  const b = await sessionsApp({ tasks: [task("a")] });
-  await b.settle();
-  b.S.select("a", { route: false }); await b.settle(1);
+});
+
+test("words a reload put back into the box (renderer/nav.js keeps fields by id) are this session's draft and are not wiped by drawing it", async () => {
+  const a = await sessionsApp({ tasks: [task("a"), task("b")] });
+  await a.settle();
+  a.one("main", "#sessions-input").value = "words from before the reload";
+  await a.one("main", "#sessions-input").trigger("input");
+  a.S.select("a", { route: false }); await a.settle(4);
+  assert.equal(box(a).input.value, "words from before the reload", "they stay in the box they were put in");
+  a.S.select("b", { route: false }); await a.settle(4);
+  assert.equal(box(a).input.value, "", "and belong to the session that was open, not the next one");
+  a.S.select("a", { route: false }); await a.settle(4);
+  assert.equal(box(a).input.value, "words from before the reload");
 });
 
 test("Enter sends and Shift+Enter is a new line; a Note is saved into the task with a log line, and the box is emptied once it went", async () => {
@@ -559,6 +589,7 @@ test("the picture button and the @ # / picker are bound to this box, once, with 
   assert.equal(a.calls.picked.length, 1, "bound once, however often the thread is drawn");
   const pictures = a.window.MefiComposerPictures.box, picker = a.window.MefiComposerPicker.box;
   assert.equal(pictures.input, input); assert.equal(picker.input, input);
+  assert.equal(pictures.row.parentNode.id, "sessions-tools", "the picture button's row sits with the other controls, not on a line of its own");
   assert.equal(pictures.options.scope(), "p1", "the pictures a box holds belong to the project");
   assert.equal(pictures.options.blocked(), false);
   assert.equal(pictures.options.mode(), "chat", "an Ask is a message: what the picture note says follows");
@@ -645,11 +676,37 @@ test("while a send is under way the box says so and cannot be sent twice; a seco
   a.api.assistantMessage = (...args) => new Promise((resolve) => { release = () => resolve({ ok: true, state: { messages: [] } }); a.api.calls.push(["assistantMessage", ...args]); });
   await type(a, "First"); box(a).form.trigger("submit"); await a.settle(3);
   assert.equal(box(a).send.textContent, "Sending…"); assert.equal(box(a).send.disabled, true);
+  const actions = () => a.all("main", "#sessions-head [data-spec]");
+  assert.ok(actions().length > 0, "the head offers something to do");
+  assert.ok(actions().every((node) => node.disabled), "and none of it can be pressed while the send is out");
   await type(a, "Second"); await submit(a);
   assert.equal(a.api.of("assistantMessage").length, 1, "one at a time");
   assert.equal(a.window.MefiComposerPictures.box.options.blocked(), true, "and the picture button is held too");
+  const toasts = a.calls.toasts.length;
+  a.window.MefiComposerPictures.box.busy = true; await submit(a); a.window.MefiComposerPictures.box.busy = false;
+  assert.equal(a.calls.toasts.length, toasts, "a press while one is out is ignored quietly: no word about pictures, no second send");
   release(); await a.settle(6);
   assert.equal(box(a).send.textContent, "Ask"); assert.equal(box(a).send.disabled, false);
+  assert.ok(actions().every((node) => !node.disabled), "the head's actions come back with the box");
+});
+
+test("nothing to say sends nothing and puts the cursor back in the box; a send that comes back after the person moved on leaves the words they are writing alone", async () => {
+  const a = await open("t1", { tasks: [task("t1", { status: "active", runId: "r" }), task("t2")], running: [{ taskId: "t1", runId: "r" }] });
+  box(a).input.focused = false;
+  const before = a.api.calls.length;
+  await submit(a);
+  assert.equal(a.api.calls.length, before, "nothing was asked of the host");
+  assert.equal(box(a).input.focused, true, "the cursor is in the box, where the words go");
+  // An Ask goes out, the person opens another session and starts writing; the answer arriving must not wipe that.
+  let release;
+  a.api.assistantMessage = (...args) => new Promise((resolve) => { release = () => resolve({ ok: true, state: { messages: [] } }); a.api.calls.push(["assistantMessage", ...args]); });
+  await type(a, "About the first"); box(a).form.trigger("submit"); await a.settle(3);
+  a.S.select("t2", { route: false }); await a.settle(4);
+  await type(a, "Words for the second"); await a.settle();
+  release(); await a.settle(6);
+  assert.equal(box(a).input.value, "Words for the second", "the box shows the session that is open, and keeps what was typed into it");
+  a.S.select("t1", { route: false }); await a.settle(4);
+  assert.equal(box(a).input.value, "", "the first session's own words went with its send");
 });
 
 test("a session that is not on the board shows no box, and the thread waits for one that is", async () => {

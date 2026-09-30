@@ -5,6 +5,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import vm from "node:vm";
 
 import { sessionsApp, task, bridge, at, mins, clean, NOW } from "./fixtures/sessions-env.mjs";
 
@@ -96,9 +97,12 @@ test("a run in its own worktree wears the branch mark, from the list worktrees.j
   const marked = a.all("list", ".sx-row").filter((node) => node.querySelector(".sx-branch")).map((node) => node.dataset.key);
   assert.deepEqual(marked.sort(), ["queued", "working"].sort(), "a checkout the list names wears the mark (a missing folder's name is in the summary too, without its branch)");
   assert.ok(a.row("working").querySelector(".sx-row-main").title.includes("in its own worktree"));
+  assert.match(a.row("working").querySelector(".sx-row-more").textContent, /mefi\/tags/, "a checkout that is there names its branch on the extra line");
+  assert.doesNotMatch(a.row("queued").querySelector(".sx-row-more").textContent, /mefi\/old/, "a folder that is gone does not lend its old branch name");
+  assert.match(a.row("queued").querySelector(".sx-row-more").textContent, /own worktree/);
   assert.ok(peeks <= 2, `it asked for a fresh look a couple of times, not on every paint (${peeks})`);
   const before = peeks;
-  for (let round = 0; round < 6; round += 1) { a.S.refresh(); await a.settle(); }
+  for (let round = 0; round < 6; round += 1) { a.env.emit("mefi:workspace-state"); await a.settle(); }
   assert.equal(peeks, before, "and not again within a few seconds");
   // The worktrees page announces a change; the mark follows.
   rows.list = { repo: true, rows: [] };
@@ -113,7 +117,7 @@ test("a window nobody can see is not drawn, and is drawn once, current, when it 
   assert.equal(a.row("queued").querySelector(".sx-row-title").textContent, "Task queued");
   a.document.hidden = true;
   a.data.tasks = a.data.tasks.map((row) => (row.id === "queued" ? { ...row, title: "Renamed while hidden" } : row));
-  a.S.refresh(); a.env.emit("mefi:workspace-state"); await a.settle(4);
+  a.env.emit("mefi:workspace-state"); a.env.emit("mefi:workspace-state"); await a.settle(4);
   assert.equal(a.row("queued").querySelector(".sx-row-title").textContent, "Task queued", "nothing was drawn for a window nobody sees");
   a.document.hidden = false; await a.document.body.trigger("visibilitychange"); await a.settle(4);
   assert.equal(a.row("queued").querySelector(".sx-row-title").textContent, "Renamed while hidden", "and it is current the moment it is shown");
@@ -125,7 +129,7 @@ test("a project that is not a git folder has no marks, and nothing asks for work
   assert.equal(a.all("list", ".sx-branch").length, 0);
   const b = await open();
   delete b.window.MefiWorktrees;
-  b.S.refresh(); await b.settle();
+  b.env.emit("mefi:workspace-state"); await b.settle();
   assert.equal(b.all("list", ".sx-row").length, 9, "the list still draws");
 });
 
@@ -162,7 +166,7 @@ test("Ctrl N starts a task from anywhere in Build, and does nothing in Vibe, und
 });
 
 test("Sessions | Backlog: the backlog lists the ideas nobody made a task of, newest first; the filter narrows either list and Escape clears it", async () => {
-  const ideas = [{ id: "i1", title: "Share a note", detail: "a link", source: "Mefi", at: at(1), status: "open" }, { id: "i2", title: "Tag suggestions", at: at(8), status: "open" }, { id: "i3", title: "Done already", at: at(1), status: "done" }, { id: "i4", title: "Already a task", at: at(1), status: "open", taskId: "queued" }];
+  const ideas = [{ id: "i2", title: "Tag suggestions", at: at(8), status: "open" }, { id: "i3", title: "Done already", at: at(1), status: "done" }, { id: "i1", title: "Share a note", detail: "a link", source: "Mefi", at: at(1), status: "open" }, { id: "i4", title: "Already a task", at: at(1), status: "open", taskId: "queued" }];
   const a = await open({ ideas });
   await a.settle();
   assert.equal(a.one("list", "#sessions-tab-backlog").textContent, "Backlog · 2", "the tab counts what is waiting");
@@ -186,13 +190,17 @@ test("Sessions | Backlog: the backlog lists the ideas nobody made a task of, new
   input.value = "archived"; await input.trigger("input"); await a.settle();
   assert.deepEqual(a.rowKeys(), [], "archived work is not on the list");
   input.value = "finished"; await input.trigger("input"); await a.settle();
-  assert.deepEqual(a.rowKeys(), ["finished", "finished-old"], "a word matches a title (or a brief), in any case");
+  assert.deepEqual(a.rowKeys(), ["finished", "finished-old"], "a word matches a title (or a brief)");
+  input.value = "  TASK FINISHED "; await input.trigger("input"); await a.settle();
+  assert.deepEqual(a.rowKeys(), ["finished", "finished-old"], "in any case, and spaces around it do not count (the titles read 'Task finished')");
+  input.value = "do finished-old"; await input.trigger("input"); await a.settle();
+  assert.deepEqual(a.rowKeys(), ["finished-old"], "the brief is searched too: only its prompt reads 'Do finished-old'");
 });
 
 test("the list says what to do when there is no project, no task or no match", async () => {
   const none = await sessionsApp({ tasks: [] });
   none.data.projectId = null; none.data.project = null;
-  none.S.refresh(); await none.settle();
+  none.env.emit("mefi:workspace-state"); await none.settle();
   assert.match(none.text("list", ".sx-empty"), /Open a project folder/);
   await none.one("list", ".sx-empty button").click();
   assert.equal(none.calls.sidebar.length, 1);
@@ -201,6 +209,40 @@ test("the list says what to do when there is no project, no task or no match", a
   assert.match(empty.text("list", ".sx-empty"), /Tasks you start show up here/);
   await empty.one("list", ".sx-empty button").click();
   assert.equal(empty.calls.compose, 1, "its button starts one");
+});
+
+test("the list is one tab panel named by the tab that is on, its headings and rows are buttons, and its tab stop is one", async () => {
+  const a = await open();
+  await a.settle();
+  const panel = a.one("list", "#sessions-list-scroll");
+  assert.equal(panel.getAttribute("role"), "tabpanel"); assert.equal(panel.getAttribute("aria-labelledby"), "sessions-tab-sessions");
+  assert.deepEqual(a.all("list", "[role=tab]").map((node) => [node.id, node.getAttribute("aria-controls"), node.getAttribute("aria-selected")]), [["sessions-tab-sessions", "sessions-list-scroll", "true"], ["sessions-tab-backlog", "sessions-list-scroll", "false"]]);
+  await a.one("list", "#sessions-tab-backlog").click(); await a.settle();
+  assert.equal(panel.getAttribute("aria-labelledby"), "sessions-tab-backlog", "the panel follows the tab");
+  assert.equal(a.all("list", "[role=list], [role=listitem]").length, 0, "no list roles that would hold headings and buttons");
+  await a.one("list", "#sessions-tab-sessions").click(); await a.settle();
+  assert.ok(a.all("list", ".sx-row-main").every((node) => node.tagName === "button" && node.type === "button"), "each row is a button");
+  assert.ok(a.all("list", ".sx-row-main").every((node) => node.getAttribute("aria-label").startsWith("Task ")), "named by its title, then its state");
+  assert.match(main(a, "asking").getAttribute("aria-label"), /^Task asking\. Needs your answer\. Asking a question · waiting 4m$/);
+  assert.match(main(a, "working").getAttribute("aria-label"), /^Task working\. Working\. Claude Code · Writing parseTags\(\)$/);
+});
+
+test("MefiSessions.open opens a session in a tab of its own, newTask starts Home's box, and the model's list is the data the rows are drawn from", async () => {
+  const a = await open();
+  await a.settle();
+  assert.equal(a.S.open("working"), true);
+  assert.deepEqual(clean(a.calls.tabsOpened.at(-1)), ["workspace", { view: "task", taskId: "working", projectId: "p1" }, { preview: false }]);
+  a.S.newTask(); assert.equal(a.calls.compose, 1); assert.equal(a.S.selected(), null);
+  const data = a.data;
+  const model = a.S.model.list(data, { now: NOW, pinned: new Set(["queued-old"]), open: "working", worktrees: new Map([["working", { branch: "mefi/x" }]]), counts: (id) => (id === "working" ? { files: 3, additions: 5, deletions: 1 } : null) });
+  assert.deepEqual(clean(model.groups.map((group) => [group.key, group.count, group.rows.length, group.closed, group.older])), [["needs", 2, 2, false, 0], ["running", 2, 2, false, 0], ["review", 1, 1, false, 0], ["queued", 2, 2, false, 0], ["done", 2, 2, false, 0]]);
+  const running = model.groups.find((group) => group.key === "running").rows.find((row) => row.id === "working");
+  assert.deepEqual(clean({ selected: running.selected, worktree: running.worktree, extra: running.extra, status: running.status, progress: running.progress }), { selected: true, worktree: "mefi/x", extra: "Claude Code · mefi/x · +5 −1", status: "Claude Code · Writing parseTags()", progress: 0.6 });
+  assert.equal(model.groups.find((group) => group.key === "queued").rows[0].id, "queued-old", "a pinned task leads its group");
+  assert.deepEqual(clean(a.S.model.list(data, { now: NOW, query: "working" }).groups.map((group) => group.count)), [2], "a filter leaves only the groups that have a match");
+  assert.deepEqual(clean(a.S.model.list(data, { now: NOW, closed: { done: true } }).groups.find((group) => group.key === "done")), { key: "done", title: "Done", tone: "done", count: 2, closed: true, older: 0, rows: [] });
+  assert.equal(a.S.model.list(data, { now: NOW }).total, 9); assert.equal(a.S.model.list(data, { now: NOW, query: "zzz" }).total, 0);
+  assert.deepEqual(clean(a.S.model.backlog({ ideas: [{ id: "i1", title: "Idea", source: "Mefi", at: at(1), status: "open" }] }, { now: NOW })), [{ id: "i1", title: "Idea", meta: "From Mefi · 1d ago" }]);
 });
 
 // ---- selecting a session ---------------------------------------------------------------------------------------------------------------
@@ -258,6 +300,29 @@ test("nav.go('tasks', { taskId }) lands in the thread; the board itself stays on
   assert.equal(a.S.redirect("tasks", { taskId: "working" }), null, "with the panels away it is the board");
 });
 
+test("renderer/nav.js hands a task opened by its id to the thread, and the layout switch to the panels: its two marked blocks", () => {
+  // The blocks are the only change nav.js has for this; they are cut out by their markers and run on their own, since nav.js itself needs a whole page.
+  const nav = readFileSync(new URL("../renderer/nav.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+  const blocks = [...nav.matchAll(/ *\/\/ ---- sessions \(renderer\/sessions\.js\) ----\n([\s\S]*?)\n *\/\/ ---- end of sessions ----/g)].map((match) => match[1]);
+  assert.equal(blocks.length, 2, "one in go(), one in applyLayout()");
+  assert.ok(nav.indexOf("function go(") < nav.indexOf(blocks[0]) && nav.indexOf(blocks[0]) < nav.indexOf("// In Vibe mode, Home is Vibe"), "the redirect comes first in go(), before anything is closed or opened");
+  assert.ok(nav.indexOf("function applyLayout(") < nav.indexOf(blocks[1]) && nav.indexOf(blocks[1]) < nav.indexOf("function setLayout("), "the switch is the last thing applyLayout() does");
+  const goBlock = vm.runInNewContext(`(function (window, go, id, params, options) { ${blocks[0]}\n return "fell through"; })`);
+  const seen = [];
+  const follow = (...args) => { seen.push(args); return "followed"; };
+  const route = { id: "workspace", params: { view: "task", taskId: "t1" } };
+  assert.equal(goBlock({ MefiSessions: { redirect: (id) => (id === "tasks" ? route : null) } }, follow, "tasks", { taskId: "t1" }, { replace: true }), "followed", "the route the module names is the one that is taken");
+  assert.deepEqual(seen, [["workspace", { view: "task", taskId: "t1" }, { replace: true }]], "with its params and the caller's own options");
+  assert.equal(goBlock({ MefiSessions: { redirect: () => null } }, follow, "tasks", {}, {}), "fell through", "no route from the module: the router goes on as it was");
+  assert.equal(goBlock({}, follow, "tasks", {}, {}), "fell through", "and without the module the route is the router's own");
+  const applyBlock = vm.runInNewContext(`(function (window, on, was) { ${blocks[1]} })`);
+  const calls = [];
+  const module = { MefiSessions: { attach: () => calls.push("attach"), detach: () => calls.push("detach") } };
+  applyBlock(module, true, false); applyBlock(module, false, true); applyBlock(module, false, false); applyBlock(module, true, true);
+  assert.deepEqual(calls, ["attach", "detach", "attach"], "on draws the panels, off after on takes them away, off after off does nothing");
+  assert.doesNotThrow(() => applyBlock({}, true, false), "a page without the module is unaffected");
+});
+
 test("what is selected is remembered for each project and comes back on the next launch; another project has its own", async () => {
   const storage = new Map();
   const a = await open({ storage });
@@ -271,10 +336,13 @@ test("what is selected is remembered for each project and comes back on the next
   assert.equal(b.S.selected(), "queued", "the session that was open is open again");
   assert.equal(b.S.tab(), "changes", "and so is the tab that was chosen for it");
   // Another project: its own memory, and back again.
+  const find = b.one("list", "#sessions-find"); find.value = "queued"; await find.trigger("input"); await b.settle();
+  assert.deepEqual(b.rowKeys(), ["queued", "queued-old"], "a filter is typed in the first project");
   b.data.projectId = "p2"; b.data.tasks = [task("other", { projectId: "p2" })];
   b.env.emit("mefi:project-changed", { projectId: "p2" }); await b.settle();
   assert.equal(b.S.selected(), null, "a project with no memory opens on Home");
-  assert.deepEqual(b.rowKeys(), ["other"]);
+  assert.deepEqual(b.rowKeys(), ["other"], "the filter was about the first project's words, and is gone (every row of this one shows)");
+  assert.equal(find.value, "", "and the box does not keep the words it no longer applies");
   b.S.select("other", { route: false }); await b.settle();
   b.data.projectId = "p1"; b.data.tasks = board();
   b.env.emit("mefi:project-changed", { projectId: "p1" }); await b.settle();
@@ -292,7 +360,7 @@ test("a remembered session that is not on the board is waited for while the boar
   assert.equal(slow.S.selected(), "deleted", "remembered until the board says otherwise");
   assert.match(slow.text("main", "#sessions-thread-scroll"), /Opening the session/);
   assert.equal(slow.calls.toasts.length, 0);
-  slow.tick(7000); slow.S.refresh(); await slow.settle();
+  slow.tick(7000); slow.env.emit("mefi:workspace-state"); await slow.settle();
   assert.equal(slow.S.selected(), null, "an empty board after a few seconds has no such session");
   // A board that has loaded and does not have it: it is gone (deleted elsewhere), and the person is told once.
   const loaded = await sessionsApp({ tasks: board(), running: jobs(), stages, storage: memory() });
@@ -304,7 +372,7 @@ test("a remembered session that is not on the board is waited for while the boar
   const live = await sessionsApp({ tasks: board(), running: jobs(), stages });
   await live.settle();
   live.S.select("working", { route: false }); await live.settle();
-  live.data.tasks = live.data.tasks.filter((row) => row.id !== "working"); live.S.refresh(); await live.settle();
+  live.data.tasks = live.data.tasks.filter((row) => row.id !== "working"); live.env.emit("mefi:workspace-state"); await live.settle();
   assert.equal(live.S.selected(), null); assert.deepEqual(live.calls.toasts.map((item) => item.message), ["That session is no longer on the board."]);
 });
 
@@ -362,7 +430,11 @@ test("Rename turns the row into a box; Enter saves through the host, Escape puts
   await a.one("list", ".sx-rename").trigger("keydown", { key: "Escape" }); await a.settle();
   assert.equal(a.one("list", ".sx-rename"), null); assert.equal(a.api.of("tasksAction").length, 1, "Escape saves nothing");
   await (await openMenu(a, "queued"))[2].click(); await a.settle();
-  const same = a.one("list", ".sx-rename"); same.value = "  "; await same.trigger("input"); await same.trigger("keydown", { key: "Enter" }); await a.settle();
+  const same = a.one("list", ".sx-rename"); same.value = "  Task queued "; await same.trigger("input"); await same.trigger("keydown", { key: "Enter" }); await a.settle();
+  assert.equal(a.api.of("tasksAction").length, 1, "the name it already has (spaces aside) is not saved again");
+  assert.equal(a.one("list", ".sx-rename"), null, "and the row is a row again");
+  await (await openMenu(a, "queued"))[2].click(); await a.settle();
+  const blank = a.one("list", ".sx-rename"); blank.value = "  "; await blank.trigger("input"); await blank.trigger("keydown", { key: "Enter" }); await a.settle();
   assert.equal(a.api.of("tasksAction").length, 1, "a blank name is not a name");
   // A host that refuses says why, and the list keeps the old name.
   a.api.state.fail.tasksAction = "The task store is busy.";
@@ -515,7 +587,8 @@ test("turning the layout on later is one call, and attaching twice draws once; a
   // A shell that announces from inside mount (the real one tells its listeners when a region opens).
   const b = await open({ shell: false });
   const mounts = [];
-  b.window.MefiShell = { active: () => true, size: () => 0, mount: (region, key, element) => { mounts.push(region); b.env.emit("mefi:shell-layout", { region }); return { show() {}, hide() {}, unmount() {} }; } };
+  // The shell stops announcing after forty mounts, so a panel set that attaches over and over fails here instead of hanging the run.
+  b.window.MefiShell = { active: () => true, size: () => 0, mount: (region, key, element) => { mounts.push(region); if (mounts.length < 40) b.env.emit("mefi:shell-layout", { region }); return { show() {}, hide() {}, unmount() {} }; } };
   b.env.emit("mefi:shell-layout", {}); await b.settle();
   assert.deepEqual(mounts, ["list", "main", "inspector"], "no recursion, no second set of panels");
 });
@@ -544,8 +617,9 @@ test("putting the panels away removes everything: the shell's handles, the liste
   await a.settle();
   a.S.select("working", { route: false }); await a.settle();
   assert.equal(a.document.getElementById("workspace-layer").hasAttribute("inert"), true, "Home is covered while a session shows");
-  assert.equal(a.env.listeners("mefi:workspace-state"), 1); assert.equal(a.env.intervals.length, 1);
+  assert.equal(a.env.listeners("mefi:workspace-state"), 1); assert.equal(a.env.intervals.length, 1); assert.deepEqual(a.env.cleared, [], "the clock that keeps 'waiting 4m' honest is running");
   a.S.detach(); await a.settle();
+  assert.deepEqual(a.env.cleared, [1], "and it is stopped, that very one");
   assert.ok(a.mounts.every((entry) => entry.unmounted));
   for (const type of ["mefi:workspace-state", "mefi:nav", "mefi:project-changed", "mefi:layout", "mefi:shell-layout", "keydown", "resize", "mefi:worktrees", "mefi:appearance", "mefi:autonomy-changed"]) assert.equal(a.env.listeners(type), 0, `${type} is no longer listened to`);
   assert.equal(a.document.getElementById("workspace-layer").hasAttribute("inert"), false, "Home is uncovered");
