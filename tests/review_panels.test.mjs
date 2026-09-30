@@ -324,3 +324,17 @@ test("a panel drawn before the settings were read shows the switches once they h
   open(); await settle();
   assert.ok(box.querySelectorAll(".review-switch").length >= 3, "the panel that is on its own is drawn again, not only the section with a fold");
 });
+
+test("the Evidence tab's own section reads its list as soon as it is open, while its box is still being put on the page, and is drawn once it is there", async () => {
+  const p = page();
+  const fold = p.dom.document.createElement("details");
+  fold.append(p.dom.document.createElement("summary"));
+  fold.open = true;
+  fold.isConnected = false; // the Tasks page builds a task's detail before it puts it in the document
+  const record = p.window.MefiReview.mount(fold, { taskId: "t1", projectId: "p1" });
+  assert.ok(record, "the section is mounted");
+  fold.isConnected = true; // and puts it there in the same breath
+  await settle();
+  assert.equal(p.named("changes").length, 1, "the list was asked for at once, not only after the box was on the page");
+  assert.equal(fold.querySelectorAll(".review-file").length, 2, "and it is drawn");
+});

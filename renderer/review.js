@@ -95,9 +95,11 @@
   // and the host's pushes all go by this, so nothing is read for a panel nobody sees.
   const shownOn = (record) => record.views.size > 0 && [...record.views.keys()].some(attached);
   const showing = (record) => (record.open && attached(record.view)) || shownOn(record);
+  // The fold asks for its list (and its tab's data) as soon as it is open, whether or not its box is on the page yet: the Tasks
+  // page builds a task's detail before it puts it in the document. Panels of their own are read only while they are on the page.
   function wants(record) {
     const names = new Set();
-    if (record.open && attached(record.view)) { names.add("changes"); names.add(record.tab); }
+    if (record.open) { names.add("changes"); names.add(record.tab); }
     for (const [host, view] of record.views) if (attached(host)) names.add(view.tab);
     return names;
   }
