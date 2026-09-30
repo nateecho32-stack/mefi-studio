@@ -28,6 +28,19 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   Spacious is new; older windows read it as Comfortable, and Settings ›
   Appearance points to this page instead of a separate Density list. The first
   time a new choice is saved, your old appearance settings are backed up.
+- **Today, Vibe's home in the new layout (new layout only).** Your box to build or
+  talk, and under it a board with one line for everything, in four groups: Needs
+  you, Running, Review and Done today. How much each line says follows your Size
+  and density setting, and a question can be answered right on its line. The
+  node tree stays behind it.
+- **An Inbox for everything waiting on you (new layout only).** Questions and
+  permissions, approvals, finished work to check and tasks that stopped, in one
+  place, with what each is, which task it is from and how long it has waited. Your
+  choices use the same buttons as before, leave a "Decided" line, and can be
+  undone where Studio has a way back. Open it from the "N need you" button, with
+  Ctrl J, or as a page.
+- **Clicking a Windows notification opens the task it was about, or the Inbox when
+  it told you about several things (new layout only).**
 - **Build's Home can list your tasks like sessions, in a coding-agent desktop
   layout (off by default).** Search › Switch Home layout turns it on. The menu
   lists this project's tasks the way the Claude Code and Codex desktop apps list

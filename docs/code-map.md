@@ -272,6 +272,7 @@ imports. See [Unified Studio](unified-studio.md) for the interfaces and fixture 
 | `workspace.js` | | The home screen: project context, bottom composer, compact current-task summary, Activity panel, scoped start/resume, app preview controls and durable results. Task presentation comes from the shared helpers in `tasks.js`; selected task identity comes from `nav.js`. |
 | `vibe.js` / `vibe.css` | | `window.MefiVibe`: Vibe, the calm front door (one box to talk or build, cards that show only while they have something: Needs you / Building now / Freshly done / Fresh ideas, and a dock whose Watch, Plans and Ideas stops come and go), the Vibe / Build switch and the one-time "what's new" card. In Vibe mode it also owns `#vibe-rail`, the frame every other page opens inside, in place of Build's menu. |
 | `key-tips.js` | | `window.MefiKeyTips`: first-run key tips. Small pop-ups beside Vibe's box, dock and top bar, Build's rail and Command's task box that name the matching keys as keycaps, at most two at a time and never over a sheet, the setup helper or the walkthrough. A click, or pressing the key itself, fades one away for good (`mefiStudio.keyTips.seen`). They switch off from the tip itself, Settings (`#settings-key-tips`), Vibe's settings panel or Search (`mefiStudio.keyTips` = "off"). Search also has Show key tips again. A device that will see them skips nav.js's one-time key toast. Bundled after `vibe.js`. |
+| `today.js` / `today.css` | 1,125 · 250 | `window.MefiToday` (layout v2 only): Today, Vibe's home in the new layout, and the Inbox. It reads Vibe's data through `MefiVibe.data()` and `watch()`: the greeting, the box and the starting chips move into the page (Build it, Suggest a next step and drafts still run through `vibe.js`), under them a board of Needs you, Running, Review and Done today with one line each (detail follows `html[data-detail]`) and a question answered on its line. The Inbox lists everything waiting on the owner (questions, permissions, approvals, steps to approve, stuck tasks, results to check) with the app's own options, a free answer, Decide later and a Decided line with Undo where there is a way back, each through the existing host calls (`assistant:answer`, `backlog:control`, `tasks:action`, `autonomy:undo`), as a popover anchored to a pill (`openInbox(anchor)`, Ctrl J) and a page. Routes `today`, `inbox` and the chord `inbox-open` exist only when the layout is on. `count()`, `onChange(cb)` and `openFromAlert` serve the shell's pill and a clicked notification. Bundled after `vibe.js`. |
 | `vibe-flow.js` | | `window.MefiVibeFlow`: Vibe's long waits, live. A run per planner look (MEFI's Suggest a next step) or sizing (Build it, New app) follows the host's `vibe:progress` steps (`main.cjs` `vibeProgress`, `scripts/planning-service.cjs`) and draws one strip per run, updated in place: stages, the files read or steps planned, a clock against this machine's usual time. Also names models and a worker's tool and current step for the plan card, the plan timeline and Team's Thinking now. Bundled before `vibe-panels.js`. |
 | `vibe-panels.js` | | `window.MefiVibePanels`: Vibe's menus, including the Tasks List/Lanes board, queue controls and revision-aware Inspector. Tasks, Plans, Ideas, Team and Settings as compact panels in `#vibe-panel`, fed by what `vibe.js` already holds; a row opens its detail, Full view opens the Build page inside Vibe's rail. |
 | `planning.js` | | The plan interview (chat bubbles, one-click "That's right — record it", Mefi asking on its own), live writing partner and file tree, editable suggestions, Enter field navigation, and reviewed task handoffs. Shows one step at a time with an Up next button; lists plans before the folder scan, then fills in the Project ready chip, the scan and "Where this lives" (Project map areas via `brainMap`/`brainMapPlace`). |
@@ -356,7 +357,7 @@ commit rewrites the JSON view as well.
 
 ## Tests and tools
 
-- **`tests/*.test.mjs`** (473 files) run on Node's own `node:test` and
+- **`tests/*.test.mjs`** (479 files) run on Node's own `node:test` and
   `node:assert/strict`, with no test dependencies. `scripts/run-node-tests.mjs`
   is the runner; `npm run test:fast` skips the real-Electron suites and the
   Python stage.
@@ -402,6 +403,18 @@ commit rewrites the JSON view as well.
   `size_css.test.mjs` (the tokens, nothing under 12 px, no scroller gutters) and
   `size_render.test.mjs` with `fixtures/size-render-electron.cjs` (real Chromium
   at five window sizes with a real zoom bridge, real pointer and keys).
+- **Today and the Inbox** are pinned by `today_model.test.mjs` (the count is the
+  digest's list, kinds and options, the four groups and the done-today window,
+  detail levels), `today_inbox.test.mjs` (every kind and action calls the right
+  host stub once and refuses a second press; free answers, Decided lines, Undo,
+  keys, the pill as a toggle, the notification hand-off), `today_page.test.mjs`
+  (the front door borrowed and given back, the board at each detail level, cards
+  that open their task), `vibe_model.test.mjs` (`MefiVibe.data()` and `watch()`,
+  and that Vibe does exactly what it did with no watcher), `alerts_click_count.test.mjs`
+  and `today_render.test.mjs` with `fixtures/today-env.mjs` and
+  `fixtures/today-render-electron.cjs` (real Chromium at five window sizes with
+  the backdrop visible, real Tab order and pointer, answers through a stateful
+  fake bridge, light and dark contrast, v1 untouched).
 - **The fleet** is pinned by `fleet.test.mjs` (the reducer: seat continuity on a
   retry, wires, health, bounded reload, no prompts or paths in a snapshot),
   `fleet_host.test.mjs` (pushes only while watched, one trailing push per half
