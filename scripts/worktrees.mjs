@@ -23,7 +23,6 @@ import { changedFiles, defaultBranch, runGit, scrub } from "./sync.mjs";
 
 const REMOTE = "origin";
 const plural = (count, word, many = `${word}s`) => `${count} ${count === 1 ? word : many}`;
-const lines = (text) => (text ? text.split(/\r?\n/).filter(Boolean) : []);
 const slash = (value) => String(value).replace(/\\/g, "/");
 
 // `git worktree list --porcelain`: blocks of "key value" lines, one blank line
