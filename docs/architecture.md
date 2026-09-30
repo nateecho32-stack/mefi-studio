@@ -2259,10 +2259,12 @@ the script starts nothing: no element, listener, timer, stored key or host call
   Alt+W close and Alt+Shift+T reopen, these three only where no text is being
   typed; a tab is moved with Ctrl+Shift+Left and Right, or dragged. Other
   Ctrl+Alt chords (AltGr on many keyboards) are never taken. Alt+Left and Right
-  stay Back and Forward (nav.js). The application
-  menu's Close (Ctrl+W) is the window's: the page takes the key first
-  (`preventDefault`), which `tests/tabs_render.test.mjs` checks against the real
-  menu template.
+  stay Back and Forward (nav.js). The application menu's Close is also Ctrl+W:
+  the strip takes the key first (`preventDefault`), so with layout v2 Ctrl+W
+  closes a tab (on Home it does nothing) and never the window; the window's own
+  close button, Alt+F4 and Quit (Ctrl+Q) still do. `tests/tabs_render.test.mjs`
+  checks that a page that takes the key keeps its window, against the real menu
+  template.
 - **Stored per project, with pins that follow you.** `mefiStudio.tabs.v1.<projectId>`
   holds that project's tabs, its Recently closed list and the tab that was showing;
   `mefiStudio.tabs.global.v1` holds the pins of pages (a session's pin stays with its
