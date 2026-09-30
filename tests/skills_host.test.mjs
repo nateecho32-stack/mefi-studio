@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { mkdtemp, mkdir, readdir, readFile, rm, stat, symlink, writeFile, lstat, utimes } from "node:fs/promises";
+import { mkdtemp, mkdir, readdir, readFile, realpath, rm, stat, symlink, writeFile, lstat, utimes } from "node:fs/promises";
 import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -18,7 +18,8 @@ const addons = require("../scripts/agent-addons.cjs");
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
 async function workspace(options = {}) {
-  const root = await mkdtemp(path.join(os.tmpdir(), "mefi-skills-host-"));
+  // Spelled the way the host spells it: it resolves the project folder, and on Windows os.tmpdir() can be an 8.3 short name (RUNNER~1) that resolves to the long one.
+  const root = await realpath(await mkdtemp(path.join(os.tmpdir(), "mefi-skills-host-")));
   const project = path.join(root, "project"), home = path.join(root, "home"), keep = path.join(root, "kept"), outside = path.join(root, "outside"), away = path.join(root, "away");
   for (const folder of [project, home, outside, away]) await mkdir(folder, { recursive: true });
   const touched = [];

@@ -77,8 +77,11 @@ const git = spawnSync("git", ["--version"], { encoding: "utf8" });
 test("the same verdicts as git on a real tree", { skip: git.status !== 0 && "git is not installed" }, async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "mefi-gitignore-"));
   try {
-    const run = (...args) => spawnSync("git", args, { cwd: root, encoding: "utf8", env: { ...process.env, GIT_CONFIG_GLOBAL: os.devNull, GIT_CONFIG_NOSYSTEM: "1", HOME: root, XDG_CONFIG_HOME: root } });
-    assert.equal(run("init", "-q").status, 0);
+    // No global or system config, named the way the other git suites name it: a file that is not there (git for Windows
+    // does not take the device name os.devNull as a config path).
+    const run = (...args) => spawnSync("git", args, { cwd: root, encoding: "utf8", env: { ...process.env, GIT_CONFIG_GLOBAL: path.join(root, ".no-global-config"), GIT_CONFIG_NOSYSTEM: "1", GIT_TERMINAL_PROMPT: "0", HOME: root, USERPROFILE: root, XDG_CONFIG_HOME: root } });
+    const started = run("init", "-q");
+    assert.equal(started.status, 0, `git init answered ${started.status}: ${started.stderr || started.error}`);
     const rootIgnore = "# build output\n*.log\n!keep.log\n/dist/\nbuild/\n**/cache\ndocs/*.md\n!docs/readme.md\nlogs/**\n*.tmp\n/only-here.txt\nsrc/**/generated\n";
     const nested = "*.gen.js\n!wanted.gen.js\n/local-only.txt\n";
     const files = {
