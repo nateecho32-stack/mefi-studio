@@ -6,6 +6,32 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-28 - Startup opens even when the window paints nothing
+
+The owner reported Vibe mode broken. The live app (attached through the
+main inspector) sat on the startup gate with every step Ready: the gate
+waited for two animation frames and `document.fonts.ready`, and a covered
+or tray-parked window gets no frames, so each hot reload from a peer's
+edit stalled there, and after 60 s the view step failed into "A little
+more setup is needed" (Trace's Window channel: "view" slow on every reload
+since 11:09, one "never finished"). `MefiBoot.afterPaint()` (boot.js)
+races the two frames against 300 ms, nav.js `resumeReady` uses it, and
+the fonts step (booklet.js) stops waiting after 4 s.
+
+- Hidden-window probe (`paintWhenInitiallyHidden: false`, fake-bridge
+  booklet in Vibe): HEAD stayed at "loading" with all steps Ready for 75 s;
+  the fix reaches "ready" in 1.2 s and opens Vibe.
+- Offscreen capture of the shared tree's Vibe (home, Tasks and Settings
+  panels, the ask drawer): renders normally, so Vibe itself was not broken.
+- `npm run build-booklet`, `npm run check`, `npm run audit` (0 errors,
+  0 warnings) in C:\wt\boot-frames: PASS. renderer_startup (9),
+  startup_resume (14), boot_poll_visibility (28), booklet_build (5),
+  settings_nav (21): PASS.
+- `npm test` in C:\wt\boot-frames on 704ef0d: Python contracts and the
+  normalized-path lock pass; Node suites failed only performance_render
+  ("Profiler JSON download timed out", the known load flake), which passes
+  solo (2).
+
 ## 2026-09-28 - Plans face lift: one step at a time, quick-then-deep models, project ready before it is needed
 
 The owner said the planner felt like a chore: slow to load, too much on
