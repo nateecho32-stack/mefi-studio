@@ -5,6 +5,9 @@ const { AsyncLocalStorage } = require("node:async_hooks");
 const addons = require("./agent-addons.cjs");
 const tools = require("./agent-tools.cjs");
 const habits = require("./habits.cjs");
+// Loaded on first use: the picture rules are not needed at startup.
+let imagesLoaded = null;
+const images = () => (imagesLoaded ??= require("./image-attach.cjs"));
 const runtime = new AsyncLocalStorage();
 const FIELDS = Object.freeze(["aiProvider", "aiRoleProviders", "aiModels", "aiModelsByProvider", "aiAutoProviders", "aiAutoFallback", "aiFallbackOpenCode", "aiSubscriptionFirst", "modelSelection", "executorCli", "executorModel", "executorModels", "executorTier", "executorTierModels", "agentSeats", "agentSubtasks", "agentSkills", "agentHabits", "agentTools", "agentBrain", "agentEfforts", "agentMode", "agentReporting"]);
 const PROVIDERS = Object.freeze(["auto", "zai", "opencode", "zen", "openrouter", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"]);
@@ -27,11 +30,18 @@ function effective(settings, projectId, snapshot) {
   for (const field of FIELDS) delete result[field];
   return { ...result, ...extract(selected) };
 }
+// Which models take a picture is read from the model catalog (data/models.json)
+// and nothing else: the host hands the parsed document to useCatalog once it has
+// it, and until then, or for a model the catalog does not list, `vision` is false.
+let visionIndex = null;
+function useCatalog(document) {
+  visionIndex = document && typeof document === "object" ? images().visionIndex(document) : null;
+}
 function capabilities(provider, model = "") {
   const id = String(model).toLowerCase().replace(/^openai\//, "");
   const extended = /^gpt-6-/.test(id);
   const reasoning = (provider === "zen" || provider === "openrouter" && /^openai\//i.test(model)) && (extended || /^(gpt-5(?:[.-]|$)|o[134](?:-|$))/.test(id));
-  return { efforts: reasoning ? extended ? [...EFFORTS] : ["low", "medium", "high"] : [], fast: provider === "zen" && extended, note: reasoning ? "Reasoning is sent to the selected model." : "Effort is managed by this provider or CLI." };
+  return { efforts: reasoning ? extended ? [...EFFORTS] : ["low", "medium", "high"] : [], fast: provider === "zen" && extended, vision: images().sees(visionIndex, provider, model), note: reasoning ? "Reasoning is sent to the selected model." : "Effort is managed by this provider or CLI." };
 }
 function validate(configuration) {
   if (!record(configuration)) return "A team configuration is required.";
@@ -152,4 +162,4 @@ function resume(snapshot, projectId) {
   runtime.getStore().snapshot = clone(snapshot);
   return true;
 }
-module.exports = { FIELDS, PROVIDERS, CLIS, EFFORTS, extract, effective, capabilities, validate, view, mutate, capture, update, run, current, resume };
+module.exports = { FIELDS, PROVIDERS, CLIS, EFFORTS, extract, effective, capabilities, useCatalog, validate, view, mutate, capture, update, run, current, resume };

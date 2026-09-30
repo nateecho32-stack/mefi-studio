@@ -60,6 +60,7 @@ const PROMISES = [
   // A task's usage tab and its time limit (renderer/tasks.js); main's "Task time limit" block owns the timer, the stop and the reads.
   { file: "scripts/task-cap.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   { file: "scripts/task-metrics.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (`now` is", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  { file: "scripts/image-attach.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   // Build's Home greeting card (renderer/builder.js); main's "work:stats" handler reads the ledgers and passes their rows and `now` in.
   { file: "scripts/work-stats.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
 ];

@@ -924,6 +924,38 @@ failed process stays an error and cannot produce briefing requests.
   limit (15 of the default 25 minutes, as before). The hard kill with no limit
   in force is still a failure. `MEFI_STUDIO_NO_TASK_CAP=1` switches limits off
   (the old single 25 minute failure kill, `tasks:cap` refuses, the fold says so).
+- **Pictures on a message** (Home's message box; `renderer/composer-pictures.js`,
+  `scripts/image-attach.cjs`, `scripts/image-store.cjs`, main.cjs "Picture
+  attachments"). **Attach picture**, a picture pasted with nothing else on the
+  clipboard, or a picture dropped into the box (a text file dropped with it still
+  goes to **Add files**) is sent to `assistant:image` as `{ name, mime, data }`.
+  The host decides by the file's own bytes, not its name or the declared type:
+  PNG, JPEG, WebP or GIF, at most 5 MB, at most 25 million pixels, four to a
+  message; SVG (which can carry script), PDF, BMP and everything else are
+  refused. It is kept under the project's data folder (`attachments/`, two files
+  per picture, written atomically, never in the repository, never in a problem
+  report) and answered with an opaque id (`img_` and 24 hex digits) and a small
+  preview. A message names its pictures by id (`assistant:message` `images`,
+  `tasks:create` `images`); the thread keeps id, name, type and size, never a
+  path, and a message whose picture has gone is refused whole, like an over-long
+  one. A picture nobody sent is removed after a day, one a message or a task
+  still names never is, and the folder is held to 300 pictures and 300 MB.
+  What reaches a model follows the catalog: `agentProfiles.capabilities().vision`
+  is true only when `data/models.json` lists `image` among the model's input
+  modalities (a model it does not list, and any custom or local one, is taken
+  as not seeing). A model that sees is sent the picture in the provider's own
+  request shape (an `image_url` data URL for chat completions, `input_image`
+  for the Responses API; an Anthropic `image` source block is built for the
+  day a Messages route exists, and none does yet). A model that does not see is
+  sent the request unchanged and the reply says once, by the model's name, that
+  it could not look at the picture. A coding CLI is never sent a picture: it
+  gets one plain line, "The owner attached <name> at <path>", and a task made
+  from the box carries the same line in its brief. The box shows what will
+  happen before the message goes ("Sent to <model>, which can read images", or
+  "<model> can't see images"), and a picture is not redacted the way text is,
+  which it says. `MEFI_STUDIO_NO_IMAGE_ATTACH=1` switches all of it off: the
+  channel refuses, a message naming a picture is refused, and the box asks once
+  at start and shows no button.
 
 ### Command center and the node tree
 

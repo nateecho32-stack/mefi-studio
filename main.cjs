@@ -5668,7 +5668,7 @@ async function chatCompletion(endpoint, apiKey, model, body, { sessionHeader = n
 function responsesRequest(body) {
   const messages = Array.isArray(body.messages) ? body.messages : [];
   const instructions = messages.filter((message) => message.role === "system").map((message) => message.content).join("\n\n");
-  const request = { model: body.model, input: messages.filter((message) => message.role !== "system").map(({ role, content }) => ({ role, content })), max_output_tokens: body.max_tokens };
+  const request = { model: body.model, input: messages.filter((message) => message.role !== "system").map(({ role, content }) => ({ role, content: Array.isArray(content) ? require("./scripts/image-attach.cjs").responsesParts(content) : content })), max_output_tokens: body.max_tokens };
   if (instructions) request.instructions = instructions;
   if (body.reasoning_effort) request.reasoning = { effort: body.reasoning_effort };
   if (body.service_tier) request.service_tier = body.service_tier;
@@ -6215,11 +6215,13 @@ async function cliAssistantCall(route, system, user, maxTokens, { role = "routin
     // next (cliAccountTurn): every subscription login answers before the
     // keyed fallback below. Sliced hosts without the block run one login.
     const turn = typeof cliAccountTurn === "function" ? cliAccountTurn : (_provider, call) => call({});
+    // A picture on the message is only named to a CLI, in one plain line (the "Picture attachments" block).
+    const said = typeof imageCliText === "function" ? imageCliText(user) : user;
     try {
-      cli = await turn(route.provider, (login) => route.provider === "grok" ? grokCompletion(system, user, route.model)
-        : route.provider === "claude" ? claudeCompletion(system, user, route.model, login)
-          : route.provider === "codex" ? codexCompletion(system, user, route.model, login)
-            : antigravityCompletion(system, user, route.model));
+      cli = await turn(route.provider, (login) => route.provider === "grok" ? grokCompletion(system, said, route.model)
+        : route.provider === "claude" ? claudeCompletion(system, said, route.model, login)
+          : route.provider === "codex" ? codexCompletion(system, said, route.model, login)
+            : antigravityCompletion(system, said, route.model));
     } finally {
       settleProvider(route.provider, gate, cli);
     }
@@ -6298,7 +6300,9 @@ async function httpAssistantCall(route, system, user, maxTokens, { taskType = "r
     if (!gate.allowed) return providerSkipped(candidate.provider, gate);
     let result;
     try {
-      result = await chatCompletion(candidate.endpoint, candidate.apiKey, candidate.model, requestBody(candidate), {
+      // A picture on the message goes in only when this model can see it (the "Picture attachments" block).
+      const wire = typeof imageBodyFor === "function" ? await imageBodyFor(candidate, requestBody(candidate)) : requestBody(candidate);
+      result = await chatCompletion(candidate.endpoint, candidate.apiKey, candidate.model, wire, {
         sessionHeader: candidate.provider === "opencode" ? await assistantSessionId() : null,
         provider: candidate.provider, taskType, source, timeoutMs,
       });
@@ -11520,7 +11524,7 @@ async function assistantChatAction(action = {}, { focused = null, remote = false
 // order. Null when no model answered (no route, a timeout, a provider error):
 // the local reply then answers. A reply that came back as prose is still the
 // reply, with the local classifier's actions standing in for the missing ones.
-async function assistantOverseerTurn({ user, text, intent, facts, did, slot, focused, generation = assistantBrakeGeneration }) {
+async function assistantOverseerTurn({ user, text, intent, facts, did, slot, focused, generation = assistantBrakeGeneration, extras = null }) {
   let companionReady = false;
   if (typeof seatChoice === "function" && typeof readAgentSettings === "function") {
     try {
@@ -11560,12 +11564,14 @@ async function assistantOverseerTurn({ user, text, intent, facts, did, slot, foc
   // (model, ordering wait, actions) must fit the pool's 150 s job deadline.
   const budgetMs = route.cli ? 90000 : 45000;
   let timer = null;
-  const call = await Promise.race([
+  const ask = () => Promise.race([
     typeof seatFetch === "function"
       ? seatFetch("companion", ASSISTANT_CHAT_SYSTEM, body, 1500, { fallback: (system = ASSISTANT_CHAT_SYSTEM) => assistantFetch(system, body, 1500, { taskType: "conversation", allowCli: DATA_ONLY_CLIS, skillRole: null }) })
       : assistantFetch(ASSISTANT_CHAT_SYSTEM, body, 1500, { taskType: "conversation", allowCli: DATA_ONLY_CLIS }),
     new Promise((resolve) => (timer = setTimeout(() => resolve({ ok: false, timedOut: true, error: `no reply within ${Math.round(budgetMs / 1000)} s` }), budgetMs))),
   ]);
+  // A picture on the message rides a scope around the call, so every request it makes can carry it.
+  const call = await (typeof extras?.run === "function" ? extras.run(ask) : ask());
   clearTimeout(timer);
   if (!call?.ok || !String(call.text ?? "").trim()) {
     if (call?.timedOut) logLine(`[assistant] chat reply abandoned: ${call.error}`);
@@ -11701,6 +11707,8 @@ async function assistantRespond(user, entry = null) {
   // reply survives any failure above it.
   let folderTarget = null;
   let offers = null;
+  // What the message brings beyond its words (a picture, the "Picture attachments" block): the model call runs inside its scope.
+  let extras = null;
   const done = [];
   const slot = assistantChatSlot();
   try {
@@ -11757,10 +11765,11 @@ async function assistantRespond(user, entry = null) {
       local = { ...local, actions: [] };
     }
     const generation = assistantBrakeGeneration;
+    try { extras = typeof messageExtras === "function" ? await messageExtras(user) : null; } catch (error) { logError(`message extras failed: ${error.message}`); }
     let turn = null;
     if (assistantAiUsable()) {
       try {
-        turn = await assistantOverseerTurn({ user, text, intent, facts, did: [...done], slot, focused: assistantFocusSubject(facts), generation });
+        turn = await assistantOverseerTurn({ user, text, intent, facts, did: [...done], slot, focused: assistantFocusSubject(facts), generation, extras });
       } catch (error) {
         // Nothing ran yet (the actions keep their own outcomes): the local
         // reply answers as if no model had.
@@ -11920,6 +11929,9 @@ async function assistantRespond(user, entry = null) {
       ? `${reply} ${confirmations.map((note) => (/[.!?]$/.test(note) ? note : `${note}.`)).join(" ")}`.trim()
       : `${reply} Done: ${confirmations.join("; ")}.`;
   }
+  // What the message brought that no model used (a picture a model cannot see), said once, plainly.
+  const extraNotes = typeof extras?.notes === "function" ? extras.notes() : [];
+  if (extraNotes.length) reply = `${reply} ${extraNotes.join(" ")}`.trim();
   // The owner switched projects while this reply ran: the thread in memory is
   // now the other project's, and this reply must not land in it.
   if (user.projectId && !assistantOwnsProject(user.projectId)) {
@@ -11971,12 +11983,16 @@ async function assistantMessage(raw, options = {}) {
     return { ok: false, error: `That message is ${say(text.length)} characters and Mefi reads up to ${say(limit)} at once, so nothing was sent. Cut it down or send it in parts.`, limit, length: text.length };
   }
   await ensureAssistant();
+  // Pictures ride along by id (the "Picture attachments" block); a message whose picture is gone is refused whole, like an over-long one.
+  const pictures = typeof attachedPictures === "function" ? await attachedPictures(options?.images) : { ok: true, images: [] };
+  if (!pictures.ok) return { ok: false, error: pictures.error };
   // The manner the owner chose for their companion rides every chat box's
   // message the same way (companion-pet.cjs; the model reads ui.personality).
   const manner = typeof agentBrain !== "undefined" && agentBrain?.companionManner ? await agentBrain.companionManner().catch(() => null) : null;
   const seen = assistantUiContext(options?.context);
   const ui = seen || manner ? { ...(seen ?? {}), ...(manner ? { personality: manner } : {}) } : null;
-  const user = { id: assistantMessageId(), projectId: projects.current().id, at: Date.now(), role: "user", text, via: "local", intent: "chat", ...(ui ? { ui } : {}) };
+  const user = { id: assistantMessageId(), projectId: projects.current().id, at: Date.now(), role: "user", text, via: "local", intent: "chat", ...(ui ? { ui } : {}),
+    ...(pictures.images.length ? { images: pictures.images.map(({ id, name, mime, bytes }) => ({ id, name, mime, bytes })) } : {}) };
   // Sent from Discord (the "Discord remote" block): the chat gate narrows what
   // it may do, and the work it files waits for the owner's OK.
   if (options?.remote === true) user.remote = true;
@@ -11993,6 +12009,156 @@ async function assistantMessage(raw, options = {}) {
   }
   return { ok: true, reply, state: assistantState };
 }
+
+// ---- Picture attachments: a picture on a message (docs/architecture.md, "Pictures on a message") ----
+// `assistant:image` saves one picture (PNG, JPEG, WebP or GIF by its bytes, at
+// most 5 MB, at most 4 a message) under the project's data folder and hands back
+// an id and a small preview; a message carries the ids (`images`), never paths.
+// When the model that answers can look at pictures (the model catalog says so:
+// agentProfiles.capabilities().vision) the picture goes in the provider's own
+// format (scripts/image-attach.cjs); a model that can not see says so once in
+// the reply, and the message and its picture are saved either way. A coding CLI
+// is never sent a picture, only one plain line naming the file. A task made
+// from the box carries the same line in its brief. The pictures a call carries
+// ride an AsyncLocalStorage scope opened around the model call
+// (messageExtras().run), so the request builders need no new parameter.
+// MEFI_STUDIO_NO_IMAGE_ATTACH=1 switches it all off. Modules load on first use.
+let imageLibLoaded = null, imageStoreLoaded = null, imageScopeLoaded = null, visionDocument = null;
+const imageLib = () => (imageLibLoaded ??= require("./scripts/image-attach.cjs"));
+const imageAttachOn = () => process.env.MEFI_STUDIO_NO_IMAGE_ATTACH !== "1";
+const imageScope = () => (imageScopeLoaded ??= new (require("node:async_hooks").AsyncLocalStorage)());
+const PICTURES_OFF = "Picture attachments are switched off on this PC.";
+function imageStore() {
+  return (imageStoreLoaded ??= require("./scripts/image-store.cjs").createImageStore({
+    dir: () => path.join(path.dirname(projectDataPath(TASKS_PATH)), "attachments"),
+    keep: imageNamedIds,
+    thumbnail: imageThumbnail,
+  }));
+}
+// Every picture a message or a task still names, so cleanup never removes one.
+async function imageNamedIds() {
+  const named = new Set();
+  const grab = (text) => { for (const match of String(text ?? "").matchAll(/img_[a-f0-9]{24}/g)) named.add(match[0]); };
+  for (const message of assistantState?.messages ?? []) for (const image of Array.isArray(message?.images) ? message.images : []) if (image?.id) named.add(image.id);
+  try {
+    for (const task of await (await getEyes()).readJson(TASKS_PATH, [])) { grab(task?.prompt); grab(task?.description); grab(task?.details); grab(task?.note); }
+  } catch { /* the thread alone keeps what it names */ }
+  return named;
+}
+// A small preview for the composer. Electron's nativeImage reads PNG and JPEG; the page makes its own for the rest.
+async function imageThumbnail(bytes, mime) {
+  if (mime !== "image/png" && mime !== "image/jpeg") return null;
+  const image = nativeImage.createFromBuffer(Buffer.from(bytes));
+  if (image.isEmpty()) return null;
+  const { width, height } = image.getSize();
+  const scale = Math.min(1, 96 / Math.max(width, height, 1));
+  const small = scale < 1 ? image.resize({ width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)), quality: "good" }) : image;
+  return mime === "image/jpeg" ? `data:image/jpeg;base64,${small.toJPEG(70).toString("base64")}` : small.toDataURL();
+}
+// The catalog says which models take pictures; the profiles module reads it through useCatalog.
+async function visionReady() {
+  try {
+    const document = await catalogDocument.read();
+    if (document !== visionDocument) { visionDocument = document; agentProfiles.useCatalog(document); }
+  } catch { /* until the catalog reads, no model is known to see */ }
+}
+// What the chat's own route will do with a picture, for the box to say before the message is sent.
+async function chatPictureHint() {
+  try {
+    await visionReady();
+    const settings = await (typeof readAgentSettings === "function" ? readAgentSettings() : readSettings());
+    const chosen = seatChoice(settings, "companion");
+    let provider = null, model = null;
+    if (chosen.provider === "zen" && decryptKey(settings, "zenApiKeyEncrypted")) { provider = "zen"; model = chosen.model || SEAT_DEFAULTS.companion.model; }
+    else {
+      const route = await resolveAiRoute("routine", { allowCli: DATA_ONLY_CLIS });
+      if (route?.ok) { provider = route.provider ?? null; model = route.model ?? null; }
+    }
+    if (!provider) return { sees: null, model: null };
+    return { sees: agentProfiles.capabilities(provider, model).vision === true, model: model || null };
+  } catch { return { sees: null, model: null }; }
+}
+// assistant:image { name, mime, data }: keep one picture, answer with its id and a preview.
+async function saveMessagePicture(payload = {}) {
+  if (!imageAttachOn()) return { ok: false, off: true, error: PICTURES_OFF };
+  // { probe: true }: the box asks once whether pictures are on at all, so a PC that switched them off never shows the button.
+  if (payload?.probe === true) return { ok: true, probe: true };
+  if (!projects.open()) return { ok: false, error: "Open a project folder first - pictures are kept with the project." };
+  const saved = await imageStore().save({ name: payload?.name, mime: payload?.mime, data: payload?.data });
+  if (!saved.ok) return saved;
+  return { ...saved, vision: await chatPictureHint() };
+}
+async function removeMessagePicture(payload = {}) {
+  if (!imageAttachOn()) return { ok: false, off: true, error: PICTURES_OFF };
+  return imageStore().remove(String(payload?.id ?? ""));
+}
+// The pictures a message names, checked and found: { ok, images: [{ id, name, mime, bytes, path }] }.
+async function attachedPictures(value) {
+  if (value === undefined || value === null || (Array.isArray(value) && !value.length)) return { ok: true, images: [] };
+  if (!imageAttachOn()) return { ok: false, error: PICTURES_OFF };
+  return imageStore().resolve(value);
+}
+// A brief that names its pictures in plain lines (a task's prompt, a CLI's request): where each one is.
+async function withPictureLines(text, value) {
+  const found = await attachedPictures(value);
+  if (!found.ok) return found;
+  return { ok: true, text: found.images.length ? `${text}\n\n${imageLib().attachedLines(found.images)}` : text, images: found.images };
+}
+// The request builder's half (httpAssistantCall): this call's request with the pictures in it when the model that
+// answers can see them, the request as it was when it can not. The call is told which happened.
+async function imageBodyFor(candidate, body) {
+  const state = imageScope().getStore();
+  if (!state?.images?.length) return body;
+  await visionReady();
+  const lib = imageLib();
+  if (agentProfiles.capabilities(candidate.provider, candidate.model).vision !== true) {
+    state.unseen ??= { model: String(candidate.model ?? "") };
+    return body;
+  }
+  try {
+    state.loaded ??= await Promise.all(state.images.map((image) => imageStore().load(image)));
+    const sent = lib.attachBody(body, state.loaded, lib.formatFor(candidate.endpoint));
+    state.seen = String(candidate.model ?? "") || "the model";
+    return sent;
+  } catch (error) {
+    logLine(`[assistant] a picture could not be added to the request: ${String(error?.message ?? error).slice(0, 160)}`);
+    state.unseen ??= { model: String(candidate.model ?? "") };
+    return body;
+  }
+}
+// The CLI's half (cliAssistantCall): a coding CLI gets one plain line per picture in its text, never the picture.
+function imageCliText(user) {
+  const state = imageScope().getStore();
+  if (!state?.images?.length) return user;
+  const lines = imageLib().attachedLines(state.images.filter((image) => !String(user).includes(imageLib().attachedLine(image))));
+  state.unseen ??= { model: "" };
+  return lines ? `${user}\n\n${lines}` : user;
+}
+// What a message brings beyond its words, for the reply to use: null when it brings nothing (the common case).
+async function messageExtras(user) {
+  const named = (Array.isArray(user?.images) ? user.images : []).filter((image) => image && typeof image.id === "string");
+  if (!named.length || !imageAttachOn()) return null;
+  // Each picture is found on its own: one that has since been cleared does not take the others with it.
+  const images = [], gone = [];
+  for (const image of named) {
+    const found = await imageStore().resolve([image.id]);
+    if (found.ok && found.images.length) images.push(found.images[0]); else gone.push(String(image.name ?? "").trim());
+  }
+  const state = images.length ? { images, seen: null, unseen: null, loaded: null } : null;
+  return {
+    images,
+    // The model call runs inside this scope, so every request it makes can see the pictures.
+    run: (call) => (state ? imageScope().run(state, call) : call()),
+    // One plain sentence per thing that did not reach the model, each said once.
+    notes: () => {
+      const said = [];
+      if (gone.length) said.push(`${gone.length === 1 && gone[0] ? `"${gone[0]}" is` : gone.length === 1 ? "A picture is" : "Some pictures are"} no longer saved, so I answered without ${gone.length === 1 ? "it" : "them"}.`);
+      if (state && !state.seen) said.push(imageLib().unseenNote({ model: state.unseen?.model || "", count: state.images.length, noModel: !state.unseen }));
+      return said;
+    },
+  };
+}
+// ---- end of picture attachments ---------------------------------------------------------
 
 // The card's Work on it: the node becomes the assistant's NEXT piece of work.
 // It is focused (follow-ups and the gold ring follow), pinned to the front of
@@ -20888,9 +21054,15 @@ function registerIpc() {
   ipcMain.handle("planning:prepare", (_event, payload) => planningRequest("prepare", payload));
   ipcMain.handle("tasks:create", (_event, payload = {}) => composerTask(payload ?? {}));
   ipcMain.handle("vibe:build", (_event, payload = {}) => vibeBuild(payload ?? {}));
-  async function composerTask({ title, prompt, projectId, intake = null, ideaId = null, ideaIds = null } = {}) {
+  async function composerTask({ title, prompt, projectId, intake = null, ideaId = null, ideaIds = null, images = null } = {}) {
     if (projectId && projectId !== projects.current().id) return { ok: false, error: "The selected project changed. Add this task again in its intended project." };
     if (!String(title ?? "").trim()) return { ok: false, error: "Give your task a title." };
+    // Pictures the owner attached are named in the brief, one plain line each, for a builder to open.
+    if (Array.isArray(images) && images.length) {
+      const briefed = await withPictureLines(prompt ?? title, images);
+      if (!briefed.ok) return { ok: false, error: briefed.error };
+      prompt = briefed.text;
+    }
     await ensureAssistant();
     // The same admission as chat work (the whole brief against the board, the
     // inbox and live workers), so a sentence sent in chat and pasted here is
@@ -22108,11 +22280,14 @@ function registerIpc() {
     if (assistantExpireQuestions()) saveAssistant().catch(() => {});
     return { ok: true, state: assistantState };
   });
-  ipcMain.handle("assistant:message", async (_event, { text, projectId, context } = {}) => {
+  ipcMain.handle("assistant:message", async (_event, { text, projectId, context, images } = {}) => {
     if (projectId && projectId !== projects.current().id) return { ok: false, error: "The selected project changed. Send your message again in its intended project." };
     if (!projects.open()) return { ok: false, error: "Open a project folder first - the assistant works inside a project." };
-    return assistantMessage(text, { context });
+    return assistantMessage(text, { context, images });
   });
+  // Pictures on a message (the "Picture attachments" block): keep one, or take one away before it is sent.
+  ipcMain.handle("assistant:image", (_event, payload) => saveMessagePicture(payload ?? {}));
+  ipcMain.handle("assistant:image-remove", (_event, payload) => removeMessagePicture(payload ?? {}));
   // Suggestions are data-only, so a CLI login answers them the way it answers
   // planning: DATA_ONLY_CLIS through the CLI text call, tools disabled.
   const recommendMusic = createMusicRecommender({ resolveRoute: resolveAiRoute, allowCli: DATA_ONLY_CLIS,
