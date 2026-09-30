@@ -160,7 +160,12 @@
     const head = el("header", "config-pane-head");
     head.append(el("h3", "config-pane-title", category.title), el("p", "config-pane-about", category.about));
     pane.append(head);
-    if (category.id === "ui") pane.append(scaleControl());
+    if (category.id === "ui") {
+      pane.append(scaleControl());
+      // Layout v2's Tab behaviour card (renderer/tabs.js): null, and so nothing here, unless the tab strip is running.
+      const tabs = window.MefiTabs?.configCard?.();
+      if (tabs) pane.append(tabs);
+    }
     if (!rows.length) { if (category.id !== "ui") pane.append(el("p", "config-empty", "Nothing is filed here yet.")); return; }
     // Grouped by where each setting lives (Settings › General, Agents …).
     const groups = new Map();

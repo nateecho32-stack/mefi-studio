@@ -15454,6 +15454,20 @@ function searchSwitchesOff() {
 }
 // ---- end of Search switches --------------------------------------------------
 
+// ---- Tab switches --------------------------------------------------------------
+// Layout v2's tab strip (renderer/tabs.js) opens, closes, replaces and offers
+// things on its own: a preview tab, a background tab for an agent that needs you,
+// tabs of finished work closing after a while, a cap on open tabs and a pin
+// suggestion. Each has a switch in Configuration › UI & Surfaces (kept in the
+// page's storage, mefiStudio.tabs.prefs.v1) and one master switch turns all of it
+// off. This run can say so too, with MEFI_STUDIO_NO_TAB_MANAGER=1 (a switch for one
+// machine, or for a test): prefs:get puts tabsManage: false on the page's prefs and
+// the strip keeps to what you do yourself. Only the value 1 counts.
+function tabSwitchesOff() {
+  return process.env.MEFI_STUDIO_NO_TAB_MANAGER === "1" ? { tabsManage: false } : {};
+}
+// ---- end of Tab switches -----------------------------------------------------
+
 // The shared theme keys from the pure module — the SAME keys the compactor
 // and the promotion pass use, so "the same work" means one thing everywhere.
 function workPlanTheme(value) {
@@ -23745,7 +23759,9 @@ function registerIpc() {
     // turn either off for this run. (typeof: the tests that run this handler on
     // its own have no such function.)
     const searchOff = typeof searchSwitchesOff === "function" ? searchSwitchesOff() : {};
-    return { ok: true, prefs: { blurMenu: true, useWeb: false, useTree: true, autoReference: true, proactive: true, ...(settings.ui ?? {}), ...searchOff, openAtLogin: loginItem.on }, loginItem };
+    // The tab strip's master switch (the "Tab switches" block), for this run.
+    const tabsOff = typeof tabSwitchesOff === "function" ? tabSwitchesOff() : {};
+    return { ok: true, prefs: { blurMenu: true, useWeb: false, useTree: true, autoReference: true, proactive: true, ...(settings.ui ?? {}), ...searchOff, ...tabsOff, openAtLogin: loginItem.on }, loginItem };
   });
   ipcMain.handle("prefs:set", async (_event, prefs) => {
     const next = { ...(prefs ?? {}) };

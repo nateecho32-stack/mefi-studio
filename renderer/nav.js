@@ -3124,6 +3124,8 @@
       focus: active && active !== document.body && active.id ? active.id : null,
       explorer: window.MefiExplorer?.saveState?.() ?? null,
       tasks: window.MefiTasks?.saveState?.() ?? null,
+      // Layout v2's tab strip writes what it had pending and says where it was (renderer/tabs.js); null when it is not running.
+      tabs: window.MefiTabs?.saveState?.() ?? null,
     };
     try {
       localStorage.setItem(RESUME_KEY, JSON.stringify(payload));
