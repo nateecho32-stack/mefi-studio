@@ -19,6 +19,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   Preview, Queue and Status become panes that dock beside the page or pop out as
   windows. The composer stays on one line at 1920 wide and the Permissions menu
   is no longer cut off.
+- **Media player fixes.** Next in a YouTube playlist follows the playlist. A
+  remembered video link no longer asks YouTube for its picture until you open the
+  media menu. The card follows radio and buffering; its ideas, hints and Up next
+  drags stay current. In a small window the floating player keeps Close inside
+  its bar and no longer flies in from the corner when the menu closes.
 - **Tree brightness is much lighter on the graphics card.** Command, Home and
   Vibe paint brightened nodes and lines once per pass instead of once per shape
   (on the owner's laptop at 200%: Vibe 4.6 to 42 fps, Command 8.8 to 36, Home 4.1
