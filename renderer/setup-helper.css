@@ -5,7 +5,7 @@
 /* By id: the rail shell narrows every .overlay .sheet to 620px. */
 #setup-helper-overlay .setup-helper-sheet {
   display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto;
-  width: min(1080px, calc(96vw - var(--shell-rail-w, 0px))); height: min(88vh, 860px); max-height: none;
+  width: min(1080px, calc(96vw - var(--shell-x0, 0px) - var(--shell-x1, 0px))); height: min(88vh, 860px); max-height: none;
   padding: 0; overflow: hidden;
   background: var(--glass-hard); border: 1px solid var(--hairline-strong);
 }

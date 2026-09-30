@@ -131,6 +131,14 @@
   --z-workspace: 65; --z-shell: 82; --z-sidebar: 85;
   /* 0 unless html[data-shell="rail"] turns the navigation rail on */
   --shell-rail-w: 0px;
+  /* The layout contract (docs/unified-studio.md, MefiNav.layout in nav.js): the
+     four regions the shell can grow, each 0 until html[data-layout="v2"] gives
+     it room. Only MefiNav.layout.set() writes them; a region reads its own. The
+     free area's edges, --shell-x0/-x1/-y0/-y1, are derived in section 22. */
+  --shell-list-w: 0px;       /* the session list, right of the rail */
+  --shell-inspector-w: 0px;  /* the inspector, at the right edge */
+  --shell-tabs-h: 0px;       /* the tab strip, under the local navigation */
+  --shell-status-h: 0px;     /* the status bar, along the bottom */
 
   /* Work surfaces share the active palette. studio-ui.css supplies the glass
      recipes; opaque palette tokens remain available to canvas renderers. */
@@ -1347,8 +1355,8 @@ input.drag-over { border-color: var(--live); box-shadow: 0 0 0 3px color-mix(in 
    10. Rail (#tree-rail)
    ============================================================ */
 #tree-rail {
-  position: fixed; top: 0; right: 0;
-  height: 100vh; width: var(--rail-w);
+  position: fixed; top: 0; right: var(--shell-x1);
+  height: calc(100vh - var(--shell-y1)); width: var(--rail-w);
   z-index: var(--z-rail);
   background: linear-gradient(270deg, rgba(4, 4, 6, 0.96), rgba(4, 4, 6, 0.82));
   backdrop-filter: blur(16px);
@@ -1412,11 +1420,11 @@ input.drag-over { border-color: var(--live); box-shadow: 0 0 0 3px color-mix(in 
 }
 /* a 58px strip cannot hold a tooltip: it only belongs to the open rail */
 #tree-rail:not(:hover):not(:has(:focus-visible)):not(.pinned) .tree-tip { display: none; }
-body { padding-right: var(--rail-gap); }
+body { padding-right: calc(var(--rail-gap) + var(--shell-x1)); }
 /* pinned open, the rail is a dock rather than an overlay: the page flow (the
    tabs strip above all) reserves its width, or the last tabs are sliced at the
    seam. Fixed-position chrome (sheets, the Command HUD) is unaffected. */
-body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)); }
+body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4) + var(--shell-x1)); }
 
 /* ============================================================
    11. Overlays and the shared .sheet-head
@@ -2203,7 +2211,7 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
 .help-group:first-child { margin-top: 0; }
 /* One small key grid per section, set in two newspaper columns when the
    sheet has room for them; a section never breaks across the columns. */
-#help-overlay .sheet { width: min(860px, calc(92vw - var(--shell-rail-w))); }
+#help-overlay .sheet { width: min(860px, calc(92vw - var(--shell-x0) - var(--shell-x1))); }
 #help-grid { display: block; columns: 2 20rem; column-gap: var(--s7); }
 .help-section {
   break-inside: avoid;
@@ -2287,13 +2295,13 @@ body.command-active:not(.appearance-settings-active):not(.music-preview-active) 
   contain-intrinsic-size: auto none;
   transition: content-visibility var(--motion-base) allow-discrete;
 }
-body.command-active #toast-host { bottom: 64px; }         /* clears the legend pill at bottom-left */
+body.command-active #toast-host { bottom: calc(64px + var(--shell-y1)); }         /* clears the legend pill at bottom-left */
 /* …but an open legend grows a list of up to 52vh above that pill, and #toast-host
    (--z-toast) paints over the HUD, so the stack has to clear the whole column. */
-body.command-active:has(#idle-legend-toggle[aria-expanded="true"]) #toast-host { bottom: calc(52vh + 64px); }
+body.command-active:has(#idle-legend-toggle[aria-expanded="true"]) #toast-host { bottom: calc(52vh + 64px + var(--shell-y1)); }
 
 #toast-host {
-  position: fixed; left: 22px; bottom: 22px;
+  position: fixed; left: 22px; bottom: calc(22px + var(--shell-y1));
   z-index: var(--z-toast);
   display: flex; flex-direction: column;
   pointer-events: none;
@@ -2429,7 +2437,7 @@ footer {
 }
 
 @media (max-width: 900px) {
-  body { padding: 0 var(--s4) 32px; padding-right: var(--s4); }
+  body { padding: 0 var(--s4) 32px; padding-right: calc(var(--s4) + var(--shell-x1)); }
   #tree-rail { display: none; }
   /* the tabs row already wraps and dropped its keycaps in the blocks above */
   .stat-grid { grid-template-columns: repeat(2, 1fr); }
@@ -2437,7 +2445,7 @@ footer {
   .cmd-card { width: min(320px, calc(100vw - 24px)); right: var(--s3); }
   .cmd-legend, .cmd-hint, .cmd-feed { display: none; }
   /* nothing to clear once the legend is hidden, whatever the toggle still reports */
-  body.command-active:has(#idle-legend-toggle[aria-expanded="true"]) #toast-host { bottom: 64px; }
+  body.command-active:has(#idle-legend-toggle[aria-expanded="true"]) #toast-host { bottom: calc(64px + var(--shell-y1)); }
   .cmd-bottom { padding: 0 var(--s3); }
   .cmd-dock { max-width: calc(100vw - 24px); }     /* wraps to two rows; row-gap is already 4px */
   /* Settings answers to its own width, not the window's: see its container queries */
@@ -2465,7 +2473,7 @@ footer {
 /* the open legend list is capped at 40vh here, so the toasts have less of it to
    clear; below 901px the legend is hidden and the 900px reset has to stand */
 @media (max-height: 760px) and (min-width: 901px) {
-  body.command-active:has(#idle-legend-toggle[aria-expanded="true"]) #toast-host { bottom: calc(40vh + 64px); }
+  body.command-active:has(#idle-legend-toggle[aria-expanded="true"]) #toast-host { bottom: calc(40vh + 64px + var(--shell-y1)); }
 }
 
 /* ============================================================
@@ -4065,7 +4073,7 @@ html[data-motion="off"]::view-transition-new(*) { animation: none !important; }
 .walkthrough-activity.busy .walkthrough-activity-track span { width: 40%; animation: walkthrough-slide 1.4s ease-in-out infinite; }
 .walkthrough-assist-list li[aria-current="step"] { color: var(--gold-bright); }
 @keyframes walkthrough-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
-.walkthrough-coach { position: fixed; right: 18px; bottom: 18px; z-index: var(--z-pop); display: flex; flex-direction: column; gap: 7px; width: min(340px, calc(100vw - 36px)); padding: 15px 16px; border: 1px solid var(--hairline-strong); border-radius: 14px; background: color-mix(in srgb, var(--panel-solid) 92%, var(--gold) 8%); box-shadow: var(--shadow-3), var(--inset-hi); }
+.walkthrough-coach { position: fixed; right: calc(18px + var(--shell-x1)); bottom: calc(18px + var(--shell-y1)); z-index: var(--z-pop); display: flex; flex-direction: column; gap: 7px; width: min(340px, calc(100vw - 36px)); padding: 15px 16px; border: 1px solid var(--hairline-strong); border-radius: 14px; background: color-mix(in srgb, var(--panel-solid) 92%, var(--gold) 8%); box-shadow: var(--shadow-3), var(--inset-hi); }
 .walkthrough-coach-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .walkthrough-coach-tools { display: flex; flex-wrap: wrap; gap: 4px; }
 #walkthrough-coach-title { color: var(--ivory); font-size: 14px; }
@@ -4078,11 +4086,11 @@ html[data-motion="off"]::view-transition-new(*) { animation: none !important; }
    long as the coach stayed on it (and the !important outline wins the
    cascade over the animated colour anyway). */
 .walkthrough-focus { outline: 2px solid var(--gold-bright) !important; outline-offset: 3px; border-radius: 7px; animation: walkthrough-pulse 1.6s ease-in-out 4; }
-body.command-active .walkthrough-coach { right: 392px; }
-@media (max-width: 1150px) { body.command-active .walkthrough-coach { right: 18px; } }
+body.command-active .walkthrough-coach { right: calc(392px + var(--shell-x1)); }
+@media (max-width: 1150px) { body.command-active .walkthrough-coach { right: calc(18px + var(--shell-x1)); } }
 @media (max-width: 650px) {
-  .walkthrough-coach { left: 12px; right: 12px; bottom: 12px; width: auto; max-height: calc(100dvh - 24px); overflow-y: auto; }
-  html[data-shell="rail"] .walkthrough-coach { left: calc(var(--shell-rail-w) + 12px); }
+  .walkthrough-coach { left: 12px; right: calc(12px + var(--shell-x1)); bottom: calc(12px + var(--shell-y1)); width: auto; max-height: calc(100dvh - 24px); overflow-y: auto; }
+  html[data-shell="rail"] .walkthrough-coach { left: calc(var(--shell-x0) + 12px); }
 }
 @keyframes walkthrough-pulse {
   0%, 100% { outline-color: var(--gold-bright); }
@@ -4268,8 +4276,8 @@ body.command-active .walkthrough-coach { right: 392px; }
    that one frame), so the scroll lands on the card as it will be. */
 .settings-card[data-settings-opening]::details-content { transition: none; }
 /* Keep the sticky category list and jumps below the fixed local navigation. */
-html[data-shell="rail"] .settings-nav { top: calc(var(--shell-local-h) + var(--s4)); max-height: calc(100vh - var(--shell-local-h) - 2 * var(--s4)); }
-html[data-shell="rail"] .settings-card { scroll-margin-top: calc(var(--shell-local-h) + var(--s4)); }
+html[data-shell="rail"] .settings-nav { top: calc(var(--shell-y0) + var(--s4)); max-height: calc(100vh - var(--shell-y0) - var(--shell-y1) - 2 * var(--s4)); }
+html[data-shell="rail"] .settings-card { scroll-margin-top: calc(var(--shell-y0) + var(--s4)); }
 /* Narrow panel: one column, and the list turns into a strip over the cards —
    Find first, then every section as a chip in one row that scrolls sideways. */
 @container settings (max-width: 720px) {
@@ -4287,8 +4295,8 @@ html[data-shell="rail"] .settings-card { scroll-margin-top: calc(var(--shell-loc
   /* The category strip sticks below the fixed local navigation. */
   /* Stuck, it reaches a little past the cards, so its rounded corners sit over
      the panel's empty padding rather than over a card's edge. */
-  html[data-shell="rail"] .settings-nav { position: sticky; top: var(--shell-local-h); z-index: 2; max-height: none; margin-inline: calc(-1 * var(--s2)); padding-inline: var(--s4); border-radius: 0 0 12px 12px; background: var(--panel-solid); box-shadow: var(--shadow-1); }
-  html[data-shell="rail"] .settings-card { scroll-margin-top: calc(var(--shell-local-h) + 112px); }
+  html[data-shell="rail"] .settings-nav { position: sticky; top: var(--shell-y0); z-index: 2; max-height: none; margin-inline: calc(-1 * var(--s2)); padding-inline: var(--s4); border-radius: 0 0 12px 12px; background: var(--panel-solid); box-shadow: var(--shadow-1); }
+  html[data-shell="rail"] .settings-card { scroll-margin-top: calc(var(--shell-y0) + 112px); }
 }
 /* The classic tabs row wraps at 1250px and grows past the list's 68px offset. */
 @media (max-width: 1250px) {
@@ -4862,17 +4870,48 @@ html[data-no-blur] #idle-hud .cmd-agents-pop { background: var(--panel-solid); b
    off html[data-shell="rail"]; without it the classic tabs row, dock
    and hover sidebar are exactly as they were.
 
-   Every full-window layer respects --shell-rail-w instead of owning
-   the left edge. At rest the rail is 64px of icons with a small label
-   under each section; hover or keyboard focus widens it OVER the page
-   (no reflow). Pinned, it widens the variable itself and the page
-   makes room.
+   Every full-window layer takes its edges from the free area below
+   instead of owning them. At rest the rail is 64px of icons with a
+   small label under each section; hover or keyboard focus widens it
+   OVER the page (no reflow). Pinned, it widens the variable itself and
+   the page makes room.
+
+   The layout contract (docs/unified-studio.md): the free area is what
+   is left inside the window once the rail, the local navigation and
+   the four regions of html[data-layout="v2"] (the session list, the
+   inspector, the tab strip and the status bar, :root) have taken
+   theirs. Its four edges are derived here, once; with the regions at
+   0, which is all of v1, each equals what the layers used to read
+   from --shell-rail-w and --shell-local-h, pixel for pixel.
+   --shell-rail-w stays for the rail itself (its width, the flyouts
+   that slide out of it) and --shell-local-h for the local navigation's
+   own height: nothing else reads them.
    ============================================================ */
 html[data-shell="rail"] { --shell-rail-w: 64px; --shell-rail-open: 256px; --shell-local-h: 56px; }
 html[data-shell="rail"][data-rail-pinned] { --shell-rail-w: var(--shell-rail-open); }
+/* On :root and body both, because body[data-nav-section=agents] (agents.css)
+   gives the local navigation its own height and every layer sits under body.
+   --shell-y0 has no fallback, so like --shell-local-h it is undefined in the
+   classic shell and the rules that carry a fallback for that keep it. */
+:root, body {
+  --shell-x0: calc(var(--shell-rail-w) + var(--shell-list-w));      /* left edge of the free area */
+  --shell-x1: var(--shell-inspector-w);                             /* what the right edge gives up */
+  --shell-y0: calc(var(--shell-local-h) + var(--shell-tabs-h));     /* top edge of the free area */
+  --shell-y1: var(--shell-status-h);                                /* what the bottom edge gives up */
+}
+/* The fold rule. Below 900px the list and the inspector are not columns: they
+   take nothing from the window (a later region shows itself as a drawer while
+   html[data-layout-fold] names it). It is a media query, not a script, so the
+   free area is right the instant the window is, and !important because
+   MefiNav.layout.set() writes the widths inline. 899.98px is nav.js's
+   LAYOUT_FOLD_BELOW (900) minus a hair; tests/layout_contract_nav.test.mjs
+   holds the two together. The tab strip and the status bar keep their height. */
+@media (max-width: 899.98px) {
+  html[data-layout="v2"] { --shell-list-w: 0px !important; --shell-inspector-w: 0px !important; }
+}
 
 #app-rail {
-  position: fixed; top: 0; bottom: 0; left: 0; z-index: var(--z-shell);
+  position: fixed; top: 0; bottom: var(--shell-y1); left: 0; z-index: var(--z-shell);
   width: var(--shell-rail-w); box-sizing: border-box;
   display: flex; flex-direction: column; gap: 4px; padding: 12px 10px;
   background: var(--surface-rail); border-right: 1px solid color-mix(in srgb, var(--ivory) 7%, transparent);
@@ -5028,7 +5067,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 #app-help-menu { position: absolute; left: calc(100% + 12px); bottom: 0; width: 204px; padding: 8px; border: 1px solid var(--hairline-strong); border-radius: var(--r-md); background: var(--panel-solid); box-shadow: var(--shadow-2); }
 #app-help-menu[hidden] { display: none; }
 html[data-shell="rail"] :is(.profiler-overlay, .music-overlay) { z-index: var(--z-transient); }
-#app-local-nav { position: fixed; top: 0; right: 0; left: var(--shell-rail-w); height: var(--shell-local-h); z-index: calc(var(--z-shell) - 1); display: flex; align-items: center; gap: 8px; overflow-x: auto; overflow-y: hidden; padding: 6px 22px; background: var(--bg); border-bottom: 1px solid var(--hairline); }
+#app-local-nav { position: fixed; top: 0; right: 0; left: var(--shell-x0); height: var(--shell-local-h); z-index: calc(var(--z-shell) - 1); display: flex; align-items: center; gap: 8px; overflow-x: auto; overflow-y: hidden; padding: 6px 22px; background: var(--bg); border-bottom: 1px solid var(--hairline); }
 #app-local-nav[hidden] { display: none; }
 #app-local-nav .app-local-link { flex: none; display: inline-flex; align-items: center; gap: 8px; min-height: 42px; padding: 8px 11px; background: transparent; color: var(--muted); border: 0; border-bottom: 2px solid transparent; border-radius: 0; box-shadow: none; font-size: 14px; transform: none; }
 #app-local-nav .app-local-link:hover { color: var(--ivory); background: color-mix(in srgb, var(--ivory) 4%, transparent); }
@@ -5070,9 +5109,19 @@ html[data-shell="rail"] :is(.profiler-overlay, .music-overlay) { z-index: var(--
    full-bleed on purpose — it is the backdrop — and usableArea() fits the
    graph beside the rail instead. */
 /* The rail's width is added to the Booklet's own gutter, not swapped for it. */
-html[data-shell="rail"] body { padding-left: calc(var(--shell-rail-w) + var(--gutter)); }
+html[data-shell="rail"] body { padding-left: calc(var(--shell-x0) + var(--gutter)); }
 html[data-shell="rail"] body:is([data-nav-section="work"], [data-nav-section="agents"]) { padding-top: var(--shell-local-h); }
-@media (max-width: 900px) { html[data-shell="rail"] body { padding-left: calc(var(--shell-rail-w) + var(--s4)); } }
+@media (max-width: 900px) { html[data-shell="rail"] body { padding-left: calc(var(--shell-x0) + var(--s4)); } }
+/* Layout v2: the tab pages are the one thing that flows inside the body, so
+   while one is showing the body also leaves room for the tab strip above it and
+   the status bar below. Every other surface is a fixed layer that ignores the
+   body's padding, and must not make the document any taller (behind Home there
+   is still the last tab page, unseen, and a few more pixels would scroll it). */
+html[data-layout="v2"][data-shell="rail"] body:not(.workspace-active, .command-active, .vibe-active):not(:has(.workspace-page:not([hidden]))) { padding-top: var(--shell-tabs-h); padding-bottom: calc(40px + var(--shell-y1)); }
+html[data-layout="v2"][data-shell="rail"] body:is([data-nav-section="work"], [data-nav-section="agents"]):not(.workspace-active, .command-active, .vibe-active):not(:has(.workspace-page:not([hidden]))) { padding-top: var(--shell-y0); }
+@media (max-width: 900px) {
+  html[data-layout="v2"][data-shell="rail"] body:not(.workspace-active, .command-active, .vibe-active):not(:has(.workspace-page:not([hidden]))) { padding-bottom: calc(32px + var(--shell-y1)); }
+}
 html[data-shell="rail"] #workspace-layer,
 html[data-shell="rail"] #idle-hud,
 html[data-shell="rail"] .overlay,
@@ -5080,25 +5129,25 @@ html[data-shell="rail"] .overlay,
    the rail sat over their left edge — Style & sound's play button included. */
 html[data-shell="rail"] .planning-overlay,
 html[data-shell="rail"] .profiler-overlay,
-html[data-shell="rail"] .music-overlay { left: var(--shell-rail-w); }
+html[data-shell="rail"] .music-overlay { left: var(--shell-x0); right: var(--shell-x1); bottom: var(--shell-y1); }
 html[data-shell="rail"] #workspace-layer,
-html[data-shell="rail"] #idle-hud { top: var(--shell-local-h); }
-/* The project panel slides out of the rail's edge, not the window's. */
-html[data-shell="rail"] #workspace-sidebar-panel { left: var(--shell-rail-w); }
+html[data-shell="rail"] #idle-hud { top: var(--shell-y0); }
+/* The project panel slides out of the rail's edge, not the window's, and like the rail it stops above the status bar. */
+html[data-shell="rail"] #workspace-sidebar-panel { left: var(--shell-rail-w); height: calc(100% - var(--shell-y1)); }
 /* Three sheets size themselves in vw, and vw does not know the overlay moved
    over for the rail: at 600px the Task board ran 13px off the right edge. Take
    the rail back out of the width they measure against. (Music, Plans, Brain
    maps and the profiler size in % of the overlay and need nothing.) */
-html[data-shell="rail"] .overlay .sheet { width: min(620px, calc(92vw - var(--shell-rail-w))); }
-html[data-shell="rail"] .palette-sheet { width: min(720px, calc(92vw - var(--shell-rail-w))); }
+html[data-shell="rail"] .overlay .sheet { width: min(620px, calc(92vw - var(--shell-x0) - var(--shell-x1))); }
+html[data-shell="rail"] .palette-sheet { width: min(720px, calc(92vw - var(--shell-x0) - var(--shell-x1))); }
 /* toasts clear the rail (Settings' sticky list sits with the Settings rules) */
 html[data-shell="rail"] #toast-host {
-  left: calc(var(--shell-rail-w) + 22px);
+  left: calc(var(--shell-x0) + 22px);
   transition: bottom var(--dur-2) var(--ease), left var(--motion-menu) var(--ease);
 }
 /* The rail opens over the page, and toasts paint above it: while it is open
    they step aside to its edge instead of covering its foot. */
-html[data-shell="rail"]:has(#app-rail:hover, #app-rail :focus-visible) #toast-host { left: calc(var(--shell-rail-open) + 22px); }
+html[data-shell="rail"]:has(#app-rail:hover, #app-rail :focus-visible) #toast-host { left: calc(max(var(--shell-rail-open), var(--shell-x0)) + 22px); }
 /* Nothing floats over the open rail or takes a click through it. Scroll
    arrows and select popups (#studio-floats, z 180) are cut out of the strip
    it covers; the roaming companion, its bubble and panel, and the media
@@ -5107,11 +5156,11 @@ html[data-shell="rail"]:has(#app-rail:hover, #app-rail :focus-visible) #studio-f
 html[data-shell="rail"][data-rail-drawer] #studio-floats { clip-path: inset(0 0 0 var(--shell-rail-open)); }
 html[data-shell="rail"]:has(#app-rail:hover, #app-rail :focus-visible) :is(.companion-orb[data-roaming], .companion-bubble, .companion-panel, .media-window),
 html[data-shell="rail"][data-rail-drawer] :is(.companion-orb[data-roaming], .companion-bubble, .companion-panel, .media-window) { z-index: calc(var(--z-shell) - 1); }
-html[data-shell="rail"] .explorer-sheet { width: min(1460px, calc(97vw - var(--shell-rail-w))); }
-html[data-shell="rail"] .overlay .walkthrough-sheet { width: min(740px, calc(94vw - var(--shell-rail-w))); }
+html[data-shell="rail"] .explorer-sheet { width: min(1460px, calc(97vw - var(--shell-x0) - var(--shell-x1))); }
+html[data-shell="rail"] .overlay .walkthrough-sheet { width: min(740px, calc(94vw - var(--shell-x0) - var(--shell-x1))); }
 /* Primary destinations fill the workspace. Temporary tools remain sheets. */
 html[data-shell="rail"] body:has(.workspace-page:not([hidden])) { overflow: hidden; }
-html[data-shell="rail"] .workspace-page { top: var(--shell-local-h); right: 0; bottom: 0; left: var(--shell-rail-w); padding: 0; background: var(--bg); backdrop-filter: none; }
+html[data-shell="rail"] .workspace-page { top: var(--shell-y0); right: var(--shell-x1); bottom: var(--shell-y1); left: var(--shell-x0); padding: 0; background: var(--bg); backdrop-filter: none; }
 html[data-shell="rail"] .workspace-page > :is(.sheet, .explorer-sheet, .brains-sheet) { width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; border: 0; border-radius: 0; box-shadow: none; }
 html[data-shell="rail"] .workspace-page .sheet-back { display: none; }
 html[data-shell="rail"] .lab-tabs { display: none; }
@@ -5257,7 +5306,7 @@ body.command-zen :is(#app-rail, #app-local-nav) { opacity: 0; pointer-events: no
 #workspace-help-details:not(:has(.walkthrough-invitation:not([hidden]))) { display: none; }
 /* Home's composer owns the bottom of the window, so toasts stack above it
    instead of over its hint line and left edge. */
-html[data-shell="rail"] body:has(#workspace-layer:not([hidden])):not(:has(.workspace-page:not([hidden]))) #toast-host { bottom: 236px; }
+html[data-shell="rail"] body:has(#workspace-layer:not([hidden])):not(:has(.workspace-page:not([hidden]))) #toast-host { bottom: calc(236px + var(--shell-y1)); }
 @container ws-main (max-width: 1000px) {
   .workspace .ws-compose-bottom > span { display: none; }
   .workspace .ws-compose-bottom .primary { margin-left: auto; }

@@ -7,6 +7,16 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Room for a session list, an inspector, a tab strip and a status bar (off by
+  default, nothing changes yet).** The window's layout now keeps room for four
+  panels that are not built yet. Nothing looks different: every page, sheet,
+  toast, the companion's orb and the media window are exactly where they were,
+  checked to the hundredth of a pixel in four window sizes. Developers can try
+  the wider layout with `?layout=v2`; below 900 px wide the list and the
+  inspector fold away.
+- **One place decides where the free space is.** The companion's orb, the media
+  window, toasts and pop-up lists ask the shell where the window is free, so they
+  will stay clear of the new panels.
 - **Build's Home can list your tasks like sessions, in a coding-agent desktop
   layout (off by default).** Search › Switch Home layout turns it on. The menu
   lists this project's tasks the way the Claude Code and Codex desktop apps list

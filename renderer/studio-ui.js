@@ -271,13 +271,15 @@
     if (!popup) return;
     if (!visible(popup.button) || popup.select.disabled) { closeSelect(); return; }
     const box = popup.button.getBoundingClientRect();
+    // Layout v2 keeps the list inside the free area (nav.js usable()); v1 is the window.
+    const area = window.MefiNav?.layout?.on?.() ? window.MefiNav.usable() : { left: 0, top: 0, right: innerWidth, bottom: innerHeight };
     // Wide form fields need not turn a handful of choices into long bars.
-    const width = Math.min(popup.columns > 1 ? popup.columns * 132 + 16 : Math.max(240, Math.min(360, box.width)), innerWidth - 24);
-    const maxHeight = Math.min(380, innerHeight - 24);
+    const width = Math.min(popup.columns > 1 ? popup.columns * 132 + 16 : Math.max(240, Math.min(360, box.width)), area.right - area.left - 24);
+    const maxHeight = Math.min(380, area.bottom - area.top - 24);
     popup.root.style.width = `${width}px`; popup.root.style.maxHeight = `${maxHeight}px`;
     const height = popup.root.getBoundingClientRect().height;
-    const top = box.bottom + 6 + height <= innerHeight - 12 ? box.bottom + 6 : Math.max(12, box.top - height - 6);
-    popup.root.style.left = `${Math.max(12, Math.min(box.left, innerWidth - width - 12))}px`;
+    const top = box.bottom + 6 + height <= area.bottom - 12 ? box.bottom + 6 : Math.max(area.top + 12, box.top - height - 6);
+    popup.root.style.left = `${Math.max(area.left + 12, Math.min(box.left, area.right - width - 12))}px`;
     popup.root.style.top = `${top}px`;
   }
   function choose(option) {

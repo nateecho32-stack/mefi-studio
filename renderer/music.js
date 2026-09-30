@@ -2410,20 +2410,24 @@
     dropdownFrame = 0;
     if (els.dropdown?.hidden !== false) return;
     const edge = 12;
-    const width = window.innerWidth || 1024, height = window.innerHeight || 768;
+    const width = window.innerWidth || 1024;
+    // Layout v2 keeps the menu inside the free area (nav.js usable()); v1 is the window.
+    const area = window.MefiNav?.layout?.on?.() ? window.MefiNav.usable() : null;
+    const height = area ? area.bottom : window.innerHeight || 768;
+    const roof = area ? area.top : 0;
     const anchor = dropdownAnchor?.getBoundingClientRect?.();
     const strip = dropdownAnchor?.closest?.(".cmd-tools")?.getBoundingClientRect?.();
     const bottom = anchor?.height ? Math.max(anchor.bottom, strip?.bottom || 0) : 64;
-    const above = anchor?.height ? Math.max(0, anchor.top - 8 - edge) : 0;
+    const above = anchor?.height ? Math.max(0, anchor.top - 8 - edge - roof) : 0;
     const below = height - bottom - 8 - edge;
     const flip = below < 280 && above > below && above >= 240;
-    const top = flip ? edge : Math.max(edge, Math.min(bottom + 8, height - 280));
+    const top = flip ? roof + edge : Math.max(roof + edge, Math.min(bottom + 8, height - 280));
     const panelWidth = els.dropdown.getBoundingClientRect().width;
     const right = anchor?.width ? width - anchor.right : edge;
     const style = els.dropdown.style;
     const put = (key, value) => { if (style[key] !== value) style[key] = value; };
     put("top", `${Math.round(top)}px`);
-    put("right", `${Math.round(Math.max(edge, Math.min(right, width - panelWidth - edge)))}px`);
+    put("right", `${Math.round(Math.max(area ? width - area.right + edge : edge, Math.min(right, width - panelWidth - (area ? area.left : 0) - edge)))}px`);
     put("maxHeight", `${Math.max(0, flip ? above : height - top - edge)}px`);
     placePlayer();
   }

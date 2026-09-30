@@ -141,6 +141,14 @@
   --z-workspace: 65; --z-shell: 82; --z-sidebar: 85;
   /* 0 unless html[data-shell="rail"] turns the navigation rail on */
   --shell-rail-w: 0px;
+  /* The layout contract (docs/unified-studio.md, MefiNav.layout in nav.js): the
+     four regions the shell can grow, each 0 until html[data-layout="v2"] gives
+     it room. Only MefiNav.layout.set() writes them; a region reads its own. The
+     free area's edges, --shell-x0/-x1/-y0/-y1, are derived in section 22. */
+  --shell-list-w: 0px;       /* the session list, right of the rail */
+  --shell-inspector-w: 0px;  /* the inspector, at the right edge */
+  --shell-tabs-h: 0px;       /* the tab strip, under the local navigation */
+  --shell-status-h: 0px;     /* the status bar, along the bottom */
 
   /* Work surfaces share the active palette. studio-ui.css supplies the glass
      recipes; opaque palette tokens remain available to canvas renderers. */
@@ -1357,8 +1365,8 @@ input.drag-over { border-color: var(--live); box-shadow: 0 0 0 3px color-mix(in 
    10. Rail (#tree-rail)
    ============================================================ */
 #tree-rail {
-  position: fixed; top: 0; right: 0;
-  height: 100vh; width: var(--rail-w);
+  position: fixed; top: 0; right: var(--shell-x1);
+  height: calc(100vh - var(--shell-y1)); width: var(--rail-w);
   z-index: var(--z-rail);
   background: linear-gradient(270deg, rgba(4, 4, 6, 0.96), rgba(4, 4, 6, 0.82));
   backdrop-filter: blur(16px);
@@ -1422,11 +1430,11 @@ input.drag-over { border-color: var(--live); box-shadow: 0 0 0 3px color-mix(in 
 }
 /* a 58px strip cannot hold a tooltip: it only belongs to the open rail */
 #tree-rail:not(:hover):not(:has(:focus-visible)):not(.pinned) .tree-tip { display: none; }
-body { padding-right: var(--rail-gap); }
+body { padding-right: calc(var(--rail-gap) + var(--shell-x1)); }
 /* pinned open, the rail is a dock rather than an overlay: the page flow (the
    tabs strip above all) reserves its width, or the last tabs are sliced at the
    seam. Fixed-position chrome (sheets, the Command HUD) is unaffected. */
-body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)); }
+body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4) + var(--shell-x1)); }
 
 /* ============================================================
    11. Overlays and the shared .sheet-head
@@ -2213,7 +2221,7 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
 .help-group:first-child { margin-top: 0; }
 /* One small key grid per section, set in two newspaper columns when the
    sheet has room for them; a section never breaks across the columns. */
-#help-overlay .sheet { width: min(860px, calc(92vw - var(--shell-rail-w))); }
+#help-overlay .sheet { width: min(860px, calc(92vw - var(--shell-x0) - var(--shell-x1))); }
 #help-grid { display: block; columns: 2 20rem; column-gap: var(--s7); }
 .help-section {
   break-inside: avoid;
@@ -2297,13 +2305,13 @@ body.command-active:not(.appearance-settings-active):not(.music-preview-active) 
   contain-intrinsic-size: auto none;
   transition: content-visibility var(--motion-base) allow-discrete;
 }
-body.command-active #toast-host { bottom: 64px; }         /* clears the legend pill at bottom-left */
+body.command-active #toast-host { bottom: calc(64px + var(--shell-y1)); }         /* clears the legend pill at bottom-left */
 /* …but an open legend grows a list of up to 52vh above that pill, and #toast-host
    (--z-toast) paints over the HUD, so the stack has to clear the whole column. */
-body.command-active:has(#idle-legend-toggle[aria-expanded="true"]) #toast-host { bottom: calc(52vh + 64px); }
+body.command-active:has(#idle-legend-toggle[aria-expanded="true"]) #toast-host { bottom: calc(52vh + 64px + var(--shell-y1)); }
 
 #toast-host {
-  position: fixed; left: 22px; bottom: 22px;
+  position: fixed; left: 22px; bottom: calc(22px + var(--shell-y1));
   z-index: var(--z-toast);
   display: flex; flex-direction: column;
   pointer-events: none;
@@ -2439,7 +2447,7 @@ footer {
 }
 
 @media (max-width: 900px) {
-  body { padding: 0 var(--s4) 32px; padding-right: var(--s4); }
+  body { padding: 0 var(--s4) 32px; padding-right: calc(var(--s4) + var(--shell-x1)); }
   #tree-rail { display: none; }
   /* the tabs row already wraps and dropped its keycaps in the blocks above */
   .stat-grid { grid-template-columns: repeat(2, 1fr); }
@@ -2447,7 +2455,7 @@ footer {
   .cmd-card { width: min(320px, calc(100vw - 24px)); right: var(--s3); }
   .cmd-legend, .cmd-hint, .cmd-feed { display: none; }
   /* nothing to clear once the legend is hidden, whatever the toggle still reports */
-  body.command-active:has(#idle-legend-toggle[aria-expanded="true"]) #toast-host { bottom: 64px; }
+  body.command-active:has(#idle-legend-toggle[aria-expanded="true"]) #toast-host { bottom: calc(64px + var(--shell-y1)); }
   .cmd-bottom { padding: 0 var(--s3); }
   .cmd-dock { max-width: calc(100vw - 24px); }     /* wraps to two rows; row-gap is already 4px */
   /* Settings answers to its own width, not the window's: see its container queries */
@@ -2475,7 +2483,7 @@ footer {
 /* the open legend list is capped at 40vh here, so the toasts have less of it to
    clear; below 901px the legend is hidden and the 900px reset has to stand */
 @media (max-height: 760px) and (min-width: 901px) {
-  body.command-active:has(#idle-legend-toggle[aria-expanded="true"]) #toast-host { bottom: calc(40vh + 64px); }
+  body.command-active:has(#idle-legend-toggle[aria-expanded="true"]) #toast-host { bottom: calc(40vh + 64px + var(--shell-y1)); }
 }
 
 /* ============================================================
@@ -4075,7 +4083,7 @@ html[data-motion="off"]::view-transition-new(*) { animation: none !important; }
 .walkthrough-activity.busy .walkthrough-activity-track span { width: 40%; animation: walkthrough-slide 1.4s ease-in-out infinite; }
 .walkthrough-assist-list li[aria-current="step"] { color: var(--gold-bright); }
 @keyframes walkthrough-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
-.walkthrough-coach { position: fixed; right: 18px; bottom: 18px; z-index: var(--z-pop); display: flex; flex-direction: column; gap: 7px; width: min(340px, calc(100vw - 36px)); padding: 15px 16px; border: 1px solid var(--hairline-strong); border-radius: 14px; background: color-mix(in srgb, var(--panel-solid) 92%, var(--gold) 8%); box-shadow: var(--shadow-3), var(--inset-hi); }
+.walkthrough-coach { position: fixed; right: calc(18px + var(--shell-x1)); bottom: calc(18px + var(--shell-y1)); z-index: var(--z-pop); display: flex; flex-direction: column; gap: 7px; width: min(340px, calc(100vw - 36px)); padding: 15px 16px; border: 1px solid var(--hairline-strong); border-radius: 14px; background: color-mix(in srgb, var(--panel-solid) 92%, var(--gold) 8%); box-shadow: var(--shadow-3), var(--inset-hi); }
 .walkthrough-coach-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .walkthrough-coach-tools { display: flex; flex-wrap: wrap; gap: 4px; }
 #walkthrough-coach-title { color: var(--ivory); font-size: 14px; }
@@ -4088,11 +4096,11 @@ html[data-motion="off"]::view-transition-new(*) { animation: none !important; }
    long as the coach stayed on it (and the !important outline wins the
    cascade over the animated colour anyway). */
 .walkthrough-focus { outline: 2px solid var(--gold-bright) !important; outline-offset: 3px; border-radius: 7px; animation: walkthrough-pulse 1.6s ease-in-out 4; }
-body.command-active .walkthrough-coach { right: 392px; }
-@media (max-width: 1150px) { body.command-active .walkthrough-coach { right: 18px; } }
+body.command-active .walkthrough-coach { right: calc(392px + var(--shell-x1)); }
+@media (max-width: 1150px) { body.command-active .walkthrough-coach { right: calc(18px + var(--shell-x1)); } }
 @media (max-width: 650px) {
-  .walkthrough-coach { left: 12px; right: 12px; bottom: 12px; width: auto; max-height: calc(100dvh - 24px); overflow-y: auto; }
-  html[data-shell="rail"] .walkthrough-coach { left: calc(var(--shell-rail-w) + 12px); }
+  .walkthrough-coach { left: 12px; right: calc(12px + var(--shell-x1)); bottom: calc(12px + var(--shell-y1)); width: auto; max-height: calc(100dvh - 24px); overflow-y: auto; }
+  html[data-shell="rail"] .walkthrough-coach { left: calc(var(--shell-x0) + 12px); }
 }
 @keyframes walkthrough-pulse {
   0%, 100% { outline-color: var(--gold-bright); }
@@ -4278,8 +4286,8 @@ body.command-active .walkthrough-coach { right: 392px; }
    that one frame), so the scroll lands on the card as it will be. */
 .settings-card[data-settings-opening]::details-content { transition: none; }
 /* Keep the sticky category list and jumps below the fixed local navigation. */
-html[data-shell="rail"] .settings-nav { top: calc(var(--shell-local-h) + var(--s4)); max-height: calc(100vh - var(--shell-local-h) - 2 * var(--s4)); }
-html[data-shell="rail"] .settings-card { scroll-margin-top: calc(var(--shell-local-h) + var(--s4)); }
+html[data-shell="rail"] .settings-nav { top: calc(var(--shell-y0) + var(--s4)); max-height: calc(100vh - var(--shell-y0) - var(--shell-y1) - 2 * var(--s4)); }
+html[data-shell="rail"] .settings-card { scroll-margin-top: calc(var(--shell-y0) + var(--s4)); }
 /* Narrow panel: one column, and the list turns into a strip over the cards —
    Find first, then every section as a chip in one row that scrolls sideways. */
 @container settings (max-width: 720px) {
@@ -4297,8 +4305,8 @@ html[data-shell="rail"] .settings-card { scroll-margin-top: calc(var(--shell-loc
   /* The category strip sticks below the fixed local navigation. */
   /* Stuck, it reaches a little past the cards, so its rounded corners sit over
      the panel's empty padding rather than over a card's edge. */
-  html[data-shell="rail"] .settings-nav { position: sticky; top: var(--shell-local-h); z-index: 2; max-height: none; margin-inline: calc(-1 * var(--s2)); padding-inline: var(--s4); border-radius: 0 0 12px 12px; background: var(--panel-solid); box-shadow: var(--shadow-1); }
-  html[data-shell="rail"] .settings-card { scroll-margin-top: calc(var(--shell-local-h) + 112px); }
+  html[data-shell="rail"] .settings-nav { position: sticky; top: var(--shell-y0); z-index: 2; max-height: none; margin-inline: calc(-1 * var(--s2)); padding-inline: var(--s4); border-radius: 0 0 12px 12px; background: var(--panel-solid); box-shadow: var(--shadow-1); }
+  html[data-shell="rail"] .settings-card { scroll-margin-top: calc(var(--shell-y0) + 112px); }
 }
 /* The classic tabs row wraps at 1250px and grows past the list's 68px offset. */
 @media (max-width: 1250px) {
@@ -4872,17 +4880,48 @@ html[data-no-blur] #idle-hud .cmd-agents-pop { background: var(--panel-solid); b
    off html[data-shell="rail"]; without it the classic tabs row, dock
    and hover sidebar are exactly as they were.
 
-   Every full-window layer respects --shell-rail-w instead of owning
-   the left edge. At rest the rail is 64px of icons with a small label
-   under each section; hover or keyboard focus widens it OVER the page
-   (no reflow). Pinned, it widens the variable itself and the page
-   makes room.
+   Every full-window layer takes its edges from the free area below
+   instead of owning them. At rest the rail is 64px of icons with a
+   small label under each section; hover or keyboard focus widens it
+   OVER the page (no reflow). Pinned, it widens the variable itself and
+   the page makes room.
+
+   The layout contract (docs/unified-studio.md): the free area is what
+   is left inside the window once the rail, the local navigation and
+   the four regions of html[data-layout="v2"] (the session list, the
+   inspector, the tab strip and the status bar, :root) have taken
+   theirs. Its four edges are derived here, once; with the regions at
+   0, which is all of v1, each equals what the layers used to read
+   from --shell-rail-w and --shell-local-h, pixel for pixel.
+   --shell-rail-w stays for the rail itself (its width, the flyouts
+   that slide out of it) and --shell-local-h for the local navigation's
+   own height: nothing else reads them.
    ============================================================ */
 html[data-shell="rail"] { --shell-rail-w: 64px; --shell-rail-open: 256px; --shell-local-h: 56px; }
 html[data-shell="rail"][data-rail-pinned] { --shell-rail-w: var(--shell-rail-open); }
+/* On :root and body both, because body[data-nav-section=agents] (agents.css)
+   gives the local navigation its own height and every layer sits under body.
+   --shell-y0 has no fallback, so like --shell-local-h it is undefined in the
+   classic shell and the rules that carry a fallback for that keep it. */
+:root, body {
+  --shell-x0: calc(var(--shell-rail-w) + var(--shell-list-w));      /* left edge of the free area */
+  --shell-x1: var(--shell-inspector-w);                             /* what the right edge gives up */
+  --shell-y0: calc(var(--shell-local-h) + var(--shell-tabs-h));     /* top edge of the free area */
+  --shell-y1: var(--shell-status-h);                                /* what the bottom edge gives up */
+}
+/* The fold rule. Below 900px the list and the inspector are not columns: they
+   take nothing from the window (a later region shows itself as a drawer while
+   html[data-layout-fold] names it). It is a media query, not a script, so the
+   free area is right the instant the window is, and !important because
+   MefiNav.layout.set() writes the widths inline. 899.98px is nav.js's
+   LAYOUT_FOLD_BELOW (900) minus a hair; tests/layout_contract_nav.test.mjs
+   holds the two together. The tab strip and the status bar keep their height. */
+@media (max-width: 899.98px) {
+  html[data-layout="v2"] { --shell-list-w: 0px !important; --shell-inspector-w: 0px !important; }
+}
 
 #app-rail {
-  position: fixed; top: 0; bottom: 0; left: 0; z-index: var(--z-shell);
+  position: fixed; top: 0; bottom: var(--shell-y1); left: 0; z-index: var(--z-shell);
   width: var(--shell-rail-w); box-sizing: border-box;
   display: flex; flex-direction: column; gap: 4px; padding: 12px 10px;
   background: var(--surface-rail); border-right: 1px solid color-mix(in srgb, var(--ivory) 7%, transparent);
@@ -5038,7 +5077,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 #app-help-menu { position: absolute; left: calc(100% + 12px); bottom: 0; width: 204px; padding: 8px; border: 1px solid var(--hairline-strong); border-radius: var(--r-md); background: var(--panel-solid); box-shadow: var(--shadow-2); }
 #app-help-menu[hidden] { display: none; }
 html[data-shell="rail"] :is(.profiler-overlay, .music-overlay) { z-index: var(--z-transient); }
-#app-local-nav { position: fixed; top: 0; right: 0; left: var(--shell-rail-w); height: var(--shell-local-h); z-index: calc(var(--z-shell) - 1); display: flex; align-items: center; gap: 8px; overflow-x: auto; overflow-y: hidden; padding: 6px 22px; background: var(--bg); border-bottom: 1px solid var(--hairline); }
+#app-local-nav { position: fixed; top: 0; right: 0; left: var(--shell-x0); height: var(--shell-local-h); z-index: calc(var(--z-shell) - 1); display: flex; align-items: center; gap: 8px; overflow-x: auto; overflow-y: hidden; padding: 6px 22px; background: var(--bg); border-bottom: 1px solid var(--hairline); }
 #app-local-nav[hidden] { display: none; }
 #app-local-nav .app-local-link { flex: none; display: inline-flex; align-items: center; gap: 8px; min-height: 42px; padding: 8px 11px; background: transparent; color: var(--muted); border: 0; border-bottom: 2px solid transparent; border-radius: 0; box-shadow: none; font-size: 14px; transform: none; }
 #app-local-nav .app-local-link:hover { color: var(--ivory); background: color-mix(in srgb, var(--ivory) 4%, transparent); }
@@ -5080,9 +5119,19 @@ html[data-shell="rail"] :is(.profiler-overlay, .music-overlay) { z-index: var(--
    full-bleed on purpose — it is the backdrop — and usableArea() fits the
    graph beside the rail instead. */
 /* The rail's width is added to the Booklet's own gutter, not swapped for it. */
-html[data-shell="rail"] body { padding-left: calc(var(--shell-rail-w) + var(--gutter)); }
+html[data-shell="rail"] body { padding-left: calc(var(--shell-x0) + var(--gutter)); }
 html[data-shell="rail"] body:is([data-nav-section="work"], [data-nav-section="agents"]) { padding-top: var(--shell-local-h); }
-@media (max-width: 900px) { html[data-shell="rail"] body { padding-left: calc(var(--shell-rail-w) + var(--s4)); } }
+@media (max-width: 900px) { html[data-shell="rail"] body { padding-left: calc(var(--shell-x0) + var(--s4)); } }
+/* Layout v2: the tab pages are the one thing that flows inside the body, so
+   while one is showing the body also leaves room for the tab strip above it and
+   the status bar below. Every other surface is a fixed layer that ignores the
+   body's padding, and must not make the document any taller (behind Home there
+   is still the last tab page, unseen, and a few more pixels would scroll it). */
+html[data-layout="v2"][data-shell="rail"] body:not(.workspace-active, .command-active, .vibe-active):not(:has(.workspace-page:not([hidden]))) { padding-top: var(--shell-tabs-h); padding-bottom: calc(40px + var(--shell-y1)); }
+html[data-layout="v2"][data-shell="rail"] body:is([data-nav-section="work"], [data-nav-section="agents"]):not(.workspace-active, .command-active, .vibe-active):not(:has(.workspace-page:not([hidden]))) { padding-top: var(--shell-y0); }
+@media (max-width: 900px) {
+  html[data-layout="v2"][data-shell="rail"] body:not(.workspace-active, .command-active, .vibe-active):not(:has(.workspace-page:not([hidden]))) { padding-bottom: calc(32px + var(--shell-y1)); }
+}
 html[data-shell="rail"] #workspace-layer,
 html[data-shell="rail"] #idle-hud,
 html[data-shell="rail"] .overlay,
@@ -5090,25 +5139,25 @@ html[data-shell="rail"] .overlay,
    the rail sat over their left edge — Style & sound's play button included. */
 html[data-shell="rail"] .planning-overlay,
 html[data-shell="rail"] .profiler-overlay,
-html[data-shell="rail"] .music-overlay { left: var(--shell-rail-w); }
+html[data-shell="rail"] .music-overlay { left: var(--shell-x0); right: var(--shell-x1); bottom: var(--shell-y1); }
 html[data-shell="rail"] #workspace-layer,
-html[data-shell="rail"] #idle-hud { top: var(--shell-local-h); }
-/* The project panel slides out of the rail's edge, not the window's. */
-html[data-shell="rail"] #workspace-sidebar-panel { left: var(--shell-rail-w); }
+html[data-shell="rail"] #idle-hud { top: var(--shell-y0); }
+/* The project panel slides out of the rail's edge, not the window's, and like the rail it stops above the status bar. */
+html[data-shell="rail"] #workspace-sidebar-panel { left: var(--shell-rail-w); height: calc(100% - var(--shell-y1)); }
 /* Three sheets size themselves in vw, and vw does not know the overlay moved
    over for the rail: at 600px the Task board ran 13px off the right edge. Take
    the rail back out of the width they measure against. (Music, Plans, Brain
    maps and the profiler size in % of the overlay and need nothing.) */
-html[data-shell="rail"] .overlay .sheet { width: min(620px, calc(92vw - var(--shell-rail-w))); }
-html[data-shell="rail"] .palette-sheet { width: min(720px, calc(92vw - var(--shell-rail-w))); }
+html[data-shell="rail"] .overlay .sheet { width: min(620px, calc(92vw - var(--shell-x0) - var(--shell-x1))); }
+html[data-shell="rail"] .palette-sheet { width: min(720px, calc(92vw - var(--shell-x0) - var(--shell-x1))); }
 /* toasts clear the rail (Settings' sticky list sits with the Settings rules) */
 html[data-shell="rail"] #toast-host {
-  left: calc(var(--shell-rail-w) + 22px);
+  left: calc(var(--shell-x0) + 22px);
   transition: bottom var(--dur-2) var(--ease), left var(--motion-menu) var(--ease);
 }
 /* The rail opens over the page, and toasts paint above it: while it is open
    they step aside to its edge instead of covering its foot. */
-html[data-shell="rail"]:has(#app-rail:hover, #app-rail :focus-visible) #toast-host { left: calc(var(--shell-rail-open) + 22px); }
+html[data-shell="rail"]:has(#app-rail:hover, #app-rail :focus-visible) #toast-host { left: calc(max(var(--shell-rail-open), var(--shell-x0)) + 22px); }
 /* Nothing floats over the open rail or takes a click through it. Scroll
    arrows and select popups (#studio-floats, z 180) are cut out of the strip
    it covers; the roaming companion, its bubble and panel, and the media
@@ -5117,11 +5166,11 @@ html[data-shell="rail"]:has(#app-rail:hover, #app-rail :focus-visible) #studio-f
 html[data-shell="rail"][data-rail-drawer] #studio-floats { clip-path: inset(0 0 0 var(--shell-rail-open)); }
 html[data-shell="rail"]:has(#app-rail:hover, #app-rail :focus-visible) :is(.companion-orb[data-roaming], .companion-bubble, .companion-panel, .media-window),
 html[data-shell="rail"][data-rail-drawer] :is(.companion-orb[data-roaming], .companion-bubble, .companion-panel, .media-window) { z-index: calc(var(--z-shell) - 1); }
-html[data-shell="rail"] .explorer-sheet { width: min(1460px, calc(97vw - var(--shell-rail-w))); }
-html[data-shell="rail"] .overlay .walkthrough-sheet { width: min(740px, calc(94vw - var(--shell-rail-w))); }
+html[data-shell="rail"] .explorer-sheet { width: min(1460px, calc(97vw - var(--shell-x0) - var(--shell-x1))); }
+html[data-shell="rail"] .overlay .walkthrough-sheet { width: min(740px, calc(94vw - var(--shell-x0) - var(--shell-x1))); }
 /* Primary destinations fill the workspace. Temporary tools remain sheets. */
 html[data-shell="rail"] body:has(.workspace-page:not([hidden])) { overflow: hidden; }
-html[data-shell="rail"] .workspace-page { top: var(--shell-local-h); right: 0; bottom: 0; left: var(--shell-rail-w); padding: 0; background: var(--bg); backdrop-filter: none; }
+html[data-shell="rail"] .workspace-page { top: var(--shell-y0); right: var(--shell-x1); bottom: var(--shell-y1); left: var(--shell-x0); padding: 0; background: var(--bg); backdrop-filter: none; }
 html[data-shell="rail"] .workspace-page > :is(.sheet, .explorer-sheet, .brains-sheet) { width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; border: 0; border-radius: 0; box-shadow: none; }
 html[data-shell="rail"] .workspace-page .sheet-back { display: none; }
 html[data-shell="rail"] .lab-tabs { display: none; }
@@ -5267,7 +5316,7 @@ body.command-zen :is(#app-rail, #app-local-nav) { opacity: 0; pointer-events: no
 #workspace-help-details:not(:has(.walkthrough-invitation:not([hidden]))) { display: none; }
 /* Home's composer owns the bottom of the window, so toasts stack above it
    instead of over its hint line and left edge. */
-html[data-shell="rail"] body:has(#workspace-layer:not([hidden])):not(:has(.workspace-page:not([hidden]))) #toast-host { bottom: 236px; }
+html[data-shell="rail"] body:has(#workspace-layer:not([hidden])):not(:has(.workspace-page:not([hidden]))) #toast-host { bottom: calc(236px + var(--shell-y1)); }
 @container ws-main (max-width: 1000px) {
   .workspace .ws-compose-bottom > span { display: none; }
   .workspace .ws-compose-bottom .primary { margin-left: auto; }
@@ -5342,12 +5391,12 @@ html[data-shell="rail"] body:has(#workspace-layer:not([hidden])):not(:has(.works
    the menu on, it is measured beside the menu (the overlay starts at its
    edge), not across the whole window. */
 :root { --music-sheet-w: clamp(300px, 38vw, 480px); }
-html[data-shell="rail"] { --music-sheet-w: clamp(300px, calc((100vw - var(--shell-rail-w)) * .4), 500px); }
+html[data-shell="rail"] { --music-sheet-w: clamp(300px, calc((100vw - var(--shell-x0) - var(--shell-x1)) * .4), 500px); }
 .music-overlay { position: fixed; inset: 0; z-index: var(--z-sheet); padding: 16px; display: grid; grid-template-columns: var(--music-sheet-w) minmax(0, 1fr); gap: 24px; background: transparent; pointer-events: none; }
 .music-overlay[hidden], .music-overlay [hidden] { display: none !important; }
 /* While the sheet is open beside the tree, toasts (a locked Void tile's
    explanation among them) rise over the tree, clear of the sheet. */
-body.music-preview-active #toast-host { left: calc(var(--shell-rail-w) + var(--music-sheet-w) + 44px); }
+body.music-preview-active #toast-host { left: calc(var(--shell-x0) + var(--music-sheet-w) + 44px); }
 /* A size container, so the parts inside follow the sheet's width, not the window's. */
 .music-sheet { container: music-sheet / inline-size; width: 100%; height: 100%; min-height: 0; padding: 0; overflow: auto; overscroll-behavior: contain; scroll-padding-top: 132px; border: 1px solid var(--hairline); border-radius: 18px; background: var(--panel-solid); box-shadow: 8px 0 40px rgba(0,0,0,.28); outline: none; pointer-events: auto; }
 .music-header { position: sticky; top: 0; z-index: 2; display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 18px 22px 14px; border-bottom: 1px solid var(--hairline); background: var(--panel-solid); }
@@ -5818,7 +5867,7 @@ body.music-preview-active #idle-hud { display: none !important; }
   .music-header h2 { margin: 0; }
   .music-settings { padding-top: 18px; }
   .music-node-preview { margin-bottom: 0; }
-  body.music-preview-active #toast-host { left: calc(var(--shell-rail-w) + 22px); }
+  body.music-preview-active #toast-host { left: calc(var(--shell-x0) + 22px); }
 }
 @media (max-width: 1100px) {
   html[data-rail-pinned] .music-overlay { --presence-from: 0 10px; padding: 8px; gap: 8px; grid-template-columns: minmax(0, 1fr); grid-template-rows: max(215px, 32vh) minmax(0, 1fr); }
@@ -5831,7 +5880,7 @@ body.music-preview-active #idle-hud { display: none !important; }
   html[data-rail-pinned] .music-header h2 { margin: 0; }
   html[data-rail-pinned] .music-settings { padding-top: 18px; }
   html[data-rail-pinned] .music-node-preview { margin-bottom: 0; }
-  html[data-rail-pinned] body.music-preview-active #toast-host { left: calc(var(--shell-rail-w) + 22px); }
+  html[data-rail-pinned] body.music-preview-active #toast-host { left: calc(var(--shell-x0) + 22px); }
 }
 /* The sheet's own width, whatever the window and the menu: stacked and wide,
    the theme grids run four across; narrow, the Members pill folds to its lock
@@ -5857,11 +5906,13 @@ body.music-preview-active #idle-hud { display: none !important; }
 /* Appearance is a small editor beside the actual Command canvas. The same
    controls remain in Settings, so search, keyboard focus and saved values
    keep their usual owners. Only the drawer scrolls. */
-body { --appearance-w: clamp(320px, 28vw, 390px); --appearance-top: calc(var(--shell-local-h, 56px) + 12px); --appearance-left: calc(var(--shell-rail-w, 0px) + 12px); }
+body { --appearance-w: clamp(320px, 28vw, 390px); --appearance-top: calc(var(--shell-y0, 56px) + 12px); --appearance-left: calc(var(--shell-x0, 0px) + 12px); }
 html:not([data-shell="rail"]) body { --appearance-top: 12px; --appearance-left: 12px; }
+/* Layout v2: between the list and the inspector the editor may have less than its 28% of the window, so it takes what is there (v1 is untouched). */
+html[data-layout="v2"] body { --appearance-w: min(clamp(320px, 28vw, 390px), calc(100vw - var(--shell-x0, 0px) - var(--shell-x1, 0px) - 24px)); }
 .appearance-actions, .appearance-sections { display: none; }
 .appearance-stage[hidden] { display: none; }
-.appearance-stage { position: fixed; top: var(--appearance-top); bottom: 16px; left: calc(var(--appearance-left) + var(--appearance-w) + 28px); right: 28px; z-index: var(--z-hud); display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; pointer-events: none; }
+.appearance-stage { position: fixed; top: var(--appearance-top); bottom: calc(16px + var(--shell-y1)); left: calc(var(--appearance-left) + var(--appearance-w) + 28px); right: calc(28px + var(--shell-x1)); z-index: var(--z-hud); display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; pointer-events: none; }
 .appearance-stage-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 18px 10px 0; margin: 0; }
 .appearance-live-label { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; color: var(--gold-bright); font: 600 10px/1.3 var(--font-ui); letter-spacing: .14em; text-transform: uppercase; }
 .appearance-live-label::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--gold-bright); box-shadow: 0 0 12px var(--gold); }
@@ -5870,7 +5921,7 @@ html:not([data-shell="rail"]) body { --appearance-top: 12px; --appearance-left: 
 .appearance-stage-hint { margin: 10px 0 0; max-width: 340px; color: var(--canvas-muted, var(--muted)); font-size: 12px; line-height: 1.6; }
 .appearance-viewport { min-width: 0; min-height: 160px; }
 body.appearance-settings-active #idle-hud { display: none !important; }
-body.appearance-settings-active #tab-studio { position: fixed; z-index: var(--z-sheet); top: var(--appearance-top); bottom: 12px; left: var(--appearance-left); width: var(--appearance-w); min-width: 0; border: 1px solid var(--hairline-strong); border-radius: 18px; background: var(--panel-solid); box-shadow: 0 18px 64px rgb(0 0 0 / .32); overflow: hidden; }
+body.appearance-settings-active #tab-studio { position: fixed; z-index: var(--z-sheet); top: var(--appearance-top); bottom: calc(12px + var(--shell-y1)); left: var(--appearance-left); width: var(--appearance-w); min-width: 0; border: 1px solid var(--hairline-strong); border-radius: 18px; background: var(--panel-solid); box-shadow: 0 18px 64px rgb(0 0 0 / .32); overflow: hidden; }
 body.appearance-settings-active .settings-panel { height: 100%; margin: 0; }
 body.appearance-settings-active .settings-layout { display: flex; flex-direction: column; gap: 0; height: 100%; }
 body.appearance-settings-active #settings-nav { position: static; flex: none; width: 100%; max-height: none; margin: 0; padding: 12px; gap: 8px; border: 0; border-bottom: 1px solid var(--hairline); border-radius: 0; box-shadow: none; background: var(--tint-gold-1); overflow: visible; }
@@ -5913,13 +5964,13 @@ body.appearance-settings-active .music-effect input { grid-column: 3; grid-row: 
 body.appearance-settings-active .studio-field { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
 body.appearance-settings-active #settings-tree-controls > label { align-items: flex-start; flex-wrap: wrap; gap: 8px; }
 body.appearance-settings-active #settings-tree-controls select { max-width: 100%; }
-body.appearance-settings-active[data-appearance-dock="right"] #tab-studio { left: auto; right: 12px; }
-body.appearance-settings-active[data-appearance-dock="right"] .appearance-stage { left: calc(var(--appearance-left) + 12px); right: calc(var(--appearance-w) + 40px); }
+body.appearance-settings-active[data-appearance-dock="right"] #tab-studio { left: auto; right: calc(12px + var(--shell-x1)); }
+body.appearance-settings-active[data-appearance-dock="right"] .appearance-stage { left: calc(var(--appearance-left) + 12px); right: calc(var(--appearance-w) + 40px + var(--shell-x1)); }
 body.appearance-settings-active #toast-host { left: calc(var(--appearance-left) + var(--appearance-w) + 20px); }
-body.appearance-settings-active[data-appearance-dock="right"] #toast-host { left: calc(var(--appearance-left) + 12px); right: calc(var(--appearance-w) + 40px); }
+body.appearance-settings-active[data-appearance-dock="right"] #toast-host { left: calc(var(--appearance-left) + 12px); right: calc(var(--appearance-w) + 40px + var(--shell-x1)); }
 @media (max-width: 800px) {
-  body.appearance-settings-active[data-appearance-dock] #tab-studio { top: calc(var(--appearance-top) + 226px); left: var(--appearance-left); right: 12px; width: auto; }
-  body.appearance-settings-active[data-appearance-dock] .appearance-stage { top: var(--appearance-top); left: var(--appearance-left); right: 12px; height: 214px; bottom: auto; }
+  body.appearance-settings-active[data-appearance-dock] #tab-studio { top: calc(var(--appearance-top) + 226px); left: var(--appearance-left); right: calc(12px + var(--shell-x1)); width: auto; }
+  body.appearance-settings-active[data-appearance-dock] .appearance-stage { top: var(--appearance-top); left: var(--appearance-left); right: calc(12px + var(--shell-x1)); height: 214px; bottom: auto; }
   .appearance-stage-header { padding: 0 8px; gap: 10px; }
   .appearance-stage-header h2 { font-size: 18px; }
   .appearance-live-label { display: none; }
@@ -5930,7 +5981,7 @@ body.appearance-settings-active[data-appearance-dock="right"] #toast-host { left
   body.appearance-settings-active .appearance-sections { margin-top: 6px; }
   body.appearance-settings-active #settings-nav { padding: 8px 12px; }
   body.appearance-settings-active .settings-find { display: none; }
-  body.appearance-settings-active[data-appearance-dock] #toast-host { left: var(--appearance-left); right: 12px; }
+  body.appearance-settings-active[data-appearance-dock] #toast-host { left: var(--appearance-left); right: calc(12px + var(--shell-x1)); }
 }
 
 /* ---- The media menu (music.js): a mini player that unfolds. Folded, it is
@@ -7134,7 +7185,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
 .profiler-bottom { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 22px; }
 .profiler-incidents { list-style: none; padding: 0; margin: 14px 0; font-family: var(--font-mono); font-size: 11px; line-height: 1.7; }
 .profiler-incidents li { padding: 9px 0; border-bottom: 1px solid var(--hairline); overflow-wrap: anywhere; }
-.profiler-hud { position: fixed; right: 20px; bottom: 18px; z-index: calc(var(--z-sheet) - 1); padding: 10px 15px; border: 1px solid var(--gold); border-radius: 24px; background: var(--panel-solid); color: var(--gold-bright); box-shadow: var(--shadow-2); font-size: 12px; }
+.profiler-hud { position: fixed; right: calc(20px + var(--shell-x1)); bottom: calc(18px + var(--shell-y1)); z-index: calc(var(--z-sheet) - 1); padding: 10px 15px; border: 1px solid var(--gold); border-radius: 24px; background: var(--panel-solid); color: var(--gold-bright); box-shadow: var(--shadow-2); font-size: 12px; }
 @media (max-width: 700px) {
   .profiler-overlay { padding: 8px; }
   .profiler-head { padding: 14px; gap: 10px; }
@@ -7956,7 +8007,7 @@ html[data-motion="off"] .pm-stage *, html[data-motion="off"] .pm-navigation * { 
 
 /* ---- the companion: an orb in the menu foot and its panel ---- */
 .companion-orb { position: relative; width: 38px; height: 38px; margin: 0 auto 6px; border-radius: 50%; border: 1px solid var(--hairline-strong); background: radial-gradient(circle at 35% 30%, var(--tint-gold-3), transparent 70%), var(--panel-solid); color: var(--gold-bright); cursor: pointer; display: grid; place-items: center; padding: 0; }
-.companion-orb.floating { position: fixed; left: 14px; bottom: 14px; z-index: var(--z-sheet); margin: 0; }
+.companion-orb.floating { position: fixed; left: 14px; bottom: calc(14px + var(--shell-y1)); z-index: var(--z-sheet); margin: 0; }
 .companion-orb:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
 .companion-face svg, .companion-avatar svg { width: 26px; height: 26px; display: block; }
 .companion-face .c-body, .companion-avatar .c-body { fill: var(--tint-gold-3); stroke: currentColor; stroke-width: 1.4; }
@@ -8002,7 +8053,7 @@ html[data-motion="off"] .companion-orb, html[data-motion="off"] .companion-orb .
 .companion-row select { height: var(--ctl-h-sm); border-radius: var(--r-sm); border: 1px solid var(--hairline); background: var(--bg); color: var(--ivory); }
 .companion-bubble { position: fixed; z-index: calc(var(--z-sheet) + 20); max-width: min(320px, calc(100vw - 90px)); padding: 9px 12px; border-radius: var(--r-lg); border: 1px solid rgba(87, 255, 154, .35); background: var(--glass-hard); color: var(--ivory); font: 500 var(--fs-sm) var(--font-ui); text-align: left; cursor: pointer; box-shadow: var(--shadow-1); }
 
-.agents-overlay { position: fixed; inset: var(--shell-local-h, 72px) 0 0 var(--shell-rail-w, 80px); padding: 16px 24px 20px; z-index: var(--z-sheet); background: var(--surface-page, var(--bg)); }
+.agents-overlay { position: fixed; inset: var(--shell-y0, 72px) var(--shell-x1, 0px) var(--shell-y1, 0px) var(--shell-x0, 80px); padding: 16px 24px 20px; z-index: var(--z-sheet); background: var(--surface-page, var(--bg)); }
 .agents-overlay .agents-sheet { width: 100%; height: 100%; max-height: none; max-width: 1600px; margin: auto; padding: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; border: 1px solid var(--hairline); border-radius: var(--r-xl); overflow: hidden; }
 .agents-head { padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; gap: 16px; border-bottom: 1px solid var(--studio-glass-edge, var(--hairline)); }
 .agents-head h1 { margin: 0; font-size: 18px; letter-spacing: -.025em; }
@@ -8136,7 +8187,7 @@ html[data-density=compact] .agents-model-settings .studio-field { padding-block:
 .agents-nav-sections { display: flex; align-items: center; gap: 4px; min-width: 0; }
 .agents-nav-group { position: relative; }
 .agents-nav-chevron { font-size: 11px; color: var(--muted); opacity: .65; }
-.agents-nav-subsections { position: absolute; top: calc(100% + 6px); left: 0; z-index: 2; display: flex; flex-direction: column; gap: 3px; min-width: 208px; width: max-content; max-width: calc(100vw - var(--shell-rail-w) - 32px); padding: 6px; border: 1px solid var(--studio-glass-edge); border-radius: var(--r-lg); background: var(--studio-menu-fill); backdrop-filter: var(--studio-glass-blur); box-shadow: var(--studio-glass-shadow); animation: studio-menu-in var(--motion-fast) var(--ease-out); }
+.agents-nav-subsections { position: absolute; top: calc(100% + 6px); left: 0; z-index: 2; display: flex; flex-direction: column; gap: 3px; min-width: 208px; width: max-content; max-width: calc(100vw - var(--shell-x0) - var(--shell-x1) - 32px); padding: 6px; border: 1px solid var(--studio-glass-edge); border-radius: var(--r-lg); background: var(--studio-menu-fill); backdrop-filter: var(--studio-glass-blur); box-shadow: var(--studio-glass-shadow); animation: studio-menu-in var(--motion-fast) var(--ease-out); }
 .agents-nav-subsections::before { content: ""; position: absolute; inset: -8px 0 100%; }
 .agents-nav-subsections[hidden] { display: none; }
 .agents-nav-group:last-child .agents-nav-subsections { left: auto; right: 0; }
@@ -8707,7 +8758,7 @@ html[data-density=compact] :is(.settings-card, .agents-card) { padding: 14px; }
 @media (max-width: 600px) {
   .sheet-actions { position: relative; }
   .sheet-actions > .surface-tools { position: static; }
-  .sheet-actions .surface-tools-menu { max-width: min(284px, calc(100vw - var(--shell-rail-w, 0px) - 32px)); }
+  .sheet-actions .surface-tools-menu { max-width: min(284px, calc(100vw - var(--shell-x0, 0px) - var(--shell-x1, 0px) - 32px)); }
 }
 @media (prefers-reduced-motion: reduce) { .studio-choice-popup { animation: none; } .studio-scroll-arrow, .studio-scroll-thumb { transition: none; } }
 html[data-motion=off] .studio-choice-popup { animation: none; }
@@ -9026,8 +9077,8 @@ html[data-motion="off"] .key-tip { transition: none; }
 .agent-guide-greeting .agent-play { width: 64px; height: 64px; }
 .agent-guide-details { margin: 12px 0; padding: 10px 0; border-block: 1px solid var(--hairline); }
 .agent-guide-details > summary { color: var(--muted); cursor: pointer; font-size: 12px; }
-html[data-shell=rail] .overlay .walkthrough-sheet[data-agent-step], .overlay .walkthrough-sheet[data-agent-step] { width: min(660px, calc(100vw - var(--shell-rail-w, 0px) - 32px)); transition: width 420ms cubic-bezier(.22,1,.36,1); }
-html[data-shell=rail] .overlay .walkthrough-sheet[data-agent-step="2"], .overlay .walkthrough-sheet[data-agent-step="2"] { width: min(740px, calc(100vw - var(--shell-rail-w, 0px) - 32px)); }
+html[data-shell=rail] .overlay .walkthrough-sheet[data-agent-step], .overlay .walkthrough-sheet[data-agent-step] { width: min(660px, calc(100vw - var(--shell-x0, 0px) - var(--shell-x1, 0px) - 32px)); transition: width 420ms cubic-bezier(.22,1,.36,1); }
+html[data-shell=rail] .overlay .walkthrough-sheet[data-agent-step="2"], .overlay .walkthrough-sheet[data-agent-step="2"] { width: min(740px, calc(100vw - var(--shell-x0, 0px) - var(--shell-x1, 0px) - 32px)); }
 #walkthrough-cli-choice { max-width: 100%; }
 @media (max-width: 650px) {
   html[data-shell=rail] #walkthrough-overlay { left: 0; }
@@ -9320,7 +9371,7 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
   --v-lift: 0 30px 60px -34px rgba(0, 0, 0, .85), inset 0 1px 0 color-mix(in srgb, var(--ivory) 7%, transparent);
   --v-r: 22px;
   position: fixed;
-  inset: 0;
+  inset: var(--shell-tabs-h) var(--shell-x1) var(--shell-y1) var(--shell-list-w);
   z-index: var(--z-workspace);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -9914,7 +9965,7 @@ html[data-ui-mode="vibe"] :is(#app-rail, #tabs, #workspace-sidebar-toggle, body 
 html[data-ui-mode="vibe"] #app-local-nav { background: var(--studio-menu-fill); backdrop-filter: var(--studio-menu-blur); }
 
 .vibe-rail {
-  position: fixed; top: 0; bottom: 0; left: 0; z-index: var(--z-shell);
+  position: fixed; top: 0; bottom: var(--shell-y1); left: 0; z-index: var(--z-shell);
   display: flex; flex-direction: column; align-items: center; gap: 6px;
   width: var(--shell-rail-w, 72px); box-sizing: border-box; padding: 12px 8px;
   border-right: 1px solid color-mix(in srgb, var(--ivory) 8%, transparent);
@@ -9981,8 +10032,8 @@ html[data-ui-mode="vibe"] {
 
 /* On Vibe's own page there is no rail, so sheets and the project panel use
    the whole window instead of leaving a strip where the rail would be. */
-body.vibe-active:not(:has(.workspace-page:not([hidden]))) :is(.overlay, .planning-overlay, .profiler-overlay, .music-overlay) { left: 0; }
-body.vibe-active:not(:has(.workspace-page:not([hidden]))) #toast-host { left: 24px; bottom: 104px; }
+body.vibe-active:not(:has(.workspace-page:not([hidden]))) :is(.overlay, .planning-overlay, .profiler-overlay, .music-overlay) { left: var(--shell-list-w); }
+body.vibe-active:not(:has(.workspace-page:not([hidden]))) #toast-host { left: calc(var(--shell-list-w) + 24px); bottom: calc(104px + var(--shell-y1)); }
 
 /* Search */
 html[data-ui-mode="vibe"] #palette-overlay { padding-top: 11vh; background: color-mix(in srgb, var(--bg-deep) 50%, transparent); }
@@ -10008,9 +10059,9 @@ html[data-ui-mode="vibe"] .overlay:not(.workspace-page) .sheet-close { border-ra
 
 /* The project panel: a floating card beside the rail, or under Vibe's
    project button on the Vibe page. */
-html[data-ui-mode="vibe"] #workspace-sidebar-panel { top: 10px; bottom: 10px; left: calc(var(--shell-rail-w) + 10px); height: auto; padding: 16px; border: 1px solid var(--v-menu-edge); border-radius: 24px; background: var(--studio-wash), var(--studio-float-fill); backdrop-filter: var(--studio-float-blur); transform: translateX(-24px) scale(.98); opacity: 0; transition: transform var(--motion-slow) var(--ease-emphasized), opacity var(--motion-base) var(--ease-out), visibility var(--motion-slow); }
+html[data-ui-mode="vibe"] #workspace-sidebar-panel { top: 10px; bottom: calc(10px + var(--shell-y1)); left: calc(var(--shell-rail-w) + 10px); height: auto; padding: 16px; border: 1px solid var(--v-menu-edge); border-radius: 24px; background: var(--studio-wash), var(--studio-float-fill); backdrop-filter: var(--studio-float-blur); transform: translateX(-24px) scale(.98); opacity: 0; transition: transform var(--motion-slow) var(--ease-emphasized), opacity var(--motion-base) var(--ease-out), visibility var(--motion-slow); }
 html[data-ui-mode="vibe"] #workspace-sidebar[data-open="true"] #workspace-sidebar-panel { transform: none; opacity: 1; box-shadow: var(--studio-float-shadow); }
-body.vibe-active:not(:has(.workspace-page:not([hidden]))) #workspace-sidebar-panel { top: 80px; left: 24px; bottom: 24px; }
+body.vibe-active:not(:has(.workspace-page:not([hidden]))) #workspace-sidebar-panel { top: 80px; left: calc(var(--shell-list-w) + 24px); bottom: calc(24px + var(--shell-y1)); }
 html[data-ui-mode="vibe"] #workspace-sidebar-panel .ws-project { border-radius: 14px; font-size: 13px; }
 html[data-ui-mode="vibe"] #workspace-sidebar-panel .ws-project:hover { background: color-mix(in srgb, var(--ivory) 6%, transparent); }
 html[data-ui-mode="vibe"] #workspace-sidebar-panel .ws-project.selected { color: var(--ivory); background: var(--v-menu-pick); border-color: color-mix(in srgb, var(--gold) 30%, transparent); }
@@ -10243,7 +10294,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 /* By id: the rail shell narrows every .overlay .sheet to 620px. */
 #setup-helper-overlay .setup-helper-sheet {
   display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto;
-  width: min(1080px, calc(96vw - var(--shell-rail-w, 0px))); height: min(88vh, 860px); max-height: none;
+  width: min(1080px, calc(96vw - var(--shell-x0, 0px) - var(--shell-x1, 0px))); height: min(88vh, 860px); max-height: none;
   padding: 0; overflow: hidden;
   background: var(--glass-hard); border: 1px solid var(--hairline-strong);
 }
@@ -10512,7 +10563,7 @@ button.gs-held:hover { filter: none; }
 /* ---- dialogs: Save and push, Publish, Link, Sign in ------------------------------- */
 /* The rail shell moves .overlay over by the rail's width, so a sheet measures against what is left of the window (600px: 504, not 568). */
 .overlay.gs-overlay { z-index: 88; }
-.overlay.gs-overlay > .gs-sheet.sheet { display: flex; flex-direction: column; width: min(var(--gs-w, 480px), calc(100vw - var(--shell-rail-w, 0px) - 32px)); max-height: min(88vh, 900px); padding: 0; overflow: hidden; border: 1px solid var(--studio-glass-edge, var(--hairline-strong)); border-radius: var(--r-lg); background: var(--studio-float-fill, var(--panel-solid)); backdrop-filter: var(--studio-float-blur, none); box-shadow: var(--shadow-3), var(--studio-float-shadow, none); color: var(--ivory); }
+.overlay.gs-overlay > .gs-sheet.sheet { display: flex; flex-direction: column; width: min(var(--gs-w, 480px), calc(100vw - var(--shell-x0, 0px) - var(--shell-x1, 0px) - 32px)); max-height: min(88vh, 900px); padding: 0; overflow: hidden; border: 1px solid var(--studio-glass-edge, var(--hairline-strong)); border-radius: var(--r-lg); background: var(--studio-float-fill, var(--panel-solid)); backdrop-filter: var(--studio-float-blur, none); box-shadow: var(--shadow-3), var(--studio-float-shadow, none); color: var(--ivory); }
 .gs-dialog-head { display: flex; flex-wrap: nowrap; align-items: flex-start; justify-content: flex-start; gap: 12px; padding: 24px 24px 12px; border-bottom: 0; }
 .gs-dialog-words { display: grid; flex: 1; min-width: 0; gap: 4px; }
 .gs-eyebrow { margin: 0; overflow: hidden; color: var(--gold); font: 600 10.5px/1.4 var(--font-mono); letter-spacing: .08em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
@@ -19867,13 +19918,15 @@ html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-mentio
     if (!popup) return;
     if (!visible(popup.button) || popup.select.disabled) { closeSelect(); return; }
     const box = popup.button.getBoundingClientRect();
+    // Layout v2 keeps the list inside the free area (nav.js usable()); v1 is the window.
+    const area = window.MefiNav?.layout?.on?.() ? window.MefiNav.usable() : { left: 0, top: 0, right: innerWidth, bottom: innerHeight };
     // Wide form fields need not turn a handful of choices into long bars.
-    const width = Math.min(popup.columns > 1 ? popup.columns * 132 + 16 : Math.max(240, Math.min(360, box.width)), innerWidth - 24);
-    const maxHeight = Math.min(380, innerHeight - 24);
+    const width = Math.min(popup.columns > 1 ? popup.columns * 132 + 16 : Math.max(240, Math.min(360, box.width)), area.right - area.left - 24);
+    const maxHeight = Math.min(380, area.bottom - area.top - 24);
     popup.root.style.width = `${width}px`; popup.root.style.maxHeight = `${maxHeight}px`;
     const height = popup.root.getBoundingClientRect().height;
-    const top = box.bottom + 6 + height <= innerHeight - 12 ? box.bottom + 6 : Math.max(12, box.top - height - 6);
-    popup.root.style.left = `${Math.max(12, Math.min(box.left, innerWidth - width - 12))}px`;
+    const top = box.bottom + 6 + height <= area.bottom - 12 ? box.bottom + 6 : Math.max(area.top + 12, box.top - height - 6);
+    popup.root.style.left = `${Math.max(area.left + 12, Math.min(box.left, area.right - width - 12))}px`;
     popup.root.style.top = `${top}px`;
   }
   function choose(option) {
@@ -22342,6 +22395,217 @@ html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-mentio
     return applyShell(Boolean(on) || vibeMode());
   }
 
+  // ---- the layout contract -----------------------------------------------
+  // docs/unified-studio.md, "Layout contract". html[data-layout="v2"] is the
+  // second attribute the 0.5.0 plan asks for (a third data-shell value would
+  // read as classic to every `=== "rail"` gate): it says four regions the
+  // shell can grow, a session list, an inspector, a tab strip and a status
+  // bar, may take room from the window. v1, the default, is the attribute
+  // absent, and nothing here is wired then: no listener, no stored key, no
+  // inline style. The regions themselves are built later; this is what they
+  // stand on: --shell-list-w, --shell-inspector-w, --shell-tabs-h and
+  // --shell-status-h (styles.css, all 0px, with the free area's edges derived
+  // from them and the rail), the one function that writes them (layout.set),
+  // the fold rule for small windows, and usable(), the rectangle a floating
+  // thing keeps inside. This is the only writer of html[data-layout] and of
+  // html[data-layout-fold]; tests/layout_contract_nav.test.mjs pins that.
+  const LAYOUT_KEY = "mefiStudio.layout";
+  const LAYOUT_REGIONS = Object.freeze({
+    list: Object.freeze({ variable: "--shell-list-w", max: 420, folds: true }),
+    inspector: Object.freeze({ variable: "--shell-inspector-w", max: 640, folds: true }),
+    tabs: Object.freeze({ variable: "--shell-tabs-h", max: 48, folds: false }),
+    status: Object.freeze({ variable: "--shell-status-h", max: 40, folds: false }),
+  });
+  // Below this width (CSS px) the list and the inspector stop being columns. The
+  // geometry is styles.css's (@media (max-width: 899.98px), instant and
+  // independent of any script, so usable() is right even when a resize handler
+  // reads it before this file's own); this keeps html[data-layout-fold] in
+  // step for the regions that become drawers.
+  const LAYOUT_FOLD_BELOW = 900;
+  // The main area never gets less than this from the list and the inspector.
+  const LAYOUT_MAIN_MIN = 320;
+  const layoutRequested = { list: 0, inspector: 0, tabs: 0, status: 0 };
+  let layoutApplied = { list: 0, inspector: 0, tabs: 0, status: 0 };
+  let layoutResize = null;
+
+  // ?layout=v1|v2 wins for one launch. A diagnostic launch (?smoke=1,
+  // ?capture=1) stays v1 unless it asks, so the render fixtures see the layout
+  // they were written for; otherwise the saved choice, and v1 by default.
+  function layoutChoice() {
+    try {
+      const search = String(location.search || "");
+      const param = new URLSearchParams(search).get("layout");
+      if (param === "v1" || param === "v2") return param;
+      if (/[?&](?:smoke|capture)=1(?:&|$)/.test(search)) return "v1";
+      return localStorage.getItem(LAYOUT_KEY) === "v2" ? "v2" : "v1";
+    } catch {
+      return "v1";
+    }
+  }
+  const layoutOn = () => document.documentElement?.dataset?.layout === "v2";
+  const viewportSize = () => ({
+    w: Number(window.innerWidth) || document.documentElement?.clientWidth || 0,
+    h: Number(window.innerHeight) || document.documentElement?.clientHeight || 0,
+  });
+  // The numbers in px of a custom property, or null where there is no computed style to ask.
+  function cssLength(name, from = document.documentElement) {
+    try {
+      const value = parseFloat(getComputedStyle(from).getPropertyValue(name));
+      return Number.isFinite(value) ? value : null;
+    } catch {
+      return null;
+    }
+  }
+  function layoutNarrow() {
+    try {
+      if (typeof window.matchMedia === "function") return Boolean(window.matchMedia(`(max-width: ${LAYOUT_FOLD_BELOW - 0.02}px)`).matches);
+    } catch { /* fall back to the width */ }
+    const { w } = viewportSize();
+    return w > 0 && w < LAYOUT_FOLD_BELOW;
+  }
+  // The regions that are drawers rather than columns at this width.
+  const layoutFolded = () => (layoutOn() && layoutNarrow() ? Object.keys(LAYOUT_REGIONS).filter((name) => LAYOUT_REGIONS[name].folds) : []);
+  // What the rail (Build's or Vibe's) takes at rest; the open rail covers the page instead.
+  function railRest() {
+    const shown = ["app-rail", "vibe-rail"].some((id) => {
+      const box = document.getElementById?.(id)?.getBoundingClientRect?.();
+      return Boolean(box && box.width > 0 && box.height > 0);
+    });
+    if (!shown) return 0;
+    return cssLength("--shell-rail-w") ?? (document.documentElement.dataset.railPinned !== undefined ? 256 : 64);
+  }
+  // What each region gets: the widths asked for, cut back so the rail, the list and
+  // the inspector leave the main area LAYOUT_MAIN_MIN (the inspector gives way
+  // first), and nothing at all for the regions that fold.
+  function layoutFit() {
+    const folded = layoutFolded();
+    let room = Math.max(0, viewportSize().w - railRest() - LAYOUT_MAIN_MIN);
+    const fit = { list: 0, inspector: 0, tabs: layoutRequested.tabs, status: layoutRequested.status };
+    for (const name of ["list", "inspector"]) {
+      if (folded.includes(name)) continue;
+      fit[name] = Math.min(layoutRequested[name], room);
+      room -= fit[name];
+    }
+    return fit;
+  }
+  // Writes the variables (only where they are not 0, so a region that is not
+  // there leaves no trace) and the fold attribute. True when anything changed.
+  function paintLayout() {
+    if (!layoutOn()) return false;
+    const root = document.documentElement;
+    const fit = layoutFit();
+    const folded = layoutFolded().join(" ");
+    let changed = false;
+    for (const [name, region] of Object.entries(LAYOUT_REGIONS)) {
+      if (fit[name] === layoutApplied[name]) continue;
+      changed = true;
+      if (fit[name] > 0) root.style?.setProperty?.(region.variable, `${fit[name]}px`);
+      else root.style?.removeProperty?.(region.variable);
+    }
+    if ((root.dataset.layoutFold || "") !== folded) {
+      changed = true;
+      if (folded) root.dataset.layoutFold = folded; else delete root.dataset.layoutFold;
+    }
+    layoutApplied = fit;
+    return changed;
+  }
+  function clearLayout() {
+    const root = document.documentElement;
+    for (const name of Object.keys(LAYOUT_REGIONS)) {
+      root.style?.removeProperty?.(LAYOUT_REGIONS[name].variable);
+      layoutRequested[name] = 0;
+    }
+    delete root.dataset.layoutFold;
+    layoutApplied = { list: 0, inspector: 0, tabs: 0, status: 0 };
+  }
+  // Tells whoever measures the window. A change of size dispatches a resize,
+  // as the rail's pin does, so the orb, the media window and Command's graph
+  // fit again without each learning a new event; mefi:layout carries the detail.
+  function announceLayout(resized) {
+    const detail = { on: layoutOn(), fold: layoutFolded(), ...layoutApplied };
+    try { window.dispatchEvent(new CustomEvent("mefi:layout", { detail })); } catch { /* no events here */ }
+    if (resized) { try { window.dispatchEvent(new Event("resize")); } catch { /* no events here */ } }
+  }
+  function wireLayout(on) {
+    if (on && !layoutResize) {
+      layoutResize = () => { if (paintLayout()) announceLayout(false); };
+      window.addEventListener("resize", layoutResize);
+    } else if (!on && layoutResize) {
+      window.removeEventListener("resize", layoutResize);
+      layoutResize = null;
+    }
+  }
+
+  // The writer of html[data-layout]: v2 on or off, now. init() asks the launch
+  // (layoutChoice), setLayout() the person's saved choice.
+  function applyLayout(on = layoutChoice() === "v2") {
+    const root = document.documentElement;
+    if (!root) return false;
+    const was = layoutOn();
+    if (on) root.dataset.layout = "v2"; else delete root.dataset.layout;
+    wireLayout(Boolean(on));
+    if (on) paintLayout(); else if (was) clearLayout();
+    if (on || was) announceLayout(false);
+    return Boolean(on);
+  }
+  function setLayout(choice) {
+    const next = choice === "v2" ? "v2" : "v1";
+    try { localStorage.setItem(LAYOUT_KEY, next); } catch { /* this launch only */ }
+    return applyLayout(next === "v2");
+  }
+
+  // The one way a region claims room: set("list", 280). The value is cut to
+  // the region's range and then to what the window can spare (layoutFit); it
+  // answers with what the region got. Nothing happens in v1.
+  function setRegion(name, value) {
+    const region = LAYOUT_REGIONS[name];
+    if (!region || !layoutOn()) return 0;
+    const number = Math.round(Number(value));
+    if (!Number.isFinite(number)) return layoutApplied[name];
+    layoutRequested[name] = Math.min(region.max, Math.max(0, number));
+    if (paintLayout()) announceLayout(true);
+    return layoutApplied[name];
+  }
+  const layout = Object.freeze({
+    on: layoutOn,
+    // What a region asked for, cut to its range; what it has now (folded, or cut back for room); the regions that are drawers now.
+    get: (name) => (name === undefined ? { ...layoutRequested } : layoutRequested[name] ?? 0),
+    used: (name) => { paintLayout(); return name === undefined ? { ...layoutApplied } : layoutApplied[name] ?? 0; },
+    fold: () => layoutFolded(),
+    set: setRegion,
+    reset: () => { for (const name of Object.keys(LAYOUT_REGIONS)) setRegion(name, 0); },
+    RANGES: Object.freeze(Object.fromEntries(Object.entries(LAYOUT_REGIONS).map(([name, region]) => [name, Object.freeze([0, region.max])]))),
+    FOLD_BELOW: LAYOUT_FOLD_BELOW,
+    MAIN_MIN: LAYOUT_MAIN_MIN,
+  });
+
+  // The rectangle of the window that chrome has left, in CSS px: what a
+  // floating thing (the companion's orb, the media window, a toast) stays inside.
+  // In v1 it is what each of those measured for itself: the right of the rail's
+  // real box (the open rail included, since it opens over the page) and
+  // below the local navigation's, to the window's other edges. In v2 it also
+  // clears the list, the tab strip, the inspector and the status bar, read from
+  // the same variables the layers use (so a fold is already in them).
+  function usable() {
+    const { w, h } = viewportSize();
+    const box = (id) => {
+      const rect = document.getElementById?.(id)?.getBoundingClientRect?.();
+      return rect && rect.width > 0 && rect.height > 0 ? rect : null;
+    };
+    const rail = box("app-rail"), bar = box("app-local-nav");
+    let left = rail ? rail.right : 0, top = bar ? bar.bottom : 0, right = w, bottom = h;
+    if (layoutOn()) {
+      paintLayout();
+      const length = (name, from) => cssLength(name, from) ?? 0;
+      left = Math.max(left, railRest() + (cssLength("--shell-list-w") ?? layoutApplied.list));
+      // The strip sits under the local navigation, or at the window's top where there is none (Vibe's own Home).
+      top = Math.max(top, (bar ? length("--shell-local-h", document.body || document.documentElement) : 0) + (cssLength("--shell-tabs-h") ?? layoutApplied.tabs));
+      right = w - (cssLength("--shell-inspector-w") ?? layoutApplied.inspector);
+      bottom = h - (cssLength("--shell-status-h") ?? layoutApplied.status);
+    }
+    return { left, top, right, bottom, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
+  }
+
   function wireRail() {
     const rail = document.getElementById("app-rail");
     if (!rail || rail.dataset.wired) return;
@@ -23603,6 +23867,7 @@ html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-mentio
     renderTools();
     renderDock();
     applyShell();
+    applyLayout();
     wireRail();
     renderSheetLinks();
     paintCurrent();
@@ -23725,6 +23990,10 @@ html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-mentio
     RAIL_SLOTS,
     applyShell,
     setShell,
+    applyLayout,
+    setLayout,
+    layout,
+    usable,
     setRailPinned,
     paintCurrent,
     current,
@@ -38022,8 +38291,19 @@ html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-mentio
     if (dock) bottom = Math.min(bottom, dock.top - 24);
     // The app's navigation rail floats over the canvas's left edge, the way the
     // work rail floats over its right; fit the graph beside it, not under it.
+    // The shell says where its chrome ends (nav.js usable()): in layout v1 that is
+    // the rail's own box, in v2 the session list, the inspector and the status
+    // bar as well. Without it, the rail alone.
     const appRail = visibleBox(el.appRail);
-    if (appRail) left = Math.max(left, appRail.right + 28);
+    const nav = globalThis.window?.MefiNav;
+    const shell = nav?.usable?.();
+    const regions = Boolean(shell && nav.layout?.on?.());
+    const chromeLeft = shell ? shell.left : appRail ? appRail.right : 0;
+    if (chromeLeft > 0) left = Math.max(left, chromeLeft + 28);
+    if (regions) {
+      right = Math.min(right, shell.right - 28);
+      bottom = Math.min(bottom, shell.bottom - 86);
+    }
     // The merged rail owns the right gutter; when it is collapsed its short
     // header still blocks the top strip.
     if (rail) {
@@ -38048,8 +38328,8 @@ html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-mentio
     // At compact widths CSS can put the feed above the map. Only reserve a
     // side panel if it leaves enough room for an actual interactive graph.
     if (right - left < 220) {
-      left = appRail ? appRail.right + 12 : 24;
-      right = el.width - 24;
+      left = chromeLeft > 0 ? chromeLeft + 12 : 24;
+      right = (regions ? Math.min(el.width, shell.right) : el.width) - 24;
       if (feed && feed.height < el.height * 0.48) top = Math.max(top, feed.bottom + 20);
     }
     if (bottom - top < 160) top = Math.max(20, bottom - 160);
@@ -48628,15 +48908,18 @@ html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-mentio
     // The layout size, not the drawn one: the popover opens through a scale.
     const rect = root.getBoundingClientRect();
     const width = root.offsetWidth || rect.width || 340, height = root.offsetHeight || rect.height || 0;
-    const wide = window.innerWidth || 1920, tall = window.innerHeight || 1080;
-    const right = box.left + box.width / 2 > wide / 2;
-    const left = Math.max(12, Math.min(right ? box.right - width : box.left, wide - width - 12));
-    const flip = box.bottom + 8 + height > tall - 12 && box.top - 8 - height >= 12;
+    // Layout v2 keeps it inside the free area (nav.js usable()); v1 is the window.
+    const area = window.MefiNav?.layout?.on?.() ? window.MefiNav.usable() : null;
+    const wide = area ? area.right : window.innerWidth || 1920, tall = area ? area.bottom : window.innerHeight || 1080;
+    const edge = area ? area.left : 0, roof = area ? area.top : 0;
+    const right = box.left + box.width / 2 > (edge + wide) / 2;
+    const left = Math.max(edge + 12, Math.min(right ? box.right - width : box.left, wide - width - 12));
+    const flip = box.bottom + 8 + height > tall - 12 && box.top - 8 - height >= roof + 12;
     const top = flip ? box.top - 8 - height : box.bottom + 8;
     css(root, "left", `${Math.round(left)}px`);
-    css(root, "top", `${Math.max(8, Math.round(top))}px`);
+    css(root, "top", `${Math.max(roof + 8, Math.round(top))}px`);
     // A long list (Show more) scrolls inside the room that is left, so the footer never ends up below the window.
-    css(root, "max-height", `${Math.max(160, Math.floor(tall - Math.max(8, top) - 12))}px`);
+    css(root, "max-height", `${Math.max(160, Math.floor(tall - Math.max(roof + 8, top) - 12))}px`);
     css(root, "--gs-from", `${flip ? "bottom" : "top"} ${right ? "right" : "left"}`);
   }
   function disarm() {
@@ -65876,6 +66159,14 @@ html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-mentio
     document.body.append(root);
 
     function bounds() {
+      // The shell knows what chrome there is: the rail and the local navigation
+      // and, in layout v2, the list, the tab strip, the inspector and the status
+      // bar. In v1 that is the very measurement below.
+      const area = window.MefiNav?.usable?.();
+      if (area) {
+        const left = clamp(area.left, 0, Math.max(0, window.innerWidth - 320));
+        return { left: left + GAP, top: Math.max(GAP, area.top + GAP), right: area.right - GAP, bottom: area.bottom - GAP };
+      }
       // Keep the menu and local navigation reachable even at the 600px app minimum.
       const rail = document.getElementById("app-rail")?.getBoundingClientRect();
       const nav = document.getElementById("app-local-nav")?.getBoundingClientRect();
@@ -68801,20 +69092,24 @@ html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-mentio
     dropdownFrame = 0;
     if (els.dropdown?.hidden !== false) return;
     const edge = 12;
-    const width = window.innerWidth || 1024, height = window.innerHeight || 768;
+    const width = window.innerWidth || 1024;
+    // Layout v2 keeps the menu inside the free area (nav.js usable()); v1 is the window.
+    const area = window.MefiNav?.layout?.on?.() ? window.MefiNav.usable() : null;
+    const height = area ? area.bottom : window.innerHeight || 768;
+    const roof = area ? area.top : 0;
     const anchor = dropdownAnchor?.getBoundingClientRect?.();
     const strip = dropdownAnchor?.closest?.(".cmd-tools")?.getBoundingClientRect?.();
     const bottom = anchor?.height ? Math.max(anchor.bottom, strip?.bottom || 0) : 64;
-    const above = anchor?.height ? Math.max(0, anchor.top - 8 - edge) : 0;
+    const above = anchor?.height ? Math.max(0, anchor.top - 8 - edge - roof) : 0;
     const below = height - bottom - 8 - edge;
     const flip = below < 280 && above > below && above >= 240;
-    const top = flip ? edge : Math.max(edge, Math.min(bottom + 8, height - 280));
+    const top = flip ? roof + edge : Math.max(roof + edge, Math.min(bottom + 8, height - 280));
     const panelWidth = els.dropdown.getBoundingClientRect().width;
     const right = anchor?.width ? width - anchor.right : edge;
     const style = els.dropdown.style;
     const put = (key, value) => { if (style[key] !== value) style[key] = value; };
     put("top", `${Math.round(top)}px`);
-    put("right", `${Math.round(Math.max(edge, Math.min(right, width - panelWidth - edge)))}px`);
+    put("right", `${Math.round(Math.max(area ? width - area.right + edge : edge, Math.min(right, width - panelWidth - (area ? area.left : 0) - edge)))}px`);
     put("maxHeight", `${Math.max(0, flip ? above : height - top - edge)}px`);
     placePlayer();
   }
@@ -75750,6 +76045,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     ["playful", "Friendly & expressive", "Chatty and playful: little faces, idle play and celebrations."],
   ];
   let conversationTimer = 0;
+  // Where the orb and its panel may go. Layout v1 never kept them off the rail,
+  // so there it is the window; in v2 the shell's free area (nav.js usable()), which
+  // keeps them clear of the list, the tab strip, the inspector and the status bar.
+  const room = () => (window.MefiNav?.layout?.on?.() ? window.MefiNav.usable() : { left: 0, top: 0, right: innerWidth, bottom: innerHeight });
+  // The right edge of the menu, which the roaming orb stays beside.
+  const railEdge = () => { const area = window.MefiNav?.usable?.(); return (area ? area.left : document.getElementById("app-rail")?.getBoundingClientRect().right) || 72; };
   const inside = (rect, x, y, margin = 14) => x >= rect.left - margin && x <= rect.right + margin && y >= rect.top - margin && y <= rect.bottom + margin;
   const editing = () => host?.panel.contains(document.activeElement) && document.activeElement?.matches("input:not([type=checkbox]):not([type=range]), textarea, [contenteditable=true]");
   function near() {
@@ -75781,21 +76082,22 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   function position() {
     if (!host || host.panel.hidden) return;
     if (host.panel.classList.contains("companion-in-hub")) { window.MefiCompanionHub?.resize(); return; }
-    const box = host.orb.getBoundingClientRect(), panel = host.panel;
-    const width = Math.min(innerWidth - 24, tab === "status" ? 370 : tab === "now" ? 430 : 460);
+    const box = host.orb.getBoundingClientRect(), panel = host.panel, area = room();
+    const width = Math.min(area.right - area.left - 24, tab === "status" ? 370 : tab === "now" ? 430 : 460);
     panel.style.width = `${width}px`;
-    const cap = Math.max(180, innerHeight - 32), head = panel.querySelector(".companion-shell-head").offsetHeight + panel.querySelector(".companion-tabs").offsetHeight + 44;
+    const cap = Math.max(180, area.bottom - area.top - 32), head = panel.querySelector(".companion-shell-head").offsetHeight + panel.querySelector(".companion-tabs").offsetHeight + 44;
     const height = Math.min(cap, head + Math.max(80, panes[tab].scrollHeight));
     panel.style.height = `${height}px`; panel.style.maxHeight = `${cap}px`;
     // Keep the opening edge fixed while content, tabs and live state change.
     // Following the pointer here makes settings move beneath focused controls.
-    if (!panelAnchor) panelAnchor = { side: innerWidth - box.right >= box.left ? "right" : "left", bottom: box.top > innerHeight / 2, y: box.top > innerHeight / 2 ? box.bottom + 24 : box.top - 24 };
+    const middle = (area.top + area.bottom) / 2;
+    if (!panelAnchor) panelAnchor = { side: area.right - box.right >= box.left - area.left ? "right" : "left", bottom: box.top > middle, y: box.top > middle ? box.bottom + 24 : box.top - 24 };
     const left = panelAnchor.side === "right" ? box.right + 10 : box.left - width - 10;
-    const anchorY = panelAnchor.bottom ? Math.min(innerHeight - 12, panelAnchor.y) - height : panelAnchor.y;
-    const top = Math.max(12, Math.min(innerHeight - height - 12, anchorY));
+    const anchorY = panelAnchor.bottom ? Math.min(area.bottom - 12, panelAnchor.y) - height : panelAnchor.y;
+    const top = Math.max(area.top + 12, Math.min(area.bottom - height - 12, anchorY));
     const layout = `${width}:${height}:${left}:${top}`;
     if (layout !== lastLayout) { settleUntil = Date.now() + (reduced() ? 120 : 360); lastLayout = layout; }
-    Object.assign(panel.style, { left: `${Math.max(12, Math.min(innerWidth - width - 12, left))}px`, top: `${top}px`, bottom: "auto" });
+    Object.assign(panel.style, { left: `${Math.max(area.left + 12, Math.min(area.right - width - 12, left))}px`, top: `${top}px`, bottom: "auto" });
     window.MefiScroll?.refresh();
   }
   async function preference(patch) {
@@ -76008,7 +76310,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const { orb } = host, before = orb.getBoundingClientRect();
     if (orb.parentElement !== document.body) { dock.hidden = false; document.body.append(orb); }
     orb.dataset.roaming = "true"; orb.classList.add("floating");
-    x = Math.max(8, Math.min(innerWidth - 48, x)); y = Math.max(8, Math.min(innerHeight - 48, y));
+    const area = room();
+    x = Math.max(area.left + 8, Math.min(area.right - 48, x)); y = Math.max(area.top + 8, Math.min(area.bottom - 48, y));
     Object.assign(orb.style, { left: `${x}px`, top: `${y}px`, bottom: "auto", margin: "0" });
     if (animate && !reduced()) {
       // A move between clear edges must not sweep across a form or a dialog.
@@ -76033,8 +76336,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     roamTimer = setTimeout(() => {
       const prefs = latest?.state || {};
       if (host && prefs.roaming !== false && !prefs.pinned && !reduced() && host.panel.hidden && !window.MefiCompanionHub?.isOpen() && !near() && !dragging && document.activeElement !== host.orb) {
-        const rail = document.getElementById("app-rail")?.getBoundingClientRect().right || 72;
-        const spots = [[innerWidth - 52, 110], [innerWidth - 52, innerHeight - 64], [rail + 14, innerHeight - 60], [innerWidth - 58, innerHeight * .46]];
+        const rail = railEdge(), area = room();
+        const spots = [[area.right - 52, Math.max(110, area.top + 54)], [area.right - 52, area.bottom - 64], [rail + 14, area.bottom - 60], [area.right - 58, area.bottom * .46]];
         const offset = Math.floor(Math.random() * spots.length);
         const choice = spots.map((_, index) => spots[(offset + index) % spots.length]).find(([x, y]) => safeSpot(x, y));
         if (choice) floatAt(choice[0], choice[1], true); else returnToDock();

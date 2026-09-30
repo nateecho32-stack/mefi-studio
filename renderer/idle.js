@@ -4053,8 +4053,19 @@
     if (dock) bottom = Math.min(bottom, dock.top - 24);
     // The app's navigation rail floats over the canvas's left edge, the way the
     // work rail floats over its right; fit the graph beside it, not under it.
+    // The shell says where its chrome ends (nav.js usable()): in layout v1 that is
+    // the rail's own box, in v2 the session list, the inspector and the status
+    // bar as well. Without it, the rail alone.
     const appRail = visibleBox(el.appRail);
-    if (appRail) left = Math.max(left, appRail.right + 28);
+    const nav = globalThis.window?.MefiNav;
+    const shell = nav?.usable?.();
+    const regions = Boolean(shell && nav.layout?.on?.());
+    const chromeLeft = shell ? shell.left : appRail ? appRail.right : 0;
+    if (chromeLeft > 0) left = Math.max(left, chromeLeft + 28);
+    if (regions) {
+      right = Math.min(right, shell.right - 28);
+      bottom = Math.min(bottom, shell.bottom - 86);
+    }
     // The merged rail owns the right gutter; when it is collapsed its short
     // header still blocks the top strip.
     if (rail) {
@@ -4079,8 +4090,8 @@
     // At compact widths CSS can put the feed above the map. Only reserve a
     // side panel if it leaves enough room for an actual interactive graph.
     if (right - left < 220) {
-      left = appRail ? appRail.right + 12 : 24;
-      right = el.width - 24;
+      left = chromeLeft > 0 ? chromeLeft + 12 : 24;
+      right = (regions ? Math.min(el.width, shell.right) : el.width) - 24;
       if (feed && feed.height < el.height * 0.48) top = Math.max(top, feed.bottom + 20);
     }
     if (bottom - top < 160) top = Math.max(20, bottom - 160);

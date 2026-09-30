@@ -260,7 +260,7 @@ imports. See [Unified Studio](unified-studio.md) for the interfaces and fixture 
 | `brains.js` | 3,953 | The brain-map editor over the data `scripts/brains.cjs` validates. |
 | `agent-brain.js` | 1,846 | `window.MefiAgentBrain`, `MefiHub` and `MefiCompanion`: the Agent brain sheet (`J`: a task's pipeline drawn from work events, the Playbook shelf, the project map, the seats), the map hub on Home, and the companion orb and panel in the menu foot. |
 | `project-map-view.js` | | `window.MefiProjectMap`: connected system cards and the expandable Ideas tree, plus contents/search, filters, history, selection, minimap, pointer and keyboard navigation, camera easing and level transitions. Uses the map and work projection supplied by `agent-brain.js`; styles live in `agent-brain.css`. |
-| `nav.js` | 2,983 | The navigation registry behind Home/Work/Agents/Friends, New task, project-scoped recent tasks, the local view row, workspace-page presentation, Search, Help and shortcuts. Friends actions focus the existing companion hub's Rooms, Your PCs and Playground cards. History is kept per project and section, it decides which destination owns a shared page, and historical destination IDs resolve here. A printable key pressed while a menu or sheet is open goes into that menu's text box (`typeInto`; menus opt in with `data-type-scope`, `data-type-here` or `typeScope()`) instead of the single-letter shortcuts. |
+| `nav.js` | 3,411 | The navigation registry behind Home/Work/Agents/Friends, New task, project-scoped recent tasks, the local view row, workspace-page presentation, Search, Help and shortcuts. Also the layout contract: `applyLayout` (the one writer of `html[data-layout]`), `MefiNav.layout` (`set`/`get`/`used`/`fold`) and `MefiNav.usable()`, the free rectangle the orb, the media window, toasts and pop-ups ask. Friends actions focus the existing companion hub's Rooms, Your PCs and Playground cards. History is kept per project and section, it decides which destination owns a shared page, and historical destination IDs resolve here. A printable key pressed while a menu or sheet is open goes into that menu's text box (`typeInto`; menus opt in with `data-type-scope`, `data-type-here` or `typeScope()`) instead of the single-letter shortcuts. |
 | `tree3d.js` | 2,491 | The 3D task-tree rail. |
 | `tasks.js` | 2,290 | The task board, per-task logs and ideas, and the reference menu; the Undo toast after a delete and the Recently deleted list (Task board › More). |
 | `card-layout.js` | | Shared measured card spans for Tasks and Ideas; coalesces resize updates, respects reduced motion, and stops observers and animations when the view closes. |
@@ -355,7 +355,7 @@ commit rewrites the JSON view as well.
 
 ## Tests and tools
 
-- **`tests/*.test.mjs`** (466 files) run on Node's own `node:test` and
+- **`tests/*.test.mjs`** (469 files) run on Node's own `node:test` and
   `node:assert/strict`, with no test dependencies. `scripts/run-node-tests.mjs`
   is the runner; `npm run test:fast` skips the real-Electron suites and the
   Python stage.
@@ -380,6 +380,20 @@ commit rewrites the JSON view as well.
   deep links and Search entries), `command_toolbar.test.mjs` (the Command
   toolbar's groups, View ▾ and Ambience) and `main_window_guards.test.mjs`
   (the 600×560 minimum and the window's navigation guards).
+- **The layout contract** (room for a session list, an inspector, a tab strip and
+  a status bar; `docs/unified-studio.md`) is pinned by
+  `layout_contract_nav.test.mjs` (the one writer of `html[data-layout]` and
+  `data-layout-fold`, the launch choice, the clamps and the 320 px budget, the
+  fold, `usable()` in v1 and v2, the events), `layout_contract_css.test.mjs`
+  (every moved declaration evaluated as CSS would: unchanged in v1, moved by
+  exactly its region in v2; every remaining raw `--shell-rail-w` or
+  `--shell-local-h` read named) and `layout_contract_render.test.mjs` with
+  `fixtures/layout-contract-electron.cjs`, `layout-contract-v2.cjs` and
+  `layout-contract-floats.cjs` (real Chromium, about five minutes: every page and
+  sheet against `layout-contract-v1.json`, the geometry recorded on the base
+  commit, then in v2 at eight window and mode combinations, with real pointer
+  drags of the media window and the orb). `layout-contract-ledger.json` lists the
+  74 declarations that moved.
 - **The fleet** is pinned by `fleet.test.mjs` (the reducer: seat continuity on a
   retry, wires, health, bounded reload, no prompts or paths in a snapshot),
   `fleet_host.test.mjs` (pushes only while watched, one trailing push per half
