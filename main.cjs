@@ -11557,7 +11557,10 @@ async function assistantOverseerTurn({ user, text, intent, facts, did, slot, foc
   }));
   // What the owner sees as "N need you", counted the way their badge is.
   const needsYou = typeof assistantNeedsYouDigest === "function" ? await assistantNeedsYouDigest() : null;
-  const body = taskOversight.packChatPayload({ message: text, did, ...(user?.ui ? { ui: user.ui } : {}), ...(needsYou ? { needsYou } : {}), decisionContext, asks, events, ...(outside ? { outside } : {}), board, thread, focus: focus ?? null, suggestions, facts: rest },
+  // Skills the owner named (/skill-name) ride the system prompt, and the files they pointed at (@path) are one line after
+  // their words: only for the model, never in the thread (the "Mentions in a message" block).
+  const chatSystem = ASSISTANT_CHAT_SYSTEM + (extras?.system ?? "");
+  const body = taskOversight.packChatPayload({ message: extras?.message ? `${text}\n\n${extras.message}` : text, did, ...(user?.ui ? { ui: user.ui } : {}), ...(needsYou ? { needsYou } : {}), decisionContext, asks, events, ...(outside ? { outside } : {}), board, thread, focus: focus ?? null, suggestions, facts: rest },
     CHAT_PAYLOAD_BUDGET, { sectionBudgets: CHAT_SECTION_BUDGETS });
   // A CLI answers slower than an endpoint. A slow reply is not an outage: only
   // a provider error takes the AI offline for the other roles. The whole turn
@@ -11566,8 +11569,8 @@ async function assistantOverseerTurn({ user, text, intent, facts, did, slot, foc
   let timer = null;
   const ask = () => Promise.race([
     typeof seatFetch === "function"
-      ? seatFetch("companion", ASSISTANT_CHAT_SYSTEM, body, 1500, { fallback: (system = ASSISTANT_CHAT_SYSTEM) => assistantFetch(system, body, 1500, { taskType: "conversation", allowCli: DATA_ONLY_CLIS, skillRole: null }) })
-      : assistantFetch(ASSISTANT_CHAT_SYSTEM, body, 1500, { taskType: "conversation", allowCli: DATA_ONLY_CLIS }),
+      ? seatFetch("companion", chatSystem, body, 1500, { fallback: (system = chatSystem) => assistantFetch(system, body, 1500, { taskType: "conversation", allowCli: DATA_ONLY_CLIS, skillRole: null }) })
+      : assistantFetch(chatSystem, body, 1500, { taskType: "conversation", allowCli: DATA_ONLY_CLIS }),
     new Promise((resolve) => (timer = setTimeout(() => resolve({ ok: false, timedOut: true, error: `no reply within ${Math.round(budgetMs / 1000)} s` }), budgetMs))),
   ]);
   // A picture on the message rides a scope around the call, so every request it makes can carry it.
@@ -12135,7 +12138,21 @@ function imageCliText(user) {
   return lines ? `${user}\n\n${lines}` : user;
 }
 // What a message brings beyond its words, for the reply to use: null when it brings nothing (the common case).
+// Pictures (this block) and mentions (the "Mentions in a message" block) each add what they have.
 async function messageExtras(user) {
+  const pictures = await pictureExtras(user);
+  let mention = null;
+  if (typeof mentionExtras === "function") { try { mention = await mentionExtras(user); } catch (error) { logLine(`[assistant] mentions could not be read: ${String(error?.message ?? error).slice(0, 160)}`); } }
+  if (!pictures && !mention) return null;
+  return {
+    images: pictures?.images ?? [],
+    run: pictures?.run ?? ((call) => call()),
+    system: mention?.system ?? "",
+    message: mention?.message ?? "",
+    notes: () => [...(pictures?.notes() ?? []), ...(mention?.notes() ?? [])],
+  };
+}
+async function pictureExtras(user) {
   const named = (Array.isArray(user?.images) ? user.images : []).filter((image) => image && typeof image.id === "string");
   if (!named.length || !imageAttachOn()) return null;
   // Each picture is found on its own: one that has since been cleared does not take the others with it.
@@ -12159,6 +12176,130 @@ async function messageExtras(user) {
   };
 }
 // ---- end of picture attachments ---------------------------------------------------------
+
+// ---- Skills: the Skills page's files (docs/architecture.md, "Skills") ----
+// skills:list / read / save / create / delete / import / export keep one project's skills as plain files,
+// <project>/.agents/skills/<name>/SKILL.md, and nowhere else inside the project (scripts/skills.cjs; the rules
+// are scripts/skill-format.cjs). The page sends a NAME, never a path; import and export take their folders from
+// a dialog opened here. A save that replaces text, and a delete, first keep the old text under the project's
+// data folder (skill-backups/, ten per skill). The inventory the agents read (agent-addons.cjs) is what lists
+// these files, so a saved skill is one the team can pick. MEFI_STUDIO_NO_SKILL_EDIT=1 makes the page read-only:
+// nothing is saved, created, deleted or imported. The module loads on first use.
+let skillsHostLoaded = null;
+function skillsHost() {
+  return (skillsHostLoaded ??= require("./scripts/skills.cjs").createSkills({
+    root: () => (projects.open() ? projectRoot() : null),
+    enabled: () => process.env.MEFI_STUDIO_NO_SKILL_EDIT !== "1",
+    backups: () => path.join(path.dirname(projectDataPath(TASKS_PATH)), "skill-backups"),
+    inventory: (root) => agentAddons.inventory(root),
+    zip: async (source, target, options) => (await loadModule("scripts/release-updater.mjs")).zipDirectory(source, target, options),
+  }));
+}
+// Import: the owner picks a folder; only its SKILL.md is read, under the rules of a save.
+async function skillsImport() {
+  const host = skillsHost();
+  if (!host.enabled()) return { ok: false, off: true, error: host.OFF };
+  const picked = await dialog.showOpenDialog(window, { title: "Import a skill: choose its folder", properties: ["openDirectory"], buttonLabel: "Import" });
+  if (picked.canceled || !picked.filePaths?.[0]) return { ok: false, canceled: true };
+  return host.importFrom(picked.filePaths[0]);
+}
+// Export: the skill is checked first (no dialog for a name that is not there), then the owner picks where it goes.
+async function skillsExport(payload = {}) {
+  const host = skillsHost();
+  const name = String(payload?.name ?? "");
+  const kind = payload?.kind === "zip" ? "zip" : "folder";
+  const found = await host.read(name);
+  if (!found.ok) return found;
+  const picked = await dialog.showSaveDialog(window, {
+    title: kind === "zip" ? "Export a skill as a zip" : "Export a skill as a folder", buttonLabel: "Export",
+    defaultPath: path.join(app.getPath("documents"), kind === "zip" ? `${name}.zip` : name),
+    ...(kind === "zip" ? { filters: [{ name: "Zip file", extensions: ["zip"] }] } : {}),
+  });
+  if (picked.canceled || !picked.filePath) return { ok: false, canceled: true };
+  return host.exportTo({ name, target: picked.filePath, kind });
+}
+// ---- end of skills ---------------------------------------------------------------------
+
+// ---- Mentions in a message: @ files, / skills (docs/architecture.md, "@ # / in a message") ----
+// The box (renderer/composer-picker.js) offers a project's files, its tasks and its skills as a person types
+// @ # /. The host's half:
+//  - project:files { query, limit }: file NAMES of the open project, fuzzy and bounded (scripts/project-files.cjs),
+//    leaving out what the read tool would refuse and what .gitignore leaves out. Never contents.
+//  - agents:skills: the skills the inventory (agent-addons.cjs) finds, each with its one-line description.
+//  - A chat message that says /skill-name gets that skill's own text in what the model is told (the system
+//    prompt), inside a budget (scripts/mentions.cjs); one that is missing, or too long, is said in the reply.
+//  - A chat message that says @path gets one sentence after its words naming the project files that exist:
+//    their names, never their contents (the model's own tools decide whether it may read them).
+// Nothing is added to the thread, and a Discord message gets none of it. settings.ui.composerPicker = false
+// (Settings) or MEFI_STUDIO_NO_COMPOSER_PICKER=1 switches all of it off. Modules load on first use.
+let mentionLibLoaded = null, projectFilesLoaded = null;
+const mentionLib = () => (mentionLibLoaded ??= require("./scripts/mentions.cjs"));
+const PICKER_OFF = "The @ # / suggestions are switched off. Turn them on in Settings.";
+async function composerPickerOn() {
+  if (process.env.MEFI_STUDIO_NO_COMPOSER_PICKER === "1") return false;
+  try { return (await readSettings())?.ui?.composerPicker !== false; } catch { return true; }
+}
+function projectFilesHost() {
+  return (projectFilesLoaded ??= require("./scripts/project-files.cjs").createProjectFiles({ root: () => (projects.open() ? projectRoot() : null) }));
+}
+async function searchProjectFiles(payload = {}) {
+  if (!(await composerPickerOn())) return { ok: false, off: true, error: PICKER_OFF };
+  return projectFilesHost().search({ query: payload?.query, limit: payload?.limit });
+}
+// The inventory's skills, one of each name: the project's before the home folder's, .agents before other tools' folders.
+async function mentionSkills() {
+  const seen = new Set(), rows = [];
+  for (const row of await agentAddons.inventory(projectRoot())) { if (!seen.has(row.name)) { seen.add(row.name); rows.push(row); } }
+  return rows;
+}
+async function listPickerSkills() {
+  if (!(await composerPickerOn())) return { ok: false, off: true, error: PICKER_OFF };
+  if (!projects.open()) return { ok: false, error: "Open a project first." };
+  const format = require("./scripts/skill-format.cjs");
+  const skills = [];
+  for (const row of (await mentionSkills()).slice(0, 100)) {
+    let head = "";
+    try {
+      const handle = await require("node:fs/promises").open(row.file, "r");
+      try { const { bytesRead, buffer } = await handle.read(Buffer.alloc(4096), 0, 4096, 0); head = buffer.subarray(0, bytesRead).toString("utf8"); } finally { await handle.close(); }
+    } catch { /* a skill that can not be read lists with no description */ }
+    skills.push({ name: row.name, description: format.describe(head), scope: row.scope });
+  }
+  return { ok: true, skills };
+}
+// What a chat message's mentions bring: { system, message, notes } for the reply path, or null when there is nothing.
+async function mentionExtras(user) {
+  const text = String(user?.text ?? "");
+  if (!text || user?.remote === true || !/[@/]/.test(text)) return null;
+  if (!projects.open() || !(await composerPickerOn())) return null;
+  const lib = mentionLib();
+  let system = "", message = "";
+  const missing = [];
+  let skipped = [];
+  const calls = lib.skillCalls(text);
+  if (calls.length) {
+    const rows = await mentionSkills().catch(() => []);
+    const found = [];
+    for (const call of calls) {
+      const row = rows.find((item) => item.name === call.name);
+      if (!row) { if (call.asked) missing.push(call.name); continue; }
+      let body = "";
+      try { body = await readFile(row.file, "utf8"); } catch { /* read again next time */ }
+      if (body) found.push({ name: row.name, text: body });
+    }
+    const section = lib.skillSection(found);
+    if (section.text) system = scrubOutbound(section.text);
+    skipped = section.skipped;
+  }
+  const paths = lib.files(text);
+  if (paths.length) {
+    const real = await projectFilesHost().resolve(paths).catch(() => []);
+    if (real.length) message = lib.fileLine(real);
+  }
+  if (!system && !message && !missing.length && !skipped.length) return null;
+  return { system, message, notes: () => lib.notes({ missing, skipped }) };
+}
+// ---- end of mentions in a message --------------------------------------------------------
 
 // The card's Work on it: the node becomes the assistant's NEXT piece of work.
 // It is focused (follow-ups and the gold ring follow), pinned to the front of
@@ -21638,6 +21779,17 @@ function registerIpc() {
   }
   ipcMain.handle("agents:save", (_event, payload) => saveAgentTeam(payload, false));
   ipcMain.handle("agents:preset", (_event, payload) => saveAgentTeam(payload, true));
+  // The Skills page (the "Skills" block): names in, never paths.
+  ipcMain.handle("skills:list", () => skillsHost().list());
+  ipcMain.handle("skills:read", (_event, payload) => skillsHost().read(String(payload?.name ?? "")));
+  ipcMain.handle("skills:save", (_event, payload) => skillsHost().save({ name: payload?.name, description: payload?.description, body: payload?.body }));
+  ipcMain.handle("skills:create", (_event, payload) => skillsHost().create({ name: payload?.name, description: payload?.description, body: payload?.body }));
+  ipcMain.handle("skills:delete", (_event, payload) => skillsHost().delete(String(payload?.name ?? "")));
+  ipcMain.handle("skills:import", () => skillsImport());
+  ipcMain.handle("skills:export", (_event, payload) => skillsExport({ name: payload?.name, kind: payload?.kind }));
+  // The @ # / picker (the "Mentions in a message" block).
+  ipcMain.handle("project:files", (_event, payload) => searchProjectFiles(payload ?? {}));
+  ipcMain.handle("agents:skills", () => listPickerSkills());
 
   // The patch lands on the queue's fresh read, so a save landing beside it
   // keeps its change; a refusal writes nothing. The two endpoints are this

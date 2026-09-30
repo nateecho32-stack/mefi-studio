@@ -640,3 +640,32 @@ test("OpenRouter and LM Studio companion seats are usable without a default rout
     assert.equal(reply.via, "ai");
   }
 });
+
+// What a message brings beyond its words (the "Picture attachments" and "Mentions in a message" blocks) reaches
+// the model through the real reply path: a skill the owner named rides the system prompt, a file they pointed at is
+// one line after their words, the thread keeps exactly what they typed, and the notes end the reply.
+test("a skill named and a file pointed at reach the model, never the thread, and what did not go is said at the end of the reply", async () => {
+  const seen = [];
+  const h = host({ model: (body, system) => { seen.push({ body, system }); return { ok: true, text: JSON.stringify({ reply: "Done.", actions: [], offers: [] }) }; } });
+  let asked = 0;
+  h.env.messageExtras = async (user) => {
+    asked += 1;
+    assert.equal(user.text, "please /bug-triage this for @src/app.js and /ghost-skill");
+    return { images: [], run: (call) => call(), system: "\n\nSkills the owner asked for by name in this message (follow them):\nSkill: bug-triage\nStep one.", message: "The owner's message points at this project file: src/app.js. Only the name is given here.", notes: () => ["I couldn't find a skill named /ghost-skill in this project, so I answered without it."] };
+  };
+  const reply = await h.send("please /bug-triage this for @src/app.js and /ghost-skill");
+  assert.equal(asked, 1);
+  assert.equal(seen.length, 1);
+  assert.ok(seen[0].system.includes("Skill: bug-triage\nStep one."), "the skill's text is in what the model is told");
+  const chatSystem = vm.runInContext("ASSISTANT_CHAT_SYSTEM", h.env);
+  assert.ok(chatSystem.length > 100 && seen[0].system.startsWith(chatSystem), "after the chat's own instructions, which are unchanged");
+  assert.equal(seen[0].body.message, "please /bug-triage this for @src/app.js and /ghost-skill\n\nThe owner's message points at this project file: src/app.js. Only the name is given here.");
+  assert.equal(h.state.messages[0].text, "please /bug-triage this for @src/app.js and /ghost-skill", "the thread keeps exactly what was typed");
+  assert.equal(reply.text, "Done. I couldn't find a skill named /ghost-skill in this project, so I answered without it.");
+  // A message that brings nothing is asked with no extra words and no extra prompt.
+  const plainHost = host({ model: (body, system) => { seen.push({ body, system }); return { ok: true, text: JSON.stringify({ reply: "Hi.", actions: [], offers: [] }) }; } });
+  plainHost.env.messageExtras = async () => null;
+  await plainHost.send("hello");
+  assert.equal(seen[1].system, chatSystem);
+  assert.equal(seen[1].body.message, "hello");
+});

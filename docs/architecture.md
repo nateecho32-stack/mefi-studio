@@ -956,6 +956,75 @@ failed process stays an error and cannot produce briefing requests.
   which it says. `MEFI_STUDIO_NO_IMAGE_ATTACH=1` switches all of it off: the
   channel refuses, a message naming a picture is refused, and the box asks once
   at start and shows no button.
+- **@ # / in a message** (Home's message box: `renderer/composer-picker.js`,
+  `scripts/mentions.cjs`, `scripts/project-files.cjs`, `scripts/gitignore-lite.cjs`,
+  main.cjs "Mentions in a message"). Typing `@` offers the open project's files by
+  name, `#` its tasks and `/` its skills, in a popup that answers the keyboard
+  first (arrows, Enter or Tab to pick, Esc to close, and no key taken while it is
+  closed) and opens nothing for an email address, a word with `@`, `#` or `/`
+  inside it, a path or a URL. What a message points at shows as chips under the
+  box: `@src/app.js` (or `@"a file with spaces.md"`; a bare name such as a
+  Makefile is inserted quoted, because a bare `@word` only counts as a file when
+  it has a `.` or `/` in it), `#"a task's title"`, `/skill-name`. The grammar is
+  one (the page and the host read a message the same way; a test holds them
+  together). `project:files { query, limit }` answers **names only**: a bounded
+  breadth-first walk (30,000 files, 6,000 folders, 12 levels, 1.5 s, kept for
+  15 s), fuzzy on the name and then the path, never outside the project and
+  never through a link, leaving out what the read tool would refuse (hidden
+  paths, `data`, `dist`, `node_modules`, `.pem` `.key` `.db`
+  `credentials.json` `settings.json`; the picker never offers a path the model
+  would be refused) plus `build`, `out`, `coverage`, `__pycache__` and whatever
+  the project's `.gitignore` files ignore (a small reader that agrees with `git
+  check-ignore` on a real tree). `agents:skills` lists the skills the inventory
+  (`agent-addons.cjs`) finds with a one-line description each, one of each name
+  (the project's before the home folder's, `.agents/skills` before other tools'
+  folders). A chat message that says `/skill-name` is sent with that skill's own
+  text added to what the model is told (after the chat's instructions, through
+  the outbound scrubber): at most four skills, inside 16,000 characters shared
+  between them; the first one is added whatever its size (a skill over 16,000
+  characters "only loads when called", and this is that call), a later one that
+  does not fit is left out and the reply says so, and so does a skill that does
+  not exist, when it was plainly meant as one (it starts the message, or it has
+  a dash in its name; `/tmp` in the middle of a sentence is just a word). A chat
+  message that says `@path` gets one sentence after its words naming the files
+  that exist in the project, through real folders and not excluded, never their
+  contents: whether the model may read one is what its tools already decide (the
+  project-read switch, `docs/agent-tools.md`). The thread keeps exactly what was
+  typed, and a Discord message gets none of it. A task made in Create task mode
+  keeps its `@` and `/` words as typed; only chat expands them. `settings.ui.
+  composerPicker = false` (Settings › You, "Suggest files, tasks and skills
+  while I type"; on by default) or `MEFI_STUDIO_NO_COMPOSER_PICKER=1` switches
+  the popup, the chips, both channels and the expansion off.
+- **Skills** (`scripts/skill-format.cjs`, `scripts/skills.cjs`, main.cjs "Skills";
+  the page is Agents › Skills). A skill is `<project>/.agents/skills/<name>/
+  SKILL.md`: front matter with `name` and `description`, then the instructions.
+  The name is the folder and the `/command`: lowercase letters, numbers and
+  dashes, up to 64 (not a name Windows keeps for devices). The file is at most
+  32,000 bytes, which is what the inventory accepts, so a bigger one would save
+  and then never be listed; agents load skills by themselves only while the ones
+  they chose fit in 16,000 characters, and the page says when a skill is over
+  that and so loads only when called by name. `skills:list`, `read`, `save`,
+  `create`, `delete`, `import` and `export` take a **name**, never a path: the
+  host builds every path from the open project's root and a checked name, and
+  the only place it writes inside a project is that one file. `.agents`,
+  `.agents/skills` and the skill's own folder must be real folders (a link is
+  refused, and a `SKILL.md` that is a link is not a skill, as in the inventory).
+  `create` and `import` never overwrite (a new folder, made so that two made at
+  once cannot both succeed); `save` replaces an existing skill and keeps any
+  other front-matter keys it had (another tool's `allowed-tools`, say); every
+  write is a temporary file and a rename. A save that changes text, and a delete,
+  first keep the old text in `data/projects/<id>/skill-backups/<name>/` (ten per
+  skill, outside the project) and refuse to go on when that copy cannot be made.
+  Delete removes the `SKILL.md` and the folder only if nothing else is in it.
+  `import` opens a folder dialog here, reads that folder's `SKILL.md` only, and
+  holds it to exactly the rules of a save (front matter with a valid name and a
+  description, instructions, under 32 KB, text); the file goes in as it was
+  written and the page is told how many other files were left. `export` checks
+  the skill, opens a Save dialog and writes a new folder or a zip (`<name>/
+  SKILL.md`) where the owner chose. The page also lists the skills the inventory
+  finds elsewhere (other tools' folders, the home folder), read-only, and offers
+  a few starters. `MEFI_STUDIO_NO_SKILL_EDIT=1` makes the page read-only: no
+  save, create, delete or import, and no dialog for an import.
 
 ### Command center and the node tree
 
