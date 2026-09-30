@@ -163,6 +163,20 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   page · 1 needs you · 4 done today". The line travels sealed in the vault
   like the rest, holds only clipped titles and counts, and is refreshed when
   the agents' work changes, at most every ten minutes.
+- **The model tracker is current again.** Models › Catalog has the new
+  OpenCode Go models (GPT 6 Luna, Grok 4.7, MiMo V2.6 Flash and Pro, LongCat
+  2.5 preview, Space Bunny) with verdicts that say when no benchmark is
+  published, fixes verdicts the newer models made wrong, and lists the Claude,
+  Zen and z.ai models Studio routes to under **Also tracked**.
+- **What the community says about a model, and Studio's own probes.** Models ›
+  Performance › **Community** shows the Void Engine community's ratings,
+  release-note claims, observed strengths and weaknesses, tips and a link to
+  the model's Discord thread, from a public feed Studio reads at most every
+  six hours (Refresh reads it now). **Run probes** gives the model seven
+  small fixed tasks (planning, structuring, coding, writing, commits, tests,
+  setup) scored by fixed checks; they run only when you click, cost like any
+  call on that model and show under Usage. Model picks lean on both only a
+  little, and never on opinions: your verified task results still decide.
 - **Answered asks leave the Needs you list.** An ask you answered in the
   companion menu used to stay on screen after it closed (the count already
   lower), and clicking it again only said "That question is no longer
