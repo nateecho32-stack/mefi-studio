@@ -26,6 +26,14 @@ Task board's compact sliding cards extend to Ideas. PC sync also catches a
 merge that drops another branch's work, and `npm run worktrees` lists every
 worktree of a project with what to do about each.
 
+Landed while finishing 0.5.0: **Work › Worktrees** (every worktree of the open
+project with what to do about each, Merge into main, Remove that keeps a copy of
+anything at risk, Forget missing folders, and the per-run worktree switch), a
+slim scroll indicator that takes no width, Ctrl +, Ctrl - and Ctrl 0 that
+remember the interface scale, chat messages over 16,000 characters refused
+instead of cut, the multi-PC report counting commits on a detached worktree,
+and a compile cache for Studio's own modules.
+
 Merged from branches that were parked, and being finished before they reach a
 release: the tree-brightness GPU fix, the media player redesign, and Build as a
 coding-agent desktop (behind a layout switch, off by default).
@@ -49,8 +57,8 @@ moves to 0.5.x instead of holding the release.
   and the Skills page.
 - **Load times, agents sending only what is new, logging and Friends 2.0** (the
   work planned for the skipped 0.4.5 and 0.4.6): measured first, then fixed.
-- **Worktrees in Studio:** a Worktrees page and a per-run Worktree choice, on top
-  of `npm run worktrees`.
+- **Worktrees in Studio:** landed (see above); what remains is the session-row
+  badge and the Worktrees entry in the new shell.
 
 ## Follows in 0.5.x
 
