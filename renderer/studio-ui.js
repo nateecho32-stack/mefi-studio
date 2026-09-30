@@ -42,12 +42,27 @@
   function scheduleSoon() {
     if (!soon && !frame) soon = setTimeout(() => { soon = 0; schedule(); }, 150);
   }
+  // A scroll hint's thumb: where the visible part sits in the whole, drawn as a
+  // short bar on the pane's edge (an indicator only; it never takes layout
+  // width and never catches the pointer). `offset` is scrollTop or scrollLeft,
+  // `view` the visible length, `total` the scrollable length, `track` the room
+  // to draw in. Null when there is nothing to scroll; never shorter than
+  // MIN_THUMB, never past either end.
+  const MIN_THUMB = 28;
+  function thumbOf(offset, view, total, track) {
+    const room = total - view;
+    if (!(room > 2) || !(track > 0)) return null;
+    const size = Math.min(track, Math.max(MIN_THUMB, Math.round(track * (view / total))));
+    const at = Math.round((track - size) * Math.min(1, Math.max(0, offset / room)));
+    return { size, at };
+  }
   function track(el) {
     if (!el || regions.has(el) || el.closest?.(".studio-scroll-hint")) return;
     const css = getComputedStyle(el);
     if (el !== document.scrollingElement && !/(auto|scroll)/.test(`${css.overflowX} ${css.overflowY}`)) return;
     const hint = node("div", "studio-scroll-hint");
-    const region = { el, hint, buttons: {}, addedTab: false, stop: null };
+    const region = { el, hint, buttons: {}, addedTab: false, stop: null, thumbs: { y: node("i", "studio-scroll-thumb thumb-y"), x: node("i", "studio-scroll-thumb thumb-x") }, seen: { top: el.scrollTop, left: el.scrollLeft }, fade: 0 };
+    for (const bar of Object.values(region.thumbs)) { bar.hidden = true; hint.append(bar); }
     for (const [direction, glyph] of [["up", "↑"], ["down", "↓"], ["left", "←"], ["right", "→"]]) {
       const button = node("button", `studio-scroll-arrow scroll-${direction}`, glyph);
       button.type = "button"; button.setAttribute("aria-label", `Scroll ${direction}`);
@@ -164,7 +179,10 @@
         // leaving it where it last stood, which may now be under a menu.
         arrows.push({ button, point: arrowPosition(el, button, direction, left, top, right - left, bottom - top) });
       }
-      Object.assign(update, { hidden: false, left, top, width: right - left, height: bottom - top, directions, active, arrows,
+      // 3 px of edge on each side, and room for the other axis's bar in the corner.
+      const thumbs = { y: y ? thumbOf(el.scrollTop, height, el.scrollHeight, bottom - top - (x ? 12 : 6)) : null, x: x ? thumbOf(el.scrollLeft, width, el.scrollWidth, right - left - (y ? 12 : 6)) : null };
+      const moved = region.seen.top !== el.scrollTop || region.seen.left !== el.scrollLeft;
+      Object.assign(update, { hidden: false, left, top, width: right - left, height: bottom - top, directions, active, arrows, thumbs, moved, seen: { top: el.scrollTop, left: el.scrollLeft },
         owner: el.id || el.className || el.tagName,
         addTab: el.tabIndex < 0 && !el.hasAttribute("tabindex") && !el.matches("input, textarea, select, html, body") });
     }
@@ -175,6 +193,8 @@
       if (hint.hidden !== update.hidden) hint.hidden = update.hidden;
       if (update.hidden) {
         region.stop();
+        clearTimeout(region.fade);
+        hint.classList.remove("scrolling");
         if (update.removeTab) { el.removeAttribute("tabindex"); region.addedTab = false; }
         continue;
       }
@@ -190,6 +210,22 @@
         hint.classList.toggle(`can-${direction}`, can);
       }
       hint.classList.toggle("active", update.active);
+      // The thumb shows while the pointer is over the pane and for a moment after it scrolls.
+      for (const axis of ["y", "x"]) {
+        const bar = region.thumbs[axis], geometry = update.thumbs[axis];
+        if (bar.hidden !== !geometry) bar.hidden = !geometry;
+        if (!geometry) continue;
+        const [lengthKey, offsetKey] = axis === "y" ? ["height", "top"] : ["width", "left"];
+        const length = `${geometry.size}px`, offset = `${geometry.at + 3}px`;
+        if (bar.style[lengthKey] !== length) bar.style[lengthKey] = length;
+        if (bar.style[offsetKey] !== offset) bar.style[offsetKey] = offset;
+      }
+      if (update.moved) {
+        hint.classList.add("scrolling");
+        clearTimeout(region.fade);
+        region.fade = setTimeout(() => hint.classList.remove("scrolling"), 900);
+      }
+      region.seen = update.seen;
       for (const { button, point } of update.arrows) {
         if (!point) continue;
         const style = { left: `${point[0]}px`, top: `${point[1]}px`, right: "auto", bottom: "auto" };

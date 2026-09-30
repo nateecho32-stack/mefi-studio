@@ -8158,6 +8158,11 @@ html, body, body * { scrollbar-width: none !important; scrollbar-gutter: auto !i
 .studio-scroll-hint.can-up::before, .studio-scroll-hint.can-down::after { opacity: .55; }
 .studio-scroll-arrow { position: absolute; z-index: 1; pointer-events: none; opacity: 0; width: 30px; height: 26px; padding: 0; border: 1px solid var(--hairline-strong); border-radius: var(--r-pill); background: var(--panel-solid); color: var(--gold-bright); box-shadow: var(--shadow-1); transition: opacity var(--motion-fast), translate var(--motion-fast); }
 .studio-scroll-hint.active .studio-scroll-arrow, .studio-scroll-hint.engaged .studio-scroll-arrow, .studio-scroll-hint:focus-within .studio-scroll-arrow { opacity: 1; pointer-events: auto; }
+/* The thumb is an indicator on the pane's edge, drawn in the hint layer: it takes no layout width, catches no pointer and exists only while the pane can scroll. */
+.studio-scroll-thumb { position: absolute; right: 2px; width: 3px; border-radius: 3px; background: color-mix(in srgb, var(--ivory) 55%, transparent); opacity: 0; pointer-events: none; transition: opacity var(--motion-fast); }
+.studio-scroll-thumb.thumb-x { right: auto; bottom: 2px; width: auto; height: 3px; }
+.studio-scroll-thumb[hidden] { display: none; }
+.studio-scroll-hint.active .studio-scroll-thumb, .studio-scroll-hint.engaged .studio-scroll-thumb, .studio-scroll-hint.scrolling .studio-scroll-thumb { opacity: .5; }
 .scroll-up { top: 3px; left: calc(50% - 15px); }
 .scroll-down { bottom: 3px; left: calc(50% - 15px); }
 .scroll-left { left: 3px; top: calc(50% - 13px); }
@@ -8567,7 +8572,7 @@ html[data-density=compact] :is(.settings-card, .agents-card) { padding: 14px; }
   .sheet-actions > .surface-tools { position: static; }
   .sheet-actions .surface-tools-menu { max-width: min(284px, calc(100vw - var(--shell-rail-w, 0px) - 32px)); }
 }
-@media (prefers-reduced-motion: reduce) { .studio-choice-popup { animation: none; } .studio-scroll-arrow { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .studio-choice-popup { animation: none; } .studio-scroll-arrow, .studio-scroll-thumb { transition: none; } }
 html[data-motion=off] .studio-choice-popup { animation: none; }
 
 /* Moving media can be white, black or patterned. Keep a reading floor under
@@ -19067,12 +19072,27 @@ html[data-motion="off"] .pane-floating { animation: none; }
   function scheduleSoon() {
     if (!soon && !frame) soon = setTimeout(() => { soon = 0; schedule(); }, 150);
   }
+  // A scroll hint's thumb: where the visible part sits in the whole, drawn as a
+  // short bar on the pane's edge (an indicator only; it never takes layout
+  // width and never catches the pointer). `offset` is scrollTop or scrollLeft,
+  // `view` the visible length, `total` the scrollable length, `track` the room
+  // to draw in. Null when there is nothing to scroll; never shorter than
+  // MIN_THUMB, never past either end.
+  const MIN_THUMB = 28;
+  function thumbOf(offset, view, total, track) {
+    const room = total - view;
+    if (!(room > 2) || !(track > 0)) return null;
+    const size = Math.min(track, Math.max(MIN_THUMB, Math.round(track * (view / total))));
+    const at = Math.round((track - size) * Math.min(1, Math.max(0, offset / room)));
+    return { size, at };
+  }
   function track(el) {
     if (!el || regions.has(el) || el.closest?.(".studio-scroll-hint")) return;
     const css = getComputedStyle(el);
     if (el !== document.scrollingElement && !/(auto|scroll)/.test(`${css.overflowX} ${css.overflowY}`)) return;
     const hint = node("div", "studio-scroll-hint");
-    const region = { el, hint, buttons: {}, addedTab: false, stop: null };
+    const region = { el, hint, buttons: {}, addedTab: false, stop: null, thumbs: { y: node("i", "studio-scroll-thumb thumb-y"), x: node("i", "studio-scroll-thumb thumb-x") }, seen: { top: el.scrollTop, left: el.scrollLeft }, fade: 0 };
+    for (const bar of Object.values(region.thumbs)) { bar.hidden = true; hint.append(bar); }
     for (const [direction, glyph] of [["up", "↑"], ["down", "↓"], ["left", "←"], ["right", "→"]]) {
       const button = node("button", `studio-scroll-arrow scroll-${direction}`, glyph);
       button.type = "button"; button.setAttribute("aria-label", `Scroll ${direction}`);
@@ -19189,7 +19209,10 @@ html[data-motion="off"] .pane-floating { animation: none; }
         // leaving it where it last stood, which may now be under a menu.
         arrows.push({ button, point: arrowPosition(el, button, direction, left, top, right - left, bottom - top) });
       }
-      Object.assign(update, { hidden: false, left, top, width: right - left, height: bottom - top, directions, active, arrows,
+      // 3 px of edge on each side, and room for the other axis's bar in the corner.
+      const thumbs = { y: y ? thumbOf(el.scrollTop, height, el.scrollHeight, bottom - top - (x ? 12 : 6)) : null, x: x ? thumbOf(el.scrollLeft, width, el.scrollWidth, right - left - (y ? 12 : 6)) : null };
+      const moved = region.seen.top !== el.scrollTop || region.seen.left !== el.scrollLeft;
+      Object.assign(update, { hidden: false, left, top, width: right - left, height: bottom - top, directions, active, arrows, thumbs, moved, seen: { top: el.scrollTop, left: el.scrollLeft },
         owner: el.id || el.className || el.tagName,
         addTab: el.tabIndex < 0 && !el.hasAttribute("tabindex") && !el.matches("input, textarea, select, html, body") });
     }
@@ -19200,6 +19223,8 @@ html[data-motion="off"] .pane-floating { animation: none; }
       if (hint.hidden !== update.hidden) hint.hidden = update.hidden;
       if (update.hidden) {
         region.stop();
+        clearTimeout(region.fade);
+        hint.classList.remove("scrolling");
         if (update.removeTab) { el.removeAttribute("tabindex"); region.addedTab = false; }
         continue;
       }
@@ -19215,6 +19240,22 @@ html[data-motion="off"] .pane-floating { animation: none; }
         hint.classList.toggle(`can-${direction}`, can);
       }
       hint.classList.toggle("active", update.active);
+      // The thumb shows while the pointer is over the pane and for a moment after it scrolls.
+      for (const axis of ["y", "x"]) {
+        const bar = region.thumbs[axis], geometry = update.thumbs[axis];
+        if (bar.hidden !== !geometry) bar.hidden = !geometry;
+        if (!geometry) continue;
+        const [lengthKey, offsetKey] = axis === "y" ? ["height", "top"] : ["width", "left"];
+        const length = `${geometry.size}px`, offset = `${geometry.at + 3}px`;
+        if (bar.style[lengthKey] !== length) bar.style[lengthKey] = length;
+        if (bar.style[offsetKey] !== offset) bar.style[offsetKey] = offset;
+      }
+      if (update.moved) {
+        hint.classList.add("scrolling");
+        clearTimeout(region.fade);
+        region.fade = setTimeout(() => hint.classList.remove("scrolling"), 900);
+      }
+      region.seen = update.seen;
       for (const { button, point } of update.arrows) {
         if (!point) continue;
         const style = { left: `${point[0]}px`, top: `${point[1]}px`, right: "auto", bottom: "auto" };

@@ -10,6 +10,11 @@ html, body, body * { scrollbar-width: none !important; scrollbar-gutter: auto !i
 .studio-scroll-hint.can-up::before, .studio-scroll-hint.can-down::after { opacity: .55; }
 .studio-scroll-arrow { position: absolute; z-index: 1; pointer-events: none; opacity: 0; width: 30px; height: 26px; padding: 0; border: 1px solid var(--hairline-strong); border-radius: var(--r-pill); background: var(--panel-solid); color: var(--gold-bright); box-shadow: var(--shadow-1); transition: opacity var(--motion-fast), translate var(--motion-fast); }
 .studio-scroll-hint.active .studio-scroll-arrow, .studio-scroll-hint.engaged .studio-scroll-arrow, .studio-scroll-hint:focus-within .studio-scroll-arrow { opacity: 1; pointer-events: auto; }
+/* The thumb is an indicator on the pane's edge, drawn in the hint layer: it takes no layout width, catches no pointer and exists only while the pane can scroll. */
+.studio-scroll-thumb { position: absolute; right: 2px; width: 3px; border-radius: 3px; background: color-mix(in srgb, var(--ivory) 55%, transparent); opacity: 0; pointer-events: none; transition: opacity var(--motion-fast); }
+.studio-scroll-thumb.thumb-x { right: auto; bottom: 2px; width: auto; height: 3px; }
+.studio-scroll-thumb[hidden] { display: none; }
+.studio-scroll-hint.active .studio-scroll-thumb, .studio-scroll-hint.engaged .studio-scroll-thumb, .studio-scroll-hint.scrolling .studio-scroll-thumb { opacity: .5; }
 .scroll-up { top: 3px; left: calc(50% - 15px); }
 .scroll-down { bottom: 3px; left: calc(50% - 15px); }
 .scroll-left { left: 3px; top: calc(50% - 13px); }
@@ -419,7 +424,7 @@ html[data-density=compact] :is(.settings-card, .agents-card) { padding: 14px; }
   .sheet-actions > .surface-tools { position: static; }
   .sheet-actions .surface-tools-menu { max-width: min(284px, calc(100vw - var(--shell-rail-w, 0px) - 32px)); }
 }
-@media (prefers-reduced-motion: reduce) { .studio-choice-popup { animation: none; } .studio-scroll-arrow { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .studio-choice-popup { animation: none; } .studio-scroll-arrow, .studio-scroll-thumb { transition: none; } }
 html[data-motion=off] .studio-choice-popup { animation: none; }
 
 /* Moving media can be white, black or patterned. Keep a reading floor under
