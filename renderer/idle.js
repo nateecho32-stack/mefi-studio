@@ -7840,9 +7840,86 @@
   function drawGraphConnections(ctx, projected, runningIds, audioLinked = false, time = 0, layers = null) {
     const profiler = globalThis.window?.MefiProfiler;
     const span = profiler?.begin("command.connections");
-    const restoreBrightness = globalThis.window?.MefiTreeDynamics?.beginPaint?.([ctx, layers?.far], "lines");
-    try { return drawGraphConnectionsImpl(ctx, projected, runningIds, audioLinked, time, layers); }
-    finally { restoreBrightness?.(); profiler?.end(span); }
+    // The far layer takes lines only while a branch is focused (penFor).
+    const farPen = layers?.focusIds && layers.far && layers.far !== ctx ? layers.far : null;
+    const tone = toneBegin("lines", ctx, farPen);
+    try {
+      if (!tone) return drawGraphConnectionsImpl(ctx, projected, runningIds, audioLinked, time, layers);
+      return drawGraphConnectionsImpl(tone.near, projected, runningIds, audioLinked, time, farPen ? { ...layers, far: tone.far } : layers);
+    } finally { tone?.finish(); profiler?.end(span); }
+  }
+
+  // Tree brightness away from 100% (Appearance › Tree brightness & outlines)
+  // was a canvas filter set around the whole wires or nodes pass, and a canvas
+  // draws every shape made under a filter through its own layer the size of
+  // the canvas. A busy tree at 200% ran hundreds of those a frame: about
+  // 250 ms of work for an integrated GPU, and Command, Home and Vibe fell to
+  // 4-8 fps. A pass now paints plain into a scratch canvas per layer and one
+  // filtered drawImage lays each down, four filter passes a frame at most.
+  // The scratch starts from its layer's drawing state and hands back the
+  // state the pass left, so what draws next is unchanged. Where the pass's
+  // own shapes overlap, the filter meets their blend rather than each shape:
+  // that differs only where a brightened shape would clip at full intensity.
+  const TONE_PEN = ["globalAlpha", "globalCompositeOperation", "fillStyle", "strokeStyle", "lineWidth", "lineCap", "lineJoin", "miterLimit", "lineDashOffset",
+    "shadowOffsetX", "shadowOffsetY", "shadowBlur", "shadowColor", "font", "textAlign", "textBaseline", "direction", "letterSpacing", "wordSpacing",
+    "fontKerning", "fontStretch", "fontVariantCaps", "textRendering", "imageSmoothingEnabled", "imageSmoothingQuality"];
+  const toneScratch = new Map();
+  function copyPen(from, to) {
+    for (const key of TONE_PEN) if (key in from && to[key] !== from[key]) to[key] = from[key];
+    if (typeof from.getLineDash === "function") to.setLineDash(from.getLineDash());
+    if (typeof from.getTransform === "function") to.setTransform(from.getTransform());
+  }
+  function toneScratchFor(slot, target) {
+    const bitmap = target?.canvas;
+    if (typeof OffscreenCanvas !== "function" || !(bitmap?.width > 0) || !(bitmap?.height > 0)) return null;
+    let entry = toneScratch.get(slot);
+    if (!entry) {
+      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+      const pen = canvas.getContext("2d");
+      if (!pen) return null;
+      toneScratch.set(slot, entry = { canvas, pen });
+    }
+    if (entry.canvas.width !== bitmap.width || entry.canvas.height !== bitmap.height) {
+      entry.canvas.width = bitmap.width;
+      entry.canvas.height = bitmap.height;
+    }
+    return entry;
+  }
+  // `far` only when the pass paints on the far layer this frame (a focus).
+  // Returns null at 100%, else the pens to paint with and finish().
+  function toneBegin(kind, near, far = null) {
+    const dynamics = globalThis.window?.MefiTreeDynamics;
+    const amount = dynamics?.brightness?.(kind) ?? 1;
+    if (amount === 1 || typeof dynamics?.beginPaint !== "function") return null;
+    const layers = [["near", near], ["far", far]].filter(([, target]) => target).map(([slot, target]) => ({ target, scratch: toneScratchFor(slot, target) }));
+    if (layers.some((layer) => !layer.scratch)) {
+      // No scratch canvas here (a bare harness): the filter around the pass.
+      const restore = dynamics.beginPaint([near, far], kind);
+      return { near, far, finish: () => restore?.() };
+    }
+    for (const { target, scratch } of layers) {
+      scratch.pen.setTransform(1, 0, 0, 1, 0, 0);
+      scratch.pen.clearRect(0, 0, scratch.canvas.width, scratch.canvas.height);
+      copyPen(target, scratch.pen);
+    }
+    return {
+      near: layers[0].scratch.pen,
+      far: layers[1]?.scratch.pen ?? null,
+      finish() {
+        for (const { target, scratch } of layers) {
+          target.save();
+          target.setTransform(1, 0, 0, 1, 0, 0);
+          target.globalAlpha = 1;
+          target.globalCompositeOperation = "source-over";
+          target.shadowColor = "rgba(0, 0, 0, 0)";
+          const restore = dynamics.beginPaint([target], kind);
+          target.drawImage(scratch.canvas, 0, 0);
+          restore?.();
+          target.restore();
+          copyPen(scratch.pen, target);
+        }
+      },
+    };
   }
 
   // An agent tether's dash, handed to a style that draws the tether itself.
@@ -9359,12 +9436,15 @@
     const selectReachFloor = nodeStyles ? nodeStyles.PREMIUM.includes(state.nodeStyle) : false;
     const growNow = Date.now();
     const nodesSpan = profiler?.begin("command.nodes");
-    const restoreNodeBrightness = globalThis.window?.MefiTreeDynamics?.beginPaint?.([ctx, far], "nodes");
+    // Brightness (toneBegin): the far layer takes nodes only while a branch
+    // is focused (layerFor).
+    const nodeTone = toneBegin("nodes", ctx, focusIds && far !== ctx ? far : null);
     try {
     for (const { node, p } of ordered) {
       if (node._absorbed) continue;
       // outside the focused branch an orb paints on the far (blurred) layer
-      const ctx = layerFor(node);
+      const layer = layerFor(node);
+      const ctx = !nodeTone ? layer : layer === el.ctx ? nodeTone.near : nodeTone.far ?? layer;
       const nodeScale = node._scale ?? 1;
       if (nodeScale <= 0.02) continue;
       const visual = nodeVisualProfile(node);
@@ -9404,7 +9484,7 @@
       let detail = 3;
       if (nodeStyles) {
         const lit = active || Boolean(selected);
-        const cap = Math.min(costCap, ctx !== el.ctx || factor <= 0.3 ? 1 : state.cameraMoving && !lit ? 2 : 3);
+        const cap = Math.min(costCap, layer !== el.ctx || factor <= 0.3 ? 1 : state.cameraMoving && !lit ? 2 : 3);
         detail = nodeStyles.tier(radius, lit ? cap + 1 : cap);
       }
       // The same tier reaches the node's orbit, ring and hub dress below, and
@@ -9470,7 +9550,7 @@
       // The badge pops in as the hold starts and shrinks away once read.
       if (hold && (!hold.ackedAt || !still && growNow - hold.ackedAt < DONE_BADGE_OUT_MS)) drawDoneBadge(ctx, node, p, radius, time, still, hold, growNow, dim);
     }
-    } finally { restoreNodeBrightness?.(); profiler?.end(nodesSpan); }
+    } finally { nodeTone?.finish(); profiler?.end(nodesSpan); }
 
     // The finish beats in the chosen node style (node-styles.js done and
     // absorb), over the flights home the blend above set up: the work pops

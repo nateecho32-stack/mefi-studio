@@ -189,11 +189,18 @@
       if (panel.status) panel.status.textContent = `${count} visible nodes · ${videoEnabled() ? statusText : "Shape and position update live in Overview."}`;
     }
   }
+  // The brightness a paint pass ("nodes" or "lines") is drawn at; 1 is none.
+  function brightness(kind) {
+    const key = kind === "lines" ? "lineBrightness" : "nodeBrightness";
+    return prefs[`${key}Enabled`] ? prefs[key] : 1;
+  }
   // Canvas filters affect only the requested paint pass. Menus, video and text
   // retain their own colors, and the default 100% path adds no filter work.
+  // Command sets it once per layer to lay down a pass it painted off to the
+  // side (idle.js toneBegin), never around the pass's own shapes: a canvas
+  // draws each shape made under a filter through a layer the canvas's size.
   function beginPaint(contexts, kind) {
-    const key = kind === "lines" ? "lineBrightness" : "nodeBrightness";
-    const amount = prefs[`${key}Enabled`] ? prefs[key] : 1;
+    const amount = brightness(kind);
     if (amount === 1) return null;
     const saved = [...new Set(contexts.filter(Boolean))].map(ctx => [ctx, ctx.filter]);
     for (const [ctx, previous] of saved) ctx.filter = `${previous && previous !== "none" ? `${previous} ` : ""}brightness(${amount})`;
@@ -255,6 +262,6 @@
     mountVisibility(root, prefix);
     panels.push({ fields, status }); refresh(); return root;
   }
-  window.MefiTreeDynamics = { normalize, update, mount, mountVisibility, beginPaint, outline, apply, musicEnabled, videoEnabled, sampleRequest, acceptSample, setVideoAvailable,
+  window.MefiTreeDynamics = { normalize, update, mount, mountVisibility, brightness, beginPaint, outline, apply, musicEnabled, videoEnabled, sampleRequest, acceptSample, setVideoAvailable,
     preferences: () => ({ ...prefs }), status: () => ({ count, available, scene: scene ? { ...scene } : null, revision }) };
 })();
