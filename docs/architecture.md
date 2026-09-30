@@ -184,6 +184,8 @@ settings and per-model work-kind summaries for the shared controls.
 | --- | --- |
 | **Menu** (the rail) | New task and Search sit above **Home**, **Work**, **Agents** and **Friends**, with one local row for the current group's views. Friends and its Rooms, Your PCs and Playground links open the existing companion menu at the matching card; Search finds them too. Recent tasks belong to the current project; Settings and Help stay at the foot. Help contains Start here, Shortcuts and Community. The project selector at the top opens the project panel. The registry in `renderer/nav.js` preserves existing shortcuts and destination IDs. |
 | **Layout contract** | The room the shell keeps for a session list, an inspector, a tab strip and a status bar that are not built yet: four `--shell-*` sizes (all 0), four derived edges the pages read, `html[data-layout="v2"]` to turn them on, one setter (`MefiNav.layout.set`) and one free-area rectangle (`MefiNav.usable()`). See `docs/unified-studio.md`. |
+| **Today** | Vibe's Home in the 0.5 layout (`html[data-layout="v2"]`, `renderer/today.js`): the greeting and the box that builds or talks, then one line per session in four groups, **Needs you**, **Running**, **Review** and **Done today**. In Build the same board is a page, reached from its pinned tab. See Getting around. |
+| **Inbox** | Everything that waits on the owner in one list (`MefiToday.openInbox`): open questions and permissions, approvals, finished work to check and tasks that stopped. "N need you" is the digest the app already keeps (`assistantState.needsYou`, the list the taskbar count is read from), never a second counter. It opens as a popover under the top bar's pill (Ctrl J) or stays open as a page. See Getting around. |
 | **Worktree** | Another folder holding the same project on its own branch, so two pieces of work never share files. Task runs make one each (`.mefi/worktrees/<runId>` on `mefi/<runId>`) while "Give each run its own worktree" is on; **Work › Worktrees** lists them all and merges or removes them. |
 | **Attempt review** | What Studio keeps around each builder attempt: a **picture** of the folder at its start and end (private git refs, only on this PC), the list of **changed files** with Accept and Revert, the **advisory checks** that ran after it and **before and after shots** of the project preview. It is the "Changes and checks" section of a task's Evidence tab. |
 | **Workspace** | The home screen (`H`): current task, app preview and conversation. Project queue, Studio status and setup information expand when needed. |
@@ -350,6 +352,36 @@ settings and per-model work-kind summaries for the shared controls.
   recommended one first, or a box for your own words. An answer goes through
   the same call as Command's Ask tab, then the drawer moves to the next
   decision or closes. **Open in Watch** shows the decision in Command instead.
+- **Today and the Inbox** (0.5 layout only; `renderer/today.js` and
+  `today.css`; with `html[data-layout="v2"]` absent nothing of it renders,
+  listens, polls or calls the host). Today is a second reader of the picture
+  `renderer/vibe.js` already keeps (`MefiVibe.data()` and `watch()`), so the front
+  door, its panels and the board never disagree. In Vibe it moves the front
+  door's own greeting, box, starting points and notices into its page (they
+  are put back when it stops, so Build it, Suggest a next step and the drafts
+  keep going through Vibe's code) and draws under them one line per session:
+  **Needs you** (the digest), **Running**, **Review** (work being checked and
+  plans waiting on you) and **Done today**, each line as much as
+  `html[data-detail]` says (titles, plus status, everything). A line opens its
+  session (`MefiTabs.open` when there is a tab strip, else `MefiNav.go`); a
+  question answers on its line with its first two options. The live node tree
+  stays behind it. In Build the same board is the **Today** page (registry
+  route `today`, hidden in Vibe where it is the front door).
+  The **Inbox** lists each thing with what it is, which task it comes from and
+  how long it has waited, the options the app offers (a permission is a
+  question; the safe answer is first), a free answer and **Decide later**
+  (this session only: it goes last and still counts). Every action calls what
+  the rest of the app calls (`assistant:answer`, `backlog:control`,
+  `tasks:action`), is refused while in flight and after it landed, and leaves a
+  **Decided** line with an **Undo** only where the app has a way back (a drop
+  or a done reopens; Mefi's own decisions undo through `autonomy:undo`, from the
+  footer). The popover is anchored to the pill (`openInbox(anchor)`; upward from
+  a bar at the foot), holds the keyboard while it is open (J and K, digits,
+  Enter, Esc; Studio's and Vibe's one-key shortcuts stay out of it) and is also
+  a page (route `inbox`). `MefiToday.count()` and `onChange()` are what the
+  pill reads. A click on a Windows notification lands on the task, or on the
+  Inbox when several were told (`alerts:open` carries `count`, `alerts.js` asks
+  `MefiToday.openFromAlert`). Nothing is stored.
 - Vibe can run on its own. When something holds every agent back, a banner
   under the box names it and carries its fix: **Start agents** after a launch
   that left them off (the launch screen's Open with Start agents off), **Resume** when new

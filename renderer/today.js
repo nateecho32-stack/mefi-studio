@@ -5,7 +5,8 @@
 //
 // Today is Vibe's Home in v2. It draws the front door's own pieces (the
 // greeting, the box that builds or talks, the four starting points, the line
-// that says what holds the agents back) where it wants them, so Build it,
+// that says what holds the agents back) where it wants them, under Vibe's own
+// top bar (which keeps the project, New app, the conversation and Settings), so Build it,
 // Suggest a next step and the drafts keep working through renderer/vibe.js, and
 // under them a board of one line per session in four groups: Needs you, Running,
 // Review and Done today. The detail each card shows follows html[data-detail]
@@ -891,9 +892,9 @@
     let today = byId("today-page");
     if (today) return today;
     today = el("section", "today"); today.id = "today-page"; today.setAttribute("aria-label", "Today");
-    const scroll = el("div", "today-scroll"); scroll.id = "today-scroll";
+    // A scroller takes the keyboard in Chromium; its controls should be what Tab walks. It still scrolls by PageUp and PageDown once clicked.
+    const scroll = el("div", "today-scroll"); scroll.id = "today-scroll"; scroll.tabIndex = -1;
     const column = el("div", "today-col");
-    const top = el("div", "today-head");
     const row = el("div", "today-top");
     const summary = el("div", "today-summary"); summary.id = "today-summary"; summary.setAttribute("role", "group"); summary.setAttribute("aria-label", "What is happening");
     const slot = el("div", "today-box");
@@ -904,11 +905,12 @@
     const latestRows = el("ul", "today-latest-rows");
     latest.append(el("h3", "", "Latest"), latestRows);
     board.append(groups, latest);
-    column.append(top, row, slot, quiet, board);
+    column.append(row, slot, quiet, board);
     scroll.append(column); today.append(scroll);
-    // After the sky, before the front door's own top bar and stage: those step aside in v2 (today.css).
-    const sky = layer.querySelector?.(".vibe-sky");
-    if (sky?.nextSibling !== undefined && layer.insertBefore) layer.insertBefore(today, sky.nextSibling ?? null); else layer.append(today);
+    // Under the front door's own top bar, which stays (the project, New app, the conversation, Settings, an update waiting), so Tab reads the page
+    // top to bottom; its stage and dock step aside (today.css). The sky is out of flow behind everything.
+    const stage = layer.querySelector?.(".vibe-stage");
+    if (stage && layer.insertBefore) layer.insertBefore(today, stage); else layer.append(today);
     // Borrow the front door's pieces. Each goes back where it was (restore) when Today stops.
     const place = (node, into) => {
       if (!node) return;
@@ -916,8 +918,6 @@
       node.remove?.();
       into.append(node);
     };
-    place(layer.querySelector(".vibe-top-left"), top);
-    place(byId("vibe-chat-toggle"), top);
     const hero = layer.querySelector(".vibe-hero");
     place(hero, row);
     row.append(summary);

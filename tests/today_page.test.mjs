@@ -48,13 +48,15 @@ test("Vibe's front door borrows its pieces into Today, and stop() puts every one
 test("Today is drawn inside Vibe's own layer, after its sky, with the pieces in the order of the page", async () => {
   const t = await up();
   const layer = byId(t, "vibe-layer");
-  assert.equal(layer.dataset.today, "on", "CSS steps the old top bar, stage and dock aside from this");
+  assert.equal(layer.dataset.today, "on", "CSS steps the old stage and dock aside from this (the top bar stays: the project, New app, the conversation, Settings)");
   const page = byId(t, "today-page");
   assert.equal(page.parentNode, layer);
   assert.equal(page.getAttribute("aria-label"), "Today");
-  assert.deepEqual(layer.children.map((child) => child.id || child.className.split(" ")[0]), ["vibe-sky", "today-page", "vibe-top", "vibe-stage", "vibe-dock"], "right after the backdrop's sky, so the node tree stays behind it");
-  const head = page.querySelector(".today-head");
-  assert.deepEqual(head.children.map((child) => child.id || child.className.split(" ")[0]), ["vibe-top-left", "vibe-chat-toggle"], "the project and New app, and the conversation toggle");
+  assert.deepEqual(layer.children.map((child) => child.id || child.className.split(" ")[0]), ["vibe-sky", "vibe-top", "today-page", "vibe-stage", "vibe-dock"], "under the top bar that stays (so Tab reads the page top to bottom), over the backdrop's sky, so the node tree stays behind it");
+  assert.equal(page.querySelector("#today-scroll").tabIndex, -1, "the scroller is not a tab stop of its own");
+  assert.equal(page.querySelector(".today-head"), null, "no second top bar: Vibe's own keeps the project, New app and the conversation toggle");
+  assert.deepEqual(t.front.order(t.front.top), ["vibe-top-left", "mode-switch", "vibe-top-actions"], "and is left exactly as it was");
+  assert.equal(byId(t, "vibe-chat-toggle").parentNode.className.includes("vibe-top-actions"), true);
   assert.deepEqual(page.querySelector(".today-top").children.map((child) => child.id || child.className.split(" ")[0]), ["vibe-hero", "today-summary"], "the greeting, and the chips beside it");
   assert.deepEqual(page.querySelector(".today-box").children.map((child) => child.id || child.className.split(" ")[0]).filter((id) => id.startsWith("vibe-")), ["vibe-compose", "vibe-flow", "vibe-feedback", "vibe-sparks", "vibe-decisions", "vibe-gate", "vibe-last"], "the box that builds or talks, its wait, its answer, the starting points, what decided, what holds the agents back");
   // The box is still Vibe's own element: Build it, Suggest a next step and the drafts keep working through vibe.js.
@@ -74,7 +76,7 @@ test("hide() keeps the page for next time, show() does not build a second one, a
   assert.equal(byId(t, "vibe-compose").parentNode.className.includes("today-box"), true);
   t.today.stop();
   assert.equal(byId(t, "vibe-compose").parentNode, t.front.stage);
-  assert.equal(byId(t, "vibe-chat-toggle").parentNode.className.includes("vibe-top-actions"), true, "the conversation toggle goes back into the old top bar");
+  assert.equal(byId(t, "vibe-chat-toggle").parentNode.className.includes("vibe-top-actions"), true, "the conversation toggle never left the top bar");
   assert.equal(byId(t, "vibe-project").parentNode.className.includes("vibe-top-left"), true);
 });
 

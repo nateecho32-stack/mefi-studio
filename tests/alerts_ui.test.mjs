@@ -270,6 +270,29 @@ test("a click on a notification opens its task in its project, else Home; the te
   assert.doesNotThrow(() => p.opens[0]({ kind: "need", taskId: "t1" }), "a page without its navigation cannot open anything and says nothing");
 });
 
+test("in layout v2 a click on a notification goes to Today first: its task, or the Inbox when it told several", async (t) => {
+  const p = await page(t);
+  const heard = [];
+  p.window.MefiToday = { openFromAlert: (payload) => { heard.push(payload); return true; } };
+  p.opens[0]({ kind: "need", id: "a", taskId: "t1", projectId: "project_a", count: 3 });
+  assert.deepEqual(p.plain(heard), [{ kind: "need", id: "a", taskId: "t1", projectId: "project_a", count: 3 }], "Today hears the whole payload, the count included");
+  assert.deepEqual(p.navs, [], "and alerts.js does not also navigate");
+  assert.deepEqual(p.entered, []);
+  // Today leaves it to alerts.js (v1, not started, or nothing it knows): what it always did.
+  p.window.MefiToday = { openFromAlert: () => false };
+  p.opens[0]({ kind: "need", id: "q1", taskId: "t1", projectId: "project_a" });
+  assert.deepEqual(p.plain(p.navs), [["tasks", { taskId: "t1", projectId: "project_a", filter: "all" }]]);
+  // The test notification is never Today's.
+  heard.length = 0;
+  p.window.MefiToday = { openFromAlert: (payload) => { heard.push(payload); return true; } };
+  p.opens[0]({ kind: "test", id: null, taskId: null, projectId: null });
+  assert.deepEqual(heard, []);
+  // No Today at all (v1): the page is exactly what it was.
+  delete p.window.MefiToday;
+  p.opens[0]({ kind: "fail", id: "t9", taskId: "t9", projectId: null });
+  assert.deepEqual(p.plain(p.navs.at(-1)), ["tasks", { taskId: "t9", filter: "all" }]);
+});
+
 test("a read that fails says so, and the card stays usable", async (t) => {
   const refused = await page(t, { get: async () => ({ ok: false, error: "Notifications are not available in this build." }) });
   await refused.open();

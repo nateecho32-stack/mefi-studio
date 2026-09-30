@@ -381,6 +381,10 @@ app.whenReady().then(async () => {
     const at = `${label}@${zoom}`;
     // Today itself.
     const m = await measure("#today-page");
+    const topBar = await measure("#vibe-layer > .vibe-top");
+    assert.deepEqual(topBar.small, [], `no text under 12 px in Vibe's own top bar, which stays over Today, at ${at}`);
+    assert.equal(topBar.pageOverflow, false);
+    assert.deepEqual(topBar.outside, [], `Vibe's own top bar stays inside the window over Today at ${at}`);
     const layer = await run(`
       const layer = document.getElementById('vibe-layer'), sky = layer.querySelector('.vibe-sky'), page = document.getElementById('today-page'), scroll = document.getElementById('today-scroll');
       const box = (node) => { const r = node.getBoundingClientRect(); return { x: r.left, y: r.top, r: r.right, b: r.bottom, w: r.width, h: r.height }; };
@@ -391,7 +395,7 @@ app.whenReady().then(async () => {
         compose: box(compose), hero: box(hero), words: { kicker: document.getElementById('vibe-kicker').textContent, title: document.getElementById('vibe-title').textContent }, board: box(board), firstCard: box(first), groups: [...board.querySelectorAll('.today-group')].map((group) => ({ group: group.dataset.group, ...box(group) })),
         backdrop: { layerAlpha: (() => { const c = getComputedStyle(layer).backgroundColor, slash = c.lastIndexOf('/'); if (slash > 0) return parseFloat(c.slice(slash + 1)); return c.startsWith('rgba') ? parseFloat(c.split(',').pop()) : 1; })(), skyVisible: getComputedStyle(sky).display !== 'none', idle: idle ? { hidden: idle.hidden, ...box(idle) } : null, idleFar: idleFar ? { hidden: idleFar.hidden, ...box(idleFar) } : null },
         cards: cards.map((card) => ({ key: card.dataset.key, ...box(card), title: box(card.querySelector('.today-card-title')), open: box(card.querySelector('.today-card-open')) })),
-        top: [...page.querySelectorAll('.today-head button, .today-chip')].map((node) => ({ text: node.textContent.trim().slice(0, 24), ...box(node) })) };`);
+        top: [...layer.querySelectorAll(':scope > .vibe-top button')].filter((node) => node.getClientRects().length).map((node) => ({ text: node.textContent.trim().slice(0, 24), ...box(node) })) };`);
     report.layouts.push({ label: at, today: { small: m.small, scrollers: m.scrollers, outside: m.outside }, backdrop: layer.backdrop, scrollHeight: layer.scroll.scrollHeight, clientHeight: layer.scroll.clientHeight });
     assert.equal(m.missing, undefined, `Today is drawn at ${at}`);
     assert.equal(m.pageOverflow, false, `the page overflows at ${at}`);
@@ -399,7 +403,7 @@ app.whenReady().then(async () => {
     assert.deepEqual(m.outside, [], `nothing of Today leaves the window sideways at ${at}`);
     for (const scroller of m.scrollers) { assert.equal(scroller.gutter, 0, `${scroller.name} reserves ${scroller.gutter}px for a bar at ${at}`); assert.equal(scroller.sideways, false, `${scroller.name} scrolls sideways at ${at}`); assert.equal(scroller.scrollbarWidth, "none", `${scroller.name} shows a native bar at ${at}`); }
     // The page sits inside the layer, which sits on the window: the node tree shows behind and around it.
-    assert.ok(layer.page.w > 300 && layer.page.h > 300, `Today has a size at ${at}`);
+    assert.ok(layer.page.w > 300 && layer.page.h > 150, `Today has a size at ${at}: ${JSON.stringify(layer.page)}`);
     assert.ok(Math.abs(layer.sky.w - layer.layer.w) < 2 && Math.abs(layer.sky.h - layer.layer.h) < 2 && layer.backdrop.skyVisible, `the sky fills the layer at ${at}`);
     assert.ok(layer.backdrop.layerAlpha < 0.9, `the layer is a veil, not a wall, at ${at}: alpha ${layer.backdrop.layerAlpha}`);
     if (layer.backdrop.idle && !layer.backdrop.idle.hidden) assert.ok(layer.backdrop.idle.w > 100 && layer.backdrop.idle.h > 100, `the node tree has a size at ${at}`);
@@ -504,6 +508,36 @@ app.whenReady().then(async () => {
   await run("await window.MefiVibe.setMode('vibe'); await window.MefiVibe.refresh();");
   await until("document.getElementById('vibe-layer').dataset.today === 'on' && !document.getElementById('vibe-layer').hidden", "Vibe is back");
   await sleep(300);
+
+  // ---- the keyboard: real Tab presses walk the page in the order it reads, and every stop of Today's own shows a ring -------------------
+  // A click on the empty page gives the window the keyboard (an unfocused page matches no :focus-visible, so no ring could show).
+  window.show(); window.focus(); contents.focus();
+  await sleep(300);
+  contents.sendInputEvent({ type: "mouseDown", button: "left", clickCount: 1, x: 40, y: 500 }); contents.sendInputEvent({ type: "mouseUp", button: "left", clickCount: 1, x: 40, y: 500 });
+  await sleep(120);
+  report.documentFocus = await run("return document.hasFocus();");
+  assert.equal(report.documentFocus, true, "the window has the keyboard, so :focus-visible can match and a ring can show");
+  await run("document.activeElement?.blur?.(); document.getElementById('vibe-layer').focus({ preventScroll: true });");
+  const stops = [];
+  for (let index = 0; index < 60; index += 1) {
+    contents.sendInputEvent({ type: "keyDown", keyCode: "Tab" }); contents.sendInputEvent({ type: "keyUp", keyCode: "Tab" });
+    await sleep(40);
+    stops.push(await run(`const node = document.activeElement; if (!node || node === document.body) return null; const r = node.getBoundingClientRect(), style = getComputedStyle(node); return { id: node.id || '', cls: typeof node.className === 'string' ? node.className.split(' ')[0] : '', text: (node.textContent || '').trim().slice(0, 28), x: Math.round(r.left), y: Math.round(r.top), ring: style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0, today: Boolean(node.closest('#today-page')), ours: /^today-/.test(typeof node.className === 'string' ? node.className.split(' ')[0] : '') };`));
+  }
+  report.tabStops = stops.map((stop) => (stop ? `${stop.id || stop.cls}:${stop.text}@${stop.x},${stop.y}` : null));
+  assert.ok(stops.every(Boolean), "focus never falls out to the page while tabbing through Today");
+  const at = (match) => stops.findIndex((stop) => stop && match(stop));
+  const order = [at((stop) => stop.id === "vibe-project"), at((stop) => stop.id === "vibe-new-app"), at((stop) => stop.id === "vibe-chat-toggle"), at((stop) => stop.cls === "today-chip"), at((stop) => stop.id === "vibe-input"), at((stop) => stop.id === "vibe-talk"), at((stop) => stop.id === "vibe-build"), at((stop) => stop.cls === "vibe-evolution-intent"), at((stop) => stop.cls === "today-card-open")];
+  assert.ok(order.every((found) => found >= 0), `every stop is reached by Tab: ${JSON.stringify(order)} in ${JSON.stringify(report.tabStops)}`);
+  assert.deepEqual([...order].sort((a, b) => a - b), order, "in the order the page reads: project, the summary, the box, its buttons, the starting points, the board");
+  const firstCards = stops.filter((stop) => stop.cls === "today-card-open" || stop.cls === "today-btn" || stop.cls === "today-link" || stop.cls === "today-chip");
+  assert.ok(firstCards.length >= 4, "the board's own controls are in the tab order");
+  assert.ok(firstCards.every((stop) => stop.ring), `a focus ring on every stop of Today's own: ${JSON.stringify(firstCards.filter((stop) => !stop.ring))}`);
+  // Down the board the order follows the columns: the first card of Needs you comes before the first of Running.
+  const needsAt = at((stop) => stop.cls === "today-card-open" && stop.x < 500), runningAt = at((stop) => stop.cls === "today-card-open" && stop.x >= 500);
+  assert.ok(needsAt >= 0 && (runningAt < 0 || needsAt < runningAt), "the Needs you column is walked before Running");
+  await run("document.activeElement?.blur?.();");
+  check("Tab walks Today in reading order with a ring on its own stops");
 
   // ---- acting, the way a person does (1440x900) -----------------------------------------------------------------
   await run("window.todayFixture.clear();");
