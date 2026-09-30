@@ -194,7 +194,8 @@ test("credentials in remote URLs never reach a caller", async () => {
   };
   const result = await sync("/repo", { run: fake });
   assert.doesNotMatch(JSON.stringify(result), /pw@|me:pw/);
-  assert.ok(calls.every((call) => !call.startsWith("push") && !call.startsWith("merge")), "offline never writes");
+  // The subcommand by name: "merge-base" is a read, "merge" is the pull.
+  assert.ok(calls.every((call) => !["push", "merge", "rebase", "commit"].includes(call.split(" ")[0])), "offline never writes");
 });
 
 async function edit(cwd, name, body) {

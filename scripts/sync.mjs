@@ -41,6 +41,9 @@ const lastLine = (text) => scrub(String(text ?? "").split(/\r?\n/).map((line) =>
 export const scrub = (text) => String(text ?? "").replace(/([a-z][a-z0-9+.-]*:\/\/)[^/@\s]+@/gi, "$1");
 // Pending kinds that exist only on this PC: losing the PC loses them.
 const LOCAL_ONLY = new Set(["uncommitted", "unpushed", "stash", "worktree", "local-branch"]);
+// Notes, not work waiting to be saved: they never change the headline or add the
+// "before moving to another PC" reminder.
+const INFO_ONLY = new Set(["site-branch", "unrelated"]);
 
 export function runGit(cwd, args, { timeout = 30000 } = {}) {
   return new Promise((resolve) => {
@@ -233,7 +236,15 @@ export async function inspect(cwd, { run = runGit } = {}) {
   const upstream = `${REMOTE}/${main}`;
   const hasUpstream = remote && (await git(["rev-parse", "--verify", "--quiet", `refs/remotes/${upstream}`])).ok;
   const hasMain = (await git(["rev-parse", "--verify", "--quiet", `refs/heads/${main}`])).ok;
-  const [ahead, behind] = hasUpstream && hasMain ? (await git(["rev-list", "--left-right", "--count", `${main}...${upstream}`])).stdout.split(/\s+/).map(Number) : [0, 0];
+  // A shallow clone (a cloud session's) can hold a local main and a GitHub main
+  // that share no history in what it fetched. Counting them against each other
+  // reports the whole difference as unpushed work, so say that they were not
+  // compared instead of inventing a count. Two separate histories in a full
+  // clone are real, and their commits still count.
+  const linked = hasUpstream && hasMain ? (await git(["merge-base", main, upstream])).ok : true;
+  const shallow = linked ? false : (await git(["rev-parse", "--is-shallow-repository"])).stdout.trim() === "true";
+  const comparable = linked || !shallow;
+  const [ahead, behind] = hasUpstream && hasMain && comparable ? (await git(["rev-list", "--left-right", "--count", `${main}...${upstream}`])).stdout.split(/\s+/).map(Number) : [0, 0];
   const branch = (await git(["rev-parse", "--abbrev-ref", "HEAD"])).stdout || "HEAD";
   const dirty = await changedFiles(cwd, { run });
   const stashes = lines((await git(["stash", "list"])).stdout).length;
@@ -251,11 +262,22 @@ export async function inspect(cwd, { run = runGit } = {}) {
   const missing = async (ref) => (hasUpstream ? Number((await git(["rev-list", "--count", `${upstream}..${ref}`])).stdout) || 0 : 0);
   const refs = async (pattern) => lines((await git(["for-each-ref", "--format=%(refname:short)", pattern])).stdout);
   const remoteBranches = [];
+  const siteBranches = [];
+  const siteRef = `${REMOTE}/gh-pages`;
+  const hasSite = (await git(["rev-parse", "--verify", "--quiet", `refs/remotes/${siteRef}`])).ok;
   for (const ref of await refs(`refs/remotes/${REMOTE}`)) {
     // gh-pages holds a published site's separate history and never merges.
-    if ([REMOTE, `${REMOTE}/HEAD`, upstream, `${REMOTE}/gh-pages`].includes(ref)) continue;
+    if ([REMOTE, `${REMOTE}/HEAD`, upstream, siteRef].includes(ref)) continue;
     const commits = await missing(ref);
-    if (commits) remoteBranches.push({ name: ref.slice(REMOTE.length + 1), commits });
+    if (!commits) continue;
+    // A branch built on gh-pages (it shares history with the site and none with
+    // the default branch) is site work: it is ahead of gh-pages, not of main.
+    if (hasSite && (await git(["merge-base", siteRef, ref])).ok && !(await git(["merge-base", upstream, ref])).ok) {
+      const onSite = Number((await git(["rev-list", "--count", `${siteRef}..${ref}`])).stdout) || 0;
+      if (onSite) siteBranches.push({ name: ref.slice(REMOTE.length + 1), commits: onSite });
+      continue;
+    }
+    remoteBranches.push({ name: ref.slice(REMOTE.length + 1), commits });
   }
   const localBranches = [];
   for (const ref of await refs("refs/heads")) {
@@ -269,7 +291,7 @@ export async function inspect(cwd, { run = runGit } = {}) {
     if (published && !Number((await git(["rev-list", "--count", `${REMOTE}/${ref}..${ref}`])).stdout)) continue;
     localBranches.push({ name: ref, commits });
   }
-  return { repo: true, root, device: os.hostname(), remote, main, upstream, hasUpstream, branch, ahead: ahead || 0, behind: behind || 0, dirty, stashes, worktrees, localBranches, remoteBranches };
+  return { repo: true, root, device: os.hostname(), remote, main, upstream, hasUpstream, unrelated: !comparable, shallow, branch, ahead: ahead || 0, behind: behind || 0, dirty, stashes, worktrees, localBranches, remoteBranches, siteBranches };
 }
 
 // Everything that is not on GitHub's default branch yet, one item each.
@@ -282,6 +304,8 @@ export function pending(state) {
   if (state.stashes) items.push({ kind: "stash", count: state.stashes, text: `${plural(state.stashes, "stash", "stashes")} saved on this PC.` });
   for (const tree of state.worktrees) items.push({ kind: "worktree", path: tree.path, count: tree.dirty, text: `Worktree ${path.basename(tree.path)} (${tree.branch || "detached"}): ${plural(tree.dirty, "uncommitted file")}.` });
   for (const item of state.localBranches) items.push({ kind: "local-branch", name: item.name, count: item.commits, text: `Branch ${item.name} on this PC: ${plural(item.commits, "commit")} not on ${state.main}.` });
+  if (state.unrelated) items.push({ kind: "unrelated", text: `This is a shallow clone and local ${state.main} shares no history with ${state.upstream} in what it fetched, so their commits were not compared.` });
+  for (const item of state.siteBranches ?? []) items.push({ kind: "site-branch", name: item.name, count: item.commits, text: `Site branch ${item.name} on GitHub: ${plural(item.commits, "commit")} not on gh-pages yet. It never merges into ${state.main}; publish the site separately.` });
   for (const item of state.remoteBranches) items.push({ kind: "github-branch", name: item.name, count: item.commits, text: `Branch ${item.name} on GitHub: ${plural(item.commits, "commit")} not on ${state.main}.` });
   return items;
 }
@@ -298,6 +322,7 @@ function headline(state, problems, waiting) {
   const unchecked = problems.find((item) => item.kind === "fetch-failed");
   if (unchecked) return `Couldn't check GitHub (${unchecked.detail}). Sign in to GitHub again or check this project's GitHub address; nothing was changed.`;
   if (!state.hasUpstream) return `GitHub has no ${state.upstream} yet. Push ${state.main} once to link your PCs.`;
+  if (state.unrelated) return `This is a shallow clone, and local ${state.main} shares no history with ${state.upstream} in what it fetched, so they were not compared. Nothing was changed.`;
   const conflict = problems.find((item) => item.kind === "rebase-conflict");
   if (conflict) return `Your commits and GitHub's both change ${conflict.files.length ? conflict.files.slice(0, 3).join(", ") : "the same lines"}. Nothing was changed; merge them by hand or ask Mefi.`;
   const lost = problems.find((item) => item.kind === "lost-work");
@@ -310,7 +335,7 @@ function headline(state, problems, waiting) {
   }
   const offline = problems.some((item) => item.kind === "offline");
   if (state.behind && !state.ahead) return `GitHub has ${plural(state.behind, "commit")} this PC has not pulled yet.`;
-  if (waiting.length) return offline ? "GitHub could not be reached. Some work on this PC is not on GitHub yet." : "Some work on this PC is not on GitHub yet.";
+  if (waiting.some((item) => !INFO_ONLY.has(item.kind))) return offline ? "GitHub could not be reached. Some work on this PC is not on GitHub yet." : "Some work on this PC is not on GitHub yet.";
   return offline ? "GitHub could not be reached. As of the last check, this PC matched GitHub." : `This PC matches GitHub ${state.main}.`;
 }
 
@@ -327,6 +352,16 @@ export async function sync(cwd, { fetch = true, pull = true, push = true, rebase
     const fetched = await git(["fetch", REMOTE, "--prune"], { timeout });
     if (fetched.ok) state = await inspect(cwd, { run });
     else problems.push({ kind: fetchFailure(fetched), detail: firstLine(fetched.stderr) || "git fetch failed" });
+    // A shallow clone whose local main sits outside the history it fetched: fetch
+    // back to that commit (a day's margin) so the two mains can be compared. This
+    // is a fetch like any other; it moves no branch and touches no file.
+    if (fetched.ok && state.unrelated && state.shallow) {
+      const tip = Date.parse((await git(["log", "-1", "--format=%cI", state.main])).stdout.trim());
+      if (Number.isFinite(tip)) {
+        const deepened = await git(["fetch", REMOTE, `--shallow-since=${new Date(tip - 86400000).toISOString()}`, state.main], { timeout: timeout * 4 });
+        if (deepened.ok) state = await inspect(cwd, { run });
+      }
+    }
   }
   const online = state.hasUpstream && !problems.length;
   const onMain = state.branch === state.main;
@@ -409,7 +444,7 @@ export async function sync(cwd, { fetch = true, pull = true, push = true, rebase
 
 export function describe(result, { hook = false } = {}) {
   const out = [hook ? "Multi-PC sync (scripts/sync.mjs, at session start):" : "Multi-PC sync:", ...result.lines.map((line, index) => (index ? `  - ${line}` : line))];
-  if (result.pending.length) out.push("Before moving to another PC: commit, merge into the default branch and run `npm run sync`.");
+  if (result.pending.some((item) => !INFO_ONLY.has(item.kind))) out.push("Before moving to another PC: commit, merge into the default branch and run `npm run sync`.");
   return out.join("\n");
 }
 

@@ -59,3 +59,22 @@ Claude Code sessions and Claude's memory stay on the PC that made them.
   (`renderer/pc-sync.js`, main's `sync:*` channels), badges the Friends
   bubble from a background look, and asks before closing when the open
   project has work on this PC alone.
+
+## Cloud sessions
+
+A Claude Code session on claude.ai runs in a container, not on one of the PCs.
+It sees only what GitHub has, so a worktree or branch that was never pushed is
+invisible to it, and anything that exists only in the container is lost when it
+is reclaimed: push it to a `wip/<topic>` branch.
+
+- The clone is shallow. The session hook deepens it when local `main` cannot be
+  compared with GitHub's, and says "not compared" rather than counting commits
+  when it still cannot. Branches built on `gh-pages` are the public site's work:
+  the report lists them as site branches, and they never merge into `main`.
+- The repo needs Node 24 (`package.json` engines, enforced by `.npmrc`). Under
+  Node 22, `tests/git_actions.test.mjs` cancels 61 tests that pass on 24.
+- Push a working branch first and let `ci.yml` (Windows, the full gate) run,
+  then fast-forward `main` with `git push origin HEAD:main`. Run `git fetch`
+  again just before that push: `main` moves constantly. Never force-push, and
+  never push a `v*` tag from a session: a tag starts `release.yml`, which builds
+  and publishes the executable.
