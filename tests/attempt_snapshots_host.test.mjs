@@ -504,6 +504,51 @@ test("two attempts starting at once get different numbers, and different tasks n
   assert.equal(h.refs().length, 3);
 });
 
+test("a start picture whose claim was cancelled is dropped; a picture with an end, or another attempt's, never is", async (t) => {
+  const h = project(t);
+  const cancelled = await h.snaps.begin({ root: h.root, taskId: TASK, runId: "run_1_1" });
+  assert.deepEqual(h.refs(), [`refs/mefi/attempts/${TASK}/1/before`]);
+  assert.deepEqual(await h.snaps.drop({ root: h.root, taskId: TASK, n: cancelled.n }), { ok: true, dropped: true });
+  assert.deepEqual(h.refs(), [], "no empty attempt is left for the page to show");
+  assert.deepEqual(await h.snaps.drop({ root: h.root, taskId: TASK, n: 1 }), { ok: true, dropped: false }, "nothing there: nothing dropped");
+  const real = await ran(h, (x) => x.write("a.txt", "one\nchanged\n"));
+  const kept = await h.snaps.drop({ root: h.root, taskId: TASK, n: real.start.n });
+  assert.deepEqual([kept.ok, kept.dropped], [true, false], "an attempt that ended is not dropped");
+  assert.equal(h.refs().length, 2);
+  const other = await h.snaps.begin({ root: h.root, taskId: "task_other", runId: "run_2_1" });
+  await h.snaps.drop({ root: h.root, taskId: TASK, n: other.n });
+  assert.equal(h.refs().includes("refs/mefi/attempts/task_other/1/before"), true, "another task's picture is not touched");
+  assert.deepEqual(await h.snaps.drop({ root: h.root, taskId: "", n: 1 }), { ok: false, dropped: false });
+});
+
+test("at most three folders are read at once, however many attempts begin together, and every one of them still gets its picture", async (t) => {
+  const { execFile } = require("node:child_process");
+  let active = 0;
+  let peak = 0;
+  // Every temporary-index `git add` (the heavy read of a folder) takes a moment, so overlapping ones are seen.
+  const slow = (file, args, options, callback) => {
+    if (!args.includes("add") || !options?.env?.GIT_INDEX_FILE) return execFile(file, args, options, callback);
+    active += 1;
+    peak = Math.max(peak, active);
+    let child = null;
+    const sent = [];
+    const timer = setTimeout(() => {
+      child = execFile(file, args, options, (...result) => { active -= 1; callback(...result); });
+      child.stdin?.on?.("error", () => {});
+      for (const data of sent) child.stdin?.end?.(data);
+    }, 60);
+    // The pathspec travels on stdin: hold it until the process exists.
+    return { kill() { clearTimeout(timer); child?.kill?.(); }, stdin: { on() {}, end(data) { sent.push(data); } } };
+  };
+  const roots = Array.from({ length: 8 }, () => project(t));
+  const shared = createAttemptSnapshots({ env: () => roots[0].env, execFile: slow });
+  const started = await Promise.all(roots.map((one, index) => shared.begin({ root: one.root, taskId: TASK, runId: `run_${index}_1` })));
+  assert.deepEqual(started.map((one) => one.ok), Array(8).fill(true));
+  assert.equal(peak, 3, "three at a time, not one and not eight");
+  assert.equal(active, 0);
+  assert.ok(roots.every((one) => one.refs().length === 1), "each folder has its picture");
+});
+
 test("a run in its own worktree: refs are shared with the project, the list works from either folder, and Revert puts the merged files back in the project", async (t) => {
   const h = project(t);
   h.write(".gitignore", "ignored.log\nnode_modules/\n.mefi/\n"); h.g("add", ".gitignore"); h.g("commit", "-q", "-m", "ignore");
@@ -550,7 +595,7 @@ test("a mode-only change is listed and put back, on platforms that have modes", 
   assert.equal(statSync(h.at("run.sh")).mode & 0o111, 0, "the executable bit is gone again");
 });
 
-test("a link in the change set is put back on platforms that make links, and a submodule is refused", { skip: !PLAIN }, async (t) => {
+test("a link in the change set is put back on platforms that make links", { skip: !PLAIN }, async (t) => {
   const h = project(t, { "a.txt": "one\n" });
   await ran(h, (x) => symlinkSync("a.txt", x.at("alias")));
   const list = await h.snaps.changes({ root: h.root, taskId: TASK });

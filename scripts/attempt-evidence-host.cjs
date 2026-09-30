@@ -15,6 +15,8 @@
 //                kept beside its pictures
 //   prune        the newest ten attempts keep their pictures, twenty their
 //                folders, and the whole folder stays under a size
+//   drop         an attempt that never started (its claim was cancelled while
+//                the start shot was taken) leaves no folder behind
 //
 // The folder is the project's data folder, never the repository, and never part
 // of a problem report. All IO is injected like scripts/git-actions.cjs; the
@@ -22,6 +24,8 @@
 const rules = require("./attempt-evidence.cjs");
 
 const STALE_TEMP_MS = 60 * 60 * 1000;
+// Pruning reads every attempt folder, so after a shot it runs at most this often.
+const PRUNE_EVERY_MS = 5 * 60 * 1000;
 
 function createAttemptEvidence({
   fs = require("node:fs"),
@@ -38,6 +42,7 @@ function createAttemptEvidence({
 } = {}) {
   const fsp = fs.promises;
   const clock = () => (typeof now === "function" ? now() : Date.now());
+  let lastPrune = 0;
   const dataFolder = () => (typeof root === "function" ? root() : root);
   const evidenceRoot = () => { const data = dataFolder(); return typeof data === "string" && data ? path.join(data, rules.DIR) : null; };
 
@@ -99,8 +104,27 @@ function createAttemptEvidence({
     }
     await writeAtomic(path.join(folder, rules.imageName(phase)), png);
     await noteMeta(folder, { runId, phase, state: "captured", bytes: png.length, width: size.width, height: size.height });
-    prune().catch(() => {});
+    if (clock() - lastPrune > PRUNE_EVERY_MS) { lastPrune = clock(); prune().catch(() => {}); }
     return { ok: true, captured: true, bytes: png.length, width: size.width, height: size.height };
+  });
+
+  // A side that will not get a shot, and why (the run's work was never merged into the folder the preview shows).
+  const skip = safe("skip", async ({ taskId, n, runId = null, phase, reason } = {}) => {
+    const folder = folderOf(taskId, n);
+    if (!folder || !rules.isPhase(phase) || !["not-merged", "failed", "no-preview"].includes(reason)) return { ok: false };
+    await noteMeta(folder, { runId, phase, state: "skipped", reason });
+    return { ok: true };
+  });
+
+  // An attempt that never started has no end side: its folder (the start shot, the notes) goes.
+  const drop = safe("drop", async ({ taskId, n } = {}) => {
+    const folder = folderOf(taskId, n);
+    if (!folder) return { ok: false };
+    for (const name of [rules.imageName("after"), "checks.json"]) {
+      if (await fsp.stat(path.join(folder, name)).then(() => true, () => false)) return { ok: true, dropped: false };
+    }
+    await fsp.rm(folder, { recursive: true, force: true });
+    return { ok: true, dropped: true };
   });
 
   // ---- what exists -------------------------------------------------------------------------------------
@@ -128,11 +152,15 @@ function createAttemptEvidence({
     }
     return rows;
   };
-  // The attempt numbers this task's folders hold: <data>/attempt-evidence/<task>/<n>.
+  // The attempt numbers this task's folders hold: <data>/attempt-evidence/<task>/<n>. Only this task's folder is read.
   async function numbers(taskId) {
     const key = rules.folderParts(taskId, 1)?.[1];
-    if (!key) return [];
-    try { return rules.numbersOf(await listing(), key); } catch { return []; }
+    const top = evidenceRoot();
+    if (!key || !top) return [];
+    try {
+      const entries = await fsp.readdir(path.join(top, key), { withFileTypes: true });
+      return entries.filter((entry) => entry.isDirectory() && /^\d{1,6}$/.test(entry.name)).map((entry) => Number(entry.name));
+    } catch { return []; }
   }
 
   const read = safe("read", async ({ taskId, n } = {}) => {
@@ -200,7 +228,7 @@ function createAttemptEvidence({
     return { ok: true, images: plan.dropImages.length, folders: plan.dropFolders.length };
   }
 
-  return { shot, read, numbers, saveChecks, readChecks, prune: safe("prune", prune), folderOf };
+  return { shot, skip, drop, read, numbers, saveChecks, readChecks, prune: safe("prune", prune), folderOf };
 }
 
 module.exports = { createAttemptEvidence };

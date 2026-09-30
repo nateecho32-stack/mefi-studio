@@ -11,6 +11,16 @@ const gitRepoFields = (options) => ({
   ...gitProject(options),
 });
 
+// The review calls (main.cjs "Attempt review": changed files, Accept, Revert, advisory checks, before and after
+// shots): plain fields only, strings cut to a sane length, the attempt a whole number.
+const reviewBody = (payload) => ({
+  taskId: gitText(payload?.taskId, 200),
+  ...(Number.isSafeInteger(payload?.attempt) ? { attempt: payload.attempt } : {}),
+  ...(typeof payload?.runId === "string" ? { runId: payload.runId.slice(0, 80) } : {}),
+  ...gitProject(payload),
+});
+const reviewChoices = (payload) => Object.fromEntries(["snapshots", "advisory", "advisoryBuild", "shots"].filter((key) => typeof payload?.[key] === "boolean").map((key) => [key, payload[key]]));
+
 const api = {
   mediaSceneSample: (rect) => ipcRenderer.invoke("media:scene-sample", rect),
   youtubeSearch: (query) => ipcRenderer.invoke("media:youtube-search", query),
@@ -197,6 +207,18 @@ const api = {
   tasksDelete: (payload) => ipcRenderer.invoke("tasks:delete", payload ?? {}),
   tasksAction: (payload) => ipcRenderer.invoke("tasks:action", payload ?? {}),
   tasksSave: (tasks) => ipcRenderer.invoke("tasks:save", tasks),
+  // Changed files and what goes with them (scripts/attempt-snapshots-host.cjs, advisory-checks-host.cjs, attempt-evidence-host.cjs).
+  tasksChanges: (payload) => ipcRenderer.invoke("tasks:changes", reviewBody(payload)),
+  tasksDiff: (payload) => ipcRenderer.invoke("tasks:diff", { ...reviewBody(payload), path: gitText(payload?.path, 1024) }),
+  tasksAccept: (payload) => ipcRenderer.invoke("tasks:accept", { ...reviewBody(payload), accepted: payload?.accepted !== false }),
+  tasksRevert: (payload) => ipcRenderer.invoke("tasks:revert", { ...reviewBody(payload), scope: payload?.scope === "file" ? "file" : payload?.scope === "attempt" ? "attempt" : "", path: gitText(payload?.path, 1024), partial: payload?.partial === true, undo: gitText(payload?.undo, 40) }),
+  tasksChecks: (payload) => ipcRenderer.invoke("tasks:checks", reviewBody(payload)),
+  tasksCheckRun: (payload) => ipcRenderer.invoke("tasks:check-run", { ...reviewBody(payload), id: gitText(payload?.id, 40) }),
+  tasksEvidence: (payload) => ipcRenderer.invoke("tasks:evidence", reviewBody(payload)),
+  // The three review switches (snapshots, advisory checks and their build, shots); with no choice it only reads.
+  reviewPrefs: (payload) => ipcRenderer.invoke("review:prefs", reviewChoices(payload)),
+  // One attempt's record changed (its start or end picture, a shot, its checks, an Accept or a Revert): { projectId, taskId, attempt, what }.
+  onReviewChanged: (callback) => ipcRenderer.on("review:changed", (_event, payload) => callback(payload)),
   ideasList: () => ipcRenderer.invoke("ideas:list"),
   ideasSave: (ideas) => ipcRenderer.invoke("ideas:save", ideas),
   ideasAction: (payload) => ipcRenderer.invoke("ideas:action", payload ?? {}),

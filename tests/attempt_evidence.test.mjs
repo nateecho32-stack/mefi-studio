@@ -235,6 +235,35 @@ test("attempt numbers already used by a folder are listed, so a run's number is 
   assert.deepEqual(await h.evidence.numbers(""), []);
 });
 
+test("a side that will get no shot says why in the approved words, and only a known reason is written", async (t) => {
+  const h = host(t);
+  assert.deepEqual(await h.evidence.skip({ taskId: "task_1", n: 1, runId: "run_1_1", phase: "after", reason: "not-merged" }), { ok: true });
+  const read = await h.evidence.read({ taskId: "task_1", n: 1 });
+  assert.equal(read.notes.after, "The work was not merged into the folder the preview shows, so there is no shot.");
+  assert.equal(read.runId, "run_1_1");
+  for (const bad of [{ reason: "because" }, { phase: "during" }, { taskId: "" }, { n: 0 }]) {
+    assert.equal((await h.evidence.skip({ taskId: "task_1", n: 2, runId: "run_1_1", phase: "after", reason: "failed", ...bad })).ok, false, JSON.stringify(bad));
+  }
+  assert.deepEqual(await h.evidence.numbers("task_1"), [1], "a refused note leaves no folder behind");
+});
+
+test("an attempt that never started is dropped with its start shot; one with an end shot or checks is not", async (t) => {
+  const h = host(t);
+  await h.evidence.shot({ taskId: "task_1", n: 1, runId: "run_1_1", phase: "before", preview: READY, prefs: ON });
+  assert.equal(existsSync(h.dir("task_1", 1)), true);
+  assert.deepEqual(await h.evidence.drop({ taskId: "task_1", n: 1 }), { ok: true, dropped: true });
+  assert.equal(existsSync(h.dir("task_1", 1)), false, "the folder goes whole");
+  assert.deepEqual(await h.evidence.drop({ taskId: "task_1", n: 1 }), { ok: true, dropped: true }, "dropping what is not there is harmless");
+  await h.evidence.shot({ taskId: "task_1", n: 2, runId: "run_2_1", phase: "before", preview: READY, prefs: ON });
+  await h.evidence.shot({ taskId: "task_1", n: 2, runId: "run_2_1", phase: "after", preview: READY, prefs: ON });
+  assert.deepEqual(await h.evidence.drop({ taskId: "task_1", n: 2 }), { ok: true, dropped: false }, "an attempt with an end shot is a real one");
+  await h.evidence.shot({ taskId: "task_1", n: 3, runId: "run_3_1", phase: "before", preview: READY, prefs: ON });
+  await h.evidence.saveChecks({ taskId: "task_1", n: 3, results: [{ id: "lint", status: "ok" }] });
+  assert.equal((await h.evidence.drop({ taskId: "task_1", n: 3 })).dropped, false, "nor one with checks");
+  assert.equal((await h.evidence.drop({ taskId: "", n: 1 })).ok, false, "an id with no safe name drops nothing");
+  assert.deepEqual((await h.evidence.numbers("task_1")).sort(), [2, 3]);
+});
+
 test("older attempts lose their pictures first and their folders later, and a task's newest ten keep theirs", async (t) => {
   const h = host(t, { now: () => Date.now() });
   for (let n = 1; n <= 22; n += 1) {

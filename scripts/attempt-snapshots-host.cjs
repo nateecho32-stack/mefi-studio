@@ -119,10 +119,12 @@ function createAttemptSnapshots({
   const HEAVY = 3;
   let heavy = 0;
   const waiting = [];
+  // A finishing task hands its place straight to the next one in line, so a caller that arrives in between
+  // can never slip past the limit.
   async function gated(task) {
     if (heavy >= HEAVY) await new Promise((resolve) => waiting.push(resolve));
-    heavy += 1;
-    try { return await task(); } finally { heavy -= 1; waiting.shift()?.(); }
+    else heavy += 1;
+    try { return await task(); } finally { const next = waiting.shift(); if (next) next(); else heavy -= 1; }
   }
   // Every public method answers, never throws.
   const guard = (name, task) => async (...args) => {
@@ -581,6 +583,22 @@ function createAttemptSnapshots({
     return { ok: true, pruned: doomed.length };
   }
 
+  // A start picture whose run never began (the claim was cancelled before the worker started) has nothing to show:
+  // it goes, unless an end picture exists.
+  const drop = guard("drop", async ({ root, taskId, n } = {}) => {
+    const before = rules.refName(taskId, n, "before");
+    const after = rules.refName(taskId, n, "after");
+    if (!before || !after) return { ok: false, dropped: false };
+    const ready = await probe(root);
+    if (!ready.ok) return { ok: false, dropped: false };
+    return serial(root, async () => {
+      if ((await git(root, ["rev-parse", "--verify", "-q", after], { reads: true, timeout: 10000 })).ok) return { ok: true, dropped: false };
+      if (!(await git(root, ["rev-parse", "--verify", "-q", before], { reads: true, timeout: 10000 })).ok) return { ok: true, dropped: false };
+      const gone = await git(root, ["update-ref", "-d", before], { timeout: 15000 });
+      return { ok: gone.ok, dropped: gone.ok };
+    });
+  });
+
   // A listing for the host's own use (the run's number lookup, the receipts).
   const attemptsFor = guard("attempts", async ({ root, taskId } = {}) => {
     const key = rules.taskKey(taskId);
@@ -589,7 +607,7 @@ function createAttemptSnapshots({
     return { ok: true, attempts: rules.attemptsOf(await refsOf(root, key), key) };
   });
 
-  return { begin, end, changes, diff, revert, undo, prune: guard("prune", async ({ root } = {}) => pruneRefs(root)), attempts: attemptsFor, probe: guard("probe", probe) };
+  return { begin, end, drop, changes, diff, revert, undo, prune: guard("prune", async ({ root } = {}) => pruneRefs(root)), attempts: attemptsFor, probe: guard("probe", probe) };
 }
 
 module.exports = { createAttemptSnapshots };

@@ -74,6 +74,7 @@ const SAY = Object.freeze({
   "bad-url": "The preview is not on this PC's own address, so Studio did not open it.",
   failed: { before: "The preview did not answer when this task started, so there is no shot.", after: "The preview did not answer when this task finished, so there is no shot." },
   "too-big": "The picture was too large to keep.",
+  "not-merged": "The work was not merged into the folder the preview shows, so there is no shot.",
 });
 const sayFor = (reason, phase) => {
   const entry = SAY[reason];
