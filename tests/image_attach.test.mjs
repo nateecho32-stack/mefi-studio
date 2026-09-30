@@ -98,12 +98,18 @@ test("what a renderer sends is decoded only after its size is known, in every fo
     assert.equal(decoded.ok, true, label);
     assert.deepEqual([...decoded.bytes], [...bytes], label);
   }
-  // Too big is refused before any buffer is made.
-  const started = process.hrtime.bigint();
-  const refused = attach.decode("A".repeat(20 * MB));
+  // Too big is refused before any buffer is made. Watched by counting the buffers made during the call, not by a clock:
+  // a wall-clock bound failed on a busy machine (143 ms against 50) and proves less.
+  const huge = "A".repeat(20 * MB);
+  const made = [], real = { from: Buffer.from, alloc: Buffer.alloc, allocUnsafe: Buffer.allocUnsafe };
+  Buffer.from = (...args) => { made.push("from"); return real.from.apply(Buffer, args); };
+  Buffer.alloc = (...args) => { made.push("alloc"); return real.alloc.apply(Buffer, args); };
+  Buffer.allocUnsafe = (...args) => { made.push("allocUnsafe"); return real.allocUnsafe.apply(Buffer, args); };
+  let refused;
+  try { refused = attach.decode(huge); } finally { Object.assign(Buffer, real); }
   assert.equal(refused.ok, false);
   assert.match(refused.error, /over the limit of 5 MB/);
-  assert.ok(Number(process.hrtime.bigint() - started) < 50_000_000, "nothing was decoded");
+  assert.deepEqual(made, [], "nothing was decoded: no buffer was made for it");
   assert.equal(attach.decode(new Uint8Array(5 * MB + 1)).ok, false);
   for (const bad of ["not base64 !!!", "data:image/png;base64,@@@@", 42, null, undefined, {}, [1, 2, 3]]) assert.equal(attach.decode(bad).ok, false, JSON.stringify(bad));
 });
