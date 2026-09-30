@@ -2241,23 +2241,25 @@ the script starts nothing: no element, listener, timer, stored key or host call
   the preview tab (typing, pinning, a double-click or arranging it keeps it);
   what an agent that needs you does (badge only, **a background tab with a
   badge**, or open and focus; the first look at the board is only a baseline, so
-  old questions are not announced); closing tabs of finished sessions after an
-  idle time (Never, 10, **30**, 60 minutes; one timer set for the next tab that
-  could be due, never polling); at most **8** unpinned tabs (3 to 12, or no
-  limit), the one used longest ago closing with an Undo toast; Recently closed (10 per project)
-  with Ctrl+Shift+T; and a quiet "Pin Fleet?" chip after three visits, never
-  twice for the same page, and not used up while nobody could see it. A pinned
-  tab is never closed by Studio, and everything Studio closes can be reopened.
+  old questions are not announced, and a badge goes when the need does);
+  closing tabs of finished sessions after an idle time (Never, 10, **30**, 60
+  minutes; one timer set for the next tab that could be due, never polling); at
+  most **8** unpinned tabs (3 to 12, or no limit), the one used longest ago
+  closing with an Undo toast; Recently closed (10 per project) with
+  Ctrl+Shift+T; and a quiet "Pin Fleet?" chip after three visits, never twice
+  for the same page, and not used up while nobody could see it. A pinned tab is
+  never closed by Studio, and everything Studio closes can be reopened.
   `MEFI_STUDIO_NO_TAB_MANAGER=1` turns all of it off for one run (main.cjs "Tab
   switches" puts `tabsManage: false` on `prefs:get`; the settings cannot turn it
   back on), and the card says so.
 - **Keys** (window capture, nothing taken while Search or Configuration is up,
   from IME composition, or from a field that needs it): Ctrl+T add, Ctrl+W
   close (Home stays), Ctrl+Tab and Ctrl+Shift+Tab (or PageDown and PageUp)
-  cycle, Ctrl+1 to 9 jump (9 is the last), Ctrl+Shift+T reopen, Ctrl+Alt+P pin,
-  Alt+W and Alt+Shift+T where no text is being typed; a tab is moved with
-  Ctrl+Shift+Left and Right, or dragged. AltGr chords (Ctrl+Alt) are never
-  taken. Alt+Left and Right stay Back and Forward (nav.js). The application
+  cycle, Ctrl+1 to 9 jump (9 is the last), Ctrl+Shift+T reopen; Ctrl+Alt+P pin,
+  Alt+W close and Alt+Shift+T reopen, these three only where no text is being
+  typed; a tab is moved with Ctrl+Shift+Left and Right, or dragged. Other
+  Ctrl+Alt chords (AltGr on many keyboards) are never taken. Alt+Left and Right
+  stay Back and Forward (nav.js). The application
   menu's Close (Ctrl+W) is the window's: the page takes the key first
   (`preventDefault`), which `tests/tabs_render.test.mjs` checks against the real
   menu template.
