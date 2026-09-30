@@ -4396,9 +4396,11 @@
     ORBIT.time = time; ORBIT.still = still; ORBIT.detail = node._detail ?? 3; ORBIT.motion = node._m ?? null; ORBIT.theme = state.nodeTheme ?? null;
     return ORBIT;
   }
-  function drawNodeSurface(ctx, node, p, radius, tint, { selected = false, active = false, alpha = 1, time = 0, still = false, detail = 3, chosen = false, motion = null } = {}) {
+  function drawNodeSurface(ctx, node, p, radius, tint, { selected = false, active = false, alpha = 1, time = 0, still = false, detail = 3, chosen = false, motion = null, outlineOn = null } = {}) {
     node._extraGlow = state.extraGlow === true;
-    globalThis.window?.MefiTreeDynamics?.outline?.(ctx, state.nodeStyle ?? "orbs", p, radius, motion, (node._fade ?? 1) * alpha);
+    // `outlineOn`: the real layer the outline paints on when `ctx` is the
+    // scratch of a brightened pass (toneBegin), which would tint its rim.
+    globalThis.window?.MefiTreeDynamics?.outline?.(outlineOn ?? ctx, state.nodeStyle ?? "orbs", p, radius, motion, (node._fade ?? 1) * alpha);
     const styles = globalThis.window?.MefiNodeStyles;
     if (styles) {
       // A node that wears a glyph (the hub's monogram, an agent's role) is
@@ -7885,15 +7887,30 @@
     }
     return entry;
   }
+  // Node outlines are black and white, which a brightness above 100% leaves as
+  // it is, so on the nodes pass they paint on the real layer, not in the
+  // scratch (`outside`): a node's coloured rim then brightens over them as it
+  // did when every shape was filtered alone, where in the scratch it mixed
+  // with the black first and came out gold or teal instead of pale. The
+  // scratch is laid down last, so where a node overlaps one drawn before it,
+  // its ring ends up under the one behind. Laying the scratch down and clearing
+  // it before such an outline fixes that and was measured: a full bitmap copy
+  // each time, and 2 to 4 times fewer frames in the software renderer (see
+  // docs/performance.md, "Tree brightness"). Below 100% nothing clamps, so
+  // outlines stay in the pass and are exact.
   // `far` only when the pass paints on the far layer this frame (a focus).
   // Returns null at 100%, else the pens to paint with and finish().
   function toneBegin(kind, near, far = null) {
     const dynamics = globalThis.window?.MefiTreeDynamics;
     const amount = dynamics?.brightness?.(kind) ?? 1;
     if (amount === 1 || typeof dynamics?.beginPaint !== "function") return null;
-    const layers = [["near", near], ["far", far]].filter(([, target]) => target).map(([slot, target]) => ({ target, scratch: toneScratchFor(slot, target) }));
-    if (layers.some((layer) => !layer.scratch)) {
-      // No scratch canvas here (a bare harness): the filter around the pass.
+    // Appearance › Fast brightness off (read only here, after the 100% return,
+    // so the default path costs nothing) keeps the scratch canvases out of it.
+    const layers = dynamics.fastBrightness?.() === false ? null
+      : [["near", near], ["far", far]].filter(([, target]) => target).map(([slot, target]) => ({ target, scratch: toneScratchFor(slot, target) }));
+    if (!layers || layers.some((layer) => !layer.scratch)) {
+      // The switch is off, or no scratch canvas here (a bare harness): the
+      // filter around the pass, as before.
       const restore = dynamics.beginPaint([near, far], kind);
       return { near, far, finish: () => restore?.() };
     }
@@ -7905,6 +7922,9 @@
     return {
       near: layers[0].scratch.pen,
       far: layers[1]?.scratch.pen ?? null,
+      // Whether the outlines of this pass paint on the real layers: above
+      // 100%, with outlines on (drawNodeSurface).
+      outside: amount > 1 && dynamics.outlinesOn?.() === true,
       finish() {
         for (const { target, scratch } of layers) {
           target.save();
@@ -9428,7 +9448,7 @@
     // The surface's flags and the arrival/selection options: one scratch each
     // for the frame, filled per node (drawNodeSurface reads its flags at once;
     // a style's hook never keeps its options).
-    const surfaceFlags = { selected: false, active: false, alpha: 1, time, still, detail: 3, chosen: false, motion: null };
+    const surfaceFlags = { selected: false, active: false, alpha: 1, time, still, detail: 3, chosen: false, motion: null, outlineOn: null };
     const overlay = { kind: "task", selected: false, chosen: false, hover: false, active: false, alpha: 1, time, still, detail: 3, motion: null, theme: state.nodeTheme ?? null };
     // A Void look marks a selection a few pixels off the node whatever its
     // size (Prism's arcs round a 3 px todo reach 2.2 radii), past what its
@@ -9500,6 +9520,7 @@
       const surface = surfaceFlags;
       surface.selected = Boolean(selected); surface.active = active; surface.alpha = Math.max(0.35, visual.alpha * factor);
       surface.detail = detail; surface.chosen = chosen; surface.motion = motion;
+      surface.outlineOn = nodeTone?.outside ? layer : null;
       drawNodeSurface(ctx, node, p, radius, tint, surface);
       if (nodeStyles) {
         // A style's arrival (t01 runs over the node's grow) and its selection

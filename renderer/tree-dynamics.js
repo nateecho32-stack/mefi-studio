@@ -6,8 +6,12 @@
   const defaults = Object.freeze({ mode: "music", shape: "layout", width: 1, height: 1, rotation: 0, x: 0, y: 0,
     nodeSize: 1, adaptCount: true, nodeMotion: .25, shapeMotion: .25, positionMotion: .2,
     videoTarget: "dark", videoStrength: .7, videoShape: true, smoothing: 2, dwell: 15,
-    nodeBrightness: 1, lineBrightness: 1, nodeBrightnessEnabled: true, lineBrightnessEnabled: true, outlines: false });
+    nodeBrightness: 1, lineBrightness: 1, nodeBrightnessEnabled: true, lineBrightnessEnabled: true, outlines: false, fastBrightness: true });
   const visibilityKeys = ["nodeBrightness", "lineBrightness", "nodeBrightnessEnabled", "lineBrightnessEnabled", "outlines"];
+  // Paint-only settings: changing one never restarts the live shape. Fast
+  // brightness is a kill switch, not part of the look, so the two "Reset"
+  // buttons leave it where the owner put it (idle.js toneBegin reads it).
+  const paintKeys = [...visibilityKeys, "fastBrightness"];
   const ranges = { width: [.4, 1], height: [.4, 1], rotation: [-180, 180], x: [-1, 1], y: [-1, 1],
     nodeSize: [.5, 1.6], nodeMotion: [0, 1], shapeMotion: [0, 1], positionMotion: [0, 1],
     videoStrength: [0, 1], smoothing: [.2, 8], dwell: [5, 60], nodeBrightness: [0, 2], lineBrightness: [0, 2] };
@@ -18,7 +22,7 @@
     if (!value || typeof value !== "object" || Array.isArray(value)) return result;
     for (const [key, bounds] of Object.entries(ranges)) if (typeof value[key] === "number" && Number.isFinite(value[key])) result[key] = clamp(value[key], ...bounds);
     for (const [key, options] of Object.entries(choices)) if (options.includes(value[key])) result[key] = value[key];
-    for (const key of ["adaptCount", "videoShape", "nodeBrightnessEnabled", "lineBrightnessEnabled", "outlines"]) if (typeof value[key] === "boolean") result[key] = value[key];
+    for (const key of ["adaptCount", "videoShape", "nodeBrightnessEnabled", "lineBrightnessEnabled", "outlines", "fastBrightness"]) if (typeof value[key] === "boolean") result[key] = value[key];
     return result;
   }
   let saved;
@@ -34,7 +38,7 @@
   function clearScene() { scene = null; candidate = -1; streak = 0; current = 4; movedAt = -Infinity; }
   function update(changes) {
     prefs = normalize({ ...prefs, ...changes });
-    if (!Object.keys(changes || {}).every(key => visibilityKeys.includes(key))) { revision++; clearScene(); }
+    if (!Object.keys(changes || {}).every(key => paintKeys.includes(key))) { revision++; clearScene(); }
     try { localStorage.setItem(KEY, JSON.stringify(prefs)); } catch {}
     refresh();
     window.dispatchEvent(new CustomEvent("mefi:tree-dynamics", { detail: { ...prefs } }));
@@ -194,6 +198,11 @@
     const key = kind === "lines" ? "lineBrightness" : "nodeBrightness";
     return prefs[`${key}Enabled`] ? prefs[key] : 1;
   }
+  // Appearance › Fast brightness: on (the default) Command paints a brightened
+  // pass once and lays it down; off it sets the filter around the pass, as it
+  // did before, for a tree the fast path draws wrongly. See idle.js toneBegin.
+  const fastBrightness = () => prefs.fastBrightness;
+  const outlinesOn = () => prefs.outlines;
   // Canvas filters affect only the requested paint pass. Menus, video and text
   // retain their own colors, and the default 100% path adds no filter work.
   // Command sets it once per layer to lay down a pass it painted off to the
@@ -220,7 +229,7 @@
     const root = add("details", null, host); root.className = "music-tree-visibility";
     add("summary", "Tree brightness & outlines", root);
     const fields = {};
-    for (const [key, title] of [["nodeBrightnessEnabled", "Adjust node brightness"], ["nodeBrightness", "Node brightness"], ["lineBrightnessEnabled", "Adjust line brightness"], ["lineBrightness", "Connecting line brightness"], ["outlines", "Node outlines"]]) {
+    for (const [key, title] of [["nodeBrightnessEnabled", "Adjust node brightness"], ["nodeBrightness", "Node brightness"], ["lineBrightnessEnabled", "Adjust line brightness"], ["lineBrightness", "Connecting line brightness"], ["outlines", "Node outlines"], ["fastBrightness", "Fast brightness"]]) {
       const row = add("label", null, root); row.className = "music-tree-control";
       add("span", title, row);
       const input = add("input", null, row); input.id = `${prefix}-tree-${key}`; input.setAttribute("aria-label", title);
@@ -230,7 +239,7 @@
       input.addEventListener(input.type === "range" ? "input" : "change", () => update({ [key]: input.type === "checkbox" ? input.checked : Number(input.value) }));
       fields[key] = { input, output };
     }
-    const hint = add("p", "Brightness changes nodes and connecting lines independently. Turn an adjustment off to use normal brightness without losing its slider setting. Outlines add a contrasting edge around each node.", root); hint.className = "music-fineprint";
+    const hint = add("p", "Brightness changes nodes and connecting lines independently. Turn an adjustment off to use normal brightness without losing its slider setting. Outlines add a contrasting edge around each node. Fast brightness paints the nodes or lines once and brightens that in one step, which is far lighter on the graphics card; turn it off to brighten every shape as it is drawn (exact, but slow on a busy tree).", root); hint.className = "music-fineprint";
     const reset = add("button", "Reset tree brightness", root); reset.type = "button"; reset.className = "ghost";
     reset.addEventListener("click", () => update(Object.fromEntries(visibilityKeys.map(key => [key, defaults[key]]))));
     panels.push({ fields }); refresh(); return root;
@@ -257,11 +266,11 @@
     for (const [key, title] of [["adaptCount", "Adapt spacing to node count"], ["width", "Shape width"], ["height", "Shape height"], ["rotation", "Shape rotation"], ["x", "Horizontal position"], ["y", "Vertical position"], ["nodeSize", "Node size"], ["nodeMotion", "Music · node movement & size"], ["shapeMotion", "Music · shape deformation"], ["positionMotion", "Music · position sway"]]) control(key, title);
     control("videoTarget", "Video positioning", [["dark", "Seek dark regions"], ["bright", "Seek bright regions"]]);
     for (const [key, title] of [["videoStrength", "Video positioning strength"], ["videoShape", "Adapt shape to video regions"], ["smoothing", "Movement smoothing"], ["dwell", "Video region hold"]]) control(key, title);
-    const reset = add("button", "Reset tree movement", root); reset.type = "button"; reset.className = "ghost"; reset.addEventListener("click", () => update(Object.fromEntries(Object.entries(defaults).filter(([key]) => !visibilityKeys.includes(key)))));
+    const reset = add("button", "Reset tree movement", root); reset.type = "button"; reset.className = "ghost"; reset.addEventListener("click", () => update(Object.fromEntries(Object.entries(defaults).filter(([key]) => !paintKeys.includes(key)))));
     const status = add("p", null, root); status.className = "music-fineprint"; status.setAttribute("role", "status");
     mountVisibility(root, prefix);
     panels.push({ fields, status }); refresh(); return root;
   }
-  window.MefiTreeDynamics = { normalize, update, mount, mountVisibility, brightness, beginPaint, outline, apply, musicEnabled, videoEnabled, sampleRequest, acceptSample, setVideoAvailable,
+  window.MefiTreeDynamics = { normalize, update, mount, mountVisibility, brightness, fastBrightness, outlinesOn, beginPaint, outline, apply, musicEnabled, videoEnabled, sampleRequest, acceptSample, setVideoAvailable,
     preferences: () => ({ ...prefs }), status: () => ({ count, available, scene: scene ? { ...scene } : null, revision }) };
 })();
