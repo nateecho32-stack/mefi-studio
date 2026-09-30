@@ -2410,6 +2410,8 @@
     shortTitle,
     workflowSummary,
     summary,
+    // The words the Usage & limit fold uses for time, tokens and cost, so the v2 inspector's Agent tab says the same.
+    usage: { durationText, usageTokens, usageCost, countText },
     // What a live-update reload hands back to open(): the task on screen.
     saveState: () => ({ taskId: state.selected ?? null, projectId: state.projectId, filter: state.filter, readiness: state.readiness, panel: detailViews.get(taskKey(selectedTask())) || "details" }),
     selectTask: (id) => {

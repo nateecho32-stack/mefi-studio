@@ -167,13 +167,41 @@
     return out;
   }
 
+  // The v2 session list's groups: Needs you, Running, Review, Queued and Done, in that order, each newest first with
+  // the pinned ones on top. They come from the same readings as groups() above, so the two lists can never disagree
+  // about what needs you. Every group is returned, empty ones too (the caller hides them); a task whose tone is
+  // unknown is Queued, never dropped, and archived work stays on the board's own page.
+  const STAGES = [["needs", "Needs you", ["ask"]], ["running", "Running", ["run"]], ["review", "Review", ["check"]], ["queued", "Queued", ["wait", "ready"]], ["done", "Done", ["done", "dropped"]]];
+  function stageGroups(tasks, { pinned = pins(), data = snapshot() } = {}) {
+    const out = STAGES.map(([key, title]) => ({ key, title, rows: [] }));
+    for (const task of Array.isArray(tasks) ? tasks : []) {
+      if (!task?.id || task.archived || task.status === "archived") continue;
+      const now = reading(task, data);
+      readings.set(task, now);
+      (out[STAGES.findIndex(([, , tones]) => tones.includes(now.tone))] ?? out[3]).rows.push(task);
+    }
+    for (const group of out) group.rows.sort((a, b) => Number(pinned.has(b.id)) - Number(pinned.has(a.id)) || lastMoved(b) - lastMoved(a));
+    return out;
+  }
+
+  // The v2 session panels (renderer/sessions.js) share this module's logic and its per-task records (runs, the
+  // words asked about a task, what a call in flight is doing). They draw themselves, so they ask to be told
+  // when any of that moved: once per frame, after this module's own paint.
+  const listeners = new Set();
+  function subscribe(callback) {
+    if (typeof callback !== "function") return () => {};
+    listeners.add(callback);
+    return () => listeners.delete(callback);
+  }
+  const announce = () => { for (const callback of [...listeners]) { try { callback(); } catch { /* one listener never stops another */ } } };
+
   // ---- scheduling -----------------------------------------------------------
   let queued = false;
   function schedule() {
     state.revision += 1;
     if (queued) return;
     queued = true;
-    const run = () => { queued = false; paint(); };
+    const run = () => { queued = false; paint(); announce(); };
     if (typeof requestAnimationFrame === "function" && !document.hidden) requestAnimationFrame(run); else setTimeout(run, 16);
   }
   function paint() {
@@ -490,12 +518,21 @@
     const summary = task ? reading(task, data).summary : null;
     const run = task?.verificationRun;
     const results = Array.isArray(run?.results) ? run.results : [];
-    const acceptance = Array.isArray(task?.acceptance) ? task.acceptance : typeof task?.acceptance === "string" && task.acceptance.trim() ? task.acceptance.split(/\r?\n/) : [];
+    const acceptance = acceptanceOf(task);
     const signature = JSON.stringify([task?.id, summary?.checks, results, acceptance, task?.verification]);
     if (state.painted.get("checks") === signature) return;
     state.painted.set("checks", signature);
+    if (!task) { box.replaceChildren(el("p", "builder-pane-lead", "Open a task to see what it must pass.")); return; }
+    box.replaceChildren(...checksNodes(task, data));
+  }
+  // What a task must pass (its "Done when" lines) and how the last completion check run went, as nodes: the Checks
+  // pane here and the v2 inspector's Checks tab (sessions.js) both put them on screen.
+  const acceptanceOf = (task) => (Array.isArray(task?.acceptance) ? task.acceptance : typeof task?.acceptance === "string" && task.acceptance.trim() ? task.acceptance.split(/\r?\n/) : []);
+  function checksNodes(task, data = snapshot()) {
+    const summary = reading(task, data).summary;
+    const results = Array.isArray(task.verificationRun?.results) ? task.verificationRun.results : [];
+    const acceptance = acceptanceOf(task);
     const out = [];
-    if (!task) { out.push(el("p", "builder-pane-lead", "Open a task to see what it must pass.")); box.replaceChildren(...out); return; }
     out.push(el("p", "builder-pane-lead", summary?.checks || "No completion checks recorded"));
     if (acceptance.length) {
       out.push(el("h3", "builder-pane-h", "Done when"));
@@ -515,7 +552,7 @@
       out.push(list);
     }
     if (task.verification?.reason) out.push(el("p", "builder-pane-note", `${task.verification.state === "verified" ? "Verified" : task.verification.state === "failed" ? "Not accepted" : "Checked"}: ${task.verification.reason}`));
-    box.replaceChildren(...out);
+    return out;
   }
 
   // ---- the top bar ----------------------------------------------------------
@@ -922,25 +959,46 @@
     } catch (error) { toast(plain(error, "That did not work. Try again."), "bad"); }
     finally { state.busy = null; state.painted.delete("task"); schedule(); }
   }
+  // What a task offers, described once: this layout draws each as a button below, and the v2 thread (sessions.js)
+  // draws the same choices its own way. A spec with `call` goes through act() (busy, a toast, a fresh read of the
+  // board); one with `open` only goes somewhere; `intent` turns the session's box to that purpose. `armed` is the
+  // two-press confirm's second word, `doneUnarmed` what a press without the confirm helper says.
+  function taskActionSpecs(task, now, run, data) {
+    const specs = [];
+    const projectId = data.projectId;
+    const scheduled = data.backlog?.taskStates?.find((item) => item.id === task.id);
+    if (run) {
+      specs.push({ id: "stop", label: "Stop", kind: "ghost", title: "Stop this worker. Its progress is saved and the task waits for you.", armed: "Stop it?", call: () => api().tasksAction({ taskId: task.id, projectId, action: "stop" }), done: "Stopped. Its progress is saved.", doneUnarmed: "Stopped." });
+      specs.push({ id: "watch", label: "Watch live", kind: "ghost", title: "Follow this worker on the live tree", open: () => window.MefiNav?.go?.("command", { taskId: task.id, projectId, selected: `task:${task.id}`, rail: "work" }) });
+    } else if (now.stage === "approval") {
+      specs.push({ id: "approve", label: window.MefiAutonomy?.state?.()?.level === "accept" ? "Accept this task" : "Approve build", kind: "primary", title: "", call: () => api().backlogControl({ action: "approve", taskId: task.id, projectId, expectedScope: scheduled?.buildScope ?? task.buildScope }), done: "Approved. It builds when a worker is free." });
+    } else if (["blocked"].includes(now.stage) || task.verification?.state === "failed" || scheduled?.blockedBy === "owner") {
+      specs.push({ id: "retry", label: scheduled?.blockedBy === "owner" ? "Resume" : "Try again", kind: "primary", title: "Put it back in the queue; it continues from its saved progress", call: () => api().tasksAction({ taskId: task.id, projectId, action: "retry" }), done: "Back in the queue." });
+    } else if (now.stage === "ready" && !isDone(task)) {
+      specs.push({ id: "start", label: task.continuation ? "Resume" : "Start", kind: "primary", title: "Ask for a worker for this task now", call: () => window.MefiWorkspace?.startTask ? window.MefiWorkspace.startTask(task).then(() => ({ ok: true })) : api().assistantWorkOn({ kind: "task", id: task.id, projectId, start: true }), done: null });
+    } else if (isDone(task)) {
+      if (data.preview?.phase === "ready") specs.push({ id: "open-app", label: "Open app", kind: "primary", title: "", open: () => window.MefiWorkspace?.previewAction?.("open") });
+      specs.push({ id: "change", label: "Request a change", kind: "ghost", title: "", intent: "change" });
+    }
+    return specs;
+  }
+  // Drop closes a task without building it: only one nobody holds, and only behind the two-press confirm.
+  function dropSpec(task, run, data) {
+    if (isDone(task) || run || task.runId || ["active", "running", "awaiting_verification", "verifying"].includes(task.status)) return null;
+    return { id: "drop", label: "Drop this task", kind: "ghost", title: "Drop this task: close it without building it", armed: "Drop?", call: () => api().tasksAction({ taskId: task.id, projectId: data.projectId, action: "drop" }), done: "Dropped. Reopen it from the board if you change your mind." };
+  }
   function taskActions(task, now, run, data) {
     const out = [];
     const projectId = data.projectId;
     const busy = Boolean(state.busy);
-    const scheduled = data.backlog?.taskStates?.find((item) => item.id === task.id);
-    const add = (label, className, run2, title = "") => { const node = button(label, className, run2, { title }); node.disabled = busy; out.push(node); return node; };
-    if (run) {
-      const stop = add("Stop", "ghost mini", null, "Stop this worker. Its progress is saved and the task waits for you.");
-      window.MefiUi?.arm ? window.MefiUi.arm(stop, { armed: "Stop it?", run: () => act("stop", () => api().tasksAction({ taskId: task.id, projectId, action: "stop" }), "Stopped. Its progress is saved.") }) : stop.addEventListener("click", () => act("stop", () => api().tasksAction({ taskId: task.id, projectId, action: "stop" }), "Stopped."));
-      add("Watch live", "ghost mini", () => window.MefiNav?.go?.("command", { taskId: task.id, projectId, selected: `task:${task.id}`, rail: "work" }), "Follow this worker on the live tree");
-    } else if (now.stage === "approval") {
-      add(window.MefiAutonomy?.state?.()?.level === "accept" ? "Accept this task" : "Approve build", "primary mini", () => act("approve", () => api().backlogControl({ action: "approve", taskId: task.id, projectId, expectedScope: scheduled?.buildScope ?? task.buildScope }), "Approved. It builds when a worker is free."));
-    } else if (["blocked"].includes(now.stage) || task.verification?.state === "failed" || scheduled?.blockedBy === "owner") {
-      add(scheduled?.blockedBy === "owner" ? "Resume" : "Try again", "primary mini", () => act("retry", () => api().tasksAction({ taskId: task.id, projectId, action: "retry" }), "Back in the queue."), "Put it back in the queue; it continues from its saved progress");
-    } else if (now.stage === "ready" && !isDone(task)) {
-      add(task.continuation ? "Resume" : "Start", "primary mini", () => act("start", () => window.MefiWorkspace?.startTask ? window.MefiWorkspace.startTask(task).then(() => ({ ok: true })) : api().assistantWorkOn({ kind: "task", id: task.id, projectId, start: true }), null), "Ask for a worker for this task now");
-    } else if (isDone(task)) {
-      if (data.preview?.phase === "ready") add("Open app", "primary mini", () => window.MefiWorkspace?.previewAction?.("open"));
-      add("Request a change", "ghost mini", () => { state.intent = "change"; state.painted.delete("task"); paintTask(); byId("builder-task-input")?.focus?.(); });
+    for (const spec of taskActionSpecs(task, now, run, data)) {
+      const node = button(spec.label, `${spec.kind} mini`, null, { title: spec.title });
+      node.disabled = busy;
+      if (spec.intent) node.addEventListener("click", () => { state.intent = spec.intent; state.painted.delete("task"); paintTask(); byId("builder-task-input")?.focus?.(); });
+      else if (spec.open) node.addEventListener("click", () => spec.open());
+      else if (spec.armed) window.MefiUi?.arm ? window.MefiUi.arm(node, { armed: spec.armed, run: () => act(spec.id, spec.call, spec.done) }) : node.addEventListener("click", () => act(spec.id, spec.call, spec.doneUnarmed));
+      else node.addEventListener("click", () => act(spec.id, spec.call, spec.done));
+      out.push(node);
     }
     const pinned = pins().has(task.id);
     const pin = button("", "builder-icon-btn", () => setPinned(task.id, !pinned), { icon: "g-pin", title: pinned ? "Unpin from the top of the menu" : "Pin to the top of the menu" });
@@ -949,21 +1007,25 @@
     const board = button("", "builder-icon-btn", () => window.MefiNav?.go?.("tasks", { taskId: task.id, projectId, filter: "all" }), { icon: "g-tasks", title: "Open on the task board: details, evidence, history" });
     board.setAttribute("aria-label", "Open on the task board");
     out.push(board);
-    if (!isDone(task) && !run && !task.runId && !["active", "running", "awaiting_verification", "verifying"].includes(task.status)) {
-      const drop = button("", "builder-icon-btn", null, { icon: "g-close", title: "Drop this task: close it without building it" });
-      drop.setAttribute("aria-label", "Drop this task");
-      window.MefiUi?.arm?.(drop, { armed: "Drop?", run: () => act("drop", () => api().tasksAction({ taskId: task.id, projectId, action: "drop" }), "Dropped. Reopen it from the board if you change your mind.") });
+    const dropping = dropSpec(task, run, data);
+    if (dropping) {
+      const drop = button("", "builder-icon-btn", null, { icon: "g-close", title: dropping.title });
+      drop.setAttribute("aria-label", dropping.label);
+      window.MefiUi?.arm?.(drop, { armed: dropping.armed, run: () => act(dropping.id, dropping.call, dropping.done) });
       out.push(drop);
     }
     return out;
   }
+  // Answer an open question: { optionId } for one of its options or { text } in your own words, `label` being what to
+  // call the answer in the toast. One call at a time, through act().
+  const answerQuestion = (question, payload, label) => act("answer", () => api().assistantAnswer({ id: question.id, ...payload }), `Answered: ${label.length > 60 ? `${label.slice(0, 57)}…` : label}. ${companion()} carries on.`);
   function questionCard(question, task) {
     const card = el("section", "builder-question");
     card.setAttribute("aria-label", "A decision this task is waiting on");
     card.append(el("span", "builder-kicker", "Needs your answer"), el("h2", "", question.question || question.title || "A decision"));
     if (question.detail) card.append(el("p", "", question.detail));
     const options = el("div", "builder-options");
-    const answer = (payload, label) => act("answer", () => api().assistantAnswer({ id: question.id, ...payload }), `Answered: ${label.length > 60 ? `${label.slice(0, 57)}…` : label}. ${companion()} carries on.`);
+    const answer = (payload, label) => answerQuestion(question, payload, label);
     for (const option of Array.isArray(question.options) ? question.options : []) {
       const choice = button(option.label || option.id, option.recommended ? "primary mini" : "ghost mini", () => answer({ optionId: option.id }, option.label || option.id), { title: option.description || "" });
       choice.disabled = Boolean(state.busy) || !api()?.assistantAnswer;
@@ -1096,6 +1158,50 @@
     const send = byId("builder-task-send");
     if (send) { send.firstChild ? (send.firstChild.textContent = state.busy === "compose" ? "Sending…" : intent.send) : (send.textContent = intent.send); send.disabled = Boolean(state.busy); }
   }
+  // What each purpose of the session's box does with the words: only the host calls, the toast and the record of an
+  // Ask (state.asks, which the feed reads). The box itself belongs to whoever draws it: this layout's composer
+  // below, or the v2 thread's (sessions.js). Throws, in words, when it did not go. `images` are the ids of pictures
+  // the box holds (renderer/composer-pictures.js): an Ask sends them with the question and a Change names them in
+  // the follow-up's brief; a Note has no way to carry one.
+  async function deliver(task, intent, words, data, images = []) {
+    if (intent === "note") {
+      const earlier = typeof task.notes === "string" && task.notes.trim() ? `${task.notes.trim()}\n` : "";
+      const result = await api().tasksSave([{ ...task, notes: `${earlier}- ${words}`.slice(-4000), logs: [...(task.logs || []), { at: Date.now(), kind: "note", text: words }].slice(-40), updatedAt: Date.now() }]);
+      if (result?.ok === false) throw new Error(result.error || "The note could not be saved.");
+      toast("Saved. Its next run reads it.", "good");
+    } else if (intent === "ask") {
+      const ask = { at: Date.now(), text: words, pending: true };
+      state.asks.set(task.id, [...(state.asks.get(task.id) || []), ask].slice(-12));
+      schedule();
+      const title = task.title || window.MefiTasks?.shortTitle?.(task) || "this task";
+      const result = await api().assistantMessage(`About the task "${title}" (${task.id}): ${words}`, data.projectId, { view: "Build · task", companion: companion(), taskId: task.id }, ...(images.length ? [images] : []));
+      ask.pending = false;
+      if (result?.ok === false) { ask.error = plain(result.error, "No reply came back. Try again."); throw new Error(ask.error); }
+      const reply = (result?.state?.messages || []).filter((message) => message.role === "assistant" && stampOf(message.at) >= ask.at - 1000 && message.kind !== "notice").at(-1);
+      ask.reply = reply?.text || "Sent. The reply is in the chat.";
+    } else {
+      const title = task.title || window.MefiTasks?.shortTitle?.(task) || "the last result";
+      const prompt = `Follow-up to task "${title}" (${task.id}).\n\nRequested change:\n${words}`;
+      const result = await api().tasksCreate({ title: `Change: ${words.split("\n")[0]}`.slice(0, 180), prompt, projectId: data.projectId, ...(images.length ? { images } : {}) });
+      if (result?.ok === false) throw new Error(result.error || "The follow-up could not be created.");
+      toast("Follow-up task created. It shows in the menu.", "good");
+    }
+  }
+  // The whole of a send: one at a time (state.busy), the host call, a plain toast for a failure and a fresh read of
+  // the board after a success. `started` runs once the box is locked, `sent` once the words went and before the
+  // board is read again (the caller clears its box there). Resolves true when the words went.
+  async function sendWords(task, intent, words, { data = snapshot(), images = [], started = null, sent = null } = {}) {
+    words = String(words ?? "").trim();
+    if (!task || !words || state.busy || !api()) return false;
+    state.busy = "compose"; started?.();
+    try {
+      await deliver(task, intent, words, data, images);
+      sent?.();
+      window.MefiWorkspace?.refresh?.(true);
+      return true;
+    } catch (error) { toast(plain(error, "That did not work. Your words are still here."), "bad"); return false; }
+    finally { state.busy = null; state.painted.delete("task"); schedule(); }
+  }
   async function submitTask() {
     const input = byId("builder-task-input");
     const data = snapshot();
@@ -1104,35 +1210,7 @@
     if (!task || !words || state.busy || !api()) return;
     const intent = state.intent || "note";
     const key = `${task.id}:${intent}`;
-    state.busy = "compose"; paintTaskComposer(task);
-    try {
-      if (intent === "note") {
-        const earlier = typeof task.notes === "string" && task.notes.trim() ? `${task.notes.trim()}\n` : "";
-        const result = await api().tasksSave([{ ...task, notes: `${earlier}- ${words}`.slice(-4000), logs: [...(task.logs || []), { at: Date.now(), kind: "note", text: words }].slice(-40), updatedAt: Date.now() }]);
-        if (result?.ok === false) throw new Error(result.error || "The note could not be saved.");
-        toast("Saved. Its next run reads it.", "good");
-      } else if (intent === "ask") {
-        const ask = { at: Date.now(), text: words, pending: true };
-        state.asks.set(task.id, [...(state.asks.get(task.id) || []), ask].slice(-12));
-        schedule();
-        const title = task.title || window.MefiTasks?.shortTitle?.(task) || "this task";
-        const result = await api().assistantMessage(`About the task "${title}" (${task.id}): ${words}`, data.projectId, { view: "Build · task", companion: companion(), taskId: task.id });
-        ask.pending = false;
-        if (result?.ok === false) { ask.error = plain(result.error, "No reply came back. Try again."); throw new Error(ask.error); }
-        const reply = (result?.state?.messages || []).filter((message) => message.role === "assistant" && stampOf(message.at) >= ask.at - 1000 && message.kind !== "notice").at(-1);
-        ask.reply = reply?.text || "Sent. The reply is in the chat.";
-      } else {
-        const title = task.title || window.MefiTasks?.shortTitle?.(task) || "the last result";
-        const prompt = `Follow-up to task "${title}" (${task.id}).\n\nRequested change:\n${words}`;
-        const result = await api().tasksCreate({ title: `Change: ${words.split("\n")[0]}`.slice(0, 180), prompt, projectId: data.projectId });
-        if (result?.ok === false) throw new Error(result.error || "The follow-up could not be created.");
-        toast("Follow-up task created. It shows in the menu.", "good");
-      }
-      if (input.dataset.key === key) input.value = "";
-      state.drafts.delete(key);
-      window.MefiWorkspace?.refresh?.(true);
-    } catch (error) { toast(plain(error, "That did not work. Your words are still here."), "bad"); }
-    finally { state.busy = null; state.painted.delete("task"); schedule(); }
+    await sendWords(task, intent, words, { data, started: () => paintTaskComposer(task), sent: () => { if (input.dataset.key === key) input.value = ""; state.drafts.delete(key); } });
   }
 
   // ---- chips and the composer's tools --------------------------------------
@@ -1345,10 +1423,25 @@
     setTimeout(() => { try { window.MefiNav?.saveResume?.(); } catch { /* resume is optional */ } window.location.reload(); }, 350);
   }
 
+  // What the v2 session panels (renderer/sessions.js) take from here, so the two layouts can never disagree about a
+  // task: the readings and the groups, a task's runs and what was asked about it, what a task offers and how a
+  // question, a note, an Ask and a Change go through, and the chips' host calls. Nothing here draws anything or
+  // needs the sessions layout to be on; `subscribe` is told once per frame when any of it moved.
+  const forgetProject = () => {
+    state.attempts.clear(); state.asks.clear(); state.worktreeTasks = new Set(); state.worktreeKey = ""; state.worktreeAt = 0;
+    Object.assign(chipsState, { where: null, whereAt: 0 });
+  };
   window.MefiBuilder = {
     layout, active: () => sessions() && state.adopted, decorateRail, paintRail: () => paintRail(), ownsRail,
     openTask, openChat, newTask, requestChange, setView, view: () => ({ view: state.view, taskId: state.taskId }),
     groups, reading, boardStats, heatmap: (days, now) => heatmap(days, now), setLayout, refresh: () => { state.painted.clear(); schedule(); },
+    stageGroups, lastMoved, stampOf, ago, span, isDone,
+    pins: () => pins(), setPinned,
+    timeline: (task, data = snapshot()) => timeline(task, data), loadAttempts, attempts: (taskId) => state.attempts.get(taskId) ?? null, asks: (taskId) => state.asks.get(taskId) ?? [],
+    taskActionSpecs, dropSpec, perform: act, busy: () => state.busy, answerQuestion,
+    INTENTS, defaultIntent, sendWords, checksNodes, acceptanceOf,
+    chips: { state: chipsState, loadWhere, loadRouting, saveRouting, setWorktrees, CLI_NAMES, TIERS, shortModel },
+    resetProject: forgetProject, subscribe,
   };
   // The classic layout wires nothing (see the header). A layout change reloads
   // the page, so this is decided once per launch.

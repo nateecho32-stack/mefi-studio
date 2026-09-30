@@ -12,6 +12,12 @@
 // window is showing; the host's review:changed pushes refresh what they name. A repaint redraws this
 // section alone and puts the keyboard back where it was. The section's three switches (snapshots, advisory
 // checks and their build, shots) are the owner's settings for what Studio keeps around each attempt.
+//
+// A second way to put it on screen (mount(host, { taskId, projectId, panel })): one panel of it, "changes", "checks"
+// or "preview", in a box of its own with no tab row, for the v2 inspector (renderer/sessions.js), which has tabs
+// of its own. Every view of a task shares that task's one record, so the attempt a person picked, what was read
+// and what Accept and Revert answered are the same wherever they are shown, and a panel is read only while some
+// view of it is on screen. counts() and onChange() tell a tab label what is in the list without opening it.
 (function () {
   "use strict";
   const api = () => window.mefiStudio;
@@ -70,10 +76,10 @@
     if (record) records.delete(key);
     else {
       uid += 1;
-      record = { key, uid, projectId, taskId, tab: "changes", attempt: null, open: false, changes: null, checks: null, evidence: null, errors: {}, stamps: {}, reading: {}, diffs: new Map(), openFile: null, more: { files: 0, diff: 0 }, note: null, undo: null, busy: new Set(), view: null, body: null, rev: 0, painted: -1, poll: 0, push: 0, pushed: new Set() };
+      record = { key, uid, projectId, taskId, tab: "changes", attempt: null, open: false, changes: null, checks: null, evidence: null, errors: {}, stamps: {}, reading: {}, diffs: new Map(), openFile: null, more: { files: 0, diff: 0 }, note: null, undo: null, busy: new Set(), view: null, views: new Map(), body: null, rev: 0, painted: -1, poll: 0, push: 0, pushed: new Set() };
     }
     records.set(key, record);
-    if (records.size > MAX_RECORDS) records.delete(records.keys().next().value);
+    if (records.size > MAX_RECORDS) { for (const [oldKey, old] of records) if (!old.views.size) { records.delete(oldKey); break; } }
     return record;
   }
 
@@ -85,6 +91,16 @@
   };
   // The attempt the page means: the one the person chose, else the newest the host named.
   const chosen = (record) => record.attempt ?? record.changes?.attempt ?? record.checks?.attempt ?? record.evidence?.attempt ?? null;
+  // What is on screen for a task: its fold (opened by the person) and any panels mounted on their own. Reading, polling
+  // and the host's pushes all go by this, so nothing is read for a panel nobody sees.
+  const shownOn = (record) => record.views.size > 0 && [...record.views.keys()].some(attached);
+  const showing = (record) => (record.open && attached(record.view)) || shownOn(record);
+  function wants(record) {
+    const names = new Set();
+    if (record.open && attached(record.view)) { names.add("changes"); names.add(record.tab); }
+    for (const [host, view] of record.views) if (attached(host)) names.add(view.tab);
+    return names;
+  }
 
   function read(record, what, { quiet = false, force = false } = {}) {
     const reader = READERS[what];
@@ -130,10 +146,11 @@
   }
   // What this record shows needs: the list always, and the current tab's own data.
   function wake(record, { force = false } = {}) {
-    if (!record.open) return;
-    void read(record, "changes", { quiet: Boolean(record.changes), force });
-    if (record.tab === "checks") void read(record, "checks", { quiet: Boolean(record.checks), force });
-    if (record.tab === "preview") void read(record, "evidence", { quiet: Boolean(record.evidence), force });
+    const names = wants(record);
+    if (!record.open && !names.size) return;
+    if (names.has("changes")) void read(record, "changes", { quiet: Boolean(record.changes), force });
+    if (names.has("checks")) void read(record, "checks", { quiet: Boolean(record.checks), force });
+    if (names.has("preview")) void read(record, "evidence", { quiet: Boolean(record.evidence), force });
     if (shared.settingsOpen) void readPrefs();
     schedulePoll(record);
   }
@@ -141,10 +158,10 @@
     clearTimeout(record.poll);
     record.poll = 0;
     const data = record.changes;
-    if (!record.open || !attached(record.view) || !data || !(data.running || data.state === "running" || data.waiting)) return;
+    if (!showing(record) || !data || !(data.running || data.state === "running" || data.waiting)) return;
     record.poll = setTimeout(() => {
       record.poll = 0;
-      if (!record.open || !attached(record.view)) return;
+      if (!showing(record)) return;
       if (document.hidden) { schedulePoll(record); return; }
       void read(record, "changes", { quiet: true, force: true });
     }, POLL_MS);
@@ -168,8 +185,9 @@
         record.pushed.clear();
         for (const what of names) {
           record.stamps[what] = 0;
-          const wanted = what === "changes" || (what === "checks" && record.tab === "checks") || (what === "evidence" && record.tab === "preview");
-          if (wanted && record.open && attached(record.view)) void read(record, what, { quiet: true, force: true });
+          const seen = wants(record);
+          const wanted = what === "changes" || (what === "checks" && seen.has("checks")) || (what === "evidence" && seen.has("preview"));
+          if (wanted && showing(record)) void read(record, what, { quiet: true, force: true });
         }
       }, QUIET_MS);
       record.push?.unref?.();
@@ -184,7 +202,10 @@
     paints.add(record);
     Promise.resolve().then(() => { paints.delete(record); paint(record); });
   }
-  const touchAll = () => { for (const record of records.values()) if (record.body) touch(record); };
+  const touchAll = () => { for (const record of records.values()) if (record.body || record.views.size) touch(record); };
+  // Who wants to know that a task's record moved (a tab label showing how many files changed).
+  const watchers = new Set();
+  const tell = (record) => { for (const callback of [...watchers]) { try { callback({ taskId: record.taskId, projectId: record.projectId }); } catch { /* one listener never stops another */ } } };
 
   function note(tone, text, choices = []) {
     const box = el("div", "review-note");
@@ -213,16 +234,28 @@
   const setNote = (record, tone, text, choices = []) => { record.note = { tone, text, choices }; touch(record); };
 
   function paint(record) {
-    const body = record.body;
-    if (!body || !attached(record.view)) return;
     if (record.painted === record.rev) return;
-    record.painted = record.rev;
-    record.view.hidden = everythingForcedOff(shared.prefs);
-    if (record.tab === "changes" && changesHidden(record)) { record.tab = "checks"; wake(record); }
-    if (record.summary) record.summary.textContent = heading(record);
-    if (!record.open) { body.replaceChildren(); return; }
+    const body = record.body;
+    if (body && attached(record.view)) {
+      record.painted = record.rev;
+      record.view.hidden = everythingForcedOff(shared.prefs);
+      if (record.tab === "changes" && changesHidden(record)) { record.tab = "checks"; wake(record); }
+      if (record.summary) record.summary.textContent = heading(record);
+      if (!record.open) body.replaceChildren();
+      else redraw(body, () => [tabs(record), panel(record), settings(record)]);
+    }
+    // The panels mounted on their own: one panel each, no tab row, the switches under it.
+    for (const [host, view] of record.views) {
+      if (!attached(host)) continue;
+      record.painted = record.rev;
+      redraw(view.body, () => [panel(record, view), settings(record)]);
+    }
+    if (record.views.size) tell(record);
+  }
+  // A repaint redraws one section alone and puts the keyboard back where it was.
+  function redraw(body, make) {
     const held = body.contains?.(document.activeElement) ? document.activeElement?.dataset?.focusKey : "";
-    body.replaceChildren(tabs(record), panel(record), settings(record));
+    body.replaceChildren(...make());
     if (held) {
       const again = byFocusKey(body, held);
       if (again && !again.disabled) again.focus?.({ preventScroll: true });
@@ -271,15 +304,19 @@
     wake(record);
   }
 
-  function panel(record) {
+  // `view` is a panel mounted on its own ({ tab, labelledBy }): it has no tab row of ours to be labelled by.
+  function panel(record, view = null) {
+    const tab = view ? view.tab : record.tab;
     const box = el("div", "review-panel");
-    box.id = `review-panel-${record.uid}`;
+    box.id = view ? `review-panel-${record.uid}-${tab}` : `review-panel-${record.uid}`;
     box.setAttribute("role", "tabpanel");
-    box.setAttribute("aria-labelledby", `review-tab-${record.uid}-${record.tab}`);
+    if (!view) box.setAttribute("aria-labelledby", `review-tab-${record.uid}-${record.tab}`);
+    else if (view.labelledBy) box.setAttribute("aria-labelledby", view.labelledBy);
+    else box.setAttribute("aria-label", TABS.find(([name]) => name === tab)?.[1] ?? "Review");
     // What Accept and Revert answered belongs to the list they act on.
-    if (record.note && record.tab === "changes") box.append(note(record.note.tone, record.note.text, record.note.choices));
-    if (record.tab === "changes") box.append(...changesPanel(record));
-    else if (record.tab === "checks") box.append(...checksPanel(record));
+    if (record.note && tab === "changes") box.append(note(record.note.tone, record.note.text, record.note.choices));
+    if (tab === "changes") box.append(...changesPanel(record));
+    else if (tab === "checks") box.append(...checksPanel(record));
     else box.append(...previewPanel(record));
     return box;
   }
@@ -656,8 +693,9 @@
 
   // ---- mounting ---------------------------------------------------------------------------------------------------------------------
   // `fold` is the section's <details> (tasks.js detailFold); its summary is kept, the rest is this page's.
-  function mount(fold, { taskId, projectId } = {}) {
+  function mount(fold, { taskId, projectId, panel: only = "", labelledBy = "" } = {}) {
     if (!fold || typeof taskId !== "string" || !taskId) return null;
+    if (only) return mountPanel(fold, { taskId, projectId, tab: only, labelledBy });
     subscribe();
     const record = recordFor(projectId, taskId);
     clearTimeout(record.poll);
@@ -680,8 +718,44 @@
     return record;
   }
 
+  // One panel on its own, in `host` (a box the caller owns): "changes", "checks" or "preview". It is drawn and read
+  // for as long as it is on screen, shares the task's record with every other view of it, and is taken down with
+  // the handle's unmount(). `labelledBy` is the id of the caller's tab that names it.
+  function mountPanel(host, { taskId, projectId, tab, labelledBy = "" }) {
+    if (!TABS.some(([name]) => name === tab)) return null;
+    subscribe();
+    const record = recordFor(projectId, taskId);
+    record.views.get(host)?.body?.remove?.();
+    const view = { tab, labelledBy, body: el("div", "review review-bare") };
+    host.append(view.body);
+    record.views.set(host, view);
+    record.painted = -1;
+    touch(record);
+    if (!shared.prefs) void readPrefs();
+    wake(record);
+    return {
+      record,
+      unmount() {
+        if (record.views.get(host) !== view) return;
+        record.views.delete(host);
+        view.body.remove?.();
+        if (!showing(record)) clearTimeout(record.poll);
+      },
+    };
+  }
+  // What a task's list holds, for a tab label: null until the list has been read or where it is not available.
+  function countsOf(taskId, projectId) {
+    const record = records.get(keyOf(projectId, taskId));
+    const data = record?.changes;
+    if (!data || data.available === false || data.attempt == null || data.state === "none") return null;
+    return { files: data.totals?.files ?? data.files?.length ?? 0, additions: data.totals?.additions ?? 0, deletions: data.totals?.deletions ?? 0, running: running(data), accepted: data.accepted === true };
+  }
+
   window.MefiReview = {
     mount,
+    counts: countsOf,
+    // Told (with { taskId, projectId }) each time a task that has a panel on its own was drawn again; the way back is the return value.
+    onChange: (callback) => { if (typeof callback !== "function") return () => {}; watchers.add(callback); return () => watchers.delete(callback); },
     // Read again now (after the owner changes a project's files by hand, say).
     refresh: (taskId) => { for (const record of records.values()) if (!taskId || record.taskId === taskId) { record.stamps = {}; wake(record, { force: true }); } },
     state: (taskId, projectId) => { const record = records.get(keyOf(projectId, taskId)); return record ? { tab: record.tab, attempt: chosen(record), open: record.open, changes: record.changes, checks: record.checks, evidence: record.evidence, errors: { ...record.errors } } : null; },
