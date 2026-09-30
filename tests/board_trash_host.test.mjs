@@ -483,6 +483,34 @@ test("a follow-up the owner deletes still settles for its parent, and Recently d
   assert.deepEqual(h.ids(), ["parent", "child"]);
 });
 
+test("ideas:action add hands Search's owner idea through: stored as one from you, and the reply carries what the toast needs", async (t) => {
+  const h = await host(t, { ideas: [idea("older")] });
+  const out = await h.call("ideas:action", { action: "add", source: "owner", title: "Let the tree dim when nothing runs", detail: "Let the tree dim when nothing runs", projectId: "project-a" });
+  assert.equal(out.ok, true, out.error);
+  assert.equal(out.added, true);
+  assert.match(out.idea.id, /^idea_owner_[0-9a-f]{24}$/);
+  assert.equal(out.idea.title, "Let the tree dim when nothing runs");
+  assert.deepEqual(h.ids("ideas"), [out.idea.id, "older"], "newest first, the rest untouched");
+  const stored = h.board.ideas[0];
+  assert.deepEqual([stored.source, stored.suggestedBy, stored.status, stored.read], ["owner", "owner", "new", true], "one from you, already read, waiting for you to decide");
+  assert.equal("trashed" in out, false, "an add keeps nothing in Recently deleted");
+  assert.equal(h.readTrash(), null);
+  // The same words again are the same idea: nothing is added, and the reply says so.
+  const again = await h.call("ideas:action", { action: "add", source: "owner", title: "Let the tree dim when nothing runs", detail: "Let the tree dim when nothing runs", projectId: "project-a" });
+  assert.equal(again.ok, true);
+  assert.equal(again.added, false);
+  assert.equal(again.idea.id, out.idea.id);
+  assert.equal(h.board.ideas.length, 2);
+  // Without the owner source it is still Mefi's suggestion from chat.
+  const chat = await h.call("ideas:action", { action: "add", title: "A chat note", detail: "From chat", projectId: "project-a" });
+  assert.match(chat.idea.id, /^idea_mefi_/);
+  assert.equal(h.board.ideas[0].source, "chat");
+  assert.equal(h.board.ideas[0].read, false);
+  // A stale project is refused before anything is written.
+  assert.equal((await h.call("ideas:action", { action: "add", source: "owner", title: "x", detail: "y", projectId: "project-b" })).ok, false);
+  assert.equal(h.board.ideas.length, 3);
+});
+
 test("nothing else in the host block reaches the network or the assistant", () => {
   assert.doesNotMatch(BLOCK, /\bfetch\(|https?:\/\/|require\("electron"\)/);
   assert.deepEqual(readdirSync(tmpdir()).filter((name) => name === "board-trash.json"), [], "no file lands outside a project's data folder");

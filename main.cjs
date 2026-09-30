@@ -14839,6 +14839,20 @@ async function boardTrashList({ projectId, kinds = null } = {}) {
 }
 // ---- end of Board trash ------------------------------------------------------
 
+// ---- Search switches ---------------------------------------------------------
+// Search (renderer/palette.js) has two extras nobody asked for: Recent, when the
+// box is empty, and "task …" / "idea …" adding a card on Enter. Each is on unless
+// settings.ui says searchRecents / searchQuickCreate false, or this run says so
+// with MEFI_STUDIO_NO_SEARCH_RECENTS=1 / MEFI_STUDIO_NO_QUICK_CREATE=1 (a switch
+// for one machine, or for a test). prefs:get puts the answer on the page's prefs.
+function searchSwitchesOff() {
+  return {
+    ...(process.env.MEFI_STUDIO_NO_SEARCH_RECENTS === "1" ? { searchRecents: false } : {}),
+    ...(process.env.MEFI_STUDIO_NO_QUICK_CREATE === "1" ? { searchQuickCreate: false } : {}),
+  };
+}
+// ---- end of Search switches --------------------------------------------------
+
 // The shared theme keys from the pure module — the SAME keys the compactor
 // and the promotion pass use, so "the same work" means one thing everywhere.
 function workPlanTheme(value) {
@@ -22536,7 +22550,11 @@ function registerIpc() {
   ipcMain.handle("prefs:get", async () => {
     const settings = await readSettings();
     const loginItem = loginItemState();
-    return { ok: true, prefs: { blurMenu: true, useWeb: false, useTree: true, autoReference: true, proactive: true, ...(settings.ui ?? {}), openAtLogin: loginItem.on }, loginItem };
+    // Search's two switches (the "Search switches" block): the environment can
+    // turn either off for this run. (typeof: the tests that run this handler on
+    // its own have no such function.)
+    const searchOff = typeof searchSwitchesOff === "function" ? searchSwitchesOff() : {};
+    return { ok: true, prefs: { blurMenu: true, useWeb: false, useTree: true, autoReference: true, proactive: true, ...(settings.ui ?? {}), ...searchOff, openAtLogin: loginItem.on }, loginItem };
   });
   ipcMain.handle("prefs:set", async (_event, prefs) => {
     const next = { ...(prefs ?? {}) };

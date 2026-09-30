@@ -185,7 +185,7 @@ settings and per-model work-kind summaries for the shared controls.
 | **Settings** | `4` or `Ctrl ,`: four single-pane categories, **General**, **Appearance**, **Audio** and **System**. Providers, routing and run behavior moved to **Agents › Setup** (Team & models, Providers, Routing & fallback, Run behavior); the old Connections, Models and Automation links redirect there. Search finds individual controls and opens their category and containing disclosures. `MefiNav.go("studio", { category: "appearance" })` opens a category; legacy section links such as `settings-updates` still work. |
 | **Preferences** | General holds names and startup. Appearance holds themes, motion, blur, node styles and canvas effects; Audio links to the music dropdown and holds sound effects. Older Preferences and Your Studio links resolve to General. |
 | **Diagnostics** | Settings › System: speed probe, profiler, auditor, machine tools and connection log. Auditor and machine links reveal Sessions' Diagnostics panel. |
-| **Search Studio** | The palette (`Ctrl K`), once called Key commands. It finds any page, tool, Settings card, action, task, node or model by familiar terms, and groups its results by menu section. |
+| **Search Studio** | The palette (`Ctrl K`), once called Key commands. It finds any page, tool, Settings card, action, task, node or model by familiar terms, and groups its results by menu section. Empty, it lists what you last opened (**Recent**); `task …` or `idea …` adds one on Enter. |
 | **Help** | The menu-foot popover containing onboarding, shortcuts and Community. These destinations are also available through Search; late-registered Community remains supported by the navigation registry. |
 | **Task** | One unit of work on the project board, with a brief, acceptance checks, prerequisites, attempts and evidence. New cards gather local references automatically when Automatic references is on; the configurable scout can use GPT-6 Luna on the fast tier to choose one verified starting file. |
 | **Idea** | A note in the feature-idea inbox; it becomes a task only when you or **Work through backlog** promote it. One you typed yourself (Search's `idea …`) reads **From you**. |
@@ -711,6 +711,19 @@ settings and per-model work-kind summaries for the shared controls.
 - **Search Studio** (`Ctrl K`) finds pages, tools, tasks and settings by
   familiar terms. **Settings › General** holds names and startup behavior;
   **Appearance** holds themes, motion, panel blur and canvas presentation.
+  With the box empty Search starts with **Recent**: the last things you opened
+  or ran from it in this project (eight are remembered and six shown, in the
+  page's own storage, so nothing waits on the host); a target that has gone
+  since, such as a deleted task, is skipped without a word. Typing `task …` or
+  `idea …` with some text puts one **Add task** or **Add idea** row on top of
+  the results; Enter adds it (a task through `tasks:create`, the board's one
+  way in; an idea through `ideas:action` as one from you) and a toast offers
+  **Open**. Nothing is added before Enter; `task` alone, `tasks …` or the word
+  inside a longer one is a plain search, and a query that is exactly the name of
+  the top result keeps that result first with the Add row one down.
+  `settings.ui.searchRecents` or `searchQuickCreate` set to false, or
+  `MEFI_STUDIO_NO_SEARCH_RECENTS=1` or `MEFI_STUDIO_NO_QUICK_CREATE=1`, turns
+  each off.
 
 Ideas uses a responsive inbox of compact cards with a title, a short detail
 preview, status and source. Selecting a card opens the existing detail and

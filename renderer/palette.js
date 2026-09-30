@@ -1,12 +1,20 @@
 // Mefi's Studio AI+ — Search Studio, the command palette (Ctrl/Cmd+K).
 // Fuzzy jumps to pages, sheets, settings, actions, tasks, nodes and models,
-// grouped by the same sections as the navigation rail.
+// grouped by the same sections as the navigation rail. With the box empty it
+// starts with Recent (what you last opened or ran from here, kept per project),
+// and "task ..." or "idea ..." adds one on Enter.
 (function () {
   "use strict";
 
   const state = { items: [], filtered: [], index: 0, opener: null, projectId: null, taskRecords: [], taskStatus: "", taskRead: 0 };
   const el = {};
   let initialized = false;
+  // Two things Search does unasked, each with a switch: the Recent group over the
+  // empty box (settings.ui.searchRecents, MEFI_STUDIO_NO_SEARCH_RECENTS=1) and the
+  // "task ..." / "idea ..." row (settings.ui.searchQuickCreate, MEFI_STUDIO_NO_QUICK_CREATE=1).
+  // Both are on until the host's preferences say otherwise.
+  const flags = { recents: true, quickCreate: true };
+  let plainPlaceholder = "";
 
   const subsequenceScore = (needle, haystack) => {
     if (!needle) return 1;
@@ -38,6 +46,7 @@
     try {
       const baked = JSON.parse(document.getElementById("booklet-data").textContent);
       return baked.models.map((model) => ({
+        key: `model:${model.name} · ${model.vendor}`,
         kind: "model",
         label: `${model.name} · ${model.vendor}`,
         hint: model.quality?.index != null ? `AA ${model.quality.index}` : "unmeasured",
@@ -75,6 +84,7 @@
       .filter((dest) => !(dest.id === "command" && commandActive) && dest.id !== openSheet)
       .sort((a, b) => rank(a) - rank(b))
       .map((dest) => ({
+        key: `dest:${dest.id}`,
         kind: nav.sectionLabel?.(dest) ?? dest.group,
         label: dest.label,
         description: dest.desc || "",
@@ -147,6 +157,7 @@
   function tasks() {
     const projectId = currentProject();
     return state.taskRecords.map((task) => ({
+      key: `task:${task.id}`,
       kind: "task",
       label: task.title,
       description: task.prompt || task.description || "",
@@ -218,6 +229,7 @@
   function nodes() {
     if (!window.MefiIdle?.isActive?.() || typeof window.MefiIdle.select !== "function") return [];
     return (window.MefiIdle.debugNodes?.() ?? []).slice(0, 120).map((node) => ({
+      key: `node:${node.id}`,
       kind: "node",
       label: node.label ?? node.id,
       hint: node.kind,
@@ -229,6 +241,117 @@
 
   function build() {
     state.items = [...destinations(), ...tasks(), ...nodes(), ...models()];
+  }
+
+  // ---- Recent: what you last opened or ran from here, per project ----------------------
+  // A short list of item keys in this browser's storage, one list per project (no host
+  // round trip), newest first. A key whose item is gone (a deleted task, a page that no
+  // longer exists) is skipped when the list is shown and never reported; it leaves the
+  // list when newer ones push it out. Storage that is blocked or full just means no
+  // Recent group.
+  const RECENT_PREFIX = "mefi.searchRecent.v1.";
+  const RECENT_KEPT = 8;
+  const RECENT_SHOWN = 6;
+  const recentKey = () => `${RECENT_PREFIX}${currentProject() || "none"}`;
+  function readRecents() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(recentKey()) || "[]");
+      return Array.isArray(saved) ? saved.filter((key) => typeof key === "string" && key).slice(0, RECENT_KEPT) : [];
+    } catch {
+      return [];
+    }
+  }
+  function remember(key) {
+    if (!flags.recents || typeof key !== "string" || !key) return;
+    try {
+      localStorage.setItem(recentKey(), JSON.stringify([key, ...readRecents().filter((other) => other !== key)].slice(0, RECENT_KEPT)));
+    } catch {
+      /* storage blocked or full: no Recent, nothing else changes */
+    }
+  }
+  // The remembered items that still exist, newest first, filed under Recent.
+  function recentItems() {
+    if (!flags.recents) return [];
+    const known = new Map(state.items.filter((item) => item.key).map((item) => [item.key, item]));
+    const found = [];
+    for (const key of readRecents()) {
+      const item = known.get(key);
+      if (item) found.push({ ...item, kind: "Recent" });
+      if (found.length >= RECENT_SHOWN) break;
+    }
+    return found;
+  }
+
+  // ---- "task ..." and "idea ...": add one from here, on Enter --------------------------
+  // The word, a space and some text. "task" alone, "tasks list" and "ideal" are plain
+  // searches. Nothing is added until Enter, and the row sits above the normal results
+  // (below a result the whole query names exactly).
+  const QUICK_CREATE = /^(task|idea)\s+(\S[\s\S]*)$/i;
+  const clip = (value, max) => { const flat = String(value ?? "").replace(/\s+/g, " ").trim(); return flat.length > max ? `${flat.slice(0, max - 1).trimEnd()}…` : flat; };
+  // Adding needs the desktop app's bridge; in a plain browser tab there is nothing to add to,
+  // so no row is offered (and the box says nothing about it).
+  const canCreate = (kind) => typeof window.mefiStudio?.[kind === "task" ? "tasksCreate" : "ideasAction"] === "function";
+  function quickCreateRow(query) {
+    if (!flags.quickCreate) return null;
+    const match = QUICK_CREATE.exec(query);
+    const text = match ? match[2].trim() : "";
+    if (!text) return null;
+    const kind = match[1].toLowerCase();
+    if (!canCreate(kind)) return null;
+    return {
+      kind: "Create",
+      label: `Add ${kind}: “${clip(text, 60)}”`,
+      description: kind === "task" ? "Adds it to the task board; the assistant picks it up." : "Saves it in your ideas. Nothing is built from it until you say so.",
+      hint: "Enter",
+      keyHint: true,
+      count: 0,
+      create: true,
+      run: () => createQuick(kind, text),
+    };
+  }
+  // A task goes through tasks:create, the board's one admission path; an idea through
+  // ideas:action with source "owner", so it reads "From you". Either way a toast says
+  // what happened, with Open to go to it; a refusal says why and adds nothing.
+  async function createQuick(kind, text) {
+    const api = window.mefiStudio;
+    const say = (message, tone, options) => window.MefiToast?.(message, tone, options);
+    const noun = kind === "task" ? "Task" : "Idea";
+    try {
+      if (kind === "task") {
+        const projectId = currentProject();
+        const result = await api.tasksCreate({ title: text.slice(0, 180).trimEnd(), prompt: text, ...(projectId ? { projectId } : {}) });
+        if (!result?.ok || !result.task) { say(`Task not added · ${result?.error || "the task could not be created"}`, "bad"); return; }
+        const id = result.task.id;
+        say(`Task added: “${clip(result.task.title || text, 32)}”`, "good", { duration: 8000, action: { label: "Open", run: () => window.MefiNav?.go?.("tasks", { taskId: id }) } });
+        return;
+      }
+      const projectId = currentProject() || (await api.ideasList?.())?.projectId || null;
+      if (!projectId) { say("Idea not saved · open a project first", "bad"); return; }
+      const result = await api.ideasAction({ action: "add", source: "owner", title: text.slice(0, 200).trimEnd(), detail: text, projectId });
+      if (!result?.ok || !result.idea) { say(`Idea not saved · ${result?.error || "the idea could not be saved"}`, "bad"); return; }
+      const id = result.idea.id;
+      say(`${result.added === false ? "Already in your ideas" : "Idea saved"}: “${clip(result.idea.title || text, 32)}”`, "good", { duration: 8000, action: { label: "Open", run: () => window.MefiNav?.go?.("ideas", { ideaId: id }) } });
+    } catch (error) {
+      say(`${noun} not ${kind === "task" ? "added" : "saved"} · ${error?.message || error}`, "bad");
+    }
+  }
+
+  // The host's word on the two switches (main's prefs:get), read at start and each time
+  // Search opens. Until it answers both stay on; a bridge without prefs leaves them on.
+  async function readFlags() {
+    try {
+      const result = await window.mefiStudio?.prefsGet?.();
+      if (result?.ok && result.prefs) {
+        flags.recents = result.prefs.searchRecents !== false;
+        flags.quickCreate = result.prefs.searchQuickCreate !== false;
+      }
+    } catch {
+      /* the preferences could not be read: keep what was known */
+    }
+    if (el.input) {
+      el.input.placeholder = flags.quickCreate && (canCreate("task") || canCreate("idea")) ? "Search · “task …” or “idea …” to add" : plainPlaceholder;
+      if (!el.overlay.hidden) filter(true);
+    }
   }
 
   // Roving aria-activedescendant: focus never leaves the input, so the
@@ -254,7 +377,7 @@
       const count = state.filtered.length;
       const results = count > 40 ? `Showing 40 of ${count} results. Keep typing to narrow them.` : `${count} result${count === 1 ? "" : "s"}.`;
       const taskStatus = state.taskStatus === "loading" ? " Loading project tasks…" : state.taskStatus === "error" ? " Tasks couldn't be loaded. Close and reopen Search to retry." : "";
-      el.status.textContent = results + taskStatus;
+      el.status.textContent = results + (state.filtered[0]?.create ? " Enter adds it; nothing is added until then." : "") + taskStatus;
     }
     if (!items.length) {
       const li = document.createElement("li");
@@ -346,16 +469,28 @@
   }
 
   function filter(preserveSelection = false) {
-    const selected = preserveSelection ? state.filtered[state.index] : null;
     const query = el.input.value.trim();
+    // A refresh in the background (the task list arriving, the switches being read) keeps
+    // the highlight on what it was on. Over the empty box, while it is still on the top
+    // row, it stays on the top row instead: that row is the last thing you opened, and a
+    // Recent task that joins above it must not push the highlight down to the second.
+    const selected = preserveSelection && !(query === "" && state.index === 0) ? state.filtered[state.index] : null;
     if (!query) {
-      state.filtered = grouped(state.items);
+      // Recent leads, and what it holds is not listed again below.
+      const recent = recentItems();
+      const shown = new Set(recent.map((item) => item.key));
+      state.filtered = [...recent, ...grouped(state.items.filter((item) => !item.key || !shown.has(item.key)))];
     } else {
       state.filtered = grouped(state.items
         .map((item) => ({ item, score: matchScore(query, item) }))
         .filter((entry) => entry.score > 0)
         .sort((a, b) => b.score - a.score)
         .map((entry) => entry.item));
+      // The Add row leads, except when the whole query is exactly the name of something
+      // ("task board"): then that result stays on top, so a search that worked before
+      // still opens what it named, and Add is the next row down.
+      const create = quickCreateRow(query);
+      if (create) state.filtered.splice(String(state.filtered[0]?.label ?? "").toLowerCase() === query.toLowerCase() ? 1 : 0, 0, create);
     }
     const retained = selected ? state.filtered.findIndex((item) => item.kind === selected.kind && item.label === selected.label) : -1;
     state.index = retained >= 0 && retained < 40 ? retained : 0;
@@ -365,6 +500,7 @@
   function run(index) {
     const item = state.filtered[index];
     if (!item) return;
+    if (!item.create) remember(item.key);
     close();
     setTimeout(() => item.run(), 30);
   }
@@ -387,6 +523,7 @@
     filter();
     el.input.focus();
     loadTasks();
+    void readFlags();
   }
 
   function close() {
@@ -422,6 +559,8 @@
     el.close = document.getElementById("palette-close");
     el.status = document.getElementById("palette-status");
     if (!el.overlay) return;
+    plainPlaceholder = el.input.placeholder || "";
+    void readFlags();
     // The focused input is the combobox; the listbox it controls stays below.
     // aria-activedescendant on it (set per option in setActiveOption) is what
     // makes arrow keys announce the active option.
