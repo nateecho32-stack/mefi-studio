@@ -325,7 +325,8 @@ test("detect reads the folder, and runAll runs the auto checks in order and list
 
 test("a real npm script runs, its output is read, and a real hang is ended at the limit", { timeout: 60000 }, async (t) => {
   const dir = temp(t);
-  const node = JSON.stringify(process.execPath);
+  // `node` from the PATH the app's own tools use: a path in quotes with doubled backslashes is not what a project's scripts hold.
+  const node = "node";
   writeFileSync(path.join(dir, "package.json"), JSON.stringify({ name: "fx", version: "1.0.0", scripts: {
     lint: `${node} -e "console.log('✖ 3 problems (1 errors, 2 warnings)'); process.exit(1)"`,
     typecheck: `${node} -e "console.log('fine')"`,
@@ -336,8 +337,8 @@ test("a real npm script runs, its output is read, and a real hang is ended at th
   const typecheck = await runner.run(dir, found.find((check) => check.id === "typecheck"));
   const lint = await runner.run(dir, found.find((check) => check.id === "lint"));
   if (typecheck.result.status === "skipped") { t.skip("npm is not available here"); return; }
-  assert.deepEqual([typecheck.result.status, typecheck.result.detail], ["ok", "0 errors"]);
-  assert.deepEqual([lint.result.status, lint.result.detail], ["bad", "1 error"]);
+  assert.deepEqual([typecheck.result.status, typecheck.result.detail], ["ok", "0 errors"], `typecheck answered ${JSON.stringify(typecheck).slice(0, 700)}`);
+  assert.deepEqual([lint.result.status, lint.result.detail], ["bad", "1 error"], `lint answered ${JSON.stringify(lint).slice(0, 700)}`);
   const started = Date.now();
   const slow = await runner.run(dir, found.find((check) => check.id === "build"), { timeoutMs: 1500 });
   assert.equal(slow.result.status, "warn");

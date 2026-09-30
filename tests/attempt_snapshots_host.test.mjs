@@ -65,6 +65,9 @@ function walk(root, prefix = "") {
   return out.sort();
 }
 const TASK = "task_0123456789abcdef";
+// Windows cannot name a file with a double quote, so the odd names there use a single quote (git quotes both).
+const QUOTED_NAME = process.platform === "win32" ? "weird 'quoted' name.txt" : 'weird "quoted" name.txt';
+const LEAD_QUOTE = process.platform === "win32" ? "'lead quote.txt" : '"lead quote.txt';
 async function ran(h, work, { taskId = TASK, runId = "run_1_1", ...more } = {}) {
   const start = await h.snaps.begin({ root: h.root, taskId, runId, ...more });
   assert.equal(start.ok, true, start.error);
@@ -225,13 +228,13 @@ test("the change list reads added, modified, deleted, renamed, binary and odd-na
     nodeFs.renameSync(x.at("sub/old name.txt"), x.at("sub/new name.txt"));
     x.write("added.js", "new\n");
     x.write("logo.png", "\0PNG-new-and-longer");
-    x.write('weird "quoted" name.txt', "q\n");
+    x.write(QUOTED_NAME, "q\n");
     x.write("ü/space dir/é.txt", "u\n");
     x.write("noise.log", "ignored\n");
   });
   const list = await h.snaps.changes({ root: h.root, taskId: TASK });
   const files = byPath(list);
-  assert.deepEqual(Object.keys(files).sort(), ["a.txt", "added.js", "gone.txt", "logo.png", "sub/new name.txt", 'weird "quoted" name.txt', "ü/space dir/é.txt"].sort());
+  assert.deepEqual(Object.keys(files).sort(), ["a.txt", "added.js", "gone.txt", "logo.png", "sub/new name.txt", QUOTED_NAME, "ü/space dir/é.txt"].sort());
   assert.deepEqual([files["a.txt"].status, files["a.txt"].additions, files["a.txt"].deletions], ["modified", 2, 1]);
   assert.deepEqual([files["gone.txt"].status, files["gone.txt"].additions, files["gone.txt"].deletions], ["deleted", 0, 1]);
   assert.deepEqual([files["added.js"].status, files["added.js"].additions], ["added", 1]);
@@ -333,7 +336,7 @@ test("Revert attempt puts back every file: edits, deletions, renames, additions,
     x.write("a.txt", "one\nchanged\n"); rmSync(x.at("gone.txt"));
     mkdirSync(x.at("moved/deeper"), { recursive: true });
     nodeFs.renameSync(x.at("sub/old name.txt"), x.at("moved/deeper/new name.txt"));
-    x.write("added.js", "new\n"); x.write('"lead quote.txt', "q\n"); x.write("ü/é.txt", "u\n");
+    x.write("added.js", "new\n"); x.write(LEAD_QUOTE, "q\n"); x.write("ü/é.txt", "u\n");
     writeFileSync(x.at("logo.png"), Buffer.from([0, 9, 9, 9]));
     x.write("ignored.log", "changed but ignored\n"); x.write("node_modules/x/y.js", "dep\n");
   });
@@ -347,7 +350,7 @@ test("Revert attempt puts back every file: edits, deletions, renames, additions,
   assert.equal(h.read("ignored.log"), "changed but ignored\n", "an ignored file is not the attempt's to undo");
   assert.equal(existsSync(h.at("node_modules/x/y.js")), true);
   assert.equal(existsSync(h.at("added.js")), false);
-  assert.equal(existsSync(h.at('"lead quote.txt')), false, "a name that starts with a quote is handled");
+  assert.equal(existsSync(h.at(LEAD_QUOTE)), false, "a name that starts with a quote is handled");
   assert.equal(existsSync(h.at("moved")), false, "folders the attempt made and left empty go with it");
   assert.equal(existsSync(h.at("ü")), false);
   assert.equal(h.g("status", "--porcelain").trim(), "", "git sees a clean folder again");
