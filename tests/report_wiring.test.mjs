@@ -34,7 +34,7 @@ test("the hooks are where the story needs them: the window, the quit, the first 
   assert.match(main, /window\.webContents\.on\("render-process-gone", \(_event, details\) => \{ if \(details\?\.reason !== "clean-exit"\) reportRecord\("renderer-gone"/);
   assert.match(main, /window\.on\("unresponsive", \(\) => reportRecord\("renderer-unresponsive"/);
   assert.match(main, /window\.on\("session-end", \(\) => reportEnd\("session-end"\)\);/);
-  assert.match(main, /endSession\("quit"\);\n  reportEnd\("quit"\);/, "a quit closes the marker beside the session record");
+  assert.match(main, /endSession\("quit"\);\n  if \(typeof reportEnd === "function"\) reportEnd\("quit"\);/, "a quit closes the marker beside the session record, guarded: suites that run the quit handler on its own do not have it");
   assert.match(main, /window\.webContents\.once\("did-finish-load", \(\) => setTimeout\(\(\) => \{ reportHost\?\.pageUp\(\)/, "the prompt waits for the first page, once");
   assert.match(main, /registerIpc\(\);\n  bootHealthStart\(\);\n  reportStart\(\);/, "the marker starts with the app, after the boot record");
   assert.match(block, /process\.on\("exit", \(code\) => \{ if \(code === 0\) reportEnd\("exit"\); \}\)/);

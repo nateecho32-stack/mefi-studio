@@ -23667,7 +23667,7 @@ app.on("before-quit", (event) => {
   // relaunch calls app.exit and never reaches this listener, so it keeps its
   // place; so does a crash, which never gets to write anything at all.
   endSession("quit");
-  reportEnd("quit");
+  if (typeof reportEnd === "function") reportEnd("quit");
   if (typeof outsideWorkQuit === "function") outsideWorkQuit();
   executorClosing = true;
   performanceProfiler.stop();
