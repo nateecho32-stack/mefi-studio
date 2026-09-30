@@ -104,6 +104,18 @@ async function copyRuntime(source, target) {
 }
 await copyRuntime(ELECTRON_DIST, OUT_DIR);
 
+// What's new: this build's notes come from the changelog's released sections
+// (scripts/release-notes.mjs) before assets/ is copied, so the package says
+// what changed in its own version. A failure keeps the file that is there.
+try {
+  const { generate: writeWhatsNew } = await import("./release-notes.mjs");
+  const notes = await writeWhatsNew({ root: STUDIO });
+  console.log(`assets/whats-new.json: ${notes.versions.join(", ") || "no versions with notes"}${notes.changed ? " (refreshed from CHANGELOG.md; commit it)" : ""}`);
+  if (release && !notes.table[pkg.version]) console.warn(`CHANGELOG.md has no released section with bold-lead bullets for ${pkg.version}, so What's new will say nothing after this build installs.`);
+} catch (error) {
+  console.warn(`could not refresh assets/whats-new.json (${error.message}); the file that is there ships as it is`);
+}
+
 // 2. app payload
 for (const entry of ["main.cjs", "preload.cjs", "README.md", "GETTING_STARTED.md"]) {
   await cp(path.join(STUDIO, entry), path.join(APP_DIR, entry));

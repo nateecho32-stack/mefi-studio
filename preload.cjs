@@ -212,6 +212,10 @@ const api = {
   releaseCheck: () => ipcRenderer.invoke("release:check"),
   releaseApply: () => ipcRenderer.invoke("release:apply"),
   releaseRollback: () => ipcRenderer.invoke("release:rollback"),
+  // What's new (main.cjs "What's new"): the running version's notes, and what has been read.
+  releaseWhatsNew: () => ipcRenderer.invoke("release:whats-new"),
+  releaseWhatsNewSeen: (payload) => ipcRenderer.invoke("release:whats-new-seen", { version: gitText(payload?.version, 40), how: payload?.how === "announce" ? "announce" : "read" }),
+  releaseWhatsNewSet: (on) => ipcRenderer.invoke("release:whats-new-set", { on: on === true }),
   // The renderer says its shell mounted: the flag an installing helper waits for.
   bootHealthy: () => ipcRenderer.invoke("boot:healthy"),
   // Void Engine Discord link (main.cjs "Discord community link"): every call

@@ -1,0 +1,31 @@
+/* Settings cards and small sheets for what the host tells you: Notifications
+   (renderer/alerts.js), Report a problem and the crash prompt
+   (renderer/report.js) and What's new (renderer/whats-new.js). Theme tokens
+   only, nothing under 12px, no scroll gutters: the app hides scrollbars and
+   draws its own indicator. */
+
+/* ---- What's new: Settings › Updates ---------------------------------------- */
+.whats-new-list { display: grid; gap: 2px; margin: 0 0 10px; }
+.whats-new-row { display: flex; align-items: center; gap: var(--s3); padding: 8px 0; border-bottom: 1px solid color-mix(in srgb, var(--hairline) 60%, transparent); }
+.whats-new-words { display: grid; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.whats-new-words b { color: var(--ivory); font-size: var(--fs-md); font-weight: 600; }
+.whats-new-words small { color: var(--muted); font-size: var(--fs-sm); line-height: 1.45; overflow-wrap: anywhere; }
+.whats-new-fresh { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: var(--r-pill); background: color-mix(in srgb, var(--gold) 20%, transparent); color: var(--gold-bright); font-size: var(--fs-sm); font-weight: 600; vertical-align: 1px; }
+.whats-new-link { justify-self: start; margin-top: 6px; }
+.whats-new-empty { margin: 4px 0; }
+
+/* ---- What's new: the sheet --------------------------------------------------- */
+.whats-new-sheet { position: fixed; inset: 0; z-index: calc(var(--z-toast) - 2); display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--bg-deep) 52%, transparent); backdrop-filter: blur(6px); }
+.whats-new-sheet[hidden] { display: none; }
+.whats-new-card { position: relative; width: min(520px, 100%); max-height: calc(100vh - 32px); padding: 20px 22px 18px; overflow: auto; border: 1px solid color-mix(in srgb, var(--ivory) 12%, transparent); border-radius: var(--r-xl); background: color-mix(in srgb, var(--panel-solid) 97%, transparent); color: var(--ivory); box-shadow: 0 40px 100px -40px color-mix(in srgb, var(--bg-deep) 95%, transparent); }
+.whats-new-head { display: flex; align-items: center; justify-content: space-between; }
+.whats-new-tag { display: inline-flex; align-items: center; gap: 7px; min-height: 28px; padding: 0 12px; border-radius: var(--r-pill); background: color-mix(in srgb, var(--gold) 18%, transparent); color: var(--gold-bright); font-size: var(--fs-sm); font-weight: 650; letter-spacing: .04em; text-transform: uppercase; }
+.whats-new-tag .glyph { width: 13px; height: 13px; }
+.whats-new-card h2 { margin: 14px 0 8px; font: 650 22px/1.25 var(--font-display); letter-spacing: -.01em; }
+.whats-new-notes { display: grid; gap: 8px; margin: 0 0 14px; padding-left: 18px; color: var(--ivory); font-size: var(--fs-md); line-height: 1.5; }
+.whats-new-notes.is-dim { color: var(--muted); }
+.whats-new-before { margin: 4px 0 12px; }
+.whats-new-before-head { margin: 0 0 6px; color: var(--gold); font-size: var(--fs-sm); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.whats-new-foot { display: flex; align-items: center; justify-content: flex-end; gap: var(--s3); flex-wrap: wrap; }
+.whats-new-foot .ghost { margin-right: auto; }
+.whats-new-sheet button:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }

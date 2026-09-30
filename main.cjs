@@ -126,6 +126,9 @@ const community = optionalHelper("./scripts/community.cjs", () => require("./scr
 // the saved copy's manifest, an update that did not stand). See "Release
 // updates: the safety net" below and scripts/update-safety.cjs.
 const updateSafety = optionalHelper("./scripts/update-safety.cjs", () => require("./scripts/update-safety.cjs"), null);
+// The rules for "What's new" after an update (which version has been read, when
+// the toast may speak). Without them the feature is simply absent.
+const whatsNew = optionalHelper("./scripts/whats-new.cjs", () => require("./scripts/whats-new.cjs"), null);
 const discordOAuth = community
   ? optionalHelper("./scripts/discord-oauth.cjs", () => require("./scripts/discord-oauth.cjs"), null)
   : null;
@@ -232,7 +235,7 @@ function handleProjectIpc(channel, handler) {
 // a gated handler would hold every project switch for. (Declared beside the
 // wrapper so the tests that load it from here up to app.setName see it.)
 const APP_WIDE_PREFIXES = ["projects:", "project-preview:", "performance:", "startup:", "community:", "hub:", "remote:", "styler:", "catalog:", "speed:", "shell:", "pc-setup:", "models:"];
-const APP_WIDE_CHANNELS = new Set(["usage:accounts", "opencode:credits", "release:status", "release:check", "update:status", "update:set", "settings:get-key", "boot:healthy"]);
+const APP_WIDE_CHANNELS = new Set(["usage:accounts", "opencode:credits", "release:status", "release:check", "update:status", "update:set", "settings:get-key", "boot:healthy", "release:whats-new", "release:whats-new-seen", "release:whats-new-set"]);
 ipcMain.handle = handleProjectIpc;
 
 app.setName("Mefi's Studio AI+");
@@ -2317,6 +2320,78 @@ async function stampProjectOpened(id) {
   }).catch(() => {});
 }
 // ---- end of the GitHub link ---------------------------------------------------
+
+// ---- What's new: the notes for the version that is running ----------------------
+// After an update installs, Studio says what changed, once, in plain words: one
+// toast with a What's new action, never a window at launch, never on a first
+// install. The words are assets/whats-new.json (scripts/release-notes.mjs writes
+// it from CHANGELOG.md when the app is packaged); what has been read is
+// settings.whatsNew { on, seen, announced }; scripts/whats-new.cjs holds the
+// rules. MEFI_STUDIO_NO_WHATS_NEW=1 and the switch in Settings › Updates turn it
+// off. A missing settings.json at launch is a fresh install (settingsFromDisk
+// reads it as {}): that version is sealed as read, so its second launch is not
+// mistaken for an update. A build older than the one already read (a roll back)
+// says nothing.
+const WHATS_NEW_PATH = path.join(STUDIO_ROOT, "assets", "whats-new.json");
+const WHATS_NEW_FRESH_INSTALL = settingsDisk.good === null && settingsDisk.unreadable !== true;
+let whatsNewTable = null;
+
+// Harness windows (smoke, capture, the CLI modes) and the kill switch never announce.
+const whatsNewOff = () => SMOKE || CAPTURE || CLI_MODE || process.env.MEFI_STUDIO_NO_WHATS_NEW === "1";
+
+async function whatsNewRead() {
+  if (whatsNewTable) return whatsNewTable;
+  let raw = null;
+  try { raw = JSON.parse(String(await readFile(WHATS_NEW_PATH, "utf8")).replace(/^\uFEFF/, "")); } catch {}
+  whatsNewTable = whatsNew.normalizeTable(raw);
+  return whatsNewTable;
+}
+
+async function releaseWhatsNew() {
+  if (!whatsNew) return { ok: false, error: "unavailable" };
+  try {
+    const current = app.getVersion();
+    let saved = (await readSettings()).whatsNew;
+    if (WHATS_NEW_FRESH_INSTALL && !whatsNewOff()) {
+      const sealed = whatsNew.sealFirstInstall({ settings: saved, current });
+      if (sealed) {
+        await updateSettings((settings) => { settings.whatsNew = whatsNew.sealFirstInstall({ settings: settings.whatsNew, current }) ?? whatsNew.settingsFrom(settings.whatsNew); });
+        saved = sealed;
+      }
+    }
+    return { ok: true, ...whatsNew.view({ table: await whatsNewRead(), current, settings: saved, killed: whatsNewOff() }) };
+  } catch (error) {
+    return { ok: false, error: String(error?.message ?? error).slice(0, 200) };
+  }
+}
+
+// `how` "announce" records that the toast was shown; "read" that the owner read
+// the notes (never backwards, and never past the running version).
+async function releaseWhatsNewSeen(payload = {}) {
+  if (!whatsNew) return { ok: false, error: "unavailable" };
+  const current = whatsNew.cleanVersion(app.getVersion());
+  const version = whatsNew.cleanVersion(payload?.version);
+  if (!version || !current || whatsNew.compareVersions(version, current) > 0) return { ok: false, error: "That is not a version this build knows." };
+  const how = payload?.how === "announce" ? "announce" : "read";
+  await updateSettings((settings) => {
+    const next = whatsNew.markVersion({ settings: settings.whatsNew, version, how });
+    if (!next) return false;
+    settings.whatsNew = next;
+  });
+  return releaseWhatsNew();
+}
+
+async function releaseWhatsNewSet(payload = {}) {
+  if (!whatsNew) return { ok: false, error: "unavailable" };
+  if (typeof payload?.on !== "boolean") return { ok: false, error: "The switch is on or off." };
+  await updateSettings((settings) => {
+    const saved = whatsNew.settingsFrom(settings.whatsNew);
+    if (saved.on === payload.on) return false;
+    settings.whatsNew = { ...saved, on: payload.on };
+  });
+  return releaseWhatsNew();
+}
+// ---- end of what's new ----------------------------------------------------------
 
 // ---- Your PCs vault: memory and setup between the owner's PCs ------------------
 // Friends › Your PCs › Share between my PCs (renderer/pc-vault.js). One private
@@ -22460,6 +22535,11 @@ function registerIpc() {
   ipcMain.handle("release:apply", async () => applyReleaseUpdate());
   ipcMain.handle("release:rollback", async () => releaseRollback());
   ipcMain.handle("boot:healthy", async () => bootHealthy("renderer"));
+  // ---- What's new (the "What's new" block) ------------------------------------
+  // App-wide: about the running build, not the open project.
+  ipcMain.handle("release:whats-new", async () => releaseWhatsNew());
+  ipcMain.handle("release:whats-new-seen", async (_event, payload) => releaseWhatsNewSeen(payload ?? {}));
+  ipcMain.handle("release:whats-new-set", async (_event, payload) => releaseWhatsNewSet(payload ?? {}));
 
   // ---- Community ----------------------------------------------------------
   // The Void Engine Discord link (the "Discord community link" block beside
@@ -23396,6 +23476,8 @@ app.whenReady().then(() => {
   // Both are fire-and-forget: a failure is logged, never an unhandled rejection.
   if (!SMOKE && !CAPTURE && !CLI_MODE) setTimeout(() => startUpdateWatch().catch((error) => logLine(`[update] watch failed: ${error?.message ?? error}`)), 3500);
   if (!SMOKE && !CAPTURE && !CLI_MODE) setTimeout(() => startReleaseWatch(), 6000);
+  // A fresh install's first launch seals its version as read (releaseWhatsNew), even if no page asks.
+  if (WHATS_NEW_FRESH_INSTALL && !whatsNewOff()) setTimeout(() => { releaseWhatsNew().catch(() => {}); }, 6000).unref?.();
   // Its first look is 15 s in; nothing reaches Discord unless a link exists.
   if (!SMOKE && !CAPTURE && !CLI_MODE) startCommunityWatch();
   // Friends › Your PCs badge: a fetch-only look 45 s in, then every 15 minutes.

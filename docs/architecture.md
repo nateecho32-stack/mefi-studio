@@ -1571,6 +1571,30 @@ the helper's PowerShell in `scripts/release-updater.mjs`, and
 protects the updates made from it, not the update that installs it.
 `MEFI_STUDIO_NO_ROLLBACK=1` restores the plain swap.
 
+**What's new.** After an update installs, Studio says what changed, once, in
+plain words: one toast, "Studio updated to 0.5.0", with a **What's new** action
+that opens a small sheet with that version's notes and **Got it**. It never
+opens a window by itself, and a first install is silent. The words are
+`assets/whats-new.json`, `{ "<version>": ["one plain sentence", ...] }` for the
+last five versions with notes, written from `CHANGELOG.md` by
+`scripts/release-notes.mjs` whenever `scripts/package-portable.mjs` runs (so a
+package carries the notes of its own version; the file is committed, and
+`node scripts/release-notes.mjs --check` fails when it no longer matches the
+changelog's released sections; `tests/release_notes.test.mjs` runs that check on
+the repository). A bullet's sentence is its bold lead; a bold label such as
+"**Trace** (Live, beside Activity): ..." joins the bullet's first sentence;
+`<!-- notes: ... -->` inside a bullet says the sentence itself, and
+`<!-- internal -->`, an "Internal:" or "Tests:" lead or a "### Internal"
+heading keeps a bullet out. At most six sentences a version. The host side is
+main.cjs's "What's new" block (`release:whats-new`, `release:whats-new-seen`
+and `release:whats-new-set`, all app-wide) over `scripts/whats-new.cjs`: what
+has been read is `settings.whatsNew` `{ on, seen, announced }`; a missing
+`settings.json` at launch is a fresh install and its version is sealed as read;
+a build older than the one already read (a roll back) says nothing; a toast that
+was shown is not shown again at the next launch, and the notes stay in
+**Settings › Updates**, marked New until read. `MEFI_STUDIO_NO_WHATS_NEW=1` or
+the "Tell me what's new after an update" switch there turns the toast off.
+
 Build and publish a release with `node scripts/package-release.mjs --version
 vX.Y.Z --publish`, or push a `v*` tag and let
 `.github/workflows/release.yml` run. A private repository needs a read-only
