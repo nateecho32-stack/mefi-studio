@@ -11952,16 +11952,27 @@ function assistantUiContext(value) {
   return view || companion || mode ? { ...(view ? { view } : {}), ...(companion ? { companion } : {}), ...(mode ? { mode } : {}) } : null;
 }
 
+// A message longer than this is refused whole, not cut: the box that sent it keeps what was typed, so
+// nothing the owner wrote is silently dropped from the thread or from what the model reads.
+const ASSISTANT_MESSAGE_LIMIT = 16000;
+function assistantMessageTooLong(text) {
+  if (text.length <= ASSISTANT_MESSAGE_LIMIT) return null;
+  const say = (count) => count.toLocaleString("en-US");
+  return { ok: false, error: `That message is ${say(text.length)} characters and Mefi reads up to ${say(ASSISTANT_MESSAGE_LIMIT)} at once, so nothing was sent. Cut it down or send it in parts.`, limit: ASSISTANT_MESSAGE_LIMIT, length: text.length };
+}
+
 async function assistantMessage(raw, options = {}) {
   const text = String(raw ?? "").trim();
   if (!text) return { ok: false, error: "empty" };
+  const tooLong = assistantMessageTooLong(text);
+  if (tooLong) return tooLong;
   await ensureAssistant();
   // The manner the owner chose for their companion rides every chat box's
   // message the same way (companion-pet.cjs; the model reads ui.personality).
   const manner = typeof agentBrain !== "undefined" && agentBrain?.companionManner ? await agentBrain.companionManner().catch(() => null) : null;
   const seen = assistantUiContext(options?.context);
   const ui = seen || manner ? { ...(seen ?? {}), ...(manner ? { personality: manner } : {}) } : null;
-  const user = { id: assistantMessageId(), projectId: projects.current().id, at: Date.now(), role: "user", text: text.slice(0, 16000), via: "local", intent: "chat", ...(ui ? { ui } : {}) };
+  const user = { id: assistantMessageId(), projectId: projects.current().id, at: Date.now(), role: "user", text, via: "local", intent: "chat", ...(ui ? { ui } : {}) };
   // Sent from Discord (the "Discord remote" block): the chat gate narrows what
   // it may do, and the work it files waits for the owner's OK.
   if (options?.remote === true) user.remote = true;

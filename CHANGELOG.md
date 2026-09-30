@@ -7,6 +7,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **A chat message over 16,000 characters is refused, not cut.** Every box that
+  talks to Mefi used to send only the first 16,000 characters of a very long
+  paste and keep that in the thread, so the rest vanished without a word. It now
+  says how long the message was and that nothing was sent, and the box keeps what
+  you typed.
 - **Commits made in a detached worktree now count as work only this PC has.**
   The Friends badge, the session report and the question before closing Studio
   listed a worktree only when it had uncommitted files, and every branch's
