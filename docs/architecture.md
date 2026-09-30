@@ -1473,6 +1473,15 @@ vX.Y.Z --publish`, or push a `v*` tag and let
 token: save one in Settings › Updates, set `MEFI_STUDIO_GITHUB_TOKEN`, or let
 Studio reuse the GitHub CLI's `gh auth token`.
 
+The packaged `Mefi Studio AI+.exe` is Electron's `electron.exe`, stamped with
+Studio's product name, version, copyright and icon (`scripts/stamp-exe.mjs`).
+Windows then shows Studio, not "Electron", in Task Manager, the file's
+Properties and SmartScreen. The release workflow opens the packaged app once
+(`--smoke`) before publishing. Once SignPath is set up, the workflow also has
+the executable signed and checks the signature first. A release run started
+by hand can use the hosted-runner gate for a tag that passed the full local
+gate. [code-signing.md](code-signing.md) holds the policy and the setup.
+
 ### Git sync: Push, Pull and GitHub linking
 
 The **Git chip** (`renderer/git-sync.js`, `window.MefiGitSync`) sits beside the

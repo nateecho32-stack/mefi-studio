@@ -60,6 +60,18 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   offers **Remove from list**; Enter or a double click opens a row; and **Open a
   folder…**, **Start a new app** and **Get from GitHub** sit at the foot. The
   loading card's spinner and progress bar no longer sit above the list.
+
+- **The Windows app is called Studio, not Electron, and is ready to be
+  signed.** The portable `Mefi Studio AI+.exe` now carries Studio's name,
+  version, copyright and icon. Task Manager, the file's Properties and
+  Windows' SmartScreen prompt stopped saying "Electron" by "GitHub, Inc.".
+  The release workflow opens the packaged app once before it publishes, and
+  it signs the executable through the SignPath Foundation's free open-source
+  programme once the project is accepted. Until then releases stay unsigned.
+  A release run started by hand now builds the tag it names rather than the
+  branch it was started from. It can also use a hosted-runner gate for a tag
+  that already passed the full local gate. See
+  [docs/code-signing.md](docs/code-signing.md).
 - **Live › Fleet: every seat on your team, and the wires between them.** A
   new page beside Command shows the open project's team the way OpenRig draws a
   rig. An explorer lists it as pods (Lead, Build, Check, Keep) of seats such as

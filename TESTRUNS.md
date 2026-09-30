@@ -35,6 +35,35 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-29 - Stamped executable and SignPath-ready release workflow
+
+The portable `Mefi Studio AI+.exe` gets Studio's name, version, copyright and
+icon (`scripts/stamp-exe.mjs`, `resedit` 3.1.0 as a dev dependency) in place
+of Electron's, and `release.yml` gains a smoke launch of the packaged app, a
+`gate: hosted` choice for hand-started runs, and SignPath signing that stays
+off until the repository variables exist (docs/code-signing.md). Gated in a
+detached worktree (`C:\wt\sign`, origin/main 10c6b97 plus this change,
+node_modules junctioned).
+
+- `npm run check` and `npm run audit` (0 findings): PASS.
+- `npm run test:fast`: PASS, 4511 pass, 0 fail, 5 skipped. The two packaging
+  suites read files from Electron's dist folder, so they sit in the heavy
+  lane; run directly: `stamp_exe` (6 new) and `package_privacy` PASS, 7 of 7.
+- Python contracts (248 tests, 1 skipped) and the normalized-path lock: PASS.
+- A real `node scripts/package-portable.mjs --release`: Windows reads the
+  stamped exe as ProductName and FileDescription "Mefi's Studio AI+", version
+  0.4.5.0, Studio's icon, unsigned. A copy launched with `--smoke` and a
+  scratch `--user-data-dir` exited 0 with the `[smoke]` line (39 cards). The
+  release folder kept only curated.json and models.json in its data folder.
+- The workflow's PowerShell steps, rehearsed locally under Windows PowerShell
+  5.1: the folder lookup and smoke launch pass; the signature check refuses
+  an unsigned file and a file whose product name and version differ. The
+  YAML parses. The SignPath steps themselves cannot run until the project is
+  accepted.
+- Not run: the 25 Electron render suites. The laptop had 0.9 GB free with
+  other sessions' Electron processes open, and this change touches neither
+  the renderer nor main.cjs.
+
 ## 2026-09-29 - GitHub link: the Git chip, Save and push, Publish and the Quiet-card launch screen
 
 The chip (`renderer/git-sync.js`), its host (`scripts/git-link.cjs`,
@@ -701,34 +730,6 @@ reorganized.
   skipped. `command_render` serialized 1/1 in 49.8 s (no cold-boot retry).
   `eyes_toggle_electron` 1/1, `occlusion_probe` 2/2. Python contracts OK
   (248, 1 skip). Normalized-path lock passed.
-
-## 2026-09-28 - Sync counts only real local work; vault calls take turns
-
-Follow-ups from the Plan session's review. sync.mjs recounts a non-empty
-status from the diffs and untracked files (a line-ending-only difference
-is not uncommitted work), skips local branches whose commits are all on
-some GitHub branch, and runs Git with GIT_OPTIONAL_LOCKS=0. The vault runs
-one call at a time, resets only when a rebase stopped on unmerged paths and
-names the changes a clash dropped, keeps insights, learned and settings per
-PC (older shared files still read), and removes its folder after a failed
-pair or create (create carries on with an empty private repository). The
-renderer saves the previewed share and keeps Send, Use and the lists on
-the shelf they were read from.
-
-- `npm run build-booklet` (renderer/booklet.html rebuilt), `npm run check`
-  (187 targets, 385 specs) and `npm run audit` (zero findings): PASS.
-- New suites: sync_changes (5), pc_vault_turns (9; 8 fail on the old
-  pc-vault.cjs) and pc_vault_ui_turns (3; all fail on the old renderer).
-  sync.test.mjs's stranded-work fixture builds `published` from main so
-  `local-only` keeps a commit of its own.
-- `npm test` in a private worktree, exit 0: Node parallel stage 4290 tests,
-  4285 passed, 5 skipped, 0 failures; Electron stage 42 tests, 41 passed, 1
-  skipped; `eyes_toggle_electron` 1/1; `occlusion_probe` 1 passed, 1
-  capability skip; Python contracts OK (248); normalized-path lock passed.
-- Rebased onto the multi-login commits (07150aa, 732026f): CHANGELOG kept
-  both entries, booklet rebuilt; `npm run check` (188 targets, 387 specs),
-  `npm run audit` and the sync, vault, booklet, setup-helper and
-  cli_accounts suites (107 tests) pass on the combined tree.
 
 ## Read Before Any Tests
 
