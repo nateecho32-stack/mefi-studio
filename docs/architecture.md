@@ -38,7 +38,14 @@ read a page you paste or a search found: public `http`/`https` addresses
 only, local and private ones refused, 15 seconds and 512 KB per read, and a
 long page in parts. The host executes bounded research turns
 for model calls; OpenCode and Claude builders receive the same tools through
-MCP. A reply's tool request is never shown as its answer. See
+MCP. Where a role may read project files, Studio's own models can also list a
+folder and search the project's text files (`project_list`, `project_search`,
+`scripts/project-search.cjs` with the rules in `scripts/project-ignore.cjs`):
+read-only, no shell, honouring `.gitignore`, never following links, never
+returning hidden or private files, and each answer under 10,000 characters;
+coding CLIs have their own file tools and are never offered these two, and
+`MEFI_STUDIO_NO_PROJECT_SEARCH=1` removes them. A reply's tool request is never
+shown as its answer. See
 [Agent tools](agent-tools.md) for setup, execution limits and the
 distinction between Studio permissions and native coding CLI access.
 

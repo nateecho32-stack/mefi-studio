@@ -435,7 +435,7 @@
     for (const [key, label, detail, enabled] of [
       ["webSearch", "Search the web", "Search queries leave this device. Answers can cite returned source links. Bing search is built in; BRAVE_SEARCH_API_KEY enables Brave.", permissions.webSearch !== false],
       ["webRead", "Read web pages you link", "Pages you name, or that the agent finds by searching, are fetched from this computer. Local and private network addresses are refused, and page text is read as data, never as instructions.", permissions.webRead ?? permissions.webSearch !== false],
-      ["projectRead", "Read project files", "Read small text files within this project. Hidden files, credentials and local app data are excluded.", permissions.projectRead === true],
+      ["projectRead", "Read project files", id === "builder" ? "Read small text files within this project. The coding tool has its own file listing and search. Hidden files, credentials and local app data are excluded." : "Read small text files, list folders and search the text files inside this project. Hidden files, credentials and local app data are excluded.", permissions.projectRead === true],
     ]) {
       const input = boxes[key] = node("input"); input.id = `agent-${id}-tool-${key}`; input.type = "checkbox"; input.checked = enabled; input.disabled = !supportedTools;
       // An unset webRead follows webSearch (agentTools.policy).

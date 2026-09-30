@@ -83,9 +83,81 @@ tool names and success/failure, without arguments or results.
 
 Project reads are off by default. Enabling them allows text files up to 32 KB
 inside the selected project. Traversal, symlinks outside the project, hidden
-paths, `data`, `dist`, `node_modules`, common credential files, binary files and
-alternate data streams are rejected. This is a limited research tool, not a
-general filesystem or shell interface.
+paths, `data`, `dist`, `node_modules`, keys and databases, files whose names say
+they hold credentials, binary files and alternate data streams are rejected.
+This is a limited research tool, not a general filesystem or shell interface.
+
+## Listing and searching project files (`project_list`, `project_search`)
+
+**Read project files** is one switch for three tools. Wherever a role may read a
+file, Studio's own models can also list a folder and search the project's text
+files, so "where is the login handled?" needs no guessing at file names. They
+are read-only, pure Node (no shell, no `ripgrep`, no `git`), and only for
+Studio's own models: Claude Code, Codex and OpenCode have their own file tools,
+and the tool server they are given never offers these two.
+
+`project_list` takes `path` (a folder, default the project's own), `depth` (1 to
+3) and `limit` (up to 300) and returns `{ path, entries: [{ path, type, bytes }] }`
+folders first, then files, each in name order. `type` is `dir`, `file`,
+`binary` (by its extension, or a NUL byte in its first bytes) or `link`;
+paths are from the project's folder, ready for `project_read`.
+
+`project_search` takes `query` (1 to 300 characters, matched within a single
+line) and returns the matching lines as `results: [{ file, matches: [{ line, text, before, after }] }]` with
+`matches`, `files` and `searched` counts. The query is literal text unless
+`regex` is true (a JavaScript regular expression); both ignore case unless
+`caseSensitive` is true. `path` narrows it to a folder or one file, `glob`
+narrows it by name (`*.ts` at any depth, `src/**/*.js` from the project's
+folder, `{a,b}` for alternatives, `!` to exclude), `context` (0 to 3) adds lines
+around each match, `maxResults` (default 30, at most 100) and `perFile` (default
+5, at most 20) cap what comes back. A file with more matches than `perFile` is
+marked `more`.
+
+What they leave out, always:
+
+- Anything `.gitignore` says (the project's own, each folder's, and
+  `.git/info/exclude`), with `!` bringing a name back, as git reads it.
+- Hidden files and folders (which covers `.env`, `.git` and Studio's own
+  `.mefi` worktrees, so a task run's copy of the same file is never found
+  twice), `data`, `dist` and `node_modules` at any depth, keys and stores by
+  name (`*.pem`, `*.key`, `*.p12`, `id_rsa`, `*.db`, `*.sqlite`, `*.tfstate`),
+  and data files whose names say they hold secrets (`secrets.yaml`,
+  `db-password.txt`, `token.json`, `credentials.json`). Source called
+  `token.ts` or `password.py` is code and stays. A file that opens with a
+  private-key header on a line of its own is skipped whatever it is called.
+  These are never opened, named or returned; the answer only counts them
+  (`skipped.private`).
+- `coverage`, `__pycache__` and `bower_components` anywhere, and `build`, `out`,
+  `target`, `vendor`, `venv`, `env`, `tmp`, `temp`, `logs` and `cache` at the top
+  of the project (a source folder called `cache` lower down stays). An ignored
+  or noisy folder can still be named as the `path`; the rules below it apply.
+- Binary files, files over 512 KB and files that cannot be read (counted as
+  `skipped.binary`, `large`, `unreadable`, never returned). UTF-16 text has NUL
+  bytes, so it counts as binary.
+- Symbolic links and junctions: a listing shows a `link`, and nothing follows it.
+
+What they refuse: a `path` outside the project or on the private list, in
+every spelling and on every platform: absolute, drive-letter, network (`\\server`),
+`\\?\` and `..` forms, alternate data streams (`name:stream`), Windows device
+names (`CON`, `NUL`, `COM1`...), wildcards, control characters, and a link that
+resolves outside the project or onto a private folder. Refusals are tool
+errors the model reads, like a regular expression that does not compile, one
+that matches the empty line (it would match every line), or one that backtracks
+without end: patterns run in a sandbox with a 250 ms limit per file and the
+call is stopped with "too slow to run safely". A `.gitignore` or a `glob` is
+matched by a plain wildcard walk, never compiled into a regular expression, so
+a hostile one costs time, not a hang.
+
+Limits: one call returns at most 10,000 characters of JSON, so a result is
+never cut inside itself by the tool loop's 12,000-character slice; it stops and
+says why in `note` (`truncated: true`). A search reads at most 5,000 files, 24
+MB and 10 seconds, and looks at no more than 20,000 folder entries; a line is
+read to 4,000 characters and shown as a 200-character excerpt around the match.
+Every result line is masked like everything Studio sends a model: credentials
+and home folders are replaced. Results are untrusted project data, like a
+file's text.
+
+`MEFI_STUDIO_NO_PROJECT_SEARCH=1` removes both tools and leaves `project_read`.
 
 ## Register a trusted MCP server
 
@@ -138,7 +210,8 @@ tools are denied by the host even if a model asks for them.
 ## Coding workers
 
 OpenCode, Claude Code and Codex receive a per-run MCP attachment exposing
-Studio search, web page reads, project reads and selected MCP tools; OpenCode
+Studio search, web page reads, project reads (not the list and search tools
+above: a coding worker has its own) and selected MCP tools; OpenCode
 and Claude Code also take the optional desk tool. OpenCode reads its config file through
 `OPENCODE_CONFIG` and Claude Code through `--mcp-config`; Codex has no
 per-run config file flag, so the server is passed as `-c mcp_servers.*`
