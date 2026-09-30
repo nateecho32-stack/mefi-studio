@@ -205,6 +205,9 @@ const api = {
   releaseStatus: () => ipcRenderer.invoke("release:status"),
   releaseCheck: () => ipcRenderer.invoke("release:check"),
   releaseApply: () => ipcRenderer.invoke("release:apply"),
+  releaseRollback: () => ipcRenderer.invoke("release:rollback"),
+  // The renderer says its shell mounted: the flag an installing helper waits for.
+  bootHealthy: () => ipcRenderer.invoke("boot:healthy"),
   // Void Engine Discord link (main.cjs "Discord community link"): every call
   // answers { ok, status } with the public status only; tokens never cross.
   communityStatus: () => ipcRenderer.invoke("community:status"),

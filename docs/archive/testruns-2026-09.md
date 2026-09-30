@@ -6,6 +6,69 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-28 - Needs you: answered asks leave the list, no dead asks after a reload
+
+The owner reported that answered asks in the companion's Needs you list hung
+around until Clear list, and that a reload showed asks whose clicks only
+failed. companion-ui.js keyed() kept any row holding focus (the clicked
+option button), so a row that left the list stayed on screen. It now holds
+back only a row with a focused text field and moves focus to the next row.
+agent-brain.js act() locks a row (aria-busy) until the re-read lands. The
+48 h question pruner ran only on a new ask or a click. assistantExpireQuestions
+now runs on loads, on the assistant:state and companion reads, on ticks and
+on answers. assistantSettleStaleAsks retires asks whose card is gone on every
+loadAssistant, the all-projects list drops expired asks, and a stale click
+comes back as gone. Asks about done or archived cards stay, as tests pin.
+
+- `npm run build-booklet`, `npm run check` (189 targets) and `npm run audit`
+  (0 findings): PASS on e53a572, rebased onto 897c2ec.
+- `npm test`: PASS (Node suites 497 s, Python contracts, normalized-path
+  lock). The first run, before the rebase, failed 5 assistant_loop cases:
+  the tick called the new helper outside the suite's vm slice. It is now
+  guarded with typeof, like the other cross-section helpers.
+- New tests: companion_queue_rows (4, keyed() in a vm with a small fake DOM;
+  all 4 fail on the old keyed()), assistant_issue_host (2: expiry on a read
+  with a gone reply, and a project load settling gone and expired asks).
+- Clicked through a booklet copy with a stub bridge: three fast clicks sent
+  one answer, the row left at once, and an Enter answer moved focus to the
+  next row's Try again.
+
+## 2026-09-28 - Vibe shows its planner and agent team at work
+
+Suggest a next step and Build it's sizing each show a live strip
+(`renderer/vibe-flow.js`) fed by the host's `vibe:progress` steps: the
+planning service's `onProgress` (reading, read, asking) and `vibeBuild`
+through `vibeProgress` (quick, sizing, tool, sized, adding), with
+`seatFetch`'s new `onTool`. The plan card draws a split request as a track
+with a live "now" line, Building now rows and the plan panel's timeline carry
+each worker's tool and current step, and Team lists Thinking now. Fixes:
+adding one suggestion no longer locks the rest, the plan panel's Make it one
+task uses `merge-steps`, and Enter in a New app field paints Making it….
+Build it's feedback moved under the box.
+
+- `npm run build-booklet` then `git diff --exit-code renderer/booklet.html`:
+  clean.
+- `npm run check` (189 targets, 389 specs), `npm run audit` (0 errors, 0
+  warnings), eslint on the changed files (no findings of theirs): PASS.
+- New tests fail on the old code: vibe_flow ("adding one suggestion keeps the
+  rest of its set usable", "Make it one task is one host call", "New app shows
+  its first build being sized"). New suites: vibe_flow (15),
+  vibe_progress_host (5); agent_tools asserts `onTool`.
+- `npm test` in C:\wt\vibe-flow on 77ad3bd: Node parallel stage 4351 tests,
+  4346 passed, 5 skipped, 0 failures. Electron lane 41 tests, 39 passed, 1
+  skipped, 1 failed: `media_browser_render` "Browser fixture timed out:
+  scroll clipping", a suite this change does not touch; it passed solo on
+  rerun in 14.4 s. `command_render` 1/1 in 50.4 s, `eyes_toggle_electron`
+  1/1, `occlusion_probe` 1 pass 1 skip. Python contracts OK (248, 1 skip).
+  Normalized-path lock passed.
+- Rebased onto c85cf60 (the menu polish): build-booklet clean, check,
+  audit, and 243 focused tests (the vibe, planning, sizing, agent tool and
+  onboarding suites plus every suite the menu polish changed): PASS.
+- Offscreen Electron captures at 1920x1080 and 1280x720 of every stage (fake
+  bridge replaying the host's steps): planner strip over placeholder cards,
+  sizing strip under the box, plan track and now line, plan timeline, Team,
+  New app; a light custom palette too.
+
 ## 2026-09-28 - Menu polish pass: plain words, two-step confirms, steadier menus
 
 The "Menu polish review" session's uncommitted work in C:\wt\menu-polish,

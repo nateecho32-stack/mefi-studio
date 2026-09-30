@@ -222,7 +222,10 @@ without devDependencies).
 releases; `stamp-exe.mjs` gives the packaged executable Studio's name,
 version and icon in place of Electron's before it is signed
 ([code-signing.md](code-signing.md)). Meanwhile `updater.mjs` (live source updates) and `release-updater.mjs`
-(GitHub releases) keep installed copies current.
+(GitHub releases) keep installed copies current. `update-safety.cjs` is the
+pure half of the update safety net: the shapes of the boot-health, backup
+manifest and update-result files the installing helper and the app pass each
+other (`main.cjs`, "Release updates: the safety net", owns their I/O).
 
 ## `renderer/` — classic scripts inlined into one HTML file
 

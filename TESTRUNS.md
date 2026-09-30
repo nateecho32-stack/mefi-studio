@@ -35,6 +35,68 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-30 - Update safety net: a saved copy, a boot watch and Roll back (ZA7)
+
+The installing helper (`scripts/release-updater.mjs`) now saves the running
+build outside the install folder, starts the new build and waits for
+`data/boot-health.json`, starts it once more if it never reports, and restores
+the saved build on a second failure; `release:rollback` and a Roll back row in
+Settings › Updates do the same by hand. The records' shapes are in
+`scripts/update-safety.cjs`; `main.cjs` owns the I/O ("Release updates: the
+safety net"). Built and gated in an isolated worktree (`C:\wt\za7`) off
+`origin/main` at 519d656, from the Bezi-informed plan (ZA7).
+
+- New `tests/update_rehearsal.test.mjs` runs the real PowerShell helper and
+  robocopy against a scratch portable folder (a name with a space and a
+  non-ASCII letter) with a `.cmd` stand-in for the app: a good update keeps
+  `resources/app/data` and saves the old build; a build that exits at once and
+  one that hangs are each tried twice, then the old build comes back with the
+  files the update added removed and the owner's data untouched; a backup that
+  cannot be made skips the update and restarts the current build; Roll back
+  restores the saved build; the plain swap is unchanged without the option; the
+  script carries a byte order mark. 7 tests, about 70 s, Windows only. This is
+  the first time anything ran the helper before a release.
+- `tests/update_safety.test.mjs` (the pure records), `tests/boot_health_host.test.mjs`
+  (`main.cjs`'s block against stubs) and the wiring pins in
+  `tests/release_updater.test.mjs` and `tests/app_wide_ipc.test.mjs`
+  (`boot:healthy` answers through a project switch, `release:rollback` waits).
+  `scripts/update-safety.cjs` is registered in `tests/module_purity.test.mjs`.
+- `npm run check`, `npm run audit` (0 findings) and `npm run lint` (0 errors;
+  no new warnings in the touched files): PASS.
+- `npm test`: Node suites 4881 tests, 4872 pass, 7 skipped, 2 fail; the
+  serialized Electron lane 48 tests, 47 pass, 1 skipped; `eyes_toggle_electron`
+  fails ("show must snap exactly one immediate refresh (got 2)"). Python
+  contracts 248 tests OK (1 skipped); normalized-path lock PASS. The two Node
+  failures, `git_actions` ("a real index.lock that clears in time") and `sync`
+  ("diverged main is reported", a `git clone` that failed after 44 s), are load
+  flakes: both files pass alone, 87 of 87. `eyes_toggle_electron` fails the
+  same way on a clean `origin/main` checkout (control run at 519d656), so it is
+  not this change.
+- Not covered: the helper has not yet updated a real installed portable build.
+  The rehearsal drives the same PowerShell against a stand-in, and the first
+  protected update in the field is the one after the release that carries this.
+
+## 2026-09-29 night - Dogfood fixes: link reading, tool-call leaks, refused plans, owner asks
+
+The fixes from a live dogfood run (an isolated Studio copy, handed only the
+public roadmap link, built three roadmap items in a sandbox clone) and from an
+audit of how work starts and ends in Vibe, Build and the pipeline. An
+adversarial review of the branch (5 area reviewers, a skeptic each: 25 raised,
+21 confirmed) was fixed and re-verified. Gated in the `C:\wt\fx` worktree on
+the merge of `origin/main` at `e9b8b79` (the update safety net), then squashed
+onto it.
+
+- `npm run check` and `npm run audit` (0 findings): PASS.
+- `npm test` on the final merge: Python contracts 248 OK (1 skipped),
+  normalized-path lock PASS. Node: 390 suites, 4945 tests in the parallel
+  stage, 4938 pass, 0 fail, 7 skipped; `command_render` PASS. The serialized
+  `eyes_toggle_electron` failed once ("baseline cadence: only 0/2 fetches
+  landed within 15000ms", the known timer drift under load) and passed solo.
+- The run before, on the merge at `519d656`: the same shape, with two load
+  failures that passed solo (`git_actions` "a real index.lock that clears in
+  time" 65/65; `command_render` "Assistant narrow: pointer reaches the switch
+  track" 2/2).
+
 ## 2026-09-29 - Land finished parked Studio work and Command-tree children
 
 Integrated off GitHub main 519d656 in isolated worktrees: issue links
@@ -664,69 +726,6 @@ from a box its choice opened (Agents' "Enter a model ID…").
   All three pass solo after the fix. Python contracts: only
   test_electron_smoke_boots_when_installed timed out (120 s); the launcher
   file passes solo (11 tests, 1 skipped).
-
-## 2026-09-28 - Needs you: answered asks leave the list, no dead asks after a reload
-
-The owner reported that answered asks in the companion's Needs you list hung
-around until Clear list, and that a reload showed asks whose clicks only
-failed. companion-ui.js keyed() kept any row holding focus (the clicked
-option button), so a row that left the list stayed on screen. It now holds
-back only a row with a focused text field and moves focus to the next row.
-agent-brain.js act() locks a row (aria-busy) until the re-read lands. The
-48 h question pruner ran only on a new ask or a click. assistantExpireQuestions
-now runs on loads, on the assistant:state and companion reads, on ticks and
-on answers. assistantSettleStaleAsks retires asks whose card is gone on every
-loadAssistant, the all-projects list drops expired asks, and a stale click
-comes back as gone. Asks about done or archived cards stay, as tests pin.
-
-- `npm run build-booklet`, `npm run check` (189 targets) and `npm run audit`
-  (0 findings): PASS on e53a572, rebased onto 897c2ec.
-- `npm test`: PASS (Node suites 497 s, Python contracts, normalized-path
-  lock). The first run, before the rebase, failed 5 assistant_loop cases:
-  the tick called the new helper outside the suite's vm slice. It is now
-  guarded with typeof, like the other cross-section helpers.
-- New tests: companion_queue_rows (4, keyed() in a vm with a small fake DOM;
-  all 4 fail on the old keyed()), assistant_issue_host (2: expiry on a read
-  with a gone reply, and a project load settling gone and expired asks).
-- Clicked through a booklet copy with a stub bridge: three fast clicks sent
-  one answer, the row left at once, and an Enter answer moved focus to the
-  next row's Try again.
-
-## 2026-09-28 - Vibe shows its planner and agent team at work
-
-Suggest a next step and Build it's sizing each show a live strip
-(`renderer/vibe-flow.js`) fed by the host's `vibe:progress` steps: the
-planning service's `onProgress` (reading, read, asking) and `vibeBuild`
-through `vibeProgress` (quick, sizing, tool, sized, adding), with
-`seatFetch`'s new `onTool`. The plan card draws a split request as a track
-with a live "now" line, Building now rows and the plan panel's timeline carry
-each worker's tool and current step, and Team lists Thinking now. Fixes:
-adding one suggestion no longer locks the rest, the plan panel's Make it one
-task uses `merge-steps`, and Enter in a New app field paints Making it….
-Build it's feedback moved under the box.
-
-- `npm run build-booklet` then `git diff --exit-code renderer/booklet.html`:
-  clean.
-- `npm run check` (189 targets, 389 specs), `npm run audit` (0 errors, 0
-  warnings), eslint on the changed files (no findings of theirs): PASS.
-- New tests fail on the old code: vibe_flow ("adding one suggestion keeps the
-  rest of its set usable", "Make it one task is one host call", "New app shows
-  its first build being sized"). New suites: vibe_flow (15),
-  vibe_progress_host (5); agent_tools asserts `onTool`.
-- `npm test` in C:\wt\vibe-flow on 77ad3bd: Node parallel stage 4351 tests,
-  4346 passed, 5 skipped, 0 failures. Electron lane 41 tests, 39 passed, 1
-  skipped, 1 failed: `media_browser_render` "Browser fixture timed out:
-  scroll clipping", a suite this change does not touch; it passed solo on
-  rerun in 14.4 s. `command_render` 1/1 in 50.4 s, `eyes_toggle_electron`
-  1/1, `occlusion_probe` 1 pass 1 skip. Python contracts OK (248, 1 skip).
-  Normalized-path lock passed.
-- Rebased onto c85cf60 (the menu polish): build-booklet clean, check,
-  audit, and 243 focused tests (the vibe, planning, sizing, agent tool and
-  onboarding suites plus every suite the menu polish changed): PASS.
-- Offscreen Electron captures at 1920x1080 and 1280x720 of every stage (fake
-  bridge replaying the host's steps): planner strip over placeholder cards,
-  sizing strip under the box, plan track and now line, plan timeline, Team,
-  New app; a light custom palette too.
 
 ## Read Before Any Tests
 

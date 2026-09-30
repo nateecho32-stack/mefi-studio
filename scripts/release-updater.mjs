@@ -10,7 +10,7 @@
 
 import { createHash } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
-import { mkdir, open, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, open, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Readable, Transform } from "node:stream";
 import { once } from "node:events";
@@ -565,7 +565,17 @@ function psQuote(value) {
 // fresh window can say what happened. resources/app/data is excluded from the
 // copy so the user's live state survives the swap. It relaunches even when
 // robocopy reports a partial failure, logs what happened, and then cleans up.
-export function buildApplyScript({ sourceRoot, installRoot, exePath, pid, version = null, cleanupRoot = null, logPath = null }) {
+//
+// With `safety` the helper also keeps a copy of the old build first, launches
+// the new one, and waits for it to raise the health flag (see
+// scripts/update-safety.cjs). A build that exits or never reports is started
+// once more, and then the old build is restored. Without `safety` the script
+// is exactly the plain swap above.
+export function buildApplyScript({ sourceRoot, installRoot, exePath, pid, version = null, cleanupRoot = null, logPath = null, safety = null }) {
+  const cleanup = [
+    cleanupRoot ? `Remove-Item -LiteralPath ${psQuote(cleanupRoot)} -Recurse -Force -ErrorAction SilentlyContinue` : "",
+    "Remove-Item -LiteralPath $MyInvocation.MyCommand.Path -Force -ErrorAction SilentlyContinue",
+  ];
   const lines = [
     "$ErrorActionPreference = 'Continue'",
     `$source = ${psQuote(sourceRoot)}`,
@@ -577,6 +587,7 @@ export function buildApplyScript({ sourceRoot, installRoot, exePath, pid, versio
     "Log 'waiting for Studio to exit'",
     "try { Wait-Process -Id $pidToWait -Timeout 180 -ErrorAction Stop } catch {}",
     "Start-Sleep -Milliseconds 900",
+    ...(safety?.backupRoot ? safetyBackupLines(safety, version, cleanup) : []),
     "Log ('copying ' + $source + ' -> ' + $target)",
     `$skip = Join-Path $source 'resources\\app\\data'`,
     `$copyArgs = @(('"' + $source + '"'), ('"' + $target + '"'), '/E', '/R:5', '/W:2', '/XD', ('"' + $skip + '"'), '/NFL', '/NDL', '/NJH', '/NJS', '/NP')`,
@@ -589,18 +600,178 @@ export function buildApplyScript({ sourceRoot, installRoot, exePath, pid, versio
     `$catalog = Start-Process -FilePath (Join-Path $env:SystemRoot 'System32\\robocopy.exe') -ArgumentList $catalogArgs -Wait -PassThru -WindowStyle Hidden`,
     "Log ('catalog robocopy exit ' + $catalog.ExitCode)",
     "Start-Sleep -Milliseconds 600",
-    "Log ('relaunching ' + $exe)",
-    version
-      ? `Start-Process -FilePath $exe -ArgumentList @('--released', ${psQuote(version)})`
-      : "Start-Process -FilePath $exe",
-    "Start-Sleep -Seconds 2",
-    cleanupRoot ? `Remove-Item -LiteralPath ${psQuote(cleanupRoot)} -Recurse -Force -ErrorAction SilentlyContinue` : "",
-    "Remove-Item -LiteralPath $MyInvocation.MyCommand.Path -Force -ErrorAction SilentlyContinue",
+    ...(safety?.backupRoot && safety.watch
+      ? safetyWatchLines(safety, version)
+      : [
+          "Log ('relaunching ' + $exe)",
+          version
+            ? `Start-Process -FilePath $exe -ArgumentList @('--released', ${psQuote(version)})${windowStyleArg(safety)}`
+            : `Start-Process -FilePath $exe${windowStyleArg(safety)}`,
+          "Start-Sleep -Seconds 2",
+        ]),
+    ...cleanup,
   ];
   return lines.filter(Boolean).join("\r\n") + "\r\n";
 }
 
+// The restore helper behind the Roll back button. It is the same rollback the
+// apply helper performs on its own, started by the owner: wait for Studio to
+// exit, mirror the saved copy over the install folder (never resources/app/data),
+// record what happened, drop the copy and start the restored build.
+export function buildRollbackScript({ installRoot, exePath, pid, safety, restoreVersion = "", replacedVersion = "", cleanupRoot = null, logPath = null }) {
+  const cleanup = [
+    cleanupRoot ? `Remove-Item -LiteralPath ${psQuote(cleanupRoot)} -Recurse -Force -ErrorAction SilentlyContinue` : "",
+    "Remove-Item -LiteralPath $MyInvocation.MyCommand.Path -Force -ErrorAction SilentlyContinue",
+  ];
+  const lines = [
+    "$ErrorActionPreference = 'Continue'",
+    `$target = ${psQuote(installRoot)}`,
+    `$exe = ${psQuote(exePath)}`,
+    `$quiet = ${psQuote(logPath ?? "")}`,
+    `$pidToWait = ${Number(pid) || 0}`,
+    "function Log([string]$message) { if ($quiet) { Add-Content -LiteralPath $quiet -Value ((Get-Date -Format s) + ' ' + $message) } }",
+    "Log 'waiting for Studio to exit'",
+    "try { Wait-Process -Id $pidToWait -Timeout 180 -ErrorAction Stop } catch {}",
+    "Start-Sleep -Milliseconds 900",
+    ...safetyPrelude({ ...safety, from: restoreVersion, to: replacedVersion }),
+    "Log ('restoring ' + $backupInstall + ' -> ' + $target)",
+    "$code = Robo @((Q $backupInstall), (Q $target), '/MIR', '/R:5', '/W:2', '/XD', (Q $dataDir), '/NFL', '/NDL', '/NJH', '/NJS', '/NP')",
+    "Log ('restore robocopy exit ' + $code)",
+    "$failed = ($code -ge 8)",
+    "WriteJson $resultPath @{ ok = $false; rolledBack = $true; rollbackFailed = $failed; stage = 'manual'; from = $fromVersion; to = $toVersion; at = (NowMs); reason = 'restored by request' }",
+    "if (-not $failed) { Remove-Item -LiteralPath $backupRoot -Recurse -Force -ErrorAction SilentlyContinue }",
+    `Start-Process -FilePath $exe -ArgumentList @('--rolled-back', $fromVersion)${windowStyleArg(safety)}`,
+    "Start-Sleep -Seconds 2",
+    ...cleanup,
+  ];
+  return lines.filter(Boolean).join("\r\n") + "\r\n";
+}
+
+// ---- the safety net's PowerShell pieces --------------------------------------
+
+// Tests start a .cmd stand-in for the app and pass windowStyle "Hidden" so no
+// console flashes. The real app never sets it: hiding a GUI window would hide it.
+function windowStyleArg(safety) {
+  return safety?.windowStyle ? ` -WindowStyle ${safety.windowStyle}` : "";
+}
+
+// Declarations shared by the apply and restore helpers. `from` is the version
+// the saved copy holds; `to` is the build that replaced it (or is being undone).
+function safetyPrelude(safety) {
+  return [
+    `$backupRoot = ${psQuote(safety.backupRoot)}`,
+    "$backupInstall = Join-Path $backupRoot 'install'",
+    "$dataDir = Join-Path $target 'resources\\app\\data'",
+    `$resultPath = ${psQuote(safety.resultPath)}`,
+    `$fromVersion = ${psQuote(safety.from)}`,
+    `$toVersion = ${psQuote(safety.to)}`,
+    "function NowMs { [long][DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() }",
+    "function Q([string]$path) { return '\"' + $path + '\"' }",
+    "function Robo([string[]]$roboArgs) { $p = Start-Process -FilePath (Join-Path $env:SystemRoot 'System32\\robocopy.exe') -ArgumentList $roboArgs -Wait -PassThru -WindowStyle Hidden; return [int]$p.ExitCode }",
+    "function WriteJson([string]$path, $object) { try { $dir = Split-Path -Parent $path; if ($dir -and -not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }; [System.IO.File]::WriteAllText($path, ($object | ConvertTo-Json -Compress), (New-Object System.Text.UTF8Encoding($false))) } catch { Log ('could not write ' + $path + ': ' + $_.Exception.Message) } }",
+  ];
+}
+
+// Copy the old build aside before anything is replaced. If the copy fails the
+// update is skipped: nothing has changed yet, so the current build starts again
+// and the next launch tells the owner why.
+function safetyBackupLines(safety, version, cleanup) {
+  return [
+    ...safetyPrelude({ ...safety, to: version ?? "" }),
+    "Log ('backing up ' + $target + ' -> ' + $backupInstall)",
+    "Remove-Item -LiteralPath $backupRoot -Recurse -Force -ErrorAction SilentlyContinue",
+    "$backupOk = $false",
+    "try { New-Item -ItemType Directory -Force -Path $backupInstall | Out-Null; $code = Robo @((Q $target), (Q $backupInstall), '/E', '/R:2', '/W:1', '/XD', (Q $dataDir), '/NFL', '/NDL', '/NJH', '/NJS', '/NP'); Log ('backup robocopy exit ' + $code); if ($code -lt 8) { $backupOk = $true } } catch { Log ('backup failed: ' + $_.Exception.Message) }",
+    "if ($backupOk) {",
+    "  WriteJson (Join-Path $backupRoot 'manifest.json') @{ v = 1; from = $fromVersion; to = $toVersion; installRoot = $target; at = (NowMs) }",
+    "} else {",
+    "  Log 'the backup failed; the update is skipped and the current build starts again'",
+    "  Remove-Item -LiteralPath $backupRoot -Recurse -Force -ErrorAction SilentlyContinue",
+    "  WriteJson $resultPath @{ ok = $false; stage = 'backup'; from = $fromVersion; to = $toVersion; at = (NowMs); reason = 'the current build could not be backed up' }",
+    `  Start-Process -FilePath $exe${windowStyleArg(safety)}`,
+    "  Start-Sleep -Seconds 2",
+    ...cleanup.filter(Boolean).map((line) => `  ${line}`),
+    "  exit",
+    "}",
+  ];
+}
+
+// Start the new build, wait for its health flag, start it once more if it did
+// not raise one, and restore the saved copy when the second try fails too. An
+// exited process is given a short grace before it counts as failed, because a
+// build may legitimately restart itself right after it starts.
+function safetyWatchLines(safety, version) {
+  const wait = Math.max(3, Math.floor(Number(safety.waitSeconds) || 120));
+  const grace = Math.max(1, Math.floor(Number(safety.exitGraceSeconds) || 20));
+  const style = windowStyleArg(safety);
+  return [
+    `$healthPath = ${psQuote(safety.healthPath)}`,
+    `$waitSeconds = ${wait}`,
+    `$exitGrace = ${grace}`,
+    "function StopTree($proc) { try { if ($proc -and -not $proc.HasExited) { & taskkill.exe /PID $proc.Id /T /F | Out-Null } } catch {} }",
+    "function Boot([string[]]$bootArgs) {",
+    "  $launchedAt = NowMs",
+    "  Log ('starting ' + $exe)",
+    `  $proc = Start-Process -FilePath $exe -ArgumentList $bootArgs -PassThru${style}`,
+    "  $deadline = (Get-Date).AddSeconds($waitSeconds)",
+    "  $exitedAt = $null",
+    "  while ((Get-Date) -lt $deadline) {",
+    "    Start-Sleep -Milliseconds 700",
+    "    try { if (Test-Path -LiteralPath $healthPath) { $h = Get-Content -LiteralPath $healthPath -Raw | ConvertFrom-Json; if ($h -and $h.healthyAt -and ([long]$h.healthyAt -ge $launchedAt)) { return @{ healthy = $true; proc = $proc } } } } catch {}",
+    "    $gone = $false",
+    "    try { $gone = $proc.HasExited } catch { $gone = $true }",
+    "    if ($gone) { if (-not $exitedAt) { $exitedAt = Get-Date } elseif (((Get-Date) - $exitedAt).TotalSeconds -ge $exitGrace) { break } }",
+    "  }",
+    "  return @{ healthy = $false; proc = $proc }",
+    "}",
+    "function Rollback([string]$why) {",
+    "  Log ('rolling back to ' + $fromVersion + ': ' + $why)",
+    "  $code = Robo @((Q $backupInstall), (Q $target), '/MIR', '/R:5', '/W:2', '/XD', (Q $dataDir), '/NFL', '/NDL', '/NJH', '/NJS', '/NP')",
+    "  Log ('rollback robocopy exit ' + $code)",
+    "  $failed = ($code -ge 8)",
+    "  WriteJson $resultPath @{ ok = $false; rolledBack = $true; rollbackFailed = $failed; stage = 'boot'; from = $fromVersion; to = $toVersion; at = (NowMs); reason = $why }",
+    "  if (-not $failed) { Remove-Item -LiteralPath $backupRoot -Recurse -Force -ErrorAction SilentlyContinue }",
+    `  Start-Process -FilePath $exe -ArgumentList @('--rolled-back', $fromVersion)${style}`,
+    "}",
+    `$launchArgs = @('--released', ${psQuote(version ?? "")})`,
+    "$boot = Boot $launchArgs",
+    "if (-not $boot.healthy) { Log 'the new build did not report healthy in time; starting it once more'; StopTree $boot.proc; Start-Sleep -Seconds 2; $boot = Boot $launchArgs }",
+    "if ($boot.healthy) { Log 'the new build reported healthy' } else { StopTree $boot.proc; Start-Sleep -Seconds 2; Rollback 'the new build did not start properly' }",
+    "Start-Sleep -Seconds 1",
+  ];
+}
+
+// Where one install keeps its saved copy: outside the install folder, OneDrive
+// and %TEMP% (the apply helper deletes its own staging folder there, and
+// Storage Sense clears it). Null when the machine names no local app-data
+// folder, in which case an update simply installs without a backup.
+export function rollbackFolder(installRoot, env = process.env, installKey = null) {
+  const base = env?.LOCALAPPDATA;
+  if (!base || !installRoot) return null;
+  const key = typeof installKey === "function" ? installKey(installRoot) : String(installKey ?? "default");
+  return path.win32.join(base, "MefiStudio", "rollback", key);
+}
+
+// A staged build only earns the boot watch when its main.cjs still raises the
+// flag the helper waits for; otherwise the helper would undo a healthy build.
+export async function stagedBuildWritesHealth(payloadRoot, writesHealth) {
+  try {
+    const source = await readFile(path.join(payloadRoot, "main.cjs"), "utf8");
+    return Boolean(writesHealth(source));
+  } catch {
+    return false;
+  }
+}
+
+// Written with a byte order mark: Windows PowerShell 5.1 reads a BOM-less
+// script as the ANSI code page, which turns a non-ASCII folder or user name in
+// the install path into a different folder.
 export async function writeApplyScript(file, options) {
-  await writeFile(file, buildApplyScript(options), "utf8");
+  await writeFile(file, `﻿${buildApplyScript(options)}`, "utf8");
+  return file;
+}
+
+export async function writeRollbackScript(file, options) {
+  await writeFile(file, `﻿${buildRollbackScript(options)}`, "utf8");
   return file;
 }
