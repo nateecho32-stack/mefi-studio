@@ -183,6 +183,70 @@ test("Dragging or moving a docked player starts from its visible location and ke
   }
 });
 
+test("Only a state-preserving move carries the player: a host that cannot, or refuses, never gets it, and the player keeps floating", () => {
+  const env = environment(); env.show(); const floating = env.rect();
+  // append and insertBefore would unload the iframe and restart what plays in it.
+  const plain = env.stage(); plain.moveBefore = undefined;
+  assert.equal(env.controller.dock(plain), false);
+  assert.equal(env.root.parent, env.document.body); assert.equal(env.root.dataset.docked, "false"); assert.deepEqual(env.rect(), floating);
+  const refusing = env.stage(); refusing.refuseMoves = true;
+  assert.equal(env.controller.dock(refusing), false, "a host whose move throws leaves the player where it is");
+  assert.equal(env.root.parent, env.document.body); assert.deepEqual(env.rect(), floating);
+  assert.equal(env.moves.length, 0, "nothing was moved at all"); assert.equal(env.root.reloads ?? 0, 0, "and nothing was reparented the way that reloads a frame");
+  // The refusals leave nothing behind: a good host is still taken.
+  const good = env.stage();
+  assert.equal(env.controller.dock(good), true); assert.equal(env.root.parent, good);
+  assert.equal(env.frame.parent, env.content); assert.equal(env.root.reloads ?? 0, 0);
+});
+
+test("Docked, the menu's card is the toolbar and the grips step aside; minimizing or hiding sends the player home to the page, and each placement is reported once", () => {
+  const env = environment(null, true); env.show();
+  const stage = env.stage(), toolbar = env.ids.get("media-window-move").parent;
+  const grips = ["n", "e", "s", "w", "ne", "se", "sw", "nw"].map((edge) => env.ids.get(`media-window-resize-${edge}`));
+  assert.equal(toolbar.hidden, false); assert.ok(grips.every((grip) => grip.hidden === false));
+  assert.deepEqual(env.placements.at(-1), { background: false, minimized: false, docked: false, visible: true });
+  env.controller.dock(stage);
+  assert.equal(toolbar.hidden, true, "in the menu, the menu's own card is the toolbar"); assert.ok(grips.every((grip) => grip.hidden === true), "and the menu sizes the player");
+  assert.deepEqual(env.placements.at(-1), { background: false, minimized: false, docked: true, visible: true });
+  const reported = env.placements.length;
+  env.controller.dock(stage); env.window.emit("mefi:nav"); env.window.emit("resize"); env.controller.reveal();
+  assert.equal(env.placements.length, reported, "a placement that has not changed is not reported again");
+  env.controller.minimize();
+  assert.equal(env.root.parent, env.document.body, "a minimized player is a pill on the page, not in the menu");
+  assert.equal(env.root.dataset.docked, "false"); assert.equal(toolbar.hidden, false, "and keeps its Restore button");
+  assert.deepEqual(env.placements.at(-1), { background: false, minimized: true, docked: false, visible: true });
+  env.controller.minimize();
+  assert.equal(env.root.parent, stage, "restored, it goes back into the stage the menu still holds"); assert.equal(env.root.dataset.docked, "true");
+  env.controller.hide();
+  assert.equal(env.root.hidden, true, "a hidden player is not drawn wherever it sits");
+  assert.deepEqual([env.placements.at(-1).visible, env.placements.at(-1).minimized, env.placements.at(-1).background], [false, false, false], "the menu is told it is no longer visible");
+  env.show(); assert.equal(env.root.hidden, false); assert.equal(env.root.parent, stage, "shown again while the menu is open, it is in the stage");
+  assert.equal(env.root.dataset.docked, "true");
+  env.controller.dock(null); assert.equal(env.root.parent, env.document.body, "and the menu closing sends it home");
+  assert.equal(env.root.reloads ?? 0, 0, "through all of it the player only moved with moveBefore");
+});
+
+test("A floating player steps clear of the open menu without saving the move, and returns when the menu closes", () => {
+  const env = environment(); env.show(); const home = env.rect();
+  const menu = { left: 700, top: 500, right: 1000, bottom: 800 };
+  const clear = (box) => box.x >= menu.right || box.x + box.width <= menu.left || box.y >= menu.bottom || box.y + box.height <= menu.top;
+  assert.equal(clear(home), false, "the player and the menu overlap to begin with");
+  env.controller.avoid(menu);
+  const aside = env.rect();
+  assert.equal(clear(aside), true, "it steps to a side of the menu");
+  assert.ok(aside.x >= 16 && aside.y >= 16 && aside.x + aside.width <= 1424 && aside.y + aside.height <= 884, "and stays on screen");
+  assert.equal(env.root.dataset.dodging, "true");
+  assert.equal(env.storage.get("mefiStudio.mediaWindow.v1"), undefined, "the move is not saved");
+  env.controller.avoid({ ...menu }); assert.deepEqual(env.rect(), aside, "the same menu asks for nothing new");
+  env.controller.avoid(null); assert.deepEqual(env.rect(), home, "it comes back when the menu closes");
+  env.controller.avoid({ left: 0, top: 0, right: 100, bottom: 100 }); assert.deepEqual(env.rect(), home, "a menu it does not overlap leaves it be");
+  env.controller.avoid({ left: NaN, top: 0, right: 1, bottom: 1 }); assert.deepEqual(env.rect(), home, "a rectangle that is not one is ignored");
+  env.controller.avoid(menu); env.controller.minimize();
+  const pill = env.rect(); assert.equal(pill.height, 60); assert.equal(clear(pill), true, "a minimized pill steps aside too");
+  env.controller.avoid(null); env.controller.minimize();
+  assert.deepEqual(env.rect(), home);
+});
+
 test("The default player stays still as its controls are approached; Move aside is opt-in", () => {
   const env = environment(); env.show(); env.advance(1800);
   const before = env.rect(); env.pointer(before.x - 40, before.y + 80);
