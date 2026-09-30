@@ -10,10 +10,38 @@
 // out, because a shared brain is text a model will later read as
 // instructions. Guarded by tests/share_review.test.mjs.
 const os = require("node:os");
-const { scrubOutbound } = require("./redaction.cjs");
+const { scrubOutbound, maskCredentials } = require("./redaction.cjs");
 
 const MAX_DEPTH = 12;
 const MAX_STRINGS = 20000;
+
+// Sharing removes the whole local path, including tails previously normalized
+// to ~ by the model redactor. Unix shapes must not match inside web URLs.
+const LOCAL_PATH_START = String.raw`(?:\bfile://|\b[A-Za-z]:[\\/]|(?<![\w./-])/(?:home|Users)/|(?<![\w./~-])~[\\/])`;
+const QUOTED_LOCAL_PATHS = ['"', "'", "\u0060"].map((quote) => [quote, new RegExp(`${quote}(${LOCAL_PATH_START}[^\\r\\n${quote}<>|]+?)${quote}`, "gi")]);
+const LOCAL_PATH = new RegExp(`${LOCAL_PATH_START}[^\\s"\\x60<>|][^\\r\\n"\\x60<>|]*`, "gi");
+function scrubPaths(value) {
+  let text = value;
+  for (const [quote, re] of QUOTED_LOCAL_PATHS) text = text.replace(re, `${quote}[path]${quote}`);
+  let clean = "", at = 0, match;
+  LOCAL_PATH.lastIndex = 0;
+  while ((match = LOCAL_PATH.exec(text))) {
+    const matched = match[0], offset = match.index;
+    // A complete filename ends an unquoted path. Keep the prose, relative
+    // references and URLs following it instead of treating them as folders.
+    const fileEnd = /\.[A-Za-z0-9]{1,12}[),.;:!?]*(?=\s)/.exec(matched);
+    const whitespace = matched.search(/\s/);
+    const prose = /\s+(?:and|then|or|see|read|run|use)\b/i.exec(matched);
+    const end = offset > 0 && prose && (!fileEnd || prose.index < fileEnd.index)
+      ? whitespace : fileEnd ? fileEnd.index + fileEnd[0].length : offset === 0 || whitespace < 0 ? matched.length : whitespace;
+    const path = matched.slice(0, end);
+    const punctuation = path.match(/[),.;:!?]+$/)?.[0] ?? "";
+    clean += text.slice(at, offset) + `[path]${punctuation}`;
+    at = offset + end;
+    LOCAL_PATH.lastIndex = at;
+  }
+  return clean + text.slice(at);
+}
 
 // Each rule: an id, how serious it is, what the owner reads, and a pattern.
 // "block" findings stop a share until the owner removes them; "warn" ones are
@@ -26,6 +54,8 @@ const RULES = Object.freeze([
   { id: "url-credential", level: "block", label: "a link with a login in it", re: /\b[a-z][a-z0-9+.-]*:\/\/[^\s/@:]+:[^\s/@]+@/i },
   { id: "home-path", level: "warn", label: "a folder path with your user name", re: /\b[A-Za-z]:[\\/]Users[\\/][^\\/\s"'<>|]+|(?<![\w.-])\/(?:home|Users)\/[^\\/\s"'<>|]+/ },
   { id: "drive-path", level: "warn", label: "a folder path on this PC", re: /\b[A-Za-z]:[\\/][^\s"'<>|]{2,}/ },
+  { id: "tilde-path", level: "warn", label: "a folder path in your home directory", re: /(?<![\w./~-])~[\\/][^\s"'<>|]+/ },
+  { id: "file-url", level: "warn", label: "a local file link", re: /\bfile:\/\/[^\s"'<>|]+/i },
   // Not the user:password part of a link, which url-credential reports.
   { id: "email", level: "warn", label: "an email address", re: /(?<![:/])\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/ },
   { id: "ip", level: "warn", label: "a network address", re: /\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b/ },
@@ -104,7 +134,10 @@ function scan(value, { received = true, names = localNames() } = {}) {
 function scrub(value, { names = localNames() } = {}, depth = 0) {
   if (depth > MAX_DEPTH) return null;
   if (typeof value === "string") {
-    let text = scrubOutbound(value);
+    // Web URLs are references, including /home or ~/ URL path components.
+    // Their credentials are still masked; file:// links remain local paths.
+    let text = value.split(/(\b(?:https?|ftp):\/\/[^\s"'<>|\x60]+)/gi)
+      .map((part, index) => index % 2 ? maskCredentials(part) : scrubOutbound(scrubPaths(part))).join("");
     for (const [re, replacement] of REPLACEMENTS) text = text.replace(re, replacement);
     for (const name of names) text = text.replace(new RegExp(`\\b${escapeRegExp(name)}\\b`, "gi"), "[this PC]");
     return text;

@@ -35,49 +35,35 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
-## 2026-09-29 - GitHub link: the Git chip, Save and push, Publish and the Quiet-card launch screen
+## 2026-09-29 - Codex Security fixes for five validated findings
 
-The chip (`renderer/git-sync.js`), its host (`scripts/git-link.cjs`,
-`git-actions.cjs`, `git-host.cjs`, wired in `main.cjs` and `preload.cjs`), New
-app's GitHub choice and the Quiet-card launch screen. Built and gated in an
-isolated worktree (`C:\wt\ghl`, branch `gh-link`) off `origin/main`, then
-merged with `origin/main` at ab206be (two conflicts, CHANGELOG and
-`build-booklet.mjs`, both resolved by keeping both sides).
+Remote task admission and promotion now retain the approval boundary. PIN
+checks, lockout changes, settings toggles and one-use approval handles share
+the settings queue. Catalog limits are validated and rendered safely. Legacy
+idea scans reject linked paths, validate opened files and redact complete
+credential context before clipping. Friend exports and Discord replies remove
+home-path tails and local file links while preserving surrounding references.
 
-- `npm run check` (0.4.5, 200 targets, 411 specs, 16 stylesheets, and
-  `MERGE-CSS-RESOLVED` on the merge) and `npm run audit` (0 findings): PASS.
-  The auditor now also reads `scripts/git-host.cjs` for the events main hands
-  it to send (`git:state`).
-- `npm test` on the merged tree: PASS. Node suites 4834 tests, 4829 pass, 0
-  fail, 5 skipped (514 s, the Electron lane included: 48 tests, 47 pass, 1
-  skipped); Python contracts 248 tests OK (1 skipped, 41 s); normalized-path
-  lock PASS.
-- New suites: `git_link` 59, `git_actions` 65 (real git in temp folders, a local
-  bare repository as "GitHub" and a fake `gh`), `git_host` 53, `git_link_host`
-  11, `git_sync_ui` 60, and `startup_screen` (rewritten deliberately: the two
-  open buttons became one Open and a Start agents switch), `vibe_panels` 48.
-  Nothing in them reaches GitHub or an account.
-- Independent reviews (three reviewers who had not written the code, host only)
-  found and fixed 41 defects, each with a regression test that fails without the
-  fix. The serious ones: a save followed a Windows junction out of the project
-  and committed a file from outside it; a branch named `-f` became a force push;
-  `scrub()` was quadratic and took 8 s on 80 KB, enough to freeze the main
-  process; key scanning was skipped for changed files when `diff.noprefix` was
-  set and for files over 1 MiB; a sync-backed step queued behind another writer
-  ran on a project opened meanwhile; an unset commit identity and a throwing
-  project check failed open. A later pass found the renderer never sent the
-  project id the host guards on, and its model sanitiser dropped the id the host
-  adds; both are fixed and pinned.
-- Left open on purpose (noted in the reviews): a file edited between the scan and
-  the commit is not re-scanned; a repository's own `.git/config` runs for reads
-  as it already does for `sync.mjs`; files over 1 MiB are warned about, not read
-  for keys; the glance has no merge/rebase-in-progress flag (Save and Publish do
-  refuse there); in-app device-code sign-in is not built (the setup window is
-  polled instead).
-- Real-app look, not only fakes: the built booklet was opened in offscreen
-  Electron at 1920x1080 with a fake bridge whose chip models come from the real
-  `describe()`: the launch card (four projects with chips, 600x560 too), the chip
-  and its popover on Vibe's home and on Build's section bar.
+- New pre-fix regressions reproduced remote provenance loss, concurrent PIN
+  undercounting, stale PIN replacement, catalog HTML, outside-project junction
+  reads and credential/path-tail disclosure. A fresh read-only reviewer found
+  multiline JSON credentials and sharing representation/prose cases; these
+  were reproduced, corrected and covered by regressions.
+- Final focused security/compatibility run: 153 tests, 151 passed, 2 skipped
+  because this Windows account cannot create file symlinks (EPERM). Initial
+  and nested junctions and cached-directory replacement ran and passed.
+- Final stable tree: `npm run build-booklet`, `npm run check` (196 targets,
+  406 specs), `git diff --check` and `npm run audit` (0 findings) PASS.
+- Final `npm test` PASS: Node 4,607 tests, 4,598 passed, 9 skipped, 0 failures
+  (563 s); Python 248 tests, 1 skipped, 0 failures (47 s); normalized-path
+  lock 6 checks PASS. Existing opt-in/platform skips remain; the occlusion
+  fixture capability-gated because this desktop never emitted occlusion.
+- An earlier full run was deliberately stopped after its passing CPU stage
+  to incorporate the independent review corrections; it is not counted as a
+  completed gate. The final full run above used the settled final sources.
+- All fixtures used synthetic data. No paid workers or live Discord/model
+  operations ran, and existing user data and installed app dependencies stayed
+  intact. Complete local logs were retained in the security artifact collection.
 
 ## 2026-09-29 - 0.4.5 roadmap quick wins and release boundary
 

@@ -92,6 +92,40 @@ test("refresh starts both independent sources before either response completes",
   assert.deepEqual(JSON.parse(await readFile(f.catalogPath, "utf8")), result);
 });
 
+test("catalog token limits reject malformed metadata and preserve numeric controls", async (t) => {
+  const values = ["<img src=x onerror=alert(1)>", "200000", { tokens: 200000 }, [200000], true, -1, Infinity, NaN];
+  const metadata = Object.fromEntries(values.map((value, index) => [`invalid-${index}`, { ...liveMetadata, limit: { context: value, output: value } }]));
+  metadata.control = { ...liveMetadata, limit: { context: 200000, output: 0 } };
+  metadata.zero = { ...liveMetadata, limit: { context: 0, output: 16000 } };
+  const f = await fixture(t, { models: [] });
+  const result = await refreshCatalog({ root: f.root, logger, fetchImpl: sources({ roster: Object.keys(metadata), metadata }) });
+  assert.deepEqual(result.models.find((model) => model.id === "control").limits, { context: 200000, output: 0 });
+  assert.deepEqual(result.models.find((model) => model.id === "zero").limits, { context: 0, output: 16000 });
+  for (let index = 0; index < values.length; index++) {
+    assert.deepEqual(result.models.find((model) => model.id === `invalid-${index}`).limits, { context: null, output: null });
+    for (const field of ["context", "output"]) assert.ok(result.warnings.some((warning) => warning.includes(`invalid-${index}`) && warning.includes(field) && warning.includes("finite nonnegative number")));
+  }
+  assert.deepEqual(JSON.parse(await readFile(f.catalogPath, "utf8")).models.map((model) => model.limits), result.models.map((model) => model.limits));
+});
+
+test("offline and failed-source rebuilds discard malformed cached token limits", async (t) => {
+  for (const offline of [true, false]) {
+    await t.test(offline ? "offline" : "failed metadata", async (t) => {
+      const unsafe = { ...savedModel, id: "unsafe", limits: { context: "<svg onload=alert(1)>", output: { tokens: 16000 } } };
+      const f = await fixture(t, { models: [savedModel, unsafe] });
+      const result = await refreshCatalog({ root: f.root, offline, logger, fetchImpl: async (url) => {
+        if (offline) assert.fail("offline refresh must not fetch");
+        if (url === metadataUrl) throw new Error("fixture offline");
+        return response({ data: [{ id: savedModel.id }, { id: unsafe.id }] });
+      } });
+      assertCachedMetadata(result.models.find((model) => model.id === savedModel.id));
+      assert.deepEqual(result.models.find((model) => model.id === unsafe.id).limits, { context: null, output: null });
+      assert.ok(result.warnings.some((warning) => warning.includes("unsafe") && warning.includes("context")));
+      assert.ok(result.warnings.some((warning) => warning.includes("unsafe") && warning.includes("output")));
+    });
+  }
+});
+
 test("offline rebuild preserves known prices, variants, capabilities and provider endpoints", async (t) => {
   const f = await fixture(t);
   const result = await refreshCatalog({

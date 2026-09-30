@@ -3026,19 +3026,33 @@ async function remoteButton(request, settings, now) {
   if (request.buttonId === "needs") return remoteNeeds(settings, now);
   if (request.buttonId === "pause") return remoteAnswer({ command: "pause" }, settings);
   if (request.buttonId === "resume") return remoteResume();
-  const held = remoteApprovals.get(request.buttonId);
+  let held = remoteApprovals.get(request.buttonId);
   if (!held || now - held.at > REMOTE_BUTTON_MS) return { text: "That button is too old. Ask for /studio needs again." };
   if (!request.pin) return { text: "Approving from Discord needs your PIN." };
-  const attempt = remoteRules.tryPin(settings, request.pin, now);
-  if (!attempt.ok || attempt.lock.failures !== settings.lock.failures) await updateSettings((saved) => { saved.remote = { ...(saved.remote ?? {}), lock: attempt.lock }; });
+  let attempt, raisedLock = false, unavailable = false;
+  // Authentication, lockout and one-use consumption share the settings lock.
+  // Each command checks the current PIN and count, including queued toggles.
+  await updateSettings((saved) => {
+    const current = remoteRules.normalizeSettings(saved.remote);
+    if (!current.on) { unavailable = true; return false; }
+    const fresh = remoteApprovals.get(request.buttonId);
+    now = Date.now();
+    if (fresh !== held || now - fresh.at > REMOTE_BUTTON_MS) { held = null; return false; }
+    attempt = remoteRules.tryPin(current, request.pin, now);
+    raisedLock = current.lock.failures < remoteRules.PIN_TRIES && attempt.lock.failures >= remoteRules.PIN_TRIES;
+    if (attempt.ok) remoteApprovals.delete(request.buttonId);
+    if (attempt.lock.failures === current.lock.failures && attempt.lock.lockedAt === current.lock.lockedAt) return false;
+    saved.remote = { ...(saved.remote ?? {}), lock: attempt.lock };
+  });
+  if (unavailable) return { text: "Approvals from Discord are off on this PC." };
+  if (!held) return { text: "That button is too old. Ask for /studio needs again." };
   if (!attempt.ok) {
-    if (attempt.reason === "locked" && attempt.lock.lockedAt === now) {
+    if (raisedLock) {
       hubClient?.remoteNotice(`pin-lock:${now}`, "info", "🔒 Five wrong PINs: approvals from Discord are locked on this PC until you unlock them in Studio (Friends › Your PCs › Reach this PC from Discord).");
       remotePush();
     }
     return { text: attempt.reason === "no-pin" ? "Set an approval PIN in Studio first." : attempt.reason === "locked" ? "Approvals from Discord are locked on this PC. Unlock them in Studio." : `That PIN is not right. ${attempt.left} ${attempt.left === 1 ? "try" : "tries"} left before approvals from Discord lock.`, note: "wrong PIN" };
   }
-  remoteApprovals.delete(request.buttonId);
   const result = await backlogControl({ action: "approve", taskId: held.taskId, projectId: projects.current().id, expectedScope: held.scope, via: "remote" });
   return result?.ok
     ? { text: `Approved: ${remoteRules.plain(held.title)}. It builds when a worker is free.`, note: "approved" }
@@ -3099,9 +3113,12 @@ async function remoteLook() {
 // Settings › the remote: the choices, the PIN, and unlocking.
 async function remoteSet(patch) {
   if (!remoteRules) return { ok: false, error: "unavailable" };
-  const current = await remoteSettings();
-  const next = remoteRules.applyPatch(current, patch ?? {});
-  await updateSettings((saved) => { saved.remote = { ...next, pin: current.pin, lock: current.lock }; });
+  let next;
+  await updateSettings((saved) => {
+    const current = remoteRules.normalizeSettings(saved.remote, { hostname: os.hostname() });
+    next = remoteRules.applyPatch(current, patch ?? {});
+    saved.remote = next;
+  });
   await remoteApply();
   logLine(`[remote] ${next.on ? "on" : "off"} as ${next.name}`);
   return remoteStatus();

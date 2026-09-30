@@ -111,6 +111,13 @@ function endpointFor(id, curated, meta) {
   return { kind, ...curated.endpoints[kind] };
 }
 
+function tokenLimit(value, id, field, warnings) {
+  if (value == null) return null;
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) return value;
+  warnings.push(`${id}: ${field} limit must be a finite nonnegative number; recorded as unknown`);
+  return null;
+}
+
 function buildRecord(id, { curated, catalogEntry, previousRecord, onRoster, warnings }) {
   const seed = curated.models[id] ?? {};
   const meta = catalogRecord(catalogEntry);
@@ -145,8 +152,8 @@ function buildRecord(id, { curated, catalogEntry, previousRecord, onRoster, warn
     typical: seed.typical ?? null,
     typicalCostUSD: typicalRequestCost(seed.typical, pricing?.default),
     limits: {
-      context: meta.limit?.context ?? null,
-      output: meta.limit?.output ?? null,
+      context: tokenLimit(meta.limit?.context, id, "context", warnings),
+      output: tokenLimit(meta.limit?.output, id, "output", warnings),
     },
     capabilities: {
       reasoning: meta.reasoning,

@@ -16,7 +16,7 @@
       return Number(value).toLocaleString();
     },
     ctx(value) {
-      if (value == null) return "—";
+      if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return "—";
       if (value >= 1e6) return (value / 1e6).toFixed(value % 1e6 ? 1 : 0) + "M";
       if (value >= 1e3) return Math.round(value / 1e3) + "K";
       return String(value);
@@ -380,7 +380,7 @@
           <td class="num">${esc(m.quality?.index ?? "—")}</td>
           <td class="num">${fmt.int(reqH5(m) === Infinity ? "unlimited" : reqH5(m))}</td>
           <td class="num">${fmt.pool(cap)}</td>
-          <td class="num">${fmt.ctx(m.limits?.context)}</td>
+          <td class="num">${esc(fmt.ctx(m.limits?.context))}</td>
           <td class="num">${fmt.money(m.pricing?.default?.input)}</td>
           <td class="num">${fmt.money(m.pricing?.default?.output)}</td>
           <td>${privacyLabel(m)}</td>
@@ -452,7 +452,7 @@
       }
       const m = hit.model;
       const measured = speeds[m.id]?.tokensPerSecond;
-      tip.innerHTML = `<b>${esc(m.name)}</b><br>${esc(m.vendor)} · ${fmt.money(m.typicalCostUSD)}/req · AA ${esc(m.quality.index)}${m.quality.indexVersion ? " " + esc(m.quality.indexVersion) : ""}<br>${fmt.int(reqH5(m) === Infinity ? "unlimited" : reqH5(m))} req/5h · ${fmt.ctx(m.limits?.context)} ctx${m.privacy ? `<br>${privacyLabel(m)}` : ""}${measured ? `<br>measured ${measured} t/s on your machine` : ""}`;
+      tip.innerHTML = `<b>${esc(m.name)}</b><br>${esc(m.vendor)} · ${fmt.money(m.typicalCostUSD)}/req · AA ${esc(m.quality.index)}${m.quality.indexVersion ? " " + esc(m.quality.indexVersion) : ""}<br>${fmt.int(reqH5(m) === Infinity ? "unlimited" : reqH5(m))} req/5h · ${esc(fmt.ctx(m.limits?.context))} ctx${m.privacy ? `<br>${privacyLabel(m)}` : ""}${measured ? `<br>measured ${measured} t/s on your machine` : ""}`;
       tip.hidden = false;
       // Kept inside the window both ways: near the bottom edge it opens above the pointer.
       const tipH = tip.offsetHeight || 0;

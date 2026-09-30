@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import os from "node:os";
-import { scrubOutbound, safeExcerpt } from "../scripts/redaction.cjs";
+import { scrubOutbound, safeExcerpt, maskCredentials } from "../scripts/redaction.cjs";
 import { buildClassifyRequest } from "../scripts/decision-client.mjs";
 
 const home = os.homedir();
@@ -53,6 +53,14 @@ test("safeExcerpt keeps its Analyzer contract: scrub, trim, then clip", () => {
   // Analyzer excerpts reach a provider through assistantFetch, which masks the
   // home prefix; safeExcerpt itself stays length-stable for its own callers.
   assert.ok(safeExcerpt(`${home}\\a.txt`).includes("a.txt"));
+});
+
+test("evidence redaction retains line numbers across multiline keys and assignments", () => {
+  const text = '-----BEGIN PRIVATE KEY-----\nprivate bytes\n-----END PRIVATE KEY-----\n{\n"password":\n"orbital-fixture-credential-opaque-value"\n}\nconst normal = "orbital";';
+  const safe = maskCredentials(text, { preserveLines: true });
+  assert.equal(safe.split("\n").length, text.split("\n").length);
+  assert.doesNotMatch(safe, /private bytes|fixture-credential/);
+  assert.equal(safe.split("\n").at(-1), 'const normal = "orbital";');
 });
 
 test("the Jev request body is scrubbed while its headers keep the key", () => {

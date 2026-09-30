@@ -56,11 +56,16 @@ const ASSIGNED_SECRET = /((?:password|secret|token|api[_-]?key|authorization)["'
 const URL_BASIC_AUTH = /(https?:\/\/)[^\s/@]+:[^\s/@]+@/gi;
 
 /** Replace credential-shaped text. Shared by both exports. */
-function maskCredentials(text) {
+function maskCredentials(text, { preserveLines = false } = {}) {
+  // Evidence searches retain source line numbers even when a multiline
+  // credential is masked. Transmission callers keep the compact default.
+  const replacement = (matched, masked) => preserveLines
+    ? masked + "\n".repeat(Math.max(0, (matched.match(/\n/g) ?? []).length - (masked.match(/\n/g) ?? []).length))
+    : masked;
   return text
-    .replace(PRIVATE_KEY, "[redacted private key]")
+    .replace(PRIVATE_KEY, (matched) => replacement(matched, "[redacted private key]"))
     .replace(KEY_SHAPES, "[redacted credential]")
-    .replace(ASSIGNED_SECRET, "$1[redacted]")
+    .replace(ASSIGNED_SECRET, (matched, prefix) => replacement(matched, `${prefix}[redacted]`))
     .replace(URL_BASIC_AUTH, "$1[redacted]@");
 }
 

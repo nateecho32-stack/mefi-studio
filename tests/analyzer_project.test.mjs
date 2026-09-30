@@ -6,6 +6,8 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { analyzeProject, verifyIdea, PROJECT_LIMITS } from "../scripts/analyzer.mjs";
+import { buildSupportPrompt } from "../scripts/agent-modes.cjs";
+import { scrubOutbound } from "../scripts/redaction.cjs";
 
 const execute = promisify(execFile);
 async function fixture(t, entries = {}) {
@@ -239,6 +241,92 @@ test("idea keyword coverage across many files never claims implementation", asyn
   const root = await fixture(t, { "scripts/a.js": "function orbit() {}", "scripts/b.js": "function orbit() {}", "scripts/c.js": "function orbit() {}" });
   const result = await verifyIdea("orbital orbit capability", { root });
   assert.equal(result.verdict, "related work exists");
+});
+
+async function ideaLink(t, target, destination, type) {
+  try { await symlink(target, destination, type); return true; }
+  catch (error) {
+    if (error.code === "EPERM") { t.skip("This host cannot create the required symbolic link."); return false; }
+    throw error;
+  }
+}
+
+test("legacy idea scan preserves ordinary in-tree evidence across cached reads", async (t) => {
+  const root = await fixture(t, { "scripts/normal.js": "export const orbital = true;\n" });
+  for (let pass = 0; pass < 2; pass += 1) {
+    const result = await verifyIdea("orbital", { root });
+    assert.equal(result.scanned, 1);
+    assert.deepEqual(result.hits, [{ keyword: "orbital", file: "scripts/normal.js", line: 1, snippet: "export const orbital = true;" }]);
+  }
+});
+
+test("legacy idea scan reads normal in-tree files and rejects linked outside files", async (t) => {
+  const root = await fixture(t, { "scripts/normal.js": "export const orbital = true;\n" });
+  const outside = await fixture(t, { "private.json": '{"orbital":"outside-file-sentinel"}\n' });
+  if (!await ideaLink(t, path.join(outside, "private.json"), path.join(root, "scripts/orbital.json"), "file")) return;
+  const result = await verifyIdea("orbital", { root });
+  assert.equal(result.scanned, 1);
+  assert.deepEqual(result.hits, [{ keyword: "orbital", file: "scripts/normal.js", line: 1, snippet: "export const orbital = true;" }]);
+  assert.ok(!JSON.stringify(result).includes("outside-file-sentinel"));
+});
+
+test("legacy idea scan rejects an initial scan-directory junction and nested directory links", async (t) => {
+  const root = await fixture(t, { "renderer/normal.js": "export const orbital = true;\n" });
+  const outside = await fixture(t, { "orbital.js": "const orbital = 'outside-directory-sentinel';\n" });
+  const type = process.platform === "win32" ? "junction" : "dir";
+  if (!await ideaLink(t, outside, path.join(root, "scripts"), type)) return;
+  if (!await ideaLink(t, outside, path.join(root, "renderer/linked"), type)) return;
+  const result = await verifyIdea("orbital", { root });
+  assert.equal(result.scanned, 1);
+  assert.deepEqual(result.files, ["renderer/normal.js"]);
+  assert.ok(!JSON.stringify(result).includes("outside-directory-sentinel"));
+});
+
+test("legacy idea scan validates a cached path after replacement with a link", async (t) => {
+  const root = await fixture(t, { "scripts/orbital.js": "export const orbital = 'cached';\n" });
+  const outside = await fixture(t, { "private.js": "export const orbital = 'outside-cache-sentinel';\n" });
+  const file = path.join(root, "scripts/orbital.js");
+  assert.equal((await verifyIdea("orbital", { root })).scanned, 1);
+  await rm(file);
+  if (!await ideaLink(t, path.join(outside, "private.js"), file, "file")) return;
+  const result = await verifyIdea("orbital", { root });
+  assert.equal(result.scanned, 0);
+  assert.deepEqual(result.hits, []);
+  assert.equal(result.verdict, "new");
+});
+
+test("legacy idea scan rejects a cached directory replaced with a junction", async (t) => {
+  const root = await fixture(t, { "scripts/orbital.js": "export const orbital = 'cached';\n" });
+  const outside = await fixture(t, { "orbital.js": "export const orbital = 'outside-cache-sentinel';\n" });
+  assert.equal((await verifyIdea("orbital", { root })).scanned, 1);
+  await rm(path.join(root, "scripts"), { recursive: true });
+  if (!await ideaLink(t, outside, path.join(root, "scripts"), process.platform === "win32" ? "junction" : "dir")) return;
+  const result = await verifyIdea("orbital", { root });
+  assert.equal(result.scanned, 0);
+  assert.deepEqual(result.hits, []);
+});
+
+test("legacy idea excerpts redact quoted JSON passwords before clipping and provider encoding", async (t) => {
+  const secret = "opaque-fixture-password-that-is-longer-than-the-excerpt".repeat(3);
+  const root = await fixture(t, { "scripts/settings.json": JSON.stringify({ orbital: true, password: secret }) });
+  const result = await verifyIdea("orbital", { root });
+  assert.deepEqual(result.hits, [{ keyword: "orbital", file: "scripts/settings.json", line: 1, snippet: '{"orbital":true,"password":[redacted]}' }]);
+  const manual = scrubOutbound(JSON.stringify({ kind: "idea", payload: result }).slice(0, 14000));
+  const cluster = buildSupportPrompt("planner", { task: { title: "orbital" }, references: result.hits, mode: "cluster" });
+  for (const encoded of [manual, scrubOutbound(cluster.user), JSON.stringify(result)]) {
+    assert.ok(!encoded.includes("opaque-fixture-password"));
+    assert.ok(encoded.includes("[redacted]"));
+  }
+});
+
+test("legacy idea excerpts retain assignment context when JSON credentials span lines", async (t) => {
+  const root = await fixture(t, { "scripts/config.json": '{\n"password":\n"orbital-fixture-credential-opaque-value"\n}\n', "scripts/control.js": 'const orbital = "ordinary feature";\n' });
+  const result = await verifyIdea("orbital", { root });
+  const secretHit = result.hits.find((hit) => hit.file === "scripts/config.json");
+  assert.equal(secretHit.line, 3);
+  assert.match(secretHit.snippet, /redacted/);
+  assert.doesNotMatch(JSON.stringify(result), /fixture-credential-opaque-value/);
+  assert.ok(result.hits.some((hit) => hit.file === "scripts/control.js" && hit.snippet.includes("ordinary feature")));
 });
 
 test("an archived Studio plan is set aside and is not compared with the code", async (t) => {

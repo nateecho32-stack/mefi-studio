@@ -13,11 +13,25 @@ const require = createRequire(import.meta.url);
 const autonomy = require("../scripts/autonomy.cjs");
 const backlog = require("../scripts/backlog.cjs");
 const remote = require("../scripts/remote.cjs");
+const admission = require("../scripts/work-admission.cjs");
 const main = (await readFile(new URL("../main.cjs", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const preloadSource = await readFile(new URL("../preload.cjs", import.meta.url), "utf8");
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
 const remoteTask = { id: "r1", projectId: "p1", title: "Add dark mode", prompt: "Add dark mode", origin: { ...remote.ORIGIN } };
+
+test("canonical admission retains remote provenance through task creation and request promotion", () => {
+  const board = { tasks: [] };
+  const task = admission.admitTask(board, { title: "Remote request", prompt: "Add search" }, { now: 1, allocateId: () => "r2", origin: { ...remote.ORIGIN, untrusted: true } }).created;
+  assert.deepEqual(task.origin, remote.ORIGIN);
+  const promoted = admission.taskRow({ id: "r3", title: "Promoted request" }, { now: 2, origin: admission.requestOrigin({ source: "manual", origin: remote.ORIGIN }) });
+  for (const row of [task, promoted]) for (const level of autonomy.LEVELS) assert.equal(autonomy.needsApproval(row, { level }), true, level);
+  const copy = admission.taskRow(task, { now: 3 });
+  assert.equal(copy.origin.via, "remote");
+  const local = admission.taskRow({ id: "local", title: "Local", origin: { kind: "chat", by: "owner", via: "made-up" } }, { now: 4 });
+  assert.deepEqual(local.origin, { kind: "chat", by: "owner" });
+  assert.equal(autonomy.needsApproval(local, { level: "auto" }), false);
+});
 
 test("work filed from Discord waits for the owner's OK in every mode, and so do its slices", () => {
   for (const level of ["ask", "accept", "auto", "elevated"]) {

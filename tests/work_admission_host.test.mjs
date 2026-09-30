@@ -18,6 +18,8 @@ import * as eyesModule from "../scripts/eyes.mjs";
 import * as history from "../scripts/task-history.mjs";
 import { applyRequestAction } from "../scripts/idea-actions.cjs";
 import { BAND, baselineCompareWork, baselineTaskPriority, baselineWorkPriority } from "../scripts/policy.mjs";
+import remoteRules from "../scripts/remote.cjs";
+import autonomy from "../scripts/autonomy.cjs";
 
 const source = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
 const section = (start, end) => {
@@ -291,8 +293,25 @@ function composer(board) {
     section("async function assistantCreateTask(", "function executorProcessAlive("),
     section('  ipcMain.handle("tasks:create",', "  // The committed catalog is available immediately"),
   ].join("\n"), env);
-  return { create: (title, prompt = title, options = {}) => handler(null, { title, prompt, ...options }), jev, asked };
+  return { create: (title, prompt = title, options = {}) => handler(null, { title, prompt, ...options }), env, jev, asked };
 }
+
+test("the real chat creator persists remote approval provenance through the board gateway", async () => {
+  const board = { tasks: [], requests: [] }, h = composer(board);
+  for (const conversation of [null, { title: "Keyed remote chat" }]) {
+    const title = conversation ? "Keyed remote chat" : "Keyless remote chat";
+    await h.env.assistantCreateTask({ title, prompt: title, source: "chat", origin: remoteRules.ORIGIN, conversation });
+  }
+  assert.equal(board.tasks.length, 2);
+  for (const task of board.tasks) {
+    assert.deepEqual(plain(task.origin), remoteRules.ORIGIN);
+    for (const level of autonomy.LEVELS) assert.equal(autonomy.needsApproval(task, { level, tasks: board.tasks }), true, level);
+  }
+  const requestBoard = { tasks: [], requests: [{ id: "remote-inbox", title: "Remote inbox", prompt: "Add an export", source: "manual", origin: remoteRules.ORIGIN }] };
+  assert.equal(await promotion(requestBoard).promoteRequestsToTasks(), 1);
+  assert.deepEqual(plain(requestBoard.tasks[0].origin), remoteRules.ORIGIN);
+  assert.equal(autonomy.needsApproval(requestBoard.tasks[0], { level: "auto" }), true);
+});
 
 test("building a saved Mefi idea links the new task atomically and refuses a second build", async () => {
   const idea = { id: "idea_mefi_one", title: "Map controls", detail: "Connect the map", source: "chat", status: "new", files: ["renderer/nav.js"], systemId: "renderer", intent: "improve" };
