@@ -11,7 +11,9 @@ import { readFile, readdir } from "node:fs/promises";
 
 import { createDom } from "./fixtures/renderer-dom.mjs";
 
-const source = await readFile(new URL("../renderer/nav.js", import.meta.url), "utf8");
+// The sources are read with LF line ends whatever the checkout made of them (Windows may give CRLF), since some checks look at lines.
+const lf = (text) => text.replace(/\r\n/g, "\n");
+const source = lf(await readFile(new URL("../renderer/nav.js", import.meta.url), "utf8"));
 const RAIL_IDS = ["app-rail", "app-rail-brand", "app-rail-sections", "app-rail-foot", "app-rail-pin", "app-local-nav", "vibe-rail", "workspace-sidebar", "workspace-layer"];
 const REGION_VARIABLES = { list: "--shell-list-w", inspector: "--shell-inspector-w", tabs: "--shell-tabs-h", status: "--shell-status-h" };
 
@@ -130,7 +132,7 @@ test("the layout has one writer in the renderer, and data-shell is only ever giv
   const writes = [];
   const shellValues = [];
   for (const name of names) {
-    const text = await readFile(new URL(`../renderer/${name}`, import.meta.url), "utf8");
+    const text = lf(await readFile(new URL(`../renderer/${name}`, import.meta.url), "utf8"));
     text.split("\n").forEach((line, index) => {
       const code = line.replace(/\/\/.*$/, "");
       // Other elements carry a data-layout of their own (a choice popup's "tiles"), and
@@ -280,7 +282,7 @@ test("below 900 CSS px the list and the inspector fold, and only they: zero widt
 });
 
 test("the fold rule in styles.css is the one in nav.js, and the variables and edges are defined once", async () => {
-  const css = await readFile(new URL("../renderer/styles.css", import.meta.url), "utf8");
+  const css = lf(await readFile(new URL("../renderer/styles.css", import.meta.url), "utf8"));
   const below = Number(/const LAYOUT_FOLD_BELOW = (\d+);/.exec(source)[1]);
   const media = /@media \(max-width: ([\d.]+)px\) \{\s*html\[data-layout="v2"\] \{([^}]*)\}\s*\}/.exec(css);
   assert.ok(media, "styles.css carries the fold rule");

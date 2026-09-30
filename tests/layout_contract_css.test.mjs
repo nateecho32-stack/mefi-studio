@@ -15,7 +15,8 @@ import { readFile, readdir } from "node:fs/promises";
 
 const cssFiles = (await readdir(new URL("../renderer/", import.meta.url))).filter((name) => name.endsWith(".css"));
 const css = {};
-for (const name of cssFiles) css[name] = await readFile(new URL(`../renderer/${name}`, import.meta.url), "utf8");
+// LF line ends whatever the checkout made of the files (Windows may give CRLF): some checks look at lines.
+for (const name of cssFiles) css[name] = (await readFile(new URL(`../renderer/${name}`, import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const ledger = JSON.parse(await readFile(new URL("./fixtures/layout-contract-ledger.json", import.meta.url), "utf8"));
 
 // ---- a small CSS length evaluator: calc, min, max, clamp, var(), px vw vh ----
