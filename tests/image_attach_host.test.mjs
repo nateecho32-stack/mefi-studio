@@ -320,6 +320,7 @@ test("the channels are project-gated, the bridge carries the pictures, and the r
   const preload = readFileSync(new URL("../preload.cjs", import.meta.url), "utf8");
   assert.match(preload, /assistantMessage: \(text, projectId, context, images\) => ipcRenderer\.invoke\("assistant:message", \{ text, projectId, context, images \}\)/);
   assert.match(preload, /assistantImage: \(payload\) => ipcRenderer\.invoke\("assistant:image"/);
+  assert.match(preload, /data: payload\?\.data, \.\.\.\(payload\?\.probe === true \? \{ probe: true \} : \{\}\) \}\),\n  assistantImageRemove:/, "the box's question whether pictures are on reaches the host");
   assert.match(preload, /assistantImageRemove: \(payload\) => ipcRenderer\.invoke\("assistant:image-remove"/);
   assert.match(preload, /tasksCreate: \(task\) => ipcRenderer\.invoke\("tasks:create", task\)/, "a task carries its pictures in the payload it already sends");
 });

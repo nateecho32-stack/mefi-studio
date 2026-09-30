@@ -112,6 +112,20 @@ test("the size is the bytes of the file that would be written, against what the 
   assert.equal(format.READ_BYTES, 65536);
 });
 
+test("a huge body or description is refused with the one field named, and no file text comes out of it", () => {
+  const huge = format.check({ name: "big", description: "d", body: "x".repeat(5_000_000) });
+  assert.equal(huge.ok, false);
+  assert.deepEqual(huge.problems.map((problem) => problem.field), ["body"]);
+  assert.match(huge.problems[0].message, /^This skill is 4882\.8 KB; the most is 32 KB\.$/);
+  assert.equal(huge.text, "", "no file is built from it");
+  const long = format.check({ name: "big", description: "d".repeat(5_000_000), body: "b" });
+  assert.deepEqual(long.problems.map((problem) => problem.field), ["description"]);
+  assert.equal(long.problems[0].message, "Keep the description to 300 characters.");
+  // Just over by length alone: a body of 32,001 characters is over however it is counted.
+  assert.equal(format.check({ name: "big", description: "d", body: "y".repeat(32001) }).ok, false);
+  assert.equal(format.check({ name: "big", description: "d", body: "y".repeat(31000) }).ok, true, "and a body well under it is fine");
+});
+
 test("the picker shows the description, else the first line that says something, in one line", () => {
   assert.equal(format.describe("---\nname: a\ndescription: Sort a bug report\n---\nBody"), "Sort a bug report");
   assert.equal(format.describe("---\nname: a\n---\n\n# Triage a bug\n\nmore"), "Triage a bug", "a heading stands in");

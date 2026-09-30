@@ -106,15 +106,17 @@ function check({ name, description, body, extra = "" } = {}) {
   if (bad) problems.push({ field: "name", message: bad });
   const about = typeof description === "string" ? description.trim() : "";
   if (!about) problems.push({ field: "description", message: "Say when to use it, in one line an agent can match a task against." });
+  else if (about.length > MAX_DESCRIPTION) problems.push({ field: "description", message: `Keep the description to ${MAX_DESCRIPTION} characters.` });
   else if (/[\r\n]/.test(about)) problems.push({ field: "description", message: "Keep the description to one line." });
   else if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(about)) problems.push({ field: "description", message: "The description has a character that is not text." });
-  else if (about.length > MAX_DESCRIPTION) problems.push({ field: "description", message: `Keep the description to ${MAX_DESCRIPTION} characters.` });
   const words = typeof body === "string" ? body : "";
   if (!words.trim()) problems.push({ field: "body", message: "Write the instructions." });
   else if (words.includes("\u0000")) problems.push({ field: "body", message: "Instructions are text; this has a character that is not." });
-  const text = problems.length ? "" : build({ name, description: about, body: words, extra });
-  const bytes = text ? bytesOf(text) : bytesOf(words);
-  if (text && bytes > MAX_BYTES) problems.push({ field: "body", message: `This skill is ${(bytes / 1024).toFixed(1)} KB; the most is ${Math.round(MAX_BYTES / 1000)} KB.` });
+  // A character is at least a byte, so a body longer than the limit is over it before anything is built.
+  const oversize = words.length > MAX_BYTES;
+  const text = problems.length || oversize ? "" : build({ name, description: about, body: words, extra });
+  const bytes = text ? bytesOf(text) : oversize ? words.length : bytesOf(words);
+  if (oversize || (text && bytes > MAX_BYTES)) problems.push({ field: "body", message: `This skill is ${(bytes / 1024).toFixed(1)} KB; the most is ${Math.round(MAX_BYTES / 1000)} KB.` });
   return { ok: problems.length === 0, problems, text: problems.length ? "" : text, bytes };
 }
 

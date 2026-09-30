@@ -159,7 +159,7 @@ const api = {
   assistantState: () => ipcRenderer.invoke("assistant:state"),
   assistantMessage: (text, projectId, context, images) => ipcRenderer.invoke("assistant:message", { text, projectId, context, images }),
   // Pictures on a message (main.cjs "Picture attachments"): keep one (its bytes as base64) and get an id back, or take one away.
-  assistantImage: (payload) => ipcRenderer.invoke("assistant:image", { name: typeof payload?.name === "string" ? payload.name.slice(0, 200) : "", mime: typeof payload?.mime === "string" ? payload.mime.slice(0, 100) : "", data: payload?.data }),
+  assistantImage: (payload) => ipcRenderer.invoke("assistant:image", { name: typeof payload?.name === "string" ? payload.name.slice(0, 200) : "", mime: typeof payload?.mime === "string" ? payload.mime.slice(0, 100) : "", data: payload?.data, ...(payload?.probe === true ? { probe: true } : {}) }),
   assistantImageRemove: (payload) => ipcRenderer.invoke("assistant:image-remove", { id: typeof payload?.id === "string" ? payload.id.slice(0, 80) : "" }),
   musicRecommend: (payload) => ipcRenderer.invoke("music:recommend", payload ?? {}),
   assistantWorkOn: (target) => ipcRenderer.invoke("assistant:work-on", target ?? {}),
