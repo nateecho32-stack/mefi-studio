@@ -52,6 +52,12 @@
   const byFocusKey = (body, key) => [...(body?.querySelectorAll?.("[data-focus-key]") ?? [])].find((node) => node.dataset?.focusKey === key) ?? null;
   const numbers = (additions, deletions) => { const box = el("span", "review-nums"); box.append(el("span", "review-add", `+${additions}`), document.createTextNode(" "), el("span", "review-del", `−${deletions}`)); return box; };
 
+  // An environment variable that holds something off is the owner saying "not on this launch": the list of changed files
+  // is then not drawn at all, and with all three held off there is no section.
+  const changesHidden = (record) => record.changes?.available === false && record.changes?.reason === "off" && record.changes?.forced === true;
+  const everythingForcedOff = (prefs) => Boolean(prefs?.forced?.snapshots && prefs?.forced?.advisory && prefs?.forced?.shots);
+  const tabsOf = (record) => TABS.filter(([name]) => !(name === "changes" && changesHidden(record)));
+
   // What the page knows about each task it has shown, kept while the window lives.
   const records = new Map();
   const shared = { prefs: null, reading: null, settingsOpen: false };
@@ -83,7 +89,8 @@
   function read(record, what, { quiet = false, force = false } = {}) {
     const reader = READERS[what];
     if (!api()?.[reader.method]) { record.errors[what] = "This is part of the desktop app."; touch(record); return Promise.resolve(null); }
-    if (record.reading[what]) return record.reading[what];
+    // One read per question: a read for another attempt is not the answer to this one.
+    if (record.reading[what] && record.reading[what].attempt === record.attempt) return record.reading[what].job;
     if (!force && record[what] && Date.now() - (record.stamps[what] ?? 0) < FRESH_MS[what]) return Promise.resolve(record[what]);
     if (!quiet || !record[what]) touch(record);
     const asked = record.attempt;
@@ -101,8 +108,8 @@
         if (what === "changes") afterChanges(record);
       } else record.errors[what] = say(result?.error, reader.fail);
       return record[what];
-    })().finally(() => { delete record.reading[what]; touch(record); if (what === "changes") schedulePoll(record); });
-    record.reading[what] = job;
+    })().finally(() => { if (record.reading[what]?.job === job) delete record.reading[what]; touch(record); if (what === "changes") schedulePoll(record); });
+    record.reading[what] = { attempt: asked, job };
     return job;
   }
   // A running attempt's diffs are stale as soon as they are read; an ended attempt's never change.
@@ -210,6 +217,8 @@
     if (!body || !attached(record.view)) return;
     if (record.painted === record.rev) return;
     record.painted = record.rev;
+    record.view.hidden = everythingForcedOff(shared.prefs);
+    if (record.tab === "changes" && changesHidden(record)) { record.tab = "checks"; wake(record); }
     if (record.summary) record.summary.textContent = heading(record);
     if (!record.open) { body.replaceChildren(); return; }
     const held = body.contains?.(document.activeElement) ? document.activeElement?.dataset?.focusKey : "";
@@ -229,7 +238,8 @@
     const row = el("div", "review-tabs");
     row.setAttribute("role", "tablist");
     row.setAttribute("aria-label", "Review this attempt");
-    TABS.forEach(([name, label], index) => {
+    const shown = tabsOf(record);
+    shown.forEach(([name, label], index) => {
       const on = record.tab === name;
       const tab = el("button", "review-tab", label);
       tab.type = "button";
@@ -243,10 +253,10 @@
       if (name === "changes" && record.changes?.available !== false && record.changes?.totals?.files) tab.append(document.createTextNode(" "), el("span", "review-count", record.changes.totals.files));
       tab.addEventListener("click", () => selectTab(record, name));
       tab.addEventListener("keydown", (event) => {
-        const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : event.key === "Home" ? -index : event.key === "End" ? TABS.length - 1 - index : 0;
+        const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : event.key === "Home" ? -index : event.key === "End" ? shown.length - 1 - index : 0;
         if (!step) return;
         event.preventDefault?.();
-        const next = TABS[(index + step + TABS.length) % TABS.length][0];
+        const next = shown[(index + step + shown.length) % shown.length][0];
         selectTab(record, next);
         byFocusKey(record.body, `tab:${next}`)?.focus?.();
       });
@@ -665,6 +675,7 @@
     });
     record.painted = -1;
     touch(record);
+    if (!shared.prefs) void readPrefs();
     if (record.open) wake(record);
     return record;
   }

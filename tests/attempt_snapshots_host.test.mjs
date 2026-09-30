@@ -127,6 +127,20 @@ test("git ignores what .gitignore and the local exclude file name, and a tracked
   assert.equal(h.g("ls-tree", "-r", "--name-only", `refs/mefi/attempts/${TASK}/1/after`).split("\n").some((name) => /ignored\.log|node_modules|scratch|local-only/.test(name)), false);
 });
 
+test("a huge ignored file is nobody's business: it is not a left-out file, and it does not count against the caps", async (t) => {
+  const h = project(t);
+  const started = await h.snaps.begin({ root: h.root, taskId: TASK, runId: "run_1_1" });
+  writeFileSync(h.at("ignored.log"), Buffer.alloc(rules.LIMITS.textBytes + 10, 97));
+  mkdirSync(h.at("node_modules/dep"), { recursive: true });
+  writeFileSync(h.at("node_modules/dep/big.bin"), Buffer.concat([Buffer.from([0, 1, 2, 3]), Buffer.alloc(rules.LIMITS.binaryBytes + 10, 7)]));
+  h.write("a.txt", "one\nedited\n");
+  const stopped = await h.snaps.end({ root: h.root, taskId: TASK, n: started.n, runId: "run_1_1" });
+  assert.equal(stopped.ok, true);
+  assert.equal(stopped.skippedCount, 0, "git would not have added them, so Studio does not name them");
+  const list = await h.snaps.changes({ root: h.root, taskId: TASK });
+  assert.deepEqual([list.files.map((file) => file.path), list.skipped.count], [["a.txt"], 0]);
+});
+
 test("files over the caps are left out and named, and never listed or reverted", async (t) => {
   const h = project(t);
   const started = await h.snaps.begin({ root: h.root, taskId: TASK, runId: "run_1_1" });

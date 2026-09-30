@@ -100,13 +100,18 @@ const tabNamed = (node, label) => node.querySelectorAll(".review-tab").find((ite
 test("nothing is read until the section is open, then the list is read once and kept for a short while", async () => {
   const p = page();
   const closed = await p.mount(p.fold(false));
-  assert.equal(p.calls.length, 0, "a closed section asks nothing");
+  const reads = () => p.calls.filter(([name]) => name !== "prefs");
+  assert.equal(reads().length, 0, "a closed section reads nothing of the project");
+  assert.equal(p.named("prefs").length, 1, "only which switches the launch holds off, once, so a section that cannot work can stay hidden");
   assert.equal(text(closed.querySelector(".review")), "", "and draws nothing");
+  p.window.MefiReview.refresh("t1"); p.window.MefiReview.refresh();
+  await settle();
+  assert.equal(reads().length, 0, "not even when something asks every section to read again");
   closed.open = true;
   await closed.trigger("toggle");
   await settle();
   assert.deepEqual(p.named("changes"), [{ taskId: "t1", projectId: "p1" }]);
-  assert.equal(p.calls.length, 1, "only the Changed files panel is read");
+  assert.equal(reads().length, 1, "only the Changed files panel is read");
   closed.open = false; await closed.trigger("toggle");
   closed.open = true; await closed.trigger("toggle");
   await settle();
@@ -146,10 +151,28 @@ test("what is not there says so in the host's own words: no attempt yet, a folde
   const b = await repo.mount(repo.fold(true));
   assert.match(text(b), /This project is not a Git repository, so Studio has no before-and-after record of its files\./);
   assert.equal(text(b.querySelector("summary")), "Changes and checks");
-  const off = page({ changes: { ok: true, available: false, reason: "off", forced: true, note: "Before-and-after snapshots are switched off on this PC." } });
+  const off = page({ changes: { ok: true, available: false, reason: "off", forced: false, note: "Before-and-after snapshots are switched off on this PC." } });
   const c = await off.mount(off.fold(true));
-  assert.match(text(c), /switched off on this PC\./);
-  assert.match(text(c), /It is switched off for this launch\./);
+  assert.match(text(c), /Before-and-after snapshots are switched off on this PC\./, "a setting that is off says so, and the switch to turn it on is right below");
+  assert.equal(tabNamed(c, "Changed files").getAttribute("aria-selected"), "true");
+});
+
+test("an environment variable that holds the snapshots off hides the changed files, and all three hide the section", async () => {
+  const forced = page({ changes: { ok: true, available: false, reason: "off", forced: true, note: "Before-and-after snapshots are switched off on this PC." } });
+  const node = await forced.mount(forced.fold(true));
+  assert.deepEqual(node.querySelectorAll(".review-tab").map((tab) => tab.textContent.trim()), ["Checks", "Preview"], "no Changed files tab");
+  assert.equal(tabNamed(node, "Checks").getAttribute("aria-selected"), "true", "the first one left is showing");
+  assert.doesNotMatch(text(node), /Before-and-after snapshots are switched off/, "and no note about what the owner chose to hold off");
+  assert.equal(forced.named("checks").length, 1, "the Checks panel is read instead");
+  assert.equal(node.hidden, false, "the rest of the section still works");
+  await tabNamed(node, "Checks").trigger("keydown", { key: "ArrowLeft" });
+  await settle();
+  assert.equal(tabNamed(node, "Preview").getAttribute("aria-selected"), "true", "the arrow keys wrap across the tabs that are drawn");
+  const all = page({ prefs: prefs({ prefs: { snapshots: false, advisory: false, advisoryBuild: false, shots: false }, forced: { snapshots: true, advisory: true, shots: true } }) });
+  const gone = await all.mount(all.fold(true));
+  assert.equal(gone.hidden, true, "nothing in it can work on this launch: there is no section");
+  const partly = page({ prefs: prefs({ forced: { snapshots: true, advisory: false, shots: true } }) });
+  assert.equal((await partly.mount(partly.fold(true))).hidden, false, "one left that works keeps it");
 });
 
 test("a host error is one sentence with Try again, and never throws into the page", async () => {
@@ -409,6 +432,7 @@ test("the host's pushes refresh what they name, for that task only, once", async
   assert.equal(p.listeners.length, 1, "subscribed once");
   tell("ended"); tell("shot"); tell("ended");
   assert.equal(p.named("changes").length, 1, "not at once: pushes that arrive together share one read");
+  assert.equal(p.pending().filter((timer) => timer.delay === 400).length, 1, "and one pause, however many arrive");
   await p.fire(400);
   assert.equal(p.named("changes").length, 2);
   assert.equal(p.named("evidence").length, 0, "a new shot is not read while the Preview tab is not showing");
@@ -453,19 +477,26 @@ test("with several attempts a picker chooses one, and its files, checks and shot
   assert.equal(p.named("changes").at(-1).attempt, undefined, "choosing the newest goes back to following the newest");
 });
 
-test("an answer for an attempt the person has already left is dropped", async () => {
-  let release;
-  const first = new Promise((resolve) => { release = resolve; });
+test("an answer for an attempt the person has already left is dropped, and the attempt they chose is read whatever is still in flight", async () => {
+  const gate = {};
+  const hold = (name) => new Promise((resolve) => { gate[name] = resolve; });
+  const held = hold("old");
   const attempts = [{ n: 2, runId: "run_2_1", startedAt: 5, endedAt: 9, ended: true, selected: true, reverts: [], accepted: false, running: false }, { n: 1, runId: "run_1_1", startedAt: 1, endedAt: 2, ended: true, selected: false, reverts: [], accepted: false, running: false }];
-  let calls = 0;
-  const p = page({ changes: async (body) => { calls += 1; if (calls === 1) return changed({ attempt: 2, attempts }); if (body.attempt === 1) return first.then(() => changed({ attempt: 1, attempts, files: [file("old.txt")] })); return changed({ attempt: 2, attempts }); } });
+  const p = page({ changes: async (body) => (body.attempt === 1 ? held.then(() => changed({ attempt: 1, attempts, files: [file("old.txt")], totals: { files: 1, additions: 1, deletions: 0, binary: 0 } })) : changed({ attempt: 2, attempts, files: [file("new.txt")], totals: { files: 1, additions: 1, deletions: 0, binary: 0 } })) });
   const node = await p.mount(p.fold(true));
+  assert.match(text(node), /new\.txt/);
   const select = node.querySelector(".review-select");
   select.value = "1"; await select.trigger("change"); await settle();
-  assert.match(text(node), /Reading the changed files…/, "while the older attempt is read");
-  release();
+  assert.match(text(node), /Reading the changed files…/, "the older attempt is slow");
+  // Before it answers, the person goes back to the newest attempt.
+  const again = node.querySelector(".review-select") ?? select;
+  again.value = "2"; await again.trigger("change"); await settle();
+  assert.equal(p.named("changes").length, 3, "the newest is read on its own, not joined to the read still in flight");
+  assert.match(text(node), /new\.txt/);
+  gate.old();
   await settle();
-  assert.match(text(node), /old\.txt/);
+  assert.doesNotMatch(text(node), /old\.txt/, "the late answer for the attempt that was left is dropped");
+  assert.match(text(node), /new\.txt/);
 });
 
 // ---- Checks -----------------------------------------------------------------------------------------------------
@@ -497,11 +528,11 @@ test("Run sends the check's id for this attempt and replaces that row with the r
   const rows = node.querySelectorAll(".review-check");
   assert.deepEqual(rows.map((row) => row.dataset.status), ["ok", "bad", "ok"]);
   assert.equal(rows[2].querySelector(".review-check-detail").textContent, "Built");
-  const refused = page({ checkrun: { ok: false, busy: true, error: "A build writes files, so it waits until no builder is working in this folder." } });
+  const refused = page({ checkrun: { ok: false, busy: true, error: "A build writes files, so it waits until no builder is working on this project." } });
   const other = await refused.mount(refused.fold(true));
   await tabNamed(other, "Checks").click(); await settle();
   await buttonNamed(other, "Run Build").click(); await settle();
-  assert.match(text(other), /A build writes files, so it waits until no builder is working in this folder\./);
+  assert.match(text(other), /A build writes files, so it waits until no builder is working on this project\./);
   assert.equal(other.querySelectorAll(".review-check").length, 3, "the rows stay");
 });
 
@@ -564,10 +595,11 @@ test("the three switches show the owner's choices, save one at a time, and a for
   const p = page({ prefs: (body) => { const patch = Object.fromEntries(Object.entries(body).filter(([key]) => ["snapshots", "advisory", "advisoryBuild", "shots"].includes(key))); if (Object.keys(patch).length) saved = prefs({ saved: { ...saved.saved, ...patch }, prefs: { ...saved.prefs, ...patch } }); return saved; } });
   const node = await p.mount(p.fold(true));
   const settings = node.querySelector(".review-settings");
-  assert.equal(p.named("prefs").length, 0, "the settings are not read until they are opened");
+  assert.equal(p.named("prefs").length, 1, "read once when the section first appears");
+  assert.equal(node.querySelectorAll(".review-switch input").length, 4, "the switches are drawn from that read");
   settings.open = true; await settings.trigger("toggle"); await settle();
-  assert.equal(p.named("prefs").length, 1);
-  assert.deepEqual(p.named("prefs")[0], {}, "a read sends no choice");
+  assert.equal(p.named("prefs").length, 2, "and again each time the settings are opened");
+  assert.deepEqual(p.named("prefs")[1], {}, "a read sends no choice");
   const boxes = () => node.querySelectorAll(".review-switch input");
   assert.deepEqual(boxes().map((box) => box.checked), [true, true, false, true], "on by default, except the build");
   assert.match(text(node.querySelector(".review-settings")), /Keep a before and after picture of each attempt/);

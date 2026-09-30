@@ -563,6 +563,7 @@ test("tasks:checks lists what the project has, then what an attempt's checks sai
   h.state.jobs.push({ id: "run_9_9", taskId: "task_other", finished: false, projectPath: h.root, worktree: null });
   const refusedBuild = await h.call("tasks:check-run", { taskId: TASK, id: "build" });
   assert.deepEqual([refusedBuild.ok, refusedBuild.busy], [false, true], "a build writes files: not while a builder works here");
+  assert.equal(refusedBuild.error, "A build writes files, so it waits until no builder is working on this project.");
   assert.equal((await h.call("tasks:check-run", { taskId: TASK, id: "lint" })).ok, true, "a lint reads only");
   await withEnv("MEFI_STUDIO_NO_ADVISORY_CHECKS", "1", async () => {
     assert.deepEqual(await h.call("tasks:checks", { taskId: TASK }), { ok: true, available: false, reason: "off", forced: true, taskId: TASK });
@@ -736,6 +737,35 @@ test("a worktree run's merge-back waits for the end picture, and the hooks brack
   releaseEnd();
   for (let turn = 0; turn < 20; turn += 1) await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(order, ["beforeMerge", "settle", ["afterMerge", true], "mergeDone"]);
+});
+
+test("a hook that throws at once, in any of the six places, changes nothing about the run", async () => {
+  const boom = () => { throw new Error("hook exploded"); };
+  const hooks = { begin: boom, end: boom, beforeMerge: boom, afterMerge: boom, mergeDone: boom, discard: boom };
+  const h = executorHost({ tasks: [task("first")] });
+  const settled = [];
+  const spawnAt = h.env.spawn;
+  h.env.spawn = (command, args, options) => spawnAt(command, args, command === "cmd.exe" ? { ...options, cwd: h.env.projectRoot() } : options);
+  h.env.executorWorktrees = {
+    enabled: () => true,
+    prepare: async ({ root, runId }) => ({ root, path: `${root}/.mefi/worktrees/${runId}`, branch: `mefi/${runId}`, runId }),
+    discard: async () => ({ discarded: true }),
+    settle: async (worktree) => { settled.push(worktree.branch); return { merged: true }; },
+  };
+  h.env.attemptReview = hooks;
+  h.wake(); await h.pump();
+  assert.equal(h.starts.length, 1, "begin threw, and the worker started all the same");
+  await h.finish("first");
+  for (let turn = 0; turn < 30; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(settled.length, 1, "end and beforeMerge threw, and the work was merged back all the same");
+  assert.equal(h.autopilot.jobs.length, 0, "afterMerge and mergeDone threw, and the run is over");
+  assert.equal(h.board().tasks[0].status, "awaiting_verification", "settled as it always does");
+  const released = executorHost({ tasks: [task("unreadable")] });
+  released.env.attemptReview = hooks;
+  released.env.taskContext = { ...released.env.taskContext, buildTaskHandoff: () => { throw new Error("fixture brief is unreadable"); } };
+  released.wake(); await released.pump();
+  assert.equal(released.starts.length, 0);
+  assert.equal(released.board().tasks[0].status, "open", "discard threw, and the claim went back all the same");
 });
 
 test("a claim released before the worker started is discarded, and a host without the block runs exactly as before", async () => {

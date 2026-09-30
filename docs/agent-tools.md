@@ -221,3 +221,14 @@ lines it captured into `preview.log` in the run's private tool folder (mode
 0600, replaced whole whenever the preview prints something, deleted when the
 run ends). Lines are cleaned of colour codes and of URL parameters, private
 keys never enter it, and credentials are masked again when they are read.
+
+**After an attempt.** The checks the project has (typecheck and lint; the build
+only when `review.advisoryBuild` is on) also run by themselves once a builder's
+attempt ends, in the folder it worked in, when it changed something and the
+owner did not stop it. The results are kept with the attempt's before and after
+shots in the project's data folder (`attempt-evidence/<task>/<n>/checks.json`;
+never in the repository and never in a problem report) and appear under **Tasks
+› a task › Evidence › Changes and checks › Checks** as "Advisory, never blocks
+Done". They never change a task, and a run is not held for them: a worktree
+run's merge-back waits for them (they read its own checkout) for six minutes at
+most, nothing else waits at all. See docs/architecture.md "Attempt review".

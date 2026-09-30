@@ -20931,7 +20931,7 @@ async function reviewCheckRun(body, root) {
   if (off) return { ok: false, reason: "off", error: "Advisory checks are switched off on this PC." };
   const check = (await advisoryHost().detect(root)).find((item) => item.id === id);
   if (!check) return { ok: false, error: "This project does not have that check." };
-  if (check.writes && (reviewJobs().length || reviewBusy(root))) return { ok: false, busy: true, error: "A build writes files, so it waits until no builder is working in this folder." };
+  if (check.writes && (reviewJobs().length || reviewBusy(root))) return { ok: false, busy: true, error: "A build writes files, so it waits until no builder is working on this project." };
   const n = reviewNumber(body.attempt) ?? await reviewLatestAttempt(root, taskId);
   const { result } = await advisoryHost().run(root, check);
   let results = [result];

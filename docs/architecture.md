@@ -177,6 +177,7 @@ settings and per-model work-kind summaries for the shared controls.
 | --- | --- |
 | **Menu** (the rail) | New task and Search sit above **Home**, **Work**, **Agents** and **Friends**, with one local row for the current group's views. Friends and its Rooms, Your PCs and Playground links open the existing companion menu at the matching card; Search finds them too. Recent tasks belong to the current project; Settings and Help stay at the foot. Help contains Start here, Shortcuts and Community. The project selector at the top opens the project panel. The registry in `renderer/nav.js` preserves existing shortcuts and destination IDs. |
 | **Worktree** | Another folder holding the same project on its own branch, so two pieces of work never share files. Task runs make one each (`.mefi/worktrees/<runId>` on `mefi/<runId>`) while "Give each run its own worktree" is on; **Work › Worktrees** lists them all and merges or removes them. |
+| **Attempt review** | What Studio keeps around each builder attempt: a **picture** of the folder at its start and end (private git refs, only on this PC), the list of **changed files** with Accept and Revert, the **advisory checks** that ran after it and **before and after shots** of the project preview. It is the "Changes and checks" section of a task's Evidence tab. |
 | **Workspace** | The home screen (`H`): current task, app preview and conversation. Project queue, Studio status and setup information expand when needed. |
 | **Command view** | The 3D node tree (`D`): sessions, tasks and agents as orbs, with a right panel for Work, Assistant, Runs and Ask, and agent settings in the top toolbar. |
 | **Booklet** | Historically the single-file model catalog; today `renderer/booklet.html` is the whole app bundled into one file by `npm run build-booklet`. The **Model catalog** tab (`1`) is the part that kept the name. |
@@ -1634,6 +1635,138 @@ Sign-in uses the same setup window as Friends › Your PCs and is polled until a
 account appears; Studio never sees a password or a token. The launch screen's
 rows carry the same chips through `projects:glance` (local, no network, three
 at a time, a second and a half each).
+
+### Attempt review: changed files, Accept and Revert, advisory checks, before and after shots
+
+A task that a builder has worked on has a **Changes and checks** section in its
+Evidence tab (`renderer/review.js`, `window.MefiReview`; Tasks › a task ›
+Evidence). It opens by itself for a task that ran, reads nothing until it is
+open, and has three panels: **Changed files**, **Checks** and **Preview**, and
+a small "What Studio keeps for each attempt" area with the three switches. The
+page only asks and shows; the host (`main.cjs`, the "Attempt review" block)
+keeps the record. Nothing in it can fail, stop or slow a run beyond one short
+wait.
+
+**The pictures.** When a builder run starts (after its worktree is prepared,
+while its prompt is built) and again when it ends, the host takes a picture of
+the folder the run works in (the project, or the run's own worktree): a git
+commit that only the refs `refs/mefi/attempts/<task>/<n>/before` and
+`.../after` point at (`scripts/attempt-snapshots.cjs` is pure: names, parsing,
+the revert plan; `scripts/attempt-snapshots-host.cjs` runs git). It is built
+with a temporary index (a copy of the real one, named by `GIT_INDEX_FILE`:
+`git add -A`, `write-tree`, `commit-tree`, `update-ref`), so the person's
+index, HEAD, branch and working files are never touched, and `.gitignore` is
+honoured because git does the adding. Files over 5 MiB (2 MiB for a binary),
+or past 64 MiB in all, are left out and named; a folder where more than 20,000
+files changed gets no picture and says so. Git runs without a shell and
+without prompts, with Studio's own keys withheld, under a fixed identity
+("Mefi's Studio"). Attempt numbers are per task and shared with the shots.
+Each task keeps its newest 20 attempts (300 tasks); older refs are pruned.
+
+- **Local only.** The refs are never pushed (Studio's own sync pushes branches
+  and nothing else; a test pushes to a bare origin and finds no `refs/mefi`).
+  Nothing that builds a problem report, a support bundle or an export may
+  include them: `refs/mefi/**` and `<project data>/attempt-evidence/**` (the
+  shots and check results, which live in the project's data folder, never in
+  the repository) are off limits there. A folder that is not a git repository,
+  has no git, sits inside another repository or has snapshots switched off has
+  no pictures, and the section says which.
+- **Shared folders.** Two runs working in the same folder see each other's
+  changes in their lists; both attempts record that, and the section says some
+  files may not be from this attempt. A run in its own worktree is listed from
+  either folder, and its files can be put back in the project once merged.
+- **Changed files** (`tasks:changes`, `tasks:diff`): the files between the two
+  pictures from `git diff`, with +/- , added, deleted, renamed (with its old
+  name), binary, link and submodule marks, and for each whether it **can be
+  reverted**, **changed since** (edited after the attempt ended) or is **back
+  as before**. A running attempt is read from the folder as it is now (kept 8
+  seconds so a busy board does not make git read the folder again and again)
+  and cannot be accepted or reverted. One file's diff comes on demand, cut at
+  200 KB or 2,500 lines.
+- **Accept** (`tasks:accept`) records the owner's word on the card
+  (`task.acceptedAttempts`: attempt, run, time, "owner") and changes no other
+  field; it is not Done and does not touch Done. It can be undone, and it waits
+  while a worker runs.
+- **Revert file / Revert attempt** (`tasks:revert`) put files back to the
+  start picture, and only files in the attempt's own change set: a file is
+  written back only while it still holds what the attempt left (otherwise the
+  whole revert refuses, names the files and changes nothing, and offers to
+  revert the unchanged ones), a file the attempt added is removed only while it
+  is still the attempt's copy, renames are undone both ways, a link is put
+  back only on platforms that make links, and a submodule or a type change is
+  refused. Before a byte moves Studio keeps a
+  safety picture (`.../<n>/reverted-<time>`), so a revert has an **Undo**
+  (`undo` with its receipt). Files are written to a temporary name and renamed,
+  inside the project folder's real path (a link pointing out of it is never
+  written through), with git's own line-ending and attribute conversions, and
+  a part-way failure puts back what was already written. Nothing runs
+  `git reset`, `clean`, `checkout .`, `stash` or `commit`. A revert refuses
+  while anything works in the folder, including a finished run's merge-back,
+  and is checked again after the safety picture. Reverting the whole attempt
+  first checks that the task can be reopened (the ordinary status path's own
+  refusals), then reopens it through that path and removes the Accept for that
+  attempt. Files git ignores, such as `node_modules`, are not in the picture
+  and cannot be restored.
+
+**Advisory checks.** After an attempt that changed something and was not
+stopped by the owner, the project's typecheck and lint (the build only when
+`review.advisoryBuild` is on) run in the run's folder; see docs/agent-tools.md
+"Checks and logs for builders" for what a project has, the limits and the
+builder tools `run_check` and `project_logs`. Results are kept at
+`attempt-evidence/<task>/<n>/checks.json`, shown under Checks as "Advisory,
+never blocks Done", and each check has a Run button (a build writes files, so
+it runs only on request and only while no builder works on the project).
+
+**Before and after shots.** When Studio's own project preview is running, a
+hidden window takes a 1280 x 800 PNG at the start and at the end of an attempt
+(`scripts/attempt-evidence.cjs` is pure: whether to capture, which requests
+are allowed, names, pruning and the sentences; `attempt-evidence-host.cjs` keeps
+the files; `evidence-window.cjs` owns the window). The window is an offscreen
+`BrowserWindow` that is never shown, focused or in the taskbar, sandboxed, with
+no Node, context isolation on and an in-memory session; only the preview's own
+localhost origin (and data: or blob: pieces of the page) may be requested, no
+pop-up, download or permission is granted, a redirect elsewhere is stopped, and
+it is given up on after 15 seconds and closed. A worktree run's "after" shot
+waits for its merge, because the preview shows the project's folder; if the
+work was not merged there is no shot and the page says so. Files live in
+`<project data>/attempt-evidence/<task>/<n>/{before,after}.png` (with
+`meta.json`); each task keeps pictures for its newest 10 attempts and folders
+for 20, and the whole folder stays under 200 MB. A picture over 6 MiB is not
+kept and one over 3 MiB is listed without being sent to the page. With no
+preview running nothing is captured and the page says "The preview was not
+running when this task started." A screenshot can show a secret, so they stay
+on this PC and are never added to a problem report.
+
+**Settings and kill switches.** Each of the three has a setting
+(`settings.review`, on by default except the build) and an environment
+variable that wins over it and shows in the section as "Switched off for this
+launch":
+
+| Part | Setting | Environment variable |
+| --- | --- | --- |
+| Before and after pictures, the changed-files list, Accept and Revert | `review.snapshots` | `MEFI_STUDIO_NO_ATTEMPT_SNAPSHOTS=1` |
+| Advisory checks after an attempt, `run_check`, `project_logs` | `review.advisory` (and `review.advisoryBuild`, off) | `MEFI_STUDIO_NO_ADVISORY_CHECKS=1` |
+| Before and after shots | `review.shots` | `MEFI_STUDIO_NO_EVIDENCE_SHOTS=1` |
+
+Switching one off leaves the other two running. With all three off a run is
+not touched at all.
+
+**How a run is protected.** `spawnNextJob` reaches the block through `typeof`
+guards and one door that drops a throw or a rejection. The worker starts when
+the start picture and shot are done or after 25 seconds (the shot is given up
+on after 8; a late picture is never kept), and the launch gates are read
+again after that wait, so a stop or pause that landed meanwhile cancels the
+claim and drops its picture. The end picture, the after shot and the checks run
+in the background and are not awaited, except a worktree run's merge-back,
+which waits for them for six minutes at most. A failure is one log line with
+the kind of error and the run id, never a message or a path. The heavy read of
+a folder is limited to three at once.
+
+**Known limits.** A project folder nested inside another git repository gets
+no pictures (the outer project owns the list). Parallel runs sharing one
+folder are flagged, not separated. The build writes files, so it is off by
+default and, run by hand, may leave a kept worktree dirty. Shots need Studio's
+own preview; an app the person runs elsewhere is not captured.
 
 ### Community
 
