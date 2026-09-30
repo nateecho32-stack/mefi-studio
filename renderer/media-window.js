@@ -8,6 +8,7 @@
   const STORAGE_KEY = "mefiStudio.mediaWindow.v1";
   const GAP = 16;
   const TOOLBAR_HEIGHT = 44; // 36px controls and the gap above playback.
+  const NARROW = 420; // the whole bar (title, transport, volume, window buttons) needs about this much.
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
   const finite = (value, fallback) => Number.isFinite(value) ? value : fallback;
   const distance = (point, box) => Math.hypot(Math.max(box.x - point.x, 0, point.x - box.x - box.width), Math.max(box.y - point.y, 0, point.y - box.y - box.height));
@@ -193,7 +194,12 @@
       let inMenu = Boolean(dockHost && visible && !minimized && !(background && shape !== "browser"));
       if (inMenu && !carry(dockHost)) { dockHost = null; inMenu = false; }
       if (!inMenu && parentOf() !== document.body) carry(document.body);
+      // Docking and undocking are jumps. The glide is for a floating player stepping aside; laid on a change
+      // of frame (the stage's `inset: 0` against a place on the page) it flew the player in from the page's
+      // corner whenever the menu closed after a step aside.
+      if ((root.dataset.docked === "true") !== inMenu) root.dataset.dodging = "false";
       root.dataset.docked = String(inMenu);
+      let narrow = false;
       if (inMenu) {
         Object.assign(root.style, { left: "", top: "", width: "", height: "" });
         root.style.clipPath = dockClip ? `inset(${dockClip.join("px ")}px)` : "none";
@@ -201,7 +207,12 @@
         const current = visibleBox();
         root.style.clipPath = "none";
         Object.assign(root.style, { left: `${current.x}px`, top: `${current.y}px`, width: `${current.width}px`, height: `${current.height}px` });
+        // Too narrow for the whole bar (a small window with the rail open): the
+        // volume stays with the menu, so the transport and the window's own
+        // buttons, Close among them, never run off the edge.
+        narrow = !minimized && current.width < NARROW;
       }
+      root.dataset.narrow = String(narrow);
       for (const grip of edges) grip.hidden = inMenu || minimized || background && shape !== "browser";
       paintVideo();
     }

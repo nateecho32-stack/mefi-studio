@@ -48,9 +48,15 @@ app.whenReady().then(async () => {
   const browserViewport = () => owner.contentView.children.find(child => child.webContents && child.webContents !== owner.webContents);
   const view = browserViewport(), remote = view.webContents;
   await capture(owner.webContents, "browser-welcome.png");
-  const design = await run("(()=>{const stage=document.getElementById('music-video-stage'),queue=document.querySelector('.music-link-queue'),player=document.getElementById('media-window'),layout=document.querySelector('.music-video-layout');const box=n=>{const r=n.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,right:r.right}};return {stage:box(stage),queue:box(queue),player:box(player),watching:box(stage.parentElement),columns:getComputedStyle(layout).gridTemplateColumns,selected:[...document.querySelectorAll('.music-tab')].map(n=>[n.textContent,n.getAttribute('aria-selected')])}})()");
-  assert.ok(design.stage.width > 800, `The browser needs the full media panel width: ${JSON.stringify(design)}`);
-  assert.ok(design.queue.y >= design.stage.y + design.stage.height - 1, `Browser and queue must not overlap: ${JSON.stringify(design)}`);
+  // The mini player is one 396 px card; a website needs more, so the card widens
+  // (data-shape="browser": up to 1040 px) and the transport runs under the page.
+  const design = await run("(()=>{const menu=document.getElementById('music-dropdown'),stage=document.getElementById('music-video-stage'),transport=document.querySelector('.music-transport'),chips=document.querySelector('.music-sections'),player=document.getElementById('media-window');const box=n=>{const r=n.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,right:r.right,bottom:r.bottom}};return {shape:menu.dataset.shape,size:menu.dataset.size,menu:box(menu),stage:box(stage),transport:box(transport),chips:box(chips),player:box(player),selected:[...document.querySelectorAll('.music-tab')].map(n=>[n.textContent,n.getAttribute('aria-selected')])}})()");
+  assert.equal(design.shape, "browser", `a website gives the card the browser shape: ${JSON.stringify(design)}`);
+  assert.ok(design.stage.width > 800, `The browser needs the widened card: ${JSON.stringify(design)}`);
+  assert.ok(design.menu.right <= 1440 && design.menu.width <= 1040 + 2, `and the card stays in the window at 1040 px at most: ${JSON.stringify(design)}`);
+  assert.ok(design.transport.y >= design.stage.y + design.stage.height - 1, `The website and the transport must not overlap: ${JSON.stringify(design)}`);
+  assert.ok(design.chips.y >= design.transport.y + design.transport.height - 1, `nor the transport and the section chips: ${JSON.stringify(design)}`);
+  assert.equal(design.selected.find(([, selected]) => selected === "true")?.[0], "Video", `the Video tab is the source on show: ${JSON.stringify(design)}`);
   await run(`window.MefiMusic.playLink(${JSON.stringify(`${base}/first`)})`);
   report.phase = "page visible";
   await until(async () => {
@@ -74,7 +80,8 @@ app.whenReady().then(async () => {
   await until(async () => view.getVisible() && Math.abs(view.getBounds().height - await run("document.getElementById('browser-viewport').getBoundingClientRect().height")) <= 1);
   report.phase = "scroll clipping";
   const pageSize = view.getBounds();
-  await run("(()=>{const panel=document.getElementById('music-dropdown'),header=document.querySelector('.music-dropdown-header'),viewport=document.getElementById('browser-viewport');panel.scrollTop+=viewport.getBoundingClientRect().top-header.getBoundingClientRect().bottom+80;})()");
+  // The card's body is what scrolls under the menu's header (the menu itself no longer scrolls).
+  await run("(()=>{const body=document.querySelector('.music-dropdown-body'),header=document.querySelector('.music-dropdown-header'),viewport=document.getElementById('browser-viewport');body.scrollTop+=viewport.getBoundingClientRect().top-header.getBoundingClientRect().bottom+80;})()");
   await until(async () => {
     const box = await run("(()=>{const b=document.getElementById('browser-viewport').getBoundingClientRect(),h=document.querySelector('.music-dropdown-header').getBoundingClientRect();return {top:b.top,headerBottom:h.bottom,bottom:b.bottom}})()");
     const clipped = view.getBounds();
@@ -82,7 +89,7 @@ app.whenReady().then(async () => {
   });
   assert.equal(view.getBounds().width, pageSize.width, "vertical clipping keeps the page width stable");
   await capture(remote, "browser-scrolled-website.png");
-  await run("document.getElementById('music-dropdown').scrollTop=0");
+  await run("document.querySelector('.music-dropdown-body').scrollTop=0");
   await until(() => view.getVisible() && view.getBounds().height === pageSize.height);
   const navigate = url => run(`document.getElementById('browser-address').value=${JSON.stringify(url)};document.getElementById('browser-form').requestSubmit();`);
   await navigate(`${base}/redirect`); report.phase = "history";

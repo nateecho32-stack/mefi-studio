@@ -247,6 +247,51 @@ test("A floating player steps clear of the open menu without saving the move, an
   assert.deepEqual(env.rect(), home);
 });
 
+// music.css gives a player marked data-dodging a short left/top transition, for a step aside. Docking is a
+// change of frame (the stage's `inset: 0` on one side, a place on the page on the other), so a glide laid on
+// it flew the player in from the page's corner when the menu closed. The render fixture caught it as a click
+// on Close landing on a window that was still gliding; here the mark must go off with every change of docked state.
+test("Docking, undocking and minimizing jump; only a floating player stepping aside glides", () => {
+  const env = environment(); env.show(); const stage = env.stage();
+  const menu = { left: 700, top: 500, right: 1000, bottom: 800 };
+  env.controller.avoid(menu); assert.equal(env.root.dataset.dodging, "true", "a step aside glides");
+  env.controller.dock(stage);
+  assert.equal(env.root.dataset.docked, "true"); assert.equal(env.root.dataset.dodging, "false", "into the card is a jump");
+  // The menu's own next request (its background switch putting the video back in the card) turns the mark on again
+  // while the player is docked, where it moves nothing; closing the menu must still be a jump.
+  env.controller.avoid(null); assert.equal(env.root.dataset.dodging, "true");
+  env.controller.dock(null);
+  assert.equal(env.root.dataset.docked, "false"); assert.equal(env.root.dataset.dodging, "false", "out of the card is a jump");
+  env.controller.avoid(menu); assert.equal(env.root.dataset.dodging, "true", "a floating player still glides aside");
+  env.controller.avoid(null); assert.equal(env.root.dataset.dodging, "true", "and back");
+  // Minimizing a docked player sends it to the page as a pill, and restoring it goes back into the card: jumps too.
+  env.controller.dock(stage); env.controller.avoid(menu); env.controller.avoid(null);
+  assert.equal(env.root.dataset.docked, "true"); assert.equal(env.root.dataset.dodging, "true");
+  env.controller.minimize(); assert.equal(env.root.dataset.docked, "false"); assert.equal(env.root.dataset.dodging, "false", "a pill on the page is a jump");
+  env.controller.avoid(menu); assert.equal(env.root.dataset.dodging, "true");
+  env.controller.minimize(); assert.equal(env.root.dataset.docked, "true"); assert.equal(env.root.dataset.dodging, "false", "and back into the card is one too");
+});
+
+// In a 600 px window the floating player comes out under 420 px (the render fixture sees it narrow there),
+// too little for the transport's volume as well as the window's own Settings, Minimize and Close: the
+// volume gives way, and Close stays inside the bar.
+test("A narrow floating player drops the bar's volume so its transport and window buttons stay inside it", async () => {
+  const wide = environment(); wide.show();
+  assert.equal(wide.root.dataset.narrow, "false"); assert.ok(wide.rect().width >= 464);
+  const small = environment(); small.window.innerWidth = 400; small.show();
+  assert.ok(small.rect().width < 420, `${small.rect().width} px`); assert.equal(small.root.dataset.narrow, "true");
+  small.window.innerWidth = 1440; small.window.emit("resize");
+  assert.equal(small.root.dataset.narrow, "false", "and it comes back with room");
+  small.window.innerWidth = 400; small.window.emit("resize"); assert.equal(small.root.dataset.narrow, "true");
+  small.controller.minimize(); assert.equal(small.root.dataset.narrow, "false", "the minimized pill has its own short bar");
+  small.controller.minimize(); assert.equal(small.root.dataset.narrow, "true");
+  small.controller.dock(small.stage()); assert.equal(small.root.dataset.narrow, "false", "docked, the menu's card carries the volume");
+  // The stylesheet hides exactly the volume, and keeps Previous, Play and Next.
+  const css = await readFile(new URL("../renderer/music.css", import.meta.url), "utf8");
+  assert.match(css, /\.media-window\[data-narrow="true"\] \.media-window-transport :is\(#media-window-mute, \.music-range\) \{ display: none; \}/);
+  assert.doesNotMatch(css, /data-narrow="true"\][^{]*(previous|next|play)/);
+});
+
 test("The default player stays still as its controls are approached; Move aside is opt-in", () => {
   const env = environment(); env.show(); env.advance(1800);
   const before = env.rect(); env.pointer(before.x - 40, before.y + 80);
