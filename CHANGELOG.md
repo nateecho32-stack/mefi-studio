@@ -180,6 +180,17 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   offers **Remove from list**; Enter or a double click opens a row; and **Open a
   folder…**, **Start a new app** and **Get from GitHub** sit at the foot. The
   loading card's spinner and progress bar no longer sit above the list.
+
+- **The Windows app is called Studio, not Electron, and is ready to be
+  signed.** The portable `Mefi Studio AI+.exe` now carries Studio's name,
+  version, copyright and icon. Task Manager, the file's Properties and
+  Windows' SmartScreen prompt stopped saying "Electron" by "GitHub, Inc.".
+  The tested signing workflow proposal is preserved in
+  [docs/release-workflow-signpath.yml](docs/release-workflow-signpath.yml).
+  It adds a packaged-app smoke launch, signing after SignPath acceptance,
+  explicit-tag builds and a hosted-runner gate. Activation is pending a
+  GitHub credential with workflow permission; releases remain unsigned.
+  See [docs/code-signing.md](docs/code-signing.md).
 - **Live › Fleet: every seat on your team, and the wires between them.** A
   new page beside Command shows the open project's team the way OpenRig draws a
   rig. An explorer lists it as pods (Lead, Build, Check, Keep) of seats such as
@@ -224,6 +235,15 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   section, and pins **Walk me through setup** at the head of Inference &
   Agents.
 
+- **Sub-agents on the Command tree.** A session's sub-agent sessions now hang
+  under it on the tree and in Command, the newest three busy in the last six
+  hours, with "+n sub-agents" beside the parent for the rest. Each pops out
+  of its parent and flies home into it when it leaves. A delegated part pops
+  out of the task that handed it out and, once closed, flies straight home
+  into that task instead of vanishing. Every flight home on the Command tree
+  plays the node style's finish beat, as the Agent brain does. Sub-agents
+  are not counted as sessions.
+
 - **A calmer Task board.** The board opens straight on its tools: add a
   task, then search with the state picker beside it, then the All / Open /
   Review / Done chips as one compact row. The explanatory heading and the
@@ -255,6 +275,31 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   answered, no port opens on your PC, and everything sent is scrubbed of
   keys, paths, emails and addresses first. It needs a rooms hub with the
   remote turned on ([docs/remote.md](docs/remote.md)).
+
+- **Studio opens in Vibe.** Every launch starts in Vibe, even if you closed
+  Studio in Build. A reload during a live update still comes back where you
+  were. Settings › Always start in Vibe turns this off. The Start here walk
+  no longer switches you to Build: its project, task and review stops use
+  Vibe's own project menu, box and Tasks panel.
+- **More of what needs you, answered in Vibe.** Results waiting on a slow
+  check can be confirmed or sent back from the Needs you drawer. When a plan's
+  interview asks you something, you answer it in the drawer. Plans waiting
+  for approval or for their tasks to be created are listed too, and open on
+  the plan page inside Vibe. Cards held because work outside Studio may
+  already cover them offer Build it anyway. A waiting update shows in
+  Vibe's top bar, which used to hide it.
+- **A new project's tree.** Watch stays in Vibe's dock from the first
+  minute, not only while agents work. Watch on a project with nothing on
+  its board shows its root, plus a small card with Start the first task and
+  Plan an idea.
+- **Key tips and Vibe keys.** First-time users see small pop-ups beside
+  buttons with the key that does the same thing, as keycaps. Click one, or
+  press its key, and it fades away for good. Use Turn tips off on a tip, the
+  Settings or Vibe settings switch, or Search to turn them off. Show key tips
+  again brings them back. On Vibe's page, outside the box: / types in the
+  box, N opens what needs you, C the conversation, T tasks, P plans, I ideas,
+  M the team and S settings. The dock and the box show their keys, and ? lists
+  them.
 - **Start with Windows.** Settings › General › Profile & startup (and the
   setup helper's Machine & app) has a **Start with Windows** switch. Studio
   then opens in the tray when you sign in, on the project you had open,
@@ -271,6 +316,20 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   page · 1 needs you · 4 done today". The line travels sealed in the vault
   like the rest, holds only clipped titles and counts, and is refreshed when
   the agents' work changes, at most every ten minutes.
+- **The model tracker is current again.** Models › Catalog has the new
+  OpenCode Go models (GPT 6 Luna, Grok 4.7, MiMo V2.6 Flash and Pro, LongCat
+  2.5 preview, Space Bunny) with verdicts that say when no benchmark is
+  published, fixes verdicts the newer models made wrong, and lists the Claude,
+  Zen and z.ai models Studio routes to under **Also tracked**.
+- **What the community says about a model, and Studio's own probes.** Models ›
+  Performance › **Community** shows the Void Engine community's ratings,
+  release-note claims, observed strengths and weaknesses, tips and a link to
+  the model's Discord thread, from a public feed Studio reads at most every
+  six hours (Refresh reads it now). **Run probes** gives the model seven
+  small fixed tasks (planning, structuring, coding, writing, commits, tests,
+  setup) scored by fixed checks; they run only when you click, cost like any
+  call on that model and show under Usage. Model picks lean on both only a
+  little, and never on opinions: your verified task results still decide.
 - **Answered asks leave the Needs you list.** An ask you answered in the
   companion menu used to stay on screen after it closed (the count already
   lower), and clicking it again only said "That question is no longer

@@ -1246,7 +1246,31 @@ card:
    work (falling back to its overall record), with a weak prior from the
    catalog quality index. Its cost, 5-hour request headroom, speed and what it
    is good at (`useFor`, `avoidFor`, `verdict` from `data/models.json`) ride
-   along as evidence. A builder's candidates are a shortlist of at most
+   along as evidence. Two weaker sources may shift only the prior's mean,
+   never the record, and only for the contract task kinds the work maps to
+   (`model-community.cjs` `taskKindsFor`: `coding-implement` and `coding`
+   read `coding`, `coding-document` reads `writing`, `coding-analyze` reads
+   `review`; `coding-explore` reads nothing):
+   - **Probes** (`probeShift`): Studio's own probe runs on that kind
+     (Models › Community › Run probes, never automatic). The mean score over
+     the latest runs (at most five per kind), mapped to -1..1, times 0.10,
+     times the share of five scored runs behind it: one perfect run is
+     +0.02, five are +0.10, a failed call counts for nothing.
+   - **Community** (`communityShift`): the public feed's evidence, capped at
+     +/-0.05 in total and averaged over the task's kinds. A specific
+     release-note claim is +0.01 (at most +0.02), an observed strength or
+     weakness that at least two members reported is +/-0.01 (+/-0.015 with
+     evidence; at most +/-0.03), and a task rating with at least three
+     evidence notes moves up to +/-0.02 by its distance from 3 of 5.
+     Opinions and tips never reach a candidate.
+
+   The shifted prior still counts as two pseudo-attempts, so after n settled
+   outcomes the two together move the estimate by at most 0.30 / (n + 2),
+   and with no judge an untried model still never outranks a proven one.
+   The judge sees both blocks with their `source` labels
+   (`studio-probe-measurements`, `community-reports-not-measurements`); when
+   the state is over budget the community's words are dropped first, then
+   the block, before any candidate. A builder's candidates are a shortlist of at most
    `MAX_WORKER_ROUTING_CANDIDATES` (6): the default first, then the models
    with the most settled outcomes on this kind of work, then catalog quality,
    then the lowest typical cost. The z.ai pair fits whole; the Go roster (16
@@ -1290,7 +1314,8 @@ card:
 Chat and the assistant's own passes are routed per kind of call, not per
 message, so a chat turn no longer pays its own routing call. Tests:
 `tests/model_win_evaluator.test.mjs` (end to end on a scratch ledger),
-`tests/model_routing.test.mjs`, `tests/model_performance.test.mjs` and
+`tests/model_routing.test.mjs`, `tests/model_routing_evidence.test.mjs`
+(probe and community priors), `tests/model_performance.test.mjs` and
 `tests/jev_model_routing_host.test.mjs`.
 
 ## 13. The Agent Brain

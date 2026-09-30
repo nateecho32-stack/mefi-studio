@@ -113,6 +113,49 @@ safety net"). Built and gated in an isolated worktree (`C:\wt\za7`) off
   The rehearsal drives the same PowerShell against a stand-in, and the first
   protected update in the field is the one after the release that carries this.
 
+## 2026-09-29 - Publish completed work with signing activation deferred
+
+GitHub rejected the completed integration push because this PC's OAuth
+credential lacks the workflow scope. No SSH key is configured. Preserved the
+exact tested signing/smoke workflow as docs/release-workflow-signpath.yml and
+on local branch codex/release-signing-gated (491373c), restored only the
+active release workflow to GitHub main's bytes, and documented the activation
+step and credential requirement. All other finished work remains integrated.
+No tag/release was published. Runtime sources are unchanged since the 733-test
+integration and final Command renderer pass.
+
+- Workflow proposal bytes match 491373c:.github/workflows/release.yml.
+- Active workflow bytes match origin/main:.github/workflows/release.yml.
+- npm run check and npm run audit: PASS; no runtime changes need new tests.
+- Lost-work guard must pass before pushing; deferral is explicit in history.
+
+## 2026-09-29 - Preserve concurrent main fixes while landing finished branches
+
+Integrated the update safety net (e9b8b79) and completed dogfood fixes
+(54640ea) from GitHub main into the finished-branch integration. Preserved
+models: and remote: app-wide routing together with boot:healthy, all module
+contracts, Command-tree children, Vibe plan review, and both kinds of result
+review: pending checks show their elapsed time; failed/unavailable checks
+keep confirmation and send-back. The pending-check fixture now includes its
+real pending reason. Imported test rows without discarding either archive,
+and regenerated booklet.html. Fixed the dogfood transport test's missing
+ReadableStream import with node:stream/web.
+
+- build-booklet, npm run check: PASS (205 targets, 425 specs).
+- npm run audit: PASS, 0 findings. Whitespace/conflict checks: PASS.
+- npm run lint: PASS, 0 errors and the same 42 existing warnings.
+- Update-safety and overlapping host/renderer suites: 154 tests passed.
+- All dogfood-changed suites plus overlapping Vibe, Command, model tracker,
+  app-wide IPC, boot health, purity, booklet and startup suites: 733 passed,
+  0 failed, 0 skipped (13 s, concurrency 4).
+- agent_tools after the explicit stream import: 28 passed, 0 failed (2.5 s).
+- Final combined Command Electron fixture: 1 passed, 0 failed (54.4 s).
+- The preceding combined full-run evidence remains in the finished-work row:
+  all 4,910 behavior tests completed with 0 failures; Python and exclusive
+  probes passed. Two documented desktop render flakes made that full command
+  exit 1; both affected suites subsequently passed alone. No additional full
+  rerun was needed for this targeted conflict resolution.
+
 ## 2026-09-29 night - Dogfood fixes: link reading, tool-call leaks, refused plans, owner asks
 
 The fixes from a live dogfood run (an isolated Studio copy, handed only the
@@ -133,6 +176,86 @@ onto it.
   failures that passed solo (`git_actions` "a real index.lock that clears in
   time" 65/65; `command_render` "Assistant narrow: pointer reaches the switch
   track" 2/2).
+
+## 2026-09-29 - Land finished parked Studio work and Command-tree children
+
+Integrated off GitHub main 519d656 in isolated worktrees: issue links
+(92f5e26), the commit checklist (bc2dc19), release packaging fixes
+(cherry-picked 77a3895), the signing/smoke workflow (8c08f90), the Studio
+model tracker and community evidence (a7e6294), Vibe defaults and key tips
+(47940db), and the finished Command-tree children. The latter were preserved
+with an alternate-index snapshot (4d3b3b5): all 11 source files still matched
+that snapshot before landing, and the original index/files were not edited.
+
+Conflicts retained both sides' application changes: models: and remote:
+remain app-wide; the booklet includes Fleet, Git sync, card layout, model
+community and key tips. Regenerated booklet.html rather than selecting a
+parent. Test rows were reconciled across the live file and archive, imported
+with append-testruns-row and rotated. The older release announcement stays
+parked because current scope/docs still describe 0.4.5 as upcoming. Unfinished
+builder, media, GPU, startup, logging, CLI, row-push and bot/service work stays
+separate. No tag or release was published.
+
+- build-booklet, check (204 targets, 419 specs), audit (0 findings), diff
+  whitespace check and the lost-work guard over origin/main..HEAD: PASS.
+- Final lint: 0 errors, 42 existing warnings, identical to clean main.
+- The first full run exposed two existing git_actions fixture assumptions,
+  both reproduced on unchanged main: a fixed 800 ms timer removed index.lock
+  before commit preflight finished; a plain copied Windows environment held
+  Path rather than PATH. The lock now persists until real retry backoff, and
+  executable-path presence is checked case-insensitively. Both tests passed
+  focused, then in the final full behavior stage.
+- Final npm test ran every suite, with only its own process affinity limited
+  to four CPUs to reduce worker memory pressure. Behavior stage: 4,910 tests,
+  4,903 passed, 7 skipped, 0 failures (596 s). Electron lane: 48 tests,
+  45 passed, 1 skipped, 2 failures (440 s). Exclusive Command and eyes probes
+  passed; occlusion passed its control and capability-skipped its other test.
+  Python: 248 tests OK, 1 skipped (58 s). Normalized-path lock: 6 checks PASS.
+- The full invocation exited 1, not a clean full-run pass: performance_render
+  hit the documented Profiler JSON download timeout (5,320 ms, 1.06x pace);
+  planning_render sampled glass transmission 12 against >35. Both suites
+  passed in the earlier combined full run. After all test lanes drained,
+  unchanged final sources passed alone: performance_render 2 active tests,
+  1 opt-in skip, 0 failures (24 s); planning_render 1/1 (33 s). The profiler
+  matches the known download flake; the Plans capture is consistent with
+  frame/load-sensitive capture, not an observed persistent regression.
+
+Complete logs and synthetic profiler captures are retained locally under the
+OS temporary directory (mefi-final-merged-test.log, mefi-final-merged-lint.log,
+mefi-final-profiler-solo.log, mefi-final-planning-solo.log and
+mefi-merged-profiler-solo/). Local data and portable dist folders were not
+committed or replaced. The optional model-review feed/signing services still
+need their separate service setup; merging their Studio support does not
+deploy those services.
+
+## 2026-09-29 - Stamped executable and SignPath-ready release workflow
+
+The portable `Mefi Studio AI+.exe` gets Studio's name, version, copyright and
+icon (`scripts/stamp-exe.mjs`, `resedit` 3.1.0 as a dev dependency) in place
+of Electron's, and `release.yml` gains a smoke launch of the packaged app, a
+`gate: hosted` choice for hand-started runs, and SignPath signing that stays
+off until the repository variables exist (docs/code-signing.md). Gated in a
+detached worktree (`C:\wt\sign`, origin/main 10c6b97 plus this change,
+node_modules junctioned).
+
+- `npm run check` and `npm run audit` (0 findings): PASS.
+- `npm run test:fast`: PASS, 4511 pass, 0 fail, 5 skipped. The two packaging
+  suites read files from Electron's dist folder, so they sit in the heavy
+  lane; run directly: `stamp_exe` (6 new) and `package_privacy` PASS, 7 of 7.
+- Python contracts (248 tests, 1 skipped) and the normalized-path lock: PASS.
+- A real `node scripts/package-portable.mjs --release`: Windows reads the
+  stamped exe as ProductName and FileDescription "Mefi's Studio AI+", version
+  0.4.5.0, Studio's icon, unsigned. A copy launched with `--smoke` and a
+  scratch `--user-data-dir` exited 0 with the `[smoke]` line (39 cards). The
+  release folder kept only curated.json and models.json in its data folder.
+- The workflow's PowerShell steps, rehearsed locally under Windows PowerShell
+  5.1: the folder lookup and smoke launch pass; the signature check refuses
+  an unsigned file and a file whose product name and version differ. The
+  YAML parses. The SignPath steps themselves cannot run until the project is
+  accepted.
+- Not run: the 25 Electron render suites. The laptop had 0.9 GB free with
+  other sessions' Electron processes open, and this change touches neither
+  the renderer nor main.cjs.
 
 ## 2026-09-29 - GitHub link: the Git chip, Save and push, Publish and the Quiet-card launch screen
 
@@ -327,6 +450,53 @@ checkout carried other sessions' edits.
   GitHub main alone as well and passed once at 12 s, so it depends on this
   desktop's state at the moment; `media_window_render` failed once under the
   lane and passes alone (3 of 3 in a row).
+
+## 2026-09-28 (evening) - Sub-agents, the return path and the finish beats on the Command tree
+
+Gated in the worktree `C:\wt\cmd-kids` (branch `claude/command-children`,
+based on `origin/main` `60c4abb`, which already has the finish beats from
+`7450479`). It covers:
+- sub-agent sessions on the tree and in Command: `tree3d.js` children, the
+  `idle.js` `childSession` life cycle, "+n sub-agents", and session counts
+  without them in `idle.js` and `nav.js`;
+- a delegated part flying home into its parent task (`fx.delegated`);
+- the node style's `done`/`absorb` beats over every Command flight home.
+
+- `npm run check` and `npm run audit`: clean.
+- `npm test` (8.6 min): the Node suites ran 4496 tests (4490 pass, 6
+  skipped, 0 fail), and the Python contracts and the normalized-path lock
+  pass.
+- An earlier full run on `79d892d` failed three `task_groups` tests with
+  `delegatedParentOf is not defined`. That suite slices `takeTasks` out of
+  `idle.js` on its own, so the helper now lives inside `takeTasks`.
+- A seeded offscreen preview of Command at 1920x1080 in Prism and Sigil
+  showed the sub-agents under their session, "+1 sub-agent", and the beats
+  as one sub-agent and one delegated part flew home. No renderer errors.
+
+## 2026-09-28 - Vibe opens by default, answers more, shows a new project's tree, key tips
+
+Every launch starts in Vibe (`mefiStudio.uiMode.launch`, Settings › Always
+start in Vibe; a live-update reload resumes) and the Start here walk stays in
+Vibe. Needs you gains `review` (Confirm done / Send it back), `plan`
+(interview follow-ups answered through `planning:assist`, spec approval and
+task creation open the plan in Vibe's rail) and Build it anyway for relevance
+holds; `#vibe-update` mirrors the rail's update pill. Watch always stands in
+the dock and Command shows a low "Nothing started yet" card on an empty
+project. New `renderer/key-tips.js` (first-run keycap tips, click or key to
+dismiss, off from the tip, Settings, Vibe settings or Search) and Vibe's own
+keys / N C T P I M S, which stand down in a drawer (nav.js typeInto).
+
+- `npm run build-booklet`: built; `npm run check` (190 targets) and
+  `npm run audit` (0 errors, 0 warnings): PASS.
+- New suites: vibe_home (6), key_tips (3); onboarding's Vibe walk and
+  vibe_panels' dock test updated. 140 focused tests across vibe_*,
+  key_tips, onboarding, nav_startup, booklet_build and type_into_menu: PASS.
+- `npm test` in C:\wt\vibe-tips rebased on 39a153d: Node suites, Python
+  contracts and the normalized-path lock: PASS. An earlier run on e53a572
+  failed only `occlusion_probe` (lag samples 1–3 s on a loaded desktop, the
+  known environmental row); solo rerun: PASS.
+- Offscreen Electron captures (fake bridge, 1920x1080): fresh project in
+  Vibe with tips, Watch's fresh card, plan and review drawers, Build tips.
 
 ## 2026-09-28 - Configuration indexes the setup helper; sync catches a merge that drops another branch's work
 
@@ -536,204 +706,6 @@ the fonts step (booklet.js) stops waiting after 4 s.
   normalized-path lock pass; Node suites failed only performance_render
   ("Profiler JSON download timed out", the known load flake), which passes
   solo (2).
-
-## 2026-09-28 - Plans face lift: one step at a time, quick-then-deep models, project ready before it is needed
-
-The owner said the planner felt like a chore: slow to load, too much on
-screen, and no real help from Mefi. Opening Plans waited on the folder scan,
-and every interview answer re-read the whole folder (2.1 s on this repo;
-0.13 s from the cache). `planning:list` now answers with `skipExisting`, and
-the new `planning:prepare` brings the scan plus a warm project read after the
-plans are on screen. Interview turns answer from that read
-(`explorePlanningFiles` `maxAge` + `stale`) and refresh it behind the reply.
-Interview, question and live-suggestion calls stay on the routine (quick)
-seat. A reply it fumbles is asked once more of the heavy seat. The spec and
-"Think harder" turns go straight to heavy, and the note names the seat. The
-page shows one step at a time (Show every step brings the rest back), an Up
-next button, a progress track, and a flourish when a step completes. The
-interview reads as a chat. Mefi's reading has a one-click "That's right —
-record it", and Mefi asks the next question on its own (a switch, on by
-default) and as soon as a new plan exists. A new idea needs no name, and
-starters fill its first words. The Project ready chip shows the files read and
-the map areas. "Where this lives" pins a plan to a Project map area.
-
-- `npm run build-booklet`, `npm run check` (189 targets) and `npm run audit`
-  (0 findings): PASS in C:\wt\plans on 6c1c940.
-- `npm test`: Python contracts OK (248). Node stage: the Electron fixture
-  stage failed on performance_render (profiler JSON timeout, a known row) and
-  planning_render (glass transmission 12 under load). Both PASS solo
-  (planning_render transmission 106, performance_render 2/2). After the
-  rebase onto 39a153d: `npm run check`, `npm run audit` and `npm run test:fast`
-  (4403 pass) PASS; planning_render solo passed 3 of 4 (one read 0, a blank
-  capture), clean 39a153d passed 3 of 3. Watch it for a flake.
-- New tests: planning_service (2: list answers before the scan and prepare
-  fills it; quick seat first, one heavy retry, deep asks, quick error shown),
-  planning_ui (4: one-click record then ask; switch off; nameless idea
-  auto-asks; list first, then ready chip, scan and map pinning),
-  planning_exploration (1: stale-ok read answers from the last inventory).
-
-## 2026-09-28 - Start with Windows; Your PCs shows what each PC's agents are doing
-
-Two pieces for leaving home PCs working. **Start with Windows** (Settings ›
-General › Profile & startup, and the setup helper's Machine & app) keeps a
-Run entry pointed at this copy of the app with `--at-login`; that launch
-(`startupAtLogin`) opens the open project in the tray without the launch
-screen, the agents follow When Studio opens, and `prefs:get` reads back what
-Windows holds, including Task Manager switching it off. **Your PCs** lines in
-Share between my PCs now carry each PC's agents (`agentsSnapshot` →
-`vaultAgentsLine`: the loop state, up to four titles being built, the
-needs-you count, today's finished and stopped counts), sealed in the vault,
-sent after a sync look and when that line changes (`vaultAgentsWatch`), at
-most every ten minutes.
-
-- `npm run build-booklet`: built; `npm run check` (189 targets, 391 specs) and
-  `npm run audit` (0 errors, 0 warnings): PASS.
-- New suites: start_with_windows (11), pc_agents_line (4); pc_vault gains the
-  sealed agents line, pc_vault_ui the painted line, setup_helper the switch.
-  188 focused tests across sync_host, pc_vault*, startup_resume, startup_hold,
-  setup_helper, workspace_ui, booklet_build, settings_search_labels,
-  cli_path_refresh_host and module_purity: PASS.
-- `npm test` in C:\wt\away on e53a572 plus this change: Node parallel stage
-  4392 tests, 4387 passed, 5 skipped, 0 failures. Electron lane 41 tests, 35
-  passed, 1 skipped, 5 failed (`performance_render` x2 "Profiler JSON download
-  timed out", `planning_render` backdrop check, `renderer_recovery` and
-  `task_overview_render` killed without a report), and `command_render` killed
-  at its limit, all while a second checkout ran its own `npm ci` and tests.
-  Each passed solo on rerun: performance_render 2/2, planning_render 1/1,
-  renderer_recovery (all pass), task_overview_render 1/1, command_render 1/1
-  in 93.2 s. `eyes_toggle_electron` 1/1, `occlusion_probe` 1 pass 1 skip.
-  Python contracts OK (248, 1 skip). Normalized-path lock passed.
-- Browser-pane preview of the real `pc-vault.js` and the switch markup with a
-  fake bridge: each PC's agents line under its sync line, and the switch
-  beside When Studio opens.
-
-## 2026-09-28 - Typing goes to the open menu's box
-
-A printable key pressed outside any field while a menu is open (focus in it,
-or the pointer resting on it), or while a sheet is open, now lands in that
-menu's text box instead of firing the single-letter shortcuts that opened
-other menus (`typeInto` in `renderer/nav.js`; menus opt in with
-`data-type-scope`, `data-type-here` or `typeScope()`). Clicking out of a menu
-gives the keys back. Wired: the companion panel (from any tab to Talk) and
-hub (Talk and Suggest work open with the caret in their box; an open room's
-message box), Music & video (link box, YouTube search), Command's chat
-panels, Assistant pill and tab, Ask cards, Vibe's side panel and ask drawer,
-the project map's Browse, Home's queue search, Explorer's session tools and
-the media browser's address bar. MefiSelect no longer takes the caret back
-from a box its choice opened (Agents' "Enter a model ID…").
-
-- Browser pane, fake-bridge booklet, real key presses: the Task board took
-  "plan the demo" into its box with P not opening Plans; T still opened the
-  Task board with no menu up; the Music dropdown, the companion panel (from
-  Needs you) and the hub's Suggest work all took typing.
-- `npm run build-booklet` in C:\wt\type-into; `npm run check`, `npm run audit`
-  (0 errors, 0 warnings): PASS.
-- New suite type_into_menu (9); the new tests fail on the old code.
-- `npm test` in C:\wt\type-into on 6c1c940: Node parallel stage 0 failures;
-  Electron lane 37 of 41 passed, 1 skipped, 3 failed under load
-  (media_window_render "No media report", task_overview_render "No fixture
-  report", unified_studio_render on a MefiSelect focus rule since narrowed).
-  All three pass solo after the fix. Python contracts: only
-  test_electron_smoke_boots_when_installed timed out (120 s); the launcher
-  file passes solo (11 tests, 1 skipped).
-
-## 2026-09-28 - Needs you: answered asks leave the list, no dead asks after a reload
-
-The owner reported that answered asks in the companion's Needs you list hung
-around until Clear list, and that a reload showed asks whose clicks only
-failed. companion-ui.js keyed() kept any row holding focus (the clicked
-option button), so a row that left the list stayed on screen. It now holds
-back only a row with a focused text field and moves focus to the next row.
-agent-brain.js act() locks a row (aria-busy) until the re-read lands. The
-48 h question pruner ran only on a new ask or a click. assistantExpireQuestions
-now runs on loads, on the assistant:state and companion reads, on ticks and
-on answers. assistantSettleStaleAsks retires asks whose card is gone on every
-loadAssistant, the all-projects list drops expired asks, and a stale click
-comes back as gone. Asks about done or archived cards stay, as tests pin.
-
-- `npm run build-booklet`, `npm run check` (189 targets) and `npm run audit`
-  (0 findings): PASS on e53a572, rebased onto 897c2ec.
-- `npm test`: PASS (Node suites 497 s, Python contracts, normalized-path
-  lock). The first run, before the rebase, failed 5 assistant_loop cases:
-  the tick called the new helper outside the suite's vm slice. It is now
-  guarded with typeof, like the other cross-section helpers.
-- New tests: companion_queue_rows (4, keyed() in a vm with a small fake DOM;
-  all 4 fail on the old keyed()), assistant_issue_host (2: expiry on a read
-  with a gone reply, and a project load settling gone and expired asks).
-- Clicked through a booklet copy with a stub bridge: three fast clicks sent
-  one answer, the row left at once, and an Enter answer moved focus to the
-  next row's Try again.
-
-## 2026-09-28 - Vibe shows its planner and agent team at work
-
-Suggest a next step and Build it's sizing each show a live strip
-(`renderer/vibe-flow.js`) fed by the host's `vibe:progress` steps: the
-planning service's `onProgress` (reading, read, asking) and `vibeBuild`
-through `vibeProgress` (quick, sizing, tool, sized, adding), with
-`seatFetch`'s new `onTool`. The plan card draws a split request as a track
-with a live "now" line, Building now rows and the plan panel's timeline carry
-each worker's tool and current step, and Team lists Thinking now. Fixes:
-adding one suggestion no longer locks the rest, the plan panel's Make it one
-task uses `merge-steps`, and Enter in a New app field paints Making it….
-Build it's feedback moved under the box.
-
-- `npm run build-booklet` then `git diff --exit-code renderer/booklet.html`:
-  clean.
-- `npm run check` (189 targets, 389 specs), `npm run audit` (0 errors, 0
-  warnings), eslint on the changed files (no findings of theirs): PASS.
-- New tests fail on the old code: vibe_flow ("adding one suggestion keeps the
-  rest of its set usable", "Make it one task is one host call", "New app shows
-  its first build being sized"). New suites: vibe_flow (15),
-  vibe_progress_host (5); agent_tools asserts `onTool`.
-- `npm test` in C:\wt\vibe-flow on 77ad3bd: Node parallel stage 4351 tests,
-  4346 passed, 5 skipped, 0 failures. Electron lane 41 tests, 39 passed, 1
-  skipped, 1 failed: `media_browser_render` "Browser fixture timed out:
-  scroll clipping", a suite this change does not touch; it passed solo on
-  rerun in 14.4 s. `command_render` 1/1 in 50.4 s, `eyes_toggle_electron`
-  1/1, `occlusion_probe` 1 pass 1 skip. Python contracts OK (248, 1 skip).
-  Normalized-path lock passed.
-- Rebased onto c85cf60 (the menu polish): build-booklet clean, check,
-  audit, and 243 focused tests (the vibe, planning, sizing, agent tool and
-  onboarding suites plus every suite the menu polish changed): PASS.
-- Offscreen Electron captures at 1920x1080 and 1280x720 of every stage (fake
-  bridge replaying the host's steps): planner strip over placeholder cards,
-  sizing strip under the box, plan track and now line, plan timeline, Team,
-  New app; a light custom palette too.
-
-## 2026-09-28 - Menu polish pass: plain words, two-step confirms, steadier menus
-
-The "Menu polish review" session's uncommitted work in C:\wt\menu-polish,
-finished and landed as six commits on efdc015. Its stuck ux-clarity port was
-resolved: the fixture and test halves no longer apply, since the startup
-fixture has no Projects-menu check now, and sidebar.test pins the behaviour.
-The branch was rebased over the Rooms rewrite (companion-hub select() keeps the
-dispose over a copy, media-window keeps setMinimized with the SVG close, and
-Your PCs sends the previewed shelf with the count in words), then over the
-onboarding landing (setup-helper merged cleanly). Rooms got REASONS for auth,
-version and unsupported, plainError, and two-step Close, Leave and Delete.
-Connection details are named as Settings › General › Community. Batch 3 (one
-page frame) was not done: hiding #tree-rail outside Command conflicts with
-command_render's "visible rail resumes painting" contract, so it waits for
-the owner.
-
-- `npm run build-booklet` (fresh), `npm run check`, `npm run lint` (0
-  errors, 41 warnings, none new) and `npm run audit` (0 findings): PASS.
-- New tests: rooms_ui (hub codes as sentences; Delete and Leave ask twice)
-  and sidebar (M+ focuses the selected project). The session's pins were
-  updated in ideas_ui, overhead_poll_backoff, pc_vault_ui, together_ui,
-  vibe_panels and the companion-hub render fixture.
-- `npm test` in C:\wt\menu-polish, exit 0: Node parallel stage 4348 tests,
-  4343 passed, 5 skipped, 0 failures. Electron lane 41 tests, 40 passed, 1
-  skipped. `command_render` 1/1 in 53.8 s, `eyes_toggle_electron` 1/1.
-  `occlusion_probe` skipped because its window was closed externally during
-  the cover wait (desktop in use). Python contracts OK (248, 1 skip). The
-  normalized-path lock passed.
-- Visual: the seeded fake-bridge preview was captured offscreen at 1920x1080,
-  48 menus each from efdc015 and from this branch. The same single
-  fake-bridge console error appears in both. The largest pixel change is
-  2.1% (the live tree preview). Trace reads "All 0" with its empty state in
-  the log pane, Context shows its own subtitle and "4,000 token budget", and
-  Friends shows the new Settings path.
 
 ## Read Before Any Tests
 

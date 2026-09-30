@@ -211,6 +211,11 @@ Workers may run in parallel against this repository. Before editing:
 - Rebuild and commit `renderer/booklet.html` with any renderer change.
 - Commit messages: a short imperative subject and, when the why is not
   obvious, a body that says it.
+- Before committing, work through the checklist in
+  `.claude/skills/commit-check/SKILL.md` (recent commits first, deltas not
+  whole payloads, older work reachable on request, measured speed, bounded
+  logs, nothing lost). Claude Code loads it as a project skill, and Studio's
+  own builders can use it from Agents › Setup › Skills.
 - Nothing from `data/`, no keys, no screenshots with private paths.
 - Expect a maintainer to run the full gate on Windows before merging; a red
   Electron fixture is checked against the known-failure table at the top of

@@ -189,7 +189,7 @@ settings and per-model work-kind summaries for the shared controls.
 | **Task** | One unit of work on the project board, with a brief, acceptance checks, prerequisites, attempts and evidence. New cards gather local references automatically when Automatic references is on; the configurable scout can use GPT-6 Luna on the fast tier to choose one verified starting file. |
 | **Idea** | A note in the feature-idea inbox; it becomes a task only when you or **Work through backlog** promote it. |
 | **Plan** | A structured route from an unclear idea to tasks: unknowns, decisions, a specification you approve, then tasks. |
-| **Session** | One coding-worker run recorded in the OpenCode store. Tasks map to sessions in **Overhead**. |
+| **Session** | One coding-worker run recorded in the OpenCode store. Tasks map to sessions in **Overhead**. A session another one spawned (its `parentId`) is a **sub-agent session**: the tree and the Command view hang the newest three busy in the last six hours under their parent, count the rest as "+n sub-agents", and fly each home into its parent when it leaves; they are not counted as sessions. |
 | **Builder / coding worker** | The CLI that edits your files: `opencode` (preferred), `claude`, `codex`, `grok` or `agy`. |
 | **Agent roles** | The service loop's satellites: **watcher** (stale sessions), **machine** (CPU, memory, leases), **auditor** (findings), **keeper** (pruning), **thinker** (what next), **briefer** (summaries), **responder** (chat), **foreman** (hands out work), **compactor** (context), **overseer** (reviews the loop), **scout** (finds task context). Agents share work state and messages in the Agents work hub. |
 | **Agent mail** | Notes the roles write to each other; shown on the assistant card under **Said to each other** and as packets on the tree. |
@@ -248,14 +248,19 @@ settings and per-model work-kind summaries for the shared controls.
   door: one box to talk it over with Mefi or build it as a task, cards for
   what needs you, what is building, what just finished and fresh ideas, and a
   dock. **Build** is the full studio described below. The choice is
-  remembered across launches.
+  remembered during updates. New launches start in Vibe unless **Always
+  start in Vibe** is turned off in Settings.
 - Vibe shows only what has something to say. A card appears while it has
   rows (Freshly done covers what finished in the last half day, by when it
   finished, and never work you dropped) and a quiet project gets one
   calm line instead of empty boxes. The dock always has Tasks, Team and More;
-  Watch steps in while agents work, Plans while a plan is in play, Ideas while
+  Watch is always available, Plans steps in while a plan is in play, Ideas while
   fresh ones wait. With cards up on a short window the greeting and the
   starter chips step aside.
+- First-time key tips show beside controls and fade after their key or the
+  tip is pressed. Settings can turn them off or show them again. Vibe's
+  Needs you drawer also handles plan interview questions and results waiting
+  for a slow check; its top bar mirrors a waiting app update.
 - Vibe's menus are its own (`renderer/vibe-panels.js`): Tasks, Plans, Ideas,
   Team and Settings open as a compact panel beside the front door, one side
   panel at a time with the conversation and the decision drawer, and a wide
@@ -1286,10 +1291,30 @@ failed process stays an error and cannot produce briefing requests.
 
 ### Model Lab and routing
 
+- The **model catalog** (`data/models.json`, Models › Catalog) is built by
+  `npm run data` (`scripts/refresh-models.mjs`) from the live OpenCode Go
+  roster, models.dev and the curated seed `data/curated.json`, whose
+  verdicts cite only published prices, pools and benchmarks (no benchmark
+  means no index). Its `providerModels` lists the models Studio routes to
+  outside Go: Claude Code (models.dev `anthropic`), Zen's OpenAI models
+  (`openai`, priced and confirmed by `opencode`) and the z.ai Coding Plan
+  (`zai-coding-plan`, list price from `zai`). Each route keeps the explicit
+  id list in the seed's `providerRoutes`. The refresher reports stale or
+  untracked ids and never adds them itself. Offline it rebuilds these rows
+  from the committed catalog. Catalog › **Also tracked** shows them read-only.
 - **Model Lab** records per-project latency, delivered tokens/s, errors,
   reported usage and USD cost, with human and model ratings kept separate;
   opening it never runs paid measurements. **Context** previews the current
   task brief within a chosen token budget and reports what was shortened.
+- **Community** (Models › Performance) shows, for one enabled model, what the
+  Void Engine community's public feed says about it (server ratings,
+  release-note claims with their source, observed strengths and weaknesses
+  with reporter counts, opinions, tips, a Discuss on Discord link) and
+  Studio's own **probes**: seven small fixed tasks with deterministic
+  scorers, run only from **Run probes**. Both are kept in user data
+  (`model-community.json`, `model-probes.json`) and only nudge routing's
+  prior; see [model-community.md](model-community.md) and
+  [agent-loop.md §12](agent-loop.md#12-choosing-a-builders-model-the-win-probability-evaluator).
 - **Usage tracker** sums two ledgers per day, provider and model: the calls
   Studio made itself (assistant HTTP and CLI routes, Jev, speed probes) and
   every coding-session turn OpenCode's own store recorded for the project
@@ -1571,6 +1596,16 @@ vX.Y.Z --publish`, or push a `v*` tag and let
 `.github/workflows/release.yml` run. A private repository needs a read-only
 token: save one in Settings › Updates, set `MEFI_STUDIO_GITHUB_TOKEN`, or let
 Studio reuse the GitHub CLI's `gh auth token`.
+
+The packaged `Mefi Studio AI+.exe` is Electron's `electron.exe`, stamped with
+Studio's product name, version, copyright and icon (`scripts/stamp-exe.mjs`).
+Windows then shows Studio, not "Electron", in Task Manager, the file's
+Properties and SmartScreen. The tested release workflow proposal in
+[release-workflow-signpath.yml](release-workflow-signpath.yml) adds a packaged
+app smoke launch, optional SignPath signing and a hosted-runner gate. It is
+pending activation with a GitHub credential allowed to change workflows;
+the active release workflow remains unchanged. [code-signing.md](code-signing.md)
+holds the policy, activation steps and service setup.
 
 ### Git sync: Push, Pull and GitHub linking
 

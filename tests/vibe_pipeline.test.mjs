@@ -23,7 +23,7 @@ function bridge({ held = false, execute = true, paused = false, keyPresent = tru
   const now = Date.now();
   const status = { held, execute, autoBuild, running: [] };
   const tasks = [
-    { id: "t2", projectId: P, title: "Fix the login redirect loop", status: "awaiting_verification" },
+    { id: "t2", projectId: P, title: "Fix the login redirect loop", status: "awaiting_verification", verification: { state: "pending", reason: "Checking the recorded result." } },
     { id: "t6", projectId: P, title: "Add a CSV export", status: "open", prompt: "Add a CSV export to the reports page, next to the date filter." },
     { id: "t7", projectId: P, title: "Upgrade the charts", status: "open", lastRunError: "peer dependency conflict" },
   ];

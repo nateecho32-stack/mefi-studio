@@ -1230,7 +1230,8 @@
     if (!Array.isArray(snapshot?.nodes)) return {};
     const counts = {
       progress: snapshot.nodes.filter((node) => node.kind === "todo" && node.status === "in_progress").length,
-      sessions: snapshot.nodes.filter((node) => node.kind === "session").length,
+      // sub-agent sessions hang under a session; they are not sessions of their own here
+      sessions: snapshot.nodes.filter((node) => node.kind === "session" && !node.child).length,
     };
     // The browser-only booklet has an assistant node but no service to report.
     if (window.mefiStudio?.assistantState && snapshot.assistant) counts.assistant = snapshot.assistant.tone ?? null;

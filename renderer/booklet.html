@@ -2068,6 +2068,13 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
 .cmd-empty-actions { margin: 0; justify-content: center; }
 #cmd-empty[data-variant="desktop-only"] [data-variant="store"],
 #cmd-empty[data-variant="store"] [data-variant="desktop-only"] { display: none; }
+#cmd-empty:not([data-variant="fresh"]) [data-variant="fresh"],
+#cmd-empty[data-variant="fresh"] :is([data-variant="store"], [data-variant="desktop-only"]) { display: none; }
+/* A new project: the card sits under the tree, so the root and the
+   assistant stay in view above it. */
+#cmd-empty[data-variant="fresh"] { top: auto; bottom: 16vh; transform: translateX(-50%); width: min(420px, 88vw); padding: var(--s5) var(--s6); }
+#cmd-empty[data-variant="fresh"] h3 { font-size: 16px; }
+#cmd-empty[data-variant="fresh"] p { font-size: var(--fs-sm); }
 
 /* --- hover tooltip (reuses the rail's .tree-tip face; must come after .tree-tip) --- */
 .cmd-tip {
@@ -3880,6 +3887,31 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 .lab-catalog > summary { font-size: 16px; }
 .lab-catalog > summary span { display: inline-block; margin-left: 12px; font-size: 12px; color: var(--muted); }
 .lab-catalog[open] > summary { margin-bottom: 22px; }
+/* Models > Community: the community feed and Studio's probes (renderer/model-community.js). */
+.mc-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.mc-card { border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--panel-solid); padding: 16px; min-width: 0; }
+.mc-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.mc-head h4 { margin: 0; font-size: 14px; color: var(--gold-bright); }
+.mc-actions { display: flex; gap: 6px; }
+.mc-summary { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; overflow-wrap: anywhere; }
+.mc-section { margin-top: 14px; }
+.mc-section h5, .mc-opinions > summary { margin: 0 0 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.mc-opinions > summary { cursor: pointer; }
+.mc-meta { font-size: 11px; color: var(--muted); }
+.mc-list { list-style: none; margin: 0; padding: 0; }
+.mc-item { display: flex; flex-direction: column; gap: 3px; padding: 8px 0; border-top: 1px solid var(--hairline); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.mc-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.mc-chip { font-size: 11px; padding: 3px 8px; border: 1px solid var(--hairline); border-radius: 999px; font-variant-numeric: tabular-nums; }
+.mc-link { align-self: flex-start; padding: 0; border: 0; background: none; color: var(--gold); font-size: 12px; text-decoration: underline; cursor: pointer; }
+.mc-foot { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--hairline); }
+.mc-probes { display: grid; gap: 8px; margin-bottom: 10px; }
+.mc-probe { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: var(--r-md); }
+.mc-probe-head { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+.mc-checks > summary { cursor: pointer; font-size: 11px; color: var(--gold); margin-top: 4px; }
+.mc-verdict { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+.mc-pass .mc-verdict, .mc-meta.mc-pass { color: var(--good); }
+.mc-fail .mc-verdict, .mc-meta.mc-fail { color: var(--bad); }
+@media (max-width: 900px) { .mc-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 1000px) { .model-lab { padding: 20px; }.lab-usage-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }.lab-summary { grid-template-columns: repeat(3,minmax(0,1fr)); }.lab-summary[data-empty="true"] .lab-stat:nth-child(3n + 1) { border-left: 0; }.lab-summary[data-empty="true"] .lab-stat:nth-child(n + 4) { border-top: 1px solid var(--line); }.lab-empty-ranking { grid-template-columns: minmax(0,1fr); }.lab-steps { grid-template-columns: minmax(0,1fr); }.lab-rating-row { grid-template-columns: minmax(150px,1fr) 132px auto; }.lab-rating-row input { grid-row: 2; grid-column: 1 / -1; } }
 @media (max-width: 680px) { .model-lab { padding: 16px; }.model-lab .lab-head { flex-direction: column; gap: 8px; }.lab-head h2 { font-size: 27px; }.lab-summary { gap: 8px; grid-template-columns: repeat(2,minmax(0,1fr)); }.lab-summary[data-empty="true"] .lab-stat { border-left: 1px solid var(--line); }.lab-summary[data-empty="true"] .lab-stat:nth-child(2n + 1) { border-left: 0; }.lab-summary[data-empty="true"] .lab-stat:nth-child(n + 3) { border-top: 1px solid var(--line); }.lab-stat { padding: 12px; flex-direction: column; align-items: flex-start; }.lab-stat > strong { font-size: 23px; }.lab-tabs > button { padding: 8px 10px; }.lab-soon { display: none; }.lab-context-controls { width: 100%; }.lab-context-controls label:first-child { max-width: 100%; width: 100%; }.lab-rating-row { grid-template-columns: minmax(0,1fr) 124px; }.lab-rating-row button { grid-column: 2; }.lab-catalog { padding: 15px; }.lab-catalog > summary span { display: block; margin: 8px 0 0; } }
 
@@ -8826,6 +8858,48 @@ html[data-studio-style] .catalog-model { border-radius: var(--r-lg); }
 .autonomy-settings-dialog > .sheet-close { position: sticky; top: 0; float: right; margin: -8px -8px 0 8px; z-index: 1; }
 .autonomy-settings-dialog::backdrop { background: var(--scrim); backdrop-filter: var(--scrim-blur); }
 
+/* --- key tips (renderer/key-tips.js) ---------------------------------------------
+   A small glass card beside a control, naming its keys as keycaps, with an
+   arrow at the control. It springs in and fades out; click it to dismiss. */
+.key-tip {
+  position: fixed; z-index: 9000; left: 0; top: 0;
+  display: grid; grid-template-columns: 1fr auto; align-items: start; gap: 6px 10px;
+  max-width: 300px; padding: 10px 10px 8px 14px;
+  border: 1px solid color-mix(in srgb, var(--gold) 34%, transparent); border-radius: 14px;
+  background: color-mix(in srgb, var(--panel-solid) 92%, transparent); backdrop-filter: var(--blur-hard);
+  box-shadow: var(--studio-float-shadow), 0 0 36px -16px color-mix(in srgb, var(--gold) 60%, transparent);
+  color: var(--ivory); font: 500 12.5px/1.35 var(--font-ui);
+  cursor: pointer; opacity: 1; translate: 0 0; scale: 1;
+  transition: opacity 180ms var(--ease-out, ease-out), translate 260ms var(--ease-spring, ease-out), scale 260ms var(--ease-spring, ease-out);
+  transition-delay: var(--tip-delay, 0ms);
+}
+@starting-style { .key-tip { opacity: 0; scale: .92; translate: 0 6px; } }
+.key-tip[data-side="bottom"] { transform-origin: 50% 0; }
+.key-tip[data-side="top"] { transform-origin: 50% 100%; }
+.key-tip[data-side="right"] { transform-origin: 0 50%; }
+@starting-style { .key-tip[data-side="bottom"] { translate: 0 -6px; } .key-tip[data-side="right"] { translate: -6px 0; } }
+.key-tip.is-leaving { opacity: 0; scale: .96; transition-delay: 0ms; pointer-events: none; }
+.key-tip:hover { border-color: color-mix(in srgb, var(--gold) 55%, transparent); }
+.key-tip::after {
+  content: ""; position: absolute; width: 10px; height: 10px; rotate: 45deg;
+  background: inherit; border: inherit; border-radius: 2px;
+}
+.key-tip[data-side="top"]::after { bottom: -6px; left: calc(var(--arrow, 50%) - 5px); border-top: 0; border-left: 0; }
+.key-tip[data-side="bottom"]::after { top: -6px; left: calc(var(--arrow, 50%) - 5px); border-bottom: 0; border-right: 0; }
+.key-tip[data-side="right"]::after { left: -6px; top: calc(var(--arrow, 50%) - 5px); border-top: 0; border-right: 0; }
+.key-tip[data-side="left"]::after { right: -6px; top: calc(var(--arrow, 50%) - 5px); border-bottom: 0; border-left: 0; }
+.key-tip-list { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.key-tip-list li { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.key-tip-keys { display: inline-flex; align-items: center; justify-content: flex-end; gap: 3px; min-width: 64px; color: var(--muted); font-size: 11px; }
+.key-tip .key { min-width: 22px; height: 20px; padding: 0 6px; font-size: 10.5px; line-height: 17px; border-radius: 6px; opacity: 1; color: var(--gold-bright); background: color-mix(in srgb, var(--gold) 12%, transparent); border-color: color-mix(in srgb, var(--gold) 36%, transparent); border-bottom-width: 2px; }
+.key-tip-close { width: 22px; height: 22px; padding: 0; border: 0; border-radius: 7px; background: none; color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer; }
+.key-tip-close:hover, .key-tip-close:focus-visible { color: var(--ivory); background: color-mix(in srgb, var(--ivory) 8%, transparent); }
+.key-tip-off { grid-column: 1 / -1; justify-self: start; padding: 0; border: 0; background: none; color: var(--muted); font-size: 11px; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.key-tip-off:hover, .key-tip-off:focus-visible { color: var(--ivory); }
+.key-tip :is(button):focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 1px; }
+html[data-motion="off"] .key-tip { transition: none; }
+@media (max-width: 720px) { .key-tip { display: none; } }
+
 /* A little light, a trailing wisp, and expressions made of floating text. */
 .agent-creature { display: block; width: 100%; height: 100%; overflow: visible; color: var(--gold-bright); pointer-events: none; }
 .agent-body { transform-origin: 40px 44px; animation: agent-float 5.6s ease-in-out infinite; translate: var(--agent-look-x, 0px) var(--agent-look-y, 0px); transition: translate var(--motion-slow) var(--ease-out), opacity var(--motion-ambient) var(--ease-out), scale var(--motion-ambient) var(--ease-emphasized); }
@@ -9499,6 +9573,19 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 .vibe-dock[data-marked="yes"] .vibe-dock-mark { opacity: 1; scale: 1; }
 .vibe-dock button[aria-pressed="true"] { color: var(--v-ink); }
 .vibe-dock button[aria-pressed="true"] .glyph { color: var(--v-accent-hi); }
+/* The key each stop answers to, as a small cap in its corner; it lights with the stop. */
+.vibe-dock .vibe-stop-key { position: absolute; top: 5px; left: 7px; min-width: 0; height: 17px; padding: 0 5px; border-width: 1px; border-radius: 5px; font: 600 10px/15px var(--font-mono); letter-spacing: .02em; color: var(--v-soft); background: color-mix(in srgb, var(--ivory) 6%, transparent); border-color: color-mix(in srgb, var(--ivory) 16%, transparent); opacity: .72; transition: opacity var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out); }
+.vibe-dock button:is(:hover, :focus-visible, [aria-pressed="true"]) .vibe-stop-key { opacity: 1; color: var(--v-accent-hi); border-color: color-mix(in srgb, var(--gold) 34%, transparent); }
+/* Enter · Ctrl+Enter under the box, as keycaps. */
+.vibe-hint { display: inline-flex; align-items: center; gap: 5px; }
+.vibe-hint .key { min-width: 0; height: 18px; padding: 0 6px; font-size: 10px; line-height: 16px; border-radius: 6px; color: var(--v-soft); background: color-mix(in srgb, var(--ivory) 5%, transparent); border-color: color-mix(in srgb, var(--ivory) 14%, transparent); }
+.vibe-compose:focus-within .vibe-hint .key { color: var(--v-ink); border-color: color-mix(in srgb, var(--gold) 34%, transparent); }
+.vibe-hint-sep { margin: 0 3px; }
+/* Build's update pill, mirrored into Vibe's top bar while it needs you. */
+.vibe-update .glyph { width: 15px; height: 15px; }
+.vibe-update[data-tone="bad"] { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 36%, transparent); }
+.vibe-update[hidden] { display: none; }
+.vibe-ask-note-inline { margin: 8px 0 0; color: var(--v-faint); font-size: 12px; }
 
 /* ---- conversation --------------------------------------------------------- */
 .vibe-chat { position: absolute; top: 84px; right: 24px; bottom: 24px; z-index: 2; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; width: min(420px, calc(100vw - 48px)); border: 1px solid var(--v-edge); border-radius: 24px; background: var(--studio-float-fill); backdrop-filter: var(--v-blur); box-shadow: -30px 0 80px -40px color-mix(in srgb, var(--bg-deep) 90%, transparent), inset 0 1px 0 color-mix(in srgb, var(--ivory) 7%, transparent); opacity: 1; transform: none; transition: opacity var(--motion-slow) var(--ease-out), transform var(--motion-slow) var(--ease-emphasized), display var(--motion-slow) allow-discrete; }
@@ -10879,10 +10966,11 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       <button type="button" role="radio" data-ui-mode="build" aria-checked="false" title="Build: the full studio"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Build</span></button>
     </div>
     <div class="vibe-top-actions">
-      <button id="vibe-pulse" class="vibe-pulse" type="button" data-tone="quiet" title="What needs you and what is building"><i aria-hidden="true"></i><span id="vibe-pulse-text" role="status">All quiet</span></button>
+      <button id="vibe-update" class="vibe-pulse vibe-update" type="button" data-tone="ask" title="An update is ready" hidden><svg class="glyph" aria-hidden="true"><use href="#g-update"/></svg><span id="vibe-update-text">Update ready</span></button>
+      <button id="vibe-pulse" class="vibe-pulse" type="button" data-tone="quiet" title="What needs you and what is building (N)"><i aria-hidden="true"></i><span id="vibe-pulse-text" role="status">All quiet</span></button>
       <button class="vibe-icon" type="button" data-nav="palette" title="Search everything (Ctrl K)" aria-label="Search everything"><svg class="glyph" aria-hidden="true"><use href="#g-search"/></svg></button>
-      <button id="vibe-chat-toggle" class="vibe-icon" type="button" aria-controls="vibe-chat" aria-expanded="false" title="Conversation" aria-label="Conversation"><svg class="glyph" aria-hidden="true"><use href="#g-plane"/></svg><i id="vibe-chat-dot" class="vibe-dot" hidden></i></button>
-      <button class="vibe-icon" type="button" data-vibe-panel="settings" title="Settings" aria-label="Settings"><svg class="glyph" aria-hidden="true"><use href="#g-sliders"/></svg></button>
+      <button id="vibe-chat-toggle" class="vibe-icon" type="button" aria-controls="vibe-chat" aria-expanded="false" title="Conversation (C)" aria-label="Conversation"><svg class="glyph" aria-hidden="true"><use href="#g-plane"/></svg><i id="vibe-chat-dot" class="vibe-dot" hidden></i></button>
+      <button class="vibe-icon" type="button" data-vibe-panel="settings" title="Settings (S)" aria-label="Settings"><svg class="glyph" aria-hidden="true"><use href="#g-sliders"/></svg></button>
     </div>
   </header>
   <div class="vibe-stage">
@@ -10895,7 +10983,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       <label for="vibe-input" class="sr-only">Describe what you want</label>
       <textarea id="vibe-input" rows="2" placeholder="Describe an idea, a fix or a question…"></textarea>
       <div class="vibe-compose-foot">
-        <span id="vibe-hint" class="vibe-hint">Enter to talk · Ctrl + Enter to build</span>
+        <span id="vibe-hint" class="vibe-hint"><kbd class="key">Enter</kbd> talk <span class="vibe-hint-sep" aria-hidden="true">·</span> <kbd class="key">Ctrl</kbd>+<kbd class="key">Enter</kbd> build</span>
         <span id="vibe-autonomy-control"></span>
         <button id="vibe-talk" class="vibe-btn quiet" type="button"><svg class="glyph" aria-hidden="true"><use href="#g-plane"/></svg>Talk it over</button>
         <button id="vibe-build" class="vibe-btn primary" type="submit"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg>Build it</button>
@@ -10943,12 +11031,12 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
   <!-- Watch, Plans and Ideas step in only while they have something to show. -->
   <nav id="vibe-dock" class="vibe-dock" aria-label="Go to">
     <span class="vibe-dock-mark" aria-hidden="true"></span>
-    <button id="vibe-stop-watch" type="button" data-nav="command" data-vibe-stop="watch" title="Watch the agents work on the live node tree (D)" hidden><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span>Watch</span><span class="count warn" data-badge="questions" hidden></span></button>
-    <button id="vibe-stop-tasks" type="button" data-vibe-panel="tasks" data-vibe-stop="tasks" title="Your tasks and results"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span>Tasks</span><span class="count" data-badge="tasks" hidden></span></button>
-    <button id="vibe-stop-plans" type="button" data-vibe-panel="plans" data-vibe-stop="plans" title="Plans in progress" hidden><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg><span>Plans</span></button>
-    <button id="vibe-stop-ideas" type="button" data-vibe-panel="ideas" data-vibe-stop="ideas" title="Ideas the agents noticed" hidden><svg class="glyph" aria-hidden="true"><use href="#g-ideas"/></svg><span>Ideas</span><span class="count" data-badge="ideas" hidden></span></button>
-    <button id="vibe-stop-team" type="button" data-vibe-panel="team" data-vibe-stop="team" title="Who is working, and on which models"><svg class="glyph" aria-hidden="true"><use href="#g-agents"/></svg><span>Team</span></button>
-    <button id="vibe-stop-more" type="button" data-nav="palette" data-vibe-stop="more" title="Everything else (Ctrl K)"><svg class="glyph" aria-hidden="true"><use href="#g-more"/></svg><span>More</span></button>
+    <button id="vibe-stop-watch" type="button" data-nav="command" data-vibe-stop="watch" title="Watch the live node tree, even before anything has started (D)"><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span>Watch</span><span class="count warn" data-badge="questions" hidden></span><kbd class="key vibe-stop-key" aria-hidden="true" title="D">D</kbd></button>
+    <button id="vibe-stop-tasks" type="button" data-vibe-panel="tasks" data-vibe-stop="tasks" title="Your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span>Tasks</span><span class="count" data-badge="tasks" hidden></span><kbd class="key vibe-stop-key" aria-hidden="true" title="T">T</kbd></button>
+    <button id="vibe-stop-plans" type="button" data-vibe-panel="plans" data-vibe-stop="plans" title="Plans in progress (P)" hidden><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg><span>Plans</span><kbd class="key vibe-stop-key" aria-hidden="true" title="P">P</kbd></button>
+    <button id="vibe-stop-ideas" type="button" data-vibe-panel="ideas" data-vibe-stop="ideas" title="Ideas the agents noticed (I)" hidden><svg class="glyph" aria-hidden="true"><use href="#g-ideas"/></svg><span>Ideas</span><span class="count" data-badge="ideas" hidden></span><kbd class="key vibe-stop-key" aria-hidden="true" title="I">I</kbd></button>
+    <button id="vibe-stop-team" type="button" data-vibe-panel="team" data-vibe-stop="team" title="Who is working, and on which models (M)"><svg class="glyph" aria-hidden="true"><use href="#g-agents"/></svg><span>Team</span><kbd class="key vibe-stop-key" aria-hidden="true" title="M">M</kbd></button>
+    <button id="vibe-stop-more" type="button" data-nav="palette" data-vibe-stop="more" title="Everything else (Ctrl K)"><svg class="glyph" aria-hidden="true"><use href="#g-more"/></svg><span>More</span><kbd class="key vibe-stop-key" aria-hidden="true" title="Ctrl K">⌃K</kbd></button>
   </nav>
   <aside id="vibe-chat" class="vibe-chat" aria-labelledby="vibe-chat-title" hidden>
     <header class="vibe-chat-head"><div><small>Conversation</small><h2 id="vibe-chat-title">Mefi</h2></div><button id="vibe-chat-close" class="vibe-icon" type="button" aria-label="Close the conversation" title="Close (Esc)"><svg class="glyph" aria-hidden="true"><use href="#g-close"/></svg></button></header>
@@ -11079,6 +11167,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       </div>
     </div>
     <div id="cards" class="cards catalog-list"></div>
+    <details id="also-tracked" class="lab-catalog" hidden><summary>Also tracked <span>Claude Code, Zen and z.ai models Studio routes to, from models.dev. Prices are API list prices; subscriptions and plans bill differently.</span></summary><div id="also-tracked-body"></div></details>
   </section>
   <section id="tab-graph" hidden>
     <section id="model-lab" class="model-lab" aria-label="Model measurements">
@@ -11089,6 +11178,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
         <button id="model-lab-tab-usage" role="tab" aria-selected="false" aria-controls="model-lab-usage" tabindex="-1" data-lab-view="usage">Usage</button>
         <button id="model-lab-tab-tracker" role="tab" aria-selected="false" aria-controls="model-lab-tracker" tabindex="-1" data-lab-view="tracker">Tracker</button>
         <button id="model-lab-tab-context" role="tab" aria-selected="false" aria-controls="model-lab-context" tabindex="-1" data-lab-view="context">Context</button>
+        <button id="model-lab-tab-community" role="tab" aria-selected="false" aria-controls="model-lab-community" tabindex="-1" data-lab-view="community">Community</button>
         <button id="model-lab-tab-compare" role="tab" aria-selected="false" aria-controls="model-lab-compare" tabindex="-1" data-lab-view="compare" hidden>Compare <span class="lab-soon">Planned</span></button>
       </div>
       <div id="model-lab-usage-switch" class="lab-usage-switch" role="tablist" aria-label="Usage source" hidden><button id="model-lab-recorded" role="tab" aria-controls="model-lab-usage" aria-selected="true" type="button">Recorded calls</button><button id="model-lab-accounts" role="tab" aria-controls="model-lab-tracker" aria-selected="false" tabindex="-1" type="button">Provider accounts</button></div>
@@ -11110,6 +11200,13 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       <section id="model-lab-context" role="tabpanel" aria-labelledby="model-lab-tab-context" hidden>
         <div class="lab-toolbar"><div><h3>Context preview</h3><p class="muted">Inspect the saved material a task can carry. Token counts are estimates.</p></div><div class="lab-context-controls"><label>Task <select id="model-lab-context-task"><option value="">Choose a task…</option></select></label><label>Preview budget <select id="model-lab-context-budget"><option value="1000">1,000 tokens</option><option value="2000">2,000 tokens</option><option value="4000" selected>4,000 tokens</option><option value="8000">8,000 tokens</option></select></label><button id="model-lab-context-refresh" class="ghost">Preview context</button></div></div>
         <p id="model-lab-context-status" class="lab-status" role="status"></p><div id="model-lab-context-sections" class="lab-context-sections"></div>
+      </section>
+      <section id="model-lab-community" role="tabpanel" aria-labelledby="model-lab-tab-community" hidden>
+        <div class="lab-toolbar"><div><h3>Community and probes</h3><p class="muted">What the Void Engine community reports about a model, and Studio's own small tests of it. Both only nudge model picks; verified task results count for more.</p></div><label>Model <select id="model-lab-community-model"><option value="">Choose a model…</option></select></label></div>
+        <div class="mc-grid">
+          <section class="mc-card" aria-labelledby="model-lab-community-title"><header class="mc-head"><h4 id="model-lab-community-title">Community</h4><button id="model-lab-community-refresh" class="ghost mini" type="button">Refresh</button></header><p id="model-lab-community-status" class="lab-status" role="status" aria-live="polite"></p><div id="model-lab-community-body"></div></section>
+          <section class="mc-card" aria-labelledby="model-lab-probes-title"><header class="mc-head"><h4 id="model-lab-probes-title">Probes</h4><div class="mc-actions"><button id="model-lab-probes-cancel" class="ghost mini" type="button" hidden>Cancel</button><button id="model-lab-probes-run" class="mini" type="button">Run probes</button></div></header><p id="model-lab-probes-status" class="lab-status" role="status" aria-live="polite"></p><div id="model-lab-probes-body"></div></section>
+        </div>
       </section>
       <section id="model-lab-compare" role="tabpanel" aria-labelledby="model-lab-tab-compare" hidden><div class="lab-empty"><span class="eyebrow">Planned</span><h3>Compare models on one brief</h3><p>Compare model results with separate human and model ratings. Demo format is being selected; no comparison runs or paid calls start from this view yet.</p></div></section>
     </section>
@@ -11262,10 +11359,12 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
           <div class="settings-you-switches">
             <label class="switch" id="settings-companion-motion" title="Your companion floats and blinks beside the conversation. Calm and Off keep it still."><input id="workspace-motion" type="checkbox" checked><span class="track"></span><span>Let your companion move</span></label>
             <label class="switch" title="Blur what sits behind every sheet, menu and Home panel. Off gives them a plain, darker backdrop."><input type="checkbox" id="pref-blur" checked><span class="track"></span><span>Blur behind panels</span></label>
-            <label class="switch" id="idle-home-switch" title="On: every launch lands on Home. Off: Studio opens straight into Command view. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span id="idle-home-label">Open Home on launch</span></label>
+            <label class="switch" id="idle-home-switch" title="On: every launch lands on Home. Off: Studio reopens the last tab page you used. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span id="idle-home-label">Open Home on launch</span></label>
+            <label class="switch" id="settings-start-vibe-switch" title="On: every launch starts in Vibe, even if you closed Studio in Build. Off: Studio keeps the mode you closed it in."><input type="checkbox" id="settings-start-vibe" checked><span class="track"></span><span>Always start in Vibe</span></label>
+            <label class="switch" id="settings-key-tips-switch" title="Small pop-ups beside buttons and tabs that show the key that does the same thing. Click one to fade it away."><input type="checkbox" id="settings-key-tips" checked><span class="track"></span><span>Show key tips</span></label>
             <label class="switch" title="On: after five minutes without input, Studio switches to Command view. Off: it stays on the page you left open."><input type="checkbox" id="idle-command-idle"><span class="track"></span><span>Show Command view after 5 quiet minutes</span></label>
           </div>
-          <p class="muted" id="idle-home-hint">When disabled, Studio opens Command view after the project chooser.</p>
+          <p class="muted" id="idle-home-hint">When disabled, Studio reopens the last tab page you used after the project chooser.</p>
           <!-- settings.ui.launchAgents (main.cjs launchAgentsInfo); the launch screen's default button follows it. -->
           <label class="field"><span class="field-label">When Studio opens</span><select id="launch-agents" aria-describedby="launch-agents-hint"><option value="resume">Resume what I had</option><option value="start">Start agents</option><option value="off">Keep agents off</option></select><span class="field-hint" id="launch-agents-hint">Resume starts agents on a project where they were running when you closed Studio. The launch screen still offers both choices.</span></label>
           <!-- settings.ui.dailyNews (main.cjs news:edition, startup:state news); renderer/daily-paper.js keeps it. -->
@@ -11963,6 +12062,8 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       <button class="ghost" data-nav="help" data-variant="desktop-only">Shortcuts</button>
       <button id="cmd-empty-retry" class="primary" data-variant="store">Retry</button>
       <button class="ghost" data-nav="tasks" data-variant="store">Open the Task board</button>
+      <button id="cmd-empty-start" class="primary" data-variant="fresh" title="Describe the first thing to build">Start the first task</button>
+      <button class="ghost" data-nav="plans" data-variant="fresh" title="Plan an idea before anything is built (P)">Plan an idea</button>
       <button id="cmd-empty-assistant" class="ghost" title="Open your companion to ask or create a task" hidden>Ask your companion</button>
     </div>
   </div>
@@ -12692,11 +12793,12 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       "site": "https://opencode.ai/go",
       "roster": "https://opencode.ai/zen/go/v1/models",
       "catalog": "https://models.dev/api.json",
-      "seedDate": "2026-09-16"
+      "seedDate": "2026-09-28"
     },
     "notes": [
-      "Usage limits are dollar-based: $12 per 5 hours, $30 per week, $60 per month across the plan.",
-      "Each model also has its own monthly pool; 5h = 20% of it and week = 50% of it.",
+      "Each model has its own monthly dollar limit; its 5-hour window is 20% of it and its week 50%.",
+      "The plan-wide $12 per 5 hours, $30 per week and $60 per month windows come from the 2026-09-16 seed; the 2026-09-28 docs publish only the per-model limits.",
+      "Go Plus ($40/month) raises every model's monthly limit at the same token prices; this catalog tracks the $10 Go limits.",
       "DeepSeek V4.x runs peak/off-peak pricing; peak is 01:00-04:00 and 06:00-10:00 UTC Mon-Fri.",
       "When a limit is reached you can keep using free models, or fall back to a Zen balance if enabled."
     ]
@@ -12924,7 +13026,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       "privacy": {
         "training": false,
         "retentionDays": 0,
-        "note": "ZDR renewed monthly; current term valid through 2026-09-30."
+        "note": "ZDR agreement renewed monthly; current term valid through 2026-10-31."
       },
       "quality": {
         "index": 40,
@@ -13141,7 +13243,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       "privacy": {
         "training": false,
         "retentionDays": 0,
-        "note": "ZDR renewed monthly; current term valid through 2026-09-30."
+        "note": "ZDR agreement renewed monthly; current term valid through 2026-10-31."
       },
       "quality": {
         "index": 44,
@@ -13180,8 +13282,8 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       "rosterAlias": null,
       "tags": [
         "new",
-        "promo-4x",
-        "peak-pricing"
+        "peak-pricing",
+        "high-volume"
       ],
       "pricing": {
         "default": {
@@ -13238,22 +13340,19 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       },
       "usage": {
         "monthlyCapUSD": 60,
-        "monthlyCapBaseUSD": 15,
-        "promo": "4x usage until 2026-09-20",
+        "monthlyCapBaseUSD": null,
+        "promo": null,
         "requests": {
           "h5": 26000,
           "week": 65000,
-          "month": 130000,
-          "baseH5": 6500,
-          "baseWeek": 16250,
-          "baseMonth": 32500
+          "month": 130000
         },
         "unlimited": false
       },
       "privacy": {
         "training": false,
         "retentionDays": 0,
-        "note": "ZDR agreement renewed monthly; current term valid through 2026-09-30."
+        "note": "ZDR agreement renewed monthly; current term valid through 2026-10-31."
       },
       "quality": {
         "index": 40,
@@ -13270,12 +13369,13 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
         "path": "https://opencode.ai/zen/go/v1/chat/completions",
         "sdk": "@ai-sdk/openai-compatible"
       },
-      "verdict": "Brand-new V4.1 with a 4x pool ($60 effective, ends Sep 20) before it settles at $15.",
+      "verdict": "The 09-28 docs list a $60 monthly pool (~26k req/5h) with no promo note; the 4x promo that ran until Sep 20 no longer appears.",
       "useFor": [
-        "current daily driving while the promo lasts"
+        "everyday driving",
+        "long cached sessions"
       ],
       "avoidFor": [
-        "planning around the promo pool after Sep 20"
+        "peak-hour bulk work (double price)"
       ],
       "releaseDate": "2026-09-10",
       "knowledge": "2025-05"
@@ -13294,35 +13394,20 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
         "legacy",
         "roster-only"
       ],
-      "pricing": {
-        "default": {
-          "input": 1,
-          "output": 3.2,
-          "cacheRead": 0.2,
-          "cacheWrite": null,
-          "condition": "models.dev list price"
-        }
-      },
+      "pricing": null,
       "variants": [],
       "typical": null,
       "typicalCostUSD": null,
       "limits": {
-        "context": 202752,
-        "output": 32768
+        "context": null,
+        "output": null
       },
       "capabilities": {
-        "reasoning": true,
-        "toolCall": true,
-        "attachment": false,
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "openWeights": true,
+        "reasoning": null,
+        "toolCall": null,
+        "attachment": null,
+        "modalities": null,
+        "openWeights": null,
         "providerNpm": null
       },
       "usage": {
@@ -13351,21 +13436,22 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       "avoidFor": [
         "new work"
       ],
-      "releaseDate": "2026-02-11",
-      "knowledge": "2025-04"
+      "releaseDate": null,
+      "knowledge": null
     },
     {
       "id": "glm-5.1",
       "name": "GLM-5.1",
       "vendor": "Zhipu",
       "onRoster": true,
-      "listed": true,
-      "legacy": false,
+      "listed": false,
+      "legacy": true,
       "premium": false,
       "experimental": false,
       "rosterAlias": null,
       "tags": [
-        "legacy-tier"
+        "legacy",
+        "roster-only"
       ],
       "pricing": {
         "default": {
@@ -13384,22 +13470,15 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       },
       "typicalCostUSD": 0.01516,
       "limits": {
-        "context": 202752,
-        "output": 32768
+        "context": null,
+        "output": null
       },
       "capabilities": {
-        "reasoning": true,
-        "toolCall": true,
-        "attachment": false,
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "openWeights": true,
+        "reasoning": null,
+        "toolCall": null,
+        "attachment": null,
+        "modalities": null,
+        "openWeights": null,
         "providerNpm": null
       },
       "usage": {
@@ -13432,15 +13511,15 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
         "path": "https://opencode.ai/zen/go/v1/chat/completions",
         "sdk": "@ai-sdk/openai-compatible"
       },
-      "verdict": "Older GLM at the same price as 5.2 - pick 5.2 unless 5.1 behaves better for you.",
+      "verdict": "Dropped from the Go docs by Sep 28 but still on the roster; GLM-5.2 is the documented model at the same price.",
       "useFor": [
         "fallback when 5.2 misbehaves"
       ],
       "avoidFor": [
-        "value picks"
+        "new work"
       ],
-      "releaseDate": "2026-04-07",
-      "knowledge": "2025-04"
+      "releaseDate": null,
+      "knowledge": null
     },
     {
       "id": "glm-5.2",
@@ -13521,7 +13600,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
         "path": "https://opencode.ai/zen/go/v1/chat/completions",
         "sdk": "@ai-sdk/openai-compatible"
       },
-      "verdict": "Highest-scoring GLM on Go with a full $60 pool; 51 AA index and strong SWE/terminal scores.",
+      "verdict": "GLM-5.3's price with a full $60 pool (~880 req/5h). Its AA index of 51 is below GLM-5.3 (60) and GLM-5.3-Flash (57).",
       "useFor": [
         "hard debugging",
         "big refactors",
@@ -13610,7 +13689,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
         "path": "https://opencode.ai/zen/go/v1/chat/completions",
         "sdk": "@ai-sdk/openai-compatible"
       },
-      "verdict": "Newest GLM with a small $15 pool - save it for hard problems.",
+      "verdict": "Top GLM tier on Go with a small $15 pool (~220 req/5h); save it for hard problems.",
       "useFor": [
         "hard problems",
         "careful refactors"
@@ -13632,8 +13711,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       "experimental": false,
       "rosterAlias": null,
       "tags": [
-        "flash",
-        "promo-2x"
+        "flash"
       ],
       "pricing": {
         "default": {
@@ -13704,7 +13782,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
         "path": "https://opencode.ai/zen/go/v1/chat/completions",
         "sdk": "@ai-sdk/openai-compatible"
       },
-      "verdict": "The volume workhorse: cheapest GLM, 2x usage promo, ~6.3k requests per 5h.",
+      "verdict": "Cheapest GLM on Go ($0.15/$0.50) with a $60 pool, ~6.3k requests per 5h. The 09-28 docs no longer mention a usage promo.",
       "useFor": [
         "routine edits",
         "long agent loops",
@@ -13815,15 +13893,124 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
         "path": "https://opencode.ai/zen/go/v1/responses",
         "sdk": "@ai-sdk/openai"
       },
-      "verdict": "OpenAI's Go entry at flash-ish prices but a $15 pool (~10k req/month).",
+      "verdict": "Superseded by GPT 6 Luna (Sep 22), which halves the input price and gets about twice the requests from the same $15 pool.",
       "useFor": [
-        "tasks where the OpenAI house style wins"
+        "sessions already tuned to 5.6 Luna"
       ],
       "avoidFor": [
+        "new work (GPT 6 Luna is cheaper)",
         "bulk volume"
       ],
       "releaseDate": "2026-07-09",
       "knowledge": "2026-02-16"
+    },
+    {
+      "id": "gpt-6-luna",
+      "name": "GPT 6 Luna",
+      "vendor": "OpenAI",
+      "onRoster": true,
+      "listed": true,
+      "legacy": false,
+      "premium": true,
+      "experimental": false,
+      "rosterAlias": null,
+      "tags": [
+        "new",
+        "premium-cap",
+        "responses-api"
+      ],
+      "pricing": {
+        "default": {
+          "input": 0.1,
+          "output": 0.5,
+          "cacheRead": 0.01,
+          "cacheWrite": 0.125,
+          "condition": "<= 272K tokens"
+        },
+        "variants": [
+          {
+            "condition": "> 272K tokens",
+            "input": 0.2,
+            "output": 0.75,
+            "cacheRead": 0.02,
+            "cacheWrite": 0.25
+          }
+        ]
+      },
+      "variants": [
+        {
+          "condition": "> 272K tokens",
+          "input": 0.2,
+          "output": 0.75,
+          "cacheRead": 0.02,
+          "cacheWrite": 0.25
+        }
+      ],
+      "typical": {
+        "input": 1000,
+        "cached": 50000,
+        "output": 220
+      },
+      "typicalCostUSD": 0.00071,
+      "limits": {
+        "context": 1050000,
+        "output": 128000
+      },
+      "capabilities": {
+        "reasoning": true,
+        "toolCall": true,
+        "attachment": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "openWeights": false,
+        "providerNpm": "@ai-sdk/openai"
+      },
+      "usage": {
+        "monthlyCapUSD": 15,
+        "monthlyCapBaseUSD": null,
+        "promo": null,
+        "requests": {
+          "h5": 4230,
+          "week": 10560,
+          "month": 21130
+        },
+        "unlimited": false
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 30,
+        "note": "Abuse-monitoring logs retained up to 30 days."
+      },
+      "quality": {
+        "index": null,
+        "declared": "none",
+        "benchmarks": []
+      },
+      "endpoint": {
+        "kind": "openai",
+        "label": "OpenAI Responses API",
+        "path": "https://opencode.ai/zen/go/v1/responses",
+        "sdk": "@ai-sdk/openai"
+      },
+      "verdict": "Newest OpenAI model on Go (Sep 22): half GPT 5.6 Luna's input price and about twice its requests from the same $15 pool. No published benchmark yet.",
+      "useFor": [
+        "work you would have sent to GPT 5.6 Luna",
+        "image or PDF input"
+      ],
+      "avoidFor": [
+        "bulk volume (the $15 pool)",
+        "privacy-sensitive work (30-day logs)"
+      ],
+      "releaseDate": "2026-09-22",
+      "knowledge": "2026-05-18"
     },
     {
       "id": "grok-4.5",
@@ -13895,7 +14082,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
         "path": "https://opencode.ai/zen/go/v1/responses",
         "sdk": "@ai-sdk/openai"
       },
-      "verdict": "Previous Grok flagship still served; strong scores but 4.6 is the current one.",
+      "verdict": "Older Grok still served; strong scores, but 4.7 is the current one.",
       "useFor": [
         "compatibility with old evals"
       ],
@@ -14004,16 +14191,124 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
         "path": "https://opencode.ai/zen/go/v1/responses",
         "sdk": "@ai-sdk/openai"
       },
-      "verdict": "xAI flagship with a ~845 req/month pool and 30-day retention - a scalp tool.",
+      "verdict": "Superseded by Grok 4.7 (Sep 21) at the same price and ~845 req/month pool; 30-day retention.",
       "useFor": [
-        "hard problems now and then"
+        "compatibility with old evals"
       ],
       "avoidFor": [
-        "daily volume",
+        "new work (Grok 4.7 costs the same)",
         "privacy-sensitive work"
       ],
       "releaseDate": "2026-08-12",
       "knowledge": "2026-02-01"
+    },
+    {
+      "id": "grok-4.7",
+      "name": "Grok 4.7",
+      "vendor": "xAI",
+      "onRoster": true,
+      "listed": true,
+      "legacy": false,
+      "premium": true,
+      "experimental": false,
+      "rosterAlias": null,
+      "tags": [
+        "new",
+        "premium-cap",
+        "responses-api"
+      ],
+      "pricing": {
+        "default": {
+          "input": 2,
+          "output": 6,
+          "cacheRead": 0.5,
+          "cacheWrite": null,
+          "condition": "<= 200K tokens"
+        },
+        "variants": [
+          {
+            "condition": "> 200K tokens",
+            "input": 4,
+            "output": 12,
+            "cacheRead": 1,
+            "cacheWrite": null
+          }
+        ]
+      },
+      "variants": [
+        {
+          "condition": "> 200K tokens",
+          "input": 4,
+          "output": 12,
+          "cacheRead": 1,
+          "cacheWrite": null
+        }
+      ],
+      "typical": {
+        "input": 390,
+        "cached": 32500,
+        "output": 120
+      },
+      "typicalCostUSD": 0.01775,
+      "limits": {
+        "context": 500000,
+        "output": 500000
+      },
+      "capabilities": {
+        "reasoning": true,
+        "toolCall": true,
+        "attachment": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "openWeights": false,
+        "providerNpm": "@ai-sdk/openai"
+      },
+      "usage": {
+        "monthlyCapUSD": 15,
+        "monthlyCapBaseUSD": null,
+        "promo": null,
+        "requests": {
+          "h5": 169,
+          "week": 423,
+          "month": 845
+        },
+        "unlimited": false
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 30,
+        "note": "ZDR would disable stateful Responses features; Go uses 30-day retention."
+      },
+      "quality": {
+        "index": null,
+        "declared": "none",
+        "benchmarks": []
+      },
+      "endpoint": {
+        "kind": "openai",
+        "label": "OpenAI Responses API",
+        "path": "https://opencode.ai/zen/go/v1/responses",
+        "sdk": "@ai-sdk/openai"
+      },
+      "verdict": "Newest Grok on Go (Sep 21) at Grok 4.6's price and ~845 req/month pool, with PDF input added. No published benchmark yet.",
+      "useFor": [
+        "hard problems now and then",
+        "image or PDF input"
+      ],
+      "avoidFor": [
+        "daily volume",
+        "privacy-sensitive work (30-day retention)"
+      ],
+      "releaseDate": "2026-09-21",
+      "knowledge": "2026-05"
     },
     {
       "id": "hy3",
@@ -14261,37 +14556,20 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
         "legacy",
         "roster-only"
       ],
-      "pricing": {
-        "default": {
-          "input": 0.6,
-          "output": 3,
-          "cacheRead": 0.1,
-          "cacheWrite": null,
-          "condition": "models.dev list price"
-        }
-      },
+      "pricing": null,
       "variants": [],
       "typical": null,
       "typicalCostUSD": null,
       "limits": {
-        "context": 262144,
-        "output": 65536
+        "context": null,
+        "output": null
       },
       "capabilities": {
-        "reasoning": true,
-        "toolCall": true,
-        "attachment": true,
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "video"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "openWeights": true,
+        "reasoning": null,
+        "toolCall": null,
+        "attachment": null,
+        "modalities": null,
+        "openWeights": null,
         "providerNpm": null
       },
       "usage": {
@@ -14320,8 +14598,8 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       "avoidFor": [
         "new work"
       ],
-      "releaseDate": "2026-01-27",
-      "knowledge": "2024-10"
+      "releaseDate": null,
+      "knowledge": null
     },
     {
       "id": "kimi-k2.6",
@@ -14590,7 +14868,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
         "path": "https://opencode.ai/zen/go/v1/chat/completions",
         "sdk": "@ai-sdk/openai-compatible"
       },
-      "verdict": "Frontier quality on Go - top-3 AA index, video input, 1M ctx - but only ~110 req/5h.",
+      "verdict": "Frontier-tier Kimi (AA 57 at the seed date) with video input and 1M context, but only ~110 req/5h.",
       "useFor": [
         "hardest problems",
         "long multi-file reasoning",
@@ -14693,6 +14971,91 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       "knowledge": null
     },
     {
+      "id": "longcat-2.5-preview-free",
+      "name": "LongCat 2.5 Preview Free",
+      "vendor": "Meituan",
+      "onRoster": true,
+      "listed": true,
+      "legacy": false,
+      "premium": false,
+      "experimental": true,
+      "rosterAlias": null,
+      "tags": [
+        "new",
+        "free",
+        "limited-time",
+        "preview"
+      ],
+      "pricing": {
+        "default": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": null,
+          "condition": "free, limited time"
+        }
+      },
+      "variants": [],
+      "typical": null,
+      "typicalCostUSD": null,
+      "limits": {
+        "context": 1000000,
+        "output": 131072
+      },
+      "capabilities": {
+        "reasoning": true,
+        "toolCall": true,
+        "attachment": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "openWeights": false,
+        "providerNpm": null
+      },
+      "usage": {
+        "monthlyCapUSD": "unlimited",
+        "monthlyCapBaseUSD": null,
+        "promo": null,
+        "requests": {
+          "h5": "unlimited",
+          "week": "unlimited",
+          "month": "unlimited"
+        },
+        "unlimited": true
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 0
+      },
+      "quality": {
+        "index": null,
+        "declared": "none",
+        "benchmarks": []
+      },
+      "endpoint": {
+        "kind": "compat",
+        "label": "OpenAI Chat Completions",
+        "path": "https://opencode.ai/zen/go/v1/chat/completions",
+        "sdk": "@ai-sdk/openai-compatible"
+      },
+      "verdict": "Free and unlimited for a limited time (since Sep 25): Meituan's LongCat 2.5 preview with image input. No benchmark and no end date published.",
+      "useFor": [
+        "free experimenting while it lasts"
+      ],
+      "avoidFor": [
+        "anything you need repeatability on",
+        "planning around it (limited time)"
+      ],
+      "releaseDate": "2026-09-25",
+      "knowledge": null
+    },
+    {
       "id": "mimo-v2-omni",
       "name": "MiMo V2 Omni",
       "vendor": "Xiaomi",
@@ -14706,38 +15069,20 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
         "roster-only",
         "omni-input"
       ],
-      "pricing": {
-        "default": {
-          "input": 0.4,
-          "output": 2,
-          "cacheRead": 0.08,
-          "cacheWrite": null,
-          "condition": "models.dev list price"
-        }
-      },
+      "pricing": null,
       "variants": [],
       "typical": null,
       "typicalCostUSD": null,
       "limits": {
-        "context": 262144,
-        "output": 128000
+        "context": null,
+        "output": null
       },
       "capabilities": {
-        "reasoning": true,
-        "toolCall": true,
-        "attachment": true,
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "audio",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "openWeights": true,
+        "reasoning": null,
+        "toolCall": null,
+        "attachment": null,
+        "modalities": null,
+        "openWeights": null,
         "providerNpm": null
       },
       "usage": {
@@ -14766,8 +15111,8 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       "avoidFor": [
         "planning"
       ],
-      "releaseDate": "2026-03-18",
-      "knowledge": "2024-12"
+      "releaseDate": null,
+      "knowledge": null
     },
     {
       "id": "mimo-v2-pro",
@@ -14782,35 +15127,20 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       "tags": [
         "roster-only"
       ],
-      "pricing": {
-        "default": {
-          "input": 1,
-          "output": 3,
-          "cacheRead": 0.2,
-          "cacheWrite": null,
-          "condition": "models.dev list price"
-        }
-      },
+      "pricing": null,
       "variants": [],
       "typical": null,
       "typicalCostUSD": null,
       "limits": {
-        "context": 1048576,
-        "output": 128000
+        "context": null,
+        "output": null
       },
       "capabilities": {
-        "reasoning": true,
-        "toolCall": true,
-        "attachment": true,
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "openWeights": true,
+        "reasoning": null,
+        "toolCall": null,
+        "attachment": null,
+        "modalities": null,
+        "openWeights": null,
         "providerNpm": null
       },
       "usage": {
@@ -14839,8 +15169,8 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       "avoidFor": [
         "planning"
       ],
-      "releaseDate": "2026-03-18",
-      "knowledge": "2024-12"
+      "releaseDate": null,
+      "knowledge": null
     },
     {
       "id": "mimo-v2.5",
@@ -14922,11 +15252,11 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
         "path": "https://opencode.ai/zen/go/v1/chat/completions",
         "sdk": "@ai-sdk/openai-compatible"
       },
-      "verdict": "Cheapest model in the catalog and the volume king: ~30k requests per 5h window.",
+      "verdict": "Same price and ~30k req/5h pool as its successor MiMo-V2.6-Flash (Sep 22); keep it for sessions already tuned to it.",
       "useFor": [
         "bulk edits",
         "throwaway questions",
-        "image/audio/video input on the cheap"
+        "sessions already tuned to V2.5"
       ],
       "avoidFor": [
         "hard reasoning"
@@ -15013,7 +15343,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
         "path": "https://opencode.ai/zen/go/v1/chat/completions",
         "sdk": "@ai-sdk/openai-compatible"
       },
-      "verdict": "42 AA index at flash prices, but the $15 pool caps it at ~16k req/month.",
+      "verdict": "42 AA index at flash prices on a $15 pool (~16k req/month); MiMo-V2.6-Pro (Sep 22) costs the same.",
       "useFor": [
         "quality work in bursts",
         "large cached contexts cheaply"
@@ -15023,6 +15353,190 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       ],
       "releaseDate": "2026-04-22",
       "knowledge": "2024-12"
+    },
+    {
+      "id": "mimo-v2.6-flash",
+      "name": "MiMo-V2.6-Flash",
+      "vendor": "Xiaomi",
+      "onRoster": true,
+      "listed": true,
+      "legacy": false,
+      "premium": false,
+      "experimental": false,
+      "rosterAlias": null,
+      "tags": [
+        "new",
+        "cheapest",
+        "omni-input",
+        "high-volume"
+      ],
+      "pricing": {
+        "default": {
+          "input": 0.14,
+          "output": 0.28,
+          "cacheRead": 0.0028,
+          "cacheWrite": null,
+          "condition": "all requests"
+        }
+      },
+      "variants": [],
+      "typical": {
+        "input": 830,
+        "cached": 71500,
+        "output": 295
+      },
+      "typicalCostUSD": 0.000399,
+      "limits": {
+        "context": 1048576,
+        "output": 131072
+      },
+      "capabilities": {
+        "reasoning": true,
+        "toolCall": true,
+        "attachment": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "openWeights": true,
+        "providerNpm": null
+      },
+      "usage": {
+        "monthlyCapUSD": 60,
+        "monthlyCapBaseUSD": null,
+        "promo": null,
+        "requests": {
+          "h5": 30100,
+          "week": 75200,
+          "month": 150400
+        },
+        "unlimited": false
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 0
+      },
+      "quality": {
+        "index": null,
+        "declared": "none",
+        "benchmarks": []
+      },
+      "endpoint": {
+        "kind": "compat",
+        "label": "OpenAI Chat Completions",
+        "path": "https://opencode.ai/zen/go/v1/chat/completions",
+        "sdk": "@ai-sdk/openai-compatible"
+      },
+      "verdict": "Successor to MiMo-V2.5 (Sep 22) at the same price and ~30k req/5h pool, with text, image, audio and video input. No published benchmark yet.",
+      "useFor": [
+        "bulk edits",
+        "long agent loops",
+        "image/audio/video input on the cheap"
+      ],
+      "avoidFor": [
+        "work that needs a published quality index"
+      ],
+      "releaseDate": "2026-09-22",
+      "knowledge": null
+    },
+    {
+      "id": "mimo-v2.6-pro",
+      "name": "MiMo-V2.6-Pro",
+      "vendor": "Xiaomi",
+      "onRoster": true,
+      "listed": true,
+      "legacy": false,
+      "premium": true,
+      "experimental": false,
+      "rosterAlias": null,
+      "tags": [
+        "new",
+        "cheap-cache",
+        "omni-input",
+        "premium-cap"
+      ],
+      "pricing": {
+        "default": {
+          "input": 0.435,
+          "output": 0.87,
+          "cacheRead": 0.003625,
+          "cacheWrite": null,
+          "condition": "all requests"
+        }
+      },
+      "variants": [],
+      "typical": {
+        "input": 790,
+        "cached": 86000,
+        "output": 305
+      },
+      "typicalCostUSD": 0.000921,
+      "limits": {
+        "context": 1048576,
+        "output": 131072
+      },
+      "capabilities": {
+        "reasoning": true,
+        "toolCall": true,
+        "attachment": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "openWeights": true,
+        "providerNpm": null
+      },
+      "usage": {
+        "monthlyCapUSD": 15,
+        "monthlyCapBaseUSD": null,
+        "promo": null,
+        "requests": {
+          "h5": 3250,
+          "week": 8150,
+          "month": 16300
+        },
+        "unlimited": false
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 0
+      },
+      "quality": {
+        "index": null,
+        "declared": "none",
+        "benchmarks": []
+      },
+      "endpoint": {
+        "kind": "compat",
+        "label": "OpenAI Chat Completions",
+        "path": "https://opencode.ai/zen/go/v1/chat/completions",
+        "sdk": "@ai-sdk/openai-compatible"
+      },
+      "verdict": "Successor to MiMo-V2.5-Pro (Sep 22) at the same price and $15 pool (~16k req/month), with omni input. No published benchmark yet.",
+      "useFor": [
+        "bursts of harder work",
+        "large cached contexts cheaply"
+      ],
+      "avoidFor": [
+        "all-day driving (the $15 pool)",
+        "work that needs a published quality index"
+      ],
+      "releaseDate": "2026-09-22",
+      "knowledge": null
     },
     {
       "id": "minimax-m2.5",
@@ -15050,23 +15564,16 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       "typical": null,
       "typicalCostUSD": null,
       "limits": {
-        "context": 204800,
-        "output": 65536
+        "context": null,
+        "output": null
       },
       "capabilities": {
-        "reasoning": true,
-        "toolCall": true,
-        "attachment": false,
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "openWeights": true,
-        "providerNpm": "@ai-sdk/anthropic"
+        "reasoning": null,
+        "toolCall": null,
+        "attachment": null,
+        "modalities": null,
+        "openWeights": null,
+        "providerNpm": null
       },
       "usage": {
         "monthlyCapUSD": 60,
@@ -15094,8 +15601,8 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       "avoidFor": [
         "new work"
       ],
-      "releaseDate": "2026-02-12",
-      "knowledge": "2025-01"
+      "releaseDate": null,
+      "knowledge": null
     },
     {
       "id": "minimax-m2.7",
@@ -15483,36 +15990,20 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       "tags": [
         "roster-only"
       ],
-      "pricing": {
-        "default": {
-          "input": 0.2,
-          "output": 0.66,
-          "cacheRead": 0.04,
-          "cacheWrite": null,
-          "condition": "models.dev list price"
-        }
-      },
+      "pricing": null,
       "variants": [],
       "typical": null,
       "typicalCostUSD": null,
       "limits": {
-        "context": 500000,
-        "output": 128000
+        "context": null,
+        "output": null
       },
       "capabilities": {
-        "reasoning": true,
-        "toolCall": true,
-        "attachment": true,
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "openWeights": false,
+        "reasoning": null,
+        "toolCall": null,
+        "attachment": null,
+        "modalities": null,
+        "openWeights": null,
         "providerNpm": null
       },
       "usage": {
@@ -15536,7 +16027,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       "avoidFor": [
         "planning"
       ],
-      "releaseDate": "2026-09-04",
+      "releaseDate": null,
       "knowledge": null
     },
     {
@@ -15545,7 +16036,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       "vendor": "Unknown",
       "onRoster": false,
       "listed": false,
-      "legacy": false,
+      "legacy": true,
       "premium": false,
       "experimental": true,
       "rosterAlias": null,
@@ -15566,24 +16057,15 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       "typical": null,
       "typicalCostUSD": null,
       "limits": {
-        "context": 1000000,
-        "output": 131072
+        "context": null,
+        "output": null
       },
       "capabilities": {
-        "reasoning": true,
-        "toolCall": true,
-        "attachment": true,
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "video"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "openWeights": false,
+        "reasoning": null,
+        "toolCall": null,
+        "attachment": null,
+        "modalities": null,
+        "openWeights": null,
         "providerNpm": null
       },
       "usage": {
@@ -15604,14 +16086,14 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
         "benchmarks": []
       },
       "endpoint": null,
-      "verdict": "Older free/unlimited catalog entry; Union Alpha is the current stealth model on the roster.",
+      "verdict": "Older free/unlimited catalog entry, not on the roster; Space Bunny Free and LongCat 2.5 Preview Free are the current free models.",
       "useFor": [
         "free experiments"
       ],
       "avoidFor": [
         "repeatability"
       ],
-      "releaseDate": "2026-08-21",
+      "releaseDate": null,
       "knowledge": null
     },
     {
@@ -15628,37 +16110,20 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
         "legacy",
         "roster-only"
       ],
-      "pricing": {
-        "default": {
-          "input": 0.2,
-          "output": 1.2,
-          "cacheRead": 0.02,
-          "cacheWrite": 0.25,
-          "condition": "models.dev list price"
-        }
-      },
+      "pricing": null,
       "variants": [],
       "typical": null,
       "typicalCostUSD": null,
       "limits": {
-        "context": 262144,
-        "output": 65536
+        "context": null,
+        "output": null
       },
       "capabilities": {
-        "reasoning": true,
-        "toolCall": true,
-        "attachment": true,
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "video"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "openWeights": false,
+        "reasoning": null,
+        "toolCall": null,
+        "attachment": null,
+        "modalities": null,
+        "openWeights": null,
         "providerNpm": null
       },
       "usage": {
@@ -15682,21 +16147,22 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       "avoidFor": [
         "new work"
       ],
-      "releaseDate": "2026-02-16",
-      "knowledge": "2025-04"
+      "releaseDate": null,
+      "knowledge": null
     },
     {
       "id": "qwen3.6-plus",
       "name": "Qwen3.6 Plus",
       "vendor": "Alibaba",
       "onRoster": true,
-      "listed": true,
-      "legacy": false,
+      "listed": false,
+      "legacy": true,
       "premium": false,
       "experimental": false,
       "rosterAlias": null,
       "tags": [
-        "multimodal",
+        "legacy",
+        "roster-only",
         "anthropic-api"
       ],
       "pricing": {
@@ -15780,13 +16246,12 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
         "path": "https://opencode.ai/zen/go/v1/messages",
         "sdk": "@ai-sdk/anthropic"
       },
-      "verdict": "One point under 3.7 Plus on AA index with output 3.00/1M - the budget Qwen Plus.",
+      "verdict": "Dropped from the Go docs by Sep 28 but still on the roster; prices here are from the 09-16 seed. Qwen3.7 Plus is the documented Plus.",
       "useFor": [
-        "bulk agent work",
-        "image/video input"
+        "compatibility with older sessions"
       ],
       "avoidFor": [
-        "premium-cap tasks"
+        "new work"
       ],
       "releaseDate": "2026-04-02",
       "knowledge": "2025-04"
@@ -15796,15 +16261,15 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       "name": "Qwen3.7 Max",
       "vendor": "Alibaba",
       "onRoster": true,
-      "listed": true,
-      "legacy": false,
+      "listed": false,
+      "legacy": true,
       "premium": true,
       "experimental": false,
       "rosterAlias": null,
       "tags": [
-        "premium-cap",
-        "anthropic-api",
-        "top-quality"
+        "legacy",
+        "roster-only",
+        "anthropic-api"
       ],
       "pricing": {
         "default": {
@@ -15871,13 +16336,12 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
         "path": "https://opencode.ai/zen/go/v1/messages",
         "sdk": "@ai-sdk/anthropic"
       },
-      "verdict": "46 AA index with strong SWE scores, but ~840 requests/month means it is a scalp tool.",
+      "verdict": "Dropped from the Go docs by Sep 28 but still on the roster; prices here are from the 09-16 seed. Qwen3.8 Max is the documented Max.",
       "useFor": [
-        "hard problems",
-        "final reviews"
+        "compatibility with older sessions"
       ],
       "avoidFor": [
-        "loops"
+        "new work"
       ],
       "releaseDate": "2026-05-21",
       "knowledge": null
@@ -16175,20 +16639,105 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       "knowledge": null
     },
     {
-      "id": "union-alpha",
-      "name": "Union Alpha",
-      "vendor": "Union",
-      "onRoster": false,
+      "id": "space-bunny-free",
+      "name": "Space Bunny Free",
+      "vendor": "Unknown",
+      "onRoster": true,
       "listed": true,
       "legacy": false,
       "premium": false,
       "experimental": true,
       "rosterAlias": null,
       "tags": [
+        "new",
         "free",
         "limited-time",
-        "anthropic-api",
         "stealth"
+      ],
+      "pricing": {
+        "default": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": null,
+          "condition": "free, limited time"
+        }
+      },
+      "variants": [],
+      "typical": null,
+      "typicalCostUSD": null,
+      "limits": {
+        "context": 1048576,
+        "output": 524288
+      },
+      "capabilities": {
+        "reasoning": true,
+        "toolCall": true,
+        "attachment": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "openWeights": false,
+        "providerNpm": null
+      },
+      "usage": {
+        "monthlyCapUSD": "unlimited",
+        "monthlyCapBaseUSD": null,
+        "promo": null,
+        "requests": {
+          "h5": "unlimited",
+          "week": "unlimited",
+          "month": "unlimited"
+        },
+        "unlimited": true
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 0
+      },
+      "quality": {
+        "index": null,
+        "declared": "none",
+        "benchmarks": []
+      },
+      "endpoint": {
+        "kind": "compat",
+        "label": "OpenAI Chat Completions",
+        "path": "https://opencode.ai/zen/go/v1/chat/completions",
+        "sdk": "@ai-sdk/openai-compatible"
+      },
+      "verdict": "Anonymous model, free and unlimited for a limited time (since Sep 23), with image and video input. Vendor, benchmarks and end date are unpublished.",
+      "useFor": [
+        "free experimenting while it lasts"
+      ],
+      "avoidFor": [
+        "anything you need repeatability on",
+        "planning around it (limited time)"
+      ],
+      "releaseDate": "2026-09-23",
+      "knowledge": null
+    },
+    {
+      "id": "union-alpha",
+      "name": "Union Alpha",
+      "vendor": "Union",
+      "onRoster": false,
+      "listed": false,
+      "legacy": true,
+      "premium": false,
+      "experimental": true,
+      "rosterAlias": null,
+      "tags": [
+        "free",
+        "stealth",
+        "legacy"
       ],
       "pricing": {
         "default": {
@@ -16240,37 +16789,1439 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
         "path": "https://opencode.ai/zen/go/v1/messages",
         "sdk": "@ai-sdk/anthropic"
       },
-      "verdict": "Limited-time free/unlimited stealth model for agentic coding (released 2026-09-16, 256K ctx, image input).",
+      "verdict": "Stealth model that was free for a limited time from Sep 16; gone from the roster and the docs by Sep 28.",
       "useFor": [
-        "free experimenting while it lasts"
+        "nothing (no longer served)"
       ],
       "avoidFor": [
-        "anything you need repeatability on"
+        "new work"
       ],
       "releaseDate": null,
       "knowledge": null
     }
   ],
-  "generatedAt": "2026-09-19T03:40:36.730Z",
-  "hash": "f98dd2322a01205dc75a6a3ef60a40f35e0d4f15413f56cbd4d0bf68d1fe0dc2",
-  "rosterHash": "d5346e27713c411fce038180ee3b1e306cc4c29700de69b49fc19b6f24a93930",
+  "providerModels": {
+    "claude": [
+      {
+        "id": "claude-opus-5-5",
+        "name": "Claude Opus 5.5",
+        "family": "claude-opus",
+        "releaseDate": "2026-09-22",
+        "knowledge": "2026-06",
+        "limits": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 4,
+          "output": 20,
+          "cacheRead": 0.2,
+          "cacheWrite": 5
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "studioRoute": "claude"
+      },
+      {
+        "id": "claude-fable-5-1",
+        "name": "Claude Fable 5.1",
+        "family": "claude-fable",
+        "releaseDate": "2026-09-01",
+        "knowledge": "2026-06",
+        "limits": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 10,
+          "output": 50,
+          "cacheRead": 0.25,
+          "cacheWrite": 12.5
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "studioRoute": "claude"
+      },
+      {
+        "id": "claude-opus-5",
+        "name": "Claude Opus 5",
+        "family": "claude-opus",
+        "releaseDate": "2026-07-24",
+        "knowledge": "2026-05",
+        "limits": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 5,
+          "output": 25,
+          "cacheRead": 0.5,
+          "cacheWrite": 6.25
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "studioRoute": "claude"
+      },
+      {
+        "id": "claude-sonnet-5",
+        "name": "Claude Sonnet 5",
+        "family": "claude-sonnet",
+        "releaseDate": "2026-06-29",
+        "knowledge": "2026-01-31",
+        "limits": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 2,
+          "output": 10,
+          "cacheRead": 0.2,
+          "cacheWrite": 2.5
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "studioRoute": "claude"
+      },
+      {
+        "id": "claude-fable-5",
+        "name": "Claude Fable 5",
+        "family": "claude-fable",
+        "releaseDate": "2026-06-07",
+        "knowledge": null,
+        "limits": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 10,
+          "output": 50,
+          "cacheRead": 1,
+          "cacheWrite": 12.5
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "studioRoute": "claude"
+      },
+      {
+        "id": "claude-opus-4-8",
+        "name": "Claude Opus 4.8",
+        "family": "claude-opus",
+        "releaseDate": "2026-05-28",
+        "knowledge": "2026-01",
+        "limits": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 5,
+          "output": 25,
+          "cacheRead": 0.5,
+          "cacheWrite": 6.25
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "studioRoute": "claude"
+      },
+      {
+        "id": "claude-opus-4-7",
+        "name": "Claude Opus 4.7",
+        "family": "claude-opus",
+        "releaseDate": "2026-04-14",
+        "knowledge": "2026-01-31",
+        "limits": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 5,
+          "output": 25,
+          "cacheRead": 0.5,
+          "cacheWrite": 6.25
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "studioRoute": "claude"
+      },
+      {
+        "id": "claude-sonnet-4-6",
+        "name": "Claude Sonnet 4.6",
+        "family": "claude-sonnet",
+        "releaseDate": "2026-02-17",
+        "knowledge": "2025-08-31",
+        "limits": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 3,
+          "output": 15,
+          "cacheRead": 0.3,
+          "cacheWrite": 3.75
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "low",
+          "medium",
+          "high",
+          "max"
+        ],
+        "studioRoute": "claude"
+      },
+      {
+        "id": "claude-opus-4-6",
+        "name": "Claude Opus 4.6",
+        "family": "claude-opus",
+        "releaseDate": "2026-02-04",
+        "knowledge": "2025-05-31",
+        "limits": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 5,
+          "output": 25,
+          "cacheRead": 0.5,
+          "cacheWrite": 6.25
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "low",
+          "medium",
+          "high",
+          "max"
+        ],
+        "studioRoute": "claude"
+      },
+      {
+        "id": "claude-opus-4-5",
+        "name": "Claude Opus 4.5 (latest)",
+        "family": "claude-opus",
+        "releaseDate": "2025-11-24",
+        "knowledge": "2025-05",
+        "limits": {
+          "context": 200000,
+          "output": 64000
+        },
+        "cost": {
+          "input": 5,
+          "output": 25,
+          "cacheRead": 0.5,
+          "cacheWrite": 6.25
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "low",
+          "medium",
+          "high"
+        ],
+        "studioRoute": "claude"
+      },
+      {
+        "id": "claude-haiku-4-5",
+        "name": "Claude Haiku 4.5 (latest)",
+        "family": "claude-haiku",
+        "releaseDate": "2025-10-15",
+        "knowledge": "2025-02-28",
+        "limits": {
+          "context": 200000,
+          "output": 64000
+        },
+        "cost": {
+          "input": 1,
+          "output": 5,
+          "cacheRead": 0.1,
+          "cacheWrite": 1.25
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": null,
+        "studioRoute": "claude"
+      },
+      {
+        "id": "claude-sonnet-4-5",
+        "name": "Claude Sonnet 4.5 (latest)",
+        "family": "claude-sonnet",
+        "releaseDate": "2025-09-29",
+        "knowledge": "2025-07-31",
+        "limits": {
+          "context": 1000000,
+          "output": 64000
+        },
+        "cost": {
+          "input": 3,
+          "output": 15,
+          "cacheRead": 0.3,
+          "cacheWrite": 3.75
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": null,
+        "studioRoute": "claude"
+      }
+    ],
+    "zen": [
+      {
+        "id": "gpt-6-luna",
+        "name": "GPT-6 Luna",
+        "family": "gpt-luna",
+        "releaseDate": "2026-09-22",
+        "knowledge": "2026-05-18",
+        "limits": {
+          "context": 1050000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 0.1,
+          "output": 0.5,
+          "cacheRead": 0.01,
+          "cacheWrite": 0.125
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "studioRoute": "zen"
+      },
+      {
+        "id": "gpt-6-sol",
+        "name": "GPT-6 Sol",
+        "family": "gpt-sol",
+        "releaseDate": "2026-09-22",
+        "knowledge": "2026-04-20",
+        "limits": {
+          "context": 1050000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 2,
+          "output": 10,
+          "cacheRead": 0.2,
+          "cacheWrite": 2.5
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "studioRoute": "zen"
+      },
+      {
+        "id": "gpt-6-astra",
+        "name": "GPT-6 Astra",
+        "family": "gpt-astra",
+        "releaseDate": "2026-09-04",
+        "knowledge": "2026-04-30",
+        "limits": {
+          "context": 1050000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 10,
+          "output": 50,
+          "cacheRead": 1,
+          "cacheWrite": 12.5
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "studioRoute": "zen"
+      },
+      {
+        "id": "gpt-5.6-luna",
+        "name": "GPT-5.6 Luna",
+        "family": "gpt-luna",
+        "releaseDate": "2026-07-09",
+        "knowledge": "2026-02-16",
+        "limits": {
+          "context": 1050000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 0.2,
+          "output": 1.2,
+          "cacheRead": 0.02,
+          "cacheWrite": 0.25
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "studioRoute": "zen"
+      },
+      {
+        "id": "gpt-5.6-sol",
+        "name": "GPT-5.6 Sol",
+        "family": "gpt-sol",
+        "releaseDate": "2026-07-09",
+        "knowledge": "2026-02-16",
+        "limits": {
+          "context": 1050000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 4,
+          "output": 20,
+          "cacheRead": 0.4,
+          "cacheWrite": 5
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "studioRoute": "zen"
+      },
+      {
+        "id": "gpt-5.6-terra",
+        "name": "GPT-5.6 Terra",
+        "family": "gpt-terra",
+        "releaseDate": "2026-07-09",
+        "knowledge": "2026-02-16",
+        "limits": {
+          "context": 1050000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 2.5,
+          "output": 15,
+          "cacheRead": 0.25,
+          "cacheWrite": 3.125
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "studioRoute": "zen"
+      },
+      {
+        "id": "gpt-5.5",
+        "name": "GPT-5.5",
+        "family": "gpt",
+        "releaseDate": "2026-04-23",
+        "knowledge": "2025-12-01",
+        "limits": {
+          "context": 1050000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 5,
+          "output": 30,
+          "cacheRead": 0.5,
+          "cacheWrite": null
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ],
+        "studioRoute": "zen"
+      },
+      {
+        "id": "gpt-5.5-pro",
+        "name": "GPT-5.5 Pro",
+        "family": "gpt-pro",
+        "releaseDate": "2026-04-23",
+        "knowledge": "2025-12-01",
+        "limits": {
+          "context": 1050000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 30,
+          "output": 180,
+          "cacheRead": 30,
+          "cacheWrite": null
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "medium",
+          "high",
+          "xhigh"
+        ],
+        "studioRoute": "zen"
+      },
+      {
+        "id": "gpt-5.4-mini",
+        "name": "GPT-5.4 mini",
+        "family": "gpt-mini",
+        "releaseDate": "2026-03-17",
+        "knowledge": "2025-08-31",
+        "limits": {
+          "context": 400000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 0.75,
+          "output": 4.5,
+          "cacheRead": 0.075,
+          "cacheWrite": null
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ],
+        "studioRoute": "zen"
+      },
+      {
+        "id": "gpt-5.4-nano",
+        "name": "GPT-5.4 nano",
+        "family": "gpt-nano",
+        "releaseDate": "2026-03-17",
+        "knowledge": "2025-08-31",
+        "limits": {
+          "context": 400000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 0.2,
+          "output": 1.25,
+          "cacheRead": 0.02,
+          "cacheWrite": null
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ],
+        "studioRoute": "zen"
+      },
+      {
+        "id": "gpt-5.4",
+        "name": "GPT-5.4",
+        "family": "gpt",
+        "releaseDate": "2026-03-05",
+        "knowledge": "2025-08-31",
+        "limits": {
+          "context": 1050000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 2.5,
+          "output": 15,
+          "cacheRead": 0.25,
+          "cacheWrite": null
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ],
+        "studioRoute": "zen"
+      },
+      {
+        "id": "gpt-5.4-pro",
+        "name": "GPT-5.4 Pro",
+        "family": "gpt-pro",
+        "releaseDate": "2026-03-05",
+        "knowledge": "2025-08-31",
+        "limits": {
+          "context": 1050000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 30,
+          "output": 180,
+          "cacheRead": 30,
+          "cacheWrite": null
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "medium",
+          "high",
+          "xhigh"
+        ],
+        "studioRoute": "zen"
+      },
+      {
+        "id": "gpt-5.3-codex",
+        "name": "GPT-5.3 Codex",
+        "family": "gpt-codex",
+        "releaseDate": "2026-02-05",
+        "knowledge": "2025-08-31",
+        "limits": {
+          "context": 400000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 1.75,
+          "output": 14,
+          "cacheRead": 0.175,
+          "cacheWrite": null
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ],
+        "studioRoute": "zen"
+      },
+      {
+        "id": "gpt-5.3-codex-spark",
+        "name": "GPT-5.3 Codex Spark",
+        "family": "gpt-codex-spark",
+        "releaseDate": "2026-02-05",
+        "knowledge": "2025-08-31",
+        "limits": {
+          "context": 128000,
+          "output": 32000
+        },
+        "cost": {
+          "input": 1.75,
+          "output": 14,
+          "cacheRead": 0.175,
+          "cacheWrite": null
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ],
+        "studioRoute": "zen"
+      },
+      {
+        "id": "gpt-5.2",
+        "name": "GPT-5.2",
+        "family": "gpt",
+        "releaseDate": "2025-12-11",
+        "knowledge": "2025-08-31",
+        "limits": {
+          "context": 400000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 1.75,
+          "output": 14,
+          "cacheRead": 0.175,
+          "cacheWrite": null
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ],
+        "studioRoute": "zen"
+      },
+      {
+        "id": "gpt-5.1",
+        "name": "GPT-5.1",
+        "family": "gpt",
+        "releaseDate": "2025-11-13",
+        "knowledge": "2024-09-30",
+        "limits": {
+          "context": 400000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 1.07,
+          "output": 8.5,
+          "cacheRead": 0.107,
+          "cacheWrite": null
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "none",
+          "low",
+          "medium",
+          "high"
+        ],
+        "studioRoute": "zen"
+      }
+    ],
+    "zai": [
+      {
+        "id": "glm-5.3-flash",
+        "name": "GLM-5.3-Flash",
+        "family": "glm-flash",
+        "releaseDate": "2026-08-26",
+        "knowledge": null,
+        "limits": {
+          "context": 1000000,
+          "output": 131072
+        },
+        "cost": {
+          "input": 0.15,
+          "output": 0.5,
+          "cacheRead": 0.03,
+          "cacheWrite": 0
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "video",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": true
+        },
+        "reasoningEfforts": [
+          "low",
+          "high",
+          "max"
+        ],
+        "studioRoute": "zai"
+      },
+      {
+        "id": "glm-5.3",
+        "name": "GLM-5.3",
+        "family": "glm",
+        "releaseDate": "2026-08-14",
+        "knowledge": null,
+        "limits": {
+          "context": 1000000,
+          "output": 131072
+        },
+        "cost": {
+          "input": 1.4,
+          "output": 4.4,
+          "cacheRead": 0.26,
+          "cacheWrite": 0
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": false,
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": true
+        },
+        "reasoningEfforts": [
+          "low",
+          "high",
+          "max"
+        ],
+        "studioRoute": "zai"
+      },
+      {
+        "id": "glm-5.3-highspeed",
+        "name": "GLM-5.3 Highspeed",
+        "family": "glm",
+        "releaseDate": "2026-08-14",
+        "knowledge": null,
+        "limits": {
+          "context": 1000000,
+          "output": 131072
+        },
+        "cost": null,
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": false,
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": true
+        },
+        "reasoningEfforts": [
+          "low",
+          "high",
+          "max"
+        ],
+        "studioRoute": "zai"
+      },
+      {
+        "id": "glm-5.2",
+        "name": "GLM-5.2",
+        "family": "glm",
+        "releaseDate": "2026-06-13",
+        "knowledge": null,
+        "limits": {
+          "context": 1000000,
+          "output": 131072
+        },
+        "cost": {
+          "input": 1.4,
+          "output": 4.4,
+          "cacheRead": 0.26,
+          "cacheWrite": 0
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": false,
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": true
+        },
+        "reasoningEfforts": [
+          "high",
+          "max"
+        ],
+        "studioRoute": "zai"
+      },
+      {
+        "id": "glm-5.2-highspeed",
+        "name": "GLM-5.2 Highspeed",
+        "family": "glm",
+        "releaseDate": "2026-06-13",
+        "knowledge": null,
+        "limits": {
+          "context": 1000000,
+          "output": 131072
+        },
+        "cost": null,
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": false,
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": true
+        },
+        "reasoningEfforts": [
+          "high",
+          "max"
+        ],
+        "studioRoute": "zai"
+      },
+      {
+        "id": "glm-5-turbo",
+        "name": "GLM-5-Turbo",
+        "family": "glm",
+        "releaseDate": "2026-03-16",
+        "knowledge": null,
+        "limits": {
+          "context": 200000,
+          "output": 131072
+        },
+        "cost": {
+          "input": 1.2,
+          "output": 4,
+          "cacheRead": 0.24,
+          "cacheWrite": 0
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": false,
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": null,
+        "studioRoute": "zai"
+      },
+      {
+        "id": "glm-4.7",
+        "name": "GLM-4.7",
+        "family": "glm",
+        "releaseDate": "2025-12-22",
+        "knowledge": "2025-04",
+        "limits": {
+          "context": 204800,
+          "output": 131072
+        },
+        "cost": {
+          "input": 0.6,
+          "output": 2.2,
+          "cacheRead": 0.11,
+          "cacheWrite": 0
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": false,
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": true
+        },
+        "reasoningEfforts": null,
+        "studioRoute": "zai"
+      }
+    ]
+  },
+  "generatedAt": "2026-09-28T17:04:09.598Z",
+  "hash": "bfe811c509c83a62ece9f015aebda77f203e79f346a971def9d0a99e6f2ede7e",
+  "rosterHash": "cff273bf935e374b635cf88845a0befe0929f924ed283436e02029b04441df9c",
   "sources": {
     "roster": {
       "url": "https://opencode.ai/zen/go/v1/models",
       "ok": true,
-      "count": 37
+      "count": 43
     },
     "catalog": {
       "url": "https://models.dev/api.json",
       "ok": true,
       "provider": "opencode-go"
     },
-    "curatedSeed": "2026-09-16",
+    "providerModels": {
+      "url": "https://models.dev/api.json",
+      "ok": true,
+      "routes": {
+        "claude": {
+          "provider": "anthropic",
+          "priceProvider": "anthropic",
+          "servedBy": null,
+          "count": 12,
+          "source": "models.dev"
+        },
+        "zen": {
+          "provider": "openai",
+          "priceProvider": "opencode",
+          "servedBy": "opencode",
+          "count": 16,
+          "source": "models.dev"
+        },
+        "zai": {
+          "provider": "zai-coding-plan",
+          "priceProvider": "zai",
+          "servedBy": null,
+          "count": 7,
+          "source": "models.dev"
+        }
+      }
+    },
+    "curatedSeed": "2026-09-28",
     "mode": "live"
   },
-  "warnings": [
-    "ox-alpha-free: documented/known but not on the live roster"
-  ]
+  "warnings": []
 }</script>
 <script>// One vocabulary for every task badge in the renderer. The board, Your work,
 // Plans and Command all pass a scheduler stage (backlog.taskStates[].stage) or
@@ -19137,7 +21088,8 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     if (!Array.isArray(snapshot?.nodes)) return {};
     const counts = {
       progress: snapshot.nodes.filter((node) => node.kind === "todo" && node.status === "in_progress").length,
-      sessions: snapshot.nodes.filter((node) => node.kind === "session").length,
+      // sub-agent sessions hang under a session; they are not sessions of their own here
+      sessions: snapshot.nodes.filter((node) => node.kind === "session" && !node.child).length,
     };
     // The browser-only booklet has an assistant node but no service to report.
     if (window.mefiStudio?.assistantState && snapshot.assistant) counts.assistant = snapshot.assistant.tone ?? null;
@@ -21685,6 +23637,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     usage: "Tokens and cost from the model calls Studio recorded.",
     context: "What a task carries into its model calls, and what the latest attempt cost.",
     tracker: "What each provider account reports: plans, balances and limits.",
+    community: "What the community reports about a model, and Studio's own probe runs on it.",
   };
   const plain = (error, fallback) => window.MefiUi?.plainError ? window.MefiUi.plainError(error, fallback) : error?.message || fallback;
   const when = (value) => {
@@ -22047,9 +24000,9 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     finally { if (token === state.contextRead) $("context-refresh").disabled = false; }
   }
   function show(view) {
-    if (!["rankings", "usage", "context", "tracker", "compare"].includes(view)) view = "rankings";
+    if (!["rankings", "usage", "context", "tracker", "community", "compare"].includes(view)) view = "rankings";
     state.view = view;
-    for (const name of ["rankings", "usage", "context", "tracker", "compare"]) {
+    for (const name of ["rankings", "usage", "context", "tracker", "community", "compare"]) {
       $(name).hidden = name !== view;
       $(`tab-${name}`).setAttribute("aria-selected", String(name === view));
       $(`tab-${name}`).tabIndex = name === view ? 0 : -1;
@@ -22064,12 +24017,13 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     if ($("summary")) $("summary").hidden = view !== "rankings";
     window.dispatchEvent(new CustomEvent("mefi:model-view", { detail: { view } }));
     if (view === "tracker") window.MefiUsageTracker?.refresh?.();
+    if (view === "community") window.MefiModelCommunity?.open?.();
     if (view === "context") loadTasks().then((fresh) => { if (fresh) return previewContext(); }).catch((error) => { $("context-status").textContent = plain(error, "Tasks could not be read."); });
   }
   function init() {
     if (state.initialized || !document.getElementById("model-lab")) return;
     state.initialized = true;
-    const views = ["rankings", "usage", "context", "tracker", "compare"];
+    const views = ["rankings", "usage", "context", "tracker", "community", "compare"];
     for (const [index, name] of views.entries()) {
       const button = $(`tab-${name}`);
       button.addEventListener("click", () => show(name));
@@ -28786,6 +30740,10 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     return luminance > 140 ? "#0b1016" : "#f3f6fa";
   }
   const AGENT_RING = 34;
+  // Sub-agent sessions hang under the shown session that spawned them: at
+  // most this many per parent, and only ones busy within this window.
+  const CHILD_SESSION_LIMIT = 3;
+  const CHILD_SESSION_WINDOW_MS = 1000 * 60 * 60 * 6;
   // The last store answer, so a roster change can rebuild without a re-read.
   const cache = { sessions: [], todos: [], fallback: null };
   let sessionSlots = new Map();
@@ -29564,6 +31522,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     nodes.push(rootNode);
     const golden = Math.PI * (3 - Math.sqrt(5));
     sessionSlots = stableNodeSlots(roots.map((session) => session.id), sessionSlots);
+    const rootNodes = new Map();
     roots.forEach((session) => {
       const index = sessionSlots.get(session.id);
       const baseAngle = index * golden;
@@ -29585,6 +31544,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
         todos: [],
       };
       nodes.push(node);
+      rootNodes.set(session.id, node);
       edges.push({ a: rootNode, b: node });
       const allTodos = (todosBySession.get(session.id) ?? []).sort((a, b) => a.position - b.position);
       const sessionTodos = allTodos.slice(0, maxTodos);
@@ -29630,6 +31590,53 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       node.todoTotal = allTodos.length;
       node.todoDone = done;
     });
+    // Sub-agent sessions (the store records the session that spawned each as
+    // its parentId) hang under a shown, live parent: the newest few busy in
+    // the last hours, smaller, with no todo nodes of their own (their state
+    // still comes from their todos). The Command view pops each out of its
+    // parent and flies it home when it leaves (idle.js, childSession).
+    const childrenOf = new Map();
+    for (const session of sessions) {
+      const parent = session.parentId ? rootNodes.get(session.parentId) : null;
+      if (!parent || parent.stale || !(session.timeUpdated > now - CHILD_SESSION_WINDOW_MS)) continue;
+      if (!childrenOf.has(parent.id)) childrenOf.set(parent.id, []);
+      childrenOf.get(parent.id).push(session);
+    }
+    if (childrenOf.size) {
+      const childTodos = new Map([...childrenOf.values()].flat().map((session) => [session.id, []]));
+      for (const todo of todos) childTodos.get(todo.sessionId)?.push(todo);
+      for (const [parentId, list] of childrenOf) {
+        const parent = rootNodes.get(parentId);
+        list.sort((a, b) => (b.timeUpdated ?? 0) - (a.timeUpdated ?? 0) || String(a.id).localeCompare(String(b.id)));
+        const shown = list.slice(0, CHILD_SESSION_LIMIT);
+        if (list.length > shown.length) parent.childMore = list.length - shown.length;
+        shown.forEach((session, index) => {
+          const own = childTodos.get(session.id) ?? [];
+          const closed = own.filter(isClosedTodo).length;
+          const spread = (index - (shown.length - 1) / 2) * 30;
+          const child = {
+            id: session.id,
+            kind: "session",
+            child: true,
+            parentSessionId: parentId,
+            label: session.title || session.id,
+            agent: session.agent,
+            model: session.model?.id,
+            updated: session.timeUpdated,
+            stale: false,
+            x: parent.x + spread,
+            y: parent.y + 78,
+            z: parent.z + spread * 0.4,
+            state: own.some((todo) => todo.status === "in_progress") ? "active" : own.length && closed === own.length ? "done" : "session",
+            progress: own.length ? closed / own.length : 0,
+            r: 4.2,
+            todos: [],
+          };
+          nodes.push(child);
+          edges.push({ a: parent, b: child, sessionId: parentId });
+        });
+      }
+    }
     if (foldedIds.length) {
       const foldAngle = roots.length * golden;
       const foldedNode = {
@@ -29725,7 +31732,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     let taskTotal = 0;
     let doneCount = 0;
     for (const node of nodes) {
-      if (node.kind !== "session" || node.stale) continue;
+      if (node.kind !== "session" || node.stale || node.child) continue;
       taskTotal += node.todoTotal;
       doneCount += node.todoDone;
     }
@@ -31004,6 +33011,8 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
           status: node.status ?? null,
           state: node.state,
           stale: node.stale ?? false,
+          ...(node.child ? { child: true, parentSessionId: node.parentSessionId } : {}),
+          ...(node.childMore ? { childMore: node.childMore } : {}),
           count: node.count ?? null,
           sessionIds: node.sessionIds ?? null,
           titles: node.titles ?? null,
@@ -32297,6 +34306,24 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     const visible = visibleGraphSnapshot(snapshot, absorbFoldedCluster(snapshot.nodes));
     state.nodes = visible.nodes.map((node) => ({ ...node, bx: node.x, by: node.y, bz: node.z }));
     state.edges = visible.edges;
+    // Sub-agent sessions (tree3d hangs them under the session that spawned
+    // them): each pops out of its parent the first time the board sees it and
+    // flies home into it when it leaves (sweepFx), the way a builder does.
+    for (const node of state.nodes) {
+      if (!node.child || !node.parentSessionId) continue;
+      const fx = ensureFx(node.id, { pop: true });
+      if (fx.absorbAt != null) {
+        // Back before its flight home ended: grow out again, no twin ghost.
+        fx.absorbAt = null;
+        fx.fromScreen = null;
+        fx.bornAt = Date.now();
+      }
+      fx.childSession = true;
+      fx.anchorId = node.parentSessionId;
+      fx.label = node.label;
+      fx.seen = true;
+      fx.wasRendered = true;
+    }
     // The tree summary and the autopilot status share this one slot, and both
     // carry a `running` — a roster COUNT in the summary, the list of build jobs
     // in the status. A plain replace let the count win on every rebuild, so
@@ -32324,7 +34351,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     // Callout numbers: sessions in the order the tree shows them, tasks in
     // board order — stable while the board holds, never derived from a slot.
     let sessionOrdinal = 0;
-    for (const node of state.nodes) if (node.kind === "session") node.ordinal = `S${++sessionOrdinal}`;
+    for (const node of state.nodes) if (node.kind === "session" && !node.child) node.ordinal = `S${++sessionOrdinal}`;
     const boardIndex = new Map((state.allTasks?.length ? state.allTasks : state.tasks ?? []).map((task, index) => [String(task.id), index + 1]));
     for (const node of state.nodes) if ((node.kind === "task" || node.kind === "task-group") && node.task) node.ordinal = `T${boardIndex.get(String(node.task.id)) ?? "?"}`;
     const firstGraph = !state.graphSeeded;
@@ -32570,6 +34597,18 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       const groupParent = node.groupParentId ? state.nodes.find((candidate) => candidate.id === node.groupParentId) : null;
       const edgeAnchor = groupParent ?? anchor;
       if (edgeAnchor) state.edges.push({ a: state.nodes.indexOf(edgeAnchor), b: state.nodes.length - 1, sessionId: anchor?.id, task: true, taskGroup: Boolean(groupParent) });
+      // A delegated part shown under its parent runs its life-cycle against
+      // that parent; other read-only leaves (saved obligations, members) have
+      // none.
+      const part = entry.member && node.groupParentId ? state.fx.get(node.id) : null;
+      if (part?.delegated) {
+        part.task = task;
+        part.builder = false;
+        part.anchorId = node.groupParentId;
+        part.seen = true;
+        part.wasRendered = true;
+        return;
+      }
       // Saved obligations are read-only leaves, not new task lifecycle events.
       if (node.readOnly) return;
       // The life-cycle entry: pop-out and absorb both run against this host —
@@ -32791,7 +34830,8 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
   // handed the work out, otherwise the root.
   function absorbHost(fx) {
     let host = fx.anchorId ? state.nodes.find((node) => node.id === fx.anchorId && !node.dying) : null;
-    if (host?.kind === "task") host = (host.anchorSessionId ? nodeForSession(host.anchorSessionId) : null) ?? host;
+    // (a delegated part's host is the task that handed it out, not its session)
+    if (host?.kind === "task" && !fx.delegated) host = (host.anchorSessionId ? nodeForSession(host.anchorSessionId) : null) ?? host;
     return host ?? absorbFallback();
   }
 
@@ -32807,17 +34847,19 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     const sz = fx.lastZ ?? host?.z ?? 0;
     const node = {
       id,
-      kind: fx.folded ? "folded" : fx.builder ? "agent" : "task",
+      kind: fx.folded ? "folded" : fx.builder ? "agent" : fx.childSession ? "session" : "task",
       dying: true,
-      label: fx.folded ? fx.label ?? "finished" : fx.builder ? fx.label ?? "building" : fx.task?.title ?? "task",
-      task: fx.folded || fx.builder ? null : fx.task ?? null,
+      label: fx.folded ? fx.label ?? "finished" : fx.builder ? fx.label ?? "building" : fx.childSession ? fx.label ?? "sub-agent" : fx.task?.title ?? "task",
+      task: fx.folded || fx.builder || fx.childSession ? null : fx.task ?? null,
       role: fx.builder ? "builder" : null,
       status: "running",
-      // A finished task flies home green — what sinks in is completed work.
-      color: !fx.folded && !fx.builder && fx.task?.status === "done" ? "#68eca4" : fx.task?.color ?? "#e6c98d",
-      state: !fx.folded && !fx.builder && fx.task?.status === "done" ? "done" : "task",
+      // A finished task flies home green — what sinks in is completed work,
+      // like a sub-agent session coming back to its parent.
+      color: fx.childSession || !fx.folded && !fx.builder && fx.task?.status === "done" ? "#68eca4" : fx.task?.color ?? "#e6c98d",
+      state: fx.childSession || !fx.folded && !fx.builder && fx.task?.status === "done" ? "done" : "task",
+      ...(fx.childSession ? { child: true, parentSessionId: fx.anchorId } : {}),
       anchorSessionId: fx.anchorId,
-      r: fx.folded ? 6 : fx.builder ? 3.6 : 7,
+      r: fx.folded ? 6 : fx.builder ? 3.6 : fx.childSession ? 4.2 : 7,
       x: sx,
       y: sy,
       z: sz,
@@ -32925,14 +34967,14 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     // would hide the live node instead.
     const readOnlyIds = new Set((state.nodes ?? []).filter((node) => node.readOnly && !node.dying).map((node) => node.id));
     for (const [id, fx] of [...state.fx]) {
-      if (readOnlyIds.has(id)) { state.fx.delete(id); continue; }
+      if (readOnlyIds.has(id) && !fx.delegated) { state.fx.delete(id); continue; }
       if (fx.absorbAt != null) {
         if (still || !fx.wasRendered || now - fx.absorbAt > NODE_ABSORB_TTL) finalizeAbsorb(id, fx);
         else appendDyingNode(id, fx);
         continue;
       }
       if (fx.seen) continue;
-      if (fx.builder) {
+      if (fx.builder || fx.childSession) {
         markAbsorb(id);
         if (still || !fx.wasRendered) finalizeAbsorb(id, fx);
         else appendDyingNode(id, fx);
@@ -32955,10 +34997,10 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     if (!fx.removed) {
       const key = host?.id ?? fx.anchorId ?? "__assistant__";
       const entry = {
-        title: fx.builder ? fx.label ?? "build" : fx.task?.title ?? "task",
+        title: fx.builder ? fx.label ?? "build" : fx.childSession ? fx.label ?? "sub-agent" : fx.task?.title ?? "task",
         prompt: fx.task?.prompt ?? null,
-        taskId: fx.builder ? null : fx.task?.id ?? null,
-        kind: fx.builder ? "job" : "task",
+        taskId: fx.builder || fx.childSession ? null : fx.task?.id ?? null,
+        kind: fx.builder ? "job" : fx.childSession ? "session" : "task",
         status: fx.task?.status ?? null,
         at: Date.now(),
       };
@@ -33073,6 +35115,14 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     const open = all.filter((task) => ["open", "active", "awaiting_verification"].includes(task.status));
     const openIds = new Set(open.map((task) => `task:${task.id}`));
     const byId = new Map(all.map((task) => [`task:${task.id}`, task]));
+    // A part another task delegated (a task-delegation group's member) pops
+    // out of the task that handed it out and flies home into it when it
+    // closes: the return path up the chain. True while its parent is on the
+    // board.
+    const delegated = (task) => {
+      const parentId = task?.delegatedFrom?.parentTaskId || task?.parentTaskId;
+      return Boolean(parentId && byId.has(`task:${parentId}`));
+    };
     const now = Date.now();
     for (const task of open) {
       const id = `task:${task.id}`;
@@ -33081,9 +35131,10 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
         // New to the board: pop out of the host on the next rebuild. Tasks the
         // first read already knew about seed as settled — a whole backlog
         // popping at once reads as noise, not as news.
-        state.fx.set(id, { bornAt: state.tasksSeeded ? Date.now() : -Infinity, absorbAt: null, task, builder: false });
+        state.fx.set(id, { bornAt: state.tasksSeeded ? Date.now() : -Infinity, absorbAt: null, task, builder: false, delegated: delegated(task) });
       } else {
         fx.task = task;
+        fx.delegated = delegated(task);
         fx.removed = false;
         state.doneHold.delete(id); // reopened: it is work again, not finished work
         if (fx.absorbAt != null) {
@@ -33094,7 +35145,20 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       }
     }
     for (const [id, fx] of state.fx) {
-      if (members.has(id)) { state.fx.delete(id); state.doneHold.delete(id); continue; }
+      if (fx.childSession) continue;
+      if (members.has(id)) {
+        // Group members are read-only leaves of their card, except a delegated
+        // part: closed, it flies straight home into its parent, no hold.
+        if (!fx.delegated) { state.fx.delete(id); state.doneHold.delete(id); continue; }
+        if (fx.absorbAt == null && !openIds.has(id)) {
+          const stored = byId.get(id);
+          fx.removed = !stored;
+          if (stored) fx.task = stored;
+          state.doneHold.delete(id);
+          markAbsorb(id);
+        }
+        continue;
+      }
       if (fx.builder || fx.absorbAt != null || openIds.has(id)) continue;
       // Left the open set (done, archived, deleted): fly home and be absorbed.
       const stored = byId.get(id);
@@ -33233,7 +35297,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     state.telemetryAt = Date.now();
     state.telemetryNodeCount = nodeCount;
     const badges = window.MefiNav?.badges ?? null;
-    const sessions = badges?.sessions ?? state.nodes.filter((node) => node.kind === "session").length;
+    const sessions = badges?.sessions ?? state.nodes.filter((node) => node.kind === "session" && !node.child).length;
     const inProgress = badges?.progress ?? state.nodes.filter((node) => node.kind === "todo" && node.status === "in_progress").length;
     const openTasks = badges?.tasks ?? state.tasks.length;
     // nav already polls the ideas store for its badges; only run the local poll
@@ -35093,6 +37157,22 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     // not an empty one: the card only speaks up for a store problem.
     const storeFine = !!window.mefiStudio && state.treeStatus !== "unavailable" &&
       !(typeof window.MefiTree?.note?.() === "string" && window.MefiTree.note());
+    // A project with nothing on its board yet still gets its tree: the root
+    // and the assistant stand, and a small card under them says how the first
+    // branch grows. It sits low, so the tree stays in view above it.
+    const fresh = storeFine && !constellationHasWork() && !(state.allTasks?.length || state.tasks?.length) && assistantNode();
+    if (fresh) {
+      const wasHidden = el.empty.hidden;
+      el.empty.hidden = false;
+      if (wasHidden) state.hudRectsAt = 0;
+      if (state.emptyVariant !== "fresh") { state.emptyVariant = "fresh"; el.empty.dataset.variant = "fresh"; }
+      const name = (document.getElementById("vibe-project-name")?.textContent || document.getElementById("workspace-project-name")?.textContent || "").trim();
+      const named = name && !/^(Choose a project|Your workspace|Workspace|Loading)/.test(name);
+      if (el.emptyTitle) el.emptyTitle.textContent = named ? `Nothing started in ${name} yet` : "Nothing started here yet";
+      if (el.emptyCopy) el.emptyCopy.textContent = "This is the project's tree. Every task you add grows a branch from the root, and agents fly out to the work they pick up.";
+      if (el.emptyAssistant) el.emptyAssistant.hidden = true;
+      return;
+    }
     if (constellationHasWork() || (storeFine && assistantNode())) {
       if (!el.empty.hidden) state.hudRectsAt = 0;
       el.empty.hidden = true;
@@ -36896,6 +38976,20 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       }
       node._layoutAnchor = null;
     }
+  }
+
+  // A node colour as the frozen [r, g, b] the style hooks take, one per colour
+  // (a hex, else the done green), so a flight builds no array per frame.
+  const beatTints = new Map();
+  function beatTint(color) {
+    const key = typeof color === "string" && /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(color) ? color : "#68eca4";
+    let tint = beatTints.get(key);
+    if (!tint) {
+      if (beatTints.size >= 32) beatTints.clear();
+      tint = Object.freeze(hexToRgb(key));
+      beatTints.set(key, tint);
+    }
+    return tint;
   }
 
   function hexToRgb(hex) {
@@ -39637,7 +41731,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     } else if (node.kind === "root") {
       title = "Sessions";
       number = null;
-      counts = `${state.nodes.filter((entry) => entry.kind === "session").length} sessions`;
+      counts = `${state.nodes.filter((entry) => entry.kind === "session" && !entry.child).length} sessions`;
     } else if (node.kind === "folded") {
       number = null;
       counts = `${node.count ?? 0} finished`;
@@ -40440,7 +42534,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
           // A live shape moves the host after this: the flight tells it where
           // home is and how far along it is, so the node lands on the host
           // where the host is drawn.
-          entry.flight = { hostId, e };
+          entry.flight = { hostId, e, t, from: fx.fromScreen };
           lifeHot = true;
         } else if (fx.bornAt != null && nowFx - fx.bornAt >= 0 && nowFx - fx.bornAt < NODE_GROW_MS) {
           const e = easeOut((nowFx - fx.bornAt) / NODE_GROW_MS);
@@ -40656,7 +42750,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
         nodeStyles.stepMotion(motion, stepFlags, dt, still);
         tint = nodeStyles.shownTint(motion, tint, time, still);
       }
-      const base = node.kind === "todo" ? 4.5 : node.kind === "assistant" ? 15 : node.kind === "agent" ? 10 : node.kind === "task" ? 12 : 11;
+      const base = node.kind === "todo" ? 4.5 : node.kind === "assistant" ? 15 : node.kind === "agent" ? 10 : node.kind === "task" ? 12 : node.child ? 7.5 : 11;
       // Hover and selection ease the node up a twentieth (the record's sel),
       // on top of the lift that raises its size cap.
       const pop = motion ? 1 + 0.05 * motion.sel : 1;
@@ -40736,10 +42830,45 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     }
     } finally { restoreNodeBrightness?.(); profiler?.end(nodesSpan); }
 
+    // The finish beats in the chosen node style (node-styles.js done and
+    // absorb), over the flights home the blend above set up: the work pops
+    // where it leaves for the first third of its flight, and its host takes
+    // it in for the last two fifths. Marks only, above the orbs.
+    if (nodeStyles?.done && projected.some((entry) => entry.flight)) {
+      const style = state.nodeStyle ?? "orbs";
+      let hosts = null;
+      for (const entry of projected) {
+        const flight = entry.flight;
+        if (!flight || !Number.isFinite(flight.t)) continue;
+        const fx = state.fx.get(entry.node.id);
+        const tint = beatTint(entry.node.color);
+        const beat = { theme: state.nodeTheme, ok: !["failed", "blocked"].includes(String(fx?.task?.status ?? "")) };
+        if (flight.t < 0.34 && flight.from) nodeStyles.done(ctx, style, flight.from, entry.node._pr ?? 7, tint, flight.t / 0.34, beat);
+        if (flight.t > 0.6) {
+          hosts ??= new Map(state.nodes.map((node) => [node.id, node]));
+          const host = hosts.get(flight.hostId);
+          if (host?._pr) nodeStyles.absorb(ctx, style, { x: host._px, y: host._py }, host._pr, tint, (flight.t - 0.6) / 0.4, beat);
+        }
+      }
+    }
+
     // Behind Home the tree is scenery seen through frosted glass: orbs, links
     // and sky only. Its words would blur into smudges, so the text layers
     // (checkpoint badges, callouts, speech and labels) wait for Command.
     const scenery = state.homeBackdrop && !state.active;
+    // A session with more busy sub-agents than tree3d hangs under it says how
+    // many more, the way the hub counts the chores it does not draw.
+    for (const { node, p } of projected) {
+      if (scenery) break;
+      if (!node.childMore || !node._pr || node.dying) continue;
+      const layer = layerFor(node);
+      layer.save();
+      layer.font = '600 8px system-ui, "Segoe UI", sans-serif';
+      layer.textAlign = "left"; layer.textBaseline = "middle";
+      layer.fillStyle = rgba(NODE_RGB.session, 0.7);
+      layer.fillText(`+${node.childMore} sub-agent${node.childMore === 1 ? "" : "s"}`, p.x + node._pr + 4, p.y + node._pr + 6);
+      layer.restore();
+    }
     // Checkpoint notes stay discoverable without competing with current work.
     const badgeExclusions = scenery ? [] : [...hudRects()];
     for (const { node, p } of projected) {
@@ -41631,7 +43760,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
   function statusBadge(node) {
     if (node.kind === "task-group") return { text: `${node.taskGroup.members.length} tasks`, className: "badge" };
     if (node.kind === "root") {
-      return { text: `${state.nodes.filter((entry) => entry.kind === "session").length} sessions`, className: "badge" };
+      return { text: `${state.nodes.filter((entry) => entry.kind === "session" && !entry.child).length} sessions`, className: "badge" };
     }
     if (node.kind === "assistant") {
       const { tone } = assistantSummary();
@@ -42046,7 +44175,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     const sessionId = node.kind === "todo" ? node.sessionId : node.kind === "session" ? node.id : session?.id ?? null;
 
     if (node.kind === "root") {
-      row("sessions", state.nodes.filter((entry) => entry.kind === "session").length);
+      row("sessions", state.nodes.filter((entry) => entry.kind === "session" && !entry.child).length);
       row("tasks", state.tasks.length);
       row("checkpoints", Object.values(state.checkpoints ?? {}).reduce((sum, list) => sum + list.length, 0));
       row("in progress", state.nodes.filter((entry) => entry.kind === "todo" && entry.status === "in_progress").length);
@@ -44226,6 +46355,16 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     pillOf("progress")?.addEventListener("click", () => focusNextInProgress());
     pillOf("assistant")?.addEventListener("click", () => selectAssistant({ focus: true }));
     el.emptyAssistant?.addEventListener("click", () => window.MefiCompanion?.open?.());
+    // The fresh card's first step: Vibe's box in Vibe, Command's own task box in Build.
+    document.getElementById("cmd-empty-start")?.addEventListener("click", () => {
+      if (window.MefiVibe?.mode?.() === "vibe") {
+        window.MefiNav?.go?.("vibe");
+        const box = document.getElementById("vibe-input");
+        setTimeout(() => box?.focus?.({ preventScroll: true }), 0);
+        return;
+      }
+      document.getElementById("idle-task-input")?.focus?.();
+    });
 
     // The broadcast carries the list that was just written. Using it skips a
     // second read that could land inside the next save and come back empty.
@@ -44767,6 +46906,259 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
   };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
+})();
+
+// Models › Community: what the Void Engine community reports about a model
+// (the public feed, docs/model-community.md) and Studio's own probe runs on it.
+// Feed text is untrusted: everything here renders with textContent, links open
+// only through the host's http(s)-only shell:open, and nothing is fetched from
+// a feed URL. Probes run only when the owner presses Run probes.
+(function () {
+  "use strict";
+  const state = { initialized: false, targets: [], kinds: [], selected: "", read: 0, running: null, progress: null, maxTokens: 1500 };
+  const $ = (id) => document.getElementById(`model-lab-${id}`);
+  const api = () => window.mefiStudio;
+  const rows = (value) => Array.isArray(value) ? value : [];
+  const finite = (value) => typeof value === "number" && Number.isFinite(value);
+  const plain = (error, fallback) => window.MefiUi?.plainError ? window.MefiUi.plainError(error, fallback) : error?.message || fallback;
+  const when = (value) => {
+    const date = new Date(value ?? NaN);
+    return Number.isFinite(date.getTime()) ? date.toLocaleString() : "an unknown time";
+  };
+  const KIND_NAMES = { planning: "Planning", structuring: "Structuring", coding: "Coding", debugging: "Debugging", writing: "Writing", commits: "Commits", tests: "Tests", setup: "Setup", review: "Review" };
+  const kindName = (kind) => KIND_NAMES[kind] || kind;
+  function element(tag, className = "", text = "") {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text) node.textContent = text;
+    return node;
+  }
+  function empty(target, title, detail) {
+    const box = element("div", "lab-empty");
+    box.append(element("h3", "", title), element("p", "", detail));
+    target.replaceChildren(box);
+  }
+  // A feed link opens outside Studio through the host, which refuses anything
+  // but http(s); the feed was already held to https on the way in.
+  function linkButton(label, url) {
+    const button = element("button", "mc-link", label);
+    button.type = "button";
+    button.title = url;
+    button.addEventListener("click", () => { api()?.openExternal?.(url); });
+    return button;
+  }
+  const selectedTarget = () => state.targets.find((target) => `${target.provider}::${target.model}` === state.selected) || null;
+
+  function section(title, note = "") {
+    const box = element("section", "mc-section");
+    box.append(element("h5", "", title));
+    if (note) box.append(element("p", "mc-meta", note));
+    return box;
+  }
+  function list(items, render) {
+    const ul = element("ul", "mc-list");
+    for (const item of items) { const li = element("li", "mc-item"); render(li, item); ul.append(li); }
+    return ul;
+  }
+
+  function renderCommunity(view) {
+    const body = $("community-body");
+    const status = view.hasFeed
+      ? `Community feed from ${when(view.fetchedAt)} · ${view.modelCount} ${view.modelCount === 1 ? "model" : "models"}${view.lastError ? ` · the last refresh failed: ${view.lastError}` : ""}`
+      : view.lastError ? `The community feed could not be read: ${view.lastError}` : view.missing ? "No community feed is published yet." : "No community feed has been read on this PC yet.";
+    $("community-status").textContent = status;
+    const match = view.match;
+    if (!view.hasFeed) { empty(body, "No community feed", "Studio works the same without one. Once the Void Engine Bot publishes reviews, they appear here after a refresh."); return; }
+    if (!match?.row) { empty(body, "No community reports for this model yet", "Members review models in the Void Engine forum; this model has no post there, or none has been published."); return; }
+    const row = match.row;
+    const parts = [];
+    const head = element("div", "mc-summary");
+    const overall = row.ratings?.overall;
+    head.append(element("strong", "", row.name || row.id), element("span", "mc-meta", overall ? `Server rating ${overall.mean} / 5 · ${overall.n} ratings` : "No server rating yet"));
+    if (match.matchedBy === "alias") head.append(element("span", "mc-meta", `Listed as ${row.key}`));
+    parts.push(head);
+    const byTask = Object.entries(row.ratings?.byTask || {});
+    if (byTask.length) {
+      const chips = element("div", "mc-chips");
+      for (const [kind, rating] of byTask) chips.append(element("span", "mc-chip", `${kindName(kind)} ${rating.mean} · n ${rating.n}${rating.withEvidence ? ` · ${rating.withEvidence} with evidence` : ""}`));
+      const box = section("Ratings by task");
+      box.append(chips);
+      parts.push(box);
+    }
+    if (rows(row.documented).length) {
+      const box = section("From the release notes", "The provider's own statements, not measurements.");
+      box.append(list(row.documented, (li, entry) => {
+        li.append(element("span", "", entry.claim), element("span", "mc-meta", `${kindName(entry.taskKind)}${entry.specific ? " · specific" : ""}`));
+        if (entry.source?.url) li.append(linkButton(entry.source.title || "Source", entry.source.url));
+      }));
+      parts.push(box);
+    }
+    const observed = rows(row.claims).filter((claim) => claim.tier === "observed");
+    for (const [polarity, title] of [["strength", "Observed strengths"], ["weakness", "Observed weaknesses"]]) {
+      const items = observed.filter((claim) => claim.polarity === polarity);
+      if (!items.length) continue;
+      const box = section(title, "Members describing what they ran and what happened.");
+      box.append(list(items, (li, claim) => li.append(element("span", "", claim.text), element("span", "mc-meta", `${kindName(claim.taskKind)} · ${claim.reporters} ${claim.reporters === 1 ? "reporter" : "reporters"}${claim.withEvidence ? ` · ${claim.withEvidence} with evidence` : ""}`))));
+      parts.push(box);
+    }
+    const opinions = rows(row.claims).filter((claim) => claim.tier === "opinion");
+    if (opinions.length) {
+      const fold = element("details", "mc-section mc-opinions");
+      fold.append(element("summary", "", `Opinions (${opinions.length}) · shown, never used to pick models`));
+      fold.append(list(opinions, (li, claim) => li.append(element("span", "", claim.text), element("span", "mc-meta", `${kindName(claim.taskKind)} · ${claim.polarity} · ${claim.reporters} ${claim.reporters === 1 ? "member" : "members"}`))));
+      parts.push(fold);
+    }
+    if (rows(row.tips).length) {
+      const box = section("Tips");
+      box.append(list(row.tips, (li, tip) => li.append(element("span", "", tip.text), element("span", "mc-meta", `${kindName(tip.taskKind)} · ${tip.votes} ${tip.votes === 1 ? "vote" : "votes"}`))));
+      parts.push(box);
+    }
+    const foot = element("div", "mc-foot");
+    if (row.forumThread) foot.append(linkButton("Discuss on Discord", row.forumThread));
+    foot.append(element("p", "mc-meta", "Model picks use only specific release-note claims, strengths or weaknesses two or more members reported, and task ratings with three or more evidence notes, and only as a small nudge."));
+    parts.push(foot);
+    body.replaceChildren(...parts);
+  }
+
+  function checkList(checks) {
+    return list(rows(checks), (li, check) => {
+      li.classList.add(check.ok ? "mc-pass" : "mc-fail");
+      li.append(element("span", "mc-verdict", check.ok ? "Pass" : "Fail"), element("span", "", check.name), element("span", "mc-meta", check.detail || ""));
+    });
+  }
+  function renderProbes(view) {
+    const body = $("probes-body");
+    const target = selectedTarget();
+    const running = state.running;
+    const mine = running && target && running.provider === target.provider && running.model === target.model;
+    $("probes-run").disabled = !target || Boolean(running);
+    $("probes-cancel").hidden = !running;
+    if (!target) { empty(body, "No model to probe", "Probes run on models enabled on this PC: save a provider key or sign in to a CLI under Settings."); return; }
+    const runs = view?.runs || {};
+    const table = element("div", "mc-probes");
+    for (const { kind, title } of state.kinds) {
+      const card = element("div", "mc-probe");
+      const latest = rows(runs[kind])[0];
+      const live = mine && state.progress?.kind === kind && state.progress.state === "running";
+      const headline = live ? "Running…" : !latest ? "Not run yet" : latest.error ? `No answer: ${latest.error}` : `${latest.passed ? "Passed" : "Did not pass"} · ${Math.round((latest.score ?? 0) * 100)}% of checks`;
+      const top = element("div", "mc-probe-head");
+      top.append(element("strong", "", `${kindName(kind)}`), element("span", `mc-meta${latest && !latest.error ? latest.passed ? " mc-pass" : " mc-fail" : ""}`, headline));
+      card.append(top, element("span", "mc-meta", title));
+      if (latest) {
+        const scored = rows(runs[kind]).filter((run) => finite(run.score));
+        const mean = scored.length ? Math.round((scored.reduce((sum, run) => sum + run.score, 0) / scored.length) * 100) : null;
+        card.append(element("span", "mc-meta", `Last run ${when(latest.at)}${finite(latest.elapsedMs) ? ` · ${Math.round(latest.elapsedMs / 100) / 10} s` : ""}${scored.length > 1 ? ` · ${scored.length} runs, ${mean}% on average` : ""}`));
+        if (rows(latest.checks).length) {
+          const fold = element("details", "mc-checks");
+          fold.append(element("summary", "", `Checks (${latest.checks.filter((check) => check.ok).length} of ${latest.checks.length})`), checkList(latest.checks));
+          card.append(fold);
+        }
+      }
+      table.append(card);
+    }
+    body.replaceChildren(table, element("p", "mc-meta", `Each probe is one small fixed task, up to ${state.maxTokens.toLocaleString("en-US")} output tokens, billed like any call on this model and listed under Usage. Results are Studio's own measurements, weaker than verified task results; the last 5 runs per probe are kept.`));
+  }
+
+  async function load({ refresh = false } = {}) {
+    const token = ++state.read;
+    const target = selectedTarget();
+    $("community-refresh").disabled = true;
+    $("community-status").textContent = refresh ? "Checking the community feed…" : "Reading the community feed…";
+    const who = target ? { provider: target.provider, model: target.model } : {};
+    try {
+      if (!api()?.modelFeed) throw new Error("The community feed is available in the Studio desktop app.");
+      const [community, probes] = await Promise.all([refresh ? api().modelFeedRefresh(who) : api().modelFeed(who), api().modelProbes?.(who)]);
+      if (token !== state.read) return;
+      if (!community || community.ok === false) throw new Error(community?.error || "The community feed could not be read.");
+      renderCommunity(community);
+      if (probes?.ok) { state.running = probes.running || null; renderProbes(probes); }
+    } catch (error) {
+      if (token !== state.read) return;
+      $("community-status").textContent = plain(error, "The community feed could not be read.");
+      $("community-body").replaceChildren();
+    } finally {
+      if (token === state.read) $("community-refresh").disabled = false;
+    }
+  }
+
+  async function loadTargets() {
+    const result = await api()?.modelProbes?.({});
+    if (!result?.ok) throw new Error(result?.error || "Models could not be listed.");
+    state.targets = rows(result.targets);
+    state.kinds = rows(result.kinds);
+    state.maxTokens = finite(result.maxTokens) ? result.maxTokens : state.maxTokens;
+    state.running = result.running || null;
+    const select = $("community-model");
+    const first = element("option", "", state.targets.length ? "Choose a model…" : "No models enabled on this PC");
+    first.value = "";
+    select.replaceChildren(first);
+    for (const target of state.targets) {
+      const option = element("option", "", target.label || `${target.provider} · ${target.model}`);
+      option.value = `${target.provider}::${target.model}`;
+      select.append(option);
+    }
+    if (!state.targets.some((target) => `${target.provider}::${target.model}` === state.selected)) state.selected = state.targets[0] ? `${state.targets[0].provider}::${state.targets[0].model}` : "";
+    select.value = state.selected;
+  }
+
+  async function run() {
+    const target = selectedTarget();
+    if (!target || state.running) return;
+    $("probes-run").disabled = true;
+    $("probes-status").textContent = `Starting probes on ${target.model}…`;
+    state.running = { provider: target.provider, model: target.model };
+    $("probes-cancel").hidden = false;
+    try {
+      const result = await api().modelProbeRun({ provider: target.provider, model: target.model });
+      if (!result?.ok) throw new Error(result?.error || "The probes could not run.");
+      $("probes-status").textContent = result.cancelled ? "Probes stopped. Finished results are kept." : `Probes finished on ${target.model}.`;
+    } catch (error) {
+      $("probes-status").textContent = plain(error, "The probes could not run.");
+    } finally {
+      state.running = null; state.progress = null;
+      $("probes-cancel").hidden = true;
+      await load();
+    }
+  }
+
+  async function cancel() {
+    $("probes-cancel").disabled = true;
+    try {
+      const result = await api()?.modelProbeCancel?.();
+      $("probes-status").textContent = result?.message || "Stopping after the current probe…";
+    } finally { $("probes-cancel").disabled = false; }
+  }
+
+  function onProgress(event) {
+    if (!event || typeof event !== "object") return;
+    state.progress = event;
+    const total = finite(event.total) ? event.total : state.kinds.length;
+    if (event.state === "running") $("probes-status").textContent = `Running ${kindName(event.kind)} (${(event.index ?? 0) + 1} of ${total}) on ${event.model}…`;
+    else if (event.state === "scored") $("probes-status").textContent = `${kindName(event.kind)} ${event.result?.error ? "got no answer" : event.result?.passed ? "passed" : "did not pass"} (${(event.index ?? 0) + 1} of ${total}).`;
+    if (event.state === "scored" || event.state === "running") api()?.modelProbes?.({ provider: event.provider, model: event.model }).then((view) => {
+      const target = selectedTarget();
+      if (view?.ok && target && target.provider === event.provider && target.model === event.model) renderProbes(view);
+    }).catch(() => {});
+  }
+
+  function init() {
+    if (state.initialized || !$("community")) return;
+    state.initialized = true;
+    $("community-model").addEventListener("change", () => { state.selected = $("community-model").value; load(); });
+    $("community-refresh").addEventListener("click", () => load({ refresh: true }));
+    $("probes-run").addEventListener("click", run);
+    $("probes-cancel").addEventListener("click", cancel);
+    api()?.onModelProbeProgress?.(onProgress);
+  }
+
+  async function open() {
+    init();
+    if (!state.initialized) return;
+    try { await loadTargets(); }
+    catch (error) { $("probes-status").textContent = plain(error, "Models could not be listed."); }
+    await load();
+  }
+  window.MefiModelCommunity = { open, refresh: () => load({ refresh: true }) };
 })();
 
 // Command's camera motion: Zen visits branches and regularly reveals the
@@ -69104,18 +71496,13 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
   // approved or started from a lesson.
   // Returns the real control it focused, if any, so the coach knows whether it
   // still needs to hand focus to its own primary button.
-  // The project, task and review stops live on Build's Home. In Vibe, Home is
-  // Vibe and those controls are hidden, so the walk switches to Build first
-  // (the mode switch on the rail goes back) rather than highlight nothing.
-  function buildHome() {
-    if (window.MefiVibe?.mode?.() !== "vibe" || typeof window.MefiVibe.setMode !== "function") return;
-    window.MefiVibe.setMode("build", { go: false });
-    window.MefiToast?.("The tour uses Build mode's Home. Switch back to Vibe any time from the menu.", "info");
-  }
+  // The walk stays in the mode you are in. In Vibe the project stop opens the
+  // same project menu (Vibe's project button), the task stop is Vibe's box
+  // and the review stop is Vibe's Tasks panel (targetOf / reachWorkspace).
   function routeTo(lesson) {
     const route = lesson.route;
     let focused = null;
-    if (["project", "task", "review"].includes(route)) { buildHome(); focused = reachWorkspace(route); }
+    if (["project", "task", "review"].includes(route)) focused = reachWorkspace(route);
     else window.MefiNav?.go?.(route, lesson.params);
     if (lesson.menu) window.MefiSidebar?.open?.();
     highlight(targetOf(lesson));
@@ -69130,7 +71517,6 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
   }
   function visit(route) {
     close();
-    if (["project", "task", "review"].includes(route)) buildHome();
     if (route === "project") {
       window.MefiNav?.go?.("workspace");
       const add = document.getElementById("workspace-add-project");
@@ -77239,8 +79625,38 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     box.type = "checkbox"; box.setAttribute("role", "switch");
     box.checked = read("mefiStudio.commandHome") !== "0";
     box.addEventListener("change", () => setLaunch(box.checked));
-    launch.append(el("span", "vibe-set-label", "Open Vibe on launch"), box, el("span", "vibe-set-hint", "Off opens Watch, the live node tree, instead."));
+    launch.append(el("span", "vibe-set-label", "Open Vibe on launch"), box, el("span", "vibe-set-hint", "Off reopens the last page you used instead."));
     body.append(launch);
+
+    // Vibe even after a day in Build (vibe.js LAUNCH_KEY), mirrored by
+    // Settings' own switch.
+    const start = el("label", "vibe-set vibe-set-toggle");
+    const startBox = el("input");
+    startBox.type = "checkbox"; startBox.setAttribute("role", "switch");
+    startBox.checked = read("mefiStudio.uiMode.launch") !== "last";
+    startBox.addEventListener("change", () => {
+      const own = document.getElementById("settings-start-vibe");
+      if (own && own.type === "checkbox") { own.checked = startBox.checked; own.dispatchEvent?.(new Event("change", { bubbles: true })); }
+      else { try { localStorage.setItem("mefiStudio.uiMode.launch", startBox.checked ? "vibe" : "last"); } catch { /* private store */ } }
+      note(startBox.checked ? "Studio starts in Vibe every launch." : "Studio keeps the mode you close it in.", "good");
+    });
+    start.append(el("span", "vibe-set-label", "Always start in Vibe"), startBox, el("span", "vibe-set-hint", "Off keeps Build if you closed Studio in Build."));
+    body.append(start);
+
+    // Key tips (renderer/key-tips.js): the small pop-ups naming each button's key.
+    const tips = window.MefiKeyTips;
+    if (tips) {
+      const row = el("label", "vibe-set vibe-set-toggle");
+      const tipsBox = el("input");
+      tipsBox.type = "checkbox"; tipsBox.setAttribute("role", "switch");
+      tipsBox.checked = tips.enabled();
+      tipsBox.addEventListener("change", () => { tips.setEnabled(tipsBox.checked); note(tipsBox.checked ? "Key tips are on." : "Key tips are off.", "good"); });
+      const again = el("button", "vibe-ask-link", "Show them again");
+      again.type = "button";
+      again.addEventListener("click", (event) => { event.preventDefault(); tips.reset(); tipsBox.checked = true; close({ quiet: true }); });
+      row.append(el("span", "vibe-set-label", "Key tips"), tipsBox, el("span", "vibe-set-hint", "Small pop-ups beside buttons with the key that does the same. Click one to fade it away."), again);
+      body.append(row);
+    }
 
     const links = el("div", "vibe-set-links");
     for (const [label, id, params] of [["Appearance and effects", "studio", { category: "appearance" }], ["AI connections", "agents", { section: "setup", pane: "connections" }]]) {
@@ -77277,7 +79693,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       void api()?.prefsSet?.({ commandHome: on });
       try { localStorage.setItem("mefiStudio.commandHome", on ? "1" : "0"); } catch { /* private store */ }
     }
-    note(on ? "Studio opens on Vibe." : "Studio opens on Watch.", "good");
+    note(on ? "Studio opens on Vibe." : "Studio reopens the last page you used.", "good");
   }
 
   // ---- a new app ----------------------------------------------------------------------
@@ -77779,6 +80195,17 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (saved === "vibe" || saved === "build") return saved;
     return headless ? "build" : "vibe";
   };
+  // Every launch opens in Vibe, even after a day spent in Build, unless the
+  // owner asked Studio to keep the mode it closed in (LAUNCH_KEY "last"). A
+  // renderer reload (a live update, a crash restore) resumes where it was:
+  // nav.js leaves a resume note for up to a minute, and that keeps Build.
+  const LAUNCH_KEY = "mefiStudio.uiMode.launch";
+  const startsInVibe = () => read(LAUNCH_KEY) !== "last";
+  const resuming = (() => {
+    try { const saved = JSON.parse(read("mefiStudio.resume") || "null"); return typeof saved?.at === "number" && Date.now() - saved.at <= 60000; } catch { return false; }
+  })();
+  if (!headless && !resuming && startsInVibe() && read(MODE_KEY) === "build") write(MODE_KEY, "vibe");
+  function setStartsInVibe(on) { write(LAUNCH_KEY, on ? "vibe" : "last"); return on; }
   function paintMode() {
     const current = mode();
     document.documentElement.dataset.uiMode = current;
@@ -77798,9 +80225,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const label = document.getElementById("idle-home-label");
     if (label) label.textContent = vibe ? "Open Vibe on launch" : "Open Home on launch";
     const hint = document.getElementById("idle-home-hint");
-    if (hint) hint.textContent = vibe ? "When disabled, Studio opens Watch, the live node tree, after the project chooser." : "When disabled, Studio opens Command view after the project chooser.";
+    if (hint) hint.textContent = vibe ? "When disabled, Studio reopens the last page you used after the project chooser." : "When disabled, Studio reopens the last tab page you used after the project chooser.";
     const toggle = document.getElementById("idle-home-switch");
-    if (toggle) toggle.title = vibe ? "On: every launch lands on Vibe. Off: Studio opens straight into Watch. The project chooser comes first either way." : "On: every launch lands on Home. Off: Studio opens straight into Command view. The project chooser comes first either way.";
+    if (toggle) toggle.title = vibe ? "On: every launch lands on Vibe. Off: Studio reopens the last page you used. The project chooser comes first either way." : "On: every launch lands on Home. Off: Studio reopens the last tab page you used. The project chooser comes first either way.";
     const modeHint = document.getElementById("settings-mode-hint");
     if (modeHint) modeHint.textContent = vibe ? "Vibe: the calm front door, where every page opens in Vibe's rail." : "Build: the full studio, with Home, the menu and every tool.";
   }
@@ -78213,13 +80640,14 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
 
   // ---- the dock ---------------------------------------------------------------
-  // Tasks, Team and More always stand; Watch steps in while agents work, Plans
-  // while a plan is in play, Ideas while fresh ones wait. The stop whose panel
-  // is open is marked, so the dock doubles as the panel's tab strip.
+  // Watch, Tasks, Team and More always stand: the tree is there from a
+  // project's first minute, before anything has started. Plans step in while
+  // a plan is in play, Ideas while fresh ones wait. The stop whose panel is
+  // open is marked, so the dock doubles as the panel's tab strip.
   const STOPS = ["watch", "tasks", "plans", "ideas", "team", "more"];
   const PANEL_STOPS = new Set(["tasks", "plans", "ideas", "team"]);
   function dockStops(data = lanes()) {
-    return { watch: data.running.length > 0 || data.checking.length > 0, tasks: true, plans: data.plans.length > 0 || data.families.length > 0, ideas: data.ideas.length > 0, team: true, more: true };
+    return { watch: true, tasks: true, plans: data.plans.length > 0 || data.families.length > 0, ideas: data.ideas.length > 0, team: true, more: true };
   }
   function renderDock(data) {
     const stops = dockStops(data);
@@ -78784,7 +81212,27 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // uses. Acting moves on to the next thing waiting, and closes when none is.
   const openQuestions = () => (Array.isArray(state.assistant.questions) ? state.assistant.questions : []).filter((question) => question?.status === "open" && belongs(question));
   const taskById = (id) => scoped(state.tasks).find((task) => task.id === id) || null;
-  const HOLD_VERBS = { loop: "Try again", owner: "Resume", duplicate: "Run anyway" };
+  const HOLD_VERBS = { loop: "Try again", owner: "Resume", duplicate: "Run anyway", relevance: "Build it anyway" };
+  const HOLD_CHIPS = { owner: "Stopped by you", loop: "Same failure repeating", duplicate: "Looks like a duplicate", relevance: "Maybe done outside Studio" };
+  // A plan waits on you only at its own turns (renderer/planning.js reads the
+  // same notes): Mefi asked a follow-up in the interview, the specification
+  // waits for your approval, or an approved plan still has to become tasks.
+  // Questions nobody has started exploring stay on the Plans page.
+  function planNeed(plan) {
+    const open = (Array.isArray(plan.questions) ? plan.questions : []).filter((question) => question?.status === "open");
+    for (const question of [...open].reverse()) {
+      const last = (question.notes || []).at(-1);
+      if (last?.author === "assistant" && ["question", "conflict"].includes(last.kind)) return { what: "ask", question, ask: last.text, verb: "Answer", meta: last.kind === "conflict" ? "the plan flagged a conflict" : "the plan asks you something" };
+    }
+    if (plan.status === "converting") return { what: "open", verb: "Finish", meta: "its tasks still need creating" };
+    if (plan.spec?.approvedAt && plan.status !== "converted") return { what: "open", verb: "Create tasks", meta: "approved · ready to become tasks" };
+    if (plan.spec && !plan.spec.stale && !plan.spec.approvedAt) return { what: "open", verb: "Review", meta: "its specification waits for your approval" };
+    return null;
+  }
+  const planNeeds = () => activePlans().flatMap((plan) => {
+    const need = planNeed(plan);
+    return need ? [{ kind: "plan", id: plan.id, tone: "ask", title: plan.title || "A plan", plan, ...need }] : [];
+  });
   function needs() {
     const list = [];
     for (const question of openQuestions()) list.push({ kind: "question", id: question.id, tone: "ask", verb: "Answer", title: question.title || "A decision", meta: question.context?.severity === "blocker" ? "blocking a task" : "decision", question });
@@ -78799,15 +81247,21 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       list.push({ kind: "approval", id: item.id, tone: "ask", verb: "Review", title: item.title || taskById(item.id)?.title || "A task", meta: "waiting for your go-ahead", row: item });
     }
     for (const [parentId, items] of grouped) list.push({ kind: "family", id: parentId, tone: "ask", verb: "Review", title: taskById(parentId)?.title || "Your request", meta: `${items.length} step${items.length === 1 ? "" : "s"} waiting for your go-ahead`, rows: items });
-    for (const item of rows("blocked")) list.push({ kind: "blocked", id: item.id, tone: "bad", verb: HOLD_VERBS[item.blockedBy] || "See why", title: item.title || taskById(item.id)?.title || "A task", meta: item.blockedBy === "owner" ? "stopped by you" : "stuck", row: item });
+    for (const item of rows("blocked")) list.push({ kind: "blocked", id: item.id, tone: "bad", verb: HOLD_VERBS[item.blockedBy] || "See why", title: item.title || taskById(item.id)?.title || "A task", meta: item.blockedBy === "owner" ? "stopped by you" : item.blockedBy === "relevance" ? "maybe done outside Studio" : "stuck", row: item });
     const shared = state.assistant.needsYou;
-    if (shared?.items && belongs(state.assistant)) return shared.items.map((item) => {
+    // Failed or unavailable checks still offer the result for your review.
+    const review = (item) => ({ kind: "review", id: item.taskId, tone: "check", verb: "Review", title: item.title || taskById(item.taskId)?.title || "A finished task", meta: "finished · check the result" });
+    if (shared?.items && belongs(state.assistant)) return [...shared.items.map((item) => {
       if (item.kind === "question") return list.find((row) => row.kind === "question" && row.id === item.id);
-      if (item.kind === "review") return checkingLong(item);
+      if (item.kind === "review") {
+        const verification = taskById(item.taskId)?.verification;
+        const settled = ["failed", "unverified"].includes(verification?.state) || !verification?.state && !!verification?.reason;
+        return settled && item.taskId ? review(item) : checkingLong(item);
+      }
       const grouped = item.memberIds?.length ? list.find((row) => row.kind === "family" && row.id === item.taskId) : null;
       return grouped || list.find((row) => row.id === item.taskId && row.kind !== "question") || { kind: item.kind === "approval" ? "approval" : "blocked", id: item.taskId, tone: "ask", verb: "Review", title: item.title, meta: "waiting for your review", row: { canRetry: false, reason: item.title } };
-    }).filter(Boolean);
-    return list;
+    }).filter(Boolean), ...planNeeds()];
+    return [...list, ...planNeeds()];
   }
   // A finished attempt still waiting on its check after half an hour
   // (companion.cjs REVIEW_AFTER_MS) is listed for you to look at, but nothing
@@ -78816,7 +81270,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const task = taskById(item.taskId);
     if (!item.taskId || task && task.status !== "awaiting_verification") return null;
     const since = time(item.at) || time(task?.awaitingAt) || null;
-    return { kind: "review", id: item.taskId, tone: "check", verb: "Check on it", title: item.title || task?.title || "A finished task", meta: `checking its work${since ? ` · ${lasted(since)} so far` : ""}`, since };
+    return { kind: "review", id: item.taskId, tone: "check", verb: "Check on it", title: item.title || task?.title || "A finished task", meta: `checking its work${since ? ` · ${lasted(since)} so far` : ""}`, since, checking: true };
   }
   // How long something has run: "45 min", "2 h".
   const lasted = (at) => { const text = ago(at); return text === "just now" ? "under a minute" : text.replace(/ ago$/, ""); };
@@ -78875,14 +81329,86 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       renderQuestion(body, need.question);
       return;
     }
+    $("ask-title").textContent = need.title;
+    // A plan opens on its own page, in Vibe's rail: Vibe stays the frame.
+    if (need.kind === "plan") {
+      $("ask-kicker").textContent = `Plan${position}`;
+      watch.textContent = "Open the plan";
+      watch.onclick = () => { closeAsk({ quiet: true }); go("plans", { planId: need.id }); };
+      renderPlanNeed(body, need);
+      return;
+    }
     watch.textContent = "Open on the task board";
     watch.onclick = () => { closeAsk({ quiet: true }); go("tasks", { taskId: need.id, filter: "all" }); };
-    $("ask-kicker").textContent = `${["approval", "family"].includes(need.kind) ? "Waiting for your go-ahead" : need.kind === "review" ? "Still checking" : need.row?.blockedBy === "owner" ? "Stopped by you" : "Stuck"}${position}`;
-    $("ask-title").textContent = need.title;
+    $("ask-kicker").textContent = `${["approval", "family"].includes(need.kind) ? "Waiting for your go-ahead" : need.kind === "review" ? need.checking ? "Still checking" : "Finished · yours to check" : need.row?.blockedBy === "owner" ? "Stopped by you" : "Stuck"}${position}`;
     if (need.kind === "family") renderFamily(body, need);
     else if (need.kind === "approval") renderApproval(body, need, task);
-    else if (need.kind === "review") renderChecking(body, need, task);
+    else if (need.kind === "review") (need.checking ? renderChecking : renderReview)(body, need, task);
     else renderBlocked(body, need, task);
+  }
+  // A result whose check has not settled: read what it did, then confirm it
+  // yourself or send it back. The same host calls as the task board's
+  // Confirm done and Retry.
+  function renderReview(body, need, task) {
+    const verdict = task?.verification?.state;
+    body.append(chips([chip(verdict === "failed" ? "Its check failed" : verdict === "unverified" ? "Could not be checked" : "Check still running", verdict === "failed" ? "blocker" : ""), task?.updatedAt ? el("span", "vibe-ask-when", `finished ${ago(task.updatedAt)}`) : null]));
+    const said = String(task?.verification?.reason || task?.result?.summary || task?.summary || task?.lastAttempt?.summary || "").trim();
+    body.append(el("p", "vibe-ask-detail", said || "The worker finished and its check has not settled yet. Look at the result in your project, then confirm it or send it back."));
+    const text = brief(task);
+    if (text) body.append(text);
+    const checking = ["verifying"].includes(task?.status);
+    body.append(actions([
+      { label: "Confirm done", primary: true, title: "You checked the result yourself: mark it complete", run: () => act(need, () => api().tasksAction({ taskId: need.id, projectId: projectId(), action: "status", status: "done" }), "Confirmed. It's marked done.") },
+      { label: "Send it back", disabled: checking, title: checking ? "Its check is running right now; try again when it settles" : "Return it to the queue for another attempt", run: () => act(need, () => api().tasksAction({ taskId: need.id, projectId: projectId(), action: "retry" }), "Sent back. It builds again when a worker is free.") },
+    ]));
+  }
+  // What a plan waits for. Mefi's follow-up in the interview is answered
+  // right here, through the same planning:assist call the Plans page makes;
+  // the plan's other turns (approve, create tasks) open the plan itself.
+  const PLAN_COPY = {
+    Finish: "Creating this plan's tasks stopped part way. Open the plan to finish; tasks it already made are reused.",
+    "Create tasks": "You approved this plan. Open it to create its tasks; they join the queue under your permission settings.",
+    Review: "The plan's specification and task briefs are written. Read them, then approve the plan or send it back with changes.",
+  };
+  function renderPlanNeed(body, need) {
+    const plan = need.plan || {};
+    const questions = Array.isArray(plan.questions) ? plan.questions : [];
+    const decided = questions.filter((question) => question?.status === "resolved").length;
+    body.append(chips([chip("Plan", "decision"), questions.length ? chip(`${decided} of ${questions.length} decided`) : null, plan.updatedAt ? el("span", "vibe-ask-when", ago(plan.updatedAt)) : null]));
+    const open = () => { closeAsk({ quiet: true }); go("plans", { planId: plan.id }); };
+    if (need.what !== "ask") {
+      body.append(el("p", "vibe-ask-detail", PLAN_COPY[need.verb] || "This plan is waiting on you."));
+      body.append(actions([{ label: need.verb === "Review" ? "Review the plan" : need.verb === "Finish" ? "Finish creating tasks" : "Create its tasks", primary: true, run: open }]));
+      return;
+    }
+    const asked = el("div", "vibe-ask-brief");
+    asked.append(el("span", "vibe-ask-label", need.question.question || "The question"), el("p", "vibe-ask-detail", need.ask));
+    body.append(asked);
+    const key = `plan:${plan.id}:${need.question.id}`;
+    const own = el("form", "vibe-ask-own");
+    const input = el("textarea");
+    input.rows = 3; input.placeholder = "Answer in your own words…";
+    input.setAttribute("aria-label", "Your answer to the plan");
+    input.value = askDrafts.get(key)?.text || "";
+    input.addEventListener("input", () => askDrafts.set(key, { text: input.value, optionId: null }));
+    const send = el("button", "vibe-btn primary", "Send");
+    send.type = "submit"; send.disabled = state.askSending;
+    own.append(input, send);
+    own.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const message = input.value.trim();
+      if (!message) { input.focus(); return; }
+      if (!api()?.planningAssist) { open(); return; }
+      void act(need, async () => {
+        const result = await api().planningAssist({ projectId: projectId(), planId: plan.id, version: plan.version, kind: "interview", questionId: need.question.id, message, useWeb: false });
+        if (result?.ok !== false) askDrafts.delete(key);
+        return result ?? { ok: true };
+      }, "Answered. Mefi reads it back on the plan.");
+    });
+    input.addEventListener("keydown", (event) => { if (event.key === "Enter" && !event.shiftKey && !event.isComposing) { event.preventDefault(); own.requestSubmit(); } });
+    body.append(own);
+    body.append(el("p", "vibe-ask-note-inline", "Only the decision you record on the plan is a requirement; your answer helps Mefi shape it."));
+    if (askRefocus) { askRefocus = false; input.focus(); }
   }
   // A request split into steps under Verify first: its steps start together.
   function renderFamily(body, need) {
@@ -79031,7 +81557,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const row = need.row || {};
     const hold = row.blockedBy;
     const reason = row.reason || task?.verification?.reason || task?.lastRunError || "The last attempt could not be confirmed.";
-    body.append(chips([chip(hold === "owner" ? "Stopped by you" : hold === "loop" ? "Same failure repeating" : hold === "duplicate" ? "Looks like a duplicate" : "Stuck", hold === "owner" ? "" : "blocker"), task?.updatedAt ? el("span", "vibe-ask-when", ago(task.updatedAt)) : null]));
+    body.append(chips([chip(HOLD_CHIPS[hold] || "Stuck", hold === "owner" ? "" : "blocker"), task?.updatedAt ? el("span", "vibe-ask-when", ago(task.updatedAt)) : null]));
     body.append(el("p", "vibe-ask-detail", reason));
     const lastError = String(task?.lastRunError || "").trim();
     if (lastError && lastError !== reason) body.append(el("pre", "vibe-ask-evidence", lastError.split("\n").slice(-4).join("\n")));
@@ -79080,6 +81606,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       if (result.backlog && belongs(result.backlog)) state.backlog = { ...result.backlog, ok: true };
       if (result.task) state.tasks = state.tasks.map((item) => item.id === result.task.id ? result.task : item);
       if (result.state && belongs(result.state)) state.assistant = result.state;
+      if (result.plan?.id && belongs(result)) state.plans = state.plans.map((plan) => plan.id === result.plan.id ? result.plan : plan);
       // Until the next read, what was just handled stays out of Needs you.
       if (state.backlog && Array.isArray(state.backlog[need.kind])) state.backlog = { ...state.backlog, [need.kind]: state.backlog[need.kind].filter((item) => item.id !== need.id) };
       if (requestProject !== projectId()) { state.askSending = false; signatures.delete("ask"); return; }
@@ -79090,7 +81617,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     } catch (error) {
       state.askSending = false;
       if (requestProject !== projectId()) return;
-      state.askErrors[requestKey] = error.gone ? error.message : `${error?.message || "That didn't go through."} You can also open it on the task board.`;
+      state.askErrors[requestKey] = error.gone ? error.message : `${error?.message || "That didn't go through."} You can also open it ${need.kind === "plan" ? "on its plan" : "on the task board"}.`;
       if (needKey(state.need) === requestKey) { note.textContent = state.askErrors[requestKey]; note.dataset.tone = error.gone ? "" : "bad"; }
       signatures.delete("ask"); renderAsk();
     }
@@ -79227,6 +81754,46 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     target?.click();
   });
 
+  // ---- Vibe's own keys ----------------------------------------------------------
+  // On the front door, outside a text field, single keys open what the dock
+  // and the top bar hold. They run before nav.js's global keys (capture), so
+  // T here opens Vibe's Tasks panel instead of Build's task board; D (Watch),
+  // H, ? and Ctrl K stay nav.js's. The dock and the box wear them as keycaps.
+  const togglePanel = (kind) => (window.MefiVibePanels?.current?.() === kind ? window.MefiVibePanels.close() : openPanel(kind));
+  const VIBE_KEYS = [
+    ["/", "vibe-key-box", "Vibe: type in the box", () => { const input = $("input"); input.focus({ preventScroll: true }); try { input.setSelectionRange(input.value.length, input.value.length); } catch { /* not a text field */ } }],
+    ["N", "vibe-key-needs", "Vibe: what needs you", () => { const waiting = needs(); if (waiting.length) openNeed(waiting[0]); else feedback("Nothing needs you right now.", "good"); }],
+    ["C", "vibe-key-chat", "Vibe: the conversation", () => (state.chatOpen ? closeChat() : openChat())],
+    ["T", "vibe-key-tasks", "Vibe: your tasks", () => togglePanel("tasks")],
+    ["P", "vibe-key-plans", "Vibe: plans", () => togglePanel("plans")],
+    ["I", "vibe-key-ideas", "Vibe: ideas", () => togglePanel("ideas")],
+    ["M", "vibe-key-team", "Vibe: the team (who works on which model)", () => togglePanel("team")],
+    ["S", "vibe-key-settings", "Vibe: settings", () => togglePanel("settings")],
+  ];
+  function vibeKeysOpen() {
+    const nav = window.MefiNav?.state;
+    if (!active() || nav?.sheet || nav?.transient || window.MefiBoot?.isActive?.()) return false;
+    if (window.MefiCompanionHub?.isOpen?.() || window.MefiSidebar?.isOpen?.() || (notes && !notes.hidden)) return false;
+    // A drawer you are in (focus inside it, or the pointer on it) takes what
+    // you type (nav.js typeInto): its letters are writing, not these keys.
+    for (const id of ["panel", "ask", "chat"]) {
+      const drawer = $(id);
+      if (!drawer || drawer.hidden) continue;
+      let hovered = false;
+      try { hovered = Boolean(drawer.matches?.(":hover")); } catch { /* no :hover outside a browser */ }
+      if (hovered || (document.activeElement && drawer.contains?.(document.activeElement))) return false;
+    }
+    return true;
+  }
+  window.addEventListener("keydown", (event) => {
+    if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.isComposing || String(event.key || "").length !== 1) return;
+    const entry = VIBE_KEYS.find(([key]) => key === event.key.toUpperCase());
+    if (!entry || event.target?.closest?.("input, textarea, select, [contenteditable]") || !vibeKeysOpen()) return;
+    event.preventDefault();
+    init();
+    entry[3]();
+  }, true);
+
   // ---- what's new -----------------------------------------------------------
   const notes = document.getElementById("vibe-notes");
   let notesReturn = null;
@@ -79305,8 +81872,47 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     showIn: { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false },
     run: () => showNotes({ force: true }),
   });
+  // Vibe's keys on the shortcut sheet, under Home: display-only rows
+  // (nav.js's handleKey skips the "command" group; the listener above acts).
+  for (const [key, id, label] of [...VIBE_KEYS, ["Enter", "vibe-key-talk", "Vibe: talk it over (in the box)"], ["Ctrl Enter", "vibe-key-build", "Vibe: build it (in the box)"]]) {
+    window.MefiNav?.register?.({
+      id, label, short: label, desc: label, kind: "action", layer: null, section: "home", group: "command", key, glyph: null, badge: null,
+      showIn: { tabs: false, tools: false, dock: false, palette: false, help: true, footer: false },
+      hidden: () => mode() !== "vibe",
+    });
+  }
+
+  // ---- updates ----------------------------------------------------------------
+  // Build's update pill sits on the app rail, which Vibe hides. Vibe mirrors
+  // it while it asks for you (an update waiting to apply, one held, a new
+  // release), and a click does what the pill does (nav.js initUpdates).
+  function mirrorUpdate() {
+    const pill = document.getElementById("update-pill");
+    const button = $("update");
+    if (!pill || !button) return;
+    const paint = () => {
+      const release = pill.dataset.release === "1";
+      const show = !pill.hidden && (release || ["pending", "held"].includes(pill.dataset.state));
+      button.hidden = !show;
+      if (!show) return;
+      button.dataset.tone = pill.dataset.state === "held" ? "bad" : "ask";
+      $("update-text").textContent = pill.querySelector(".label")?.textContent || "Update ready";
+      button.title = pill.title || "An update is ready";
+    };
+    paint();
+    if (typeof MutationObserver === "function") new MutationObserver(paint).observe(pill, { attributes: true, attributeFilter: ["hidden", "data-state", "data-release", "title"] });
+    button.addEventListener("click", () => pill.click());
+  }
+
+  // ---- Settings' launch switch ---------------------------------------------------
+  const startSwitch = document.getElementById("settings-start-vibe");
+  if (startSwitch) {
+    startSwitch.checked = startsInVibe();
+    startSwitch.addEventListener("change", () => { setStartsInVibe(startSwitch.checked); window.MefiToast?.(startSwitch.checked ? "Studio starts in Vibe every launch." : "Studio keeps the mode you close it in.", "info"); });
+  }
 
   window.addEventListener("mefi:nav", paintRail);
+  mirrorUpdate();
   paintMode();
   // A plain read of where the vibe stands, for tests and anything driving
   // Studio: what holds the agents back, what waits on you, what is building.
@@ -79330,6 +81936,258 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     return false;
   }
   window.MefiVibe = { enter, exit, isActive: active, refresh, mode, setMode, landing, startup, showNotes, closeNotes, snapshot, openPanel, closeDrawers, composeEvolution, suggestEvolution, openNeed: openNeedById, requestChange, paintDock: () => renderDock(lanes()), promoteIdea: (idea) => promoteIdea(idea), feedback: (text, tone) => feedback(text, tone), ready: () => refreshFlight ?? Promise.resolve() };
+})();
+
+// Key tips: small pop-ups beside a button, tab or box that name the key doing
+// the same thing, as keycaps. A first launch meets them one or two at a time,
+// once the setup helper, the walkthrough and every sheet are out of the way.
+// Clicking a tip (or pressing the key it names) fades it away for good; its
+// "Turn tips off" link, Settings (#settings-key-tips), Vibe's settings panel
+// and Search all switch them off, and "Show key tips again" brings every one
+// back. What was seen lives in localStorage, per device, like the other
+// first-run notes (mefiStudio.keyHint.v1, mefiStudio.setupHelper.seen).
+(function () {
+  "use strict";
+  const OFF_KEY = "mefiStudio.keyTips";
+  const SEEN_KEY = "mefiStudio.keyTips.seen";
+  const HOLD_MS = 5000; // quiet after launch before the first tip
+  const TICK_MS = 2000;
+  const MAX_SHOWN = 2;
+  const headless = /[?&](?:smoke|capture)=1(?:&|$)/.test(String(window.location?.search || ""));
+  const read = (key) => { try { return localStorage.getItem(key); } catch { return null; } };
+  const write = (key, value) => { try { if (value === null) localStorage.removeItem(key); else localStorage.setItem(key, value); } catch { /* private store */ } };
+
+  const vibeMode = () => { try { return window.MefiVibe?.mode?.() === "vibe"; } catch { return false; } };
+  const onVibe = () => Boolean(window.MefiVibe?.isActive?.());
+  const onCommand = () => Boolean(window.MefiIdle?.isActive?.()) && !window.MefiNav?.state?.sheet;
+  const onBuild = () => !vibeMode() && !onCommand();
+  // Each tip: where it applies, the control it points at (the first visible
+  // match), which side it sits on, and its keys with what they do.
+  const TIPS = [
+    { id: "vibe-box", when: onVibe, target: "#vibe-compose", side: "right", parts: [["/", "jump into the box"], ["Enter", "talk it over"], ["Ctrl+Enter", "build it"]] },
+    { id: "vibe-dock", when: onVibe, target: "#vibe-dock", side: "right", parts: [["D", "watch the tree"], ["T", "tasks"], ["M", "team"]] },
+    { id: "vibe-pulse", when: onVibe, target: "#vibe-pulse", side: "bottom", parts: [["N", "what needs you"], ["C", "the conversation"]] },
+    { id: "vibe-search", when: onVibe, target: "#vibe-layer .vibe-top-actions [data-nav='palette']", side: "bottom", parts: [["Ctrl+K", "find anything"], ["?", "every shortcut"]] },
+    { id: "build-home", when: onBuild, target: "#app-rail-sections, #tabs", side: "right", parts: [["H", "Home"], ["D", "Command view"], ["T", "task board"]] },
+    { id: "build-search", when: onBuild, target: "#app-rail-foot [data-nav='palette'], .tools-cluster [data-nav='palette'], [data-nav='palette']", side: "right", parts: [["Ctrl+K", "jump anywhere"], ["?", "every shortcut"], ["Ctrl+,", "Settings"]] },
+    { id: "command-walk", when: onCommand, target: "#idle-task-input", side: "bottom", parts: [["← →", "walk the tree"], ["Enter", "open a node"], ["F", "fit it all"]] },
+    { id: "command-leave", when: onCommand, target: "#cmd-dock, .cmd-dock", side: "top", parts: [["Esc", "step back out"], ["V", "3D or flat map"], ["?", "every key"]] },
+  ];
+
+  const state = { shown: new Map(), timer: null, started: false, seen: readSeen() };
+  function readSeen() {
+    try { const list = JSON.parse(read(SEEN_KEY) || "[]"); return new Set(Array.isArray(list) ? list.map(String) : []); } catch { return new Set(); }
+  }
+  const saveSeen = () => write(SEEN_KEY, JSON.stringify([...state.seen]));
+  const enabled = () => read(OFF_KEY) !== "off";
+  const remaining = () => TIPS.filter((tip) => !state.seen.has(tip.id));
+
+  // Nothing pops over the boot gate, the setup helper, the walkthrough,
+  // What's new, an open sheet or dialog, the companion or a menu.
+  function busy() {
+    const nav = window.MefiNav?.state;
+    if (nav?.sheet || nav?.transient) return true;
+    if (window.MefiBoot?.isActive?.() || window.MefiSetupHelper?.isOpen?.() || window.MefiCompanionHub?.isOpen?.() || window.MefiSidebar?.isOpen?.()) return true;
+    for (const id of ["walkthrough-overlay", "walkthrough-coach", "vibe-notes", "boot-layer"]) {
+      const node = document.getElementById(id);
+      if (node && !node.hidden && node.getClientRects?.().length) return true;
+    }
+    return document.hidden === true;
+  }
+  function targetOf(tip) {
+    for (const selector of tip.target.split(/,\s*/)) {
+      for (const node of document.querySelectorAll(selector)) {
+        const rect = node.getBoundingClientRect?.();
+        if (rect && rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.right > 0 && rect.top < window.innerHeight && rect.left < window.innerWidth) return node;
+      }
+    }
+    return null;
+  }
+
+  // ---- the pop-up -----------------------------------------------------------------
+  function keyCaps(combo) {
+    const holder = document.createElement("span");
+    holder.className = "key-tip-keys";
+    combo.split("+").forEach((part, index) => {
+      if (index) holder.append(document.createTextNode("+"));
+      const cap = document.createElement("kbd");
+      cap.className = "key";
+      cap.textContent = part;
+      holder.append(cap);
+    });
+    return holder;
+  }
+  function build(tip) {
+    const box = document.createElement("div");
+    box.className = "key-tip";
+    box.dataset.tip = tip.id;
+    box.dataset.side = tip.side;
+    box.setAttribute("role", "note");
+    box.setAttribute("aria-label", `Key tip: ${tip.parts.map(([keys, text]) => `${keys.replace("+", " ")} ${text}`).join(", ")}`);
+    box.title = "Click to fade this tip away";
+    const list = document.createElement("ul");
+    list.className = "key-tip-list";
+    for (const [keys, text] of tip.parts) {
+      const item = document.createElement("li");
+      const label = document.createElement("span");
+      label.textContent = text;
+      item.append(keyCaps(keys), label);
+      list.append(item);
+    }
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "key-tip-close";
+    close.setAttribute("aria-label", "Hide this tip");
+    close.textContent = "×";
+    const off = document.createElement("button");
+    off.type = "button";
+    off.className = "key-tip-off";
+    off.textContent = "Turn tips off";
+    off.addEventListener("click", (event) => { event.stopPropagation(); setEnabled(false); window.MefiToast?.("Key tips are off. Turn them back on in Settings.", "info"); });
+    box.append(list, close, off);
+    box.addEventListener("click", () => dismiss(tip.id));
+    return box;
+  }
+  function place(box, target, wanted) {
+    const rect = target.getBoundingClientRect();
+    const width = box.offsetWidth, height = box.offsetHeight, gap = 12, pad = 10;
+    // No room beside it on the right: the other side, arrow and all.
+    const side = wanted === "right" && rect.right + gap + width > window.innerWidth - pad && rect.left - gap - width >= pad ? "left" : wanted;
+    if (box.dataset.side !== side) box.dataset.side = side;
+    let left, top;
+    if (side === "right") { left = rect.right + gap; top = rect.top + Math.min(rect.height, 160) / 2 - height / 2; }
+    else if (side === "left") { left = rect.left - gap - width; top = rect.top + Math.min(rect.height, 160) / 2 - height / 2; }
+    else { left = rect.left + rect.width / 2 - width / 2; top = side === "bottom" ? rect.bottom + gap : rect.top - gap - height; }
+    const clampedLeft = Math.max(pad, Math.min(window.innerWidth - width - pad, left));
+    const clampedTop = Math.max(pad, Math.min(window.innerHeight - height - pad, top));
+    box.style.left = `${Math.round(clampedLeft)}px`;
+    box.style.top = `${Math.round(clampedTop)}px`;
+    // The little arrow keeps pointing at the control when the box is clamped.
+    if (side === "top" || side === "bottom") box.style.setProperty?.("--arrow", `${Math.round(rect.left + rect.width / 2 - clampedLeft)}px`);
+    else box.style.setProperty?.("--arrow", `${Math.round(Math.max(14, Math.min(height - 14, rect.top + Math.min(rect.height, 160) / 2 - clampedTop)))}px`);
+    return { left: clampedLeft, top: clampedTop, right: clampedLeft + width, bottom: clampedTop + height };
+  }
+  const overlaps = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+
+  function hide(id, { seen = false } = {}) {
+    const entry = state.shown.get(id);
+    if (seen && !state.seen.has(id)) { state.seen.add(id); saveSeen(); }
+    if (!entry) return;
+    state.shown.delete(id);
+    const box = entry.box;
+    box.classList.add("is-leaving");
+    const gone = () => box.remove();
+    const still = window.MefiNav?.noMotion?.();
+    if (still) gone(); else { box.addEventListener("transitionend", gone, { once: true }); setTimeout(gone, 400); }
+  }
+  function dismiss(id) {
+    hide(id, { seen: true });
+    // The next tip waits a beat instead of popping into the same place.
+    schedule(900);
+  }
+
+  // One pass: drop tips whose place is gone, move the rest, then add unseen
+  // ones for what is on screen until MAX_SHOWN stand.
+  function tick() {
+    state.timer = null;
+    if (!enabled() || headless) { clear(); return; }
+    if (busy()) { for (const id of [...state.shown.keys()]) hide(id); schedule(TICK_MS); return; }
+    const rects = [];
+    for (const [id, entry] of [...state.shown]) {
+      const target = entry.tip.when() ? targetOf(entry.tip) : null;
+      if (!target) { hide(id); continue; }
+      rects.push(place(entry.box, target, entry.tip.side));
+    }
+    for (const tip of remaining()) {
+      if (state.shown.size >= MAX_SHOWN) break;
+      if (state.shown.has(tip.id) || !tip.when()) continue;
+      const target = targetOf(tip);
+      if (!target) continue;
+      const box = build(tip);
+      if (state.shown.size) box.style.setProperty?.("--tip-delay", "420ms");
+      document.body.append(box);
+      const rect = place(box, target, tip.side);
+      if (rects.some((other) => overlaps(other, rect))) { box.remove(); continue; }
+      rects.push(rect);
+      state.shown.set(tip.id, { tip, box });
+    }
+    if (remaining().length) schedule(TICK_MS);
+  }
+  function schedule(ms) {
+    if (state.timer) clearTimeout(state.timer);
+    state.timer = setTimeout(tick, ms);
+  }
+  function clear() {
+    if (state.timer) clearTimeout(state.timer);
+    state.timer = null;
+    for (const id of [...state.shown.keys()]) hide(id);
+  }
+
+  // Pressing the key a tip names means it landed: that tip fades for good.
+  const comboOf = (event) => {
+    const key = event.key === " " ? "Space" : event.key?.length === 1 ? event.key.toUpperCase() : event.key;
+    const arrows = { ArrowLeft: "← →", ArrowRight: "← →" };
+    return [(event.ctrlKey || event.metaKey) && key !== "Control" ? "Ctrl" : null, arrows[key] || (key === "Escape" ? "Esc" : key)].filter(Boolean).join("+");
+  };
+  function learned(event) {
+    if (!state.shown.size) return;
+    const combo = comboOf(event);
+    // Letters typed into a field are writing, not the shortcut; Enter and
+    // Ctrl chords in the box are the keys the box tip names.
+    const typing = event.target?.closest?.("input, textarea, select, [contenteditable]");
+    if (typing && !combo.startsWith("Ctrl+") && !["Enter", "Esc"].includes(combo)) return;
+    for (const [id, entry] of [...state.shown]) if (entry.tip.parts.some(([keys]) => keys.toUpperCase() === combo.toUpperCase())) dismiss(id);
+  }
+
+  function setEnabled(on) {
+    write(OFF_KEY, on ? null : "off");
+    const box = document.getElementById("settings-key-tips");
+    if (box) box.checked = on;
+    if (on) start(true); else clear();
+    return on;
+  }
+  // Every tip back, as for a first launch.
+  function reset() {
+    state.seen = new Set();
+    write(SEEN_KEY, null);
+    setEnabled(true);
+    schedule(600);
+  }
+  function start(soon = false) {
+    if (headless) return;
+    if (!state.started) {
+      state.started = true;
+      window.addEventListener("keydown", learned, true);
+      window.addEventListener("resize", () => { if (state.shown.size) schedule(60); });
+      window.addEventListener("mefi:nav", () => { if (enabled() && remaining().length) schedule(state.shown.size ? 60 : 1200); });
+      window.addEventListener("mefi:project-changed", () => schedule(1200));
+      const box = document.getElementById("settings-key-tips");
+      if (box) { box.checked = enabled(); box.addEventListener("change", () => { setEnabled(box.checked); window.MefiToast?.(box.checked ? "Key tips are on." : "Key tips are off.", "info"); }); }
+    }
+    if (enabled() && remaining().length) schedule(soon ? 600 : HOLD_MS);
+  }
+
+  // The key tips cover what nav.js's one-time "single keys move around" toast
+  // says, so a device that will see them skips that toast.
+  if (!headless && enabled() && remaining().length) write("mefiStudio.keyHint.v1", "1");
+
+  window.MefiNav?.register?.({
+    id: "keyTipsToggle", get label() { return enabled() ? "Turn key tips off" : "Turn key tips on"; }, short: "Key tips", kind: "action", layer: null, section: "help", group: "system",
+    key: null, glyph: "g-help", badge: null, desc: "Small pop-ups beside buttons that name the key doing the same thing",
+    searchTerms: "key tips hints hotkeys shortcuts keyboard popups help first time", showIn: { palette: true },
+    run: () => { const on = setEnabled(!enabled()); window.MefiToast?.(on ? "Key tips are on." : "Key tips are off.", "info"); },
+  });
+  window.MefiNav?.register?.({
+    id: "keyTipsAgain", label: "Show key tips again", short: "Key tips again", kind: "action", layer: null, section: "help", group: "system",
+    key: null, glyph: "g-help", badge: null, desc: "Bring back every key tip you faded away",
+    searchTerms: "key tips hints hotkeys shortcuts keyboard reset again", showIn: { palette: true },
+    run: () => reset(),
+  });
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => start(), { once: true });
+  else start();
+
+  window.MefiKeyTips = { enabled, setEnabled, reset, tick, shown: () => [...state.shown.keys()], seen: () => [...state.seen], tips: () => TIPS.map(({ id, parts }) => ({ id, parts })) };
 })();
 
 // Mefi's Studio AI+ — booklet renderer, filters, refresh-on-open, studio launcher UI.
@@ -79495,6 +82353,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     cards: document.getElementById("cards"),
     count: document.getElementById("count"),
     footer: document.getElementById("footer-meta"),
+    alsoTracked: document.getElementById("also-tracked"),
+    alsoTrackedBody: document.getElementById("also-tracked-body"),
     banner2: null,
   };
 
@@ -79664,6 +82524,45 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       + `<span>Each model's own pool: 5h ${pct(share["5h"], 0.2)} · week ${pct(share.week, 0.5)} · month ${pct(share.month, 1)}</span>`;
   }
 
+  // Also tracked: the models Studio routes to outside Go (providerModels,
+  // rebuilt from models.dev). Read-only, and built with textContent so no
+  // catalog string ever reaches innerHTML.
+  const ROUTE_LABELS = { claude: "Claude Code", zen: "OpenCode Zen", zai: "z.ai Coding Plan" };
+  let alsoTrackedDoc = null;
+  function renderAlsoTracked() {
+    const box = els.alsoTracked, body = els.alsoTrackedBody;
+    if (!box || !body || alsoTrackedDoc === state.doc) return;
+    alsoTrackedDoc = state.doc;
+    const routes = Object.entries(state.doc.providerModels ?? {}).filter(([, rows]) => Array.isArray(rows) && rows.length);
+    box.hidden = !routes.length;
+    const node = (tag, text, className) => {
+      const el = document.createElement(tag);
+      if (text != null) el.textContent = String(text);
+      if (className) el.className = className;
+      return el;
+    };
+    const price = (cost) => (cost && cost.input != null && cost.output != null ? `${fmt.money(cost.input)} in / ${fmt.money(cost.output)} out` : "—");
+    const parts = [];
+    for (const [route, rows] of routes) {
+      parts.push(node("h3", `${ROUTE_LABELS[route] ?? route} · ${rows.length}`));
+      const table = node("table", null, "lab-table");
+      const head = node("tr");
+      for (const label of ["Model", "Released", "Context", "List price / 1M"]) head.append(node("th", label));
+      table.append(head);
+      for (const row of rows) {
+        const name = node("td", row.name ?? row.id);
+        name.title = String(row.id ?? "");
+        const tr = node("tr");
+        tr.append(name, node("td", row.releaseDate ?? "—"), node("td", fmt.ctx(row.limits?.context)), node("td", price(row.cost)));
+        table.append(tr);
+      }
+      const wrap = node("div", null, "lab-table-wrap");
+      wrap.append(table);
+      parts.push(wrap);
+    }
+    body.replaceChildren(...parts);
+  }
+
   // One line under the page title: how many, how fresh, from where. The hash
   // stays on hover and in the footer.
   function renderStatus() {
@@ -79765,6 +82664,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 
   function renderAll() {
     renderPlan();
+    renderAlsoTracked();
     renderStatus();
     renderPicks();
     renderChips();

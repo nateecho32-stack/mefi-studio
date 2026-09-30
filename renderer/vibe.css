@@ -351,6 +351,19 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 .vibe-dock[data-marked="yes"] .vibe-dock-mark { opacity: 1; scale: 1; }
 .vibe-dock button[aria-pressed="true"] { color: var(--v-ink); }
 .vibe-dock button[aria-pressed="true"] .glyph { color: var(--v-accent-hi); }
+/* The key each stop answers to, as a small cap in its corner; it lights with the stop. */
+.vibe-dock .vibe-stop-key { position: absolute; top: 5px; left: 7px; min-width: 0; height: 17px; padding: 0 5px; border-width: 1px; border-radius: 5px; font: 600 10px/15px var(--font-mono); letter-spacing: .02em; color: var(--v-soft); background: color-mix(in srgb, var(--ivory) 6%, transparent); border-color: color-mix(in srgb, var(--ivory) 16%, transparent); opacity: .72; transition: opacity var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out); }
+.vibe-dock button:is(:hover, :focus-visible, [aria-pressed="true"]) .vibe-stop-key { opacity: 1; color: var(--v-accent-hi); border-color: color-mix(in srgb, var(--gold) 34%, transparent); }
+/* Enter · Ctrl+Enter under the box, as keycaps. */
+.vibe-hint { display: inline-flex; align-items: center; gap: 5px; }
+.vibe-hint .key { min-width: 0; height: 18px; padding: 0 6px; font-size: 10px; line-height: 16px; border-radius: 6px; color: var(--v-soft); background: color-mix(in srgb, var(--ivory) 5%, transparent); border-color: color-mix(in srgb, var(--ivory) 14%, transparent); }
+.vibe-compose:focus-within .vibe-hint .key { color: var(--v-ink); border-color: color-mix(in srgb, var(--gold) 34%, transparent); }
+.vibe-hint-sep { margin: 0 3px; }
+/* Build's update pill, mirrored into Vibe's top bar while it needs you. */
+.vibe-update .glyph { width: 15px; height: 15px; }
+.vibe-update[data-tone="bad"] { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 36%, transparent); }
+.vibe-update[hidden] { display: none; }
+.vibe-ask-note-inline { margin: 8px 0 0; color: var(--v-faint); font-size: 12px; }
 
 /* ---- conversation --------------------------------------------------------- */
 .vibe-chat { position: absolute; top: 84px; right: 24px; bottom: 24px; z-index: 2; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; width: min(420px, calc(100vw - 48px)); border: 1px solid var(--v-edge); border-radius: 24px; background: var(--studio-float-fill); backdrop-filter: var(--v-blur); box-shadow: -30px 0 80px -40px color-mix(in srgb, var(--bg-deep) 90%, transparent), inset 0 1px 0 color-mix(in srgb, var(--ivory) 7%, transparent); opacity: 1; transform: none; transition: opacity var(--motion-slow) var(--ease-out), transform var(--motion-slow) var(--ease-emphasized), display var(--motion-slow) allow-discrete; }

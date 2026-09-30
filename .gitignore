@@ -47,9 +47,12 @@ desktop.ini
 
 # Local-only Claude Code config (preview launch.json, worktrees, personal
 # settings) and the untracked site. The shared SessionStart sync hook in
-# .claude/settings.json is tracked so every PC runs it.
+# .claude/settings.json is tracked so every PC runs it, and so are the
+# project skills in .claude/skills (commit-check), which Claude Code loads and
+# Studio's Agents › Setup › Skills lists for its builders.
 .claude/*
 !.claude/settings.json
+!.claude/skills/
 website/
 
 # Editor swap and merge leftovers

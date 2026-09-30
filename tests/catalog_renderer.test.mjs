@@ -299,3 +299,32 @@ test("the Server Styler check polls through the shared guard only while Settings
   assert.equal(checks, 3, "coming back to Settings checks at once");
   assert.equal(env.get("server-styler-status").textContent, "Server Styler is running.");
 });
+
+test("Also tracked lists providerModels by route with textContent only, and follows a catalog refresh", async () => {
+  const cells = (body) => body.children.filter((child) => child.className === "lab-table-wrap")
+    .map((wrap) => wrap.children[0].children.slice(1).map((tr) => tr.children.map((td) => td.textContent)));
+  let current = catalog;
+  const env = environment({ readCatalog: async () => current });
+  await flush();
+  const box = env.get("also-tracked"), body = env.get("also-tracked-body");
+  const routes = Object.entries(catalog.providerModels ?? {}).filter(([, rows]) => rows.length);
+  assert.ok(routes.length >= 3, "the committed catalog tracks the Claude, Zen and z.ai routes");
+  assert.equal(box.hidden, false);
+  assert.deepEqual(body.children.filter((child) => child.className !== "lab-table-wrap").map((h) => h.textContent),
+    routes.map(([route, rows]) => `${{ claude: "Claude Code", zen: "OpenCode Zen", zai: "z.ai Coding Plan" }[route]} · ${rows.length}`));
+  const first = routes[0][1][0];
+  assert.deepEqual(cells(body)[0][0].slice(0, 2), [first.name, first.releaseDate]);
+
+  current = structuredClone(catalog);
+  current.hash = "also-tracked-refresh";
+  current.providerModels = { zen: [{ id: "gpt-x", name: "<img src=x onerror=alert(1)>", releaseDate: "2026-09-27", limits: { context: 1050000 }, cost: { input: 2, output: 10 } }], zai: [] };
+  await env.window.MefiBooklet.refresh("test"); await flush();
+  assert.deepEqual(cells(body), [[["<img src=x onerror=alert(1)>", "2026-09-27", "1.1M", "$2 in / $10 out"]]], "names stay text and empty routes are left out");
+  assert.equal(body.writes, 0, "Also tracked never writes innerHTML");
+
+  current = structuredClone(current);
+  current.hash = "no-provider-models";
+  delete current.providerModels;
+  await env.window.MefiBooklet.refresh("test"); await flush();
+  assert.equal(box.hidden, true, "a catalog without providerModels hides the section");
+});

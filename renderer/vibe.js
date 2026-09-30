@@ -42,6 +42,17 @@
     if (saved === "vibe" || saved === "build") return saved;
     return headless ? "build" : "vibe";
   };
+  // Every launch opens in Vibe, even after a day spent in Build, unless the
+  // owner asked Studio to keep the mode it closed in (LAUNCH_KEY "last"). A
+  // renderer reload (a live update, a crash restore) resumes where it was:
+  // nav.js leaves a resume note for up to a minute, and that keeps Build.
+  const LAUNCH_KEY = "mefiStudio.uiMode.launch";
+  const startsInVibe = () => read(LAUNCH_KEY) !== "last";
+  const resuming = (() => {
+    try { const saved = JSON.parse(read("mefiStudio.resume") || "null"); return typeof saved?.at === "number" && Date.now() - saved.at <= 60000; } catch { return false; }
+  })();
+  if (!headless && !resuming && startsInVibe() && read(MODE_KEY) === "build") write(MODE_KEY, "vibe");
+  function setStartsInVibe(on) { write(LAUNCH_KEY, on ? "vibe" : "last"); return on; }
   function paintMode() {
     const current = mode();
     document.documentElement.dataset.uiMode = current;
@@ -61,9 +72,9 @@
     const label = document.getElementById("idle-home-label");
     if (label) label.textContent = vibe ? "Open Vibe on launch" : "Open Home on launch";
     const hint = document.getElementById("idle-home-hint");
-    if (hint) hint.textContent = vibe ? "When disabled, Studio opens Watch, the live node tree, after the project chooser." : "When disabled, Studio opens Command view after the project chooser.";
+    if (hint) hint.textContent = vibe ? "When disabled, Studio reopens the last page you used after the project chooser." : "When disabled, Studio reopens the last tab page you used after the project chooser.";
     const toggle = document.getElementById("idle-home-switch");
-    if (toggle) toggle.title = vibe ? "On: every launch lands on Vibe. Off: Studio opens straight into Watch. The project chooser comes first either way." : "On: every launch lands on Home. Off: Studio opens straight into Command view. The project chooser comes first either way.";
+    if (toggle) toggle.title = vibe ? "On: every launch lands on Vibe. Off: Studio reopens the last page you used. The project chooser comes first either way." : "On: every launch lands on Home. Off: Studio reopens the last tab page you used. The project chooser comes first either way.";
     const modeHint = document.getElementById("settings-mode-hint");
     if (modeHint) modeHint.textContent = vibe ? "Vibe: the calm front door, where every page opens in Vibe's rail." : "Build: the full studio, with Home, the menu and every tool.";
   }
@@ -476,13 +487,14 @@
   }
 
   // ---- the dock ---------------------------------------------------------------
-  // Tasks, Team and More always stand; Watch steps in while agents work, Plans
-  // while a plan is in play, Ideas while fresh ones wait. The stop whose panel
-  // is open is marked, so the dock doubles as the panel's tab strip.
+  // Watch, Tasks, Team and More always stand: the tree is there from a
+  // project's first minute, before anything has started. Plans step in while
+  // a plan is in play, Ideas while fresh ones wait. The stop whose panel is
+  // open is marked, so the dock doubles as the panel's tab strip.
   const STOPS = ["watch", "tasks", "plans", "ideas", "team", "more"];
   const PANEL_STOPS = new Set(["tasks", "plans", "ideas", "team"]);
   function dockStops(data = lanes()) {
-    return { watch: data.running.length > 0 || data.checking.length > 0, tasks: true, plans: data.plans.length > 0 || data.families.length > 0, ideas: data.ideas.length > 0, team: true, more: true };
+    return { watch: true, tasks: true, plans: data.plans.length > 0 || data.families.length > 0, ideas: data.ideas.length > 0, team: true, more: true };
   }
   function renderDock(data) {
     const stops = dockStops(data);
@@ -1047,7 +1059,27 @@
   // uses. Acting moves on to the next thing waiting, and closes when none is.
   const openQuestions = () => (Array.isArray(state.assistant.questions) ? state.assistant.questions : []).filter((question) => question?.status === "open" && belongs(question));
   const taskById = (id) => scoped(state.tasks).find((task) => task.id === id) || null;
-  const HOLD_VERBS = { loop: "Try again", owner: "Resume", duplicate: "Run anyway" };
+  const HOLD_VERBS = { loop: "Try again", owner: "Resume", duplicate: "Run anyway", relevance: "Build it anyway" };
+  const HOLD_CHIPS = { owner: "Stopped by you", loop: "Same failure repeating", duplicate: "Looks like a duplicate", relevance: "Maybe done outside Studio" };
+  // A plan waits on you only at its own turns (renderer/planning.js reads the
+  // same notes): Mefi asked a follow-up in the interview, the specification
+  // waits for your approval, or an approved plan still has to become tasks.
+  // Questions nobody has started exploring stay on the Plans page.
+  function planNeed(plan) {
+    const open = (Array.isArray(plan.questions) ? plan.questions : []).filter((question) => question?.status === "open");
+    for (const question of [...open].reverse()) {
+      const last = (question.notes || []).at(-1);
+      if (last?.author === "assistant" && ["question", "conflict"].includes(last.kind)) return { what: "ask", question, ask: last.text, verb: "Answer", meta: last.kind === "conflict" ? "the plan flagged a conflict" : "the plan asks you something" };
+    }
+    if (plan.status === "converting") return { what: "open", verb: "Finish", meta: "its tasks still need creating" };
+    if (plan.spec?.approvedAt && plan.status !== "converted") return { what: "open", verb: "Create tasks", meta: "approved · ready to become tasks" };
+    if (plan.spec && !plan.spec.stale && !plan.spec.approvedAt) return { what: "open", verb: "Review", meta: "its specification waits for your approval" };
+    return null;
+  }
+  const planNeeds = () => activePlans().flatMap((plan) => {
+    const need = planNeed(plan);
+    return need ? [{ kind: "plan", id: plan.id, tone: "ask", title: plan.title || "A plan", plan, ...need }] : [];
+  });
   function needs() {
     const list = [];
     for (const question of openQuestions()) list.push({ kind: "question", id: question.id, tone: "ask", verb: "Answer", title: question.title || "A decision", meta: question.context?.severity === "blocker" ? "blocking a task" : "decision", question });
@@ -1062,15 +1094,21 @@
       list.push({ kind: "approval", id: item.id, tone: "ask", verb: "Review", title: item.title || taskById(item.id)?.title || "A task", meta: "waiting for your go-ahead", row: item });
     }
     for (const [parentId, items] of grouped) list.push({ kind: "family", id: parentId, tone: "ask", verb: "Review", title: taskById(parentId)?.title || "Your request", meta: `${items.length} step${items.length === 1 ? "" : "s"} waiting for your go-ahead`, rows: items });
-    for (const item of rows("blocked")) list.push({ kind: "blocked", id: item.id, tone: "bad", verb: HOLD_VERBS[item.blockedBy] || "See why", title: item.title || taskById(item.id)?.title || "A task", meta: item.blockedBy === "owner" ? "stopped by you" : "stuck", row: item });
+    for (const item of rows("blocked")) list.push({ kind: "blocked", id: item.id, tone: "bad", verb: HOLD_VERBS[item.blockedBy] || "See why", title: item.title || taskById(item.id)?.title || "A task", meta: item.blockedBy === "owner" ? "stopped by you" : item.blockedBy === "relevance" ? "maybe done outside Studio" : "stuck", row: item });
     const shared = state.assistant.needsYou;
-    if (shared?.items && belongs(state.assistant)) return shared.items.map((item) => {
+    // Failed or unavailable checks still offer the result for your review.
+    const review = (item) => ({ kind: "review", id: item.taskId, tone: "check", verb: "Review", title: item.title || taskById(item.taskId)?.title || "A finished task", meta: "finished · check the result" });
+    if (shared?.items && belongs(state.assistant)) return [...shared.items.map((item) => {
       if (item.kind === "question") return list.find((row) => row.kind === "question" && row.id === item.id);
-      if (item.kind === "review") return checkingLong(item);
+      if (item.kind === "review") {
+        const verification = taskById(item.taskId)?.verification;
+        const settled = ["failed", "unverified"].includes(verification?.state) || !verification?.state && !!verification?.reason;
+        return settled && item.taskId ? review(item) : checkingLong(item);
+      }
       const grouped = item.memberIds?.length ? list.find((row) => row.kind === "family" && row.id === item.taskId) : null;
       return grouped || list.find((row) => row.id === item.taskId && row.kind !== "question") || { kind: item.kind === "approval" ? "approval" : "blocked", id: item.taskId, tone: "ask", verb: "Review", title: item.title, meta: "waiting for your review", row: { canRetry: false, reason: item.title } };
-    }).filter(Boolean);
-    return list;
+    }).filter(Boolean), ...planNeeds()];
+    return [...list, ...planNeeds()];
   }
   // A finished attempt still waiting on its check after half an hour
   // (companion.cjs REVIEW_AFTER_MS) is listed for you to look at, but nothing
@@ -1079,7 +1117,7 @@
     const task = taskById(item.taskId);
     if (!item.taskId || task && task.status !== "awaiting_verification") return null;
     const since = time(item.at) || time(task?.awaitingAt) || null;
-    return { kind: "review", id: item.taskId, tone: "check", verb: "Check on it", title: item.title || task?.title || "A finished task", meta: `checking its work${since ? ` · ${lasted(since)} so far` : ""}`, since };
+    return { kind: "review", id: item.taskId, tone: "check", verb: "Check on it", title: item.title || task?.title || "A finished task", meta: `checking its work${since ? ` · ${lasted(since)} so far` : ""}`, since, checking: true };
   }
   // How long something has run: "45 min", "2 h".
   const lasted = (at) => { const text = ago(at); return text === "just now" ? "under a minute" : text.replace(/ ago$/, ""); };
@@ -1138,14 +1176,86 @@
       renderQuestion(body, need.question);
       return;
     }
+    $("ask-title").textContent = need.title;
+    // A plan opens on its own page, in Vibe's rail: Vibe stays the frame.
+    if (need.kind === "plan") {
+      $("ask-kicker").textContent = `Plan${position}`;
+      watch.textContent = "Open the plan";
+      watch.onclick = () => { closeAsk({ quiet: true }); go("plans", { planId: need.id }); };
+      renderPlanNeed(body, need);
+      return;
+    }
     watch.textContent = "Open on the task board";
     watch.onclick = () => { closeAsk({ quiet: true }); go("tasks", { taskId: need.id, filter: "all" }); };
-    $("ask-kicker").textContent = `${["approval", "family"].includes(need.kind) ? "Waiting for your go-ahead" : need.kind === "review" ? "Still checking" : need.row?.blockedBy === "owner" ? "Stopped by you" : "Stuck"}${position}`;
-    $("ask-title").textContent = need.title;
+    $("ask-kicker").textContent = `${["approval", "family"].includes(need.kind) ? "Waiting for your go-ahead" : need.kind === "review" ? need.checking ? "Still checking" : "Finished · yours to check" : need.row?.blockedBy === "owner" ? "Stopped by you" : "Stuck"}${position}`;
     if (need.kind === "family") renderFamily(body, need);
     else if (need.kind === "approval") renderApproval(body, need, task);
-    else if (need.kind === "review") renderChecking(body, need, task);
+    else if (need.kind === "review") (need.checking ? renderChecking : renderReview)(body, need, task);
     else renderBlocked(body, need, task);
+  }
+  // A result whose check has not settled: read what it did, then confirm it
+  // yourself or send it back. The same host calls as the task board's
+  // Confirm done and Retry.
+  function renderReview(body, need, task) {
+    const verdict = task?.verification?.state;
+    body.append(chips([chip(verdict === "failed" ? "Its check failed" : verdict === "unverified" ? "Could not be checked" : "Check still running", verdict === "failed" ? "blocker" : ""), task?.updatedAt ? el("span", "vibe-ask-when", `finished ${ago(task.updatedAt)}`) : null]));
+    const said = String(task?.verification?.reason || task?.result?.summary || task?.summary || task?.lastAttempt?.summary || "").trim();
+    body.append(el("p", "vibe-ask-detail", said || "The worker finished and its check has not settled yet. Look at the result in your project, then confirm it or send it back."));
+    const text = brief(task);
+    if (text) body.append(text);
+    const checking = ["verifying"].includes(task?.status);
+    body.append(actions([
+      { label: "Confirm done", primary: true, title: "You checked the result yourself: mark it complete", run: () => act(need, () => api().tasksAction({ taskId: need.id, projectId: projectId(), action: "status", status: "done" }), "Confirmed. It's marked done.") },
+      { label: "Send it back", disabled: checking, title: checking ? "Its check is running right now; try again when it settles" : "Return it to the queue for another attempt", run: () => act(need, () => api().tasksAction({ taskId: need.id, projectId: projectId(), action: "retry" }), "Sent back. It builds again when a worker is free.") },
+    ]));
+  }
+  // What a plan waits for. Mefi's follow-up in the interview is answered
+  // right here, through the same planning:assist call the Plans page makes;
+  // the plan's other turns (approve, create tasks) open the plan itself.
+  const PLAN_COPY = {
+    Finish: "Creating this plan's tasks stopped part way. Open the plan to finish; tasks it already made are reused.",
+    "Create tasks": "You approved this plan. Open it to create its tasks; they join the queue under your permission settings.",
+    Review: "The plan's specification and task briefs are written. Read them, then approve the plan or send it back with changes.",
+  };
+  function renderPlanNeed(body, need) {
+    const plan = need.plan || {};
+    const questions = Array.isArray(plan.questions) ? plan.questions : [];
+    const decided = questions.filter((question) => question?.status === "resolved").length;
+    body.append(chips([chip("Plan", "decision"), questions.length ? chip(`${decided} of ${questions.length} decided`) : null, plan.updatedAt ? el("span", "vibe-ask-when", ago(plan.updatedAt)) : null]));
+    const open = () => { closeAsk({ quiet: true }); go("plans", { planId: plan.id }); };
+    if (need.what !== "ask") {
+      body.append(el("p", "vibe-ask-detail", PLAN_COPY[need.verb] || "This plan is waiting on you."));
+      body.append(actions([{ label: need.verb === "Review" ? "Review the plan" : need.verb === "Finish" ? "Finish creating tasks" : "Create its tasks", primary: true, run: open }]));
+      return;
+    }
+    const asked = el("div", "vibe-ask-brief");
+    asked.append(el("span", "vibe-ask-label", need.question.question || "The question"), el("p", "vibe-ask-detail", need.ask));
+    body.append(asked);
+    const key = `plan:${plan.id}:${need.question.id}`;
+    const own = el("form", "vibe-ask-own");
+    const input = el("textarea");
+    input.rows = 3; input.placeholder = "Answer in your own words…";
+    input.setAttribute("aria-label", "Your answer to the plan");
+    input.value = askDrafts.get(key)?.text || "";
+    input.addEventListener("input", () => askDrafts.set(key, { text: input.value, optionId: null }));
+    const send = el("button", "vibe-btn primary", "Send");
+    send.type = "submit"; send.disabled = state.askSending;
+    own.append(input, send);
+    own.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const message = input.value.trim();
+      if (!message) { input.focus(); return; }
+      if (!api()?.planningAssist) { open(); return; }
+      void act(need, async () => {
+        const result = await api().planningAssist({ projectId: projectId(), planId: plan.id, version: plan.version, kind: "interview", questionId: need.question.id, message, useWeb: false });
+        if (result?.ok !== false) askDrafts.delete(key);
+        return result ?? { ok: true };
+      }, "Answered. Mefi reads it back on the plan.");
+    });
+    input.addEventListener("keydown", (event) => { if (event.key === "Enter" && !event.shiftKey && !event.isComposing) { event.preventDefault(); own.requestSubmit(); } });
+    body.append(own);
+    body.append(el("p", "vibe-ask-note-inline", "Only the decision you record on the plan is a requirement; your answer helps Mefi shape it."));
+    if (askRefocus) { askRefocus = false; input.focus(); }
   }
   // A request split into steps under Verify first: its steps start together.
   function renderFamily(body, need) {
@@ -1294,7 +1404,7 @@
     const row = need.row || {};
     const hold = row.blockedBy;
     const reason = row.reason || task?.verification?.reason || task?.lastRunError || "The last attempt could not be confirmed.";
-    body.append(chips([chip(hold === "owner" ? "Stopped by you" : hold === "loop" ? "Same failure repeating" : hold === "duplicate" ? "Looks like a duplicate" : "Stuck", hold === "owner" ? "" : "blocker"), task?.updatedAt ? el("span", "vibe-ask-when", ago(task.updatedAt)) : null]));
+    body.append(chips([chip(HOLD_CHIPS[hold] || "Stuck", hold === "owner" ? "" : "blocker"), task?.updatedAt ? el("span", "vibe-ask-when", ago(task.updatedAt)) : null]));
     body.append(el("p", "vibe-ask-detail", reason));
     const lastError = String(task?.lastRunError || "").trim();
     if (lastError && lastError !== reason) body.append(el("pre", "vibe-ask-evidence", lastError.split("\n").slice(-4).join("\n")));
@@ -1343,6 +1453,7 @@
       if (result.backlog && belongs(result.backlog)) state.backlog = { ...result.backlog, ok: true };
       if (result.task) state.tasks = state.tasks.map((item) => item.id === result.task.id ? result.task : item);
       if (result.state && belongs(result.state)) state.assistant = result.state;
+      if (result.plan?.id && belongs(result)) state.plans = state.plans.map((plan) => plan.id === result.plan.id ? result.plan : plan);
       // Until the next read, what was just handled stays out of Needs you.
       if (state.backlog && Array.isArray(state.backlog[need.kind])) state.backlog = { ...state.backlog, [need.kind]: state.backlog[need.kind].filter((item) => item.id !== need.id) };
       if (requestProject !== projectId()) { state.askSending = false; signatures.delete("ask"); return; }
@@ -1353,7 +1464,7 @@
     } catch (error) {
       state.askSending = false;
       if (requestProject !== projectId()) return;
-      state.askErrors[requestKey] = error.gone ? error.message : `${error?.message || "That didn't go through."} You can also open it on the task board.`;
+      state.askErrors[requestKey] = error.gone ? error.message : `${error?.message || "That didn't go through."} You can also open it ${need.kind === "plan" ? "on its plan" : "on the task board"}.`;
       if (needKey(state.need) === requestKey) { note.textContent = state.askErrors[requestKey]; note.dataset.tone = error.gone ? "" : "bad"; }
       signatures.delete("ask"); renderAsk();
     }
@@ -1490,6 +1601,46 @@
     target?.click();
   });
 
+  // ---- Vibe's own keys ----------------------------------------------------------
+  // On the front door, outside a text field, single keys open what the dock
+  // and the top bar hold. They run before nav.js's global keys (capture), so
+  // T here opens Vibe's Tasks panel instead of Build's task board; D (Watch),
+  // H, ? and Ctrl K stay nav.js's. The dock and the box wear them as keycaps.
+  const togglePanel = (kind) => (window.MefiVibePanels?.current?.() === kind ? window.MefiVibePanels.close() : openPanel(kind));
+  const VIBE_KEYS = [
+    ["/", "vibe-key-box", "Vibe: type in the box", () => { const input = $("input"); input.focus({ preventScroll: true }); try { input.setSelectionRange(input.value.length, input.value.length); } catch { /* not a text field */ } }],
+    ["N", "vibe-key-needs", "Vibe: what needs you", () => { const waiting = needs(); if (waiting.length) openNeed(waiting[0]); else feedback("Nothing needs you right now.", "good"); }],
+    ["C", "vibe-key-chat", "Vibe: the conversation", () => (state.chatOpen ? closeChat() : openChat())],
+    ["T", "vibe-key-tasks", "Vibe: your tasks", () => togglePanel("tasks")],
+    ["P", "vibe-key-plans", "Vibe: plans", () => togglePanel("plans")],
+    ["I", "vibe-key-ideas", "Vibe: ideas", () => togglePanel("ideas")],
+    ["M", "vibe-key-team", "Vibe: the team (who works on which model)", () => togglePanel("team")],
+    ["S", "vibe-key-settings", "Vibe: settings", () => togglePanel("settings")],
+  ];
+  function vibeKeysOpen() {
+    const nav = window.MefiNav?.state;
+    if (!active() || nav?.sheet || nav?.transient || window.MefiBoot?.isActive?.()) return false;
+    if (window.MefiCompanionHub?.isOpen?.() || window.MefiSidebar?.isOpen?.() || (notes && !notes.hidden)) return false;
+    // A drawer you are in (focus inside it, or the pointer on it) takes what
+    // you type (nav.js typeInto): its letters are writing, not these keys.
+    for (const id of ["panel", "ask", "chat"]) {
+      const drawer = $(id);
+      if (!drawer || drawer.hidden) continue;
+      let hovered = false;
+      try { hovered = Boolean(drawer.matches?.(":hover")); } catch { /* no :hover outside a browser */ }
+      if (hovered || (document.activeElement && drawer.contains?.(document.activeElement))) return false;
+    }
+    return true;
+  }
+  window.addEventListener("keydown", (event) => {
+    if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.isComposing || String(event.key || "").length !== 1) return;
+    const entry = VIBE_KEYS.find(([key]) => key === event.key.toUpperCase());
+    if (!entry || event.target?.closest?.("input, textarea, select, [contenteditable]") || !vibeKeysOpen()) return;
+    event.preventDefault();
+    init();
+    entry[3]();
+  }, true);
+
   // ---- what's new -----------------------------------------------------------
   const notes = document.getElementById("vibe-notes");
   let notesReturn = null;
@@ -1568,8 +1719,47 @@
     showIn: { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false },
     run: () => showNotes({ force: true }),
   });
+  // Vibe's keys on the shortcut sheet, under Home: display-only rows
+  // (nav.js's handleKey skips the "command" group; the listener above acts).
+  for (const [key, id, label] of [...VIBE_KEYS, ["Enter", "vibe-key-talk", "Vibe: talk it over (in the box)"], ["Ctrl Enter", "vibe-key-build", "Vibe: build it (in the box)"]]) {
+    window.MefiNav?.register?.({
+      id, label, short: label, desc: label, kind: "action", layer: null, section: "home", group: "command", key, glyph: null, badge: null,
+      showIn: { tabs: false, tools: false, dock: false, palette: false, help: true, footer: false },
+      hidden: () => mode() !== "vibe",
+    });
+  }
+
+  // ---- updates ----------------------------------------------------------------
+  // Build's update pill sits on the app rail, which Vibe hides. Vibe mirrors
+  // it while it asks for you (an update waiting to apply, one held, a new
+  // release), and a click does what the pill does (nav.js initUpdates).
+  function mirrorUpdate() {
+    const pill = document.getElementById("update-pill");
+    const button = $("update");
+    if (!pill || !button) return;
+    const paint = () => {
+      const release = pill.dataset.release === "1";
+      const show = !pill.hidden && (release || ["pending", "held"].includes(pill.dataset.state));
+      button.hidden = !show;
+      if (!show) return;
+      button.dataset.tone = pill.dataset.state === "held" ? "bad" : "ask";
+      $("update-text").textContent = pill.querySelector(".label")?.textContent || "Update ready";
+      button.title = pill.title || "An update is ready";
+    };
+    paint();
+    if (typeof MutationObserver === "function") new MutationObserver(paint).observe(pill, { attributes: true, attributeFilter: ["hidden", "data-state", "data-release", "title"] });
+    button.addEventListener("click", () => pill.click());
+  }
+
+  // ---- Settings' launch switch ---------------------------------------------------
+  const startSwitch = document.getElementById("settings-start-vibe");
+  if (startSwitch) {
+    startSwitch.checked = startsInVibe();
+    startSwitch.addEventListener("change", () => { setStartsInVibe(startSwitch.checked); window.MefiToast?.(startSwitch.checked ? "Studio starts in Vibe every launch." : "Studio keeps the mode you close it in.", "info"); });
+  }
 
   window.addEventListener("mefi:nav", paintRail);
+  mirrorUpdate();
   paintMode();
   // A plain read of where the vibe stands, for tests and anything driving
   // Studio: what holds the agents back, what waits on you, what is building.

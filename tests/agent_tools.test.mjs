@@ -11,6 +11,7 @@ import vm from "node:vm";
 import http from "node:http";
 import zlib from "node:zlib";
 import { spawn } from "node:child_process";
+import { ReadableStream } from "node:stream/web";
 import { createDom } from "./fixtures/renderer-dom.mjs";
 
 async function fixture(fn) {

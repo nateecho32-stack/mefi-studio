@@ -948,6 +948,24 @@
     const visible = visibleGraphSnapshot(snapshot, absorbFoldedCluster(snapshot.nodes));
     state.nodes = visible.nodes.map((node) => ({ ...node, bx: node.x, by: node.y, bz: node.z }));
     state.edges = visible.edges;
+    // Sub-agent sessions (tree3d hangs them under the session that spawned
+    // them): each pops out of its parent the first time the board sees it and
+    // flies home into it when it leaves (sweepFx), the way a builder does.
+    for (const node of state.nodes) {
+      if (!node.child || !node.parentSessionId) continue;
+      const fx = ensureFx(node.id, { pop: true });
+      if (fx.absorbAt != null) {
+        // Back before its flight home ended: grow out again, no twin ghost.
+        fx.absorbAt = null;
+        fx.fromScreen = null;
+        fx.bornAt = Date.now();
+      }
+      fx.childSession = true;
+      fx.anchorId = node.parentSessionId;
+      fx.label = node.label;
+      fx.seen = true;
+      fx.wasRendered = true;
+    }
     // The tree summary and the autopilot status share this one slot, and both
     // carry a `running` — a roster COUNT in the summary, the list of build jobs
     // in the status. A plain replace let the count win on every rebuild, so
@@ -975,7 +993,7 @@
     // Callout numbers: sessions in the order the tree shows them, tasks in
     // board order — stable while the board holds, never derived from a slot.
     let sessionOrdinal = 0;
-    for (const node of state.nodes) if (node.kind === "session") node.ordinal = `S${++sessionOrdinal}`;
+    for (const node of state.nodes) if (node.kind === "session" && !node.child) node.ordinal = `S${++sessionOrdinal}`;
     const boardIndex = new Map((state.allTasks?.length ? state.allTasks : state.tasks ?? []).map((task, index) => [String(task.id), index + 1]));
     for (const node of state.nodes) if ((node.kind === "task" || node.kind === "task-group") && node.task) node.ordinal = `T${boardIndex.get(String(node.task.id)) ?? "?"}`;
     const firstGraph = !state.graphSeeded;
@@ -1221,6 +1239,18 @@
       const groupParent = node.groupParentId ? state.nodes.find((candidate) => candidate.id === node.groupParentId) : null;
       const edgeAnchor = groupParent ?? anchor;
       if (edgeAnchor) state.edges.push({ a: state.nodes.indexOf(edgeAnchor), b: state.nodes.length - 1, sessionId: anchor?.id, task: true, taskGroup: Boolean(groupParent) });
+      // A delegated part shown under its parent runs its life-cycle against
+      // that parent; other read-only leaves (saved obligations, members) have
+      // none.
+      const part = entry.member && node.groupParentId ? state.fx.get(node.id) : null;
+      if (part?.delegated) {
+        part.task = task;
+        part.builder = false;
+        part.anchorId = node.groupParentId;
+        part.seen = true;
+        part.wasRendered = true;
+        return;
+      }
       // Saved obligations are read-only leaves, not new task lifecycle events.
       if (node.readOnly) return;
       // The life-cycle entry: pop-out and absorb both run against this host —
@@ -1442,7 +1472,8 @@
   // handed the work out, otherwise the root.
   function absorbHost(fx) {
     let host = fx.anchorId ? state.nodes.find((node) => node.id === fx.anchorId && !node.dying) : null;
-    if (host?.kind === "task") host = (host.anchorSessionId ? nodeForSession(host.anchorSessionId) : null) ?? host;
+    // (a delegated part's host is the task that handed it out, not its session)
+    if (host?.kind === "task" && !fx.delegated) host = (host.anchorSessionId ? nodeForSession(host.anchorSessionId) : null) ?? host;
     return host ?? absorbFallback();
   }
 
@@ -1458,17 +1489,19 @@
     const sz = fx.lastZ ?? host?.z ?? 0;
     const node = {
       id,
-      kind: fx.folded ? "folded" : fx.builder ? "agent" : "task",
+      kind: fx.folded ? "folded" : fx.builder ? "agent" : fx.childSession ? "session" : "task",
       dying: true,
-      label: fx.folded ? fx.label ?? "finished" : fx.builder ? fx.label ?? "building" : fx.task?.title ?? "task",
-      task: fx.folded || fx.builder ? null : fx.task ?? null,
+      label: fx.folded ? fx.label ?? "finished" : fx.builder ? fx.label ?? "building" : fx.childSession ? fx.label ?? "sub-agent" : fx.task?.title ?? "task",
+      task: fx.folded || fx.builder || fx.childSession ? null : fx.task ?? null,
       role: fx.builder ? "builder" : null,
       status: "running",
-      // A finished task flies home green — what sinks in is completed work.
-      color: !fx.folded && !fx.builder && fx.task?.status === "done" ? "#68eca4" : fx.task?.color ?? "#e6c98d",
-      state: !fx.folded && !fx.builder && fx.task?.status === "done" ? "done" : "task",
+      // A finished task flies home green — what sinks in is completed work,
+      // like a sub-agent session coming back to its parent.
+      color: fx.childSession || !fx.folded && !fx.builder && fx.task?.status === "done" ? "#68eca4" : fx.task?.color ?? "#e6c98d",
+      state: fx.childSession || !fx.folded && !fx.builder && fx.task?.status === "done" ? "done" : "task",
+      ...(fx.childSession ? { child: true, parentSessionId: fx.anchorId } : {}),
       anchorSessionId: fx.anchorId,
-      r: fx.folded ? 6 : fx.builder ? 3.6 : 7,
+      r: fx.folded ? 6 : fx.builder ? 3.6 : fx.childSession ? 4.2 : 7,
       x: sx,
       y: sy,
       z: sz,
@@ -1576,14 +1609,14 @@
     // would hide the live node instead.
     const readOnlyIds = new Set((state.nodes ?? []).filter((node) => node.readOnly && !node.dying).map((node) => node.id));
     for (const [id, fx] of [...state.fx]) {
-      if (readOnlyIds.has(id)) { state.fx.delete(id); continue; }
+      if (readOnlyIds.has(id) && !fx.delegated) { state.fx.delete(id); continue; }
       if (fx.absorbAt != null) {
         if (still || !fx.wasRendered || now - fx.absorbAt > NODE_ABSORB_TTL) finalizeAbsorb(id, fx);
         else appendDyingNode(id, fx);
         continue;
       }
       if (fx.seen) continue;
-      if (fx.builder) {
+      if (fx.builder || fx.childSession) {
         markAbsorb(id);
         if (still || !fx.wasRendered) finalizeAbsorb(id, fx);
         else appendDyingNode(id, fx);
@@ -1606,10 +1639,10 @@
     if (!fx.removed) {
       const key = host?.id ?? fx.anchorId ?? "__assistant__";
       const entry = {
-        title: fx.builder ? fx.label ?? "build" : fx.task?.title ?? "task",
+        title: fx.builder ? fx.label ?? "build" : fx.childSession ? fx.label ?? "sub-agent" : fx.task?.title ?? "task",
         prompt: fx.task?.prompt ?? null,
-        taskId: fx.builder ? null : fx.task?.id ?? null,
-        kind: fx.builder ? "job" : "task",
+        taskId: fx.builder || fx.childSession ? null : fx.task?.id ?? null,
+        kind: fx.builder ? "job" : fx.childSession ? "session" : "task",
         status: fx.task?.status ?? null,
         at: Date.now(),
       };
@@ -1724,6 +1757,14 @@
     const open = all.filter((task) => ["open", "active", "awaiting_verification"].includes(task.status));
     const openIds = new Set(open.map((task) => `task:${task.id}`));
     const byId = new Map(all.map((task) => [`task:${task.id}`, task]));
+    // A part another task delegated (a task-delegation group's member) pops
+    // out of the task that handed it out and flies home into it when it
+    // closes: the return path up the chain. True while its parent is on the
+    // board.
+    const delegated = (task) => {
+      const parentId = task?.delegatedFrom?.parentTaskId || task?.parentTaskId;
+      return Boolean(parentId && byId.has(`task:${parentId}`));
+    };
     const now = Date.now();
     for (const task of open) {
       const id = `task:${task.id}`;
@@ -1732,9 +1773,10 @@
         // New to the board: pop out of the host on the next rebuild. Tasks the
         // first read already knew about seed as settled — a whole backlog
         // popping at once reads as noise, not as news.
-        state.fx.set(id, { bornAt: state.tasksSeeded ? Date.now() : -Infinity, absorbAt: null, task, builder: false });
+        state.fx.set(id, { bornAt: state.tasksSeeded ? Date.now() : -Infinity, absorbAt: null, task, builder: false, delegated: delegated(task) });
       } else {
         fx.task = task;
+        fx.delegated = delegated(task);
         fx.removed = false;
         state.doneHold.delete(id); // reopened: it is work again, not finished work
         if (fx.absorbAt != null) {
@@ -1745,7 +1787,20 @@
       }
     }
     for (const [id, fx] of state.fx) {
-      if (members.has(id)) { state.fx.delete(id); state.doneHold.delete(id); continue; }
+      if (fx.childSession) continue;
+      if (members.has(id)) {
+        // Group members are read-only leaves of their card, except a delegated
+        // part: closed, it flies straight home into its parent, no hold.
+        if (!fx.delegated) { state.fx.delete(id); state.doneHold.delete(id); continue; }
+        if (fx.absorbAt == null && !openIds.has(id)) {
+          const stored = byId.get(id);
+          fx.removed = !stored;
+          if (stored) fx.task = stored;
+          state.doneHold.delete(id);
+          markAbsorb(id);
+        }
+        continue;
+      }
       if (fx.builder || fx.absorbAt != null || openIds.has(id)) continue;
       // Left the open set (done, archived, deleted): fly home and be absorbed.
       const stored = byId.get(id);
@@ -1884,7 +1939,7 @@
     state.telemetryAt = Date.now();
     state.telemetryNodeCount = nodeCount;
     const badges = window.MefiNav?.badges ?? null;
-    const sessions = badges?.sessions ?? state.nodes.filter((node) => node.kind === "session").length;
+    const sessions = badges?.sessions ?? state.nodes.filter((node) => node.kind === "session" && !node.child).length;
     const inProgress = badges?.progress ?? state.nodes.filter((node) => node.kind === "todo" && node.status === "in_progress").length;
     const openTasks = badges?.tasks ?? state.tasks.length;
     // nav already polls the ideas store for its badges; only run the local poll
@@ -3744,6 +3799,22 @@
     // not an empty one: the card only speaks up for a store problem.
     const storeFine = !!window.mefiStudio && state.treeStatus !== "unavailable" &&
       !(typeof window.MefiTree?.note?.() === "string" && window.MefiTree.note());
+    // A project with nothing on its board yet still gets its tree: the root
+    // and the assistant stand, and a small card under them says how the first
+    // branch grows. It sits low, so the tree stays in view above it.
+    const fresh = storeFine && !constellationHasWork() && !(state.allTasks?.length || state.tasks?.length) && assistantNode();
+    if (fresh) {
+      const wasHidden = el.empty.hidden;
+      el.empty.hidden = false;
+      if (wasHidden) state.hudRectsAt = 0;
+      if (state.emptyVariant !== "fresh") { state.emptyVariant = "fresh"; el.empty.dataset.variant = "fresh"; }
+      const name = (document.getElementById("vibe-project-name")?.textContent || document.getElementById("workspace-project-name")?.textContent || "").trim();
+      const named = name && !/^(Choose a project|Your workspace|Workspace|Loading)/.test(name);
+      if (el.emptyTitle) el.emptyTitle.textContent = named ? `Nothing started in ${name} yet` : "Nothing started here yet";
+      if (el.emptyCopy) el.emptyCopy.textContent = "This is the project's tree. Every task you add grows a branch from the root, and agents fly out to the work they pick up.";
+      if (el.emptyAssistant) el.emptyAssistant.hidden = true;
+      return;
+    }
     if (constellationHasWork() || (storeFine && assistantNode())) {
       if (!el.empty.hidden) state.hudRectsAt = 0;
       el.empty.hidden = true;
@@ -5547,6 +5618,20 @@
       }
       node._layoutAnchor = null;
     }
+  }
+
+  // A node colour as the frozen [r, g, b] the style hooks take, one per colour
+  // (a hex, else the done green), so a flight builds no array per frame.
+  const beatTints = new Map();
+  function beatTint(color) {
+    const key = typeof color === "string" && /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(color) ? color : "#68eca4";
+    let tint = beatTints.get(key);
+    if (!tint) {
+      if (beatTints.size >= 32) beatTints.clear();
+      tint = Object.freeze(hexToRgb(key));
+      beatTints.set(key, tint);
+    }
+    return tint;
   }
 
   function hexToRgb(hex) {
@@ -8288,7 +8373,7 @@
     } else if (node.kind === "root") {
       title = "Sessions";
       number = null;
-      counts = `${state.nodes.filter((entry) => entry.kind === "session").length} sessions`;
+      counts = `${state.nodes.filter((entry) => entry.kind === "session" && !entry.child).length} sessions`;
     } else if (node.kind === "folded") {
       number = null;
       counts = `${node.count ?? 0} finished`;
@@ -9091,7 +9176,7 @@
           // A live shape moves the host after this: the flight tells it where
           // home is and how far along it is, so the node lands on the host
           // where the host is drawn.
-          entry.flight = { hostId, e };
+          entry.flight = { hostId, e, t, from: fx.fromScreen };
           lifeHot = true;
         } else if (fx.bornAt != null && nowFx - fx.bornAt >= 0 && nowFx - fx.bornAt < NODE_GROW_MS) {
           const e = easeOut((nowFx - fx.bornAt) / NODE_GROW_MS);
@@ -9307,7 +9392,7 @@
         nodeStyles.stepMotion(motion, stepFlags, dt, still);
         tint = nodeStyles.shownTint(motion, tint, time, still);
       }
-      const base = node.kind === "todo" ? 4.5 : node.kind === "assistant" ? 15 : node.kind === "agent" ? 10 : node.kind === "task" ? 12 : 11;
+      const base = node.kind === "todo" ? 4.5 : node.kind === "assistant" ? 15 : node.kind === "agent" ? 10 : node.kind === "task" ? 12 : node.child ? 7.5 : 11;
       // Hover and selection ease the node up a twentieth (the record's sel),
       // on top of the lift that raises its size cap.
       const pop = motion ? 1 + 0.05 * motion.sel : 1;
@@ -9387,10 +9472,45 @@
     }
     } finally { restoreNodeBrightness?.(); profiler?.end(nodesSpan); }
 
+    // The finish beats in the chosen node style (node-styles.js done and
+    // absorb), over the flights home the blend above set up: the work pops
+    // where it leaves for the first third of its flight, and its host takes
+    // it in for the last two fifths. Marks only, above the orbs.
+    if (nodeStyles?.done && projected.some((entry) => entry.flight)) {
+      const style = state.nodeStyle ?? "orbs";
+      let hosts = null;
+      for (const entry of projected) {
+        const flight = entry.flight;
+        if (!flight || !Number.isFinite(flight.t)) continue;
+        const fx = state.fx.get(entry.node.id);
+        const tint = beatTint(entry.node.color);
+        const beat = { theme: state.nodeTheme, ok: !["failed", "blocked"].includes(String(fx?.task?.status ?? "")) };
+        if (flight.t < 0.34 && flight.from) nodeStyles.done(ctx, style, flight.from, entry.node._pr ?? 7, tint, flight.t / 0.34, beat);
+        if (flight.t > 0.6) {
+          hosts ??= new Map(state.nodes.map((node) => [node.id, node]));
+          const host = hosts.get(flight.hostId);
+          if (host?._pr) nodeStyles.absorb(ctx, style, { x: host._px, y: host._py }, host._pr, tint, (flight.t - 0.6) / 0.4, beat);
+        }
+      }
+    }
+
     // Behind Home the tree is scenery seen through frosted glass: orbs, links
     // and sky only. Its words would blur into smudges, so the text layers
     // (checkpoint badges, callouts, speech and labels) wait for Command.
     const scenery = state.homeBackdrop && !state.active;
+    // A session with more busy sub-agents than tree3d hangs under it says how
+    // many more, the way the hub counts the chores it does not draw.
+    for (const { node, p } of projected) {
+      if (scenery) break;
+      if (!node.childMore || !node._pr || node.dying) continue;
+      const layer = layerFor(node);
+      layer.save();
+      layer.font = '600 8px system-ui, "Segoe UI", sans-serif';
+      layer.textAlign = "left"; layer.textBaseline = "middle";
+      layer.fillStyle = rgba(NODE_RGB.session, 0.7);
+      layer.fillText(`+${node.childMore} sub-agent${node.childMore === 1 ? "" : "s"}`, p.x + node._pr + 4, p.y + node._pr + 6);
+      layer.restore();
+    }
     // Checkpoint notes stay discoverable without competing with current work.
     const badgeExclusions = scenery ? [] : [...hudRects()];
     for (const { node, p } of projected) {
@@ -10282,7 +10402,7 @@
   function statusBadge(node) {
     if (node.kind === "task-group") return { text: `${node.taskGroup.members.length} tasks`, className: "badge" };
     if (node.kind === "root") {
-      return { text: `${state.nodes.filter((entry) => entry.kind === "session").length} sessions`, className: "badge" };
+      return { text: `${state.nodes.filter((entry) => entry.kind === "session" && !entry.child).length} sessions`, className: "badge" };
     }
     if (node.kind === "assistant") {
       const { tone } = assistantSummary();
@@ -10697,7 +10817,7 @@
     const sessionId = node.kind === "todo" ? node.sessionId : node.kind === "session" ? node.id : session?.id ?? null;
 
     if (node.kind === "root") {
-      row("sessions", state.nodes.filter((entry) => entry.kind === "session").length);
+      row("sessions", state.nodes.filter((entry) => entry.kind === "session" && !entry.child).length);
       row("tasks", state.tasks.length);
       row("checkpoints", Object.values(state.checkpoints ?? {}).reduce((sum, list) => sum + list.length, 0));
       row("in progress", state.nodes.filter((entry) => entry.kind === "todo" && entry.status === "in_progress").length);
@@ -12877,6 +12997,16 @@
     pillOf("progress")?.addEventListener("click", () => focusNextInProgress());
     pillOf("assistant")?.addEventListener("click", () => selectAssistant({ focus: true }));
     el.emptyAssistant?.addEventListener("click", () => window.MefiCompanion?.open?.());
+    // The fresh card's first step: Vibe's box in Vibe, Command's own task box in Build.
+    document.getElementById("cmd-empty-start")?.addEventListener("click", () => {
+      if (window.MefiVibe?.mode?.() === "vibe") {
+        window.MefiNav?.go?.("vibe");
+        const box = document.getElementById("vibe-input");
+        setTimeout(() => box?.focus?.({ preventScroll: true }), 0);
+        return;
+      }
+      document.getElementById("idle-task-input")?.focus?.();
+    });
 
     // The broadcast carries the list that was just written. Using it skips a
     // second read that could land inside the next save and come back empty.

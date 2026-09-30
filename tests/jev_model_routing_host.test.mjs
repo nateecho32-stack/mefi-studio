@@ -586,3 +586,22 @@ test("an OpenCode Go worker asks the router for the Go roster and gets back what
   const fixed = routingHost({ initialSettings: { modelSelection: "fixed" } });
   assert.deepEqual(copy((await fixed.route({ worker: true }, { ok: true, provider: "opencode", model: "deepseek-v4.1-flash" })).routingCandidates), []);
 });
+
+test("routing hands the community feed and the probe results to the candidate builder, and runs without them", async () => {
+  const feed = { schema: 1, models: [] };
+  const probes = { schema: 1, models: {} };
+  const host = routingHost();
+  host.context.modelCommunityForRouting = async () => feed;
+  host.context.readModelProbes = async () => probes;
+  await host.route({ role: "heavy", taskType: "planning-spec" });
+  assert.deepEqual(host.candidateRequests[0].community, feed);
+  assert.deepEqual(host.candidateRequests[0].probes, probes);
+  const broken = routingHost();
+  broken.context.modelCommunityForRouting = async () => { throw new Error("unreadable feed"); };
+  broken.context.readModelProbes = async () => { throw new Error("unreadable probes"); };
+  assert.equal((await broken.route({ role: "heavy", taskType: "planning-spec" })).routingDecision.method, "jev", "a broken feed or probe file never costs the decision");
+  assert.equal(broken.candidateRequests[0].community, null);
+  const bare = routingHost();
+  await bare.route({ role: "heavy", taskType: "planning-spec" });
+  assert.equal(bare.candidateRequests[0].community, null, "a host without the block routes as before");
+});
