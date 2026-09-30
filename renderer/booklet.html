@@ -92673,8 +92673,15 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 
   // ---- drawers: a column over the page in a small window ------------------------------------------
   const FOCUSABLE = "button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex=\"-1\"])";
+  // The first control in a region that can really take focus: a mounted panel that is hidden (the session inspector while no session
+  // is open) keeps its controls in the page, and focus() on one of those does nothing, so a drawer would open with focus left behind.
+  function takesFocus(node, host) {
+    for (let walk = node; walk && walk !== host; walk = walk.parentNode) if (walk.hidden === true) return false;
+    return (node.getClientRects?.().length ?? 1) > 0;
+  }
   function focusInto(host) {
-    const target = host?.querySelector?.(FOCUSABLE) || host;
+    const found = host?.querySelectorAll?.(FOCUSABLE);
+    const target = (found ? [...found].find((node) => takesFocus(node, host)) : null) || host;
     try { target?.focus?.({ preventScroll: true }); } catch { /* not focusable here */ }
   }
   function openDrawer(name) {

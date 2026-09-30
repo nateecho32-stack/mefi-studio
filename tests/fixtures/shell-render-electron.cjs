@@ -76,7 +76,9 @@ function probe() {
   // A scroller that keeps a native bar or a gutter for one.
   const gutters = inside.filter((node) => shown(node) && /(auto|scroll)/.test(getComputedStyle(node).overflowY + getComputedStyle(node).overflowX) && getComputedStyle(node).scrollbarWidth !== "none" && node.offsetWidth - node.clientWidth - parseFloat(getComputedStyle(node).borderLeftWidth) - parseFloat(getComputedStyle(node).borderRightWidth) > 1).map((node) => node.id || node.className);
   // Everything on screen in the frame stays in the window.
-  const outside = inside.filter((node) => { if (!shown(node)) return false; const box = node.getBoundingClientRect(); return box.left < -1 || box.top < -1 || box.right > innerWidth + 1 || box.bottom > innerHeight + 1; }).map((node) => `${node.id || node.className}:${Math.round(node.getBoundingClientRect().left)},${Math.round(node.getBoundingClientRect().top)},${Math.round(node.getBoundingClientRect().right)},${Math.round(node.getBoundingClientRect().bottom)}`);
+  // (What a mounted panel holds is its own slice's to check: a list of rows scrolls inside its box, and its rows below the fold are not "outside".
+  // The panel's wrapper is still held to the window.)
+  const outside = inside.filter((node) => { if (!shown(node)) return false; const host = node.closest(".shell-panel"); if (host && host !== node) return false; const box = node.getBoundingClientRect(); return box.left < -1 || box.top < -1 || box.right > innerWidth + 1 || box.bottom > innerHeight + 1; }).map((node) => `${node.id || node.className}:${Math.round(node.getBoundingClientRect().left)},${Math.round(node.getBoundingClientRect().top)},${Math.round(node.getBoundingClientRect().right)},${Math.round(node.getBoundingClientRect().bottom)}`);
   const infoOf = (name) => { const one = shell?.info?.(name); return one ? { open: one.open, docked: one.docked, drawer: one.drawer, drawerOpen: one.drawerOpen, size: one.size, width: one.width, max: one.max } : null; };
   const bar = document.getElementById("shell-top");
   const barBox = shown(bar) ? bar.getBoundingClientRect() : null;
@@ -102,6 +104,7 @@ function probe() {
     saved: (() => { try { return JSON.parse(localStorage.getItem("mefiStudio.shell.layout.v1")); } catch { return null; } })(),
     drawerAttr: frame?.dataset.drawer ?? null, columns: { list: document.getElementById("shell-list")?.dataset.state ?? null, inspector: document.getElementById("shell-inspector")?.dataset.state ?? null },
     focus: document.activeElement ? (document.activeElement.id || document.activeElement.tagName) : null,
+    active: (() => { const a = document.activeElement; return a ? `${a.tagName}#${a.id}.${String(a.className).slice(0, 40)}` : "none"; })(),
     inList: document.getElementById("shell-list")?.contains(document.activeElement) ?? false, inInspector: document.getElementById("shell-inspector")?.contains(document.activeElement) ?? false,
   };
 }
@@ -322,8 +325,8 @@ app.whenReady().then(async () => {
       assert.ok(left >= state.clusters.left[1] - 1 && right <= state.clusters.right[0] + 1, `${tag}: the local navigation ${left}-${right} stays between the bar's ends ${JSON.stringify(state.clusters)}`);
       assert.ok(b.localNav[2] >= 100, `${tag}: and is wide enough to use (${b.localNav[2]}): below that the bar keeps the row to itself`);
     } else if (state.narrow) assert.ok(b.top[2] < 640, `${tag}: only a band under 640 px gives the row up (${b.top[2]})`);
-    // Vibe's own layer starts under the bar, not behind it.
-    if (b.vibeLayer && mode === "vibe" && ["workspace", "vibe"].includes(state.route)) assert.ok(near(b.vibeLayer[1], b.top[1] + b.top[3], 1), `${tag}: Vibe's layer starts under the bar (${b.vibeLayer[1]} vs ${b.top[1] + b.top[3]})`);
+    // Vibe's own layer starts under the bar, not behind it, and under the tab strip where the window has one (the strip is the row below the bar).
+    if (b.vibeLayer && mode === "vibe" && ["workspace", "vibe"].includes(state.route)) assert.ok(near(b.vibeLayer[1], b.top[1] + b.top[3] + (state.vars.tabs || 0), 1), `${tag}: Vibe's layer starts under the bar and the tab strip (${b.vibeLayer[1]} vs ${b.top[1] + b.top[3]} + ${state.vars.tabs || 0})`);
     assert.deepEqual(state.overflow, [false, false], `${tag}: no page overflow (${JSON.stringify(state.scroll)} in ${JSON.stringify(state.inner)})`);
     assert.deepEqual(state.small, [], `${tag}: nothing under 12px`);
     assert.deepEqual(state.gutters, [], `${tag}: no scroller reserves width`);
@@ -669,7 +672,7 @@ app.whenReady().then(async () => {
       assert.ok(box[1] + box[3] <= state.boxes.status[1] + 1, `${tag}: and above the status bar`);
       assert.ok(box[2] <= state.inner[0] - (name === "list" ? state.rest : 0) + 0.5, `${tag}: and no wider than the room`);
       assert.ok(state.boxes.scrim, `${tag}: the page is dimmed under it`);
-      assert.equal(name === "list" ? state.inList : state.inInspector, true, `${tag}: focus moves into the drawer`);
+      assert.equal(name === "list" ? state.inList : state.inInspector, true, `${tag}: focus moves into the drawer (it is on ${state.active})`);
       assert.deepEqual(state.usable, usableBefore, `${tag}: a drawer takes no room from the page`);
       assert.ok(state.boxes.status && state.boxes.top, `${tag}: the bar and the status bar stay rows`);
       // The bar stays in reach while a drawer is open: the scrim dims the page, not the controls that close the drawer.

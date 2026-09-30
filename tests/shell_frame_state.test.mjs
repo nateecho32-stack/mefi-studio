@@ -469,6 +469,39 @@ test("the keys are listed in the shortcut sheet, for display only, while the fra
   assert.deepEqual(v1.calls.registered.filter((row) => row.id.startsWith("shell-key-")), [], "nothing is listed in v1");
 });
 
+test("a drawer puts focus on the first control that can take it, not on one inside a panel that is hidden", () => {
+  const page = loadShell({ width: 400, height: 373 });
+  const shell = page.window.MefiShell;
+  const inspector = page.region("inspector");
+  const withButton = (id) => { const node = page.document.createElement("div"); const button = page.document.createElement("button"); button.id = id; node.append(button); return { node, button }; };
+  // A mounted panel that is hidden (the session inspector while no session is open) keeps its controls in the page, and focus() on
+  // one of them does nothing: a drawer must not open with focus left on the button that opened it.
+  const asleep = withButton("asleep-button"), awake = withButton("awake-button");
+  const first = shell.mount("inspector", "asleep", asleep.node, { title: "Asleep", order: 10 });
+  shell.mount("inspector", "awake", awake.node, { title: "Awake", order: 20 });
+  first.hide();
+  // The fake DOM cannot read the selector (":not([disabled])" is an attribute test to it), so the region answers the way a browser does:
+  // every control in it, in order, whether or not it is on screen.
+  inspector.querySelectorAll = () => [asleep.button, awake.button];
+  const toggle = page.$("shell-inspector-toggle");
+  toggle.focus();
+  shell.open("inspector");
+  assert.equal(page.document.activeElement, awake.button, "focus goes to the control that is on screen");
+  shell.close("inspector");
+  assert.equal(page.document.activeElement, toggle, "and back to the button afterwards");
+  // The panel that was put away, shown again, is first in line again.
+  first.show();
+  shell.open("inspector");
+  assert.equal(page.document.activeElement, asleep.button, "once shown, its control is the first");
+  shell.close("inspector");
+  // Nothing on screen that can take focus: the region itself does.
+  first.hide();
+  page.document.getElementById("awake-button").hidden = true;
+  toggle.focus();
+  shell.open("inspector");
+  assert.equal(page.document.activeElement, inspector, "the drawer takes focus itself when none of its controls can");
+});
+
 test("drawers: in a window the contract folds, a column is a drawer the bar's buttons open over the page", () => {
   const page = loadShell({ width: 400, height: 373 });
   const shell = page.window.MefiShell;
