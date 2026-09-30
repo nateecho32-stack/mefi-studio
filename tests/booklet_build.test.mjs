@@ -62,6 +62,7 @@ const INLINE_SCRIPTS = [
   "pc-sync.js",
   "pc-vault.js",
   "whats-new.js",
+  "report.js",
   "companion-friends.js",
   "rooms.js",
   "onboarding.js",

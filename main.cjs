@@ -129,6 +129,13 @@ const updateSafety = optionalHelper("./scripts/update-safety.cjs", () => require
 // The rules for "What's new" after an update (which version has been read, when
 // the toast may speak). Without them the feature is simply absent.
 const whatsNew = optionalHelper("./scripts/whats-new.cjs", () => require("./scripts/whats-new.cjs"), null);
+// Report a problem and the crash prompt: what a report holds and how a session
+// ended (crash-report), the host that reads and writes for it (report-host) and
+// the zip it is saved as (zip-lite). See "Report a problem" below; without any
+// of the three the feature is simply absent.
+const crashReport = optionalHelper("./scripts/crash-report.cjs", () => require("./scripts/crash-report.cjs"), null);
+const reportHostModule = crashReport ? optionalHelper("./scripts/report-host.cjs", () => require("./scripts/report-host.cjs"), null) : null;
+const zipLite = reportHostModule ? optionalHelper("./scripts/zip-lite.cjs", () => require("./scripts/zip-lite.cjs"), null) : null;
 const discordOAuth = community
   ? optionalHelper("./scripts/discord-oauth.cjs", () => require("./scripts/discord-oauth.cjs"), null)
   : null;
@@ -235,7 +242,7 @@ function handleProjectIpc(channel, handler) {
 // a gated handler would hold every project switch for. (Declared beside the
 // wrapper so the tests that load it from here up to app.setName see it.)
 const APP_WIDE_PREFIXES = ["projects:", "project-preview:", "performance:", "startup:", "community:", "hub:", "remote:", "styler:", "catalog:", "speed:", "shell:", "pc-setup:", "models:"];
-const APP_WIDE_CHANNELS = new Set(["usage:accounts", "opencode:credits", "release:status", "release:check", "update:status", "update:set", "settings:get-key", "boot:healthy", "release:whats-new", "release:whats-new-seen", "release:whats-new-set"]);
+const APP_WIDE_CHANNELS = new Set(["usage:accounts", "opencode:credits", "release:status", "release:check", "update:status", "update:set", "settings:get-key", "boot:healthy", "release:whats-new", "release:whats-new-seen", "release:whats-new-set", "report:dismiss", "report:set"]);
 ipcMain.handle = handleProjectIpc;
 
 app.setName("Mefi's Studio AI+");
@@ -2392,6 +2399,85 @@ async function releaseWhatsNewSet(payload = {}) {
   return releaseWhatsNew();
 }
 // ---- end of what's new ----------------------------------------------------------
+
+// ---- Report a problem: the report, the session marker and the crash prompt ---------
+// Settings › System › Diagnostics builds a small report on this PC: the owner
+// reads every file, then saves it as a zip where a Save dialog says. Nothing is
+// uploaded or sent. scripts/crash-report.cjs decides what is in it (and what
+// never is: settings.json, the sign-in files, the vault, screenshots, project
+// files); scripts/report-host.cjs does the reading and writing.
+//   - data/session-marker.json: "running" while Studio runs, "closed" with a
+//     reason when Studio chose to close (a quit, a Windows sign-out, and any
+//     exit with code 0: the update restarts and the roll back are app.exit(0)
+//     paths). A marker still "running" at the next start is a session that
+//     never closed.
+//   - data/crash.jsonl: a row when the window dies or hangs, main throws or the
+//     GPU process is lost, kept to the last 50 rows of the last 7 days.
+//   - the next start says "Studio closed unexpectedly" once (report:crashed),
+//     unless MEFI_STUDIO_NO_CRASH_PROMPT=1 or the switch in the card is off. A
+//     clean quit, an update restart, a roll back and a development run that was
+//     only stopped never say it.
+let reportHost = null;
+
+function reportCollect() {
+  return (async () => {
+    const settings = await readSettings();
+    const project = projects.current();
+    let tasks = [];
+    try { tasks = (await (await getEyes()).readJson(TASKS_PATH, [])).filter((task) => task && typeof task === "object" && !task.archived); } catch {}
+    tasks.sort((a, b) => (Number(b.updatedAt) || 0) - (Number(a.updatedAt) || 0));
+    const ledger = await brainLedgerTail(projectDataPath(EXECUTOR_LOG_PATH), 1024 * 1024);
+    const trace = [...traceStudio.rows().map((row) => ({ ...row, source: row.source })), ...traceRenderer.rows().map((row) => ({ ...row, source: `window:${row.source}` }))]
+      .sort((a, b) => (Number(a.at) || 0) - (Number(b.at) || 0));
+    let user = "";
+    try { user = os.userInfo().username; } catch {}
+    return {
+      studio: { version: app.getVersion(), install: app.isPackaged ? "portable" : "source" },
+      os: { platform: process.platform, release: os.release(), arch: process.arch },
+      runtime: { electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node },
+      project: { name: project?.name ?? "" },
+      route: { provider: settings.aiProvider ?? "auto", models: Object.fromEntries(Object.entries(settings.aiModels && typeof settings.aiModels === "object" ? settings.aiModels : {}).filter(([, model]) => typeof model === "string")) },
+      builder: { cli: settings.executorCli ?? "opencode", tier: settings.executorTier ?? "auto" },
+      tasks: tasks.slice(0, crashReport.LIMITS.tasks).map((task) => ({ id: task.id, title: task.title, status: task.status, verification: task.verification ? { state: task.verification.state, checks: task.verification.checks } : null, builder: task.lastAttempt?.route ?? null, updatedAt: task.updatedAt })),
+      trace: trace.slice(-crashReport.LIMITS.traceRows),
+      builderRuns: ledger.filter((row) => row?.event === "finish").slice(-crashReport.LIMITS.builderRuns).map((row) => ({ at: row.at, runId: row.runId, taskId: typeof row.task === "string" ? row.task : null, title: row.title, ok: row.ok, code: row.code, seconds: row.seconds, tail: Array.isArray(row.tail) ? row.tail.slice(-40) : [] })),
+      scrub: {
+        roots: [{ path: projectRoot(), label: "<project>" }, { path: STUDIO_ROOT, label: "<studio>" }, { path: os.homedir(), label: "~" }],
+        names: [{ name: user, label: "<user>" }, { name: os.hostname(), label: "<pc>" }],
+      },
+    };
+  })();
+}
+
+// Called once Electron is ready, before the window: judges the last session and
+// starts this one's marker. Harness windows and the CLI modes keep none.
+function reportStart() {
+  if (SMOKE || CAPTURE || CLI_MODE || !reportHostModule || !zipLite || reportHost) return;
+  try {
+    reportHost = reportHostModule.createReportHost({
+      fs: require("node:fs"), rep: crashReport, zip: zipLite, dataDir: path.join(STUDIO_ROOT, "data"), updateResultPath: UPDATE_RESULT_PATH, env: process.env,
+      pid: process.pid, version: app.getVersion(), install: app.isPackaged ? "portable" : "source",
+      collect: reportCollect, getWindow: () => (window && !window.isDestroyed() ? window : null),
+      showSaveDialog: (parent, options) => (parent ? dialog.showSaveDialog(parent, options) : dialog.showSaveDialog(options)),
+      showItemInFolder: (file) => shell.showItemInFolder(file), documentsPath: () => app.getPath("documents"),
+      send: (payload) => send("report:crashed", payload), readSettings, updateSettings, log: (line) => logLine(line), id: () => crypto.randomBytes(6).toString("hex"),
+    });
+    reportHost.boot();
+  } catch (error) {
+    reportHost = null;
+    logLine(`[report] could not start (${String(error?.code ?? error?.name ?? "error").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40) || "error"})`);
+  }
+}
+// Each of these is one guarded line at the place that knows: a failure is never Studio's.
+const reportRecord = (kind, detail, extra) => { try { reportHost?.record(kind, detail, extra); } catch {} };
+const reportEnd = (why) => { try { reportHost?.end(why); } catch {} };
+process.on("uncaughtExceptionMonitor", (error, origin) => reportRecord("main-exception", `${error?.name ?? "Error"}: ${String(error?.message ?? error).slice(0, 160)}`, { origin: String(origin ?? "") }));
+// An exit with code 0 is Studio's own choice (app.quit, app.exit for an update
+// restart or a roll back); a crash never reaches here, and a failing exit code
+// leaves the marker "running" so the next start says so.
+process.on("exit", (code) => { if (code === 0) reportEnd("exit"); });
+app.on("child-process-gone", (_event, details) => { if (details?.type === "GPU" && details.reason !== "clean-exit") reportRecord("gpu-gone", details.reason, { exitCode: details.exitCode }); });
+// ---- end of report a problem ------------------------------------------------------
 
 // ---- Your PCs vault: memory and setup between the owner's PCs ------------------
 // Friends › Your PCs › Share between my PCs (renderer/pc-vault.js). One private
@@ -22540,6 +22626,14 @@ function registerIpc() {
   ipcMain.handle("release:whats-new", async () => releaseWhatsNew());
   ipcMain.handle("release:whats-new-seen", async (_event, payload) => releaseWhatsNewSeen(payload ?? {}));
   ipcMain.handle("release:whats-new-set", async (_event, payload) => releaseWhatsNewSet(payload ?? {}));
+  // ---- Report a problem (the "Report a problem" block) --------------------------
+  // preview and save read the open project's tasks and log, so a project switch
+  // waits for them; the prompt's own state (dismiss, the switch) is the app's.
+  const reportOff = { ok: false, error: "Reports are not available in this build." };
+  ipcMain.handle("report:preview", async (_event, options) => (reportHost ? reportHost.preview({ replaceTitles: options?.replaceTitles === true, includeCrash: options?.includeCrash !== false }) : reportOff));
+  ipcMain.handle("report:save", async (_event, payload) => (reportHost ? reportHost.save({ token: typeof payload?.token === "string" ? payload.token : "" }) : reportOff));
+  ipcMain.handle("report:dismiss", async () => (reportHost ? reportHost.dismiss() : reportOff));
+  ipcMain.handle("report:set", async (_event, payload) => (reportHost ? reportHost.setPrompt(payload?.prompt) : reportOff));
 
   // ---- Community ----------------------------------------------------------
   // The Void Engine Discord link (the "Discord community link" block beside
@@ -23013,6 +23107,11 @@ function createWindow() {
     },
   });
   loadView().catch(() => {}); // did-fail-load owns the bounded recovery path.
+  // What went wrong is written down for Report a problem (data/crash.jsonl).
+  window.webContents.on("render-process-gone", (_event, details) => { if (details?.reason !== "clean-exit") reportRecord("renderer-gone", details?.reason, { exitCode: details?.exitCode }); });
+  window.on("unresponsive", () => reportRecord("renderer-unresponsive", "the window stopped responding"));
+  // Windows signing out or shutting down closes Studio without a quit.
+  window.on("session-end", () => reportEnd("session-end"));
   // Background mode: closing parks the app in the tray and the assistant
   // keeps ticking; Quit lives in the tray menu.
   window.on("close", (event) => {
@@ -23216,6 +23315,7 @@ async function captureTabs() {
 app.whenReady().then(() => {
   registerIpc();
   bootHealthStart();
+  reportStart();
   if (process.argv.includes("--set-key")) {
     (async () => {
       const key = process.env.MEFI_STUDIO_KEY;
@@ -23490,6 +23590,8 @@ app.whenReady().then(() => {
   if (!SMOKE && !CAPTURE && !CLI_MODE) setTimeout(() => { remoteApply(); }, 20000).unref?.();
   if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => announceRestart().catch(() => {}));
   if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => announceRelease().catch(() => {}));
+  // "Studio closed unexpectedly", once, after the page has had a moment to come up.
+  if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => setTimeout(() => { reportHost?.pageUp().catch(() => {}); }, reportHostModule?.PROMPT_DELAY_MS ?? 2500).unref?.());
   if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => bootHealthWatch());
   // The assistant service runs on its own clock, renderer or not; the smoke
   // exercises its keyless path, the capture tour never needs it.
@@ -23565,6 +23667,7 @@ app.on("before-quit", (event) => {
   // relaunch calls app.exit and never reaches this listener, so it keeps its
   // place; so does a crash, which never gets to write anything at all.
   endSession("quit");
+  reportEnd("quit");
   if (typeof outsideWorkQuit === "function") outsideWorkQuit();
   executorClosing = true;
   performanceProfiler.stop();

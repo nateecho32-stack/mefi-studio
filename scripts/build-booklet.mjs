@@ -71,6 +71,7 @@ const CODE_SOURCES = [
   "pc-sync.js",
   "pc-vault.js",
   "whats-new.js",
+  "report.js",
   "companion-friends.js",
   "rooms.js",
   "planning.js",
@@ -210,8 +211,8 @@ export async function build({ root = ROOT } = {}) {
   const [fleetLayoutCode, fleetCode, fleetStyles] = await Promise.all([readFile(path.join(RENDERER, "fleet-layout.js"), "utf8"), readFile(path.join(RENDERER, "fleet.js"), "utf8"), readFile(path.join(RENDERER, "fleet.css"), "utf8")]);
   const [gitSyncCode, gitSyncStyles] = await Promise.all([readFile(path.join(RENDERER, "git-sync.js"), "utf8"), readFile(path.join(RENDERER, "git-sync.css"), "utf8")]);
   // What the host tells you (alerts, Report a problem, What's new): their scripts and the one stylesheet they share.
-  const [hostCardsStyles, whatsNewCode] = await Promise.all([readFile(path.join(RENDERER, "host-cards.css"), "utf8"), readFile(path.join(RENDERER, "whats-new.js"), "utf8")]);
-  const codeParts = [stageLabels, nodeVisuals, performanceCore, profiler, taskGroups, studioUi, fileInputs, motion, cardLayout, nav, sidebar, graph, modelLab, tracker, nodeStyles, tree, treeDynamics, idle, modelCommunity, cameraTour, gitSyncCode, explorer, analyzer, tasks, ideas, overhead, brains, palette, configCode, eyes, traceCode, fleetLayoutCode, fleetCode, boot, startup, workspace, mediaWindow, mediaBrowser, music, together, pcSync, pcVault, whatsNewCode, companionFriends, roomsCode, planning, onboarding, community, demoPanel, autonomyUi, companionUi, companionHub, projectMapView, agentBrain, agents, setupHelper, vibeFlow, vibePanels, vibe, keyTips, panes, builder, worktrees, booklet];
+  const [hostCardsStyles, whatsNewCode, reportCode] = await Promise.all([readFile(path.join(RENDERER, "host-cards.css"), "utf8"), readFile(path.join(RENDERER, "whats-new.js"), "utf8"), readFile(path.join(RENDERER, "report.js"), "utf8")]);
+  const codeParts = [stageLabels, nodeVisuals, performanceCore, profiler, taskGroups, studioUi, fileInputs, motion, cardLayout, nav, sidebar, graph, modelLab, tracker, nodeStyles, tree, treeDynamics, idle, modelCommunity, cameraTour, gitSyncCode, explorer, analyzer, tasks, ideas, overhead, brains, palette, configCode, eyes, traceCode, fleetLayoutCode, fleetCode, boot, startup, workspace, mediaWindow, mediaBrowser, music, together, pcSync, pcVault, whatsNewCode, reportCode, companionFriends, roomsCode, planning, onboarding, community, demoPanel, autonomyUi, companionUi, companionHub, projectMapView, agentBrain, agents, setupHelper, vibeFlow, vibePanels, vibe, keyTips, panes, builder, worktrees, booklet];
   const code = codeParts.join("\n");
   const html = template
     // "</" and "<!--" escaped: a fetched model name holding "</script>" would

@@ -218,6 +218,14 @@ const api = {
   releaseWhatsNewSet: (on) => ipcRenderer.invoke("release:whats-new-set", { on: on === true }),
   // The renderer says its shell mounted: the flag an installing helper waits for.
   bootHealthy: () => ipcRenderer.invoke("boot:healthy"),
+  // Report a problem and the crash prompt (main.cjs "Report a problem"): the owner
+  // reads every file of the report, then saves it as a zip. Nothing is sent
+  // anywhere. onReportCrashed is the one push: the last session did not close.
+  reportPreview: (options) => ipcRenderer.invoke("report:preview", { replaceTitles: options?.replaceTitles === true, includeCrash: options?.includeCrash !== false }),
+  reportSave: (payload) => ipcRenderer.invoke("report:save", { token: gitText(payload?.token, 64) }),
+  reportDismiss: () => ipcRenderer.invoke("report:dismiss"),
+  reportSet: (payload) => ipcRenderer.invoke("report:set", typeof payload?.prompt === "boolean" ? { prompt: payload.prompt } : {}),
+  onReportCrashed: (callback) => ipcRenderer.on("report:crashed", (_event, payload) => callback(payload)),
   // Void Engine Discord link (main.cjs "Discord community link"): every call
   // answers { ok, status } with the public status only; tokens never cross.
   communityStatus: () => ipcRenderer.invoke("community:status"),

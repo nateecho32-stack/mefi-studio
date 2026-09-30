@@ -29,3 +29,27 @@
 .whats-new-foot { display: flex; align-items: center; justify-content: flex-end; gap: var(--s3); flex-wrap: wrap; }
 .whats-new-foot .ghost { margin-right: auto; }
 .whats-new-sheet button:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
+
+/* ---- Report a problem: Settings › System › Diagnostics ---------------------------- */
+.settings-report { margin-top: 18px; padding-top: 4px; border-top: 1px solid color-mix(in srgb, var(--hairline) 60%, transparent); }
+.settings-report[hidden] { display: none; }
+.report-title { margin: 0 0 4px; }
+.report-crash { padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); border-radius: var(--r-md); background: color-mix(in srgb, var(--warn) 10%, transparent); color: var(--ivory); font-size: var(--fs-sm); }
+.report-files { display: grid; gap: 2px; margin: 10px 0 4px; }
+.report-file { display: flex; align-items: center; gap: var(--s3); padding: 8px 10px; border: 1px solid transparent; border-radius: var(--r-md); }
+.report-file.is-selected { border-color: color-mix(in srgb, var(--gold) 38%, transparent); background: color-mix(in srgb, var(--gold) 8%, transparent); }
+.report-file-words { display: grid; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.report-file-name { font: 600 var(--fs-md)/1.3 ui-monospace, Consolas, "Cascadia Mono", monospace; color: var(--ivory); }
+.report-file-words small { color: var(--muted); font-size: var(--fs-sm); line-height: 1.4; }
+.report-file-size { flex: none; min-width: 58px; text-align: right; color: var(--muted); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.report-total { margin: 2px 0 10px; }
+.report-switches { margin-bottom: 8px; }
+.report-preview { margin: 12px 0; border: 1px solid var(--hairline); border-radius: var(--r-lg); background: color-mix(in srgb, var(--bg-deep) 40%, transparent); }
+.report-preview-head { margin: 0; padding: 8px 12px; border-bottom: 1px solid color-mix(in srgb, var(--hairline) 60%, transparent); font-size: var(--fs-sm); }
+.report-pre { margin: 0; max-height: 300px; padding: 10px 12px; overflow: auto; border: 0; background: transparent; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--fs-sm); line-height: 1.5; }
+.report-actions { align-items: center; flex-wrap: wrap; }
+.report-never { display: grid; gap: 6px; margin: 0 0 8px; padding: 0; list-style: none; }
+.report-never-row { display: block; padding: 6px 10px; border-left: 2px solid color-mix(in srgb, var(--gold) 40%, transparent); color: var(--ivory); font-size: var(--fs-sm); }
+.report-never-row small { color: var(--muted); font-size: var(--fs-sm); }
+.report-next { display: grid; gap: 6px; margin: 0 0 10px; padding-left: 20px; color: var(--muted); font-size: var(--fs-sm); line-height: 1.5; }
+.report-next b { color: var(--ivory); font-weight: 600; }

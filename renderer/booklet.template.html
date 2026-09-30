@@ -987,7 +987,7 @@
           <p class="muted" id="whats-new-note" role="status" hidden></p>
         </div>
         </details>
-<details class="settings-optional settings-card" id="settings-diagnostics"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-gauge"/></svg></span><span class="settings-summary-text"><b>Diagnostics</b><span>Performance, checks and machine status</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
+<details class="settings-optional settings-card" id="settings-diagnostics"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-gauge"/></svg></span><span class="settings-summary-text"><b>Diagnostics</b><span>Performance, checks, machine status and Report a problem</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
           <div class="row settings-probe" data-desktop-only>
             <label class="muted">Speed probe <select id="speed-model"></select></label>
             <button id="speed-go">Measure tokens/s</button>
@@ -999,6 +999,39 @@
             <button type="button" class="ghost" data-settings-nav="machine" data-desktop-only title="Test leases, LÖVE runs and auto-kill, in the Explorer">Machine <span aria-hidden="true">↗</span></button>
           </div>
           <p class="muted">A capture stays in memory until you export it. The auditor's findings and the machine readout open in the Explorer.</p>
+          <!-- Report a problem (renderer/report.js, main.cjs "Report a problem"): a small bundle built on this PC, read in full, then saved as a zip. Nothing is uploaded. -->
+          <div id="settings-report" class="settings-report" data-desktop-only>
+            <p class="settings-eyebrow">Report a problem</p>
+            <h3 class="report-title">Read it, then save it</h3>
+            <p class="muted">Studio builds a small bundle on this PC. Read every file first, then save it as a zip. Nothing is uploaded: you attach it to a message yourself.</p>
+            <p class="settings-status report-crash" id="report-crash" role="status" hidden></p>
+            <div class="report-files" id="report-files" role="list" aria-label="What would be in the zip"><p class="muted report-empty">Building the report…</p></div>
+            <p class="muted report-total" id="report-total"></p>
+            <div class="settings-you-switches report-switches">
+              <label class="switch" title="Titles can give away what you are building. With this on, every task and the project are Task 1, Task 2 … and Project 1 in every file."><input type="checkbox" id="report-replace"><span class="track"></span><span>Replace task titles with numbers</span></label>
+              <label class="switch" id="report-crash-switch" title="What Studio wrote down when it closed unexpectedly, kept for a week." hidden><input type="checkbox" id="report-crash-on" checked><span class="track"></span><span id="report-crash-label">Include the crash record</span></label>
+              <label class="switch" title="After a crash or a hang, the next start says so once and offers this report."><input type="checkbox" id="report-prompt" checked><span class="track"></span><span>Tell me when Studio closes unexpectedly</span></label>
+            </div>
+            <p class="muted" id="report-prompt-note" role="status" hidden></p>
+            <div class="report-preview">
+              <p class="report-preview-head"><b class="report-file-name" id="report-preview-name">manifest.json</b><span class="muted"> · read-only preview</span></p>
+              <pre class="log report-pre" id="report-pre" tabindex="0" aria-label="Preview of the selected file"></pre>
+            </div>
+            <div class="row tight report-actions">
+              <button id="report-save" class="primary" type="button" disabled>Save zip…</button>
+              <button id="report-refresh" class="ghost" type="button" title="Build the report again from what Studio knows now">Read it again</button>
+              <span class="settings-status" id="report-status" role="status"></span>
+            </div>
+            <p class="settings-eyebrow">Never included</p>
+            <ul class="report-never" id="report-never" aria-label="What a report never holds"></ul>
+            <p class="settings-eyebrow">What happens next</p>
+            <ol class="report-next">
+              <li><b>Studio saves the zip where you choose.</b> A Save dialog, because Documents may live in OneDrive.</li>
+              <li><b>It shows the file in Explorer.</b> So you can look inside it once more.</li>
+              <li><b>You attach it to a message yourself.</b> The Void Engine Discord is one place. Studio never sends it.</li>
+            </ol>
+            <button id="report-discord" class="ghost mini" type="button">Open the Discord invite <span aria-hidden="true">↗</span></button>
+          </div>
         </details>
 <details class="settings-optional settings-card" id="settings-integrations"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-plug"/></svg></span><span class="settings-summary-text"><b>Integrations</b><span>Optional: Ruins Runner and Love2D</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary><p class="muted">Requires a separate game project and its LÖVE runtime. This integration is optional for Studio.</p><div class="row studio-actions" id="studio-actions"><button data-action="launch">Launch Love2D studio</button><button data-action="smoke">Run smoke</button><button data-action="game">Launch Ruins Runner</button><button data-action="stop">Stop game</button></div><p class="muted" id="studio-hint"></p></details>
 <details class="settings-optional settings-card" id="settings-styler" data-desktop-only><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-plug"/></svg></span><span class="settings-summary-text"><b>Discord Server Styler</b><span>Bot and local dashboard</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary><p class="muted">Run the bot and its local dashboard from this desktop. Bot credentials stay in the separate Server Styler project's <code>.env</code>.</p><div class="row studio-actions" id="server-styler-actions"><button class="primary" data-styler-action="start">Start Server Styler</button><button data-styler-action="open">Open dashboard</button><button data-styler-action="folder">Open bot folder</button><button data-styler-action="stop">Stop</button></div><p class="eyes-status" id="server-styler-status" role="status">Checking Server Styler…</p></details>
