@@ -35,6 +35,43 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-30 - DevDay 2026: GPT-6.1 Sol, Codex over app-server, ChatGPT plan, The Studio Daily, Models face lift
+
+Five pieces built in parallel worktrees (`C:\wt\sol`, `cxh`, `plan`, `paper`,
+`face`) off `origin/main` 519d656, integrated on `feat/devday-2026`
+(`C:\wt\devday`) with origin/main 54640ea merged in (CHANGELOG union, all 90
+of main's new lines kept; `APP_WIDE_PREFIXES`/`CHANNELS` keep both sides;
+booklet rebuilt). An independent review of the wiring found five defects,
+all fixed with tests: the ChatGPT plan missing from the "is an AI connected"
+gate, `news:edition` holding the project gate, no exec retry when
+`codex app-server` exits mid-handshake, no way to switch ChatGPT accounts,
+and limit-paused calls recorded as ledger errors.
+
+- `npm run check`: ok (206 targets, CSS merge/unused clean, 20 live rows).
+  `node scripts/check-css.mjs --merge --theirs origin/main`: resolved.
+- `npm run audit`: 0 errors, 0 warnings.
+- `npm test`: Node parallel stage 5024 tests, 5017 pass, 0 fail, 7 skipped;
+  the serialized Electron suites pass. The Python contracts failed 3 of 248 on
+  the first run, all in `tools/test_mefi_studio_routing.py`, which pins the
+  provider lists literally; after adding `"chatgpt"` to its three pins,
+  `python -m unittest discover -s tools -p "test_mefi_studio_*.py"` ran 248, OK
+  (1 skipped).
+- New suites: `codex_harness` (13, a scripted fake app-server),
+  `chatgpt_plan` (28, fake OAuth/JWKS/Responses servers on 127.0.0.1, no real
+  network), `daily_news` and `daily_paper` (29, trimmed real feed fixtures);
+  host tests in `executor_builder_cli`, `explicit_route_fallback`,
+  `ai_route_gate`, `agent_profiles`, `app_wide_ipc`.
+- Live, no model turns: `codex app-server` handshake + `thread/start` +
+  `mcpServerStatus/list` on codex-cli 0.154.0 (the owner's MCP servers off per
+  thread); Zen accepts the same efforts and tiers for `gpt-6.1-sol` as
+  `gpt-6-sol`; a real Studio Daily edition from all 10 wires in 0.7 s, with the
+  Studio wire reporting Codex 0.154.0 < 0.159.2 and Claude Code 2.1.280 <
+  2.1.285 from the npm registry.
+- Not run: a real ChatGPT sign-in (the owner's first), a real Codex turn over
+  the app server (the plan's weekly window was at 99%), and
+  `tools/verify_model_lab.py`, which already times out on clean main because
+  the setup helper and Vibe open first.
+
 ## 2026-09-30 - Update safety net: a saved copy, a boot watch and Roll back (ZA7)
 
 The installing helper (`scripts/release-updater.mjs`) now saves the running
@@ -697,40 +734,6 @@ the owner.
   2.1% (the live tree preview). Trace reads "All 0" with its empty state in
   the log pane, Context shows its own subtitle and "4,000 token budget", and
   Friends shows the new Settings path.
-
-## 2026-09-28 - New-user onboarding: no AI connected, real logins, one welcome
-
-The "New user onboarding experience" session's fresh-profile findings,
-finished and gated in C:\wt\onboard on 77ad3bd (one commit). A held launch
-with no AI connected is loop state `setup`. Talk it over files nothing: a
-model's create_task becomes an offer, and keyless it says no AI is connected.
-spawnNextJob refuses an OpenCode route when OpenCode is not installed, and
-executor-core `readableRunError` turns cmd.exe's "not recognized" into "x is
-not installed or not on PATH". cliSignedIn reads each subscription CLI's login
-file. planAutoSetup prefers signed-in logins (then Claude Code, Codex, Grok,
-Antigravity). The setup helper defaults to Quick, leads with Set up
-automatically and Start free with OpenCode, counts a signed-out CLI as not
-connected, and keeps a key save's words and scroll. Only "Continue to the
-guided tour" opens the walkthrough (MefiOnboarding.invite otherwise). The
-keyboard tip waits for 30 quiet seconds, and the launch screen leads with Open
-a folder… when there is no project.
-
-- `npm run build-booklet`, `npm run check` (188 targets), `npm run lint` (0
-  errors, 41 warnings, none new) and `npm run audit` (0 findings): PASS.
-- New tests: assistant_overseer_chat (2 talk-mode), executor_builder_cli (no
-  coding tool), executor_core (readable errors), model_auto_setup (login
-  ranking, cliSignedIn), setup_helper (quick default, signed-out CLI, finder
-  first with key save kept, tour hand-off), onboarding (invite), nav_startup
-  (keyboard tip). startup_screen and vibe_pipeline were updated.
-- `npm test`, exit 1, then fixed: Node parallel stage 4344 tests, 4339
-  passed, 5 skipped, 0 failures. Electron lane 41 tests, 40 passed, 1
-  skipped. `command_render` 1/1 in 55.2 s, `eyes_toggle_electron` 1/1,
-  `occlusion_probe` 1 passed and 1 capability skip. Python contracts: 3
-  failures (test_mefi_studio_assistant pins "Kept in the thread and put on the
-  task board" and the self-test's request reply), because the keyless reply
-  was reworded. The sentence was restored with only the foreman line dropped.
-  After that, Python contracts OK (248, 1 skip) and assistant*/vibe_pipeline
-  273/273. The normalized-path lock passed.
 
 ## Read Before Any Tests
 
