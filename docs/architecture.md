@@ -176,6 +176,7 @@ settings and per-model work-kind summaries for the shared controls.
 | Term | Meaning |
 | --- | --- |
 | **Menu** (the rail) | New task and Search sit above **Home**, **Work**, **Agents** and **Friends**, with one local row for the current group's views. Friends and its Rooms, Your PCs and Playground links open the existing companion menu at the matching card; Search finds them too. Recent tasks belong to the current project; Settings and Help stay at the foot. Help contains Start here, Shortcuts and Community. The project selector at the top opens the project panel. The registry in `renderer/nav.js` preserves existing shortcuts and destination IDs. |
+| **Worktree** | Another folder holding the same project on its own branch, so two pieces of work never share files. Task runs make one each (`.mefi/worktrees/<runId>` on `mefi/<runId>`) while "Give each run its own worktree" is on; **Work › Worktrees** lists them all and merges or removes them. |
 | **Workspace** | The home screen (`H`): current task, app preview and conversation. Project queue, Studio status and setup information expand when needed. |
 | **Command view** | The 3D node tree (`D`): sessions, tasks and agents as orbs, with a right panel for Work, Assistant, Runs and Ask, and agent settings in the top toolbar. |
 | **Booklet** | Historically the single-file model catalog; today `renderer/booklet.html` is the whole app bundled into one file by `npm run build-booklet`. The **Model catalog** tab (`1`) is the part that kept the name. |
@@ -873,7 +874,27 @@ failed process stays an error and cannot produce briefing requests.
   run that left uncommitted edits keeps its checkout for recovery, and a
   crashed attempt's branch is renamed aside (`mefi/orphan/...`) instead of
   deleted. A worktree starts from HEAD, so a run does not see other sessions'
-  uncommitted work until it lands.
+  uncommitted work until it lands. Besides the environment switch, "Give each
+  run its own worktree" (settings.executor.worktreeRuns; the Worktree chip in
+  Build's composer and a switch on the page below) turns it on.
+- **Work › Worktrees** (renderer/worktrees.js; main.cjs "Worktrees";
+  scripts/worktrees.mjs reads, scripts/worktree-actions.mjs writes) lists every
+  worktree of the open project, worst first, and says which hold work only this
+  PC has (uncommitted files, or commits on a detached HEAD no branch holds),
+  which are on GitHub but not merged and which are merged and safe to remove.
+  A task run's row names its task. **Open folder** hands the folder to the file
+  manager. **Merge into main** fast-forwards the main checkout on this PC
+  (a merge commit only when asked; refused while the worktree or the main
+  checkout has uncommitted files, while the main checkout is on another
+  branch or mid-merge, and while a run works in it; a conflicting merge is
+  undone) and never pushes. **Remove** takes the folder away, never the main
+  checkout, a locked worktree or a run's folder while it works; a folder that
+  holds uncommitted files or commits on no branch needs a second, explicit
+  yes and is first kept as `refs/mefi/rescue/<name>-<time>`, and a branch that
+  is not fully merged is never deleted. **Forget missing folders** is
+  `git worktree prune`. Every action names a folder from the list and the host
+  only acts on a folder git lists for the open project. `npm run worktrees`
+  prints the same table (`--json` for other tools); it changes nothing.
 
 ### Command center and the node tree
 
