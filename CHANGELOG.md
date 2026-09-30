@@ -84,6 +84,34 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   pins or unpins, Ctrl+Shift+Left and Right move the tab, and a middle-click
   closes it. With the 0.5 layout on, Ctrl+W no longer closes the Studio window (its
   close button and Ctrl+Q still do). Nothing is taken from a box you are typing in.
+- **Build's tasks as a session list (new layout only, off by default).** With
+  the new layout on (`?layout=v2`), Build's Home lists this project's tasks as
+  sessions: Needs you, Running, Review, Queued and Done, newest first, each with
+  a status dot, its title and a line of words (Settings' detail level picks
+  titles only, titles and status, or everything). A run in its own worktree
+  wears a branch mark. Each row's menu opens it in a new tab, pins, renames,
+  stops or deletes it (a delete asks first and can be undone from Recently
+  deleted). A filter box and a Sessions | Backlog switch narrow the list; Ctrl N
+  starts a task. Developers can switch the panels off with `?sessions=off`.
+- **Each session opens as a thread (new layout only).** It shows the brief with
+  its pictures, every run with its steps and what it said, a live line while a
+  worker is on it, your notes, your questions to Mefi and the answers, what Mefi
+  decided for you (with Undo), and before and after shots that open larger. A
+  question that waits on you sits above the message box with its options, what
+  Mefi suggests, a box for your own words and Decide later. The box at the foot
+  takes a Note, an Ask or a Change, with Attach picture, the @ # / picker and
+  chips for the branch, Worktree, permission mode and coding worker. In a small
+  window it folds behind a More button.
+- **An inspector beside the thread (new layout only).** Plan (where it stands,
+  the brief, what it is done when, earlier versions with Restore), Changes and
+  Checks (the same files, diffs, Accept, Revert and checks as the task board,
+  with live counts on the tabs), Preview (the project's preview controls and
+  Before and After) and Agent (who is on it, what it took, the time limit,
+  Stop).
+- **A task opened from anywhere lands in its thread (new layout only).** The
+  palette, a notification, a tab and View task select the session and show it.
+  Each project remembers its open session, folded groups and inspector tabs
+  across a reload. The task board is still one press away.
 - **Build's Home can list your tasks like sessions, in a coding-agent desktop
   layout (off by default).** Search › Switch Home layout turns it on. The menu
   lists this project's tasks the way the Claude Code and Codex desktop apps list
