@@ -1,0 +1,28 @@
+/* Pictures on a message (renderer/composer-pictures.js): one row under the words with
+   the Attach picture button, the thumbnails and one plain sentence about what will
+   happen to them. Nothing here is smaller than 12px. */
+.composer-attach { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0; padding: 2px 16px 4px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.composer-attach[hidden], .composer-attach-note[hidden] { display: none; }
+.composer-attach-button { flex: 0 0 auto; }
+.composer-thumbs { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.composer-thumbs:empty { display: none; }
+.composer-thumb { position: relative; display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px; border: 1px solid var(--hairline-strong); border-radius: 10px; background: color-mix(in srgb, var(--ivory) 5%, transparent); color: var(--ivory); font-size: 12px; }
+.composer-thumb img, .composer-thumb-kind { flex: 0 0 auto; width: 36px; height: 36px; border-radius: 7px; object-fit: cover; }
+.composer-thumb-kind { display: inline-grid; place-items: center; background: color-mix(in srgb, var(--gold) 16%, transparent); color: var(--ivory); font-size: 12px; font-weight: 600; letter-spacing: .02em; }
+.composer-thumb-name { min-width: 0; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.composer-thumb-remove { flex: 0 0 auto; display: inline-grid; place-items: center; width: 24px; min-width: 24px; height: 24px; min-height: 24px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer; }
+.composer-thumb-remove:hover:not(:disabled), .composer-thumb-remove:focus-visible { background: color-mix(in srgb, var(--bad) 22%, transparent); color: var(--ivory); }
+.composer-thumb-remove:disabled { cursor: default; opacity: .5; }
+.composer-thumb-busy { padding: 9px 12px; color: var(--muted); }
+.composer-attach-note { flex: 1 1 100%; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+
+/* A message in the thread that carried pictures names them under its words. */
+.ws-message-images { margin-top: 6px; color: var(--muted); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+
+/* Sessions layout: the composer is one wrapping row of small controls. The thumbnails
+   and the note take a full line under the words; the Attach button joins the row. */
+html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-attach { display: contents; }
+html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-attach[hidden] { display: none; }
+html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-thumbs { order: 0; flex: 1 1 100%; padding: 0 8px; }
+html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-attach-note { order: 0; flex: 1 1 100%; padding: 0 8px; }
+html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-attach-button { order: 1; }

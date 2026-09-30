@@ -35,6 +35,8 @@
   let readSequence = 0;
   let readFailure = false;
   let createdTask = null;
+  // Pictures on a message (renderer/composer-pictures.js) and @ # / suggestions (renderer/composer-picker.js); null when a script is not loaded.
+  let composerPictures = null, composerPicker = null;
   let buildModeSaving = false;
   const buildMode = () => ({ autoBuild: state.status.autoBuild !== false, loaded: typeof state.status.autoBuild === "boolean", saving: buildModeSaving });
   let agentModeSaving = false;
@@ -121,6 +123,8 @@
     for (const button of $("work-list").querySelectorAll("button")) {
       if (button.dataset.backlogAction) button.disabled = !api()?.backlogControl || state.switching || Boolean(state.busyAction);
     }
+    // The pictures and the suggestions follow the project and the mode; a switch in flight or a send holds them still.
+    composerPictures?.refresh(); composerPicker?.refresh();
   }
   const accentForTheme = (theme) => theme === "forest" ? "sage" : theme;
   function personalize(accentChoice = accentForTheme(window.MefiMusic?.status?.()?.theme) || storage.get("accent", "aurora")) {
@@ -254,6 +258,8 @@
       const head = text("div", "ws-message-head", "");
       head.append(text("strong", "", message.role === "user" ? person() || "You" : companion()), text("time", "", when(message.at)));
       row.append(head, text("div", "ws-message-body", message.text));
+      const pictures = (Array.isArray(message.images) ? message.images : []).map((image) => String(image?.name ?? "").trim()).filter(Boolean);
+      if (pictures.length) row.append(text("div", "ws-message-images", `${pictures.length === 1 ? "Picture" : "Pictures"} attached: ${pictures.join(", ")}`));
       list.append(row);
     }
     // The welcome reads top-down; only a real conversation pins to its newest line.
@@ -967,9 +973,11 @@
   async function submit(event) {
     event?.preventDefault();
     if (window.MefiFileInputs?.isReading($("input"))) { feedback("Wait for the files to finish reading."); return; }
+    if (composerPictures?.isBusy()) { feedback("Wait for the picture to finish adding."); return; }
     const value = $("input").value.trim();
     if (!value || state.pending || state.switching || !state.activeId || !api()) return;
     const id = state.activeId; const mode = state.mode;
+    const images = composerPictures?.take() ?? [];
     if (mode === "work" && !hasRequirement(value)) {
       state.pending = false; controls();
       feedback("Describe what to change and how to check it, then create the task.", true);
@@ -980,10 +988,12 @@
     if ($("created-task")) $("created-task").hidden = true;
     let saved = false;
     try {
-      const result = guard(await (mode === "work" ? api().tasksCreate({ title: value.split("\n")[0].slice(0, 180), prompt: value, projectId: id }) : api().assistantMessage(value, id, { view: "Home", companion: companion() })));
+      const result = guard(await (mode === "work" ? api().tasksCreate({ title: value.split("\n")[0].slice(0, 180), prompt: value, projectId: id, ...(images.length ? { images } : {}) }) : api().assistantMessage(value, id, { view: "Home", companion: companion() }, ...(images.length ? [images] : []))));
       saved = true;
       if (id !== state.activeId) return;
       if ($("input").value.trim() === value) $("input").value = "";
+      // The pictures went with the message; they belong to it now.
+      composerPictures?.clear();
       saveDraft();
       if (result.state) { state.assistant = result.state; renderThread(); }
       if (mode === "work") {
@@ -1109,6 +1119,9 @@
     });
     $("form").addEventListener("submit", submit);
     window.MefiFileInputs?.bind($("input"), { scope: () => `${state.epoch}:${state.activeId}:${state.mode}`, blocked: () => state.pending || state.switching || !state.activeId });
+    const composerScope = () => `${state.epoch}:${state.activeId}`, composerBlocked = () => state.pending || state.switching || !state.activeId;
+    composerPictures = window.MefiComposerPictures?.bind($("input"), { scope: composerScope, blocked: composerBlocked, mode: () => state.mode === "work" ? "task" : "chat" }) ?? null;
+    composerPicker = window.MefiComposerPicker?.bind($("input"), { scope: composerScope, blocked: composerBlocked, tasks: () => scoped(state.tasks), mode: () => state.mode === "work" ? "task" : "chat" }) ?? null;
     $("activity-toggle")?.addEventListener("click", () => setActivityOpen($("activity-drawer").hidden, true));
     $("activity-close")?.addEventListener("click", () => setActivityOpen(false, true));
     $("progress-open")?.addEventListener("click", () => setActivityOpen(true, true));
@@ -1249,6 +1262,24 @@
           if (!result?.ok) throw new Error(result?.error || "The launch choice could not be saved.");
           feedback(launchAgents.value === "start" ? "Agents will start when Studio opens." : launchAgents.value === "off" ? "Agents will stay off until you start them." : "Agents will start again where they were running when you closed Studio.");
         } catch (error) { feedback(error.message, true); }
+      });
+    }
+    // "Suggest files, tasks and skills while I type" (settings.ui.composerPicker, on unless it says false): the @ # /
+    // popup and the chips under the message box. The host keeps the key and honours it too (main.cjs, "Mentions in a message").
+    const pickerSwitch = document.getElementById("settings-composer-picker");
+    if (pickerSwitch) {
+      Promise.resolve(api()?.prefsGet?.()).then((result) => {
+        const on = window.MefiComposerPicker?.pickerPreference?.(result?.prefs) !== false;
+        pickerSwitch.checked = on; composerPicker?.setPicker(on);
+      }).catch(() => {});
+      pickerSwitch.addEventListener("change", async () => {
+        const wanted = pickerSwitch.checked;
+        try {
+          const result = await api()?.prefsSet?.({ composerPicker: wanted });
+          if (!result?.ok) throw new Error(result?.error || "That choice could not be saved.");
+          composerPicker?.setPicker(wanted);
+          feedback(wanted ? "Typing @, # or / now suggests project files, tasks and skills." : "Typing @, # or / stays plain text, and a /skill in a message is not expanded.");
+        } catch (error) { pickerSwitch.checked = !wanted; feedback(error.message, true); }
       });
     }
     // "Start with Windows" (settings.ui.openAtLogin): the host reads back what
