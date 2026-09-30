@@ -76,6 +76,22 @@ safety net"). Built and gated in an isolated worktree (`C:\wt\za7`) off
   The rehearsal drives the same PowerShell against a stand-in, and the first
   protected update in the field is the one after the release that carries this.
 
+## 2026-09-29 - Publish completed work with signing activation deferred
+
+GitHub rejected the completed integration push because this PC's OAuth
+credential lacks the workflow scope. No SSH key is configured. Preserved the
+exact tested signing/smoke workflow as docs/release-workflow-signpath.yml and
+on local branch codex/release-signing-gated (491373c), restored only the
+active release workflow to GitHub main's bytes, and documented the activation
+step and credential requirement. All other finished work remains integrated.
+No tag/release was published. Runtime sources are unchanged since the 733-test
+integration and final Command renderer pass.
+
+- Workflow proposal bytes match 491373c:.github/workflows/release.yml.
+- Active workflow bytes match origin/main:.github/workflows/release.yml.
+- npm run check and npm run audit: PASS; no runtime changes need new tests.
+- Lost-work guard must pass before pushing; deferral is explicit in history.
+
 ## 2026-09-29 - Preserve concurrent main fixes while landing finished branches
 
 Integrated the update safety net (e9b8b79) and completed dogfood fixes
@@ -688,41 +704,6 @@ the map areas. "Where this lives" pins a plan to a Project map area.
   planning_ui (4: one-click record then ask; switch off; nameless idea
   auto-asks; list first, then ready chip, scan and map pinning),
   planning_exploration (1: stale-ok read answers from the last inventory).
-
-## 2026-09-28 - Start with Windows; Your PCs shows what each PC's agents are doing
-
-Two pieces for leaving home PCs working. **Start with Windows** (Settings ›
-General › Profile & startup, and the setup helper's Machine & app) keeps a
-Run entry pointed at this copy of the app with `--at-login`; that launch
-(`startupAtLogin`) opens the open project in the tray without the launch
-screen, the agents follow When Studio opens, and `prefs:get` reads back what
-Windows holds, including Task Manager switching it off. **Your PCs** lines in
-Share between my PCs now carry each PC's agents (`agentsSnapshot` →
-`vaultAgentsLine`: the loop state, up to four titles being built, the
-needs-you count, today's finished and stopped counts), sealed in the vault,
-sent after a sync look and when that line changes (`vaultAgentsWatch`), at
-most every ten minutes.
-
-- `npm run build-booklet`: built; `npm run check` (189 targets, 391 specs) and
-  `npm run audit` (0 errors, 0 warnings): PASS.
-- New suites: start_with_windows (11), pc_agents_line (4); pc_vault gains the
-  sealed agents line, pc_vault_ui the painted line, setup_helper the switch.
-  188 focused tests across sync_host, pc_vault*, startup_resume, startup_hold,
-  setup_helper, workspace_ui, booklet_build, settings_search_labels,
-  cli_path_refresh_host and module_purity: PASS.
-- `npm test` in C:\wt\away on e53a572 plus this change: Node parallel stage
-  4392 tests, 4387 passed, 5 skipped, 0 failures. Electron lane 41 tests, 35
-  passed, 1 skipped, 5 failed (`performance_render` x2 "Profiler JSON download
-  timed out", `planning_render` backdrop check, `renderer_recovery` and
-  `task_overview_render` killed without a report), and `command_render` killed
-  at its limit, all while a second checkout ran its own `npm ci` and tests.
-  Each passed solo on rerun: performance_render 2/2, planning_render 1/1,
-  renderer_recovery (all pass), task_overview_render 1/1, command_render 1/1
-  in 93.2 s. `eyes_toggle_electron` 1/1, `occlusion_probe` 1 pass 1 skip.
-  Python contracts OK (248, 1 skip). Normalized-path lock passed.
-- Browser-pane preview of the real `pc-vault.js` and the switch markup with a
-  fake bridge: each PC's agents line under its sync line, and the switch
-  beside When Studio opens.
 
 ## Read Before Any Tests
 

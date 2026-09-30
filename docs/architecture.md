@@ -1559,11 +1559,12 @@ Studio reuse the GitHub CLI's `gh auth token`.
 The packaged `Mefi Studio AI+.exe` is Electron's `electron.exe`, stamped with
 Studio's product name, version, copyright and icon (`scripts/stamp-exe.mjs`).
 Windows then shows Studio, not "Electron", in Task Manager, the file's
-Properties and SmartScreen. The release workflow opens the packaged app once
-(`--smoke`) before publishing. Once SignPath is set up, the workflow also has
-the executable signed and checks the signature first. A release run started
-by hand can use the hosted-runner gate for a tag that passed the full local
-gate. [code-signing.md](code-signing.md) holds the policy and the setup.
+Properties and SmartScreen. The tested release workflow proposal in
+[release-workflow-signpath.yml](release-workflow-signpath.yml) adds a packaged
+app smoke launch, optional SignPath signing and a hosted-runner gate. It is
+pending activation with a GitHub credential allowed to change workflows;
+the active release workflow remains unchanged. [code-signing.md](code-signing.md)
+holds the policy, activation steps and service setup.
 
 ### Git sync: Push, Pull and GitHub linking
 

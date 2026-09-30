@@ -6,9 +6,12 @@ Smart App Control on Windows 11 blocks one outright. Studio's Windows builds
 are going to be signed through the SignPath Foundation's free programme for
 open-source projects.
 
-**Status:** every release so far is unsigned, and so is 0.4.5. Signed
-releases start with the first version released after SignPath Foundation
-accepts the project. Until then the download page's SmartScreen steps still
+**Status:** every release so far is unsigned, and so is 0.4.5. The tested workflow is preserved in
+[release-workflow-signpath.yml](release-workflow-signpath.yml); activation is
+pending because the current GitHub credential lacks the `workflow` scope.
+An authorized maintainer must replace `.github/workflows/release.yml` with
+that proposal and land it using a credential allowed to change workflows.
+Signed releases then require SignPath Foundation to accept the project. Until then the download page's SmartScreen steps still
 apply.
 
 Free code signing provided by [SignPath.io](https://signpath.io), certificate
