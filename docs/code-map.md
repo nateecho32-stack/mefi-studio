@@ -302,6 +302,7 @@ imports. See [Unified Studio](unified-studio.md) for the interfaces and fixture 
 | `size.js` / `size.css` | 711 · 259 | `window.MefiSize` (layout v2 only): Size and density. The model for interface scale, text size (`--text-scale`), density (`data-density`, now with Spacious) and detail (`data-detail`), saved in the appearance store (`mefiStudio.appearance`, version 2, old reader and a backup kept); the page (Configuration › UI & Surfaces, Search, Settings › Appearance) with four controls, a read-only Panels table and a live miniature drawn from the same tokens under its own scope, so the window changes only on Apply (with Undo). The stylesheet defines the `--d-*` density tokens, the detail tokens and the `--f12`…`--f22` type ladder the new regions size themselves with. With the layout off it does nothing. Bundled after `config-dialog.js`. |
 | `skills.js` / `skills.css` | 459 · 64 | `window.MefiSkills`: Agents › Setup › Skills (`skills`; also in Search): the skills the project keeps, an editor with live checks, starters, import from a folder, export as a folder or zip, delete behind a second press, and a read-only state; other tools' skills are listed read-only. Bundled after `review.js`. |
 | `shell.js` / `shell.css` | 1,319 · 256 | `window.MefiShell`: the 0.5 layout's frame (`html[data-layout="v2"]`, off by default). The top bar sits in the local navigation's row: list toggle, Vibe | Build switch (Ctrl M), trail, Search, "N need you", "N working" with pause, inspector toggle. List and inspector columns have splitters (drag, arrows, double-click reset) and, in small windows, drawers. A tab strip row, a `main` host and a status bar (Layout menu, running, waiting, usage meters, player, permission mode and today's cost, only with data). Each mode keeps its own widths in `mefiStudio.shell.layout.v1`. Modules put content in regions with `mount(region, key, elementOrFactory, {title, order})`. Also the way in: the Settings switch "Try the 0.5 layout", Search's "Switch layout" and `MEFI_STUDIO_LAYOUT`. Bundled after `skills.js`. |
+| `tabs.js` / `tabs.css` | 1,639 · 156 | `window.MefiTabs`: layout v2's tab strip, drawn into `MefiShell.region("tabs")` and sized through `MefiShell.resize`. A tab is a remembered route (`{ id, params }`), never a live page: the strip asks `MefiNav.go` for the page and follows where the app really is (`mefi:nav`, the body watcher, `MefiNav.current()`, readers). Each managed behaviour has a switch in the Tab behaviour card (`configCard`, shown in Configuration › UI & Surfaces and from the strip): preview tab, an agent that needs you, idle close, the cap with Undo, Recently closed, the pin suggestion; keys Ctrl+T/W/Tab/1–9. Tabs are kept per project (`mefiStudio.tabs.v1.<projectId>`) with global pins (`mefiStudio.tabs.global.v1`). Starts only in layout v2 with a `MefiShell`. Bundled after `shell.js`. |
 | `alerts.js` · `report.js` · `whats-new.js` · `host-cards.css` | 182 · 207 · 196 · 72 | What the host tells you, in Studio: Settings › General › Notifications (switches, quiet hours, generic or titled words, a test button) and the click routing for `alerts:open`; the Report a problem card in Diagnostics (preview every file, Save zip) with the "Studio closed unexpectedly" toast; the "Studio updated to X" toast, its What's new sheet and the list in Settings › Updates. Each waits for the startup gate. One stylesheet is shared. Bundled after `pc-vault.js`. |
 | `worktrees.js` / `worktrees.css` | 344 · 63 | `window.MefiWorktrees`: Work › Worktrees (`worktrees`), every git worktree of the open project, worst first, with what to do about each: which hold work only this PC has, which are on GitHub but not merged, which are merged and safe to remove. Open folder, Merge into main (a second step offers a merge commit when main has moved, or "Merge anyway" while agents work), Remove (two presses; a folder holding uncommitted files asks once more and keeps a copy) and Forget missing folders; the switch under the title turns per-run worktrees on. A run's row names its task and is left alone while the run works. It reads on open, every 15 s while shown, on focus and when a run starts or ends, and skips a repaint that would change nothing. `peek()`/`summary()` feed other surfaces. |
 | `builder.js` / `builder.css` | 1,356 · 343 | `window.MefiBuilder`: Build's Home as a coding-agent desktop (`html[data-home-layout="sessions"]`; Search › Switch Home layout, off by default). The menu lists this project's tasks like sessions (Chat with Mefi, Pinned, Needs you, Working, then by day); the page opens on a greeting card with work stats (tasks, runs, tokens, active days, peak hour, top model, a 22-week heat map) over the composer, with chips for the project, its branch, the permission mode, the coding worker and Worktree; a task opens as a session with its brief, runs, checks and a Note / Ask / Change composer. A task whose run has its own worktree wears a branch mark (from `MefiWorktrees`). `workspace.js` still owns Home's data and host calls. |
@@ -358,7 +359,7 @@ commit rewrites the JSON view as well.
 
 ## Tests and tools
 
-- **`tests/*.test.mjs`** (486 files) run on Node's own `node:test` and
+- **`tests/*.test.mjs`** (492 files) run on Node's own `node:test` and
   `node:assert/strict`, with no test dependencies. `scripts/run-node-tests.mjs`
   is the runner; `npm run test:fast` skips the real-Electron suites and the
   Python stage.
@@ -426,6 +427,18 @@ commit rewrites the JSON view as well.
   `shell_render.test.mjs` with `fixtures/shell-render-electron.cjs` and
   `fixtures/shell-vm.mjs` (real Chromium at five window sizes, both modes, real
   key and pointer events, drawers at 600x560).
+- **The tab strip** (layout v2; `renderer/tabs.js`) is pinned by five fake-DOM
+  suites over `fixtures/tabs-env.mjs` (a stub nav and shell, a controllable clock
+  and timers, measurable geometry): `tabs_model` (preview, pins, the cap, Undo,
+  idle close, Recently closed, needs, the suggestion, the settings),
+  `tabs_observer` (every way a page can open, and v1 doing nothing at all),
+  `tabs_persist` (records, keys, bad storage, projects), `tabs_strip` (fit, "N
+  more", the one-menu strip, keys, drag, menus, the Add menu, the card, ARIA) and
+  `tabs_host` (`MEFI_STUDIO_NO_TAB_MANAGER`, `saveResume`, the Configuration card,
+  the build registration, the chords the app already binds); and by
+  `tabs_render.test.mjs` with `fixtures/tabs-render-electron.cjs` (real Chromium,
+  about two minutes: five window sizes, real input, real pages, a reload, v1
+  untouched, Ctrl+W against the application menu's own template).
 - **The fleet** is pinned by `fleet.test.mjs` (the reducer: seat continuity on a
   retry, wires, health, bounded reload, no prompts or paths in a snapshot),
   `fleet_host.test.mjs` (pushes only while watched, one trailing push per half
@@ -472,6 +485,10 @@ commit rewrites the JSON view as well.
 
 ## Where to look when…
 
+- **the tab strip does something you did not ask for:** `renderer/tabs.js` (each
+  managed behaviour is read through `eff()` and has a switch), the Tab behaviour
+  card in Configuration › UI & Surfaces, and `MEFI_STUDIO_NO_TAB_MANAGER=1`;
+  [architecture.md](architecture.md) "Tabs you add and pin" walks it.
 - **a model call misbehaves:** `assistantFetch` → `httpAssistantCall` →
   `chatCompletion` in `main.cjs`, with routing in `resolveAiRoute` and the
   pause logic in `scripts/provider-breaker.cjs`.

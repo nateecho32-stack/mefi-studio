@@ -58,6 +58,32 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   reset (new layout only).** Vibe and Build each remember their own layout. Ctrl B
   shows or hides the list, and [ the inspector. In a small window they open as
   drawers over the page and close on Esc or a click outside.
+- **Tabs you add and pin (new layout only).** With the 0.5 layout on, a row of
+  tabs sits at the top of the window. Home stays at the left. Press + (or Ctrl+T)
+  to open any page, or one of this project's sessions, in a tab; pin the ones you
+  always want so they stay; drag a tab to put it where you like. Each project keeps
+  its own tabs, pinned pages follow you into every project, and your tabs are still
+  there after Studio restarts or updates itself. In a small window the row becomes
+  one button with a menu of every tab, and Build's session page starts right under
+  the row.
+- **Studio keeps your tabs tidy, and every part has a switch (Configuration ›
+  UI & Surfaces › Tab behaviour, or the sliders button on the row).** A page you
+  only look at opens in one italic preview tab that your next click replaces,
+  until you type in it, pin it or double-click it. When an agent needs you, its tab
+  gets a badge and opens in the background (or only gets the badge, or takes you
+  there: your choice). Tabs of finished sessions close after 30 minutes you have
+  not opened them. At most 8 unpinned tabs are kept (3 to 12, or no limit): the one
+  you used longest ago closes, with an Undo. After you open the same page three
+  times, a small chip offers to pin it, once. Pinned tabs never close by
+  themselves, and whatever Studio closes comes back from Recently closed or with
+  Ctrl+Shift+T. One master switch turns all of it off, and so does starting Studio
+  with `MEFI_STUDIO_NO_TAB_MANAGER=1` (for that run).
+- **Keys for tabs (new layout only).** Ctrl+T opens the add menu, Ctrl+W closes the
+  tab you are on, Ctrl+Tab and Ctrl+Shift+Tab move between tabs, Ctrl+1 to 9 jump to
+  one (9 is the last), Ctrl+Shift+T brings the last closed tab back, Ctrl+Alt+P
+  pins or unpins, Ctrl+Shift+Left and Right move the tab, and a middle-click
+  closes it. With the 0.5 layout on, Ctrl+W no longer closes the Studio window (its
+  close button and Ctrl+Q still do). Nothing is taken from a box you are typing in.
 - **Build's Home can list your tasks like sessions, in a coding-agent desktop
   layout (off by default).** Search › Switch Home layout turns it on. The menu
   lists this project's tasks the way the Claude Code and Codex desktop apps list
