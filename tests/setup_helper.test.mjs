@@ -248,6 +248,89 @@ test("without the accounts bridge the connections page reads as before", async (
   assert.equal(content().querySelectorAll("section").some((node) => node.textContent.includes("More than one login")), false);
 });
 
+test("the ChatGPT plan card follows OpenAI's wording and only exists behind its bridge", async () => {
+  const bare = load();
+  bare.helper.open("providers");
+  await settle();
+  assert.equal(bare.content().querySelectorAll("section").some((node) => node.textContent.includes("Use your ChatGPT plan")), false, "no bridge, no card");
+  bare.helper.open("team");
+  await settle();
+  const bareMain = bare.content().querySelectorAll("select").find((node) => node.getAttribute("aria-label") === "Main assistant provider");
+  assert.equal(bareMain.querySelectorAll("option").some((option) => option.value === "chatgpt"), false, "and no ChatGPT plan route to pick");
+
+  const { window, helper, calls, content, byText, overlay } = load();
+  let status = { ok: true, provider: "chatgpt", signedIn: false, signingIn: false, email: null, planUsage: false, needsSignIn: false, limited: false, limitedUntil: null, manageUsageUrl: "https://chatgpt.com/settings/usage" };
+  Object.assign(window.mefiStudio, {
+    chatgptPlanStatus: async () => { calls.push(["chatgptPlanStatus"]); return status; },
+    chatgptPlanSignIn: async () => {
+      calls.push(["chatgptPlanSignIn"]);
+      status = { ...status, signedIn: true, email: "owner@example.com", planUsage: true };
+      return { ok: true, welcome: true, status };
+    },
+    chatgptPlanSignOut: async () => { calls.push(["chatgptPlanSignOut"]); status = { ...status, signedIn: false, email: null, planUsage: false }; return { ok: true, status }; },
+    openExternal: async (url) => { calls.push(["openExternal", url]); return { ok: true }; },
+  });
+  helper.open("providers");
+  await settle();
+  const card = () => content().querySelectorAll("section").find((node) => node.textContent.includes("Use your ChatGPT plan"));
+  assert.ok(card(), "the card shows once the host wires the bridge");
+  assert.match(card().textContent, /Complete eligible AI requests in this app with usage included in your ChatGPT plan or credits balance\./);
+  const go = byText(card(), "Continue with ChatGPT");
+  assert.ok(go, "the approved button label");
+  assert.equal(go.className, "setup-helper-chatgpt");
+  await go.click();
+  await settle();
+  assert.ok(calls.find((row) => row[0] === "chatgptPlanSignIn"));
+  const welcome = card().querySelectorAll(".setup-helper-chatgpt-welcome")[0];
+  assert.ok(welcome, "the first sign-in shows the one-time welcome");
+  assert.equal(welcome.getAttribute("role"), "dialog");
+  assert.match(welcome.textContent, /You're using your ChatGPT plan/);
+  assert.match(welcome.textContent, /Eligible usage in this app uses your ChatGPT plan\. Manage usage in your ChatGPT settings\./);
+  await byText(welcome, "Got it").click();
+  await settle();
+  assert.equal(card().querySelectorAll(".setup-helper-chatgpt-welcome").length, 0, "Got it dismisses it");
+  assert.match(card().textContent, /Signed in as owner@example\.com/);
+  assert.match(card().textContent, /Using ChatGPT plan/);
+  assert.match(overlay().querySelector("#setup-helper-status").textContent, /Signed in with ChatGPT/);
+  await byText(card(), "Manage usage").click();
+  assert.deepEqual(calls.filter((row) => row[0] === "openExternal").at(-1), ["openExternal", "https://chatgpt.com/settings/usage"]);
+
+  status = { ...status, limited: true, limitedUntil: Date.now() + 60000 };
+  helper.open("providers");
+  await settle();
+  assert.match(card().textContent, /Usage limit reached/);
+  assert.match(card().textContent, /Review your plan or this app's limit in ChatGPT settings\./);
+  assert.equal(byText(card(), "Manage usage").className, "primary", "Manage usage leads once the limit is reached");
+
+  await byText(card(), "Sign out").click();
+  await settle();
+  assert.ok(calls.find((row) => row[0] === "chatgptPlanSignOut"));
+  assert.ok(byText(card(), "Continue with ChatGPT"), "signed out, the card offers the sign-in again");
+
+  helper.open("team");
+  await settle();
+  const main = content().querySelectorAll("select").find((node) => node.getAttribute("aria-label") === "Main assistant provider");
+  assert.ok(main.querySelectorAll("option").some((option) => option.value === "chatgpt" && option.textContent.startsWith("ChatGPT plan")), "the route can be picked once it is wired");
+});
+
+test("a ChatGPT plan sign-in without plan usage keeps the card's sign-in and shows no welcome", async () => {
+  const { window, helper, content, byText } = load();
+  const status = { ok: true, signedIn: true, email: "owner@example.com", planUsage: false, limited: false, manageUsageUrl: "https://chatgpt.com/settings/usage" };
+  Object.assign(window.mefiStudio, {
+    chatgptPlanStatus: async () => status,
+    chatgptPlanSignIn: async () => ({ ok: false, errorKind: "canceled", error: "Sign-in was canceled in the browser.", status }),
+    chatgptPlanSignOut: async () => ({ ok: true }),
+  });
+  helper.open("providers");
+  await settle();
+  const card = () => content().querySelectorAll("section").find((node) => node.textContent.includes("Use your ChatGPT plan"));
+  assert.match(card().textContent, /ChatGPT plan usage off/);
+  assert.equal(helper.connected(), false, "a sign-in without plan usage is not a working route");
+  await byText(card(), "Continue with ChatGPT").click();
+  await settle();
+  assert.equal(card().querySelectorAll(".setup-helper-chatgpt-welcome").length, 0);
+});
+
 test("machine limits save one validated field at a time", async () => {
   const { helper, calls, content } = load();
   helper.open("system");

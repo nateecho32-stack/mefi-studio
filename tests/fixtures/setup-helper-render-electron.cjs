@@ -63,6 +63,8 @@ app.whenReady().then(async () => {
       categories: [{ id: "grant", label: "Granting reach", blurb: "Letting an agent touch more than its task allows." }, { id: "risk", label: "Irreversible changes", blurb: "Changes that may be difficult or impossible to undo." }], decisions: [] },
     learningState: { ok: true, projectId, decisions: { enabled: true, scope: "blend" }, models: "blend", profiles: {} },
     openrouterModels: { ok: true, models: [] }, agentModels: { ok: true, models: [{ id: "gpt-6-sol" }] },
+    // The ChatGPT plan card (Connect an AI) shows behind these; signed out, so its button is on the page.
+    chatgptPlanStatus: { ok: true, provider: "chatgpt", signedIn: false, signingIn: false, email: null, planUsage: false, needsSignIn: false, limited: false, limitedUntil: null, manageUsageUrl: "https://chatgpt.com/settings/usage" },
   };
   const preload = path.join(root, "setup-preload.cjs");
   fs.writeFileSync(preload, `const {contextBridge}=require('electron');const responses=${JSON.stringify(responses)};const calls=[];
@@ -79,6 +81,7 @@ app.whenReady().then(async () => {
     bridge.backlogControl=record('backlogControl',{ok:true});bridge.machineSet=record('machineSet',{ok:true});bridge.updateSet=record('updateSet',{ok:true});
     bridge.companionPrefs=record('companionPrefs',{ok:true});bridge.prefsSet=record('prefsSet',{ok:true});bridge.jevSetEnabled=record('jevSetEnabled',{ok:true});bridge.jevSetRoute=record('jevSetRoute',{ok:true});
     bridge.autonomySet=record('autonomySet',patch=>({...responses.autonomyState,...patch,ok:true}));bridge.learningSet=record('learningSet',{ok:true});
+    bridge.chatgptPlanSignIn=record('chatgptPlanSignIn',{ok:false,errorKind:'canceled',error:'Sign-in canceled.'});bridge.chatgptPlanSignOut=record('chatgptPlanSignOut',{ok:true});
     for(const name of ['onTasks','onProjects','onAssistantStatus','onAssistant','onProjectPreview','onSettingsChanged','onStudioLog','onAutoSetup'])bridge[name]=()=>()=>{};
     contextBridge.exposeInMainWorld('mefiStudio',bridge);
     contextBridge.exposeInMainWorld('setupFixture',{calls:()=>calls});
