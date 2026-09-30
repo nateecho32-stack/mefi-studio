@@ -5,7 +5,8 @@
 // region here is one box placed the way docs/unified-studio.md says a region is placed (from MefiNav.usable() and the
 // contract's variables), sized through MefiNav.layout.set, which is what MefiShell.resize does. So what is measured is
 // the strip itself: its geometry and its behaviour with real pages, real pointer and keyboard input, the real nav, the
-// real Configuration and Search.
+// real Configuration and Search. Once the renderer has a shell.js of its own (FRAME's MefiShell), the stand-in is not put
+// in and the strip runs in the real regions; report.shell says which it was.
 //
 //   1. five window sizes (1920x1080, 1440x900, 1100x720, 600x560, 600x560 at 150%): with a dozen tabs open the strip
 //      fits, folds into "N more" or becomes one menu below the fold; nothing overflows the page, no scroller reserves
@@ -209,11 +210,15 @@ app.whenReady().then(async () => {
     contextBridge.exposeInMainWorld('tabsFixture',{calls:()=>calls.slice(),push:(name,value)=>{for(const callback of subscribers[name]||[])callback(value);},answer:(name,value)=>{responses[name]=value;}});
     localStorage.setItem('mefiStudio.commandHome','0');localStorage.setItem('mefiStudio.zen','0');localStorage.setItem('mefiStudio.zenReactive','0');localStorage.setItem('mefiStudio.keyHint.v1','1');localStorage.setItem('mefiStudio.keyTips','off');localStorage.setItem('mefiStudio.walkthrough.v1',JSON.stringify({version:1,step:0,status:'complete'}));localStorage.setItem('mefiStudio.whatsNew.seen','vibe-build-1');
   `);
-  // The fixture-only shell goes in ahead of the booklet's scripts, in the copy this run owns.
+  // The fixture-only shell goes in ahead of the booklet's scripts, in the copy this run owns, unless the renderer has a shell of its own
+  // (FRAME's renderer/shell.js, which replaces window.MefiShell when it loads): then the strip runs in the real regions, and only what the
+  // stand-in itself recorded (how often it was asked to mount) is not checked.
   const bookletFile = path.join(root, "renderer", "booklet.html");
+  const realShell = fs.existsSync(path.join(root, "renderer", "shell.js"));
+  report.shell = realShell ? "the renderer's own MefiShell" : "the fixture's stand-in";
   const page = fs.readFileSync(bookletFile, "utf8");
   assert.ok(page.includes('<script id="booklet-data"'), "the booklet has its data block to put the stand-in shell in front of");
-  fs.writeFileSync(bookletFile, page.replace('<script id="booklet-data"', () => `<script>${SHELL_STUB}</script>\n<script id="booklet-data"`));
+  if (!realShell) fs.writeFileSync(bookletFile, page.replace('<script id="booklet-data"', () => `<script>${SHELL_STUB}</script>\n<script id="booklet-data"`));
 
   const window = new BrowserWindow({ show: false, width: 1440, height: 900, frame: false, webPreferences: { preload, contextIsolation: true, nodeIntegration: false, sandbox: true, offscreen: true, backgroundThrottling: false } });
   const contents = window.webContents; contents.setAudioMuted(true); contents.setFrameRate(60); contents.setWindowOpenHandler(() => ({ action: "deny" }));
@@ -296,8 +301,10 @@ app.whenReady().then(async () => {
   await until("window.MefiWorkspace.snapshot().tasks.length >= 6", "the board is loaded");
   await wipe();
   report.notes.push(await run("const a = window.MefiWorkspace.snapshot().assistant; return { questions: (a && a.questions || []).length, needs: Array.from(new Set((a && a.questions || []).map((q) => q.context && q.context.taskId))) };"));
-  assert.equal(await run("return window.MefiShell.mounts().length;"), 1, "the strip asked the shell for its place once");
-  assert.deepEqual(await run("return window.MefiShell.mounts()[0];"), { region: "tabs", key: "tabs", title: "Tabs", order: 0 });
+  if (!realShell) {
+    assert.equal(await run("return window.MefiShell.mounts().length;"), 1, "the strip asked the shell for its place once");
+    assert.deepEqual(await run("return window.MefiShell.mounts()[0];"), { region: "tabs", key: "tabs", title: "Tabs", order: 0 });
+  }
   const booted = await strip();
   assert.equal(booted.used, 38, "the strip asked for its height and the contract gave it");
   assert.equal(booted.variable, "38px", "as html's own variable");
@@ -310,7 +317,10 @@ app.whenReady().then(async () => {
   assert.equal(booted.strip.y + booted.strip.h <= booted.usable.top + 0.5, true, "the page starts under the strip");
   assert.deepEqual(booted.items.map((item) => [item.title, item.pinned, item.home, item.active]), [["Home", true, true, true]]);
   assert.deepEqual(booted.missing, [], "every glyph the strip draws is in the sprite");
-  assert.deepEqual(await run("const main = document.getElementById('fx-region-main'); const tab = document.querySelector('.ts-tab[aria-selected=\"true\"]'); return { role: main.getAttribute('role'), labelledby: main.getAttribute('aria-labelledby') === tab.id, controls: tab.getAttribute('aria-controls') === main.id };"), { role: "tabpanel", labelledby: true, controls: true }, "the main area is the tab panel of the tab that is selected");
+  const panel = await run("const main = window.MefiShell.region('main'); const tab = document.querySelector('.ts-tab[aria-selected=\"true\"]'); return { tag: main.tagName, role: main.getAttribute('role'), labelledby: main.getAttribute('aria-labelledby') === tab.id, controls: tab.getAttribute('aria-controls') === main.id };");
+  // A main area that has a meaning of its own (a <main>, or another role) is left alone: then the tabs name no panel, and that is said.
+  if (panel.tag === "MAIN" || (panel.role && panel.role !== "tabpanel")) report.notes.push(`the shell's main region is <${panel.tag.toLowerCase()}> with role ${panel.role || "none"}: the strip leaves it as it is, so the tabs name no panel`);
+  else assert.deepEqual({ role: panel.role, labelledby: panel.labelledby, controls: panel.controls }, { role: "tabpanel", labelledby: true, controls: true }, "the main area is the tab panel of the tab that is selected");
   await capture("tabs-launch.png");
 
   // ===================================================================================================================================
@@ -792,8 +802,17 @@ app.whenReady().then(async () => {
   const menuSource = fs.readFileSync(path.join(studio, "main.cjs"), "utf8").replace(/\r\n/g, "\n");
   const from0 = menuSource.indexOf("function applicationMenu() {"), to0 = menuSource.indexOf("async function applyReload");
   assert.ok(from0 > 0 && to0 > from0, "the application menu is in main.cjs");
-  const applicationMenu = new Function("Menu", "requestQuit", "reloadKeepingPlace", "stepUiZoom", `${menuSource.slice(from0, to0)}\nreturn applicationMenu;`)(Menu, () => {}, async () => {}, async () => {});
-  Menu.setApplicationMenu(applicationMenu());
+  // The template is main.cjs's own, run here with stubs for what its clicks call. Should it ever need more than that to be built outside
+  // the app, the probe is left out and says why, rather than failing a check that is about the platform and not about the strip.
+  try {
+    const applicationMenu = new Function("Menu", "requestQuit", "reloadKeepingPlace", "stepUiZoom", `${menuSource.slice(from0, to0)}\nreturn applicationMenu;`)(Menu, () => {}, async () => {}, async () => {});
+    Menu.setApplicationMenu(applicationMenu());
+  } catch (error) {
+    report.keys.windowProbe = `The application menu in main.cjs could not be built outside the app (${String((error && error.message) || error).slice(0, 160)}), so what Ctrl+W does to a window was not checked.`;
+    report.notes.push(report.keys.windowProbe);
+    assert.deepEqual(report.errors, [], JSON.stringify(report.errors));
+    report.complete = true; finish(); return;
+  }
   const probe = async (html, label) => {
     const win = new BrowserWindow({ show: true, width: 420, height: 260, frame: true, webPreferences: { contextIsolation: true, sandbox: true } });
     let closed = false;

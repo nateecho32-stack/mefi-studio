@@ -1,5 +1,6 @@
 // The tab strip in a real renderer: a copied booklet in layout v2, a synthetic bridge and a fixture-only stand-in for FRAME's
-// tab region (tests/fixtures/tabs-render-electron.cjs). Five window sizes with a dozen tabs (nothing overflows, no scroller
+// tab region (tests/fixtures/tabs-render-electron.cjs; it is left out, and the strip runs in the renderer's own MefiShell, once
+// renderer/shell.js exists). Five window sizes with a dozen tabs (nothing overflows, no scroller
 // reserves width, no text under 12 px, menus stay inside the window), real pointer and keyboard input, real pages, the
 // reload, v1 untouched, the host's switch, and Ctrl+W against the window's own menu (two small windows are shown for about two
 // seconds; MEFI_TABS_SKIP_WINDOW_PROBE=1 leaves that step out). Set MEFI_TABS_CAPTURE_DIR to an absolute folder to keep the screenshots.
@@ -55,8 +56,9 @@ test("the tab strip fits, folds and menus at five window sizes, takes real input
     assert.equal(report.keys.ctrlWClosesTheTab, true, "Ctrl+W closes the tab you are on");
     if (process.env.MEFI_TABS_SKIP_WINDOW_PROBE !== "1") {
       if (report.keys.windowMenuCloseObservable) assert.equal(report.keys.pageTakesCtrlW, "the window stayed", "a page that takes Ctrl+W keeps its window");
-      else t.diagnostic("The window menu's Close did not act on a synthetic Ctrl+W on this machine, so what Ctrl+W does to a window could not be checked here.");
+      else t.diagnostic(report.keys.windowProbe || "The window menu's Close did not act on a synthetic Ctrl+W on this machine, so what Ctrl+W does to a window could not be checked here.");
     }
+    t.diagnostic(`The strip ran in ${report.shell}.`);
   } finally {
     assert.equal(path.dirname(fixture), path.resolve(tmpdir()));
     assert.ok(path.basename(fixture).startsWith("mefi-tabs-render-"));
