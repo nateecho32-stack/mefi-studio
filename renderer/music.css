@@ -152,6 +152,8 @@ body.music-preview-active #toast-host { left: calc(var(--shell-rail-w) + var(--m
 .media-window > .media-window-toolbar .media-window-transport button:disabled { opacity: .35; }
 .media-window-transport .music-range { width: 72px; flex: none; margin: 0 4px 0 2px; }
 .media-window[data-minimized="true"] .media-window-transport :is(#media-window-previous, #media-window-next, #media-window-mute, .music-range) { display: none; }
+/* Too narrow for the whole bar (media-window.js): the volume stays with the menu, the transport and window buttons stay in. */
+.media-window[data-narrow="true"] .media-window-transport :is(#media-window-mute, .music-range) { display: none; }
 .media-window-transparency { grid-column: 1 / -1; display: grid; flex: 0 0 auto; gap: 4px; padding: 6px 2px; }
 .media-window-transparency input { width: 100%; min-width: 0; margin: 0; padding: 0; accent-color: var(--gold-bright); }
 .media-window button:focus-visible { outline: 2px solid var(--ivory); outline-offset: -2px; }

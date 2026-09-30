@@ -8,7 +8,7 @@ const dynamicsSource = await readFile(new URL("../renderer/tree-dynamics.js", im
 function environment(saved = null, withSettingsHost = false) {
   const ids = new Map(), storage = new Map();
   if (saved) storage.set("mefiStudio.mediaWindow.v1", JSON.stringify(saved));
-  const toasts = [], intervals = new Map();
+  const toasts = [], intervals = new Map(), placements = [], moves = [];
   let timerId = 0;
   let tasksListener, projectsListener;
   let time = 10000, route = "studio", reduced = false, closed = 0, settings = 0;
@@ -22,9 +22,21 @@ function environment(saved = null, withSettingsHost = false) {
     constructor(tag) { emitter(this); this.tagName = tag; this.style = { setProperty(key, value) { this[key] = value; } }; this.dataset = {}; this.children = []; this.attrs = {}; }
     set id(value) { this._id = value; ids.set(value, this); }
     get id() { return this._id; }
-    append(...nodes) { for (const node of nodes) { node.remove(); node.parent = this; this.children.push(node); } }
-    prepend(...nodes) { for (const node of [...nodes].reverse()) { node.remove(); node.parent = this; this.children.unshift(node); } }
-    insertBefore(node, reference) { node.remove(); node.parent = this; this.children.splice(this.children.indexOf(reference), 0, node); }
+    get parentElement() { return this.parent ?? null; }
+    // Moving a node that already has a parent by any way but moveBefore
+    // unloads whatever plays inside it (an iframe restarts); `reloads` counts those.
+    adopt(node) { if (node.parent && node.parent !== this) node.reloads = (node.reloads || 0) + 1; }
+    append(...nodes) { for (const node of nodes) { this.adopt(node); node.remove(); node.parent = this; this.children.push(node); } }
+    prepend(...nodes) { for (const node of [...nodes].reverse()) { this.adopt(node); node.remove(); node.parent = this; this.children.unshift(node); } }
+    insertBefore(node, reference) { this.adopt(node); node.remove(); node.parent = this; this.children.splice(this.children.indexOf(reference), 0, node); }
+    // The state-preserving move: the node keeps playing. A host can be told to refuse it.
+    moveBefore(node, reference) {
+      if (this.refuseMoves) throw new Error("InvalidStateError");
+      node.remove(); node.parent = this; const at = reference ? this.children.indexOf(reference) : -1;
+      if (at < 0) this.children.push(node); else this.children.splice(at, 0, node);
+      moves.push([node.id, this.id || this.tagName]);
+    }
+    getBoundingClientRect() { const r = this.rect || { x: 0, y: 0, width: 0, height: 0 }; return { ...r, left: r.x, top: r.y, right: r.x + r.width, bottom: r.y + r.height }; }
     remove() { if (this.parent) this.parent.children = this.parent.children.filter(node => node !== this); this.parent = null; }
     setAttribute(key, value) { this.attrs[key] = value; }
     contains(node) { return node === this || this.children.some(child => child.contains(node)); }
@@ -42,14 +54,19 @@ function environment(saved = null, withSettingsHost = false) {
   if (settingsHost) document.body.append(settingsHost);
   const context = vm.createContext({ Date: { now: () => time }, document, window, localStorage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value) } });
   vm.runInContext(source, context);
-  const controller = window.MefiMediaWindow.create({ content, settingsHost, onClose: () => { closed++; }, onSettings: () => { settings++; } });
+  const controller = window.MefiMediaWindow.create({ content, settingsHost, onPlacement: placement => placements.push({ ...placement }), onClose: () => { closed++; }, onSettings: () => { settings++; } });
   const root = ids.get("media-window");
   const rect = () => ({ x: parseFloat(root.style.left), y: parseFloat(root.style.top), width: parseFloat(root.style.width), height: parseFloat(root.style.height) });
+  // Where the player is drawn: floating, its own style; carried into another
+  // element (the menu's stage), that element's box.
+  root.getBoundingClientRect = () => root.parent !== document.body && root.parent?.rect ? root.parent.getBoundingClientRect() : { ...rect(), left: rect().x, top: rect().y };
+  // A stand-in for the menu's stage: an element with a box of its own.
+  const stage = (box = { x: 150, y: 220, width: 520, height: 300 }) => { const node = document.createElement("div"); node.id = "fixture-stage"; node.rect = box; document.body.append(node); return node; };
   const pointer = (x, y, values = {}) => document.emit("pointermove", { clientX: x, clientY: y, pointerId: 1, pointerType: "mouse", buttons: 0, ...values });
   const begin = (id, x, y) => ids.get(`media-window-${id}`).emit("pointerdown", { button: 0, clientX: x, clientY: y, pointerId: 1 });
   const finish = () => document.emit("pointerup", { pointerId: 1 });
   const advance = ms => { time += ms; };
-  return { intervals, toasts, tasks: value => tasksListener(value), projects: value => projectsListener(value), controller, root, content, frame, settingsHost, ids, document, window, storage, rect, pointer, begin, finish, advance,
+  return { intervals, toasts, placements, moves, stage, tasks: value => tasksListener(value), projects: value => projectsListener(value), controller, root, content, frame, settingsHost, ids, document, window, storage, rect, pointer, begin, finish, advance,
     route: value => { route = value; }, reduced: value => { reduced = value; }, closed: () => closed, settings: () => settings,
     show: (shape = "video") => controller.show({ shape, label: "Fixture video" }),
   };
@@ -112,41 +129,167 @@ test("All eight resize grips preserve the opposite edges and obey minimum and vi
   }
 });
 
+// Docking (the 2026-09 redesign): the menu hands over the element of its stage
+// and the whole player is carried into it with moveBefore, the one move that
+// keeps a live iframe playing. The stage then sizes and places the player, and
+// the menu's own scroll moves it, so no script chases it frame by frame.
 test("The media panel docks the same frame, releases it for backgrounds, and preserves floating placement", () => {
   const env = environment(); env.show(); const floating = env.rect();
-  const dock = { x: 150, y: 220, width: 440, height: 248, clip: [0, 0, 30, 0] };
-  env.controller.dock(dock);
-  assert.deepEqual(env.rect(), { x: 150, y: 220, width: 440, height: 248 });
-  assert.equal(env.root.dataset.docked, "true"); assert.equal(env.root.style.clipPath, "inset(0px 0px 30px 0px)");
+  const stage = env.stage();
+  assert.equal(env.controller.dock(stage), true);
+  assert.equal(env.root.parent, stage, "the player is carried into the stage");
+  assert.deepEqual(env.moves.at(-1), ["media-window", "fixture-stage"], "with moveBefore");
+  assert.equal(env.root.dataset.docked, "true");
+  for (const key of ["left", "top", "width", "height"]) assert.equal(env.root.style[key], "", `the stage, not a script, sets the ${key}`);
+  assert.equal(env.root.style.clipPath, "none");
+  env.controller.clip([0, 0, 30, 0]);
+  assert.equal(env.root.style.clipPath, "inset(0px 0px 30px 0px)", "a website is cut to the part of the stage the menu shows");
   env.controller.setBackground(true);
   assert.equal(env.root.dataset.background, "true"); assert.equal(env.root.dataset.docked, "false"); assert.equal(env.content.inert, true);
+  assert.equal(env.root.parent, env.document.body, "a backdrop lives on the page, not in the menu");
   env.controller.setBackground(false); assert.equal(env.root.dataset.docked, "true");
+  assert.equal(env.root.parent, stage, "it returns to the stage when the backdrop is turned off");
   env.controller.dock(null); assert.deepEqual(env.rect(), floating);
+  assert.equal(env.root.parent, env.document.body);
   assert.equal(env.frame.parent, env.content); assert.equal(env.root.style.clipPath, "none");
-  assert.equal(env.storage.get("mefiStudio.mediaWindow.v1").includes('"width":440'), false, "docking never overwrites floating dimensions");
+  assert.equal(env.root.reloads ?? 0, 0, "the player only ever moved with moveBefore, so its frame never reloaded");
+  assert.equal(env.storage.get("mefiStudio.mediaWindow.v1")?.includes('"width":520') ?? false, false, "docking never overwrites floating dimensions");
 });
 
 test("Dragging or moving a docked player starts from its visible location and keeps it detached", () => {
   for (const method of ["pointer", "keyboard"]) {
     const env = environment(); env.show();
     const dock = { x: 150, y: 220, width: 520, height: 300 };
-    env.controller.dock(dock);
+    const stage = env.stage(dock);
+    env.controller.dock(stage);
     if (method === "pointer") {
       env.begin("move", 180, 240);
       assert.deepEqual(env.rect(), dock, "grabbing the toolbar does not teleport the player");
+      assert.equal(env.root.parent, env.document.body, "a dragged player leaves the stage");
       env.pointer(210, 260, { buttons: 1 }); env.finish();
       assert.deepEqual(env.rect(), { ...dock, x: 180, y: 240 });
     } else {
       env.ids.get("media-window-move").emit("keydown", { key: "ArrowRight" });
       assert.deepEqual(env.rect(), { ...dock, x: 166 });
     }
-    const detached = env.rect(); env.controller.dock(dock);
+    const detached = env.rect(); assert.equal(env.controller.dock(stage), false);
     assert.deepEqual(env.rect(), detached, "menu layout does not snap a manually moved player back");
-    assert.equal(env.root.dataset.docked, "false");
+    assert.equal(env.root.dataset.docked, "false"); assert.equal(env.root.parent, env.document.body);
     const restored = environment(JSON.parse(env.storage.get("mefiStudio.mediaWindow.v1"))); restored.show();
     for (const key of ["x", "y", "width", "height"]) assert.ok(Math.abs(restored.rect()[key] - detached[key]) < .001, key);
     assert.equal(env.frame.parent, env.content);
+    // Closing the menu ends the detour: the next time it opens, the player docks again.
+    env.controller.dock(null); assert.equal(env.controller.dock(stage), true); assert.equal(env.root.parent, stage);
   }
+});
+
+test("Only a state-preserving move carries the player: a host that cannot, or refuses, never gets it, and the player keeps floating", () => {
+  const env = environment(); env.show(); const floating = env.rect();
+  // append and insertBefore would unload the iframe and restart what plays in it.
+  const plain = env.stage(); plain.moveBefore = undefined;
+  assert.equal(env.controller.dock(plain), false);
+  assert.equal(env.root.parent, env.document.body); assert.equal(env.root.dataset.docked, "false"); assert.deepEqual(env.rect(), floating);
+  const refusing = env.stage(); refusing.refuseMoves = true;
+  assert.equal(env.controller.dock(refusing), false, "a host whose move throws leaves the player where it is");
+  assert.equal(env.root.parent, env.document.body); assert.deepEqual(env.rect(), floating);
+  assert.equal(env.moves.length, 0, "nothing was moved at all"); assert.equal(env.root.reloads ?? 0, 0, "and nothing was reparented the way that reloads a frame");
+  // The refusals leave nothing behind: a good host is still taken.
+  const good = env.stage();
+  assert.equal(env.controller.dock(good), true); assert.equal(env.root.parent, good);
+  assert.equal(env.frame.parent, env.content); assert.equal(env.root.reloads ?? 0, 0);
+});
+
+test("Docked, the menu's card is the toolbar and the grips step aside; minimizing or hiding sends the player home to the page, and each placement is reported once", () => {
+  const env = environment(null, true); env.show();
+  const stage = env.stage(), toolbar = env.ids.get("media-window-move").parent;
+  const grips = ["n", "e", "s", "w", "ne", "se", "sw", "nw"].map((edge) => env.ids.get(`media-window-resize-${edge}`));
+  assert.equal(toolbar.hidden, false); assert.ok(grips.every((grip) => grip.hidden === false));
+  assert.deepEqual(env.placements.at(-1), { background: false, minimized: false, docked: false, visible: true });
+  env.controller.dock(stage);
+  assert.equal(toolbar.hidden, true, "in the menu, the menu's own card is the toolbar"); assert.ok(grips.every((grip) => grip.hidden === true), "and the menu sizes the player");
+  assert.deepEqual(env.placements.at(-1), { background: false, minimized: false, docked: true, visible: true });
+  const reported = env.placements.length;
+  env.controller.dock(stage); env.window.emit("mefi:nav"); env.window.emit("resize"); env.controller.reveal();
+  assert.equal(env.placements.length, reported, "a placement that has not changed is not reported again");
+  env.controller.minimize();
+  assert.equal(env.root.parent, env.document.body, "a minimized player is a pill on the page, not in the menu");
+  assert.equal(env.root.dataset.docked, "false"); assert.equal(toolbar.hidden, false, "and keeps its Restore button");
+  assert.deepEqual(env.placements.at(-1), { background: false, minimized: true, docked: false, visible: true });
+  env.controller.minimize();
+  assert.equal(env.root.parent, stage, "restored, it goes back into the stage the menu still holds"); assert.equal(env.root.dataset.docked, "true");
+  env.controller.hide();
+  assert.equal(env.root.hidden, true, "a hidden player is not drawn wherever it sits");
+  assert.deepEqual([env.placements.at(-1).visible, env.placements.at(-1).minimized, env.placements.at(-1).background], [false, false, false], "the menu is told it is no longer visible");
+  env.show(); assert.equal(env.root.hidden, false); assert.equal(env.root.parent, stage, "shown again while the menu is open, it is in the stage");
+  assert.equal(env.root.dataset.docked, "true");
+  env.controller.dock(null); assert.equal(env.root.parent, env.document.body, "and the menu closing sends it home");
+  assert.equal(env.root.reloads ?? 0, 0, "through all of it the player only moved with moveBefore");
+});
+
+test("A floating player steps clear of the open menu without saving the move, and returns when the menu closes", () => {
+  const env = environment(); env.show(); const home = env.rect();
+  const menu = { left: 700, top: 500, right: 1000, bottom: 800 };
+  const clear = (box) => box.x >= menu.right || box.x + box.width <= menu.left || box.y >= menu.bottom || box.y + box.height <= menu.top;
+  assert.equal(clear(home), false, "the player and the menu overlap to begin with");
+  env.controller.avoid(menu);
+  const aside = env.rect();
+  assert.equal(clear(aside), true, "it steps to a side of the menu");
+  assert.ok(aside.x >= 16 && aside.y >= 16 && aside.x + aside.width <= 1424 && aside.y + aside.height <= 884, "and stays on screen");
+  assert.equal(env.root.dataset.dodging, "true");
+  assert.equal(env.storage.get("mefiStudio.mediaWindow.v1"), undefined, "the move is not saved");
+  env.controller.avoid({ ...menu }); assert.deepEqual(env.rect(), aside, "the same menu asks for nothing new");
+  env.controller.avoid(null); assert.deepEqual(env.rect(), home, "it comes back when the menu closes");
+  env.controller.avoid({ left: 0, top: 0, right: 100, bottom: 100 }); assert.deepEqual(env.rect(), home, "a menu it does not overlap leaves it be");
+  env.controller.avoid({ left: NaN, top: 0, right: 1, bottom: 1 }); assert.deepEqual(env.rect(), home, "a rectangle that is not one is ignored");
+  env.controller.avoid(menu); env.controller.minimize();
+  const pill = env.rect(); assert.equal(pill.height, 60); assert.equal(clear(pill), true, "a minimized pill steps aside too");
+  env.controller.avoid(null); env.controller.minimize();
+  assert.deepEqual(env.rect(), home);
+});
+
+// music.css gives a player marked data-dodging a short left/top transition, for a step aside. Docking is a
+// change of frame (the stage's `inset: 0` on one side, a place on the page on the other), so a glide laid on
+// it flew the player in from the page's corner when the menu closed. The render fixture caught it as a click
+// on Close landing on a window that was still gliding; here the mark must go off with every change of docked state.
+test("Docking, undocking and minimizing jump; only a floating player stepping aside glides", () => {
+  const env = environment(); env.show(); const stage = env.stage();
+  const menu = { left: 700, top: 500, right: 1000, bottom: 800 };
+  env.controller.avoid(menu); assert.equal(env.root.dataset.dodging, "true", "a step aside glides");
+  env.controller.dock(stage);
+  assert.equal(env.root.dataset.docked, "true"); assert.equal(env.root.dataset.dodging, "false", "into the card is a jump");
+  // The menu's own next request (its background switch putting the video back in the card) turns the mark on again
+  // while the player is docked, where it moves nothing; closing the menu must still be a jump.
+  env.controller.avoid(null); assert.equal(env.root.dataset.dodging, "true");
+  env.controller.dock(null);
+  assert.equal(env.root.dataset.docked, "false"); assert.equal(env.root.dataset.dodging, "false", "out of the card is a jump");
+  env.controller.avoid(menu); assert.equal(env.root.dataset.dodging, "true", "a floating player still glides aside");
+  env.controller.avoid(null); assert.equal(env.root.dataset.dodging, "true", "and back");
+  // Minimizing a docked player sends it to the page as a pill, and restoring it goes back into the card: jumps too.
+  env.controller.dock(stage); env.controller.avoid(menu); env.controller.avoid(null);
+  assert.equal(env.root.dataset.docked, "true"); assert.equal(env.root.dataset.dodging, "true");
+  env.controller.minimize(); assert.equal(env.root.dataset.docked, "false"); assert.equal(env.root.dataset.dodging, "false", "a pill on the page is a jump");
+  env.controller.avoid(menu); assert.equal(env.root.dataset.dodging, "true");
+  env.controller.minimize(); assert.equal(env.root.dataset.docked, "true"); assert.equal(env.root.dataset.dodging, "false", "and back into the card is one too");
+});
+
+// In a 600 px window the floating player comes out under 420 px (the render fixture sees it narrow there),
+// too little for the transport's volume as well as the window's own Settings, Minimize and Close: the
+// volume gives way, and Close stays inside the bar.
+test("A narrow floating player drops the bar's volume so its transport and window buttons stay inside it", async () => {
+  const wide = environment(); wide.show();
+  assert.equal(wide.root.dataset.narrow, "false"); assert.ok(wide.rect().width >= 464);
+  const small = environment(); small.window.innerWidth = 400; small.show();
+  assert.ok(small.rect().width < 420, `${small.rect().width} px`); assert.equal(small.root.dataset.narrow, "true");
+  small.window.innerWidth = 1440; small.window.emit("resize");
+  assert.equal(small.root.dataset.narrow, "false", "and it comes back with room");
+  small.window.innerWidth = 400; small.window.emit("resize"); assert.equal(small.root.dataset.narrow, "true");
+  small.controller.minimize(); assert.equal(small.root.dataset.narrow, "false", "the minimized pill has its own short bar");
+  small.controller.minimize(); assert.equal(small.root.dataset.narrow, "true");
+  small.controller.dock(small.stage()); assert.equal(small.root.dataset.narrow, "false", "docked, the menu's card carries the volume");
+  // The stylesheet hides exactly the volume, and keeps Previous, Play and Next.
+  const css = await readFile(new URL("../renderer/music.css", import.meta.url), "utf8");
+  assert.match(css, /\.media-window\[data-narrow="true"\] \.media-window-transport :is\(#media-window-mute, \.music-range\) \{ display: none; \}/);
+  assert.doesNotMatch(css, /data-narrow="true"\][^{]*(previous|next|play)/);
 });
 
 test("The default player stays still as its controls are approached; Move aside is opt-in", () => {

@@ -798,7 +798,7 @@
       player.controls = true; player.preload = "metadata"; player.playsInline = true;
       player.title = link.label;
       player.volume = mediaVolume; player.muted = mediaMuted;
-      const sync = () => { if (els.linkFrame !== player) return; state.linkPlaying = !player.paused && !player.ended; renderLinkNow(); announce(); };
+      const sync = () => { if (els.linkFrame !== player) return; state.linkPlaying = !player.paused && !player.ended; renderLinkNow(); scheduleNow(); announce(); };
       for (const name of ["play", "playing", "pause", "ended"]) player.addEventListener(name, sync);
       for (const name of ["timeupdate", "durationchange", "loadedmetadata"]) player.addEventListener(name, () => { if (els.linkFrame === player) scheduleNow(); });
       player.addEventListener("ended", () => { if (els.linkFrame === player) playQueued(); });
@@ -809,7 +809,7 @@
         if (els.linkFrame !== player) return;
         state.linkPlaying = false;
         note(link.provider === "discord" ? "Discord could not send that file. Attachment links expire; copy a fresh one from Discord." : "That file could not be played. The link may have expired, or the format is not supported.", true);
-        announce();
+        scheduleNow(); announce();
       });
       if (startSeconds > 0) {
         const seekOnce = () => { player.removeEventListener?.("loadedmetadata", seekOnce); try { player.currentTime = startSeconds; } catch {} };
@@ -971,8 +971,13 @@
       const media = draggedMedia(event);
       if (!Number.isInteger(from) && !media) return;
       event.preventDefault(); event.stopPropagation?.();
-      if (Number.isInteger(from) && linkQueue[from]) moveQueued(from, at);
-      else queueLink(media.url, media.title, false, { at });
+      if (Number.isInteger(from)) {
+        // A row is moved, never copied. Its place was read when the drag began;
+        // if the queue has changed since (a video ended and took the head), the
+        // row is found again by its link, and a row that is gone is left alone.
+        const row = linkQueue[from] && (!media || linkQueue[from].url === media.url) ? from : media ? linkQueue.findIndex((item) => item.url === media.url) : -1;
+        if (row >= 0) moveQueued(row, at);
+      } else queueLink(media.url, media.title, false, { at });
     });
   }
   function renderLinkQueue() {
@@ -1014,9 +1019,12 @@
   function nextVideo() {
     if (playQueued()) return;
     const current = linkPlayback?.url || state.link?.url;
-    const index = youtubeResults.findIndex(item => item.url === current || item.id === youtubeId(current));
+    // A playlist plays its own order, even when its video is also on screen in
+    // the feed; a single video (whatever start time its link carried) follows the feed.
+    const playlist = state.link?.provider === "youtube" && new URL(state.link.url).searchParams.has("list");
+    const index = playlist ? -1 : youtubeResults.findIndex(item => item.url === current || item.id === youtubeId(current));
     if (index >= 0 && index + 1 < youtubeResults.length) { playLink(youtubeResults[index + 1].url, { label: youtubeResults[index + 1].title, keepField: true }); return; }
-    if (state.link?.provider === "youtube" && new URL(state.link.url).searchParams.has("list")) { youtubeCommand("nextVideo"); return; }
+    if (playlist) { youtubeCommand("nextVideo"); return; }
     // Nothing lined up: the feed is where the next one comes from.
     openSection("browse");
     feedNote("Pick what plays next: click a video to queue it, or drag it onto Up next.");
@@ -1037,16 +1045,19 @@
   const feed = { kind: null, query: "", about: "", more: null, generation: 0, observer: null };
   const FEED_IDEAS = ["lofi beats", "synthwave", "jazz for work", "ambient focus", "piano covers", "nature 4K", "retro game music", "deep house"];
   function feedNote(text) { if (els.youtubeNotice) els.youtubeNotice.textContent = String(text || ""); }
+  // With nothing on, a click plays; with something on, it lines up after it.
+  const feedBusy = () => state.source === "link" && Boolean(state.link || els.browser?.active);
+  const feedHint = (item) => `${item.title} — click to ${feedBusy() ? "add it to Up next" : "play it"}; drag it onto Up next to place it`;
+  const feedItems = new WeakMap();
   function feedPick(item) {
-    // With nothing on, a click plays; with something on, it lines up after it.
-    if (!(state.source === "link" && (state.link || els.browser?.active))) { playLink(item.url, { label: item.title, keepField: true }); return; }
+    if (!feedBusy()) { playLink(item.url, { label: item.title, keepField: true }); return; }
     if (state.link?.url === item.url) { renderNow(); return; }
     if (queueLink(item.url, item.title)) window.MefiMotion?.enter?.(els.linkQueueHeading);
   }
   function feedCard(item) {
     const card = element("article", "music-youtube-result", null, els.youtubeResults);
     card.dataset.key = item.id;
-    card.title = `${item.title} — click to ${state.link ? "add it to Up next" : "play it"}; drag it onto Up next to place it`;
+    feedItems.set(card, item); card.title = feedHint(item);
     // children[0] the picture and words; then Play, Add to queue, Queue next.
     const copy = element("span", "music-yt-copy", null, card);
     const picture = thumbInto(copy, item.id, "music-yt-thumb");
@@ -1061,7 +1072,8 @@
     dragMedia(card, item);
     return card;
   }
-  // Marks each card that is playing or already waiting in Up next.
+  // Marks each card that is playing or already waiting in Up next, and keeps
+  // its hint true to what a click will do.
   function paintFeedMarks() {
     if (!els.youtubeResults) return;
     const queued = new Set(linkQueue.map((item) => youtubeId(item.url)).filter(Boolean));
@@ -1070,12 +1082,20 @@
       const id = card.dataset?.key;
       const mark = id && id === playing ? "playing" : queued.has(id) ? "queued" : "";
       if ((card.dataset.state || "") !== mark) card.dataset.state = mark;
+      const item = feedItems.get(card), hint = item ? feedHint(item) : card.title;
+      if (card.title !== hint) card.title = hint;
     }
   }
+  // The ideas are the same until the playing YouTube video changes (or ends up
+  // none), so they are painted once per video; render() asks on every repaint,
+  // which is what puts them on a Browse that opens before anything has played.
+  let ideasFor;
   function paintFeedIdeas() {
     if (!els.feedIdeas) return;
-    els.feedIdeas.textContent = "";
     const current = state.source === "link" ? youtubeId(state.link?.url) : null;
+    if (ideasFor === current) return;
+    ideasFor = current;
+    els.feedIdeas.textContent = "";
     if (current) button("More like this video", "ghost music-feed-idea", els.feedIdeas, () => void loadFeed({ related: current }, { about: `More like ${linkPlayback?.title || "this video"}` })).dataset.kind = "related";
     for (const idea of FEED_IDEAS) button(idea, "ghost music-feed-idea", els.feedIdeas, () => { els.linkInput.value = idea; void searchYouTube(idea); });
   }
@@ -1455,8 +1475,10 @@
     setText(els.nowKicker, now.kicker); setText(els.nowTitle, now.title); setText(els.nowDetail, now.detail);
     els.nowTitle.title = now.title;
     // The picture beside the words: a video's thumbnail when the video itself
-    // is not in the stage, else the source's own mark.
-    const picture = now.source === "link" && els.linkStage.dataset.docked !== "true" ? now.thumb : null;
+    // is not in the stage, else the source's own mark. Only an open menu asks
+    // for it: a closed one shows nobody a picture, and a remembered or freshly
+    // loaded link must not reach YouTube's image host before the menu opens.
+    const picture = els.dropdown.hidden === false && now.source === "link" && els.linkStage.dataset.docked !== "true" ? now.thumb : null;
     if ((els.nowThumb.dataset.src || "") !== (picture || "")) {
       els.nowThumb.dataset.src = picture || "";
       if (picture) els.nowThumb.src = picture; else els.nowThumb.removeAttribute("src");
@@ -1681,7 +1703,7 @@
   function render() {
     if (!initialized) return;
     renderSourcePanels();
-    renderQueue(); renderRadio(); renderAudioLink(); renderLinks(); renderNow();
+    renderQueue(); renderRadio(); renderAudioLink(); renderLinks(); paintFeedIdeas(); paintFeedMarks(); renderNow();
     els.recommend.disabled = state.sending || !(recommender || window.mefiStudio?.musicRecommend);
     els.recommend.textContent = state.sending ? "Finding a direction…" : "Ask for recommendations";
     els.aiHint.textContent = recommender || window.mefiStudio?.musicRecommend ? "Uses Studio’s configured assistant. Recommendations appear here." : "Music recommendations need Studio’s assistant connection.";
@@ -1810,6 +1832,9 @@
       node.setAttribute("aria-pressed", String(current));
       node.dataset.state = current ? phase : "off";
     }
+    // The card says the same thing (Live radio, Holding the sound…, Station
+    // unavailable): a phase change repaints it too, not only the panel.
+    scheduleNow();
   }
   function renderAudioLink(status = window.MefiIdle?.audioStatus?.()) {
     if (!els.audioToggle) return;
