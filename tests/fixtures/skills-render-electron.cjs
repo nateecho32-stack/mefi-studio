@@ -181,7 +181,7 @@ app.whenReady().then(async () => {
         for (const field of m.editor.fields) assert.ok(field.w > 40 && field.x >= m.editor.x - 1 && field.r <= m.editor.r + 1, `${field.id} stays inside the editor at ${label}: ${JSON.stringify(field)}`);
         for (const card of m.cards) assert.ok(card.b <= m.editor.y + 1 || card.y >= m.editor.b - 1, `${card.name} does not overlap the editor at ${label}`);
       }
-      if (zoom === 1 && [1720, 1440, 600].includes(width)) await capture(`skills-${editing ? "editor-" : ""}${width}.png`);
+      if ((zoom === 1 && [1720, 1440, 600].includes(width)) || zoom === 1.5) await capture(`skills-${editing ? "editor-" : ""}${width}${zoom === 1 ? "" : `-zoom${zoom}`}.png`);
     }
   }
 
