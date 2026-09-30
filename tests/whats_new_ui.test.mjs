@@ -27,16 +27,25 @@ const inflight = new Set();
 const track = (promise) => { inflight.add(promise); promise.finally(() => inflight.delete(promise)); return promise; };
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 async function settle() {
-  for (let quiet = 0, turn = 0; quiet < 2 && turn < 2000; turn += 1) {
-    await tick();
-    quiet = inflight.size ? 0 : quiet + 1;
+  // Wall-clock bounded, and it sleeps on the calls in flight instead of spinning
+  // on setImmediate: real file reads take as long as they take on a busy machine.
+  const deadline = Date.now() + 5000;
+  for (let quiet = 0; quiet < 2 && Date.now() < deadline;) {
+    if (inflight.size) {
+      await Promise.race([Promise.allSettled([...inflight]), new Promise((resolve) => setTimeout(resolve, 50))]);
+      quiet = 0;
+    } else {
+      await tick();
+      quiet += 1;
+    }
   }
 }
 
 // One page load, talking to one host. Pass `host` to reuse a host's settings for a second launch.
-function page(t, { host = null, hostOptions = {}, search = "", hidden = false, bridge = true } = {}) {
+function page(t, { host = null, hostOptions = {}, search = "", hidden = false, bridge = true, gate = false } = {}) {
   const the = host ?? launch(t, hostOptions);
-  const dom = domWith(updatesMarkup, sheetMarkup);
+  // The startup gate is above every toast until it is hidden.
+  const dom = domWith(updatesMarkup, sheetMarkup, ...(gate ? ['<div id="boot-layer" role="dialog"></div>'] : []));
   dom.document.hidden = hidden;
   const toasts = [];
   const opened = [];
@@ -59,7 +68,7 @@ function page(t, { host = null, hostOptions = {}, search = "", hidden = false, b
   const get = dom.get;
   const flush = async () => { for (const run of timers.splice(0)) run?.(); await settle(); };
   const texts = (id) => get(id).querySelectorAll("li").map((node) => node.textContent);
-  return { host: the, dom, get, window, toasts, opened, records, flush, texts, whatsNew: window.MefiWhatsNew, sheet: get("whats-new-sheet") };
+  return { host: the, dom, get, window, toasts, opened, records, flush, texts, timers, whatsNew: window.MefiWhatsNew, sheet: get("whats-new-sheet") };
 }
 
 test("a first install is silent: no toast, no sheet, and its notes are already read", async (t) => {
@@ -200,6 +209,26 @@ test("the kill switch says nothing and shows why; the switch in Settings turns i
   await box.trigger("change", { target: box });
   await settle();
   assert.equal(p.host.state.settings.whatsNew.on, true);
+});
+
+test("the toast waits for the startup gate, which hides the page and covers every toast; nothing is recorded as said while it is up", async (t) => {
+  const p = page(t, { hostOptions: { settings: { projects: [] } }, gate: true });
+  for (let turn = 0; turn < 6; turn += 1) await p.flush();
+  assert.deepEqual(p.toasts, [], "under the gate nobody could see it or click it");
+  assert.equal(p.host.state.settings.whatsNew?.announced ?? null, null, "so it is not recorded as said");
+  assert.equal(p.get("whats-new-list").querySelectorAll(".whats-new-fresh").length, 1, "Settings › Updates still marks the notes New");
+  p.get("boot-layer").hidden = true;
+  await p.flush();
+  assert.equal(p.toasts.length, 1, "the gate is gone: one toast");
+  assert.equal(p.host.state.settings.whatsNew.announced, "0.5.0");
+  assert.deepEqual(p.timers, [], "and nothing is left polling");
+
+  // The wait is bounded: a launch that never leaves the gate stops asking.
+  const stuck = page(t, { hostOptions: { settings: { projects: [] } }, gate: true });
+  let rounds = 0;
+  do { await stuck.flush(); rounds += 1; } while (stuck.timers.length && rounds < 1000);
+  assert.ok(rounds >= 100 && rounds < 1000, `the poll is slow and finite (${rounds} rounds)`);
+  assert.deepEqual(stuck.toasts, []);
 });
 
 test("a window in the tray waits to be seen, a harness window and a page with no host say nothing", async (t) => {

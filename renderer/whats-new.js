@@ -147,11 +147,28 @@
     void refresh("releaseWhatsNewSeen", { version: view.current, how: "announce" });
     return true;
   }
-  // A window parked in the tray at sign-in has nobody to tell yet.
+  // A window parked in the tray at sign-in has nobody to tell yet, and neither
+  // does one still behind the startup gate: #boot-layer hides the page and sits
+  // above every toast, so a toast made under it is neither seen nor clickable
+  // and "announced" would be a lie. The wait after the gate is a slow poll of one
+  // cheap read that stops; a launch that never leaves the gate says nothing, and
+  // Settings › Updates still marks the version New.
   function whenVisible(run) {
     if (!document.hidden) { run(); return; }
     const wake = () => { if (document.hidden) return; document.removeEventListener("visibilitychange", wake); run(); };
     document.addEventListener("visibilitychange", wake);
+  }
+  const BOOT_POLL_MS = 1500;
+  const BOOT_POLL_TRIES = 400;
+  function booting() {
+    const gate = $("boot-layer");
+    if (!gate || gate.hidden) return false;
+    if (typeof getComputedStyle !== "function") return true;
+    try { return getComputedStyle(gate).display !== "none"; } catch { return true; }
+  }
+  function whenBooted(run, tries = 0) {
+    if (!booting()) { run(); return; }
+    if (tries < BOOT_POLL_TRIES) setTimeout(() => whenBooted(run, tries + 1), BOOT_POLL_MS);
   }
 
   function init() {
@@ -171,7 +188,7 @@
     });
     void refresh();
     // The studio has had a few seconds to come up before anything speaks.
-    setTimeout(() => whenVisible(() => { void announce(); }), 4000);
+    setTimeout(() => whenVisible(() => whenBooted(() => { void announce(); })), 4000);
   }
 
   window.MefiWhatsNew = { open, close, refresh, announce, toastText, state };
