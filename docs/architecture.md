@@ -589,6 +589,26 @@ settings and per-model work-kind summaries for the shared controls.
   total the agent's habits add to every prompt. `agent-addons.cjs` appends a
   role's habits wherever its skills go (seats, roles, the builder), and a
   team snapshot carries `agentHabits` like `agentSkills`.
+- **Rules** (Agents › Setup › Team & models, under the roles;
+  `scripts/agent-rules.cjs`): up to 4,000 characters of standing rules for the
+  project, and two switches that also send its own `AGENTS.md` and `CLAUDE.md`.
+  Stored as `agentRules` in the team like `agentSkills` and `agentHabits`: a
+  project with no team of its own reads the Studio defaults' rules, saving them
+  for such a project gives it a team of its own (a copy of the defaults plus
+  the rules), a saved team (preset) never carries them and applying one keeps
+  the project's, and a running task keeps the rules it started with. Too long
+  is refused with "Nothing was cut", never trimmed. `agent-addons.cjs`
+  `instructions()` puts the rules first in every prompt of a role that runs on
+  Studio's own models (the assistant roles, lead, desk, overseer, companion,
+  scout, and builders on Grok or Antigravity), reading each file fresh for the
+  request, at most 8,000 characters of it, and once when CLAUDE.md repeats
+  AGENTS.md. Claude Code, Codex and OpenCode builders read those two files
+  themselves, so they get the owner's text only. The card has its own Save and
+  Discard (`agents:save` with `action: "rules"`, so the rest of a half-edited
+  team is not applied), counts a draft the way the prompt does (headings plus
+  text, four characters a token) and lists who reads what from the same table
+  the prompt uses. `MEFI_STUDIO_NO_AGENT_RULES=1` sends no rules and keeps the
+  saved ones.
 - **Trace** (Live, next to Activity; `renderer/trace.js`) reads Studio's logs
   as channels: the studio log (every line the host logs, kept in a bounded
   ring since it was only ever streamed to the window), the assistant's log,
