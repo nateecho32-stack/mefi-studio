@@ -116,6 +116,15 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   section, and pins **Walk me through setup** at the head of Inference &
   Agents.
 
+- **Sub-agents on the Command tree.** A session's sub-agent sessions now hang
+  under it on the tree and in Command, the newest three busy in the last six
+  hours, with "+n sub-agents" beside the parent for the rest. Each pops out
+  of its parent and flies home into it when it leaves. A delegated part pops
+  out of the task that handed it out and, once closed, flies straight home
+  into that task instead of vanishing. Every flight home on the Command tree
+  plays the node style's finish beat, as the Agent brain does. Sub-agents
+  are not counted as sessions.
+
 - **A calmer Task board.** The board opens straight on its tools: add a
   task, then search with the state picker beside it, then the All / Open /
   Review / Done chips as one compact row. The explanatory heading and the

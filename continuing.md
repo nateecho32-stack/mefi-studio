@@ -1,3 +1,9 @@
+> Integration update, 2026-09-29: the finished issue links, commit checklist,
+> packaging fixes, signing workflow, Studio model tracker, Vibe/key tips and
+> Command-tree child sessions are integrated. The older handoffs below remain
+> for their unfinished follow-ups; their instructions to land these finished
+> slices are superseded. See the latest TESTRUNS row for combined validation.
+
 # Continuing: handoff (2026-09-28, afternoon)
 
 Twelve things are open:

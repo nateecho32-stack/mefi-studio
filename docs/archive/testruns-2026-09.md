@@ -6,6 +6,40 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-28 - New-user onboarding: no AI connected, real logins, one welcome
+
+The "New user onboarding experience" session's fresh-profile findings,
+finished and gated in C:\wt\onboard on 77ad3bd (one commit). A held launch
+with no AI connected is loop state `setup`. Talk it over files nothing: a
+model's create_task becomes an offer, and keyless it says no AI is connected.
+spawnNextJob refuses an OpenCode route when OpenCode is not installed, and
+executor-core `readableRunError` turns cmd.exe's "not recognized" into "x is
+not installed or not on PATH". cliSignedIn reads each subscription CLI's login
+file. planAutoSetup prefers signed-in logins (then Claude Code, Codex, Grok,
+Antigravity). The setup helper defaults to Quick, leads with Set up
+automatically and Start free with OpenCode, counts a signed-out CLI as not
+connected, and keeps a key save's words and scroll. Only "Continue to the
+guided tour" opens the walkthrough (MefiOnboarding.invite otherwise). The
+keyboard tip waits for 30 quiet seconds, and the launch screen leads with Open
+a folder… when there is no project.
+
+- `npm run build-booklet`, `npm run check` (188 targets), `npm run lint` (0
+  errors, 41 warnings, none new) and `npm run audit` (0 findings): PASS.
+- New tests: assistant_overseer_chat (2 talk-mode), executor_builder_cli (no
+  coding tool), executor_core (readable errors), model_auto_setup (login
+  ranking, cliSignedIn), setup_helper (quick default, signed-out CLI, finder
+  first with key save kept, tour hand-off), onboarding (invite), nav_startup
+  (keyboard tip). startup_screen and vibe_pipeline were updated.
+- `npm test`, exit 1, then fixed: Node parallel stage 4344 tests, 4339
+  passed, 5 skipped, 0 failures. Electron lane 41 tests, 40 passed, 1
+  skipped. `command_render` 1/1 in 55.2 s, `eyes_toggle_electron` 1/1,
+  `occlusion_probe` 1 passed and 1 capability skip. Python contracts: 3
+  failures (test_mefi_studio_assistant pins "Kept in the thread and put on the
+  task board" and the self-test's request reply), because the keyless reply
+  was reworded. The sentence was restored with only the foreman line dropped.
+  After that, Python contracts OK (248, 1 skip) and assistant*/vibe_pipeline
+  273/273. The normalized-path lock passed.
+
 ## 2026-09-28 - Fixes from the improvements plan: setup windows, shares, Rooms, booklet line endings
 
 The owner-approved "Fixes + hand-offs" plan, 14 commits on 7a5ff81. Set up

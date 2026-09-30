@@ -258,6 +258,28 @@ checkout carried other sessions' edits.
   desktop's state at the moment; `media_window_render` failed once under the
   lane and passes alone (3 of 3 in a row).
 
+## 2026-09-28 (evening) - Sub-agents, the return path and the finish beats on the Command tree
+
+Gated in the worktree `C:\wt\cmd-kids` (branch `claude/command-children`,
+based on `origin/main` `60c4abb`, which already has the finish beats from
+`7450479`). It covers:
+- sub-agent sessions on the tree and in Command: `tree3d.js` children, the
+  `idle.js` `childSession` life cycle, "+n sub-agents", and session counts
+  without them in `idle.js` and `nav.js`;
+- a delegated part flying home into its parent task (`fx.delegated`);
+- the node style's `done`/`absorb` beats over every Command flight home.
+
+- `npm run check` and `npm run audit`: clean.
+- `npm test` (8.6 min): the Node suites ran 4496 tests (4490 pass, 6
+  skipped, 0 fail), and the Python contracts and the normalized-path lock
+  pass.
+- An earlier full run on `79d892d` failed three `task_groups` tests with
+  `delegatedParentOf is not defined`. That suite slices `takeTasks` out of
+  `idle.js` on its own, so the helper now lives inside `takeTasks`.
+- A seeded offscreen preview of Command at 1920x1080 in Prism and Sigil
+  showed the sub-agents under their session, "+1 sub-agent", and the beats
+  as one sub-agent and one delegated part flew home. No renderer errors.
+
 ## 2026-09-28 - Vibe opens by default, answers more, shows a new project's tree, key tips
 
 Every launch starts in Vibe (`mefiStudio.uiMode.launch`, Settings › Always
@@ -689,40 +711,6 @@ the owner.
   2.1% (the live tree preview). Trace reads "All 0" with its empty state in
   the log pane, Context shows its own subtitle and "4,000 token budget", and
   Friends shows the new Settings path.
-
-## 2026-09-28 - New-user onboarding: no AI connected, real logins, one welcome
-
-The "New user onboarding experience" session's fresh-profile findings,
-finished and gated in C:\wt\onboard on 77ad3bd (one commit). A held launch
-with no AI connected is loop state `setup`. Talk it over files nothing: a
-model's create_task becomes an offer, and keyless it says no AI is connected.
-spawnNextJob refuses an OpenCode route when OpenCode is not installed, and
-executor-core `readableRunError` turns cmd.exe's "not recognized" into "x is
-not installed or not on PATH". cliSignedIn reads each subscription CLI's login
-file. planAutoSetup prefers signed-in logins (then Claude Code, Codex, Grok,
-Antigravity). The setup helper defaults to Quick, leads with Set up
-automatically and Start free with OpenCode, counts a signed-out CLI as not
-connected, and keeps a key save's words and scroll. Only "Continue to the
-guided tour" opens the walkthrough (MefiOnboarding.invite otherwise). The
-keyboard tip waits for 30 quiet seconds, and the launch screen leads with Open
-a folder… when there is no project.
-
-- `npm run build-booklet`, `npm run check` (188 targets), `npm run lint` (0
-  errors, 41 warnings, none new) and `npm run audit` (0 findings): PASS.
-- New tests: assistant_overseer_chat (2 talk-mode), executor_builder_cli (no
-  coding tool), executor_core (readable errors), model_auto_setup (login
-  ranking, cliSignedIn), setup_helper (quick default, signed-out CLI, finder
-  first with key save kept, tour hand-off), onboarding (invite), nav_startup
-  (keyboard tip). startup_screen and vibe_pipeline were updated.
-- `npm test`, exit 1, then fixed: Node parallel stage 4344 tests, 4339
-  passed, 5 skipped, 0 failures. Electron lane 41 tests, 40 passed, 1
-  skipped. `command_render` 1/1 in 55.2 s, `eyes_toggle_electron` 1/1,
-  `occlusion_probe` 1 passed and 1 capability skip. Python contracts: 3
-  failures (test_mefi_studio_assistant pins "Kept in the thread and put on the
-  task board" and the self-test's request reply), because the keyless reply
-  was reworded. The sentence was restored with only the foreman line dropped.
-  After that, Python contracts OK (248, 1 skip) and assistant*/vibe_pipeline
-  273/273. The normalized-path lock passed.
 
 ## Read Before Any Tests
 
