@@ -607,12 +607,17 @@ test("a busy index is retried at 250 ms and 1.5 s, then the save says another se
 
 test("a real index.lock that clears in time lets the save through", async (t) => {
   const box = sandbox(t);
-  const noSleep = harness(t, box, { sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) });
   const cwd = repoWith(box, "app");
   put(cwd, "README.md", "# app\nedited\n");
   const lock = path.join(cwd, ".git", "index.lock");
   writeFileSync(lock, "");
-  setTimeout(() => { try { unlinkSync(lock); } catch { /* already gone */ } }, 800);
+  // Keep the real lock through the first commit attempt even when preflight
+  // reads take longer than a timer on a loaded machine. Release it during
+  // backoff, so this still proves a failed real git command is retried.
+  const noSleep = harness(t, box, { sleep: async (ms) => {
+    unlinkSync(lock);
+    await new Promise((resolve) => setTimeout(resolve, ms));
+  } });
   const saved = await noSleep.actions.save(cwd, { paths: ["README.md"] });
   assert.equal(saved.ok, true, saved.error);
   assert.equal(noSleep.gitCalls("commit").length >= 2, true, "it did retry");
@@ -1281,7 +1286,7 @@ test("children get prompts off, Studio's own keys withheld and no shell; reads t
     assert.equal(call.env.MEFI_STUDIO_OPENROUTER_KEY, undefined);
     assert.equal(call.env.MEFI_STUDIO_DISCORD_TOKEN, undefined);
     assert.equal(call.env.GH_TOKEN, "kept-because-gh-reads-it", "names other tools read are kept, as platform.cjs does");
-    assert.ok(call.env.PATH);
+    assert.ok(Object.entries(call.env).some(([name, value]) => name.toUpperCase() === "PATH" && value), "the inherited executable search path is kept, including Windows' Path spelling");
   }
   assert.ok(calls.filter((call) => call.args.includes("commit")).every((call) => call.env.GIT_OPTIONAL_LOCKS === undefined), "a write is an ordinary git");
   assert.ok(calls.filter((call) => call.command === "git" && call.args[0] === "status").every((call) => call.env.GIT_OPTIONAL_LOCKS === "0"));
