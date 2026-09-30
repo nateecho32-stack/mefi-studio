@@ -57,6 +57,8 @@ const PROMISES = [
   { file: "scripts/model-community.cjs", says: "Pure module: no Electron, no filesystem, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "clock"] },
   // The records an installing update helper and the app pass each other; main.cjs "Release updates: the safety net" owns the I/O.
   { file: "scripts/update-safety.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (time is", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  // Build's Home greeting card (renderer/builder.js); main's "work:stats" handler reads the ledgers and passes their rows and `now` in.
+  { file: "scripts/work-stats.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
 ];
 
 const CLOCK = /\bDate\.now\s*\(|new\s+Date\s*\(\s*\)|\bperformance\.now\s*\(/;

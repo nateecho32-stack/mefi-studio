@@ -13,10 +13,15 @@
 // Queue, Status) become panes (panes.js) that dock beside the page or pop out
 // as windows, joined by Output and Checks for the task on screen.
 //
-// Layout: html[data-home-layout="sessions"]. Diagnostic launches (?smoke=1,
-// ?capture=1) keep the classic Home unless a layout was saved, as vibe.js
-// keeps them in Build. Search's "Switch Home layout" flips it and reloads,
-// since the panes adopt the classic Home's own sections.
+// Layout: html[data-home-layout="sessions"]. The classic Home is the default
+// (the 0.5.0 plan keeps homeLayout on classic until the owner turns this on):
+// a saved mefiStudio.homeLayout of "sessions", ?home=sessions for one launch,
+// or Search's "Switch Home layout" (it saves the choice and reloads, since the
+// panes adopt the classic Home's own sections) turn it on, and ?home=classic
+// turns it off for a launch. Diagnostic launches (?smoke=1, ?capture=1) also
+// fall back to the classic Home, so the render fixtures see the page they were
+// written for. Under the classic layout this module wires nothing at all: no
+// listener, timer or frame, no stored key, and no change to the page.
 //
 // Workspace (workspace.js) still owns Home's data, its composer and every
 // host call it made; this module reads its snapshot, adds the session's own
@@ -24,6 +29,7 @@
 (function () {
   "use strict";
   const LAYOUT_KEY = "mefiStudio.homeLayout";
+  const DEFAULT_LAYOUT = "classic";
   const layer = document.getElementById("workspace-layer");
   if (!layer) return;
   const api = () => window.mefiStudio;
@@ -38,7 +44,7 @@
     if (param === "classic" || param === "sessions") return param;
     const saved = read(LAYOUT_KEY);
     if (saved === "sessions" || saved === "classic") return saved;
-    return headless ? "classic" : "sessions";
+    return headless ? "classic" : DEFAULT_LAYOUT;
   }
   const sessions = () => layout() === "sessions";
   const building = () => window.MefiVibe?.mode?.() !== "vibe";
@@ -129,10 +135,12 @@
     const label = question ? "Needs your answer" : summary?.label || (tone === "done" ? "Done" : "Queued");
     return { stage, tone, label, summary, question };
   }
-  const TONE_WORDS = { ask: "Needs you", run: "Working", check: "Checking", done: "Done", dropped: "Dropped", wait: "Waiting", ready: "Queued" };
 
   // The menu's groups: Pinned, Needs you and Working first, then the rest by
   // the day each last moved. Finished work older than two weeks folds away.
+  // The rows are the workspace's own, shared by every listener, so each row's
+  // reading is kept here beside it and never written onto it.
+  const readings = new WeakMap();
   function groups(tasks, { now = Date.now(), pinned = pins(), data = snapshot() } = {}) {
     const today = startOfDay(now);
     const buckets = new Map();
@@ -140,7 +148,7 @@
     for (const task of tasks) {
       if (!task?.id || task.archived || task.status === "archived") continue;
       const now2 = reading(task, data);
-      task.__reading = now2;
+      readings.set(task, now2);
       if (pinned.has(task.id)) { add("pinned", "Pinned", task, 0); continue; }
       if (now2.tone === "ask") { add("needs", "Needs you", task, 1); continue; }
       if (now2.tone === "run" || now2.tone === "check") { add("working", "Working", task, 2); continue; }
@@ -232,7 +240,7 @@
     const seen = Number(read(seenKey(), "0")) || 0;
     const unread = Boolean(lastSaid && stampOf(lastSaid.at) > seen && !(state.view === "chat" && window.MefiWorkspace?.isActive?.()));
     const current = state.view === "task" ? state.taskId : state.view === "chat" ? "__chat" : null;
-    const signature = JSON.stringify([data.projectId, grouped.map((group) => [group.key, group.title, group.rows.map((task) => [task.id, task.title || task.prompt || "", task.__reading.tone, task.__reading.label])]), state.query, state.searching, state.olderOpen, unread, current, companion(), window.MefiWorkspace?.isActive?.() ? 1 : 0]);
+    const signature = JSON.stringify([data.projectId, grouped.map((group) => [group.key, group.title, group.rows.map((task) => [task.id, task.title || task.prompt || "", readings.get(task).tone, readings.get(task).label])]), state.query, state.searching, state.olderOpen, unread, current, companion(), window.MefiWorkspace?.isActive?.() ? 1 : 0]);
     paintPerson(data);
     if (state.painted.get("rail") === signature && list.childElementCount) return true;
     state.painted.set("rail", signature);
@@ -269,7 +277,7 @@
       }
       rows.push(el("span", "app-rail-heading builder-group", group.title));
       for (const task of group.rows) {
-        const now = task.__reading;
+        const now = readings.get(task);
         rows.push(row({ key: task.id, title: window.MefiTasks?.shortTitle?.(task) || task.title || task.prompt || "Untitled task", full: task.title || task.prompt || "", tone: now.tone, label: now.label, pinned: pinned.has(task.id), selected: current === task.id, run: () => openTask(task.id) }));
         shown += 1;
       }
@@ -430,9 +438,10 @@
   function subject(data = snapshot()) {
     const tasks = data.tasks || [];
     if (state.view === "task" && state.taskId) return tasks.find((task) => task.id === state.taskId) ?? null;
-    const context = window.MefiNav?.taskContext?.(data.projectId);
-    return tasks.find((task) => task.id === context?.taskId)
-      ?? tasks.find((task) => (data.status?.running || []).some((job) => job.taskId === task.id))
+    // A row with no id (or a job with no task) must never match "no task followed".
+    const followed = window.MefiNav?.taskContext?.(data.projectId)?.taskId;
+    return (followed ? tasks.find((task) => task.id === followed) : null)
+      ?? tasks.find((task) => task.id && (data.status?.running || []).some((job) => job.taskId === task.id))
       ?? null;
   }
   function paintOutput(task, run, data) {
@@ -1123,9 +1132,47 @@
     for (const [select, words] of [[cli, "Coding worker"], [tier, "Tier"]]) { const option = el("option", "", words); option.value = ""; select.append(option); select.disabled = true; }
     cli.addEventListener("change", () => saveRouting({ executorCli: cli.value }, `${CLI_NAMES[cli.value] || cli.value} builds your tasks now.`));
     tier.addEventListener("change", () => saveRouting({ executorTier: tier.value }, `${(TIERS.find(([id]) => id === tier.value) || ["", tier.value])[1]} saved.`));
-    tools.append(autonomy, cli, tier);
+    tools.append(autonomy, buildMoreMenu(), cli, tier);
     bottom.insertBefore(tools, ws("send") ?? null);
     window.MefiAutonomy?.mount?.(autonomy, { id: "builder-autonomy-control" });
+  }
+  // The "+" after the permission chip holds what crowded the row and pushed the
+  // worker, its tier and Send onto a second line at 1920x1080: "Use a task
+  // outline" and "Plan an idea". Their own buttons move into the menu, so ids,
+  // handlers and the purpose's show and hide stay Home's (workspace.js).
+  function buildMoreMenu() {
+    const holder = el("span", "builder-more"); holder.id = "builder-more";
+    const toggle = button("", "ghost builder-more-btn", null, { icon: "g-add", title: "More: a task outline, or plan an idea" });
+    toggle.id = "builder-compose-more"; toggle.setAttribute("aria-label", "More"); toggle.setAttribute("aria-haspopup", "menu"); toggle.setAttribute("aria-expanded", "false"); toggle.setAttribute("aria-controls", "builder-more-menu");
+    const menu = el("div", "builder-more-menu"); menu.id = "builder-more-menu"; menu.setAttribute("role", "menu"); menu.setAttribute("aria-label", "More"); menu.hidden = true;
+    for (const id of ["task-outline", "plan-idea"]) {
+      const item = ws(id);
+      if (!item) continue;
+      item.setAttribute("role", "menuitem");
+      menu.append(item);
+    }
+    const items = () => [...menu.querySelectorAll("button")].filter((item) => !item.hidden && !item.disabled);
+    const set = (open, { focus = false } = {}) => {
+      menu.hidden = !open;
+      toggle.setAttribute("aria-expanded", String(open));
+      if (open && focus) items()[0]?.focus?.({ preventScroll: true });
+    };
+    toggle.addEventListener("click", () => set(menu.hidden, { focus: true }));
+    // A pick closes the menu after the button's own handler has run.
+    menu.addEventListener("click", (event) => { if (event.target?.closest?.("button")) set(false); });
+    holder.addEventListener("keydown", (event) => {
+      if (menu.hidden) return;
+      if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); set(false); toggle.focus?.({ preventScroll: true }); return; }
+      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+      const list = items();
+      if (!list.length) return;
+      event.preventDefault();
+      const at = list.indexOf(event.target);
+      list[(at + (event.key === "ArrowDown" ? 1 : -1) + list.length) % list.length]?.focus?.({ preventScroll: true });
+    });
+    document.addEventListener("click", (event) => { if (!menu.hidden && !holder.contains(event.target)) set(false); });
+    holder.append(toggle, menu);
+    return holder;
   }
   function paintChips() {
     const holder = byId("builder-chips");
@@ -1280,5 +1327,7 @@
     openTask, openChat, newTask, requestChange, setView, view: () => ({ view: state.view, taskId: state.taskId }),
     groups, reading, boardStats, heatmap: (days, now) => heatmap(days, now), setLayout, refresh: () => { state.painted.clear(); schedule(); },
   };
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", wire); else wire();
+  // The classic layout wires nothing (see the header). A layout change reloads
+  // the page, so this is decided once per launch.
+  if (sessions()) { if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", wire); else wire(); }
 })();

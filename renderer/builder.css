@@ -125,19 +125,23 @@ html[data-home-layout="sessions"] #workspace-layer .builder-home[hidden], html[d
 #workspace-layer .builder-switch[aria-checked="true"] { color: var(--ivory); border-color: color-mix(in srgb, var(--gold) 45%, transparent); }
 #workspace-layer .builder-switch[aria-checked="true"] .builder-check { background: var(--gold); box-shadow: none; background-image: linear-gradient(135deg, transparent 45%, var(--on-ivory, #202320) 45% 55%, transparent 55%); }
 #workspace-layer .builder-chip:disabled { opacity: .55; }
-/* One row under the words, like the desktop coding apps: files, purpose and
-   permission on the left; the worker, its tier and Send on the right. */
-html[data-home-layout="sessions"] #workspace-layer .ws-composer { order: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 10px 10px; border-radius: 18px; }
+/* One row under the words, like the desktop coding apps: files, purpose,
+   permission and "+" on the left; the worker, its tier and Send on the right.
+   The row never wraps at 1920x1080: "Use a task outline" and "Plan an idea" live
+   in the "+" menu, and the two pickers start narrow and share what is left, with
+   an ellipsis when a name is longer. Menus here open upward, so the composer
+   must not clip them (Home's own sheet clips its rounded corners). */
+html[data-home-layout="sessions"] #workspace-layer .ws-composer { order: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 10px 10px; border-radius: 18px; overflow: visible; }
 html[data-home-layout="sessions"] #workspace-layer .ws-composer :is(.ws-compose-top, .ws-compose-bottom, .file-input-tools, .builder-compose-tools) { display: contents; }
 html[data-home-layout="sessions"] #workspace-layer .ws-composer textarea { order: 0; flex: 1 1 100%; min-height: 70px; max-height: 280px; padding: 16px 8px 6px; font-size: 14.5px; }
 html[data-home-layout="sessions"] #workspace-layer .ws-composer .file-input-tools > button { order: 1; }
 html[data-home-layout="sessions"] #workspace-layer .ws-composer .ws-modes { order: 2; }
 html[data-home-layout="sessions"] #workspace-layer .ws-composer .builder-autonomy { order: 3; position: relative; }
-html[data-home-layout="sessions"] #workspace-layer .ws-composer :is(#workspace-compose-hint, .builder-intent-hint) { order: 4; flex: 1 1 auto; min-width: 0; overflow: hidden; color: var(--dim); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; visibility: hidden; }
-html[data-home-layout="sessions"] #workspace-layer .ws-composer .builder-intent-hint { visibility: visible; text-align: right; }
-html[data-home-layout="sessions"] #workspace-layer .ws-composer #workspace-task-outline { order: 5; }
-html[data-home-layout="sessions"] #workspace-layer .ws-composer #workspace-plan-idea { order: 6; }
-html[data-home-layout="sessions"] #workspace-layer .ws-composer #builder-worker-cli-choice { order: 7; }
+html[data-home-layout="sessions"] #workspace-layer .ws-composer .builder-more { order: 4; position: relative; }
+/* Home's keyboard hint is not shown in this layout; a task's intent hint is, and takes the row's spare room. */
+html[data-home-layout="sessions"] #workspace-layer .ws-composer #workspace-compose-hint { display: none; }
+html[data-home-layout="sessions"] #workspace-layer .ws-composer .builder-intent-hint { order: 5; flex: 1 1 0; min-width: 0; overflow: hidden; color: var(--dim); font-size: 11px; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+html[data-home-layout="sessions"] #workspace-layer .ws-composer #builder-worker-cli-choice { order: 7; margin-left: auto; }
 html[data-home-layout="sessions"] #workspace-layer .ws-composer #builder-worker-tier-choice { order: 8; }
 html[data-home-layout="sessions"] #workspace-layer .ws-composer :is(#workspace-send, #builder-task-send) { order: 9; min-height: 32px; padding: 0 16px; border-radius: 10px; }
 html[data-home-layout="sessions"] #workspace-layer .ws-composer .file-input-tools > [role="status"] { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -145,8 +149,17 @@ html[data-home-layout="sessions"] #workspace-layer .ws-composer #workspace-compo
 html[data-home-layout="sessions"] #workspace-layer .ws-composer :is(button.ghost, .autonomy-chip) { min-height: 30px; padding: 0 11px; border-radius: 9px; font-size: 12px; }
 html[data-home-layout="sessions"] #workspace-layer .ws-composer .ws-modes { padding: 2px; border-radius: 9px; }
 html[data-home-layout="sessions"] #workspace-layer .ws-composer .ws-modes button { min-height: 26px; padding: 0 10px; font-size: 12px; }
-#workspace-layer .builder-compose-tools .studio-select { min-height: 30px; max-width: 220px; padding: 0 10px; border: 1px solid color-mix(in srgb, var(--ivory) 10%, transparent); border-radius: 9px; background: color-mix(in srgb, var(--ivory) 4%, transparent); color: var(--ivory); font: 500 12px/1 var(--font-ui); }
+#workspace-layer .builder-compose-tools .studio-select { flex: 1 1 96px; min-width: 88px; min-height: 30px; max-width: 220px; padding: 0 10px; border: 1px solid color-mix(in srgb, var(--ivory) 10%, transparent); border-radius: 9px; background: color-mix(in srgb, var(--ivory) 4%, transparent); color: var(--ivory); font: 500 12px/1 var(--font-ui); }
 #workspace-layer .builder-compose-tools .studio-select .studio-select-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The "+" and its menu: a round button, and a small list that opens upward. */
+html[data-home-layout="sessions"] #workspace-layer .ws-composer .builder-more-btn { display: inline-grid; place-items: center; width: 30px; min-width: 30px; padding: 0; border-radius: 50%; }
+html[data-home-layout="sessions"] #workspace-layer .ws-composer .builder-more-btn .glyph { width: 15px; height: 15px; }
+html[data-home-layout="sessions"] #workspace-layer .ws-composer .builder-more-btn[aria-expanded="true"] { border-color: var(--gold); color: var(--ivory); }
+.builder-more-menu { position: absolute; z-index: 30; bottom: calc(100% + 8px); left: 0; display: flex; flex-direction: column; gap: 2px; min-width: 190px; padding: 6px; border: 1px solid var(--hairline-strong); border-radius: 14px; background: var(--panel-solid); box-shadow: 0 12px 34px rgb(0 0 0 / .4); }
+.builder-more-menu[hidden] { display: none; }
+html[data-home-layout="sessions"] #workspace-layer .ws-composer .builder-more-menu > button { display: flex; align-items: center; justify-content: flex-start; width: 100%; min-height: 34px; padding: 0 12px; border: 0; border-radius: 9px; background: transparent; color: var(--ivory); font-size: 12.5px; text-align: left; white-space: nowrap; }
+html[data-home-layout="sessions"] #workspace-layer .ws-composer .builder-more-menu > button:hover:not(:disabled), html[data-home-layout="sessions"] #workspace-layer .ws-composer .builder-more-menu > button:focus-visible { background: color-mix(in srgb, var(--ivory) 9%, transparent); }
+html[data-home-layout="sessions"] #workspace-layer .ws-composer .builder-more-menu > button[hidden] { display: none; }
 
 /* ---- New task: the greeting and the stats card --------------------------- */
 .builder-home { order: 0; display: flex; flex-direction: column; align-items: center; gap: 20px; padding: clamp(18px, 5vh, 56px) 0 24px; }
