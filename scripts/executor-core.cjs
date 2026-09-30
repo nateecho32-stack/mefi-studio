@@ -20,6 +20,8 @@ const agentModes = require("./agent-modes.cjs");
 const agentIssues = require("./agent-issues.cjs");
 const taskHandoffs = require("./task-handoffs.cjs");
 const { buildWindowsCmdArgs } = require("./windows-command-line.cjs");
+// Only its pure launch builder (appServerInvocation) runs from here.
+const codexAppServer = require("./codex-harness.cjs");
 
 const MINUTE_MS = 60 * 1000;
 // A card is parked for a manual reopen at its fifth charged failure.
@@ -622,7 +624,12 @@ function codexMcpArgs(servers) {
 // file through OPENCODE_CONFIG, Claude Code takes --mcp-config, Codex takes
 // its server table as config overrides. Grok and Antigravity have no per-run
 // MCP flag and keep their own configuration.
-function cliInvocation(route, cli, prompt, { modelArg = () => "", agyModelArg = () => "", desk = null, platform = "win32", shim = () => null, promptFile = null } = {}) {
+// `codexHarness` picks how a Codex route runs: "exec" (the default, `codex
+// exec` below) or "app-server", the same worker over `codex app-server`'s
+// JSON-RPC (scripts/codex-harness.cjs appServerInvocation: `harness` and a
+// session `plan` ride the result, the host wraps the child in wrapChild, and
+// the MCP servers travel over stdin, so none is dropped).
+function cliInvocation(route, cli, prompt, { modelArg = () => "", agyModelArg = () => "", desk = null, platform = "win32", shim = () => null, promptFile = null, codexHarness = "exec" } = {}) {
   if (cli === "grok") {
     // A headless agentic session. --prompt-file both starts grok's headless
     // mode and keeps a brief of up to EXECUTOR_PROMPT_MAX off every command
@@ -645,6 +652,7 @@ function cliInvocation(route, cli, prompt, { modelArg = () => "", agyModelArg = 
     return { ...shellLaunch("claude", args, platform), stdio: ["pipe", "pipe", "pipe"], stdin: prompt, env: route.env, dropped: [] };
   }
   if (cli === "codex") {
+    if (codexHarness === "app-server") return codexAppServer.appServerInvocation(route, prompt, { modelArg, desk, platform, shim, launch: shellLaunch });
     // `codex exec`: approvals and the sandbox bypassed (the run root is the
     // whole workspace), the prompt on stdin ("-" reads it there), --color
     // never keeps the protocol readable, the run's MCP servers as overrides.
@@ -783,6 +791,7 @@ module.exports = {
   attemptFinishRecord,
   attemptRecord,
   startBudgetMs,
+  shellLaunch,
   cliInvocation,
   heavyRetryPending,
   readWorkerLine,

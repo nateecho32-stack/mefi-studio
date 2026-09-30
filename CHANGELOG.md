@@ -7,6 +7,12 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Codex workers can run over `codex app-server`.** An opt-in harness
+  (`scripts/codex-harness.cjs`) drives Codex's JSON-RPC server instead of
+  `codex exec` while the executor reads the same lines: MCP servers with
+  credentials are no longer dropped, the owner's own Codex MCP servers stay
+  out of Studio's runs, and token use and plan limits arrive live.
+
 - **Security fixes for remote approvals, catalogs and sharing.** Work filed
   from Discord retains its approval requirement through task admission and
   promotion. Concurrent PIN attempts count toward one lockout and approval
