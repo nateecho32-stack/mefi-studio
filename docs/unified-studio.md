@@ -112,6 +112,72 @@ through. Blur off retains a translucent tint with greater opacity; OS reduced
 transparency uses solid surfaces. Custom palettes retain their chosen colours,
 with a safe reading background when canvas and panel tones differ.
 
+## Layout contract
+
+The shell keeps room in its geometry for four regions that later work draws: a
+session list beside the rail, an inspector at the right, a tab strip under the
+local navigation and a status bar along the bottom. None is built yet. With
+every region at 0 (the default, "layout v1") each page, sheet and floating
+thing is exactly where it was: `tests/fixtures/layout-contract-v1.json` holds
+the boxes of the base commit and the render fixture compares them.
+
+| Variable | Range | Meaning |
+| --- | --- | --- |
+| `--shell-list-w` | 0 to 420 | width of the session list, right of the rail |
+| `--shell-inspector-w` | 0 to 640 | width of the inspector, at the right edge |
+| `--shell-tabs-h` | 0 to 48 | height of the tab strip, under the local navigation |
+| `--shell-status-h` | 0 to 40 | height of the status bar, at the bottom |
+
+All four are declared once, as `0px`, in `renderer/styles.css`. The free area
+is bounded by four derived edges, and page CSS says "where the free area
+starts" with them and nothing else: `--shell-x0` (rail plus list),
+`--shell-x1` (inspector), `--shell-y0` (local navigation plus tab strip) and
+`--shell-y1` (status bar). `--shell-rail-w`, `--shell-rail-open` and
+`--shell-local-h` keep their own meaning, the rail itself and the local
+navigation itself, and their remaining uses are named in
+`tests/layout_contract_css.test.mjs`.
+
+The contract is for the rail shell, which Vibe always has. Build's classic-tabs
+choice keeps its row of tabs and has no room for the regions.
+
+Only `MefiNav.layout.set(name, value)` (`renderer/nav.js`) gives a region room,
+where `name` is `list`, `inspector`, `tabs` or `status`. The value is cut to
+its range, then to what the window can spare: the rail, the list and the
+inspector never leave the main area less than 320 CSS px, and the inspector
+gives way first. It writes the variable as an inline pixel value on `html`
+(nothing for 0), announces `mefi:layout` and a `resize`, and answers with what
+the region got. A region's own component calls it when it appears and again
+with 0 when it goes; no stylesheet assigns these variables beyond the zeros
+above and the fold's.
+
+`html[data-layout="v2"]` turns the contract on; v1 is the attribute absent. It
+is a second attribute because a third `data-shell` value would read as classic
+to every `=== "rail"` test. `applyLayout` in `renderer/nav.js`, beside
+`applyShell`, is its only writer. `?layout=v1|v2` decides one launch and wins;
+otherwise the saved `mefiStudio.layout` (`MefiNav.setLayout("v2")` writes it),
+and v1 when there is none. A `?smoke=1` or `?capture=1` launch stays v1 unless
+it names a layout. In v1 nothing is wired: no listener, no stored key, no
+inline variable.
+
+Fold rule: a v2 window narrower than 900 CSS px has no room for columns. The
+list and the inspector compute to 0 (a `max-width: 899.98px` query in
+`renderer/styles.css`, so the geometry is right in the same frame as the
+resize and `usable()` is right even inside a resize handler that runs before
+any script's media-query event) and `html` carries `data-layout-fold="list
+inspector"`, which `nav.js` keeps on resize, for the regions that become
+drawers. The tab strip and the status bar are rows and keep their height. What
+was asked for is kept (`layout.get()`), and the columns come back when the
+window grows.
+
+`MefiNav.usable()` answers `{ left, top, right, bottom, width, height }` in CSS
+px: the part of the window no chrome covers, the rectangle the companion's
+orb, the media window, toasts, pop-ups and Command's graph stay inside. In v1
+it is what each of them measured for itself before: the right edge of the
+rail's box (the open rail included, since it opens over the page), the bottom
+of the local navigation's, and the window's other edges. In v2 it is also
+clear of the list, the tab strip, the inspector and the status bar. Ask it
+each time something is placed, not once.
+
 ## The companion
 
 Hover briefly over the companion to open its menu. Leaving its avatar,
@@ -149,3 +215,16 @@ dropdowns, keyboard and held overflow arrows, dragging/pinning, visibility,
 project isolation and draft retention. No live project data or
 credentials are used. Screenshots can be retained with
 `MEFI_UNIFIED_CAPTURE_DIR` pointing to a directory outside the repository.
+
+The layout contract has three suites. `tests/layout_contract_nav.test.mjs`
+pins the layout writer, the launch choice, the clamps and `usable()` against
+a fake document. `tests/layout_contract_css.test.mjs` evaluates every
+declaration that moved onto the derived edges, with the regions at 0 (it must
+equal what it was) and at the sample sizes (it must move by exactly the
+region). `tests/layout_contract_render.test.mjs` launches an Electron fixture
+that measures the rail, the local navigation and every registered destination
+in four window sizes, Build and Vibe, the menu closed and pinned: v1 must
+reproduce `tests/fixtures/layout-contract-v1.json`, and v2 with fixture-only
+boxes for the four regions (list 280, inspector 400, tab strip 36, status bar
+28) must keep every page clear of them and inside the window. Screenshots can
+be retained with `MEFI_LAYOUT_CAPTURE_DIR`.
