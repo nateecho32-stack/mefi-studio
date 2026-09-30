@@ -313,7 +313,7 @@ class MefiStudioRoutingTests(unittest.TestCase):
         cli = _function_body(self.main, "cliAssistantCall")
         self.assertIn("cliAssistantCall(route, system, user, maxTokens", fetch)
         # The call rides whichever Claude Code login answers (cliAccountTurn).
-        self.assertIn("claudeCompletion(system, user, route.model, login)", cli)
+        self.assertIn("claudeCompletion(system, said, route.model, login)", cli)
         self.assertIn("cliAccountTurn", cli, "a topped-out login hands the call to the next")
         # Only CLIs whose reply path runs outside the project with native
         # action tools off may answer data-only calls: every text CLI in
@@ -348,7 +348,7 @@ class MefiStudioRoutingTests(unittest.TestCase):
         body = _function_body(self.main, "resolveAiRoute")
         self.assertIn('provider === "codex"', body)
         cli = _function_body(self.main, "cliAssistantCall")
-        self.assertIn("codexCompletion(system, user, route.model, login)", cli)
+        self.assertIn("codexCompletion(system, said, route.model, login)", cli)
         # Builders: approvals and the sandbox bypassed because nobody is at the
         # keyboard, plain stdout so the sentinel protocol stays readable.
         spawn = _function_body(self.main, "spawnNextJob")
@@ -413,7 +413,9 @@ class MefiStudioRoutingTests(unittest.TestCase):
         body = _function_body(self.main, "resolveAiRoute")
         self.assertIn('provider === "antigravity"', body)
         cli = _function_body(self.main, "cliAssistantCall")
-        self.assertIn("antigravityCompletion(system, user, route.model)", cli)
+        self.assertIn("antigravityCompletion(system, said, route.model)", cli)
+        # A picture on the message is only named to a CLI, in one plain line.
+        self.assertIn('const said = typeof imageCliText === "function" ? imageCliText(user) : user;', cli)
         # Builders: agentic print mode, permissions skipped, model before -p.
         spawn = _function_body(self.main, "spawnNextJob")
         self.assertIn('cli === "antigravity"', self.core)

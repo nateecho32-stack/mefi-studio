@@ -430,7 +430,8 @@ class MefiStudioAssistantTests(unittest.TestCase):
         # The overseer's payload is packed by section, message first, and the
         # serialized JSON is never sliced (a sliced tail was invalid JSON).
         turn = self.main[self.main.index("async function assistantOverseerTurn(") : self.main.index("// Keyless (or model-less this turn) control")]
-        self.assertIn("taskOversight.packChatPayload({ message: text, did,", turn, "the owner's words lead the chat payload")
+        # A picture note rides after the words (extras.message), never before them.
+        self.assertIn("taskOversight.packChatPayload({ message: extras?.message ? `${text}\\n\\n${extras.message}` : text, did,", turn, "the owner's words lead the chat payload")
         self.assertIn("sectionBudgets: CHAT_SECTION_BUDGETS", turn, "each section keeps its own budget before the global one")
         self.assertNotIn("body.slice(", turn, "the packed body is never cut mid-JSON")
         oversight = (STUDIO / "scripts" / "task-oversight.cjs").read_text(encoding="utf-8")
