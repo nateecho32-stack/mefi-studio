@@ -59,6 +59,8 @@ const PROMISES = [
   { file: "scripts/update-safety.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (time is", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   // The project's standing rules for its agents (ZA8); agent-addons.cjs reads the two project files and puts the block in a prompt.
   { file: "scripts/agent-rules.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  // What Studio's own models may see of a project's files (ZA9); project-search.cjs owns the folder walk and the reads.
+  { file: "scripts/project-ignore.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
 ];
 
 const CLOCK = /\bDate\.now\s*\(|new\s+Date\s*\(\s*\)|\bperformance\.now\s*\(/;
