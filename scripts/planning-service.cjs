@@ -16,7 +16,8 @@
 
 const { applyPlanningAction, buildImplementationTasks, LIMITS } = require("./planning.cjs");
 
-const USER_ACTIONS = new Set(["create", "update", "add-unknown", "remove-unknown", "add-question", "edit-question", "resolve", "reopen", "add-note", "confirm-understanding", "draft-spec", "approve-spec", "archive", "restore"]);
+// "restore-version" brings an earlier version of the plan back as a new one (Plans › Versions).
+const USER_ACTIONS = new Set(["create", "update", "add-unknown", "remove-unknown", "add-question", "edit-question", "resolve", "reopen", "add-note", "confirm-understanding", "draft-spec", "approve-spec", "archive", "restore", "restore-version"]);
 const TYPES = new Set(["discussion", "research", "prototype", "prerequisite"]);
 const BASE_PROMPT = [
   "You interview a human about one bounded project outcome before implementation.",

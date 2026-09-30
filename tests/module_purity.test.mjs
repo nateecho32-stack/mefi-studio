@@ -63,6 +63,8 @@ const PROMISES = [
   { file: "scripts/agent-rules.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   // What Studio's own models may see of a project's files (ZA9); project-search.cjs owns the folder walk and the reads.
   { file: "scripts/project-ignore.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  // Recently deleted (ZA3): the rules and the store's shape; main.cjs "Board trash" owns the file.
+  { file: "scripts/board-trash.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (time is", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
 ];
 
 const CLOCK = /\bDate\.now\s*\(|new\s+Date\s*\(\s*\)|\bperformance\.now\s*\(/;

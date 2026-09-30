@@ -107,6 +107,8 @@ const { createPlanningStore } = require("./scripts/planning.cjs");
 const { createPlanningService } = require("./scripts/planning-service.cjs");
 const projectWork = require("./scripts/project-work.cjs");
 const { applyIdeaAction, applyRequestAction } = require("./scripts/idea-actions.cjs");
+// Recently deleted: what the "Board trash" block keeps of a deleted task or idea.
+const boardTrash = require("./scripts/board-trash.cjs");
 const { createMusicRecommender } = require("./scripts/music-recommendations.cjs");
 const { attachRendererRecovery } = require("./scripts/renderer-recovery.cjs");
 const { createEyesClient, wrapEyes } = require("./scripts/eyes-client.cjs");
@@ -14486,18 +14488,30 @@ async function restoreTaskContext({ taskId, revisionId, projectId } = {}) {
 async function deleteTask({ taskId, projectId } = {}) {
   const error = taskProjectError(projectId);
   if (error) return { ok: false, error };
-  const result = await mutateBoard((board) => {
-    const task = board.tasks.find((item) => item?.id === taskId);
-    if (!task) return { ok: false, error: "Task not found in this project." };
-    if (task.runId || ["active", "running", "awaiting_verification", "verifying", "absorbed"].includes(task.status) || autopilot.jobs.some((job) => job.taskId === taskId)) return { ok: false, error: "Wait for the worker or its group to finish before deleting this task." };
-    const dependents = board.tasks.filter((item) => backlog.dependencyIds(item).includes(taskId));
-    if (dependents.length) return { ok: false, error: "Other tasks depend on this one. Remove their prerequisite links before deleting it." };
-    recordDroppedHandoff(board, task);
-    return { ok: true, tasks: board.tasks.filter((item) => item.id !== taskId) };
-  });
+  // Recently deleted (the "Board trash" block): the record is kept BEFORE the
+  // board write that removes it, and `sink` says what can be brought back. With
+  // the block off or absent (MEFI_STUDIO_NO_BOARD_TRASH=1) a delete is for good.
+  const sink = { kept: [], removed: 0 };
+  let result;
+  try {
+    result = await mutateBoard((board) => {
+      const task = board.tasks.find((item) => item?.id === taskId);
+      if (!task) return { ok: false, error: "Task not found in this project." };
+      if (task.runId || ["active", "running", "awaiting_verification", "verifying", "absorbed"].includes(task.status) || autopilot.jobs.some((job) => job.taskId === taskId)) return { ok: false, error: "Wait for the worker or its group to finish before deleting this task." };
+      const dependents = board.tasks.filter((item) => backlog.dependencyIds(item).includes(taskId));
+      if (dependents.length) return { ok: false, error: "Other tasks depend on this one. Remove their prerequisite links before deleting it." };
+      recordDroppedHandoff(board, task);
+      return { ok: true, tasks: board.tasks.filter((item) => item.id !== taskId) };
+    }, typeof boardTrashBefore === "function" ? boardTrashBefore("task", { via: "tasks:delete" }, sink) : undefined);
+  } catch (failure) {
+    // A copy kept for a delete that then failed is taken out again if the card is still on the board.
+    if (sink.kept.length && typeof boardTrashReconcile === "function") await boardTrashReconcile("task", sink);
+    if (!failure?.boardTrash) throw failure;
+    return { ok: false, error: failure.message };
+  }
   if (!result.ok) return { ok: false, error: result.error };
   await refreshAutopilotQueue();
-  return { ok: true, tasks: result.tasks.map(taskView), backlog: await backlogStatus() };
+  return { ok: true, tasks: result.tasks.map(taskView), backlog: await backlogStatus(), ...(typeof boardTrashReply === "function" ? boardTrashReply(sink) : {}) };
 }
 
 // A follow-up the owner drops or deletes stays settled for the parent that
@@ -14671,6 +14685,192 @@ function workTitleKey(value) {
   // one (compactKey delegates to it), Work on it unwrap included.
   return assistantModule?.compactKey ? assistantModule.compactKey(value) : workAdmission.titleKey(value);
 }
+
+// ---- Board trash: Recently deleted tasks and ideas ---------------------------
+// scripts/board-trash.cjs holds the rules; this block owns the file and the
+// calls. Deleting a task or an idea keeps its whole record in board-trash.json
+// beside the project's board files, 30 days and at most 50 items, so the delete
+// can be undone: from the toast's Undo, or later from the Recently deleted list
+// (`tasks:undelete`, `ideas:action` restore, `board:trash`). The copy is written
+// BEFORE the board write that removes it: mutateBoard's beforeWrite runs inside
+// the board lock, so a crash between the two leaves the card in both places and
+// never in neither, and when the copy cannot be written the card is not deleted.
+// A restore puts the record back under its id at its place and never over a card
+// that is there. MEFI_STUDIO_NO_BOARD_TRASH=1 turns all of it off: a delete is
+// for good again (the old behaviour) and nothing here reads or writes the file.
+// A function, not a constant: host suites run slices of this file with no STUDIO_ROOT.
+const boardTrashPath = () => path.join(STUDIO_ROOT, "data", "board-trash.json");
+const BOARD_TRASH_OFF = "Recently deleted is switched off for this run of Studio (MEFI_STUDIO_NO_BOARD_TRASH), so nothing was kept and nothing can be put back.";
+const boardTrashOn = () => process.env.MEFI_STUDIO_NO_BOARD_TRASH !== "1";
+// A short reason for a log line or a message, with no path in it: an fs error's text
+// names the file ("EACCES: permission denied, open 'C:\Users\…'"), and logs and
+// messages must not carry personal paths. A known code becomes words; anything else
+// keeps what comes before the first quoted name or drive path (a folder called
+// Mefi's Studio has an apostrophe in it, so quotes cannot be matched in pairs).
+function boardTrashWhy(failure) {
+  const code = typeof failure?.code === "string" ? failure.code : "";
+  const words = { ENOSPC: "the disk is full", EACCES: "permission denied", EPERM: "permission denied", EBUSY: "the file is in use", EROFS: "the disk is read-only" };
+  if (words[code]) return words[code];
+  const whole = String(failure?.message ?? failure ?? "").replace(/\s+/g, " ").trim();
+  let text = whole.split(/['"`]|\b[A-Za-z]:[\\/]|\\\\\S/)[0];
+  if (text !== whole) text = text.replace(/,\s*\w+\s*$/, "");
+  text = text.trim().slice(0, 120);
+  return code && !text.includes(code) ? `${code}${text ? ` · ${text}` : ""}` : text || "unknown error";
+}
+const boardTrashStores = new Map();
+// One store per project file, bound to the project it was made for: a switch
+// while a call is in flight cannot move it to another project's file.
+function boardTrashStore() {
+  const project = projects.current();
+  const file = projects.dataPath(boardTrashPath(), project);
+  let store = boardTrashStores.get(file);
+  if (!store) {
+    const inProject = (run) => projects.run(project, run);
+    store = boardTrash.createTrashStore({
+      // A file that is not there is an empty list; any other failure to read it
+      // is an error, never an empty list to write over.
+      read: () => inProject(async () => {
+        try { return await readFile(file, "utf8"); } catch (error) { if (error?.code === "ENOENT") return null; throw error; }
+      }),
+      // A temp file and a rename, like the board's own files.
+      write: (document) => inProject(async () => (await getEyes()).writeJson(boardTrashPath(), document)),
+      now: () => Date.now(),
+      // A file that will not read is set aside before the next write covers it.
+      setAside: (text) => inProject(async () => {
+        await writeFile(`${file}.unreadable-${Date.now()}.txt`, text);
+        logLine("[board] Recently deleted could not be read; its bytes were set aside beside it");
+      }),
+    });
+    boardTrashStores.set(file, store);
+  }
+  return store;
+}
+
+// What a delete hands mutateBoard so the records it removes are kept first.
+// `sink` collects what was kept (and how many were removed) for the reply.
+// Undefined when Recently deleted is off, which is the old behaviour.
+function boardTrashBefore(kind, { via, by = "owner" } = {}, sink = { kept: [], removed: 0 }) {
+  if (!boardTrashOn()) return undefined;
+  const key = kind === "task" ? "tasks" : "ideas";
+  return {
+    beforeWrite: async ({ before, after }) => {
+      const rows = boardTrash.removed(kind, before[key], after[key], { by, via });
+      if (!rows.length) return;
+      let out;
+      try { out = await boardTrashStore().keep(rows); }
+      catch (failure) {
+        const why = boardTrashWhy(failure);
+        logLine(`[board] Recently deleted failed to keep ${rows.length} ${kind}${rows.length === 1 ? "" : "s"}, so nothing was deleted: ${why}`);
+        throw Object.assign(new Error(`Nothing was deleted: Studio could not keep a copy in Recently deleted first (${why}).`), { boardTrash: true });
+      }
+      sink.removed += rows.length;
+      sink.kept.push(...out.kept);
+      const shown = out.kept.slice(0, 8).map((row) => row.id).join(", ");
+      logLine(`[board] kept ${out.kept.length} deleted ${kind}${out.kept.length === 1 ? "" : "s"} in Recently deleted (${shown}${out.kept.length > 8 ? ", …" : ""})${out.dropped.length ? `; let go of ${out.dropped.length} older` : ""}`);
+    },
+  };
+}
+// What a delete's reply says was kept: small rows, never the records.
+const boardTrashReply = (sink) => (sink.kept.length ? { trashed: sink.kept.map(({ kind, id, title, deletedAt }) => ({ kind, id, title, deletedAt })), ...(sink.removed > sink.kept.length ? { notKept: sink.removed - sink.kept.length } : {}) } : {});
+
+// A copy kept for a delete that then failed is taken out again when the card is
+// still on the board, so the list never offers to restore a card that was never
+// deleted. Best effort: a copy that stays is harmless, the list flags it.
+async function boardTrashReconcile(kind, sink) {
+  try {
+    const rows = await (await getEyes()).readJson(kind === "task" ? TASKS_PATH : IDEAS_PATH, []);
+    const present = new Set((Array.isArray(rows) ? rows : []).map((row) => row?.id));
+    const store = boardTrashStore();
+    for (const item of sink.kept) if (present.has(item.id)) await store.remove(kind, item.id);
+  } catch (failure) {
+    logLine(`[board] could not tidy Recently deleted after a delete that did not land: ${boardTrashWhy(failure)}`);
+  }
+}
+
+// Put one kept record back: found in the list, checked and placed inside the
+// board lock (never over a card with its id), and only then taken off the list.
+// A prerequisite it named that is gone is reported, not dropped: the card then
+// waits, visibly, for a task that no longer exists.
+async function boardTrashPutBack(kind, id) {
+  if (!boardTrashOn()) return { ok: false, error: BOARD_TRASH_OFF };
+  const store = boardTrashStore();
+  const item = await store.find(kind, id);
+  if (!item) return { ok: false, error: `That ${kind} is not in Recently deleted any more. It may already be back, or it was deleted more than ${boardTrash.KEPT_DAYS} days ago.` };
+  let missing = [];
+  const result = await mutateBoard((board) => {
+    if (kind === "idea") {
+      const out = applyIdeaAction(board.ideas, { action: "restore", record: item.record, index: item.index, afterId: item.afterId });
+      return out.ok ? { ok: true, ideas: out.ideas } : { ok: false, error: out.error };
+    }
+    const out = boardTrash.place(board.tasks, item);
+    if (!out.ok) return { ok: false, error: out.error };
+    missing = backlog.dependencyIds(item.record).filter((dependency) => !board.tasks.some((task) => task.id === dependency));
+    return { ok: true, tasks: out.rows, revisionNote: "Put back from Recently deleted" };
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  try { await store.remove(kind, id); }
+  catch (failure) { logLine(`[board] a ${kind} was put back but its copy stayed in Recently deleted: ${boardTrashWhy(failure)}`); }
+  logLine(`[board] put back ${kind} ${id} from Recently deleted`);
+  return { ok: true, item, result, missing };
+}
+
+async function undeleteTask({ taskId, projectId } = {}) {
+  const error = taskProjectError(projectId);
+  if (error) return { ok: false, error };
+  const id = typeof taskId === "string" ? taskId : "";
+  if (!id) return { ok: false, error: "Choose a deleted task to put back." };
+  const back = await boardTrashPutBack("task", id);
+  if (!back.ok) return { ok: false, error: back.error };
+  await refreshAutopilotQueue();
+  assistantAskForWork("a deleted task was put back");
+  const task = back.result.tasks.find((row) => row.id === id);
+  return {
+    ok: true, projectId: projects.current().id, task: taskView(task), tasks: back.result.tasks.map(taskView), backlog: await backlogStatus(),
+    restored: { kind: "task", id, title: back.item.title },
+    ...(back.missing.length ? { warning: `It waits for ${back.missing.length === 1 ? "a task" : `${back.missing.length} tasks`} that ${back.missing.length === 1 ? "is" : "are"} no longer on the board. Open it to change its prerequisites.` } : {}),
+  };
+}
+
+async function restoreIdea({ ideaId } = {}) {
+  const id = typeof ideaId === "string" ? ideaId : "";
+  if (!id) return { ok: false, error: "Choose a deleted idea to put back." };
+  const back = await boardTrashPutBack("idea", id);
+  if (!back.ok) return { ok: false, error: back.error, projectId: projects.current().id };
+  return { ok: true, projectId: projects.current().id, ideas: back.result.ideas, restored: { kind: "idea", id, title: back.item.title } };
+}
+
+// The Recently deleted list: newest first, each with when it goes and whether a
+// restore would be refused now. The records stay here.
+async function boardTrashList({ projectId, kinds = null } = {}) {
+  const error = taskProjectError(projectId);
+  if (error) return { ok: false, error };
+  const base = { projectId: projects.current().id, keptDays: boardTrash.KEPT_DAYS, max: boardTrash.MAX_ITEMS };
+  if (!boardTrashOn()) return { ok: true, enabled: false, items: [], ...base };
+  try {
+    const eyes = await getEyes();
+    const [tasks, ideas] = await Promise.all([eyes.readJson(TASKS_PATH, []), eyes.readJson(IDEAS_PATH, [])]);
+    const present = new Set([...(Array.isArray(tasks) ? tasks : []).map((row) => `task:${row?.id}`), ...(Array.isArray(ideas) ? ideas : []).map((row) => `idea:${row?.id}`)]);
+    const items = await boardTrashStore().list({ exists: (kind, id) => present.has(`${kind}:${id}`), kinds: Array.isArray(kinds) ? kinds.filter((kind) => boardTrash.KINDS.includes(kind)) : null });
+    return { ok: true, enabled: true, items, ...base };
+  } catch (failure) {
+    return { ok: false, error: `Recently deleted could not be read: ${boardTrashWhy(failure)}`, ...base };
+  }
+}
+// ---- end of Board trash ------------------------------------------------------
+
+// ---- Search switches ---------------------------------------------------------
+// Search (renderer/palette.js) has two extras nobody asked for: Recent, when the
+// box is empty, and "task …" / "idea …" adding a card on Enter. Each is on unless
+// settings.ui says searchRecents / searchQuickCreate false, or this run says so
+// with MEFI_STUDIO_NO_SEARCH_RECENTS=1 / MEFI_STUDIO_NO_QUICK_CREATE=1 (a switch
+// for one machine, or for a test). prefs:get puts the answer on the page's prefs.
+function searchSwitchesOff() {
+  return {
+    ...(process.env.MEFI_STUDIO_NO_SEARCH_RECENTS === "1" ? { searchRecents: false } : {}),
+    ...(process.env.MEFI_STUDIO_NO_QUICK_CREATE === "1" ? { searchQuickCreate: false } : {}),
+  };
+}
+// ---- end of Search switches --------------------------------------------------
 
 // The shared theme keys from the pure module — the SAME keys the compactor
 // and the promotion pass use, so "the same work" means one thing everywhere.
@@ -15508,7 +15708,15 @@ function sameRows(next, prev) {
 // process (a fresh parse after the file changed underneath) is hashed as
 // before, so drift written by another process is still recorded.
 const revisionBodies = new WeakMap();
-async function mutateBoard(mutator) {
+// `options.beforeWrite({ before, after })` (optional, async) is for a caller that
+// must keep what a change removes BEFORE the change lands: Recently deleted
+// (the "Board trash" block). It runs inside the lock, after the mutator has
+// accepted the change and before any file is written, with the rows as they were
+// read and the rows about to be written. If it throws, nothing is written and
+// the error reaches the caller. A store transaction cannot await, so a change
+// that carries one takes the file path below, which reads and writes the same
+// rows through readJson and writeJson.
+async function mutateBoard(mutator, options = {}) {
   const eyes = await getEyes();
   let project = null;
   try { project = projects.current(); } catch {}
@@ -15562,7 +15770,7 @@ async function mutateBoard(mutator) {
     // ride the gateway either way. The gateway AWAITS it: the result is a
     // Promise, and broadcasting off `result.written` before resolution sent
     // no mutation events at all.
-    if (typeof eyes.boardMutate === "function" && eyes.boardEnabled()) {
+    if (typeof eyes.boardMutate === "function" && eyes.boardEnabled() && typeof options?.beforeWrite !== "function") {
       const result = await eyes.boardMutate(applyMutation);
       const events = { requests: "eyes:requests", tasks: "eyes:tasks", ideas: "eyes:ideas" };
       for (const key of result.written ?? []) send(events[key], key === "tasks" ? result[key].map(taskView) : result[key]);
@@ -15589,6 +15797,7 @@ async function mutateBoard(mutator) {
       tasks: patch.tasks ?? board.tasks,
       ideas: patch.ideas ?? board.ideas,
     };
+    if (typeof options?.beforeWrite === "function" && patch.ok !== false) await options.beforeWrite({ before: original, after: result });
     const written = [];
     for (const [file, key, event] of [
       [REQUESTS_PATH, "requests", "eyes:requests"],
@@ -22291,18 +22500,35 @@ function registerIpc() {
   ipcMain.handle("tasks:attempts", (_event, payload) => readTaskAttempts(payload ?? {}));
   ipcMain.handle("tasks:restore", (_event, payload) => restoreTaskContext(payload ?? {}));
   ipcMain.handle("tasks:delete", (_event, payload) => deleteTask(payload ?? {}));
+  // ---- Board trash channels (the "Board trash" block above) ----
+  // Project-gated like the rest of tasks:*. An idea comes back through
+  // ideas:action { action: "restore" }, the house pattern for ideas.
+  ipcMain.handle("tasks:undelete", (_event, payload) => undeleteTask(payload ?? {}));
+  ipcMain.handle("board:trash", (_event, payload) => boardTrashList(payload ?? {}));
+  // ---- end of Board trash channels ----
   ipcMain.handle("tasks:action", (_event, payload) => taskAction(payload ?? {}));
   ipcMain.handle("tasks:save", async (_event, tasks) => {
     return saveTaskEdits(tasks);
   });
   ipcMain.handle("ideas:list", async () => {
     const eyes = await getEyes();
-    return { ok: true, ideas: await eyes.readJson(IDEAS_PATH, []), projectId: projects.current().id };
+    return { ok: true, ideas: await eyes.readJson(IDEAS_PATH, []), projectId: projects.current().id, trash: boardTrashOn() };
   });
   ipcMain.handle("ideas:action", async (_event, payload = {}) => {
     if (!payload.projectId || payload.projectId !== projects.current().id) return { ok: false, error: "Reload this project's ideas before changing them." };
-    const result = await mutateBoard((board) => applyIdeaAction(board.ideas, payload));
-    return { ok: result.ok, error: result.error, projectId: projects.current().id, ideas: result.ideas, ...(result.idea ? { idea: result.idea, added: result.added } : {}) };
+    // Recently deleted (the "Board trash" block): a deleted idea comes back from
+    // the list, never from a record the caller sends; a delete keeps its record first.
+    if (payload.action === "restore") return restoreIdea(payload);
+    const sink = { kept: [], removed: 0 };
+    let result;
+    try {
+      result = await mutateBoard((board) => applyIdeaAction(board.ideas, payload), ["delete", "clean"].includes(payload.action) ? boardTrashBefore("idea", { via: `ideas:action:${payload.action}` }, sink) : undefined);
+    } catch (failure) {
+      if (sink.kept.length) await boardTrashReconcile("idea", sink);
+      if (!failure?.boardTrash) throw failure;
+      return { ok: false, error: failure.message, projectId: projects.current().id };
+    }
+    return { ok: result.ok, error: result.error, projectId: projects.current().id, ideas: result.ideas, ...(result.idea ? { idea: result.idea, added: result.added } : {}), ...boardTrashReply(sink) };
   });
   // A view's list is merged by id onto the latest ideas inside the board
   // gateway: only what a view may change (read, and the status it chose) is
@@ -22350,7 +22576,11 @@ function registerIpc() {
   ipcMain.handle("prefs:get", async () => {
     const settings = await readSettings();
     const loginItem = loginItemState();
-    return { ok: true, prefs: { blurMenu: true, useWeb: false, useTree: true, autoReference: true, proactive: true, ...(settings.ui ?? {}), openAtLogin: loginItem.on }, loginItem };
+    // Search's two switches (the "Search switches" block): the environment can
+    // turn either off for this run. (typeof: the tests that run this handler on
+    // its own have no such function.)
+    const searchOff = typeof searchSwitchesOff === "function" ? searchSwitchesOff() : {};
+    return { ok: true, prefs: { blurMenu: true, useWeb: false, useTree: true, autoReference: true, proactive: true, ...(settings.ui ?? {}), ...searchOff, openAtLogin: loginItem.on }, loginItem };
   });
   ipcMain.handle("prefs:set", async (_event, prefs) => {
     const next = { ...(prefs ?? {}) };

@@ -195,6 +195,10 @@ const api = {
   tasksAttempts: (payload) => ipcRenderer.invoke("tasks:attempts", payload ?? {}),
   tasksRestore: (payload) => ipcRenderer.invoke("tasks:restore", payload ?? {}),
   tasksDelete: (payload) => ipcRenderer.invoke("tasks:delete", payload ?? {}),
+  // Recently deleted (main.cjs "Board trash"): put a deleted task back, and list
+  // what can be put back. An idea comes back through ideasAction({ action: "restore" }).
+  tasksUndelete: (payload) => ipcRenderer.invoke("tasks:undelete", payload ?? {}),
+  boardTrash: (payload) => ipcRenderer.invoke("board:trash", payload ?? {}),
   tasksAction: (payload) => ipcRenderer.invoke("tasks:action", payload ?? {}),
   tasksSave: (tasks) => ipcRenderer.invoke("tasks:save", tasks),
   ideasList: () => ipcRenderer.invoke("ideas:list"),

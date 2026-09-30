@@ -1371,6 +1371,9 @@
       <div class="sheet-links" data-sheet-links="tasks" role="group" aria-label="Other tools"></div>
       <div class="sheet-actions">
         <button id="tasks-overhead" class="ghost" title="Overhead view of the node tree with task boxes">Overhead map</button>
+        <details class="surface-tools" id="tasks-tools"><summary>More</summary><div class="surface-tools-menu" role="group" aria-label="More task tools">
+        <section class="recent-deleted" id="tasks-recent" aria-label="Recently deleted" hidden></section>
+        </div></details>
         <button id="tasks-close" class="ghost sheet-close" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
       </div>
     </header>
@@ -1434,6 +1437,7 @@
         <button id="ideas-scan" class="ghost" title="Scan recent chats for ideas">Scan chats</button>
         <button id="ideas-ai" class="ghost" title="AI review of scanned ideas (needs a key)">AI review</button>
         <button id="ideas-clean" class="ghost danger" title="Remove finished ideas; accepted work stays available">Clear finished ideas</button>
+        <section class="recent-deleted" id="ideas-recent" aria-label="Recently deleted ideas" hidden></section>
         </div></details>
         <button id="ideas-close" class="ghost sheet-close" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
       </div>

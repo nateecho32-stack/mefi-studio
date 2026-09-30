@@ -19,6 +19,25 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   Preview, Queue and Status become panes that dock beside the page or pop out as
   windows. The composer stays on one line at 1920 wide and the Permissions menu
   is no longer cut off.
+- **Deleting a task or an idea can be undone.** A toast with Undo stays for about
+  eight seconds on the Task board and in Ideas, and Clear finished ideas gets one
+  Undo for all of them. A new Recently deleted list (Task board › More for tasks
+  and ideas, Ideas › Tools for ideas) keeps deleted cards for 30 days, up to 50
+  per project; Restore puts a card back where it was and never over one that is
+  there again. A delete keeps a copy first, and if Studio cannot keep the copy,
+  nothing is deleted and it says why. `MEFI_STUDIO_NO_BOARD_TRASH=1` gives the
+  old delete-for-good back.
+- **Plans keep every edit as a version.** Each one records who made it (you,
+  Mefi or Studio), when, and a one-line note. Versions (it was Plan history) lists
+  the newest 20, and Restore this version brings an older one back as a new
+  version: nothing is erased, and you confirm and approve again before tasks are
+  made.
+- **Search (Ctrl K) starts with what you used last, and can add work.** The empty
+  box shows Recent (what you last opened or ran from it, kept for each project).
+  Type "task ..." or "idea ..." and press Enter to add one; a toast offers Open,
+  and an idea added this way reads "From you". Both can be switched off:
+  settings `ui.searchRecents` and `ui.searchQuickCreate` set to false, or
+  `MEFI_STUDIO_NO_SEARCH_RECENTS=1` and `MEFI_STUDIO_NO_QUICK_CREATE=1`.
 - **Rules for your agents: a new card in Agents › Team & models.** Write up to
   4,000 characters of standing rules for a project and every Studio model working
   on it reads them first. A rule text that is too long is refused, never cut. Two

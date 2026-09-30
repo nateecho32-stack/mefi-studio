@@ -484,12 +484,14 @@
     return (state.data.ideas || []).filter((idea) => idea && idea.status !== "done")
       .sort((a, b) => Number(Boolean(a.read)) - Number(Boolean(b.read)) || (Number(b.at) || 0) - (Number(a.at) || 0)).slice(0, 40);
   }
+  // An idea the owner typed (Search's "idea ...") has source "owner": it reads as "you".
+  const ideaSource = (idea) => (idea.source === "owner" ? "you" : idea.source);
   function ideasList(body) {
     const ideas = ideasOrdered();
     if (!ideas.length) { body.append(el("p", "vibe-panel-empty", "No ideas right now. The agents add ideas here as they notice them.")); return; }
     const fresh = ideas.filter((idea) => !idea.read && !idea.taskId);
     const seen = ideas.filter((idea) => idea.read || idea.taskId);
-    const rowOf = (idea) => row({ key: `idea:${idea.id}`, tone: idea.taskId ? "done" : idea.read ? "next" : "idea", title: ideaTitle(idea), meta: idea.taskId ? "already a task" : [idea.source, idea.at ? ago(idea.at) : ""].filter(Boolean).join(" · ") || "idea", action: idea.taskId ? null : { label: "Build it", run: () => buildIdea(idea) }, onOpen: () => push({ view: "idea", id: idea.id }) });
+    const rowOf = (idea) => row({ key: `idea:${idea.id}`, tone: idea.taskId ? "done" : idea.read ? "next" : "idea", title: ideaTitle(idea), meta: idea.taskId ? "already a task" : [ideaSource(idea), idea.at ? ago(idea.at) : ""].filter(Boolean).join(" · ") || "idea", action: idea.taskId ? null : { label: "Build it", run: () => buildIdea(idea) }, onOpen: () => push({ view: "idea", id: idea.id }) });
     fold(body, "fresh", "New", fresh.map(rowOf), { empty: "You've seen every idea." });
     fold(body, "seen", "Seen", seen.map(rowOf));
   }
@@ -502,7 +504,7 @@
   function ideaDetail(body, id) {
     const idea = (state.data.ideas || []).find((item) => item.id === id);
     if (!idea) { body.append(el("p", "vibe-panel-empty", "This idea is no longer here.")); return; }
-    heading(body, ideaTitle(idea), [idea.source ? chip(idea.source) : null, ...(Array.isArray(idea.tags) ? idea.tags.slice(0, 3).map((tag) => chip(tag)) : []), idea.at ? el("span", "vibe-ask-when", ago(idea.at)) : null]);
+    heading(body, ideaTitle(idea), [idea.source ? chip(ideaSource(idea)) : null, ...(Array.isArray(idea.tags) ? idea.tags.slice(0, 3).map((tag) => chip(tag)) : []), idea.at ? el("span", "vibe-ask-when", ago(idea.at)) : null]);
     text(body, "The idea", idea.detail && idea.detail !== idea.title ? idea.detail : "");
     const buttons = idea.taskId
       ? [{ label: "Open its task", primary: true, disabled: typeof idea.taskId !== "string", run: () => open("tasks", { taskId: idea.taskId }) }]

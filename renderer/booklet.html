@@ -1518,6 +1518,20 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
 .surface-tools-menu { position: absolute; right: 0; top: calc(100% + 5px); z-index: 10; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; width: 284px; max-width: min(284px, 75vw); padding: 7px; border: 1px solid var(--hairline-strong); border-radius: var(--r-md); background: var(--panel-solid); box-shadow: var(--shadow-2); }
 .surface-tools-menu > button { justify-content: flex-start; text-align: left; white-space: normal; min-width: 0; padding: 8px 10px; border: 1px solid var(--hairline); min-height: 38px; font-size: var(--fs-sm); }
 .surface-tools-menu > .danger { grid-column: 1 / -1; color: var(--bad); background: color-mix(in srgb, var(--bad) 5%, transparent); }
+/* Recently deleted (Task board › More, Ideas › Tools): what was deleted here, with Restore on each row. */
+/* The head's glass makes its own layer; without a rank the tab strip below paints over the end of a tall menu. */
+#tasks-overlay .explorer-head, #ideas-overlay .explorer-head { position: relative; z-index: 6; }
+.surface-tools-menu > .recent-deleted { grid-column: 1 / -1; display: grid; gap: 6px; padding-top: 6px; border-top: 1px solid var(--hairline); }
+.surface-tools-menu > .recent-deleted[hidden] { display: none; }
+.recent-deleted-heading { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.recent-deleted-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; max-height: min(320px, 46vh); overflow-y: auto; }
+.recent-deleted-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "kind name button" ". when button"; column-gap: 8px; align-items: center; padding: 5px 2px; border-radius: var(--r-sm); }
+.recent-deleted-row:hover { background: color-mix(in srgb, var(--ivory) 5%, transparent); }
+.recent-deleted-kind { grid-area: kind; font-size: 12px; color: var(--muted); }
+.recent-deleted-name { grid-area: name; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); color: var(--ivory); }
+.recent-deleted-when { grid-area: when; font-size: 12px; color: var(--muted); }
+.recent-deleted-row > button { grid-area: button; }
+.recent-deleted-note { margin: 0; font-size: 12px; color: var(--muted); }
 .surface-detail-back { display: none; margin-bottom: 12px; }
 /* All cards closes the open task: the board goes back to its full-width
    card grid (and, under 760px, the list comes back at all). */
@@ -12314,6 +12328,9 @@ html[data-motion="off"] .pane-floating { animation: none; }
       <div class="sheet-links" data-sheet-links="tasks" role="group" aria-label="Other tools"></div>
       <div class="sheet-actions">
         <button id="tasks-overhead" class="ghost" title="Overhead view of the node tree with task boxes">Overhead map</button>
+        <details class="surface-tools" id="tasks-tools"><summary>More</summary><div class="surface-tools-menu" role="group" aria-label="More task tools">
+        <section class="recent-deleted" id="tasks-recent" aria-label="Recently deleted" hidden></section>
+        </div></details>
         <button id="tasks-close" class="ghost sheet-close" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
       </div>
     </header>
@@ -12377,6 +12394,7 @@ html[data-motion="off"] .pane-floating { animation: none; }
         <button id="ideas-scan" class="ghost" title="Scan recent chats for ideas">Scan chats</button>
         <button id="ideas-ai" class="ghost" title="AI review of scanned ideas (needs a key)">AI review</button>
         <button id="ideas-clean" class="ghost danger" title="Remove finished ideas; accepted work stays available">Clear finished ideas</button>
+        <section class="recent-deleted" id="ideas-recent" aria-label="Recently deleted ideas" hidden></section>
         </div></details>
         <button id="ideas-close" class="ghost sheet-close" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
       </div>
@@ -52586,8 +52604,95 @@ html[data-motion="off"] .pane-floating { animation: none; }
         window.MefiToast?.(`Task not deleted · ${result?.error || "the task store could not be written"}`, "bad");
         return;
       }
-      window.MefiToast?.(`Task deleted · ${task.title}`, "good");
+      // Recently deleted (main.cjs "Board trash") kept it: the toast can undo the delete
+      // for a few seconds, and the list under More brings it back after that. With
+      // the switch off (MEFI_STUDIO_NO_BOARD_TRASH) nothing was kept and the toast says only that.
+      const kept = Array.isArray(result?.trashed) && result.trashed.some((row) => row?.kind === "task" && row.id === task.id);
+      if (kept && window.mefiStudio?.tasksUndelete) window.MefiToast?.(`Deleted “${clipName(task.title)}”`, "good", { duration: UNDO_MS, action: { label: "Undo", run: () => undoDelete(task) } });
+      else window.MefiToast?.(`Task deleted · ${task.title}`, "good");
     });
+  }
+
+  // ---------- Recently deleted ----------
+  // How long a delete toast offers Undo. After it is gone the same button waits in
+  // More › Recently deleted for 30 days.
+  const UNDO_MS = 8000;
+  const clipName = (value) => { const flat = String(value ?? "").replace(/\s+/g, " ").trim(); return flat.length > 40 ? `${flat.slice(0, 39).trimEnd()}…` : flat || "Untitled"; };
+  async function undoDelete(task) {
+    const projectId = task.projectId || state.backlog?.projectId || state.projectId || undefined;
+    let result;
+    try { result = await window.mefiStudio.tasksUndelete({ taskId: task.id, projectId }); } catch (error) { result = { ok: false, error: error?.message }; }
+    if (!result?.ok) { window.MefiToast?.(`Not put back · ${result?.error || "Recently deleted could not be read"}`, "bad"); return; }
+    if (Array.isArray(result.tasks) && (!result.projectId || !state.projectId || result.projectId === state.projectId)) { taskRevision += 1; state.tasks = result.tasks; hydrated = true; }
+    state.selected = task.id;
+    syncBadge();
+    if (!els.overlay?.hidden) { renderList(); renderDetail(); revealSelected(); }
+    window.MefiToast?.(`Put back “${clipName(task.title)}”${result.warning ? ` · ${result.warning}` : ""}`, result.warning ? "warn" : "good");
+  }
+  // One list per place that shows it: the Task board's More menu (tasks and ideas)
+  // and the Ideas sheet's Tools menu (ideas). A read that lands after a newer one
+  // for the same place is dropped.
+  const trashReads = new WeakMap();
+  async function showRecentlyDeleted(container, options = {}) {
+    if (!container) return;
+    const api = window.mefiStudio;
+    if (typeof api?.boardTrash !== "function") { container.hidden = true; return; }
+    const token = (trashReads.get(container) || 0) + 1;
+    trashReads.set(container, token);
+    const kinds = Array.isArray(options.kinds) && options.kinds.length ? options.kinds : null;
+    container.hidden = false;
+    container.textContent = "";
+    const list = node("ul", "recent-deleted-list");
+    const note = node("p", "recent-deleted-note", "Looking…");
+    note.setAttribute("role", "status");
+    container.append(node("h4", "recent-deleted-heading", "Recently deleted"), list, note);
+    const asked = options.projectId || state.projectId || null;
+    let result;
+    try { result = await api.boardTrash({ ...(asked ? { projectId: asked } : {}), ...(kinds ? { kinds } : {}) }); } catch (error) { result = { ok: false, error: error?.message }; }
+    if (trashReads.get(container) !== token) return;
+    // Switched off (MEFI_STUDIO_NO_BOARD_TRASH): nothing was kept, and the list says why it is empty.
+    if (result?.ok && result.enabled === false) { note.textContent = "Switched off for this run of Studio, so deletes are for good."; return; }
+    if (!result?.ok) {
+      // The host says "Recently deleted could not be read: why"; the heading above already names the list.
+      const why = String(result?.error || "").replace(/^Recently deleted could not be read:?\s*/i, "").trim();
+      note.textContent = `Could not be read · ${why || "try again"}`;
+      return;
+    }
+    const days = Number(result.keptDays) || 30;
+    const items = Array.isArray(result.items) ? result.items : [];
+    note.textContent = items.length ? `Kept for ${days} days, then let go.` : `Nothing deleted lately. What you delete stays here for ${days} days.`;
+    const scope = { ...options, projectId: result.projectId || asked };
+    for (const item of items) list.append(trashRow(item, container, scope));
+  }
+  function trashRow(item, container, options) {
+    const row = node("li", "recent-deleted-row");
+    row.dataset.kind = item.kind;
+    row.dataset.id = item.id;
+    const name = node("span", "recent-deleted-name", item.title || "Untitled");
+    name.title = item.title || "";
+    const button = node("button", "ghost mini", "Restore");
+    button.type = "button";
+    button.setAttribute("aria-label", `Restore ${item.kind === "idea" ? "the idea" : "the task"} ${item.title || ""}`.trim());
+    if (item.restorable === false) {
+      button.disabled = true;
+      button.title = "It is already back, so the deleted copy is kept and not put over it.";
+    }
+    button.addEventListener("click", () => { void restoreDeleted(item, container, options, button); });
+    row.append(node("span", "recent-deleted-kind", item.kind === "idea" ? "Idea" : "Task"), name, node("span", "recent-deleted-when", `Deleted ${relTime(Number(item.deletedAt) || Date.now())}`), button);
+    return row;
+  }
+  async function restoreDeleted(item, container, options, button) {
+    const api = window.mefiStudio;
+    button.disabled = true;
+    let result;
+    try {
+      result = item.kind === "idea"
+        ? await api.ideasAction({ action: "restore", ideaId: item.id, projectId: options.projectId })
+        : await api.tasksUndelete({ taskId: item.id, projectId: options.projectId });
+    } catch (error) { result = { ok: false, error: error?.message }; }
+    if (!result?.ok) window.MefiToast?.(`Not put back · ${result?.error || "Recently deleted could not be read"}`, "bad");
+    else window.MefiToast?.(`Put back “${clipName(item.title)}”${result.warning ? ` · ${result.warning}` : ""}`, result.warning ? "warn" : "good");
+    void showRecentlyDeleted(container, options);
   }
 
   // Who filed a card. Promotion keeps a request's own source (it used to
@@ -53602,6 +53707,7 @@ html[data-motion="off"] .pane-floating { animation: none; }
     if (els.overlay.hidden) return;
     els.overlay.hidden = true;
     cardLayout?.stop();
+    if (els.tools) els.tools.open = false;
     window.MefiNav?.release?.("tasks");
   }
 
@@ -53640,6 +53746,8 @@ html[data-motion="off"] .pane-floating { animation: none; }
       prefAuto: "pref-auto",
       close: "tasks-close",
       overhead: "tasks-overhead",
+      tools: "tasks-tools",
+      recent: "tasks-recent",
       openButton: "tasks-open",
       filters: "task-filters",
       overviewBack: "task-overview-back",
@@ -53708,6 +53816,14 @@ html[data-motion="off"] .pane-floating { animation: none; }
       if (!chip || !FILTERS.includes(chip.dataset.filter)) return;
       selectFilter(chip.dataset.filter);
     });
+    // More: Recently deleted. The list is read each time the menu opens; Esc and a
+    // click outside close it, and it never stays open behind a closed sheet.
+    if (els.tools && typeof window.mefiStudio?.boardTrash !== "function") els.tools.hidden = true;
+    els.tools?.addEventListener("toggle", () => { if (els.tools.open) void showRecentlyDeleted(els.recent); });
+    els.tools?.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && els.tools.open) { event.preventDefault(); event.stopPropagation(); els.tools.open = false; els.tools.querySelector("summary")?.focus?.(); }
+    });
+    document.addEventListener("pointerdown", (event) => { if (els.tools?.open && !els.tools.contains(event.target)) els.tools.open = false; });
     // The single owner of #tasks-overhead; overhead.js no longer binds it too.
     els.overhead?.addEventListener("click", () => {
       if (window.MefiNav) window.MefiNav.go("overhead");
@@ -53783,6 +53899,8 @@ html[data-motion="off"] .pane-floating { animation: none; }
     open,
     close,
     addTask,
+    // Recently deleted, for the Ideas sheet's own menu (it lists ideas only).
+    showRecentlyDeleted,
     state,
     describe,
     shortTitle,
@@ -53812,7 +53930,7 @@ html[data-motion="off"] .pane-floating { animation: none; }
 (function () {
   "use strict";
 
-  const state = { ideas: [], selected: null, view: "list", clusterFilter: null, projectId: null };
+  const state = { ideas: [], selected: null, view: "list", clusterFilter: null, projectId: null, trash: false };
   const el = {};
   let initialized = false;
   let ideaRevision = 0;
@@ -53870,11 +53988,14 @@ html[data-motion="off"] .pane-floating { animation: none; }
       if (!result?.ok || !Array.isArray(result.ideas)) throw new Error(result?.error || "Couldn't load saved ideas.");
       state.projectId = result.projectId || state.projectId;
       state.ideas = result.ideas;
+      // Whether Recently deleted is keeping deletes (main.cjs "Board trash"), so the
+      // Delete question can say what is true.
+      state.trash = result.trash === true;
       renderAll();
     } catch (error) { if (revision === ideaRevision) el.status.textContent = error.message; }
   }
 
-  async function act(action, payload = {}) {
+  async function act(action, payload = {}, after = null) {
     if (!window.mefiStudio?.ideasAction) return false;
     const projectId = state.projectId;
     try {
@@ -53882,9 +54003,39 @@ html[data-motion="off"] .pane-floating { animation: none; }
       if (projectId !== state.projectId) return false;
       if (!result?.ok) throw new Error(result?.error || "Couldn't save the idea.");
       await load();
+      after?.(result);
       return true;
     } catch (error) { if (projectId === state.projectId) window.MefiToast?.(error.message, "bad"); return false; }
   }
+
+  // Recently deleted (main.cjs "Board trash"): a delete that was kept says so in its
+  // reply, and the toast offers Undo for a few seconds. After that the same button
+  // waits in Tools › Recently deleted for 30 days. With the switch off nothing was
+  // kept, so nothing is offered.
+  const UNDO_MS = 8000;
+  const clipName = (value) => { const flat = String(value ?? "").replace(/\s+/g, " ").trim(); return flat.length > 40 ? `${flat.slice(0, 39).trimEnd()}…` : flat || "Untitled"; };
+  async function undoDelete(rows) {
+    const projectId = state.projectId;
+    let back = 0;
+    let failure = "";
+    for (const row of rows) {
+      let result;
+      try { result = await window.mefiStudio.ideasAction({ action: "restore", ideaId: row.id, projectId }); } catch (error) { result = { ok: false, error: error?.message }; }
+      if (result?.ok) back += 1; else failure = result?.error || "Recently deleted could not be read";
+    }
+    if (projectId === state.projectId) await load();
+    if (failure) window.MefiToast?.(`${back ? `${back} put back · ` : ""}Not put back · ${failure}`, "bad");
+    else window.MefiToast?.(back === 1 ? `Put back “${clipName(rows[0].title)}”` : `Put back ${back} ideas`, "good");
+  }
+  const offerUndo = (result, message) => {
+    const kept = Array.isArray(result?.trashed) ? result.trashed.filter((row) => row?.kind === "idea") : [];
+    if (!kept.length || !window.mefiStudio?.ideasAction) return false;
+    window.MefiToast?.(message(kept.length, Number(result.notKept) || 0), "good", { duration: UNDO_MS, action: { label: "Undo", run: () => undoDelete(kept) } });
+    return true;
+  };
+  // "owner" is the person at the keyboard (Search's "idea ..."): it reads as "you".
+  const SOURCE_LABELS = { owner: "you" };
+  const sourceOf = (idea) => SOURCE_LABELS[idea?.source] || idea?.source;
 
   const STATUS_LABELS = { new: "New", keep: "Kept", accepted: "Task made", done: "Done" };
   function statusTag(idea) {
@@ -53945,7 +54096,7 @@ html[data-motion="off"] .pane-floating { animation: none; }
       // printing "undefined · Invalid Date"; the New badge already says unread.
       const at = idea.at == null || idea.at === "" ? NaN : new Date(idea.at).getTime();
       const saysNew = String(idea.status || "new") === "new";
-      meta.textContent = [idea.source, Number.isFinite(at) ? new Date(at).toLocaleString() : "", idea.read || saysNew ? "" : "unread"].filter(Boolean).join(" · ");
+      meta.textContent = [sourceOf(idea), Number.isFinite(at) ? new Date(at).toLocaleString() : "", idea.read || saysNew ? "" : "unread"].filter(Boolean).join(" · ");
       li.append(meta);
       // Focusable because nav's claim() focuses "#ideas-list li".
       li.tabIndex = 0;
@@ -53996,7 +54147,7 @@ html[data-motion="off"] .pane-floating { animation: none; }
     const meta = document.createElement("p");
     meta.className = "idea-detail-meta";
     const at = idea.at == null || idea.at === "" ? NaN : new Date(idea.at).getTime();
-    meta.append(statusTag(idea), document.createTextNode(` ${[idea.source ? `From ${idea.source}` : "", Number.isFinite(at) ? new Date(at).toLocaleString() : ""].filter(Boolean).join(" · ")}`));
+    meta.append(statusTag(idea), document.createTextNode(` ${[idea.source ? `From ${sourceOf(idea)}` : "", Number.isFinite(at) ? new Date(at).toLocaleString() : ""].filter(Boolean).join(" · ")}`));
     el.detail.append(meta);
     const title = document.createElement("p");
     title.className = "idea-detail-text";
@@ -54070,8 +54221,9 @@ html[data-motion="off"] .pane-floating { animation: none; }
       renderDetail();
     });
     action("Delete", async () => {
-      if (typeof window.MefiConfirm === "function" && !(await window.MefiConfirm(`Delete the idea "${String(idea.title ?? idea.detail ?? "").slice(0, 60)}"? This cannot be undone.`, { label: "Delete" }))) return;
-      if (window.mefiStudio?.ideasAction) { act("delete", { ideaId: idea.id }); return; }
+      const name = String(idea.title ?? idea.detail ?? "").slice(0, 60);
+      if (typeof window.MefiConfirm === "function" && !(await window.MefiConfirm(`Delete the idea "${name}"? ${state.trash ? "You can bring it back from Recently deleted for 30 days." : "This cannot be undone."}`, { label: "Delete" }))) return;
+      if (window.mefiStudio?.ideasAction) { act("delete", { ideaId: idea.id }, (result) => offerUndo(result, () => `Deleted “${clipName(name)}”`)); return; }
       state.ideas = state.ideas.filter((item) => item.id !== idea.id);
       state.selected = null;
       save();
@@ -54277,6 +54429,7 @@ html[data-motion="off"] .pane-floating { animation: none; }
       openButton: "ideas-open",
       graphCol: "ideas-graph-col",
       tools: "ideas-tools",
+      recent: "ideas-recent",
       back: "ideas-back",
     })) {
       el[key] = document.getElementById(id);
@@ -54290,6 +54443,8 @@ html[data-motion="off"] .pane-floating { animation: none; }
     el.ai?.addEventListener("click", () => scan(true));
     // A button that just armed (Clear finished ideas) keeps the menu open for its second press.
     el.tools?.addEventListener("click", (event) => { const button = event.target.closest?.("button"); if (button && !button.classList?.contains?.("danger-armed")) el.tools.open = false; });
+    // Tools › Recently deleted: ideas only, read each time the menu opens (the list itself lives in tasks.js).
+    el.tools?.addEventListener("toggle", () => { if (el.tools.open) void window.MefiTasks?.showRecentlyDeleted?.(el.recent, { kinds: ["idea"], projectId: state.projectId }); });
     el.tools?.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && el.tools.open) { event.preventDefault(); event.stopPropagation(); el.tools.open = false; el.tools.querySelector("summary")?.focus(); }
     });
@@ -54297,7 +54452,8 @@ html[data-motion="off"] .pane-floating { animation: none; }
     el.back?.addEventListener("click", () => { el.overlay.dataset.detail = "false"; layoutCards(true); el.list?.querySelector("li.selected")?.focus(); });
     const clean = async () => {
       if (window.mefiStudio?.ideasAction) {
-        if (await act("clean", { ideaIds: state.ideas.filter((idea) => idea.status === "done").map((idea) => idea.id) })) el.status.textContent = "Removed finished ideas; accepted work stays available.";
+        const cleaned = await act("clean", { ideaIds: state.ideas.filter((idea) => idea.status === "done").map((idea) => idea.id) }, (result) => offerUndo(result, (kept, notKept) => `Removed ${kept + notKept} finished idea${kept + notKept === 1 ? "" : "s"}${notKept ? ` · the newest ${kept} can be brought back` : ""}`));
+        if (cleaned) el.status.textContent = "Removed finished ideas; accepted work stays available.";
         return;
       }
       state.ideas = state.ideas.filter((idea) => idea.status !== "done");
@@ -58780,13 +58936,21 @@ html[data-motion="off"] .pane-floating { animation: none; }
 
 // Mefi's Studio AI+ — Search Studio, the command palette (Ctrl/Cmd+K).
 // Fuzzy jumps to pages, sheets, settings, actions, tasks, nodes and models,
-// grouped by the same sections as the navigation rail.
+// grouped by the same sections as the navigation rail. With the box empty it
+// starts with Recent (what you last opened or ran from here, kept per project),
+// and "task ..." or "idea ..." adds one on Enter.
 (function () {
   "use strict";
 
   const state = { items: [], filtered: [], index: 0, opener: null, projectId: null, taskRecords: [], taskStatus: "", taskRead: 0 };
   const el = {};
   let initialized = false;
+  // Two things Search does unasked, each with a switch: the Recent group over the
+  // empty box (settings.ui.searchRecents, MEFI_STUDIO_NO_SEARCH_RECENTS=1) and the
+  // "task ..." / "idea ..." row (settings.ui.searchQuickCreate, MEFI_STUDIO_NO_QUICK_CREATE=1).
+  // Both are on until the host's preferences say otherwise.
+  const flags = { recents: true, quickCreate: true };
+  let plainPlaceholder = "";
 
   const subsequenceScore = (needle, haystack) => {
     if (!needle) return 1;
@@ -58818,6 +58982,7 @@ html[data-motion="off"] .pane-floating { animation: none; }
     try {
       const baked = JSON.parse(document.getElementById("booklet-data").textContent);
       return baked.models.map((model) => ({
+        key: `model:${model.name} · ${model.vendor}`,
         kind: "model",
         label: `${model.name} · ${model.vendor}`,
         hint: model.quality?.index != null ? `AA ${model.quality.index}` : "unmeasured",
@@ -58855,6 +59020,7 @@ html[data-motion="off"] .pane-floating { animation: none; }
       .filter((dest) => !(dest.id === "command" && commandActive) && dest.id !== openSheet)
       .sort((a, b) => rank(a) - rank(b))
       .map((dest) => ({
+        key: `dest:${dest.id}`,
         kind: nav.sectionLabel?.(dest) ?? dest.group,
         label: dest.label,
         description: dest.desc || "",
@@ -58927,6 +59093,7 @@ html[data-motion="off"] .pane-floating { animation: none; }
   function tasks() {
     const projectId = currentProject();
     return state.taskRecords.map((task) => ({
+      key: `task:${task.id}`,
       kind: "task",
       label: task.title,
       description: task.prompt || task.description || "",
@@ -58998,6 +59165,7 @@ html[data-motion="off"] .pane-floating { animation: none; }
   function nodes() {
     if (!window.MefiIdle?.isActive?.() || typeof window.MefiIdle.select !== "function") return [];
     return (window.MefiIdle.debugNodes?.() ?? []).slice(0, 120).map((node) => ({
+      key: `node:${node.id}`,
       kind: "node",
       label: node.label ?? node.id,
       hint: node.kind,
@@ -59009,6 +59177,117 @@ html[data-motion="off"] .pane-floating { animation: none; }
 
   function build() {
     state.items = [...destinations(), ...tasks(), ...nodes(), ...models()];
+  }
+
+  // ---- Recent: what you last opened or ran from here, per project ----------------------
+  // A short list of item keys in this browser's storage, one list per project (no host
+  // round trip), newest first. A key whose item is gone (a deleted task, a page that no
+  // longer exists) is skipped when the list is shown and never reported; it leaves the
+  // list when newer ones push it out. Storage that is blocked or full just means no
+  // Recent group.
+  const RECENT_PREFIX = "mefi.searchRecent.v1.";
+  const RECENT_KEPT = 8;
+  const RECENT_SHOWN = 6;
+  const recentKey = () => `${RECENT_PREFIX}${currentProject() || "none"}`;
+  function readRecents() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(recentKey()) || "[]");
+      return Array.isArray(saved) ? saved.filter((key) => typeof key === "string" && key).slice(0, RECENT_KEPT) : [];
+    } catch {
+      return [];
+    }
+  }
+  function remember(key) {
+    if (!flags.recents || typeof key !== "string" || !key) return;
+    try {
+      localStorage.setItem(recentKey(), JSON.stringify([key, ...readRecents().filter((other) => other !== key)].slice(0, RECENT_KEPT)));
+    } catch {
+      /* storage blocked or full: no Recent, nothing else changes */
+    }
+  }
+  // The remembered items that still exist, newest first, filed under Recent.
+  function recentItems() {
+    if (!flags.recents) return [];
+    const known = new Map(state.items.filter((item) => item.key).map((item) => [item.key, item]));
+    const found = [];
+    for (const key of readRecents()) {
+      const item = known.get(key);
+      if (item) found.push({ ...item, kind: "Recent" });
+      if (found.length >= RECENT_SHOWN) break;
+    }
+    return found;
+  }
+
+  // ---- "task ..." and "idea ...": add one from here, on Enter --------------------------
+  // The word, a space and some text. "task" alone, "tasks list" and "ideal" are plain
+  // searches. Nothing is added until Enter, and the row sits above the normal results
+  // (below a result the whole query names exactly).
+  const QUICK_CREATE = /^(task|idea)\s+(\S[\s\S]*)$/i;
+  const clip = (value, max) => { const flat = String(value ?? "").replace(/\s+/g, " ").trim(); return flat.length > max ? `${flat.slice(0, max - 1).trimEnd()}…` : flat; };
+  // Adding needs the desktop app's bridge; in a plain browser tab there is nothing to add to,
+  // so no row is offered (and the box says nothing about it).
+  const canCreate = (kind) => typeof window.mefiStudio?.[kind === "task" ? "tasksCreate" : "ideasAction"] === "function";
+  function quickCreateRow(query) {
+    if (!flags.quickCreate) return null;
+    const match = QUICK_CREATE.exec(query);
+    const text = match ? match[2].trim() : "";
+    if (!text) return null;
+    const kind = match[1].toLowerCase();
+    if (!canCreate(kind)) return null;
+    return {
+      kind: "Create",
+      label: `Add ${kind}: “${clip(text, 60)}”`,
+      description: kind === "task" ? "Adds it to the task board; the assistant picks it up." : "Saves it in your ideas. Nothing is built from it until you say so.",
+      hint: "Enter",
+      keyHint: true,
+      count: 0,
+      create: true,
+      run: () => createQuick(kind, text),
+    };
+  }
+  // A task goes through tasks:create, the board's one admission path; an idea through
+  // ideas:action with source "owner", so it reads "From you". Either way a toast says
+  // what happened, with Open to go to it; a refusal says why and adds nothing.
+  async function createQuick(kind, text) {
+    const api = window.mefiStudio;
+    const say = (message, tone, options) => window.MefiToast?.(message, tone, options);
+    const noun = kind === "task" ? "Task" : "Idea";
+    try {
+      if (kind === "task") {
+        const projectId = currentProject();
+        const result = await api.tasksCreate({ title: text.slice(0, 180).trimEnd(), prompt: text, ...(projectId ? { projectId } : {}) });
+        if (!result?.ok || !result.task) { say(`Task not added · ${result?.error || "the task could not be created"}`, "bad"); return; }
+        const id = result.task.id;
+        say(`Task added: “${clip(result.task.title || text, 32)}”`, "good", { duration: 8000, action: { label: "Open", run: () => window.MefiNav?.go?.("tasks", { taskId: id }) } });
+        return;
+      }
+      const projectId = currentProject() || (await api.ideasList?.())?.projectId || null;
+      if (!projectId) { say("Idea not saved · open a project first", "bad"); return; }
+      const result = await api.ideasAction({ action: "add", source: "owner", title: text.slice(0, 200).trimEnd(), detail: text, projectId });
+      if (!result?.ok || !result.idea) { say(`Idea not saved · ${result?.error || "the idea could not be saved"}`, "bad"); return; }
+      const id = result.idea.id;
+      say(`${result.added === false ? "Already in your ideas" : "Idea saved"}: “${clip(result.idea.title || text, 32)}”`, "good", { duration: 8000, action: { label: "Open", run: () => window.MefiNav?.go?.("ideas", { ideaId: id }) } });
+    } catch (error) {
+      say(`${noun} not ${kind === "task" ? "added" : "saved"} · ${error?.message || error}`, "bad");
+    }
+  }
+
+  // The host's word on the two switches (main's prefs:get), read at start and each time
+  // Search opens. Until it answers both stay on; a bridge without prefs leaves them on.
+  async function readFlags() {
+    try {
+      const result = await window.mefiStudio?.prefsGet?.();
+      if (result?.ok && result.prefs) {
+        flags.recents = result.prefs.searchRecents !== false;
+        flags.quickCreate = result.prefs.searchQuickCreate !== false;
+      }
+    } catch {
+      /* the preferences could not be read: keep what was known */
+    }
+    if (el.input) {
+      el.input.placeholder = flags.quickCreate && (canCreate("task") || canCreate("idea")) ? "Search · “task …” or “idea …” to add" : plainPlaceholder;
+      if (!el.overlay.hidden) filter(true);
+    }
   }
 
   // Roving aria-activedescendant: focus never leaves the input, so the
@@ -59034,7 +59313,7 @@ html[data-motion="off"] .pane-floating { animation: none; }
       const count = state.filtered.length;
       const results = count > 40 ? `Showing 40 of ${count} results. Keep typing to narrow them.` : `${count} result${count === 1 ? "" : "s"}.`;
       const taskStatus = state.taskStatus === "loading" ? " Loading project tasks…" : state.taskStatus === "error" ? " Tasks couldn't be loaded. Close and reopen Search to retry." : "";
-      el.status.textContent = results + taskStatus;
+      el.status.textContent = results + (state.filtered[0]?.create ? " Enter adds it; nothing is added until then." : "") + taskStatus;
     }
     if (!items.length) {
       const li = document.createElement("li");
@@ -59126,16 +59405,28 @@ html[data-motion="off"] .pane-floating { animation: none; }
   }
 
   function filter(preserveSelection = false) {
-    const selected = preserveSelection ? state.filtered[state.index] : null;
     const query = el.input.value.trim();
+    // A refresh in the background (the task list arriving, the switches being read) keeps
+    // the highlight on what it was on. Over the empty box, while it is still on the top
+    // row, it stays on the top row instead: that row is the last thing you opened, and a
+    // Recent task that joins above it must not push the highlight down to the second.
+    const selected = preserveSelection && !(query === "" && state.index === 0) ? state.filtered[state.index] : null;
     if (!query) {
-      state.filtered = grouped(state.items);
+      // Recent leads, and what it holds is not listed again below.
+      const recent = recentItems();
+      const shown = new Set(recent.map((item) => item.key));
+      state.filtered = [...recent, ...grouped(state.items.filter((item) => !item.key || !shown.has(item.key)))];
     } else {
       state.filtered = grouped(state.items
         .map((item) => ({ item, score: matchScore(query, item) }))
         .filter((entry) => entry.score > 0)
         .sort((a, b) => b.score - a.score)
         .map((entry) => entry.item));
+      // The Add row leads, except when the whole query is exactly the name of something
+      // ("task board"): then that result stays on top, so a search that worked before
+      // still opens what it named, and Add is the next row down.
+      const create = quickCreateRow(query);
+      if (create) state.filtered.splice(String(state.filtered[0]?.label ?? "").toLowerCase() === query.toLowerCase() ? 1 : 0, 0, create);
     }
     const retained = selected ? state.filtered.findIndex((item) => item.kind === selected.kind && item.label === selected.label) : -1;
     state.index = retained >= 0 && retained < 40 ? retained : 0;
@@ -59145,6 +59436,7 @@ html[data-motion="off"] .pane-floating { animation: none; }
   function run(index) {
     const item = state.filtered[index];
     if (!item) return;
+    if (!item.create) remember(item.key);
     close();
     setTimeout(() => item.run(), 30);
   }
@@ -59167,6 +59459,7 @@ html[data-motion="off"] .pane-floating { animation: none; }
     filter();
     el.input.focus();
     loadTasks();
+    void readFlags();
   }
 
   function close() {
@@ -59202,6 +59495,8 @@ html[data-motion="off"] .pane-floating { animation: none; }
     el.close = document.getElementById("palette-close");
     el.status = document.getElementById("palette-status");
     if (!el.overlay) return;
+    plainPlaceholder = el.input.placeholder || "";
+    void readFlags();
     // The focused input is the combobox; the listbox it controls stays below.
     // aria-activedescendant on it (set per option in setActiveOption) is what
     // makes arrow keys announce the active option.
@@ -71209,36 +71504,57 @@ html[data-motion="off"] .pane-floating { animation: none; }
       button(`Create ${count} ${count === 1 ? "task" : "tasks"}`, actions, () => act("convert", {}, null, "Approved tasks are in your project's queue."), "convert", true, !item.spec?.approvedAt || Boolean(local.specDirty) || !count || unsavedPlan(item));
     }
   }
+  // Versions: every edit of the plan is kept, whole, with when, who and what it did.
+  // Open one to read what it said, then Restore this version: its wording comes back as
+  // a NEW version (restoring 2 of 3 makes 4), so nothing is rewritten or lost, and you
+  // confirm what we understand and approve the specification again before any task.
+  // The newest twenty are listed; Show older versions pages back through the rest.
+  const VERSIONS_SHOWN = 20;
   function history(item) {
     if (!item.history?.length) return;
     const local = draft(); const area = node("details", "planning-card", undefined, $("editor") || $("detail")); area.id = "plans-history";
-    node("summary", "", `Plan history · ${countLabel(item.history.length, "saved revision")}`, area);
-    node("p", "planning-subtle", "Earlier decisions and specifications remain available here after you change the plan. Copy any text you want to use in a new revision.", area);
-    const labels = { create: "Plan created", update: "Destination saved", "add-unknown": "Unknown added", "remove-unknown": "Unknown set aside", "add-question": "Question added", "edit-question": "Question edited", resolve: "Decision recorded", reopen: "Decision reopened", "add-note": "Interview line saved", "confirm-understanding": "Understanding confirmed", "draft-spec": "Specification drafted", "approve-spec": "Specification approved", "begin-conversion": "Task creation started", "mark-converted": "Tasks created", archive: "Plan archived", restore: "Plan restored" };
-    const limit = local.historyLimit || 12;
+    area.open = Boolean(local.historyOpen);
+    area.addEventListener("toggle", () => { local.historyOpen = Boolean(area.open); });
+    node("summary", "", `Versions · ${countLabel(item.history.length, "saved version")} · every edit is kept`, area);
+    node("p", "planning-subtle", "Earlier decisions and specifications stay available here after you change the plan. Open a version to read it, then restore it if you want it back: its wording returns as a new version and nothing is lost. You can also copy any text into a new edit.", area);
+    const labels = { create: "Plan created", update: "Destination saved", "add-unknown": "Unknown added", "remove-unknown": "Unknown set aside", "add-question": "Question added", "edit-question": "Question edited", resolve: "Decision recorded", reopen: "Decision reopened", "add-note": "Interview line saved", "confirm-understanding": "Understanding confirmed", "draft-spec": "Specification drafted", "approve-spec": "Specification approved", "begin-conversion": "Task creation started", "mark-converted": "Tasks created", archive: "Plan archived", restore: "Plan restored", "restore-version": "Version restored", migrated: "First version kept" };
+    const authors = { user: "You", assistant: "Mefi", host: "Studio" };
+    const limit = local.historyLimit || VERSIONS_SHOWN;
+    const newest = item.history.at(-1)?.version;
     for (const entry of [...item.history].reverse().slice(0, limit)) {
       const row = node("details", "", undefined, area);
-      node("summary", "", [`Revision ${entry.version}`, labels[entry.action] || "Plan updated", dateOf(entry.at)].filter(Boolean).join(" · "), row);
+      const isCurrent = entry.version === newest;
+      node("summary", "", [`Version ${entry.version}`, isCurrent ? "current" : "", entry.note || labels[entry.action] || "Plan updated", authors[entry.by] || "", dateOf(entry.at)].filter(Boolean).join(" · "), row);
       let loaded = false;
       row.addEventListener("toggle", () => {
         if (!row.open || loaded) return; loaded = true;
-        const snapshot = entry.snapshot; if (!snapshot) { node("p", "planning-subtle", "This older revision has no saved snapshot.", row); return; }
+        const snapshot = entry.snapshot; if (!snapshot) { node("p", "planning-subtle", "This older version has no saved snapshot.", row); return; }
+        if (!isCurrent && !frozen(item)) {
+          const actions = node("div", "planning-actions", undefined, row);
+          button("Restore this version", actions, () => {
+            // Restoring replaces the saved plan, so unsaved changes are saved or cleared first.
+            if (unsavedPlan(plan())) { note("Save or clear your unsaved changes before restoring a version.", true); return; }
+            local.historyOpen = true;
+            void act("restore-version", { toVersion: entry.version }, null, `Restored version ${entry.version} as version ${(plan()?.version ?? item.version) + 1}. Nothing was lost.`);
+          }, `restore-version-${entry.version}`);
+          node("p", "planning-subtle", `Brings this wording back as version ${item.version + 1}; every version stays in the list. You confirm what we understand and approve the specification again before any tasks are made.`, row);
+        }
         node("h4", "", snapshot.title, row); node("p", "planning-answer", `Destination: ${snapshot.destination}`, row);
         if (snapshot.outOfScope) node("p", "planning-answer planning-subtle", `Outside this plan: ${snapshot.outOfScope}`, row);
         if (entry.reason) node("p", "planning-answer", `Reason: ${entry.reason}`, row);
         for (const question of snapshot.questions || []) {
           const decision = node("article", "planning-note", undefined, row); node("strong", "", question.question, decision);
-          node("p", "", question.status === "resolved" ? question.resolution : "Open at this revision", decision);
+          node("p", "", question.status === "resolved" ? question.resolution : "Open at this version", decision);
           if (question.evidence) node("p", "planning-subtle", `Evidence: ${question.evidence}`, decision);
         }
         if (snapshot.spec) {
-          const spec = node("details", "", undefined, row); node("summary", "", "Specification and task briefs at this revision", spec);
+          const spec = node("details", "", undefined, row); node("summary", "", "Specification and task briefs at this version", spec);
           node("p", "planning-answer", snapshot.spec.text, spec);
           for (const task of snapshot.spec.tasks || []) { const card = node("article", "planning-note", undefined, spec); node("strong", "", task.title, card); node("p", "", task.prompt, card); node("p", "", `Acceptance: ${Array.isArray(task.acceptance) ? task.acceptance.join("\n") : task.acceptance}`, card); }
         }
       });
     }
-    if (item.history.length > limit) button("Show older revisions", area, () => { local.historyLimit = limit + 12; render(); if ($("history")) { $("history").open = true; $("history").scrollIntoView?.({ block: "nearest" }); } });
+    if (item.history.length > limit) button("Show older versions", area, () => { local.historyLimit = limit + VERSIONS_SHOWN; local.historyOpen = true; render(); if ($("history")) { $("history").open = true; $("history").scrollIntoView?.({ block: "nearest" }); } });
   }
   // What the folder already holds, read by the desktop app when the plans
   // list is fetched: wayfinder maps and tickets on the repo's issue tracker
@@ -80260,12 +80576,14 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     return (state.data.ideas || []).filter((idea) => idea && idea.status !== "done")
       .sort((a, b) => Number(Boolean(a.read)) - Number(Boolean(b.read)) || (Number(b.at) || 0) - (Number(a.at) || 0)).slice(0, 40);
   }
+  // An idea the owner typed (Search's "idea ...") has source "owner": it reads as "you".
+  const ideaSource = (idea) => (idea.source === "owner" ? "you" : idea.source);
   function ideasList(body) {
     const ideas = ideasOrdered();
     if (!ideas.length) { body.append(el("p", "vibe-panel-empty", "No ideas right now. The agents add ideas here as they notice them.")); return; }
     const fresh = ideas.filter((idea) => !idea.read && !idea.taskId);
     const seen = ideas.filter((idea) => idea.read || idea.taskId);
-    const rowOf = (idea) => row({ key: `idea:${idea.id}`, tone: idea.taskId ? "done" : idea.read ? "next" : "idea", title: ideaTitle(idea), meta: idea.taskId ? "already a task" : [idea.source, idea.at ? ago(idea.at) : ""].filter(Boolean).join(" · ") || "idea", action: idea.taskId ? null : { label: "Build it", run: () => buildIdea(idea) }, onOpen: () => push({ view: "idea", id: idea.id }) });
+    const rowOf = (idea) => row({ key: `idea:${idea.id}`, tone: idea.taskId ? "done" : idea.read ? "next" : "idea", title: ideaTitle(idea), meta: idea.taskId ? "already a task" : [ideaSource(idea), idea.at ? ago(idea.at) : ""].filter(Boolean).join(" · ") || "idea", action: idea.taskId ? null : { label: "Build it", run: () => buildIdea(idea) }, onOpen: () => push({ view: "idea", id: idea.id }) });
     fold(body, "fresh", "New", fresh.map(rowOf), { empty: "You've seen every idea." });
     fold(body, "seen", "Seen", seen.map(rowOf));
   }
@@ -80278,7 +80596,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   function ideaDetail(body, id) {
     const idea = (state.data.ideas || []).find((item) => item.id === id);
     if (!idea) { body.append(el("p", "vibe-panel-empty", "This idea is no longer here.")); return; }
-    heading(body, ideaTitle(idea), [idea.source ? chip(idea.source) : null, ...(Array.isArray(idea.tags) ? idea.tags.slice(0, 3).map((tag) => chip(tag)) : []), idea.at ? el("span", "vibe-ask-when", ago(idea.at)) : null]);
+    heading(body, ideaTitle(idea), [idea.source ? chip(ideaSource(idea)) : null, ...(Array.isArray(idea.tags) ? idea.tags.slice(0, 3).map((tag) => chip(tag)) : []), idea.at ? el("span", "vibe-ask-when", ago(idea.at)) : null]);
     text(body, "The idea", idea.detail && idea.detail !== idea.title ? idea.detail : "");
     const buttons = idea.taskId
       ? [{ label: "Open its task", primary: true, disabled: typeof idea.taskId !== "string", run: () => open("tasks", { taskId: idea.taskId }) }]

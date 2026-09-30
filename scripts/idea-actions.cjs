@@ -1,6 +1,7 @@
 const { OWNER_REQUEST_SOURCES, requestTitle } = require("./work-admission.cjs");
 const { createHash } = require("node:crypto");
 const { normalizePath } = require("./project-map.cjs");
+const { place } = require("./board-trash.cjs");
 
 // Apply one UI intent to the latest board, so reading or keeping an idea
 // cannot replace a promotion or erase ideas that arrived in the meantime.
@@ -15,13 +16,26 @@ function applyIdeaAction(ideas, payload = {}, now = Date.now()) {
     const files = [...new Set((Array.isArray(payload.files) ? payload.files : []).slice(0, 30).map(file => normalizePath(file)).filter(Boolean))];
     const intent = ["modify", "experiment", "fix", "improve"].includes(payload.intent) ? payload.intent : "improve";
     const systemId = clean(payload.systemId, 120), systemName = clean(payload.systemName, 180);
-    const id = `idea_mefi_${createHash("sha256").update(JSON.stringify([title, detail, [...files].sort(), intent, systemId])).digest("hex").slice(0, 24)}`;
+    // The owner's own idea (Search's "idea ...") says so with source "owner",
+    // and reads "From you"; everything else here is Mefi's suggestion from chat.
+    const owner = payload.source === "owner";
+    const id = `${owner ? "idea_owner_" : "idea_mefi_"}${createHash("sha256").update(JSON.stringify([title, detail, [...files].sort(), intent, systemId])).digest("hex").slice(0, 24)}`;
     const existing = rows.find(row => row.id === id);
     if (existing) return { ok: true, idea: existing, ideas: rows, added: false };
     // Chat notes are excluded from automatic admission until the owner
     // chooses Keep or Build. Saving a suggestion must not launch a worker.
-    const idea = { id, title, detail, files, intent, ...(systemId ? { systemId, systemName } : {}), source: "chat", suggestedBy: "mefi", status: "new", read: false, at: now, updatedAt: now };
+    // The owner's own idea is already read: they wrote it.
+    const idea = { id, title, detail, files, intent, ...(systemId ? { systemId, systemName } : {}), ...(owner ? { source: "owner", suggestedBy: "owner", status: "new", read: true } : { source: "chat", suggestedBy: "mefi", status: "new", read: false }), at: now, updatedAt: now };
     return { ok: true, idea, ideas: [idea, ...rows], added: true };
+  }
+  // Put a deleted idea back (main.cjs "Board trash"): the host hands over the
+  // record it kept, never the caller. It returns to the place it left and is
+  // refused, saying so, when an idea with its id is in the list again.
+  if (action === "restore") {
+    const record = payload.record;
+    if (!record || typeof record !== "object" || Array.isArray(record) || typeof record.id !== "string" || !record.id) return { ok: false, error: "That idea cannot be put back." };
+    const out = place(rows, { kind: "idea", record, index: payload.index, afterId: payload.afterId });
+    return out.ok ? { ok: true, ideas: out.rows } : { ok: false, error: out.error, exists: out.exists === true };
   }
   if (action === "clean") {
     const ids = new Set(Array.isArray(ideaIds) ? ideaIds : []);
