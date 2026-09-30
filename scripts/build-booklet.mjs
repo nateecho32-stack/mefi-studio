@@ -82,6 +82,7 @@ const CODE_SOURCES = [
   "vibe-flow.js",
   "vibe-panels.js",
   "vibe.js",
+  "key-tips.js",
   "booklet.js",
 ];
 
@@ -196,12 +197,13 @@ export async function build({ root = ROOT } = {}) {
   const autonomyUi = await readFile(path.join(RENDERER, "autonomy-ui.js"), "utf8");
   const vibeFlow = await readFile(path.join(RENDERER, "vibe-flow.js"), "utf8");
   const vibePanels = await readFile(path.join(RENDERER, "vibe-panels.js"), "utf8");
+  const keyTips = await readFile(path.join(RENDERER, "key-tips.js"), "utf8");
   const [setupHelper, setupHelperStyles] = await Promise.all([readFile(path.join(RENDERER, "setup-helper.js"), "utf8"), readFile(path.join(RENDERER, "setup-helper.css"), "utf8")]);
   const [traceCode, traceStyles] = await Promise.all([readFile(path.join(RENDERER, "trace.js"), "utf8"), readFile(path.join(RENDERER, "trace.css"), "utf8")]);
   const [configCode, configStyles] = await Promise.all([readFile(path.join(RENDERER, "config-dialog.js"), "utf8"), readFile(path.join(RENDERER, "config-dialog.css"), "utf8")]);
   const [fleetLayoutCode, fleetCode, fleetStyles] = await Promise.all([readFile(path.join(RENDERER, "fleet-layout.js"), "utf8"), readFile(path.join(RENDERER, "fleet.js"), "utf8"), readFile(path.join(RENDERER, "fleet.css"), "utf8")]);
   const [gitSyncCode, gitSyncStyles] = await Promise.all([readFile(path.join(RENDERER, "git-sync.js"), "utf8"), readFile(path.join(RENDERER, "git-sync.css"), "utf8")]);
-  const codeParts = [stageLabels, nodeVisuals, performanceCore, profiler, taskGroups, studioUi, fileInputs, motion, cardLayout, nav, sidebar, graph, modelLab, tracker, nodeStyles, tree, treeDynamics, idle, modelCommunity, cameraTour, gitSyncCode, explorer, analyzer, tasks, ideas, overhead, brains, palette, configCode, eyes, traceCode, fleetLayoutCode, fleetCode, boot, startup, workspace, mediaWindow, mediaBrowser, music, together, pcSync, pcVault, companionFriends, roomsCode, planning, onboarding, community, demoPanel, autonomyUi, companionUi, companionHub, projectMapView, agentBrain, agents, setupHelper, vibeFlow, vibePanels, vibe, booklet];
+  const codeParts = [stageLabels, nodeVisuals, performanceCore, profiler, taskGroups, studioUi, fileInputs, motion, cardLayout, nav, sidebar, graph, modelLab, tracker, nodeStyles, tree, treeDynamics, idle, modelCommunity, cameraTour, gitSyncCode, explorer, analyzer, tasks, ideas, overhead, brains, palette, configCode, eyes, traceCode, fleetLayoutCode, fleetCode, boot, startup, workspace, mediaWindow, mediaBrowser, music, together, pcSync, pcVault, companionFriends, roomsCode, planning, onboarding, community, demoPanel, autonomyUi, companionUi, companionHub, projectMapView, agentBrain, agents, setupHelper, vibeFlow, vibePanels, vibe, keyTips, booklet];
   const code = codeParts.join("\n");
   const html = template
     // "</" and "<!--" escaped: a fetched model name holding "</script>" would

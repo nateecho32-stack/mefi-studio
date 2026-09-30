@@ -94,7 +94,8 @@ npm start
 screen. Its **Needs you** drawer handles questions, build approvals and blocked
 tasks. Open other tools from its dock and return to Vibe from the top of the rail.
 Switch to **Build** for the full workspace described below; Studio remembers
-which mode you use.
+which mode you use during updates. New launches start in Vibe; turn off
+**Always start in Vibe** in Settings to keep your last mode across launches.
 
 The **menu** down the left edge opens **Home**, **Work**, **Agents** and **Friends**, with section-local Back/Forward navigation for pages. Friends opens the companion's existing Friends menu; its Rooms, Your PCs and Playground links go straight to the matching card. Agents contains Overview, Setup, Live, Workflows, Models and Usage. It stays open by default in wide windows; **Keep menu open** saves your preference. **Settings**, **Search** (`Ctrl K`) and **Help** stay at its foot. Help contains Start here, Shortcuts (`?`) and Community. The project selector at the top switches projects, and `Ctrl ,` opens Settings from anywhere.
 

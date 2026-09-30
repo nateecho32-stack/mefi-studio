@@ -695,18 +695,13 @@
   // approved or started from a lesson.
   // Returns the real control it focused, if any, so the coach knows whether it
   // still needs to hand focus to its own primary button.
-  // The project, task and review stops live on Build's Home. In Vibe, Home is
-  // Vibe and those controls are hidden, so the walk switches to Build first
-  // (the mode switch on the rail goes back) rather than highlight nothing.
-  function buildHome() {
-    if (window.MefiVibe?.mode?.() !== "vibe" || typeof window.MefiVibe.setMode !== "function") return;
-    window.MefiVibe.setMode("build", { go: false });
-    window.MefiToast?.("The tour uses Build mode's Home. Switch back to Vibe any time from the menu.", "info");
-  }
+  // The walk stays in the mode you are in. In Vibe the project stop opens the
+  // same project menu (Vibe's project button), the task stop is Vibe's box
+  // and the review stop is Vibe's Tasks panel (targetOf / reachWorkspace).
   function routeTo(lesson) {
     const route = lesson.route;
     let focused = null;
-    if (["project", "task", "review"].includes(route)) { buildHome(); focused = reachWorkspace(route); }
+    if (["project", "task", "review"].includes(route)) focused = reachWorkspace(route);
     else window.MefiNav?.go?.(route, lesson.params);
     if (lesson.menu) window.MefiSidebar?.open?.();
     highlight(targetOf(lesson));
@@ -721,7 +716,6 @@
   }
   function visit(route) {
     close();
-    if (["project", "task", "review"].includes(route)) buildHome();
     if (route === "project") {
       window.MefiNav?.go?.("workspace");
       const add = document.getElementById("workspace-add-project");

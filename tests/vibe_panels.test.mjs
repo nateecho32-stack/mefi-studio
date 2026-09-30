@@ -145,10 +145,10 @@ test("cards show only while they have something to say, and a quiet project gets
   assert.equal(lively.get("vibe-lane-ideas").children.length, 1, "only the unread idea is fresh");
 });
 
-test("the dock's stops come and go: Watch while agents work, Plans while a plan is in play, Ideas while fresh ones wait", async () => {
+test("the dock's stops come and go: Watch always stands (a new project's tree too), Plans while a plan is in play, Ideas while fresh ones wait", async () => {
   const quiet = await load({ quiet: true });
-  assert.deepEqual(quiet.snapshot().dock, ["tasks", "team", "more"]);
-  assert.equal(quiet.get("vibe-stop-watch").hidden, true);
+  assert.deepEqual(quiet.snapshot().dock, ["watch", "tasks", "team", "more"]);
+  assert.equal(quiet.get("vibe-stop-watch").hidden, false, "the tree is one click away before anything has started");
   assert.equal(quiet.get("vibe-stop-plans").hidden, true);
 
   const busy = await load({ running: true, ideas: true, plans: true });

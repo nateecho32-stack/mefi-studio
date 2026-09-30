@@ -256,10 +256,11 @@
       <button type="button" role="radio" data-ui-mode="build" aria-checked="false" title="Build: the full studio"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Build</span></button>
     </div>
     <div class="vibe-top-actions">
-      <button id="vibe-pulse" class="vibe-pulse" type="button" data-tone="quiet" title="What needs you and what is building"><i aria-hidden="true"></i><span id="vibe-pulse-text" role="status">All quiet</span></button>
+      <button id="vibe-update" class="vibe-pulse vibe-update" type="button" data-tone="ask" title="An update is ready" hidden><svg class="glyph" aria-hidden="true"><use href="#g-update"/></svg><span id="vibe-update-text">Update ready</span></button>
+      <button id="vibe-pulse" class="vibe-pulse" type="button" data-tone="quiet" title="What needs you and what is building (N)"><i aria-hidden="true"></i><span id="vibe-pulse-text" role="status">All quiet</span></button>
       <button class="vibe-icon" type="button" data-nav="palette" title="Search everything (Ctrl K)" aria-label="Search everything"><svg class="glyph" aria-hidden="true"><use href="#g-search"/></svg></button>
-      <button id="vibe-chat-toggle" class="vibe-icon" type="button" aria-controls="vibe-chat" aria-expanded="false" title="Conversation" aria-label="Conversation"><svg class="glyph" aria-hidden="true"><use href="#g-plane"/></svg><i id="vibe-chat-dot" class="vibe-dot" hidden></i></button>
-      <button class="vibe-icon" type="button" data-vibe-panel="settings" title="Settings" aria-label="Settings"><svg class="glyph" aria-hidden="true"><use href="#g-sliders"/></svg></button>
+      <button id="vibe-chat-toggle" class="vibe-icon" type="button" aria-controls="vibe-chat" aria-expanded="false" title="Conversation (C)" aria-label="Conversation"><svg class="glyph" aria-hidden="true"><use href="#g-plane"/></svg><i id="vibe-chat-dot" class="vibe-dot" hidden></i></button>
+      <button class="vibe-icon" type="button" data-vibe-panel="settings" title="Settings (S)" aria-label="Settings"><svg class="glyph" aria-hidden="true"><use href="#g-sliders"/></svg></button>
     </div>
   </header>
   <div class="vibe-stage">
@@ -272,7 +273,7 @@
       <label for="vibe-input" class="sr-only">Describe what you want</label>
       <textarea id="vibe-input" rows="2" placeholder="Describe an idea, a fix or a question…"></textarea>
       <div class="vibe-compose-foot">
-        <span id="vibe-hint" class="vibe-hint">Enter to talk · Ctrl + Enter to build</span>
+        <span id="vibe-hint" class="vibe-hint"><kbd class="key">Enter</kbd> talk <span class="vibe-hint-sep" aria-hidden="true">·</span> <kbd class="key">Ctrl</kbd>+<kbd class="key">Enter</kbd> build</span>
         <span id="vibe-autonomy-control"></span>
         <button id="vibe-talk" class="vibe-btn quiet" type="button"><svg class="glyph" aria-hidden="true"><use href="#g-plane"/></svg>Talk it over</button>
         <button id="vibe-build" class="vibe-btn primary" type="submit"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg>Build it</button>
@@ -320,12 +321,12 @@
   <!-- Watch, Plans and Ideas step in only while they have something to show. -->
   <nav id="vibe-dock" class="vibe-dock" aria-label="Go to">
     <span class="vibe-dock-mark" aria-hidden="true"></span>
-    <button id="vibe-stop-watch" type="button" data-nav="command" data-vibe-stop="watch" title="Watch the agents work on the live node tree (D)" hidden><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span>Watch</span><span class="count warn" data-badge="questions" hidden></span></button>
-    <button id="vibe-stop-tasks" type="button" data-vibe-panel="tasks" data-vibe-stop="tasks" title="Your tasks and results"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span>Tasks</span><span class="count" data-badge="tasks" hidden></span></button>
-    <button id="vibe-stop-plans" type="button" data-vibe-panel="plans" data-vibe-stop="plans" title="Plans in progress" hidden><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg><span>Plans</span></button>
-    <button id="vibe-stop-ideas" type="button" data-vibe-panel="ideas" data-vibe-stop="ideas" title="Ideas the agents noticed" hidden><svg class="glyph" aria-hidden="true"><use href="#g-ideas"/></svg><span>Ideas</span><span class="count" data-badge="ideas" hidden></span></button>
-    <button id="vibe-stop-team" type="button" data-vibe-panel="team" data-vibe-stop="team" title="Who is working, and on which models"><svg class="glyph" aria-hidden="true"><use href="#g-agents"/></svg><span>Team</span></button>
-    <button id="vibe-stop-more" type="button" data-nav="palette" data-vibe-stop="more" title="Everything else (Ctrl K)"><svg class="glyph" aria-hidden="true"><use href="#g-more"/></svg><span>More</span></button>
+    <button id="vibe-stop-watch" type="button" data-nav="command" data-vibe-stop="watch" title="Watch the live node tree, even before anything has started (D)"><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span>Watch</span><span class="count warn" data-badge="questions" hidden></span><kbd class="key vibe-stop-key" aria-hidden="true" title="D">D</kbd></button>
+    <button id="vibe-stop-tasks" type="button" data-vibe-panel="tasks" data-vibe-stop="tasks" title="Your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span>Tasks</span><span class="count" data-badge="tasks" hidden></span><kbd class="key vibe-stop-key" aria-hidden="true" title="T">T</kbd></button>
+    <button id="vibe-stop-plans" type="button" data-vibe-panel="plans" data-vibe-stop="plans" title="Plans in progress (P)" hidden><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg><span>Plans</span><kbd class="key vibe-stop-key" aria-hidden="true" title="P">P</kbd></button>
+    <button id="vibe-stop-ideas" type="button" data-vibe-panel="ideas" data-vibe-stop="ideas" title="Ideas the agents noticed (I)" hidden><svg class="glyph" aria-hidden="true"><use href="#g-ideas"/></svg><span>Ideas</span><span class="count" data-badge="ideas" hidden></span><kbd class="key vibe-stop-key" aria-hidden="true" title="I">I</kbd></button>
+    <button id="vibe-stop-team" type="button" data-vibe-panel="team" data-vibe-stop="team" title="Who is working, and on which models (M)"><svg class="glyph" aria-hidden="true"><use href="#g-agents"/></svg><span>Team</span><kbd class="key vibe-stop-key" aria-hidden="true" title="M">M</kbd></button>
+    <button id="vibe-stop-more" type="button" data-nav="palette" data-vibe-stop="more" title="Everything else (Ctrl K)"><svg class="glyph" aria-hidden="true"><use href="#g-more"/></svg><span>More</span><kbd class="key vibe-stop-key" aria-hidden="true" title="Ctrl K">⌃K</kbd></button>
   </nav>
   <aside id="vibe-chat" class="vibe-chat" aria-labelledby="vibe-chat-title" hidden>
     <header class="vibe-chat-head"><div><small>Conversation</small><h2 id="vibe-chat-title">Mefi</h2></div><button id="vibe-chat-close" class="vibe-icon" type="button" aria-label="Close the conversation" title="Close (Esc)"><svg class="glyph" aria-hidden="true"><use href="#g-close"/></svg></button></header>
@@ -627,10 +628,12 @@
           <div class="settings-you-switches">
             <label class="switch" id="settings-companion-motion" title="Your companion floats and blinks beside the conversation. Calm and Off keep it still."><input id="workspace-motion" type="checkbox" checked><span class="track"></span><span>Let your companion move</span></label>
             <label class="switch" title="Blur what sits behind every sheet, menu and Home panel. Off gives them a plain, darker backdrop."><input type="checkbox" id="pref-blur" checked><span class="track"></span><span>Blur behind panels</span></label>
-            <label class="switch" id="idle-home-switch" title="On: every launch lands on Home. Off: Studio opens straight into Command view. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span id="idle-home-label">Open Home on launch</span></label>
+            <label class="switch" id="idle-home-switch" title="On: every launch lands on Home. Off: Studio reopens the last tab page you used. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span id="idle-home-label">Open Home on launch</span></label>
+            <label class="switch" id="settings-start-vibe-switch" title="On: every launch starts in Vibe, even if you closed Studio in Build. Off: Studio keeps the mode you closed it in."><input type="checkbox" id="settings-start-vibe" checked><span class="track"></span><span>Always start in Vibe</span></label>
+            <label class="switch" id="settings-key-tips-switch" title="Small pop-ups beside buttons and tabs that show the key that does the same thing. Click one to fade it away."><input type="checkbox" id="settings-key-tips" checked><span class="track"></span><span>Show key tips</span></label>
             <label class="switch" title="On: after five minutes without input, Studio switches to Command view. Off: it stays on the page you left open."><input type="checkbox" id="idle-command-idle"><span class="track"></span><span>Show Command view after 5 quiet minutes</span></label>
           </div>
-          <p class="muted" id="idle-home-hint">When disabled, Studio opens Command view after the project chooser.</p>
+          <p class="muted" id="idle-home-hint">When disabled, Studio reopens the last tab page you used after the project chooser.</p>
           <!-- settings.ui.launchAgents (main.cjs launchAgentsInfo); the launch screen's default button follows it. -->
           <label class="field"><span class="field-label">When Studio opens</span><select id="launch-agents" aria-describedby="launch-agents-hint"><option value="resume">Resume what I had</option><option value="start">Start agents</option><option value="off">Keep agents off</option></select><span class="field-hint" id="launch-agents-hint">Resume starts agents on a project where they were running when you closed Studio. The launch screen still offers both choices.</span></label>
           <!-- settings.ui.openAtLogin (main.cjs "Start with Windows"); Windows holds the real switch. -->
@@ -1319,6 +1322,8 @@
       <button class="ghost" data-nav="help" data-variant="desktop-only">Shortcuts</button>
       <button id="cmd-empty-retry" class="primary" data-variant="store">Retry</button>
       <button class="ghost" data-nav="tasks" data-variant="store">Open the Task board</button>
+      <button id="cmd-empty-start" class="primary" data-variant="fresh" title="Describe the first thing to build">Start the first task</button>
+      <button class="ghost" data-nav="plans" data-variant="fresh" title="Plan an idea before anything is built (P)">Plan an idea</button>
       <button id="cmd-empty-assistant" class="ghost" title="Open your companion to ask or create a task" hidden>Ask your companion</button>
     </div>
   </div>

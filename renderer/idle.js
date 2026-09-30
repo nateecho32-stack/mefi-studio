@@ -3732,6 +3732,22 @@
     // not an empty one: the card only speaks up for a store problem.
     const storeFine = !!window.mefiStudio && state.treeStatus !== "unavailable" &&
       !(typeof window.MefiTree?.note?.() === "string" && window.MefiTree.note());
+    // A project with nothing on its board yet still gets its tree: the root
+    // and the assistant stand, and a small card under them says how the first
+    // branch grows. It sits low, so the tree stays in view above it.
+    const fresh = storeFine && !constellationHasWork() && !(state.allTasks?.length || state.tasks?.length) && assistantNode();
+    if (fresh) {
+      const wasHidden = el.empty.hidden;
+      el.empty.hidden = false;
+      if (wasHidden) state.hudRectsAt = 0;
+      if (state.emptyVariant !== "fresh") { state.emptyVariant = "fresh"; el.empty.dataset.variant = "fresh"; }
+      const name = (document.getElementById("vibe-project-name")?.textContent || document.getElementById("workspace-project-name")?.textContent || "").trim();
+      const named = name && !/^(Choose a project|Your workspace|Workspace|Loading)/.test(name);
+      if (el.emptyTitle) el.emptyTitle.textContent = named ? `Nothing started in ${name} yet` : "Nothing started here yet";
+      if (el.emptyCopy) el.emptyCopy.textContent = "This is the project's tree. Every task you add grows a branch from the root, and agents fly out to the work they pick up.";
+      if (el.emptyAssistant) el.emptyAssistant.hidden = true;
+      return;
+    }
     if (constellationHasWork() || (storeFine && assistantNode())) {
       if (!el.empty.hidden) state.hudRectsAt = 0;
       el.empty.hidden = true;
@@ -12834,6 +12850,16 @@
     pillOf("progress")?.addEventListener("click", () => focusNextInProgress());
     pillOf("assistant")?.addEventListener("click", () => selectAssistant({ focus: true }));
     el.emptyAssistant?.addEventListener("click", () => window.MefiCompanion?.open?.());
+    // The fresh card's first step: Vibe's box in Vibe, Command's own task box in Build.
+    document.getElementById("cmd-empty-start")?.addEventListener("click", () => {
+      if (window.MefiVibe?.mode?.() === "vibe") {
+        window.MefiNav?.go?.("vibe");
+        const box = document.getElementById("vibe-input");
+        setTimeout(() => box?.focus?.({ preventScroll: true }), 0);
+        return;
+      }
+      document.getElementById("idle-task-input")?.focus?.();
+    });
 
     // The broadcast carries the list that was just written. Using it skips a
     // second read that could land inside the next save and come back empty.

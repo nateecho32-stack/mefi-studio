@@ -973,22 +973,17 @@ test("a first launch after the setup helper connected an AI starts at Your works
   assert.equal(fresh.calls.filter((call) => call[0] === "scan").length, 1);
 });
 
-test("in Vibe the walk switches to Build's Home before it points at Home's controls", () => {
+test("in Vibe the walk stays in Vibe: the project, task and review stops use Vibe's own controls", () => {
   const env = environment();
   const modes = [];
   let mode = "vibe";
-  env.context.window.MefiVibe = { mode: () => mode, setMode: (next, options) => { modes.push([next, options?.go]); mode = next; } };
-  env.guide.open();
-  env.el("steps").children[MONITOR].click();
-  env.el("action").click();
-  assert.deepEqual(modes, [], "Command is the same in both modes");
-  env.guide.open();
-  env.el("steps").children[CREATE].click();
-  env.el("action").click();
-  assert.deepEqual(modes, [["build", false]], "switched without its own navigation; the walk navigates next");
-  assert.deepEqual(env.routes.slice(-1), ["workspace"]);
-  env.guide.open();
-  env.el("steps").children[REVIEW].click();
-  env.el("action").click();
-  assert.equal(modes.length, 1, "already in Build");
+  env.context.window.MefiVibe = { mode: () => mode, setMode: (next, options) => { modes.push([next, options?.go]); mode = next; }, openPanel: () => true };
+  for (const step of [MONITOR, CREATE, REVIEW]) {
+    env.guide.open();
+    env.el("steps").children[step].click();
+    env.el("action").click();
+  }
+  assert.deepEqual(modes, [], "the walk never switches the owner into Build");
+  assert.equal(mode, "vibe");
+  assert.ok(env.routes.includes("workspace"), "Home is reached through go(), which lands on Vibe in Vibe mode");
 });

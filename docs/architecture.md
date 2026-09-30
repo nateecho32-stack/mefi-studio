@@ -225,13 +225,18 @@ settings and per-model work-kind summaries for the shared controls.
   door: one box to talk it over with Mefi or build it as a task, cards for
   what needs you, what is building, what just finished and fresh ideas, and a
   dock. **Build** is the full studio described below. The choice is
-  remembered across launches.
+  remembered during updates. New launches start in Vibe unless **Always
+  start in Vibe** is turned off in Settings.
 - Vibe shows only what has something to say. A card appears while it has
   rows (Freshly done covers the last half day) and a quiet project gets one
   calm line instead of empty boxes. The dock always has Tasks, Team and More;
-  Watch steps in while agents work, Plans while a plan is in play, Ideas while
+  Watch is always available, Plans steps in while a plan is in play, Ideas while
   fresh ones wait. With cards up on a short window the greeting and the
   starter chips step aside.
+- First-time key tips show beside controls and fade after their key or the
+  tip is pressed. Settings can turn them off or show them again. Vibe's
+  Needs you drawer also handles plan interview questions and results waiting
+  for a slow check; its top bar mirrors a waiting app update.
 - Vibe's menus are its own (`renderer/vibe-panels.js`): Tasks, Plans, Ideas,
   Team and Settings open as a compact panel beside the front door, one side
   panel at a time with the conversation and the decision drawer, and a wide

@@ -147,6 +147,31 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   answered, no port opens on your PC, and everything sent is scrubbed of
   keys, paths, emails and addresses first. It needs a rooms hub with the
   remote turned on ([docs/remote.md](docs/remote.md)).
+
+- **Studio opens in Vibe.** Every launch starts in Vibe, even if you closed
+  Studio in Build. A reload during a live update still comes back where you
+  were. Settings › Always start in Vibe turns this off. The Start here walk
+  no longer switches you to Build: its project, task and review stops use
+  Vibe's own project menu, box and Tasks panel.
+- **More of what needs you, answered in Vibe.** Results waiting on a slow
+  check can be confirmed or sent back from the Needs you drawer. When a plan's
+  interview asks you something, you answer it in the drawer. Plans waiting
+  for approval or for their tasks to be created are listed too, and open on
+  the plan page inside Vibe. Cards held because work outside Studio may
+  already cover them offer Build it anyway. A waiting update shows in
+  Vibe's top bar, which used to hide it.
+- **A new project's tree.** Watch stays in Vibe's dock from the first
+  minute, not only while agents work. Watch on a project with nothing on
+  its board shows its root, plus a small card with Start the first task and
+  Plan an idea.
+- **Key tips and Vibe keys.** First-time users see small pop-ups beside
+  buttons with the key that does the same thing, as keycaps. Click one, or
+  press its key, and it fades away for good. Use Turn tips off on a tip, the
+  Settings or Vibe settings switch, or Search to turn them off. Show key tips
+  again brings them back. On Vibe's page, outside the box: / types in the
+  box, N opens what needs you, C the conversation, T tasks, P plans, I ideas,
+  M the team and S settings. The dock and the box show their keys, and ? lists
+  them.
 - **Start with Windows.** Settings › General › Profile & startup (and the
   setup helper's Machine & app) has a **Start with Windows** switch. Studio
   then opens in the tray when you sign in, on the project you had open,

@@ -1983,6 +1983,13 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
 .cmd-empty-actions { margin: 0; justify-content: center; }
 #cmd-empty[data-variant="desktop-only"] [data-variant="store"],
 #cmd-empty[data-variant="store"] [data-variant="desktop-only"] { display: none; }
+#cmd-empty:not([data-variant="fresh"]) [data-variant="fresh"],
+#cmd-empty[data-variant="fresh"] :is([data-variant="store"], [data-variant="desktop-only"]) { display: none; }
+/* A new project: the card sits under the tree, so the root and the
+   assistant stay in view above it. */
+#cmd-empty[data-variant="fresh"] { top: auto; bottom: 16vh; transform: translateX(-50%); width: min(420px, 88vw); padding: var(--s5) var(--s6); }
+#cmd-empty[data-variant="fresh"] h3 { font-size: 16px; }
+#cmd-empty[data-variant="fresh"] p { font-size: var(--fs-sm); }
 
 /* --- hover tooltip (reuses the rail's .tree-tip face; must come after .tree-tip) --- */
 .cmd-tip {
