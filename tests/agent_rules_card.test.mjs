@@ -112,6 +112,21 @@ test("typing counts as you go, marks the change, and refuses to save past 4,000 
   assert.equal(p.ui.area.maxLength, undefined);
 });
 
+test("a repaint while the box has focus never touches what is being typed; without focus it follows the draft", async () => {
+  const p = page();
+  await p.type("Half a sentence being typ");
+  p.dom.document.activeElement = p.ui.area;
+  p.item.rules.text = "The draft moved on underneath"; // a late repaint whose draft differs from the box
+  p.context.paintRules(); p.context.paintRules();
+  assert.equal(p.ui.area.value, "Half a sentence being typ", "focus keeps the box as it is");
+  p.dom.document.activeElement = null;
+  p.context.paintRules();
+  assert.equal(p.ui.area.value, "The draft moved on underneath", "without focus the box follows the draft");
+  p.item.rules = { text: "Set from the draft", agents: false, claude: true };
+  p.context.paintRules();
+  assert.equal(p.ui.area.value, "Set from the draft"); assert.equal(p.ui.switches.claude.input.checked, true); assert.equal(p.ui.switches.agents.input.checked, false);
+});
+
 test("a switch marks the change and moves the total by what that file adds", async () => {
   const p = page({ view: savedView({ text: "Rule.", agents: false, claude: false }) });
   const before = Number(/(\d+)/.exec(p.ui.sum.textContent)[1]);

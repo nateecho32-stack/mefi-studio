@@ -176,7 +176,7 @@ const compileSegments = (pattern) => pattern.split("/").filter(Boolean).map((par
  */
 function parseIgnore(text) {
   const rules = [];
-  for (const raw of String(text ?? "").split(/\r?\n/).slice(0, 4000)) {
+  for (const raw of String(text ?? "").replace(/^\uFEFF/, "").split(/\r?\n/).slice(0, 4000)) {
     if (raw.length > 400) continue;
     let line = raw.replace(/(?<!\\)[ \t]+$/, "");
     if (!line || line.startsWith("#")) continue;

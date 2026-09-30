@@ -57,6 +57,10 @@ test("the two tools are declared with schemas, exactly where project_read is off
   assert.deepEqual(search.inputSchema.required, ["query"]); assert.equal(search.inputSchema.additionalProperties, false);
   assert.deepEqual(Object.keys(search.inputSchema.properties), ["query", "regex", "caseSensitive", "path", "glob", "context", "maxResults", "perFile"]);
   assert.match(list.description, /binary files are marked binary and links are not followed/); assert.match(search.description, /at most 100 matches/);
+  // What one caller is given cannot change what the next model is offered.
+  list.inputSchema.properties.depth.maximum = 99; search.inputSchema.required.push("path"); search.description = "changed";
+  const [, listAgain, searchAgain] = await tools.definitions(ON, "companion");
+  assert.equal(listAgain.inputSchema.properties.depth.maximum, 3); assert.deepEqual(searchAgain.inputSchema.required, ["query"]); assert.match(searchAgain.description, /at most 100 matches/);
   // A saved team carries the permission the way it always did: nothing new to save.
   assert.equal(profiles.validate({ agentTools: { companion: { projectRead: true } } }), null);
   assert.ok(profiles.validate({ agentTools: { companion: { projectSearch: true } } }), "there is no switch of its own to save");

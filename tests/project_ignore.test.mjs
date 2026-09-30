@@ -106,6 +106,12 @@ test("a .gitignore in a folder speaks for that folder, deeper files override sha
   assert.equal(ignore.ignoredBy(rules, "PKG/a.tmp", false, true), true);
 });
 
+test("a .gitignore saved with a byte order mark and Windows line endings still works", () => {
+  const sets = [{ base: "", rules: ignore.parseIgnore("\uFEFF*.log\r\nbuild-out/\r\n") }];
+  assert.equal(ignore.ignoredBy(sets, "a.log", false), true, "the first line is not eaten by the mark");
+  assert.equal(ignore.ignoredBy(sets, "build-out", true), true);
+});
+
 test("a hostile or huge .gitignore costs time, never a hang", () => {
   const t0 = performance.now();
   // Thousands of stars against a long name: a regular expression built from this would run for years.
