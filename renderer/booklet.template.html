@@ -10,9 +10,12 @@
 <script id="startup-mode">if (['capture', 'smoke'].some(key => new URLSearchParams(location.search).get(key) === '1')) document.documentElement.removeAttribute('data-starting');</script>
 <style id="booklet-styles">__BOOKLET_STYLES__</style>
 <div id="boot-layer" role="dialog" aria-modal="true" aria-labelledby="boot-title" aria-describedby="boot-detail" tabindex="-1">
+  <!-- The Studio Daily (renderer/daily-paper.js): the launch question as a front page; the card below stays the chooser. -->
+  <header id="paper-mast" hidden></header>
   <section class="boot-card">
     <div class="boot-mark" aria-hidden="true"><span class="boot-spinner"></span><span class="boot-monogram">M<span>+</span></span></div>
     <p class="eyebrow">Mefi's Studio AI+</p>
+    <p class="paper-kicker boot-paper-kicker" aria-hidden="true">Your projects</p>
     <h1 id="boot-title" class="boot-title">Opening your studio</h1>
     <p id="boot-detail" class="boot-detail" role="status" aria-live="polite" aria-atomic="true">Preparing your workspace before you begin.</p>
     <div id="boot-progress-heading" class="boot-progress-heading"><span>Getting ready</span><span id="boot-count" class="boot-count">0%</span></div>
@@ -44,6 +47,8 @@
       <button id="boot-continue" class="ghost" type="button">Open with available data</button>
     </div>
   </section>
+  <p id="paper-note" hidden></p>
+  <section id="paper-news" aria-labelledby="paper-nameplate" hidden></section>
 </div>
 <svg id="nav-glyphs" class="glyph-sprite" aria-hidden="true" focusable="false" width="0" height="0">
   <symbol id="g-style" viewBox="0 0 16 16"><path d="M8 2.2c3.3 0 5.8 2.3 5.8 5.1 0 1.7-1.3 2.6-2.6 2.6h-1c-.8 0-1.4.6-1.4 1.3 0 .3.1.6.3.9.2.3.3.6.3.9 0 .5-.4.8-1.1.8-3.3 0-6.1-2.6-6.1-5.9S4.7 2.2 8 2.2Z"/><circle cx="5.9" cy="6" r=".9" fill="currentColor" stroke="none"/><circle cx="9.1" cy="5.2" r=".9" fill="currentColor" stroke="none"/><circle cx="11.4" cy="7.2" r=".9" fill="currentColor" stroke="none"/></symbol>
@@ -624,6 +629,10 @@
           <p class="muted" id="idle-home-hint">When disabled, Studio opens Command view after the project chooser.</p>
           <!-- settings.ui.launchAgents (main.cjs launchAgentsInfo); the launch screen's default button follows it. -->
           <label class="field"><span class="field-label">When Studio opens</span><select id="launch-agents" aria-describedby="launch-agents-hint"><option value="resume">Resume what I had</option><option value="start">Start agents</option><option value="off">Keep agents off</option></select><span class="field-hint" id="launch-agents-hint">Resume starts agents on a project where they were running when you closed Studio. The launch screen still offers both choices.</span></label>
+          <!-- settings.ui.dailyNews (main.cjs news:edition, startup:state news); renderer/daily-paper.js keeps it. -->
+          <div class="settings-you-switches" id="launch-daily-news-row">
+            <label class="switch" title="On: the launch screen is a front page with the day's biggest AI and developer-tool news beside your projects, fetched once a day. Off: only the project chooser, and Studio fetches no news."><input type="checkbox" id="launch-daily-news" checked><span class="track"></span><span>Daily news on the launch screen</span></label>
+          </div>
           <!-- settings.ui.openAtLogin (main.cjs "Start with Windows"); Windows holds the real switch. -->
           <div class="settings-you-switches" id="open-at-login-row" hidden>
             <label class="switch" title="Studio opens in the tray when you sign in to Windows, on the project you had open."><input type="checkbox" id="open-at-login"><span class="track"></span><span>Start with Windows</span></label>

@@ -1,0 +1,44 @@
+[
+ {
+  "url": "https://api.github.com/repos/anthropics/claude-code/releases/399375132",
+  "html_url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.285",
+  "id": 399375132,
+  "tag_name": "v2.1.285",
+  "target_commitish": "main",
+  "name": "v2.1.285",
+  "draft": false,
+  "prerelease": false,
+  "created_at": "2026-09-29T19:27:09Z",
+  "published_at": "2026-09-29T19:27:30Z",
+  "assets": [],
+  "body": "## What's changed\n\n- Added `CLAUDE_CODE_DISABLE_WEB_FETCH` environment variable to turn off the WebFetch tool\n- Added `claude --desktop` to open the Claude desktop app on the current directory, or on a session with `--continue` / `--resume <id>`\n- Added `claude plugin configure <plugin>` to show a plugin's options and which are unset, or save new values read from stdin with `--values-stdin`\n- Added `<server>.<key>=<value>` to `claude plugin install --config`, so a bundled `.mcpb` MCP server's own settings can be set at install time and it starts without visiting `/plugin` → Configure\n- Added `allowedProviders` managed setting to limit which API providers a machine may use (Anthropic API, a custom endpoint, Bedrock, Mantle, Vertex AI, Foundry, Claude Platform on AWS, or a Cloud gateway)\n"
+ },
+ {
+  "url": "https://api.github.com/repos/anthropics/claude-code/releases/398457074",
+  "html_url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.284",
+  "id": 398457074,
+  "tag_name": "v2.1.284",
+  "target_commitish": "main",
+  "name": "v2.1.284",
+  "draft": false,
+  "prerelease": false,
+  "created_at": "2026-09-28T18:01:46Z",
+  "published_at": "2026-09-28T18:02:03Z",
+  "assets": [],
+  "body": "## What's changed\n\n- Added Claude Sonnet 5.5 (`claude-sonnet-5-5`), now the default Sonnet model on the Anthropic API — 1M context, $2/$10 per Mtok with $0.20/Mtok cache reads\n- Added a \"Yes, but ask again next time\" answer to auto mode's prompt before a read outside the working directories, so you can allow that one read and still be asked about later ones\n- Added dollar amounts to the Claude apps gateway spend limit in `/usage` and the status line (for example \"$271.40 / $500.00 spent this month\") when the gateway runs this version or later; the status line's `rate_limits.spend_limit` also gains `used_usd`, `limit_usd` and `period`\n- Added `effortSlider:decreaseEffort`, `increaseEffort` and `toggleUltracode` keybinding actions, so the `/effort` slider's arrow and Tab keys can be rebound in `keybindings.json`\n"
+ },
+ {
+  "url": "https://api.github.com/repos/anthropics/claude-code/releases/396845205",
+  "html_url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.283",
+  "id": 396845205,
+  "tag_name": "v2.1.283",
+  "target_commitish": "main",
+  "name": "v2.1.283",
+  "draft": false,
+  "prerelease": false,
+  "created_at": "2026-09-25T21:49:55Z",
+  "published_at": "2026-09-25T21:50:12Z",
+  "assets": [],
+  "body": "## What's changed\n\n- Added `x-claude-code-prompt-id` to the gateway hint headers so LLM gateways can group the requests that serve one user prompt; opt in with `CLAUDE_CODE_GATEWAY_HINT_HEADERS=1`\n- Added `availableModelsMatch` managed setting: with `\"exact\"`, an `availableModels` entry allows only the model version it names, so new releases stay blocked until listed\n- Added `deniedModels` managed setting to block specific models, even when `availableModels` allows them\n- Added MCP tool, WebFetch and WebSearch outputs to the `tool.output` OpenTelemetry span event when `OTEL_LOG_TOOL_CONTENT=1`\n- Added `/doctor prompt-audit` (also `/checkup prompt-audit`) to audit your CLAUDE.md files, skills, agents and commands for prompting patterns written for older models\n- Added click-to-expand for truncated messages from your other sessions in fullscreen mode\n"
+ }
+]

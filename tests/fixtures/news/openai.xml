@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?><rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom" version="2.0">
+    <channel>
+        <title><![CDATA[OpenAI News]]></title>
+        <description><![CDATA[The OpenAI blog]]></description>
+        <link>https://openai.com/news</link>
+        <image>
+            <url>https://openai.com/apple-icon.png</url>
+            <title>OpenAI News</title>
+            <link>https://openai.com/news</link>
+        </image>
+        <generator>OpenAI</generator>
+        <lastBuildDate>Wed, 30 Sep 2026 03:39:48 GMT</lastBuildDate>
+        <atom:link href="https://openai.com/news/rss.xml" rel="self" type="application/rss+xml"/>
+        <item>
+            <title><![CDATA[Introducing GPT-6.1 Sol]]></title>
+            <description><![CDATA[Meet GPT-6.1 Sol: near-Astra intelligence for coding, computer use, and professional work at one-fifth of Astra’s standard API input and output token prices.]]></description>
+            <link>https://openai.com/index/introducing-gpt-6-1-sol</link>
+            <guid isPermaLink="true">https://openai.com/index/introducing-gpt-6-1-sol</guid>
+            <category><![CDATA[Product]]></category>
+            <pubDate>Tue, 29 Sep 2026 10:00:00 GMT</pubDate>
+        </item>
+<item>
+            <title><![CDATA[DevDay 2026 Recap]]></title>
+            <description><![CDATA[Explore more than 20 announcements from OpenAI DevDay 2026, including GPT-6 Astra, ChatGPT, Codex, APIs, security, and new tools for builders.]]></description>
+            <link>https://openai.com/index/devday-2026-recap</link>
+            <guid isPermaLink="true">https://openai.com/index/devday-2026-recap</guid>
+            <category><![CDATA[Company]]></category>
+            <pubDate>Tue, 29 Sep 2026 10:00:00 GMT</pubDate>
+        </item>
+<item>
+            <title><![CDATA[Introducing dots]]></title>
+            <description><![CDATA[Dots by OpenAI are proactive assistants that can keep working across complex projects and everyday tasks. Learn how dots help you stay in control while work moves forward.]]></description>
+            <link>https://openai.com/index/introducing-dots</link>
+            <guid isPermaLink="true">https://openai.com/index/introducing-dots</guid>
+            <category><![CDATA[Product]]></category>
+            <pubDate>Tue, 29 Sep 2026 00:00:00 GMT</pubDate>
+        </item>
+<item>
+            <title><![CDATA[Towards safety cases for frontier AI training]]></title>
+            <description><![CDATA[Our early guidelines for safety cases in frontier AI training cover technical safeguards, operational practices, and investigating misalignment incidents]]></description>
+            <link>https://openai.com/index/towards-safety-cases-for-frontier-ai-training</link>
+            <guid isPermaLink="true">https://openai.com/index/towards-safety-cases-for-frontier-ai-training</guid>
+            <category><![CDATA[Safety]]></category>
+            <pubDate>Mon, 28 Sep 2026 19:00:00 GMT</pubDate>
+        </item>
+<item>
+            <title><![CDATA[How we will do better for Australia]]></title>
+            <description><![CDATA[OpenAI apologises for incidents involving Australian government websites and outlines stronger safeguards and support to strengthen Australia’s cyber defences.]]></description>
+            <link>https://openai.com/index/how-we-will-do-better-for-australia</link>
+            <guid isPermaLink="true">https://openai.com/index/how-we-will-do-better-for-australia</guid>
+            <category><![CDATA[Company]]></category>
+            <pubDate>Mon, 28 Sep 2026 19:00:00 GMT</pubDate>
+        </item>
+<item>
+            <title><![CDATA[The Lenfest Institute grows landmark program with expanded OpenAI support]]></title>
+            <description><![CDATA[OpenAI is expanding the Lenfest AI Collaborative and Fellowship Program with $5 million in funding and up to $5 million in software credits and engineering support.]]></description>
+            <link>https://openai.com/index/lenfest-ai-collaborative-expansion</link>
+            <guid isPermaLink="true">https://openai.com/index/lenfest-ai-collaborative-expansion</guid>
+            <category><![CDATA[Company]]></category>
+            <pubDate>Mon, 28 Sep 2026 07:00:00 GMT</pubDate>
+        </item>
+<item>
+            <title><![CDATA[Are you a Codex Original?]]></title>
+            <description><![CDATA[We’re collecting real stories of builders, tinkerers, researchers, and creators who are using Codex to do incredible things. If you want to be a part of the next chapter of the Codex Originals program, tell us more about your story and project below.]]></description>
+            <link>https://openai.com/form/codex-originals</link>
+            <guid isPermaLink="true">https://openai.com/form/codex-originals</guid>
+            <pubDate>Mon, 28 Sep 2026 00:00:00 GMT</pubDate>
+        </item>
+<item>
+            <title><![CDATA[Basis completes a tax workbook 2x faster with GPT-6 Astra]]></title>
+            <description><![CDATA[GPT-6 Astra completed a 50-tab tax workbook twice as fast as GPT-5.6 Sol, and its stronger understanding of user intent gives Basis more confidence in real-world use.]]></description>
+            <link>https://openai.com/index/basis-tax-workbook-with-astra</link>
+            <guid isPermaLink="true">https://openai.com/index/basis-tax-workbook-with-astra</guid>
+            <pubDate>Mon, 28 Sep 2026 00:00:00 GMT</pubDate>
+        </item>
+</channel>
+</rss>

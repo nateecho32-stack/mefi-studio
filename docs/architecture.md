@@ -220,6 +220,19 @@ settings and per-model work-kind summaries for the shared controls.
 
 ### Getting around
 
+- **The Studio Daily.** The launch screen, where you choose a project, is a
+  morning front page: the day's biggest AI and developer-tool news on the
+  left (a lead, three stories, In brief, and a Studio wire of CLI releases and
+  new models on your providers) and your projects as the right-hand column,
+  which is interactive from the first frame and never moves for the news.
+  `scripts/daily-news-host.cjs` reads ten wires once a local day (and again
+  after 06:00 while Studio runs); `scripts/daily-news.cjs` joins one story
+  across outlets and ranks it, and an optional AI editor may pick the lead and
+  tighten the words, never adding a link or a number. Only headlines, short
+  feed summaries and links are printed; stories open in the browser. Offline,
+  yesterday's paper shows marked as such. Settings › General › Daily news on
+  the launch screen turns it off, and with it every fetch.
+
 - Studio has two modes, switched at the top of Vibe, from the foot of Vibe's
   rail, or with **Switch to Build** in Search. **Vibe** is the calm front
   door: one box to talk it over with Mefi or build it as a task, cards for

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+ <channel>
+  <atom:link href="https://huggingface.co/blog/feed.xml" rel="self" type="application/rss+xml"/>
+  <title>Hugging Face - Blog</title>
+  <link>https://huggingface.co/blog</link>
+  <description>The Hugging Face blog</description>
+  <language>en-US</language>
+  <item>
+   <title>NVIDIA Kumo Tabular Sets a New Accuracy-Efficiency Frontier for Tabular Prediction</title>
+   <pubDate>Tue, 29 Sep 2026 15:30:38 GMT</pubDate>
+   <link>https://huggingface.co/blog/nvidia/kumo-tabular</link>
+   <guid isPermaLink="false">https://huggingface.co/blog/nvidia/kumo-tabular</guid>
+  </item>
+<item>
+   <title>Getting the Source Right, Not Just the Fact: Source-Aware Verification for MCP Agents</title>
+   <pubDate>Tue, 29 Sep 2026 13:07:00 GMT</pubDate>
+   <link>https://huggingface.co/blog/MultiverseComputingCAI/getting-the-source-right-not-just-the-fact-source</link>
+   <guid isPermaLink="false">https://huggingface.co/blog/MultiverseComputingCAI/getting-the-source-right-not-just-the-fact-source</guid>
+  </item>
+<item>
+   <title>Holo4: powering generalist computer-use agents</title>
+   <pubDate>Mon, 28 Sep 2026 09:44:05 GMT</pubDate>
+   <link>https://huggingface.co/blog/Hcompany/holo4</link>
+   <guid isPermaLink="false">https://huggingface.co/blog/Hcompany/holo4</guid>
+  </item>
+<item>
+   <title>Accelerating vision-language models with LFM2.5-VL-DSpark</title>
+   <pubDate>Thu, 24 Sep 2026 14:08:57 GMT</pubDate>
+   <link>https://huggingface.co/blog/LiquidAI/lfm2-5-vl-dspark</link>
+   <guid isPermaLink="false">https://huggingface.co/blog/LiquidAI/lfm2-5-vl-dspark</guid>
+  </item>
+<item>
+   <title>How UK AISI and EvalEval Are Making Benchmark Results Reproducible</title>
+   <pubDate>Tue, 22 Sep 2026 00:00:00 GMT</pubDate>
+   <link>https://huggingface.co/blog/evaleval-aisi</link>
+   <guid isPermaLink="true">https://huggingface.co/blog/evaleval-aisi</guid>
+  </item>
+</channel>
+</rss>

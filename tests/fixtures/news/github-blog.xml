@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"
+	xmlns:content="http://purl.org/rss/1.0/modules/content/"
+	xmlns:wfw="http://wellformedweb.org/CommentAPI/"
+	xmlns:dc="http://purl.org/dc/elements/1.1/"
+	xmlns:atom="http://www.w3.org/2005/Atom"
+	xmlns:sy="http://purl.org/rss/1.0/modules/syndication/"
+	xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
+	>
+
+<channel>
+	<title>The GitHub Blog</title>
+	<atom:link href="https://github.blog/feed/" rel="self" type="application/rss+xml" />
+	<link>https://github.blog/</link>
+	<description>Updates, ideas, and inspiration from GitHub to help developers build and design software.</description>
+	<lastBuildDate>Mon, 28 Sep 2026 21:29:54 +0000</lastBuildDate>
+	<language>en-US</language>
+	<sy:updatePeriod>
+	hourly	</sy:updatePeriod>
+	<sy:updateFrequency>
+	1	</sy:updateFrequency>
+	<generator>https://wordpress.org/?v=7.1.2</generator>
+
+<image>
+	<url>https://github.blog/wp-content/uploads/2019/01/cropped-github-favicon-512.png?fit=32%2C32</url>
+	<title>The GitHub Blog</title>
+	<link>https://github.blog/</link>
+	<width>32</width>
+	<height>32</height>
+</image> 
+<site xmlns="com-wordpress:feed-additions:1">153214340</site>	<item>
+		<title>Developer policy update: Transparency, state policy, and what’s ahead</title>
+		<link>https://github.blog/news-insights/policy-news-and-insights/developer-policy-update-transparency-state-policy-and-whats-ahead/</link>
+		
+		<dc:creator><![CDATA[Margaret Tucker]]></dc:creator>
+		<pubDate>Tue, 29 Sep 2026 15:00:00 +0000</pubDate>
+				<category><![CDATA[News & insights]]></category>
+		<category><![CDATA[Policy]]></category>
+		<category><![CDATA[GitHub Policy]]></category>
+		<category><![CDATA[GitHub Transparency Report]]></category>
+		<guid isPermaLink="false">https://github.blog/?p=99134</guid>
+
+					<description><![CDATA[<p>Explore GitHub’s latest transparency data and learn more about policy updates affecting developers and open source.</p>
+<p>The post <a href="https://github.blog/news-insights/policy-news-and-insights/developer-policy-update-transparency-state-policy-and-whats-ahead/">Developer policy update: Transparency, state policy, and what’s ahead</a> appeared first on <a href="https://github.blog">The GitHub Blog</a>.</p>
+]]></description>
+					
+		
+		
+		<post-id xmlns="com-wordpress:feed-additions:1">99134</post-id>	</item>
+<item>
+		<title>How we found 24 Android vulnerabilities using our open source AI security agent</title>
+		<link>https://github.blog/security/how-we-found-24-android-vulnerabilities-using-our-open-source-ai-security-agent/</link>
+		
+		<dc:creator><![CDATA[Kevin Stubbings]]></dc:creator>
+		<pubDate>Mon, 28 Sep 2026 19:00:00 +0000</pubDate>
+				<category><![CDATA[Security]]></category>
+		<category><![CDATA[GitHub Security Lab]]></category>
+		<guid isPermaLink="false">https://github.blog/?p=98105</guid>
+
+					<description><![CDATA[<p>A look at the targeted AI taskflows behind these findings, the critical Android bugs they uncovered, and how to run the same open-source agent on your own app.</p>
+<p>The post <a href="https://github.blog/security/how-we-found-24-android-vulnerabilities-using-our-open-source-ai-security-agent/">How we found 24 Android vulnerabilities using our open source AI security agent</a> appeared first on <a href="https://github.blog">The GitHub Blog</a>.</p>
+]]></description>
+					
+		
+		
+		<post-id xmlns="com-wordpress:feed-additions:1">98105</post-id>	</item>
+<item>
+		<title>Highlights from Git 2.56</title>
+		<link>https://github.blog/open-source/git/highlights-from-git-2-56/</link>
+		
+		<dc:creator><![CDATA[Elijah Newren]]></dc:creator>
+		<pubDate>Mon, 28 Sep 2026 17:23:33 +0000</pubDate>
+				<category><![CDATA[Git]]></category>
+		<category><![CDATA[Open Source]]></category>
+		<guid isPermaLink="false">https://github.blog/?p=99087</guid>
+
+					<description><![CDATA[<p>The open source Git project just released Git 2.56. Here is GitHub's look at some of the most interesting features and changes introduced since last time.</p>
+<p>The post <a href="https://github.blog/open-source/git/highlights-from-git-2-56/">Highlights from Git 2.56</a> appeared first on <a href="https://github.blog">The GitHub Blog</a>.</p>
+]]></description>
+					
+		
+		
+		<post-id xmlns="com-wordpress:feed-additions:1">99087</post-id>	</item>
+<item>
+		<title>GitHub Copilot app for Beginners: How to build custom workflows with canvases</title>
+		<link>https://github.blog/ai-and-ml/github-copilot/github-copilot-app-for-beginners-how-to-build-custom-workflows-with-canvases/</link>
+		
+		<dc:creator><![CDATA[Kayla Cinnamon]]></dc:creator>
+		<pubDate>Fri, 25 Sep 2026 18:00:00 +0000</pubDate>
+				<category><![CDATA[AI & ML]]></category>
+		<category><![CDATA[GitHub Copilot]]></category>
+		<category><![CDATA[GitHub Copilot app]]></category>
+		<category><![CDATA[GitHub Copilot app for Beginners]]></category>
+		<guid isPermaLink="false">https://github.blog/?p=99027</guid>
+
+					<description><![CDATA[<p>Describe the interface you need in plain English, then let the agent build a live surface you can both use and update—so you spend less time adapting to tools and more time getting work done.</p>
+<p>The post <a href="https://github.blog/ai-and-ml/github-copilot/github-copilot-app-for-beginners-how-to-build-custom-workflows-with-canvases/">GitHub Copilot app for Beginners: How to build custom workflows with canvases</a> appeared first on <a href="https://github.blog">The GitHub Blog</a>.</p>
+]]></description>
+					
+		
+		
+		<post-id xmlns="com-wordpress:feed-additions:1">99027</post-id>	</item>
+</channel>
+</rss>

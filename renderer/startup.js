@@ -14,7 +14,9 @@
 // add one: Open a folder, Start a new app and Get from GitHub. It draws what
 // the host says and never guesses, so a chip nobody could read shows nothing.
 // Pinned by tests/startup_screen.test.mjs and tests/startup_resume.test.mjs;
-// the card's look is the launch block of styles.css.
+// the card's look is the launch block of styles.css. When the host carries
+// the day's news, renderer/daily-paper.js sets a front page around the card
+// (tests/daily_paper.test.mjs); nothing in the card changes for it.
 (function () {
   "use strict";
   const $ = (id) => document.getElementById("boot-" + id);
@@ -723,6 +725,10 @@
     if (ui.newApp) face(ui.newApp, "Start a new app", "plus");
     if (ui.github) face(ui.github, "Get from GitHub", "cloud-download");
     adopt({ projects: info.projects, activeId: info.activeId });
+    // The day's paper (renderer/daily-paper.js) lays out around this card
+    // before it draws, so the first focus lands where the card will stay.
+    // `news` false is the owner's "off"; a host without news skips it.
+    window.MefiDailyPaper?.show?.({ enabled: info.news });
     render();
     note("");
     void requestGlance();
