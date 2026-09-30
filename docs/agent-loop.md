@@ -267,9 +267,21 @@ they read the assistant's state and the git index), then the fixed tail
 handoff protocol (`MEFI_NEXT:`, at most `EXECUTOR_MAX_HANDOFFS` = 3 per run;
 `MEFI_CALL:`, which wakes a role from `EXECUTOR_CALLABLE` at most once per
 role), the owner-question line (`agentIssues.issuePromptLine`), the ~15-minute
-budget warning (`EXECUTOR_BUDGET_MINUTES`), `MEFI_RESULT:` (asked for as one
-line under 300 characters) and the verdict sentinel `MEFI_JOB_DONE`
-(`EXECUTOR_DONE_MARK`). For tasks, the brief points the worker at its full
+budget warning (`EXECUTOR_BUDGET_MINUTES`), `MEFI_RESULT:` (required on every
+run, one line under 300 characters: Studio queues its verification check from
+the `done:` report, and a run on a CLI that leaves no session, Claude Code,
+Codex, Grok or Antigravity, cannot be verified without it) and the verdict
+sentinel `MEFI_JOB_DONE` (`EXECUTOR_DONE_MARK`). Before the tail, the fixed
+builder rules (`executorCore.INSTRUCTIONS`) cover the folder, previews and the
+shared git index. Workers never push, pull, merge or sync branches, and never
+run `git push` or `npm run sync`, even where the project's own notes say to
+(this repository's AGENTS.md does): Studio and the owner land the work. They
+are told not to invent names, commands, environment variables, packages or
+API details, to put an unknown detail under `remaining:` or in a `MEFI_ASK`,
+and to follow a roadmap item's plan in the project's `docs/`. A Windows run
+(`workerPrompt`'s `platform`) also gets `WINDOWS_SHELL`: PowerShell, which
+OpenCode and Codex may run in, has no `head` or `tail`, so it is told to use
+`Select-Object -First`/`-Last`. For tasks, the brief points the worker at its full
 saved record through `taskContext.buildTaskHandoff`'s `contextPath`: a small
 read-only run file, `task-runs/<runId>.json` beside the project's board
 (`writeTaskRunContext` in `main.cjs`), holding the task row with its
@@ -452,6 +464,28 @@ When the child closes, `finish()` (`const finish = async` in
   - **provider outage** → back to `open` on the outage backoff (5m doubling
     to 2h, `providerCooldownMs`) with no attempt charged (branch `"outage"`,
     within the grace `executorCore.providerOutage` bounds; §10).
+  - **route refusal** → a provider that answered and refused this login's
+    plan is the route's problem, not the card's. `finish` reads the run's own
+    error and last words with `executorCore.entitlementRefusal`: "subscription
+    required" (OpenCode Go's "An active OpenCode Go subscription is required
+    to use Go models"), "no active … subscription", a model "not included in
+    your plan", or HTTP 402. It is counted as a provider that said it was
+    down, so the card takes the outage branch above (uncharged, on the outage
+    backoff, within the same grace), with `lastRunError` set to the refusal in
+    the owner's words (`refusedRoute(...).short`, passed to `settleAttemptRow`
+    as `routeRefusal`), and the model ledger counts it as neither a win nor a
+    loss. The host parks the route in memory (`executorRouteRefused`,
+    `autopilot.routeRefusals`) for 5 minutes, doubling to half an hour while
+    it keeps refusing (`executorCore.routeParkMs`). A subscription or payment
+    refusal parks the provider (every model the login lists), a plan refusal
+    only that model. While a park holds, `spawnNextJob` returns `"route"`
+    before any claim, both before per-task model routing and after it, so the
+    cards on that route are not each refused in turn. The owner hears it once
+    per route (a thread notice, a feed warning and `autopilot.lastError`,
+    naming the fix: another coding model in Agents › Setup › Team & models,
+    or renewing the plan). A run that finishes on the route clears its marks
+    (`executorRouteAnswered`), so a later refusal is news again; the owner's
+    own Start (`taskStart`) bypasses the park, and a restart forgets it.
   - **failure** → `runFailures += 1`, backoff 1 min, then 20m/40m/80m
     (`failureBackoffMs`); after 5 tries parked for manual reopen ("gave up
     after 5 tries"). The next worker receives the prior error and repairs the
@@ -807,7 +841,12 @@ runs, and a single follow-up chain seven generations deep.
   a rate limit or a connection that never opened is requeued by settle on its
   own backoff (5 minutes, doubling to 2 hours while the outage lasts) with no
   attempt charged: `provider unavailable (exit N) · … · requeued in Xm, no
-  attempt charged`. No issue is raised for it.
+  attempt charged`. No issue is raised for it. A provider that refuses the
+  login's plan (no active subscription, a model the plan leaves out, HTTP
+  402) used to be charged as the card's own failure and retried on the same
+  dead route in 1, 20, 40 and 80 minutes, so an OpenCode Go login without a
+  subscription spent every card's retries; it now takes the same uncharged
+  requeue and parks the route (§5, route refusal).
 - **Follow-ups of follow-ups.** A "split" answer used to mint
   `Follow-up: Follow-up: …` cards with no lineage, so the depth cap never
   applied. Splits now carry `splitFrom`/`splitDepth`, are titled
@@ -1192,8 +1231,9 @@ card:
    only when the failure was the model's own work
    (`executorCore.attemptLedgerOutcome`). A stop, a spawn error, a runner
    that never started or died silent in its first 15 s, a provider that said
-   it was down (even after the card's outage grace ran out, which charges the
-   card, not the model) and a model or provider the CLI could not reach
+   it was down or refused the login's plan (even after the card's outage grace
+   ran out, which charges the card, not the model) and a model or provider the
+   CLI could not reach
    (`ProviderModelNotFoundError`, `model not found`) keep their row but count
    as neither.
 2. **The kind of work.** The key is the classified intent

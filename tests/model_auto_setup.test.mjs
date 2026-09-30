@@ -261,6 +261,34 @@ test("with no key saved, a signed-in subscription CLI leads; otherwise Claude Co
   assert.equal(planAutoSetup({ settings: {}, keys: { zai: true }, clis: [login("claude", true)] }).active.provider, "zai", "a saved key still outranks every CLI");
 });
 
+// 6a5c7be put the signed-out note at the head of the local-server chain, so
+// its final else ("the saved custom endpoint answers") reached every keyed
+// route and every signed-in CLI.
+test("only a keyless machine is told a local server or the custom endpoint answers", () => {
+  const login = (id, signedIn) => ({ ...cli(id, true), signedIn });
+  const custom = /No key saved|custom endpoint answers/;
+  for (const keys of [{ zai: true }, { opencode: true }, { zen: true }, { openrouter: true }]) {
+    const plan = planAutoSetup({ settings: {}, keys, clis: [cli("opencode", true)], local: { custom: true, lmstudio: true, ollama: true } });
+    assert.doesNotMatch(plan.notes.join(" "), custom, Object.keys(keys)[0]);
+  }
+  for (const id of ["claude", "codex", "grok"]) {
+    for (const signedIn of [true, null]) {
+      const plan = planAutoSetup({ settings: {}, keys: {}, clis: [login(id, signedIn)], local: { custom: true } });
+      assert.equal(plan.active.provider, id);
+      assert.doesNotMatch(plan.notes.join(" "), custom, `${id} signed in: ${signedIn}`);
+    }
+  }
+  const agy = planAutoSetup({ settings: {}, keys: {}, clis: [cli("antigravity", true)] });
+  assert.doesNotMatch(agy.notes.join(" "), custom);
+  const out = planAutoSetup({ settings: {}, keys: {}, clis: [login("codex", false)] });
+  assert.match(out.notes.join(" "), /Codex is installed but not signed in yet/);
+  assert.doesNotMatch(out.notes.join(" "), custom);
+  // The keyless local routes keep their own notes.
+  assert.match(planAutoSetup({ settings: {}, keys: {}, clis: [], local: { lmstudio: true } }).notes.join(" "), /No key saved: LM Studio is reachable/);
+  assert.match(planAutoSetup({ settings: {}, keys: {}, clis: [], local: { ollama: true } }).notes.join(" "), /No key saved: Ollama is running/);
+  assert.match(planAutoSetup({ settings: {}, keys: {}, clis: [], local: { custom: true } }).notes.join(" "), /No key saved: the saved custom endpoint answers for the assistant\./);
+});
+
 test("a CLI's login is read from the file its sign-in writes, or its API key", () => {
   const signedIn = context.cliSignedIn;
   context.path = { join: (...parts) => parts.join("/") };

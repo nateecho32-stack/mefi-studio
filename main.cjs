@@ -125,6 +125,10 @@ const { windowsShim } = require("./scripts/agent-mcp.cjs");
 // saved state still reads but nothing can link or check. The login module
 // requires the rules module, so it loads only after the rules did.
 const community = optionalHelper("./scripts/community.cjs", () => require("./scripts/community.cjs"), null);
+// The records an installing helper and this app pass each other (boot health,
+// the saved copy's manifest, an update that did not stand). See "Release
+// updates: the safety net" below and scripts/update-safety.cjs.
+const updateSafety = optionalHelper("./scripts/update-safety.cjs", () => require("./scripts/update-safety.cjs"), null);
 const discordOAuth = community
   ? optionalHelper("./scripts/discord-oauth.cjs", () => require("./scripts/discord-oauth.cjs"), null)
   : null;
@@ -229,7 +233,7 @@ function handleProjectIpc(channel, handler) {
 // handler would wait on. (Declared beside the wrapper so the tests that load
 // it from here up to app.setName see it.)
 const APP_WIDE_PREFIXES = ["projects:", "project-preview:", "performance:", "startup:", "community:", "hub:", "remote:", "styler:", "catalog:", "speed:", "shell:", "pc-setup:", "chatgpt-plan:", "news:"];
-const APP_WIDE_CHANNELS = new Set(["usage:accounts", "opencode:credits", "release:status", "release:check", "update:status", "update:set", "settings:get-key"]);
+const APP_WIDE_CHANNELS = new Set(["usage:accounts", "opencode:credits", "release:status", "release:check", "update:status", "update:set", "settings:get-key", "boot:healthy"]);
 ipcMain.handle = handleProjectIpc;
 
 app.setName("Mefi's Studio AI+");
@@ -563,7 +567,7 @@ function relaunchArgs() {
   const args = [];
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (arg === "--released") {
+    if (arg === "--released" || arg === "--rolled-back") {
       if (argv[index + 1] && !argv[index + 1].startsWith("--")) index += 1;
       continue;
     }
@@ -997,8 +1001,12 @@ let releaseState = {
   repo: null,
   installed: null,
   staged: null,
+  rollback: null,
   at: Date.now(),
 };
+// The saved copy of the build this one replaced, while it still describes this
+// install: { from, to, at } or null. Read at boot and after each apply.
+let releasePrevious = null;
 let releaseCheckInFlight = null;
 // Set from the first await of an apply until it fails (success exits the
 // app): the state only reads "downloading" after the staging folder is reset,
@@ -1013,6 +1021,7 @@ function releaseStatus() {
     current: app.getVersion(),
     repo: releaseState.repo ?? RELEASE_REPO ?? "nateecho32-stack/mefi-studio",
     supported: app.isPackaged && process.platform === "win32",
+    previous: releasePrevious,
   };
 }
 
@@ -1027,6 +1036,8 @@ function releaseSignature(status) {
     status.error ?? null,
     Boolean(status.needsToken),
     status.installed?.version ?? null,
+    status.previous?.from ?? null,
+    status.rollback?.message ?? null,
   ]);
 }
 
@@ -1224,6 +1235,9 @@ async function downloadReleaseBuild() {
     version,
     cleanupRoot: root,
     logPath,
+    // A saved copy of this build and a watch on the new one (the safety net
+    // below); null keeps the plain swap.
+    safety: typeof releaseSafetyPlan === "function" ? await releaseSafetyPlan({ module, prepared, installRoot }) : null,
   });
   publishRelease({ progress: null, latest: { ...latest, sha256: downloaded.sha256, verified: Boolean(expected) } });
   return { version, scriptPath, installRoot, exePath: prepared.exePath, verified: Boolean(expected) };
@@ -1290,6 +1304,10 @@ async function applyReleaseUpdate() {
 
 // A boot that carries --released says which build the helper just installed.
 async function announceRelease() {
+  // Whatever an installing helper left behind is read on every boot, however
+  // this one was started: a note about an update that did not stand, and the
+  // saved copy the Roll back button would restore.
+  await releaseSafetyBoot().catch((error) => logLine(`[release] safety check failed: ${error?.message ?? error}`));
   const index = process.argv.indexOf("--released");
   if (index < 0) return;
   const settings = await readSettings();
@@ -1304,6 +1322,177 @@ async function announceRelease() {
     progress: null,
   }, { force: true });
   logLine(`[release] updated ${last?.from ?? "?"} -> ${version}`);
+}
+
+// ---- Release updates: the safety net ------------------------------------------
+// An in-app update swaps the portable folder while Studio is closed, so nothing
+// inside the old process can notice that the new build is broken. The apply
+// helper (scripts/release-updater.mjs) therefore copies the running build aside
+// first, starts the new one and waits for the flag this block raises; a build
+// that never raises it is started once more and then replaced by the copy.
+//   - data/boot-health.json: written at every boot of a packaged build. The
+//     renderer's boot:healthy stamps it; a window that loaded and stayed up for
+//     45 s is the fallback, so a shell that forgot to report is not undone.
+//   - the saved copy lives in %LOCALAPPDATA%\MefiStudio\rollback\<install key>
+//     and the Roll back button (release:rollback) restores it by hand.
+//   - data/update-result.json: what the helper leaves when an update did not
+//     stand. The next boot shows it once and removes it.
+// The shapes are in scripts/update-safety.cjs. MEFI_STUDIO_NO_ROLLBACK=1 turns
+// the copy and the watch off, leaving the plain swap.
+const BOOT_HEALTH_PATH = path.join(STUDIO_ROOT, "data", "boot-health.json");
+const UPDATE_RESULT_PATH = path.join(STUDIO_ROOT, "data", "update-result.json");
+let bootHealth = null;
+let bootHealthTimer = null;
+
+function bootHealthWrite() {
+  try {
+    mkdirSync(path.dirname(BOOT_HEALTH_PATH), { recursive: true });
+    writeFileSync(BOOT_HEALTH_PATH, JSON.stringify(bootHealth));
+  } catch (error) {
+    logLine(`[release] could not write the boot record: ${error?.message ?? error}`);
+  }
+}
+
+function bootHealthStart() {
+  if (SMOKE || CAPTURE || CLI_MODE || !app.isPackaged || typeof updateSafety?.beginBoot !== "function") return;
+  bootHealth = updateSafety.beginBoot({ version: app.getVersion(), pid: process.pid, now: Date.now() });
+  bootHealthWrite();
+}
+
+// The window finished loading. If the renderer never reports, a build that is
+// still up after the fallback delay counts as healthy.
+function bootHealthWatch() {
+  if (!bootHealth || bootHealthTimer) return;
+  bootHealthTimer = setTimeout(() => { bootHealthy("fallback"); }, Number(updateSafety?.HEALTHY_FALLBACK_MS) || 45000);
+  bootHealthTimer.unref?.();
+}
+
+function bootHealthy(via = "renderer") {
+  if (!bootHealth) return { ok: true, recorded: false };
+  const next = updateSafety.reportHealthy(bootHealth, { via, now: Date.now() });
+  if (next && next !== bootHealth) {
+    bootHealth = next;
+    bootHealthWrite();
+    clearTimeout(bootHealthTimer);
+  }
+  return { ok: true, recorded: true };
+}
+
+// What the apply helper is told about the safety net, or null for the plain
+// swap. The new build is watched only when its own main.cjs still raises the
+// flag, otherwise the helper would undo a healthy build that cannot report.
+async function releaseSafetyPlan({ module, prepared, installRoot }) {
+  if (process.env.MEFI_STUDIO_NO_ROLLBACK === "1" || typeof updateSafety?.installKey !== "function") return null;
+  try {
+    const backupRoot = module.rollbackFolder(installRoot, process.env, updateSafety.installKey);
+    if (!backupRoot) return null;
+    const watch = await module.stagedBuildWritesHealth(prepared.payloadRoot, updateSafety.releaseWritesHealth);
+    logLine(`[release] saving this build to ${backupRoot} first${watch ? "; the new build is watched until it reports healthy" : "; the new build does not report health, so it is not watched"}`);
+    return { backupRoot, from: app.getVersion(), resultPath: UPDATE_RESULT_PATH, healthPath: BOOT_HEALTH_PATH, watch };
+  } catch (error) {
+    logLine(`[release] this update has no rollback: ${error?.message ?? error}`);
+    return null;
+  }
+}
+
+async function releaseSafetyBoot() {
+  if (!updateSafety) return;
+  let result = null;
+  try {
+    result = updateSafety.parseResult(await readFile(UPDATE_RESULT_PATH, "utf8"));
+  } catch {}
+  if (result) {
+    await rm(UPDATE_RESULT_PATH, { force: true }).catch(() => {});
+    const message = updateSafety.describeResult(result);
+    if (message) {
+      publishRelease({ rollback: { message, stage: result.stage, at: result.at }, error: null, progress: null }, { force: true });
+      logLine(`[release] ${message}`);
+    }
+  }
+  await releaseScanPrevious();
+}
+
+// Whether a saved copy exists that still describes this install (same folder,
+// and the build that replaced it is the one running now).
+async function releaseScanPrevious() {
+  if (!updateSafety || !app.isPackaged || process.platform !== "win32") return;
+  const module = await getReleaseUpdater();
+  const installRoot = path.dirname(process.execPath);
+  const folder = module.rollbackFolder(installRoot, process.env, updateSafety.installKey);
+  let previous = null;
+  if (folder) {
+    try {
+      previous = updateSafety.usableBackup(await readFile(path.join(folder, updateSafety.MANIFEST_FILE), "utf8"), { installRoot, version: app.getVersion() });
+    } catch {}
+  }
+  releasePrevious = previous;
+  publishRelease({}, { force: true });
+}
+
+// The Roll back button: restore the saved copy through a helper that outlives
+// this process, the same way an update is applied.
+async function releaseRollback() {
+  const blocked = (error) => ({ ok: false, error, status: releaseStatus() });
+  if (SMOKE || CAPTURE || CLI_MODE) return blocked("rolling back is unavailable in this mode");
+  if (!app.isPackaged || process.platform !== "win32") return blocked("Rolling back applies to the portable Windows build.");
+  if (!updateSafety || !releasePrevious) return blocked("There is no saved version to go back to.");
+  if (releaseState.state === "applying" || releaseState.state === "rollingback" || releaseApplyInFlight) return blocked("an update is already in progress");
+  if (activeChild && activeChild.exitCode === null) return blocked("Love2D is running — close it and try again");
+  const running = autopilot.jobs.filter((job) => !job.finished || job.settlementPending);
+  if (running.length) return blocked(`${running.length} build job(s) still running — try again when they finish`);
+  releaseApplyInFlight = true;
+  try {
+    const module = await getReleaseUpdater();
+    const installRoot = path.dirname(process.execPath);
+    const backupRoot = module.rollbackFolder(installRoot, process.env, updateSafety.installKey);
+    if (!backupRoot || !existsSync(path.join(backupRoot, "install"))) throw new Error("the saved version is no longer on disk");
+    const root = path.join(app.getPath("temp"), "mefi-studio-update", `rollback-${Date.now()}`);
+    await mkdir(root, { recursive: true });
+    const scriptPath = path.join(root, "rollback-update.ps1");
+    await module.writeRollbackScript(scriptPath, {
+      installRoot,
+      exePath: process.execPath,
+      pid: process.pid,
+      restoreVersion: releasePrevious.from,
+      replacedVersion: app.getVersion(),
+      cleanupRoot: root,
+      logPath: path.join(root, "rollback-update.log"),
+      safety: { backupRoot, resultPath: UPDATE_RESULT_PATH },
+    });
+    publishRelease({ state: "rollingback", error: null, progress: null });
+    await updateSettings((settings) => {
+      if (window && !window.isDestroyed()) settings.window = { bounds: window.getBounds(), maximized: window.isMaximized() };
+    });
+    await saveResume();
+    try {
+      window?.webContents.session.flushStorageData();
+    } catch {}
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    stopReleaseWatch();
+    stopUpdateWatch();
+    stopEyesWatch();
+    stopMachineWatch();
+    stopCommunityWatch();
+    stopAssistant();
+    const rollbackLine = ["start", '""', "powershell.exe", ...["-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", scriptPath].map(quoteWindowsCmdArg)].join(" ");
+    const helper = spawn(process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", `"${rollbackLine}"`], {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true,
+      windowsVerbatimArguments: true,
+    });
+    helper.unref();
+    logLine(`[release] rolling back to v${releasePrevious.from}; helper pid ${helper.pid}`);
+    app.releaseSingleInstanceLock();
+    app.exit(0);
+    return { ok: true, applying: true, version: releasePrevious.from, status: releaseStatus() };
+  } catch (error) {
+    const message = String(error?.message ?? error).slice(0, 400);
+    releaseApplyInFlight = false;
+    publishRelease({ state: "error", error: message, progress: null });
+    logLine(`[release] rollback failed: ${message}`);
+    return blocked(message);
+  }
 }
 
 // ---- Discord community link: the Void Engine server ------------------------
@@ -4104,10 +4293,12 @@ function planAutoSetup({ settings = {}, keys = {}, clis = [], local = {} } = {})
   else if (provider === "claude") notes.push("The assistant answers through the Claude Code CLI's own subscription login.");
   else if (provider === "codex") notes.push("The assistant answers through the Codex CLI's own ChatGPT login.");
   else if (provider === "antigravity") notes.push("The assistant answers through the Antigravity CLI's own Google account login.");
-  if (subscription && signedIn(provider) === false) notes.push(`${{ grok: "Grok", claude: "Claude Code", codex: "Codex" }[provider]} is installed but not signed in yet: sign in under Agents › Setup › Connect an AI before it can answer.`);
   else if (provider === "lmstudio") notes.push("No key saved: LM Studio is reachable on this machine, so the assistant answers from the local server.");
   else if (ollama) notes.push(`No key saved: Ollama is running on this machine (${OLLAMA_ENDPOINT}), so it is saved as the custom endpoint and the assistant answers from it.`);
   else notes.push("No key saved: the saved custom endpoint answers for the assistant.");
+  // Its own line after the route's: at the head of the chain above it sent
+  // every keyed route and signed-in CLI to the custom-endpoint note (6a5c7be).
+  if (subscription && signedIn(provider) === false) notes.push(`${{ grok: "Grok", claude: "Claude Code", codex: "Codex", antigravity: "Antigravity" }[provider]} is installed but not signed in yet: sign in under Agents › Setup › Connect an AI before it can answer.`);
   const jevVia = changes.jevRoute ? ` Jev rides your ${{ typesafe: "TypeSafe Jev", zen: "OpenCode Zen", openrouter: "OpenRouter" }[changes.jevRoute]} key.` : "";
   // Jev chooses among the z.ai GLM and OpenCode Go rosters only (see
   // applyModelRouting); on any other route it is connected but picks nothing.
@@ -12014,7 +12205,13 @@ async function assistantWorkOn(raw, { origin = "click" } = {}) {
       delete task.duplicateOf;
       // Start/Resume releases only this owner's hold. Retry budgets, provider
       // cooldowns and loop holds still require the separate explicit Retry action.
+      // A refused plan's wait is the exception (executorCore.refusalWait): it
+      // is the route's, and Start is how the owner tries a renewed plan.
       if (explicitStart) delete task.ownerHold;
+      if (explicitStart && executorCore.refusalWait(task)) {
+        delete task.nextRunAt;
+        delete task.refusedUntil;
+      }
       // The owner asking for this card answers its check against work done
       // outside Studio; the evidence stays for its worker (outside-work.cjs).
       const outsideReleased = typeof outsideWork !== "undefined" ? outsideWork.release(task.relevance, now, "owner") : null;
@@ -13261,10 +13458,13 @@ async function assistantAnswer(payload = {}) {
     await assistantRememberDecision({ kind: question.context?.issueKind ?? question.source, verb: question.source === "offer" ? option?.dismiss ? "decline" : "accept" : option?.dismiss ? "hold" : option?.action?.action ?? option?.action?.choice ?? (text ? "instruct" : option?.id), source: payload.origin === "chat" ? "chat" : question.source,
       taskId: question.context?.taskId, ...(prior ? { correction: { was: prior.choice } } : {}) });
   };
+  // Only the owner closes an owner-only ask (autonomy-host.cjs refuses the
+  // same). A dismissal says who closed it, so a closed ask can be traced.
+  if (option?.dismiss && delegatedBy && question.context?.issueKind === "owner") return { ok: false, error: "Only the owner can leave this ask for review.", state: assistantState };
   if (option?.dismiss) {
     question.status = "dismissed";
-    question.answer = { at: Date.now(), optionId: option.id, label: option.label, text: null, via: "option" };
-    assistantLog("question", `dismissed: ${question.title}`);
+    question.answer = { at: Date.now(), optionId: option.id, label: option.label, text: null, via: delegatedBy ? (delegatedBy === "desk" ? "desk" : "delegate") : payload.origin === "chat" ? "chat" : "option", ...(delegatedBy ? { by: delegatedBy } : {}) };
+    assistantLog("question", `dismissed${delegatedBy ? ` for you by the ${delegatedBy === "desk" ? "desk" : "assistant"}` : payload.origin === "chat" ? " from chat" : ""}: ${question.title}`);
     assistantEmit({ kind: "question", ...question });
     await saveAssistant({ force: true });
     await rememberAnswer();
@@ -14481,6 +14681,9 @@ async function taskAction({ taskId, projectId, action, status, title } = {}) {
     else {
       task.status = status;
       task.updatedAt = now;
+      // A card dropped earlier and now marked done is finished, not dropped:
+      // the stamp kept Tasks reading "dropped by you — not finished" on it.
+      const wasDropped = status === "done" && Boolean(task.dropped);
       if (status === "done") {
         task.doneAt = now;
         task.verification = { state: "manual", at: now, reason: "Marked done by you" };
@@ -14488,8 +14691,9 @@ async function taskAction({ taskId, projectId, action, status, title } = {}) {
         delete task.lease;
         delete task.nextRunAt;
         delete task.lastRunError;
+        delete task.dropped;
       }
-      task.logs = [...(Array.isArray(task.logs) ? task.logs : []), { at: now, kind: "status", text: status === "done" ? "Completion confirmed by you" : `Task marked ${status}` }].slice(-40);
+      task.logs = [...(Array.isArray(task.logs) ? task.logs : []), { at: now, kind: "status", text: status === "done" ? `Completion confirmed by you${wasDropped ? " (it was dropped before)" : ""}` : `Task marked ${status}` }].slice(-40);
     }
     return { ok: true, revisionKind: "status", revisionNote: `Task marked ${status}` };
   });
@@ -15816,6 +16020,54 @@ async function heavierRetryOnOffer() {
   }
 }
 
+// A route its provider refuses: a run that ended on "no active subscription",
+// a plan that leaves the model out or an HTTP 402 (executorCore.refusedRoute)
+// is the route's problem, not the card's. finish() requeues the card
+// uncharged on the outage backoff, and the route is parked here like any
+// other route fault, 5 minutes doubling to half an hour while it keeps
+// refusing, so the cards on it are not each refused in turn. The owner hears
+// it once per route, in the thread and the feed, until that route answers a
+// run again. The owner's own Start still tries it, so a renewed plan need not
+// wait out the park or the card's own wait (executorCore.refusalWait). Kept on
+// `autopilot` (in memory): a restart tries again.
+function executorRouteRefused(refused) {
+  if (!refused?.key) return null;
+  if (typeof autopilot.routeRefusals?.get !== "function") autopilot.routeRefusals = new Map();
+  const now = Date.now();
+  const prior = autopilot.routeRefusals.get(refused.key);
+  const streak = (Number(prior?.streak) || 0) + 1;
+  const mark = { ...refused, streak, at: now, until: now + executorCore.routeParkMs(streak), told: prior?.told === true };
+  autopilot.routeRefusals.set(refused.key, mark);
+  logLine(`[autopilot] ${refused.short} · that route waits ${Math.round((mark.until - now) / 60000)}m before the next card tries it`);
+  if (mark.told) return mark;
+  mark.told = true;
+  autopilot.lastError = refused.notice;
+  pushAutopilotHistory("warning", refused.notice);
+  if (typeof assistantState !== "undefined" && assistantState && typeof assistantAppendReply === "function") {
+    try {
+      assistantAppendReply(refused.notice, "local", "status", { notice: true });
+      if (typeof assistantEmit === "function") assistantEmit({ at: now, kind: "notice", text: refused.notice });
+      if (typeof saveAssistant === "function") saveAssistant({ force: true }).catch(() => {});
+    } catch (error) { logLine(`[autopilot] route notice not posted: ${String(error?.message ?? error).slice(0, 160)}`); }
+  }
+  return mark;
+}
+// The park a dispatch on this route would meet, or null. Either key counts:
+// the provider (a login with no subscription) or this one model; the
+// provider's park wins, since it stops every model.
+function executorRouteParked(route) {
+  if (typeof autopilot.routeRefusals?.get !== "function") return null;
+  const now = Date.now();
+  const marks = (executorCore.refusedRoute(route)?.keys ?? []).map((key) => autopilot.routeRefusals.get(key)).filter((mark) => mark && mark.until > now);
+  return marks.find((mark) => mark.kind !== "plan") ?? marks[0] ?? null;
+}
+// A route that finished a run has its plan back: its marks go, and a later
+// refusal is news again.
+function executorRouteAnswered(route) {
+  if (typeof autopilot.routeRefusals?.delete !== "function" || !autopilot.routeRefusals.size) return;
+  for (const key of executorCore.refusedRoute(route)?.keys ?? []) autopilot.routeRefusals.delete(key);
+}
+
 // One spawn: pick, claim and launch the best ready piece of work. The
 // decisions (which card, the prompt, the command line, what an output line
 // says, how a run ended and what that writes on the card, the start budget)
@@ -16199,6 +16451,29 @@ async function spawnNextJob(options) {
   // whole pool whatever the manual or adaptive limit says.
   // Its own stop, so the wait says why instead of reading "nothing ready".
   if (runRoute.parallelCap && autopilot.jobs.length >= runRoute.parallelCap) return "freecap";
+  // A route whose provider refused this login's plan waits out its park
+  // (executorRouteRefused) as a route fault, before any claim: every card on
+  // it would only be refused again. The owner's own Start still tries it.
+  // Asked before per-task model routing (no router call for a parked route)
+  // and again after it. A park on one model ("plan") stops that model alone:
+  // routing may pick another, a routed pick of the parked one falls back to
+  // the route's default, and with neither left this card sits out the fill
+  // while the next one is tried. The owner's own pick of the parked model (a
+  // heavier retry, a subtask override) never falls back: a default run would
+  // spend the heavier retry on the model it was meant to replace, so the card
+  // sits out until the park lifts and the pick is still there then.
+  const routePark = () => (!taskStart && typeof executorRouteParked === "function" ? executorRouteParked(runRoute) : null);
+  const refusedPark = (park) => {
+    autopilot.lastError = park.notice;
+    if (autopilot.routeRefusalLogged !== park.notice) {
+      logLine(`[autopilot] executor route failed: ${park.notice}`);
+      autopilot.routeRefusalLogged = park.notice;
+    }
+    return "route";
+  };
+  const firstPark = routePark();
+  if (firstPark && !(firstPark.kind === "plan" && typeof BUILDER_MODEL_PREFIX !== "undefined" && Object.hasOwn(BUILDER_MODEL_PREFIX, String(runRoute.modelProvider ?? "")))) return refusedPark(firstPark);
+  const unrouted = { ...runRoute };
   const selectedScope = backlog.buildScope(job.ref);
   // Choose a worker model only after the task is known and before ownership
   // changes. CLI-owned accounts retain their configured/default models.
@@ -16211,6 +16486,8 @@ async function spawnNextJob(options) {
   const workShape = typeof workShapeFor === "function" ? workShapeFor(job.ref?.id) : null;
   const workKind = typeof workShape?.intent === "string" && /^[a-z]+$/.test(workShape.intent) ? `coding-${workShape.intent}` : "coding";
   let routeDecision = await routeBuilderModel(runRoute, job, { workKind, weight: workShape?.weight ?? null });
+  // Why this card runs a model routing did not choose, for the park below.
+  let ownerPick = null;
   const subtaskModel = String(subtaskSettings?.model ?? "").trim();
   // Antigravity's models are display names ("Gemini 3.1 Pro (High)"), which
   // the id pattern refused, so its subtask model was dropped without a word;
@@ -16224,10 +16501,40 @@ async function spawnNextJob(options) {
     runRoute.modelProvider = null;
     runRoute.via = `${runRoute.cli} / ${subtaskModel} · subtask override`;
     routeDecision = null;
+    ownerPick = "its subtask override names that model";
   }
   // "Try again with a heavier model": this one attempt runs the builder's
   // Heavy-tier model whatever its tier or model selection (heavyRetryRoute).
-  if (executorCore.heavyRetryPending(job.ref) && typeof heavyRetryRoute === "function" && await heavyRetryRoute(runRoute)) routeDecision = null;
+  // Without a Heavy model the deep shape steered routing's pick, which is the
+  // owner's choice as much.
+  if (executorCore.heavyRetryPending(job.ref)) {
+    if (typeof heavyRetryRoute === "function" && await heavyRetryRoute(runRoute)) routeDecision = null;
+    ownerPick = "its heavier retry asked for that model";
+  }
+  let park = routePark();
+  if (park?.kind === "plan" && runRoute.model !== unrouted.model && !ownerPick) {
+    const parked = park;
+    Object.assign(runRoute, unrouted);
+    routeDecision = null;
+    park = routePark();
+    if (!park) logLine(`[autopilot] ${parked.short} · "${assistantClip(job.title, 60)}" runs on the default ${unrouted.model} instead`);
+  }
+  if (park?.kind === "plan") {
+    // Said once per card while this park lasts: every wake runs a fill.
+    const told = park.toldCards instanceof Set ? park.toldCards : (park.toldCards = new Set());
+    if (!told.has(job.ref.id)) {
+      told.add(job.ref.id);
+      const why = ownerPick && runRoute.model !== unrouted.model ? ownerPick : "no other model is left for it";
+      logLine(`[autopilot] ${park.short} · "${assistantClip(job.title, 60)}" sits out until that model is back: ${why}`);
+    }
+  }
+  if (park?.kind === "plan" && typeof autopilot.fillReleased?.add === "function"
+    && ranked.some((candidate) => candidate.ref.id !== job.ref.id && !autopilot.fillReleased.has(candidate.ref.id))) {
+    autopilot.fillReleased.add(job.ref.id);
+    return "lost";
+  }
+  if (park) return refusedPark(park);
+  autopilot.routeRefusalLogged = null;
   const startedAt = Date.now();
   const entry = {
     mode: dispatchMode, studioMode,
@@ -16696,7 +17003,7 @@ async function spawnNextJob(options) {
     const built = executorCore.workerPrompt({
       title: job.title, taskId: job.ref.id, tasksFile: projectDataPath(TASKS_PATH), ref: job.ref, resumeCheckpoint: entry.resumeCheckpoint,
       sections: { fail: failBit, memory: memoryBit, paths: pathsBit, brain: brainHints.brief, collab: collabBit, outside: typeof outsideWork !== "undefined" ? outsideWork.briefLine(job.ref, Date.now()) : "" }, clusterBrief, tail, promptMax: EXECUTOR_PROMPT_MAX - skillInstructions.length,
-      contextPath,
+      contextPath, platform: process.platform,
       brief: (maxChars) => taskContext.buildTaskHandoff(job.ref, { tasks, maxChars, contextPath }),
     });
     job.prompt = built.jobPrompt;
@@ -16787,8 +17094,20 @@ async function spawnNextJob(options) {
     const loginHit = !ok && !userStop && !entry.sawDone && !entry.resultNote && ranOn?.account && typeof cliAccountLimitHit === "function"
       ? cliAccountLimitHit(ranOn.account, [errorMessage, lastWords]) : null;
     const accountLimit = loginHit ? cliAccountLimitNote({ ...loginHit, next: cliAccountNext(ranOn) }) : null;
+    // A provider that refused this login's plan (no active subscription, a
+    // model the plan leaves out, HTTP 402) is the route's problem: read from
+    // the same words, requeued uncharged within the same outage grace, and
+    // the route is parked with one notice to the owner (executorRouteRefused).
+    // A route that finished a run has its plan back (executorRouteAnswered).
+    const refusal = !ok && !userStop && !accountLimit && !entry.sawDone && !entry.resultNote ? executorCore.entitlementRefusal([errorMessage, lastWords]) : null;
+    const routeRefusal = refusal ? executorCore.refusedRoute(ranOn, refusal) : null;
+    if (routeRefusal && typeof executorRouteRefused === "function") {
+      try { executorRouteRefused(routeRefusal); } catch (error) { logLine(`[autopilot] route refusal not recorded: ${String(error?.message ?? error).slice(0, 160)}`); }
+    }
+    if (ok && typeof executorRouteAnswered === "function") executorRouteAnswered(ranOn);
+    const routeSaid = providerSaid || Boolean(refusal);
     const providerDown = Boolean(accountLimit) || executorCore.providerOutage({
-      said: providerSaid, streak: Number(job.ref?.providerFailures) || 0, lastAttemptAt: Number(job.ref?.lastAttempt?.at) || 0,
+      said: routeSaid, streak: Number(job.ref?.providerFailures) || 0, lastAttemptAt: Number(job.ref?.lastAttempt?.at) || 0,
       upAt: Number(autopilot.providerUpAt instanceof Map ? autopilot.providerUpAt.get(providerRoute) : 0) || 0,
     });
     // The durable record: what ran, how it ended, and the tail of what it
@@ -16871,7 +17190,7 @@ async function spawnNextJob(options) {
     try {
       if (typeof recordWorkerAttempt === "function") {
         const outcome = executorCore.attemptLedgerOutcome({ ok, userStop, startKilled: entry.startKilled === true, providerOutage: providerDown, endKind: entry.endKind,
-          spoke: entry.spoke === true, ageMs: attemptDurationMs }, { providerSaid, errorMessage, lastWords });
+          spoke: entry.spoke === true, ageMs: attemptDurationMs }, { providerSaid: routeSaid, errorMessage, lastWords });
         // The route that actually ran: a CLI that fell back to OpenCode did no
         // work, so its verdict belongs to the fallback's model.
         // A Codex app-server run reported its token use (codex-harness facade).
@@ -16945,7 +17264,7 @@ async function spawnNextJob(options) {
       // stop with saved progress, an uncharged start-kill or outage requeue,
       // or a charged failure on its backoff (executorCore.settleAttemptRow).
       board.tasks[board.tasks.indexOf(task)] = executorCore.settleAttemptRow(task,
-        { ok, userStop, providerOutage: providerDown, providerSaid, accountLimit, code, errorMessage, lastWords, attempt, run: entry, scopeHeal, queuedJob },
+        { ok, userStop, providerOutage: providerDown, providerSaid: routeSaid, accountLimit, routeRefusal, code, errorMessage, lastWords, attempt, run: entry, scopeHeal, queuedJob },
         { now: Date.now(), maxHandoffs: EXECUTOR_MAX_HANDOFFS, startGrace: EXECUTOR_START_FAILURE_GRACE, clip: assistantClip });
       if (ok) board.requests = executorCore.releaseInboxCopies(board.requests, task.title, workTitleKey);
       return { settled: true };
@@ -20410,6 +20729,11 @@ function registerIpc() {
     report("quick", { verdict: first.verdict, reason: first.reason });
     let plan = null;
     let sized = first.verdict === "one" ? "one" : "unsized";
+    // Why a request stayed one card when the lead did not say so: "timeout",
+    // "no-answer" (no lead model, or its call failed), "too-many" (more steps
+    // than a plan may hold), "unusable" or "error". The sized step carries it,
+    // so the page never says the lead chose one task when sizing failed.
+    let kept = null;
     if (first.verdict === "maybe") {
       try {
         const board = await (await getEyes()).readJson(TASKS_PATH, []);
@@ -20420,14 +20744,22 @@ function registerIpc() {
         const parsed = result?.ok ? requestSizing.parseBreakdown(result.text) : null;
         if (parsed?.size === "steps") { plan = parsed; sized = "steps"; }
         else if (parsed?.size === "one") sized = "one";
-        else assistantLog("control", `sizing kept it one card: ${result?.ok ? "the reply could not be used" : assistantClip(result?.error || "no model answered", 120)}`);
+        else {
+          const planned = (() => {
+            try { const body = String(result?.text ?? ""); const steps = JSON.parse(body.slice(body.indexOf("{"), body.lastIndexOf("}") + 1))?.steps; return Array.isArray(steps) ? steps.length : 0; } catch { return 0; }
+          })();
+          kept = !result?.ok ? (result?.errorKind === "timeout" || /\btim(?:ed|e) ?out\b|\btimeout\b|\babort/i.test(String(result?.error ?? "")) ? "timeout" : "no-answer")
+            : planned > requestSizing.LIMITS.steps.max ? "too-many" : "unusable";
+          assistantLog("control", `sizing kept it one card: ${kept === "too-many" ? `the lead planned ${planned} steps, more than ${requestSizing.LIMITS.steps.max}` : result?.ok ? "the reply could not be used" : assistantClip(result?.error || "no model answered", 120)}`);
+        }
       } catch (error) {
+        kept = "error";
         logError(`sizing failed: ${error.message}`);
       }
       // Step titles and which earlier steps each waits on, by position.
       report("sized", plan
         ? { size: "steps", summary: plan.summary, steps: plan.steps.map((step) => ({ title: step.title, after: step.dependsOn.map((id) => plan.steps.findIndex((row) => row.id === id)).filter((index) => index >= 0) })) }
-        : { size: sized === "one" ? "one" : "kept" });
+        : sized === "one" ? { size: "one" } : { size: "kept", why: kept ?? "unusable" });
     }
     report("adding");
     const created = await composerTask({ title: String(title ?? "").trim() || text.split(/\r?\n/)[0].slice(0, 180), prompt: text, projectId, intake: plan, ideaId, ideaIds });
@@ -22040,6 +22372,8 @@ function registerIpc() {
     return { ok: true, status: releaseStatus() };
   });
   ipcMain.handle("release:apply", async () => applyReleaseUpdate());
+  ipcMain.handle("release:rollback", async () => releaseRollback());
+  ipcMain.handle("boot:healthy", async () => bootHealthy("renderer"));
 
   // ---- Community ----------------------------------------------------------
   // The Void Engine Discord link (the "Discord community link" block beside
@@ -22654,6 +22988,7 @@ async function captureTabs() {
 
 app.whenReady().then(() => {
   registerIpc();
+  bootHealthStart();
   if (process.argv.includes("--set-key")) {
     (async () => {
       const key = process.env.MEFI_STUDIO_KEY;
@@ -22926,6 +23261,7 @@ app.whenReady().then(() => {
   if (!SMOKE && !CAPTURE && !CLI_MODE) setTimeout(() => { remoteApply(); }, 20000).unref?.();
   if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => announceRestart().catch(() => {}));
   if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => announceRelease().catch(() => {}));
+  if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => bootHealthWatch());
   // The assistant service runs on its own clock, renderer or not; the smoke
   // exercises its keyless path, the capture tour never needs it.
   if (!CAPTURE && !CLI_MODE) setTimeout(() => startAssistant().catch((error) => logLine(`[assistant] start failed: ${error?.message ?? error}`)), 1500);

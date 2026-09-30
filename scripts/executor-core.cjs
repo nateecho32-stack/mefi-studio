@@ -90,11 +90,14 @@ function idleStopReason({ open, tasks, now, autoBuild, approve = null, taskStart
 // any structured result it prints) names the attempt it belongs to; the
 // hand-off and call protocol, or at the depth limit the order to stop handing
 // off; the owner-question line, so a decision the run cannot make reaches the
-// owner while it keeps working; the budget warning; the optional MEFI_RESULT
-// line, whose owner: part is the lane for what only the owner can do (it is
-// neither work this task owes, remaining:, nor a hand-off, MEFI_NEXT); and the
-// verdict sentinel. `opencode run` exits 1 even on a clean run, so the
-// sentinel, not the exit code, is the success signal.
+// owner while it keeps working; the budget warning; the MEFI_RESULT line,
+// required on every run (Studio queues its verification check from a done:
+// report, and a run on a CLI that leaves no session, Claude Code, Codex, Grok
+// or Antigravity, cannot be verified without it), whose owner: part is the
+// lane for what only the owner can do (it is neither work this task owes,
+// remaining:, nor a hand-off, MEFI_NEXT); and the verdict sentinel, the one
+// last line (MEFI_RESULT comes before it). `opencode run` exits 1 even on a
+// clean run, so the sentinel, not the exit code, is the success signal.
 function promptTail({ runId, taskId, depth = 0, maxDepth, maxHandoffs, nextMark, callMark, budgetMinutes, doneMark, protocol = "" }) {
   const handoff =
     depth < maxDepth
@@ -109,14 +112,25 @@ function promptTail({ runId, taskId, depth = 0, maxDepth, maxHandoffs, nextMark,
   // The Agent Brain's step, help and report lines (agent-brain-host.cjs); they
   // ride the tail because a truncated protocol line is worse than none.
   const brainLine = protocol ? ` ${String(protocol).replace(/["\r\n]+/g, " ").trim().slice(0, 700)}` : "";
-  const tail = `${identity}${brainLine} Keep verification and board bookkeeping in the current task. Never create a child task merely to close, update, verify or confirm another card. Report evidence and actual remaining implementation scope on this attempt instead; hand off only substantive unfinished work.${handoff}${askLine}${budget} Optionally print one line "MEFI_RESULT: done: <what you finished>; remaining: <what this task still owes, or none>; owner: <what only the owner can do, or leave it out>" naming your own account of the work (one line, under 300 characters). A concrete human decision, missing access or physical action goes under owner:, never under remaining: or MEFI_NEXT. Routine repairs, failing checks and concurrent-file or test-history conflicts stay under remaining: until resolved. Preserve other sessions' work and use the repository's documented test-history tools. Studio owns board updates; report the evidence and let the host reconcile the task. Print the exact line ${doneMark} as the last thing you say.`;
+  const tail = `${identity}${brainLine} Keep verification and board bookkeeping in the current task. Never create a child task merely to close, update, verify or confirm another card. Report evidence and actual remaining implementation scope on this attempt instead; hand off only substantive unfinished work.${handoff}${askLine}${budget} Every run must print one line "MEFI_RESULT: done: <what you finished>; remaining: <what this task still owes, or none>; owner: <what only the owner can do, or leave it out>" before the last line, naming your own account of the work (under 300 characters): Studio checks your work from it, and a run without it cannot be verified. A concrete human decision, missing access or physical action goes under owner:, never under remaining: or MEFI_NEXT. Routine repairs, failing checks and concurrent-file or test-history conflicts stay under remaining: until resolved. Preserve other sessions' work and use the repository's documented test-history tools. Studio owns board updates; report the evidence and let the host reconcile the task. Print the exact line ${doneMark} as the last thing you say.`;
   return tail;
 }
 
 // What every builder is told about the folder, previews and the shared git
 // index. A selected project may be a brand-new folder, so the Git guidance
 // must not invent a commit obligation or an owner blocker for that case.
-const INSTRUCTIONS = " Work in the project folder at the current directory. Make the edits, do not just describe them. When done, run the narrowest relevant test. For browser apps, leave a root index.html or a working package preview/dev/start script for Studio Preview. Save and test the app, then finish the builder task; Studio owns the preview server separately. Do not launch a long-running foreground or background preview server from a builder tool, or wait on one to report completion. Determine whether the project is a Git working tree before applying Git instructions. In a Git working tree, other Studio sessions share its index: commit with one atomic path-limited command (`git commit -m <msg> -- <your files>`), never `git add` followed by a plain `git commit`, `git commit -a`, or `git add -A`, and leave nothing staged when you finish — a bare commit sweeps whatever another session staged into your commit. Preserve any commit requirement in the task or project instructions. If no Git working tree exists and neither the task nor project instructions require a commit, finish and verify normally: do not initialize Git or create follow-up work just to satisfy this generic guidance. Missing Git alone is then informational: mention it only in the ordinary result summary, never in MEFI_ASK, remaining: or owner:. If a commit is explicitly required, retain that obligation and report any actual blocker.".replace(/["\r\n]+/g, " ");
+// Workers never publish: a project's own agent notes may say to push or run
+// `npm run sync` (this repository's AGENTS.md does), and a worker reads them,
+// so the rule names both and says it wins; Studio and the owner land work.
+// Workers given a one-line task filled its gaps with invented commands, env
+// vars and package names, and built roadmap items without reading the plan
+// docs. An unknown detail is looked for first; one only the owner can supply
+// is theirs (MEFI_ASK or owner:), and remaining: is work this task can still do.
+const INSTRUCTIONS = " Work in the project folder at the current directory. Make the edits, do not just describe them. When done, run the narrowest relevant test. For browser apps, leave a root index.html or a working package preview/dev/start script for Studio Preview. Save and test the app, then finish the builder task; Studio owns the preview server separately. Do not launch a long-running foreground or background preview server from a builder tool, or wait on one to report completion. Determine whether the project is a Git working tree before applying Git instructions. In a Git working tree, other Studio sessions share its index: commit with one atomic path-limited command (`git commit -m <msg> -- <your files>`), never `git add` followed by a plain `git commit`, `git commit -a`, or `git add -A`, and leave nothing staged when you finish — a bare commit sweeps whatever another session staged into your commit. Preserve any commit requirement in the task or project instructions. If no Git working tree exists and neither the task nor project instructions require a commit, finish and verify normally: do not initialize Git or create follow-up work just to satisfy this generic guidance. Missing Git alone is then informational: mention it only in the ordinary result summary, never in MEFI_ASK, remaining: or owner:. If a commit is explicitly required, retain that obligation and report any actual blocker. Never push, pull, merge or sync branches, and never run `git push` or `npm run sync`, even where project instructions say to: Studio and the owner land the work. Do not invent names, commands, env vars, packages or API details not in the repository, the task or a source you read. Look for them first; if only the owner has one, use MEFI_ASK or owner:; remaining: is only for work this task can still do. Before building an item from a roadmap or plan, look for its plan in the project's docs (docs/ when there is one) and follow it.".replace(/["\r\n]+/g, " ");
+// A worker on Windows may be in PowerShell (OpenCode and Codex are), where
+// `head` and `tail` do not exist. Only Windows runs are told (workerPrompt's
+// `platform`); the line is conditional because Claude Code runs Git Bash there.
+const WINDOWS_SHELL = " If your shell is PowerShell, use Select-Object -First N or -Last N instead of head or tail.";
 
 // The whole prompt, budgeted piecewise against `promptMax`. The tail carries
 // the verdict sentinel, so it is budgeted first: slicing the whole string
@@ -129,10 +143,11 @@ const INSTRUCTIONS = " Work in the project folder at the current directory. Make
 // decorations and cut the later obligations, so a run could declare success
 // on a job it had only partly read. `brief(maxChars)` renders the saved
 // record (taskContext.buildTaskHandoff); it is the caller's, so a malformed
-// record throws out of here and the caller releases the claim. Returns the
-// prompt and the brief it carries (`jobPrompt`, which the caller keeps as the
-// job's prompt).
-function workerPrompt({ title, taskId, tasksFile, ref, resumeCheckpoint = null, sections = {}, clusterBrief = "", tail, promptMax, brief, contextPath = null }) {
+// record throws out of here and the caller releases the claim. `platform` is
+// the host's process.platform: a Windows run also gets the PowerShell line.
+// Returns the prompt and the brief it carries (`jobPrompt`, which the caller
+// keeps as the job's prompt).
+function workerPrompt({ title, taskId, tasksFile, ref, resumeCheckpoint = null, sections = {}, clusterBrief = "", tail, promptMax, brief, contextPath = null, platform = null }) {
   const titleBit = `${title}. `.replace(/["\r\n]+/g, " ");
   const failFlat = flat(sections.fail, 240);
   // Work done outside Studio that touches this card (outside-work.cjs briefLine).
@@ -145,9 +160,10 @@ function workerPrompt({ title, taskId, tasksFile, ref, resumeCheckpoint = null, 
   const resumeBrief = executorResume.brief({ ...ref, runProgress: resumeCheckpoint });
   const resumeFlat = resumeBrief ? ` ${resumeBrief}\n\n` : "";
   const tailFlat = tail.replace(/["\r\n]+/g, " ");
+  const instructions = platform === "win32" ? `${INSTRUCTIONS}${WINDOWS_SHELL}` : INSTRUCTIONS;
   const promptBudget = Math.max(
     240,
-    promptMax - tailFlat.length - INSTRUCTIONS.length - titleBit.length - failFlat.length - outsideFlat.length - memoryFlat.length - pathsFlat.length - brainFlat.length - collabFlat.length - clusterFlat.length - resumeFlat.length - 8,
+    promptMax - tailFlat.length - instructions.length - titleBit.length - failFlat.length - outsideFlat.length - memoryFlat.length - pathsFlat.length - brainFlat.length - collabFlat.length - clusterFlat.length - resumeFlat.length - 8,
   );
   // The durable brief carries prior findings and successful prerequisite
   // outputs into the next worker instead of restarting from a short title.
@@ -156,7 +172,7 @@ function workerPrompt({ title, taskId, tasksFile, ref, resumeCheckpoint = null, 
   const recovery = contextPath ? "" : `Full saved task context: read ${JSON.stringify(tasksFile)}, find task id ${JSON.stringify(taskId)}. Read that record and its members whenever the brief is excerpted or grouped; contextHistory contains earlier requirements and attempts. Do not rewrite Studio's task store from the worker.\n\n`;
   const jobPrompt = recovery + brief(Math.max(1000, promptBudget - recovery.length));
   const body = String(jobPrompt ?? "").slice(0, promptBudget);
-  const head = `${titleBit}${resumeFlat}${body}${outsideFlat}${failFlat}${memoryFlat}${pathsFlat}${brainFlat}${collabFlat}${clusterFlat}${INSTRUCTIONS}`;
+  const head = `${titleBit}${resumeFlat}${body}${outsideFlat}${failFlat}${memoryFlat}${pathsFlat}${brainFlat}${collabFlat}${clusterFlat}${instructions}`;
   return { prompt: `${head}${tailFlat}`, jobPrompt, budget: promptBudget };
 }
 
@@ -242,6 +258,82 @@ function readableRunError(text, tail = []) {
   return value;
 }
 
+// A provider that answered and refused this login's plan: OpenCode Go's "An
+// active OpenCode Go subscription is required to use Go models", a plan that
+// leaves the model out, an HTTP 402. The same route will refuse every retry and
+// the card did nothing wrong, so it is a route problem: settle requeues the
+// card uncharged on the outage backoff (settleAttemptRow's `routeRefusal`),
+// and the host parks the route and tells the owner once (main.cjs
+// executorRouteRefused). The host reads only the run's own error and last
+// words, as it does for an outage, and the outage grace still bounds a misread.
+// Only a CLI's error line is read ("Error:" or "API Error:" opening it), or
+// OpenCode Go's own sentence: a worker's prose and a test's output name plans,
+// subscriptions and 402s too. A 402 must lead the error, or come as the
+// provider's "402 Payment Required" or payment_required.
+// "plan": the plan leaves out this model (parked alone); "subscription" and
+// "payment": the login itself (its provider is parked).
+const REFUSAL_ERROR = /^\s*(?:API )?error:\s*/i;
+const REFUSAL_SAID = /\bAn active OpenCode Go subscription is required\b/;
+const ENTITLEMENT_REFUSAL = [
+  ["plan", /\bnot (?:included|available) (?:in|on|with) your (?:current )?(?:plan|subscription|tier)\b/i],
+  ["subscription", /\bsubscription (?:is )?required\b/i],
+  ["subscription", /\brequires? an? (?:active |paid |valid )?(?:[\w.-]+ ){0,3}?subscription\b/i],
+  ["subscription", /\bno active (?:[\w.-]+ ){0,3}?subscription\b/i],
+  ["payment", /^(?:HTTP(?:\/[\d.]+)?\s*|status(?: code)?[\s:=]*)?402\b|\b402 Payment Required\b|\bpayment_required\b/i],
+];
+function entitlementRefusal(texts) {
+  for (const text of Array.isArray(texts) ? texts : [texts]) {
+    if (text == null) continue;
+    const line = String(text).replace(COLOUR, "");
+    const error = REFUSAL_ERROR.exec(line);
+    if (!error && !REFUSAL_SAID.test(line)) continue;
+    const said = error ? line.slice(error[0].length) : line;
+    const hit = ENTITLEMENT_REFUSAL.find(([, pattern]) => pattern.test(said));
+    if (hit) return { kind: hit[0], line: flat(line, 200).trim() };
+  }
+  return null;
+}
+
+// Which route a refusal is about, in the owner's words. An OpenCode run names
+// its model on the command line (--model provider/model), and the provider
+// prefix names the plan; any other builder is its CLI, one login at a time.
+// `key` is what the host parks: the provider for a subscription or payment
+// refusal (it covers every model the login lists), the model alone when the
+// plan leaves out only that one. `keys` are both, for the dispatch check.
+const REFUSED_NAMES = {
+  "opencode-go": ["OpenCode Go", "Go"], opencode: ["OpenCode Zen", "Zen"], "mefi-zai": ["z.ai", "coding plan"], "zai-coding-plan": ["z.ai", "coding plan"],
+  openrouter: ["OpenRouter", ""], claude: ["Claude Code", "Claude"], codex: ["Codex", "ChatGPT"], grok: ["Grok", ""], antigravity: ["Antigravity", ""],
+};
+const REFUSAL_FIX = "Pick another coding model in Agents › Setup › Team & models, or renew the plan.";
+function refusedRoute(route, refusal = null) {
+  if (!route || typeof route !== "object") return null;
+  const cli = ["grok", "claude", "codex", "antigravity"].includes(route.cli) ? route.cli : "opencode";
+  const model = cli === "opencode" ? (/--model\s+(\S+)/.exec(String(route.modelArgs ?? ""))?.[1] || String(route.model ?? "").trim()) : String(route.model ?? "").trim();
+  const prefix = cli === "opencode" ? (model.includes("/") ? model.split("/")[0] : "") : cli;
+  const login = cli !== "opencode" && route.account?.id ? `:${route.account.id}` : "";
+  const providerKey = `${prefix || "opencode-default"}${login}`;
+  const modelKey = model ? `${providerKey}|${model}` : providerKey;
+  const [name, plan] = REFUSED_NAMES[prefix] ?? (prefix ? [prefix, ""] : ["OpenCode", ""]);
+  const shown = model ? model.replace(/^[^/]*\//, "") : "";
+  const kind = refusal?.kind ?? "subscription";
+  const short = kind === "plan" ? `${name} says ${shown || "this model"} is not included in this login's plan`
+    : kind === "payment" ? `${name} says this login's plan or credit has run out`
+      : `${name} says this login has no active ${plan ? `${plan} ` : ""}subscription`;
+  return { key: kind === "plan" ? modelKey : providerKey, keys: [...new Set([modelKey, providerKey])], kind, name, model: model || null, short, notice: `${short}. ${REFUSAL_FIX}`, said: refusal?.line ?? null };
+}
+
+// How long a refused route is parked: the outage ladder (5m doubling) held to
+// half an hour, so a renewed plan is tried again soon.
+function routeParkMs(streak) {
+  return Math.min(30 * MINUTE_MS, providerCooldownMs(streak));
+}
+// Whether a card waits only on the backoff a refused plan left it (settle's
+// `refusedUntil` stamp, still the card's nextRunAt): the owner's own Start
+// does not wait it out.
+function refusalWait(task) {
+  return Number(task?.refusedUntil) > 0 && Number(task.refusedUntil) === Number(task.nextRunAt);
+}
+
 // The card one finished attempt leaves behind: its settle state machine. The
 // caller has already fenced ownership (the row still names this run) inside
 // its board transaction and writes the returned row back there; `task` itself
@@ -249,14 +341,17 @@ function readableRunError(text, tail = []) {
 // handoffs, declinedHandoffs, resultNote, ownerHold, resumeRequested,
 // startKilled), `attempt` its evidence record, `scopeHeal` the card's
 // re-anchored file scope, and `queuedJob` the overseer verification the
-// caller queued for a done report. `clip` is the host's title clipper.
+// caller queued for a done report. `routeRefusal` is refusedRoute's reading
+// of a provider that refused this login's plan. `clip` is the host's title
+// clipper.
 function settleAttemptRow(task, outcome, { now, maxHandoffs, startGrace, clip }) {
-  const { ok, userStop = false, providerOutage: outage = false, providerSaid = false, code, errorMessage = null, lastWords = null, attempt, run, scopeHeal = null, queuedJob = null, accountLimit = null } = outcome;
+  const { ok, userStop = false, providerOutage: outage = false, providerSaid = false, code, errorMessage = null, lastWords = null, attempt, run, scopeHeal = null, queuedJob = null, accountLimit = null, routeRefusal = null } = outcome;
   const row = { ...task };
   row.updatedAt = now;
   if (!userStop) row.lastAttempt = attempt;
   delete row.runProgress;
   delete row.claimFailures; // a worker launched: the pre-launch streak is over
+  delete row.refusedUntil;
   // The card's saved files/file must name files that exist. Unresolvable
   // entries stay as saved (and visible in the log): nothing is dropped silently.
   if (scopeHeal?.changed) {
@@ -351,9 +446,15 @@ function settleAttemptRow(task, outcome, { now, maxHandoffs, startGrace, clip })
       delete row.nextRunAt;
       executorResume.appendLog(row, `provider unavailable (exit ${code ?? "?"}) · ${accountLimit.tag} topped out until ${accountLimit.until} · requeued now ${accountLimit.next ? `on ${accountLimit.next}` : "for the next route"}, no attempt charged`, { at: now });
     } else {
+      // A provider that refused this login's plan waits on the outage
+      // backoff too, and the card says why in the owner's words. The wait is
+      // stamped as the refusal's (`refusedUntil`), so the owner's own Start
+      // can try the renewed plan at once (main.cjs assistantWorkOn).
+      if (routeRefusal?.short) row.lastRunError = String(routeRefusal.short).slice(0, 160);
       row.providerFailures = (Number(row.providerFailures) || 0) + 1;
       const cooldown = providerCooldownMs(row.providerFailures);
       row.nextRunAt = now + cooldown;
+      if (routeRefusal) row.refusedUntil = row.nextRunAt;
       executorResume.appendLog(row, `provider unavailable (exit ${code ?? "?"}) · ${row.lastRunError} · requeued in ${Math.round(cooldown / 60000)}m, no attempt charged`, { at: now });
     }
   } else {
@@ -775,6 +876,7 @@ module.exports = {
   promptTail,
   workerPrompt,
   INSTRUCTIONS,
+  WINDOWS_SHELL,
   failureBackoffMs,
   startKillCooldownMs,
   providerCooldownMs,
@@ -782,6 +884,10 @@ module.exports = {
   classifyRunEnd,
   attemptLedgerOutcome,
   readableRunError,
+  entitlementRefusal,
+  refusedRoute,
+  routeParkMs,
+  refusalWait,
   settleAttemptRow,
   releaseInboxCopies,
   saidLine,

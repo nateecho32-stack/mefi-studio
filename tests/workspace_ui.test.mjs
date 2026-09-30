@@ -875,6 +875,45 @@ test("Home ages a quiet worker's last update without replacing its task card", a
   assert.match(env.el("work-list").textContent, /Updated 1m ago/);
 });
 
+// Stop all ends every run in flight, so it asks first like Command's and the
+// Explorer's, and it reports what the host answered: `stopped` counts kill
+// requests, and `idle: false` means a worker outlived the host's wait.
+test("Stop all asks first and reports a worker that is still finishing", async () => {
+  const calls = [], questions = [];
+  let answer = false;
+  const env = await environment({
+    bridgeOverrides: { assistantControl: async (action) => { calls.push(action); return { ok: true, stopped: 2, idle: false, state: { status: "paused" }, autopilot: { running: [] } }; } },
+    windowOverrides: { MefiConfirm: async (question, options) => { questions.push([question, options?.label]); return answer; } },
+  });
+  await env.el("stop-all").trigger("click"); await flush();
+  assert.equal(questions.length, 1);
+  assert.equal(questions[0][1], "Stop all");
+  assert.deepEqual(calls, [], "a declined question stops nothing");
+  answer = true;
+  await env.el("stop-all").trigger("click"); await flush();
+  assert.deepEqual(calls, ["stop-all"]);
+  assert.match(env.el("feedback").textContent, /Asked 2 agent\(s\) to stop, but a run is still finishing/);
+  assert.doesNotMatch(env.el("feedback").textContent, /^Stopped/);
+});
+
+// Restart stops every agent before it relaunches, so it asks first too.
+test("Restart asks first: no restarts nothing, yes restarts once with the agents stopped", async () => {
+  const calls = [], questions = [];
+  let answer = false;
+  const env = await environment({
+    bridgeOverrides: { appRestart: async (options) => { calls.push(JSON.stringify(options)); return { ok: true }; } },
+    windowOverrides: { MefiConfirm: async (question, options) => { questions.push([question, options?.label]); return answer; } },
+  });
+  await env.el("restart").trigger("click"); await flush();
+  assert.deepEqual(questions.map(([, label]) => label), ["Restart"]);
+  assert.deepEqual(calls, [], "a declined question restarts nothing");
+  answer = true;
+  await env.el("restart").trigger("click"); await flush();
+  assert.equal(questions.length, 2);
+  assert.deepEqual(calls, ['{"stopAgents":true}']);
+  assert.match(env.el("feedback").textContent, /Stopping agents, then restarting Studio/);
+});
+
 test("one pause control holds all new work and resumes through start-work", async () => {
   const calls = [];
   const env = await environment({ bridgeOverrides: {

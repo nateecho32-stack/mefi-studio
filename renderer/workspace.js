@@ -701,12 +701,20 @@
   // park new dispatch until the operator resumes.
   async function stopAllAgents() {
     if (!api()?.assistantControl || state.switching || state.busyAction) return;
+    // It ends every run in flight, so it asks first, as Command's and the
+    // Explorer's Stop all do. The More menu closes on any press, so the
+    // question is the confirm toast rather than an armed button.
+    if (!(await confirmAction("Stop every running agent now? Each run's progress is saved and its work stays queued; new work stays off until you resume.", "Stop all"))) return;
+    if (state.switching || state.busyAction) return;
     state.busyAction = "stop-all"; controls();
     feedback("Stopping every agent and saving progress…");
     try {
       const result = guard(await api().assistantControl("stop-all"));
+      // `stopped` counts kill requests; `idle: false` means a worker was
+      // still alive when the host stopped waiting, so it is not "stopped".
       const stopped = Number(result.stopped) || 0;
-      feedback(stopped ? `Stopped ${stopped} agent(s). Progress saved; their work stays queued.` : "No agents were running. New work is off.");
+      if (result.idle === false) feedback(`${stopped ? `Asked ${stopped} agent(s) to stop` : "New work is off"}, but a run is still finishing. Progress is saved; check Activity in a moment.`);
+      else feedback(stopped ? `Stopped ${stopped} agent(s). Progress saved; their work stays queued.` : "No agents were running. New work is off.");
       await refresh(true);
     } catch (error) { feedback(error.message, true); }
     finally { state.busyAction = null; controls(); }
@@ -715,6 +723,8 @@
   // relaunch. Studio comes back paused; Resume starts work again.
   async function restartStudio() {
     if (!api()?.appRestart || state.switching || state.busyAction) return;
+    if (!(await confirmAction("Restart Studio? Every agent stops first and its progress is saved; Studio comes back paused.", "Restart"))) return;
+    if (state.switching || state.busyAction) return;
     state.busyAction = "restart"; controls();
     feedback("Stopping agents, then restarting Studio…");
     try {

@@ -2144,6 +2144,10 @@
     let launch = null;
     const choose = window.MefiStartup?.choose ? async (context) => { launch = await window.MefiStartup.choose(context); return launch; } : null;
     const relaunch = () => Boolean(launch?.changed);
+    // The shell's scripts ran to the point of starting: tell the host, which
+    // an installing update helper is waiting to hear from (main.cjs "Release
+    // updates: the safety net"). Idempotent, and a failure is nothing to act on.
+    Promise.resolve(window.mefiStudio?.bootHealthy?.()).catch(() => {});
     window.MefiBoot.run([
       { id: "workspace", label: "Your projects and work", load: (context) => { const retry = context.retry || relaunch(); return window.MefiWorkspace?.ready?.({ retry }); } },
       { id: "catalog", label: "Model catalog", load: paintCatalog },

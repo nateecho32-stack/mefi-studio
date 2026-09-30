@@ -214,6 +214,20 @@ test("answering with dismiss marks the question without replying", async () => {
   assert.deepEqual(h.backlog, []);
 });
 
+test("an automatic answer never leaves an owner-only ask for review, and a dismissal says who closed it", async () => {
+  const h = questionHost();
+  const owner = h.env.assistantQuestion({ title: "Needs something only you can do: merge/push decision", context: { issueKind: "owner", taskId: "t1" },
+    options: [{ id: "acknowledge", label: "I'll take care of it" }, { id: "hold", label: "Leave it for review", dismiss: true }] });
+  const refused = await h.env.assistantAnswer({ id: owner.id, optionId: "hold", origin: "delegate", by: "desk" });
+  assert.equal(refused.ok, false);
+  assert.equal(h.state.questions.find((row) => row.id === owner.id).status, "open", "the owner still sees it");
+  const other = h.env.assistantQuestion({ title: "Queue it?", context: { issueKind: "conflict" }, options: [{ id: "hold", label: "Leave it for review", dismiss: true }] });
+  assert.equal((await h.env.assistantAnswer({ id: other.id, optionId: "hold", origin: "delegate", by: "desk" })).ok, true);
+  assert.deepEqual([h.state.questions.find((row) => row.id === other.id).answer.via, h.state.questions.find((row) => row.id === other.id).answer.by], ["desk", "desk"]);
+  assert.equal((await h.env.assistantAnswer({ id: owner.id, optionId: "hold" })).ok, true, "the owner's own click still closes it");
+  assert.equal(h.state.questions.find((row) => row.id === owner.id).answer.via, "option");
+});
+
 test("a written answer or a reply option goes through the chat path", async () => {
   const h = questionHost();
   const first = h.env.assistantQuestion({ title: "Which one?", options: [{ id: "a", label: "Fix the renderer", reply: "work on \"Fix the renderer\"" }] });

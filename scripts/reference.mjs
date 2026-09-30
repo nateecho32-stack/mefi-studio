@@ -5,7 +5,8 @@
 //   node tree - live sessions whose titles/keywords match
 //   chats     - recent idea lines from sessions
 //   pngs      - newest evidence images from tools/logs
-//   web       - optional DuckDuckGo lookup (toggle, off by default)
+//   web       - optional search through agentTools.search: Bing RSS, or Brave
+//               with BRAVE_SEARCH_API_KEY (the useWeb toggle, off by default)
 // Everything is grouped for the reference menu; the UI decides what to show.
 
 import { fileURLToPath } from "node:url";

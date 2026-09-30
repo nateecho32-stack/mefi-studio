@@ -700,15 +700,30 @@
       const li = document.createElement("li");
       li.append(Object.assign(document.createElement("span"), { className: `src-tag ${entry.status === "healthy" ? "improver" : "fix"}`, textContent: entry.status.toUpperCase() }));
       li.append(document.createTextNode(` pid ${entry.pid} · ${entry.ageMinutes}m · ${entry.memMB}MB`));
-      const killButton = document.createElement("button");
-      killButton.className = "ghost mini";
-      killButton.textContent = "×";
-      killButton.title = "Kill this run";
-      li.append(arm(killButton, async (event) => {
-        event?.stopPropagation?.();
-        await window.mefiStudio?.machineKill?.(entry.pid);
-        window.MefiToast?.(`kill sent for pid ${entry.pid}`, "bad");
-      }, "Stop this run?"));
+      // machine:kill stops LOVE test runs only (a test row, or one the scan
+      // marked killable) and refuses anything else, so only those get the ×,
+      // and the toast says what the host answered, not that a kill went out.
+      if ((entry.test || entry.killable) && window.mefiStudio?.machineKill) {
+        const killButton = document.createElement("button");
+        killButton.className = "ghost mini";
+        killButton.textContent = "×";
+        killButton.title = "Stop this test run";
+        killButton.setAttribute?.("aria-label", `Stop test run ${entry.pid}`);
+        const refused = (error) => {
+          const fallback = `test run ${entry.pid} could not be stopped`;
+          window.MefiToast?.(window.MefiUi?.plainError?.(error, fallback) ?? (typeof error === "string" && error ? error : fallback), "bad");
+        };
+        li.append(arm(killButton, async (event) => {
+          event?.stopPropagation?.();
+          try {
+            const result = await window.mefiStudio.machineKill(entry.pid);
+            if (result?.ok) window.MefiToast?.(`stopping test run ${entry.pid}`, "info");
+            else refused(result?.error);
+          } catch (error) {
+            refused(error);
+          }
+        }, "Stop this test run?"));
+      }
       els.machineList.append(li);
     }
     for (const holder of status?.leases?.holders ?? []) {
@@ -1034,8 +1049,11 @@
         const overseer = service.overseer;
         status(overseer?.lastSummary ? `overseer · ${overseer.lastSummary}` : "overseer review queued");
       } else if (action === "stop-all") {
+        // `stopped` counts kill requests; `idle: false` means a worker was
+        // still alive when the host stopped waiting.
         const stopped = Number(result.stopped) || 0;
-        status(stopped ? `stopped ${stopped} agent(s) · progress saved, work stays queued` : "no agents were running · new work is off");
+        if (result.idle === false) status(`${stopped ? `asked ${stopped} agent(s) to stop` : "new work is off"} · a run is still finishing · progress saved`);
+        else status(stopped ? `stopped ${stopped} agent(s) · progress saved, work stays queued` : "no agents were running · new work is off");
       } else status(`assistant ${service.status ?? action}`);
     } catch (error) {
       status(`${action} failed · ${String(error?.message ?? error)}`, true);

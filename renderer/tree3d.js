@@ -2172,24 +2172,64 @@
         buildGraph([], [], { status: "desktop-only", text: "desktop mode only", stats: "desktop mode only" });
         return;
       }
-      const result = await read("eyesState", fresh ? { fresh: true } : undefined);
+      // A refused IPC read is an offline store like any {ok:false} answer:
+      // it draws the offline card and queues the retry below.
+      let result;
+      try {
+        result = await read("eyesState", fresh ? { fresh: true } : undefined);
+      } catch (error) {
+        result = { ok: false, error: String(error?.message ?? error) };
+      }
       if (seq !== loadSeq) return;
       loadResult(result);
     })();
     return readyPromise;
   }
 
+  // A store that could not be read is asked again on its own, 5 s doubling to
+  // a minute, until it answers: nothing else may ever push (no activity comes
+  // from a store the host cannot read either), and the Command hint, the pills
+  // and the empty card all wait on this status. A healthy store costs nothing
+  // here, and any answer (a push, a project switch, Retry) resets the ladder.
+  const RETRY_MIN_MS = 5000;
+  const RETRY_MAX_MS = 60000;
+  let retryTimer = null;
+  let retryDelay = 0;
+  function scheduleRetry() {
+    if (retryTimer || typeof setTimeout !== "function") return;
+    retryDelay = retryDelay ? Math.min(RETRY_MAX_MS, retryDelay * 2) : RETRY_MIN_MS;
+    retryTimer = setTimeout(() => {
+      retryTimer = null;
+      if (status !== "unavailable") return;
+      // A hidden window climbs the ladder instead of reading for nobody.
+      if (document.hidden) scheduleRetry();
+      else load().catch(() => {});
+    }, retryDelay);
+    // A Node test harness must not be held open by the ladder.
+    retryTimer?.unref?.();
+  }
+  function clearRetry() {
+    retryDelay = 0;
+    if (retryTimer != null && typeof clearTimeout === "function") clearTimeout(retryTimer);
+    retryTimer = null;
+  }
+  function storeOffline(error) {
+    lastRead = null;
+    storeNote = null;
+    buildGraph([], [], {
+      status: "unavailable",
+      text: error ? `store unavailable · ${error}` : "store unavailable",
+      stats: "store offline",
+    });
+    scheduleRetry();
+  }
+
   function loadResult(result) {
     if (!result?.ok) {
-      lastRead = null;
-      storeNote = null;
-      buildGraph([], [], {
-        status: "unavailable",
-        text: result?.error ? `store unavailable · ${result.error}` : "store unavailable",
-        stats: "store offline",
-      });
+      storeOffline(result?.error);
       return;
     }
+    clearRetry();
     // An empty read may carry why: a store file whose session schema is
     // missing. The empty card shows the note instead of "no recent sessions".
     storeNote = typeof result.note === "string" && result.note ? result.note : null;
@@ -2360,7 +2400,7 @@
       else buildGraph([], [], { status: "desktop-only", text: "desktop mode only", stats: "desktop mode only" });
     }).catch((error) => {
       if (initSeq !== loadSeq) return;
-      buildGraph([], [], { status: "unavailable", text: `store unavailable · ${String(error?.message ?? error)}`, stats: "store offline" });
+      storeOffline(String(error?.message ?? error));
     });
     await readyPromise;
     window.mefiStudio?.onCheckpoints?.((data) => {

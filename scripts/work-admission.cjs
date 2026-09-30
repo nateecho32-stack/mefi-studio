@@ -194,7 +194,10 @@ function represented(board = {}, candidate = {}, { jobs = [], briefs = true, tit
 
 // Who asked for a card and how it arrived, which ranking reads: `by: "owner"`
 // is the owner's own work (chat, the composer, Work on it, a split answer, an
-// approved plan, an idea promoted by hand) whatever its `source` says.
+// approved plan, an idea promoted by hand) whatever its `source` says. `via`
+// says where the ask came from: "remote" is Discord (docs/remote.md), whose
+// work waits for the owner's OK in every mode (autonomy.remoteWork). Keeping
+// only kind and by dropped it, so Discord work ran unapproved under Auto.
 function originOf(value) {
   if (!value || typeof value !== "object") return null;
   const kind = text(value.kind).slice(0, 24);

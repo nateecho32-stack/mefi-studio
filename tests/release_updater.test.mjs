@@ -342,6 +342,39 @@ test("the host, bridge and page wire the 20-minute GitHub check", async () => {
   assert.match(nav, /data-release-row/);
 });
 
+// The apply helper is written by the build that is installed, so the safety net
+// (a saved copy, a watch on the new build, a way back) has to be wired in every
+// layer before a release that carries it ships. This pins the wiring; the
+// rehearsal in update_rehearsal.test.mjs runs the real helper against it.
+test("the host, bridge and page wire the rollback and the boot flag", async () => {
+  const main = (await readFile(path.join(STUDIO, "main.cjs"), "utf8")).replace(/\r\n/g, "\n");
+  const preload = await readFile(path.join(STUDIO, "preload.cjs"), "utf8");
+  const nav = await readFile(path.join(STUDIO, "renderer", "nav.js"), "utf8");
+  const booklet = await readFile(path.join(STUDIO, "renderer", "booklet.js"), "utf8");
+  const template = await readFile(path.join(STUDIO, "renderer", "booklet.template.html"), "utf8");
+
+  // The literal name is what a staged build is scanned for, so main.cjs must spell it out.
+  assert.ok(main.includes('path.join(STUDIO_ROOT, "data", "boot-health.json")'), "the health file is written where the helper reads it");
+  assert.match(main, /ipcMain\.handle\("boot:healthy"/);
+  assert.match(main, /ipcMain\.handle\("release:rollback"/);
+  assert.match(main, /safety: typeof releaseSafetyPlan === "function"/, "the download hands the helper its safety plan, guarded for hosts without it");
+  assert.match(main, /MEFI_STUDIO_NO_ROLLBACK/, "the safety net has a kill switch");
+  assert.ok(main.includes('arg === "--released" || arg === "--rolled-back"'), "neither flag is carried into later relaunches");
+  assert.match(main, /bootHealthStart\(\);/);
+  assert.match(main, /window\.webContents\.once\("did-finish-load", \(\) => bootHealthWatch\(\)\)/, "the 45 second fallback starts once the window has loaded");
+  assert.match(main, /const rollbackLine = \["start", '""', "powershell\.exe"/, "the restore helper is launched through start, like the apply helper");
+
+  assert.match(preload, /releaseRollback: \(\) => ipcRenderer\.invoke\("release:rollback"\)/);
+  assert.match(preload, /bootHealthy: \(\) => ipcRenderer\.invoke\("boot:healthy"\)/);
+  assert.match(booklet, /window\.mefiStudio\?\.bootHealthy\?\.\(\)/, "the shell reports once its scripts ran");
+  assert.ok(booklet.indexOf("bootHealthy") < booklet.indexOf("window.MefiBoot.run(["), "before the boot steps, which wait on the owner's launch choice");
+
+  assert.match(template, /id="release-rollback"/);
+  assert.match(template, /id="release-note"/);
+  assert.match(nav, /#release-rollback/);
+  assert.match(nav, /releaseRollback\(\)/);
+});
+
 test("a first run with no release reads 'no published release yet', not a failure", async () => {
   const main = await readFile(path.join(STUDIO, "main.cjs"), "utf8");
   const nav = await readFile(path.join(STUDIO, "renderer", "nav.js"), "utf8");

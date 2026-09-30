@@ -37,6 +37,15 @@ function briefOf(item) {
   return resolved ? resolved[1] : value;
 }
 
+// A card filed from a message that listed several tasks (task-oversight's
+// validateChatActions): the owner's item, this note, then their whole message.
+const LISTED_NOTE = "This is one of the tasks listed in the message below; the others have their own cards.";
+const listedBrief = (item, message) => `${item}\n\n${LISTED_NOTE}\n\n${message}`;
+function listedParts(value) {
+  const at = value.indexOf(`\n\n${LISTED_NOTE}\n\n`);
+  return at > 0 && !value.slice(0, at).includes("\n") ? { item: value.slice(0, at), message: value.slice(at + LISTED_NOTE.length + 4) } : null;
+}
+
 // A brief's shape never changes, and the one admission ladder asks for every
 // saved brief on every filed request as well as every chat send, so recent
 // shapes are kept (bounded; the cache is dropped whole when it fills).
@@ -74,8 +83,18 @@ function shapeOf(value) {
   return { tokens, action, ordered, paths };
 }
 
+// A listed card is its item of its message, whatever the model titled it; a
+// whole-message brief is any item of that message (the same message filed
+// whole once and split another time).
 function equalBrief(left, right) {
-  const a = shape(briefOf(left)), b = shape(briefOf(right));
+  const a = briefOf(left), b = briefOf(right);
+  const x = listedParts(a), y = listedParts(b);
+  if (x && y) return sameWords(x.item, y.item) && sameWords(x.message, y.message);
+  return sameWords(x?.message ?? a, y?.message ?? b);
+}
+
+function sameWords(left, right) {
+  const a = shape(left), b = shape(right);
   if (!a.tokens.length || !b.tokens.length || JSON.stringify(a.paths) !== JSON.stringify(b.paths)) return false;
   if (a.tokens.join(" ") === b.tokens.join(" ")) return true;
   // Require complete coverage and enough specific language before permitting
@@ -174,4 +193,4 @@ function findExistingChatWork({ tasks = [], requests = [], jobs = [] } = {}, inc
   return null;
 }
 
-module.exports = { findExistingChatWork };
+module.exports = { findExistingChatWork, listedBrief };

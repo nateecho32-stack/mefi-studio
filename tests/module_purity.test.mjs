@@ -53,6 +53,8 @@ const PROMISES = [
   { file: "scripts/fleet.cjs", says: "Pure module: no Electron, no filesystem, no network, no processes, no", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   // The GitHub link's vocabulary and rules (chip states, repository names, failure sentences, the publish plan); git-actions.cjs owns its I/O.
   { file: "scripts/git-link.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  // The records an installing update helper and the app pass each other; main.cjs "Release updates: the safety net" owns the I/O.
+  { file: "scripts/update-safety.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (time is", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
 ];
 
 const CLOCK = /\bDate\.now\s*\(|new\s+Date\s*\(\s*\)|\bperformance\.now\s*\(/;

@@ -31,6 +31,10 @@
 
 const backlog = require("./backlog.cjs");
 const autonomy = require("./autonomy.cjs");
+// The admission ladder's title key, and chat admission's brief for one of the
+// tasks a message lists.
+const { titleKey: cardKey } = require("./work-admission.cjs");
+const { listedBrief } = require("./chat-work.cjs");
 const { createHash } = require("node:crypto");
 const { workerActivity } = require("./executor-activity.cjs");
 
@@ -794,6 +798,25 @@ function gateOf(checked, words) {
   }
 }
 
+// The tasks an owner's message lists, in their words: a numbered list
+// ("1) … 2) …") or bullet lines, else the parts of a written list (a comma,
+// semicolon or line break, with "and" before its last item). A bare "and" is
+// one request's own clauses: "a settings page for theme and font size".
+function listedItems(text) {
+  const said = String(text ?? "");
+  let cuts = [];
+  for (const mark of said.matchAll(/(?:^|\s)\(?(\d{1,2})[.)]\s+/g)) {
+    if (Number(mark[1]) === cuts.length + 1) cuts.push([mark.index, mark.index + mark[0].length]);
+  }
+  if (cuts.length < 2) cuts = [...said.matchAll(/^[ \t]*[-*•][ \t]+/gm)].map((mark) => [mark.index, mark.index + mark[0].length]);
+  const parts = cuts.length >= 2 ? cuts.map(([, from], index) => said.slice(from, cuts[index + 1]?.[0] ?? said.length)) : /[,;\n]/.test(said) ? said.split(/[,;\n&]|\band\b/i) : [said];
+  return parts.map((part) => clip(part, 200).replace(/^[\s,;:.]+|[\s,;:.]+$/g, "")).filter(Boolean);
+}
+
+// The words that tell one listed task from another.
+const LIST_FILLER = new Set(["a", "an", "the", "to", "for", "of", "in", "on", "at", "by", "with", "and", "or", "from", "into", "as", "it", "this", "that", "my", "our", "please", "also", "add", "make", "new", "task", "tasks"]);
+const keyWords = (value) => new Set(cardKey(value).split(" ").filter((word) => word && !LIST_FILLER.has(word)).map((word) => word.length > 3 ? word.replace(/s$/, "") : word));
+
 // The actions a chat reply asked for, checked against the board it was shown
 // and the owner's own words (each kind's gate in CHAT_ACTION_KINDS):
 //   run       plainly asked for, on a card the owner's words name;
@@ -871,6 +894,29 @@ function validateChatActions(actions, context = {}) {
     if (action.kind === "run_role") roles += 1;
   });
   if (list.length > ACTIONS_SCANNED) rejected.push({ action: { value: `${list.length - ACTIONS_SCANNED} more` }, reason: "too many actions" });
+  // One message may list several tasks ("add three tasks: 1) … 2) …"). Each
+  // carried the whole message as its brief, so admission read the second as
+  // the first card again (chat-work's brief rung) and the message filed one
+  // card. When each title is its own item of the owner's list, its brief is
+  // that item in their words, then the whole message; chat admission keys the
+  // card on those, never the model's title. Titles the owner did not list
+  // apart (the model splitting one ask) stay one card.
+  const filing = run.filter((action) => action.kind === "create_task" && action.ownerText);
+  const titles = [...new Set(filing.map((action) => cardKey(action.title)))];
+  const items = titles.length > 1 ? listedItems(words.ownerText) : [];
+  const lists = items.map(keyWords);
+  const itemOf = new Map(titles.map((title) => {
+    const wanted = keyWords(title);
+    const scores = lists.map((list) => [...list].filter((word) => wanted.has(word)).length);
+    const best = Math.max(0, ...scores);
+    return [title, best && scores.indexOf(best) === scores.lastIndexOf(best) ? scores.indexOf(best) : -1];
+  }));
+  const picked = [...itemOf.values()];
+  if (items.length && picked.every((at) => at >= 0) && new Set(picked).size === picked.length) {
+    run.forEach((action, index) => {
+      if (filing.includes(action)) run[index] = { ...action, ownerText: listedBrief(items[itemOf.get(cardKey(action.title))], action.ownerText) };
+    });
+  }
   return { run, confirm, rejected, offer };
 }
 

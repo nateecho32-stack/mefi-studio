@@ -978,6 +978,11 @@
             <button id="release-apply" class="ghost" hidden disabled>Update</button>
             <span class="eyes-status" id="release-status" role="status">release: not checked</span>
           </div>
+          <div class="row tight update-row" id="release-previous-row" hidden>
+            <button id="release-rollback" class="ghost" title="Restore the build this one replaced. Your projects, tasks and settings stay as they are.">Roll back</button>
+            <span class="eyes-status" id="release-previous" role="status"></span>
+          </div>
+          <p class="muted bad-text" id="release-note" role="status" hidden></p>
           <div class="row tight update-row" id="release-token-row" hidden>
             <input type="password" id="release-token" placeholder="GitHub token (read-only, for a private repo)" autocomplete="off" aria-label="GitHub update token">
             <button id="release-token-save" class="ghost mini">Save token</button>

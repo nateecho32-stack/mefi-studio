@@ -526,6 +526,35 @@ test("the request inbox adds and removes through targeted actions and reports a 
   assert.match(env.element("assistant-status").textContent, /A worker holds this request/);
 });
 
+// machine:kill stops LOVE test runs only (main refuses anything else), so the
+// row's button shows for those alone, says so, and reports the host's answer
+// instead of "kill sent".
+test("the Machine list offers Stop only on test runs and reports a refused stop", async () => {
+  const machineFeeds = [], kills = [], toasts = [];
+  const env = environment({
+    onMachineStatus: (fn) => machineFeeds.push(fn),
+    machineKill: async (pid) => { kills.push(pid); return pid === 12 ? { ok: true } : { ok: false, error: `pid ${pid} is not a LOVE test run in the latest machine scan` }; },
+  });
+  env.window.MefiToast = (text, tone) => toasts.push([text, tone]);
+  await env.open();
+  machineFeeds.forEach((fn) => fn({
+    lines: "two processes", wait: false, leases: { exclusive: false, busy: false, holders: [] }, processes: [], actions: [], capacity: { canStart: true },
+    running: [{ pid: 12, status: "healthy", test: true, ageMinutes: 1, memMB: 512 }, { pid: 13, status: "healthy", test: true, ageMinutes: 2, memMB: 256 }, { pid: 14, status: "other", ageMinutes: 3, memMB: 128 }],
+  }));
+  const rows = env.element("machine-list").children;
+  const stopOf = (row) => row.children.find((child) => child.tagName === "button");
+  assert.equal(rows.length, 3);
+  assert.ok(stopOf(rows[0]) && stopOf(rows[1]), "test runs can be stopped");
+  assert.equal(stopOf(rows[2]), undefined, "a process main would refuse gets no button");
+  assert.equal(stopOf(rows[0]).title, "Stop this test run");
+  stopOf(rows[0]).click(); await flush();
+  stopOf(rows[1]).click(); await flush();
+  assert.deepEqual(kills, [12, 13]);
+  assert.deepEqual(toasts[0], ["stopping test run 12", "info"]);
+  assert.equal(toasts[1][1], "bad", "a refused stop reads as a failure, not as sent");
+  assert.match(toasts[1][0], /not a LOVE test run/);
+});
+
 test("the Machine panel scans once per open, then follows the machine:status push instead of rescanning every poll tick", async () => {
   let scans = 0;
   const feeds = [];

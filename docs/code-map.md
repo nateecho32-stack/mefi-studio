@@ -222,7 +222,10 @@ binary, which Electron 44 no longer downloads on install (skipped on CI and
 without devDependencies).
 `package-portable.mjs`, `package-release.mjs` and `make-icon.mjs` build
 releases, while `updater.mjs` (live source updates) and `release-updater.mjs`
-(GitHub releases) keep installed copies current.
+(GitHub releases) keep installed copies current. `update-safety.cjs` is the
+pure half of the update safety net: the shapes of the boot-health, backup
+manifest and update-result files the installing helper and the app pass each
+other (`main.cjs`, "Release updates: the safety net", owns their I/O).
 
 ## `renderer/` — classic scripts inlined into one HTML file
 
