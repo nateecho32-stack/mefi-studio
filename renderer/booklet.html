@@ -11858,6 +11858,9 @@ html[data-frame] body.vibe-active:not(:has(.workspace-page:not([hidden]))) :is(.
 /* Vibe's own layer starts under the bar; its header keeps the project, new app, update, conversation
    and settings buttons and drops the mode switch, the pulse and the search the bar carries now. */
 html[data-frame] #vibe-layer { top: var(--shell-y0); }
+/* Build's Home in its sessions layout is a layer of its own, with no local bar, that would start at the window's top (or under the strip
+   alone, builder.css): with the frame it starts under the bar and the strip. */
+html[data-frame][data-home-layout="sessions"][data-shell="rail"] body.workspace-active:not(:has(.workspace-page:not([hidden]))) #workspace-layer { top: var(--shell-y0); }
 html[data-frame] .vibe-top { grid-template-columns: 1fr auto; padding-top: 10px; }
 html[data-frame] .vibe-top > .mode-switch, html[data-frame] .vibe-top #vibe-pulse, html[data-frame] .vibe-top [data-nav="palette"] { display: none; }
 
@@ -12006,7 +12009,8 @@ html[data-frame] .shell-scrim { position: fixed; top: var(--shell-y0); bottom: v
 @keyframes shell-fade { from { opacity: 0; } to { opacity: 1; } }
 
 /* ---- the tab strip's row and the main area ---- */
-html[data-frame] .shell-tabs { position: fixed; top: var(--frame-top-h); left: var(--frame-x0); right: 0; height: var(--shell-tabs-h); z-index: calc(var(--z-shell) - 1); display: flex; flex-direction: column; min-width: 0; background: var(--bg); border-bottom: 1px solid var(--hairline); overflow: hidden; }
+/* The strip (renderer/tabs.js) draws its own hairline and sizes itself from the density token, so the row has none of its own: a second line, or a border taking a pixel from the strip, would leave it a pixel short of the row it asked for. */
+html[data-frame] .shell-tabs { position: fixed; top: var(--frame-top-h); left: var(--frame-x0); right: 0; height: var(--shell-tabs-h); z-index: calc(var(--z-shell) - 1); display: flex; flex-direction: column; min-width: 0; background: var(--bg); overflow: hidden; }
 html[data-frame] .shell-main { position: fixed; top: var(--shell-y0); left: var(--frame-x0); right: var(--shell-x1); bottom: var(--shell-y1); z-index: calc(var(--z-workspace) + 1); display: flex; flex-direction: column; min-width: 0; min-height: 0; background: transparent; pointer-events: none; }
 html[data-frame] .shell-main .shell-panel { pointer-events: auto; }
 
