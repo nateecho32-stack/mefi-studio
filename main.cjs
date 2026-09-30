@@ -1,6 +1,13 @@
 // Mefi's Studio AI+ — Electron main process (CommonJS: Electron's most reliable main format).
 // Window, tray and IPC; the service loop, executor and board gateway; settings, keys, updates and headless CLI flags.
 
+// Node's compile cache: the hundred or so modules below are compiled once and read back
+// compiled on the next launch (about 90 ms down to 50 ms of module loading on a fast Linux
+// box; the gain is larger where file reads are slow). It is keyed by each file's content
+// and Node's version, so an update can never load stale code. Before any other require, so
+// they all benefit; MEFI_STUDIO_NO_COMPILE_CACHE=1 turns it off.
+try { if (process.env.MEFI_STUDIO_NO_COMPILE_CACHE !== "1") require("node:module").enableCompileCache?.(); } catch { /* an older Node has none: modules compile as before */ }
+
 // Two helpers this file gained after the shipped builds already knew how to
 // carry them: scripts/updater.mjs holds a live payload until every local
 // require in it resolves (missingRequires), and the portable swap robocopies

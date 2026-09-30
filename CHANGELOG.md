@@ -7,6 +7,12 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Studio's own code loads from a compile cache after the first launch.** Each
+  of the hundred or so files behind the window is compiled once and read back
+  compiled the next time (module loading dropped from about 90 ms to 50 ms on a
+  fast Linux machine; more where disk reads are slow). It is keyed by each file's
+  content, so an update can never load old code. `MEFI_STUDIO_NO_COMPILE_CACHE=1`
+  turns it off.
 - **A chat message over 16,000 characters is refused, not cut.** Every box that
   talks to Mefi used to send only the first 16,000 characters of a very long
   paste and keep that in the thread, so the rest vanished without a word. It now
