@@ -1355,7 +1355,12 @@ failed process stays an error and cannot produce briefing requests.
   installed, for a CLI that never got going (a spawn failure, a wedged start,
   or a quick exit with nothing on stdout that is not a usage limit). A CLI
   installed as an npm `.cmd` shim (Grok from the guided installer) runs
-  through `cmd.exe`; Grok's brief goes in a prompt file.
+  through `cmd.exe`; Grok's brief goes in a prompt file. Codex can instead
+  run over `codex app-server` (`scripts/codex-harness.cjs`, off by default):
+  the same brief and sentinel lines, but the run's MCP servers travel over
+  stdin (so none is dropped for carrying a credential), the owner's own
+  Codex MCP servers, plugins and apps stay out of the run, and the run
+  reports its token use and plan rate limits live.
 - *Try again with a heavier model* runs that task's next attempt on the
   builder's Heavy-tier model (`opus` for Claude Code, the z.ai heavy model on
   the coding plan, or the Heavy model saved for the CLI), and is offered only
