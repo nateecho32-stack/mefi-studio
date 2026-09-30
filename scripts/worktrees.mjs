@@ -16,7 +16,7 @@
 // It shares `runGit` (bounded, no prompts, no index lock), `changedFiles` (real
 // content changes, not line-ending noise) and `scrub` (no credentials in any
 // text) with scripts/sync.mjs. Git runs without a shell.
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { changedFiles, defaultBranch, runGit, scrub } from "./sync.mjs";
@@ -83,7 +83,9 @@ async function inspectOne(entry, index, ctx) {
     branch: entry.branch,
     detached: entry.detached || !entry.branch,
     head: entry.head.slice(0, 7),
+    sha: entry.head,
     locked: Boolean(entry.locked),
+    lockedReason: typeof entry.locked === "string" ? entry.locked : "",
     missing: Boolean(entry.prunable) || !existsSync(entry.path),
     dirty: 0,
     ahead: 0,
@@ -113,16 +115,46 @@ async function inspectOne(entry, index, ctx) {
   return { ...row, ...classify(row) };
 }
 
-// Every worktree of the repository `cwd` belongs to, worst first.
-export async function listWorktrees(cwd, { run = runGit } = {}) {
+// What every row is compared with: the default branch and its copy on GitHub.
+async function lookAt(cwd, run) {
   const git = (args, options) => run(cwd, args, options);
   const top = await git(["rev-parse", "--show-toplevel"]);
-  if (!top.ok) return { repo: false, root: path.resolve(cwd) };
+  if (!top.ok) return null;
   const entries = parseWorktrees((await git(["worktree", "list", "--porcelain"])).stdout);
   const main = await defaultBranch(git);
   const upstream = `${REMOTE}/${main}`;
   const hasUpstream = (await git(["rev-parse", "--verify", "--quiet", `refs/remotes/${upstream}`])).ok;
   const ctx = { git, main, upstream, hasUpstream, run: (dir, args, options) => run(dir, args, options) };
+  return { top: path.resolve(slash(top.stdout)), entries, main, upstream, hasUpstream, ctx };
+}
+
+// Windows hands out 8.3 short paths for a temp folder while git lists the long
+// form, and a case-insensitive disk differs only by case: compare what is on disk.
+function canonical(value) {
+  const resolved = path.resolve(String(value ?? ""));
+  let real = resolved;
+  try { real = realpathSync.native(resolved); } catch { /* not on disk (a missing worktree): compare as written */ }
+  return process.platform === "win32" ? real.toLowerCase() : real;
+}
+
+// One worktree and the primary checkout, without inspecting the others: what a
+// merge or a removal needs (scripts/worktree-actions.mjs). `target` is matched
+// by path against what git lists, so a folder git does not know is never found.
+export async function inspectWorktree(cwd, target, { run = runGit } = {}) {
+  const look = await lookAt(cwd, run);
+  if (!look) return { repo: false, root: path.resolve(cwd) };
+  const wanted = canonical(target);
+  const at = look.entries.findIndex((entry) => canonical(entry.path) === wanted);
+  const base = { repo: true, root: look.top, main: look.main, upstream: look.upstream, hasUpstream: look.hasUpstream, count: look.entries.length };
+  if (at === -1) return { ...base, row: null, primary: await inspectOne(look.entries[0], 0, look.ctx) };
+  return { ...base, row: await inspectOne(look.entries[at], at, look.ctx), primary: at === 0 ? null : await inspectOne(look.entries[0], 0, look.ctx) };
+}
+
+// Every worktree of the repository `cwd` belongs to, worst first.
+export async function listWorktrees(cwd, { run = runGit } = {}) {
+  const look = await lookAt(cwd, run);
+  if (!look) return { repo: false, root: path.resolve(cwd) };
+  const { top, entries, main, upstream, hasUpstream, ctx } = look;
   const rows = [];
   // A few at a time: each worktree costs a status and a few rev-lists.
   for (let start = 0; start < entries.length; start += 4) {
@@ -137,7 +169,7 @@ export async function listWorktrees(cwd, { run = runGit } = {}) {
     safeToRemove: count("merged"),
     missing: count("missing"),
   };
-  return { repo: true, root: path.resolve(slash(top.stdout)), main, upstream, hasUpstream, rows, summary, headline: headline(summary, hasUpstream, upstream) };
+  return { repo: true, root: top, main, upstream, hasUpstream, rows, summary, headline: headline(summary, hasUpstream, upstream) };
 }
 
 function headline(summary, hasUpstream, upstream) {
