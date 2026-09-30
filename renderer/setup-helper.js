@@ -60,8 +60,8 @@
     ["overseer", "Overseer", "Reviews progress across the team"], ["lead", "Lead", "Sizes and delegates work, then gathers reports"],
     ["desk", "Desk", "Answers workers' questions and settles ordinary asks"],
   ];
-  const SEAT_DEFAULTS = { provider: "zen", model: "gpt-6-sol", effort: "medium", fast: false };
-  const seatDefaults = (seat) => ({ ...SEAT_DEFAULTS, provider: seat === "overseer" ? "auto" : "zen", model: ["companion", "scout"].includes(seat) ? "gpt-6-luna" : "gpt-6-sol", effort: seat === "scout" ? "low" : "medium", fast: ["companion", "scout"].includes(seat) });
+  const SEAT_DEFAULTS = { provider: "zen", model: "gpt-6.1-sol", effort: "medium", fast: false };
+  const seatDefaults = (seat) => ({ ...SEAT_DEFAULTS, provider: seat === "overseer" ? "auto" : "zen", model: ["companion", "scout"].includes(seat) ? "gpt-6-luna" : "gpt-6.1-sol", effort: seat === "scout" ? "low" : "medium", fast: ["companion", "scout"].includes(seat) });
   const EFFORTS = ["minimal", "low", "medium", "high", "xhigh", "max"];
   const TOOL_ROLES = [
     ["routine", "Assistant · routine"], ["heavy", "Assistant · planning & review"], ["companion", "Companion"], ["scout", "Context scout"],
@@ -77,7 +77,7 @@
   // agent-profiles.cjs capabilities(): which models take a reasoning effort.
   function efforts(provider, model = "") {
     const id = String(model).toLowerCase().replace(/^openai\//, "");
-    const extended = /^gpt-6-/.test(id);
+    const extended = /^gpt-6(?:\.\d+)?-/.test(id);
     const reasoning = (provider === "zen" || provider === "openrouter" && /^openai\//i.test(model)) && (extended || /^(gpt-5(?:[.-]|$)|o[134](?:-|$))/.test(id));
     return { list: reasoning ? extended ? EFFORTS : ["low", "medium", "high"] : [], fast: provider === "zen" && extended };
   }
@@ -299,7 +299,7 @@
   const modelLists = new Map();
   async function modelsFor(provider) {
     if (modelLists.has(provider)) return modelLists.get(provider);
-    const rows = provider === "zen" ? ["gpt-6-luna", "gpt-6-sol"] : provider === "zai" ? ["glm-5.3-flash", "glm-5.3"] : provider === "openrouter" ? ["openrouter/free"] : [];
+    const rows = provider === "zen" ? ["gpt-6-luna", "gpt-6.1-sol", "gpt-6-sol"] : provider === "zai" ? ["glm-5.3-flash", "glm-5.3"] : provider === "openrouter" ? ["openrouter/free"] : [];
     modelLists.set(provider, rows);
     try {
       if (["zen", "opencode", "zai", "lmstudio", "custom"].includes(provider) && api()?.agentModels) {
@@ -605,7 +605,7 @@
       void set({ provider, model: modelsByProvider[provider] ?? "", modelsByProvider, effort: "", fast: false });
     }, `${title} provider`)));
     if (value.provider !== "auto") box.append(field("Model", modelInput(value.provider, value.model, (model) => void set({ model, effort: "", fast: false }), { label: `${title} model` })));
-    const support = efforts(value.provider, value.model || (value.provider === "zen" ? "gpt-6-sol" : ""));
+    const support = efforts(value.provider, value.model || (value.provider === "zen" ? "gpt-6.1-sol" : ""));
     if (support.list.length && value.provider !== "auto") box.append(field("Reasoning effort", select([["", "Default"], ...support.list.map((effort) => [effort, effort])], value.effort || "", (effort) => void set({ effort }), `${title} effort`)));
     if (support.fast) box.append(toggle("Fast mode", value.fast, (fast) => void set({ fast }), "Faster answers from GPT-6 on Zen."));
     const applied = data.team?.choices?.[seat];

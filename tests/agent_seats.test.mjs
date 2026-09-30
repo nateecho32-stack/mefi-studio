@@ -1,4 +1,4 @@
-// The 0.4.0 seats (main.cjs seatChoice): the lead and the desk answer on GPT 6
+// The 0.4.0 seats (main.cjs seatChoice): the lead and the desk answer on GPT 6.1
 // Sol through Zen at medium reasoning effort unless the owner's
 // settings.agentSeats say otherwise. Lifted from main.cjs with its constant.
 import test from "node:test";
@@ -14,10 +14,10 @@ const context = vm.createContext({ ZEN_MODEL_HEAVY: heavy, ZEN_MODEL_ROUTINE: ro
 vm.runInContext(source.slice(source.indexOf("const SEAT_DEFAULTS"), source.indexOf("async function seatFetch(")), context);
 const seatChoice = vm.runInContext("seatChoice", context);
 
-test("both seats default to GPT 6 Sol on Zen at medium effort", () => {
-  assert.equal(heavy, "gpt-6-sol");
-  for (const seat of ["lead", "desk"]) assert.deepEqual({ ...seatChoice({}, seat) }, { provider: "zen", model: "gpt-6-sol", effort: "medium", fast: false });
-  assert.deepEqual({ ...seatChoice(null, "unknown") }, { provider: "zen", model: "gpt-6-sol", effort: "medium", fast: false });
+test("both seats default to GPT 6.1 Sol on Zen at medium effort", () => {
+  assert.equal(heavy, "gpt-6.1-sol");
+  for (const seat of ["lead", "desk"]) assert.deepEqual({ ...seatChoice({}, seat) }, { provider: "zen", model: "gpt-6.1-sol", effort: "medium", fast: false });
+  assert.deepEqual({ ...seatChoice(null, "unknown") }, { provider: "zen", model: "gpt-6.1-sol", effort: "medium", fast: false });
 });
 
 test("the companion and scout default to Luna on Zen's fast tier", () => {
@@ -28,14 +28,14 @@ test("the companion and scout default to Luna on Zen's fast tier", () => {
 test("a saved seat overrides model and effort, and a bad effort falls back", () => {
   const settings = { agentSeats: { lead: { model: "gpt-6-luna", effort: "high" }, desk: { effort: "turbo" } } };
   assert.deepEqual({ ...seatChoice(settings, "lead") }, { provider: "zen", model: "gpt-6-luna", effort: "high", fast: false });
-  assert.deepEqual({ ...seatChoice(settings, "desk") }, { provider: "zen", model: "gpt-6-sol", effort: "medium", fast: false });
+  assert.deepEqual({ ...seatChoice(settings, "desk") }, { provider: "zen", model: "gpt-6.1-sol", effort: "medium", fast: false });
   assert.equal(seatChoice({ agentSeats: { lead: { provider: "auto" } } }, "lead").provider, "auto");
 });
 
 test("a seat can run at max effort on Zen's fast tier", () => {
   const settings = { agentSeats: { desk: { model: "gpt-6-luna", effort: "max", fast: true }, lead: { effort: "xhigh", fast: "yes" } } };
   assert.deepEqual({ ...seatChoice(settings, "desk") }, { provider: "zen", model: "gpt-6-luna", effort: "max", fast: true });
-  assert.deepEqual({ ...seatChoice(settings, "lead") }, { provider: "zen", model: "gpt-6-sol", effort: "xhigh", fast: false });
+  assert.deepEqual({ ...seatChoice(settings, "lead") }, { provider: "zen", model: "gpt-6.1-sol", effort: "xhigh", fast: false });
 });
 
 test("seats select other providers without leaking their route into the rest of the team", async () => {

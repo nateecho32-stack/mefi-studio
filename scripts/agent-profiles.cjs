@@ -29,7 +29,7 @@ function effective(settings, projectId, snapshot) {
 }
 function capabilities(provider, model = "") {
   const id = String(model).toLowerCase().replace(/^openai\//, "");
-  const extended = /^gpt-6-/.test(id);
+  const extended = /^gpt-6(?:\.\d+)?-/.test(id);
   const reasoning = (provider === "zen" || provider === "openrouter" && /^openai\//i.test(model)) && (extended || /^(gpt-5(?:[.-]|$)|o[134](?:-|$))/.test(id));
   return { efforts: reasoning ? extended ? [...EFFORTS] : ["low", "medium", "high"] : [], fast: provider === "zen" && extended, note: reasoning ? "Reasoning is sent to the selected model." : "Effort is managed by this provider or CLI." };
 }
@@ -59,8 +59,8 @@ function validate(configuration) {
     if (choice.fast !== undefined && typeof choice.fast !== "boolean") return "Fast mode must be on or off.";
     if (choice.model !== undefined && !validModel(choice.model, choice.provider)) return "Invalid seat model id.";
     if (choice.modelsByProvider !== undefined && (!record(choice.modelsByProvider) || Object.entries(choice.modelsByProvider).some(([provider, model]) => !PROVIDERS.includes(provider) || !validModel(model, provider)))) return "Invalid saved seat models.";
-    if (choice.fast && !capabilities(choice.provider || "zen", choice.model || "gpt-6-sol").fast) return "Fast mode is unavailable for this seat model.";
-    if (choice.effort && choice.provider !== "auto" && !capabilities(choice.provider || "zen", choice.model || "gpt-6-sol").efforts.includes(choice.effort)) return "Reasoning effort is unavailable for this seat model.";
+    if (choice.fast && !capabilities(choice.provider || "zen", choice.model || "gpt-6.1-sol").fast) return "Fast mode is unavailable for this seat model.";
+    if (choice.effort && choice.provider !== "auto" && !capabilities(choice.provider || "zen", choice.model || "gpt-6.1-sol").efforts.includes(choice.effort)) return "Reasoning effort is unavailable for this seat model.";
   }
   if (configuration.agentSubtasks !== undefined) {
     const choice = configuration.agentSubtasks;

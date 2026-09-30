@@ -54,6 +54,11 @@ test("stale saves and unsafe configuration leave the transaction untouched", () 
   assert.deepEqual(profiles.capabilities("zen", "gpt-4o").efforts, []);
   assert.deepEqual(profiles.capabilities("openrouter", "openai/o3").efforts, ["low", "medium", "high"]);
   assert.equal(profiles.capabilities("claude", "gpt-6-sol").fast, false);
+  // A point release (GPT-6.1 Sol, DevDay 2026) keeps the GPT-6 family's full
+  // effort ladder and Zen's fast tier; Zen lists the same values for both.
+  assert.deepEqual(profiles.capabilities("zen", "gpt-6.1-sol"), profiles.capabilities("zen", "gpt-6-sol"));
+  assert.equal(profiles.capabilities("zen", "gpt-6.1-sol").fast, true);
+  assert.equal(profiles.validate({ agentSeats: { lead: { provider: "zen", model: "gpt-6.1-sol", effort: "max", fast: true } } }), null);
 });
 
 test("concurrent calls and interrupted continuations retain their admitted team", async () => {

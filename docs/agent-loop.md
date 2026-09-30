@@ -1303,7 +1303,7 @@ folder>` prints a day's events and compares `agent.out`/`agent.home` with the
 ledger's `start`/`finish` rows (exit 1 when they differ).
 
 **The seats.** `seatFetch("lead" | "desk", …)` calls the seat's model on Zen
-with its own reasoning effort (`SEAT_DEFAULTS`: GPT 6 Sol at medium;
+with its own reasoning effort (`SEAT_DEFAULTS`: GPT 6.1 Sol at medium;
 `settings.agentSeats` overrides, from the Agent brain's Seats tab), through
 `httpAssistantCall`'s `effort` and `pinned` options; without a Zen key it falls
 back to the heavy route (or, for the Cluster planner, to its own route). The

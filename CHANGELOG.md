@@ -7,6 +7,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **GPT-6.1 Sol.** The lead, desk and overseer seats and the heavy Zen role
+  now default to `gpt-6.1-sol` (released at DevDay 2026: near Astra quality
+  at a fifth of Astra's price). It appears in the Zen model pickers and keeps
+  the GPT-6 family's full effort ladder and Fast tier; seats you picked
+  yourself are unchanged.
 - **Security fixes for remote approvals, catalogs and sharing.** Work filed
   from Discord retains its approval requirement through task admission and
   promotion. Concurrent PIN attempts count toward one lockout and approval

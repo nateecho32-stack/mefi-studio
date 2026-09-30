@@ -3536,7 +3536,7 @@ const LMSTUDIO_ENDPOINT = "http://127.0.0.1:1234/v1/chat/completions";
 const ZEN_ENDPOINT = "https://opencode.ai/zen/v1/chat/completions";
 const ZEN_RESPONSES_ENDPOINT = "https://opencode.ai/zen/v1/responses";
 const ZEN_MODEL_ROUTINE = "gpt-6-luna";
-const ZEN_MODEL_HEAVY = "gpt-6-sol";
+const ZEN_MODEL_HEAVY = "gpt-6.1-sol";
 const OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 const OPENROUTER_MODEL = "openrouter/free";
 // Any other OpenAI-compatible endpoint (Together, vLLM, a proxy,

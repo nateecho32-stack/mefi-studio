@@ -376,7 +376,7 @@
   }
   function modelChoices(provider, builder) {
     let baked = []; try { baked = JSON.parse($("booklet-data").textContent).models || []; } catch {}
-    const ids = provider === "zen" ? ["gpt-6-luna", "gpt-6-sol"] : provider === "zai" ? ["glm-5.3-flash", "glm-5.3"] : [];
+    const ids = provider === "zen" ? ["gpt-6-luna", "gpt-6.1-sol", "gpt-6-sol"] : provider === "zai" ? ["glm-5.3-flash", "glm-5.3"] : [];
     const rows = ids.map((id) => ({ id, name: id }));
     if (provider === "opencode") rows.push(...baked.filter((entry) => entry.onRoster).map((entry) => ({ id: builder ? `opencode/${entry.id}` : entry.id, name: entry.name })));
     if (provider === "openrouter") rows.push({ id: "openrouter/free", name: "Free models · automatic" }, ...(openrouterCatalog || []));
@@ -514,8 +514,8 @@
     custom.addEventListener("change", applyModel); custom.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); applyModel(); } if (event.key === "Escape") { event.stopPropagation(); custom.hidden = true; select.value = model; window.MefiSelect?.refresh?.(); } });
     identity.append(select, custom);
     const settings = node("div", "agents-model-settings");
-    const capabilityModel = model || (seat && provider === "zen" ? "gpt-6-sol" : "");
-    const modelId = capabilityModel.toLowerCase().replace(/^openai\//, ""), extended = /^gpt-6-/.test(modelId);
+    const capabilityModel = model || (seat && provider === "zen" ? "gpt-6.1-sol" : "");
+    const modelId = capabilityModel.toLowerCase().replace(/^openai\//, ""), extended = /^gpt-6(?:\.\d+)?-/.test(modelId);
     const support = !builder && (provider === "zen" || provider === "openrouter" && /^openai\//i.test(capabilityModel)) && (extended || /^(gpt-5(?:[.-]|$)|o[134](?:-|$))/.test(modelId));
     const supportedEfforts = support ? extended ? (saved.efforts || ["minimal", "low", "medium", "high", "xhigh", "max"]) : ["low", "medium", "high"] : [];
     if (setEffort) {
@@ -582,7 +582,7 @@
       }, config, item.saved));
     }
     for (const [seat, title, detail] of [["companion", "Companion", "Talks with you and creates tasks when asked"], ["scout", "Task context scout", "Picks a starting file from local matches"], ["overseer", "Overseer", "Reviews progress across the team"], ["lead", "Lead", "Delegates work and brings reports together"], ["desk", "Desk", "Helps workers when they are stuck"]]) {
-      const defaults = { provider: seat === "overseer" ? "auto" : "zen", model: ["companion", "scout"].includes(seat) ? "gpt-6-luna" : "gpt-6-sol", effort: seat === "scout" ? "low" : "medium", fast: ["companion", "scout"].includes(seat) };
+      const defaults = { provider: seat === "overseer" ? "auto" : "zen", model: ["companion", "scout"].includes(seat) ? "gpt-6-luna" : "gpt-6.1-sol", effort: seat === "scout" ? "low" : "medium", fast: ["companion", "scout"].includes(seat) };
       const value = { ...defaults, ...item.saved.seats?.[seat], ...config.agentSeats?.[seat] };
       const set = (patch) => { config.agentSeats = { ...config.agentSeats, [seat]: { ...value, ...config.agentSeats?.[seat], ...patch } }; dirty(); };
       roles.append(agentRow({ id: seat, title, detail, ...value, seat: true,
