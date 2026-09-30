@@ -5438,6 +5438,8 @@ body.music-preview-active #toast-host { left: calc(var(--shell-rail-w) + var(--m
 .media-window > .media-window-toolbar .media-window-transport button:disabled { opacity: .35; }
 .media-window-transport .music-range { width: 72px; flex: none; margin: 0 4px 0 2px; }
 .media-window[data-minimized="true"] .media-window-transport :is(#media-window-previous, #media-window-next, #media-window-mute, .music-range) { display: none; }
+/* Too narrow for the whole bar (media-window.js): the volume stays with the menu, the transport and window buttons stay in. */
+.media-window[data-narrow="true"] .media-window-transport :is(#media-window-mute, .music-range) { display: none; }
 .media-window-transparency { grid-column: 1 / -1; display: grid; flex: 0 0 auto; gap: 4px; padding: 6px 2px; }
 .media-window-transparency input { width: 100%; min-width: 0; margin: 0; padding: 0; accent-color: var(--gold-bright); }
 .media-window button:focus-visible { outline: 2px solid var(--ivory); outline-offset: -2px; }
@@ -10635,19 +10637,23 @@ html[data-home-layout="sessions"] #workspace-layer .builder-home[hidden], html[d
 #workspace-layer .builder-switch[aria-checked="true"] { color: var(--ivory); border-color: color-mix(in srgb, var(--gold) 45%, transparent); }
 #workspace-layer .builder-switch[aria-checked="true"] .builder-check { background: var(--gold); box-shadow: none; background-image: linear-gradient(135deg, transparent 45%, var(--on-ivory, #202320) 45% 55%, transparent 55%); }
 #workspace-layer .builder-chip:disabled { opacity: .55; }
-/* One row under the words, like the desktop coding apps: files, purpose and
-   permission on the left; the worker, its tier and Send on the right. */
-html[data-home-layout="sessions"] #workspace-layer .ws-composer { order: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 10px 10px; border-radius: 18px; }
+/* One row under the words, like the desktop coding apps: files, purpose,
+   permission and "+" on the left; the worker, its tier and Send on the right.
+   The row never wraps at 1920x1080: "Use a task outline" and "Plan an idea" live
+   in the "+" menu, and the two pickers start narrow and share what is left, with
+   an ellipsis when a name is longer. Menus here open upward, so the composer
+   must not clip them (Home's own sheet clips its rounded corners). */
+html[data-home-layout="sessions"] #workspace-layer .ws-composer { order: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 10px 10px; border-radius: 18px; overflow: visible; }
 html[data-home-layout="sessions"] #workspace-layer .ws-composer :is(.ws-compose-top, .ws-compose-bottom, .file-input-tools, .builder-compose-tools) { display: contents; }
 html[data-home-layout="sessions"] #workspace-layer .ws-composer textarea { order: 0; flex: 1 1 100%; min-height: 70px; max-height: 280px; padding: 16px 8px 6px; font-size: 14.5px; }
 html[data-home-layout="sessions"] #workspace-layer .ws-composer .file-input-tools > button { order: 1; }
 html[data-home-layout="sessions"] #workspace-layer .ws-composer .ws-modes { order: 2; }
 html[data-home-layout="sessions"] #workspace-layer .ws-composer .builder-autonomy { order: 3; position: relative; }
-html[data-home-layout="sessions"] #workspace-layer .ws-composer :is(#workspace-compose-hint, .builder-intent-hint) { order: 4; flex: 1 1 auto; min-width: 0; overflow: hidden; color: var(--dim); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; visibility: hidden; }
-html[data-home-layout="sessions"] #workspace-layer .ws-composer .builder-intent-hint { visibility: visible; text-align: right; }
-html[data-home-layout="sessions"] #workspace-layer .ws-composer #workspace-task-outline { order: 5; }
-html[data-home-layout="sessions"] #workspace-layer .ws-composer #workspace-plan-idea { order: 6; }
-html[data-home-layout="sessions"] #workspace-layer .ws-composer #builder-worker-cli-choice { order: 7; }
+html[data-home-layout="sessions"] #workspace-layer .ws-composer .builder-more { order: 4; position: relative; }
+/* Home's keyboard hint is not shown in this layout; a task's intent hint is, and takes the row's spare room. */
+html[data-home-layout="sessions"] #workspace-layer .ws-composer #workspace-compose-hint { display: none; }
+html[data-home-layout="sessions"] #workspace-layer .ws-composer .builder-intent-hint { order: 5; flex: 1 1 0; min-width: 0; overflow: hidden; color: var(--dim); font-size: 11px; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+html[data-home-layout="sessions"] #workspace-layer .ws-composer #builder-worker-cli-choice { order: 7; margin-left: auto; }
 html[data-home-layout="sessions"] #workspace-layer .ws-composer #builder-worker-tier-choice { order: 8; }
 html[data-home-layout="sessions"] #workspace-layer .ws-composer :is(#workspace-send, #builder-task-send) { order: 9; min-height: 32px; padding: 0 16px; border-radius: 10px; }
 html[data-home-layout="sessions"] #workspace-layer .ws-composer .file-input-tools > [role="status"] { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -10655,8 +10661,17 @@ html[data-home-layout="sessions"] #workspace-layer .ws-composer #workspace-compo
 html[data-home-layout="sessions"] #workspace-layer .ws-composer :is(button.ghost, .autonomy-chip) { min-height: 30px; padding: 0 11px; border-radius: 9px; font-size: 12px; }
 html[data-home-layout="sessions"] #workspace-layer .ws-composer .ws-modes { padding: 2px; border-radius: 9px; }
 html[data-home-layout="sessions"] #workspace-layer .ws-composer .ws-modes button { min-height: 26px; padding: 0 10px; font-size: 12px; }
-#workspace-layer .builder-compose-tools .studio-select { min-height: 30px; max-width: 220px; padding: 0 10px; border: 1px solid color-mix(in srgb, var(--ivory) 10%, transparent); border-radius: 9px; background: color-mix(in srgb, var(--ivory) 4%, transparent); color: var(--ivory); font: 500 12px/1 var(--font-ui); }
+#workspace-layer .builder-compose-tools .studio-select { flex: 1 1 96px; min-width: 88px; min-height: 30px; max-width: 220px; padding: 0 10px; border: 1px solid color-mix(in srgb, var(--ivory) 10%, transparent); border-radius: 9px; background: color-mix(in srgb, var(--ivory) 4%, transparent); color: var(--ivory); font: 500 12px/1 var(--font-ui); }
 #workspace-layer .builder-compose-tools .studio-select .studio-select-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The "+" and its menu: a round button, and a small list that opens upward. */
+html[data-home-layout="sessions"] #workspace-layer .ws-composer .builder-more-btn { display: inline-grid; place-items: center; width: 30px; min-width: 30px; padding: 0; border-radius: 50%; }
+html[data-home-layout="sessions"] #workspace-layer .ws-composer .builder-more-btn .glyph { width: 15px; height: 15px; }
+html[data-home-layout="sessions"] #workspace-layer .ws-composer .builder-more-btn[aria-expanded="true"] { border-color: var(--gold); color: var(--ivory); }
+.builder-more-menu { position: absolute; z-index: 30; bottom: calc(100% + 8px); left: 0; display: flex; flex-direction: column; gap: 2px; min-width: 190px; padding: 6px; border: 1px solid var(--hairline-strong); border-radius: 14px; background: var(--panel-solid); box-shadow: 0 12px 34px rgb(0 0 0 / .4); }
+.builder-more-menu[hidden] { display: none; }
+html[data-home-layout="sessions"] #workspace-layer .ws-composer .builder-more-menu > button { display: flex; align-items: center; justify-content: flex-start; width: 100%; min-height: 34px; padding: 0 12px; border: 0; border-radius: 9px; background: transparent; color: var(--ivory); font-size: 12.5px; text-align: left; white-space: nowrap; }
+html[data-home-layout="sessions"] #workspace-layer .ws-composer .builder-more-menu > button:hover:not(:disabled), html[data-home-layout="sessions"] #workspace-layer .ws-composer .builder-more-menu > button:focus-visible { background: color-mix(in srgb, var(--ivory) 9%, transparent); }
+html[data-home-layout="sessions"] #workspace-layer .ws-composer .builder-more-menu > button[hidden] { display: none; }
 
 /* ---- New task: the greeting and the stats card --------------------------- */
 .builder-home { order: 0; display: flex; flex-direction: column; align-items: center; gap: 20px; padding: clamp(18px, 5vh, 56px) 0 24px; }
@@ -64294,6 +64309,7 @@ html[data-motion="off"] .pane-floating { animation: none; }
   const STORAGE_KEY = "mefiStudio.mediaWindow.v1";
   const GAP = 16;
   const TOOLBAR_HEIGHT = 44; // 36px controls and the gap above playback.
+  const NARROW = 420; // the whole bar (title, transport, volume, window buttons) needs about this much.
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
   const finite = (value, fallback) => Number.isFinite(value) ? value : fallback;
   const distance = (point, box) => Math.hypot(Math.max(box.x - point.x, 0, point.x - box.x - box.width), Math.max(box.y - point.y, 0, point.y - box.y - box.height));
@@ -64479,7 +64495,12 @@ html[data-motion="off"] .pane-floating { animation: none; }
       let inMenu = Boolean(dockHost && visible && !minimized && !(background && shape !== "browser"));
       if (inMenu && !carry(dockHost)) { dockHost = null; inMenu = false; }
       if (!inMenu && parentOf() !== document.body) carry(document.body);
+      // Docking and undocking are jumps. The glide is for a floating player stepping aside; laid on a change
+      // of frame (the stage's `inset: 0` against a place on the page) it flew the player in from the page's
+      // corner whenever the menu closed after a step aside.
+      if ((root.dataset.docked === "true") !== inMenu) root.dataset.dodging = "false";
       root.dataset.docked = String(inMenu);
+      let narrow = false;
       if (inMenu) {
         Object.assign(root.style, { left: "", top: "", width: "", height: "" });
         root.style.clipPath = dockClip ? `inset(${dockClip.join("px ")}px)` : "none";
@@ -64487,7 +64508,12 @@ html[data-motion="off"] .pane-floating { animation: none; }
         const current = visibleBox();
         root.style.clipPath = "none";
         Object.assign(root.style, { left: `${current.x}px`, top: `${current.y}px`, width: `${current.width}px`, height: `${current.height}px` });
+        // Too narrow for the whole bar (a small window with the rail open): the
+        // volume stays with the menu, so the transport and the window's own
+        // buttons, Close among them, never run off the edge.
+        narrow = !minimized && current.width < NARROW;
       }
+      root.dataset.narrow = String(narrow);
       for (const grip of edges) grip.hidden = inMenu || minimized || background && shape !== "browser";
       paintVideo();
     }
@@ -65733,7 +65759,7 @@ html[data-motion="off"] .pane-floating { animation: none; }
       player.controls = true; player.preload = "metadata"; player.playsInline = true;
       player.title = link.label;
       player.volume = mediaVolume; player.muted = mediaMuted;
-      const sync = () => { if (els.linkFrame !== player) return; state.linkPlaying = !player.paused && !player.ended; renderLinkNow(); announce(); };
+      const sync = () => { if (els.linkFrame !== player) return; state.linkPlaying = !player.paused && !player.ended; renderLinkNow(); scheduleNow(); announce(); };
       for (const name of ["play", "playing", "pause", "ended"]) player.addEventListener(name, sync);
       for (const name of ["timeupdate", "durationchange", "loadedmetadata"]) player.addEventListener(name, () => { if (els.linkFrame === player) scheduleNow(); });
       player.addEventListener("ended", () => { if (els.linkFrame === player) playQueued(); });
@@ -65744,7 +65770,7 @@ html[data-motion="off"] .pane-floating { animation: none; }
         if (els.linkFrame !== player) return;
         state.linkPlaying = false;
         note(link.provider === "discord" ? "Discord could not send that file. Attachment links expire; copy a fresh one from Discord." : "That file could not be played. The link may have expired, or the format is not supported.", true);
-        announce();
+        scheduleNow(); announce();
       });
       if (startSeconds > 0) {
         const seekOnce = () => { player.removeEventListener?.("loadedmetadata", seekOnce); try { player.currentTime = startSeconds; } catch {} };
@@ -65906,8 +65932,13 @@ html[data-motion="off"] .pane-floating { animation: none; }
       const media = draggedMedia(event);
       if (!Number.isInteger(from) && !media) return;
       event.preventDefault(); event.stopPropagation?.();
-      if (Number.isInteger(from) && linkQueue[from]) moveQueued(from, at);
-      else queueLink(media.url, media.title, false, { at });
+      if (Number.isInteger(from)) {
+        // A row is moved, never copied. Its place was read when the drag began;
+        // if the queue has changed since (a video ended and took the head), the
+        // row is found again by its link, and a row that is gone is left alone.
+        const row = linkQueue[from] && (!media || linkQueue[from].url === media.url) ? from : media ? linkQueue.findIndex((item) => item.url === media.url) : -1;
+        if (row >= 0) moveQueued(row, at);
+      } else queueLink(media.url, media.title, false, { at });
     });
   }
   function renderLinkQueue() {
@@ -65949,9 +65980,12 @@ html[data-motion="off"] .pane-floating { animation: none; }
   function nextVideo() {
     if (playQueued()) return;
     const current = linkPlayback?.url || state.link?.url;
-    const index = youtubeResults.findIndex(item => item.url === current || item.id === youtubeId(current));
+    // A playlist plays its own order, even when its video is also on screen in
+    // the feed; a single video (whatever start time its link carried) follows the feed.
+    const playlist = state.link?.provider === "youtube" && new URL(state.link.url).searchParams.has("list");
+    const index = playlist ? -1 : youtubeResults.findIndex(item => item.url === current || item.id === youtubeId(current));
     if (index >= 0 && index + 1 < youtubeResults.length) { playLink(youtubeResults[index + 1].url, { label: youtubeResults[index + 1].title, keepField: true }); return; }
-    if (state.link?.provider === "youtube" && new URL(state.link.url).searchParams.has("list")) { youtubeCommand("nextVideo"); return; }
+    if (playlist) { youtubeCommand("nextVideo"); return; }
     // Nothing lined up: the feed is where the next one comes from.
     openSection("browse");
     feedNote("Pick what plays next: click a video to queue it, or drag it onto Up next.");
@@ -65972,16 +66006,19 @@ html[data-motion="off"] .pane-floating { animation: none; }
   const feed = { kind: null, query: "", about: "", more: null, generation: 0, observer: null };
   const FEED_IDEAS = ["lofi beats", "synthwave", "jazz for work", "ambient focus", "piano covers", "nature 4K", "retro game music", "deep house"];
   function feedNote(text) { if (els.youtubeNotice) els.youtubeNotice.textContent = String(text || ""); }
+  // With nothing on, a click plays; with something on, it lines up after it.
+  const feedBusy = () => state.source === "link" && Boolean(state.link || els.browser?.active);
+  const feedHint = (item) => `${item.title} — click to ${feedBusy() ? "add it to Up next" : "play it"}; drag it onto Up next to place it`;
+  const feedItems = new WeakMap();
   function feedPick(item) {
-    // With nothing on, a click plays; with something on, it lines up after it.
-    if (!(state.source === "link" && (state.link || els.browser?.active))) { playLink(item.url, { label: item.title, keepField: true }); return; }
+    if (!feedBusy()) { playLink(item.url, { label: item.title, keepField: true }); return; }
     if (state.link?.url === item.url) { renderNow(); return; }
     if (queueLink(item.url, item.title)) window.MefiMotion?.enter?.(els.linkQueueHeading);
   }
   function feedCard(item) {
     const card = element("article", "music-youtube-result", null, els.youtubeResults);
     card.dataset.key = item.id;
-    card.title = `${item.title} — click to ${state.link ? "add it to Up next" : "play it"}; drag it onto Up next to place it`;
+    feedItems.set(card, item); card.title = feedHint(item);
     // children[0] the picture and words; then Play, Add to queue, Queue next.
     const copy = element("span", "music-yt-copy", null, card);
     const picture = thumbInto(copy, item.id, "music-yt-thumb");
@@ -65996,7 +66033,8 @@ html[data-motion="off"] .pane-floating { animation: none; }
     dragMedia(card, item);
     return card;
   }
-  // Marks each card that is playing or already waiting in Up next.
+  // Marks each card that is playing or already waiting in Up next, and keeps
+  // its hint true to what a click will do.
   function paintFeedMarks() {
     if (!els.youtubeResults) return;
     const queued = new Set(linkQueue.map((item) => youtubeId(item.url)).filter(Boolean));
@@ -66005,12 +66043,20 @@ html[data-motion="off"] .pane-floating { animation: none; }
       const id = card.dataset?.key;
       const mark = id && id === playing ? "playing" : queued.has(id) ? "queued" : "";
       if ((card.dataset.state || "") !== mark) card.dataset.state = mark;
+      const item = feedItems.get(card), hint = item ? feedHint(item) : card.title;
+      if (card.title !== hint) card.title = hint;
     }
   }
+  // The ideas are the same until the playing YouTube video changes (or ends up
+  // none), so they are painted once per video; render() asks on every repaint,
+  // which is what puts them on a Browse that opens before anything has played.
+  let ideasFor;
   function paintFeedIdeas() {
     if (!els.feedIdeas) return;
-    els.feedIdeas.textContent = "";
     const current = state.source === "link" ? youtubeId(state.link?.url) : null;
+    if (ideasFor === current) return;
+    ideasFor = current;
+    els.feedIdeas.textContent = "";
     if (current) button("More like this video", "ghost music-feed-idea", els.feedIdeas, () => void loadFeed({ related: current }, { about: `More like ${linkPlayback?.title || "this video"}` })).dataset.kind = "related";
     for (const idea of FEED_IDEAS) button(idea, "ghost music-feed-idea", els.feedIdeas, () => { els.linkInput.value = idea; void searchYouTube(idea); });
   }
@@ -66390,8 +66436,10 @@ html[data-motion="off"] .pane-floating { animation: none; }
     setText(els.nowKicker, now.kicker); setText(els.nowTitle, now.title); setText(els.nowDetail, now.detail);
     els.nowTitle.title = now.title;
     // The picture beside the words: a video's thumbnail when the video itself
-    // is not in the stage, else the source's own mark.
-    const picture = now.source === "link" && els.linkStage.dataset.docked !== "true" ? now.thumb : null;
+    // is not in the stage, else the source's own mark. Only an open menu asks
+    // for it: a closed one shows nobody a picture, and a remembered or freshly
+    // loaded link must not reach YouTube's image host before the menu opens.
+    const picture = els.dropdown.hidden === false && now.source === "link" && els.linkStage.dataset.docked !== "true" ? now.thumb : null;
     if ((els.nowThumb.dataset.src || "") !== (picture || "")) {
       els.nowThumb.dataset.src = picture || "";
       if (picture) els.nowThumb.src = picture; else els.nowThumb.removeAttribute("src");
@@ -66616,7 +66664,7 @@ html[data-motion="off"] .pane-floating { animation: none; }
   function render() {
     if (!initialized) return;
     renderSourcePanels();
-    renderQueue(); renderRadio(); renderAudioLink(); renderLinks(); renderNow();
+    renderQueue(); renderRadio(); renderAudioLink(); renderLinks(); paintFeedIdeas(); paintFeedMarks(); renderNow();
     els.recommend.disabled = state.sending || !(recommender || window.mefiStudio?.musicRecommend);
     els.recommend.textContent = state.sending ? "Finding a direction…" : "Ask for recommendations";
     els.aiHint.textContent = recommender || window.mefiStudio?.musicRecommend ? "Uses Studio’s configured assistant. Recommendations appear here." : "Music recommendations need Studio’s assistant connection.";
@@ -66745,6 +66793,9 @@ html[data-motion="off"] .pane-floating { animation: none; }
       node.setAttribute("aria-pressed", String(current));
       node.dataset.state = current ? phase : "off";
     }
+    // The card says the same thing (Live radio, Holding the sound…, Station
+    // unavailable): a phase change repaints it too, not only the panel.
+    scheduleNow();
   }
   function renderAudioLink(status = window.MefiIdle?.audioStatus?.()) {
     if (!els.audioToggle) return;
@@ -82918,7 +82969,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   let raise = 10;
   let saved = load();
 
-  function load() { try { const value = JSON.parse(localStorage.getItem(STORE) || "{}"); return value && typeof value === "object" ? value : {}; } catch { return {}; } }
+  // A stored array would take property writes that JSON.stringify then drops,
+  // so only a plain object is a layout.
+  function load() { try { const value = JSON.parse(localStorage.getItem(STORE) || "{}"); return value && typeof value === "object" && !Array.isArray(value) ? value : {}; } catch { return {}; } }
   function save() { try { localStorage.setItem(STORE, JSON.stringify(saved)); } catch { /* the layout is a convenience */ } }
   function memory(id) { if (!saved[id] || typeof saved[id] !== "object") saved[id] = {}; return saved[id]; }
   const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
@@ -83276,10 +83329,15 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 // Queue, Status) become panes (panes.js) that dock beside the page or pop out
 // as windows, joined by Output and Checks for the task on screen.
 //
-// Layout: html[data-home-layout="sessions"]. Diagnostic launches (?smoke=1,
-// ?capture=1) keep the classic Home unless a layout was saved, as vibe.js
-// keeps them in Build. Search's "Switch Home layout" flips it and reloads,
-// since the panes adopt the classic Home's own sections.
+// Layout: html[data-home-layout="sessions"]. The classic Home is the default
+// (the 0.5.0 plan keeps homeLayout on classic until the owner turns this on):
+// a saved mefiStudio.homeLayout of "sessions", ?home=sessions for one launch,
+// or Search's "Switch Home layout" (it saves the choice and reloads, since the
+// panes adopt the classic Home's own sections) turn it on, and ?home=classic
+// turns it off for a launch. Diagnostic launches (?smoke=1, ?capture=1) also
+// fall back to the classic Home, so the render fixtures see the page they were
+// written for. Under the classic layout this module wires nothing at all: no
+// listener, timer or frame, no stored key, and no change to the page.
 //
 // Workspace (workspace.js) still owns Home's data, its composer and every
 // host call it made; this module reads its snapshot, adds the session's own
@@ -83287,6 +83345,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 (function () {
   "use strict";
   const LAYOUT_KEY = "mefiStudio.homeLayout";
+  const DEFAULT_LAYOUT = "classic";
   const layer = document.getElementById("workspace-layer");
   if (!layer) return;
   const api = () => window.mefiStudio;
@@ -83301,7 +83360,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (param === "classic" || param === "sessions") return param;
     const saved = read(LAYOUT_KEY);
     if (saved === "sessions" || saved === "classic") return saved;
-    return headless ? "classic" : "sessions";
+    return headless ? "classic" : DEFAULT_LAYOUT;
   }
   const sessions = () => layout() === "sessions";
   const building = () => window.MefiVibe?.mode?.() !== "vibe";
@@ -83392,10 +83451,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const label = question ? "Needs your answer" : summary?.label || (tone === "done" ? "Done" : "Queued");
     return { stage, tone, label, summary, question };
   }
-  const TONE_WORDS = { ask: "Needs you", run: "Working", check: "Checking", done: "Done", dropped: "Dropped", wait: "Waiting", ready: "Queued" };
 
   // The menu's groups: Pinned, Needs you and Working first, then the rest by
   // the day each last moved. Finished work older than two weeks folds away.
+  // The rows are the workspace's own, shared by every listener, so each row's
+  // reading is kept here beside it and never written onto it.
+  const readings = new WeakMap();
   function groups(tasks, { now = Date.now(), pinned = pins(), data = snapshot() } = {}) {
     const today = startOfDay(now);
     const buckets = new Map();
@@ -83403,7 +83464,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     for (const task of tasks) {
       if (!task?.id || task.archived || task.status === "archived") continue;
       const now2 = reading(task, data);
-      task.__reading = now2;
+      readings.set(task, now2);
       if (pinned.has(task.id)) { add("pinned", "Pinned", task, 0); continue; }
       if (now2.tone === "ask") { add("needs", "Needs you", task, 1); continue; }
       if (now2.tone === "run" || now2.tone === "check") { add("working", "Working", task, 2); continue; }
@@ -83495,7 +83556,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const seen = Number(read(seenKey(), "0")) || 0;
     const unread = Boolean(lastSaid && stampOf(lastSaid.at) > seen && !(state.view === "chat" && window.MefiWorkspace?.isActive?.()));
     const current = state.view === "task" ? state.taskId : state.view === "chat" ? "__chat" : null;
-    const signature = JSON.stringify([data.projectId, grouped.map((group) => [group.key, group.title, group.rows.map((task) => [task.id, task.title || task.prompt || "", task.__reading.tone, task.__reading.label])]), state.query, state.searching, state.olderOpen, unread, current, companion(), window.MefiWorkspace?.isActive?.() ? 1 : 0]);
+    const signature = JSON.stringify([data.projectId, grouped.map((group) => [group.key, group.title, group.rows.map((task) => [task.id, task.title || task.prompt || "", readings.get(task).tone, readings.get(task).label])]), state.query, state.searching, state.olderOpen, unread, current, companion(), window.MefiWorkspace?.isActive?.() ? 1 : 0]);
     paintPerson(data);
     if (state.painted.get("rail") === signature && list.childElementCount) return true;
     state.painted.set("rail", signature);
@@ -83532,7 +83593,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       }
       rows.push(el("span", "app-rail-heading builder-group", group.title));
       for (const task of group.rows) {
-        const now = task.__reading;
+        const now = readings.get(task);
         rows.push(row({ key: task.id, title: window.MefiTasks?.shortTitle?.(task) || task.title || task.prompt || "Untitled task", full: task.title || task.prompt || "", tone: now.tone, label: now.label, pinned: pinned.has(task.id), selected: current === task.id, run: () => openTask(task.id) }));
         shown += 1;
       }
@@ -83693,9 +83754,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   function subject(data = snapshot()) {
     const tasks = data.tasks || [];
     if (state.view === "task" && state.taskId) return tasks.find((task) => task.id === state.taskId) ?? null;
-    const context = window.MefiNav?.taskContext?.(data.projectId);
-    return tasks.find((task) => task.id === context?.taskId)
-      ?? tasks.find((task) => (data.status?.running || []).some((job) => job.taskId === task.id))
+    // A row with no id (or a job with no task) must never match "no task followed".
+    const followed = window.MefiNav?.taskContext?.(data.projectId)?.taskId;
+    return (followed ? tasks.find((task) => task.id === followed) : null)
+      ?? tasks.find((task) => task.id && (data.status?.running || []).some((job) => job.taskId === task.id))
       ?? null;
   }
   function paintOutput(task, run, data) {
@@ -84386,9 +84448,47 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     for (const [select, words] of [[cli, "Coding worker"], [tier, "Tier"]]) { const option = el("option", "", words); option.value = ""; select.append(option); select.disabled = true; }
     cli.addEventListener("change", () => saveRouting({ executorCli: cli.value }, `${CLI_NAMES[cli.value] || cli.value} builds your tasks now.`));
     tier.addEventListener("change", () => saveRouting({ executorTier: tier.value }, `${(TIERS.find(([id]) => id === tier.value) || ["", tier.value])[1]} saved.`));
-    tools.append(autonomy, cli, tier);
+    tools.append(autonomy, buildMoreMenu(), cli, tier);
     bottom.insertBefore(tools, ws("send") ?? null);
     window.MefiAutonomy?.mount?.(autonomy, { id: "builder-autonomy-control" });
+  }
+  // The "+" after the permission chip holds what crowded the row and pushed the
+  // worker, its tier and Send onto a second line at 1920x1080: "Use a task
+  // outline" and "Plan an idea". Their own buttons move into the menu, so ids,
+  // handlers and the purpose's show and hide stay Home's (workspace.js).
+  function buildMoreMenu() {
+    const holder = el("span", "builder-more"); holder.id = "builder-more";
+    const toggle = button("", "ghost builder-more-btn", null, { icon: "g-add", title: "More: a task outline, or plan an idea" });
+    toggle.id = "builder-compose-more"; toggle.setAttribute("aria-label", "More"); toggle.setAttribute("aria-haspopup", "menu"); toggle.setAttribute("aria-expanded", "false"); toggle.setAttribute("aria-controls", "builder-more-menu");
+    const menu = el("div", "builder-more-menu"); menu.id = "builder-more-menu"; menu.setAttribute("role", "menu"); menu.setAttribute("aria-label", "More"); menu.hidden = true;
+    for (const id of ["task-outline", "plan-idea"]) {
+      const item = ws(id);
+      if (!item) continue;
+      item.setAttribute("role", "menuitem");
+      menu.append(item);
+    }
+    const items = () => [...menu.querySelectorAll("button")].filter((item) => !item.hidden && !item.disabled);
+    const set = (open, { focus = false } = {}) => {
+      menu.hidden = !open;
+      toggle.setAttribute("aria-expanded", String(open));
+      if (open && focus) items()[0]?.focus?.({ preventScroll: true });
+    };
+    toggle.addEventListener("click", () => set(menu.hidden, { focus: true }));
+    // A pick closes the menu after the button's own handler has run.
+    menu.addEventListener("click", (event) => { if (event.target?.closest?.("button")) set(false); });
+    holder.addEventListener("keydown", (event) => {
+      if (menu.hidden) return;
+      if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); set(false); toggle.focus?.({ preventScroll: true }); return; }
+      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+      const list = items();
+      if (!list.length) return;
+      event.preventDefault();
+      const at = list.indexOf(event.target);
+      list[(at + (event.key === "ArrowDown" ? 1 : -1) + list.length) % list.length]?.focus?.({ preventScroll: true });
+    });
+    document.addEventListener("click", (event) => { if (!menu.hidden && !holder.contains(event.target)) set(false); });
+    holder.append(toggle, menu);
+    return holder;
   }
   function paintChips() {
     const holder = byId("builder-chips");
@@ -84543,7 +84643,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     openTask, openChat, newTask, requestChange, setView, view: () => ({ view: state.view, taskId: state.taskId }),
     groups, reading, boardStats, heatmap: (days, now) => heatmap(days, now), setLayout, refresh: () => { state.painted.clear(); schedule(); },
   };
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", wire); else wire();
+  // The classic layout wires nothing (see the header). A layout change reloads
+  // the page, so this is decided once per launch.
+  if (sessions()) { if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", wire); else wire(); }
 })();
 
 // Worktrees: Work's list of every git worktree of the open project (Work ›

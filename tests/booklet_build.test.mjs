@@ -73,8 +73,10 @@ const INLINE_SCRIPTS = [
   "vibe-panels.js",
   "vibe.js",
   "key-tips.js",
+  "patch.js",
   "panes.js",
   "builder.js",
+  "worktrees.js",
   "booklet.js",
 ];
 
@@ -112,7 +114,7 @@ async function makeFixtureRoot() {
   await copyFile(path.join(RENDERER, "profiler.css"), path.join(renderer, "profiler.css"));
   await copyFile(path.join(RENDERER, "brains.css"), path.join(renderer, "brains.css"));
   await copyFile(path.join(RENDERER, "agent-brain.css"), path.join(renderer, "agent-brain.css"));
-  for (const name of ["studio-ui.css", "agents.css", "companion-ui.css", "companion-hub.css", "vibe.css", "trace.css", "fleet.css", "setup-helper.css", "config-dialog.css", "git-sync.css", "builder.css"]) await copyFile(path.join(RENDERER, name), path.join(renderer, name));
+  for (const name of ["studio-ui.css", "agents.css", "companion-ui.css", "companion-hub.css", "vibe.css", "trace.css", "fleet.css", "setup-helper.css", "config-dialog.css", "git-sync.css", "builder.css", "worktrees.css"]) await copyFile(path.join(RENDERER, name), path.join(renderer, name));
   for (const name of INLINE_SCRIPTS) {
     await copyFile(path.join(RENDERER, name), path.join(renderer, name));
   }
