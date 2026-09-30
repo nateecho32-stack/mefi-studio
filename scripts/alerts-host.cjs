@@ -21,7 +21,8 @@
 //   the showing    decide() says yes or why not; a yes makes one Notification,
 //                  flashes the taskbar until Studio is focused, and is
 //                  remembered for the dedupe and the twelve an hour. A click
-//                  brings the window up and pushes alerts:open { kind, id, ... }.
+//                  brings the window up and pushes alerts:open { kind, id, taskId,
+//                  projectId, count? }: count only when it told several.
 //   the test       test() sends the test notification; while Studio is in
 //                  front it waits (up to a minute) for the owner to look
 //                  away, because a notification is never sent to a window
@@ -114,10 +115,15 @@ function createAlertsHost({
   // ---- showing one ----------------------------------------------------------------------------------
   const context = () => ({ now: now(), minuteOfDay: minute(), focused: isLooked() === true, killed: killed(), quiet: quietSaved, sent: memory.sent, recent: memory.recent, waiting });
 
-  /** What a click goes to: the first thing the notification told. */
+  /**
+   * What a click goes to: the first thing the notification told. When it told
+   * several (a burst is one notification) `count` says how many, so the page can
+   * open the Inbox instead of one task; a single thing carries no count.
+   */
   function targetOf(notify, group) {
     const first = (group?.items ?? []).find((item) => String(item.id) === notify.open?.id) ?? null;
-    return { kind: notify.kind, id: notify.open?.id ?? null, taskId: first?.taskId ?? null, projectId: first?.projectId ?? null };
+    const told = Number(notify.count) || 0;
+    return { kind: notify.kind, id: notify.open?.id ?? null, taskId: first?.taskId ?? null, projectId: first?.projectId ?? null, ...(told > 1 ? { count: told } : {}) };
   }
   function open(target) {
     try { showWindow(); } catch (error) { say(`[alerts] could not bring Studio up (${why(error)})`); }
