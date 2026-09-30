@@ -16894,7 +16894,10 @@ async function spawnNextJob(options) {
         return null;
       });
     }
-    const skillInstructions = typeof agentAddons === "undefined" ? "" : scrubOutbound(await agentAddons.instructions(projectRoot(), entry.agentConfiguration?.configuration || await readAgentSettings(), "builder"));
+    // The route's CLI decides how the project's rules reach this builder: Claude Code,
+    // Codex and OpenCode read AGENTS.md and CLAUDE.md themselves, so they get the owner's
+    // own rules text only (agent-rules.cjs deliversFiles).
+    const skillInstructions = typeof agentAddons === "undefined" ? "" : scrubOutbound(await agentAddons.instructions(projectRoot(), entry.agentConfiguration?.configuration || await readAgentSettings(), "builder", { cli: runRoute?.cli }));
     // A task's saved record goes to the worker as its own small run file
     // (writeTaskRunContext); the handoff header points at it. Only when that
     // write fails is the builder sent to the whole board file, as before.
@@ -21296,7 +21299,10 @@ function registerIpc() {
       }
     }
     const habits = habitsLibrary.library().map((habit) => ({ ...habit, costs: Object.fromEntries(habit.variants.map((variant) => [variant.id, habitsLibrary.cost(habit.id, variant.id)])) }));
-    return { ...state, name: scope === "defaults" ? "Studio defaults" : state.name, scope, configuration: agentProfiles.extract(effective), routing, seats, choices, skills, mcpTools, habits,
+    // The Rules card: the limits, both project files as they are now (the Studio
+    // defaults have no one folder), each section's cost and who reads what.
+    const rulesInfo = await agentAddons.rulesState(projectRoot(), { files: scope !== "defaults" }).catch(() => null);
+    return { ...state, name: scope === "defaults" ? "Studio defaults" : state.name, scope, configuration: agentProfiles.extract(effective), routing, seats, choices, skills, mcpTools, habits, rulesInfo,
       capabilities: Object.fromEntries(["routine", "heavy"].map((role) => {
         const provider = roleProvider(effective, role);
         const model = assistantModelOverride(effective, role, provider);
@@ -21320,7 +21326,7 @@ function registerIpc() {
   async function saveAgentTeam(payload, preset = false) {
     const projectId = projects.active().id;
     if (payload?.projectId !== projectId) return { ok: false, stale: true, error: "The active project changed. Your draft has been kept." };
-    const allowed = preset ? ["preset-save", "preset-delete", "apply"] : ["save", "inherit"];
+    const allowed = preset ? ["preset-save", "preset-delete", "apply"] : ["save", "inherit", "rules"];
     if (!allowed.includes(payload.action)) return { ok: false, error: "Unknown agent setup action." };
     let result;
     const settings = await updateSettings((settings) => {
@@ -21329,7 +21335,8 @@ function registerIpc() {
       return result.ok;
     });
     if (!result?.ok) return result;
-    providerBreaker.reset();
+    // Rules change what is said to a model, not which route answers: a paused route stays paused.
+    if (payload.action !== "rules") providerBreaker.reset();
     if (["save", "inherit", "apply"].includes(payload.action)) resetAssistantAiBackoff();
     send("settings:changed", { agents: true, projectId, revision: result.revision });
     return agentsView(settings, projectId, payload.scope === "defaults" ? "defaults" : "project");

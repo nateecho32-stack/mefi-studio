@@ -57,6 +57,8 @@ const PROMISES = [
   { file: "scripts/model-community.cjs", says: "Pure module: no Electron, no filesystem, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "clock"] },
   // The records an installing update helper and the app pass each other; main.cjs "Release updates: the safety net" owns the I/O.
   { file: "scripts/update-safety.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (time is", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  // The project's standing rules for its agents (ZA8); agent-addons.cjs reads the two project files and puts the block in a prompt.
+  { file: "scripts/agent-rules.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
 ];
 
 const CLOCK = /\bDate\.now\s*\(|new\s+Date\s*\(\s*\)|\bperformance\.now\s*\(/;
