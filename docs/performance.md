@@ -116,6 +116,22 @@ Still open: the accent colour above; a check of the live window
 governor, which sees JavaScript time only and cannot tell when the card is
 the bottleneck.
 
+## Studio's own modules load from a compile cache, September 30, 2026
+
+`main.cjs` now calls `module.enableCompileCache()` before its first require, so
+the hundred or so `scripts/*.cjs` modules it loads are compiled once and read
+back compiled on the next launch. The cache is keyed by each file's content and
+Node's version, so an update cannot load stale code; `MEFI_STUDIO_NO_COMPILE_CACHE=1`
+turns it off (`tests/compile_cache.test.mjs`).
+
+Measured on the cloud Linux machine (Node 24, 95 modules required in a loop,
+median of three): 95 ms without the cache, 50 ms from the second run on. That is
+module loading only, on a fast disk; it is not a Windows number. The startup
+benchmark (`tools/benchmark_startup.py`, three runs) belongs on the PC before
+and after, and the result goes into the TESTRUNS row. Bundling `main.cjs` for
+packaged builds is the larger lever, and is left alone: the updater's
+`missingRequires` scan reads `require()` calls out of the shipped files.
+
 ## Work for surfaces nobody can see, September 27, 2026
 
 A read-only audit of the push paths found per-push work aimed at hidden

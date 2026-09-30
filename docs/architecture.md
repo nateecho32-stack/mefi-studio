@@ -915,7 +915,11 @@ failed process stays an error and cannot produce briefing requests.
   and light edges around the chosen node shape. These controls also live directly
   in the video's media settings, synchronize across panels, and persist locally.
   Brightness applies to the separate node/connection paint passes; labels, menus,
-  video brightness, transparency and tree position remain independent.
+  video brightness, transparency and tree position remain independent. **Fast
+  brightness** (on by default; `fastBrightness` in `mefiStudio.treeDynamics.v1`)
+  paints each brightened pass once into a scratch layer and lays it down with one
+  filtered draw, instead of filtering every shape; turn it off to get the old
+  per-shape path back ([performance.md](performance.md) has the measurements).
 - **Tree modes & movement**, in Appearance › Layout and Music & video › Audio
   reactions, shares saved controls across both panels. **Steady** disables music
   and video reactions; **Music**, **Video**, and **Music + video** select the inputs.

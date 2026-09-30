@@ -7,6 +7,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Tree brightness is much lighter on the graphics card.** Command, Home and
+  Vibe paint brightened nodes and lines once per pass instead of once per shape
+  (on the owner's laptop at 200%: Vibe 4.6 to 42 fps, Command 8.8 to 36, Home 4.1
+  to 43). Node outlines stay pale over the real layer. Appearance › Tree
+  brightness & outlines › Fast brightness turns it off if a look changes.
 - **Studio's own code loads from a compile cache after the first launch.** Each
   of the hundred or so files behind the window is compiled once and read back
   compiled the next time (module loading dropped from about 90 ms to 50 ms on a

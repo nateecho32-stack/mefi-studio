@@ -33207,8 +33207,12 @@ html[data-motion="off"] .pane-floating { animation: none; }
   const defaults = Object.freeze({ mode: "music", shape: "layout", width: 1, height: 1, rotation: 0, x: 0, y: 0,
     nodeSize: 1, adaptCount: true, nodeMotion: .25, shapeMotion: .25, positionMotion: .2,
     videoTarget: "dark", videoStrength: .7, videoShape: true, smoothing: 2, dwell: 15,
-    nodeBrightness: 1, lineBrightness: 1, nodeBrightnessEnabled: true, lineBrightnessEnabled: true, outlines: false });
+    nodeBrightness: 1, lineBrightness: 1, nodeBrightnessEnabled: true, lineBrightnessEnabled: true, outlines: false, fastBrightness: true });
   const visibilityKeys = ["nodeBrightness", "lineBrightness", "nodeBrightnessEnabled", "lineBrightnessEnabled", "outlines"];
+  // Paint-only settings: changing one never restarts the live shape. Fast
+  // brightness is a kill switch, not part of the look, so the two "Reset"
+  // buttons leave it where the owner put it (idle.js toneBegin reads it).
+  const paintKeys = [...visibilityKeys, "fastBrightness"];
   const ranges = { width: [.4, 1], height: [.4, 1], rotation: [-180, 180], x: [-1, 1], y: [-1, 1],
     nodeSize: [.5, 1.6], nodeMotion: [0, 1], shapeMotion: [0, 1], positionMotion: [0, 1],
     videoStrength: [0, 1], smoothing: [.2, 8], dwell: [5, 60], nodeBrightness: [0, 2], lineBrightness: [0, 2] };
@@ -33219,7 +33223,7 @@ html[data-motion="off"] .pane-floating { animation: none; }
     if (!value || typeof value !== "object" || Array.isArray(value)) return result;
     for (const [key, bounds] of Object.entries(ranges)) if (typeof value[key] === "number" && Number.isFinite(value[key])) result[key] = clamp(value[key], ...bounds);
     for (const [key, options] of Object.entries(choices)) if (options.includes(value[key])) result[key] = value[key];
-    for (const key of ["adaptCount", "videoShape", "nodeBrightnessEnabled", "lineBrightnessEnabled", "outlines"]) if (typeof value[key] === "boolean") result[key] = value[key];
+    for (const key of ["adaptCount", "videoShape", "nodeBrightnessEnabled", "lineBrightnessEnabled", "outlines", "fastBrightness"]) if (typeof value[key] === "boolean") result[key] = value[key];
     return result;
   }
   let saved;
@@ -33235,7 +33239,7 @@ html[data-motion="off"] .pane-floating { animation: none; }
   function clearScene() { scene = null; candidate = -1; streak = 0; current = 4; movedAt = -Infinity; }
   function update(changes) {
     prefs = normalize({ ...prefs, ...changes });
-    if (!Object.keys(changes || {}).every(key => visibilityKeys.includes(key))) { revision++; clearScene(); }
+    if (!Object.keys(changes || {}).every(key => paintKeys.includes(key))) { revision++; clearScene(); }
     try { localStorage.setItem(KEY, JSON.stringify(prefs)); } catch {}
     refresh();
     window.dispatchEvent(new CustomEvent("mefi:tree-dynamics", { detail: { ...prefs } }));
@@ -33395,6 +33399,11 @@ html[data-motion="off"] .pane-floating { animation: none; }
     const key = kind === "lines" ? "lineBrightness" : "nodeBrightness";
     return prefs[`${key}Enabled`] ? prefs[key] : 1;
   }
+  // Appearance › Fast brightness: on (the default) Command paints a brightened
+  // pass once and lays it down; off it sets the filter around the pass, as it
+  // did before, for a tree the fast path draws wrongly. See idle.js toneBegin.
+  const fastBrightness = () => prefs.fastBrightness;
+  const outlinesOn = () => prefs.outlines;
   // Canvas filters affect only the requested paint pass. Menus, video and text
   // retain their own colors, and the default 100% path adds no filter work.
   // Command sets it once per layer to lay down a pass it painted off to the
@@ -33421,7 +33430,7 @@ html[data-motion="off"] .pane-floating { animation: none; }
     const root = add("details", null, host); root.className = "music-tree-visibility";
     add("summary", "Tree brightness & outlines", root);
     const fields = {};
-    for (const [key, title] of [["nodeBrightnessEnabled", "Adjust node brightness"], ["nodeBrightness", "Node brightness"], ["lineBrightnessEnabled", "Adjust line brightness"], ["lineBrightness", "Connecting line brightness"], ["outlines", "Node outlines"]]) {
+    for (const [key, title] of [["nodeBrightnessEnabled", "Adjust node brightness"], ["nodeBrightness", "Node brightness"], ["lineBrightnessEnabled", "Adjust line brightness"], ["lineBrightness", "Connecting line brightness"], ["outlines", "Node outlines"], ["fastBrightness", "Fast brightness"]]) {
       const row = add("label", null, root); row.className = "music-tree-control";
       add("span", title, row);
       const input = add("input", null, row); input.id = `${prefix}-tree-${key}`; input.setAttribute("aria-label", title);
@@ -33431,7 +33440,7 @@ html[data-motion="off"] .pane-floating { animation: none; }
       input.addEventListener(input.type === "range" ? "input" : "change", () => update({ [key]: input.type === "checkbox" ? input.checked : Number(input.value) }));
       fields[key] = { input, output };
     }
-    const hint = add("p", "Brightness changes nodes and connecting lines independently. Turn an adjustment off to use normal brightness without losing its slider setting. Outlines add a contrasting edge around each node.", root); hint.className = "music-fineprint";
+    const hint = add("p", "Brightness changes nodes and connecting lines independently. Turn an adjustment off to use normal brightness without losing its slider setting. Outlines add a contrasting edge around each node. Fast brightness paints the nodes or lines once and brightens that in one step, which is far lighter on the graphics card; turn it off to brighten every shape as it is drawn (exact, but slow on a busy tree).", root); hint.className = "music-fineprint";
     const reset = add("button", "Reset tree brightness", root); reset.type = "button"; reset.className = "ghost";
     reset.addEventListener("click", () => update(Object.fromEntries(visibilityKeys.map(key => [key, defaults[key]]))));
     panels.push({ fields }); refresh(); return root;
@@ -33458,12 +33467,12 @@ html[data-motion="off"] .pane-floating { animation: none; }
     for (const [key, title] of [["adaptCount", "Adapt spacing to node count"], ["width", "Shape width"], ["height", "Shape height"], ["rotation", "Shape rotation"], ["x", "Horizontal position"], ["y", "Vertical position"], ["nodeSize", "Node size"], ["nodeMotion", "Music · node movement & size"], ["shapeMotion", "Music · shape deformation"], ["positionMotion", "Music · position sway"]]) control(key, title);
     control("videoTarget", "Video positioning", [["dark", "Seek dark regions"], ["bright", "Seek bright regions"]]);
     for (const [key, title] of [["videoStrength", "Video positioning strength"], ["videoShape", "Adapt shape to video regions"], ["smoothing", "Movement smoothing"], ["dwell", "Video region hold"]]) control(key, title);
-    const reset = add("button", "Reset tree movement", root); reset.type = "button"; reset.className = "ghost"; reset.addEventListener("click", () => update(Object.fromEntries(Object.entries(defaults).filter(([key]) => !visibilityKeys.includes(key)))));
+    const reset = add("button", "Reset tree movement", root); reset.type = "button"; reset.className = "ghost"; reset.addEventListener("click", () => update(Object.fromEntries(Object.entries(defaults).filter(([key]) => !paintKeys.includes(key)))));
     const status = add("p", null, root); status.className = "music-fineprint"; status.setAttribute("role", "status");
     mountVisibility(root, prefix);
     panels.push({ fields, status }); refresh(); return root;
   }
-  window.MefiTreeDynamics = { normalize, update, mount, mountVisibility, brightness, beginPaint, outline, apply, musicEnabled, videoEnabled, sampleRequest, acceptSample, setVideoAvailable,
+  window.MefiTreeDynamics = { normalize, update, mount, mountVisibility, brightness, fastBrightness, outlinesOn, beginPaint, outline, apply, musicEnabled, videoEnabled, sampleRequest, acceptSample, setVideoAvailable,
     preferences: () => ({ ...prefs }), status: () => ({ count, available, scene: scene ? { ...scene } : null, revision }) };
 })();
 
@@ -37865,9 +37874,11 @@ html[data-motion="off"] .pane-floating { animation: none; }
     ORBIT.time = time; ORBIT.still = still; ORBIT.detail = node._detail ?? 3; ORBIT.motion = node._m ?? null; ORBIT.theme = state.nodeTheme ?? null;
     return ORBIT;
   }
-  function drawNodeSurface(ctx, node, p, radius, tint, { selected = false, active = false, alpha = 1, time = 0, still = false, detail = 3, chosen = false, motion = null } = {}) {
+  function drawNodeSurface(ctx, node, p, radius, tint, { selected = false, active = false, alpha = 1, time = 0, still = false, detail = 3, chosen = false, motion = null, outlineOn = null } = {}) {
     node._extraGlow = state.extraGlow === true;
-    globalThis.window?.MefiTreeDynamics?.outline?.(ctx, state.nodeStyle ?? "orbs", p, radius, motion, (node._fade ?? 1) * alpha);
+    // `outlineOn`: the real layer the outline paints on when `ctx` is the
+    // scratch of a brightened pass (toneBegin), which would tint its rim.
+    globalThis.window?.MefiTreeDynamics?.outline?.(outlineOn ?? ctx, state.nodeStyle ?? "orbs", p, radius, motion, (node._fade ?? 1) * alpha);
     const styles = globalThis.window?.MefiNodeStyles;
     if (styles) {
       // A node that wears a glyph (the hub's monogram, an agent's role) is
@@ -41354,15 +41365,30 @@ html[data-motion="off"] .pane-floating { animation: none; }
     }
     return entry;
   }
+  // Node outlines are black and white, which a brightness above 100% leaves as
+  // it is, so on the nodes pass they paint on the real layer, not in the
+  // scratch (`outside`): a node's coloured rim then brightens over them as it
+  // did when every shape was filtered alone, where in the scratch it mixed
+  // with the black first and came out gold or teal instead of pale. The
+  // scratch is laid down last, so where a node overlaps one drawn before it,
+  // its ring ends up under the one behind. Laying the scratch down and clearing
+  // it before such an outline fixes that and was measured: a full bitmap copy
+  // each time, and 2 to 4 times fewer frames in the software renderer (see
+  // docs/performance.md, "Tree brightness"). Below 100% nothing clamps, so
+  // outlines stay in the pass and are exact.
   // `far` only when the pass paints on the far layer this frame (a focus).
   // Returns null at 100%, else the pens to paint with and finish().
   function toneBegin(kind, near, far = null) {
     const dynamics = globalThis.window?.MefiTreeDynamics;
     const amount = dynamics?.brightness?.(kind) ?? 1;
     if (amount === 1 || typeof dynamics?.beginPaint !== "function") return null;
-    const layers = [["near", near], ["far", far]].filter(([, target]) => target).map(([slot, target]) => ({ target, scratch: toneScratchFor(slot, target) }));
-    if (layers.some((layer) => !layer.scratch)) {
-      // No scratch canvas here (a bare harness): the filter around the pass.
+    // Appearance › Fast brightness off (read only here, after the 100% return,
+    // so the default path costs nothing) keeps the scratch canvases out of it.
+    const layers = dynamics.fastBrightness?.() === false ? null
+      : [["near", near], ["far", far]].filter(([, target]) => target).map(([slot, target]) => ({ target, scratch: toneScratchFor(slot, target) }));
+    if (!layers || layers.some((layer) => !layer.scratch)) {
+      // The switch is off, or no scratch canvas here (a bare harness): the
+      // filter around the pass, as before.
       const restore = dynamics.beginPaint([near, far], kind);
       return { near, far, finish: () => restore?.() };
     }
@@ -41374,6 +41400,9 @@ html[data-motion="off"] .pane-floating { animation: none; }
     return {
       near: layers[0].scratch.pen,
       far: layers[1]?.scratch.pen ?? null,
+      // Whether the outlines of this pass paint on the real layers: above
+      // 100%, with outlines on (drawNodeSurface).
+      outside: amount > 1 && dynamics.outlinesOn?.() === true,
       finish() {
         for (const { target, scratch } of layers) {
           target.save();
@@ -42897,7 +42926,7 @@ html[data-motion="off"] .pane-floating { animation: none; }
     // The surface's flags and the arrival/selection options: one scratch each
     // for the frame, filled per node (drawNodeSurface reads its flags at once;
     // a style's hook never keeps its options).
-    const surfaceFlags = { selected: false, active: false, alpha: 1, time, still, detail: 3, chosen: false, motion: null };
+    const surfaceFlags = { selected: false, active: false, alpha: 1, time, still, detail: 3, chosen: false, motion: null, outlineOn: null };
     const overlay = { kind: "task", selected: false, chosen: false, hover: false, active: false, alpha: 1, time, still, detail: 3, motion: null, theme: state.nodeTheme ?? null };
     // A Void look marks a selection a few pixels off the node whatever its
     // size (Prism's arcs round a 3 px todo reach 2.2 radii), past what its
@@ -42969,6 +42998,7 @@ html[data-motion="off"] .pane-floating { animation: none; }
       const surface = surfaceFlags;
       surface.selected = Boolean(selected); surface.active = active; surface.alpha = Math.max(0.35, visual.alpha * factor);
       surface.detail = detail; surface.chosen = chosen; surface.motion = motion;
+      surface.outlineOn = nodeTone?.outside ? layer : null;
       drawNodeSurface(ctx, node, p, radius, tint, surface);
       if (nodeStyles) {
         // A style's arrival (t01 runs over the node's grow) and its selection
