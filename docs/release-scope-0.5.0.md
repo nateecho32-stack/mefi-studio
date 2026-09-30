@@ -34,9 +34,11 @@ remember the interface scale, chat messages over 16,000 characters refused
 instead of cut, the multi-PC report counting commits on a detached worktree,
 and a compile cache for Studio's own modules.
 
-Merged from branches that were parked, and being finished before they reach a
-release: the tree-brightness GPU fix, the media player redesign, and Build as a
-coding-agent desktop (behind a layout switch, off by default).
+Merged from branches that were parked, each finished with the tests it was
+missing: the tree-brightness GPU fix (the owner's look at it on the laptop is
+still owed), the media player redesign (with the bugs its new tests found), and
+Build as a coding-agent desktop (behind a layout switch, off by default), whose
+task list now marks tasks that work in their own worktree.
 
 ## Planned for 0.5.0
 
@@ -57,8 +59,8 @@ moves to 0.5.x instead of holding the release.
   and the Skills page.
 - **Load times, agents sending only what is new, logging and Friends 2.0** (the
   work planned for the skipped 0.4.5 and 0.4.6): measured first, then fixed.
-- **Worktrees in Studio:** landed (see above); what remains is the session-row
-  badge and the Worktrees entry in the new shell.
+- **Worktrees in Studio:** landed (see above), with the mark on Build's task
+  rows; what remains is the Worktrees entry in the new shell.
 
 ## Follows in 0.5.x
 
