@@ -12370,6 +12370,14 @@ async function removeMessagePicture(payload = {}) {
   if (!imageAttachOn()) return { ok: false, off: true, error: PICTURES_OFF };
   return imageStore().remove(String(payload?.id ?? ""));
 }
+// assistant:image-read { id }: one saved picture as a data URL, for Build's thread to show what a message or a
+// brief carries. Only an id this folder holds is read, it is checked like any other use of a picture, and
+// MEFI_STUDIO_NO_IMAGE_ATTACH=1 refuses it like the rest.
+async function readMessagePicture(payload = {}) {
+  if (!imageAttachOn()) return { ok: false, off: true, error: PICTURES_OFF };
+  if (!projects.open()) return { ok: false, error: "Open a project folder first - pictures are kept with the project." };
+  return imageStore().read(String(payload?.id ?? ""));
+}
 // The pictures a message names, checked and found: { ok, images: [{ id, name, mime, bytes, path }] }.
 async function attachedPictures(value) {
   if (value === undefined || value === null || (Array.isArray(value) && !value.length)) return { ok: true, images: [] };
@@ -23377,6 +23385,7 @@ function registerIpc() {
   // Pictures on a message (the "Picture attachments" block): keep one, or take one away before it is sent.
   ipcMain.handle("assistant:image", (_event, payload) => saveMessagePicture(payload ?? {}));
   ipcMain.handle("assistant:image-remove", (_event, payload) => removeMessagePicture(payload ?? {}));
+  ipcMain.handle("assistant:image-read", (_event, payload) => readMessagePicture(payload ?? {}));
   // Suggestions are data-only, so a CLI login answers them the way it answers
   // planning: DATA_ONLY_CLIS through the CLI text call, tools disabled.
   const recommendMusic = createMusicRecommender({ resolveRoute: resolveAiRoute, allowCli: DATA_ONLY_CLIS,

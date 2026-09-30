@@ -120,6 +120,23 @@ function createImageStore({ dir, keep = null, fs = fsp, thumbnail = null, now = 
     return { ...entry, base64: bytes.toString("base64") };
   }
 
+  /**
+   * One picture for the page to show (Build's thread): { ok, id, name, mime, bytes, width, height, dataUrl }, or
+   * { ok: false, error }. It is the same picture `resolve` would name (a real file of the type its record says, in this
+   * folder and nowhere else) and `load` checks its bytes still say what the record says before they leave. The data
+   * URL is at most the store's own 5 MB limit of base64, for one picture the person attached or a brief names.
+   */
+  async function read(id) {
+    const found = await resolve([id]);
+    if (!found.ok) return found;
+    const entry = found.images[0];
+    if (!entry) return { ok: false, error: "That is not a picture Studio saved." };
+    let loaded;
+    try { loaded = await load(entry); } catch (error) { return { ok: false, error: `The picture could not be read: ${String(error?.message ?? error).slice(0, 120)}` }; }
+    const meta = await readMeta(id);
+    return { ok: true, id, name: entry.name, mime: entry.mime, bytes: entry.bytes, width: meta?.width ?? null, height: meta?.height ?? null, dataUrl: `data:${entry.mime};base64,${loaded.base64}` };
+  }
+
   /** Take one picture away, its record last. Never fails for one that is already gone. */
   async function remove(id) {
     if (!images.isId(id)) return { ok: false, error: "That is not a picture Studio saved." };
@@ -178,7 +195,7 @@ function createImageStore({ dir, keep = null, fs = fsp, thumbnail = null, now = 
     return { ok: true, removed, kept: living.length + held };
   }
 
-  return { save, resolve, load, remove, prune, folder };
+  return { save, resolve, load, read, remove, prune, folder };
 }
 
 module.exports = { createImageStore, THUMB_MAX_CHARS, MAX_STORED, MAX_FOLDER_BYTES, ORPHAN_MS };
