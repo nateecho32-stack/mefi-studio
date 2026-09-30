@@ -472,10 +472,17 @@ app.whenReady().then(async () => {
     await until("window.MefiNav.get('palette').isOpen()", "the palette is open");
     await key("Escape");
     await until("!window.MefiNav.get('palette').isOpen()", "the palette is closed");
-    // The need pill takes you to what needs you (here Command's Ask rail: no inbox module is part of this frame).
+    // The need pill takes you to what needs you: the Inbox where the Today module is part of the window (MefiToday.openInbox),
+    // else Command's Ask rail.
     await click("shell-need");
-    await until("window.MefiNav.current() === 'command'", "the pill opened Command");
-    await clear(); await run("await window.MefiNav.go('workspace');"); await settle();
+    if (await run("return Boolean(window.MefiToday && window.MefiToday.openInbox && window.MefiToday.isInboxOpen);")) {
+      await until("window.MefiToday.isInboxOpen()", "the pill opened the Inbox");
+      await key("Escape");
+      await until("!window.MefiToday.isInboxOpen()", "Escape closed the Inbox");
+    } else {
+      await until("window.MefiNav.current() === 'command'", "the pill opened Command");
+      await clear(); await run("await window.MefiNav.go('workspace');"); await settle();
+    }
     assert.equal((await p()).frameOn, "on");
     report.interactions.pointer = "ok";
     // Switching mode re-reads the menu's saved pin (Studio keeps it open by default in a wide window): the sections below want it closed.
