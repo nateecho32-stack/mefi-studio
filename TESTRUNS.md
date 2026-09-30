@@ -88,6 +88,20 @@ this row appended through the helper).
   `describe()`: the launch card (four projects with chips, 600x560 too), the chip
   and its popover on Vibe's home and on Build's section bar.
 
+## 2026-09-29 - Promo browser-module ESLint follow-up reverified
+
+Checked PR #2's reported lint follow-up:
+https://github.com/nateecho32-stack/mefi-studio/pull/2#issuecomment-5837986150
+The exact proposed browser-globals override for tools/promo/*.mjs already
+landed in commit 1bdf9d2 and remains in eslint.config.js. The promo HTML pages
+load these stages as ES modules. No configuration or application edit was
+needed; the existing override retains module parsing and no-undef checks.
+
+- npm run lint at main 147710d: PASS (exit 0), 0 errors, 41 existing
+  no-unused-vars warnings. The reported browser-global errors are resolved.
+- Only this validation record and the helper's automatic archive rotation
+  were written. No application sources or local user data were changed.
+
 ## 2026-09-29 - Codex Security fixes for five validated findings
 
 Remote task admission and promotion now retain the approval boundary. PIN
@@ -715,29 +729,6 @@ the shelf they were read from.
   both entries, booklet rebuilt; `npm run check` (188 targets, 387 specs),
   `npm run audit` and the sync, vault, booklet, setup-helper and
   cli_accounts suites (107 tests) pass on the combined tree.
-
-## 2026-09-28 - More than one Claude Code or Codex login, swapped when one tops out
-
-Extra subscription logins (settings.cliAccounts, each a folder under user
-data handed over as CLAUDE_CONFIG_DIR / CODEX_HOME). scripts/cli-accounts.cjs
-holds the pure rules; main.cjs's "Several logins per coding CLI" block keeps
-the folders and cli-account-limits.json. Assistant calls retry on the next
-login inside cliAccountTurn; a worker whose login tops out is settled in
-finish() as an outage with `accountLimit`, requeued at once with no backoff.
-Gated in the detached-style worktree C:\wt\multi-acct on the rebased commit
-(on top of 726eb48).
-
-- `npm run build-booklet`, `npm run check` (188 targets, 384 specs) and
-  `npm run audit` (zero findings): PASS.
-- `npm test`: Node 4,298 tests, 4,293 pass, 0 fail, 5 skipped (359 s);
-  Python contracts 248 OK (1 skipped); normalized-path lock PASS.
-- New suites: `cli_accounts` (reset parsing incl. named zones, fill-first
-  pick, marks), `cli_accounts_host` (the real block in a vm: call rotation,
-  marks surviving a restart and a limit hit before the file was read,
-  junction-safe removal on a real temp folder, and an executor run that
-  tops out on the main login and runs again at once on the second).
-- Updated pins: `test_mefi_studio_routing.py` now asserts
-  `claudeCompletion(system, user, route.model, login)` and `cliAccountTurn`.
 
 ## Read Before Any Tests
 

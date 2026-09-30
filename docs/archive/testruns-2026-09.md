@@ -6,6 +6,29 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-28 - More than one Claude Code or Codex login, swapped when one tops out
+
+Extra subscription logins (settings.cliAccounts, each a folder under user
+data handed over as CLAUDE_CONFIG_DIR / CODEX_HOME). scripts/cli-accounts.cjs
+holds the pure rules; main.cjs's "Several logins per coding CLI" block keeps
+the folders and cli-account-limits.json. Assistant calls retry on the next
+login inside cliAccountTurn; a worker whose login tops out is settled in
+finish() as an outage with `accountLimit`, requeued at once with no backoff.
+Gated in the detached-style worktree C:\wt\multi-acct on the rebased commit
+(on top of 726eb48).
+
+- `npm run build-booklet`, `npm run check` (188 targets, 384 specs) and
+  `npm run audit` (zero findings): PASS.
+- `npm test`: Node 4,298 tests, 4,293 pass, 0 fail, 5 skipped (359 s);
+  Python contracts 248 OK (1 skipped); normalized-path lock PASS.
+- New suites: `cli_accounts` (reset parsing incl. named zones, fill-first
+  pick, marks), `cli_accounts_host` (the real block in a vm: call rotation,
+  marks surviving a restart and a limit hit before the file was read,
+  junction-safe removal on a real temp folder, and an executor run that
+  tops out on the main login and runs again at once on the second).
+- Updated pins: `test_mefi_studio_routing.py` now asserts
+  `claudeCompletion(system, user, route.model, login)` and `cliAccountTurn`.
+
 ## 2026-09-28 - Cowork file claims between PCs; keep this PC up to date
 
 A cowork room linked to the project (settings.cowork) carries live file
