@@ -25,7 +25,17 @@ function later() {
   return { promise, resolve };
 }
 
-function load({ vibe = false, storage = new Map(), bridge = {} } = {}) {
+// studio-ui.js MefiUi.arm's contract: the first press shows the question
+// (.danger-armed), the second runs, and unpressed it lapses after 3 s on
+// the test's clock.
+const armStub = (setTimer) => ({ arm(button, { run, armed }) {
+  let timer = 0, resting = "";
+  const disarm = () => { if (!timer) return; timer = 0; button.textContent = resting; button.classList.remove("danger-armed"); };
+  button.addEventListener("click", (event) => { if (!timer) { resting = button.textContent; button.textContent = armed; button.classList.add("danger-armed"); timer = setTimer(disarm, 3000); return; } disarm(); run(event); });
+  return button;
+} });
+
+function load({ vibe = false, storage = new Map(), bridge = {}, ui = false } = {}) {
   const { document, get } = createDom({ ids: templateIds((id) => id.startsWith("vibe-")) });
   const lookup = document.getElementById;
   document.getElementById = (id) => lookup(id) ?? document.querySelector(`#${id}`);
@@ -47,17 +57,19 @@ function load({ vibe = false, storage = new Map(), bridge = {} } = {}) {
   // Timers wait until the test runs them; ids let clearTimeout drop one.
   const timers = new Map();
   let nextTimer = 1;
+  const setTimer = (fn, ms) => { const id = nextTimer++; timers.set(id, { fn, ms }); return id; };
   const window = {
     addEventListener() {}, dispatchEvent() { return true; },
     mefiStudio: api,
     MefiNav: { register() {}, current: () => "vibe", go: (id, params) => calls.push(["go", id, params ?? null]) },
+    ...(ui ? { MefiUi: armStub(setTimer) } : {}),
   };
   const context = vm.createContext({
     window, document, console,
     location: { search: "" },
     localStorage: { getItem: (key) => storage.get(key) ?? (key === "mefiStudio.uiMode" ? "vibe" : null), setItem: (key, value) => storage.set(key, String(value)), length: 0, key: () => null },
     requestAnimationFrame: () => 0,
-    setTimeout: (fn, ms) => { const id = nextTimer++; timers.set(id, { fn, ms }); return id; },
+    setTimeout: setTimer,
     clearTimeout: (id) => { timers.delete(id); },
     CustomEvent: class { constructor(type, init = {}) { this.type = type; this.detail = init.detail; } },
   });
@@ -355,6 +367,47 @@ test("the plan panel is a timeline of who does what, and Make it one task is one
   const merge = body.querySelectorAll(".vibe-ask-actions button").find((button) => button.textContent === "Make it one task");
   merge.click(); await settle();
   assert.deepEqual(calls, [["merge-steps", "f0"]], "the atomic host action, never a drop per step");
+});
+
+test("Make it one task drops the unstarted steps only on the second press", async () => {
+  const { bridge, calls } = familyBridge();
+  const h = load({ vibe: true, bridge, ui: true });
+  await h.window.MefiVibe.enter(); await settle();
+  h.window.MefiVibe.openPanel("plans", { familyId: "f0" });
+  const merge = h.get("vibe-panel-body").querySelectorAll(".vibe-ask-actions button").find((button) => button.textContent === "Make it one task");
+  merge.click(); await settle();
+  assert.deepEqual(calls, [], "the first press only asks");
+  assert.equal(merge.textContent, "Drop the unstarted steps?");
+  merge.click(); await settle();
+  assert.deepEqual(calls, [["merge-steps", "f0"]]);
+});
+
+test("a worker's push between the two presses keeps Make it one task asking; the panel catches up after", async () => {
+  let step = "Edit running · 3s · src/menu.lua";
+  const { bridge, calls } = familyBridge({ assistantStatus: async () => ({ ok: true, status: { held: false, execute: true, autoBuild: true, running: [{ taskId: "f2", projectId: P, title: "Slots menu", phase: "building", startedAt: Date.now() - 120000, route: "opencode", currentStep: step }] } }) });
+  const h = load({ vibe: true, bridge, ui: true });
+  await h.window.MefiVibe.enter(); await settle();
+  h.window.MefiVibe.openPanel("plans", { familyId: "f0" });
+  const body = h.get("vibe-panel-body");
+  const merge = () => body.querySelectorAll(".vibe-ask-actions button").find((button) => ["Make it one task", "Drop the unstarted steps?"].includes(button.textContent));
+  const live = () => body.querySelector(".vibe-row-now").textContent;
+  const asking = merge();
+  asking.click();
+  step = "Write running · 1s · src/slots.lua";
+  await h.window.MefiVibe.refresh(); await settle();
+  assert.equal(merge(), asking, "the asking button is not swapped for a fresh one");
+  assert.equal(asking.textContent, "Drop the unstarted steps?");
+  assert.equal(live(), "Edit running · 3s · src/menu.lua", "the panel waits while it asks");
+  // Left alone, the question lapses and the panel shows what it missed.
+  h.runTimers(3200);
+  assert.equal(live(), "Write running · 1s · src/slots.lua");
+  assert.equal(merge().textContent, "Make it one task");
+  assert.deepEqual(calls, []);
+  merge().click();
+  step = "Bash running · 2s · npm test";
+  await h.window.MefiVibe.refresh(); await settle();
+  merge().click(); await settle();
+  assert.deepEqual(calls, [["merge-steps", "f0"]], "the second press merges");
 });
 
 test("Team lists what Mefi is thinking about beside what the agents build", async () => {

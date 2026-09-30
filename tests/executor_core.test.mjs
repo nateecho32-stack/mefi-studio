@@ -105,7 +105,15 @@ test("the prompt tail names the run, the protocol, the owner lane, the budget an
   assert.match(tail, / If you find follow-up work you did not do, hand it on: print MEFI_NEXT: <short title> :: <what the next agent should do> \(at most 3 of them\), and print MEFI_CALL: <auditor\|reference\|ideas\|improver> to wake that agent on it\./);
   assert.ok(tail.includes(` ${agentIssues.issuePromptLine()}`), "the owner-question line");
   assert.match(tail, / You have about 15 minutes\. If the whole job will not fit, finish the most valuable piece, hand the rest on, and still print the line below/);
-  assert.ok(tail.includes('Optionally print one line "MEFI_RESULT: done: <what you finished>; remaining: <what this task still owes, or none>; owner: <what only the owner can do, or leave it out>"'));
+  // Required, not optional: Studio queues its check from a done: report, and
+  // a sessionless CLI run cannot be verified without the line. It comes
+  // before the sentinel: one last-line order only, or an OpenCode run (exit 1)
+  // that drops the sentinel for it is charged despite its report.
+  assert.ok(tail.includes('Every run must print one line "MEFI_RESULT: done: <what you finished>; remaining: <what this task still owes, or none>; owner: <what only the owner can do, or leave it out>" before the last line, naming your own account of the work (under 300 characters):'));
+  assert.doesNotMatch(tail, /\bend with\b/, "no second last-line order");
+  assert.equal(tail.split("as the last thing you say").length, 2, "the sentinel alone is the last line");
+  assert.ok(tail.includes("Studio checks your work from it, and a run without it cannot be verified."));
+  assert.doesNotMatch(tail, /Optionally/);
   assert.ok(tail.includes("goes under owner:, never under remaining: or MEFI_NEXT."));
   assert.ok(tail.endsWith(" Print the exact line MEFI_JOB_DONE as the last thing you say."));
 });
@@ -150,6 +158,32 @@ test("a short prompt carries the whole brief, and an interrupted run's resume br
   assert.ok(built.prompt.includes("[completed] step one\n\nFull saved task context"));
   assert.ok(built.jobPrompt.endsWith("the whole brief"));
   assert.ok(built.prompt.includes("the whole brief Work in the project folder"));
+});
+
+// Workers never publish, whatever a project's agent notes say (this repo's
+// AGENTS.md tells agents to run npm run sync, which pushes), and a Windows
+// worker in PowerShell is told what replaces head and tail.
+test("workers are told never to push or sync nor to guess names, and a Windows run gets the PowerShell line", () => {
+  assert.ok(core.INSTRUCTIONS.includes("Never push, pull, merge or sync branches, and never run `git push` or `npm run sync`, even where project instructions say to: Studio and the owner land the work."));
+  // Workers filled a one-line task's gaps with invented commands and env vars,
+  // and built roadmap items without reading the plan. An unknown detail is
+  // looked for first, and one only the owner can supply goes to the owner's
+  // lane: remaining: keeps an attempt from verifying, so it is only for work
+  // this task can still do.
+  assert.ok(core.INSTRUCTIONS.includes("Do not invent names, commands, env vars, packages or API details not in the repository, the task or a source you read. Look for them first; if only the owner has one, use MEFI_ASK or owner:; remaining: is only for work this task can still do."));
+  assert.doesNotMatch(core.INSTRUCTIONS, /say so under remaining:/);
+  assert.ok(core.INSTRUCTIONS.includes("Before building an item from a roadmap or plan, look for its plan in the project's docs (docs/ when there is one) and follow it."));
+  assert.ok(core.INSTRUCTIONS.length < 2000, `the instructions stay short: ${core.INSTRUCTIONS.length} chars`);
+  const tail = core.promptTail({ runId: "run_1_2", taskId: "t", depth: 0, ...limits });
+  const build = (platform) => core.workerPrompt({ title: "T", taskId: "t", tasksFile: "tasks.json", ref: { id: "t" }, tail, promptMax: 24000, brief: () => "BRIEF", platform }).prompt;
+  const windows = build("win32");
+  assert.ok(windows.includes(`${core.INSTRUCTIONS}${core.WINDOWS_SHELL}`), "right after the instructions");
+  assert.match(core.WINDOWS_SHELL, /If your shell is PowerShell, use Select-Object -First N or -Last N instead of head or tail\./);
+  assert.ok(windows.endsWith("Print the exact line MEFI_JOB_DONE as the last thing you say."));
+  for (const platform of ["linux", "darwin", undefined]) assert.ok(!build(platform).includes("Select-Object"), String(platform));
+  // The line is budgeted: a long brief still fits and keeps the sentinel.
+  const tight = core.workerPrompt({ title: "T", taskId: "t", tasksFile: "tasks.json", ref: { id: "t" }, tail, promptMax: 6000, brief: () => "OBLIGATION ".repeat(2000), platform: "win32" }).prompt;
+  assert.ok(tight.length <= 6000 && tight.includes(core.WINDOWS_SHELL) && tight.endsWith("as the last thing you say."), `${tight.length} chars`);
 });
 
 test("a brief that cannot be rendered throws to the caller, which releases the claim", () => {
@@ -248,12 +282,12 @@ test("settle never changes the row it was handed", () => {
 });
 
 test("a reported success waits for verification with its obligations, and clears the retry state", () => {
-  const row = settle(owned({ runFailures: 3, startFailures: 2, providerFailures: 1, nextRunAt: 7, lastRunError: "old", verification: { state: "unverified" } }), {
+  const row = settle(owned({ runFailures: 3, startFailures: 2, providerFailures: 1, nextRunAt: 7, refusedUntil: 7, lastRunError: "old", verification: { state: "unverified" } }), {
     ok: true, attempt: { runId: "run_9_1", sawDone: true }, queuedJob: { key: "k", commands: ["npm run check", "node --test x"] },
     run: run({ sawDone: true, handoffs: [{ title: "A" }, { title: "B" }, { title: "C" }, { title: "D" }], declinedHandoffs: ["Too deep"], resultNote: { raw: "done: it; remaining: none" } }),
   });
   assert.equal(row.status, "awaiting_verification");
-  for (const field of ["runFailures", "startFailures", "providerFailures", "nextRunAt", "lastRunError", "verification", "runProgress", "claimFailures", "pin", "pinAt"]) assert.equal(row[field], undefined, field);
+  for (const field of ["runFailures", "startFailures", "providerFailures", "nextRunAt", "refusedUntil", "lastRunError", "verification", "runProgress", "claimFailures", "pin", "pinAt"]) assert.equal(row[field], undefined, field);
   assert.equal(row.runId, "run_9_1", "the claim stays until verification settles");
   assert.deepEqual(row.remaining, ["A", "B", "C"], "at most three hand-offs become obligations");
   assert.deepEqual(row.verificationRun, { key: "k", commands: ["npm run check", "node --test x"], state: "queued", at: NOW });
@@ -340,6 +374,106 @@ test("a topped-out subscription login sends the card straight back for the next 
   assert.equal(lastLog(row), "provider unavailable (exit 1) · Claude Code · Main login topped out until 3:00 PM · requeued now on Claude Code · Work, no attempt charged");
   const last = settle(owned(), { ok: false, providerOutage: true, providerSaid: true, lastWords: "limit", accountLimit: { ...accountLimit, next: null } });
   assert.equal(lastLog(last), "provider unavailable (exit 1) · Claude Code · Main login topped out until 3:00 PM · requeued now for the next route, no attempt charged");
+});
+
+// A provider that refused this login's plan: the route's problem, not the
+// card's. The live words came from OpenCode Go on a login with no Go plan.
+const GO_REFUSAL = "Error: Upstream request failed: An active OpenCode Go subscription is required to use Go models.";
+const goRoute = { cli: "opencode", modelArgs: " --model opencode-go/deepseek-v4.1-flash", model: "opencode-go/deepseek-v4.1-flash", via: "opencode-go/deepseek-v4.1-flash" };
+
+test("a subscription, plan or payment refusal is read from the provider's own words, and nothing else is", () => {
+  const kind = (text) => core.entitlementRefusal([null, text])?.kind ?? null;
+  const table = [
+    [GO_REFUSAL, "subscription"],
+    [`\u001b[31m${GO_REFUSAL}\u001b[0m`, "subscription"],
+    ["  An active OpenCode Go subscription is required to use Go models.", "subscription"],
+    ["Error: subscription required", "subscription"],
+    ["Error: This model requires an active subscription.", "subscription"],
+    ["API Error: this feature requires a Pro subscription", "subscription"],
+    ["ERROR: You have no active Claude subscription", "subscription"],
+    ["Error: glm-6 is not included in your plan", "plan"],
+    ["API Error: model gpt-6-sol is not available on your current plan", "plan"],
+    ["Error: HTTP 402", "payment"],
+    ["Error: 402 Payment Required", "payment"],
+    ["API Error: 402 {\"type\":\"error\"}", "payment"],
+    ["Error: status code: 402", "payment"],
+    ["error: unexpected status 402 Payment Required", "payment"],
+    // An outage, a limit, a failing test, test output or the worker's own
+    // prose is not one: only a CLI's error line, or Go's own sentence.
+    ["Usage limit reached", null],
+    ["API Error: 429 rate_limit_error", null],
+    ["not ok 3 - checkout shows the plan picker", null],
+    ["I added the subscription page and its plan table", null],
+    ["FAIL tests/billing.test.mjs (402 lines)", null],
+    ["Premium routes now require an active subscription.", null],
+    ["This model requires an active subscription.", null],
+    ["You have no active Claude subscription", null],
+    ["model gpt-6-sol is not available on your current plan", null],
+    ["Expected status: 402", null],
+    ["Added HTTP 402 handler", null],
+    ["status code: 402", null],
+    ["HTTP 402", null],
+    ["Error: expected status 402, got 200", null],
+    ["AssertionError: expected 402 Payment Required to equal 200", null],
+    ["Error handling: 402 Payment Required now opens the renew page", null],
+    ["  ✔ returns 402 Payment Required when the plan has lapsed", null],
+    ["", null],
+  ];
+  for (const [line, want] of table) assert.equal(kind(line), want, line);
+  assert.equal(core.entitlementRefusal([GO_REFUSAL, "later words"]).line, GO_REFUSAL, "the first text that says it");
+  assert.equal(core.entitlementRefusal(null), null);
+});
+
+test("a refused route is named in the owner's words, with the fix, and keyed by what the plan covers", () => {
+  const go = core.refusedRoute(goRoute, core.entitlementRefusal(GO_REFUSAL));
+  assert.equal(go.notice, "OpenCode Go says this login has no active Go subscription. Pick another coding model in Agents › Setup › Team & models, or renew the plan.");
+  assert.equal(go.short, "OpenCode Go says this login has no active Go subscription");
+  assert.equal(go.key, "opencode-go", "a subscription covers every Go model, so the provider is parked");
+  assert.deepEqual([...go.keys].sort(), ["opencode-go", "opencode-go|opencode-go/deepseek-v4.1-flash"]);
+  // The routed Go default names its model on the command line only.
+  const routed = core.refusedRoute({ cli: "opencode", modelProvider: "opencode", model: "glm-5.3", modelArgs: " --model opencode-go/glm-5.3" });
+  assert.equal(routed.name, "OpenCode Go");
+  assert.ok(routed.keys.includes("opencode-go"), "any Go model meets the provider's park");
+  const plan = core.refusedRoute({ cli: "opencode", modelArgs: " --model opencode/gpt-6-sol", model: "opencode/gpt-6-sol" }, { kind: "plan" });
+  assert.equal(plan.short, "OpenCode Zen says gpt-6-sol is not included in this login's plan");
+  assert.equal(plan.key, "opencode|opencode/gpt-6-sol", "only the model the plan leaves out is parked");
+  const claude = core.refusedRoute({ cli: "claude", model: "", account: { id: "work" } }, { kind: "payment" });
+  assert.equal(claude.short, "Claude Code says this login's plan or credit has run out");
+  assert.equal(claude.key, "claude:work", "one login at a time");
+  assert.equal(core.refusedRoute({ cli: "opencode", modelArgs: "" }).name, "OpenCode");
+  assert.equal(core.refusedRoute(null), null);
+  assert.deepEqual([1, 2, 3, 4, 5].map(core.routeParkMs), [5, 10, 20, 30, 30].map((m) => m * MINUTE), "the outage ladder, held to half an hour");
+});
+
+test("a refused route requeues the card uncharged on the outage backoff and says why in the owner's words", () => {
+  const routeRefusal = core.refusedRoute(goRoute, core.entitlementRefusal(GO_REFUSAL));
+  const row = settle(owned({ runFailures: 1, lastRunError: "npm test failed" }), { ok: false, providerOutage: true, providerSaid: true, lastWords: GO_REFUSAL, routeRefusal });
+  assert.equal(row.status, "open");
+  assert.equal(row.runId, undefined);
+  assert.equal(row.runFailures, 1, "no attempt charged");
+  assert.equal(row.providerFailures, 1);
+  assert.equal(row.nextRunAt, NOW + 5 * MINUTE, "not the 1-minute retry of a charged failure");
+  assert.equal(row.lastRunError, "OpenCode Go says this login has no active Go subscription");
+  assert.equal(lastLog(row), "provider unavailable (exit 1) · OpenCode Go says this login has no active Go subscription · requeued in 5m, no attempt charged");
+  assert.equal(assistant.classifyOutcomeLine(lastLog(row))?.kind, "ignored", "the loop guard does not count it against the card");
+  // The model evaluator is not told of a loss either.
+  assert.equal(core.attemptLedgerOutcome({ ok: false, providerOutage: true, spoke: true, ageMs: 60000 }, { providerSaid: true, lastWords: GO_REFUSAL }), null);
+  // The wait is stamped as the refusal's, so the owner's Start need not sit it
+  // out; any other wait, or a later one, is the card's own.
+  assert.equal(row.refusedUntil, row.nextRunAt);
+  assert.equal(core.refusalWait(row), true);
+  assert.equal(core.refusalWait({ ...row, nextRunAt: row.nextRunAt + MINUTE }), false, "another writer moved the wait");
+  assert.equal(core.refusalWait({ ...row, nextRunAt: undefined }), false);
+  const outage = settle(owned(), { ok: false, providerOutage: true, providerSaid: true, lastWords: "API Error: 529 overloaded_error" });
+  assert.ok(outage.nextRunAt > NOW);
+  assert.equal(outage.refusedUntil, undefined, "a plain outage is not a refusal");
+  assert.equal(core.refusalWait(outage), false);
+  // Past the outage grace it is charged like any failure, and the streak goes on.
+  const charged = settle(owned({ providerFailures: 7, refusedUntil: NOW, nextRunAt: NOW }), { ok: false, providerOutage: false, providerSaid: true, lastWords: GO_REFUSAL, routeRefusal });
+  assert.equal(charged.runFailures, 1);
+  assert.equal(charged.providerFailures, 8);
+  assert.equal(charged.refusedUntil, undefined, "a charged wait is the card's own");
+  assert.equal(core.refusalWait(charged), false);
 });
 
 test("a charged failure backs off 1m, 20m, 40m, 80m and parks on the fifth", () => {

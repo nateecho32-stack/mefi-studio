@@ -103,7 +103,7 @@
     const out = {};
     if (Number.isFinite(payload.scanned)) out.scanned = Math.max(0, Math.round(payload.scanned));
     if (Array.isArray(payload.files)) out.files = payload.files.filter((file) => typeof file === "string").map((file) => clip(file, 200)).filter(Boolean).slice(0, 8);
-    for (const key of ["seat", "provider", "model", "verdict", "reason", "size"]) if (typeof payload[key] === "string") out[key] = clip(payload[key], 120);
+    for (const key of ["seat", "provider", "model", "verdict", "reason", "size", "why"]) if (typeof payload[key] === "string") out[key] = clip(payload[key], 120);
     if (typeof payload.cli === "boolean") out.cli = payload.cli;
     if (typeof payload.summary === "string") out.summary = clip(payload.summary, 400);
     if (Array.isArray(payload.steps)) out.steps = payload.steps.slice(0, 6).map((step) => ({ title: clip(step?.title, 90) || "A step", after: (Array.isArray(step?.after) ? step.after : []).filter(Number.isInteger).slice(0, 6) }));
@@ -126,8 +126,9 @@
     if (!run || run.endedAt) return run || null;
     run.endedAt = now();
     run.outcome = { ok: ok !== false, error: clip(error, 300), count: Number.isFinite(count) ? count : null, steps: Number.isFinite(steps) ? steps : null };
-    // A request sized without a model call says nothing about how long one takes.
-    if (run.outcome.ok && (run.kind === "explore" || run.seen.sizing)) remember(run.kind, run.endedAt - run.startedAt);
+    // A request sized without a model call says nothing about how long one
+    // takes, and nor does a sizing that failed or timed out.
+    if (run.outcome.ok && (run.kind === "explore" || (run.seen.sizing && run.seen.sized?.size !== "kept"))) remember(run.kind, run.endedAt - run.startedAt);
     refresh(run);
     emit(run);
     return run;
@@ -137,7 +138,12 @@
   function on(listener) { if (typeof listener === "function") listeners.add(listener); return () => listeners.delete(listener); }
 
   // ---- what a run has done, stage by stage ------------------------------------------------
-  const TOOL_WORDS = { web_search: "searched the web", project_read: "read a file" };
+  const TOOL_WORDS = { web_search: "searched the web", web_read: "read a web page", project_read: "read a file" };
+  // Why sizing kept a request one card when the lead did not choose that
+  // (main.cjs vibeBuild's sized step, size "kept"): never "Best as one task".
+  const KEPT = { timeout: "The lead took too long, so it's one task", "no-answer": "No lead model answered, so it's one task", "too-many": "The plan had too many steps, so it's one task" };
+  const KEPT_LINE = "Couldn't plan steps, so it's one task";
+  const keptText = (sized) => KEPT[sized?.why] || KEPT_LINE;
   const toolWords = (run) => [...new Set(run.tools.map((tool) => TOOL_WORDS[tool.name] || (tool.name.startsWith("mcp__") ? `used ${tool.name.split("__").pop().replace(/_/g, " ")}` : "used a tool")))].join(" · ");
   function readText(read) {
     const files = read.files?.length ?? 0;
@@ -163,7 +169,7 @@
       list = [
         { key: "look", label: "Take a look", state: quick || done ? "done" : "now", detail: quick ? (single ? "One change, no split needed" : "Big enough to plan in steps") : "Reading your request" },
         { key: "split", label: "Plan the steps", state: single ? "skipped" : sized || adding || done ? "done" : sizing ? "now" : "next",
-          detail: single ? "Not needed" : sized ? (split ? `${plural(split, "step")}, then a final check` : "Best as one task") : sizing ? [`${who(sizing) || "The lead"} is splitting it`, tools].filter(Boolean).join(" · ") : "" },
+          detail: single ? "Not needed" : sized ? (split ? `${plural(split, "step")}, then a final check` : sized.size === "kept" ? keptText(sized) : "Best as one task") : sizing ? [`${who(sizing) || "The lead"} is splitting it`, tools].filter(Boolean).join(" · ") : "" },
         { key: "board", label: "Put it on the board", state: done ? "done" : adding ? "now" : "next", detail: done ? (out.steps ? `${plural(out.steps, "step")} and a final check` : "One task") : adding ? "Adding it" : "" },
       ];
     }
@@ -177,7 +183,7 @@
     const out = run.outcome;
     if (run.kind === "explore") return !out ? "Mefi is looking for next steps" : !out.ok ? "Mefi couldn't finish looking" : out.count ? `Found ${plural(out.count, "next step")}` : "Nothing new to suggest";
     const sized = run.seen.sized;
-    if (out) return !out.ok ? "Sizing stopped" : out.steps ? `Split into ${plural(out.steps, "step")}` : "Added as one task";
+    if (out) return !out.ok ? "Sizing stopped" : out.steps ? `Split into ${plural(out.steps, "step")}` : sized?.size === "kept" ? KEPT_LINE : "Added as one task";
     return sized?.size === "steps" ? `Splitting it into ${plural(sized.steps.length, "step")}` : "Mefi is sizing your request";
   }
   // One line for the Team panel and the page's status: the stage now running.

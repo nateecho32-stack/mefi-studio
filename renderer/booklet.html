@@ -9254,6 +9254,11 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 @keyframes vibe-flow { 0% { transform: translateX(-100%); } 100% { transform: translateX(294.12%); } }
 .vibe-row-action { flex: none; height: 30px; margin-right: 8px; padding: 0 12px; border: 1px solid color-mix(in srgb, var(--lane) 45%, transparent); border-radius: 10px; background: color-mix(in srgb, var(--lane) 12%, transparent); color: var(--v-ink); font-size: 12px; font-weight: 600; cursor: pointer; transition: background var(--motion-fast) var(--ease-out); }
 .vibe-row-action:hover { background: color-mix(in srgb, var(--lane) 24%, transparent); }
+/* Stop on a Building now row asks twice (MefiUi.arm adds .danger): a quiet red
+   edge at rest, filled once it asks. */
+.vibe-row button.vibe-row-action.danger { border-color: color-mix(in srgb, var(--bad) 35%, transparent); background: color-mix(in srgb, var(--bad) 8%, transparent); }
+.vibe-row button.vibe-row-action.danger:hover, .vibe-row button.vibe-row-action.danger-armed { border-color: color-mix(in srgb, var(--bad) 55%, transparent); background: color-mix(in srgb, var(--bad) 18%, transparent); }
+.vibe-row-action:disabled { opacity: .55; cursor: progress; }
 .vibe-empty { padding: 14px 10px; color: var(--v-faint); font-size: 13px; line-height: 1.5; list-style: none; }
 .vibe-lane-link { align-self: flex-start; margin-top: auto; padding: 10px 10px 4px; border: 0; background: none; color: var(--v-soft); font-size: 13px; font-weight: 550; cursor: pointer; transition: color var(--motion-fast) var(--ease-out); }
 .vibe-lane-link span { display: inline-block; transition: transform var(--motion-base) var(--ease-spring); }
@@ -9360,6 +9365,7 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 .vibe-ask-chip { max-width: 100%; padding: 4px 10px; overflow: hidden; border: 1px solid var(--v-edge); border-radius: 999px; background: color-mix(in srgb, var(--ivory) 5%, transparent); color: var(--v-soft); font: 550 12px/1.3 var(--font-ui); text-overflow: ellipsis; white-space: nowrap; }
 .vibe-ask-chip.is-blocker { border-color: color-mix(in srgb, var(--bad) 45%, transparent); background: color-mix(in srgb, var(--bad) 14%, transparent); color: var(--v-ink); }
 .vibe-ask-chip.is-decision { border-color: color-mix(in srgb, var(--warn) 45%, transparent); background: color-mix(in srgb, var(--warn) 12%, transparent); color: var(--v-ink); }
+.vibe-ask-chip.is-check { border-color: color-mix(in srgb, var(--info) 45%, transparent); background: color-mix(in srgb, var(--info) 12%, transparent); color: var(--v-ink); }
 button.vibe-ask-chip { cursor: pointer; }
 button.vibe-ask-chip:hover { border-color: var(--v-edge-hi); color: var(--v-ink); }
 .vibe-ask-when { margin-left: auto; color: var(--v-faint); font-size: 12px; }
@@ -30233,24 +30239,64 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
         buildGraph([], [], { status: "desktop-only", text: "desktop mode only", stats: "desktop mode only" });
         return;
       }
-      const result = await read("eyesState", fresh ? { fresh: true } : undefined);
+      // A refused IPC read is an offline store like any {ok:false} answer:
+      // it draws the offline card and queues the retry below.
+      let result;
+      try {
+        result = await read("eyesState", fresh ? { fresh: true } : undefined);
+      } catch (error) {
+        result = { ok: false, error: String(error?.message ?? error) };
+      }
       if (seq !== loadSeq) return;
       loadResult(result);
     })();
     return readyPromise;
   }
 
+  // A store that could not be read is asked again on its own, 5 s doubling to
+  // a minute, until it answers: nothing else may ever push (no activity comes
+  // from a store the host cannot read either), and the Command hint, the pills
+  // and the empty card all wait on this status. A healthy store costs nothing
+  // here, and any answer (a push, a project switch, Retry) resets the ladder.
+  const RETRY_MIN_MS = 5000;
+  const RETRY_MAX_MS = 60000;
+  let retryTimer = null;
+  let retryDelay = 0;
+  function scheduleRetry() {
+    if (retryTimer || typeof setTimeout !== "function") return;
+    retryDelay = retryDelay ? Math.min(RETRY_MAX_MS, retryDelay * 2) : RETRY_MIN_MS;
+    retryTimer = setTimeout(() => {
+      retryTimer = null;
+      if (status !== "unavailable") return;
+      // A hidden window climbs the ladder instead of reading for nobody.
+      if (document.hidden) scheduleRetry();
+      else load().catch(() => {});
+    }, retryDelay);
+    // A Node test harness must not be held open by the ladder.
+    retryTimer?.unref?.();
+  }
+  function clearRetry() {
+    retryDelay = 0;
+    if (retryTimer != null && typeof clearTimeout === "function") clearTimeout(retryTimer);
+    retryTimer = null;
+  }
+  function storeOffline(error) {
+    lastRead = null;
+    storeNote = null;
+    buildGraph([], [], {
+      status: "unavailable",
+      text: error ? `store unavailable · ${error}` : "store unavailable",
+      stats: "store offline",
+    });
+    scheduleRetry();
+  }
+
   function loadResult(result) {
     if (!result?.ok) {
-      lastRead = null;
-      storeNote = null;
-      buildGraph([], [], {
-        status: "unavailable",
-        text: result?.error ? `store unavailable · ${result.error}` : "store unavailable",
-        stats: "store offline",
-      });
+      storeOffline(result?.error);
       return;
     }
+    clearRetry();
     // An empty read may carry why: a store file whose session schema is
     // missing. The empty card shows the note instead of "no recent sessions".
     storeNote = typeof result.note === "string" && result.note ? result.note : null;
@@ -30421,7 +30467,7 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
       else buildGraph([], [], { status: "desktop-only", text: "desktop mode only", stats: "desktop mode only" });
     }).catch((error) => {
       if (initSeq !== loadSeq) return;
-      buildGraph([], [], { status: "unavailable", text: `store unavailable · ${String(error?.message ?? error)}`, stats: "store offline" });
+      storeOffline(String(error?.message ?? error));
     });
     await readyPromise;
     window.mefiStudio?.onCheckpoints?.((data) => {
@@ -31831,7 +31877,16 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
     }
     state.hoverNode = state.hoverNode ? state.nodes.find((entry) => entry.id === state.hoverNode.id) ?? null : null;
     state.hoverBubble = state.hoverBubble ? state.nodes.find((entry) => entry.id === state.hoverBubble.id) ?? null : null;
+    const treeWas = state.treeStatus;
     state.treeStatus = window.MefiTree?.status?.() ?? (window.mefiStudio ? "ok" : "desktop-only");
+    // The store coming back (or dropping) changes the hint, the pills and the
+    // autopilot switch, none of which repaint on a rebuild by themselves: the
+    // offline hint stayed up after the rail had drawn the recovered store.
+    if (treeWas !== state.treeStatus && state.active) {
+      renderHint();
+      renderSettingsPanel();
+      updateTelemetry(true);
+    }
     renderEmpty();
     updateAssistantPill();
     if (state.query) applyQuery();
@@ -34089,8 +34144,11 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
       } else if (action === "start-work") window.MefiToast?.("new work is on · queued work can start when ready", "good");
       else if (action === "pause") window.MefiToast?.("new work is off · current jobs can finish", "info");
       else if (action === "stop-all") {
+        // `stopped` counts kill requests; `idle: false` says a worker was
+        // still alive when the host stopped waiting, so that is not "stopped".
         const stopped = Number(result.stopped) || 0;
-        window.MefiToast?.(stopped ? `stopped ${stopped} agent(s) · progress saved, work stays queued` : "no agents were running · new work is off", stopped ? "good" : "info");
+        if (result.idle === false) window.MefiToast?.(`${stopped ? `asked ${stopped} agent(s) to stop` : "new work is off"} · a run is still finishing · progress saved`, "warn");
+        else window.MefiToast?.(stopped ? `stopped ${stopped} agent(s) · progress saved, work stays queued` : "no agents were running · new work is off", stopped ? "good" : "info");
       }
       else window.MefiToast?.(`assistant ${full?.status ?? action}`, "info");
       return result;
@@ -40958,6 +41016,16 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
     return true;
   }
 
+  // A task's place on the graph, most alive first: its running builder, its
+  // own node, then the plan group that holds it as a member.
+  function selectTaskNode(taskId) {
+    const id = String(taskId ?? "");
+    if (!id) return false;
+    if (select(`builder:${id}`) || select(`task:${id}`)) return true;
+    const group = state.nodes.find((node) => !node.dying && node.taskGroup?.members?.some((member) => String(member?.id) === id));
+    return group ? select(group.id) : false;
+  }
+
   function selection() {
     const current = state.selected;
     if (!current) return null;
@@ -40967,7 +41035,9 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
       kind: node.kind,
       label: node.label ?? null,
       sessionId: node.kind === "session" ? node.id : node.kind === "todo" ? node.sessionId ?? null : null,
-      taskId: node.kind === "task" ? node.task?.id ?? null : null,
+      // A builder stands for the task it is building: Live's "same task" and
+      // the T key read this after nav lands a task on its running builder.
+      taskId: node.kind === "task" ? node.task?.id ?? null : node.builder ? node.job?.taskId ?? null : null,
       anchorSessionId: node.anchorSessionId ?? null,
       assistant: node.kind === "assistant",
       folded: node.kind === "folded" ? node.sessionIds ?? [] : null,
@@ -42814,7 +42884,19 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
     let applied = false;
     if (typeof params?.rail === "string" && typeof setRailTab === "function") { setRailTab(params.rail, { focus: true }); applied = true; }
     const selectedId = typeof params?.selected === "string" ? params.selected : "";
-    if (selectedId && select(selectedId)) applied = true;
+    // A task named by id (the Agents page's running builds; nav also turns it
+    // into selected "task:<id>") lands on its live builder first. A builder or
+    // task id that is not on the graph falls back the same way: a builder node
+    // lives only while its job runs, so Fleet's Open in Command on an idle
+    // seat used to select nothing.
+    const taskId = typeof params?.taskId === "string" || typeof params?.taskId === "number" ? String(params.taskId).trim() : "";
+    if (taskId && (!selectedId || selectedId === `task:${taskId}`)) {
+      if (selectTaskNode(taskId)) applied = true;
+      else window.MefiToast?.("That task is not on the Command board right now", "info");
+    } else if (selectedId) {
+      const workId = /^(builder|task):/.test(selectedId) ? selectedId.slice(selectedId.indexOf(":") + 1) : "";
+      if (select(selectedId) || (workId && selectTaskNode(workId))) applied = true;
+    }
     if (typeof params?.zoom === "number" && Number.isFinite(params.zoom)) {
       setZoom(params.zoom);
       applied = true;
@@ -43629,8 +43711,15 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
     el.feedBuildMode?.addEventListener("change", () => void changeBuildMode(el.feedBuildMode.value));
     el.feedAgentMode?.addEventListener("change", () => void changeAgentMode(el.feedAgentMode.value));
     el.settingsAgentMode?.addEventListener("change", () => void changeAgentMode(el.settingsAgentMode.value));
-    el.stopAll?.addEventListener("click", () => void stopAllAgents());
-    el.restart?.addEventListener("click", () => void restartStudio());
+    // Both brakes ask first, as the Explorer's do: the first press arms the
+    // question on the button, a second press within a few seconds acts.
+    const armBrake = (button, run, question) => {
+      if (!button) return;
+      if (window.MefiUi?.arm) window.MefiUi.arm(button, { run, armed: question });
+      else button.addEventListener("click", run);
+    };
+    armBrake(el.stopAll, () => void stopAllAgents(), "Stop every run?");
+    armBrake(el.restart, () => void restartStudio(), "Restart Studio?");
     setFeedMenu(state.feedMenuOpen);
     window.addEventListener("mefi:project-changed", projectChanged);
     el.emptyRetry?.addEventListener("click", async () => {
@@ -46752,15 +46841,30 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
       const li = document.createElement("li");
       li.append(Object.assign(document.createElement("span"), { className: `src-tag ${entry.status === "healthy" ? "improver" : "fix"}`, textContent: entry.status.toUpperCase() }));
       li.append(document.createTextNode(` pid ${entry.pid} · ${entry.ageMinutes}m · ${entry.memMB}MB`));
-      const killButton = document.createElement("button");
-      killButton.className = "ghost mini";
-      killButton.textContent = "×";
-      killButton.title = "Kill this run";
-      li.append(arm(killButton, async (event) => {
-        event?.stopPropagation?.();
-        await window.mefiStudio?.machineKill?.(entry.pid);
-        window.MefiToast?.(`kill sent for pid ${entry.pid}`, "bad");
-      }, "Stop this run?"));
+      // machine:kill stops LOVE test runs only (a test row, or one the scan
+      // marked killable) and refuses anything else, so only those get the ×,
+      // and the toast says what the host answered, not that a kill went out.
+      if ((entry.test || entry.killable) && window.mefiStudio?.machineKill) {
+        const killButton = document.createElement("button");
+        killButton.className = "ghost mini";
+        killButton.textContent = "×";
+        killButton.title = "Stop this test run";
+        killButton.setAttribute?.("aria-label", `Stop test run ${entry.pid}`);
+        const refused = (error) => {
+          const fallback = `test run ${entry.pid} could not be stopped`;
+          window.MefiToast?.(window.MefiUi?.plainError?.(error, fallback) ?? (typeof error === "string" && error ? error : fallback), "bad");
+        };
+        li.append(arm(killButton, async (event) => {
+          event?.stopPropagation?.();
+          try {
+            const result = await window.mefiStudio.machineKill(entry.pid);
+            if (result?.ok) window.MefiToast?.(`stopping test run ${entry.pid}`, "info");
+            else refused(result?.error);
+          } catch (error) {
+            refused(error);
+          }
+        }, "Stop this test run?"));
+      }
       els.machineList.append(li);
     }
     for (const holder of status?.leases?.holders ?? []) {
@@ -47086,8 +47190,11 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
         const overseer = service.overseer;
         status(overseer?.lastSummary ? `overseer · ${overseer.lastSummary}` : "overseer review queued");
       } else if (action === "stop-all") {
+        // `stopped` counts kill requests; `idle: false` means a worker was
+        // still alive when the host stopped waiting.
         const stopped = Number(result.stopped) || 0;
-        status(stopped ? `stopped ${stopped} agent(s) · progress saved, work stays queued` : "no agents were running · new work is off");
+        if (result.idle === false) status(`${stopped ? `asked ${stopped} agent(s) to stop` : "new work is off"} · a run is still finishing · progress saved`);
+        else status(stopped ? `stopped ${stopped} agent(s) · progress saved, work stays queued` : "no agents were running · new work is off");
       } else status(`assistant ${service.status ?? action}`);
     } catch (error) {
       status(`${action} failed · ${String(error?.message ?? error)}`, true);
@@ -48400,6 +48507,9 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
   const state = { tasks: [], plans: [], plansError: null, selected: null, filter: "all", readiness: "all", projectId: null, query: "", doneCollapsed: false, renaming: false, prefs: { blurMenu: true, useWeb: false, useTree: true, autoReference: true, useReference: true }, references: null };
   // Two-step delete: the id of the task whose Delete button is armed right now.
   let deleteArmed = null;
+  // Two-step Stop, kept here rather than on the button for the same reason:
+  // a running card re-renders while its worker reports.
+  let stopArmed = null;
   const els = {};
   let initialized = false;
   // tasks:save overwrites the whole store, so this module must never write a
@@ -49267,6 +49377,24 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
     renderDetail();
   }
 
+  // Stopping a worker ends its run, so the first press only arms the button
+  // (as Fleet's Stop does); a second within 4 s stops it.
+  function stopTask(task) {
+    if (stopArmed !== task.id) {
+      stopArmed = task.id;
+      renderDetail();
+      setTimeout(() => {
+        if (stopArmed === task.id) {
+          stopArmed = null;
+          if (!els.overlay.hidden) renderDetail();
+        }
+      }, 4000);
+      return;
+    }
+    stopArmed = null;
+    return runTaskAction(task, "stop");
+  }
+
   function deleteTask(task) {
     if (deleteArmed !== task.id) {
       // First click arms: the button asks for a confirmation instead of
@@ -49382,12 +49510,17 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
     const release = holdAction(task);
     if (awaitingApproval) actions.push({ label: "Approve build", action: "approve", className: "primary", title: "Approve the brief shown here so this task can build when scheduling and prerequisites allow", disabled: !window.mefiStudio?.backlogControl || scheduled.canApprove !== true || !task.buildScope, run: () => runTaskAction(task, "approve", { expectedScope: task.buildScope }) });
     if (release && !(release.action === "resume" && window.MefiWorkspace?.startTask)) actions.push(release);
+    // A grouped member belongs to its plan: the host refuses any status,
+    // title or delete change while absorbedInto holds it (the plan releases
+    // it), so the card offers its group instead of buttons that cannot land.
+    const grouped = Boolean(task.absorbedInto) && Boolean(window.mefiStudio?.tasksAction);
+    const groupedWhy = "This task belongs to a group. Work with the group's plan until it releases the member.";
     if (isDone(task)) {
       actions.push({ label: "Reopen", className: "primary", title: "Put this task back on the open board", run: () => setTaskStatus(task, "open") });
-    } else {
+    } else if (!grouped) {
       actions.push({ label: needsReview(task) && !release ? "Confirm done" : "Mark done", className: awaitingApproval || release ? "ghost" : "primary", title: "Mark this task complete after reviewing its result", run: () => setTaskStatus(task, "done") });
     }
-    if (!release && (needsReview(task) || scheduled?.stage === "cooling")) actions.push({ label: scheduled?.stage === "cooling" ? "Retry now" : "Retry", className: "ghost", title: scheduled?.blockedBy ? scheduled.reason : "Return this task to the queue for another attempt", disabled: ["verifying", "awaiting_verification"].includes(task.status) || scheduled?.canRetry === false, run: () => {
+    if (!release && !grouped && (needsReview(task) || scheduled?.stage === "cooling")) actions.push({ label: scheduled?.stage === "cooling" ? "Retry now" : "Retry", className: "ghost", title: scheduled?.blockedBy ? scheduled.reason : "Return this task to the queue for another attempt", disabled: ["verifying", "awaiting_verification"].includes(task.status) || scheduled?.canRetry === false, run: () => {
       if (window.mefiStudio?.tasksAction) return runTaskAction(task, "retry");
       delete task.verification;
       delete task.verifyAttempts;
@@ -49400,16 +49533,23 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
     if (task.status === "open" && window.mefiStudio?.backlogControl && (!scheduled || scheduled.stage === "ready")) actions.push({ label: "Do next", className: "ghost", title: "Prioritize this task when its prerequisites and a worker are ready", run: () => runTaskAction(task, "prioritize") });
     // A running worker is stopped, not released: its progress is saved and the
     // card waits for you instead of being picked up again at once.
-    if (task.status === "active" && task.runId && window.mefiStudio?.tasksAction) actions.push({ label: "Stop", action: "stop", allowDuringRun: true, className: "ghost", title: "Stop this task's worker. Its progress is saved and the card waits for you; other workers keep running.", run: () => runTaskAction(task, "stop") });
-    else if (task.status === "active") actions.push({ label: "Back to open", className: "ghost", title: "Release the active claim", run: () => setTaskStatus(task, "open") });
-    if (task.status === "absorbed") actions.push({ label: "Restore", className: "ghost", title: "Pull this task out of the grouped plan and back onto the open board", run: () => setTaskStatus(task, "open") });
+    // It asks twice, like Fleet's Stop and Delete here: the first press arms it.
+    if (task.status === "active" && task.runId && window.mefiStudio?.tasksAction) {
+      const stopping = stopArmed === task.id;
+      actions.push({ label: stopping ? "Stop it?" : "Stop", action: "stop", allowDuringRun: true, className: stopping ? "ghost danger danger-armed" : "ghost danger", title: "Stop this task's worker. Its progress is saved and the card waits for you; other workers keep running.", run: () => stopTask(task) });
+    } else if (task.status === "active") actions.push({ label: "Back to open", className: "ghost", title: "Release the active claim", run: () => setTaskStatus(task, "open") });
+    if (grouped) {
+      const group = state.tasks.find((entry) => entry.id === task.absorbedInto);
+      actions.push({ label: "Open group", action: "view-group", className: "primary", title: group ? `Open "${shortTitle(group)}", the grouped plan that holds this task's work` : "The grouped plan that holds this task is not on this board", disabled: !group, run: () => window.MefiTasks.selectTask(task.absorbedInto) });
+    } else if (task.status === "absorbed") actions.push({ label: "Restore", className: "ghost", title: "Pull this task out of the grouped plan and back onto the open board", run: () => setTaskStatus(task, "open") });
     if (task.status === "done") actions.push({ label: "Archive", className: "ghost", title: "Shelve the finished task", run: () => setTaskStatus(task, "archived") });
     if (task.status === "archived") actions.push({ label: "Mark done", className: "ghost", title: "Back to done, still under the Done mark", run: () => setTaskStatus(task, "done") });
     actions.push({
       label: "Rename",
       allowDuringRun: true,
       className: "ghost mini",
-      title: "Edit the title",
+      title: grouped ? groupedWhy : "Edit the title",
+      disabled: grouped,
       run: () => {
         state.renaming = true;
         renderTitle(task);
@@ -49419,7 +49559,8 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
     actions.push({
       label: armed ? "Really delete?" : "Delete",
       className: armed ? "ghost mini danger danger-armed" : "ghost mini danger",
-      title: "Remove this task for good",
+      title: grouped ? groupedWhy : "Remove this task for good",
+      disabled: grouped,
       run: () => deleteTask(task),
     });
     return actions;
@@ -49869,6 +50010,9 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
     const focused = document.activeElement;
     const focusedEntry = ["logs", "ideas"].find((field) => focused?.dataset?.taskEntryKey === `${taskKey(task)}/${field}`);
     const selection = focusedEntry ? { start: focused.selectionStart, end: focused.selectionEnd, direction: focused.selectionDirection } : null;
+    // An armed Stop is rebuilt as "Stop it?": a keyboard press confirms it
+    // only if focus follows the button across the rebuild.
+    const focusedAction = els.statusRow.contains?.(focused) ? focused.dataset?.taskAction : "";
     if (els.overviewBack) els.overviewBack.hidden = !task;
     els.detail.textContent = "";
     detailPanels = {};
@@ -50093,7 +50237,7 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
       const input = focusedEntry === "logs" ? logInput : ideaInput;
       input.focus({ preventScroll: true });
       if (Number.isInteger(selection.start) && Number.isInteger(selection.end)) input.setSelectionRange(selection.start, selection.end, selection.direction);
-    }
+    } else if (focusedAction) [...els.statusRow.children].find((button) => button.dataset?.taskAction === focusedAction)?.focus({ preventScroll: true });
   }
 
   // ---------- reference menu ----------
@@ -60388,12 +60532,20 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
   // park new dispatch until the operator resumes.
   async function stopAllAgents() {
     if (!api()?.assistantControl || state.switching || state.busyAction) return;
+    // It ends every run in flight, so it asks first, as Command's and the
+    // Explorer's Stop all do. The More menu closes on any press, so the
+    // question is the confirm toast rather than an armed button.
+    if (!(await confirmAction("Stop every running agent now? Each run's progress is saved and its work stays queued; new work stays off until you resume.", "Stop all"))) return;
+    if (state.switching || state.busyAction) return;
     state.busyAction = "stop-all"; controls();
     feedback("Stopping every agent and saving progress…");
     try {
       const result = guard(await api().assistantControl("stop-all"));
+      // `stopped` counts kill requests; `idle: false` means a worker was
+      // still alive when the host stopped waiting, so it is not "stopped".
       const stopped = Number(result.stopped) || 0;
-      feedback(stopped ? `Stopped ${stopped} agent(s). Progress saved; their work stays queued.` : "No agents were running. New work is off.");
+      if (result.idle === false) feedback(`${stopped ? `Asked ${stopped} agent(s) to stop` : "New work is off"}, but a run is still finishing. Progress is saved; check Activity in a moment.`);
+      else feedback(stopped ? `Stopped ${stopped} agent(s). Progress saved; their work stays queued.` : "No agents were running. New work is off.");
       await refresh(true);
     } catch (error) { feedback(error.message, true); }
     finally { state.busyAction = null; controls(); }
@@ -60402,6 +60554,8 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
   // relaunch. Studio comes back paused; Resume starts work again.
   async function restartStudio() {
     if (!api()?.appRestart || state.switching || state.busyAction) return;
+    if (!(await confirmAction("Restart Studio? Every agent stops first and its progress is saved; Studio comes back paused.", "Restart"))) return;
+    if (state.switching || state.busyAction) return;
     state.busyAction = "restart"; controls();
     feedback("Stopping agents, then restarting Studio…");
     try {
@@ -71434,6 +71588,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       canvas.width = Math.round(view.W * view.dpr);
       canvas.height = Math.round(view.H * view.dpr);
       paint();
+      // A paint outside the loop (this one) can leave motion mid-way: hand
+      // it to the loop, which runs only while the scene says it is hot.
+      if (view.hot()) view.kick();
     };
     const paint = () => {
       if (!view.W) return;
@@ -71599,6 +71756,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const pipeline = scene.taskId ? data.pipelines[scene.taskId] : null;
     const task = scene.taskId ? taskById(scene.taskId) : null;
     ctx.fillStyle = P.bg; ctx.fillRect(0, 0, W, H);
+    scene.settling = false;
     if (!pipeline) {
       label(ctx, "No pipeline yet", W / 2, H / 2 - 10, { size: 15, weight: 650, color: P.ivory });
       label(ctx, "A task gets one the moment a worker is prepared for it.", W / 2, H / 2 + 14, { size: 12, color: P.muted });
@@ -71607,7 +71765,13 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const L = layoutPipeline(pipeline, W, H);
     scene.layout = L;
     // Eased positions: a new step springs out of its parent, a folded one
-    // slides into the fold, so growing and shrinking read as motion.
+    // slides into the fold, so growing and shrinking read as motion. The
+    // spring needs frames, and the canvas keeps painting only while it is
+    // hot: `settling` holds it hot until every step has landed. Without it a
+    // pipeline with no active step painted once, a fifth of the way in, and
+    // stayed as small boxes whose titles (drawn from s > 0.7) never came.
+    const k = still() ? 1 : 0.18;
+    let settling = false;
     for (const step of L.steps) {
       const target = L.at.get(step.id);
       const held = scene.motion.get(step.id);
@@ -71616,9 +71780,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         scene.motion.set(step.id, { x: parent?.x ?? target.x, y: parent?.y ?? target.y, s: still() ? 1 : 0.2 });
       }
       const m = scene.motion.get(step.id);
-      const k = still() ? 1 : 0.18;
       m.x = lerp(m.x, target.x, k); m.y = lerp(m.y, target.y, k); m.s = lerp(m.s, 1, k);
+      if (Math.abs(m.x - target.x) < 0.5 && Math.abs(m.y - target.y) < 0.5 && 1 - m.s < 0.01) { m.x = target.x; m.y = target.y; m.s = 1; }
+      else settling = true;
     }
+    scene.settling = settling;
     for (const id of [...scene.motion.keys()]) if (!L.at.has(id)) scene.motion.delete(id);
     const pos = (id) => { const m = scene.motion.get(id); return m ? [m.x, m.y] : (L.fold ?? L.lead); };
 
@@ -72179,7 +72345,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     brainView = makeCanvas(el.canvas, drawPipeline, (width) => Math.max(360, layoutPipeline(data.pipelines[scene.taskId], width, 360).height));
     wirePipelineHover(el);
     initDetailPanes(el);
-    brainView.hot = () => fxAlive(performance.now() / 1000) || Object.values(data.pipelines).some((row) => row.steps?.some((step) => step.status === "active"));
+    brainView.hot = () => fxAlive(performance.now() / 1000) || scene.settling === true || Object.values(data.pipelines).some((row) => row.steps?.some((step) => step.status === "active"));
     sheetMap = mountMap({ canvas: el.mapCanvas, stage: el.mapCanvas.parentElement, tools: el.mapTools, minHeight: 440,
       onSelect: (system, part, file) => renderRegion(el.mapDetail, system, { part, file }),
       onNavigate: () => { if (el.panes.map.dataset.detail === "true") showDetails("map", false); },
@@ -73482,12 +73648,16 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const supportedTools = id !== "builder" || ["opencode", "claude", "codex"].includes(provider);
     const permissions = config.agentTools?.[id] || {};
     const setPermission = (key, value) => { config.agentTools = { ...config.agentTools, [id]: { ...config.agentTools?.[id], [key]: value } }; dirty(); };
+    const boxes = {};
     for (const [key, label, detail, enabled] of [
       ["webSearch", "Search the web", "Search queries leave this device. Answers can cite returned source links. Bing search is built in; BRAVE_SEARCH_API_KEY enables Brave.", permissions.webSearch !== false],
+      ["webRead", "Read web pages you link", "Pages you name, or that the agent finds by searching, are fetched from this computer. Local and private network addresses are refused, and page text is read as data, never as instructions.", permissions.webRead ?? permissions.webSearch !== false],
       ["projectRead", "Read project files", "Read small text files within this project. Hidden files, credentials and local app data are excluded.", permissions.projectRead === true],
     ]) {
-      const input = node("input"); input.id = `agent-${id}-tool-${key}`; input.type = "checkbox"; input.checked = enabled; input.disabled = !supportedTools;
-      input.addEventListener("change", () => setPermission(key, input.checked)); panel.append(field(label, input, detail));
+      const input = boxes[key] = node("input"); input.id = `agent-${id}-tool-${key}`; input.type = "checkbox"; input.checked = enabled; input.disabled = !supportedTools;
+      // An unset webRead follows webSearch (agentTools.policy).
+      input.addEventListener("change", () => { setPermission(key, input.checked); if (key === "webSearch" && config.agentTools[id].webRead === undefined) boxes.webRead.checked = input.checked; });
+      panel.append(field(label, input, detail));
     }
     panel.append(node("h4", "", "MCP tool allowlist"));
     for (const tool of saved.mcpTools || []) {
@@ -74683,7 +74853,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         const tools = configuration.agentTools?.[role] || {};
         const set = (key, value) => saveTeam((next) => { next.agentTools = { ...next.agentTools, [role]: { ...next.agentTools?.[role], [key]: value } }; });
         const box = card("Studio tools", supported ? "" : `Studio tools attach to OpenCode and Claude Code workers. ${cliName(cli)} uses its own tools and permissions.`);
-        box.append(toggle("Search the web", tools.webSearch !== false, (value) => void set("webSearch", value), "Search queries leave this computer. Bing is built in; a BRAVE_SEARCH_API_KEY variable switches to Brave.", { disabled: !supported }));
+        // An unset webRead follows webSearch (agentTools.policy).
+        let readFollows = tools.webRead === undefined;
+        const read = toggle("Read web pages you link", tools.webRead ?? tools.webSearch !== false, (value) => { readFollows = false; void set("webRead", value); }, "Pages you name, or that the agent finds by searching, are fetched from this computer. Local and private network addresses are refused.", { disabled: !supported });
+        box.append(toggle("Search the web", tools.webSearch !== false, (value) => { if (readFollows) read.querySelector("input").checked = value; void set("webSearch", value); }, "Search queries leave this computer. Bing is built in; a BRAVE_SEARCH_API_KEY variable switches to Brave.", { disabled: !supported }));
+        box.append(read);
         box.append(toggle("Read project files", tools.projectRead === true, (value) => void set("projectRead", value), "Small text files inside this project. Hidden files, credentials and app data are excluded.", { disabled: !supported }));
         body.append(box);
         const mcp = card("MCP tools", "Trusted stdio servers from ~/.mefi-studio/mcp.json. Allowing a tool lets its server run for this agent with its own credentials.");
@@ -75218,7 +75392,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const out = {};
     if (Number.isFinite(payload.scanned)) out.scanned = Math.max(0, Math.round(payload.scanned));
     if (Array.isArray(payload.files)) out.files = payload.files.filter((file) => typeof file === "string").map((file) => clip(file, 200)).filter(Boolean).slice(0, 8);
-    for (const key of ["seat", "provider", "model", "verdict", "reason", "size"]) if (typeof payload[key] === "string") out[key] = clip(payload[key], 120);
+    for (const key of ["seat", "provider", "model", "verdict", "reason", "size", "why"]) if (typeof payload[key] === "string") out[key] = clip(payload[key], 120);
     if (typeof payload.cli === "boolean") out.cli = payload.cli;
     if (typeof payload.summary === "string") out.summary = clip(payload.summary, 400);
     if (Array.isArray(payload.steps)) out.steps = payload.steps.slice(0, 6).map((step) => ({ title: clip(step?.title, 90) || "A step", after: (Array.isArray(step?.after) ? step.after : []).filter(Number.isInteger).slice(0, 6) }));
@@ -75241,8 +75415,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (!run || run.endedAt) return run || null;
     run.endedAt = now();
     run.outcome = { ok: ok !== false, error: clip(error, 300), count: Number.isFinite(count) ? count : null, steps: Number.isFinite(steps) ? steps : null };
-    // A request sized without a model call says nothing about how long one takes.
-    if (run.outcome.ok && (run.kind === "explore" || run.seen.sizing)) remember(run.kind, run.endedAt - run.startedAt);
+    // A request sized without a model call says nothing about how long one
+    // takes, and nor does a sizing that failed or timed out.
+    if (run.outcome.ok && (run.kind === "explore" || (run.seen.sizing && run.seen.sized?.size !== "kept"))) remember(run.kind, run.endedAt - run.startedAt);
     refresh(run);
     emit(run);
     return run;
@@ -75252,7 +75427,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   function on(listener) { if (typeof listener === "function") listeners.add(listener); return () => listeners.delete(listener); }
 
   // ---- what a run has done, stage by stage ------------------------------------------------
-  const TOOL_WORDS = { web_search: "searched the web", project_read: "read a file" };
+  const TOOL_WORDS = { web_search: "searched the web", web_read: "read a web page", project_read: "read a file" };
+  // Why sizing kept a request one card when the lead did not choose that
+  // (main.cjs vibeBuild's sized step, size "kept"): never "Best as one task".
+  const KEPT = { timeout: "The lead took too long, so it's one task", "no-answer": "No lead model answered, so it's one task", "too-many": "The plan had too many steps, so it's one task" };
+  const KEPT_LINE = "Couldn't plan steps, so it's one task";
+  const keptText = (sized) => KEPT[sized?.why] || KEPT_LINE;
   const toolWords = (run) => [...new Set(run.tools.map((tool) => TOOL_WORDS[tool.name] || (tool.name.startsWith("mcp__") ? `used ${tool.name.split("__").pop().replace(/_/g, " ")}` : "used a tool")))].join(" · ");
   function readText(read) {
     const files = read.files?.length ?? 0;
@@ -75278,7 +75458,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       list = [
         { key: "look", label: "Take a look", state: quick || done ? "done" : "now", detail: quick ? (single ? "One change, no split needed" : "Big enough to plan in steps") : "Reading your request" },
         { key: "split", label: "Plan the steps", state: single ? "skipped" : sized || adding || done ? "done" : sizing ? "now" : "next",
-          detail: single ? "Not needed" : sized ? (split ? `${plural(split, "step")}, then a final check` : "Best as one task") : sizing ? [`${who(sizing) || "The lead"} is splitting it`, tools].filter(Boolean).join(" · ") : "" },
+          detail: single ? "Not needed" : sized ? (split ? `${plural(split, "step")}, then a final check` : sized.size === "kept" ? keptText(sized) : "Best as one task") : sizing ? [`${who(sizing) || "The lead"} is splitting it`, tools].filter(Boolean).join(" · ") : "" },
         { key: "board", label: "Put it on the board", state: done ? "done" : adding ? "now" : "next", detail: done ? (out.steps ? `${plural(out.steps, "step")} and a final check` : "One task") : adding ? "Adding it" : "" },
       ];
     }
@@ -75292,7 +75472,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const out = run.outcome;
     if (run.kind === "explore") return !out ? "Mefi is looking for next steps" : !out.ok ? "Mefi couldn't finish looking" : out.count ? `Found ${plural(out.count, "next step")}` : "Nothing new to suggest";
     const sized = run.seen.sized;
-    if (out) return !out.ok ? "Sizing stopped" : out.steps ? `Split into ${plural(out.steps, "step")}` : "Added as one task";
+    if (out) return !out.ok ? "Sizing stopped" : out.steps ? `Split into ${plural(out.steps, "step")}` : sized?.size === "kept" ? KEPT_LINE : "Added as one task";
     return sized?.size === "steps" ? `Splitting it into ${plural(sized.steps.length, "step")}` : "Mefi is sizing your request";
   }
   // One line for the Team panel and the page's status: the stage now running.
@@ -75694,6 +75874,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // ---- tasks ------------------------------------------------------------------------
   const isDone = (task) => ["done", "archived", "completed"].includes(task?.status) || Boolean(task?.dropped);
   const stamp = (task) => Number(task.updatedAt || task.createdAt) || Date.parse(task.updatedAt || task.createdAt || "") || 0;
+  // When a finished card closed (done, or dropped), not its last write.
+  const time = (value) => Number(value) || Date.parse(value || "") || 0;
+  const closedAt = (task) => time(task.doneAt) || time(task.dropped?.at) || time(task.verification?.at) || stamp(task);
   // What a task is doing, in Vibe's words, from the backlog's stage for it.
   function stage(task) {
     const data = state.data;
@@ -75734,14 +75917,14 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const active = (data.tasks || []).filter((task) => !isDone(task) && !needing.has(task.id))
       .map((task) => ({ task, stage: stage(task) }))
       .sort((a, b) => (STAGE_ORDER[a.stage.key] ?? 9) - (STAGE_ORDER[b.stage.key] ?? 9) || stamp(b.task) - stamp(a.task));
-    const finished = (data.tasks || []).filter(isDone).sort((a, b) => stamp(b) - stamp(a)).slice(0, 30);
+    const finished = (data.tasks || []).filter(isDone).sort((a, b) => closedAt(b) - closedAt(a)).slice(0, 30);
     if (!needs.length && !active.length && !finished.length) {
       body.append(el("p", "vibe-panel-empty", "No tasks yet. Describe something in the box and press Build it; it shows up here."));
       return;
     }
     fold(body, "needs", "Needs you", needs.map((need) => row({ key: `need:${need.kind}:${need.id}`, tone: need.tone, title: need.title, meta: need.meta, action: { label: need.verb, run: () => vibe()?.openNeed?.({ kind: need.kind, id: need.id }) }, onOpen: () => vibe()?.openNeed?.({ kind: need.kind, id: need.id }) })), { empty: "Nothing is waiting on you." });
     fold(body, "active", "In progress", active.map(({ task, stage: now }) => row({ key: `task:${task.id}`, tone: now.tone, title: task.title || "A task", meta: now.text, onOpen: () => push({ view: "task", id: task.id }) })), { empty: "Nothing is queued or building." });
-    fold(body, "done", "Done", finished.map((task) => { const now = stage(task); return row({ key: `task:${task.id}`, tone: now.tone, title: task.title || "A task", meta: `${now.text} · ${ago(stamp(task))}`, onOpen: () => push({ view: "task", id: task.id }) }); }), { empty: "Finished work lands here." });
+    fold(body, "done", "Done", finished.map((task) => { const now = stage(task); return row({ key: `task:${task.id}`, tone: now.tone, title: task.title || "A task", meta: `${now.text} · ${ago(closedAt(task))}`, onOpen: () => push({ view: "task", id: task.id }) }); }), { empty: "Finished work lands here." });
   }
   function governor(body) {
     const data = state.data;
@@ -75800,7 +75983,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (!task) { body.append(el("p", "vibe-panel-empty", "This task is no longer on the board.")); return; }
     const now = stage(task);
     const need = (data.needs || []).find((item) => item.kind !== "question" && (item.id === id || item.kind === "family" && item.rows?.some((row) => row.id === id)));
-    heading(body, task.title || "A task", [chip(now.text, now.key === "blocked" ? "blocker" : now.key === "approval" ? "decision" : ""), el("span", "vibe-ask-when", ago(stamp(task)))]);
+    heading(body, task.title || "A task", [chip(now.text, now.key === "blocked" ? "blocker" : now.key === "approval" ? "decision" : ""), el("span", "vibe-ask-when", ago(isDone(task) ? closedAt(task) : stamp(task)))]);
     if (now.reason) body.append(el("p", "vibe-ask-detail vibe-panel-reason", now.reason));
     text(body, "The brief", task.prompt && task.prompt !== task.title ? task.prompt : "");
     const error = String(task.lastRunError || "").trim();
@@ -75893,14 +76076,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     });
     body.append(form);
   }
+  // The follow-up goes into the box through Vibe (vibe.js requestChange): it
+  // keeps the draft, cites the task and closes this panel, or says why not.
   function askChange(task) {
-    const input = document.getElementById("vibe-input");
-    if (!input) return;
-    input.value = `Change "${task.title || "the last result"}": `;
-    close({ quiet: true });
-    input.focus?.();
-    try { input.setSelectionRange?.(input.value.length, input.value.length); } catch { /* not a text field */ }
-    input.dispatchEvent?.(new Event("input", { bubbles: true }));
+    const result = vibe()?.requestChange?.(task);
+    if (result?.ok === false) note(result.error, "warn");
   }
 
   // ---- plans ------------------------------------------------------------------------
@@ -75958,7 +76138,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (need) buttons.push({ label: "Start all steps", primary: true, run: () => vibe()?.openNeed?.({ kind: "family", id }) });
     // One host transaction, as the drawer's: dropping steps one at a time is
     // refused for a step another one waits on.
-    if (unstarted.length) buttons.push({ label: "Make it one task", title: "Drop the steps that have not started; the request is built as one task", run: () => act(() => api().tasksAction({ taskId: id, projectId: state.data.projectId, action: "merge-steps" }), "Kept as one task. It builds as a whole.") });
+    if (unstarted.length) buttons.push({ label: "Make it one task", confirm: "Drop the unstarted steps?", title: "Drop the steps that have not started; the request is built as one task", run: () => act(() => api().tasksAction({ taskId: id, projectId: state.data.projectId, action: "merge-steps" }), "Kept as one task. It builds as a whole.") });
     if (buttons.length) body.append(actions(buttons));
   }
 
@@ -76537,6 +76717,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   window.addEventListener("mefi:autonomy-changed", () => { state.signature = ""; if (["settings", "decisions", "team"].includes(state.kind)) render(); });
   // A thinking run starting, moving on or ending repaints Team's list of them.
   window.MefiVibeFlow?.on?.(() => { if (state.kind === "team") render(); });
+  let armedPaint = 0;
   function render() {
     if (aside.hidden || !state.kind) return;
     const view = top();
@@ -76545,6 +76726,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const typing = aside.contains(document.activeElement) && /^(TEXTAREA|INPUT)$/.test(document.activeElement?.tagName || "") && document.activeElement?.type !== "checkbox";
     const signature = JSON.stringify([state.kind, state.stack, state.folds, state.busy, digest()]);
     if (signature === state.signature || typing) return;
+    // Nor is a button that asks (MefiUi.arm's 3 s): a push would swap it for
+    // a fresh one, so the panel waits, then catches up. Your own moves paint.
+    if (state.signature && $("body")?.querySelector?.(".danger-armed")) { clearTimeout(armedPaint); armedPaint = setTimeout(render, 3200); return; }
     state.signature = signature;
     $("kicker").textContent = state.data.projectName || "Vibe";
     $("title").textContent = view?.view === "task" ? "Task" : view?.view === "idea" ? "Idea" : view?.view === "family" ? "Plan" : TITLES[state.kind];
@@ -76702,6 +76886,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   const done = (task) => ["done", "archived", "completed"].includes(task.status);
   const describe = (task) => window.MefiTasks?.describe?.(task) ?? { stage: done(task) ? "done" : task.status === "awaiting_verification" ? "review" : "open" };
   const stamp = (task) => Number(task.updatedAt || task.createdAt) || Date.parse(task.updatedAt || task.createdAt || "") || 0;
+  // When a card finished, not when it was last written: a note or an archive
+  // on an old result must not make it read "done just now" (tasks.js doneStamp).
+  const time = (value) => Number(value) || Date.parse(value || "") || 0;
+  const finishedAt = (task) => time(task.doneAt) || time(task.verification?.at) || stamp(task);
   const companion = () => { try { return (localStorage.getItem("mefiStudio.workspace.companion") || "Mefi").trim() || "Mefi"; } catch { return "Mefi"; } };
   const person = () => { try { return (localStorage.getItem("mefiStudio.workspace.person") || "").trim(); } catch { return ""; } };
 
@@ -76784,8 +76972,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const tasks = scoped(state.tasks);
     const checking = tasks.filter((task) => !runningIds.has(task.id) && ["awaiting_verification", "verifying"].includes(task.status));
     const next = (Array.isArray(state.backlog?.next) ? state.backlog.next : []).filter((item) => !runningIds.has(item.id) && ["ready", "waiting", "cooling"].includes(item.stage ?? "ready")).slice(0, 2);
-    // Freshly done is the last half day; older results live in the Tasks panel.
-    const finished = tasks.filter((task) => done(task) && describe(task).stage !== "review" && Date.now() - stamp(task) < FRESH_MS).sort((a, b) => stamp(b) - stamp(a)).slice(0, 3);
+    // Freshly done is what finished in the last half day; older results, and
+    // work you dropped (closed without finishing), live in the Tasks panel.
+    const finished = tasks.filter((task) => done(task) && !task.dropped && describe(task).stage !== "review" && Date.now() - finishedAt(task) < FRESH_MS).sort((a, b) => finishedAt(b) - finishedAt(a)).slice(0, 3);
     return { running, checking, next, finished, ideas: freshIdeas(), plans: activePlans(), families: families(), needs: needs(), gate: runState() };
   }
   // A request Build it split into steps (main.cjs vibeBuild): the owner's card,
@@ -76912,18 +77101,47 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (action) {
       const button = el("button", "vibe-row-action", action.label);
       button.type = "button";
-      button.addEventListener("click", action.run);
+      button.disabled = Boolean(action.disabled);
+      if (action.title) button.title = action.title;
+      // An action that cannot be undone asks twice (studio-ui.js MefiUi.arm).
+      if (action.confirm && window.MefiUi?.arm) window.MefiUi.arm(button, { run: action.run, armed: action.confirm });
+      else button.addEventListener("click", action.run);
       item.append(button);
     }
     return item;
   }
   const go = (id, params) => window.MefiNav?.go?.(id, params);
+  // Stop one worker from its Building now row: the Tasks panel's Stop (the
+  // host's per-task stop), so its progress is kept and the card waits for
+  // you under Needs you.
+  const stopping = new Set();
+  async function stopJob(job) {
+    const id = projectId();
+    if (!job.taskId || stopping.has(job.taskId) || !api()?.tasksAction) return;
+    stopping.add(job.taskId); signatures.delete("lanes"); renderLanes();
+    feedback(`Stopping "${job.title || "the task"}"…`);
+    try {
+      const result = await api().tasksAction({ taskId: job.taskId, projectId: id, action: "stop" });
+      if (!result || result.ok === false) throw new Error(result?.error || "That worker could not be stopped.");
+      if (projectId() === id) feedback("Stopped. It waits for you under Needs you.", "good");
+    } catch (error) {
+      if (projectId() === id) feedback(error?.message || "That worker could not be stopped.", "bad");
+    } finally {
+      stopping.delete(job.taskId); signatures.delete("lanes");
+      void refresh();
+    }
+  }
 
   // A row opens its task in the Tasks panel beside Vibe, not the Build board.
   const openTask = (taskId) => openPanel("tasks", taskId ? { taskId } : {});
+  // A worker's live line repaints the cards up to four times a second, which
+  // would swap an asking Stop for a fresh one: while one asks (MefiUi.arm's
+  // 3 s), the cards wait, then catch up.
+  let armedPaint = 0;
   function renderLanes() {
+    if ($("lane-building")?.querySelector?.(".danger-armed")) { clearTimeout(armedPaint); armedPaint = setTimeout(() => { if (active()) renderLanes(); }, 3200); return; }
     const data = lanes();
-    if (!changed("lanes", [data, projectId(), state.gateBusy])) { sharePanels(); return; }
+    if (!changed("lanes", [data, projectId(), state.gateBusy, [...stopping]])) { sharePanels(); return; }
     const needCount = data.needs.length;
     keep($("card-needs")?.parentElement, () => paintLanes(data));
     renderDock(data);
@@ -76946,7 +77164,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       const phase = job.phase ? String(job.phase).replace(/_/g, " ") : "working";
       // The worker's tool, and under it what the worker is doing right now.
       const now = window.MefiVibeFlow?.doing?.(job) ?? { tool: "", step: "" };
-      building.append(row({ key: `building:${job.taskId || job.title}`, tone: "live", title: job.title || "A task", meta: `${now.tool ? `${now.tool} · ` : ""}${phase} · started ${ago(job.startedAt)}`, detail: now.step, progress: job.progress, onOpen: () => go("command", job.taskId ? { selected: `task:${job.taskId}` } : {}) }));
+      // Stop asks twice, as the Tasks panel's does; a stop on its way says so.
+      const halting = Boolean(job.stopping) || stopping.has(job.taskId);
+      const stop = !job.taskId ? null : halting ? { label: "Stopping…", disabled: true, run() {} }
+        : { label: "Stop", confirm: "Stop it?", title: "Stop this worker; its progress is kept and the task waits for you", run: () => void stopJob(job) };
+      building.append(row({ key: `building:${job.taskId || job.title}`, tone: "live", title: job.title || "A task", meta: `${now.tool ? `${now.tool} · ` : ""}${phase} · started ${ago(job.startedAt)}`, detail: now.step, progress: job.progress, action: stop, onOpen: () => go("command", job.taskId ? { selected: `task:${job.taskId}` } : {}) }));
     }
     for (const task of data.checking.slice(0, Math.max(0, 4 - building.children.length))) building.append(row({ key: `building:${task.id}`, tone: "check", title: task.title || "A finished task", meta: "checking its work", onOpen: () => openTask(task.id) }));
     const heldBack = data.gate && ["held", "paused", "key"].includes(data.gate.key);
@@ -76965,7 +77187,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     finished.replaceChildren();
     for (const task of data.finished) {
       const verified = task.verification?.state === "verified";
-      finished.append(row({ key: `done:${task.id}`, tone: "done", title: task.title || "A task", meta: `${verified ? "verified" : "done"} · ${ago(task.updatedAt || task.createdAt)}`, onOpen: () => openTask(task.id) }));
+      finished.append(row({ key: `done:${task.id}`, tone: "done", title: task.title || "A task", meta: `${verified ? "verified" : "done"} · ${ago(finishedAt(task))}`, onOpen: () => openTask(task.id) }));
     }
     $("count-done").textContent = "";
 
@@ -77279,6 +77501,39 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     feedback(current ? "Added to your draft. Review it, then talk it over or build it." : "Ready to shape. Review the brief, then talk it over or build it.");
     return true;
   }
+  // Ask for a change on a finished task (the Tasks panel): the follow-up
+  // Build's Home writes (workspace.js requestChange), naming the task by title
+  // and id, added under any draft already in the box, with the caret on the
+  // empty line where the change goes. Only the open project's task, and only
+  // into the open project's draft.
+  function requestChange(task) {
+    // The box still holds what is being sent: a follow-up joined to it would
+    // stay behind once that lands (send clears only unchanged text).
+    if (state.pending) return { ok: false, error: "Wait for the request you just sent to land, then ask for the change." };
+    const id = projectId();
+    if (!task?.id || !id) return { ok: false, error: "Open the task's project first." };
+    if (task.projectId && task.projectId !== id) return { ok: false, error: "This task belongs to another project. Open that project to ask for a change." };
+    init(); syncDraft();
+    const input = $("input"), current = input.value.trim();
+    const title = task.title || String(task.prompt || "").split(/[\r\n]/)[0].slice(0, 80) || "Untitled task";
+    const lead = `Follow-up to task "${title}" (${task.id}).\n\nRequested change:\n`;
+    const next = `${current ? `${current}\n\n` : ""}${lead}\nDone when:\n- `;
+    if (next.length > 16000) return { ok: false, error: "This follow-up will not fit beside your current draft. Shorten the draft first." };
+    if (!current) evolution.context = null;
+    input.value = next; grow(); saveDraft(); renderEvolution();
+    window.MefiVibePanels?.close?.({ quiet: true });
+    closeDrawers();
+    if (!active()) go("vibe");
+    input.focus();
+    const caret = next.length - "\nDone when:\n- ".length;
+    try { input.setSelectionRange?.(caret, caret); } catch { /* not a text field */ }
+    feedback("Describe the change, then build it. The finished task stays as it is.");
+    return { ok: true };
+  }
+  // The follow-up scaffold alone is structure, not a request (workspace.js
+  // hasRequirement): what is left once its lines are set aside.
+  const SCAFFOLD_LINE = /^(?:Follow-up to task\b.*|Requested change\s*:?|Done when\s*:?|-)$/;
+  const said = (text) => text.split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !SCAFFOLD_LINE.test(line)).join(" ");
   function renderSparks() {
     const holder = $("sparks");
     holder.replaceChildren();
@@ -77497,7 +77752,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (state.pending) return;
     if (!value) { input.focus(); feedback("Describe what you have in mind first."); return; }
     if (!id || !api()) { feedback("Choose a project first: select the project name at the top left.", "warn"); return; }
-    if (intent === "build" && value.replace(/[^\p{L}\p{N}]/gu, "").length < 3) { feedback("Say a little more about what to build.", "warn"); return; }
+    const words = said(value).replace(/[^\p{L}\p{N}]/gu, "").length;
+    if (words < 3 && /^Follow-up to task\b/m.test(value)) { input.focus(); feedback("Say what to change first, under Requested change.", "warn"); return; }
+    if (intent === "build" && words < 3) { feedback("Say a little more about what to build.", "warn"); return; }
     busy(true);
     if (intent === "talk") openChat();
     // Build it asks the host to size the request (vibeBuild): one card, or the
@@ -77588,11 +77845,23 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const shared = state.assistant.needsYou;
     if (shared?.items && belongs(state.assistant)) return shared.items.map((item) => {
       if (item.kind === "question") return list.find((row) => row.kind === "question" && row.id === item.id);
+      if (item.kind === "review") return checkingLong(item);
       const grouped = item.memberIds?.length ? list.find((row) => row.kind === "family" && row.id === item.taskId) : null;
-      return grouped || list.find((row) => row.id === item.taskId && row.kind !== "question") || { kind: item.kind === "approval" ? "approval" : "blocked", id: item.taskId, tone: "ask", verb: "Review", title: item.title, meta: item.kind === "review" ? "check the result" : "waiting for your review", row: { canRetry: false, reason: item.title } };
+      return grouped || list.find((row) => row.id === item.taskId && row.kind !== "question") || { kind: item.kind === "approval" ? "approval" : "blocked", id: item.taskId, tone: "ask", verb: "Review", title: item.title, meta: "waiting for your review", row: { canRetry: false, reason: item.title } };
     }).filter(Boolean);
     return list;
   }
+  // A finished attempt still waiting on its check after half an hour
+  // (companion.cjs REVIEW_AFTER_MS) is listed for you to look at, but nothing
+  // is stuck: it says how long the check has run. Gone once the card moves on.
+  function checkingLong(item) {
+    const task = taskById(item.taskId);
+    if (!item.taskId || task && task.status !== "awaiting_verification") return null;
+    const since = time(item.at) || time(task?.awaitingAt) || null;
+    return { kind: "review", id: item.taskId, tone: "check", verb: "Check on it", title: item.title || task?.title || "A finished task", meta: `checking its work${since ? ` · ${lasted(since)} so far` : ""}`, since };
+  }
+  // How long something has run: "45 min", "2 h".
+  const lasted = (at) => { const text = ago(at); return text === "just now" ? "under a minute" : text.replace(/ ago$/, ""); };
   const needKey = (need) => need ? `${need.kind}:${need.id}` : "";
   function openNeed(need) {
     if (state.chatOpen) closeChat();
@@ -77614,7 +77883,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // A typed answer per question: pushes rebuild the drawer (another need
   // arriving changes the signature), which emptied the box and took focus.
   const askDrafts = new Map();
-  let askRefocus = false;
+  let askRefocus = false, armedAsk = 0;
   function renderAsk() {
     if (!state.need || $("ask").hidden) return;
     const all = needs();
@@ -77622,8 +77891,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const need = all[index];
     if (need && !state.askSending) { $("ask-note").textContent = state.askErrors[needKey(need)] || ""; $("ask-note").dataset.tone = state.askErrors[needKey(need)] ? "bad" : ""; }
     const task = need && need.kind !== "question" ? taskById(need.id) : null;
+    const painted = signatures.get("ask");
     if (!changed("ask", [need ?? null, task, all.length, state.askSending, state.status.autoBuild])) return;
     const body = $("ask-body");
+    // A push while a button asks waits, then catches up, as the cards do;
+    // opening an item, acting, moving on and the item going still paint.
+    if (need && painted !== undefined && body.querySelector(".danger-armed")) { signatures.set("ask", painted); clearTimeout(armedAsk); armedAsk = setTimeout(renderAsk, 3200); return; }
     askRefocus = Boolean(document.activeElement && body.contains(document.activeElement) && document.activeElement.matches?.(".vibe-ask-own textarea"));
     body.replaceChildren();
     const watch = $("ask-watch");
@@ -77646,10 +77919,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }
     watch.textContent = "Open on the task board";
     watch.onclick = () => { closeAsk({ quiet: true }); go("tasks", { taskId: need.id, filter: "all" }); };
-    $("ask-kicker").textContent = `${["approval", "family"].includes(need.kind) ? "Waiting for your go-ahead" : need.row?.blockedBy === "owner" ? "Stopped by you" : "Stuck"}${position}`;
+    $("ask-kicker").textContent = `${["approval", "family"].includes(need.kind) ? "Waiting for your go-ahead" : need.kind === "review" ? "Still checking" : need.row?.blockedBy === "owner" ? "Stopped by you" : "Stuck"}${position}`;
     $("ask-title").textContent = need.title;
     if (need.kind === "family") renderFamily(body, need);
     else if (need.kind === "approval") renderApproval(body, need, task);
+    else if (need.kind === "review") renderChecking(body, need, task);
     else renderBlocked(body, need, task);
   }
   // A request split into steps under Verify first: its steps start together.
@@ -77665,7 +77939,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const ready = need.rows.filter((row) => typeof row.buildScope === "string" && row.buildScope && row.canApprove !== false);
     body.append(actions([
       { label: `Start ${ready.length === 1 ? "the step" : `all ${ready.length} steps`}`, primary: true, disabled: !ready.length, title: "Approve every waiting step as it is saved now", run: () => act(need, () => startSteps(ready), "Started. The steps build as workers free up.") },
-      { label: "Make it one task", title: "Drop the steps that have not started; the request is built as one task", run: () => act(need, () => mergeSteps(need.id), "Kept as one task. It builds as a whole.") },
+      { label: "Make it one task", confirm: "Drop the unstarted steps?", title: "Drop the steps that have not started; the request is built as one task", run: () => act(need, () => mergeSteps(need.id), "Kept as one task. It builds as a whole.") },
     ]));
   }
   // Approving each step is the same call Review makes for a single build.
@@ -77698,12 +77972,15 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
   function actions(buttons) {
     const holder = el("div", "vibe-ask-actions");
-    for (const { label, primary, run, disabled, title } of buttons) {
+    for (const { label, primary, run, disabled, title, confirm } of buttons) {
       const button = el("button", `vibe-btn ${primary ? "primary" : "quiet"}`, label);
       button.type = "button";
       button.disabled = state.askSending || Boolean(disabled);
       if (title) button.title = title;
-      button.addEventListener("click", () => void run());
+      // What cannot be undone asks twice, as the Tasks panel's Drop does:
+      // the first press asks, the second acts (studio-ui.js MefiUi.arm).
+      if (confirm && window.MefiUi?.arm) window.MefiUi.arm(button, { run: () => void run(), armed: confirm });
+      else button.addEventListener("click", () => void run());
       holder.append(button);
     }
     return holder;
@@ -77781,7 +78058,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const canApprove = row.canApprove === true && typeof row.buildScope === "string" && row.buildScope;
     body.append(actions([
       { label: window.MefiAutonomy?.state?.()?.level === "accept" ? "Accept this task" : "Approve build", primary: true, disabled: !canApprove, title: canApprove ? "Approve this brief so the task can build" : "Open it on the task board to review its current brief", run: () => act(need, () => api().backlogControl({ action: "approve", taskId: need.id, projectId: projectId(), expectedScope: row.buildScope }), "Approved. It builds when a worker is free.") },
-      { label: "Drop it", run: () => act(need, () => api().tasksAction({ taskId: need.id, projectId: projectId(), action: "drop" }), "Dropped. It's closed without being built.") },
+      { label: "Drop it", confirm: "Drop this task?", title: "Close it without building it", run: () => act(need, () => api().tasksAction({ taskId: need.id, projectId: projectId(), action: "drop" }), "Dropped. It's closed without being built.") },
     ]));
     if (window.MefiAutonomy) {
       const auto = el("button", "vibe-ask-link vibe-ask-auto", "Review permission settings");
@@ -77805,8 +78082,23 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const retryable = row.canRetry !== false && !["verifying", "awaiting_verification"].includes(task?.status);
     body.append(actions([
       { label: HOLD_VERBS[hold] || "Try again", primary: true, disabled: !retryable, title: "Put it back in the queue; it continues from its saved progress", run: () => act(need, () => api().tasksAction({ taskId: need.id, projectId: projectId(), action: "retry" }), "Back in the queue. It shows under Building now when a worker picks it up.") },
-      { label: "It's done", title: "You checked the result yourself: mark it complete", run: () => act(need, () => api().tasksAction({ taskId: need.id, projectId: projectId(), action: "status", status: "done" }), "Marked done.") },
-      { label: "Drop it", title: "Close it without finishing; it is not marked done", run: () => act(need, () => api().tasksAction({ taskId: need.id, projectId: projectId(), action: "drop" }), "Dropped. It's closed without being finished.") },
+      markDone(need),
+      { label: "Drop it", confirm: "Drop this task?", title: "Close it without finishing; it is not marked done", run: () => act(need, () => api().tasksAction({ taskId: need.id, projectId: projectId(), action: "drop" }), "Dropped. It's closed without being finished.") },
+    ]));
+  }
+  const markDone = (need) => ({ label: "It's done", confirm: "Mark it done?", title: "You checked the result yourself: mark it complete", run: () => act(need, () => api().tasksAction({ taskId: need.id, projectId: projectId(), action: "status", status: "done" }), "Marked done.") });
+  // A check that is taking long: you can look at the checks, or confirm the
+  // result yourself; never drop it, since the host refuses a drop while a
+  // check holds the card.
+  function renderChecking(body, need, task) {
+    const long = need.since ? lasted(need.since) : "";
+    body.append(chips([chip("Checking its work", "check"), long ? el("span", "vibe-ask-when", `for ${long}`) : null]));
+    body.append(el("p", "vibe-ask-detail", `The worker finished, and Studio has been checking the result${long ? ` for ${long}` : ""}, longer than usual. You can look at the checks, or mark it done if you have checked it yourself.`));
+    const text = brief(task);
+    if (text) body.append(text);
+    body.append(actions([
+      { label: "View checks", primary: true, title: "Open it on the task board to see its checks and result", run: () => { closeAsk({ quiet: true }); go("tasks", { taskId: need.id, filter: "all" }); } },
+      markDone(need),
     ]));
   }
   // One path for every drawer action: call the host, adopt what it hands
@@ -78079,7 +78371,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     void refresh().then(() => { const late = needs().find((item) => item.kind === (wanted.kind || "question") && item.id === wanted.id); if (late) openNeed(late); });
     return false;
   }
-  window.MefiVibe = { enter, exit, isActive: active, refresh, mode, setMode, landing, startup, showNotes, closeNotes, snapshot, openPanel, closeDrawers, composeEvolution, suggestEvolution, openNeed: openNeedById, paintDock: () => renderDock(lanes()), promoteIdea: (idea) => promoteIdea(idea), feedback: (text, tone) => feedback(text, tone), ready: () => refreshFlight ?? Promise.resolve() };
+  window.MefiVibe = { enter, exit, isActive: active, refresh, mode, setMode, landing, startup, showNotes, closeNotes, snapshot, openPanel, closeDrawers, composeEvolution, suggestEvolution, openNeed: openNeedById, requestChange, paintDock: () => renderDock(lanes()), promoteIdea: (idea) => promoteIdea(idea), feedback: (text, tone) => feedback(text, tone), ready: () => refreshFlight ?? Promise.resolve() };
 })();
 
 // Mefi's Studio AI+ — booklet renderer, filters, refresh-on-open, studio launcher UI.

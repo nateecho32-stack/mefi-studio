@@ -4,6 +4,7 @@ import { createAutonomyHost } from "../scripts/autonomy-host.cjs";
 import issues from "../scripts/agent-issues.cjs";
 import backlog from "../scripts/backlog.cjs";
 import ledger from "../scripts/decision-ledger.cjs";
+import autonomy from "../scripts/autonomy.cjs";
 import { emptyState, normalizeState } from "../scripts/assistant.mjs";
 
 const NOW = 1800000000000;
@@ -342,6 +343,64 @@ test("Auto clears agent proposals from Needs you; switching back restores the ap
   assert.equal((await f.host.notices()).counts.approval, 1);
   await f.host.set({ level: "auto" });
   assert.equal((await f.host.notices()).counts.total, 0);
+});
+
+// Defence in depth, not a reproduction. Live 2026-09-29, under Auto, two
+// owner-only asks (a merge/push decision, landing a branch with npm run sync)
+// closed as "Leave it for review" without the owner clicking. What closed them
+// is unproven: no desk, chat or learned-decision trace of it exists, and this
+// desk pass left both open before these guards too. The guards: the desk is
+// never offered a closing answer on an owner-only ask, and apply() refuses one
+// whoever picks it. main.cjs refuses a delegated dismissal of one and records
+// who closed an ask (tests/assistant_questions.test.mjs).
+test("the desk never closes an owner-only ask: it is not offered Leave it for review, and applying it leaves the ask open", async () => {
+  const asks = [
+    { taskId: "task", taskTitle: "Build the unfinished items from our public roadmap", title: "merge/push decision for the dogfood branch" },
+    { taskId: "bridge", taskTitle: "Creative-tools bridge", title: "landing the branch onto main via npm run sync." },
+  ];
+  const replies = [
+    { optionId: "hold", classification: "studio", confidence: 0.95, reason: "Leave the merge for review." },
+    { optionId: "hold", confidence: 0.95, reason: "Leave it for review." },
+    { optionId: null, confidence: 0.9, reason: "This needs the owner." },
+  ];
+  for (const level of ["auto", "elevated"]) {
+    for (const reply of replies) {
+      const f = fixture({ level, kind: "owner", reply });
+      const prompts = [];
+      const call = f.io.callDesk;
+      f.io.callDesk = async (prompt) => { prompts.push(prompt.user); return call(prompt); };
+      f.board.tasks.push({ id: "bridge", title: "Creative-tools bridge", status: "open", origin: { by: "owner" }, logs: [] });
+      Object.assign(f.question, issues.questionForIssue({ kind: "owner", source: "worker", ...asks[0] }, { now: NOW }));
+      f.state.questions.push({ ...issues.questionForIssue({ kind: "owner", source: "worker", ...asks[1] }, { now: NOW }), id: "q2", at: NOW, status: "open" });
+      for (let minute = 0; minute <= 15; minute += 5) { await f.host.decide(); f.advance(5 * 60000); }
+      const owned = f.state.questions.filter((row) => ["q", "q2"].includes(row.id));
+      const label = `${level} ${JSON.stringify(reply)}`;
+      assert.deepEqual(owned.map((row) => row.status), ["open", "open"], label);
+      assert.equal(f.answers.length, 0, label);
+      assert.ok(prompts.length > 0 && prompts.every((user) => !/^- hold:/m.test(user)), `${label}: the desk is not offered Leave it for review`);
+      assert.ok(owned.every((row) => row.context.suggestion?.optionId === null), `${label}: each carries the desk's note`);
+      assert.ok(owned.every((row) => row.options.some((option) => option.id === "hold")), `${label}: the owner can still leave it themselves`);
+      assert.equal((await f.host.notices()).counts.question, 2, `${label}: both stay in Needs you`);
+    }
+  }
+  // Whatever picks it, an automatic answer never closes one: the ask stays open with the note.
+  const f = fixture({ kind: "owner" });
+  const result = await f.host.apply(f.question, { optionId: "hold", reason: "Leave it for review.", confidence: 1 }, autonomy.migrate(f.settings));
+  assert.equal(result.left, true);
+  assert.equal(f.question.status, "open");
+  assert.equal(f.answers.length, 0);
+  assert.equal(f.state.decisions.length, 0, "nothing was decided, so there is nothing to undo");
+  assert.equal(f.question.context.suggestion.reason, "Leave it for review.");
+  // Other kinds keep Elevated's safe fallback, and an owner leftover the desk
+  // reads as a real-world step still moves to the For you list.
+  const conflict = fixture({ level: "elevated", kind: "conflict", reply: { optionId: null, confidence: 0.2, reason: "Unclear." } });
+  await conflict.host.decide();
+  assert.equal(conflict.answers[0]?.optionId, "hold");
+  assert.equal(conflict.question.status, "dismissed");
+  const human = fixture({ kind: "owner", reply: { optionId: "acknowledge", classification: "human", confidence: 0.95, text: "Merge the dogfood branch.", reason: "A person lands it." } });
+  await human.host.decide();
+  assert.equal(human.answers[0]?.optionId, "acknowledge");
+  assert.equal(human.state.todos[0]?.text, "Merge the dogfood branch.");
 });
 
 test("a decision that failed to apply cannot be undone or taught as a correction", async () => {

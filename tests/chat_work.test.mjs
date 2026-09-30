@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import chatWork from "../scripts/chat-work.cjs";
 
-const { findExistingChatWork: find } = chatWork;
+const { findExistingChatWork: find, listedBrief } = chatWork;
 const task = (prompt, extra = {}) => ({ id: "saved", title: prompt.slice(0, 60), prompt, status: "open", ...extra });
 const ask = (prompt, extra = {}) => ({ title: prompt.slice(0, 60), prompt, ...extra });
 
@@ -57,6 +57,19 @@ test("known chat wrappers and focus provenance do not create another obligation"
   assert.equal(find({ tasks: [saved] }, ask("Please add the search button")).item, saved);
   const wrapped = task('Work on "Add search button". Queued from the assistant chat — the user said "work on it".');
   assert.equal(find({ tasks: [wrapped] }, ask("Please add the search button")).item, wrapped);
+});
+
+test("a card for one of the tasks a message lists is that item of that message, whatever its title", () => {
+  const said = "Add three tasks: 1) dark mode toggle 2) CSV export 3) shortcut help page";
+  const saved = task(listedBrief("CSV export", said), { title: "CSV export" });
+  assert.equal(find({ tasks: [saved] }, ask(listedBrief("CSV export", said), { title: "Export tasks to CSV" })).item, saved);
+  assert.equal(find({ tasks: [saved] }, ask(listedBrief("dark mode toggle", said))), null, "another item of the message is other work");
+  assert.equal(find({ tasks: [saved] }, ask(said)).item, saved, "the same message filed whole");
+  const whole = task(said);
+  assert.equal(find({ tasks: [whole] }, ask(listedBrief("dark mode toggle", said))).item, whole, "a message filed whole covers its items");
+  assert.equal(find({ tasks: [saved] }, ask("Add two tasks: 1) dark mode toggle 2) CSV export")), null, "another message is other work");
+  const focused = task(`${listedBrief("CSV export", said)}\n\nThe user pointed the assistant at task "Board" (id: t1) while asking for this.`);
+  assert.equal(find({ tasks: [focused] }, ask(listedBrief("CSV export", said))).item, focused);
 });
 
 test("the pinned Work on it wrapper is the label it points at, not new work", () => {

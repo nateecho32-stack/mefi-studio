@@ -25,7 +25,13 @@ const plain = (value) => JSON.parse(JSON.stringify(value));
 const settle = async () => { for (let turn = 0; turn < 16; turn += 1) await new Promise((resolve) => setImmediate(resolve)); };
 const now = Date.now();
 
-function bridge({ quiet = false, running = false, ideas = false, plans = false, finished = false, family = false, sized = 0, deferred = false, github = null } = {}) {
+// studio-ui.js MefiUi.arm's contract: the first press shows the question,
+// the second runs it.
+function armStub() {
+  return { arm(button, { run, armed }) { button.classList.add("danger"); let ready = false, resting = ""; button.addEventListener("click", (event) => { if (!ready) { ready = true; resting = button.textContent; button.textContent = armed; button.classList.add("danger-armed"); return; } ready = false; button.textContent = resting; button.classList.remove("danger-armed"); run(event); }); return button; } };
+}
+
+function bridge({ quiet = false, running = false, ideas = false, plans = false, finished = false, family = false, sized = 0, deferred = false, closed = false, github = null } = {}) {
   const calls = [];
   // The project the host has open: a test switches it to play a user who moves on mid-publish.
   const active = { id: P };
@@ -36,6 +42,14 @@ function bridge({ quiet = false, running = false, ideas = false, plans = false, 
     { id: "t3", projectId: P, title: "Add a sitemap", status: "open", prompt: "Generate sitemap.xml from the routes.", updatedAt: now - 3000, contextVersion: 1, ...(deferred ? { deferUntil: now + 60000 } : {}) },
     { id: "t7", projectId: P, title: "Upgrade the charts", status: "open", lastRunError: "peer dependency conflict", updatedAt: now - 4000 },
     ...(finished ? [{ id: "t9", projectId: P, title: "Dark mode", status: "done", verification: { state: "verified" }, updatedAt: now - 3600000 }] : []),
+    // Closed cards Freshly done must not call new: one dropped a minute ago
+    // (main.cjs dropTask), one finished days ago with a note written just
+    // now, one finished last week and archived just now.
+    ...(closed ? [
+      { id: "t10", projectId: P, title: "Drop the old parser", status: "archived", dropped: { at: now - 60000, by: "owner" }, updatedAt: now - 60000 },
+      { id: "t11", projectId: P, title: "Old result", status: "done", doneAt: now - 3 * 86400000, verification: { state: "manual", at: now - 3 * 86400000 }, notes: "- a later note", updatedAt: now - 5000 },
+      { id: "t12", projectId: P, title: "Archived last week", status: "archived", doneAt: now - 7 * 86400000, updatedAt: now - 1000 },
+    ] : []),
     // A request Build it split into steps (main.cjs vibeBuild), under Verify first.
     ...(family ? [
       { id: "f0", projectId: P, title: "Save system", status: "open", updatedAt: now, delegation: { version: 1, intake: true, summary: "Data first, then menus.", childTaskIds: ["f1", "f2", "f3"] } },
@@ -104,6 +118,7 @@ async function load(options = {}) {
     addEventListener() {}, dispatchEvent() { return true; },
     mefiStudio: api,
     MefiNav: { register() {}, current: () => "vibe", go: (id, params) => gone.push([id, params ?? null]) },
+    ...(options.ui ? { MefiUi: armStub() } : {}),
     MefiToast: (text, tone) => toasts.push([text, tone]),
     // The chip's dialogs (renderer/git-sync.js), when a test brings them.
     ...(options.sync ? { MefiGitSync: options.sync(calls) } : {}),
@@ -913,4 +928,60 @@ test("Inspector changes one field without rewriting a legacy acceptance list", a
   assert.equal(saved.priority, "high"); assert.deepEqual(saved.acceptance, acceptance);
   assert.equal("estimateMinutes" in saved, false);
   assert.equal("deferUntil" in saved, false);
+});
+
+test("Ask for a change keeps the draft, cites the task like Build does and puts the caret on the change", async () => {
+  const { window, get, fire, panelButtons, snapshot } = await load({ finished: true });
+  const input = get("vibe-input");
+  input.setSelectionRange = (start, end) => { input.selection = [start, end]; };
+  input.value = "Keep my existing draft";
+  fire(input, "input");
+  window.MefiVibe.openPanel("tasks", { taskId: "t9" });
+  assert.deepEqual(panelButtons().map((button) => button.textContent), ["Ask for a change"]);
+  panelButtons()[0].click();
+  assert.equal(input.value, 'Keep my existing draft\n\nFollow-up to task "Dark mode" (t9).\n\nRequested change:\n\nDone when:\n- ');
+  assert.equal(snapshot().panel, null, "the panel steps aside for the box");
+  assert.equal(input.focused, true);
+  assert.equal(input.selection[0], input.selection[1]);
+  assert.ok(input.value.slice(0, input.selection[0]).endsWith("Requested change:\n"), "the caret waits on the change's own line");
+  assert.equal(input.value.slice(input.selection[0]), "\nDone when:\n- ");
+  // Another project's task never lands in this project's draft.
+  const refused = plain(window.MefiVibe.requestChange({ id: "x1", projectId: "p2", title: "Elsewhere", status: "done" }));
+  assert.equal(refused.ok, false);
+  assert.match(input.value, /^Keep my existing draft\n\nFollow-up to task "Dark mode"/);
+});
+
+test("Freshly done shows what finished lately: never dropped work, never an old card written to again", async () => {
+  const { window, get, panelRows } = await load({ finished: true, closed: true });
+  const lane = get("vibe-lane-done").children;
+  assert.deepEqual(lane.map((row) => row.children[0].children[1].textContent), ["Dark mode"], "the dropped card and the old ones stay out");
+  assert.equal(lane[0].children[0].children[2].textContent, "verified · 1 h ago");
+  // The Tasks panel keeps them all, dated by when they closed.
+  window.MefiVibe.openPanel("tasks", { fold: "done" });
+  const done = panelRows().filter((row) => ["Drop the old parser", "Dark mode", "Old result", "Archived last week"].includes(row.children[1].textContent));
+  assert.deepEqual(done.map((row) => [row.children[1].textContent, row.children[2].textContent]), [
+    ["Drop the old parser", "dropped · 1 min ago"], ["Dark mode", "verified · 1 h ago"], ["Old result", "done · 3 d ago"], ["Archived last week", "done · 7 d ago"],
+  ]);
+});
+
+test("a Building now row stops its worker with the Tasks panel's two-press Stop", async () => {
+  const { window, get, calls } = await load({ running: true, ui: true });
+  const rows = get("vibe-lane-building").children;
+  const stop = rows[0].children[1];
+  assert.equal(stop.textContent, "Stop");
+  assert.ok(stop.classList.contains("danger"));
+  assert.equal(rows[1].children.length, 1, "a card being checked has no worker to stop");
+  stop.click();
+  assert.equal(stop.textContent, "Stop it?", "the first press asks");
+  assert.equal(calls.filter(([name]) => name === "tasksAction").length, 0);
+  // The worker's live line moves on while it asks: the asking button stays.
+  const status = await window.mefiStudio.assistantStatus();
+  window.mefiStudio.assistantStatus = async () => ({ ...status, status: { ...status.status, running: status.status.running.map((job) => ({ ...job, progress: 0.5 })) } });
+  await window.MefiVibe.refresh();
+  assert.equal(get("vibe-lane-building").children[0].children[1], stop);
+  assert.equal(stop.textContent, "Stop it?");
+  stop.click();
+  await settle();
+  assert.deepEqual(calls.filter(([name]) => name === "tasksAction"), [["tasksAction", "stop", "t1"]]);
+  assert.equal(get("vibe-feedback").textContent, "Stopped. It waits for you under Needs you.");
 });

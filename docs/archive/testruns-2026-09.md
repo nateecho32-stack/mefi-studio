@@ -6,6 +6,38 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-28 - Fixes from the improvements plan: setup windows, shares, Rooms, booklet line endings
+
+The owner-approved "Fixes + hand-offs" plan, 14 commits on 7a5ff81. Set up
+this PC's PowerShell windows open attached. share-review blocks a share it
+could not read to the end. A friend's preferences carry only behaviour
+fields, and other PCs' settings pass the settings checks. Approvals and
+named Starts survive a gather on `refs: []` cards (`backlog.scopeMatches`).
+Rooms keeps the open room's chat, drafts and a fair hub subscription per
+holder. The media player focuses only on the owner's own minimize.
+adoptProject recounts `autopilot.queueCounts`. The keyless away answer says
+"may already be done" for local guesses and ignores "when the user logs
+out". build-booklet reads every input as LF and writes the template's own
+line ending. command_render runs serialized (120 s kill, 200 s timeout,
+duration and retry diagnostics), and media_window_render polls the hover
+fade. Lint lost 36 warnings (ignoreRestSiblings plus dead code). The MCP
+servers read their version from package.json, and docs/code-map.md was
+reorganized.
+
+- `npm run build-booklet` then `git diff --exit-code renderer/booklet.html`:
+  clean. After a fresh checkout, a rebuild leaves `git status` clean.
+- `npm run check` (188 targets, 387 specs), `npm run audit` (0 errors, 0
+  warnings), `npm run lint` (0 errors, 41 warnings, down from 77): PASS.
+- New or changed tests fail on the old code: media_window (code-driven
+  un-minimize keeps focus), project_switch_settlement (adoptProject counts),
+  booklet_build (CRLF inputs give all-CRLF output and a no-op rebuild), plus
+  outside_work, desk_tool and agent_tools additions.
+- `npm test` in C:\wt\fixes, exit 0: Node parallel stage 4331 tests, 4326
+  passed, 5 skipped, 0 failures. Electron lane 41 tests, 40 passed, 1
+  skipped. `command_render` serialized 1/1 in 49.8 s (no cold-boot retry).
+  `eyes_toggle_electron` 1/1, `occlusion_probe` 2/2. Python contracts OK
+  (248, 1 skip). Normalized-path lock passed.
+
 ## 2026-09-28 - Sync counts only real local work; vault calls take turns
 
 Follow-ups from the Plan session's review. sync.mjs recounts a non-empty

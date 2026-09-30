@@ -1,7 +1,8 @@
-# Agent skills, web search and MCP
+# Agent skills, web search, web pages and MCP
 
 Open **Agents → Setup**, then the **+** on a role. Each role can select its
-own installed skills, web search, project file reads and individual MCP tools.
+own installed skills, web search, web page reads, project file reads and
+individual MCP tools.
 Save the team to apply the draft. Project teams, Studio defaults, presets and
 captured attempts retain these choices separately. Skills provide instructions;
 they do not grant permissions. Up to eight skills and sixteen MCP tools can be
@@ -15,19 +16,70 @@ backend. Search queries leave the device; results include titles, excerpts and
 source URLs. Bing's public RSS search requires no key, but can be unavailable or
 rate limited. Set `BRAVE_SEARCH_API_KEY` in Studio's process environment to use
 the [Brave Search API](https://api-dashboard.search.brave.com/app/documentation/web-search).
-Neither backend downloads arbitrary result pages. Search failures are returned
-to the agent explicitly, never presented as successful research.
+Neither search backend downloads the result pages; reading a page is the
+separate `web_read` tool below. Search failures are returned to the agent
+explicitly, never presented as successful research.
+
+## Reading web pages (`web_read`)
+
+**Read web pages you link** is on by default wherever search is, and has its
+own switch. It lets chat, Vibe sizing, Plans and the other assistant roles read
+a page you paste (or one a search returned), so "what's planned on
+https://…/roadmap.html?" works without a coding worker. The page is fetched
+from this computer:
+
+- Only `http://` and `https://` addresses, and none with a user name or
+  password in them.
+- The host name is resolved first and refused when any address is loopback,
+  private (10/8, 172.16/12, 192.168/16), link-local (169.254/16, fe80::/10),
+  carrier-grade NAT (100.64/10), unique-local IPv6 (fc00::/7), unspecified
+  (`0.0.0.0`, `::`), multicast or reserved, or a cloud metadata address;
+  `localhost`, `*.local` and `*.internal` names are refused by name, and so
+  is any address this PC's own network adapters hold (a public IPv6 address
+  reaches services bound to every interface). Studio runs local services, so
+  this is checked again when the connection opens: a name that re-resolves to
+  a local address between the check and the connection is refused too.
+- Only links the agent was given: a link named in the request (for chat, that
+  includes the conversation it is shown, earlier replies too), a search
+  result's link, and a page already read with its JSON files. Links inside a
+  page are not opened, and an address the model makes up is refused, so it
+  cannot put your data in a URL of its own. Search queries still leave the PC,
+  as the search switch says.
+- Redirects are followed by Studio itself, at most five, and every hop is
+  checked the same way.
+- 15 seconds for the whole read, 512 KB of body at most, and only
+  `text/html`, `application/json`, `text/plain` and `text/markdown`.
+- No cookies, no stored logins and none of Studio's keys are sent; the
+  request carries only Accept, Accept-Encoding and a plain User-Agent.
+
+HTML becomes text: scripts, styles, SVG and comments are dropped, `<noscript>`
+content is kept, whitespace is collapsed and the `<title>` (and a meta
+description) is returned alongside. When a page built by JavaScript has little
+visible text, Studio follows up to three of the page's own same-origin JSON
+files, found in `data-*` attributes, `<link rel="alternate"
+type="application/json">` or `fetch("….json")` strings in inline scripts, under
+the same limits. The result names the final URL, is marked as untrusted page
+data, and holds about 9,000 characters of text; a longer page comes in parts
+(`part` and `parts` in the result), and the agent reads on by asking for a
+higher `part`, within the usual tool budget.
+
+## The tool loop
 
 Studio's tool loop works with HTTP model routes and the tool-disabled Claude
 reply CLI. It requests a JSON tool envelope for intermediate turns, executes
 the request in the host and returns to the original final answer format. This
 does not require provider-native function calling. There are at most four tool
 rounds, eight tool calls and three calls per round, followed by a final answer.
-Models must support following this protocol; malformed requests and exhausted
-budgets fail visibly. Every model round still passes the provider usage tracker
-and fallback handling. Tool results are bounded, scrubbed by the host's outbound
-filter, and labelled untrusted. The application log records tool names and
-success/failure, without arguments or results.
+An envelope is found anywhere in a reply: inside a code fence, repeated, or
+with stray text before or after it (identical calls in one reply run once).
+Calls past the per-round or total cap are skipped and the model is told so.
+A reply that still asks for tools when the budget is spent, or whose envelope
+does not parse, is never shown as the answer: the model gets one more turn
+without tools to give its final answer, and if that reply asks for tools again
+the call fails with a plain error. Every model round still passes the provider
+usage tracker and fallback handling. Tool results are bounded, scrubbed by the
+host's outbound filter, and labelled untrusted. The application log records
+tool names and success/failure, without arguments or results.
 
 Project reads are off by default. Enabling them allows text files up to 32 KB
 inside the selected project. Traversal, symlinks outside the project, hidden
@@ -86,8 +138,8 @@ tools are denied by the host even if a model asks for them.
 ## Coding workers
 
 OpenCode, Claude Code and Codex receive a per-run MCP attachment exposing
-Studio search, project reads and selected MCP tools; OpenCode and Claude Code
-also take the optional desk tool. OpenCode reads its config file through
+Studio search, web page reads, project reads and selected MCP tools; OpenCode
+and Claude Code also take the optional desk tool. OpenCode reads its config file through
 `OPENCODE_CONFIG` and Claude Code through `--mcp-config`; Codex has no
 per-run config file flag, so the server is passed as `-c mcp_servers.*`
 overrides (TOML literal strings, quoted for `cmd.exe`). Those overrides are

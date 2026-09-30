@@ -31,10 +31,15 @@ with private paths excluded and credentials redacted. Exact file mentions
 receive priority. Earlier human answers remain available on resumed interviews;
 over-budget context is refused rather than silently dropping requirements.
 
-Agent setup now exposes per-role web search, project reads and MCP tool
-allowlists beside selected skills. The host executes bounded research turns
+Agent setup now exposes per-role web search, web page reads, project reads
+and MCP tool allowlists beside selected skills. **Read web pages you link**
+(`web_read`, on by default) lets chat, Vibe sizing, Plans and the other roles
+read a page you paste or a search found: public `http`/`https` addresses
+only, local and private ones refused, 15 seconds and 512 KB per read, and a
+long page in parts. The host executes bounded research turns
 for model calls; OpenCode and Claude builders receive the same tools through
-MCP. See [Agent tools](agent-tools.md) for setup, execution limits and the
+MCP. A reply's tool request is never shown as its answer. See
+[Agent tools](agent-tools.md) for setup, execution limits and the
 distinction between Studio permissions and native coding CLI access.
 
 The detailed feature walkthrough that used to live in the README. It is
@@ -108,7 +113,12 @@ ask computes a suggestion; Accept per task delegates worker questions only
 within an accepted scope; Auto starts queued tasks, including agent proposals,
 and resolves ordinary questions at confidence 0.7 or above; Elevated only
 uses the offered conservative recommendation when uncertain. Owner holds and
-desk escalations always stay with the owner. Grants, irreversible changes,
+desk escalations always stay with the owner. An ask only the owner can answer
+(a merge, a push, a login, a physical step) is never closed automatically:
+the desk is not offered *Leave it for review* on it, an automatic answer that
+would close it leaves it open in Needs you with the desk's note, and only the
+owner's own click dismisses it. A dismissal records who closed the ask.
+Grants, irreversible changes,
 closing owner-created work, agent-filed work, heavier models and human to-dos
 have individual switches, all enabled initially. The agent-filed switch applies
 in Elevated only; Auto includes that work without a separate go-ahead. Disabling the first two
@@ -227,7 +237,8 @@ settings and per-model work-kind summaries for the shared controls.
   dock. **Build** is the full studio described below. The choice is
   remembered across launches.
 - Vibe shows only what has something to say. A card appears while it has
-  rows (Freshly done covers the last half day) and a quiet project gets one
+  rows (Freshly done covers what finished in the last half day, by when it
+  finished, and never work you dropped) and a quiet project gets one
   calm line instead of empty boxes. The dock always has Tasks, Team and More;
   Watch steps in while agents work, Plans while a plan is in play, Ideas while
   fresh ones wait. With cards up on a short window the greeting and the
@@ -239,7 +250,9 @@ settings and per-model work-kind summaries for the shared controls.
   **Esc** steps out); each action uses the host call its Build page uses: a
   task can be started, stopped, dropped or given a note for its next attempt
   (its saved notes reach the worker's brief), a finished one sent back with
-  **Ask for a change**, an idea built, kept or dismissed. Team shows who is
+  **Ask for a change** (a follow-up naming the task, added under the draft
+  already in the box with the caret where the change goes; the finished task
+  stays as it is), an idea built, kept or dismissed. Team shows who is
   building and each seat's model, with Start, Resume or Pause. **Full view**
   opens the Build page for the same thing inside Vibe's rail. The status pill
   opens what it names, and a decision toast answers in Vibe's drawer.
@@ -252,8 +265,11 @@ settings and per-model work-kind summaries for the shared controls.
   and the card waits for them and runs last as the integration and check.
   Vibe's **Plan in flight** card and the Plans panel follow the steps; when
   permission settings require approval, waiting steps are one Needs you row, started together
-  with their reviewed scopes, and **Make it one task** drops the unstarted
-  steps so the card runs whole. Anything that cannot be sized keeps it one card.
+  with their reviewed scopes, and **Make it one task** (two presses) drops the
+  unstarted steps so the card runs whole. Anything that cannot be sized keeps
+  it one card, and the strip says why (the lead took too long, no lead model
+  answered, the plan had too many steps) rather than that the lead chose one
+  task.
 - **MEFI — Modify, Experiment, Fix, Improve** gives Vibe four starting points
   for evolving the open project, including Studio itself when its repository
   is selected. Pick an approach, describe the change, then talk it over or
@@ -280,7 +296,9 @@ settings and per-model work-kind summaries for the shared controls.
 - The agent team on a split request: the **Plan in flight** card draws the
   steps as a track that ends in the final check, with a line naming the step
   being built, its worker's tool and what it is doing now; **Building now**
-  rows carry the same live line. The Plans panel's plan view is a timeline
+  rows carry the same live line and a **Stop** that asks twice (the Tasks
+  panel's per-task stop: progress is kept and the card waits under Needs
+  you). The Plans panel's plan view is a timeline
   with who is on each step and which step each waiting one waits for. **Make
   it one task** there is the same single host transaction as the drawer's.
 - **New app** (the + beside Vibe's project picker, `projects:create`) makes an
@@ -327,8 +345,11 @@ settings and per-model work-kind summaries for the shared controls.
   without you, one row each: decisions, builds waiting for your go-ahead under
   the permission settings (the drawer shows the brief, approves its reviewed
   scope, and links to those settings), and stuck tasks (the drawer shows why and
-  offers Try again, Resume or Run anyway, It's done and Drop it). Work the
-  checker is still verifying sits under Building now as "checking its work".
+  offers Try again, Resume or Run anyway, It's done and Drop it, the last two
+  asking twice). Work the checker is still verifying sits under Building now
+  as "checking its work"; a check still running after half an hour is listed
+  under Needs you as **Still checking**: the check has run longer than usual,
+  and you can look at the checks or mark it done if you checked it yourself.
   Every action uses the host call its Build surface uses, and the drawer moves
   forward to the next thing waiting. `MefiVibe.snapshot()` reads the same state
   (what holds the agents, what needs you, what is building) for tests and
@@ -428,10 +449,13 @@ settings and per-model work-kind summaries for the shared controls.
   read `agentsSnapshot`, the needs-you digest and the companion digest. A plain
   DM is `assistantMessage(text, { remote: true })`: the chat gate narrows it
   (`remote.gateActions`, `LOCAL_ACTIONS`), and the work it files carries
-  `origin.via = "remote"`, which `autonomy.needsApproval` holds for approval in
-  every mode, slices included. Approve buttons remember the card's scope when
-  shown and need the PIN (salted scrypt, five wrong tries lock it); the
-  approval goes through `backlogControl` with that scope. A look once a minute
+  `origin.via = "remote"` through the admission gate onto its card
+  (`workAdmission.originOf` keeps `via`; it once kept only kind and by, and
+  Discord work then built unapproved under Auto), which
+  `autonomy.needsApproval` holds for approval in every mode, slices included.
+  Approve buttons remember the card's scope when shown and need the PIN
+  (salted scrypt, five wrong tries lock it); the approval goes through
+  `backlogControl` with that scope. A look once a minute
   turns changes into alerts (`remote.alerts`). Everything sent passes
   `shareReview.scrub` first.
 - The same glowing wisp wakes in the launch box, responds to pointer play with
@@ -475,10 +499,10 @@ settings and per-model work-kind summaries for the shared controls.
   queue running on its own, pass interval, coding workers at once, the team's
   coordination, reporting and delegation switches, backlog mode, the
   assistant roster and housekeeping), Permissions (autonomy-ui's shared
-  control), Tools & skills (per-agent web search, project reads, MCP tools and
-  skills, plus task-context gathering), Machine & app (keep awake, tray,
-  resource manager limits, updates, companion reach, GitHub token), Look and
-  Finish. It opens by itself before the Start here walkthrough on a fresh
+  control), Tools & skills (per-agent web search, web page reads, project
+  reads, MCP tools and skills, plus task-context gathering), Machine & app
+  (keep awake, tray, resource manager limits, updates, companion reach,
+  GitHub token), Look and Finish. It opens by itself before the Start here walkthrough on a fresh
   profile, and once after an update that raises its `REVISION`. Quick setup
   (the default) walks Connect, Permissions and Finish only; Everything walks
   every section with Next and Back. Connect an AI leads with **Set up
@@ -584,7 +608,9 @@ settings and per-model work-kind summaries for the shared controls.
   Pause / Resume** control. A **Needs you** shortcut appears when a decision
   is waiting. The task, preview and composer stay ahead of secondary panels:
   **Project queue**, **Studio status**, and **Getting started & community**
-  start collapsed. **More** holds folder actions, Stop all and Restart.
+  start collapsed. **More** holds folder actions, Stop all and Restart, which
+  ask first; Stop all says when a run is still finishing rather than
+  stopped.
 - **Current task** on Home combines the selected task's state, worker, current
   action, last activity age, recorded checks, blocker and next step. The task
   selector chooses what to follow without leaving Home. Work and Live retain
@@ -652,6 +678,9 @@ settings and per-model work-kind summaries for the shared controls.
   holds prerequisites, handoff context and task history. Missing prerequisites
   and dependency cycles are surfaced for correction. History notes and ideas
   retain their draft, focus and text selection while live task details refresh.
+  A running task's **Stop** asks twice. A task a grouped plan holds offers
+  **Open group** instead of status, rename or delete changes, which the host
+  refuses until the plan releases it.
 - **Search Studio** (`Ctrl K`) finds pages, tools, tasks and settings by
   familiar terms. **Settings › General** holds names and startup behavior;
   **Appearance** holds themes, motion, panel blur and canvas presentation.
@@ -848,6 +877,10 @@ failed process stays an error and cannot produce briefing requests.
   canvas fonts can then resolve without a document style update. Resizing
   follows the drawing bitmap and device scale; unsupported previews retain
   ordinary contexts. The far layer remains transparent for background video.
+- When the session store cannot be read, Command's hint reads "Desktop store
+  not available". Studio asks the store again on its own (5 seconds, doubling
+  to a minute), and the hint, the pills and the autopilot switch follow as
+  soon as it answers.
 
 - **Tree brightness & outlines**, under Tree modes & movement in Appearance ›
   Layout and Music & video › Audio reactions, provides node and connecting-line
@@ -986,7 +1019,8 @@ failed process stays an error and cannot produce briefing requests.
   model, provider and advanced run settings. **Esc** or an outside click closes
   the dropdown; the sidebar no longer has a duplicate Agents tab. Accepting
   new work and running queued work remain separate controls; Stop all and
-  Restart stay operational actions beside the work.
+  Restart stay operational actions beside the work, and each needs a second
+  press.
   An intentional worker stop saves its continuation; its task and session
   history both report that progress was saved, without calling the stop a failure.
 - **Parallel builds** defaults to **Machine managed**: admission follows
@@ -1160,7 +1194,8 @@ failed process stays an error and cannot produce briefing requests.
 - Selecting a seat opens its **inspector**: what it is doing now, its
   generations, the wires in and out, and **Stop this run** (which names the run
   on screen, so a seat that moved on is left alone), **Open task** and
-  **Open in Command**, which lands on the seat's orb. The Command node tree
+  **Open in Command**, which lands on the seat's orb, or on its task (or the
+  group holding it) once the run has ended. The Command node tree
   itself is unchanged. At 1500 px and under the inspector is a drawer under the
   tab bar, and under 760 px the page stacks.
 

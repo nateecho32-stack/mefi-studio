@@ -107,6 +107,10 @@
   const done = (task) => ["done", "archived", "completed"].includes(task.status);
   const describe = (task) => window.MefiTasks?.describe?.(task) ?? { stage: done(task) ? "done" : task.status === "awaiting_verification" ? "review" : "open" };
   const stamp = (task) => Number(task.updatedAt || task.createdAt) || Date.parse(task.updatedAt || task.createdAt || "") || 0;
+  // When a card finished, not when it was last written: a note or an archive
+  // on an old result must not make it read "done just now" (tasks.js doneStamp).
+  const time = (value) => Number(value) || Date.parse(value || "") || 0;
+  const finishedAt = (task) => time(task.doneAt) || time(task.verification?.at) || stamp(task);
   const companion = () => { try { return (localStorage.getItem("mefiStudio.workspace.companion") || "Mefi").trim() || "Mefi"; } catch { return "Mefi"; } };
   const person = () => { try { return (localStorage.getItem("mefiStudio.workspace.person") || "").trim(); } catch { return ""; } };
 
@@ -189,8 +193,9 @@
     const tasks = scoped(state.tasks);
     const checking = tasks.filter((task) => !runningIds.has(task.id) && ["awaiting_verification", "verifying"].includes(task.status));
     const next = (Array.isArray(state.backlog?.next) ? state.backlog.next : []).filter((item) => !runningIds.has(item.id) && ["ready", "waiting", "cooling"].includes(item.stage ?? "ready")).slice(0, 2);
-    // Freshly done is the last half day; older results live in the Tasks panel.
-    const finished = tasks.filter((task) => done(task) && describe(task).stage !== "review" && Date.now() - stamp(task) < FRESH_MS).sort((a, b) => stamp(b) - stamp(a)).slice(0, 3);
+    // Freshly done is what finished in the last half day; older results, and
+    // work you dropped (closed without finishing), live in the Tasks panel.
+    const finished = tasks.filter((task) => done(task) && !task.dropped && describe(task).stage !== "review" && Date.now() - finishedAt(task) < FRESH_MS).sort((a, b) => finishedAt(b) - finishedAt(a)).slice(0, 3);
     return { running, checking, next, finished, ideas: freshIdeas(), plans: activePlans(), families: families(), needs: needs(), gate: runState() };
   }
   // A request Build it split into steps (main.cjs vibeBuild): the owner's card,
@@ -317,18 +322,47 @@
     if (action) {
       const button = el("button", "vibe-row-action", action.label);
       button.type = "button";
-      button.addEventListener("click", action.run);
+      button.disabled = Boolean(action.disabled);
+      if (action.title) button.title = action.title;
+      // An action that cannot be undone asks twice (studio-ui.js MefiUi.arm).
+      if (action.confirm && window.MefiUi?.arm) window.MefiUi.arm(button, { run: action.run, armed: action.confirm });
+      else button.addEventListener("click", action.run);
       item.append(button);
     }
     return item;
   }
   const go = (id, params) => window.MefiNav?.go?.(id, params);
+  // Stop one worker from its Building now row: the Tasks panel's Stop (the
+  // host's per-task stop), so its progress is kept and the card waits for
+  // you under Needs you.
+  const stopping = new Set();
+  async function stopJob(job) {
+    const id = projectId();
+    if (!job.taskId || stopping.has(job.taskId) || !api()?.tasksAction) return;
+    stopping.add(job.taskId); signatures.delete("lanes"); renderLanes();
+    feedback(`Stopping "${job.title || "the task"}"…`);
+    try {
+      const result = await api().tasksAction({ taskId: job.taskId, projectId: id, action: "stop" });
+      if (!result || result.ok === false) throw new Error(result?.error || "That worker could not be stopped.");
+      if (projectId() === id) feedback("Stopped. It waits for you under Needs you.", "good");
+    } catch (error) {
+      if (projectId() === id) feedback(error?.message || "That worker could not be stopped.", "bad");
+    } finally {
+      stopping.delete(job.taskId); signatures.delete("lanes");
+      void refresh();
+    }
+  }
 
   // A row opens its task in the Tasks panel beside Vibe, not the Build board.
   const openTask = (taskId) => openPanel("tasks", taskId ? { taskId } : {});
+  // A worker's live line repaints the cards up to four times a second, which
+  // would swap an asking Stop for a fresh one: while one asks (MefiUi.arm's
+  // 3 s), the cards wait, then catch up.
+  let armedPaint = 0;
   function renderLanes() {
+    if ($("lane-building")?.querySelector?.(".danger-armed")) { clearTimeout(armedPaint); armedPaint = setTimeout(() => { if (active()) renderLanes(); }, 3200); return; }
     const data = lanes();
-    if (!changed("lanes", [data, projectId(), state.gateBusy])) { sharePanels(); return; }
+    if (!changed("lanes", [data, projectId(), state.gateBusy, [...stopping]])) { sharePanels(); return; }
     const needCount = data.needs.length;
     keep($("card-needs")?.parentElement, () => paintLanes(data));
     renderDock(data);
@@ -351,7 +385,11 @@
       const phase = job.phase ? String(job.phase).replace(/_/g, " ") : "working";
       // The worker's tool, and under it what the worker is doing right now.
       const now = window.MefiVibeFlow?.doing?.(job) ?? { tool: "", step: "" };
-      building.append(row({ key: `building:${job.taskId || job.title}`, tone: "live", title: job.title || "A task", meta: `${now.tool ? `${now.tool} · ` : ""}${phase} · started ${ago(job.startedAt)}`, detail: now.step, progress: job.progress, onOpen: () => go("command", job.taskId ? { selected: `task:${job.taskId}` } : {}) }));
+      // Stop asks twice, as the Tasks panel's does; a stop on its way says so.
+      const halting = Boolean(job.stopping) || stopping.has(job.taskId);
+      const stop = !job.taskId ? null : halting ? { label: "Stopping…", disabled: true, run() {} }
+        : { label: "Stop", confirm: "Stop it?", title: "Stop this worker; its progress is kept and the task waits for you", run: () => void stopJob(job) };
+      building.append(row({ key: `building:${job.taskId || job.title}`, tone: "live", title: job.title || "A task", meta: `${now.tool ? `${now.tool} · ` : ""}${phase} · started ${ago(job.startedAt)}`, detail: now.step, progress: job.progress, action: stop, onOpen: () => go("command", job.taskId ? { selected: `task:${job.taskId}` } : {}) }));
     }
     for (const task of data.checking.slice(0, Math.max(0, 4 - building.children.length))) building.append(row({ key: `building:${task.id}`, tone: "check", title: task.title || "A finished task", meta: "checking its work", onOpen: () => openTask(task.id) }));
     const heldBack = data.gate && ["held", "paused", "key"].includes(data.gate.key);
@@ -370,7 +408,7 @@
     finished.replaceChildren();
     for (const task of data.finished) {
       const verified = task.verification?.state === "verified";
-      finished.append(row({ key: `done:${task.id}`, tone: "done", title: task.title || "A task", meta: `${verified ? "verified" : "done"} · ${ago(task.updatedAt || task.createdAt)}`, onOpen: () => openTask(task.id) }));
+      finished.append(row({ key: `done:${task.id}`, tone: "done", title: task.title || "A task", meta: `${verified ? "verified" : "done"} · ${ago(finishedAt(task))}`, onOpen: () => openTask(task.id) }));
     }
     $("count-done").textContent = "";
 
@@ -684,6 +722,39 @@
     feedback(current ? "Added to your draft. Review it, then talk it over or build it." : "Ready to shape. Review the brief, then talk it over or build it.");
     return true;
   }
+  // Ask for a change on a finished task (the Tasks panel): the follow-up
+  // Build's Home writes (workspace.js requestChange), naming the task by title
+  // and id, added under any draft already in the box, with the caret on the
+  // empty line where the change goes. Only the open project's task, and only
+  // into the open project's draft.
+  function requestChange(task) {
+    // The box still holds what is being sent: a follow-up joined to it would
+    // stay behind once that lands (send clears only unchanged text).
+    if (state.pending) return { ok: false, error: "Wait for the request you just sent to land, then ask for the change." };
+    const id = projectId();
+    if (!task?.id || !id) return { ok: false, error: "Open the task's project first." };
+    if (task.projectId && task.projectId !== id) return { ok: false, error: "This task belongs to another project. Open that project to ask for a change." };
+    init(); syncDraft();
+    const input = $("input"), current = input.value.trim();
+    const title = task.title || String(task.prompt || "").split(/[\r\n]/)[0].slice(0, 80) || "Untitled task";
+    const lead = `Follow-up to task "${title}" (${task.id}).\n\nRequested change:\n`;
+    const next = `${current ? `${current}\n\n` : ""}${lead}\nDone when:\n- `;
+    if (next.length > 16000) return { ok: false, error: "This follow-up will not fit beside your current draft. Shorten the draft first." };
+    if (!current) evolution.context = null;
+    input.value = next; grow(); saveDraft(); renderEvolution();
+    window.MefiVibePanels?.close?.({ quiet: true });
+    closeDrawers();
+    if (!active()) go("vibe");
+    input.focus();
+    const caret = next.length - "\nDone when:\n- ".length;
+    try { input.setSelectionRange?.(caret, caret); } catch { /* not a text field */ }
+    feedback("Describe the change, then build it. The finished task stays as it is.");
+    return { ok: true };
+  }
+  // The follow-up scaffold alone is structure, not a request (workspace.js
+  // hasRequirement): what is left once its lines are set aside.
+  const SCAFFOLD_LINE = /^(?:Follow-up to task\b.*|Requested change\s*:?|Done when\s*:?|-)$/;
+  const said = (text) => text.split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !SCAFFOLD_LINE.test(line)).join(" ");
   function renderSparks() {
     const holder = $("sparks");
     holder.replaceChildren();
@@ -902,7 +973,9 @@
     if (state.pending) return;
     if (!value) { input.focus(); feedback("Describe what you have in mind first."); return; }
     if (!id || !api()) { feedback("Choose a project first: select the project name at the top left.", "warn"); return; }
-    if (intent === "build" && value.replace(/[^\p{L}\p{N}]/gu, "").length < 3) { feedback("Say a little more about what to build.", "warn"); return; }
+    const words = said(value).replace(/[^\p{L}\p{N}]/gu, "").length;
+    if (words < 3 && /^Follow-up to task\b/m.test(value)) { input.focus(); feedback("Say what to change first, under Requested change.", "warn"); return; }
+    if (intent === "build" && words < 3) { feedback("Say a little more about what to build.", "warn"); return; }
     busy(true);
     if (intent === "talk") openChat();
     // Build it asks the host to size the request (vibeBuild): one card, or the
@@ -993,11 +1066,23 @@
     const shared = state.assistant.needsYou;
     if (shared?.items && belongs(state.assistant)) return shared.items.map((item) => {
       if (item.kind === "question") return list.find((row) => row.kind === "question" && row.id === item.id);
+      if (item.kind === "review") return checkingLong(item);
       const grouped = item.memberIds?.length ? list.find((row) => row.kind === "family" && row.id === item.taskId) : null;
-      return grouped || list.find((row) => row.id === item.taskId && row.kind !== "question") || { kind: item.kind === "approval" ? "approval" : "blocked", id: item.taskId, tone: "ask", verb: "Review", title: item.title, meta: item.kind === "review" ? "check the result" : "waiting for your review", row: { canRetry: false, reason: item.title } };
+      return grouped || list.find((row) => row.id === item.taskId && row.kind !== "question") || { kind: item.kind === "approval" ? "approval" : "blocked", id: item.taskId, tone: "ask", verb: "Review", title: item.title, meta: "waiting for your review", row: { canRetry: false, reason: item.title } };
     }).filter(Boolean);
     return list;
   }
+  // A finished attempt still waiting on its check after half an hour
+  // (companion.cjs REVIEW_AFTER_MS) is listed for you to look at, but nothing
+  // is stuck: it says how long the check has run. Gone once the card moves on.
+  function checkingLong(item) {
+    const task = taskById(item.taskId);
+    if (!item.taskId || task && task.status !== "awaiting_verification") return null;
+    const since = time(item.at) || time(task?.awaitingAt) || null;
+    return { kind: "review", id: item.taskId, tone: "check", verb: "Check on it", title: item.title || task?.title || "A finished task", meta: `checking its work${since ? ` · ${lasted(since)} so far` : ""}`, since };
+  }
+  // How long something has run: "45 min", "2 h".
+  const lasted = (at) => { const text = ago(at); return text === "just now" ? "under a minute" : text.replace(/ ago$/, ""); };
   const needKey = (need) => need ? `${need.kind}:${need.id}` : "";
   function openNeed(need) {
     if (state.chatOpen) closeChat();
@@ -1019,7 +1104,7 @@
   // A typed answer per question: pushes rebuild the drawer (another need
   // arriving changes the signature), which emptied the box and took focus.
   const askDrafts = new Map();
-  let askRefocus = false;
+  let askRefocus = false, armedAsk = 0;
   function renderAsk() {
     if (!state.need || $("ask").hidden) return;
     const all = needs();
@@ -1027,8 +1112,12 @@
     const need = all[index];
     if (need && !state.askSending) { $("ask-note").textContent = state.askErrors[needKey(need)] || ""; $("ask-note").dataset.tone = state.askErrors[needKey(need)] ? "bad" : ""; }
     const task = need && need.kind !== "question" ? taskById(need.id) : null;
+    const painted = signatures.get("ask");
     if (!changed("ask", [need ?? null, task, all.length, state.askSending, state.status.autoBuild])) return;
     const body = $("ask-body");
+    // A push while a button asks waits, then catches up, as the cards do;
+    // opening an item, acting, moving on and the item going still paint.
+    if (need && painted !== undefined && body.querySelector(".danger-armed")) { signatures.set("ask", painted); clearTimeout(armedAsk); armedAsk = setTimeout(renderAsk, 3200); return; }
     askRefocus = Boolean(document.activeElement && body.contains(document.activeElement) && document.activeElement.matches?.(".vibe-ask-own textarea"));
     body.replaceChildren();
     const watch = $("ask-watch");
@@ -1051,10 +1140,11 @@
     }
     watch.textContent = "Open on the task board";
     watch.onclick = () => { closeAsk({ quiet: true }); go("tasks", { taskId: need.id, filter: "all" }); };
-    $("ask-kicker").textContent = `${["approval", "family"].includes(need.kind) ? "Waiting for your go-ahead" : need.row?.blockedBy === "owner" ? "Stopped by you" : "Stuck"}${position}`;
+    $("ask-kicker").textContent = `${["approval", "family"].includes(need.kind) ? "Waiting for your go-ahead" : need.kind === "review" ? "Still checking" : need.row?.blockedBy === "owner" ? "Stopped by you" : "Stuck"}${position}`;
     $("ask-title").textContent = need.title;
     if (need.kind === "family") renderFamily(body, need);
     else if (need.kind === "approval") renderApproval(body, need, task);
+    else if (need.kind === "review") renderChecking(body, need, task);
     else renderBlocked(body, need, task);
   }
   // A request split into steps under Verify first: its steps start together.
@@ -1070,7 +1160,7 @@
     const ready = need.rows.filter((row) => typeof row.buildScope === "string" && row.buildScope && row.canApprove !== false);
     body.append(actions([
       { label: `Start ${ready.length === 1 ? "the step" : `all ${ready.length} steps`}`, primary: true, disabled: !ready.length, title: "Approve every waiting step as it is saved now", run: () => act(need, () => startSteps(ready), "Started. The steps build as workers free up.") },
-      { label: "Make it one task", title: "Drop the steps that have not started; the request is built as one task", run: () => act(need, () => mergeSteps(need.id), "Kept as one task. It builds as a whole.") },
+      { label: "Make it one task", confirm: "Drop the unstarted steps?", title: "Drop the steps that have not started; the request is built as one task", run: () => act(need, () => mergeSteps(need.id), "Kept as one task. It builds as a whole.") },
     ]));
   }
   // Approving each step is the same call Review makes for a single build.
@@ -1103,12 +1193,15 @@
   }
   function actions(buttons) {
     const holder = el("div", "vibe-ask-actions");
-    for (const { label, primary, run, disabled, title } of buttons) {
+    for (const { label, primary, run, disabled, title, confirm } of buttons) {
       const button = el("button", `vibe-btn ${primary ? "primary" : "quiet"}`, label);
       button.type = "button";
       button.disabled = state.askSending || Boolean(disabled);
       if (title) button.title = title;
-      button.addEventListener("click", () => void run());
+      // What cannot be undone asks twice, as the Tasks panel's Drop does:
+      // the first press asks, the second acts (studio-ui.js MefiUi.arm).
+      if (confirm && window.MefiUi?.arm) window.MefiUi.arm(button, { run: () => void run(), armed: confirm });
+      else button.addEventListener("click", () => void run());
       holder.append(button);
     }
     return holder;
@@ -1186,7 +1279,7 @@
     const canApprove = row.canApprove === true && typeof row.buildScope === "string" && row.buildScope;
     body.append(actions([
       { label: window.MefiAutonomy?.state?.()?.level === "accept" ? "Accept this task" : "Approve build", primary: true, disabled: !canApprove, title: canApprove ? "Approve this brief so the task can build" : "Open it on the task board to review its current brief", run: () => act(need, () => api().backlogControl({ action: "approve", taskId: need.id, projectId: projectId(), expectedScope: row.buildScope }), "Approved. It builds when a worker is free.") },
-      { label: "Drop it", run: () => act(need, () => api().tasksAction({ taskId: need.id, projectId: projectId(), action: "drop" }), "Dropped. It's closed without being built.") },
+      { label: "Drop it", confirm: "Drop this task?", title: "Close it without building it", run: () => act(need, () => api().tasksAction({ taskId: need.id, projectId: projectId(), action: "drop" }), "Dropped. It's closed without being built.") },
     ]));
     if (window.MefiAutonomy) {
       const auto = el("button", "vibe-ask-link vibe-ask-auto", "Review permission settings");
@@ -1210,8 +1303,23 @@
     const retryable = row.canRetry !== false && !["verifying", "awaiting_verification"].includes(task?.status);
     body.append(actions([
       { label: HOLD_VERBS[hold] || "Try again", primary: true, disabled: !retryable, title: "Put it back in the queue; it continues from its saved progress", run: () => act(need, () => api().tasksAction({ taskId: need.id, projectId: projectId(), action: "retry" }), "Back in the queue. It shows under Building now when a worker picks it up.") },
-      { label: "It's done", title: "You checked the result yourself: mark it complete", run: () => act(need, () => api().tasksAction({ taskId: need.id, projectId: projectId(), action: "status", status: "done" }), "Marked done.") },
-      { label: "Drop it", title: "Close it without finishing; it is not marked done", run: () => act(need, () => api().tasksAction({ taskId: need.id, projectId: projectId(), action: "drop" }), "Dropped. It's closed without being finished.") },
+      markDone(need),
+      { label: "Drop it", confirm: "Drop this task?", title: "Close it without finishing; it is not marked done", run: () => act(need, () => api().tasksAction({ taskId: need.id, projectId: projectId(), action: "drop" }), "Dropped. It's closed without being finished.") },
+    ]));
+  }
+  const markDone = (need) => ({ label: "It's done", confirm: "Mark it done?", title: "You checked the result yourself: mark it complete", run: () => act(need, () => api().tasksAction({ taskId: need.id, projectId: projectId(), action: "status", status: "done" }), "Marked done.") });
+  // A check that is taking long: you can look at the checks, or confirm the
+  // result yourself; never drop it, since the host refuses a drop while a
+  // check holds the card.
+  function renderChecking(body, need, task) {
+    const long = need.since ? lasted(need.since) : "";
+    body.append(chips([chip("Checking its work", "check"), long ? el("span", "vibe-ask-when", `for ${long}`) : null]));
+    body.append(el("p", "vibe-ask-detail", `The worker finished, and Studio has been checking the result${long ? ` for ${long}` : ""}, longer than usual. You can look at the checks, or mark it done if you have checked it yourself.`));
+    const text = brief(task);
+    if (text) body.append(text);
+    body.append(actions([
+      { label: "View checks", primary: true, title: "Open it on the task board to see its checks and result", run: () => { closeAsk({ quiet: true }); go("tasks", { taskId: need.id, filter: "all" }); } },
+      markDone(need),
     ]));
   }
   // One path for every drawer action: call the host, adopt what it hands
@@ -1484,5 +1592,5 @@
     void refresh().then(() => { const late = needs().find((item) => item.kind === (wanted.kind || "question") && item.id === wanted.id); if (late) openNeed(late); });
     return false;
   }
-  window.MefiVibe = { enter, exit, isActive: active, refresh, mode, setMode, landing, startup, showNotes, closeNotes, snapshot, openPanel, closeDrawers, composeEvolution, suggestEvolution, openNeed: openNeedById, paintDock: () => renderDock(lanes()), promoteIdea: (idea) => promoteIdea(idea), feedback: (text, tone) => feedback(text, tone), ready: () => refreshFlight ?? Promise.resolve() };
+  window.MefiVibe = { enter, exit, isActive: active, refresh, mode, setMode, landing, startup, showNotes, closeNotes, snapshot, openPanel, closeDrawers, composeEvolution, suggestEvolution, openNeed: openNeedById, requestChange, paintDock: () => renderDock(lanes()), promoteIdea: (idea) => promoteIdea(idea), feedback: (text, tone) => feedback(text, tone), ready: () => refreshFlight ?? Promise.resolve() };
 })();

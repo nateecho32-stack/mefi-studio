@@ -7,6 +7,82 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Agents can read the web pages you link.** A new `web_read` tool, with its
+  own **Read web pages you link** switch (in Agents › Setup and the setup
+  helper's Tools & skills; it starts wherever the role's search switch is),
+  lets chat, Vibe sizing, Plans and the other assistant roles read a page you
+  paste or one a search found, and coding workers get it with their other
+  Studio tools. It opens only links it was given, never an address the model
+  makes up, and reads public `http`/`https` addresses only: local, private,
+  cloud metadata and this PC's own addresses are refused, checked again when
+  the connection opens and on each of at most five redirects. A read stops at 15 seconds and 512 KB and sends no cookies,
+  logins or keys. `<noscript>` text is kept, a page built by JavaScript also
+  returns up to three of its own same-origin JSON files, and a long page comes
+  in parts the agent reads on through. Page text is marked as untrusted data.
+  See [docs/agent-tools.md](docs/agent-tools.md).
+- **Tool requests no longer leak into chat.** A reply that wrapped its tool
+  request in a code fence, repeated it or added text around it was shown as
+  the answer, raw JSON and all. Studio now finds the request anywhere in the
+  reply and runs each call once. Calls past the per-turn or per-answer cap are
+  skipped and the model is told. When the tool budget is spent the model gets
+  one more turn without tools, and a reply that still asks for tools fails
+  with a plain error instead of reaching you.
+- **A plan your login does not have no longer burns a task's retries.** When
+  a provider refuses the login itself (OpenCode Go's "An active OpenCode Go
+  subscription is required", a model the plan leaves out, HTTP 402), the card
+  goes back on the outage backoff with no attempt charged, and it says why.
+  The route then waits, 5 minutes doubling to half an hour, so the other cards
+  on it are not each refused in turn (a plan that leaves out one model holds
+  only that model). You hear it once, in the thread and the feed, with the
+  fix: pick another coding model in Agents › Setup › Team & models, or renew
+  the plan. Starting the card yourself still tries the route, and a run that
+  finishes on it, or a restart, ends the wait.
+- **Workers report every run and leave landing to you.** Every run must now
+  print its `MEFI_RESULT` line before the final one: Studio checks the work
+  from it, and a Claude Code, Codex, Grok or Antigravity run cannot be
+  verified without it. Workers never push, pull, merge or run `npm run sync`,
+  even where a project's own notes say to; Studio and you land the work. They
+  are told not to invent names, commands, environment variables or packages
+  (a detail only you know becomes an ask), to look for a roadmap item's plan
+  in `docs/` before building it, and on Windows to use `Select-Object` where
+  PowerShell has no `head` or `tail`.
+- **Asks only you can answer stay on your list.** In a test run, two asks only
+  the owner could answer (a merge and a push decision) were closed as "Leave
+  it for review" before anyone saw them. Nothing automatic can close an
+  owner-only ask now: the desk leaves it in Needs you with its note, the host
+  refuses such an answer made for you, and your own click still closes it. A
+  dismissed ask records who closed it.
+- **One chat message can file several tasks.** "Add three tasks: 1) … 2) …"
+  filed one card, because each carried the whole message and admission read
+  the others as the first one again. When your message lists the tasks (a
+  numbered or bulleted list, or a comma list), each gets its own card with its
+  item first in the brief. One request that the model splits into steps is
+  still one card, one title asked twice is one card, and sending the message
+  again files nothing new.
+- **Vibe says what really happened, and asks before what cannot be undone.**
+  When sizing times out, no lead model answers or the plan has too many steps,
+  the strip says so ("The lead took too long, so it's one task") instead of
+  "Best as one task", and a failed sizing no longer sets the usual time.
+  **Building now** rows get a **Stop** that asks twice and keeps the run's
+  progress, and **Drop it**, **It's done** and **Make it one task** ask twice
+  too. A check still running after half an hour shows in Needs you as **Still
+  checking**, with View checks and It's done, instead of looking stuck. **Ask
+  for a change** adds the follow-up under your draft instead of replacing it,
+  names the task and puts the caret where the change goes. Freshly done and
+  the Done list go by when a card finished, so a note on an old card no longer
+  makes it "done just now", and dropped work stays out of Freshly done.
+- **Build and Live ask before they stop work, and loose ends are tied.**
+  Command's Stop all and Restart need a second press, Home's ask first, and a
+  running task's Stop in Work › Tasks asks twice. Stop all says when a run is
+  still finishing instead of calling it stopped. A card held by a grouped plan
+  offers **Open group** instead of buttons the host refuses. Fleet's **Open in
+  Command** on an idle seat lands on its task, or the group holding it. The
+  Explorer's Machine list offers Stop only on test runs and reports what the
+  host answered. The Agent brain draws step titles on a pipeline with no
+  running step, and Command's "Desktop store not available" hint clears once
+  the store answers again. A dropped card you then mark done reads as
+  finished, not dropped. Auto setup no longer tells a machine with a saved key
+  or a signed-in CLI that "the saved custom endpoint answers".
 - **An update can be undone, and a broken one undoes itself.** Before an
   in-app update replaces the portable folder, Studio saves the build it is
   replacing outside the install folder (`%LOCALAPPDATA%\MefiStudio\rollback`).
