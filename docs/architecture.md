@@ -996,7 +996,7 @@ failed process stays an error and cannot produce briefing requests.
   while I type"; on by default) or `MEFI_STUDIO_NO_COMPOSER_PICKER=1` switches
   the popup, the chips, both channels and the expansion off.
 - **Skills** (`scripts/skill-format.cjs`, `scripts/skills.cjs`, main.cjs "Skills";
-  the page is Agents › Skills). A skill is `<project>/.agents/skills/<name>/
+  the page is Agents › Setup › Skills). A skill is `<project>/.agents/skills/<name>/
   SKILL.md`: front matter with `name` and `description`, then the instructions.
   The name is the folder and the `/command`: lowercase letters, numbers and
   dashes, up to 64 (not a name Windows keeps for devices). The file is at most

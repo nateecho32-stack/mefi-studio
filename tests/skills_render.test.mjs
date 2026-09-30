@@ -15,7 +15,7 @@ const studio = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const executable = path.join(studio, "node_modules", "electron", "dist", process.platform === "win32" ? "electron.exe" : process.platform === "darwin" ? "Electron.app/Contents/MacOS/Electron" : "electron");
 const canRun = existsSync(executable) && (process.platform !== "linux" || Boolean(process.env.DISPLAY || process.env.WAYLAND_DISPLAY));
 
-test("the Skills page fits five window sizes with the editor closed and open, without a scrollbar or small text, lists every state honestly, says what is wrong in the editor as you type, asks twice before deleting, sends names and text and never a path, goes read-only, and closes with Back", { skip: !canRun, timeout: 240000 }, async (t) => {
+test("the Skills page fits six window sizes with the editor closed and open, without a scrollbar or small text, lists every state honestly, says what is wrong in the editor as you type, asks twice before deleting, sends names and text and never a path, goes read-only, and closes with Back", { skip: !canRun, timeout: 240000 }, async (t) => {
   const fixture = await mkdtemp(path.join(tmpdir(), "mefi-skills-render-"));
   try {
     await mkdir(path.join(fixture, "renderer")); await mkdir(path.join(fixture, "data"));
@@ -45,7 +45,7 @@ test("the Skills page fits five window sizes with the editor closed and open, wi
     }
     assert.equal(code, 0, `${report?.failure || "No renderer report"}\n${output}`);
     assert.deepEqual(report.errors, []); assert.deepEqual(report.networkAttempts, []); assert.deepEqual(report.processAttempts, []);
-    assert.equal(report.layouts.length, 10, "five window sizes, with the editor closed and open");
+    assert.equal(report.layouts.length, 12, "six window sizes (the smallest window also zoomed to 150%), with the editor closed and open");
     assert.ok(report.layouts.every((layout) => layout.pageOverflow === false && layout.bodyGutter === 0), "no size overflows the page or reserves a gutter for a scrollbar");
     assert.ok(report.complete);
   } finally {

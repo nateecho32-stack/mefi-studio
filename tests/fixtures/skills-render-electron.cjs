@@ -2,7 +2,7 @@
 
 // Agents > Skills in a real Chromium: a copied booklet and a synthetic bridge that keeps
 // skills in memory the way the host keeps them on disk (the page is the thing under test;
-// the host has its own suites). It opens the page at five window sizes, with the editor
+// the host has its own suites). It opens the page at six window sizes (the smallest also zoomed to 150%), with the editor
 // closed and open, and checks the real geometry: nothing overflows the page, every row,
 // field and button is on screen and inside its card, no scroller reserves width for a bar,
 // no text is under 12 px. Then it drives the page the way a person does: a new skill with
@@ -146,7 +146,7 @@ app.whenReady().then(async () => {
   assert.ok(await run("return window.MefiNav.LOCAL_ROUTES.agents.includes('skills');"), "it sits in Agents' local row");
   assert.equal(await run("return window.MefiNav.sectionLabel(window.MefiNav.get('skills'));"), "Agents");
 
-  const layouts = [[1720, 900, 1], [1440, 900, 1], [1100, 720, 1], [600, 560, 1], [1100, 720, 1.25]];
+  const layouts = [[1720, 900, 1], [1440, 900, 1], [1100, 720, 1], [600, 560, 1], [1100, 720, 1.25], [600, 560, 1.5]];
   for (const editing of [false, true]) {
     for (const [width, height, zoom] of layouts) {
       window.setContentSize(width, height); contents.setZoomFactor(zoom); await sleep(300);

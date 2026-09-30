@@ -123,6 +123,7 @@ app.whenReady().then(async () => {
       attachHidden: document.querySelector('.composer-attach').hidden,
       thumbs: [...document.querySelectorAll('.composer-thumb')].map((node) => ({ ...box(node), img: node.querySelector('img') ? { w: node.querySelector('img').naturalWidth, h: node.querySelector('img').naturalHeight } : null, name: node.querySelector('.composer-thumb-name')?.textContent || node.textContent })),
       note: document.querySelector('.composer-attach-note').hidden ? '' : document.querySelector('.composer-attach-note').textContent,
+      noteBox: visible(document.querySelector('.composer-attach-note')) ? box(document.querySelector('.composer-attach-note')) : null,
       chips: [...document.querySelectorAll('.composer-mention')].map((node) => node.textContent),
       chipsRow: box(document.querySelector('.composer-mentions')), chipsHidden: document.querySelector('.composer-mentions').hidden,
       popup: popup && !popup.hidden ? { ...box(popup), title: popup.getAttribute('aria-label'), items: [...popup.querySelectorAll('.composer-picker-item')].map((node) => ({ label: node.querySelector('b').textContent, meta: node.querySelector('small')?.textContent || '', current: node.classList.contains('current'), ...box(node) })) } : null,
@@ -142,6 +143,9 @@ app.whenReady().then(async () => {
   const type = (text) => run(`const input = document.getElementById('workspace-input'); input.focus(); input.value = ${JSON.stringify(text)}; input.setSelectionRange(input.value.length, input.value.length); input.dispatchEvent(new Event('input', { bubbles: true })); return true;`);
   const press = (key, extra = "{}") => run(`const input = document.getElementById('workspace-input'); input.focus(); const event = new KeyboardEvent('keydown', Object.assign({ key: ${JSON.stringify(key)}, bubbles: true, cancelable: true }, ${extra})); input.dispatchEvent(event); return event.defaultPrevented;`);
   const popupOpen = () => run("const p = document.querySelector('.composer-picker'); return Boolean(p && !p.hidden);");
+  // The builder's promise at 1920x1080 in the sessions layout: Attach, the purpose switch and Send share one row.
+  const controlRow = () => run("const a = document.querySelector('.composer-attach-button').getBoundingClientRect(), s = document.getElementById('workspace-send').getBoundingClientRect(), t = document.getElementById('workspace-mode-chat').getBoundingClientRect(); return { attach: a.top + a.height / 2, send: s.top + s.height / 2, modes: t.top + t.height / 2 };");
+  const oneRow = (row) => Math.abs(row.attach - row.send) < 6 && Math.abs(row.modes - row.send) < 6;
   const inViewport = (b, m, label) => assert.ok(b.x >= -1 && b.y >= -1 && b.r <= m.inner.w + 1 && b.b <= m.inner.h + 1, `${label} is inside the window: ${JSON.stringify(b)} in ${JSON.stringify(m.inner)}`);
 
   const open = async (query, layout) => {
@@ -177,8 +181,8 @@ app.whenReady().then(async () => {
       assert.equal(m.chipsHidden, true, "no chips until something is mentioned");
       if (layout === "sessions" && width === 1920) {
         // The builder's promise: one row of controls at 1920x1080. The new button joins it; it does not start a second one.
-        const sameRow = await run("const a = document.querySelector('.composer-attach-button').getBoundingClientRect(), s = document.getElementById('workspace-send').getBoundingClientRect(), t = document.getElementById('workspace-mode-chat').getBoundingClientRect(); return { attach: a.top + a.height / 2, send: s.top + s.height / 2, modes: t.top + t.height / 2 };");
-        assert.ok(Math.abs(sameRow.attach - sameRow.send) < 6 && Math.abs(sameRow.modes - sameRow.send) < 6, `Attach, the purpose switch and Send share one row at ${label}: ${JSON.stringify(sameRow)}`);
+        const sameRow = await controlRow();
+        assert.ok(oneRow(sameRow), `Attach, the purpose switch and Send share one row at ${label}: ${JSON.stringify(sameRow)}`);
       }
       // A dropped picture becomes a thumbnail with its name, a note about the model and a remove button.
       await drop("crash screen.png");
@@ -190,6 +194,11 @@ app.whenReady().then(async () => {
       assert.match(m.note, /^glm-5\.3 can't see images\. The picture is saved with your message, and the reply will say so\./);
       inViewport(m.thumbs[0], m, `the thumbnail at ${label}`);
       assert.ok(m.thumbs[0].x >= m.form.x - 1 && m.thumbs[0].r <= m.form.r + 1, `the thumbnail is inside the composer at ${label}`);
+      assert.ok(m.noteBox && m.noteBox.w >= m.form.w * 0.6, `the note about the model has a line of its own at ${label}, not a narrow column beside the button: ${JSON.stringify(m.noteBox)} in ${JSON.stringify(m.form)}`);
+      if (layout === "sessions" && width === 1920) {
+        const withPicture = await controlRow();
+        assert.ok(oneRow(withPicture), `a picture on the message does not push the controls to a second row at ${label}: ${JSON.stringify(withPicture)}`);
+      }
       assert.deepEqual(m.small, [], `no text under 12 px on the picture row at ${label}`);
       assert.equal((await calls("assistantImage")).filter(([payload]) => !payload.probe).length, 1, "the host was given the picture once");
       await capture(`composer-${layout}-picture-${width}.png`);
