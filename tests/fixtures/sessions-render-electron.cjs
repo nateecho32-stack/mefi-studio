@@ -6,7 +6,7 @@
 // bridge that answers with a board that has a task in every stage, a run in its own worktree, an open question, a finished
 // attempt with changes (Accept, Revert and its Undo really change what the bridge answers next), pictures a brief and a
 // message carry, and the before and after shots of an attempt. It checks what the DOM tests cannot: the list, the thread
-// and the inspector fit five window sizes, no scroller reserves width for a bar, nothing is under 12 px, pictures and shots
+// and the inspector fit six window sizes (the five of the layout contract and a short, wide one), no scroller reserves width for a bar, nothing is under 12 px, pictures and shots
 // are whole (never cropped) and open in the lightbox, the keys work, and with the layout off (v1) none of it exists.
 // Screenshots are kept when the test is given a capture folder. No application main process or live state is loaded;
 // network, permissions and child processes are blocked.
@@ -645,6 +645,10 @@ app.whenReady().then(async () => {
   assert.ok(Math.abs(lightbox.box[4] / lightbox.box[5] - 1.6) < 0.02, `and keeps its shape: ${JSON.stringify(lightbox.box)}`);
   assert.match(lightbox.focus, /sx-lb-close/, "focus moves into the dialog");
   await capture("sessions-lightbox-1440.png");
+  await size(600, 560);
+  const small = await run("const img = document.querySelector('#sessions-lightbox .sx-lb-img'); const r = img.getBoundingClientRect(); return { box: [r.left, r.top, r.right, r.bottom, r.width, r.height], win: [innerWidth, innerHeight] };");
+  assert.ok(small.box[0] >= 0 && small.box[1] >= 0 && small.box[2] <= small.win[0] && small.box[3] <= small.win[1] && Math.abs(small.box[4] / small.box[5] - 1.6) < 0.02, `a shot bigger than the window is scaled down to fit it, whole: ${JSON.stringify(small)}`);
+  await size(1440, 900);
   await press("Right");
   assert.equal(await run("return [...document.querySelectorAll('#sessions-lightbox .sx-lb-tabs button')].map((node) => node.getAttribute('aria-pressed')).join();"), "false,true", "an arrow key moves to the After shot");
   await press("Tab"); await press("Tab"); await press("Tab");
@@ -709,7 +713,8 @@ app.whenReady().then(async () => {
   step("a session opens from a tab, a notification and a click, and Ctrl N starts a new task");
 
   // ---- sizes --------------------------------------------------------------------------------------------------------------------------------
-  const sizes = [[1920, 1080, 1], [1440, 900, 1], [1100, 720, 1], [600, 560, 1], [600, 560, 1.5]];
+  // The five of the window's contract, and a wide one that is short (the box folds for the height alone, not the width).
+  const sizes = [[1920, 1080, 1], [1440, 900, 1], [1100, 720, 1], [600, 560, 1], [600, 560, 1.5], [1920, 480, 1]];
   for (const [width, height, zoom] of sizes) {
     const label = `${width}x${height}@${zoom}`;
     await size(width, height, zoom);
@@ -720,7 +725,7 @@ app.whenReady().then(async () => {
       await sleep(500);
       const folded = await run("return (document.documentElement.dataset.layoutFold || '').length > 0;");
       const m = await run(measure);
-      await capture(`sessions-${id === "task_ask" ? "ask" : "review"}-${width}${zoom === 1 ? "" : "-zoom"}.png`);
+      await capture(`sessions-${id === "task_ask" ? "ask" : "review"}-${width}${height < 520 ? "-short" : ""}${zoom === 1 ? "" : "-zoom"}.png`);
       report.layouts.push({ label, id, folded, thread: m.thread, list: m.list, inspector: m.inspector });
       assert.equal(m.pageOverflow, false, `${label}: the page does not overflow`);
       assert.equal(m.scrollbarWidth, "none", `${label}: native bars stay hidden`);
@@ -742,6 +747,26 @@ app.whenReady().then(async () => {
       if (id === "task_review") {
         assert.ok(await run("const box = document.querySelector('#sessions-thread .sx-compare'); return Boolean(box) && box.getBoundingClientRect().width > 100;"), `${label}: the before and after frame has a size`);
       }
+      // A short window (under 520 CSS px) or a narrow thread (up to 620) folds the box: the words and Send, the rest behind More.
+      const boxState = `const form = document.getElementById('sessions-compose'); const shown = (selector) => { const node = form.querySelector(selector); if (!node) return null; const r = node.getBoundingClientRect(); return getComputedStyle(node).display !== 'none' && r.width > 0 && r.height > 0; };
+        return { open: form.dataset.open, hint: shown('.sx-hint'), more: shown('.sx-more'), chips: shown('#sessions-chips'), worker: shown('.sx-worker'), top: shown('.sx-compose-top'), autonomy: shown('#sessions-autonomy'), attach: shown('.composer-attach-button') };`;
+      const short = m.inner.h < 520, narrow = m.thread.w <= 620, folds = short || narrow;
+      const before = await run(boxState);
+      assert.equal(before.more, folds, `${label}: More shows exactly when the box is folded: ${JSON.stringify(before)}`);
+      assert.equal(before.chips, !folds, `${label}: the branch and Worktree chips are folded away with it: ${JSON.stringify(before)}`);
+      assert.equal(before.worker, !folds, `${label}: and the coding worker: ${JSON.stringify(before)}`);
+      assert.equal(before.hint, !folds, `${label}: and the line that says what the words will do: ${JSON.stringify(before)}`);
+      if (short) assert.equal(before.top, false, `${label}: a short window hides the Note | Ask | Change row too: ${JSON.stringify(before)}`);
+      if (folds) {
+        await click("#sessions-compose .sx-more");
+        const opened = await run(boxState);
+        assert.equal(opened.open, "true"); assert.equal(opened.chips, true, `${label}: More brings the chips back: ${JSON.stringify(opened)}`); assert.equal(opened.worker, true);
+        assert.equal(opened.top, true, `${label}: and the row of purposes: ${JSON.stringify(opened)}`);
+        const inside = await run("const form = document.getElementById('sessions-compose').getBoundingClientRect(); const send = document.getElementById('sessions-send').getBoundingClientRect(); return form.bottom <= innerHeight + 1 && send.bottom <= innerHeight + 1;");
+        assert.equal(inside, true, `${label}: opened, the whole box is still on screen`);
+        await click("#sessions-compose .sx-more");
+        assert.equal((await run(boxState)).chips, false, `${label}: and More folds it again`);
+      }
     }
     if (report.layouts.at(-1).folded) {
       // A folded window (under 900 CSS px) has no columns: the list and the inspector are drawers, and each fits the window when opened.
@@ -759,8 +784,8 @@ app.whenReady().then(async () => {
       }
     }
   }
-  assert.equal(report.layouts.length, 10, "two sessions at five sizes");
-  step("every panel fits five window sizes");
+  assert.equal(report.layouts.length, 12, "two sessions at six sizes");
+  step("every panel fits six window sizes");
   await size(1440, 900, 1);
 
   // ---- switching it off, and on again ---------------------------------------------------------------------------------------------------------

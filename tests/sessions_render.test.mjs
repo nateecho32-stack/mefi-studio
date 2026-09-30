@@ -15,7 +15,7 @@ const studio = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const executable = path.join(studio, "node_modules", "electron", "dist", process.platform === "win32" ? "electron.exe" : process.platform === "darwin" ? "Electron.app/Contents/MacOS/Electron" : "electron");
 const canRun = existsSync(executable) && (process.platform !== "linux" || Boolean(process.env.DISPLAY || process.env.WAYLAND_DISPLAY));
 
-test("the session list, the thread and the inspector in a real window: they fit five window sizes, pictures and shots are whole and open larger, Accept, Revert and Undo work, and with the layout off none of it exists", { skip: !canRun, timeout: 420000 }, async (t) => {
+test("the session list, the thread and the inspector in a real window: they fit six window sizes, pictures and shots are whole and open larger, Accept, Revert and Undo work, and with the layout off none of it exists", { skip: !canRun, timeout: 420000 }, async (t) => {
   const fixture = await mkdtemp(path.join(tmpdir(), "mefi-sessions-render-"));
   try {
     await mkdir(path.join(fixture, "renderer")); await mkdir(path.join(fixture, "data"));

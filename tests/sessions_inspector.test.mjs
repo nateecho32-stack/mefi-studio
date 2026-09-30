@@ -382,3 +382,19 @@ test("See the changes from the thread asks the shell for the inspector when it h
   await tabs(a)[1].trigger("keydown", { key: "ArrowRight" });
   assert.deepEqual(calls, [], "moving between tabs with the keys never opens a column");
 });
+
+test("a shell with open() and isOpen() is asked to open the inspector, folded into a drawer or not, and only when it is not open", async () => {
+  const a = await open("t1", { tasks: [task("t1")] });
+  const calls = []; let shown = false;
+  a.shell.isOpen = (name) => { calls.push(["isOpen", name]); return shown; };
+  a.shell.open = (name) => { calls.push(["open", name]); shown = true; };
+  a.document.documentElement.dataset.layoutFold = "list inspector";
+  a.S.setTab("changes"); await a.settle();
+  assert.deepEqual(calls, [["isOpen", "inspector"], ["open", "inspector"]], "a drawer that is shut is opened: the person asked to see the changes");
+  calls.length = 0;
+  a.S.setTab("checks"); await a.settle();
+  assert.deepEqual(calls, [["isOpen", "inspector"]], "one that is open is left as it is");
+  shown = false; delete a.document.documentElement.dataset.layoutFold; calls.length = 0;
+  a.S.setTab("agent"); await a.settle();
+  assert.deepEqual(calls, [["isOpen", "inspector"], ["open", "inspector"]], "a column that was closed, the same");
+});

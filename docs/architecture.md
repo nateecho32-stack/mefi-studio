@@ -2380,15 +2380,17 @@ pushes, the clock tick, the page's signals, refusals and failures, and the keys
 that need real focus) run the real builder.js in the shared fake DOM
 (`tests/fixtures/sessions-env.mjs`); `tests/builder_kit.test.mjs` and
 `tests/review_panels.test.mjs` pin what builder.js and review.js hand the panels;
-`tests/sessions_render.test.mjs` runs the lot in a real window at five sizes with
+`tests/sessions_render.test.mjs` runs the lot in a real window at six sizes with
 a stand-in for the shell's regions.
 
 **Known limits.** The panels depend on the shell to place them and to fold them into
-drawers below 900 CSS px; "See the changes" asks the shell to open a closed
-inspector only when it offers a way (`reveal`, or `resize` when the column is at
-0 and not folded). With Home's own Sessions layout (`homeLayout=sessions`) also on,
-its menu list repeats this list: leave Home on its default. There are no Drafts
-(the app keeps none); Ctrl N is not bound in Vibe; a Note cannot carry a picture.
+drawers below 900 CSS px; "See the changes" asks the shell for a closed or folded
+inspector the way it offers (`open("inspector")` when it has `open` and `isOpen`,
+else `reveal`, else a `resize` of a column that is at 0 and not folded). With Home's
+own Sessions layout (`homeLayout=sessions`) also on, its menu list repeats this list:
+leave Home on its default. There are no Drafts (the app keeps none); Ctrl N is not
+bound in Vibe; a Note cannot carry a picture. Windows' high-contrast mode is not
+handled here or anywhere else in the app (a status dot is colour plus words).
 
 ### Community
 

@@ -1520,12 +1520,14 @@
     schedule();
     if (S.wired) paintInspector();
   }
-  // "See the changes" from the thread: the inspector column may have been closed (or dragged to nothing); ask the shell for it back.
+  // "See the changes" from the thread: the inspector column may have been closed (or dragged to nothing, or folded into a drawer);
+  // ask the shell for it back the way it offers, open() being the frame's own (it opens a drawer too), then a bare resize.
   function revealInspector() {
     const shell = S.shell;
     if (!shell) return;
     try {
       if (typeof shell.reveal === "function") { shell.reveal("inspector"); return; }
+      if (typeof shell.open === "function" && typeof shell.isOpen === "function") { if (!shell.isOpen("inspector")) shell.open("inspector"); return; }
       const folded = String(document.documentElement?.dataset?.layoutFold || "").split(/\s+/).includes("inspector");
       if (!folded && typeof shell.size === "function" && typeof shell.resize === "function" && Number(shell.size("inspector")) === 0) shell.resize("inspector", 380);
     } catch { /* a shell that cannot is left as it is */ }
