@@ -6,8 +6,10 @@ const tools = require("./agent-tools.cjs");
 const VERSION = (() => { try { return String(require("../package.json").version || "0.0.0"); } catch { return "0.0.0"; } })();
 async function serve() {
   const config = JSON.parse(await fs.readFile(process.env.MEFI_TOOLS_CONFIG, "utf8"));
-  const context = { root: config.root, settings: { agentTools: { builder: config.policy } }, role: "builder" };
-  const definitions = await tools.definitions(context.settings, context.role);
+  // A coding worker has its own file listing and search: project_list and
+  // project_search are for Studio's own models, so this server never offers them.
+  const context = { root: config.root, settings: { agentTools: { builder: config.policy } }, role: "builder", worker: true };
+  const definitions = await tools.definitions(context.settings, context.role, { worker: true });
   let buffer = "", chain = Promise.resolve();
   const send = (message) => process.stdout.write(`${JSON.stringify(message)}\n`);
   async function handle(message) {

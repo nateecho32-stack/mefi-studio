@@ -19,6 +19,26 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   Preview, Queue and Status become panes that dock beside the page or pop out as
   windows. The composer stays on one line at 1920 wide and the Permissions menu
   is no longer cut off.
+- **Rules for your agents: a new card in Agents › Team & models.** Write up to
+  4,000 characters of standing rules for a project and every Studio model working
+  on it reads them first. A rule text that is too long is refused, never cut. Two
+  switches on the card also send the project's own AGENTS.md and CLAUDE.md (the
+  first 8,000 characters of each, read fresh each time); they are off until you
+  switch them on, because their text reaches the models as instructions. Claude
+  Code, Codex and OpenCode keep reading those files themselves, so they are given
+  only your written rules; Grok and Antigravity builders are given the files by
+  Studio. The card shows what the rules add to every request and who reads what.
+  A project that follows the Studio defaults shows their rules; saving rules for
+  it gives it a team of its own, and "Use Studio defaults" asks twice before it
+  would drop a project's rules. Saved teams do not carry rules, and applying one
+  keeps the project's. `MEFI_STUDIO_NO_AGENT_RULES=1` turns the rules off.
+- **Studio's own models can list a project's folders and search its text.** When
+  Read project files is on, they no longer guess file names: `project_list` and
+  `project_search` follow .gitignore, skip hidden, private, binary and very large
+  files, and never follow a link out of the project. Read project files now also
+  refuses key and database files and data files whose names say they hold
+  secrets. Coding CLIs keep their own tools. `MEFI_STUDIO_NO_PROJECT_SEARCH=1`
+  removes the two tools.
 - **Media player fixes.** Next in a YouTube playlist follows the playlist. A
   remembered video link no longer asks YouTube for its picture until you open the
   media menu. The card follows radio and buffering; its ideas, hints and Up next

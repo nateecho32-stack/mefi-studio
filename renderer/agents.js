@@ -79,6 +79,18 @@
   function button(text, run, cls = "ghost") { const el = node("button", cls, text); el.type = "button"; el.addEventListener("click", run); return el; }
   // A button that throws work away asks twice (MefiUi.arm in studio-ui.js).
   function risky(text, run, armed, cls = "ghost") { const el = node("button", cls, text); el.type = "button"; if (window.MefiUi?.arm) window.MefiUi.arm(el, { run, armed }); else el.addEventListener("click", run); return el; }
+  // Like risky(), but it asks only while there is something to lose: `when()` is asked at each press.
+  function riskyIf(text, when, run, armed, cls = "ghost") {
+    const el = node("button", cls, text); el.type = "button"; let timer = 0;
+    const rest = () => { clearTimeout(timer); timer = 0; el.textContent = text; el.classList.remove("danger-armed"); };
+    el.addEventListener("click", () => {
+      if (!when() || timer) { rest(); run(); return; }
+      el.classList.add("danger", "danger-armed"); el.textContent = armed; timer = setTimeout(rest, 3000);
+    });
+    el.addEventListener("blur", rest);
+    el.addEventListener("keydown", (event) => { if (event.key === "Escape" && timer) { event.stopPropagation(); rest(); } });
+    return el;
+  }
   const plain = (error, fallback) => window.MefiUi?.plainError ? window.MefiUi.plainError(error, fallback) : error?.message || fallback;
   function card(title, detail) { const el = node("section", "agents-card"); el.append(node("h3", "", title)); if (detail) el.append(node("p", "muted", detail)); return el; }
   function say(text, bad = false) { const el = $("agents-save-status"); if (el) { el.textContent = text; el.dataset.tone = bad ? "bad" : "good"; } }
@@ -222,6 +234,7 @@
       const help = (el.closest("label")?.querySelector("small") || el.querySelector("summary small, summary .settings-summary-text > span"))?.textContent?.trim() || "";
       if (label) window.MefiNav?.register({ id: `settings:${el.id}`, kind: "action", section: "agents", group: "tools", label: `Agents › ${label.trim().slice(0, 100)}`, desc: help.slice(0, 160), glyph: "g-agents", showIn: { palette: true }, run: () => go("agents", { section: "setup", pane: pane.dataset.agentsPane, target: el.id }) });
     }
+    $("agents-team").append(buildRules());
     buildSetupHeader(); buildOverview(); buildRoles(); buildBehavior();
     $("agents-connections").append(button("Continue to Team →", () => go("agents", { section: "setup", pane: "team" }), "primary"));
     $("agents-team").append(button("Continue to Workflow →", () => go("agents", { section: "setup", pane: "behavior" }), "ghost"));
@@ -240,14 +253,18 @@
     for (const [value, text] of [["project", "This project"], ["defaults", "Studio defaults"]]) { const option = node("option", "", text); option.value = value; select.append(option); }
     select.addEventListener("change", () => { scope = select.value; load(); }); label.append(select);
     const name = node("input"); name.id = "agents-team-name"; name.type = "text"; name.maxLength = 80; name.placeholder = "Team name"; name.setAttribute("aria-label", "Team name"); name.addEventListener("input", () => { if (draft()) { draft().name = name.value; dirty(); } });
-    header.append(label, name, button("Use Studio defaults", () => save("inherit"), "ghost mini"));
+    // Dropping the project's own team drops its rules with it: with rules to lose, it asks twice.
+    header.append(label, name, riskyIf("Use Studio defaults", rulesAtRisk, () => save("inherit"), "Drop this team and its rules?", "ghost mini"));
     $("agents-body").prepend(header);
     const presets = card("Saved teams", "Apply a preset as an independent project copy. Changes here never alter another project."); presets.id = "agents-presets";
     const picker = node("select"); picker.id = "agents-preset-picker"; picker.setAttribute("aria-label", "Saved team preset");
     const actions = node("div", "agents-actions");
     actions.append(picker, button("Use in draft", () => {
       const chosen = draft()?.saved.presets.find((item) => item.id === picker.value); if (!chosen) return;
-      draft().configuration = clone(chosen.configuration); draft().name = chosen.name; $("agents-team-name").value = chosen.name; dirty(); renderConfiguration();
+      // A saved team is a team, not a project's words: the draft keeps the rules it has.
+      const kept = draft().configuration.agentRules;
+      draft().configuration = clone(chosen.configuration); if (kept) draft().configuration.agentRules = kept;
+      draft().name = chosen.name; $("agents-team-name").value = chosen.name; dirty(); renderConfiguration();
       window.dispatchEvent(new CustomEvent("mefi:agent-draft"));
     }), button("Save as new preset", () => save("preset-save")), button("Update selected preset", () => save("preset-save", picker.value)), risky("Delete preset", () => save("preset-delete", picker.value), "Delete this preset?"));
     presets.append(actions); const saved = node("details", "agents-saved-teams"); saved.append(node("summary", "", "Saved teams & presets"), presets); $("agents-team").append(saved);
@@ -418,7 +435,7 @@
     for (const [key, label, detail, enabled] of [
       ["webSearch", "Search the web", "Search queries leave this device. Answers can cite returned source links. Bing search is built in; BRAVE_SEARCH_API_KEY enables Brave.", permissions.webSearch !== false],
       ["webRead", "Read web pages you link", "Pages you name, or that the agent finds by searching, are fetched from this computer. Local and private network addresses are refused, and page text is read as data, never as instructions.", permissions.webRead ?? permissions.webSearch !== false],
-      ["projectRead", "Read project files", "Read small text files within this project. Hidden files, credentials and local app data are excluded.", permissions.projectRead === true],
+      ["projectRead", "Read project files", id === "builder" ? "Read small text files within this project. The coding tool has its own file listing and search. Hidden files, credentials and local app data are excluded." : "Read small text files, list folders and search the text files inside this project. Hidden files, credentials and local app data are excluded.", permissions.projectRead === true],
     ]) {
       const input = boxes[key] = node("input"); input.id = `agent-${id}-tool-${key}`; input.type = "checkbox"; input.checked = enabled; input.disabled = !supportedTools;
       // An unset webRead follows webSearch (agentTools.policy).
@@ -499,6 +516,146 @@
     paintTotal();
     return box;
   }
+  // ---- rules card ----
+  // Project rules (scripts/agent-rules.cjs): standing rules the owner writes for
+  // this project's agents, and two switches that also send its AGENTS.md and
+  // CLAUDE.md. The card is part of the team but saves on its own (agents:save,
+  // action "rules"), with its own Save and Discard, so writing a paragraph does not
+  // apply the rest of a half-edited team. Its working copy is `item.rules`; the
+  // saved one is what the host last returned. The rules are counted as the prompt
+  // counts them: the section headings plus the text, four characters a token.
+  const RULES_LIMIT = 4000;
+  const rulesSavedOf = (item) => { const saved = item?.saved?.configuration?.agentRules; return { text: typeof saved?.text === "string" ? saved.text : "", agents: saved?.agents === true, claude: saved?.claude === true }; };
+  const rulesOf = (item) => (item.rules ||= rulesSavedOf(item));
+  const rulesChanged = (item) => { if (!item?.rules) return false; const saved = rulesSavedOf(item); return item.rules.text !== saved.text || item.rules.agents !== saved.agents || item.rules.claude !== saved.claude; };
+  const rulesInfoOf = (item) => item?.saved?.rulesInfo || {};
+  const rulesTokens = (chars) => Math.ceil(chars / 4);
+  // What the working rules add to each request from Studio's own models. A CLAUDE.md
+  // that repeats AGENTS.md counts once (the host sends it once).
+  function rulesCost(item) {
+    const info = rulesInfoOf(item), over = info.overhead || {}, files = info.files || {}, rules = rulesOf(item);
+    const own = rules.text.replace(/\s+$/, "");
+    let chars = own ? (over.text || 0) + own.length : 0;
+    if (rules.agents && files.agents?.used) chars += (over.agents || 0) + files.agents.used;
+    if (rules.claude && files.claude?.used && !(files.claude.same && rules.agents)) chars += (over.claude || 0) + files.claude.used;
+    return { chars, tokens: rulesTokens(chars) };
+  }
+  const rulesKb = (bytes) => bytes < 1024 ? `${bytes} bytes` : `${(bytes / 1024).toFixed(1)} KB`;
+  function rulesFileNote(item, key) {
+    const info = rulesInfoOf(item), file = info.files?.[key];
+    if (!info.files) return "Read from each project's own folder";
+    if (!file) return " ";
+    if (!file.found) return `Not in this project's folder · ${file.note}`;
+    if (file.problem === "outside") return "A link that leaves the project: not read";
+    if (file.problem === "binary") return "Not a text file: not read";
+    if (file.problem) return "Could not be read";
+    if (file.same) return `Same text as AGENTS.md · sent once · about ${rulesTokens(file.used)} tokens`;
+    return `${rulesKb(file.bytes)} · about ${rulesTokens(file.used)} tokens${file.capped ? ` · only the first ${(info.fileCap || 8000).toLocaleString("en-US")} characters are sent` : ""} · ${file.note}`;
+  }
+  // "Use Studio defaults" replaces the project's own team, its rules included: true while there are rules (saved or typed) to lose.
+  function rulesAtRisk() {
+    const item = draft(); if (!item || scope !== "project" || item.saved.inherited) return false;
+    const saved = rulesSavedOf(item), working = item.rules || saved;
+    return Boolean(saved.text || saved.agents || saved.claude || working.text);
+  }
+  const rulesUi = {};
+  function buildRules() {
+    const box = card("Rules", "Standing rules every model on this project reads. Write what you would tell a new teammate on their first day."); box.id = "agents-rules"; box.classList.add("agents-rules");
+    const state = node("p", "agents-rules-state muted"); state.id = "agents-rules-state"; state.setAttribute("role", "status");
+    const scopeNote = node("p", "agents-rules-scope muted"); scopeNote.id = "agents-rules-scope"; scopeNote.hidden = true;
+    const area = node("textarea", "agents-rules-text"); area.id = "agents-rules-text"; area.rows = 8; area.spellcheck = true; area.setAttribute("aria-label", "Project rules"); area.placeholder = "One rule per line…";
+    // No maxlength: a paste would be cut silently. Over the limit is said in words, and Save waits.
+    area.addEventListener("input", () => { const item = draft(); if (!item) return; rulesUi.flash = null; rulesOf(item).text = area.value; paintRulesLive(item); });
+    const count = node("div", "agents-rules-count"), chars = node("span"), tokens = node("span"); count.append(chars, tokens);
+    const warn = node("div", "agents-rules-warn"); warn.id = "agents-rules-warn"; warn.setAttribute("role", "alert"); warn.hidden = true;
+    warn.append(node("strong", "", "Too long to save"), node("span", "", "Nothing was cut. Trim it, or move the detail into AGENTS.md and switch that file on below."));
+    const files = node("div", "agents-rules-files"); files.append(node("h4", "", "Also read these files"));
+    const switches = {};
+    for (const [key, name] of [["agents", "AGENTS.md"], ["claude", "CLAUDE.md"]]) {
+      const input = node("input"); input.type = "checkbox"; input.id = `agents-rules-${key}`; input.setAttribute("role", "switch"); input.setAttribute("aria-label", `Also read ${name}`);
+      input.addEventListener("change", () => { const item = draft(); if (!item) return; rulesUi.flash = null; rulesOf(item)[key] = input.checked; paintRulesLive(item); });
+      const row = field(name, input, " "); row.classList.add("agents-rules-file"); row.dataset.file = key;
+      switches[key] = { input, note: row.querySelector("small"), row }; files.append(row);
+    }
+    const total = node("p", "agents-rules-total"); total.id = "agents-rules-total"; const sum = node("b", ""); total.append(node("span", "", "Added to each request from Studio's models"), sum);
+    const save = button("Save rules", () => void saveRules(), "primary"); save.id = "agents-rules-save";
+    // Throwing typed text away asks twice, like the rest of this page.
+    const discard = risky("Discard", () => discardRules(), "Discard your rules edits?"); discard.id = "agents-rules-discard";
+    const actions = node("div", "agents-actions agents-rules-actions"); actions.append(save, discard);
+    const readers = node("div", "agents-rules-readers"); readers.id = "agents-rules-readers"; const list = node("div", "agents-rules-reader-list"); readers.append(node("h4", "", "Who reads what"), list);
+    const fine = node("p", "muted agents-rules-fine", "Claude Code, Codex and OpenCode already read AGENTS.md and CLAUDE.md on their own, so Studio only adds your text for them. A running task keeps the rules it started with; a file is read again for each new request. Switch the files on only for a project you trust: their text goes to the models as instructions.");
+    box.append(state, scopeNote, area, count, warn, files, total, actions, readers, fine);
+    Object.assign(rulesUi, { box, state, scopeNote, area, chars, tokens, warn, switches, sum, save, discard, readers, list, flash: null });
+    return box;
+  }
+  const rulesTone = (text, tone = "") => { rulesUi.state.textContent = text; if (tone) rulesUi.state.dataset.tone = tone; else delete rulesUi.state.dataset.tone; };
+  // The parts that follow every keystroke and every switch: the counter, the warning, the total, the state and the buttons.
+  function paintRulesLive(item) {
+    const rules = rulesOf(item), info = rulesInfoOf(item), limit = info.limit || RULES_LIMIT, over = rules.text.length > limit, changed = rulesChanged(item);
+    rulesUi.chars.textContent = `${rules.text.length.toLocaleString("en-US")} of ${limit.toLocaleString("en-US")} characters`;
+    rulesUi.tokens.textContent = `about ${rulesTokens(rules.text.length)} tokens`;
+    rulesUi.box.dataset.over = String(over); rulesUi.warn.hidden = !over;
+    rulesUi.sum.textContent = `about ${rulesCost(item).tokens} tokens`;
+    rulesUi.save.disabled = !changed || over || saving; rulesUi.discard.disabled = !changed || saving;
+    if (rulesUi.flash) rulesTone(rulesUi.flash.text, rulesUi.flash.tone);
+    else if (info.disabled) rulesTone("Rules are switched off for this session (MEFI_STUDIO_NO_AGENT_RULES). Nothing here is sent, and your rules are kept.", "warn");
+    else rulesTone(changed ? "Unsaved changes" : "Saved", over ? "bad" : changed ? "" : "good");
+  }
+  // The whole card from the draft (a new project, a reload, a save). The textarea keeps what is typed while it has focus.
+  function paintRules() {
+    const item = draft(); if (!item || !rulesUi.box) return;
+    const rules = rulesOf(item), info = rulesInfoOf(item);
+    if (document.activeElement !== rulesUi.area && rulesUi.area.value !== rules.text) rulesUi.area.value = rules.text;
+    for (const [key, ui] of Object.entries(rulesUi.switches)) {
+      ui.input.checked = rules[key] === true; ui.note.textContent = rulesFileNote(item, key);
+      ui.row.dataset.found = String(info.files?.[key]?.found === true);
+    }
+    const inherited = scope === "project" && item.saved.inherited === true;
+    rulesUi.scopeNote.textContent = scope === "defaults" ? "These are the Studio defaults' rules: every project without a team of its own reads them."
+      : inherited ? "This project follows the Studio defaults, so these are their rules. Saving here gives it a team of its own: a copy of the defaults plus these rules." : "";
+    rulesUi.scopeNote.hidden = !rulesUi.scopeNote.textContent;
+    rulesUi.box.dataset.scope = scope;
+    const readers = Array.isArray(info.readers) ? info.readers : [];
+    rulesUi.list.replaceChildren();
+    for (const row of readers) {
+      const line = node("div", "agents-rules-reader"), words = node("span", "agents-rules-reader-words");
+      words.append(node("strong", "", row.title), node("small", "muted", row.detail));
+      line.append(words, node("span", `agents-rules-chip${row.files ? " agents-rules-chip-files" : ""}`, row.files ? "Text and files" : "Your text"));
+      rulesUi.list.append(line);
+    }
+    rulesUi.readers.hidden = !readers.length;
+    paintRulesLive(item);
+  }
+  function discardRules() {
+    const item = draft(); if (!item || saving) return;
+    rulesUi.flash = null; item.rules = rulesSavedOf(item); rulesUi.area.value = item.rules.text; paintRules();
+  }
+  async function saveRules() {
+    const item = draft(); if (!item || saving || !rulesChanged(item)) return;
+    const rules = rulesOf(item);
+    if (rules.text.length > (rulesInfoOf(item).limit || RULES_LIMIT)) { paintRulesLive(item); return; }
+    const key = draftKey(), before = item.saved.name;
+    saving = true; rulesUi.flash = { text: "Saving…" }; paintRulesLive(item);
+    try {
+      const result = await api()?.agentsSave?.({ action: "rules", projectId: item.saved.projectId, scope, revision: item.saved.revision, rules: { text: rules.text, agents: rules.agents, claude: rules.claude } });
+      if (!result?.ok) throw new Error(result?.error || "The rules were not saved.");
+      // The host's copy is the truth (line endings and trailing space normalised): the card and the draft follow it, and the rest of the team draft is left as edited.
+      item.saved = result;
+      if (result.configuration?.agentRules) item.configuration.agentRules = clone(result.configuration.agentRules); else delete item.configuration.agentRules;
+      if (item.name === before) { item.name = result.name; const name = $("agents-team-name"); if (name && document.activeElement !== name) name.value = result.name; }
+      item.rules = rulesSavedOf(item);
+      // A project that followed the Studio defaults has a team of its own now; the rest of the page is left as it is.
+      const summary = $("agents-team-summary"); if (summary) summary.textContent = `${item.saved.name} · ${item.saved.inherited ? "Studio defaults" : "Project team"}`;
+      if (!item.dirty) say(`${scope === "defaults" ? "Studio defaults" : "Independent project team"} · Saved`);
+      rulesUi.flash = { text: "Rules saved. New requests use them. Running tasks keep the rules they started with.", tone: "good" };
+    } catch (error) {
+      rulesUi.flash = { text: plain(error, "The rules were not saved. Your text is still here."), tone: "bad" };
+    } finally {
+      saving = false;
+      if (key === draftKey() && draft() === item) { if (!rulesChanged(item)) rulesUi.area.value = item.rules.text; paintRules(); }
+    }
+  }
+  // ---- end of rules card ----
   function agentRow({ id, title, detail, provider, model, effort = "", fast = false, builder = false, seat = false, setProvider, setModel, setEffort, setFast }, config, saved) {
     const box = node("section", "agents-model-row"); box.dataset.agent = id;
     const addon = addonPanel(id, title, provider, config, saved);
@@ -629,6 +786,7 @@
     for (const preset of item.saved.presets || []) { const option = node("option", "", preset.name); option.value = preset.id; picker.append(option); }
     picker.value = selected;
     say(item.dirty ? "Draft · applies to new work after you choose Apply." : `${scope === "defaults" ? "Studio defaults" : item.saved.inherited ? "Inheriting Studio defaults" : "Independent project team"} · Saved`);
+    paintRules();
     window.MefiScroll?.scan($("agents-overlay"));
   }
   function stageRouting(patch) {
@@ -688,10 +846,11 @@
       const result = await (action.startsWith("preset-") ? api()?.agentsPreset?.(payload) : api()?.agentsSave?.(payload));
       if (!result?.ok) throw new Error(result?.error || "The team was not saved.");
       if (action.startsWith("preset-")) item.saved = result;
-      else drafts.set(key, { saved: result, configuration: clone(result.configuration), name: result.name, dirty: false });
+      else drafts.set(key, { saved: result, configuration: clone(result.configuration), name: result.name, dirty: false, rules: item.rules && rulesChanged(item) ? item.rules : undefined });
       if (key === draftKey()) { renderConfiguration(); window.dispatchEvent(new CustomEvent("mefi:agent-draft")); say(action === "preset-delete" ? "Preset deleted. Project copies are unchanged." : action.startsWith("preset-") ? "Preset saved. Project copies are unchanged." : "Saved · new work uses this team. Running work keeps its configuration."); }
     } catch (error) { if (key === draftKey()) say(plain(error, "The team was not saved."), true); }
-    finally { saving = false; }
+    // The rules buttons wait while a save is out; they are ready again now.
+    finally { saving = false; if (draft() && rulesUi.box) paintRulesLive(draft()); }
   }
   function discard() { drafts.delete(draftKey()); load(); }
   async function open(options = {}) {
@@ -725,7 +884,7 @@
     // An open sheet reloads at once; its form stayed bound to the dropped
     // draft, so edits and Apply silently did nothing.
     api()?.onSettingsChanged?.(() => {
-      if (saving || !draft() || draft().dirty) return;
+      if (saving || !draft() || draft().dirty || rulesChanged(draft())) return;
       drafts.delete(draftKey());
       if ($("agents-overlay")?.hidden === false) void load();
     });
