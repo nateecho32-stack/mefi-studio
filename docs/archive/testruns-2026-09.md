@@ -6,6 +6,41 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-28 - Plans face lift: one step at a time, quick-then-deep models, project ready before it is needed
+
+The owner said the planner felt like a chore: slow to load, too much on
+screen, and no real help from Mefi. Opening Plans waited on the folder scan,
+and every interview answer re-read the whole folder (2.1 s on this repo;
+0.13 s from the cache). `planning:list` now answers with `skipExisting`, and
+the new `planning:prepare` brings the scan plus a warm project read after the
+plans are on screen. Interview turns answer from that read
+(`explorePlanningFiles` `maxAge` + `stale`) and refresh it behind the reply.
+Interview, question and live-suggestion calls stay on the routine (quick)
+seat. A reply it fumbles is asked once more of the heavy seat. The spec and
+"Think harder" turns go straight to heavy, and the note names the seat. The
+page shows one step at a time (Show every step brings the rest back), an Up
+next button, a progress track, and a flourish when a step completes. The
+interview reads as a chat. Mefi's reading has a one-click "That's right —
+record it", and Mefi asks the next question on its own (a switch, on by
+default) and as soon as a new plan exists. A new idea needs no name, and
+starters fill its first words. The Project ready chip shows the files read and
+the map areas. "Where this lives" pins a plan to a Project map area.
+
+- `npm run build-booklet`, `npm run check` (189 targets) and `npm run audit`
+  (0 findings): PASS in C:\wt\plans on 6c1c940.
+- `npm test`: Python contracts OK (248). Node stage: the Electron fixture
+  stage failed on performance_render (profiler JSON timeout, a known row) and
+  planning_render (glass transmission 12 under load). Both PASS solo
+  (planning_render transmission 106, performance_render 2/2). After the
+  rebase onto 39a153d: `npm run check`, `npm run audit` and `npm run test:fast`
+  (4403 pass) PASS; planning_render solo passed 3 of 4 (one read 0, a blank
+  capture), clean 39a153d passed 3 of 3. Watch it for a flake.
+- New tests: planning_service (2: list answers before the scan and prepare
+  fills it; quick seat first, one heavy retry, deep asks, quick error shown),
+  planning_ui (4: one-click record then ask; switch off; nameless idea
+  auto-asks; list first, then ready chip, scan and map pinning),
+  planning_exploration (1: stale-ok read answers from the last inventory).
+
 ## 2026-09-28 - Start with Windows; Your PCs shows what each PC's agents are doing
 
 Two pieces for leaving home PCs working. **Start with Windows** (Settings ›

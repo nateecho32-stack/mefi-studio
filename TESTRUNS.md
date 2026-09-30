@@ -25,6 +25,9 @@ the guide are the frozen archive.
 | `occlusion_probe` | Skips with a capability-gated record (`occlusionUnsupported`, or `occlusionUnstable` after a blank-control corroboration), or fails on a destroyed cover window | Needs an attended, unlocked desktop; runs serialized after the parallel stage. An actively used desktop can mark the covered window occluded and un-mark it mid-measure (rAF growth 9–23 while the page reads visible under a still-shown cover) | A skip (locked desktop, tracker never engages, or tracker does not hold) is expected. Fails only when the cover is lost mid-probe (rerun) or the blank control stays silent while the booklet keeps painting — that one is a real page regression, not environmental. |
 | `eyes_toggle_electron` | Timer drift over the worker channel | Wall-clock measurement under CPU load; serialized for that reason | Rerun solo on a quiet machine. |
 | `command_render` | Killed at its 120 s child limit with no fixture report | One fixture of 60 routes, 16 settings categories, 12 session tabs, audio and motion: 45–53 s alone. It now runs serialized after the Electron lane, and reports its duration and any cold-boot retry as diagnostics | Rerun solo: `node --test tests/command_render.test.mjs`. |
+| `command_render` (narrow) | "Assistant narrow: pointer reaches the switch track", once, in a lane run with other Electron processes going; the same file passes alone (53 s) | Something transient (a toast or hint) sat over the New work switch at 600 px when the fixture measured it | Rerun solo. The fixture now names the element on top of the switch, so a repeat says what it is. |
+| `project_map_render` (Linux lane) | Fails at 600×560 zoom 1.5: the map stage's content is 9 px taller than its 52 px box (the fixture allows 2) | Fails the same way on db63e15, before the 2026-09-30 landing; Linux fallback fonts are the likely difference from Windows | Judge it on the PC's Windows run. Not a regression from the landing. |
+| `run_node_tests_fast` | "fast run keeps this guard", rarely, in a full `npm run test:fast` on a busy machine; passes alone and on rerun | Not found: the guard lists the suites twice and once the fast list lacked its own file. The assertion now prints both list sizes and whether the full list had the file | Rerun. If it repeats, the message says whether the listing or the Electron classification is at fault. |
 | `task_overview_render`, `startup_render`, `renderer_recovery`, `node_paint_cache` | Painted-position or capture assertions off by a frame | GPU-contended Electron captures in the parallel stage | Rerun the one file solo. |
 | `eyes_worker` | "read past the timeout" | Load-dependent worker read budget | Rerun solo. |
 | `expand_finished_guard` | One-off failure in the parallel stage, passes solo | Parallel-load timing | Rerun. |
@@ -34,6 +37,63 @@ the guide are the frozen archive.
 
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
+
+## 2026-09-30 - Phase 0 landing: tree brightness, media player, Build's sessions layout and Worktrees on main
+
+A cloud session (Linux, Node 24.21.0) finished the parked branches on the
+integration branch `claude/funny-einstein-19ljkq` and moved `main` forward by
+fast-forward only, each time after Windows CI was green on the exact commit
+(runs 156, 157 and 160; `main` is at 9d10828). Landed: `wip/release-0.4.5`'s
+code fixes and docs, `wip/tree-brightness-gpu`, `wip/media-player-redesign` and
+`wip/builder-mode`, each with the tests it was missing; Work › Worktrees and
+`npm run worktrees`; the slim scroll indicator; Ctrl +/−/0 as a saved scale; the
+compile cache; the 16,000-character refusal; the keyed patcher
+(`renderer/patch.js`, not used by a page yet); and the worktree mark on Build's
+task rows. No executable was built, no tag was pushed and `gh-pages` was not
+touched.
+
+- `npm run check`: PASS (212 targets, 439 specs). `npm run audit`: PASS, 0
+  findings. `npm run lint`: PASS, 0 errors and the same 42 warnings.
+- `npm run test:fast` (Linux, Node 24.21.0): 5,213 tests, 5,186 pass, 0 fail,
+  27 skipped, 99 s. In a `core.autocrlf=true` clone (CRLF checkout, as on the PC)
+  at 3d877f3: 5,213 tests, 5,186 pass, 0 fail, 27 skipped, 111 s. One earlier
+  run of the same tree failed only `run_node_tests_fast` ("fast run keeps this
+  guard"); it passes alone and in the rerun, and the test now prints the list
+  sizes if it happens again (see the table above).
+- Windows CI (`ci.yml`, windows-latest: build-booklet and its diff, spec audit,
+  check, lint, `npm test`, audit): green on f271343 (run 156), 8ce81a4 (157)
+  and 9d10828 (160). Hosted Windows skips every Electron-launching fixture, so
+  the lane below ran here only.
+- Electron lane on 8ce81a4: all 27 suites that launch Electron, one at a time as
+  an unprivileged user under xvfb at 1920×1080. 25 pass (agent_setup_render,
+  autonomy_render, command_toolbar, companion_hub_render, eyes_toggle_electron,
+  first_install, fleet_render, media_browser_render, media_window_render,
+  node_paint_cache, node_views_render, occlusion_probe, package_privacy,
+  patch_render, performance_render with 1 skip, planning_render,
+  renderer_recovery, setup_helper_render, stamp_exe with 3 Windows-only skips,
+  startup_render, task_overview_render, tree_dynamics_render,
+  unified_studio_render, workflow_render, worktrees_render). Two failed:
+  - `command_render` failed once at "Assistant narrow: pointer reaches the switch
+    track" while other Electron processes ran. It passes alone on 8ce81a4 (53 s)
+    and on the commit before all of this, db63e15 (51 s). The fixture now names
+    what covers the switch if it recurs.
+  - `project_map_render` fails at 600×560, zoom 1.5 (the map stage is 9 px taller
+    than its 52 px box and the fixture allows 2) and fails the same way on
+    db63e15, so it is not from this landing. The PC's Windows run decides it.
+- `worktrees_render` passes again on 3d877f3's booklet with the new
+  project-change case (the Worktrees page drops its list when the project
+  changes and the menu's marks follow).
+- What the branch agents measured before hand-over: tree brightness tone unit
+  tests 12, tree dynamics 15; Build's sessions layout +99 tests, and 33 of the
+  37 Electron suites its agent ran passed (it found `project_map_render` and
+  `unified_studio_render` red on clean main on its machine; `unified_studio_render`
+  passes in the lane above, `project_map_render` is the one listed there); media
+  music 117, media window 23, YouTube explorer 11 and six Electron render
+  suites passing, with the 12 failures the redesign left fixed and six bugs the
+  new tests found fixed and pinned.
+- Not run: `npm test` on the PC (the Windows Electron lane), the attended look
+  at tree brightness, and the startup benchmark for the compile cache on Windows
+  (`tools/benchmark_startup.py`; the Linux figures are in `docs/performance.md`).
 
 ## 2026-09-30 - Update safety net: a saved copy, a boot watch and Roll back (ZA7)
 
@@ -669,41 +729,6 @@ the fonts step (booklet.js) stops waiting after 4 s.
   normalized-path lock pass; Node suites failed only performance_render
   ("Profiler JSON download timed out", the known load flake), which passes
   solo (2).
-
-## 2026-09-28 - Plans face lift: one step at a time, quick-then-deep models, project ready before it is needed
-
-The owner said the planner felt like a chore: slow to load, too much on
-screen, and no real help from Mefi. Opening Plans waited on the folder scan,
-and every interview answer re-read the whole folder (2.1 s on this repo;
-0.13 s from the cache). `planning:list` now answers with `skipExisting`, and
-the new `planning:prepare` brings the scan plus a warm project read after the
-plans are on screen. Interview turns answer from that read
-(`explorePlanningFiles` `maxAge` + `stale`) and refresh it behind the reply.
-Interview, question and live-suggestion calls stay on the routine (quick)
-seat. A reply it fumbles is asked once more of the heavy seat. The spec and
-"Think harder" turns go straight to heavy, and the note names the seat. The
-page shows one step at a time (Show every step brings the rest back), an Up
-next button, a progress track, and a flourish when a step completes. The
-interview reads as a chat. Mefi's reading has a one-click "That's right —
-record it", and Mefi asks the next question on its own (a switch, on by
-default) and as soon as a new plan exists. A new idea needs no name, and
-starters fill its first words. The Project ready chip shows the files read and
-the map areas. "Where this lives" pins a plan to a Project map area.
-
-- `npm run build-booklet`, `npm run check` (189 targets) and `npm run audit`
-  (0 findings): PASS in C:\wt\plans on 6c1c940.
-- `npm test`: Python contracts OK (248). Node stage: the Electron fixture
-  stage failed on performance_render (profiler JSON timeout, a known row) and
-  planning_render (glass transmission 12 under load). Both PASS solo
-  (planning_render transmission 106, performance_render 2/2). After the
-  rebase onto 39a153d: `npm run check`, `npm run audit` and `npm run test:fast`
-  (4403 pass) PASS; planning_render solo passed 3 of 4 (one read 0, a blank
-  capture), clean 39a153d passed 3 of 3. Watch it for a flake.
-- New tests: planning_service (2: list answers before the scan and prepare
-  fills it; quick seat first, one heavy retry, deep asks, quick error shown),
-  planning_ui (4: one-click record then ask; switch off; nameless idea
-  auto-asks; list first, then ready chip, scan and map pinning),
-  planning_exploration (1: stale-ok read answers from the last inventory).
 
 ## Read Before Any Tests
 
