@@ -135,3 +135,25 @@ test("separate histories in a full clone are still counted: that is real unpushe
   assert.equal(look.behind, 1);
   assert.ok(pending(look).some((item) => item.kind === "unpushed" && item.count === 1));
 });
+
+test("commits made on a detached worktree are counted, and a commit some branch already holds is not", async (t) => {
+  const { root, first: repo } = await fixture(t);
+  const at = (name) => path.join(root, name);
+  // A detached worktree with a commit no branch and no GitHub branch holds.
+  await run(repo, "worktree", "add", "-q", "--detach", at("loose"));
+  await configure(at("loose"));
+  writeFileSync(path.join(at("loose"), "loose.txt"), "only here\n");
+  await run(at("loose"), "add", "loose.txt");
+  await run(at("loose"), "commit", "-q", "-m", "Loose work");
+  // A detached worktree sitting on a commit main already has.
+  await run(repo, "worktree", "add", "-q", "--detach", at("held"), "main");
+  const state = await inspect(repo);
+  assert.deepEqual(state.worktrees.map((tree) => ({ name: path.basename(tree.path), dirty: tree.dirty, loose: tree.loose })), [{ name: "loose", dirty: 0, loose: 1 }], "only the folder with a commit nothing else holds");
+  const items = pending(state).filter((item) => item.kind === "worktree");
+  assert.equal(items.length, 1);
+  assert.match(items[0].text, /^Worktree loose \(detached\): 1 commit on no branch and not on GitHub\.$/);
+  assert.equal(atRisk(pending(state)).length, 1, "it is work only this PC holds, so the Friends badge and the quit question count it");
+  // Once a branch holds the commit it is the branch's to report, not the folder's.
+  await run(at("loose"), "branch", "wip/loose-saved");
+  assert.deepEqual((await inspect(repo)).worktrees, [], "a branch holds it now");
+});

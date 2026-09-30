@@ -7,6 +7,12 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Commits made in a detached worktree now count as work only this PC has.**
+  The Friends badge, the session report and the question before closing Studio
+  listed a worktree only when it had uncommitted files, and every branch's
+  commits by branch, so commits on a detached HEAD (which belong to no branch)
+  were invisible until the folder was deleted. They are listed when no branch,
+  local or on GitHub, holds them.
 - **Ctrl +, Ctrl − and Ctrl 0 change the interface scale, and it is remembered.**
   They walk the same 70% to 150% ladder as the slider in Configuration › UI &
   Surfaces (fine below 130%), from wherever the slider left it, and Ctrl 0 is

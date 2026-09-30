@@ -250,14 +250,22 @@ export async function inspect(cwd, { run = runGit } = {}) {
   const stashes = lines((await git(["stash", "list"])).stdout).length;
   const trees = [];
   for (const line of lines((await git(["worktree", "list", "--porcelain"])).stdout)) {
-    if (line.startsWith("worktree ")) trees.push({ path: path.resolve(line.slice(9)), branch: null });
+    if (line.startsWith("worktree ")) trees.push({ path: path.resolve(line.slice(9)), branch: null, head: null });
+    else if (trees.length && line.startsWith("HEAD ")) trees.at(-1).head = line.slice(5);
     else if (trees.length && line.startsWith("branch refs/heads/")) trees.at(-1).branch = line.slice(18);
   }
   const worktrees = [];
   for (const tree of trees) {
     if (tree.path === root) continue;
     const changed = await changedFiles(tree.path, { run });
-    if (changed) worktrees.push({ ...tree, dirty: changed });
+    // Commits made on a detached HEAD belong to no branch, so the branch lists below never
+    // see them: count them here when no GitHub branch holds them either.
+    let loose = 0;
+    if (!tree.branch && tree.head && hasUpstream) {
+      const held = (await git(["for-each-ref", "--contains", tree.head, "--count=1", "--format=%(refname)", "refs/heads", `refs/remotes/${REMOTE}`])).stdout;
+      if (!held) loose = Number((await git(["rev-list", "--count", tree.head, "--not", `--remotes=${REMOTE}`])).stdout) || 0;
+    }
+    if (changed || loose) worktrees.push({ path: tree.path, branch: tree.branch, dirty: changed, loose });
   }
   const missing = async (ref) => (hasUpstream ? Number((await git(["rev-list", "--count", `${upstream}..${ref}`])).stdout) || 0 : 0);
   const refs = async (pattern) => lines((await git(["for-each-ref", "--format=%(refname:short)", pattern])).stdout);
@@ -302,7 +310,10 @@ export function pending(state) {
   if (state.dirty) items.push({ kind: "uncommitted", count: state.dirty, text: `${plural(state.dirty, "uncommitted file")} in this checkout.` });
   if (state.ahead) items.push({ kind: "unpushed", count: state.ahead, text: `${plural(state.ahead, "commit")} on ${state.main} not pushed yet.` });
   if (state.stashes) items.push({ kind: "stash", count: state.stashes, text: `${plural(state.stashes, "stash", "stashes")} saved on this PC.` });
-  for (const tree of state.worktrees) items.push({ kind: "worktree", path: tree.path, count: tree.dirty, text: `Worktree ${path.basename(tree.path)} (${tree.branch || "detached"}): ${plural(tree.dirty, "uncommitted file")}.` });
+  for (const tree of state.worktrees) {
+    const parts = [tree.dirty ? plural(tree.dirty, "uncommitted file") : "", tree.loose ? `${plural(tree.loose, "commit")} on no branch and not on GitHub` : ""].filter(Boolean);
+    items.push({ kind: "worktree", path: tree.path, count: (tree.dirty || 0) + (tree.loose || 0), text: `Worktree ${path.basename(tree.path)} (${tree.branch || "detached"}): ${parts.join(" and ")}.` });
+  }
   for (const item of state.localBranches) items.push({ kind: "local-branch", name: item.name, count: item.commits, text: `Branch ${item.name} on this PC: ${plural(item.commits, "commit")} not on ${state.main}.` });
   if (state.unrelated) items.push({ kind: "unrelated", text: `This is a shallow clone and local ${state.main} shares no history with ${state.upstream} in what it fetched, so their commits were not compared.` });
   for (const item of state.siteBranches ?? []) items.push({ kind: "site-branch", name: item.name, count: item.commits, text: `Site branch ${item.name} on GitHub: ${plural(item.commits, "commit")} not on gh-pages yet. It never merges into ${state.main}; publish the site separately.` });
