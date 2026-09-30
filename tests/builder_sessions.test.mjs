@@ -34,7 +34,7 @@ const LABELS = { running: "Working", review: "Checking", blocked: "Blocked", app
 const summary = (stage) => ({ stage, label: LABELS[stage] ?? stage, checks: "No completion checks recorded", worker: "", action: "", activityAge: "", blocker: "", nextAction: "" });
 
 /** The page, a stand-in workspace / navigation / bridge, and the two scripts loaded as the booklet loads them. */
-async function makeApp({ search = "", storage = new Map(), saved = null, active = true, vibe = "build", tasks = [], stages = {}, questions = [], running = [], messages = [], backlog = null, preview = null, bridge = undefined, panes = true } = {}) {
+async function makeApp({ search = "", storage = new Map(), saved = null, active = true, vibe = "build", tasks = [], stages = {}, questions = [], running = [], messages = [], backlog = null, preview = null, bridge = undefined, panes = true, worktrees = null } = {}) {
   if (saved) storage.set(LAYOUT, saved);
   for (const rows of [tasks, questions, running, messages]) rows.forEach(deepFreeze);
   const env = createEnv({ search, storage, now: NOW });
@@ -67,6 +67,7 @@ async function makeApp({ search = "", storage = new Map(), saved = null, active 
   };
   window.MefiToast = (message, kind) => calls.toasts.push([message, kind]);
   if (bridge) window.mefiStudio = bridge;
+  if (worktrees) window.MefiWorktrees = worktrees;
   if (panes) await env.load("panes.js");
   await env.load("builder.js");
   const B = window.MefiBuilder;
@@ -450,6 +451,66 @@ test("Older folds finished work away until you ask for it", async () => {
   await list().querySelector(".builder-older").click();
   assert.deepEqual(menuOf(app).slice(-4), ["# Older", "old-done-1/done", "pinned-old/done", "old-done-2/done"], "newest first, under their own heading");
   assert.equal(list().querySelector(".builder-older"), null, "and the fold's button is gone");
+});
+
+// ---- the worktree mark -----------------------------------------------------------
+
+test("a task whose run works in its own worktree wears the branch mark, and the mark follows the Worktrees page", async () => {
+  let looks = 0;
+  const worktrees = { peek: async () => { looks += 1; return { repo: true, tasks: ["today-a", "pinned-old"] }; } };
+  const storage = new Map([["mefiStudio.builder.pins.p1", JSON.stringify(["pinned-old"])]]);
+  const app = await makeApp({ saved: "sessions", storage, tasks: board(), stages: STAGES, questions: QUESTIONS, worktrees });
+  const row = (key) => app.document.getElementById("app-rail-sessions").querySelector(`[data-key="${key}"]`);
+  const marked = () => app.document.getElementById("app-rail-sessions").querySelectorAll(".builder-worktree").length;
+  assert.equal(looks, 1, "the menu takes one quiet look when it first paints");
+  await app.env.settle(); app.env.flush();
+  assert.equal(marked(), 2, "the two tasks the list names carry the mark");
+  assert.ok(row("today-a").querySelector(".builder-worktree"));
+  assert.equal(row("today-a").title, "Task today-a · Ready to start · in its own worktree");
+  assert.equal(row("today-a").getAttribute("aria-label"), "Task today-a. Ready to start. In its own worktree");
+  assert.equal(row("today-b").querySelector(".builder-worktree"), null, "a task with no worktree has none");
+  assert.equal(row("today-b").title, "Task today-b · Waiting", "and its words are unchanged");
+  assert.equal(row("__chat").querySelector(".builder-worktree"), null, "Chat with Mefi never has one");
+  const both = row("pinned-old");
+  assert.ok(both.querySelector(".builder-worktree") && both.querySelector(".builder-pinned"), "a pinned task can carry both");
+  assert.equal(both.getAttribute("aria-label"), "Task pinned-old. Done. In its own worktree. Pinned");
+  assert.deepEqual(both.children.map((child) => child.classList.contains("builder-worktree") ? "worktree" : child.classList.contains("builder-pinned") ? "pin" : "other").slice(-2), ["worktree", "pin"], "the branch mark sits before the pin");
+
+  // The Worktrees page announces a new list: the marks move with it, no repaint is wasted on the same one.
+  app.env.emit("mefi:worktrees", { repo: true, tasks: ["runs"] });
+  assert.equal(marked(), 1);
+  assert.ok(row("runs").querySelector(".builder-worktree"));
+  assert.equal(row("today-a").querySelector(".builder-worktree"), null, "a merged run's mark goes");
+  const painted = app.document.getElementById("app-rail-sessions").children[0];
+  app.env.emit("mefi:worktrees", { repo: true, tasks: ["runs"] });
+  assert.equal(app.document.getElementById("app-rail-sessions").children[0], painted, "the same list repaints nothing");
+  app.env.emit("mefi:worktrees", { repo: false, tasks: [] });
+  assert.equal(marked(), 0, "a project that is not a repository has none");
+  app.env.emit("mefi:worktrees", undefined);
+  app.env.emit("mefi:worktrees", { tasks: "not a list" });
+  assert.equal(marked(), 0, "an answer that is not a list is no list");
+});
+
+test("the menu looks for worktrees quietly: once per few seconds, again for another project, never when the page cannot answer", async () => {
+  let looks = 0;
+  const app = await makeApp({ saved: "sessions", tasks: board(), stages: STAGES, questions: QUESTIONS, worktrees: { peek: async () => { looks += 1; return { tasks: ["runs"] }; } } });
+  await app.env.settle();
+  for (let repaint = 0; repaint < 4; repaint += 1) { app.B.refresh(); app.env.flush(); }
+  assert.equal(looks, 1, "repainting the menu does not ask the host again");
+  // Another project has other worktrees: the old marks are dropped and the menu looks again.
+  app.env.emit("mefi:project-changed");
+  app.env.flush(); await app.env.settle(); app.env.flush();
+  assert.equal(looks, 2, "a project change looks again");
+  assert.equal(app.document.getElementById("app-rail-sessions").querySelectorAll(".builder-worktree").length, 1);
+
+  // A look that fails leaves the menu as it was; a page with no Worktrees module gets no marks and no errors.
+  const failing = await makeApp({ saved: "sessions", tasks: board(), worktrees: { peek: async () => { throw new Error("git is not installed"); } } });
+  await failing.env.settle(); failing.env.flush();
+  assert.equal(failing.document.getElementById("app-rail-sessions").querySelectorAll(".builder-worktree").length, 0);
+  const without = await makeApp({ saved: "sessions", tasks: board() });
+  await without.env.settle(); without.env.flush();
+  assert.equal(without.document.getElementById("app-rail-sessions").querySelectorAll(".builder-worktree").length, 0);
+  assert.ok(without.document.getElementById("app-rail-sessions").querySelector('[data-key="today-a"]'), "and the menu is drawn as ever");
 });
 
 test("the filter narrows the list as you type, says when nothing matches, and Escape puts everything back", async () => {

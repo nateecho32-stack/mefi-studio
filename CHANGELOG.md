@@ -61,6 +61,12 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   no branch keeps a copy as `refs/mefi/rescue/…` first) and forget folders that
   are gone, and turn on "Give each run its own worktree". Nothing on the page
   pushes, and a run's folder is left alone while it works.
+- **Build's task list marks tasks that work in their own worktree.** A small
+  branch mark sits on the row of any task whose run has a worktree, so you can
+  see which work lives in another folder without opening Work › Worktrees. It
+  follows that page (a merged run's mark goes) and starts over when you switch
+  projects. Switching projects also clears the Worktrees page's old list at once
+  instead of showing it until the next read.
 - **Panes that can scroll show a slim indicator.** Scrollbars stay hidden
   everywhere, so it was easy to miss that a pane scrolled. While the pointer is
   over a pane that overflows, and for a moment after you scroll it, a thin

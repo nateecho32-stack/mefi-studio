@@ -894,7 +894,10 @@ failed process stays an error and cannot produce briefing requests.
   is not fully merged is never deleted. **Forget missing folders** is
   `git worktree prune`. Every action names a folder from the list and the host
   only acts on a folder git lists for the open project. `npm run worktrees`
-  prints the same table (`--json` for other tools); it changes nothing.
+  prints the same table (`--json` for other tools); it changes nothing. In
+  Build's task list a task whose run has a worktree wears a small branch mark
+  (`MefiWorktrees.peek()`, at most one quiet read every 8 s; the page announces
+  `mefi:worktrees` when its list changes, and a project change drops the list).
 
 ### Command center and the node tree
 

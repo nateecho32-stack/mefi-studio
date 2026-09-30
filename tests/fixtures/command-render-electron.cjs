@@ -1015,13 +1015,13 @@ app.whenReady().then(async () => {
       const input=document.getElementById(${JSON.stringify(id)}),label=input.closest('.new-work-toggle'),track=label.querySelector('.track');
       const box=label.getBoundingClientRect(),trackBox=track.getBoundingClientRect(),style=getComputedStyle(label);
       const hit=document.elementFromPoint(trackBox.x+trackBox.width/2,trackBox.y+trackBox.height/2);
-      return {id:input.id,label:${JSON.stringify(label)},width:innerWidth,height:innerHeight,scroll:document.documentElement.scrollWidth,box:box.toJSON(),track:trackBox.toJSON(),text:label.textContent.trim(),visible:style.display!=='none'&&style.visibility!=='hidden',reachable:hit===label||label.contains(hit)};
+      return {id:input.id,label:${JSON.stringify(label)},width:innerWidth,height:innerHeight,scroll:document.documentElement.scrollWidth,box:box.toJSON(),track:trackBox.toJSON(),text:label.textContent.trim(),visible:style.display!=='none'&&style.visibility!=='hidden',reachable:hit===label||label.contains(hit),covered:hit===label||label.contains(hit)?'':(hit?hit.tagName+'#'+hit.id+'.'+String(hit.className)+' '+JSON.stringify(hit.getBoundingClientRect()):'nothing')};
     `);
     report.newWork.layouts.push(layout);
     assert.ok(layout.visible && layout.box.width > 70 && layout.box.height >= 14, `${label}: visible labelled New work switch`);
     assert.match(layout.text, /New work/);
     assert.ok(layout.box.x >= 0 && layout.box.right <= layout.width && layout.box.y >= 0 && layout.box.bottom <= layout.height, `${label}: switch fits the visible viewport`);
-    assert.ok(layout.reachable, `${label}: pointer reaches the switch track`);
+    assert.ok(layout.reachable, `${label}: pointer reaches the switch track (something else is on top of it: ${layout.covered})`);
     assert.ok(layout.scroll <= layout.width + 2, `${label}: no horizontal overflow`);
   };
   for (const [width, label] of [[1280, "desktop"], [600, "narrow"]]) {

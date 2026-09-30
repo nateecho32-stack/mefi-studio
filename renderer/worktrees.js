@@ -344,6 +344,11 @@
     });
     document.addEventListener("visibilitychange", () => { if (!document.hidden && isOpen()) { void read({ quiet: true }); schedule(); } });
     window.addEventListener("focus", () => { if (isOpen()) void read({ quiet: true }); });
+    // Another project has other worktrees: nothing of the last one's list, notes or badges carries over.
+    window.addEventListener("mefi:project-changed", () => {
+      state.list = null; state.error = ""; state.peekAt = 0; state.signature = ""; state.notes.clear();
+      if (isOpen()) void read(); else announce();
+    });
     // A run starting or ending moves a folder in or out: read again shortly after the push.
     let later = 0;
     api()?.onAssistantStatus?.((status) => {

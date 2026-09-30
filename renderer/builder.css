@@ -38,6 +38,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 #app-rail .builder-session .glyph.builder-mark { width: 15px; height: 15px; margin-left: -1px; color: var(--muted); }
 #app-rail .builder-session[data-tone="new"] .glyph.builder-mark { color: var(--gold-bright); }
 #app-rail .builder-session .builder-pinned { width: 12px; height: 12px; color: var(--dim); }
+#app-rail .builder-session .builder-worktree { flex: none; width: 12px; height: 12px; color: var(--dim); }
 #app-rail .builder-session[aria-current="page"] { color: var(--ivory); background: color-mix(in srgb, var(--ivory) 8%, transparent); }
 #app-rail .builder-older { min-height: 30px; margin-top: 10px; padding: 0 12px; border: 0; background: transparent; color: var(--dim); font: 12px var(--font-ui); text-align: left; box-shadow: none; }
 #app-rail .builder-older:hover { color: var(--ivory); }

@@ -102,7 +102,7 @@
   }
 
   // ---- state --------------------------------------------------------------
-  const state = { revision: 0, railRevision: -1, view: "home", taskId: null, query: "", searching: false, olderOpen: false, range: "all", tab: "overview", stats: null, statsKey: "", statsFlight: null, statsAt: 0, attempts: new Map(), asks: new Map(), intent: null, busy: null, drafts: new Map(), notes: new Map(), seenAt: 0, painted: new Map(), adopted: false, wired: false, lastUserAt: 0 };
+  const state = { revision: 0, railRevision: -1, view: "home", taskId: null, query: "", searching: false, olderOpen: false, range: "all", tab: "overview", stats: null, statsKey: "", statsFlight: null, statsAt: 0, attempts: new Map(), asks: new Map(), intent: null, busy: null, drafts: new Map(), notes: new Map(), seenAt: 0, painted: new Map(), adopted: false, wired: false, lastUserAt: 0, worktreeTasks: new Set(), worktreeKey: "", worktreeAt: 0 };
   function snapshot() {
     const data = window.MefiWorkspace?.snapshot?.();
     return data && typeof data === "object" ? data : { projectId: null, project: null, projects: [], tasks: [], ideas: [], assistant: {}, status: {}, backlog: null, preview: null };
@@ -241,7 +241,8 @@
     const seen = Number(read(seenKey(), "0")) || 0;
     const unread = Boolean(lastSaid && stampOf(lastSaid.at) > seen && !(state.view === "chat" && window.MefiWorkspace?.isActive?.()));
     const current = state.view === "task" ? state.taskId : state.view === "chat" ? "__chat" : null;
-    const signature = JSON.stringify([data.projectId, grouped.map((group) => [group.key, group.title, group.rows.map((task) => [task.id, task.title || task.prompt || "", readings.get(task).tone, readings.get(task).label])]), state.query, state.searching, state.olderOpen, unread, current, companion(), window.MefiWorkspace?.isActive?.() ? 1 : 0]);
+    lookForWorktrees();
+    const signature = JSON.stringify([data.projectId, grouped.map((group) => [group.key, group.title, group.rows.map((task) => [task.id, task.title || task.prompt || "", readings.get(task).tone, readings.get(task).label, state.worktreeTasks.has(task.id)])]), state.query, state.searching, state.olderOpen, unread, current, companion(), window.MefiWorkspace?.isActive?.() ? 1 : 0]);
     paintPerson(data);
     if (state.painted.get("rail") === signature && list.childElementCount) return true;
     state.painted.set("rail", signature);
@@ -279,7 +280,7 @@
       rows.push(el("span", "app-rail-heading builder-group", group.title));
       for (const task of group.rows) {
         const now = readings.get(task);
-        rows.push(row({ key: task.id, title: window.MefiTasks?.shortTitle?.(task) || task.title || task.prompt || "Untitled task", full: task.title || task.prompt || "", tone: now.tone, label: now.label, pinned: pinned.has(task.id), selected: current === task.id, run: () => openTask(task.id) }));
+        rows.push(row({ key: task.id, title: window.MefiTasks?.shortTitle?.(task) || task.title || task.prompt || "Untitled task", full: task.title || task.prompt || "", tone: now.tone, label: now.label, pinned: pinned.has(task.id), worktree: state.worktreeTasks.has(task.id), selected: current === task.id, run: () => openTask(task.id) }));
         shown += 1;
       }
     }
@@ -293,7 +294,7 @@
     return true;
   }
   function repaintRail() { state.revision += 1; state.painted.delete("rail"); paintRail(); }
-  function row({ key, title, full = "", tone, label, icon = null, pinned = false, selected = false, run }) {
+  function row({ key, title, full = "", tone, label, icon = null, pinned = false, worktree = false, selected = false, run }) {
     const node = el("button", "app-rail-item builder-session");
     node.type = "button"; node.tabIndex = -1;
     node.dataset.key = key; node.dataset.tone = tone;
@@ -302,9 +303,10 @@
     mark.classList?.add?.("builder-mark");
     const words = el("span", "label", title);
     node.append(mark, words);
+    if (worktree) { const branch = glyph("g-worktree"); branch.classList.add("builder-worktree"); node.append(branch); }
     if (pinned) { const pin = glyph("g-pin"); pin.classList.add("builder-pinned"); node.append(pin); }
-    node.title = `${full || title} · ${label}`;
-    node.setAttribute("aria-label", `${title}. ${label}${pinned ? ". Pinned" : ""}`);
+    node.title = `${full || title} · ${label}${worktree ? " · in its own worktree" : ""}`;
+    node.setAttribute("aria-label", `${title}. ${label}${worktree ? ". In its own worktree" : ""}${pinned ? ". Pinned" : ""}`);
     node.addEventListener("click", run);
     return node;
   }
@@ -323,6 +325,25 @@
       words.firstChild.textContent = name; words.lastChild.textContent = line;
     }
     chip.dataset.tone = asks ? "ask" : running ? "run" : "quiet";
+  }
+
+  // A task whose run works in its own worktree (Work › Worktrees) wears the branch
+  // mark in the menu, so it is easy to see which work lives in another folder.
+  // worktrees.js reads the list (quietly, and not more often than every few
+  // seconds) and says so when it changes; this only keeps the ids it names.
+  function haveWorktrees(info) {
+    const ids = Array.isArray(info?.tasks) ? info.tasks.map(String) : [];
+    const key = [...new Set(ids)].sort().join("\n");
+    if (key === state.worktreeKey) return;
+    state.worktreeKey = key;
+    state.worktreeTasks = new Set(ids);
+    repaintRail();
+  }
+  function lookForWorktrees() {
+    const looker = window.MefiWorktrees;
+    if (!looker?.peek || Date.now() - state.worktreeAt < 8000) return;
+    state.worktreeAt = Date.now();
+    Promise.resolve(looker.peek()).then(haveWorktrees, () => {});
   }
 
   // ---- adopting the classic Home's sections into panes -------------------
@@ -1278,7 +1299,8 @@
     if (state.wired) return;
     state.wired = true;
     window.addEventListener("mefi:workspace-state", schedule);
-    window.addEventListener("mefi:project-changed", () => { state.attempts.clear(); state.asks.clear(); state.stats = null; state.statsKey = ""; state.painted.clear(); chipsState.branchAt = 0; chipsState.workerAt = 0; chipsState.branch = null; if (state.adopted) restoreView(); schedule(); });
+    window.addEventListener("mefi:worktrees", (event) => haveWorktrees(event.detail));
+    window.addEventListener("mefi:project-changed", () => { state.attempts.clear(); state.asks.clear(); state.stats = null; state.statsKey = ""; state.painted.clear(); state.worktreeTasks = new Set(); state.worktreeKey = ""; state.worktreeAt = 0; chipsState.branchAt = 0; chipsState.workerAt = 0; chipsState.branch = null; if (state.adopted) restoreView(); schedule(); });
     window.addEventListener("mefi:nav", (event) => {
       const detail = event.detail || {};
       if (detail.id === "workspace" && detail.action === "open" && sessions()) {

@@ -330,6 +330,18 @@ app.whenReady().then(async () => {
   // Back leaves the page (through the nav's history, like every Work page).
   await run("document.getElementById('worktrees-close').click();");
   await until("!window.MefiWorktrees.isOpen()", "Back closes the page");
+
+  // Another project has other worktrees: nothing of the last one's list carries over, and the menu's badges hear it at once.
+  await setList(listOf(rows()));
+  await run("await window.MefiWorktrees.refresh();");
+  assert.ok((await run("return window.MefiWorktrees.summary().tasks;")).includes("task_9"), "the list names the task a run belongs to");
+  await run("window.__heard = []; window.addEventListener('mefi:worktrees', (event) => window.__heard.push(event.detail)); window.worktreesFixture.clear();");
+  await run("window.dispatchEvent(new CustomEvent('mefi:project-changed'));");
+  assert.deepEqual(await run("return window.__heard;"), [{ repo: false, total: 0, atRisk: 0, toLand: 0, safeToRemove: 0, missing: 0, tasks: [] }], "a project change announces an empty list");
+  assert.deepEqual(await run("return window.MefiWorktrees.summary().tasks;"), []);
+  assert.deepEqual(await calls("worktreesList"), [], "nothing is read until something asks");
+  assert.ok((await run("return (await window.MefiWorktrees.peek()).tasks;")).includes("task_9"), "the next quiet look reads the new project at once, not after the rate limit");
+  assert.equal((await calls("worktreesList")).length, 1);
   assert.deepEqual(report.errors, [], "no console errors");
   report.calls = await run("return window.worktreesFixture.calls().map((call) => call.name);");
   report.complete = true;

@@ -24,7 +24,10 @@ test("--fast leaves out every suite that launches Electron", () => {
   assert.ok(!fast.includes("tests/eyes_toggle_electron.test.mjs"), "fast run skips the eyes toggle probe");
   assert.ok(!fast.includes("tests/package_privacy.test.mjs"), "fast run skips the packaging check");
   assert.ok(fast.includes("tests/board.test.mjs"), "fast run keeps plain suites");
-  assert.ok(fast.includes("tests/run_node_tests_fast.test.mjs"), "fast run keeps this guard");
+  // Rarely this failed in a full run on a busy machine and passed alone; if it does again, the sizes and whether the
+  // full list had the file say whether the listing or the classification is at fault.
+  const self = "tests/run_node_tests_fast.test.mjs";
+  assert.ok(fast.includes(self), `fast run keeps this guard (fast ${fast.length} suites, full ${full.length}, full has it: ${full.includes(self)})`);
   assert.ok(fast.length < full.length);
   for (const file of fast) assert.ok(full.includes(file), `${file} is a real suite`);
 });
