@@ -1,13 +1,14 @@
 // Local evidence about Studio's models, separate from published catalog claims.
 (function () {
   "use strict";
-  const state = { initialized: false, view: "rankings", snapshot: null, read: 0, contextRead: 0, taskRead: 0, types: new Set(), tasks: [], at: 0 };
+  const state = { initialized: false, view: "rankings", snapshot: null, read: 0, contextRead: 0, taskRead: 0, types: new Set(), typesKey: "", tasks: [], at: 0 };
   const $ = (id) => document.getElementById(`model-lab-${id}`);
   const api = () => window.mefiStudio;
   const rows = (value) => Array.isArray(value) ? value : [];
   const finite = (value) => typeof value === "number" && Number.isFinite(value);
   const number = (value, digits = 0) => finite(value) ? value.toLocaleString("en-US", { maximumFractionDigits: digits }) : "Unknown";
   const duration = (value) => finite(value) ? value < 1000 ? `${number(value)} ms` : `${number(value / 1000, 1)} s` : "Unmeasured";
+  const callCount = (value) => `${number(value)} ${value === 1 ? "call" : "calls"}`;
   const money = (value) => finite(value) ? `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: value < 0.01 ? 6 : 4 })}` : "Unknown";
   // Each view names what it measures; one shared line read the same on three pages.
   const LEDES = {
@@ -41,20 +42,84 @@
     if (!((value?.wins || 0) + (value?.losses || 0))) return value?.unsettled > 0 ? `${number(value.unsettled)} awaiting verification` : "No verified tasks";
     return `${number(value.wins)} won / ${number(value.losses)} lost${finite(value.winProbability) ? ` · ${number(value.winProbability * 100)}% win chance` : ""}`;
   }
+  // A header is a title, or [title, class] when its column needs one (the
+  // leaderboard's columns carry their class onto every cell).
   function table(headers, entries, rowOf) {
     const node = element("table", "lab-table");
     const head = element("thead");
     const headRow = element("tr");
-    for (const title of headers) { const th = element("th", "", title); th.scope = "col"; headRow.append(th); }
+    const columns = headers.map((header) => (Array.isArray(header) ? header : [header, ""]));
+    for (const [title, className] of columns) { const th = element("th", className, title); th.scope = "col"; headRow.append(th); }
     head.append(headRow);
     const body = element("tbody");
     entries.forEach((entry) => {
       const tr = element("tr");
-      for (const value of rowOf(entry)) { const cell = element("td"); cell.append(typeof value === "object" ? value : element("span", "", String(value))); tr.append(cell); }
+      rowOf(entry).forEach((value, index) => { const cell = element("td", columns[index]?.[1] || ""); cell.append(typeof value === "object" ? value : element("span", "", String(value))); tr.append(cell); });
       body.append(tr);
     });
     node.append(head, body);
     return node;
+  }
+  // A thin inline bar: zero at the left, its share of the column's scale as
+  // its length. It repeats the number beside it, so screen readers skip it;
+  // the style attribute keeps it one write.
+  function bar(fraction, tone = "") {
+    const node = element("span", tone ? `lab-bar ${tone}` : "lab-bar");
+    node.setAttribute("aria-hidden", "true");
+    node.setAttribute("style", `--v:${(Math.max(0, Math.min(1, fraction)) * 100).toFixed(1)}%`);
+    node.append(element("i"));
+    return node;
+  }
+  // A leaderboard cell: the value, its bar when it has a scale, a quiet note.
+  function metric(text, fraction = null, { tone = "", note = "", quiet = false } = {}) {
+    const cell = element("div", quiet ? "lab-metric is-quiet" : "lab-metric");
+    cell.append(element("span", "lab-metric-value", text));
+    if (finite(fraction)) cell.append(bar(fraction, tone));
+    if (note) cell.append(element("small", "", note));
+    return cell;
+  }
+  function rankCell(model) {
+    if (model.rank == null || !finite(model.score)) return element("span", "lab-rank is-unranked", "—");
+    return element("span", model.rank <= 3 ? "lab-rank is-top" : "lab-rank", `#${model.rank}`);
+  }
+  // Speed leads with output tokens per second (longer bar, faster model) and
+  // keeps the median response time beside it; without token counts the
+  // response time stands alone.
+  function speedCell(model, fastest) {
+    const median = model.latencyMs?.count ? `${duration(model.latencyMs?.p50)} median` : duration(model.latencyMs?.p50);
+    if (finite(model.throughput?.p50)) return metric(`${number(model.throughput.p50, 1)} tokens/s`, fastest > 0 ? model.throughput.p50 / fastest : null, { note: `${median} response` });
+    return metric(median, null, { quiet: !finite(model.latencyMs?.p50), note: model.samples > 0 ? "Output speed unmeasured" : "" });
+  }
+  function costCell(model, dearest) {
+    if (model.costUsd?.count > 0 && finite(model.costUsd.mean)) {
+      const unreported = Number(model.usage?.costUsd?.unknownRecords) || 0;
+      return metric(money(model.costUsd.mean), dearest > 0 ? model.costUsd.mean / dearest : null, { note: unreported ? `${callCount(unreported)} unreported` : "per call" });
+    }
+    return model.samples > 0 ? metric("Unknown", null, { quiet: true, note: "Not reported by the provider" }) : metric("Unmeasured", null, { quiet: true });
+  }
+  function errorsCell(model) {
+    if (!(model.samples > 0)) return metric("Unmeasured", null, { quiet: true });
+    if (!finite(model.errorRate)) return metric(`${number(model.errors)} / ${number(model.samples)}`, null, { note: "No finished calls" });
+    return metric(`${number(model.errorRate * 100, 1)}%`, model.errorRate, { tone: model.errors ? "is-bad" : "", note: `${number(model.errors)} of ${callCount(model.samples)} failed` });
+  }
+  function ratingCell(value, tone = "") {
+    return value?.count > 0 && finite(value.mean) ? metric(quality(value), value.mean / 5, { tone }) : metric(quality(value), null, { quiet: true });
+  }
+  // Your ratings and a model judge's, one line each and never averaged.
+  function ratingsCell(model) {
+    const cell = element("div", "lab-ratings");
+    for (const [who, value, tone] of [["You", model.quality?.human, ""], ["Model", model.quality?.model, "is-judge"]]) {
+      const line = element("div", "lab-rating-line");
+      line.append(element("span", "lab-rating-who", who), ratingCell(value, tone));
+      cell.append(line);
+    }
+    return cell;
+  }
+  // Verified task wins, with the win chance as the bar; nothing verified yet
+  // reads as a quiet line.
+  function winsCell(model) {
+    if (!((model.wins || 0) + (model.losses || 0))) return metric(verdicts(model), null, { quiet: true });
+    return metric(`${number(model.wins)} won / ${number(model.losses)} lost`, finite(model.winProbability) ? model.winProbability : null, { note: finite(model.winProbability) ? `${number(model.winProbability * 100)}% win chance` : "" });
   }
   function modelName(model) {
     const cell = element("div", "lab-model-name");
@@ -68,27 +133,81 @@
     }
     return cell;
   }
+  // The KPI row. Before the first call each tile says what will fill it
+  // instead of showing a row of zeros.
   function renderSummary(snapshot) {
+    const totals = $("summary"); if (!totals) return;
     const models = rows(snapshot.models);
-    const totals = $("summary"); totals.replaceChildren();
-    const stats = [["Recorded calls", number(finite(snapshot.calls) ? snapshot.calls : models.reduce((sum, model) => sum + (model.samples || 0), 0))], ["Models observed", number(models.filter((model) => model.samples > 0).length)], ["Errors recorded", number(models.reduce((sum, model) => sum + (model.errors || 0), 0))]];
-    for (const [label, value] of stats) { const card = element("div", "lab-stat"); card.append(element("span", "", label), element("strong", "", value)); totals.append(card); }
+    const calls = finite(snapshot.calls) ? snapshot.calls : models.reduce((sum, model) => sum + (model.samples || 0), 0);
+    const observed = models.filter((model) => model.samples > 0);
+    const ranked = observed.filter((model) => model.rank != null).length;
+    const errors = models.reduce((sum, model) => sum + (model.errors || 0), 0);
+    const finished = models.reduce((sum, model) => sum + (model.successes || 0) + (model.errors || 0), 0);
+    // The ledger's own median: the lower middle of the recent successful calls.
+    const times = rows(snapshot.recent).filter((call) => ["ok", "success"].includes(call.status) && finite(call.elapsedMs)).map((call) => call.elapsedMs).sort((a, b) => a - b);
+    const median = times.length ? times[Math.ceil(times.length / 2) - 1] : null;
+    const cost = snapshot.usage?.costUsd;
+    const unreported = Math.max(0, Number(cost?.unknownRecords) || 0);
+    const since = new Date(snapshot.range?.from ?? NaN);
+    const tiles = calls > 0 ? [
+      ["Recorded calls", number(calls), Number.isFinite(since.getTime()) ? `since ${since.toLocaleDateString(undefined, { month: "short", day: "numeric" })}` : "on this computer"],
+      ["Models observed", number(observed.length), ranked ? `${number(ranked)} ranked` : "none ranked yet"],
+      ["Error rate", finished ? `${number((errors / finished) * 100, 1)}%` : "—", finished ? `${number(errors)} of ${number(finished)} finished calls` : "no finished calls yet", finished ? errors / finished : null],
+      ["Median response", median !== null ? duration(median) : "—", median !== null ? `last ${callCount(times.length)} that succeeded` : "no successful calls yet"],
+      ["Recorded cost", cost && finite(cost.known) ? money(cost.known) : "Unknown", unreported ? `${callCount(unreported)} did not report cost` : `across ${callCount(calls)}`],
+    ] : [
+      ["Recorded calls", "No calls yet", "Studio counts every model call it makes"],
+      ["Models observed", "None yet", "A model appears after its first call"],
+      ["Error rate", "—", "Nothing to count yet"],
+      ["Median response", "—", "Measured on successful calls"],
+      ["Recorded cost", "—", "Counted when a provider reports it"],
+    ];
+    totals.dataset.empty = String(!(calls > 0));
+    totals.replaceChildren(...tiles.map(([label, value, note, share]) => {
+      const tile = element("div", calls > 0 && value !== "—" ? "lab-stat" : "lab-stat is-empty");
+      tile.append(element("span", "", label), element("strong", "", value), element("small", "", note));
+      if (finite(share)) tile.append(bar(share, errors ? "is-bad" : ""));
+      return tile;
+    }));
+  }
+  // Before any call is measured, one card says how the leaderboard fills in.
+  function emptyRanking(target) {
+    const box = element("div", "lab-empty lab-empty-ranking");
+    const art = element("span", "lab-empty-art"); art.setAttribute("aria-hidden", "true"); art.append(element("i"), element("i"), element("i"));
+    const text = element("div", "lab-empty-text");
+    const steps = element("ol", "lab-steps");
+    for (const [title, detail] of [
+      ["Use a model", "Chats, plans and builds record each call's response time, cost and errors on this computer."],
+      ["Rate what you reviewed", "Score finished results under Rate recent work. Your score stays separate from model judging."],
+      ["See the ranking", "Measured models are ranked on the same evidence. Anything not measured stays unknown."],
+    ]) { const step = element("li"); step.append(element("strong", "", title), element("span", "", detail)); steps.append(step); }
+    text.append(element("h3", "", "Your results will build the ranking"), element("p", "", "Studio has no measured calls for this selection yet. Unmeasured models are not treated as fast, free, or reliable."), steps);
+    box.append(art, text);
+    target.replaceChildren(box);
   }
   function renderRankings(snapshot) {
     const models = rows(snapshot.models);
     const target = $("ranking-list");
-    if (!models.some((model) => model.samples > 0)) empty(target, "Your results will build the ranking", "Studio has no measured calls for this selection yet. Unmeasured models are not treated as fast, free, or reliable.");
-    else target.replaceChildren(table(["Model", "Rank / score", "Response time", "Output speed", "Cost / call", "Errors", "Task wins", "Your quality", "Model judged"], models, (model) => [
-      modelName(model), model.rank != null && finite(model.score) ? `#${model.rank} · ${number(model.score, 1)} / 100` : "Not ranked",
-      `${duration(model.latencyMs?.p50)}${model.latencyMs?.count ? " median" : ""}`,
-      finite(model.throughput?.p50) ? `${number(model.throughput.p50, 1)} tokens/s` : "Unmeasured",
-      model.costUsd?.count > 0 ? money(model.costUsd.mean) : model.samples > 0 ? "Unknown" : "Unmeasured",
-      model.samples > 0 ? `${number(model.errors)} / ${number(model.samples)}${finite(model.errorRate) ? ` · ${number(model.errorRate * 100, 1)}%` : ""}` : "Unmeasured",
-      verdicts(model), quality(model.quality?.human), quality(model.quality?.model),
-    ]));
+    const measured = models.some((model) => model.samples > 0);
+    if (!measured) emptyRanking(target);
+    else {
+      // Bars share one scale per column: the fastest output speed and the
+      // highest cost per call are full length; errors and ratings use their
+      // own fixed ranges (0-100%, 0-5).
+      const fastest = Math.max(0, ...models.map((model) => (finite(model.throughput?.p50) ? model.throughput.p50 : 0)));
+      const dearest = Math.max(0, ...models.map((model) => (model.costUsd?.count > 0 && finite(model.costUsd.mean) ? model.costUsd.mean : 0)));
+      const col = "lab-col-metric";
+      target.replaceChildren(table([["Rank", "lab-col-rank"], ["Model", "lab-col-model"], ["Score", col], ["Speed", col], ["Cost / call", col], ["Errors", col], ["Task wins", col], ["Ratings", "lab-col-ratings"]], models, (model) => [
+        rankCell(model), modelName(model),
+        model.rank != null && finite(model.score) ? metric(`${number(model.score, 1)} / 100`, model.score / 100) : metric("Not ranked", null, { quiet: true }),
+        speedCell(model, fastest), costCell(model, dearest), errorsCell(model), winsCell(model), ratingsCell(model),
+      ]));
+    }
     const notes = rows(snapshot.ranking?.notes).filter((note) => typeof note === "string");
     const metrics = rows(snapshot.ranking?.metrics).map((key) => key === "speed" ? "response time" : key === "quality" ? `${snapshot.ranking.qualitySource || "human"} ratings` : key);
     $("ranking-notes").textContent = `${metrics.length ? `Rank uses ${metrics.join(", ")}. ` : ""}${notes.join(" ") || "Rank reflects available evidence. Human and model ratings stay separate; missing measurements remain unknown."}`;
+    // The empty card already explains the ranking; the footnote waits for rows.
+    $("ranking-notes").hidden = !measured;
     renderRecent(snapshot);
   }
   // Once calls exist, a value they did not report reads "Unknown". Before the
@@ -119,6 +238,13 @@
   function renderRecent(snapshot) {
     const target = $("recent"); target.replaceChildren();
     const recent = rows(snapshot.recent).filter((call) => ["success", "ok"].includes(call.status)).slice(0, 12);
+    // The fold's heading says how much is waiting, so it can stay folded.
+    const count = $("rate-count");
+    if (count) {
+      const unrated = recent.filter((call) => !rows(call.ratings?.human).length).length;
+      count.hidden = !recent.length;
+      count.textContent = !recent.length ? "" : unrated ? `${number(unrated)} to rate` : "All rated";
+    }
     if (!recent.length) { empty(target, "No completed results to rate", "Rate successful work after reviewing the result in its conversation or task."); return; }
     for (const call of recent) {
       const card = element("form", "lab-rating-row");
@@ -156,6 +282,27 @@
     const first = element("option", "", "All task types"); first.value = ""; filter.replaceChildren(first);
     for (const type of [...state.types].sort()) { const option = element("option", "", type); option.value = type; filter.append(option); }
     filter.value = selected;
+    paintTypes();
+  }
+  // The task types as a row of pressed buttons over the hidden select. The
+  // row is rebuilt only when the set of types changes, so a click keeps focus.
+  const typeLabel = (type) => { const text = String(type).replace(/[-_]+/g, " "); return text.charAt(0).toUpperCase() + text.slice(1); };
+  function paintTypes() {
+    const group = $("task-types"), filter = $("task-type");
+    if (!group || !filter) return;
+    const types = [...state.types].sort();
+    const key = JSON.stringify(types);
+    if (state.typesKey !== key) {
+      state.typesKey = key;
+      const choice = (value, label) => {
+        const button = element("button", "", label); button.type = "button"; button.dataset.value = value;
+        button.addEventListener("click", () => { if (filter.value === value) return; filter.value = value; paintTypes(); refresh(); });
+        return button;
+      };
+      group.replaceChildren(choice("", "All"), ...types.map((type) => choice(type, typeLabel(type))));
+    }
+    for (const button of Array.from(group.children || [])) button.setAttribute("aria-pressed", String((button.dataset?.value ?? "") === filter.value));
+    if ($("task-filter")) $("task-filter").hidden = !types.length;
   }
   async function refresh() {
     if (!state.initialized) return;
@@ -277,7 +424,7 @@
         $(accounts ? "accounts" : "recorded")?.focus();
       });
     }
-    $("task-type").addEventListener("change", refresh);
+    $("task-type").addEventListener("change", () => { paintTypes(); refresh(); });
     $("context-refresh").addEventListener("click", previewContext);
     $("context-task").addEventListener("change", previewContext);
     $("context-budget").addEventListener("change", previewContext);
@@ -286,7 +433,7 @@
       // A read cut off by this switch no longer owns the button (its finally
       // checks the token just bumped), so it is released here.
       $("refresh").disabled = false;
-      $("task-type").value = "";
+      $("task-type").value = ""; paintTypes();
       $("context-task").value = ""; $("context-sections").replaceChildren();
       if (!document.getElementById("tab-graph")?.hidden) { refresh(); if (state.view === "context") show("context"); }
     });

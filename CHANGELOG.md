@@ -7,6 +7,12 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Models › Catalog and Performance get a face lift.** The catalog is one
+  aligned table under a sticky toolbar whose column names sort it, with a
+  quality bar per row, four picks (top quality, best value, biggest context,
+  newest) and the plan in one quiet line; Performance leads with KPI tiles, a
+  leaderboard with inline bars, a task type switch and one card explaining how
+  rankings fill in.
 - **Security fixes for remote approvals, catalogs and sharing.** Work filed
   from Discord retains its approval requirement through task admission and
   promotion. Concurrent PIN attempts count toward one lockout and approval

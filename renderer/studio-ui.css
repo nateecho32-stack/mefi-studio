@@ -177,7 +177,7 @@ html[data-studio-style] :is(.sheet, .explorer-sheet, .brains-sheet, .agent-brain
   background: var(--studio-wash), var(--studio-sheen), var(--studio-panel-bg);
   border-color: var(--studio-glass-edge); box-shadow: var(--studio-glass-shadow); backdrop-filter: var(--studio-glass-blur);
 }
-html[data-studio-style] :is(.panel, .card, .plan-strip, .settings-card, .agents-card, .agents-model-row, .task-overview-card, .lab-usage-card, .tracker-section, .ws-workflow, .ws-idea-card, .ws-backlog, .ws-dash-tile) {
+html[data-studio-style] :is(.panel, .card, .settings-card, .agents-card, .agents-model-row, .task-overview-card, .lab-usage-card, .tracker-section, .ws-workflow, .ws-idea-card, .ws-backlog, .ws-dash-tile) {
   background: var(--studio-sheen), var(--studio-panel-bg);
   border-color: var(--studio-glass-edge); box-shadow: var(--studio-glass-shadow);
   border-radius: var(--r-lg);
