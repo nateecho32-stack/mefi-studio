@@ -301,6 +301,7 @@ imports. See [Unified Studio](unified-studio.md) for the interfaces and fixture 
 | `composer-pictures.js` / `.css` · `composer-picker.js` / `.css` | 193 · 28 · 310 · 23 | Home's message box: `window.MefiComposerPictures` (Attach picture, paste, drop, thumbnails and the note about what the model can see) and `window.MefiComposerPicker` (typing `@` offers files, `#` tasks and `/` skills in a popup that answers the keyboard first, with chips for what a message points at). Bundled after `startup.js` and before `workspace.js`, which they attach to. |
 | `size.js` / `size.css` | 711 · 259 | `window.MefiSize` (layout v2 only): Size and density. The model for interface scale, text size (`--text-scale`), density (`data-density`, now with Spacious) and detail (`data-detail`), saved in the appearance store (`mefiStudio.appearance`, version 2, old reader and a backup kept); the page (Configuration › UI & Surfaces, Search, Settings › Appearance) with four controls, a read-only Panels table and a live miniature drawn from the same tokens under its own scope, so the window changes only on Apply (with Undo). The stylesheet defines the `--d-*` density tokens, the detail tokens and the `--f12`…`--f22` type ladder the new regions size themselves with. With the layout off it does nothing. Bundled after `config-dialog.js`. |
 | `skills.js` / `skills.css` | 459 · 64 | `window.MefiSkills`: Agents › Setup › Skills (`skills`; also in Search): the skills the project keeps, an editor with live checks, starters, import from a folder, export as a folder or zip, delete behind a second press, and a read-only state; other tools' skills are listed read-only. Bundled after `review.js`. |
+| `shell.js` / `shell.css` | 1,319 · 256 | `window.MefiShell`: the 0.5 layout's frame (`html[data-layout="v2"]`, off by default). The top bar sits in the local navigation's row: list toggle, Vibe | Build switch (Ctrl M), trail, Search, "N need you", "N working" with pause, inspector toggle. List and inspector columns have splitters (drag, arrows, double-click reset) and, in small windows, drawers. A tab strip row, a `main` host and a status bar (Layout menu, running, waiting, usage meters, player, permission mode and today's cost, only with data). Each mode keeps its own widths in `mefiStudio.shell.layout.v1`. Modules put content in regions with `mount(region, key, elementOrFactory, {title, order})`. Also the way in: the Settings switch "Try the 0.5 layout", Search's "Switch layout" and `MEFI_STUDIO_LAYOUT`. Bundled after `skills.js`. |
 | `alerts.js` · `report.js` · `whats-new.js` · `host-cards.css` | 182 · 207 · 196 · 72 | What the host tells you, in Studio: Settings › General › Notifications (switches, quiet hours, generic or titled words, a test button) and the click routing for `alerts:open`; the Report a problem card in Diagnostics (preview every file, Save zip) with the "Studio closed unexpectedly" toast; the "Studio updated to X" toast, its What's new sheet and the list in Settings › Updates. Each waits for the startup gate. One stylesheet is shared. Bundled after `pc-vault.js`. |
 | `worktrees.js` / `worktrees.css` | 344 · 63 | `window.MefiWorktrees`: Work › Worktrees (`worktrees`), every git worktree of the open project, worst first, with what to do about each: which hold work only this PC has, which are on GitHub but not merged, which are merged and safe to remove. Open folder, Merge into main (a second step offers a merge commit when main has moved, or "Merge anyway" while agents work), Remove (two presses; a folder holding uncommitted files asks once more and keeps a copy) and Forget missing folders; the switch under the title turns per-run worktrees on. A run's row names its task and is left alone while the run works. It reads on open, every 15 s while shown, on focus and when a run starts or ends, and skips a repaint that would change nothing. `peek()`/`summary()` feed other surfaces. |
 | `builder.js` / `builder.css` | 1,356 · 343 | `window.MefiBuilder`: Build's Home as a coding-agent desktop (`html[data-home-layout="sessions"]`; Search › Switch Home layout, off by default). The menu lists this project's tasks like sessions (Chat with Mefi, Pinned, Needs you, Working, then by day); the page opens on a greeting card with work stats (tasks, runs, tokens, active days, peak hour, top model, a 22-week heat map) over the composer, with chips for the project, its branch, the permission mode, the coding worker and Worktree; a task opens as a session with its brief, runs, checks and a Note / Ask / Change composer. A task whose run has its own worktree wears a branch mark (from `MefiWorktrees`). `workspace.js` still owns Home's data and host calls. |
@@ -357,7 +358,7 @@ commit rewrites the JSON view as well.
 
 ## Tests and tools
 
-- **`tests/*.test.mjs`** (479 files) run on Node's own `node:test` and
+- **`tests/*.test.mjs`** (486 files) run on Node's own `node:test` and
   `node:assert/strict`, with no test dependencies. `scripts/run-node-tests.mjs`
   is the runner; `npm run test:fast` skips the real-Electron suites and the
   Python stage.
@@ -415,6 +416,16 @@ commit rewrites the JSON view as well.
   `fixtures/today-render-electron.cjs` (real Chromium at five window sizes with
   the backdrop visible, real Tab order and pointer, answers through a stateful
   fake bridge, light and dark contrast, v1 untouched).
+- **The 0.5 frame** is pinned by `shell_frame_state.test.mjs` (regions built once
+  and removable, presets and per-mode persistence, clamps asked through the layout
+  contract, drawers, keys), `shell_frame_bars.test.mjs` (top bar, pills, feed, the
+  inbox chain, status bar and Layout menu), `shell_frame_splitters.test.mjs`,
+  `shell_frame_wiring.test.mjs` (v2 off touches nothing, the way in, the exact
+  `MefiShell` surface, every CSS rule scoped to `html[data-frame]`),
+  `shell_frame_css.test.mjs`, `usage_tracker_brief.test.mjs` and
+  `shell_render.test.mjs` with `fixtures/shell-render-electron.cjs` and
+  `fixtures/shell-vm.mjs` (real Chromium at five window sizes, both modes, real
+  key and pointer events, drawers at 600x560).
 - **The fleet** is pinned by `fleet.test.mjs` (the reducer: seat continuity on a
   retry, wires, health, bounded reload, no prompts or paths in a snapshot),
   `fleet_host.test.mjs` (pushes only while watched, one trailing push per half

@@ -41,6 +41,23 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   Ctrl J, or as a page.
 - **Clicking a Windows notification opens the task it was about, or the Inbox when
   it told you about several things (new layout only).**
+- **A new, optional 0.5 layout, with a bar, a list, an inspector and a status bar
+  around every page (classic stays the default).** Turn it on in Settings ("Try
+  the 0.5 layout") or with Search ("Switch layout: 0.5 or classic"); Studio
+  reloads to switch. `MEFI_STUDIO_LAYOUT=v2` opens Studio in it for one launch, and
+  `MEFI_STUDIO_LAYOUT=v1` forces the classic layout whatever was saved.
+- **The 0.5 layout's top bar** has a list toggle, a Vibe | Build switch (Ctrl M),
+  where you are, Search, how many things need you, how much is working with a
+  pause button, and an inspector toggle.
+- **The 0.5 layout's status bar** has a Layout menu (list, inspector and tab strip
+  switches, each mode's widths, Reset layout with Undo, Size and density), what is
+  running and what waits on you. When Studio has them it also shows usage meters,
+  the player, the permission mode and today's cost.
+- **Resize the list and the inspector by dragging their edge, with the arrow keys
+  (Shift for bigger steps, Home and End for the ends), or by double-clicking to
+  reset (new layout only).** Vibe and Build each remember their own layout. Ctrl B
+  shows or hides the list, and [ the inspector. In a small window they open as
+  drawers over the page and close on Esc or a click outside.
 - **Build's Home can list your tasks like sessions, in a coding-agent desktop
   layout (off by default).** Search › Switch Home layout turns it on. The menu
   lists this project's tasks the way the Claude Code and Codex desktop apps list

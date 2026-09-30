@@ -238,7 +238,7 @@ export async function build({ root = ROOT } = {}) {
     // otherwise end the data block and run as renderer script. JSON.parse
     // reads < back as "<"; a plain "<= 200K" is left as it was.
     .replace("__BOOKLET_DATA__", () => catalog.trim().replace(/<(?=\/|!--)/g, "\\u003c"))
-    .replace("__BOOKLET_STYLES__", () => `${styles}\n${musicStyles}\n${planningStyles}\n${brainStyles}\n${profilerStyles}\n${traceStyles}\n${fleetStyles}\n${configStyles}\n${hostCardsStyles}\n${agentBrainStyles}\n${agentsStyles}\n${companionStyles}\n${studioUiStyles}\n${companionHubStyles}\n${vibeStyles}\n${todayStyles}\n${setupHelperStyles}\n${gitSyncStyles}\n${builderStyles}\n${composerPicturesStyles}\n${composerPickerStyles}\n${worktreesStyles}\n${reviewStyles}\n${skillsStyles}\n${shellStyles}`)\n${skillsStyles}\n${sizeStyles}`)
+    .replace("__BOOKLET_STYLES__", () => `${styles}\n${musicStyles}\n${planningStyles}\n${brainStyles}\n${profilerStyles}\n${traceStyles}\n${fleetStyles}\n${configStyles}\n${hostCardsStyles}\n${agentBrainStyles}\n${agentsStyles}\n${companionStyles}\n${studioUiStyles}\n${companionHubStyles}\n${vibeStyles}\n${todayStyles}\n${setupHelperStyles}\n${gitSyncStyles}\n${builderStyles}\n${composerPicturesStyles}\n${composerPickerStyles}\n${worktreesStyles}\n${reviewStyles}\n${skillsStyles}\n${sizeStyles}\n${shellStyles}`)
     .replace("__BOOKLET_CODE__", () => code);
 
   const out = path.join(RENDERER, "booklet.html");
