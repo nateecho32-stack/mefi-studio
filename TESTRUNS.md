@@ -35,6 +35,48 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-29 - 0.4.5 release gate (main as it is, the rebrand)
+
+Gated in an isolated worktree (`C:\wt\rel`, GitHub main `2f0488b` plus two
+commits: `77a3895` the release fixes and `c36279f` the changelog cut, release
+notes, README/public docs, SECURITY data flows and handoff), because the
+shared checkout held other sessions' unfinished edits. The release commit adds
+no renderer code, so the booklet is the one main already carried.
+
+- What the two commits change in code: the `tests/remote_host.test.mjs`
+  fixture project "Ruins Runner" became "Quillfold" (the outbound scrubber
+  turns the CI user name `runner` into "[this PC]", which had kept Linux CI red
+  on every push since the Discord remote landed; checked with the real
+  `share-review` scrub), the zip no longer copies Electron's `debug.log`, the
+  release is titled "Mefi Studio", and `tests/update_apply_launch.test.mjs` pins
+  the update helper's `start` launch that v0.4.4 lacked.
+- `npm run build-booklet` then `git diff --exit-code renderer/booklet.html`:
+  identical. `npm run check` and `npm run audit` (0 findings): PASS.
+- `npm test` on that tree (8.6 min): Node parallel stage 4478 tests (4473
+  pass, 5 skipped, 0 fail), Python contracts 248 OK (1 skipped), normalized-path
+  lock PASS. Electron stage 41: 39 pass, 1 skipped, 1 fail:
+  `media_window_render` ("Media keeps its window controls reachable"), a hit-test
+  list at 600 px (`hits` began with the music iframe) after 20 s. Solo it passed
+  twice (45 s, 47 s). `command_render` passed at 49.7 s.
+- An earlier gate of the same content on `ba5a1ea` (before the rebase onto
+  `2f0488b`) failed `command_render` once in the full run ("Command task pixels
+  must be painted", 4 s) and three times solo ("Assistant narrow: pointer
+  reaches the switch track"), all while another session was running Electron
+  captures on this laptop (2.4 GB of 13.8 GB free, 56% CPU while idle). It then
+  passed six times in a row in this tree and in fresh checkouts of clean
+  `60c4abb`, `ba5a1ea`, `2f0488b` and of the release commit itself (54-62 s).
+  Same class as the known-flaky rows: a pointer or hit-test assertion that is
+  right when the machine is quiet and wrong when a sibling Electron process
+  starves the window's paint. Neither fixture was changed.
+- Restored-work spot check (the lesson of v0.4.4, which shipped without work a
+  bad merge dropped): `renderer/config-dialog.js`, `renderer/setup-helper.js`,
+  `scripts/habits.cjs`, `scripts/cowork.cjs`, `scripts/cli-accounts.cjs`,
+  `scripts/pc-setup.cjs`, `scripts/pc-vault.cjs`, `scripts/share-review.cjs` and
+  `scripts/remote.cjs` are all in the tree.
+- Not exercised: a live in-app update (the fix is only proven in a scratch
+  simulation and by the launch pin above), and `release.yml` on a hosted runner
+  (it has failed at the Electron fixtures on v0.4.0, v0.4.3 and v0.4.4).
+
 ## 2026-09-29 - GitHub link: the Git chip, Save and push, Publish and the Quiet-card launch screen
 
 The chip (`renderer/git-sync.js`), its host (`scripts/git-link.cjs`,
@@ -701,34 +743,6 @@ reorganized.
   skipped. `command_render` serialized 1/1 in 49.8 s (no cold-boot retry).
   `eyes_toggle_electron` 1/1, `occlusion_probe` 2/2. Python contracts OK
   (248, 1 skip). Normalized-path lock passed.
-
-## 2026-09-28 - Sync counts only real local work; vault calls take turns
-
-Follow-ups from the Plan session's review. sync.mjs recounts a non-empty
-status from the diffs and untracked files (a line-ending-only difference
-is not uncommitted work), skips local branches whose commits are all on
-some GitHub branch, and runs Git with GIT_OPTIONAL_LOCKS=0. The vault runs
-one call at a time, resets only when a rebase stopped on unmerged paths and
-names the changes a clash dropped, keeps insights, learned and settings per
-PC (older shared files still read), and removes its folder after a failed
-pair or create (create carries on with an empty private repository). The
-renderer saves the previewed share and keeps Send, Use and the lists on
-the shelf they were read from.
-
-- `npm run build-booklet` (renderer/booklet.html rebuilt), `npm run check`
-  (187 targets, 385 specs) and `npm run audit` (zero findings): PASS.
-- New suites: sync_changes (5), pc_vault_turns (9; 8 fail on the old
-  pc-vault.cjs) and pc_vault_ui_turns (3; all fail on the old renderer).
-  sync.test.mjs's stranded-work fixture builds `published` from main so
-  `local-only` keeps a commit of its own.
-- `npm test` in a private worktree, exit 0: Node parallel stage 4290 tests,
-  4285 passed, 5 skipped, 0 failures; Electron stage 42 tests, 41 passed, 1
-  skipped; `eyes_toggle_electron` 1/1; `occlusion_probe` 1 passed, 1
-  capability skip; Python contracts OK (248); normalized-path lock passed.
-- Rebased onto the multi-login commits (07150aa, 732026f): CHANGELOG kept
-  both entries, booklet rebuilt; `npm run check` (188 targets, 387 specs),
-  `npm run audit` and the sync, vault, booklet, setup-helper and
-  cli_accounts suites (107 tests) pass on the combined tree.
 
 ## Read Before Any Tests
 

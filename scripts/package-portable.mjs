@@ -88,6 +88,8 @@ async function placeExecutable(from, to) {
 async function copyRuntime(source, target) {
   await mkdir(target, { recursive: true });
   for (const entry of await readdir(source, { withFileTypes: true })) {
+    // electron's own debug.log names the builder's user folder; never ship it
+    if (source === ELECTRON_DIST && entry.name === "debug.log") continue;
     const from = path.join(source, entry.name);
     const executable = source === ELECTRON_DIST && entry.name === "electron.exe";
     const to = path.join(target, executable ? EXE_NAME : entry.name);
