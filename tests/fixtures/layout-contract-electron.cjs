@@ -61,8 +61,8 @@ process.on("uncaughtException", finish); process.on("unhandledRejection", finish
 // person would have. 600x560 at 150% is about 400 CSS px, the smallest window.
 const SIZES = [[1920, 1080, 1], [1440, 900, 1], [1100, 720, 1], [600, 560, 1.5]];
 const MODES = ["build", "vibe"];
-// Pages added after the base commit the record was made on (996db71): Skills came with the Skills page, Size with Size and density.
-const ADDED_SINCE_RECORD = ["skills", "size"];
+// Pages added after the base commit the record was made on (996db71) that v1 opens: Skills came with the Skills page. (Size and density registers its page in v2 only, so v1 has nothing of it to compare.)
+const ADDED_SINCE_RECORD = ["skills"];
 const RAILS = ["closed", "pinned"];
 const sizeLabel = ([width, height, zoom]) => `${width}x${height}@${zoom}`;
 
