@@ -212,7 +212,7 @@ class MefiStudioRoutingTests(unittest.TestCase):
         self.assertIn("AI_AUTO_PROVIDERS.includes(id)", normalize)
         self.assertIn("!order.includes(id)", normalize)
         self.assertIn('["zai", "opencode"]', normalize)
-        self.assertIn('AI_AUTO_PROVIDERS = ["zai", "opencode", "zen", "openrouter", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"]', self.main)
+        self.assertIn('AI_AUTO_PROVIDERS = ["zai", "opencode", "zen", "openrouter", "grok", "claude", "codex", "chatgpt", "antigravity", "lmstudio", "custom"]', self.main)
         # The opt-in fallback switch generalized: aiAutoFallback first, the
         # older aiFallbackOpenCode field honored for settings already written.
         fallback = _function_body(self.main, "autoFallbackEnabled")
@@ -305,7 +305,7 @@ class MefiStudioRoutingTests(unittest.TestCase):
         self.assertIn('mkdtemp(path.join(tempRoot, "mefi-text-"))', self.cli_text, "text calls never run in the project directory")
         body = _function_body(self.main, "resolveAiRoute")
         self.assertIn('provider === "claude"', body, "the router returns the CLI route without a key")
-        self.assertRegex(self.main, r'AI_PROVIDERS = \["auto", "zai", "opencode", "zen", "openrouter", "grok", "claude", "codex", "antigravity",.*"lmstudio", "custom"\]')
+        self.assertRegex(self.main, r'AI_PROVIDERS = \["auto", "zai", "opencode", "zen", "openrouter", "grok", "claude", "codex", "chatgpt", "antigravity",.*"lmstudio", "custom"\]')
         fetch = _function_body(self.main, "assistantFetch")
         self.assertIn('route.provider === "grok" || route.provider === "claude"', fetch)
         # The CLI half is shared with the data-only callers (planning, brain
@@ -431,7 +431,7 @@ class MefiStudioRoutingTests(unittest.TestCase):
         self.assertTrue(override, "assistantModelOverride must exist")
         self.assertIn("settings.aiModelsByProvider", override)
         self.assertIn("SINGLE_MODEL_PROVIDERS.has(providerKey)", override)
-        self.assertIn('const SINGLE_MODEL_PROVIDERS = new Set(["openrouter", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"])', self.main)
+        self.assertIn('const SINGLE_MODEL_PROVIDERS = new Set(["openrouter", "grok", "claude", "codex", "chatgpt", "antigravity", "lmstudio", "custom"])', self.main)
         builder = _function_body(self.main, "executorModelOverride")
         self.assertTrue(builder, "executorModelOverride must exist")
         self.assertIn("settings.executorModels", builder)
