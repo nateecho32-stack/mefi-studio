@@ -11959,20 +11959,17 @@ function assistantUiContext(value) {
   return view || companion || mode ? { ...(view ? { view } : {}), ...(companion ? { companion } : {}), ...(mode ? { mode } : {}) } : null;
 }
 
-// A message longer than this is refused whole, not cut: the box that sent it keeps what was typed, so
-// nothing the owner wrote is silently dropped from the thread or from what the model reads.
-const ASSISTANT_MESSAGE_LIMIT = 16000;
-function assistantMessageTooLong(text) {
-  if (text.length <= ASSISTANT_MESSAGE_LIMIT) return null;
-  const say = (count) => count.toLocaleString("en-US");
-  return { ok: false, error: `That message is ${say(text.length)} characters and Mefi reads up to ${say(ASSISTANT_MESSAGE_LIMIT)} at once, so nothing was sent. Cut it down or send it in parts.`, limit: ASSISTANT_MESSAGE_LIMIT, length: text.length };
-}
-
 async function assistantMessage(raw, options = {}) {
   const text = String(raw ?? "").trim();
   if (!text) return { ok: false, error: "empty" };
-  const tooLong = assistantMessageTooLong(text);
-  if (tooLong) return tooLong;
+  // A message longer than this is refused whole, not cut: the box that sent it keeps what was typed, so
+  // nothing the owner wrote is silently dropped from the thread or from what the model reads. (Inline, so
+  // the vm suites that slice this function out of main.cjs need nothing else.)
+  const limit = 16000;
+  if (text.length > limit) {
+    const say = (count) => count.toLocaleString("en-US");
+    return { ok: false, error: `That message is ${say(text.length)} characters and Mefi reads up to ${say(limit)} at once, so nothing was sent. Cut it down or send it in parts.`, limit, length: text.length };
+  }
   await ensureAssistant();
   // The manner the owner chose for their companion rides every chat box's
   // message the same way (companion-pet.cjs; the model reads ui.personality).
