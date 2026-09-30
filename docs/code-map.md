@@ -298,6 +298,7 @@ imports. See [Unified Studio](unified-studio.md) for the interfaces and fixture 
 | `patch.js` | 173 | `window.MefiPatch.morph(host, source)`: a keyed DOM patcher, so a push never rebuilds what the person is using. Makes `host`'s children match an HTML string, element or fragment by changing only what differs: `data-key`/`id` nodes keep their identity through moves, a focused field keeps its draft (its value only follows the markup when the markup's own value moved), scroll and open `<details>` survive, `data-keep` players and frames are never touched inside and move with `Node.moveBefore`, script-owned attributes are listed in `data-mp-own`, and inline handlers, `javascript:` URLs, `srcdoc` and scripts are never copied over. Checked in a real renderer by `tests/patch_render.test.mjs`. |
 | `review.js` / `review.css` | 689 · 83 | The "Changes and checks" section of a task's Evidence tab (Tasks › a task › Evidence): Changed files (diff on demand, Accept changes, Revert file, Revert attempt behind a second press, Undo), Checks (advisory, never colour-only), Preview (Before / After) and the three switches under "What Studio keeps for each attempt". Polls every 6 s only while open and visible; the host pushes `review:changed`. Bundled after `tasks.js`. |
 | `composer-pictures.js` / `.css` · `composer-picker.js` / `.css` | 193 · 28 · 310 · 23 | Home's message box: `window.MefiComposerPictures` (Attach picture, paste, drop, thumbnails and the note about what the model can see) and `window.MefiComposerPicker` (typing `@` offers files, `#` tasks and `/` skills in a popup that answers the keyboard first, with chips for what a message points at). Bundled after `startup.js` and before `workspace.js`, which they attach to. |
+| `size.js` / `size.css` | 711 · 259 | `window.MefiSize` (layout v2 only): Size and density. The model for interface scale, text size (`--text-scale`), density (`data-density`, now with Spacious) and detail (`data-detail`), saved in the appearance store (`mefiStudio.appearance`, version 2, old reader and a backup kept); the page (Configuration › UI & Surfaces, Search, Settings › Appearance) with four controls, a read-only Panels table and a live miniature drawn from the same tokens under its own scope, so the window changes only on Apply (with Undo). The stylesheet defines the `--d-*` density tokens, the detail tokens and the `--f12`…`--f22` type ladder the new regions size themselves with. With the layout off it does nothing. Bundled after `config-dialog.js`. |
 | `skills.js` / `skills.css` | 459 · 64 | `window.MefiSkills`: Agents › Setup › Skills (`skills`; also in Search): the skills the project keeps, an editor with live checks, starters, import from a folder, export as a folder or zip, delete behind a second press, and a read-only state; other tools' skills are listed read-only. Bundled after `review.js`. |
 | `alerts.js` · `report.js` · `whats-new.js` · `host-cards.css` | 182 · 207 · 196 · 72 | What the host tells you, in Studio: Settings › General › Notifications (switches, quiet hours, generic or titled words, a test button) and the click routing for `alerts:open`; the Report a problem card in Diagnostics (preview every file, Save zip) with the "Studio closed unexpectedly" toast; the "Studio updated to X" toast, its What's new sheet and the list in Settings › Updates. Each waits for the startup gate. One stylesheet is shared. Bundled after `pc-vault.js`. |
 | `worktrees.js` / `worktrees.css` | 344 · 63 | `window.MefiWorktrees`: Work › Worktrees (`worktrees`), every git worktree of the open project, worst first, with what to do about each: which hold work only this PC has, which are on GitHub but not merged, which are merged and safe to remove. Open folder, Merge into main (a second step offers a merge commit when main has moved, or "Merge anyway" while agents work), Remove (two presses; a folder holding uncommitted files asks once more and keeps a copy) and Forget missing folders; the switch under the title turns per-run worktrees on. A run's row names its task and is left alone while the run works. It reads on open, every 15 s while shown, on focus and when a run starts or ends, and skips a repaint that would change nothing. `peek()`/`summary()` feed other surfaces. |
@@ -355,7 +356,7 @@ commit rewrites the JSON view as well.
 
 ## Tests and tools
 
-- **`tests/*.test.mjs`** (469 files) run on Node's own `node:test` and
+- **`tests/*.test.mjs`** (473 files) run on Node's own `node:test` and
   `node:assert/strict`, with no test dependencies. `scripts/run-node-tests.mjs`
   is the runner; `npm run test:fast` skips the real-Electron suites and the
   Python stage.
@@ -394,6 +395,13 @@ commit rewrites the JSON view as well.
   commit, then in v2 at eight window and mode combinations, with real pointer
   drags of the media window and the orb). `layout-contract-ledger.json` lists the
   74 declarations that moved.
+- **Size and density** is pinned by `size_model.test.mjs` (limits and steps, the
+  old stores, launch painting, Apply/Undo/Reset, broken storage, events),
+  `size_page.test.mjs` (the page and its miniature: every combination of the four
+  controls gives the miniature its own tokens and the root none until Apply),
+  `size_css.test.mjs` (the tokens, nothing under 12 px, no scroller gutters) and
+  `size_render.test.mjs` with `fixtures/size-render-electron.cjs` (real Chromium
+  at five window sizes with a real zoom bridge, real pointer and keys).
 - **The fleet** is pinned by `fleet.test.mjs` (the reducer: seat continuity on a
   retry, wires, health, bounded reload, no prompts or paths in a snapshot),
   `fleet_host.test.mjs` (pushes only while watched, one trailing push per half

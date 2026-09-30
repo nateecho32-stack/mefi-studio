@@ -17,6 +17,17 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 - **One place decides where the free space is.** The companion's orb, the media
   window, toasts and pop-up lists ask the shell where the window is free, so they
   will stay clear of the new panels.
+- **Size and density, with a live preview (new layout only).** Settings has a
+  Size and density page: make text bigger or smaller (never under 12 px), pick
+  Compact, Comfortable or Spacious rows, and choose how much each row shows
+  (titles, status or everything). A miniature of the window beside the controls
+  changes as you drag, so you do not have to flip back and forth. **Apply** puts
+  it on the whole window (with **Undo**), **Reset** goes back to the defaults, and
+  leaving the page keeps what you have not applied. The interface scale is on the
+  same page, and Ctrl +, Ctrl - and Ctrl 0 still move it and the page follows.
+  Spacious is new; older windows read it as Comfortable, and Settings ›
+  Appearance points to this page instead of a separate Density list. The first
+  time a new choice is saved, your old appearance settings are backed up.
 - **Build's Home can list your tasks like sessions, in a coding-agent desktop
   layout (off by default).** Search › Switch Home layout turns it on. The menu
   lists this project's tasks the way the Claude Code and Codex desktop apps list
