@@ -62,6 +62,7 @@ const PROMISES = [
   // Attempt review: snapshots, changed files, Accept and Revert, advisory checks, before and after shots, and their switches; the *-host modules and main's "Attempt review" block own the I/O.
   { file: "scripts/attempt-snapshots.cjs", says: "Pure module: no Electron, no filesystem, no network, no processes, no", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   { file: "scripts/review-prefs.cjs", says: "Pure module: no Electron, no filesystem, no network, no processes, no", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  { file: "scripts/advisory-checks.cjs", says: "Pure module: no Electron, no filesystem, no network, no processes, no", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
 ];
 
 const CLOCK = /\bDate\.now\s*\(|new\s+Date\s*\(\s*\)|\bperformance\.now\s*\(/;

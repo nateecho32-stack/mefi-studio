@@ -138,7 +138,8 @@ tools are denied by the host even if a model asks for them.
 ## Coding workers
 
 OpenCode, Claude Code and Codex receive a per-run MCP attachment exposing
-Studio search, web page reads, project reads and selected MCP tools; OpenCode
+Studio search, web page reads, project reads, selected MCP tools and, for
+builders only, `run_check` and `project_logs` (below); OpenCode
 and Claude Code also take the optional desk tool. OpenCode reads its config file through
 `OPENCODE_CONFIG` and Claude Code through `--mcp-config`; Codex has no
 per-run config file flag, so the server is passed as `-c mcp_servers.*`
@@ -162,3 +163,61 @@ Skills are discovered from project/user `.agents/skills`, `.claude/skills`,
 `.config/opencode/skills`). Add a named folder containing `SKILL.md`, reload
 saved settings and choose it on the agent. Selected skills are capped at 16 KB
 of prompt content; oversized or unavailable entries are skipped.
+
+## Checks and logs for builders (`run_check`, `project_logs`)
+
+Two tools exist only for the **builder** role, the coding workers above. They
+are never offered to chat, planning, the companion, scout, overseer, lead, desk
+or any other role, and the host refuses a call for them from any other role
+even when a model asks. They ride the same per-run attachment as the tools
+above, so a worker sees them in its own tool list.
+
+- **`run_check { id }`** runs one of the checks the project already has and
+  returns its result (`ok`, `warn`, `bad` or `skipped`, a short detail, the
+  time) with the last lines of its output. An id the project does not have
+  answers with the ones it does have. It is advisory: a result never decides
+  whether a task is done and never changes a task.
+- **`project_logs { lines }`** returns the last `lines` (1 to 200, default 60)
+  of the output of the project's preview or dev server *as Studio captured it*.
+  Studio starts and owns the preview (a builder is told not to start a server
+  itself), so this is how a builder reads its output. When Studio has captured
+  nothing (no preview started by Studio, or one that printed nothing) it says
+  so instead of guessing.
+
+**What a project has.** Studio reads the folder, never a model, to decide:
+
+| id | Found from | Runs |
+| --- | --- | --- |
+| `typecheck` | a `package.json` script named `typecheck`, `type-check`, `check:types`, `tsc`, `test:types` or `types` (first in that order) | `npm run <script>` |
+| `lint` | a script named `lint`, `lint:check` or `eslint`; never one that fixes files (`--fix`, `--write`) | `npm run <script>` |
+| `build` | a script named `build`; it writes files, so it does not run on its own | `npm run build` |
+| `ruff` | `ruff.toml`, `.ruff.toml` or `[tool.ruff]` in `pyproject.toml` | `ruff check .` |
+| `mypy` | `mypy.ini`, `[tool.mypy]` or `[mypy]` in `setup.cfg` | `mypy .` |
+| `cargo-check` | `Cargo.toml`; not run on its own (it compiles) | `cargo check --message-format short` |
+| `go-vet` | `go.mod` | `go vet ./...` |
+
+A tool call names an id and nothing else: the command always comes from this
+table, so a model cannot ask for a command of its own. Only these programs are
+started (npm, ruff, mypy, cargo, go), without a shell where one can be avoided
+(npm is a `.cmd` file on Windows, so it goes through `cmd.exe` with a command
+line built from the checked words), in the run's own folder, with no input,
+with Studio's own credentials withheld from the environment
+(`scripts/platform.cjs`), and at most two checks at a time. A check that runs
+longer than 120 seconds (90 for a builder's call) is ended together with
+everything it started and reads as a warning ("Stopped after ..."), not as a
+failure. Output is kept only from its end, up to 256 KB while it runs, then
+4,000 characters for a builder or 1,500 for the page, with colour codes
+removed and anything that looks like a credential masked. Results are labelled
+untrusted project output.
+
+**Turning it off.** `MEFI_STUDIO_NO_ADVISORY_CHECKS=1` removes both tools from
+every list, refuses the calls and stops the checks that run on their own.
+The same is Settings' `review.advisory` (on by default); `review.advisoryBuild`
+(off by default) lets the build join the checks that run by themselves. A run
+that started with the setting off keeps its own tool list until it ends.
+
+`project_logs` reads a file that goes with the run: Studio writes the last 200
+lines it captured into `preview.log` in the run's private tool folder (mode
+0600, replaced whole whenever the preview prints something, deleted when the
+run ends). Lines are cleaned of colour codes and of URL parameters, private
+keys never enter it, and credentials are masked again when they are read.

@@ -8,12 +8,19 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const os = require("node:os");
 const tools = require("./agent-tools.cjs");
-async function prepare({ root, settings, desk, script, dir = os.tmpdir(), node = process.execPath }) {
+// `review` says whether the builder-only tools run_check and project_logs are on ({ advisory }); `logs` is the text
+// of the preview output Studio has captured so far, which becomes preview.log beside the policy for project_logs to
+// read (updateLogs keeps it current while the run lasts). The whole folder goes when the run ends.
+async function prepare({ root, settings, desk, script, dir = os.tmpdir(), node = process.execPath, review = null, logs = null }) {
   const folder = await fs.mkdtemp(path.join(dir, "mefi-tools-"));
-  const files = { folder, opencode: path.join(folder, "opencode.json"), claude: path.join(folder, "claude.json"), servers: null };
+  const files = { folder, opencode: path.join(folder, "opencode.json"), claude: path.join(folder, "claude.json"), servers: null, logs: null };
   try {
     const config = path.join(folder, "policy.json");
-    await fs.writeFile(config, JSON.stringify({ root, policy: tools.policy(settings, "builder") }), { mode: 0o600, flag: "wx" });
+    if (typeof logs === "string") {
+      files.logs = path.join(folder, "preview.log");
+      await fs.writeFile(files.logs, logs, { mode: 0o600, flag: "wx" });
+    }
+    await fs.writeFile(config, JSON.stringify({ root, policy: tools.policy(settings, "builder"), ...(review ? { review: { advisory: review.advisory !== false } } : {}), ...(files.logs ? { logs: files.logs } : {}) }), { mode: 0o600, flag: "wx" });
     const env = { MEFI_TOOLS_CONFIG: config, ...(process.versions.electron ? { ELECTRON_RUN_AS_NODE: "1" } : {}) };
     const open = desk?.opencode ? JSON.parse(await fs.readFile(desk.opencode, "utf8")) : {};
     const claude = desk?.claude ? JSON.parse(await fs.readFile(desk.claude, "utf8")) : {};
@@ -25,9 +32,15 @@ async function prepare({ root, settings, desk, script, dir = os.tmpdir(), node =
     return files;
   } catch (error) { await remove(files); throw error; }
 }
+// The preview output changed: the file project_logs reads is replaced whole (a reader never sees half of it).
+async function updateLogs(files, text) {
+  if (!files?.logs || typeof text !== "string" || !path.basename(files.folder ?? "").startsWith("mefi-tools-")) return false;
+  const temp = `${files.logs}.${process.pid}.tmp`;
+  try { await fs.writeFile(temp, text, { mode: 0o600 }); await fs.rename(temp, files.logs); return true; } catch { await fs.rm(temp, { force: true }).catch(() => {}); return false; }
+}
 async function remove(files) {
   if (!files?.folder || !path.basename(files.folder).startsWith("mefi-tools-")) return;
-  for (const name of ["policy.json", "opencode.json", "claude.json"]) await fs.rm(path.join(files.folder, name), { force: true }).catch(() => {});
+  for (const name of ["policy.json", "opencode.json", "claude.json", "preview.log", `preview.log.${process.pid}.tmp`]) await fs.rm(path.join(files.folder, name), { force: true }).catch(() => {});
   await fs.rmdir(files.folder).catch(() => {});
 }
-module.exports = { prepare, remove };
+module.exports = { prepare, remove, updateLogs };

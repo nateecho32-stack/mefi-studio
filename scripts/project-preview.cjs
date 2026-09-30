@@ -115,12 +115,14 @@ async function freePort() {
   return port;
 }
 
+const HISTORY_LINES = 200;
+
 function createProjectPreview({ onChange = () => {}, openExternal = async () => {}, spawnImpl = spawn, readinessMs = 12000, probeMs = 700, pollMs = 150, stopMs = 5000 } = {}) {
   const records = new Map();
   const record = (project) => {
     if (!project?.id || !project.path || project.placeholder) throw new Error("Open a project folder to preview its app.");
     const key = `${project.id}\0${path.resolve(project.path)}`;
-    if (!records.has(key)) records.set(key, { projectId: project.id, root: path.resolve(project.path), version: 0, phase: "stopped", detection: null, url: null, owned: false, logs: [], error: null, message: "Preview is stopped.", child: null, server: null });
+    if (!records.has(key)) records.set(key, { projectId: project.id, root: path.resolve(project.path), version: 0, phase: "stopped", detection: null, url: null, owned: false, logs: [], history: [], error: null, message: "Preview is stopped.", child: null, server: null });
     return records.get(key);
   };
   const snapshot = (r, ok = true, error = r.error) => ({ ok, projectId: r.projectId, phase: r.phase, available: Boolean(r.detection || r.url), kind: r.detection?.kind || null, commandLabel: r.detection?.commandLabel || null, url: r.url, owned: r.owned, canStop: Boolean(r.child || r.server), message: r.message, error: error || null, logs: r.logs.map((line) => ({ ...line })), startedAt: r.startedAt || null, checkedAt: r.checkedAt || null });
@@ -129,7 +131,11 @@ function createProjectPreview({ onChange = () => {}, openExternal = async () => 
     const begins = /-----BEGIN .*PRIVATE KEY-----/.test(text), ends = /-----END .*PRIVATE KEY-----/.test(text);
     if (begins || r.privateKey) { r.privateKey = !ends; return; }
     const clean = cleanActivity(String(text).replace(/(https?:\/\/[^\s?#]+)[?#][^\s]*/g, "$1[redacted parameters]"));
-    if (clean) { r.logs.push({ at: Date.now(), text: clean }); r.logs = r.logs.slice(-24); }
+    if (clean) {
+      r.logs.push({ at: Date.now(), text: clean }); r.logs = r.logs.slice(-24);
+      // A longer memory of the same lines, for a builder that asks (project_logs); the page still gets the last 24.
+      (r.history ??= []).push({ at: Date.now(), text: clean }); if (r.history.length > HISTORY_LINES) r.history = r.history.slice(-HISTORY_LINES);
+    }
   };
   const probe = (url) => probeUrl(url, { timeoutMs: probeMs });
   // Readiness requires a successful app response. Shutdown must also notice
@@ -228,7 +234,7 @@ function createProjectPreview({ onChange = () => {}, openExternal = async () => 
       if (await observe(r, options.urls || [], true)) { publish(r); return snapshot(r); }
       if (r.cancel) return snapshot(r);
       if (!r.detection) { r.phase = "unavailable"; r.message = "No supported local app preview was found."; publish(r); return snapshot(r, false, r.message); }
-      r.phase = "starting"; r.error = null; r.logs = []; r.privateKey = false; r.candidates = null; r.message = "Starting preview and waiting for a reachable local URL…"; r.startedAt = Date.now(); publish(r);
+      r.phase = "starting"; r.error = null; r.logs = []; r.history = []; r.privateKey = false; r.candidates = null; r.message = "Starting preview and waiting for a reachable local URL…"; r.startedAt = Date.now(); publish(r);
       if (r.detection.kind === "static") {
         r.server = await staticServer(r.root); r.owned = true;
         r.url = `http://127.0.0.1:${r.server.address().port}/`;
@@ -295,6 +301,12 @@ function createProjectPreview({ onChange = () => {}, openExternal = async () => 
     })().catch((error) => { r.phase = "failed"; r.error = cleanActivity(error.message); r.message = r.error; publish(r); return snapshot(r, false); }).finally(() => { r.stopPromise = null; });
     return r.stopPromise;
   }
+  // The last lines of output this service captured for a project's preview, without starting or probing anything.
+  function tail(project, lines = 60) {
+    const found = project?.id && project.path ? records.get(`${project.id}\0${path.resolve(project.path)}`) : null;
+    const wanted = Math.max(1, Math.min(HISTORY_LINES, Math.floor(Number(lines)) || 60));
+    return { ok: true, phase: found?.phase ?? "stopped", url: found?.url ?? null, owned: Boolean(found?.owned), lines: (found?.history ?? []).slice(-wanted).map((row) => row.text) };
+  }
   async function open(project, options) {
     const state = await status(project, options);
     if (state.phase !== "ready" || !loopbackUrl(state.url)) return { ...state, ok: false, error: "Start a reachable preview before opening it." };
@@ -307,7 +319,7 @@ function createProjectPreview({ onChange = () => {}, openExternal = async () => 
       if (r.child?.pid) spawnImpl("taskkill", ["/pid", String(r.child.pid), "/t", "/f"], { windowsHide: true, stdio: "ignore" });
     }
   }
-  return { status, start, stop, open, closeAll, disposeSync };
+  return { status, start, stop, open, closeAll, disposeSync, tail };
 }
 
 module.exports = { createProjectPreview, loopbackUrl, observedUrls, probeUrl, detectProject };

@@ -6,7 +6,8 @@ const tools = require("./agent-tools.cjs");
 const VERSION = (() => { try { return String(require("../package.json").version || "0.0.0"); } catch { return "0.0.0"; } })();
 async function serve() {
   const config = JSON.parse(await fs.readFile(process.env.MEFI_TOOLS_CONFIG, "utf8"));
-  const context = { root: config.root, settings: { agentTools: { builder: config.policy } }, role: "builder" };
+  // `review` (whether run_check and project_logs are on) and `logs` (the preview output file) come from the run's policy file.
+  const context = { root: config.root, settings: { agentTools: { builder: config.policy }, ...(config.review ? { review: config.review } : {}) }, role: "builder", logs: typeof config.logs === "string" ? config.logs : null };
   const definitions = await tools.definitions(context.settings, context.role);
   let buffer = "", chain = Promise.resolve();
   const send = (message) => process.stdout.write(`${JSON.stringify(message)}\n`);
