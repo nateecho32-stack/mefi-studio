@@ -226,6 +226,14 @@ const api = {
   reportDismiss: () => ipcRenderer.invoke("report:dismiss"),
   reportSet: (payload) => ipcRenderer.invoke("report:set", typeof payload?.prompt === "boolean" ? { prompt: payload.prompt } : {}),
   onReportCrashed: (callback) => ipcRenderer.on("report:crashed", (_event, payload) => callback(payload)),
+  // Notifications (main.cjs "Notifications"): Windows alerts, the taskbar flash and the count.
+  // The choices are validated in the host; the quiet hours are the Discord remote's own.
+  // alertsTest may take up to a minute: it waits for the owner to look away from Studio.
+  // onAlertsOpen is the one push: a notification was clicked, and main has already brought Studio up.
+  alertsGet: () => ipcRenderer.invoke("alerts:get"),
+  alertsSet: (patch) => ipcRenderer.invoke("alerts:set", patch && typeof patch === "object" && !Array.isArray(patch) ? patch : {}),
+  alertsTest: () => ipcRenderer.invoke("alerts:test"),
+  onAlertsOpen: (callback) => ipcRenderer.on("alerts:open", (_event, payload) => callback(payload)),
   // Void Engine Discord link (main.cjs "Discord community link"): every call
   // answers { ok, status } with the public status only; tokens never cross.
   communityStatus: () => ipcRenderer.invoke("community:status"),

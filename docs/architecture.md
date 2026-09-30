@@ -185,6 +185,7 @@ settings and per-model work-kind summaries for the shared controls.
 | **Settings** | `4` or `Ctrl ,`: four single-pane categories, **General**, **Appearance**, **Audio** and **System**. Providers, routing and run behavior moved to **Agents › Setup** (Team & models, Providers, Routing & fallback, Run behavior); the old Connections, Models and Automation links redirect there. Search finds individual controls and opens their category and containing disclosures. `MefiNav.go("studio", { category: "appearance" })` opens a category; legacy section links such as `settings-updates` still work. |
 | **Preferences** | General holds names and startup. Appearance holds themes, motion, blur, node styles and canvas effects; Audio links to the music dropdown and holds sound effects. Older Preferences and Your Studio links resolve to General. |
 | **Diagnostics** | Settings › System: speed probe, profiler, auditor, machine tools, connection log and Report a problem. Auditor and machine links reveal Sessions' Diagnostics panel. |
+| **Notifications** | Settings › General: Windows alerts for what waits on you (only while Studio is not in front), the taskbar flash and count, and quiet hours shared with the Discord remote. |
 | **Search Studio** | The palette (`Ctrl K`), once called Key commands. It finds any page, tool, Settings card, action, task, node or model by familiar terms, and groups its results by menu section. |
 | **Help** | The menu-foot popover containing onboarding, shortcuts and Community. These destinations are also available through Search; late-registered Community remains supported by the navigation registry. |
 | **Task** | One unit of work on the project board, with a brief, acceptance checks, prerequisites, attempts and evidence. New cards gather local references automatically when Automatic references is on; the configurable scout can use GPT-6 Luna on the fast tier to choose one verified starting file. |
@@ -1526,6 +1527,36 @@ failed process stays an error and cannot produce briefing requests.
   beside the file list and tested against it. The rules are pure
   (`scripts/crash-report.cjs`), the zip writer is `scripts/zip-lite.cjs`, the
   host is `scripts/report-host.cjs` and main.cjs's "Report a problem" block.
+- **Notifications** (Settings › General, `renderer/alerts.js`) tell Windows
+  when something waits on the owner: a question, an approval or a permission
+  (`need`, `perm`), a task that failed after Mefi stopped retrying (`fail`) and,
+  when switched on, one that finished (`done`). Nothing is sent while a Studio
+  window is in front (shown, not minimized, focused) with somebody at the PC (a
+  locked screen, or ten minutes without input, counts as away), nothing inside
+  quiet hours, nothing about the same task and kind twice in fifteen minutes, and no
+  more than twelve an hour; the words are generic ("Something needs you")
+  unless the owner chose task titles, because Windows keeps notification text
+  in its history. A thing must still be waiting twenty seconds after it came up,
+  so a question the assistant answers by itself never pings, and a burst is one
+  notification. The taskbar button flashes until Studio is focused and carries a
+  red count of what waits on the owner (the needs-you digest): the numbered
+  overlay icon is drawn in `scripts/badge-icon.cjs`, without a canvas, at 16 px
+  or 32 px for a scaled display. Quiet hours are the Discord remote's own
+  (`settings.remote.quiet`): one clock, shown and changed from both cards. The
+  defaults are need and failed on, finished off, flash and count on, sound off,
+  quiet hours off. The rules are pure (`scripts/alerts.cjs`: `decide`), the host
+  is `scripts/alerts-host.cjs` (queue, settle, look, show, click) and main.cjs's
+  "Notifications" block holds four one-line hooks (a question asked or
+  answered, the tasks the owner cares about, a project switch, the window's
+  focus). The bridge is `alerts:get`, `alerts:set` (validated) and `alerts:test`
+  (it waits up to a minute for the owner to look away), and one push,
+  `alerts:open { kind, id, taskId, projectId }`, when a notification is clicked:
+  main brings Studio up first and the page opens the task (else Home).
+  Windows needs an application user model id for a toast; it is fixed at
+  `MefiStudio.StudioAIPlus` so a portable, a moved and an updated copy are one
+  app. `MEFI_STUDIO_NO_ALERTS=1` or the master switch turns all of it off, the
+  id included; `MEFI_STUDIO_KEEP_APP_ID=1` leaves only the id to Electron (for a
+  taskbar button pinned under the old id, which Windows groups by it).
 - **Studio closed unexpectedly.** Studio writes `data/session-marker.json`
   (`running`) at launch and closes it with a reason on a quit, on any exit with
   code 0 (the update restart and the roll back are `app.exit(0)`) and when

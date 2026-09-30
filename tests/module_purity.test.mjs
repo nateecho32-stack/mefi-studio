@@ -41,6 +41,9 @@ const PROMISES = [
   { file: "scripts/desk.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   // The Discord remote's rules (docs/remote.md); main.cjs "Discord remote" owns the I/O.
   { file: "scripts/remote.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  // Windows notifications, the taskbar flash and the count on the taskbar icon: when Studio may speak, what it says and the picture of the count; alerts-host.cjs and main.cjs "Notifications" own the window, the Notification and the clock.
+  { file: "scripts/alerts.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (time is", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  { file: "scripts/badge-icon.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   // Report a problem: what a report holds, how it is redacted and how a session ended, and the zip it is saved as; report-host.cjs and main.cjs "Report a problem" own the I/O.
   { file: "scripts/crash-report.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (time is", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   { file: "scripts/zip-lite.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },

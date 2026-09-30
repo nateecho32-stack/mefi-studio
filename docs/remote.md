@@ -18,7 +18,9 @@ Telegram comes later, through the same hub.
   stop and restart new work.
 - **Alerts:** a DM when something needs you, when a task stops, when agents
   sit waiting, and a daily digest at the hour you choose. Each kind can be
-  switched off, and quiet hours hold them back.
+  switched off, and quiet hours hold them back. The quiet hours are the same
+  ones Windows notifications keep (Settings › General › Notifications): change
+  them in either place and both follow.
 - **Approvals with a PIN:** an approval shows an **Approve** button. It asks
   for the PIN you set in Studio in a Discord form, which never appears in
   the chat history.
@@ -152,6 +154,13 @@ session's user.
 - Friends › Your PCs › **Reach this PC from Discord**: the switch, the PC's
   name, what the alerts cover, quiet hours and the digest hour, the approval
   PIN (set, change, remove, unlock), and the last 20 commands this PC answered.
+- `settings.remote.quiet` (`{ from, to }` in 24-hour `HH:MM`, or null) is the
+  one clock for quiet hours. The Windows notifications of Settings ›
+  General › Notifications (`scripts/alerts.cjs`, main.cjs "Notifications") read
+  and write it too, through `alerts:get` and `alerts:set`, and tell the Friends
+  card (`remote:event`) when they change it; `tests/alerts.test.mjs` pins that
+  both modules accept and reject the same windows and call the same minutes
+  quiet. The Windows alerts keep it even when the remote is off.
 
 ## Order of work
 

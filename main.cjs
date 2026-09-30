@@ -136,6 +136,13 @@ const whatsNew = optionalHelper("./scripts/whats-new.cjs", () => require("./scri
 const crashReport = optionalHelper("./scripts/crash-report.cjs", () => require("./scripts/crash-report.cjs"), null);
 const reportHostModule = crashReport ? optionalHelper("./scripts/report-host.cjs", () => require("./scripts/report-host.cjs"), null) : null;
 const zipLite = reportHostModule ? optionalHelper("./scripts/zip-lite.cjs", () => require("./scripts/zip-lite.cjs"), null) : null;
+// Windows notifications, the taskbar flash and the count on the taskbar icon:
+// the rules (alerts), the host that watches and shows (alerts-host) and the
+// drawn overlay icon (badge-icon). See "Notifications" below; without the rules
+// or the host the feature is simply absent, without the icon there is no count.
+const alertsRules = optionalHelper("./scripts/alerts.cjs", () => require("./scripts/alerts.cjs"), null);
+const alertsHostModule = alertsRules ? optionalHelper("./scripts/alerts-host.cjs", () => require("./scripts/alerts-host.cjs"), null) : null;
+const badgeIcon = alertsHostModule ? optionalHelper("./scripts/badge-icon.cjs", () => require("./scripts/badge-icon.cjs"), null) : null;
 const discordOAuth = community
   ? optionalHelper("./scripts/discord-oauth.cjs", () => require("./scripts/discord-oauth.cjs"), null)
   : null;
@@ -150,7 +157,7 @@ if (typeof electron === "string" || !electron.app) {
   process.exit(1);
 }
 
-const { app, BrowserWindow, ipcMain, safeStorage, shell, dialog, clipboard, desktopCapturer, powerSaveBlocker, Tray, Menu, nativeImage, screen } = electron;
+const { app, BrowserWindow, ipcMain, safeStorage, shell, dialog, clipboard, desktopCapturer, powerSaveBlocker, powerMonitor, Tray, Menu, nativeImage, screen, Notification } = electron;
 const performanceProfiler = createPerformanceProfiler({ getAppMetrics: () => app.getAppMetrics() });
 
 const STUDIO_ROOT = __dirname;
@@ -239,13 +246,26 @@ function handleProjectIpc(channel, handler) {
 // is the PC's own and may open a freshly cloned project, which a gated
 // handler would wait on. The community model feed and the probe results
 // (models:) live in this PC's user data, and a probe run lasts minutes, which
-// a gated handler would hold every project switch for. (Declared beside the
-// wrapper so the tests that load it from here up to app.setName see it.)
-const APP_WIDE_PREFIXES = ["projects:", "project-preview:", "performance:", "startup:", "community:", "hub:", "remote:", "styler:", "catalog:", "speed:", "shell:", "pc-setup:", "models:"];
+// a gated handler would hold every project switch for. Notifications (alerts:)
+// are the PC's own: their card works with no project open, and a test
+// notification waits up to a minute for the owner to look away from Studio.
+// (Declared beside the wrapper so the tests that load it from here up to
+// app.setName see it.)
+const APP_WIDE_PREFIXES = ["projects:", "project-preview:", "performance:", "startup:", "community:", "hub:", "remote:", "styler:", "catalog:", "speed:", "shell:", "pc-setup:", "models:", "alerts:"];
 const APP_WIDE_CHANNELS = new Set(["usage:accounts", "opencode:credits", "release:status", "release:check", "update:status", "update:set", "settings:get-key", "boot:healthy", "release:whats-new", "release:whats-new-seen", "release:whats-new-set", "report:dismiss", "report:set"]);
 ipcMain.handle = handleProjectIpc;
 
 app.setName("Mefi's Studio AI+");
+// Windows shows a toast under an application user model id, and groups the
+// taskbar button by it. The id is fixed here so it never follows the product
+// name or the install folder: a portable copy, a moved copy and an updated copy
+// are one app to Windows. MEFI_STUDIO_NO_ALERTS=1 leaves the id to Electron, as
+// before alerts existed, and so does MEFI_STUDIO_KEEP_APP_ID=1 (for a taskbar
+// button pinned before this id existed, which Windows groups by the old id).
+const ALERTS_APP_ID = "MefiStudio.StudioAIPlus";
+if (process.platform === "win32" && process.env.MEFI_STUDIO_NO_ALERTS !== "1" && process.env.MEFI_STUDIO_KEEP_APP_ID !== "1") {
+  try { app.setAppUserModelId(ALERTS_APP_ID); } catch { /* Windows keeps the id Electron chose */ }
+}
 
 let window = null;
 let rendererRecovery = null;
@@ -2478,6 +2498,80 @@ process.on("uncaughtExceptionMonitor", (error, origin) => reportRecord("main-exc
 process.on("exit", (code) => { if (code === 0) reportEnd("exit"); });
 app.on("child-process-gone", (_event, details) => { if (details?.type === "GPU" && details.reason !== "clean-exit") reportRecord("gpu-gone", details.reason, { exitCode: details.exitCode }); });
 // ---- end of report a problem ------------------------------------------------------
+
+// ---- Notifications: Windows alerts, the taskbar flash and the count ------------------
+// Settings › General › Notifications (renderer/alerts.js). Studio tells Windows
+// when something waits on the owner (a question, an approval, a permission, a
+// task that failed after the retries, and a finished one when asked), only while
+// Studio is not the window being looked at, never inside quiet hours (the
+// Discord remote's own, settings.remote.quiet), at most twelve an hour, and in
+// generic words unless the owner chose task titles. The taskbar button flashes
+// until Studio is focused and carries the count of what waits on the owner.
+// scripts/alerts.cjs decides, scripts/alerts-host.cjs watches and shows, and the
+// hooks below only tell it what main already knows: a question asked or
+// answered (assistantQuestion, assistantEmit), the tasks the owner cares about
+// moving (assistantObserveTasks), another project's queue (selectProject) and
+// the window's own focus. They set a timer and return: nothing runs per line
+// or per write. MEFI_STUDIO_NO_ALERTS=1 or the master switch turns it all off.
+let alertsHost = null;
+
+// The page must be there to hear a click: a window that had to be made again is still loading.
+function alertsSendOpen(payload) {
+  const contents = window?.webContents;
+  if (!contents || contents.isDestroyed?.()) return;
+  if (contents.isLoading?.()) {
+    contents.once("did-finish-load", () => setTimeout(() => send("alerts:open", payload), 1500).unref?.());
+    return;
+  }
+  send("alerts:open", payload);
+}
+
+// Studio is "being looked at" when one of its windows is in front (shown, not
+// minimized, focused) and somebody is at the PC: a locked screen, or ten
+// minutes without a key or a click, is nobody looking even when Studio is the
+// window in front, and a PC left working is the point of all this.
+const ALERTS_IDLE_SECONDS = 600;
+function alertsLooked() {
+  const inFront = BrowserWindow.getAllWindows().some((win) => !win.isDestroyed() && win.isVisible() && !win.isMinimized() && win.isFocused());
+  if (!inFront) return false;
+  try {
+    const state = powerMonitor.getSystemIdleState(ALERTS_IDLE_SECONDS);
+    return state !== "locked" && state !== "idle";
+  } catch {
+    return true;
+  }
+}
+
+function alertsStart() {
+  if (SMOKE || CAPTURE || CLI_MODE || !alertsRules || !alertsHostModule || alertsHost) return;
+  try {
+    const iconFile = path.join(STUDIO_ROOT, "assets", "icon-256.png");
+    alertsHost = alertsHostModule.createAlertsHost({
+      rules: alertsRules, icon: badgeIcon, Notification, nativeImage, iconPath: existsSync(iconFile) ? iconFile : "", platform: process.platform, env: process.env,
+      getWindow: () => (window && !window.isDestroyed() ? window : null),
+      isLooked: alertsLooked,
+      showWindow, send: alertsSendOpen, readSettings, updateSettings, log: (line) => logLine(line),
+      digest: (now) => (projects.open() ? assistantNeedsYouDigest(now) : null),
+      questionOpen: (id) => (assistantState?.questions ?? []).some((question) => question?.id === id && question.status === "open"),
+      projectId: () => (projects.open() ? projects.current().id : null),
+      scale: () => { try { return screen.getPrimaryDisplay().scaleFactor; } catch { return 1; } },
+      remotePush: () => { if (typeof remotePush === "function") remotePush(); },
+    });
+    void alertsHost.start();
+  } catch (error) {
+    alertsHost = null;
+    logLine(`[alerts] could not start (${String(error?.code ?? error?.name ?? "error").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40) || "error"})`);
+  }
+}
+// Each of these is one guarded line at the place that knows: a failure is never Studio's.
+const alertsQuestion = (question) => { try { alertsHost?.question(question); } catch {} };
+const alertsTasks = (events, attention, projectId) => { try { alertsHost?.tasks(events, attention, projectId); } catch {} };
+const alertsPoke = () => { try { alertsHost?.poke(); } catch {} };
+const alertsFocus = () => { try { alertsHost?.focus(); } catch {} };
+const alertsAway = () => { try { alertsHost?.away(); } catch {} };
+const alertsWindow = () => { try { alertsHost?.windowMade(); } catch {} };
+const alertsStop = () => { try { alertsHost?.close(); } catch {} };
+// ---- end of notifications ---------------------------------------------------------
 
 // ---- Your PCs vault: memory and setup between the owner's PCs ------------------
 // Friends › Your PCs › Share between my PCs (renderer/pc-vault.js). One private
@@ -7403,6 +7497,8 @@ function assistantFix(kind, text, ok = true) {
 // either way), so the renderer never sees more than ~4 pushes a second.
 // State keys the page already holds ride by reference (assistantPush).
 function assistantEmit(event) {
+  // A question asked, answered or expired changes what waits on the owner: the taskbar count looks again.
+  if (event?.kind === "question" && typeof alertsPoke === "function") alertsPoke();
   if (assistantEmitTimer) {
     if (!assistantEmitPending || (ASSISTANT_EVENT_RANK[event.kind] ?? 1) >= (ASSISTANT_EVENT_RANK[assistantEmitPending.kind] ?? 1)) assistantEmitPending = event;
     return;
@@ -11248,6 +11344,8 @@ function assistantObserveTasks(tasks) {
     const result = taskOversight.taskEvents(taskEventIndexes.get(projectId) ?? null, tasks, { now: Date.now(), isOwned: assistantOwnsTask, autoBuild: autopilot.autoBuild !== false, approve: autopilot.approve, watchAll: true });
     taskEventIndexes.set(projectId, result.index);
     events = result.events;
+    // Notifications hears the same events: a parked task, an approval wait, a finished one.
+    if (typeof alertsTasks === "function") alertsTasks(result.events, result.attention, projectId);
     // The agents' own cards the owner never touched still reach the owner
     // when only the owner can move them: one rolling "needs you" line.
     if (Array.isArray(result.attention) && result.attention.length) assistantNeedsYouNotice(result.attention, projectId);
@@ -13473,6 +13571,8 @@ function assistantQuestion(payload = {}) {
   assistantTrim(assistantState.questions, assistantCaps().questions);
   assistantLog("question", `${question.kind === "suggestion" ? "suggested" : "asked"}: ${title}`);
   assistantEmit({ kind: "question", ...question });
+  // Windows hears of it only if it is still waiting in twenty seconds (Notifications).
+  if (typeof alertsQuestion === "function") alertsQuestion(question);
   saveAssistant({ force: true }).catch(() => {});
   return question;
 }
@@ -20638,6 +20738,8 @@ async function selectProject(id, { saveProgress = false } = {}) {
   } finally {
     projectSwitching = false;
     if (assistantLoop) projects.run(projects.active(), () => assistantSchedule());
+    // Another project has another queue: the taskbar count looks again.
+    if (typeof alertsPoke === "function") alertsPoke();
   }
 }
 
@@ -22634,6 +22736,13 @@ function registerIpc() {
   ipcMain.handle("report:save", async (_event, payload) => (reportHost ? reportHost.save({ token: typeof payload?.token === "string" ? payload.token : "" }) : reportOff));
   ipcMain.handle("report:dismiss", async () => (reportHost ? reportHost.dismiss() : reportOff));
   ipcMain.handle("report:set", async (_event, payload) => (reportHost ? reportHost.setPrompt(payload?.prompt) : reportOff));
+  // ---- Notifications (the "Notifications" block) --------------------------------
+  // The PC's own (alerts: is app-wide): the card works with no project open.
+  // alerts:test may take up to a minute: it waits for the owner to look away.
+  const alertsOff = { ok: false, error: "Notifications are not available in this build." };
+  ipcMain.handle("alerts:get", async () => (alertsHost ? alertsHost.state() : alertsOff));
+  ipcMain.handle("alerts:set", async (_event, patch) => (alertsHost ? alertsHost.set(patch) : alertsOff));
+  ipcMain.handle("alerts:test", async () => (alertsHost ? alertsHost.test() : alertsOff));
 
   // ---- Community ----------------------------------------------------------
   // The Void Engine Discord link (the "Discord community link" block beside
@@ -23112,6 +23221,10 @@ function createWindow() {
   window.on("unresponsive", () => reportRecord("renderer-unresponsive", "the window stopped responding"));
   // Windows signing out or shutting down closes Studio without a quit.
   window.on("session-end", () => reportEnd("session-end"));
+  // Notifications: coming to the front ends the taskbar flash; leaving it (or hiding, or minimizing) lets a waiting test go.
+  window.on("focus", () => { if (typeof alertsFocus === "function") alertsFocus(); });
+  for (const name of ["blur", "hide", "minimize"]) window.on(name, () => { if (typeof alertsAway === "function") alertsAway(); });
+  if (typeof alertsWindow === "function") alertsWindow();
   // Background mode: closing parks the app in the tray and the assistant
   // keeps ticking; Quit lives in the tray menu.
   window.on("close", (event) => {
@@ -23316,6 +23429,7 @@ app.whenReady().then(() => {
   registerIpc();
   bootHealthStart();
   reportStart();
+  alertsStart();
   if (process.argv.includes("--set-key")) {
     (async () => {
       const key = process.env.MEFI_STUDIO_KEY;
@@ -23668,6 +23782,7 @@ app.on("before-quit", (event) => {
   // place; so does a crash, which never gets to write anything at all.
   endSession("quit");
   if (typeof reportEnd === "function") reportEnd("quit");
+  if (typeof alertsStop === "function") alertsStop();
   if (typeof outsideWorkQuit === "function") outsideWorkQuit();
   executorClosing = true;
   performanceProfiler.stop();
