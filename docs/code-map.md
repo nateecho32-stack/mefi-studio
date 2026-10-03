@@ -270,7 +270,8 @@ outside the checkout).
 | --- | --- |
 | `crates/mefi-core/src/eyes/` | The OpenCode session store in Rust (stage 2): `eyes.mjs`'s 19 worker reads and its git helpers, held to it by `tests/rust_parity_eyes.test.mjs`. |
 | `crates/mefi-core/src/repo/` · `callbacks.rs` | Multi-PC sync, the worktree table and its actions in Rust (`sync.mjs`, `worktrees.mjs`, `worktree-actions.mjs`), held to them by `tests/rust_parity_repo.test.mjs`; function arguments arrive as handles the host calls back. |
-| `scripts/rust-modules.cjs` | Which engine module functions Rust answers under the Rust host; `main.cjs`'s `loadModule` hands those modules out with the functions replaced. |
+| `crates/mefi-core/src/files/` | The @ picker's project file search and its `.gitignore` reader in Rust (`project-files.cjs`, `gitignore-lite.cjs`), held to them by `tests/rust_parity_files.test.mjs`. |
+| `scripts/rust-modules.cjs` | What Rust answers under the Rust host: module functions (`main.cjs`'s `loadModule` hands those modules out with the functions replaced) and whole host factories (`factory`, e.g. project file search). |
 | `crates/mefi-core/src/js.rs` · `paths.rs` | JavaScript's rules a port must keep (number printing, rounding, toFixed, dates, UTF-16 slices, localeCompare order) and `path-scope.cjs`'s path rules. |
 | `crates/mefi-core/src/bin/mefi-core.rs` | The engine crate from the command line: one read, a batch, or the store dump, for the parity tests. |
 | `src-tauri/src/lib.rs` | The host's start: the single-instance lock, the `mefi` protocol, the page's commands, starting the engine, and leaving when it leaves. |

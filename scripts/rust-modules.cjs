@@ -40,4 +40,27 @@ function withRust(rel, module, host = rustHost()) {
   return Object.freeze(served);
 }
 
-module.exports = { PORTED, withRust };
+// Host factories whose whole object moved to Rust: the factory's
+// collaborators (functions) stay in the engine and are called back per call.
+// Each answers like the JavaScript factory of the same name.
+const FACTORIES = Object.freeze({
+  "project-files": (collaborators, host) => {
+    const call = (name, ...args) => host.callWithFunctions(`core.files.${name}`, [collaborators, ...args]);
+    return Object.freeze({
+      search: (request = {}) => call("search", request ?? {}),
+      resolve: (paths) => call("resolve", paths),
+      forget: () => {
+        host.callWithFunctions("core.files.forget", []).catch(() => {});
+      },
+    });
+  },
+});
+
+// The Rust-backed object for a host factory, or null to use the JavaScript one.
+function factory(name, collaborators, host = rustHost()) {
+  const make = FACTORIES[name];
+  if (!make || !host || typeof host.callWithFunctions !== "function") return null;
+  return make(collaborators, host);
+}
+
+module.exports = { PORTED, FACTORIES, withRust, factory };

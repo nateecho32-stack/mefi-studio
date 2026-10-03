@@ -67,7 +67,7 @@ fn main() {
                 .map(|entry| {
                     let function = entry.get("function").and_then(Value::as_str).unwrap_or_default();
                     let input = entry.get("args").and_then(Value::as_array).cloned().unwrap_or_default();
-                    match mefi_core::repo::call(function, &input, &mefi_core::callbacks::NoCallbacks) {
+                    match mefi_core::dispatch(function, &input, &mefi_core::callbacks::NoCallbacks) {
                         Ok(value) => json!({ "ok": true, "value": value }),
                         Err(error) => json!({ "ok": false, "error": error }),
                     }

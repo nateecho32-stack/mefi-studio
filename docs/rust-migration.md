@@ -171,6 +171,7 @@ the Electron build until stage 3.
 | Module | JavaScript | Rust | How the engine reaches it | Held together by |
 | --- | --- | --- | --- | --- |
 | OpenCode session store: 19 reads and 2 git helpers | `scripts/eyes.mjs` (worker methods) | `crates/mefi-core/src/eyes/` | `scripts/eyes-client.cjs` returns a host client under the Rust host; the host runs the read on a blocking thread and sends its JSON text on unparsed | `tests/rust_parity_eyes.test.mjs` |
+| The @ picker's project file search (and its .gitignore reader) | `scripts/project-files.cjs`, `gitignore-lite.cjs`, `mentions.cjs` `cleanPath` | `crates/mefi-core/src/files/` | `main.cjs`'s `projectFilesHost` takes a Rust-backed factory (`scripts/rust-modules.cjs` `factory`); the project root is called back in the engine | `tests/rust_parity_files.test.mjs` |
 | Multi-PC sync, the worktree table and its actions | `scripts/sync.mjs` (`sync`, `inspect`, `remoteMoved`, `changedFiles`, `lostWork`), `worktrees.mjs`, `worktree-actions.mjs` | `crates/mefi-core/src/repo/` | `main.cjs`'s `loadModule` hands the module out with these functions answered by Rust (`scripts/rust-modules.cjs`); `check` and `inUse` are called back in the engine | `tests/rust_parity_repo.test.mjs` |
 
 ### Two seams
@@ -185,6 +186,17 @@ the Electron build until stage 3.
   sends `callback` frames and the engine answers with `callback-reply`, so
   `sync`'s `check` (the project's `npm run check`) and a worktree action's
   `inUse` still run in the engine.
+
+- **A host factory** (`createProjectFiles` and its kin, which take their
+  collaborators as functions and expose async methods):
+  `rust-modules.cjs` `factory(name, collaborators)` returns an object with
+  the same methods answered by Rust; the collaborators stay in the engine and
+  are called back each call.
+
+What does not move this way: fine-grained pure logic called synchronously
+with whole boards (`backlog.workState` runs per card per tick with every
+task), which would cost a copy of the board per call across any boundary.
+It moves with its callers and the board state, as one subsystem.
 
 ### How a port is held to the JavaScript
 

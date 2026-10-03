@@ -10,8 +10,20 @@
 //!   (scripts/sync.mjs, worktrees.mjs, worktree-actions.mjs, reached through
 //!   main.cjs's loadModule).
 
+//! - `files`: the @ picker's project file search (scripts/project-files.cjs
+//!   with gitignore-lite.cjs), behind a Rust-backed factory.
+
 pub mod callbacks;
 pub mod eyes;
+pub mod files;
 pub mod js;
 pub mod paths;
 pub mod repo;
+
+/// Any ported module function by its `<module>.<function>` name.
+pub fn dispatch(function: &str, args: &[serde_json::Value], callbacks: &dyn callbacks::Callbacks) -> Result<serde_json::Value, String> {
+    match function.split_once('.') {
+        Some(("files", name)) => files::call(name, args, callbacks),
+        _ => repo::call(function, args, callbacks),
+    }
+}

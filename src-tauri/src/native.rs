@@ -538,7 +538,7 @@ fn self_test(engine: Arc<Engine>, dir: PathBuf) {
         // And one answered by a module function that moved (worktrees.listWorktrees).
         // The Worktrees page needs an open project: the Studio folder itself.
         let open_and_list = format!(
-            "window.mefiStudio.projectsAddPath({}).then(() => window.mefiStudio.worktreesList()).then((r) => ({{ ok: r.ok, repo: r.repo ?? null, rows: r.rows?.length ?? null, error: r.error ?? null }}))",
+            "window.mefiStudio.projectsAddPath({}).then(() => window.mefiStudio.worktreesList()).then(async (r) => {{ const files = await window.mefiStudio.projectFiles({{ query: \"rust\", limit: 5 }}); return {{ ok: r.ok, repo: r.repo ?? null, rows: r.rows?.length ?? null, error: r.error ?? null, files: files.ok ? files.files.length : files.error, scanned: files.scanned ?? null }}; }})",
             wire_string(&engine.studio.root.to_string_lossy())
         );
         report["worktrees"] = execute_javascript(&engine, &open_and_list)

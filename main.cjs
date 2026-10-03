@@ -12688,7 +12688,9 @@ async function composerPickerOn() {
   try { return (await readSettings())?.ui?.composerPicker !== false; } catch { return true; }
 }
 function projectFilesHost() {
-  return (projectFilesLoaded ??= require("./scripts/project-files.cjs").createProjectFiles({ root: () => (projects.open() ? projectRoot() : null) }));
+  const collaborators = { root: () => (projects.open() ? projectRoot() : null) };
+  // Under the Rust host the search runs in Rust (scripts/rust-modules.cjs factory).
+  return (projectFilesLoaded ??= (typeof rustModules !== "undefined" && rustModules?.factory("project-files", collaborators)) || require("./scripts/project-files.cjs").createProjectFiles(collaborators));
 }
 async function searchProjectFiles(payload = {}) {
   if (!(await composerPickerOn())) return { ok: false, off: true, error: PICKER_OFF };

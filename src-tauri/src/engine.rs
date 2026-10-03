@@ -279,14 +279,14 @@ impl Engine {
                         let _ = reply_to.send(frame);
                     });
                 }
-                "call" if head.api.as_deref().is_some_and(|api| api.starts_with("repo.")) => {
+                "call" if head.api.as_deref().is_some_and(|api| api.starts_with("repo.") || api.starts_with("core.")) => {
                     // A module function moved into Rust (scripts/rust-modules.cjs):
                     // run on a blocking thread, able to call the engine's
                     // function arguments back while it runs.
                     let id = head.id.unwrap_or(0);
                     let api = head.api.clone().unwrap_or_default();
                     count_rust_call(&api);
-                    let function = api.trim_start_matches("repo.").to_string();
+                    let function = api.strip_prefix("repo.").or_else(|| api.strip_prefix("core.")).unwrap_or(&api).to_string();
                     let args = head.body.map(|raw| raw.get().to_string()).unwrap_or_else(|| "[]".into());
                     let callbacks = HostCallbacks { engine: self.clone(), writer: tx.clone() };
                     let reply_to = tx.clone();
@@ -294,7 +294,7 @@ impl Engine {
                         let answer = tauri::async_runtime::spawn_blocking(move || {
                             let list: Value = serde_json::from_str(&args).unwrap_or(Value::Null);
                             let list = list.as_array().cloned().unwrap_or_default();
-                            mefi_core::repo::call(&function, &list, &callbacks).map(|value| value.to_string())
+                            mefi_core::dispatch(&function, &list, &callbacks).map(|value| value.to_string())
                         })
                         .await;
                         let frame = match answer {
