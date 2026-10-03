@@ -56,8 +56,9 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   windows, including 150% zoom, while keeping the draft intact.
 - Stable updates use published GitHub release builds only. An optional
   Development / beta switch asks for confirmation about untested changes,
-  instability and possible data loss, then automatically receives packaged
-  artifacts from successful main builds. Returning to Stable stops development
+  instability and possible data loss. Once artifact publishing is separately
+  delivered, it can automatically receive packaged artifacts from successful
+  main builds. Returning to Stable stops development
   updates and can restore the published stable build. Installed apps no longer
   hot-swap raw source files from a nearby checkout; downloads require SHA-256,
   matching platform and build identity, and development updates require rollback.

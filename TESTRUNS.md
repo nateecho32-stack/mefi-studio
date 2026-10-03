@@ -39,6 +39,12 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-03 - Completed updater review and final channel cleanup
+
+CodeRabbit completed the combined updater delta at 85bc4e6: 21 files reviewed, two minor issues. The channel-toggle cleanup now keeps the switch disabled during checking, downloading, installing or rollback, and the changelog makes deferred artifact publishing explicit. The original three partial review issues were fixed in 85bc4e6. Native screenshot evidence uses an isolated bridge; live update channels, credentials and provider state are untouched.
+
+Final focused tests, generated booklet, checks, audit, lint, exact-head CI and the follow-up review qualify this final small change before landing. The full b481ec0 integration gate and earlier red aggregate remain separately recorded, with their original outcomes and native capability limits.
+
 ## 2026-10-03 - Combined updater gate and review follow-up
 
 The combined application head b481ec0 passed the corrected full Windows gate with process-scoped Git trust: 6,796 Node tests, 6,780 passed, zero failed, 16 skipped; 248 Python contracts OK with one skip; six lock checks passed. Its three exact-head GitHub runs passed on Windows and Linux. The earlier failed aggregate remains recorded separately.
@@ -252,64 +258,6 @@ list, thread and inspector. No executable was built, no tag was pushed and
   looks the owners still owe (tree brightness, the new layout on the laptop), real
   Windows fonts and display scaling, and every item in
   `docs/release-scope-0.5.0.md` under "What still needs the owner".
-
-## 2026-09-30 - Phase 0 landing: tree brightness, media player, Build's sessions layout and Worktrees on main
-
-A cloud session (Linux, Node 24.21.0) finished the parked branches on the
-integration branch `claude/funny-einstein-19ljkq` and moved `main` forward by
-fast-forward only, each time after Windows CI was green on the exact commit
-(runs 156, 157 and 160; `main` is at 9d10828). Landed: `wip/release-0.4.5`'s
-code fixes and docs, `wip/tree-brightness-gpu`, `wip/media-player-redesign` and
-`wip/builder-mode`, each with the tests it was missing; Work › Worktrees and
-`npm run worktrees`; the slim scroll indicator; Ctrl +/−/0 as a saved scale; the
-compile cache; the 16,000-character refusal; the keyed patcher
-(`renderer/patch.js`, not used by a page yet); and the worktree mark on Build's
-task rows. No executable was built, no tag was pushed and `gh-pages` was not
-touched.
-
-- `npm run check`: PASS (212 targets, 439 specs). `npm run audit`: PASS, 0
-  findings. `npm run lint`: PASS, 0 errors and the same 42 warnings.
-- `npm run test:fast` (Linux, Node 24.21.0): 5,213 tests, 5,186 pass, 0 fail,
-  27 skipped, 99 s. In a `core.autocrlf=true` clone (CRLF checkout, as on the PC)
-  at 3d877f3: 5,213 tests, 5,186 pass, 0 fail, 27 skipped, 111 s. One earlier
-  run of the same tree failed only `run_node_tests_fast` ("fast run keeps this
-  guard"); it passes alone and in the rerun. Cause found afterwards and fixed
-  (see the table above): the runner's `--list` output was cut off by
-  `process.exit()` when a pipe was slow.
-- Windows CI (`ci.yml`, windows-latest: build-booklet and its diff, spec audit,
-  check, lint, `npm test`, audit): green on f271343 (run 156), 8ce81a4 (157)
-  and 9d10828 (160). Hosted Windows skips every Electron-launching fixture, so
-  the lane below ran here only.
-- Electron lane on 8ce81a4: all 27 suites that launch Electron, one at a time as
-  an unprivileged user under xvfb at 1920×1080. 25 pass (agent_setup_render,
-  autonomy_render, command_toolbar, companion_hub_render, eyes_toggle_electron,
-  first_install, fleet_render, media_browser_render, media_window_render,
-  node_paint_cache, node_views_render, occlusion_probe, package_privacy,
-  patch_render, performance_render with 1 skip, planning_render,
-  renderer_recovery, setup_helper_render, stamp_exe with 3 Windows-only skips,
-  startup_render, task_overview_render, tree_dynamics_render,
-  unified_studio_render, workflow_render, worktrees_render). Two failed:
-  - `command_render` failed once at "Assistant narrow: pointer reaches the switch
-    track" while other Electron processes ran. It passes alone on 8ce81a4 (53 s)
-    and on the commit before all of this, db63e15 (51 s). The fixture now names
-    what covers the switch if it recurs.
-  - `project_map_render` fails at 600×560, zoom 1.5 (the map stage is 9 px taller
-    than its 52 px box and the fixture allows 2) and fails the same way on
-    db63e15, so it is not from this landing. The PC's Windows run decides it.
-- `worktrees_render` passes again on 3d877f3's booklet with the new
-  project-change case (the Worktrees page drops its list when the project
-  changes and the menu's marks follow).
-- What the branch agents measured before hand-over: tree brightness tone unit
-  tests 12, tree dynamics 15; Build's sessions layout +99 tests, and 33 of the
-  37 Electron suites its agent ran passed (it found `project_map_render` and
-  `unified_studio_render` red on clean main on its machine; `unified_studio_render`
-  passes in the lane above, `project_map_render` is the one listed there); media
-  music 117, media window 23, YouTube explorer 11 and six Electron render
-  suites passing, with the 12 failures the redesign left fixed and six bugs the
-  new tests found fixed and pinned.
-- Not run: `npm test` on the PC (the Windows Electron lane), the attended look
-  at tree brightness, and the startup benchmark for the compile cache on Windows
-  (`tools/benchmark_startup.py`; the Linux figures are in `docs/performance.md`).
 
 ## Read Before Any Tests
 

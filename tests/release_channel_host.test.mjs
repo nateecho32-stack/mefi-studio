@@ -77,9 +77,24 @@ test("channel failures show a useful fallback and preserve the bridge's reason",
   for(const error of [undefined,"Settings could not be saved"]){
     let handler;const toasts=[];const toggle={checked:true,disabled:false};
     const context=vm.createContext({document:{querySelector:()=>({addEventListener:(_event,f)=>{handler=f;}})},window:{mefiStudio:{releaseSetChannel:async()=>({ok:false,error})},MefiToast:message=>toasts.push(message)},paintRelease:()=>{},releaseUpdateState:{channel:"stable"}});
+    vm.runInContext(nav.slice(nav.indexOf("function releaseView(status)"),nav.indexOf("function paintRelease(status)")),context);
     vm.runInContext(nav.slice(start,end),context);await handler({target:toggle});
     assert.equal(toggle.disabled,false);assert.equal(toasts.length,1);
     if(error)assert.equal(toasts[0],error);else assert.match(toasts[0],/Could not change.*try again/);
+  }
+});
+
+test("channel cleanup preserves the disabled toggle during a concurrent update operation",async()=>{
+  const nav=(await readFile(new URL("../renderer/nav.js",import.meta.url),"utf8")).replace(/\r\n/g,"\n");
+  const start=nav.indexOf('document.querySelector("#release-development")?.addEventListener("change",');
+  const end=nav.indexOf('\n    });',start)+9;
+  for(const state of ["checking","downloading","applying","rollingback","current"]){
+    let handler;const toggle={checked:true,disabled:false};
+    const context=vm.createContext({document:{querySelector:()=>({addEventListener:(_event,f)=>{handler=f;}})},window:{mefiStudio:{releaseSetChannel:async()=>({ok:true,status:{state,channel:"development"}})}},releaseUpdateState:{state:"current"}});
+    context.paintRelease=status=>{if(status)context.releaseUpdateState=status;};
+    vm.runInContext(nav.slice(nav.indexOf("function releaseView(status)"),nav.indexOf("function paintRelease(status)")),context);
+    vm.runInContext(nav.slice(start,end),context);await handler({target:toggle});
+    assert.equal(toggle.disabled,state!=="current",state);
   }
 });
 

@@ -3110,7 +3110,7 @@
       } catch (error) {
         paintRelease(releaseUpdateState);
         window.MefiToast?.(`Channel change failed · ${String(error?.message ?? error)}`, "bad");
-      } finally { toggle.disabled = false; }
+      } finally { toggle.disabled = Boolean(releaseView(releaseUpdateState).busy); }
     });
     document.querySelector("#release-apply")?.addEventListener("click", () => applyReleaseNow());
     document.querySelector("#release-rollback")?.addEventListener("click", () => rollbackReleaseNow());
