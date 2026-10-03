@@ -966,6 +966,15 @@ async function applyRestart(files, { counted = true, stopAgents = false } = {}) 
   // off between saving the old project and selecting the new one.
   if (projectSwitching) return { deferred: true, reason: "Project switch is saving progress before update" };
   if (autopilot.jobs.length) return { deferred: true, reason: `${autopilot.jobs.length} build job(s) finishing before update; new dispatches wait` };
+  if (typeof pairedWorkersPrepareRestart === "function") {
+    const prepared = await pairedWorkersPrepareRestart();
+    if (prepared?.ok === false) return prepared;
+    // Closing an owned check may await its final journal/report. Protect any
+    // project or game that began during that wait before the synchronous exit.
+    if (projectSwitching) return { deferred: true, reason: "Project switch is saving progress before update" };
+    if (activeChild && activeChild.exitCode === null) return { deferred: true, reason: "Love2D is running" };
+    if (autopilot.jobs.length) return { deferred: true, reason: `${autopilot.jobs.length} build job(s) finishing before update; new dispatches wait` };
+  }
   stopUpdateWatch();
   stopEyesWatch();
   stopMachineWatch();
@@ -3082,6 +3091,14 @@ async function pairedWorkersClose(timeoutMs = 15000) {
       new Promise((_resolve, reject) => { timer = setTimeout(() => reject(new Error("Paired workers did not finish stopping; their saved journals need recovery.")), timeoutMs); }),
     ]);
   } finally { clearTimeout(timer); }
+}
+async function pairedWorkersPrepareRestart() {
+  if (!pairedWorkersHost) return { ok: true };
+  const previous = pairedWorkersClosing;
+  pairedWorkersClosing = true;
+  try { await pairedWorkersClose(); return { ok: true }; }
+  catch { return { ok: false, error: "Could not stop paired workers; their saved journals need recovery." }; }
+  finally { pairedWorkersClosing = previous; }
 }
 function pairedWorkersQuit(event) {
   if (!pairedWorkersHost || pairedWorkersQuitSaved) return false;
@@ -20213,11 +20230,7 @@ async function restartStudio({ stopAgents = true, reason = "restarting", files =
   if (activeChild && activeChild.exitCode === null) return { deferred: true, reason: "Love2D is running" };
   if (projectSwitching) return { deferred: true, reason: "Project switch is saving progress before update" };
   const closingPaired = typeof pairedWorkersClose === "function";
-  if (closingPaired) {
-    pairedWorkersClosing = true;
-    try { await pairedWorkersClose(); }
-    catch (error) { pairedWorkersClosing = false; return { ok: false, error: String(error?.message ?? "Could not stop paired workers.") }; }
-  }
+  if (closingPaired) pairedWorkersClosing = true;
   try {
   if (stopAgents) {
     const stopped = await stopAllAgents({ reason, pauseAssistant: true, pauseExecutor: true });
@@ -20229,7 +20242,7 @@ async function restartStudio({ stopAgents = true, reason = "restarting", files =
       if (saved?.ok === false) return { ok: false, error: `Could not save agent progress: ${saved.error}` };
     }
   }
-  return applyRestart(files, { counted: false });
+  return await applyRestart(files, { counted: false });
   } finally { if (closingPaired) pairedWorkersClosing = false; }
 }
 

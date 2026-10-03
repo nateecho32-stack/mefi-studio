@@ -39,6 +39,22 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-03 Paired restart boundary review follow-up
+
+All three Windows push/PR and Linux PR checks pass at first milestone commit
+44e40d0. Its completed 25-file CodeRabbit review raised one minor issue: paired
+services stopped before a deferred restart had reached its final checks.
+Shutdown now runs after saved-state and existing deferral checks, immediately
+before relaunch preparation. A project, game or build appearing during that
+await is checked again before the synchronous exit. Restart admission remains
+closed through the decision, and close failures prevent relaunch.
+
+34 lifecycle/update/loop tests pass, including paired-close deadline, deferral,
+ordering and failure injection. Earlier aggregate and clean-main audio fixture
+failures remain recorded; the unchanged candidate retry and exact-head CI pass.
+Follow-up check/audit/lint and review/CI outcomes are reported separately.
+No renderer, provider runtime, workflow, main merge or release changes.
+
 ## 2026-10-03 Paired workers review milestone - aggregate and baseline comparison
 
 Corrected slice: 22 focused tests pass; real HTTP loopback and Git/Node run the
@@ -193,16 +209,6 @@ Change: an informational Fleet Health note for at least three distinct handed-of
 Focused validation: 30 Node tests passed, zero failures/skips across fleet and fleet_host. Tests use real board/status/report observations and cover duplicate/title-changed events, pending completion reports, verification and human confirmation, persistence, renewed handoffs, expiry, future events, read-only history and cross-project isolation. The extended Chromium fixture is prepared for desktop/narrow note and inspector screenshots, but was not launched while the game held the shared server window. Required full aggregate and real Fleet verification remain pending coordination; no aggregate validation is claimed for this new batch.
 
 Dependency evidence: the unchanged recap candidate passed build, check, audit and full npm test (6,656 Node passes, zero failures, 16 skips; 248 Python tests OK with one skip; six normalized-path lock checks). All 1,012 tracked files matched the source freeze after the gate. Its synchronous disposable-profile real Fleet check passed all ten steps. The PowerShell GUI launch's initial zero-second entry was replaced with the actual waited child exit and report. Platform limitations: synthetic Ctrl+W did not exercise native Close; Electron occlusion events were unavailable. That evidence belongs to the prior recap candidate, not this new Health change.
-
-## 2026-10-02 - Maxwells-PC Fleet seat recap focused verification
-
-Source/provenance: local/fleet-seat-recaps-20261002 in a separate mefi-studio-recaps checkout at b3a4f468348a4485112c6741026b565f106e9821, with the previously verified UI/loop candidate applied first. The original checkout and mefi-studio-current candidate remain untouched. No commit, push, merge or release.
-
-Fleet recap batch: deterministic recorded history from up to four prior generations, capped at 1,500 characters, shown in the seat inspector and passed to the next assigned worker. Live generations are excluded; interrupted, awaiting-verification and verified outcomes remain distinct; exact repeated handoffs collapse while distinct child identities survive. The full ledger and task history remain intact. Lookup stays project scoped, is bounded at two seconds and fails open for dispatch; no additional model calls.
-
-Focused validation: 148 Node tests passed, zero failures/skips across fleet, fleet_host, executor_core and executor_lifecycle, including cross-project and project-switch isolation, saved interruption/verification history, handoff identity, bounded text/prompt budget, actual prompt delivery, unavailable history and a stalled lookup. Initial new history test needed its active board seed before checking the observed verified transition; corrected focused run passed. Fleet Chromium fixture passed in 31.1 seconds: 25 layout/view combinations across five size/zoom cases, desktop/narrow recap geometry, real inspector content, no renderer errors, network or child attempts. Screenshots retained at 1440x900 and 600x560. Build-booklet, check and audit passed; zero audit findings/errors/warnings. Required full aggregate gate is pending parent coordination of the shared server CPU window; this row does not claim aggregate validation of the recap batch.
-
-Separate live evidence: the unchanged prior candidate passed actual native restart during a real Codex worker, app PID 10360 -> 7212, original app exit 0. Interrupted progress/claims persisted without a failure charge; old worker process tree drained before explicit resume, paused dwell admitted no worker, exactly one resumed worker completed and the actual project check/verifier reached Done/Verified; shipped review Accept ran once. Both workers were sequential and the same one task survived. This used disposable Git/project/profile and existing authorized ChatGPT login. No production tasks, credentials, original checkout, default Classic or release state changed. The complete raw active-native-restart report/controller/screenshots stay outside Git under task-2/evidence.
 
 ## Read Before Any Tests
 

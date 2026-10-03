@@ -6,6 +6,16 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-02 - Maxwells-PC Fleet seat recap focused verification
+
+Source/provenance: local/fleet-seat-recaps-20261002 in a separate mefi-studio-recaps checkout at b3a4f468348a4485112c6741026b565f106e9821, with the previously verified UI/loop candidate applied first. The original checkout and mefi-studio-current candidate remain untouched. No commit, push, merge or release.
+
+Fleet recap batch: deterministic recorded history from up to four prior generations, capped at 1,500 characters, shown in the seat inspector and passed to the next assigned worker. Live generations are excluded; interrupted, awaiting-verification and verified outcomes remain distinct; exact repeated handoffs collapse while distinct child identities survive. The full ledger and task history remain intact. Lookup stays project scoped, is bounded at two seconds and fails open for dispatch; no additional model calls.
+
+Focused validation: 148 Node tests passed, zero failures/skips across fleet, fleet_host, executor_core and executor_lifecycle, including cross-project and project-switch isolation, saved interruption/verification history, handoff identity, bounded text/prompt budget, actual prompt delivery, unavailable history and a stalled lookup. Initial new history test needed its active board seed before checking the observed verified transition; corrected focused run passed. Fleet Chromium fixture passed in 31.1 seconds: 25 layout/view combinations across five size/zoom cases, desktop/narrow recap geometry, real inspector content, no renderer errors, network or child attempts. Screenshots retained at 1440x900 and 600x560. Build-booklet, check and audit passed; zero audit findings/errors/warnings. Required full aggregate gate is pending parent coordination of the shared server CPU window; this row does not claim aggregate validation of the recap batch.
+
+Separate live evidence: the unchanged prior candidate passed actual native restart during a real Codex worker, app PID 10360 -> 7212, original app exit 0. Interrupted progress/claims persisted without a failure charge; old worker process tree drained before explicit resume, paused dwell admitted no worker, exactly one resumed worker completed and the actual project check/verifier reached Done/Verified; shipped review Accept ran once. Both workers were sequential and the same one task survived. This used disposable Git/project/profile and existing authorized ChatGPT login. No production tasks, credentials, original checkout, default Classic or release state changed. The complete raw active-native-restart report/controller/screenshots stay outside Git under task-2/evidence.
+
 ## 2026-10-02 - Maxwells-PC modern UI and live-loop verification
 
 Source/provenance: isolated branch local/ui-loop-current-20261001 at b3a4f468348a4485112c6741026b565f106e9821. Independently reproduced on the server; Echo's uncommitted patch was unavailable and was not assumed transferred. The installed OneDrive checkout remains clean at 1dd9518be7b8843616cd56778f8d834fcb534e58. No push, merge, release, production restart, credentials or default-setting changes.
