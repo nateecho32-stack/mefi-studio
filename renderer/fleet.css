@@ -1,6 +1,7 @@
 /* Fleet (renderer/fleet.js): Live > Fleet. An explorer tree, five views of the
    team and the selected seat. Every colour comes from the theme tokens, so
    every palette keeps its own; the wire colours are named once below. */
+.fleet-recap { white-space: pre-line; overflow-wrap: anywhere; }
 .fleet-sheet {
   --fleet-escalate: var(--bad); --fleet-rework: var(--warn); --fleet-handoff: var(--gold-bright); --fleet-delegation: var(--info);
   --fleet-verify: var(--good); --fleet-desk: var(--idea); --fleet-report: var(--info); --fleet-dispatch: var(--muted); --fleet-mail: var(--dim);

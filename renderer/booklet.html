@@ -3350,6 +3350,11 @@ html[data-no-blur] {
 .task-context-section > summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .task-context-section[open] { padding-bottom: 13px; }
 .task-context-hint { font-size: 12px; line-height: 1.65; color: var(--muted); margin: 0 0 11px; overflow-wrap: anywhere; }
+.task-plan-trace { min-width: 0; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: var(--r-xs); margin: 10px 0 14px; }
+#task-detail .task-plan-trace > h4 { font-size: 12px; margin: 0 0 8px; }
+#task-detail .task-plan-trace > button { font-size: 12px; }
+.task-plan-title { font-size: 13px; font-weight: 600; margin: 0 0 6px; overflow-wrap: anywhere; }
+.task-plan-destination { font-size: 13px; line-height: 1.6; margin: 0 0 10px; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
 .task-dependency-options { display: grid; gap: 4px; max-height: 210px; overflow-y: auto; padding: 3px; margin: 0 -3px 12px; overscroll-behavior: contain; }
 .task-dependency-option { display: flex; gap: 9px; align-items: center; padding: 7px 8px; border-radius: 5px; color: var(--ivory); cursor: pointer; }
 .task-dependency-option:hover { background: var(--tint-gold-1); }
@@ -7255,6 +7260,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
 /* Fleet (renderer/fleet.js): Live > Fleet. An explorer tree, five views of the
    team and the selected seat. Every colour comes from the theme tokens, so
    every palette keeps its own; the wire colours are named once below. */
+.fleet-recap { white-space: pre-line; overflow-wrap: anywhere; }
 .fleet-sheet {
   --fleet-escalate: var(--bad); --fleet-rework: var(--warn); --fleet-handoff: var(--gold-bright); --fleet-delegation: var(--info);
   --fleet-verify: var(--good); --fleet-desk: var(--idea); --fleet-report: var(--info); --fleet-dispatch: var(--muted); --fleet-mail: var(--dim);
@@ -12496,6 +12502,7 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
 .sx-thread[data-short="true"] .sx-actions :is(.sx-icon, [data-spec="watch"], [data-spec="drop"]) { display: none; }
 .sx-thread[data-short="true"] .sx-chips .sx-chip:not(:first-child) { display: none; }
 .sx-thread[data-short="true"] .sx-dock { max-height: 40%; }
+.sx-thread[data-short="true"] .sx-scroll { min-height: 60px; }
 .sx-thread[data-short="true"] .sx-compose { display: flex; flex: 0 1 auto; flex-wrap: wrap; align-items: flex-end; gap: 6px; min-height: 0; margin-bottom: 8px; padding: 6px 8px 8px; overflow-y: auto; overscroll-behavior: contain; }
 .sx-thread[data-short="true"] #sessions-input { order: 1; flex: 1 1 0; min-width: 0; height: 44px; min-height: 44px; }
 .sx-thread[data-short="true"] .sx-tools { display: contents; }
@@ -20956,7 +20963,44 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
     return [...result.values()];
   }
 
-  window.MefiTaskGroups = { groupTasks, graphTasks, overviewGroups, isLiveTask };
+  // Only an explicit task link and the current project's scoped plan read
+  // establish provenance. This never changes the recorded task or its brief.
+  function planTrace(task, { plans = [], projectId = "", unavailable = false } = {}) {
+    const planId = idOf(task?.planningId), currentProject = idOf(projectId);
+    if (!planId) return null;
+    const absent = (state, message) => ({ state, planId, title: "", destination: "", message, canOpen: false });
+    if (!currentProject) return absent("unavailable", "The linked plan could not be read. Its destination is not shown.");
+    if (task.projectId && idOf(task.projectId) !== currentProject) return absent("foreign", "This task's plan link belongs to another project.");
+    if (unavailable) return absent("unavailable", "The linked plan could not be read. Its destination is not shown.");
+    const matching = rows(plans).filter(plan => object(plan) && idOf(plan.id) === planId && (!plan.projectId || idOf(plan.projectId) === currentProject));
+    if (!matching.length) return absent("missing", "The linked plan is not available in this project.");
+    if (matching.length !== 1) return absent("ambiguous", "More than one saved plan has this ID. Its destination cannot be identified.");
+    const plan = matching[0], spec = object(plan.spec) ? plan.spec : null;
+    const title = typeof plan.title === "string" ? plan.title.trim().slice(0, 180) : "";
+    const fullDestination = typeof plan.destination === "string" ? plan.destination.trim() : "";
+    const messages = [];
+    let state = "current";
+    if (plan.status === "archived") { state = "changed"; messages.push("The linked plan is archived."); }
+    if (spec?.stale) { state = "changed"; messages.push("The saved plan needs revision."); }
+    if (idOf(task.planningSpecId) && idOf(task.planningSpecId) !== idOf(spec?.id)) {
+      state = "changed"; messages.push("The saved specification differs from the one recorded on this task.");
+    }
+    if (Array.isArray(plan.taskIds) && !plan.taskIds.includes(task.id)) {
+      state = "changed"; messages.push("This task is no longer listed in the saved plan.");
+    }
+    if (!spec?.approvedAt) {
+      if (state === "current") state = "unconfirmed";
+      messages.push("The saved plan has no current approval recorded.");
+    }
+    if (!fullDestination) messages.push("No destination is recorded in this plan.");
+    const destinationTruncated = fullDestination.length > 16000;
+    if (destinationTruncated) messages.push("The destination is shortened here. View the plan for its full text.");
+    if (state !== "current") messages.push("This task's recorded brief is unchanged.");
+    return { state, planId, title: title || "Saved plan", destination: fullDestination.slice(0, 16000), destinationTruncated,
+      message: messages.join(" "), canOpen: true };
+  }
+
+  window.MefiTaskGroups = { groupTasks, graphTasks, overviewGroups, isLiveTask, planTrace };
 })();
 
 // Shared Studio controls: scrollbar-free overflow, accessible select menus and
@@ -21948,6 +21992,7 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
 
   // Layer bookkeeping. Other modules read it; only claim/release write it.
   const state = { sheet: null, transient: null, returnTo: null, commandFrom: null, focusReturn: { sheet: null, transient: null } };
+  let focusClaimSequence = 0;
   // assistant holds the service tone (ok | busy | warn | offline | paused), painted
   // as a dot on the Explorer's dock item and tool button.
   const badges = { sessions: 0, progress: 0, tasks: 0, ideas: 0, machine: null, assistant: null, questions: 0 };
@@ -22940,7 +22985,13 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
       if (page) sheet.removeAttribute("aria-modal");
       else sheet.setAttribute("aria-modal", "true");
     }
+    const focusClaim = ++focusClaimSequence;
+    const focusBeforeClaim = document.activeElement;
     requestAnimationFrame(() => {
+      // Navigation supplies initial focus only while its claim is current.
+      // A later user focus must survive a delayed or covered-window frame.
+      if (focusClaim !== focusClaimSequence || state[dest.layer] !== id ||
+          document.activeElement !== focusBeforeClaim || !visibleNavTarget(root)) return;
       const requested = dest.focus ? Array.from(document.querySelectorAll?.(dest.focus) ?? []).find(visibleNavTarget) : null;
       const selected = Array.from(root?.querySelectorAll?.('[aria-selected="true"]') ?? []).find(visibleNavTarget);
       const target = requested ?? selected ?? sheet;
@@ -22955,6 +23006,7 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
   function release(id) {
     const dest = get(id);
     const layer = dest?.layer ?? (state.sheet === id ? "sheet" : state.transient === id ? "transient" : null);
+    if (state.sheet === id || state.transient === id) focusClaimSequence += 1;
     if (state.sheet === id) {
       state.sheet = null;
       delete document.body.dataset.sheet;
@@ -53730,7 +53782,8 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
   const UNPAINTED = Object.freeze({ view: "", rows: null });
   let paintedList = UNPAINTED;
   let paintedDetail = UNPAINTED;
-  const state = { tasks: [], plans: [], plansError: null, selected: null, filter: "all", readiness: "all", projectId: null, query: "", doneCollapsed: false, renaming: false, prefs: { blurMenu: true, useWeb: false, useTree: true, autoReference: true, useReference: true }, references: null };
+  const state = { tasks: [], plans: [], plansError: null, plansLoaded: false, selected: null, filter: "all", readiness: "all", projectId: null, query: "", doneCollapsed: false, renaming: false, prefs: { blurMenu: true, useWeb: false, useTree: true, autoReference: true, useReference: true }, references: null };
+  let planTracePanel = null, paintedPlanTrace = "";
   // Two-step delete: the id of the task whose Delete button is armed right now.
   let deleteArmed = null;
   // Two-step Stop, kept here rather than on the button for the same reason:
@@ -53780,9 +53833,12 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
   let detailBusy = null;
   let backlogRead = 0;
   let projectEpoch = 0;
+  let openRead = 0;
+  let gatherRead = 0;
   let createPending = false;
   const createDrafts = new Map();
   const overviewExpanded = new Set();
+  let overviewPaint = null;
   let plansRead = 0;
   const taskKey = (task) => `${task?.projectId || state.backlog?.projectId || ""}/${task?.id || ""}`;
   const node = (tag, className, text) => Object.assign(document.createElement(tag), { className, textContent: text ?? "" });
@@ -54120,8 +54176,13 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
   }
 
   function taskRow(task) {
+    const epoch = projectEpoch;
+    // Kept rows may outlive an identical board snapshot. Act on the current
+    // canonical row, and never on a detached row from a previous project.
+    const current = () => epoch === projectEpoch ? state.tasks.find((row) => row.id === task.id) : null;
     const li = document.createElement("li");
     li.classList.add("task-row");
+    li.dataset.taskId = task.id;
     li.style.setProperty("--task-color", task.color ?? COLORS[0]);
     if (task.id === state.selected) li.classList.add("selected");
     if (isDone(task)) li.classList.add("done-row");
@@ -54147,8 +54208,8 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
     // One-click finish (or reopen) without leaving the board.
     const actions = document.createElement("span");
     actions.className = "row-actions";
-    if (isDone(task)) actions.append(rowButton("↺", "Reopen — back to the open board", () => setTaskStatus(task, "open")));
-    else actions.append(rowButton("✓", "Mark done — moves it under the Done mark", () => setTaskStatus(task, "done")));
+    if (isDone(task)) actions.append(rowButton("↺", "Reopen - back to the open board", () => { const row = current(); if (row) setTaskStatus(row, "open"); }));
+    else actions.append(rowButton("✓", "Mark done - moves it under the Done mark", () => { const row = current(); if (row) setTaskStatus(row, "done"); }));
     li.append(dot, text, actions);
     // The brief rides under the title in the Done view — the same digest the
     // detail pane shows, so the list answers "what got done" at a glance.
@@ -54162,6 +54223,7 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
     // Focusable because nav's claim() may focus a row in this list.
     li.tabIndex = 0;
     li.addEventListener("click", () => {
+      if (!current()) return;
       window.MefiNav?.note?.("tasks", { taskId: task.id, projectId: state.projectId });
       state.selected = task.id;
       renderList();
@@ -54225,12 +54287,13 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
 
   function renderList() {
     paintedList = UNPAINTED;
-    cardLayout?.stop();
-    els.list.textContent = "";
     renderFilters();
     els.overlay?.classList.toggle("task-overview-mode", state.filter !== "done");
     els.overlay?.classList.toggle("task-detail-open", Boolean(selectedTask()));
     if (state.filter !== "done" && window.MefiTaskGroups?.overviewGroups) { renderOverview(); return; }
+    cardLayout?.stop();
+    overviewPaint = null;
+    els.list.textContent = "";
     // A selected done task must be visible, so unfold the mark it lives under.
     const selected = selectedTask();
     if (selected && isDone(selected)) state.doneCollapsed = false;
@@ -54321,6 +54384,7 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
 
   function overviewCard(model) {
     const { group, counts, stage, planning } = model;
+    const epoch = projectEpoch;
     const card = node("li", "task-overview-card");
     card.dataset.overviewId = group.id;
     card.dataset.stage = stage;
@@ -54367,10 +54431,10 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
     }
     if (stage === "done" && group.task) card.append(node("p", "task-overview-note", doneSummary(group.task)));
     const actions = node("div", "task-overview-actions");
-    if (group.planId && (group.plan || group.kind === "approved-plan")) actions.append(rowButton(planning ? "Continue planning" : "View plan", "Open the saved destination, discussion and decisions", () => { close(); window.MefiPlanning?.open?.({ planId: group.planId }); }));
+    if (group.planId && (group.plan || group.kind === "approved-plan")) actions.append(rowButton(planning ? "Continue planning" : "View plan", "Open the saved destination, discussion and decisions", () => { if (epoch !== projectEpoch) return; close(); window.MefiPlanning?.open?.({ planId: group.planId }); }));
     const release = model.current && !model.current.unavailable ? holdAction(model.current) : null;
     if (release && !release.disabled) {
-      const button = rowButton(release.label, release.title, release.run);
+      const button = rowButton(release.label, release.title, () => { if (epoch === projectEpoch) release.run(); });
       button.dataset.taskAction = release.action;
       actions.append(button);
     }
@@ -54382,7 +54446,7 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
       card.classList.add("opens-task");
       card.tabIndex = 0;
       card.title = `Open ${shortTitle(target)}`;
-      const openTarget = () => window.MefiTasks.selectTask(target.id);
+      const openTarget = () => { if (epoch === projectEpoch && state.tasks.some((task) => task.id === target.id)) window.MefiTasks.selectTask(target.id); };
       card.addEventListener("click", (event) => { if (!event.target?.closest?.("button, a, input, select, summary, .task-overview-details")) openTarget(); });
       card.addEventListener("keydown", (event) => { if (event.target === card && event.key === "Enter") { event.preventDefault(); openTarget(); } });
     }
@@ -54394,7 +54458,7 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
       const details = node("details", "task-overview-details");
       details.open = overviewExpanded.has(group.id) || detailsRows.some((member) => member.id === state.selected);
       details.append(node("summary", "", `${detailsRows.length} ${detailsRows.length === 1 ? "task" : "tasks"} in this card`));
-      details.addEventListener("toggle", () => { details.open ? overviewExpanded.add(group.id) : overviewExpanded.delete(group.id); });
+      details.addEventListener("toggle", () => { if (epoch === projectEpoch && els.list.contains(details)) details.open ? overviewExpanded.add(group.id) : overviewExpanded.delete(group.id); });
       const list = node("ul", "pin-list task-overview-members");
       for (const member of detailsRows) {
         if (member.canonical !== false) list.append(taskRow(member.task));
@@ -54410,7 +54474,89 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
     return card;
   }
 
+  // Keep stable nodes in place, including focused descendants. moveBefore
+  // preserves browser state on reorder; older renderers restore focus below.
+  function reconcileOverviewChildren(parent, children) {
+    const wanted = new Set(children);
+    for (const child of [...parent.children]) if (!wanted.has(child)) parent.removeChild(child);
+    for (let index = 0; index < children.length; index += 1) {
+      const child = children[index], before = parent.children[index] || null;
+      if (child === before) continue;
+      if (child.parentNode && child.isConnected && parent.isConnected && parent.moveBefore) parent.moveBefore(child, before);
+      else parent.insertBefore(child, before);
+    }
+  }
+
+  function overviewFocus() {
+    const active = document.activeElement;
+    if (!active || !els.list.contains(active)) return null;
+    const card = active.closest?.(".task-overview-card");
+    const fold = active.closest?.(".task-overview-finished-fold");
+    if (!card) return fold ? { active, finished: true } : null;
+    const path = [];
+    for (let item = active; item && item !== card; item = item.parentNode) path.unshift([...item.parentNode.children].indexOf(item));
+    const row = active.closest?.(".task-row"), rowPath = [];
+    if (row) for (let item = active; item && item !== row; item = item.parentNode) rowPath.unshift([...item.parentNode.children].indexOf(item));
+    return { active, id: card.dataset.overviewId, path, tag: active.tagName, text: active.textContent, action: active.dataset.taskAction,
+      row: row?.dataset.taskId, rowPath };
+  }
+
+  function restoreOverviewFocus(focus) {
+    if (!focus || document.activeElement === focus.active && focus.active.isConnected) return;
+    if (focus.active.isConnected) { focus.active.focus?.({ preventScroll: true }); return; }
+    if (focus.finished) { overviewPaint?.finished?.summary.focus?.({ preventScroll: true }); return; }
+    const card = overviewPaint?.cards.get(focus.id)?.card;
+    if (!card) return;
+    let target = card;
+    if (focus.row) {
+      target = [...card.querySelectorAll(".task-row")].find((row) => row.dataset.taskId === focus.row);
+      for (const index of focus.rowPath) target = target?.children[index];
+    } else for (const index of focus.path) target = target?.children[index];
+    // Never transfer a removed member's button focus onto a different task.
+    if (!target || target.tagName !== focus.tag || target.dataset.taskAction !== focus.action ||
+        (focus.row && target.closest?.(".task-row")?.dataset.taskId !== focus.row) ||
+        (String(target.tagName).toLowerCase() === "button" && target.textContent !== focus.text)) target = card;
+    if (target === card && !card.classList.contains("opens-task")) card.tabIndex = -1;
+    target.focus?.({ preventScroll: true });
+  }
+
+  function overviewCardSignature(model, signatures, now) {
+    const group = model.group;
+    const row = (task) => {
+      if (!task) return null;
+      if (!signatures.has(task)) signatures.set(task, rowSignature(task, now));
+      return [signatures.get(task), scheduledTask(task), task.id === state.selected];
+    };
+    // Full row fields retain the existing paint contract, excluding only live
+    // runProgress. Scheduler reasons/actions, saved-plan changes and canonical
+    // membership must also invalidate the affected card, even at equal counts.
+    return JSON.stringify([state.filter, Boolean(window.mefiStudio?.tasksAction), group.id, group.kind, group.title, group.planId,
+      group.plan, row(group.task), (group.members || []).map((member) => [member.id, member.canonical, member.readOnly, row(member.task)])]);
+  }
+
+  function retainedOverviewCard(model, signatures, now) {
+    const id = model.group.id, signature = overviewCardSignature(model, signatures, now);
+    const prior = overviewPaint.cards.get(id);
+    if (prior?.signature === signature) return prior.card;
+    const details = prior?.card.querySelector(".task-overview-details");
+    // toggle is queued by the browser; capture the actual fold before replacing
+    // a changed card instead of relying on the event having already fired.
+    if (details) details.open ? overviewExpanded.add(id) : overviewExpanded.delete(id);
+    const card = overviewCard(model);
+    overviewPaint.cards.set(id, { signature, card });
+    return card;
+  }
+
   function renderOverview() {
+    const focus = overviewFocus();
+    if (!overviewPaint || overviewPaint.epoch !== projectEpoch) {
+      const heading = node("li", "task-overview-summary");
+      const count = node("strong", ""), explanation = node("span", "");
+      heading.append(count);
+      overviewPaint = { epoch: projectEpoch, cards: new Map(), heading, count, explanation,
+        note: node("li", "task-overview-note", "Saved plans could not be refreshed. Task progress is still available."),
+        empty: mutedLi(emptyListMessage(0)), finished: null };
+    }
     const groups = window.MefiTaskGroups.overviewGroups(state.tasks, { plans: state.plans });
     const query = state.query.trim().toLowerCase();
     const models = groups.map(overviewModel).filter((model) => {
@@ -54426,25 +54572,45 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
     models.sort((a, b) => rank[a.stage] - rank[b.stage] || (b.group.plan?.updatedAt || b.group.task?.updatedAt || 0) - (a.group.plan?.updatedAt || a.group.task?.updatedAt || 0));
     // The chips count tasks and the list shows cards; say how the two relate
     // only when they differ.
-    const heading = node("li", "task-overview-summary");
+    const { heading, count, explanation } = overviewPaint;
     const taskCount = summary()[state.filter] ?? 0;
-    heading.append(node("strong", "", `${models.length} ${models.length === 1 ? "card" : "cards"}`));
-    if (taskCount !== models.length) heading.append(node("span", "", `from ${taskCount} ${taskCount === 1 ? "task" : "tasks"} — related tasks share a card`));
-    els.list.append(heading);
-    if (state.plansError) els.list.append(node("li", "task-overview-note", "Saved plans could not be refreshed. Task progress is still available."));
+    const text = `${models.length} ${models.length === 1 ? "card" : "cards"}`;
+    if (count.textContent !== text) count.textContent = text;
+    const why = `from ${taskCount} ${taskCount === 1 ? "task" : "tasks"} - related tasks share a card`;
+    if (explanation.textContent !== why) explanation.textContent = why;
+    reconcileOverviewChildren(heading, taskCount !== models.length ? [count, explanation] : [count]);
+    const children = [heading];
+    if (state.plansError) children.push(overviewPaint.note);
+    const signatures = new Map(), now = Date.now();
     const finished = models.filter((model) => model.stage === "done");
-    for (const model of models.filter((model) => model.stage !== "done")) els.list.append(overviewCard(model));
+    for (const model of models.filter((model) => model.stage !== "done")) children.push(retainedOverviewCard(model, signatures, now));
     if (finished.length) {
-      const row = node("li", "task-overview-finished");
-      const details = node("details", "task-overview-finished-fold");
-      details.open = overviewExpanded.has("finished") || finished.some((model) => model.work.some((task) => task.id === state.selected));
-      details.append(node("summary", "", `Confirmed plans & tasks · ${finished.length}`));
-      details.addEventListener("toggle", () => { details.open ? overviewExpanded.add("finished") : overviewExpanded.delete("finished"); });
-      const list = node("ul", "pin-list task-overview-finished-list");
-      for (const model of finished) list.append(overviewCard(model));
-      details.append(list); row.append(details); els.list.append(row);
+      if (!overviewPaint.finished) {
+        const row = node("li", "task-overview-finished"), details = node("details", "task-overview-finished-fold");
+        const summary = node("summary", ""), list = node("ul", "pin-list task-overview-finished-list");
+        details.open = overviewExpanded.has("finished");
+        const epoch = projectEpoch;
+        details.addEventListener("toggle", () => { if (epoch === projectEpoch && els.list.contains(details)) details.open ? overviewExpanded.add("finished") : overviewExpanded.delete("finished"); });
+        details.append(summary, list); row.append(details);
+        overviewPaint.finished = { row, details, summary, list };
+      }
+      const fold = overviewPaint.finished;
+      const label = `Confirmed plans & tasks · ${finished.length}`;
+      if (fold.summary.textContent !== label) fold.summary.textContent = label;
+      if (finished.some((model) => model.work.some((task) => task.id === state.selected))) fold.details.open = true;
+      reconcileOverviewChildren(fold.list, finished.map((model) => retainedOverviewCard(model, signatures, now)));
+      children.push(fold.row);
     }
-    if (!models.length) els.list.append(mutedLi(emptyListMessage(0)));
+    if (!models.length) {
+      const message = emptyListMessage(0);
+      if (overviewPaint.empty.textContent !== message) overviewPaint.empty.textContent = message;
+      children.push(overviewPaint.empty);
+    }
+    reconcileOverviewChildren(els.list, children);
+    const visible = new Set(models.map((model) => model.group.id));
+    for (const id of overviewPaint.cards.keys()) if (!visible.has(id)) overviewPaint.cards.delete(id);
+    if (!finished.length) overviewPaint.finished = null;
+    restoreOverviewFocus(focus);
     watchMasonry();
   }
 
@@ -54464,15 +54630,18 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
     const epoch = projectEpoch, projectId = state.projectId, read = ++plansRead;
     try {
       const result = await api.planningList(projectId ? { projectId } : {});
-      if (epoch !== projectEpoch || read !== plansRead || projectId !== state.projectId || result?.projectId && projectId && result.projectId !== projectId) return;
+      if (epoch !== projectEpoch || read !== plansRead || projectId !== state.projectId) return;
+      if (result?.projectId && projectId && result.projectId !== projectId) throw new Error("Plan project mismatch");
       if (!result?.ok || !Array.isArray(result.plans)) throw new Error("Plans unavailable");
       state.plans = result.plans.filter((plan) => !plan.projectId || !projectId || plan.projectId === projectId);
       state.plansError = null;
+      state.plansLoaded = true;
     } catch {
       if (epoch !== projectEpoch || read !== plansRead) return;
       state.plansError = true;
+      state.plansLoaded = false;
     }
-    if (!els.overlay.hidden) paintIfChanged();
+    if (!els.overlay.hidden) { paintIfChanged(); refreshPlanTrace(); }
   }
 
   async function load(options = {}) {
@@ -55003,24 +55172,33 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
     const method = action === "dependencies" ? "tasksDependencies" : "tasksRestore";
     if (!api?.[method] || detailBusy) return;
     const key = taskKey(task), projectId = task.projectId || state.backlog?.projectId;
+    const epoch = projectEpoch, revision = taskRevision;
+    const current = () => epoch === projectEpoch && taskKey(selectedTask()) === key;
     detailBusy = key;
     detailMessages.set(key, { text: action === "dependencies" ? "Saving prerequisites…" : "Restoring this brief…" });
     renderDetail();
     try {
       const result = await api[method]({ taskId: task.id, projectId, ...payload });
       if (!result?.ok) throw new Error(result?.error || "The change could not be saved. Try again.");
-      if (taskKey(selectedTask()) !== key) return;
-      if (result.task) state.tasks = state.tasks.map((item) => item.id === task.id ? result.task : item);
-      if (result.backlog) state.backlog = result.backlog;
+      if (!current()) return;
+      const accepted = selectedTask();
+      // Context versions order brief edits. A push at the same version may
+      // carry newer run state, which is deliberately outside brief history.
+      const replyVersion = Number(result.task?.contextVersion) || 0;
+      const acceptedVersion = Number(accepted?.contextVersion) || 0;
+      const preserveAccepted = result.task && (replyVersion < acceptedVersion ||
+        (taskRevision !== revision && replyVersion === acceptedVersion));
+      if (result.task && !preserveAccepted) state.tasks = state.tasks.map((item) => item.id === task.id ? result.task : item);
+      if (result.backlog && taskRevision === revision) state.backlog = result.backlog;
       dependencyDrafts.delete(key);
       contextReads.delete(key);
       detailMessages.set(key, { text: action === "dependencies" ? "Prerequisites saved. The queue will wait for them to finish." : "Earlier brief restored. Files, task status, and completion evidence are unchanged." });
       renderList();
     } catch (error) {
-      detailMessages.set(key, { text: error.message, error: true });
+      if (current()) detailMessages.set(key, { text: error.message, error: true });
     } finally {
       detailBusy = null;
-      if (taskKey(selectedTask()) === key) renderDetail();
+      if (current()) renderDetail();
     }
   }
 
@@ -55448,6 +55626,42 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
     box.append(actions); parent.append(box);
   }
 
+  function currentPlanTrace(task) {
+    return window.MefiTaskGroups?.planTrace?.(task, { plans: state.plans, projectId: state.projectId, unavailable: !state.plansLoaded || Boolean(state.plansError) }) ?? null;
+  }
+  function refreshPlanTrace() {
+    const task = selectedTask(), panel = planTracePanel;
+    if (!panel || !task || panel.dataset.taskId !== task.id) return;
+    const trace = currentPlanTrace(task), signature = JSON.stringify(trace);
+    if (signature === paintedPlanTrace) return;
+    paintedPlanTrace = signature;
+    panel.planTrace = trace; panel.hidden = !trace;
+    if (!trace) return;
+    panel.dataset.state = trace.state;
+    const [heading, title, destination, message, origin] = panel.children;
+    heading.textContent = trace.title ? "Current saved destination" : "Linked plan destination";
+    title.textContent = trace.title; title.hidden = !trace.title;
+    destination.textContent = trace.destination; destination.hidden = !trace.destination;
+    message.textContent = trace.message; message.hidden = !trace.message;
+    origin.hidden = !trace.canOpen;
+    if (origin.hidden && document.activeElement === origin) panel.focus({ preventScroll: true });
+  }
+  function renderPlanTrace(task, body) {
+    if (!String(task.planningId || "").trim()) return;
+    const panel = node("section", "task-subpanel task-plan-trace");
+    panel.dataset.taskPanel = "plan-trace"; panel.dataset.taskId = task.id; panel.tabIndex = -1;
+    panel.setAttribute("aria-label", "Linked plan destination");
+    const origin = node("button", "ghost mini", "View linked plan");
+    origin.type = "button"; origin.dataset.taskAction = "view-plan";
+    origin.addEventListener("click", () => {
+      const current = selectedTask(), trace = currentPlanTrace(current);
+      if (current?.id === task.id && panel === planTracePanel && trace?.canOpen) window.MefiNav?.go?.("plans", { planId: trace.planId });
+      else refreshPlanTrace();
+    });
+    panel.append(node("h4", "", ""), node("p", "task-plan-title", ""), node("p", "task-plan-destination", ""), node("p", "task-context-hint", ""), origin);
+    body.append(panel); planTracePanel = panel; paintedPlanTrace = ""; refreshPlanTrace();
+  }
+
   function renderDetail() {
     paintedDetail = UNPAINTED;
     const task = selectedTask();
@@ -55462,6 +55676,7 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
     if (els.overviewBack) els.overviewBack.hidden = !task;
     els.detail.textContent = "";
     detailPanels = {};
+    planTracePanel = null; paintedPlanTrace = "";
     els.statusRow.textContent = "";
     renderTitle(task);
     if (!task) {
@@ -55487,13 +55702,7 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
     meta.className = "muted who task-meta";
     meta.textContent = metaLine(task);
     body.append(meta);
-    if (task.planningId) {
-      const origin = node("button", "ghost mini", "View approved plan");
-      origin.type = "button";
-      origin.dataset.taskAction = "view-plan";
-      origin.addEventListener("click", () => window.MefiNav?.go?.("plans", { planId: task.planningId }));
-      body.append(origin);
-    }
+    renderPlanTrace(task, body);
     // An owner hold's reason (and its remedy) is the readiness line below, so
     // it is not repeated up here; nor is a pending check or a reason the
     // status box above already gives.
@@ -55765,6 +55974,8 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
   }
 
   async function gather() {
+    const epoch = projectEpoch, projectId = state.projectId, read = ++gatherRead;
+    const current = () => epoch === projectEpoch && projectId === state.projectId && read === gatherRead && !els.overlay.hidden;
     const taskId = selectedTask()?.id ?? null;
     const text = taskId ? `${selectedTask().title}. ${selectedTask().prompt ?? ""}` : els.newInput.value.trim();
     if (!text) {
@@ -55777,13 +55988,21 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
     }
     status("gathering references…");
     // taskId rides along so a gather the assistant journals and restarts after
-    // a close can still attach its refs to the right task.
-    const result = await window.mefiStudio?.referenceGather?.({
-      text,
-      taskId,
-      useWeb: Boolean(state.prefs.useWeb),
-      useTree: state.prefs.useTree !== false,
-    });
+    // a close can still attach its refs to the right task. This view ignores
+    // stale replies without cancelling that host-owned work or its journal.
+    let result;
+    try {
+      result = await window.mefiStudio?.referenceGather?.({
+        text,
+        taskId,
+        useWeb: Boolean(state.prefs.useWeb),
+        useTree: state.prefs.useTree !== false,
+      });
+    } catch (error) {
+      if (current()) status(error?.message || "reference failed", true);
+      return;
+    }
+    if (!current()) return;
     if (!result?.ok) {
       status(result?.error ?? "reference failed", true);
       return;
@@ -55810,7 +56029,9 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
       };
       state.tasks = state.tasks.map((item) => (item === task ? edited : item));
       let error = "The task store could not be written.";
-      if (!(await save((message) => { error = message; }))) {
+      const saved = await save((message) => { error = message; });
+      if (!current()) return;
+      if (!saved) {
         if (state.tasks.includes(edited)) state.tasks = state.tasks.map((item) => (item === edited ? task : item));
         const message = `References found, but not saved to the task · ${error}`;
         status(message, true);
@@ -55877,6 +56098,8 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
   function open(options) {
     window.MefiNav?.claim?.("tasks");
     const params = optionsOf(options);
+    const epoch = projectEpoch, read = ++openRead;
+    const current = () => epoch === projectEpoch && read === openRead && !els.overlay.hidden;
     els.overlay.hidden = false;
     watchMasonry();
     // Set the selection before load() so the first render already shows it.
@@ -55885,6 +56108,7 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
     if (typeof params.taskId === "string" && params.taskId && !elsewhere) state.selected = params.taskId;
     return load({ ...params, restoreSelection: !params.filter && !params.readiness })
       .then(() => {
+        if (!current()) return;
         if (typeof params.projectId === "string" && params.projectId && state.projectId && params.projectId !== state.projectId) {
           if (!elsewhere && state.selected === params.taskId) { state.selected = null; renderList(); renderDetail(); }
           status("That task belongs to another project. Switch projects to open it.", true);
@@ -55897,10 +56121,12 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
         if (params.gather) { showDetailView("references"); gather(); }
         if (task) focusNarrowDetail();
       })
-      .catch(() => status("tasks unavailable · the store could not be read", true));
+      .catch(() => { if (current()) status("tasks unavailable · the store could not be read", true); });
   }
 
   function close() {
+    openRead += 1;
+    gatherRead += 1;
     if (els.overlay.hidden) return;
     els.overlay.hidden = true;
     cardLayout?.stop();
@@ -56051,8 +56277,9 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
       createDrafts.set(state.projectId || "", els.newInput?.value || "");
       projectEpoch += 1; taskRevision += 1; backlogRead += 1; plansRead += 1; liveRevision += 1; assistantRevision += 1;
       if (state.selected) projectSelections.set(state.projectId, state.selected);
-      state.projectId = result.activeId; state.tasks = []; state.plans = []; state.plansError = null; state.selected = projectSelections.get(result.activeId) || null; state.backlog = null; state.live = {}; state.assistant = {};
+      state.projectId = result.activeId; state.tasks = []; state.plans = []; state.plansError = null; state.plansLoaded = false; state.selected = projectSelections.get(result.activeId) || null; state.backlog = null; state.live = {}; state.assistant = {};
       overviewExpanded.clear();
+      overviewPaint = null;
       state.readiness = "all"; state.query = ""; hydrated = false; hydrating = null;
       status("", false);
       if (els.search) els.search.value = "";
@@ -63565,10 +63792,14 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
       item.setAttribute("aria-pressed", chips[index].getAttribute("aria-pressed"));
     });
   }
+  function writeFailureNote(result) {
+    const failures = (result.logWriteFailures || []).filter((row) => ["executor", "work-events"].includes(row.channel) && Number.isSafeInteger(row.count) && row.count > 0);
+    return failures.length ? "History write failures this session: " + failures.map((row) => row.channel + " " + row.count + " (last " + clock(row.lastFailureAt) + ")").join("; ") : "";
+  }
   function render() {
     const result = state.result;
     if (!result) return;
-    if (result.ok === false) { status(result.error || "The log could not be read.", "bad"); $("lines").replaceChildren(); return; }
+    if (result.ok === false) { status([result.error || "The log could not be read.", writeFailureNote(result)].filter(Boolean).join(" · "), "bad"); $("lines").replaceChildren(); return; }
     const counts = result.counts || { error: 0, warn: 0, info: 0 };
     const levels = $("levels");
     syncChips(levels, LEVELS.map(([key, label]) => {
@@ -63583,6 +63814,8 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
     $("file").hidden = !result.file;
     const shown = result.rows || [];
     status(result.total ? `${shown.length} of ${result.matched} matching line${result.matched === 1 ? "" : "s"} (${result.total} in this channel${result.dropped ? `, ${result.dropped} older lines rotated out` : ""})` : "");
+    const failureNote = writeFailureNote(result);
+    if (failureNote) status([$("status").textContent, failureNote].filter(Boolean).join(" · "), "bad");
     const signature = JSON.stringify([state.channel, state.newest, shown.length, shown[0]?.at, shown[0]?.text, shown.at(-1)?.at, shown.at(-1)?.text]);
     if (signature === state.signature) return;
     state.signature = signature;
@@ -63934,6 +64167,7 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
     sort: { key: "state", dir: 1 }, groups: new Set(), text: "", collapsed: new Set(),
     camera: null, manual: false, layout: null, layoutKey: "", drag: null, treeKey: "",
     detail: null, detailKey: "", detailFetch: 0, painted: {},
+    readIssue: null, snapshotTicket: 0, scopeKnown: false, scopeId: null,
   };
   let initialized = false;
   const tabButtons = new Map();
@@ -64044,17 +64278,43 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
   async function lease(on) {
     try { await api()?.fleetWatch?.({ id: "fleet-view", on }); } catch { /* the lease lapses by itself */ }
   }
+  function currentScope() {
+    if (typeof window.MefiWorkspace?.activeProjectId === "function") return { known: true, id: window.MefiWorkspace.activeProjectId() || null };
+    return { known: state.scopeKnown, id: state.scopeId };
+  }
+  function clearContent() {
+    const active = document.activeElement;
+    const lostFocus = ["side", "panels", "inspector"].some((id) => $(id)?.contains?.(active));
+    for (const id of ["tree", "graph", "table", "recent", "nodes", "health", "inspector"]) $(id)?.replaceChildren();
+    if ($("inspector")) $("inspector").dataset.mode = "fleet";
+    for (const button of tabButtons.values()) if (button.children[1]) { button.children[1].textContent = ""; button.children[1].hidden = true; }
+    if (lostFocus && state.open) tabButtons.get(state.tab)?.focus?.({ preventScroll: true });
+  }
+  function paintReadIssue() {
+    if (!state.readIssue) return false;
+    const cached = Boolean(state.view);
+    if ($("body")) $("body").dataset.readState = cached ? "cached" : "unavailable";
+    status(cached ? `Last confirmed team. ${state.readIssue}` : state.readIssue, "bad");
+    return true;
+  }
+  function failedRead(error) {
+    state.readIssue = typeof error === "string" && error.trim() ? short(error, 240) : plain(error, "The fleet could not be read.");
+    if (!state.view) clearContent();
+    // Cached same-project facts remain usable; a project with no confirmed snapshot stays empty.
+    loading(!state.view);
+    if (state.open) paintReadIssue();
+  }
   async function refresh() {
-    if (!api()?.fleetSnapshot) { loading(false); status("Fleet shows your team in the desktop app."); return; }
+    if (!api()?.fleetSnapshot) { failedRead("Fleet shows your team in the desktop app."); return; }
     const epoch = state.epoch;
+    const ticket = ++state.snapshotTicket;
     try {
       const view = await api().fleetSnapshot();
       // A read asked for before the project changed answers for the old project.
-      if (epoch === state.epoch) apply(view);
+      if (epoch === state.epoch && ticket === state.snapshotTicket) apply(view);
     } catch (error) {
-      if (epoch !== state.epoch) return;
-      loading(false);
-      status(plain(error, "The fleet could not be read."), "bad");
+      if (epoch !== state.epoch || ticket !== state.snapshotTicket) return;
+      failedRead(error);
     }
   }
   // While a project's team is being read the old one cannot be clicked, so a Stop that belongs to
@@ -64064,10 +64324,30 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
     const body = $("body");
     if (body) body.dataset.loading = on ? "1" : "0";
   }
-  function apply(view) {
-    if (!view || view.ok === false) { loading(false); if (view?.error) status(view.error, "bad"); return; }
+  function apply(view, pushed = false) {
+    const scope = currentScope();
+    // Workspace exposes no selection as null; the host's empty store has the
+    // fixed project_none identity. It is the same scope, never another team.
+    const scopedId = view?.projectId === "project_none" ? null : view?.projectId ?? null;
+    // Pushes from a project already left cannot establish the new project's facts.
+    if (view && Object.prototype.hasOwnProperty.call(view, "projectId") && scope.known && scopedId !== scope.id) {
+      if (!pushed) failedRead("This project's team could not be confirmed.");
+      return;
+    }
+    if (pushed && !scope.known && state.epoch > 0) return;
+    if (!view || view.ok === false) {
+      if (pushed) state.snapshotTicket++;
+      failedRead(view?.error);
+      return;
+    }
+    if (scope.known && scopedId !== scope.id) { failedRead("This project's team could not be confirmed."); return; }
     // Never go back in time: a read that a newer push of the same project overtook is dropped.
     if (state.view && view.projectId === state.view.projectId && (view.rev ?? 0) < (state.view.rev ?? 0)) return;
+    if (pushed) state.snapshotTicket++;
+    state.scopeKnown = true;
+    state.scopeId = scopedId;
+    state.readIssue = null;
+    if ($("body")) $("body").dataset.readState = "ready";
     if (view.projectId !== state.projectId) {
       state.projectId = view.projectId ?? null;
       state.manual = false;
@@ -64081,7 +64361,7 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
     schedulePaint();
   }
   function start() {
-    if (!state.subscribed && typeof api()?.onFleetUpdate === "function") { state.subscribed = true; api().onFleetUpdate((view) => apply(view)); }
+    if (!state.subscribed && typeof api()?.onFleetUpdate === "function") { state.subscribed = true; api().onFleetUpdate((view) => apply(view, true)); }
     if (!state.view) loading(true);
     void refresh();
     void lease(true);
@@ -64109,7 +64389,7 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
   function paint() {
     const view = state.view;
     if (!state.open) return;
-    if (!view) { status("Reading the team…"); return; }
+    if (!view) { if (!paintReadIssue()) status("Reading the team…"); return; }
     state.stale = false;
     paintStatus(view);
     paintTabs(view);
@@ -64118,6 +64398,7 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
     paintPanel(view);
   }
   function paintStatus(view) {
+    if (paintReadIssue()) return;
     const loop = view.loop;
     const counts = view.counts ?? {};
     const parts = [`${counts.seats ?? 0} seats`, `${counts.working ?? 0} working`, `${counts.attention ?? 0} need attention`, `${counts.openRows ?? 0} ready to take`];
@@ -65017,6 +65298,7 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
       box.append(section("Last run", el("p", "fleet-now-title", short(seat.last.title || "untitled", 90)), chipOf(OUTCOME_LABEL[seat.last.outcome] ?? "ended", OUTCOME_TONE[seat.last.outcome] ?? "quiet")));
     }
     const runtime = el("dl", "fleet-facts");
+    if (detail?.recap?.text) box.append(section("Seat recap", el("p", "fleet-recap", detail.recap.text)));
     runtime.append(fact("Runtime", seat.runtime?.via || "not set"), fact("Model", modelName(seat.runtime?.model) || "not set"), fact("Context", Number.isFinite(seat.ctx) ? percent(seat.ctx) : "not measured"));
     box.append(section("Runtime", runtime), section("Runs", generationsList(detail, seat, phase)), section("Works with", wiresList(view, seat, detail)));
     const recent = el("ul", "fleet-ins-list");
@@ -65044,7 +65326,7 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
     setText(live.dd.branch, now.branch || "the shared checkout");
   }
   function structureKey(view, seat, detail, phase) {
-    return JSON.stringify([phase, seat.id, seat.status, seat.text, seat.gen, seat.now?.taskId, seat.now?.runId, seat.now?.stopping, Boolean(seat.now), seat.last?.outcome, seat.last?.title, seat.last?.runId, seat.runtime,
+    return JSON.stringify([phase, seat.id, seat.status, seat.text, seat.gen, seat.now?.taskId, seat.now?.runId, seat.now?.stopping, Boolean(seat.now), seat.last?.outcome, seat.last?.title, seat.last?.runId, seat.runtime, detail?.recap?.text,
       (detail?.lineage ?? []).map((gen) => [gen.gen, gen.outcome, gen.running, gen.merge?.merged]), (detail?.edges ?? view.edges ?? []).filter((edge) => edge.from === seat.id || edge.to === seat.id).map((edge) => [edge.from, edge.to, edge.kind, edge.count]),
       (detail?.recent ?? []).slice(0, 5).map((row) => row.seq), (view.health ?? []).filter((item) => item.seatId === seat.id).map((item) => item.id)]);
   }
@@ -65084,7 +65366,7 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
     state.treeKey = "";
     start();
     if (state.view) schedulePaint();
-    else status("Reading the team…");
+    else if (!paintReadIssue()) status("Reading the team…");
     requestAnimationFrame(() => { measureBar(); tabButtons.get(state.tab)?.focus?.({ preventScroll: true }); });
   }
   function close() {
@@ -65127,10 +65409,16 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
       schedulePaint();
     });
     // The host keeps one fleet per project: a switch starts from a new snapshot.
-    window.addEventListener("mefi:project-changed", () => {
+    window.addEventListener("mefi:project-changed", (event) => {
       state.epoch += 1;
+      state.snapshotTicket += 1;
+      state.detailFetch += 1;
       clearTimeout(state.detailTimer);
-      Object.assign(state, { view: null, selected: null, projectId: null, detail: null, detailTimer: 0, detailPending: 0, layoutKey: "", treeKey: "", painted: {} });
+      const hasScope = Object.prototype.hasOwnProperty.call(event?.detail ?? {}, "projectId");
+      const scope = hasScope ? { known: true, id: event.detail.projectId || null } : typeof window.MefiWorkspace?.activeProjectId === "function" ? { known: true, id: window.MefiWorkspace.activeProjectId() || null } : { known: false, id: null };
+      Object.assign(state, { view: null, selected: null, projectId: null, detail: null, detailTimer: 0, detailPending: 0, layout: null, layoutKey: "", treeKey: "", painted: {}, readIssue: null, scopeKnown: scope.known, scopeId: scope.id });
+      clearContent();
+      if ($("body")) $("body").dataset.readState = "reading";
       loading(true);
       if (state.open) { status("Reading the team…"); void lease(true); void refresh(); }
     });

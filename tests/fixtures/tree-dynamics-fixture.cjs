@@ -16,7 +16,13 @@ exports.capture = async ({ contents, run, until, sleep, capturePage, report, roo
   // Supply a deterministic decoded music frame to the real drawing loop.
   // FFT decoding and connection effects have their own real-WAV fixture.
   await run("const apply=window.MefiTreeDynamics.apply;window.MefiTreeDynamics.apply=(nodes,area,options)=>apply(nodes,area,{...options,linked:true,response:1,music:{bass:.9,mid:.8,treble:.5}});window.MefiTreeDynamics.update({mode:'music',nodeMotion:.8,shapeMotion:.8,positionMotion:.8});");
-  await sleep(1200); const musical = await nodes();
+  // Wall time does not guarantee a rendered frame under a busy compositor.
+  // Keep the same movement/radius criterion and a bounded completion wait.
+  await sleep(1200); let musical = await nodes();
+  const musicStarted = Date.now(), musicDeadline = musicStarted + 5000;
+  const musicPainted = entries => entries.some(n => { const a = ring.find(v => v.id === n.id); return a && Math.hypot(n.x - a.x, n.y - a.y) > 1 && n.radius > a.radius; });
+  while (!musicPainted(musical) && Date.now() < musicDeadline) { await sleep(30); musical = await nodes(); }
+  report.musicPaint = { ring, musical, waitedMs: Date.now() - musicStarted };
   assert.ok(musical.some(n => { const a = ring.find(v => v.id === n.id); return a && Math.hypot(n.x - a.x, n.y - a.y) > 1 && n.radius > a.radius; }), "music changes painted positions and radii");
   for (const n of musical) assert.deepEqual(n.layoutAnchor, anchors.get(n.id), "live music preserves layout anchors");
   fs.writeFileSync(path.join(root, "tree-dynamics-canvas.png"), (await capturePage()).toPNG());

@@ -6,6 +6,531 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-29 night - Dogfood fixes: link reading, tool-call leaks, refused plans, owner asks
+
+The fixes from a live dogfood run (an isolated Studio copy, handed only the
+public roadmap link, built three roadmap items in a sandbox clone) and from an
+audit of how work starts and ends in Vibe, Build and the pipeline. An
+adversarial review of the branch (5 area reviewers, a skeptic each: 25 raised,
+21 confirmed) was fixed and re-verified. Gated in the `C:\wt\fx` worktree on
+the merge of `origin/main` at `e9b8b79` (the update safety net), then squashed
+onto it.
+
+- `npm run check` and `npm run audit` (0 findings): PASS.
+- `npm test` on the final merge: Python contracts 248 OK (1 skipped),
+  normalized-path lock PASS. Node: 390 suites, 4945 tests in the parallel
+  stage, 4938 pass, 0 fail, 7 skipped; `command_render` PASS. The serialized
+  `eyes_toggle_electron` failed once ("baseline cadence: only 0/2 fetches
+  landed within 15000ms", the known timer drift under load) and passed solo.
+- The run before, on the merge at `519d656`: the same shape, with two load
+  failures that passed solo (`git_actions` "a real index.lock that clears in
+  time" 65/65; `command_render` "Assistant narrow: pointer reaches the switch
+  track" 2/2).
+
+## 2026-09-29 - Land finished parked Studio work and Command-tree children
+
+Integrated off GitHub main 519d656 in isolated worktrees: issue links
+(92f5e26), the commit checklist (bc2dc19), release packaging fixes
+(cherry-picked 77a3895), the signing/smoke workflow (8c08f90), the Studio
+model tracker and community evidence (a7e6294), Vibe defaults and key tips
+(47940db), and the finished Command-tree children. The latter were preserved
+with an alternate-index snapshot (4d3b3b5): all 11 source files still matched
+that snapshot before landing, and the original index/files were not edited.
+
+Conflicts retained both sides' application changes: models: and remote:
+remain app-wide; the booklet includes Fleet, Git sync, card layout, model
+community and key tips. Regenerated booklet.html rather than selecting a
+parent. Test rows were reconciled across the live file and archive, imported
+with append-testruns-row and rotated. The older release announcement stays
+parked because current scope/docs still describe 0.4.5 as upcoming. Unfinished
+builder, media, GPU, startup, logging, CLI, row-push and bot/service work stays
+separate. No tag or release was published.
+
+- build-booklet, check (204 targets, 419 specs), audit (0 findings), diff
+  whitespace check and the lost-work guard over origin/main..HEAD: PASS.
+- Final lint: 0 errors, 42 existing warnings, identical to clean main.
+- The first full run exposed two existing git_actions fixture assumptions,
+  both reproduced on unchanged main: a fixed 800 ms timer removed index.lock
+  before commit preflight finished; a plain copied Windows environment held
+  Path rather than PATH. The lock now persists until real retry backoff, and
+  executable-path presence is checked case-insensitively. Both tests passed
+  focused, then in the final full behavior stage.
+- Final npm test ran every suite, with only its own process affinity limited
+  to four CPUs to reduce worker memory pressure. Behavior stage: 4,910 tests,
+  4,903 passed, 7 skipped, 0 failures (596 s). Electron lane: 48 tests,
+  45 passed, 1 skipped, 2 failures (440 s). Exclusive Command and eyes probes
+  passed; occlusion passed its control and capability-skipped its other test.
+  Python: 248 tests OK, 1 skipped (58 s). Normalized-path lock: 6 checks PASS.
+- The full invocation exited 1, not a clean full-run pass: performance_render
+  hit the documented Profiler JSON download timeout (5,320 ms, 1.06x pace);
+  planning_render sampled glass transmission 12 against >35. Both suites
+  passed in the earlier combined full run. After all test lanes drained,
+  unchanged final sources passed alone: performance_render 2 active tests,
+  1 opt-in skip, 0 failures (24 s); planning_render 1/1 (33 s). The profiler
+  matches the known download flake; the Plans capture is consistent with
+  frame/load-sensitive capture, not an observed persistent regression.
+
+Complete logs and synthetic profiler captures are retained locally under the
+OS temporary directory (mefi-final-merged-test.log, mefi-final-merged-lint.log,
+mefi-final-profiler-solo.log, mefi-final-planning-solo.log and
+mefi-merged-profiler-solo/). Local data and portable dist folders were not
+committed or replaced. The optional model-review feed/signing services still
+need their separate service setup; merging their Studio support does not
+deploy those services.
+
+## 2026-09-29 - Stamped executable and SignPath-ready release workflow
+
+The portable `Mefi Studio AI+.exe` gets Studio's name, version, copyright and
+icon (`scripts/stamp-exe.mjs`, `resedit` 3.1.0 as a dev dependency) in place
+of Electron's, and `release.yml` gains a smoke launch of the packaged app, a
+`gate: hosted` choice for hand-started runs, and SignPath signing that stays
+off until the repository variables exist (docs/code-signing.md). Gated in a
+detached worktree (`C:\wt\sign`, origin/main 10c6b97 plus this change,
+node_modules junctioned).
+
+- `npm run check` and `npm run audit` (0 findings): PASS.
+- `npm run test:fast`: PASS, 4511 pass, 0 fail, 5 skipped. The two packaging
+  suites read files from Electron's dist folder, so they sit in the heavy
+  lane; run directly: `stamp_exe` (6 new) and `package_privacy` PASS, 7 of 7.
+- Python contracts (248 tests, 1 skipped) and the normalized-path lock: PASS.
+- A real `node scripts/package-portable.mjs --release`: Windows reads the
+  stamped exe as ProductName and FileDescription "Mefi's Studio AI+", version
+  0.4.5.0, Studio's icon, unsigned. A copy launched with `--smoke` and a
+  scratch `--user-data-dir` exited 0 with the `[smoke]` line (39 cards). The
+  release folder kept only curated.json and models.json in its data folder.
+- The workflow's PowerShell steps, rehearsed locally under Windows PowerShell
+  5.1: the folder lookup and smoke launch pass; the signature check refuses
+  an unsigned file and a file whose product name and version differ. The
+  YAML parses. The SignPath steps themselves cannot run until the project is
+  accepted.
+- Not run: the 25 Electron render suites. The laptop had 0.9 GB free with
+  other sessions' Electron processes open, and this change touches neither
+  the renderer nor main.cjs.
+
+## 2026-09-29 - GitHub link: the Git chip, Save and push, Publish and the Quiet-card launch screen
+
+The chip (`renderer/git-sync.js`), its host (`scripts/git-link.cjs`,
+`git-actions.cjs`, `git-host.cjs`, wired in `main.cjs` and `preload.cjs`), New
+app's GitHub choice and the Quiet-card launch screen. Built and gated in an
+isolated worktree (`C:\wt\ghl`, branch `gh-link`) off `origin/main`, merged
+with `origin/main` twice: at ab206be (CHANGELOG and `build-booklet.mjs`
+conflicted, both resolved by keeping both sides) and at 147710d (only
+TESTRUNS conflicted: main's TESTRUNS and archive were taken as the base and
+this row appended through the helper).
+
+- `npm run check` (0.4.5, 200 targets, 411 specs, 16 stylesheets, and
+  `MERGE-CSS-RESOLVED` on the first merge) and `npm run audit` (0 findings):
+  PASS on the final merged tree. The auditor now also reads
+  `scripts/git-host.cjs` for the events main hands it to send (`git:state`).
+  The repo's lost-work guard over `origin/main..HEAD`: 0 findings.
+- `npm test` on the final merged tree: Node suites 4855 tests, 4848 pass, 0
+  fail, 7 skipped (parallel stage); the serialized Electron lane 48 tests, 46
+  pass, 1 skipped, 1 fail: `unified_studio_render` ("holding an arrow continues
+  scrolling", a key-repeat timing check at
+  `unified-studio-render-electron.cjs:297`), which passes alone (208 s on a
+  loaded machine) and passed in the previous full run of the same code, so it
+  is the known load flake, not this change. Python contracts 248 tests OK (1
+  skipped, 86 s); normalized-path lock PASS. The previous full run, on the tree
+  before the second merge, was clean: Node 4834 tests, 4829 pass, 0 fail.
+- New suites: `git_link` 59, `git_actions` 65 (real git in temp folders, a local
+  bare repository as "GitHub" and a fake `gh`), `git_host` 53, `git_link_host`
+  11, `git_sync_ui` 60, and `startup_screen` (rewritten deliberately: the two
+  open buttons became one Open and a Start agents switch), `vibe_panels` 48.
+  Nothing in them reaches GitHub or an account.
+- Independent reviews (three reviewers who had not written the code, host only)
+  found and fixed 41 defects, each with a regression test that fails without the
+  fix. The serious ones: a save followed a Windows junction out of the project
+  and committed a file from outside it; a branch named `-f` became a force push;
+  `scrub()` was quadratic and took 8 s on 80 KB, enough to freeze the main
+  process; key scanning was skipped for changed files when `diff.noprefix` was
+  set and for files over 1 MiB; a sync-backed step queued behind another writer
+  ran on a project opened meanwhile; an unset commit identity and a throwing
+  project check failed open. A later pass found the renderer never sent the
+  project id the host guards on, and its model sanitiser dropped the id the host
+  adds; both are fixed and pinned.
+- Left open on purpose (noted in the reviews): a file edited between the scan and
+  the commit is not re-scanned; a repository's own `.git/config` runs for reads
+  as it already does for `sync.mjs`; files over 1 MiB are warned about, not read
+  for keys; the glance has no merge/rebase-in-progress flag (Save and Publish do
+  refuse there); in-app device-code sign-in is not built (the setup window is
+  polled instead). Publishing has never been run against real GitHub: the first
+  real one should be a throwaway project.
+- Real-app look, not only fakes: the built booklet was opened in offscreen
+  Electron at 1920x1080 with a fake bridge whose chip models come from the real
+  `describe()`: the launch card (four projects with chips, 600x560 too), the chip
+  and its popover on Vibe's home and on Build's section bar.
+
+## 2026-09-29 - Promo browser-module ESLint follow-up reverified
+
+Checked PR #2's reported lint follow-up:
+https://github.com/nateecho32-stack/mefi-studio/pull/2#issuecomment-5837986150
+The exact proposed browser-globals override for tools/promo/*.mjs already
+landed in commit 1bdf9d2 and remains in eslint.config.js. The promo HTML pages
+load these stages as ES modules. No configuration or application edit was
+needed; the existing override retains module parsing and no-undef checks.
+
+- npm run lint at main 147710d: PASS (exit 0), 0 errors, 41 existing
+  no-unused-vars warnings. The reported browser-global errors are resolved.
+- Only this validation record and the helper's automatic archive rotation
+  were written. No application sources or local user data were changed.
+
+## 2026-09-29 - Codex Security fixes for five validated findings
+
+Remote task admission and promotion now retain the approval boundary. PIN
+checks, lockout changes, settings toggles and one-use approval handles share
+the settings queue. Catalog limits are validated and rendered safely. Legacy
+idea scans reject linked paths, validate opened files and redact complete
+credential context before clipping. Friend exports and Discord replies remove
+home-path tails and local file links while preserving surrounding references.
+
+- New pre-fix regressions reproduced remote provenance loss, concurrent PIN
+  undercounting, stale PIN replacement, catalog HTML, outside-project junction
+  reads and credential/path-tail disclosure. A fresh read-only reviewer found
+  multiline JSON credentials and sharing representation/prose cases; these
+  were reproduced, corrected and covered by regressions.
+- Final focused security/compatibility run: 153 tests, 151 passed, 2 skipped
+  because this Windows account cannot create file symlinks (EPERM). Initial
+  and nested junctions and cached-directory replacement ran and passed.
+- Final stable tree: `npm run build-booklet`, `npm run check` (196 targets,
+  406 specs), `git diff --check` and `npm run audit` (0 findings) PASS.
+- Final `npm test` PASS: Node 4,607 tests, 4,598 passed, 9 skipped, 0 failures
+  (563 s); Python 248 tests, 1 skipped, 0 failures (47 s); normalized-path
+  lock 6 checks PASS. Existing opt-in/platform skips remain; the occlusion
+  fixture capability-gated because this desktop never emitted occlusion.
+- An earlier full run was deliberately stopped after its passing CPU stage
+  to incorporate the independent review corrections; it is not counted as a
+  completed gate. The final full run above used the settled final sources.
+- All fixtures used synthetic data. No paid workers or live Discord/model
+  operations ran, and existing user data and installed app dependencies stayed
+  intact. Complete local logs were retained in the security artifact collection.
+
+## 2026-09-29 - 0.4.5 roadmap quick wins and release boundary
+
+Friends now has a primary menu entry, direct Rooms, Your PCs and Playground
+routes, and a Vibe rail stop. Ideas uses compact responsive cards through a
+layout helper shared with Tasks. The app docs and public site separate built
+0.4.5 work from deferred work and service-dependent features; the published
+download stays 0.4.4.
+
+- Final stable tree: `npm run build-booklet`, `npm run check` (196 targets,
+  406 specs), and `npm run audit` (0 findings) PASS.
+- Final `npm test` PASS: 379 Node suites, 4,586 tests (4,579 pass, 7 skipped,
+  0 failures, 574 s); Python contracts 248 tests (1 skipped, 0 failures,
+  47 s); normalized-path lock 6 checks PASS. The occlusion probe skipped
+  because the attended desktop did not sustain throttling, as documented.
+- The first full run caught outdated three-entry Vibe/Command expectations,
+  a Python build-order expectation missing the shared helper, and a real
+  fourth-menu clipping regression at 600x560 / 150% scale. Expectations are
+  updated; the compact rail preserves four visible 28px targets. Unified's
+  Electron fixture now checks keyboard access and actual card focus for all
+  three Friends links. Unified and Command passed solo before the final gate.
+- That first run also lacked resedit in this PC's old installed dependencies.
+  A fresh lockfile install in the isolated worktree restored all stamping
+  checks; existing app dependencies and user state were preserved.
+- Seeded Ideas Electron QA at 1360px and 600px passed without overlapping
+  cards, horizontal overflow, console errors or network requests. Back and
+  reopen measure cards before restoring selection/focus, including a failed
+  reload after a resize.
+- Full ESLint: 0 errors, 41 existing warnings. The final changed-source pass
+  has 0 errors and 2 existing fixture warnings.
+- Public-site validation PASS: 64 unique roadmap items, 35 wiki pages,
+  313 feature cards and 607 local references, with exact no-script roadmap
+  parity. Real Electron browser QA of six routes at 1440px, 390px and 320px
+  passed all 18 layouts with no missing images, console errors or overflow.
+
+## 2026-09-29 - Live > Fleet, the branches view (fleet overhaul Phase 2)
+
+Phase 2 of docs/fleet-overhaul-plan.md: the Fleet page under Agents > Live
+(`renderer/fleet.js`, `fleet-layout.js`, `fleet.css`: an explorer, Graph,
+Table, Recent, Tree, Health and a seat inspector), the three host changes an
+independent review of it asked for (an idle seat names its last run, Stop names
+the run it means, titles lose bidi marks) and `tools/verify_fleet.cjs`, a check
+of the real app. Gated in a clone (`.claude/worktrees/fleet-gate`, the fleet
+branch with Electron copied in so the render suites run), because the shared
+checkout carried other sessions' edits.
+
+- `npm run check` and `npm run audit` (0 findings): PASS. ESLint (the project's
+  flat config, on the changed files): 0 errors; the two warnings already on
+  main stay.
+- `npm run test:fast` on the final tree: PASS, 4511 pass, 0 fail, 5 skipped
+  (39 new since the Configuration and sync-guard gate: `fleet_layout` 11,
+  `fleet_ui` 25, `fleet` 2, `fleet_host` 1).
+- The review: a read-only subagent read the first version of the renderer and
+  found 7 bugs (the inspector was rebuilt on every push and took an armed Stop
+  with it; an idle seat offered no Open task; a click on the table's Stop also
+  selected the row and slid the drawer over it; quiet-run and ask-wait signals
+  never refreshed on a quiet fleet; a project switch left the old team
+  clickable and a stale read could beat the new one; an error line stuck; a page
+  opened on a seat never read its runs), 4 keyboard problems, 2 CSS problems and
+  a bidi risk in titles. All are fixed. Every fix has a test that fails on the
+  first version, and the Electron fixture fails on it too (a push destroyed the
+  armed Stop).
+- `npm test` with the Electron lane, run before the last test fix: Python
+  contracts (248 tests, 52 s) and the normalized-path lock PASS; Node suites
+  FAIL on two suites (577 s), both timing. `fleet_host` ("a project that is not
+  open is never pushed"): the test waited 25 event-loop turns for a file read,
+  which a loaded machine outran; reproduced by delaying every read 120 ms, fixed
+  by waiting for the host's own read and writes (8 of 8 runs under CPU load).
+  `planning_render` timed out waiting for the Plans field's focus ring under
+  load; it passes alone (twice in a row) and failed the same way in the previous
+  gate, before any Fleet page existed.
+- The final tree, quiet machine: the whole Electron lane at width two (42
+  tests, 41 pass, 0 fail, 1 skipped, 297 s: `fleet_render` 24 s,
+  `planning_render` and `tree_dynamics_render` both pass) and the three
+  serialized Electron suites (4 tests, 3 pass, 0 fail, 1 skipped:
+  `occlusion_probe` is capability-gated as documented, and `command_render`
+  passes with the Fleet route, 53 s).
+- The real app: `node_modules/.bin/electron tools/verify_fleet.cjs` boots
+  main.cjs in smoke mode on a throwaway profile and drives the page through the
+  real preload, handlers and fleet host: PASS, 10 steps (snapshot with no
+  project open, the first push after the watch, five views, the inspector, seat
+  and action replies, the lease returned on close, no console errors).
+- Real events: this PC's two recorded work-event streams (59 and 246 events
+  from real runs) replayed through the fleet reducer with nothing thrown; the
+  larger gives 14 builder runs over the builder seats (14 claimed, 9 completed,
+  5 failed rows) and one desk ask that escalated to you (Health: escalated).
+- Not done: a live builder run seen in the page. It needs an AI CLI signed in on
+  a real project, so the plan's end-to-end step stays open for the first real
+  run.
+- Rebased onto GitHub main `2f0488b` (another PC's task-board and menu-typing
+  change) before the push: check, audit, the fast lane (4511 pass, 0 fail), the
+  serialized Electron suites and the real-app check pass again. The Electron
+  lane has two failures that are not this change. `media_browser_render` ("page
+  visible": the embedded browser view reports 0x0 bounds) fails 3 of 3 runs on
+  GitHub main alone as well and passed once at 12 s, so it depends on this
+  desktop's state at the moment; `media_window_render` failed once under the
+  lane and passes alone (3 of 3 in a row).
+
+## 2026-09-28 (evening) - Sub-agents, the return path and the finish beats on the Command tree
+
+Gated in the worktree `C:\wt\cmd-kids` (branch `claude/command-children`,
+based on `origin/main` `60c4abb`, which already has the finish beats from
+`7450479`). It covers:
+- sub-agent sessions on the tree and in Command: `tree3d.js` children, the
+  `idle.js` `childSession` life cycle, "+n sub-agents", and session counts
+  without them in `idle.js` and `nav.js`;
+- a delegated part flying home into its parent task (`fx.delegated`);
+- the node style's `done`/`absorb` beats over every Command flight home.
+
+- `npm run check` and `npm run audit`: clean.
+- `npm test` (8.6 min): the Node suites ran 4496 tests (4490 pass, 6
+  skipped, 0 fail), and the Python contracts and the normalized-path lock
+  pass.
+- An earlier full run on `79d892d` failed three `task_groups` tests with
+  `delegatedParentOf is not defined`. That suite slices `takeTasks` out of
+  `idle.js` on its own, so the helper now lives inside `takeTasks`.
+- A seeded offscreen preview of Command at 1920x1080 in Prism and Sigil
+  showed the sub-agents under their session, "+1 sub-agent", and the beats
+  as one sub-agent and one delegated part flew home. No renderer errors.
+
+## 2026-09-28 - Vibe opens by default, answers more, shows a new project's tree, key tips
+
+Every launch starts in Vibe (`mefiStudio.uiMode.launch`, Settings › Always
+start in Vibe; a live-update reload resumes) and the Start here walk stays in
+Vibe. Needs you gains `review` (Confirm done / Send it back), `plan`
+(interview follow-ups answered through `planning:assist`, spec approval and
+task creation open the plan in Vibe's rail) and Build it anyway for relevance
+holds; `#vibe-update` mirrors the rail's update pill. Watch always stands in
+the dock and Command shows a low "Nothing started yet" card on an empty
+project. New `renderer/key-tips.js` (first-run keycap tips, click or key to
+dismiss, off from the tip, Settings, Vibe settings or Search) and Vibe's own
+keys / N C T P I M S, which stand down in a drawer (nav.js typeInto).
+
+- `npm run build-booklet`: built; `npm run check` (190 targets) and
+  `npm run audit` (0 errors, 0 warnings): PASS.
+- New suites: vibe_home (6), key_tips (3); onboarding's Vibe walk and
+  vibe_panels' dock test updated. 140 focused tests across vibe_*,
+  key_tips, onboarding, nav_startup, booklet_build and type_into_menu: PASS.
+- `npm test` in C:\wt\vibe-tips rebased on 39a153d: Node suites, Python
+  contracts and the normalized-path lock: PASS. An earlier run on e53a572
+  failed only `occlusion_probe` (lag samples 1–3 s on a loaded desktop, the
+  known environmental row); solo rerun: PASS.
+- Offscreen Electron captures (fake bridge, 1920x1080): fresh project in
+  Vibe with tips, Watch's fresh card, plan and review drawers, Build tips.
+
+## 2026-09-28 - Configuration indexes the setup helper; sync catches a merge that drops another branch's work
+
+Two changes from the fleet overhaul's Phase 0 (docs/fleet-overhaul-plan.md).
+Configuration (`renderer/config-dialog.js`) now also files the setup helper's
+per-section Search records beside the settings they configure and pins "Walk
+me through setup" at the head of Inference & Agents. `scripts/sync.mjs` gains
+`lostWork()`: for each merge it finds paths one side changed where the tip
+holds exactly the other side's copy, refuses a push that drops 200 or more
+lines of another branch's work, and lists recent findings in the session hook
+and Friends > Your PCs. A deliberate choice is acknowledged with a
+`Lost-work-ok:` line in history; `--allow-lost-work` overrides one push.
+
+Gated in a clone (`.claude/worktrees/fleet-gate`, a copy of the fleet branch
+with Electron copied in so the render suites run), because the shared
+checkout carried other sessions' edits.
+
+- `npm run check` and `npm run audit` (0 findings): PASS. `npm run test:fast`:
+  PASS, 4472 pass, 0 fail, 5 skipped (11 new: 8 in sync, 3 in
+  config_dialog).
+- `npm test` with the Electron lane: Python contracts (69 s) and the
+  normalized-path lock PASS; Node suites FAIL on two suites (655 s).
+  `planning_render` timed out waiting for the Plans field's focus ring while
+  other suites and builds shared the machine; it passes solo (28.8 s).
+  `occlusion_probe` is the documented environmental failure (attended
+  desktop). Everything else passes, including the nine Electron render suites.
+- The guard against the real history: it flags `65703a6` (136 files, 10,474
+  lines, the merge that dropped the 12 commits) and the two earlier merges
+  whose work the reset also removed. Over the last 200 first-parent commits
+  of main it raises one finding, 9785601, whose own message says it kept
+  main's companion on purpose, which a `Lost-work-ok:` line would settle. A
+  30-commit scan takes about a second; 200 commits take 6 s.
+
+## 2026-09-28 - Fleet host: seats, generations and wires (fleet overhaul Phase 1)
+
+Phase 1 of docs/fleet-overhaul-plan.md: the pure fleet model
+(`scripts/fleet.cjs`), its host (`scripts/fleet-host.cjs`), five guarded
+one-line hooks in `main.cjs` (brain event, executor status, board write, run
+finish, worktree merge), four `fleet:*` handlers, the `fleet:update` push and
+the preload methods. No renderer change yet; Live > Fleet is Phase 2.
+
+Gated in an isolated clone (`.claude/worktrees/fleet-overhaul`, branch
+`fleet/overhaul`, rebased onto GitHub main `60c4abb`), because the shared
+checkout carried other sessions' edits.
+
+- `npm run check` and `npm run audit` (0 findings): PASS.
+- `npm run test:fast`: PASS, 4461 pass, 0 fail, 5 skipped. New suites:
+  `fleet` (11: seat continuity on retry, handoff and delegation wires, desk
+  ask and escalation, the owner's stop outranking a failed exit, lost runs,
+  mail, health signals, bounded reload, no prompts or paths in a snapshot)
+  and `fleet_host` (7: pushes only while watched, one trailing push per half
+  second, lapsed leases, per-project files, reload, seat actions, hooks that
+  never throw); `module_purity` now holds `fleet.cjs` to its header.
+- `npm test`: Node suites (111 s), Python contracts (248 tests, 44 s) and the
+  normalized-path lock PASS. The nine Electron render suites SKIPPED: this
+  clone is on an exFAT drive with no `node_modules/electron`, and they skip
+  when the binary is missing. They run in Phase 2, with Electron set up in
+  the clone.
+- Boot: `electron . --smoke --user-data-dir=<throwaway>` exits 0 with the
+  normal smoke summary and no `[fleet]` line, so the host is created and the
+  handlers register. (A throwaway profile keeps the owner's settings out of
+  it.)
+- One flake fixed while writing `fleet_host`: waiting two `setImmediate`
+  ticks after a watch is not enough for the first load's file read; the test
+  now waits for the loop to go quiet (`flush`). 10 consecutive runs pass.
+
+## 2026-09-28 (afternoon) - Every node style's finish beats, and Agent brain list/shelf fixes
+
+Gated in an isolated worktree (`C:\wt\land-beats`, GitHub main `f85681b`,
+whose successor `79d892d` changes only `continuing.md`, plus
+only `renderer/node-styles.js`, `renderer/agent-brain.js`,
+`renderer/agent-brain.css`, `tests/node_styles.test.mjs`,
+`tests/node_visuals.test.mjs`, three doc rows and a rebuilt
+`renderer/booklet.html`), because the shared tree held another session's
+unfinished menu work.
+
+- Before landing, four reviewers read the diff (one per look group, one for
+  agent-brain, one for tests and docs) and two skeptics tried to refute each
+  finding; 9 of 17 survived both, six distinct issues, all fixed: every beat
+  now fades over its last fifth (Sigil, Singularity, Prism, Halo and Minimal
+  ended bright and were cut by the caller), absorb marks lift toward the
+  highlight on a light theme (the raw pale green was about 1.1:1 on a pale
+  page), Prism's shards and Crystal's glint follow a failed check's amber
+  (only 2 of 6 shards did), `popFx` hands the marks the hopped point and
+  swollen radius it draws the body at, the Playbook shelf scrolls again
+  (`align-self: start` had clipped it), and the CHANGELOG no longer claims a
+  still pose under reduced motion where the Agent brain plays no beats.
+  The changed test assertions (all-amber failed check, nothing bright at
+  u = 1, no raw pale tint on a light page) and the new `node_visuals` test
+  (marks on the body, sliced from `agent-brain.js`) each fail on the
+  pre-fix code and pass on the fix.
+- `npm run check` and `npm run audit`: clean. `node --test tests/node_styles*.test.mjs`:
+  151/151, including the finish-beats tests (every look's `done` and
+  `absorb` draw in their own save with no gradient, stay near the node, hold
+  one pose when still, finish a failed check wholly in amber and a passing
+  one never, fade out by the end of their window, and no two looks share a
+  beat).
+- `npm test` (8.7 min, no failures, no reruns): Node parallel stage 4447
+  tests (4442 pass, 5 skipped), Electron stage 41 (40 pass, 1 skipped),
+  `command_render` serialized at 48 s with no cold-boot retry, Python
+  contracts 248 OK (1 skipped), normalized-path lock passes. An earlier
+  identical run on the first build (10.5 min) was also clean. None of the
+  known-flaky rows fired.
+- Rendered check: a contact sheet of every look's done and absorb frames
+  (real `node-styles.js` on a canvas in headless Edge, dark, light and a
+  failed check) shows the marks on the hopping body, all beats gone by the
+  last frame and the failed check amber throughout. The earlier real-app
+  staging of `agent.home` (scratch copy on a copy of the live Studio
+  project, 143 pipelines) ran on the first build, before the review fixes,
+  and was not repeated.
+- The Command view never calls the new hooks yet (child sessions on the
+  Command tree are still open), so `command_render` is unaffected by design.
+
+## 2026-09-28 - Task board cleanup
+
+The owner said the Task board was a mess nobody knew how to use. The left
+column lost its heading, intro paragraph and "cards in this view"
+explanation; search now shares a row with the state picker ("Any state"),
+and the stage chips are one segmented control. Cards are tighter and open
+their current task on click or Enter (the "Open current task" button is
+gone); the open card is ringed and the selected row highlighted. In the
+detail, "All cards" shows at every width, the status box renders only in
+Details (stage pill, fine-print facts, callout, Next line, no Home button),
+the brief has a heading, and the placeholder readiness line and the
+duplicate "Verifying: ..." line are dropped.
+
+- `npm run build-booklet`, `npm run check` and `npm run audit` (0 errors):
+  PASS on the private-index commit in C:\wt\tb-gate (HEAD 6c1c940 plus only
+  this change; another session's template and CSS edits left out).
+- `npm test`: Python contracts and normalized-path lock PASS; Node suites
+  FAIL on the first run with 5 Electron fixtures and occlusion_probe.
+  workflow_render was ours: its fixture clicked the removed status-box Home
+  button and the card's Open button; it now uses the header's Home button
+  and the card itself, and passes. agent_setup_render, companion_hub_render,
+  tree_dynamics_render and unified_studio_render timed out under load and
+  pass solo. occlusion_probe fails the same way (visible probe lag
+  300-530 ms) on clean 6c1c940, so it is environmental.
+- Rebased onto 39a153d: booklet fresh, `npm run check` and `npm run audit`
+  PASS, and a second full `npm test` PASS (Node suites 1324 s including the
+  Electron lane and occlusion_probe, Python contracts 207 s, normalized-path
+  lock).
+- tasks_ui (62) and task_overview_render pass; before/after captures at
+  1360x980 and 1920x1080 from a scratch copy of the task overview fixture.
+
+## 2026-09-28 - Reach your PCs from Discord: the Studio side of the DM remote
+
+The Studio half of the Discord remote (docs/remote.md). `scripts/remote.cjs`
+holds the pure rules (commands, the chat gate for a message from Discord,
+reply wording, alerts with quiet hours and an hourly cap, the approval PIN
+with its five-try lock); `scripts/hub-client.cjs` gains the `remote` feature
+(remoteHello / remoteReply / remoteNotice out, remote / remoteState in, only
+when the hub lists it and the owner turned it on); main.cjs "Discord remote"
+answers status, needs, made, digest, pause, resume and a plain DM (as
+`assistantMessage(text, { remote: true })`, with an interim "Mefi is on it…"
+reply), approves with the PIN against the scope shown, turns changes into
+alerts once a minute, and scrubs everything bound for Discord with
+`shareReview.scrub`. Work a Discord message files carries
+`origin.via = "remote"`, which `autonomy.needsApproval` holds in every mode,
+slices included. Settings: Friends › Your PCs › Reach this PC from Discord.
+
+- `npm run build-booklet`, `npm run check` (190 targets) and `npm run audit`
+  (0 errors, 0 warnings): PASS. eslint on the changed files: no new findings.
+- New suites: remote_rules (11), remote_host (9), remote_gate (4),
+  hub_client_remote (5), pc_remote_ui (5); module_purity holds remote.cjs to
+  its header. Focused: remote, hub_client, hub_host, pc_sync_ui, sync_host,
+  pc_setup, community_bridge, autonomy and booklet_build suites, 171 tests:
+  PASS.
+- `npm test` in C:\wt\away on 39a153d plus this change (before the interim
+  reply and the PIN placeholder): Node parallel stage 4436 tests, 4430 passed,
+  5 skipped, 1 failed: `booklet_build` "overlapping booklet builds" with EPERM
+  on a temp rename while another checkout ran its own tests; it passed solo
+  in 6.2 s. Electron lane 41 tests, 39 passed, 1 skipped, 1 failed:
+  `performance_render` "Profiler JSON download timed out"; both of its tests
+  passed solo. `command_render` 1/1, `eyes_toggle_electron` 1/1,
+  `occlusion_probe` 1 pass 1 skip. Python contracts OK (248, 1 skip).
+  Normalized-path lock passed.
+- After the interim reply: remote_host, remote_rules, remote_gate,
+  hub_client_remote, pc_remote_ui and hub_host, 45 tests: PASS; pc_remote_ui,
+  pc_sync_ui, booklet_build and remote_host again after the PIN placeholder,
+  31 tests: PASS.
+- Browser-pane preview of the real `pc-sync.js` with a fake bridge: the
+  section's status line, switch, name, alerts, digest, quiet hours, PIN row
+  and the PC list.
+
 ## 2026-09-28 - Startup opens even when the window paints nothing
 
 The owner reported Vibe mode broken. The live app (attached through the

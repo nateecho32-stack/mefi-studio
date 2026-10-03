@@ -46,7 +46,7 @@ function fakeTimers(clock) {
   };
 }
 
-async function harness({ tasks = [], project = "project_1", active = () => true } = {}) {
+async function harness({ tasks = [], project = "project_1", active = () => true, status = null } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "fleet-host-"));
   const clock = { t: T0 };
   const timers = fakeTimers(clock);
@@ -59,7 +59,7 @@ async function harness({ tasks = [], project = "project_1", active = () => true 
     isActive: (id) => active(id, current),
     send: (channel, payload) => sent.push({ channel, payload }),
     now: () => clock.t,
-    status: () => ({ parallel: 2, loop: { state: "idle", on: true, ready: 0 }, running: [] }),
+    status: status || (() => ({ parallel: 2, loop: { state: "idle", on: true, ready: 0 }, running: [] })),
     roster: () => [{ role: "foreman", status: "running", runs: 2 }],
     team: async () => ({ executorCli: "opencode", executorModel: "fable-5" }),
     readTasks: async () => tasks,
@@ -71,6 +71,43 @@ async function harness({ tasks = [], project = "project_1", active = () => true 
 
 const running = (runId, taskId, at) => ({ parallel: 2, loop: { state: "running", on: true, ready: 1 }, running: [{ id: runId, taskId, title: `Work on ${taskId}`, startedAt: at, phase: "building", lastOutputAt: at }] });
 const builderOf = (view) => view.pods.find((pod) => pod.id === "build").seats[0];
+
+test("advisory handoff progress remains in its project even when another project uses the same seat names", async () => {
+  const h = await harness();
+  try {
+    const tasks = [{ id: "parent", status: "active" }, ...[1, 2, 3].map(index => ({ id: `child_${index}`, title: `Child ${index}`, status: "active", fromRun: "parent_run" }))];
+    await h.fleet.observeTasks(tasks);
+    await h.fleet.observeStatus({ parallel: 4, loop: { state: "running", on: true, ready: 0 }, running: tasks.map((task, index) => ({ id: index ? `child_run_${index}` : "parent_run", taskId: task.id, title: task.title, startedAt: T0, phase: "building" })) });
+    const notes = snapshot => snapshot.health.filter(item => item.id.startsWith("handoff-progress:"));
+    assert.equal(notes(await h.fleet.snapshot())[0].count, 3);
+    h.switchTo("project_2");
+    assert.deepEqual(notes(await h.fleet.snapshot()), []);
+    h.switchTo("project_1");
+    assert.equal(notes(await h.fleet.snapshot())[0].seatId, "builder-1");
+    await h.fleet.flush();
+  } finally { await h.done(); }
+});
+
+test("run recaps resolve only the current project's assigned seat, including a switch during loading", async () => {
+  let status = running("run_old", "task_a", T0);
+  const h = await harness({ status: () => status });
+  try {
+    await h.fleet.observeStatus(status);
+    await h.fleet.observeFinish({ runId: "run_old", userStop: true, result: { parts: { done: "Project one checkpoint" } } });
+    await h.fleet.observeEvent({ kind: "agent.home", at: T0 + 1000, runId: "run_old", ok: false });
+    status = running("run_next", "task_a", T0 + 2000);
+    const recap = await h.fleet.recap({ runId: "run_next", taskId: "task_a" });
+    assert.match(recap.text, /Project one checkpoint/);
+    assert.equal(await h.fleet.recap({ runId: "run_next", taskId: "other" }), null);
+    h.switchTo("project_2");
+    const switched = h.fleet.recap({ runId: "run_next", taskId: "task_a" });
+    h.switchTo("project_3");
+    assert.equal(await switched, null, "a loading project cannot use the next project's status");
+    h.switchTo("project_2");
+    assert.equal(await h.fleet.recap({ runId: "run_next", taskId: "task_a" }), null, "same builder/run names do not borrow project one's history");
+    assert.equal((await h.fleet.seat({ seatId: "builder-1" })).recap, null);
+  } finally { await h.done(); }
+});
 
 test("nothing is pushed until a Fleet view watches, and a new watcher gets a snapshot at once", async () => {
   const h = await harness();

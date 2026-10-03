@@ -50,7 +50,10 @@ app.whenReady().then(async () => {
     task("family-next", "Restore settings on startup", { parentTaskId: "family", status: "active" }),
     task("family-check", "Check settings after a restart", { parentTaskId: "family", status: "awaiting_verification" }),
     task("review", "Review the import result", { status: "open", verification: { state: "failed", reason: "A malformed input check needs review" } }),
-    task("plan-build", "Build the approved offline format", { planningId: "converted" }),
+    task("plan-build", "Build the approved offline format", { planningId: "converted", planningSpecId: "approved-spec", prompt: "Original approved task brief: preserve offline exports." }),
+    task("plan-stale", "Inspect changed plan context", { planningId: "changed", planningSpecId: "old-spec", prompt: "Original task brief: keep the earlier approved scope." }),
+    task("plan-missing", "Inspect a missing plan link", { planningId: "missing-plan" }),
+    task("plan-foreign", "Inspect a foreign plan identifier", { planningId: "foreign-plan" }),
     task("shared-task", "Build a shared export flow", { delegation: { version: 1, childTaskIds: ["shared-format", "shared-check"], summary: "Build the format and independent UI checks, then integrate their results." } }),
     task("shared-format", "Implement the export format", { parentTaskId: "shared-task", delegatedFrom: { parentTaskId: "shared-task" }, status: "done", verification: { state: "verified", reason: "Format checks passed" } }),
     task("shared-check", "Verify the export controls", { parentTaskId: "shared-task", delegatedFrom: { parentTaskId: "shared-task" }, status: "awaiting_verification", verification: { state: "unverified", reason: "The control checks await confirmation" } }),
@@ -63,7 +66,9 @@ app.whenReady().then(async () => {
   }
   const plans = [
     { id: "discussion", projectId: "fixture", title: "Discuss offline sharing", status: "planning", destination: "Share without accounts", outOfScope: "Cloud sync", unknowns: [], questions: [{ id: "q1", type: "discussion", question: "Which format?", status: "resolved", resolution: "JSON", dependsOn: [] }, { id: "q2", type: "discussion", question: "How should conflicts be handled?", status: "open", dependsOn: ["q1"] }], createdAt: now, updatedAt: now },
-    { id: "converted", projectId: "fixture", title: "Approved offline format", status: "converted", destination: "Keep exported data portable", outOfScope: "Servers", unknowns: [], questions: [], taskIds: ["plan-build"], conversion: { taskIds: ["plan-build"] }, createdAt: now, updatedAt: now },
+    { id: "converted", projectId: "fixture", title: "Approved offline format", status: "converted", destination: "Keep exported data portable. Preserve accented filenames and final empty fields.\nReference: " + "Approved_scope_identifier_".repeat(5), outOfScope: "Servers", unknowns: [], questions: [], taskIds: ["plan-build"], conversion: { taskIds: ["plan-build"] }, spec: { id: "approved-spec", approvedAt: now }, createdAt: now, updatedAt: now },
+    { id: "changed", projectId: "fixture", title: "Changed offline format", status: "converted", destination: "Current saved destination after the original task was approved.", taskIds: ["plan-stale"], spec: { id: "new-spec", approvedAt: now, stale: true }, unknowns: [], questions: [], createdAt: now, updatedAt: now },
+    { id: "foreign-plan", projectId: "elsewhere", title: "Private foreign plan", destination: "PRIVATE_FOREIGN_DESTINATION", unknowns: [], questions: [], createdAt: now, updatedAt: now },
   ];
   const taskStates = tasks.filter((row) => !row.absorbedInto).map((row) => ({ id: row.id, stage: row.status === "active" ? "running" : row.status === "awaiting_verification" ? "verifying" : row.verification?.state === "failed" ? "blocked" : row.status === "done" ? "done" : "ready", reason: row.status === "active" ? "A worker is applying this step" : "Ready when scheduling resumes" }));
   Object.assign(taskStates.find((row) => row.id === "shared-task"), { stage: "waiting", reason: "Waiting for delegated subtasks to finish before combining their results" });
@@ -81,7 +86,7 @@ app.whenReady().then(async () => {
   };
   report.rawTaskCount = tasks.length;
   const preload = path.join(root, "read-only-preload.cjs");
-  fs.writeFileSync(preload, `const {contextBridge}=require('electron');const responses=${JSON.stringify(responses)};contextBridge.exposeInMainWorld('mefiStudio',Object.fromEntries(Object.keys(responses).map(key=>[key,async()=>responses[key]])));localStorage.setItem('mefiStudio.zen','0');localStorage.setItem('mefiStudio.commandHome','0');localStorage.setItem('mefiStudio.zenReactive','0');`);
+  fs.writeFileSync(preload, `const {contextBridge}=require('electron');const responses=${JSON.stringify(responses)};const listeners=[];const projectListeners=[];let held=null;let deferred=null;let gathers=0;const bridge=Object.fromEntries(Object.keys(responses).map(key=>[key,async()=>responses[key]]));bridge.onTasks=fn=>listeners.push(fn);bridge.onProjects=fn=>projectListeners.push(fn);bridge.tasksList=()=>{if(held){const result=held;held=null;return result;}return Promise.resolve(responses.tasksList);};let holdGather=false;const gatherQueue=[];const savedRows=[];let cancellationCalls=0;bridge.tasksSave=async rows=>{savedRows.push(JSON.parse(JSON.stringify(rows)));return {ok:true};};bridge.referenceCancel=()=>{cancellationCalls++;throw new Error('No cancellation allowed');};bridge.referenceGather=async()=>{gathers++;if(holdGather){holdGather=false;return new Promise((resolve,reject)=>gatherQueue.push({resolve,reject}));}return {ok:false,error:'Isolated fixture only'};};contextBridge.exposeInMainWorld('taskGatherFixture',{hold:()=>{holdGather=true;},count:()=>gatherQueue.length,saved:()=>savedRows,cancellations:()=>cancellationCalls,settle:(index,kind,label)=>{const pending=gatherQueue[index];if(kind==='rejection')pending.reject(new Error(label));else if(kind==='error')pending.resolve({ok:false,error:label});else pending.resolve({ok:true,references:{files:[label],code:[],sessions:[],chats:[],web:[],ideas:[],pngs:[]}});}});contextBridge.exposeInMainWorld('taskOpenFixture',{hold:()=>{held=new Promise((yes,no)=>{deferred={yes,no};});},settle:fail=>{if(fail)deferred.no(new Error('old read rejected'));else deferred.yes(responses.tasksList);},switch:id=>{responses.tasksList={ok:true,projectId:id,tasks:[{id:'same',projectId:id,title:id+' task',prompt:'Fixture brief',status:'open'}]};projectListeners.forEach(fn=>fn({activeId:id}));},gathers:()=>gathers});contextBridge.exposeInMainWorld('mefiStudio',bridge);contextBridge.exposeInMainWorld('taskRetentionFixture',{resetPlans:()=>{responses.planningList.plans=[];},push:tasks=>{responses.tasksList.tasks=tasks;listeners.forEach(fn=>fn(tasks));}});localStorage.setItem('mefiStudio.zen','0');localStorage.setItem('mefiStudio.commandHome','0');localStorage.setItem('mefiStudio.zenReactive','0');`);
   const window = new BrowserWindow({ show: false, width: 1360, height: 980, webPreferences: { preload, contextIsolation: true, nodeIntegration: false, sandbox: true, offscreen: true, backgroundThrottling: false } });
   const contents = window.webContents; contents.setAudioMuted(true); contents.setFrameRate(30); contents.setWindowOpenHandler(() => ({ action: "deny" }));
   contents.on("console-message", (_event, detail, oldMessage) => { const level = typeof detail === "object" ? detail.level : detail; if (level === "error" || level === 3) report.errors.push(String(typeof detail === "object" ? detail.message : oldMessage)); });
@@ -153,6 +158,82 @@ app.whenReady().then(async () => {
   await run("const search=document.getElementById('task-search');search.value='Discuss offline sharing';search.dispatchEvent(new Event('input',{bubbles:true}));");
   await capture("task-overview-discussion.png");
   report.delegationNarrow = await inspectDelegation("narrow");
+  report.planTrace = [];
+  for (const [size,width,height] of [["desktop",1360,980],["narrow",600,560]]) {
+    window.setContentSize(width,height);await sleep(160);
+    for (const [taskId,state] of [["plan-build","current"],["plan-stale","changed"],["plan-missing","missing"],["plan-foreign","missing"]]) {
+      await run(`await window.MefiTasks.open({taskId:${JSON.stringify(taskId)}});`);
+      await until(`document.querySelector('[data-task-panel="plan-trace"]')?.dataset.state===${JSON.stringify(state)}`, `${size} ${taskId} plan trace`);
+      await run("document.querySelector('[data-task-panel=plan-trace]').scrollIntoView({block:'center',behavior:'instant'});");
+      const trace=await run("const p=document.querySelector('[data-task-panel=plan-trace]'),d=p.querySelector('.task-plan-destination'),b=p.getBoundingClientRect(),link=p.querySelector('[data-task-action=view-plan]');return {state:p.dataset.state,text:p.textContent,detail:document.getElementById('task-detail').textContent,left:b.left,right:b.right,width:innerWidth,pageOverflow:document.documentElement.scrollWidth>innerWidth+1,destinationOverflow:!d.hidden&&d.scrollWidth>d.clientWidth+1,linkVisible:!link.hidden,fontSizes:[...p.querySelectorAll('h4,p,button')].filter(n=>!n.hidden).map(n=>parseFloat(getComputedStyle(n).fontSize))};");
+      assert.equal(trace.state,state);assert.equal(trace.pageOverflow,false);assert.equal(trace.destinationOverflow,false);
+      assert.ok(trace.left>=-1&&trace.right<=trace.width+1);assert.ok(trace.fontSizes.every(size=>size>=12));
+      assert.equal(trace.linkVisible,["current","changed"].includes(state));assert.doesNotMatch(trace.text,/PRIVATE_FOREIGN_DESTINATION|Private foreign plan/);
+      if(taskId==="plan-build"){assert.match(trace.text,/Keep exported data portable/);assert.match(trace.detail,/Original approved task brief/);}
+      if(taskId==="plan-stale"){assert.match(trace.text,/needs revision/);assert.match(trace.text,/specification differs/);assert.match(trace.detail,/earlier approved scope/);}
+      if(state==="missing")assert.match(trace.text,/not available in this project/);
+      report.planTrace.push({size,taskId,...trace});await capture(`task-plan-trace-${size}-${taskId}.png`);
+    }
+  }
+  // Native DOM state checks complement the mocked insertion/removal contract.
+  // Only synthetic read-only board pushes reach the real preload subscribers.
+  report.retention = [];
+  for (const [size,width,height] of [["desktop",1360,980],["narrow",600,560]]) {
+    window.setContentSize(width,height); await sleep(160);
+    await run(`window.MefiTasks.selectTask(null);window.taskRetentionFixture.resetPlans();await window.MefiTasks.open({filter:'all'});
+      window.__retentionRows=[{id:'retain-a',projectId:'fixture',title:'Keep this task focused',prompt:'Preserve this card and its expanded rows.',status:'open',updatedAt:20},{id:'retain-b',projectId:'fixture',title:'Changed task',status:'open',updatedAt:10}];
+      window.taskRetentionFixture.push(window.__retentionRows);`);
+    await until("document.querySelector('[data-overview-id=retain-a]')?.textContent.includes('Keep this task focused') && document.querySelector('[data-overview-id=retain-b]')?.textContent.includes('Changed task') && document.querySelectorAll('.task-overview-card').length===2", `${size} isolated retention board`);
+    await run(`window.__keptCard=document.querySelector('[data-overview-id=retain-a]');window.__keptCard.querySelector('details').open=true;window.__keptFocus=window.__keptCard.querySelector('summary');window.__keptFocus.focus();window.__oldChanged=document.querySelector('[data-overview-id=retain-b]');window.__retentionRows=window.__retentionRows.map(t=>t.id==='retain-b'?{...t,title:'Newest changed task'}:t);window.taskRetentionFixture.push(window.__retentionRows);`);
+    await until("document.querySelector('[data-overview-id=retain-b]')?.textContent.includes('Newest changed task')", `${size} single changed native card`);
+    const kept = await run("return {identity:document.querySelector('[data-overview-id=retain-a]')===window.__keptCard,focus:document.activeElement===window.__keptFocus,expanded:window.__keptCard.querySelector('details').open,changed:document.querySelector('[data-overview-id=retain-b]')!==window.__oldChanged};");
+    if (!kept.focus) report.focusDiagnostic = await run("return {active:document.activeElement.outerHTML,focus:window.__keptFocus.outerHTML,connected:window.__keptFocus.isConnected,selected:window.MefiTasks.state.selected,detailOpen:document.getElementById('tasks-overlay').classList.contains('task-detail-open'),rect:window.__keptFocus.getBoundingClientRect().toJSON()};");
+    assert.ok(Object.values(kept).every(Boolean), JSON.stringify(kept));
+    await run(`window.__retentionRows=[{id:'retain-c',projectId:'fixture',title:'Inserted running task',status:'active',updatedAt:30},...window.__retentionRows];window.taskRetentionFixture.push(window.__retentionRows);`);
+    await until("document.querySelector('[data-overview-id=retain-c]')", `${size} inserted native card`);
+    const inserted = await run("return {order:[...document.querySelectorAll('.task-overview-card')].map(c=>c.dataset.overviewId),identity:document.querySelector('[data-overview-id=retain-a]')===window.__keptCard,focus:document.activeElement===window.__keptFocus};");
+    assert.deepEqual(inserted.order,["retain-c","retain-a","retain-b"]); assert.ok(inserted.identity && inserted.focus);
+    await run(`window.__retentionRows=window.__retentionRows.filter(t=>t.id!=='retain-c').map(t=>t.id==='retain-b'?{...t,updatedAt:40}:t);window.taskRetentionFixture.push(window.__retentionRows);`);
+    await until("!document.querySelector('[data-overview-id=retain-c]') && document.querySelector('.task-overview-card')?.dataset.overviewId==='retain-b'", `${size} removed and reordered native cards`);
+    const reordered = await run("return {identity:document.querySelector('[data-overview-id=retain-a]')===window.__keptCard,focus:document.activeElement===window.__keptFocus,expanded:window.__keptCard.querySelector('details').open,overflow:document.documentElement.scrollWidth>innerWidth+1,moveBefore:typeof document.getElementById('task-list').moveBefore==='function'};");
+    assert.ok(reordered.identity && reordered.focus && reordered.expanded && !reordered.overflow,JSON.stringify(reordered));
+    await run(`window.__keptCard.querySelector('.task-row button').focus();window.__retentionRows=window.__retentionRows.map(t=>t.id==='retain-a'?{...t,title:'Focused task refreshed'}:t);window.taskRetentionFixture.push(window.__retentionRows);`);
+    await until("document.querySelector('[data-overview-id=retain-a]')?.textContent.includes('Focused task refreshed')", `${size} focused native card refresh`);
+    const changedFocus = await run("const c=document.querySelector('[data-overview-id=retain-a]');return {button:document.activeElement===c.querySelector('.task-row button'),expanded:c.querySelector('details').open};");
+    assert.ok(changedFocus.button && changedFocus.expanded,JSON.stringify(changedFocus));
+    report.retention.push({size,kept,inserted,reordered,changedFocus}); await capture(`task-overview-retention-${size}.png`);
+  }
+  report.openRaces=[];
+  for(const scenario of ['same-id project switch','A-B-A','close','close-reopen','rejected old read','valid completion']) {
+    await run("window.taskOpenFixture.switch('a');await window.MefiTasks.open({taskId:'same'});window.__opened=0;if(!window.__openObserver){window.__openObserver=true;window.addEventListener('mefi:task-opened',()=>window.__opened++);}window.__beforeGather=window.taskOpenFixture.gathers();window.taskOpenFixture.hold();window.__oldOpen=window.MefiTasks.open({taskId:'same',gather:true,panel:'references'});");
+    if(['same-id project switch','A-B-A','rejected old read'].includes(scenario)) {
+      await run("window.taskOpenFixture.switch('b');await window.MefiTasks.open({taskId:'same'});");
+      if(scenario==='A-B-A')await run("window.taskOpenFixture.switch('a');await window.MefiTasks.open({taskId:'same'});");
+    }
+    if(scenario.startsWith('close'))await run("window.MefiTasks.close();"+(scenario==='close-reopen'?"await window.MefiTasks.open({taskId:'same'});":""));
+    await run("window.__opened=0;document.getElementById('reference-status').textContent='Current detail status';window.taskOpenFixture.settle("+(scenario==='rejected old read')+");await window.__oldOpen;");
+    const result=await run("return {gathers:window.taskOpenFixture.gathers()-window.__beforeGather,announcements:window.__opened,status:document.getElementById('reference-status').textContent,projectId:window.MefiTasks.state.projectId,hidden:document.getElementById('tasks-overlay').hidden};");
+    const expected=scenario==='valid completion'?1:0;
+    assert.equal(result.gathers,expected,scenario+JSON.stringify(result));
+    assert.equal(result.announcements,expected,scenario+JSON.stringify(result));
+    if(!expected)assert.equal(result.status,'Current detail status',scenario);
+    report.openRaces.push({scenario,...result});
+  }
+  await capture('task-overview-open-race-verified.png');
+  report.gatherRaces=[];
+  for(const scenario of ['A-B success','A-B error','A-B rejection','A-B-A success','A-B-A error','close','close-reopen','new gather success','new gather error','new gather rejection','valid success','valid error','valid rejection']) {
+    await run("window.taskOpenFixture.switch('a');await window.MefiTasks.open({taskId:'same'});window.__gatherIndex=window.taskGatherFixture.count();window.taskGatherFixture.hold();await window.MefiTasks.open({taskId:'same',gather:true});");
+    if(scenario.startsWith('A-B')) {await run("window.taskOpenFixture.switch('b');await window.MefiTasks.open({taskId:'same'});");if(scenario.startsWith('A-B-A'))await run("window.taskOpenFixture.switch('a');await window.MefiTasks.open({taskId:'same'});");}
+    if(scenario.startsWith('close'))await run("window.MefiTasks.close();"+(scenario==='close-reopen'?"await window.MefiTasks.open({taskId:'same'});":""));
+    if(scenario.startsWith('new gather')) {await run("window.taskGatherFixture.hold();document.getElementById('reference-run').click();window.taskGatherFixture.settle(window.__gatherIndex+1,'success','new-result.txt');");await sleep(80);}
+    await run("window.__savedBefore=window.taskGatherFixture.saved().length;document.getElementById('reference-status').textContent='Current detail status';window.taskGatherFixture.settle(window.__gatherIndex,'"+(scenario.includes('rejection')?'rejection':scenario.includes('error')?'error':'success')+"','old-result.txt');");await sleep(100);
+    const result=await run("return {saved:window.taskGatherFixture.saved().length-window.__savedBefore,status:document.getElementById('reference-status').textContent,projectId:window.MefiTasks.state.projectId,oldRefs:window.MefiTasks.state.tasks.some(t=>t.refs?.some(r=>r.title==='old-result.txt')),oldResult:window.MefiTasks.state.references?.files?.includes('old-result.txt')||false,cancellations:window.taskGatherFixture.cancellations()};");
+    const valid=scenario.startsWith('valid');assert.equal(result.saved,scenario==='valid success'?1:0,scenario+JSON.stringify(result));assert.equal(result.cancellations,0);
+    if(!valid){assert.equal(result.status,'Current detail status',scenario);assert.ok(!result.oldRefs&&!result.oldResult,scenario);}else if(scenario!=='valid success')assert.equal(result.status,'old-result.txt');
+    report.gatherRaces.push({scenario,...result});
+  }
+  await capture('task-overview-gather-race-verified.png');
+
   assert.deepEqual(report.errors, []); assert.deepEqual(report.networkAttempts, []); assert.deepEqual(report.processAttempts, []);
   finish();
 }).catch(finish);

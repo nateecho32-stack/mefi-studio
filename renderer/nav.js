@@ -20,6 +20,7 @@
 
   // Layer bookkeeping. Other modules read it; only claim/release write it.
   const state = { sheet: null, transient: null, returnTo: null, commandFrom: null, focusReturn: { sheet: null, transient: null } };
+  let focusClaimSequence = 0;
   // assistant holds the service tone (ok | busy | warn | offline | paused), painted
   // as a dot on the Explorer's dock item and tool button.
   const badges = { sessions: 0, progress: 0, tasks: 0, ideas: 0, machine: null, assistant: null, questions: 0 };
@@ -1012,7 +1013,13 @@
       if (page) sheet.removeAttribute("aria-modal");
       else sheet.setAttribute("aria-modal", "true");
     }
+    const focusClaim = ++focusClaimSequence;
+    const focusBeforeClaim = document.activeElement;
     requestAnimationFrame(() => {
+      // Navigation supplies initial focus only while its claim is current.
+      // A later user focus must survive a delayed or covered-window frame.
+      if (focusClaim !== focusClaimSequence || state[dest.layer] !== id ||
+          document.activeElement !== focusBeforeClaim || !visibleNavTarget(root)) return;
       const requested = dest.focus ? Array.from(document.querySelectorAll?.(dest.focus) ?? []).find(visibleNavTarget) : null;
       const selected = Array.from(root?.querySelectorAll?.('[aria-selected="true"]') ?? []).find(visibleNavTarget);
       const target = requested ?? selected ?? sheet;
@@ -1027,6 +1034,7 @@
   function release(id) {
     const dest = get(id);
     const layer = dest?.layer ?? (state.sheet === id ? "sheet" : state.transient === id ? "transient" : null);
+    if (state.sheet === id || state.transient === id) focusClaimSequence += 1;
     if (state.sheet === id) {
       state.sheet = null;
       delete document.body.dataset.sheet;

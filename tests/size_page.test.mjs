@@ -1,3 +1,4 @@
+import { parseBookletInputs } from "../scripts/build-booklet.mjs";
 // Size and density, the page and its miniature (renderer/size.js, size.css), over the
 // fake DOM. Every state of the four controls, what the miniature shows of the draft and
 // what the window does not until Apply, the buttons, the keys, leaving and coming back,
@@ -558,14 +559,9 @@ test("the template carries the page's shell and its glyph, the way a page of Wor
 });
 
 test("the build inlines the script after the Configuration dialog and the stylesheet with the others, in the same places", async () => {
-  const build = await read("scripts/build-booklet.mjs");
-  const sources = build.slice(build.indexOf("const CODE_SOURCES = ["), build.indexOf("];", build.indexOf("const CODE_SOURCES = ["))).match(/"([\w-]+\.js)"/g).map((name) => name.slice(1, -1));
-  const parts = build.match(/const codeParts = \[([^\]]+)\]/)[1].split(",").map((name) => name.trim());
-  assert.equal(sources.length, parts.length, "the two lists are the same length");
-  assert.equal(parts[sources.indexOf("size.js")], "sizeCode", "and index for index");
-  assert.equal(sources.indexOf("size.js"), sources.indexOf("config-dialog.js") + 1);
-  assert.ok(sources.indexOf("size.js") > sources.indexOf("idle.js"), "after idle, which the updater pins");
-  assert.match(build, /readFile\(path\.join\(RENDERER, "size\.js"\), "utf8"\), readFile\(path\.join\(RENDERER, "size\.css"\), "utf8"\)/);
-  // Directly after the skills stylesheet; the slices built after it (the frame, the tabs) add theirs further along.
-  assert.match(build, /\$\{skillsStyles\}\\n\$\{sizeStyles\}/);
+  const { scripts, styles } = parseBookletInputs(await read("scripts/build-booklet.mjs"));
+  assert.ok(scripts.includes("size.js") && styles.includes("size.css"));
+  assert.equal(scripts.indexOf("size.js"), scripts.indexOf("config-dialog.js") + 1);
+  assert.ok(scripts.indexOf("size.js") > scripts.indexOf("idle.js"), "after idle, which the updater pins");
+  assert.equal(styles.indexOf("size.css"), styles.indexOf("skills.css") + 1, "directly after the skills stylesheet");
 });

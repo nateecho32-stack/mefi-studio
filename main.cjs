@@ -94,6 +94,7 @@ const agentIssues = require("./scripts/agent-issues.cjs");
 const brains = require("./scripts/brains.cjs");
 const taskDelegation = require("./scripts/task-delegation.cjs");
 const trace = require("./scripts/trace.cjs");
+const logWriteHealth = require("./scripts/log-write-health.cjs");
 const habitsLibrary = require("./scripts/habits.cjs");
 // Trace keeps the studio log and the window's warnings (see traceRows); made
 // here, before anything can log, so logLine never meets them uninitialised.
@@ -14395,7 +14396,7 @@ async function executorLog(record) {
     } catch {
       await rm(temp, { force: true }).catch(() => {});
     }
-  }).catch(() => {});
+  }).catch(() => { if (typeof logWriteHealth !== "undefined") logWriteHealth.failure("executor"); });
   executorLogChain = run;
   return run;
 }
@@ -17739,9 +17740,18 @@ async function spawnNextJob(options) {
         logLine(`[autopilot] could not write the run context for "${assistantClip(job.title, 60)}": ${String(error?.message ?? error).slice(0, 160)}`);
       }
     }
+    let seatRecap = "";
+    if (job.kind === "task" && typeof fleetHost !== "undefined" && typeof fleetHost?.recap === "function") {
+      let recapTimer;
+      try {
+        const recorded = await Promise.race([fleetHost.recap({ runId: entry.id, taskId: job.ref.id }), new Promise((resolve) => { recapTimer = setTimeout(() => resolve(null), 2000); })]);
+        seatRecap = recorded?.text ? scrubOutbound(recorded.text) : "";
+      } catch { /* history must never prevent the claimed task starting */ }
+      finally { clearTimeout(recapTimer); }
+    }
     const built = executorCore.workerPrompt({
       title: job.title, taskId: job.ref.id, tasksFile: projectDataPath(TASKS_PATH), ref: job.ref, resumeCheckpoint: entry.resumeCheckpoint,
-      sections: { fail: failBit, memory: memoryBit, paths: pathsBit, brain: brainHints.brief, collab: collabBit, outside: typeof outsideWork !== "undefined" ? outsideWork.briefLine(job.ref, Date.now()) : "" }, clusterBrief, tail, promptMax: EXECUTOR_PROMPT_MAX - skillInstructions.length,
+      sections: { fail: failBit, memory: memoryBit, recap: seatRecap, paths: pathsBit, brain: brainHints.brief, collab: collabBit, outside: typeof outsideWork !== "undefined" ? outsideWork.briefLine(job.ref, Date.now()) : "" }, clusterBrief, tail, promptMax: EXECUTOR_PROMPT_MAX - skillInstructions.length,
       contextPath, platform: process.platform,
       brief: (maxChars) => taskContext.buildTaskHandoff(job.ref, { tasks, maxChars, contextPath }),
     });
@@ -20434,9 +20444,9 @@ async function traceRead({ channel = "studio", tail = 250, text = "", problems =
   try {
     const read = await traceRows(channel, { tail });
     const result = trace.query(read?.rows ?? [], { tail, text, problems: problems === true, level: ["error", "warn", "info"].includes(level) ? level : null, sources: Array.isArray(sources) ? sources.slice(0, 12).map(String) : null });
-    return { ok: true, channel, ...result, size: read?.size ?? 0, file: read?.file ?? null, dropped: channel === "studio" ? traceStudio.dropped() : 0 };
+    return { ok: true, channel, ...result, size: read?.size ?? 0, file: read?.file ?? null, dropped: channel === "studio" ? traceStudio.dropped() : 0, logWriteFailures: typeof logWriteHealth !== "undefined" ? logWriteHealth.snapshot() : [] };
   } catch (error) {
-    return { ok: false, channel, error: String(error.message ?? error).slice(0, 300) };
+    return { ok: false, channel, error: String(error.message ?? error).slice(0, 300), logWriteFailures: typeof logWriteHealth !== "undefined" ? logWriteHealth.snapshot() : [] };
   }
 }
 

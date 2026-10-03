@@ -1,3 +1,4 @@
+import { parseBookletInputs } from "../scripts/build-booklet.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -258,8 +259,10 @@ test("the bridge, the IPC handlers and the bundle all carry the tracker", () => 
   assert.match(mainSource, /eyes\.usageLedger\(\{ since: now - days \* 86400000, now \}\)/, "coding sessions come from the store reader");
   assert.match(mainSource, /usageTrackerLimits\(\), codingSessionUsage\(now\)\]/, "the Usage tab still reads the default window");
   assert.match(mainSource, /codingSessionUsage\(now, Math\.max\(USAGE_LEDGER_DAYS, workStats\.HEAT_DAYS\)\)/, "the stats card reaches back as far as its heatmap and never less than the tracker");
-  assert.match(buildSource, /readFile\(path\.join\(RENDERER, "tracker\.js"\), "utf8"\)/);
-  assert.match(buildSource, /modelLab, tracker, nodeStyles, tree/);
+  const sources = parseBookletInputs(buildSource).scripts;
+  const at = sources.indexOf("model-lab.js");
+  assert.ok(at >= 0);
+  assert.deepEqual(sources.slice(at, at + 4), ["model-lab.js", "tracker.js", "node-styles.js", "tree3d.js"]);
 });
 
 test("the store read is a worker method and the project facade scopes it", () => {

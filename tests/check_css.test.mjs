@@ -138,6 +138,6 @@ test("CLI: default mode compares renderer/styles.css against HEAD", async () => 
   const out = res.stdout + res.stderr;
   const code = res.code ?? 0;
   if (code === 0) assert.match(res.stdout, /CASCADE-EQUIVALENT/);
-  else assert.equal(code, 1);
+  else assert.equal(code, 1, out);
   assert.match(out, /CASCADE-(EQUIVALENT|DIVERGED)/);
 });

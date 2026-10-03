@@ -1,3 +1,4 @@
+import { parseBookletInputs } from "../scripts/build-booklet.mjs";
 // How the tab strip (renderer/tabs.js) joins the rest of the app, and what it must never do: the one switch the host
 // owns (main.cjs "Tab switches" and the prefs:get channel that carries it), nav.js's saveResume, Configuration's
 // UI & Surfaces pane, where the build puts the script, the keys it claims against what the app already binds, and the
@@ -175,17 +176,12 @@ test("with no strip (v1, no shell, stopped) Configuration is exactly what it was
 
 // ---- the build ----------------------------------------------------------------------------------------------------------------------
 test("tabs.js is built in after idle and before booklet.js, with its stylesheet in the styles join", () => {
-  const build = read("scripts/build-booklet.mjs");
-  const sources = [...section("const CODE_SOURCES = [", "];", build).matchAll(/"([^"]+\.js)"/g)].map((match) => match[1]);
-  assert.ok(sources.indexOf("idle.js") >= 0 && sources.indexOf("tabs.js") > sources.indexOf("idle.js"), "after idle: tools/test_mefi_studio_updater.py pins the prefix up to it");
-  assert.ok(sources.indexOf("tabs.js") < sources.indexOf("booklet.js"), "and before booklet.js, which starts the page (where it sits among the other new scripts does not matter)");
-  const parts = section("const codeParts = [", "];", build).split(",").map((part) => part.trim().replace(/^.*\[/, ""));
-  assert.equal(parts.indexOf("tabsCode"), sources.indexOf("tabs.js"), "the same index in codeParts");
-  assert.match(build, /readFile\(path\.join\(RENDERER, "tabs\.css"\)/);
-  assert.match(build, /\$\{tabsStyles\}/);
+  const { scripts, styles } = parseBookletInputs(read("scripts/build-booklet.mjs"));
+  assert.ok(scripts.indexOf("idle.js") >= 0 && scripts.indexOf("tabs.js") > scripts.indexOf("idle.js"));
+  assert.ok(scripts.indexOf("tabs.js") < scripts.indexOf("booklet.js"));
+  assert.ok(styles.includes("tabs.css"));
   const inline = read("tests/booklet_build.test.mjs");
-  assert.match(inline, /"tabs\.js",/);
-  assert.match(inline, /"tabs\.css"/);
+  assert.ok(inline.includes("BOOKLET_INPUTS.scripts") && inline.includes("BOOKLET_INPUTS.styles"), "the fixture copies both shared inventories");
 });
 
 // ---- Build's session page ------------------------------------------------------------------------------------------------------------

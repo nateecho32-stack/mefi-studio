@@ -244,14 +244,16 @@ console.log(JSON.stringify({ queued, exitsWhileQueued, reloads: calls.reload.map
         self.assertEqual("held", payload["held"]["phase"])
         self.assertEqual(4, payload["finalExits"], "neither a deferred nor a held apply relaunches")
 
-    def test_build_exports_build_and_keeps_cli_and_auditor_literals(self):
-        self.assertIn("export async function build({ root = ROOT } = {})", self.build)
+    def test_build_exports_build_and_keeps_cli_and_inventory_contract(self):
+        self.assertIn("export async function build({ root = ROOT, inputs = BOOKLET_INPUTS } = {})", self.build)
         self.assertIn('const RENDERER = path.join(root, "renderer");', self.build)
         self.assertIn("path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)", self.build)
-        for name in ("task-groups.js", "file-inputs.js", "card-layout.js", "nav.js", "sidebar.js", "styles.css", "model-lab.js", "idle.js", "booklet.js"):
+        inputs = json.loads(re.search(r"export const BOOKLET_INPUTS = (\{[\s\S]*?\})\s*;", self.build).group(1))
+        for name in ("task-groups.js", "file-inputs.js", "card-layout.js", "nav.js", "sidebar.js", "model-lab.js", "idle.js", "booklet.js"):
             with self.subTest(name=name):
-                self.assertIn(f'readFile(path.join(RENDERER, "{name}")', self.build)
-        self.assertIn("[stageLabels, nodeVisuals, performanceCore, profiler, taskGroups, studioUi, fileInputs, motion, cardLayout, nav, sidebar, graph, modelLab, tracker, nodeStyles, tree, treeDynamics, idle,", self.build)
+                self.assertIn(name, inputs["scripts"])
+        self.assertIn("styles.css", inputs["styles"])
+        self.assertEqual(["stage-labels.js", "node-visuals.js", "performance-core.js", "profiler.js", "task-groups.js", "studio-ui.js", "file-inputs.js", "motion.js", "card-layout.js", "nav.js", "sidebar.js", "graph.js", "model-lab.js", "tracker.js", "node-styles.js", "tree3d.js", "tree-dynamics.js", "idle.js"], inputs["scripts"][:18])
         self.assertNotIn('from "electron"', self.updater)
         self.assertNotIn('require("electron")', self.updater)
         check = self.package.get("scripts", {}).get("check", "")

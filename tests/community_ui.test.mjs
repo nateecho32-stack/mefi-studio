@@ -1,3 +1,4 @@
+import { parseBookletInputs } from "../scripts/build-booklet.mjs";
 // renderer/community.js in a vm with a fake DOM, bridge, storage and clock:
 // window.MefiCommunity, the retired boot hint's cleanup, the weekly Discord
 // card's quiet gates and buttons, Settings › Community and the palette
@@ -237,13 +238,11 @@ test("every id the module looks up exists in the template", () => {
 });
 
 test("registration: bundled after music and onboarding, before booklet, and started from the boot callback", () => {
-  assert.match(buildSource, /readFile\(path\.join\(RENDERER, "community\.js"\), "utf8"\)/);
-  const joined = buildSource.match(/const codeParts = \[([^\]]+)\]/)[1].split(",").map((name) => name.trim());
-  assert.ok(joined.indexOf("music") < joined.indexOf("community"));
-  assert.ok(joined.indexOf("onboarding") < joined.indexOf("community"));
-  assert.ok(joined.indexOf("community") < joined.indexOf("booklet"), "community bundles before booklet");
-  const sources = [...buildSource.match(/const CODE_SOURCES = \[([^\]]+)\]/)[1].matchAll(/"([\w.-]+)\.js"/g)].map((match) => match[1]);
-  assert.ok(sources.indexOf("community") < sources.indexOf("booklet"), "the source map lists it before booklet");
+  const sources = parseBookletInputs(buildSource).scripts;
+  assert.ok(sources.includes("community.js"));
+  assert.ok(sources.indexOf("music.js") < sources.indexOf("community.js"));
+  assert.ok(sources.indexOf("onboarding.js") < sources.indexOf("community.js"));
+  assert.ok(sources.indexOf("community.js") < sources.indexOf("booklet.js"), "community bundles before booklet");
   assert.match(onboardingSource, /status: \(\) => state\.status/, "MefiOnboarding exposes the walkthrough status the card waits on");
   assert.ok(booklet.indexOf("window.MefiCommunity?.startup?.()") > booklet.indexOf("window.MefiOnboarding?.startup?.({ automatic: true })"));
 });

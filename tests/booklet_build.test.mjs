@@ -13,82 +13,11 @@ import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { build } from "../scripts/build-booklet.mjs";
+import { build, BOOKLET_INPUTS } from "../scripts/build-booklet.mjs";
 
 const STUDIO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const RENDERER = path.join(STUDIO, "renderer");
 
-// Keep in step with the inline list in scripts/build-booklet.mjs; the fixture
-// only counts as faithful while it copies the same inputs the real build reads.
-const INLINE_SCRIPTS = [
-  "file-inputs.js", "composer-pictures.js", "composer-picker.js", "motion.js", "card-layout.js", "autonomy-ui.js",
-  "performance-core.js",
-  "profiler.js",
-  "stage-labels.js",
-  "node-visuals.js",
-  "task-groups.js", "studio-ui.js", "agents.js", "companion-ui.js", "companion-hub.js",
-  "nav.js",
-  "sidebar.js",
-  "graph.js",
-  "model-lab.js",
-  "tracker.js",
-  "node-styles.js",
-  "tree3d.js",
-  "tree-dynamics.js",
-  "idle.js",
-  "model-community.js",
-  "camera-tour.js",
-  "git-sync.js",
-  "explorer.js",
-  "analyzer.js",
-  "tasks.js",
-  "ideas.js",
-  "overhead.js",
-  "brains.js",
-  "palette.js",
-  "config-dialog.js",
-  "size.js",
-  "eyes.js",
-  "trace.js",
-  "fleet-layout.js",
-  "fleet.js",
-  "boot.js",
-  "startup.js",
-  "workspace.js",
-  "planning.js",
-  "media-window.js",
-  "media-browser.js",
-  "music.js",
-  "together.js",
-  "pc-sync.js",
-  "pc-vault.js",
-  "whats-new.js",
-  "report.js",
-  "alerts.js",
-  "companion-friends.js",
-  "rooms.js",
-  "onboarding.js",
-  "community.js",
-  "demo-panel.js",
-  "agent-brain.js",
-  "project-map-view.js",
-  "setup-helper.js",
-  "vibe-flow.js",
-  "vibe-panels.js",
-  "vibe.js",
-  "today.js",
-  "key-tips.js",
-  "patch.js",
-  "panes.js",
-  "builder.js",
-  "worktrees.js",
-  "review.js",
-  "skills.js",
-  "shell.js",
-  "tabs.js",
-  "sessions.js",
-  "booklet.js",
-];
 
 const FIXTURE_CATALOG = {
   hash: "fixture-hash-0f9e8d7c6b5a",
@@ -118,14 +47,7 @@ async function makeFixtureRoot() {
   await mkdir(renderer, { recursive: true });
   await mkdir(path.join(root, "data"), { recursive: true });
   await copyFile(path.join(RENDERER, "booklet.template.html"), path.join(renderer, "booklet.template.html"));
-  await copyFile(path.join(RENDERER, "styles.css"), path.join(renderer, "styles.css"));
-  await copyFile(path.join(RENDERER, "music.css"), path.join(renderer, "music.css"));
-  await copyFile(path.join(RENDERER, "planning.css"), path.join(renderer, "planning.css"));
-  await copyFile(path.join(RENDERER, "profiler.css"), path.join(renderer, "profiler.css"));
-  await copyFile(path.join(RENDERER, "brains.css"), path.join(renderer, "brains.css"));
-  await copyFile(path.join(RENDERER, "agent-brain.css"), path.join(renderer, "agent-brain.css"));
-  for (const name of ["studio-ui.css", "agents.css", "companion-ui.css", "companion-hub.css", "vibe.css", "today.css", "trace.css", "fleet.css", "setup-helper.css", "config-dialog.css", "git-sync.css", "builder.css", "composer-pictures.css", "composer-picker.css", "worktrees.css", "review.css", "skills.css", "sessions.css", "tabs.css", "shell.css", "size.css", "host-cards.css"]) await copyFile(path.join(RENDERER, name), path.join(renderer, name));
-  for (const name of INLINE_SCRIPTS) {
+  for (const name of [...BOOKLET_INPUTS.styles, ...BOOKLET_INPUTS.scripts]) {
     await copyFile(path.join(RENDERER, name), path.join(renderer, name));
   }
   await writeFile(path.join(root, "data", "models.json"), `${JSON.stringify(FIXTURE_CATALOG, null, 2)}\n`);
@@ -160,14 +82,16 @@ test("booklet build on fixtures: the output exists, is non-empty and self-contai
       /<script id="booklet-data" type="application\/json">([\s\S]*?)<\/script>/,
       "catalog block"
     );
-    const code = bakedSection(html, /<script>([\s\S]*?)<\/script>/, "code block");
+    // The builder normalizes every input and emits the template's line ending.
+    // Compare content in LF so a mixed LF/CRLF checkout still proves inclusion.
+    const code = bakedSection(html, /<script>([\s\S]*?)<\/script>/, "code block").replace(/\r\n?/g, "\n");
     assert.ok(styles.trim().length > 0, "the baked styles must be non-empty");
     assert.ok(code.trim().length > 0, "the baked code must be non-empty");
-    const groupHelper = await readFile(path.join(root, "renderer", "task-groups.js"), "utf8");
+    const groupHelper = (await readFile(path.join(root, "renderer", "task-groups.js"), "utf8")).replace(/\r\n?/g, "\n");
     const helperAt = code.indexOf(groupHelper);
     assert.ok(helperAt >= 0, "the shared task grouping helper is included in the built artifact");
     for (const consumer of ["idle.js", "workspace.js"]) {
-      const consumerAt = code.indexOf(await readFile(path.join(root, "renderer", consumer), "utf8"));
+      const consumerAt = code.indexOf((await readFile(path.join(root, "renderer", consumer), "utf8")).replace(/\r\n?/g, "\n"));
       assert.ok(consumerAt > helperAt, `${consumer} loads after the shared grouping helper`);
     }
 
@@ -231,8 +155,8 @@ async function setLineEndings(root, ending, { except = [] } = {}) {
 test("booklet build on fixtures: CRLF inputs give an all-CRLF booklet that a rebuild leaves alone", async () => {
   const root = await makeFixtureRoot();
   try {
-    // One LF file among CRLF ones: the booklet still comes out in one ending.
-    await setLineEndings(root, "\r\n", { except: ["palette.js"] });
+    // LF helper and palette files among CRLF inputs still emit one ending.
+    await setLineEndings(root, "\r\n", { except: ["palette.js", "task-groups.js"] });
     const out = path.join(root, "renderer", "booklet.html");
     await build({ root });
     const bytes = await readFile(out);
@@ -240,6 +164,8 @@ test("booklet build on fixtures: CRLF inputs give an all-CRLF booklet that a reb
     assert.ok(text.includes("\r\n"));
     assert.equal(text.replace(/\r\n/g, "").includes("\n"), false, "no bare LF: the booklet is not mixed");
     assert.equal(text.replace(/\r\n/g, "").includes("\r"), false, "no bare CR");
+    const helper = (await readFile(path.join(root, "renderer", "task-groups.js"), "utf8")).replace(/\r\n?/g, "\n");
+    assert.equal(text.split(helper.replace(/\n/g, "\r\n")).length - 1, 1, "the complete LF helper is included exactly once in CRLF output");
 
     const second = await build({ root });
     assert.equal(second.changed, false, "a rebuild over the same CRLF checkout is a no-op, not a size-only change");
