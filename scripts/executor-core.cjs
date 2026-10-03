@@ -84,15 +84,20 @@ function idleStopReason({ open, tasks, now, autoBuild, approve = null, taskStart
 
 // ---- the worker's prompt -------------------------------------------------------
 
-// The fixed end of every worker prompt: the run's identity, so the worker (and
-// any structured result it prints) names the attempt it belongs to; the
-// hand-off and call protocol, or at the depth limit the order to stop handing
-// off; the owner-question line, so a decision the run cannot make reaches the
-// owner while it keeps working; the budget warning; the optional MEFI_RESULT
-// line, whose owner: part is the lane for what only the owner can do (it is
-// neither work this task owes, remaining:, nor a hand-off, MEFI_NEXT); and the
-// verdict sentinel. `opencode run` exits 1 even on a clean run, so the
-// sentinel, not the exit code, is the success signal.
+// The fixed parts of every worker prompt, in two halves:
+// - `rules`, the same for every run at the same depth: keep the bookkeeping in
+//   this task; the hand-off and call protocol, or at the depth limit the order
+//   to stop handing off; the owner-question line, so a decision the run cannot
+//   make reaches the owner while it keeps working; the budget warning; the
+//   optional MEFI_RESULT line, whose owner: part is the lane for what only the
+//   owner can do (it is neither work this task owes, remaining:, nor a
+//   hand-off, MEFI_NEXT); and the Agent Brain's step, help and report lines.
+//   They lead the prompt beside the builder instructions (workerPrompt), so a
+//   provider that caches prompt prefixes serves them from its cache.
+// - `identity`, which closes the prompt: the run's identity, so the worker
+//   (and any structured result it prints) names the attempt it belongs to, and
+//   the verdict sentinel. `opencode run` exits 1 even on a clean run, so the
+//   sentinel, not the exit code, is the success signal.
 function promptTail({ runId, taskId, depth = 0, maxDepth, maxHandoffs, nextMark, callMark, budgetMinutes, doneMark, protocol = "" }) {
   const handoff =
     depth < maxDepth
@@ -102,13 +107,13 @@ function promptTail({ runId, taskId, depth = 0, maxDepth, maxHandoffs, nextMark,
     depth < maxDepth
       ? ` You have about ${budgetMinutes} minutes. If the whole job will not fit, finish the most valuable piece, hand the rest on, and still print the line below — a run that is cut off reports nothing and counts as a failure.`
       : ` You have about ${budgetMinutes} minutes. If the whole job will not fit, finish the most valuable piece and still print the line below.`;
-  const identity = ` This dispatch is run ${runId} for task ${taskId}.`;
   const askLine = ` ${agentIssues.issuePromptLine()}`;
   // The Agent Brain's step, help and report lines (agent-brain-host.cjs); they
-  // ride the tail because a truncated protocol line is worse than none.
+  // ride the fixed parts because a truncated protocol line is worse than none.
   const brainLine = protocol ? ` ${String(protocol).replace(/["\r\n]+/g, " ").trim().slice(0, 700)}` : "";
-  const tail = `${identity}${brainLine} Keep verification and board bookkeeping in the current task. Never create a child task merely to close, update, verify or confirm another card. Report evidence and actual remaining implementation scope on this attempt instead; hand off only substantive unfinished work.${handoff}${askLine}${budget} Optionally print one line "MEFI_RESULT: done: <what you finished>; remaining: <what this task still owes, or none>; owner: <what only the owner can do, or leave it out>" naming your own account of the work (one line, under 300 characters). A concrete human decision, missing access or physical action goes under owner:, never under remaining: or MEFI_NEXT. Routine repairs, failing checks and concurrent-file or test-history conflicts stay under remaining: until resolved. Preserve other sessions' work and use the repository's documented test-history tools. Studio owns board updates; report the evidence and let the host reconcile the task. Print the exact line ${doneMark} as the last thing you say.`;
-  return tail;
+  const rules = ` Keep verification and board bookkeeping in the current task. Never create a child task merely to close, update, verify or confirm another card. Report evidence and actual remaining implementation scope on this attempt instead; hand off only substantive unfinished work.${handoff}${askLine}${budget} Optionally print one line "MEFI_RESULT: done: <what you finished>; remaining: <what this task still owes, or none>; owner: <what only the owner can do, or leave it out>" naming your own account of the work (one line, under 300 characters). A concrete human decision, missing access or physical action goes under owner:, never under remaining: or MEFI_NEXT. Routine repairs, failing checks and concurrent-file or test-history conflicts stay under remaining: until resolved. Preserve other sessions' work and use the repository's documented test-history tools. Studio owns board updates; report the evidence and let the host reconcile the task.${brainLine}`;
+  const identity = ` This dispatch is run ${runId} for task ${taskId}. Print the exact line ${doneMark} as the last thing you say.`;
+  return { rules, identity };
 }
 
 // What every builder is told about the folder, previews and the shared git
@@ -116,20 +121,25 @@ function promptTail({ runId, taskId, depth = 0, maxDepth, maxHandoffs, nextMark,
 // must not invent a commit obligation or an owner blocker for that case.
 const INSTRUCTIONS = " Work in the project folder at the current directory. Make the edits, do not just describe them. When done, run the narrowest relevant test. For browser apps, leave a root index.html or a working package preview/dev/start script for Studio Preview. Save and test the app, then finish the builder task; Studio owns the preview server separately. Do not launch a long-running foreground or background preview server from a builder tool, or wait on one to report completion. Determine whether the project is a Git working tree before applying Git instructions. In a Git working tree, other Studio sessions share its index: commit with one atomic path-limited command (`git commit -m <msg> -- <your files>`), never `git add` followed by a plain `git commit`, `git commit -a`, or `git add -A`, and leave nothing staged when you finish — a bare commit sweeps whatever another session staged into your commit. Preserve any commit requirement in the task or project instructions. If no Git working tree exists and neither the task nor project instructions require a commit, finish and verify normally: do not initialize Git or create follow-up work just to satisfy this generic guidance. Missing Git alone is then informational: mention it only in the ordinary result summary, never in MEFI_ASK, remaining: or owner:. If a commit is explicitly required, retain that obligation and report any actual blocker.".replace(/["\r\n]+/g, " ");
 
-// The whole prompt, budgeted piecewise against `promptMax`. The tail carries
-// the verdict sentinel, so it is budgeted first: slicing the whole string
-// dropped the sentinel off any job with a long prompt (a folded plan listing
-// eight ideas runs past 1000 characters on its own), and those jobs were then
-// filed as failures however well they went. The instructions are fixed, the
-// memory, path, collaboration and advisory sections are capped decorations,
-// and the task's own text (for a folded plan, the obligation list itself)
-// gets whatever is left, trimmed LAST: the old single slice kept the
-// decorations and cut the later obligations, so a run could declare success
-// on a job it had only partly read. `brief(maxChars)` renders the saved
-// record (taskContext.buildTaskHandoff); it is the caller's, so a malformed
-// record throws out of here and the caller releases the claim. Returns the
-// prompt and the brief it carries (`jobPrompt`, which the caller keeps as the
-// job's prompt).
+// The whole prompt, budgeted piecewise against `promptMax`, in the order a
+// prompt-prefix cache can use: the builder instructions and the fixed rules
+// first (the same for every run, so a provider that caches prefixes reads
+// them from its cache; the host puts the selected skills before them), then
+// this task's own parts, and the run's identity and the verdict sentinel last.
+// The fixed parts (`tail`, promptTail's { rules, identity }; a plain string is
+// an identity alone) carry the sentinel, so they are budgeted first: slicing
+// the whole string dropped the sentinel off any job with a long prompt (a
+// folded plan listing eight ideas runs past 1000 characters on its own), and
+// those jobs were then filed as failures however well they went. The
+// instructions are fixed, the memory, path, collaboration and advisory
+// sections are capped decorations, and the task's own text (for a folded
+// plan, the obligation list itself) gets whatever is left, trimmed LAST: the
+// old single slice kept the decorations and cut the later obligations, so a
+// run could declare success on a job it had only partly read.
+// `brief(maxChars)` renders the saved record (taskContext.buildTaskHandoff);
+// it is the caller's, so a malformed record throws out of here and the caller
+// releases the claim. Returns the prompt and the brief it carries
+// (`jobPrompt`, which the caller keeps as the job's prompt).
 function workerPrompt({ title, taskId, tasksFile, ref, resumeCheckpoint = null, sections = {}, clusterBrief = "", tail, promptMax, brief, contextPath = null }) {
   const titleBit = `${title}. `.replace(/["\r\n]+/g, " ");
   const failFlat = flat(sections.fail, 240);
@@ -142,10 +152,13 @@ function workerPrompt({ title, taskId, tasksFile, ref, resumeCheckpoint = null, 
   const clusterFlat = clusterBrief ? ` ${clusterBrief.replace(/[\r\n]+/g, " ").slice(0, 2400)} ` : "";
   const resumeBrief = executorResume.brief({ ...ref, runProgress: resumeCheckpoint });
   const resumeFlat = resumeBrief ? ` ${resumeBrief}\n\n` : "";
-  const tailFlat = tail.replace(/["\r\n]+/g, " ");
+  const fixed = typeof tail === "string" ? { rules: "", identity: tail } : { rules: String(tail?.rules ?? ""), identity: String(tail?.identity ?? "") };
+  // What every run shares, ended by a blank line before the task's own parts.
+  const lead = `${INSTRUCTIONS.trimStart()}${fixed.rules.replace(/["\r\n]+/g, " ")}\n\n`;
+  const identityFlat = fixed.identity.replace(/["\r\n]+/g, " ");
   const promptBudget = Math.max(
     240,
-    promptMax - tailFlat.length - INSTRUCTIONS.length - titleBit.length - failFlat.length - outsideFlat.length - memoryFlat.length - pathsFlat.length - brainFlat.length - collabFlat.length - clusterFlat.length - resumeFlat.length - 8,
+    promptMax - lead.length - identityFlat.length - titleBit.length - failFlat.length - outsideFlat.length - memoryFlat.length - pathsFlat.length - brainFlat.length - collabFlat.length - clusterFlat.length - resumeFlat.length - 8,
   );
   // The durable brief carries prior findings and successful prerequisite
   // outputs into the next worker instead of restarting from a short title.
@@ -154,8 +167,8 @@ function workerPrompt({ title, taskId, tasksFile, ref, resumeCheckpoint = null, 
   const recovery = contextPath ? "" : `Full saved task context: read ${JSON.stringify(tasksFile)}, find task id ${JSON.stringify(taskId)}. Read that record and its members whenever the brief is excerpted or grouped; contextHistory contains earlier requirements and attempts. Do not rewrite Studio's task store from the worker.\n\n`;
   const jobPrompt = recovery + brief(Math.max(1000, promptBudget - recovery.length));
   const body = String(jobPrompt ?? "").slice(0, promptBudget);
-  const head = `${titleBit}${resumeFlat}${body}${outsideFlat}${failFlat}${memoryFlat}${pathsFlat}${brainFlat}${collabFlat}${clusterFlat}${INSTRUCTIONS}`;
-  return { prompt: `${head}${tailFlat}`, jobPrompt, budget: promptBudget };
+  const task = `${titleBit}${resumeFlat}${body}${outsideFlat}${failFlat}${memoryFlat}${pathsFlat}${brainFlat}${collabFlat}${clusterFlat}`;
+  return { prompt: `${lead}${task}${identityFlat}`, jobPrompt, budget: promptBudget };
 }
 
 // ---- how a run ended -------------------------------------------------------------
@@ -500,6 +513,10 @@ function attemptRecord({ run, job, code, errorMessage = null, lastWords: tail = 
     spoke: run.spoke === true,
     sessionId,
     ...(run.routeLabel ? { route: run.routeLabel } : {}),
+    // A coding CLI's own session and token totals (live progress,
+    // scripts/cli-stream.cjs), for an attempt that resumes it after this one.
+    ...(run.cliSession?.id ? { cliSession: executorResume.cliSessionRecord(run.cliSession) } : {}),
+    ...(run.cliUsage ? { usage: executorResume.usageRecord(run.cliUsage) } : {}),
     at: now,
     tail,
     ...(errorMessage ? { error: String(errorMessage).slice(0, 500) } : {}),
@@ -622,7 +639,14 @@ function codexMcpArgs(servers) {
 // file through OPENCODE_CONFIG, Claude Code takes --mcp-config, Codex takes
 // its server table as config overrides. Grok and Antigravity have no per-run
 // MCP flag and keep their own configuration.
-function cliInvocation(route, cli, prompt, { modelArg = () => "", agyModelArg = () => "", desk = null, platform = "win32", shim = () => null, promptFile = null } = {}) {
+// `live` is live progress (the host's switch, on by default): Claude Code and
+// Codex print JSON events as they work instead of their answer at the end,
+// and the launch names that stream (`stream`: "claude" or "codex") for the
+// host's decoder (scripts/cli-stream.cjs). Claude Code also runs under
+// `sessionId`, a UUID the host chose, so a later attempt can resume the
+// session. Off, every command line is exactly the text-mode one.
+const SESSION_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function cliInvocation(route, cli, prompt, { modelArg = () => "", agyModelArg = () => "", desk = null, platform = "win32", shim = () => null, promptFile = null, live = false, sessionId = null } = {}) {
   if (cli === "grok") {
     // A headless agentic session. --prompt-file both starts grok's headless
     // mode and keeps a brief of up to EXECUTOR_PROMPT_MAX off every command
@@ -639,19 +663,23 @@ function cliInvocation(route, cli, prompt, { modelArg = () => "", agyModelArg = 
     // Claude Code's headless print mode: permission checks bypassed, the
     // prompt on stdin (never cmd's command line), plain text so the sentinel
     // protocol stays readable, the model id held to real-id characters.
+    // With live progress, stream-json (which print mode gives only with
+    // --verbose) and the session id the host chose instead of plain text.
     // --mcp-config takes a list, so it goes last.
     const selected = modelArg(route.model);
-    const args = ["-p", "--output-format", "text", "--dangerously-skip-permissions", ...(selected ? ["--model", selected] : []), ...(desk?.claude ? ["--mcp-config", desk.claude] : [])];
-    return { ...shellLaunch("claude", args, platform), stdio: ["pipe", "pipe", "pipe"], stdin: prompt, env: route.env, dropped: [] };
+    const session = live && SESSION_UUID.test(String(sessionId ?? "")) ? ["--session-id", String(sessionId)] : [];
+    const args = ["-p", "--output-format", ...(live ? ["stream-json", "--verbose", ...session] : ["text"]), "--dangerously-skip-permissions", ...(selected ? ["--model", selected] : []), ...(desk?.claude ? ["--mcp-config", desk.claude] : [])];
+    return { ...shellLaunch("claude", args, platform), stdio: ["pipe", "pipe", "pipe"], stdin: prompt, env: route.env, dropped: [], ...(live ? { stream: "claude" } : {}) };
   }
   if (cli === "codex") {
     // `codex exec`: approvals and the sandbox bypassed (the run root is the
     // whole workspace), the prompt on stdin ("-" reads it there), --color
     // never keeps the protocol readable, the run's MCP servers as overrides.
+    // With live progress, --json prints its events on stdout as JSONL.
     const selected = modelArg(route.model);
     const mcp = codexMcpArgs(desk?.servers);
-    const args = ["exec", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "--color", "never", ...(selected ? ["-m", selected] : []), ...mcp.args, "-"];
-    return { ...shellLaunch("codex", args, platform), stdio: ["pipe", "pipe", "pipe"], stdin: prompt, env: route.env, dropped: mcp.dropped };
+    const args = ["exec", ...(live ? ["--json"] : []), "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "--color", "never", ...(selected ? ["-m", selected] : []), ...mcp.args, "-"];
+    return { ...shellLaunch("codex", args, platform), stdio: ["pipe", "pipe", "pipe"], stdin: prompt, env: route.env, dropped: mcp.dropped, ...(live ? { stream: "codex" } : {}) };
   }
   if (cli === "antigravity") {
     // The Antigravity CLI's agentic print mode. Every flag precedes `-p` (with

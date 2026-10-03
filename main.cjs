@@ -94,6 +94,8 @@ const requestSizing = require("./scripts/request-sizing.cjs");
 const newApp = require("./scripts/new-app.cjs");
 const executorResume = require("./scripts/executor-resume.cjs");
 const executorCore = require("./scripts/executor-core.cjs");
+const cliStream = require("./scripts/cli-stream.cjs");
+const promptCache = require("./scripts/prompt-cache.cjs");
 const { createPlanningStore } = require("./scripts/planning.cjs");
 const { createPlanningService } = require("./scripts/planning-service.cjs");
 const projectWork = require("./scripts/project-work.cjs");
@@ -5035,8 +5037,13 @@ async function chatCompletion(endpoint, apiKey, model, body, { sessionHeader = n
     const payload = responses ? responsesAsChat(await response.json()) : await response.json();
     observed.model = typeof payload.model === "string" ? payload.model : model;
     const usage = payload.usage ?? {};
+    // Cached input as each provider reports it: OpenAI's details (Zen, and
+    // OpenRouter's normalized usage), DeepSeek's hit count, Anthropic's
+    // cache reads and writes. A reported 0 is kept, a missing field is unknown.
+    const cached = (...values) => { const known = values.filter((value) => Number.isFinite(value) && value >= 0); return known.find((value) => value > 0) ?? known[0] ?? null; };
     observed.tokenUsage = { inputTokens: usage.prompt_tokens ?? null, outputTokens: usage.completion_tokens ?? null,
-      totalTokens: usage.total_tokens ?? null, cacheReadTokens: usage.prompt_tokens_details?.cached_tokens ?? null };
+      totalTokens: usage.total_tokens ?? null, cacheReadTokens: cached(usage.prompt_tokens_details?.cached_tokens, usage.prompt_cache_hit_tokens, usage.cache_read_input_tokens),
+      cacheWriteTokens: cached(usage.cache_creation_input_tokens, usage.prompt_tokens_details?.cache_write_tokens) };
     // Only an explicit USD field counts as reported cost. Missing billing data
     // and subscription calls are not free, and catalog prices are not receipts.
     observed.costUsd = typeof usage.cost_usd === "number" && Number.isFinite(usage.cost_usd) && usage.cost_usd >= 0 ? usage.cost_usd : null;
@@ -5076,6 +5083,7 @@ function responsesRequest(body) {
   if (instructions) request.instructions = instructions;
   if (body.reasoning_effort) request.reasoning = { effort: body.reasoning_effort };
   if (body.service_tier) request.service_tier = body.service_tier;
+  if (body.prompt_cache_key) request.prompt_cache_key = body.prompt_cache_key;
   return request;
 }
 
@@ -5665,6 +5673,8 @@ async function httpAssistantCall(route, system, user, maxTokens, { taskType = "r
     const chosen = settings.agentEfforts?.[role];
     if (agentProfiles.capabilities(route.provider, route.model).efforts.includes(chosen)) effort = chosen;
   }
+  // A cache-friendly body where the route takes one (promptCacheFor).
+  const caching = typeof promptCacheFor === "function" ? await promptCacheFor(route) : null;
   // The wire shape belongs to the route that answers: glm-5.3 reasons on every
   // request and caps effort at low|high|max — "low" keeps the heavy passes
   // honest without burning the plan. The flash route and OpenCode keep the
@@ -5690,6 +5700,7 @@ async function httpAssistantCall(route, system, user, maxTokens, { taskType = "r
       body.usage = { include: true };
       if (effort && candidate === route) body.reasoning = { effort };
     }
+    if (caching) promptCache.shape(body, { provider: candidate.provider, model: candidate.model, role, refused: caching });
     return body;
   };
   // Every call passes its provider's breaker first, so a route that keeps
@@ -5700,10 +5711,14 @@ async function httpAssistantCall(route, system, user, maxTokens, { taskType = "r
     if (!gate.allowed) return providerSkipped(candidate.provider, gate);
     let result;
     try {
-      result = await chatCompletion(candidate.endpoint, candidate.apiKey, candidate.model, requestBody(candidate), {
+      const send = async () => chatCompletion(candidate.endpoint, candidate.apiKey, candidate.model, requestBody(candidate), {
         sessionHeader: candidate.provider === "opencode" ? await assistantSessionId() : null,
         provider: candidate.provider, taskType, source, timeoutMs,
       });
+      result = await send();
+      // A provider that refuses its caching option (HTTP 400 naming it) has it
+      // off for the session, and this call goes again without it.
+      if (caching && promptCache.refused(caching, candidate, result)) result = await send();
     } finally {
       settleProvider(candidate.provider, gate, result);
     }
@@ -8469,7 +8484,7 @@ async function assistantOverseerJob(now, entry) {
   if (!aiPlan.call) Object.assign(aiRecord, { skippedAt: now, skipped: aiPlan.reason });
   else {
     const reviewInput = assistant.boundedFactsJson(overseerFacts(now, board), 14000);
-    const reviewFallback = (system = ASSISTANT_OVERSEER_SYSTEM, fromSeat = false) => assistantFetch(system, reviewInput, 6000, { role: "heavy", taskType: "overseer", skillRole: fromSeat ? null : "heavy" });
+    const reviewFallback = (system = ASSISTANT_OVERSEER_SYSTEM, fromSeat = false, input = reviewInput) => assistantFetch(system, input, 6000, { role: "heavy", taskType: "overseer", skillRole: fromSeat ? null : "heavy" });
     const call = typeof seatFetch === "function" ? await seatFetch("overseer", ASSISTANT_OVERSEER_SYSTEM, reviewInput, 6000, { fallback: reviewFallback }) : await reviewFallback();
     if (call.ok) {
       assistantAiOk();
@@ -10887,7 +10902,7 @@ async function assistantOverseerTurn({ user, text, intent, facts, did, slot, foc
   let timer = null;
   const call = await Promise.race([
     typeof seatFetch === "function"
-      ? seatFetch("companion", ASSISTANT_CHAT_SYSTEM, body, 1500, { fallback: (system = ASSISTANT_CHAT_SYSTEM) => assistantFetch(system, body, 1500, { taskType: "conversation", allowCli: DATA_ONLY_CLIS, skillRole: null }) })
+      ? seatFetch("companion", ASSISTANT_CHAT_SYSTEM, body, 1500, { fallback: (system = ASSISTANT_CHAT_SYSTEM, _fromSeat = false, input = body) => assistantFetch(system, input, 1500, { taskType: "conversation", allowCli: DATA_ONLY_CLIS, skillRole: null }) })
       : assistantFetch(ASSISTANT_CHAT_SYSTEM, body, 1500, { taskType: "conversation", allowCli: DATA_ONLY_CLIS }),
     new Promise((resolve) => (timer = setTimeout(() => resolve({ ok: false, timedOut: true, error: `no reply within ${Math.round(budgetMs / 1000)} s` }), budgetMs))),
   ]);
@@ -13104,6 +13119,62 @@ async function executorLog(record) {
   return run;
 }
 
+// ---- live progress: Claude Code and Codex runs as event streams ---------------------
+// With live progress on (settings.executor.liveProgress, on unless false, and
+// MEFI_STUDIO_LIVE_PROGRESS=0 to turn it off), Claude Code runs with
+// stream-json under a session id Studio chose and Codex with --json
+// (executorCore.cliInvocation). scripts/cli-stream.cjs turns each stream back
+// into the worker's text lines, which wire()'s take() reads as it always has,
+// and into the session, tool, usage and todo events that show the run's steps
+// while it works: the same todos, fraction and active tool watchJobProgress
+// keeps for an OpenCode session. spawnNextJob's hooks are one line each and
+// guarded, so its sliced test hosts run as before.
+async function cliLiveProgress() {
+  try { return cliStream.liveProgressEnabled(await readSettings(), process.env); }
+  catch { return cliStream.liveProgressEnabled(null, process.env); }
+}
+// The decoder for one attempt's stdout, or null when that attempt prints text
+// (entry.liveStream is set by spawnAttempt). Lines go to the stream's own
+// take(), events to cliStreamEvent, and nothing once the attempt is over.
+function cliStreamWire(entry, owner, take) {
+  if (!entry?.liveStream?.format) return null;
+  const decoder = cliStream.createDecoder(entry.liveStream.format);
+  const deliver = (items) => {
+    for (const item of items) {
+      if (entry.finished || entry.child !== owner) return;
+      if (typeof item.line === "string") take(item.line, item.stdout === true);
+      else cliStreamEvent(entry, item);
+    }
+  };
+  return { push: (chunk) => deliver(decoder.push(chunk)), end: () => deliver(decoder.end()) };
+}
+// A session, todo list or fraction is saved within a second, as
+// watchJobProgress saves them; a tool, a step or a fraction is pushed.
+function cliStreamEvent(entry, item) {
+  const changed = cliStream.applyEvent(entry, item, Date.now());
+  if (changed.todos && typeof agentBrain !== "undefined" && agentBrain && entry.taskId) agentBrain.todos({ taskId: entry.taskId, runId: entry.id, todos: entry.todos });
+  if (changed.session || changed.todos || changed.progress) queueExecutorCheckpoint(entry);
+  if (changed.tool || changed.todos || changed.progress) emitAutopilot();
+}
+// ---- end of live progress --------------------------------------------------------
+
+// ---- cache-friendly provider calls (scripts/prompt-cache.cjs) -------------------------
+// A Zen gpt-* call names its prompt cache and an OpenRouter Claude or Gemini
+// call marks its system prompt cacheable, so a repeated prompt is billed as a
+// cache read. settings.ai.promptCache (on unless false) and
+// MEFI_STUDIO_PROMPT_CACHE=0 turn both off; a provider that answers HTTP 400
+// naming an option has that option off until Studio restarts.
+const promptCacheRefused = new Set();
+// The refusals to shape httpAssistantCall's bodies with, or null when no
+// candidate of this route takes an option or caching is switched off.
+async function promptCacheFor(route) {
+  const candidates = [route, ...(Array.isArray(route?.fallbacks) ? route.fallbacks : route?.fallback ? [route.fallback] : [])];
+  if (!candidates.some((candidate) => promptCache.wanted(candidate))) return null;
+  const settings = await readSettings().catch(() => null);
+  return promptCache.enabled(settings, process.env) ? promptCacheRefused : null;
+}
+// ---- end of cache-friendly provider calls --------------------------------------------
+
 // ---- the Agent Brain (docs/roadmap-0.4.0.md) --------------------------------------
 // One host object turns the loop's own moments (a run prepared, started,
 // speaking, finished, a board write, agent mail, the files a verified run
@@ -13269,8 +13340,9 @@ async function seatFetch(seat, system, user, maxTokens = 2400, { fallback = null
       return httpAssistantCall(route, system, scrubOutbound(user), maxTokens, { ...options, effort: support.efforts.includes(chosen.effort) ? chosen.effort : null, timeoutMs });
     });
   }
-  // A caller with its own route keeps it when the seat's provider is out.
-  if (typeof fallback === "function") return fallback(system, true);
+  // A caller with its own route keeps it when the seat's provider is out. The
+  // user content goes along: in a tool round it carries the tool transcript.
+  if (typeof fallback === "function") return fallback(system, true, user);
   return assistantFetch(system, user, maxTokens, { role: "heavy", taskType: `seat-${seat}`, skillRole: null });
 }
 
@@ -15042,7 +15114,7 @@ async function prepareClusterJob(job, entry, tasks) {
           agent.step = agent.role === "planner" ? canDelegate ? "Dividing this task into scoped subtasks" : "Planning this task" : "Reviewing risks and acceptance checks";
           publish();
           const tokens = canDelegate && agent.role === "planner" ? 3200 : 1800;
-          const viaRoute = (system = prompt.system) => (route.cli ? cliAssistantCall : httpAssistantCall)(route, system, prompt.user, tokens, { role: "routine", taskType: `cluster-${agent.role}`, source: entry.mode });
+          const viaRoute = (system = prompt.system, _fromSeat = false, input = prompt.user) => (route.cli ? cliAssistantCall : httpAssistantCall)(route, system, input, tokens, { role: "routine", taskType: `cluster-${agent.role}`, source: entry.mode });
           // The planner is the lead seat (roadmap 0.4.0 M2): GPT 6 Sol on medium
           // when the owner's Zen key is there, the ordinary route otherwise.
           const result = agent.role === "planner" && typeof seatFetch === "function"
@@ -15917,9 +15989,11 @@ async function spawnNextJob(options) {
     } catch {}
     try { brainHints = await agentBrain.prepareRun({ task: job.ref, shape: typeof workShape !== "undefined" ? workShape : null, deskTool: Boolean(entry.deskTool), draft: headDrafts }); } catch {}
   }
-  // The fixed tail: identity, hand-off protocol, owner questions, budget,
-  // MEFI_RESULT and the verdict sentinel (executorCore.promptTail). The exit
-  // code is not the success signal; that sentinel line coming back is.
+  // The fixed parts, in two halves (executorCore.promptTail): the rules every
+  // run shares (hand-off protocol, owner questions, budget, MEFI_RESULT),
+  // which lead the prompt, and the run's identity with the verdict sentinel,
+  // which close it. The exit code is not the success signal; that sentinel
+  // line coming back is.
   const tail = executorCore.promptTail({
     runId: entry.id, taskId: job.ref?.id, depth: entry.depth, maxDepth: EXECUTOR_MAX_DEPTH, maxHandoffs: EXECUTOR_MAX_HANDOFFS,
     nextMark: EXECUTOR_NEXT_MARK, callMark: EXECUTOR_CALL_MARK, budgetMinutes: EXECUTOR_BUDGET_MINUTES, doneMark: EXECUTOR_DONE_MARK,
@@ -16081,6 +16155,8 @@ async function spawnNextJob(options) {
       logLine(`[autopilot] could not write the grok prompt file for "${assistantClip(job.title, 60)}": ${String(error?.message ?? error).slice(0, 160)}`);
     }
   }
+  // Live progress (cliLiveProgress): a Claude Code or Codex run reports its steps as it works.
+  if ((runRoute.cli === "claude" || runRoute.cli === "codex") && typeof cliLiveProgress === "function") entry.liveProgress = await cliLiveProgress();
   // finish() sits above the spawn so a synchronous spawn failure (argument
   // rejects, resource exhaustion — 'error' is the normal channel) still
   // unclaims through the same path a dead process would take.
@@ -16466,7 +16542,9 @@ async function spawnNextJob(options) {
     if (!stream) return;
     stream.setEncoding("utf8");
     let buffer = "";
-    const take = (line) => {
+    // `out`: whether the line is the CLI reporting on stdout (spokeOut); a
+    // decoded stream's own notices (its session start, its errors) are not.
+    const take = (line, out = stdout) => {
       if (entry.finished || entry.child !== owner) return;
       // What the line says, read by the pure core (executorCore.readWorkerLine):
       // the verdict sentinel by strict line match, so quoting the protocol in
@@ -16518,7 +16596,7 @@ async function spawnNextJob(options) {
           }
         }
       }
-      executorCore.applyWorkerLine(entry, read, { stdout });
+      executorCore.applyWorkerLine(entry, read, { stdout: out });
       // The Agent Brain reads the same line for its own marks (MEFI_STEP,
       // MEFI_HELP, MEFI_REPORT) and the first-line "spoke" step.
       if (typeof agentBrain !== "undefined" && agentBrain && job.kind === "task") agentBrain.workerLine({ taskId: job.ref?.id, runId: entry.id, line, first: read.first });
@@ -16526,11 +16604,15 @@ async function spawnNextJob(options) {
       // are worth the prompt one.
       queueExecutorCheckpoint(entry, read.urgent ? {} : { delay: 30000 });
     };
+    // Claude Code's stream-json and Codex's --json: decoded into the lines
+    // above plus the run's session, tool, usage and todo events (cliStreamWire).
+    const decoded = stdout && typeof cliStreamWire === "function" ? cliStreamWire(entry, owner, take) : null;
     // Only the new chunk is split, and a line that never ends (a spinner
     // redrawn with bare carriage returns, a runaway dump) is kept to its
     // first 64 KiB: re-splitting a growing buffer on every chunk was
     // quadratic, and the whole line went to the log and the renderer.
     stream.on("data", (chunk) => {
+      if (decoded) { decoded.push(chunk); return; }
       const pieces = chunk.split(/\r?\n/);
       if (pieces.length === 1) {
         if (buffer.length < 65536) buffer = (buffer + chunk).slice(0, 65536);
@@ -16545,6 +16627,7 @@ async function spawnNextJob(options) {
       buffer = pieces[pieces.length - 1].slice(0, 65536);
     });
     stream.on("end", () => {
+      if (decoded) { decoded.end(); return; }
       if (buffer.trim()) take(buffer);
     });
   };
@@ -16564,11 +16647,16 @@ async function spawnNextJob(options) {
   // A line built for cmd.exe is handed over verbatim, and a grok or agy
   // installed as a batch shim is found on PATH (windowsShim) and run through
   // it. An MCP server the command line could not carry is named in the log.
+  // With live progress, Claude Code streams its events under a session id
+  // chosen here and Codex prints its --json events; `entry.liveStream` names
+  // the stream for cliStreamWire, with the route facts a resume must match.
   const spawnAttempt = (route, cli) => {
     const invocation = executorCore.cliInvocation(route, cli, prompt, {
       modelArg: (value) => cliModelArg(value), agyModelArg: (value) => agyModelArg(value), desk: entry.toolConfigs ?? entry.deskTool ?? null,
       platform: process.platform, shim: (name) => typeof windowsShim === "function" ? windowsShim(name, process.env) : null, promptFile: entry.promptFile ?? null,
+      live: entry.liveProgress === true, sessionId: entry.liveProgress === true && cli === "claude" ? (entry.cliSessionId ??= crypto.randomUUID()) : null,
     });
+    entry.liveStream = invocation.stream ? { format: invocation.stream, cli, model: String(route.model ?? ""), account: route.account?.id ?? null, cwd: entry.worktree?.path || runRoot } : null;
     if (invocation.dropped?.length) logLine(`[autopilot] ${cli ?? "opencode"} run of "${assistantClip(job.title, 60)}" goes without MCP server(s) ${invocation.dropped.join(", ")}: not safe to pass on its command line`);
     const child = spawn(invocation.command, invocation.args, {
       cwd: entry.worktree?.path || runRoot,
@@ -16721,7 +16809,9 @@ async function spawnNextJob(options) {
     // text` and `agy -p` say nothing while they work and register no OpenCode
     // session, so silence is their healthy shape and every run longer than
     // the start budget was killed as wedged. The hard kill budget bounds them.
-    entry.bufferedOutput = label === "claude" || label === "antigravity";
+    // A Claude run with live progress streams (entry.liveStream): its session
+    // line comes within seconds, so it keeps the start watchdog.
+    entry.bufferedOutput = (label === "claude" && !entry.liveStream) || label === "antigravity";
     // The timer firing is itself proof the budget passed: Node may deliver it
     // a millisecond early by the wall clock, and an early read returned here
     // without ever re-arming, leaving a wedged run until the hard kill.
