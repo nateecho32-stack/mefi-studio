@@ -49,7 +49,11 @@ export function runGit(cwd, args, { timeout = 30000 } = {}) {
   return new Promise((resolve) => {
     // GIT_OPTIONAL_LOCKS=0: a look's `git status` runs inside agents' worktrees
     // too, and must never take index.lock just as an agent adds or commits.
-    execFile("git", args, { cwd, timeout, windowsHide: true, maxBuffer: 4 * 1024 * 1024, env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_OPTIONAL_LOCKS: "0" } }, (error, stdout, stderr) => {
+    // core.fsmonitor=false: in a repository that turns the monitor on, every
+    // `git status` here started a daemon in that worktree that never exits
+    // (nine at ~44 MB each from one worktree list), and the status was no
+    // faster for it.
+    execFile("git", ["-c", "core.fsmonitor=false", ...args], { cwd, timeout, windowsHide: true, maxBuffer: 4 * 1024 * 1024, env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_OPTIONAL_LOCKS: "0" } }, (error, stdout, stderr) => {
       resolve({ ok: !error, timedOut: Boolean(error?.killed), stdout: String(stdout ?? "").trim(), stderr: scrub(String(stderr ?? "").trim() || error?.message || "") });
     });
   });

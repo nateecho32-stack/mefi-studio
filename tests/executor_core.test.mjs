@@ -584,8 +584,10 @@ test("each builder CLI gets its headless command line, and the brief never rides
   assert.equal(run({ model: "x && del", env: {} }, "grok").args.includes("-m"), false, "grok's model goes through the same id filter");
   assert.throws(() => run({ env: {} }, "grok", { promptFile: null }), /prompt file/, "no file, no spawn: the host falls back as for any spawn failure");
   assert.deepEqual(run({ model: "claude-sonnet-5" }, "claude"),
-    { command: "cmd.exe", args: ["/d", "/s", "/c", "\"claude -p --output-format text --dangerously-skip-permissions --model claude-sonnet-5\""], verbatim: true, stdio: ["pipe", "pipe", "pipe"], stdin: "PROMPT", env: undefined, dropped: [] });
-  assert.deepEqual(run({ model: "x && del" }, "claude").args, ["/d", "/s", "/c", "\"claude -p --output-format text --dangerously-skip-permissions\""], "a model id that is not an id never reaches cmd.exe");
+    { command: "cmd.exe", args: ["/d", "/s", "/c", "\"claude -p --output-format text --dangerously-skip-permissions --strict-mcp-config --model claude-sonnet-5\""], verbatim: true, stdio: ["pipe", "pipe", "pipe"], stdin: "PROMPT", env: undefined, dropped: [] });
+  assert.deepEqual(run({ model: "x && del" }, "claude").args, ["/d", "/s", "/c", "\"claude -p --output-format text --dangerously-skip-permissions --strict-mcp-config\""], "a model id that is not an id never reaches cmd.exe");
+  assert.equal(run({ model: "opus" }, "claude", { ownMcp: true }).args[3], "\"claude -p --output-format text --dangerously-skip-permissions --model opus\"", "the kill switch gives the run the owner's own MCP servers back");
+  assert.match(run({ model: "opus" }, "claude", { live: true, sessionId: "123e4567-e89b-12d3-a456-426614174000" }).args[3], /--dangerously-skip-permissions --strict-mcp-config --model opus/, "live progress keeps the desk-only servers");
   assert.equal(run({ model: "gpt-6" }, "codex").args[3], "\"codex exec --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check --color never -m gpt-6 -\"");
   assert.equal(run({}, "codex").stdin, "PROMPT");
   assert.deepEqual(run({ model: "Gemini 3.1 Pro (High)" }, "antigravity"),
@@ -602,7 +604,7 @@ test("each builder CLI gets its headless command line, and the brief never rides
 test("each builder CLI gets the attempt's thinking as its own flag", () => {
   const modelArg = (value) => /^[A-Za-z0-9._:/-]{1,80}$/.test(String(value ?? "")) ? String(value) : "";
   const run = (route, cli, extra = {}) => core.cliInvocation(route, cli, "PROMPT", { modelArg, agyModelArg: (value) => value, promptFile: "C:\\p.txt", ...extra });
-  assert.equal(run({ model: "opus", effort: "high" }, "claude").args[3], "\"claude -p --output-format text --dangerously-skip-permissions --model opus --effort high\"");
+  assert.equal(run({ model: "opus", effort: "high" }, "claude").args[3], "\"claude -p --output-format text --dangerously-skip-permissions --strict-mcp-config --model opus --effort high\"");
   assert.match(run({ model: "opus", effort: "low" }, "claude", { desk: { claude: "C:\\x.json" } }).args[3], /--effort low --mcp-config/, "--mcp-config stays last");
   assert.match(run({ effort: "medium" }, "codex").args[3], /--color never -c "?model_reasoning_effort=medium"? -"$/);
   assert.equal(run({ modelArgs: " --model opencode-go/deepseek-v4.1-flash", effort: "high", env: {} }, null).args[3], "opencode run --auto --model opencode-go/deepseek-v4.1-flash --variant high");
@@ -637,7 +639,7 @@ test("a grok or agy installed as a batch shim runs through cmd.exe, a native bin
 test("off Windows the shell CLIs get an sh line, which platform.cjs runs as sh -c", () => {
   const claude = core.cliInvocation({ model: "opus" }, "claude", "PROMPT", { modelArg: (value) => value, platform: "linux", desk: { claude: "/tmp/it's here/claude.json" } });
   assert.equal(claude.verbatim, false);
-  assert.deepEqual(claude.args, ["/d", "/s", "/c", "claude -p --output-format text --dangerously-skip-permissions --model opus --mcp-config '/tmp/it'\\''s here/claude.json'"]);
+  assert.deepEqual(claude.args, ["/d", "/s", "/c", "claude -p --output-format text --dangerously-skip-permissions --strict-mcp-config --model opus --mcp-config '/tmp/it'\\''s here/claude.json'"]);
 });
 
 // Codex takes Studio's tool server as config overrides: no per-run config file
