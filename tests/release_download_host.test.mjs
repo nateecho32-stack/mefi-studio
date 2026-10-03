@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import vm from "node:vm";
 import path from "node:path";
 import { readFile } from "node:fs/promises";
+import { validateBuildAssets } from "../scripts/release-updater.mjs";
 
 // main.cjs's downloadReleaseBuild, run against a stubbed release-updater
 // module. The rule under test: a release that publishes a .sha256 asset must
@@ -15,19 +16,20 @@ assert.ok(start > 0 && end > start, "downloadReleaseBuild is where this suite sl
 
 const BUILD_SHA = "a".repeat(64);
 const OTHER_SHA = "b".repeat(64);
-const ROOT = path.join("C:/tmp", "mefi-studio-update", "v0.9.0");
+const ROOT = path.join("C:/tmp", "mefi-studio-update", "v0.9.0-42");
 
 function release({ digest = null, checksum = true } = {}) {
   return {
     version: "0.9.0",
-    asset: { name: "Mefi-Studio-win-x64.zip", size: 5 * 1024 * 1024, digest, url: "https://example.invalid/zip" },
-    checksum: checksum ? { name: "Mefi-Studio-win-x64.zip.sha256", size: 90, url: "https://example.invalid/sha256" } : null,
+    asset: { name: "Mefi-Studio-win-x64.zip", size: 5 * 1024 * 1024, digest, url: "https://api.github.com/repos/nateecho32-stack/mefi-studio/releases/assets/1" },
+    checksum: checksum ? { name: "Mefi-Studio-win-x64.zip.sha256", size: 90, url: "https://api.github.com/repos/nateecho32-stack/mefi-studio/releases/assets/2" } : null,
   };
 }
 
 function host(latest, fetchChecksum = async () => BUILD_SHA) {
   const calls = { removed: [], fetched: 0, staged: 0, logs: [] };
   const updater = {
+    validateBuildAssets,
     downloadAsset: async () => ({ path: path.join(ROOT, "build.zip"), bytes: 5 * 1024 * 1024, sha256: BUILD_SHA.toUpperCase() }),
     fetchChecksum: async (args) => { calls.fetched += 1; return fetchChecksum(args); },
     stageUpdate: async () => { calls.staged += 1; return { sourceRoot: path.join(ROOT, "staging", "app"), exePath: path.join(ROOT, "staging", "app", "Mefi.exe") }; },
@@ -38,7 +40,8 @@ function host(latest, fetchChecksum = async () => BUILD_SHA) {
     getReleaseUpdater: async () => updater,
     app: { getPath: () => "C:/tmp" },
     path,
-    process: { execPath: "C:/Program Files/Mefi/Mefi.exe" },
+    process: { execPath: "C:/Program Files/Mefi/Mefi.exe", pid: 42 },
+    releaseStatus: () => ({ repo: "nateecho32-stack/mefi-studio" }),
     rm: async (target) => { calls.removed.push(target); },
     mkdir: async () => {},
     publishRelease: () => {},
@@ -66,13 +69,11 @@ test("a published checksum whose fetch throws stops the update with the reason",
   assert.deepEqual(calls.removed, [ROOT, ROOT]);
 });
 
-test("a release that publishes no checksum is staged unverified and the log says so", async () => {
+test("a release with no verification metadata is refused before download or staging", async () => {
   const { download, calls } = host(release({ checksum: false }));
-  const staged = await download();
-  assert.equal(staged.verified, false);
+  await assert.rejects(download(), /no SHA-256 verification metadata/);
   assert.equal(calls.fetched, 0);
-  assert.equal(calls.staged, 1);
-  assert.ok(calls.logs.includes("[release] downloaded v0.9.0 (5 MB, unverified: the release publishes no checksum)"), calls.logs.join("\n"));
+  assert.equal(calls.staged, 0);
 });
 
 test("a readable published checksum verifies the build, and a mismatch still stops it", async () => {
