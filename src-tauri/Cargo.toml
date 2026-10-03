@@ -1,0 +1,80 @@
+[package]
+name = "mefi-studio-host"
+version = "0.4.5"
+edition = "2021"
+description = "Mefi's Studio AI+: the Rust (Tauri) host that replaces Electron"
+license = "MIT"
+publish = false
+
+# Stage 1 of docs/rust-migration.md: this crate owns the window, the tray, the
+# native dialogs and the bridge, and runs the existing engine (main.cjs) as a
+# Node sidecar behind the same channels. Channels move into Rust one by one.
+
+[lib]
+name = "mefi_host"
+path = "src/lib.rs"
+
+[[bin]]
+name = "mefi-studio"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png", "image-ico", "devtools"] }
+tauri-plugin-single-instance = "2"
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["raw_value"] }
+tokio = { version = "1", features = ["io-util", "net", "process", "rt", "sync", "time", "macros"] }
+base64 = "0.22"
+getrandom = "0.3"
+rfd = { version = "0.15", default-features = false, features = ["common-controls-v6"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "ico"] }
+
+[target.'cfg(windows)'.dependencies]
+# Tauri's own WebView2 bindings (keep both versions in step with tauri's wry).
+webview2-com = "0.39"
+windows = { version = "0.62", features = [
+  "Data_Xml_Dom",
+  "Foundation",
+  "UI_Notifications",
+  "Win32_Foundation",
+  "Win32_System_Com",
+  "Win32_System_Com_StructuredStorage",
+  "Win32_System_Memory",
+] }
+windows-sys = { version = "0.59", features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Gdi",
+  "Win32_Security",
+  "Win32_Security_Cryptography",
+  "Win32_System_DataExchange",
+  "Win32_System_LibraryLoader",
+  "Win32_System_Memory",
+  "Win32_System_Ole",
+  "Win32_System_Power",
+  "Win32_System_Registry",
+  "Win32_System_RemoteDesktop",
+  "Win32_System_StationsAndDesktops",
+  "Win32_System_SystemInformation",
+  "Win32_System_Threading",
+  "Win32_UI_Input_KeyboardAndMouse",
+  "Win32_UI_WindowsAndMessaging",
+] }
+
+[features]
+# Tauri's CLI turns this on for release builds; plain `cargo build` leaves it
+# off. Studio never loads a dev server, so both serve the same files.
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.dev]
+# Dependencies are optimised once and cached; the host itself stays fast to rebuild.
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.release]
+codegen-units = 4
+lto = "thin"
+strip = true

@@ -8,6 +8,9 @@ Longer-form docs live under `docs/`; superseded ones under `docs/archive/`.
 
 - Application sources live at the root: `main.cjs`, `preload.cjs`, `scripts/`,
   `renderer/`, `assets/`. Run npm commands from this directory.
+- The app is moving to Rust in stages (`docs/rust-migration.md`). `src-tauri/`
+  is the Rust host; `main.cjs` must keep working under both Electron and the
+  host until stage 3. Build it with `npm run host:build`, never into OneDrive.
 - Run `npm run check`, `npm test`, and `npm run audit` for application changes.
   Run `npm run build-booklet` after editing renderer sources; the generated
   `renderer/booklet.html` is committed.

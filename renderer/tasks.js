@@ -2204,7 +2204,7 @@
       const li = document.createElement("li");
       const img = document.createElement("img");
       // encodeURI keeps # and ?, which would cut a path like C#\... short.
-      img.src = encodeURI("file:///" + png.path.replace(/\\/g, "/")).replace(/#/g, "%23").replace(/\?/g, "%3F");
+      img.src = window.__mefiHost?.fileUrl?.(png.path) ?? encodeURI("file:///" + png.path.replace(/\\/g, "/")).replace(/#/g, "%23").replace(/\?/g, "%3F");
       img.alt = png.name;
       img.style.maxWidth = "100%";
       img.style.borderRadius = "8px";

@@ -7,6 +7,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- Studio is moving from Electron to Rust in stages (docs/rust-migration.md).
+  A source checkout can now run on the new Rust host with `npm run host`: the
+  same screens, saved settings and API keys, with the engine running beside
+  it under Node. The Electron build is unchanged and is still what ships.
+
 - Your PCs can explicitly start a coordinator and pair check workers. Queued
   Studio checks use isolated exact-commit checkouts, retain restart journals,
   and hold uncertain assignments for owner recovery. Services stay off after

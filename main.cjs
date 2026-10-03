@@ -156,7 +156,9 @@ const badgeIcon = alertsHostModule ? optionalHelper("./scripts/badge-icon.cjs", 
 const discordOAuth = community
   ? optionalHelper("./scripts/discord-oauth.cjs", () => require("./scripts/discord-oauth.cjs"), null)
   : null;
-const electron = require("electron");
+// Under the Rust host (src-tauri, docs/rust-migration.md) this engine runs on
+// plain Node and Electron's API comes from the host through a shim.
+const electron = process.env.MEFI_STUDIO_HOST === "tauri" ? require("./scripts/tauri-electron.cjs") : require("electron");
 
 if (typeof electron === "string" || !electron.app) {
   console.error(
@@ -21737,7 +21739,7 @@ const attemptEvidenceHost = () => (reviewHosts.evidence ??= require("./scripts/a
   // The project's own data folder (never the repository): attempt-evidence/<task>/<n>/ goes inside it.
   root: () => path.dirname(projectDataPath(TASKS_PATH)),
   capture: (url, options) => (window && !window.isDestroyed()
-    ? (reviewHosts.window ??= require("./scripts/evidence-window.cjs").createEvidenceWindow({ electron: require("electron"), log: (line) => logLine(line) })).capture(url, options)
+    ? (reviewHosts.window ??= require("./scripts/evidence-window.cjs").createEvidenceWindow({ electron, log: (line) => logLine(line) })).capture(url, options)
     : Promise.resolve({ ok: false, error: "no window" })),
   log: (line) => logLine(line),
 }));

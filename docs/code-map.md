@@ -259,6 +259,30 @@ pure half of the update safety net: the shapes of the boot-health, backup
 manifest and update-result files the installing helper and the app pass each
 other (`main.cjs`, "Release updates: the safety net", owns their I/O).
 
+## `src-tauri/` and the host shim - the Rust host (moving to Rust, stage 1)
+
+[rust-migration.md](rust-migration.md) has the plan and the parity table. The
+Rust host runs the unchanged engine as a Node sidecar; build it with
+`npm run host:build` (`scripts/rust-host.mjs` keeps Cargo's target folder
+outside the checkout).
+
+| File | Purpose |
+| --- | --- |
+| `src-tauri/src/lib.rs` | The host's start: the single-instance lock, the `mefi` protocol, the page's commands, starting the engine, and leaving when it leaves. |
+| `src-tauri/src/engine.rs` | The engine sidecar: the named pipe, the launch token, frames in both directions, and the relaunch after an `app.relaunch`. |
+| `src-tauri/src/native.rs` | What the engine's Electron objects ask for: the window and its events, dialogs, tray, images, clipboard, idle state, power requests, login items, displays. |
+| `src-tauri/src/bridge.rs` | The commands the page calls: invoke, send, the push channel, console messages, menu accelerators, `executeJavaScript` answers. |
+| `src-tauri/src/init.js` | The page's half of the bridge, injected at document start: runs `preload.cjs` unchanged with a stand-in `require("electron")`. |
+| `src-tauri/src/protocol.rs` | Serves Studio's page at `http://mefi.localhost/` (`renderer/`, `assets/`, the `data/` catalogs) and local pictures under `/__file/`. |
+| `src-tauri/src/webview2.rs` | WebView2 features Tauri does not wrap: page captures (`capturePage`), the Referer YouTube's embeds need, the page process failing, DevTools protocol calls. |
+| `src-tauri/src/toast.rs` | Windows notifications for Electron's `Notification`, under the app id `main.cjs` sets, which it registers under `HKCU\Software\Classes\AppUserModelId`. |
+| `src-tauri/src/power.rs` | `powerMonitor`'s suspend, resume, lock-screen and unlock-screen events, from a power callback and a message-only window. |
+| `src-tauri/src/oscrypt.rs` | Electron's `safeStorage` key: the DPAPI-protected AES key in userData's `Local State`, read or created. |
+| `src-tauri/src/wire.rs` · `scripts/host-wire.cjs` | The wire's two halves: one JSON frame per line, bodies forwarded unparsed, Electron's structured-clone values tagged. |
+| `scripts/tauri-electron.cjs` | Electron's API for `main.cjs` when `MEFI_STUDIO_HOST=tauri`, served by the host. |
+| `scripts/tauri-sync-worker.cjs` | The blocking connection for the calls Electron answered on the spot (`Atomics.wait`). |
+| `scripts/rust-host.mjs` | `build`, `test`, `run` for the host, with the target folder in `%LOCALAPPDATA%\MefiStudio\rust-target`. |
+
 ## `renderer/` — classic scripts inlined into one HTML file
 
 `npm run build-booklet` inlines every script and stylesheet here, and the model

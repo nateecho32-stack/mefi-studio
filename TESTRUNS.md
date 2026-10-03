@@ -39,6 +39,25 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-03 Rust host stage 1 (Tauri) - first gate
+
+Branch `claude/app-migration-rust-b89096` (pushed as `wip/rust-host`), based on
+72c6f58. `npm run check` ok (264 targets). `npm test`: Node 6757 tests, 6743
+pass, 14 skipped, 0 fail (274 s); Python contracts 248 OK; normalized-path lock
+ok. The Electron lane skipped 39 suites in that run because the worktree had no
+`node_modules`; with a junction to the main checkout's, `evidence_capture`,
+`startup_render`, `task_overview_render` and `command_render` (56 s) each pass
+solo. `npm run lint`: 0 errors, no new warnings. `npm run audit`: ok.
+
+New: `tests/rust_host_bridge.test.mjs` (4 tests, no Rust needed: the wire's
+tagging, the engine shim over a real pipe against a fake host, the page bridge
+built from the real preload.cjs). `npm run host:test`: 13 Rust unit tests pass.
+On the host itself, with scratch userData: `--smoke` exits 0 (45 cards, models,
+assistant tick 1); `MEFI_HOST_SELFTEST` recorded a 1825x1175 page capture, 40
+invokes, 29 channels listened to, live pushes and an accepted toast. Electron
+44.4.1 safeStorage round trip verified both ways on synthetic data in a scratch
+app folder. No change to what the Electron build does.
+
 ## 2026-10-03 Paired restart boundary review follow-up
 
 All three Windows push/PR and Linux PR checks pass at first milestone commit
@@ -199,16 +218,6 @@ Expanded affected suites: 92 tests passed, zero failures/skips across task_overv
 The Chromium fixture is prepared for desktop and 600x560 captures of current, changed, missing and foreign links, with text size, horizontal bounds, no overflow, original-brief and navigation-availability assertions. Visual, full aggregate and disposable-profile runtime checks remain pending coordinated server release; no heavy launch was made while game native tests owned the window.
 
 Dependency evidence: frozen Health candidate passed build/check/audit, full npm test (6,661 Node passes, zero failures, 16 skips; 248 Python tests OK with one skip; six path-lock checks), 25 Fleet size/view checks and waited real Fleet 10/10 steps. Its 1,012 source hashes remained unchanged and all test processes drained. Platform limitations remain native Close through synthetic Ctrl+W unverified and occlusion capability unavailable. That prior aggregate does not validate this new renderer change.
-
-## 2026-10-02 - Maxwells-PC advisory handoff progress focused verification
-
-Source/provenance: local/fleet-handoff-health-20261002 in the separate mefi-studio-health checkout, based on b3a4f468348a4485112c6741026b565f106e9821 plus the aggregate-verified recap candidate. The frozen recap source, original checkout and prior UI/loop candidate remain untouched. No commit, push, merge or release.
-
-Change: an informational Fleet Health note for at least three distinct handed-off tasks from one builder seat in the last 24 hours without later recorded verification. It counts task identity rather than event volume, clears verified and human-confirmed child evidence, ignores future or expired events, remains project scoped and opens the source seat through the existing Look action. It describes retained evidence and explicitly says waiting for verification can be normal; no attention-count increase, automatic pause or dispatch change.
-
-Focused validation: 30 Node tests passed, zero failures/skips across fleet and fleet_host. Tests use real board/status/report observations and cover duplicate/title-changed events, pending completion reports, verification and human confirmation, persistence, renewed handoffs, expiry, future events, read-only history and cross-project isolation. The extended Chromium fixture is prepared for desktop/narrow note and inspector screenshots, but was not launched while the game held the shared server window. Required full aggregate and real Fleet verification remain pending coordination; no aggregate validation is claimed for this new batch.
-
-Dependency evidence: the unchanged recap candidate passed build, check, audit and full npm test (6,656 Node passes, zero failures, 16 skips; 248 Python tests OK with one skip; six normalized-path lock checks). All 1,012 tracked files matched the source freeze after the gate. Its synchronous disposable-profile real Fleet check passed all ten steps. The PowerShell GUI launch's initial zero-second entry was replaced with the actual waited child exit and report. Platform limitations: synthetic Ctrl+W did not exercise native Close; Electron occlusion events were unavailable. That evidence belongs to the prior recap candidate, not this new Health change.
 
 ## Read Before Any Tests
 

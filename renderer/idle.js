@@ -7357,7 +7357,7 @@
     const image = document.createElement("img");
     image.className = "idle-pop";
     // encodeURI keeps # and ?, which would cut a path like C#\... short.
-    image.src = encodeURI("file:///" + path.replace(/\\/g, "/")).replace(/#/g, "%23").replace(/\?/g, "%3F");
+    image.src = window.__mefiHost?.fileUrl?.(path) ?? encodeURI("file:///" + path.replace(/\\/g, "/")).replace(/#/g, "%23").replace(/\?/g, "%3F");
     image.style.setProperty("--x", `${(10 + Math.random() * 62).toFixed(2)}%`);
     image.style.setProperty("--y", `${(12 + Math.random() * 58).toFixed(2)}%`);
     image.style.setProperty("--tilt", `${(Math.random() * 10 - 5).toFixed(1)}deg`);

@@ -1,6 +1,10 @@
 # Dependencies and generated portable application
 node_modules/
 dist/
+# The Rust host's build output (scripts/rust-host.mjs builds outside the
+# checkout) and the schemas tauri-build writes beside the crate.
+src-tauri/target/
+src-tauri/gen/
 
 # Only the model catalog belongs in source control. Keep tasks, conversations,
 # assistant state, databases, caches and atomic-write leftovers local.
