@@ -39,6 +39,32 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-03 Rust stage 2: the store and repo modules move into Rust
+
+Branch `wip/rust-host`, after 80b1e0e. The OpenCode store reads
+(`eyes.mjs` worker methods) and `sync.mjs`/`worktrees.mjs`/
+`worktree-actions.mjs` now have Rust ports in `crates/mefi-core`, served under
+the Rust host only.
+
+Full `npm test` on the store port (node_modules junctioned to the main
+checkout, so the Electron lane ran): Node 6765 tests, 0 fail in the parallel
+stage; Python 248 OK; path lock ok. Four Electron fixtures failed in the
+loaded run: `tree_dynamics_render` and `today_render` pass solo (load);
+`layout_contract_render` (viewport 1921x1081, was 1920x1080) and
+`shell_render` (373 vs 372 px) fail identically on a clean origin/main
+worktree (72c6f58) on this PC, so they are this display's state, not the port.
+
+After the repo port: `npm run check` ok (265 targets), `npm run test:fast`
+6768 tests, 0 fail; lint 0 errors, no new warnings; audit ok; 16 mefi-core
+unit tests. Parity: `tests/rust_parity_eyes.test.mjs` (4 tests, ~100 store
+reads plus the dump and git helpers) and `tests/rust_parity_repo.test.mjs`
+(3 tests: sync through clean/behind/check-failed/pushed/diverged/rebased,
+lost work found and acknowledged, every worktree action) all identical. On
+the owner's 20 GB OpenCode store, read-only: 12 of 12 reads identical;
+usageLedger cold 2.1 s vs 3.1 s, warm 22 ms vs ~190 ms. Live self-test on
+the Rust host: `eyes:state` and `worktrees:list` answered through Rust
+(rustCalls lists eyes.* and repo.sync.sync, repo.worktrees.listWorktrees).
+
 ## 2026-10-03 Rust host stage 1 (Tauri) - first gate
 
 Branch `claude/app-migration-rust-b89096` (pushed as `wip/rust-host`), based on
@@ -204,20 +230,6 @@ Isolated local/task-card-retention-20261002 candidate, derived from the aggregat
 ## 2026-10-02 - Fleet read failure and recovery: isolated focused validation
 
 79 focused Fleet model, host, layout and UI tests passed. The real Chromium fixture passed all 25 existing layouts plus cached, unavailable and recovered states at 1440x900 and 600x560, with no page overflow, console errors, network attempts or child execution. Project switches clear all old team content; same-project errors persist across repaint; deterministic deferred tests cover late success, rejection and push ordering. Host run-identity checks remain unchanged. Full aggregate validation follows on the frozen candidate; its separate evidence records the outcome without changing tested source.
-
-## 2026-10-02 - Maxwells-PC task plan provenance focused verification
-
-Source/provenance: local/task-plan-trace-20261002 in the separate mefi-studio-plan-trace checkout at b3a4f468348a4485112c6741026b565f106e9821 plus the aggregate-verified Health candidate. Original checkout and verified UI/loop, recap and Health candidates remain untouched. No commit, push, merge or release.
-
-Change: Task Details reads the current saved destination through its explicit planningId and existing scoped plan read. It labels missing, unreadable, foreign, ambiguous, stale, changed-specification, archived or unapproved context; the recorded brief is not replaced. The existing plan navigation is reused only for an identifiable scoped plan. Plan-only refreshes patch that section in place, retain other detail nodes and note drafts/focus, and move focus off a link if it becomes hidden. No prompt, dispatch, permission, task-store or publishing changes.
-
-Focused validation: 82 Node tests passed, zero failures/skips across task_overview_groups and tasks_ui. Meaningful cases cover explicit association, read-only inputs, foreign and duplicate plan identities, unreadable cached context, legacy scoped plans, missing/large destinations, changed/stale/archive/unapproved context, preserved briefs, existing navigation, plan-only refresh with draft/focus, unavailable/recovery transitions and late prior-project responses. Two initial DOM assertions needed fixture corrections: the UI normalizes placeholder punctuation to an ellipsis, and the existing task controls need the appropriate bridge for a Start action. Stable entry identity and existing task controls retained the intended assertions; corrected complete focused run passed.
-
-Expanded affected suites: 92 tests passed, zero failures/skips across task_overview_groups, tasks_ui, task_groups and task_groups_node_edges. The refresh test follows the visible History-to-Details flow; recovery makes the existing plan link available again without replacing the detail nodes.
-
-The Chromium fixture is prepared for desktop and 600x560 captures of current, changed, missing and foreign links, with text size, horizontal bounds, no overflow, original-brief and navigation-availability assertions. Visual, full aggregate and disposable-profile runtime checks remain pending coordinated server release; no heavy launch was made while game native tests owned the window.
-
-Dependency evidence: frozen Health candidate passed build/check/audit, full npm test (6,661 Node passes, zero failures, 16 skips; 248 Python tests OK with one skip; six path-lock checks), 25 Fleet size/view checks and waited real Fleet 10/10 steps. Its 1,012 source hashes remained unchanged and all test processes drained. Platform limitations remain native Close through synthetic Ctrl+W unverified and occlusion capability unavailable. That prior aggregate does not validate this new renderer change.
 
 ## Read Before Any Tests
 

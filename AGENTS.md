@@ -11,6 +11,9 @@ Longer-form docs live under `docs/`; superseded ones under `docs/archive/`.
 - The app is moving to Rust in stages (`docs/rust-migration.md`). `src-tauri/`
   is the Rust host; `main.cjs` must keep working under both Electron and the
   host until stage 3. Build it with `npm run host:build`, never into OneDrive.
+  Modules already ported to `crates/mefi-core` change in both languages
+  together; `tests/rust_parity_*.test.mjs` hold them equal once
+  `npm run host:core` has built the binary.
 - Run `npm run check`, `npm test`, and `npm run audit` for application changes.
   Run `npm run build-booklet` after editing renderer sources; the generated
   `renderer/booklet.html` is committed.

@@ -5,6 +5,8 @@ dist/
 # checkout) and the schemas tauri-build writes beside the crate.
 src-tauri/target/
 src-tauri/gen/
+/target/
+crates/*/target/
 
 # Only the model catalog belongs in source control. Keep tasks, conversations,
 # assistant state, databases, caches and atomic-write leftovers local.

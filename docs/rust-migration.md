@@ -73,6 +73,7 @@ scan in Rust and one parse in the page.
 | `event` | host → engine | `window:focus`, `window:close-requested`, `webContents:did-finish-load`, `tray:click`, `menu:click`, ... |
 | `call` → `reply` | engine → host → engine | An Electron call that answers (dialogs, the saved-key key, images, idle state). |
 | `cast` | engine → host | An Electron call that only acts (window show/hide, tray, overlay icon). |
+| `callback` → `callback-reply` | host → engine → host | A ported function calling a function argument the engine passed it. |
 
 Electron's IPC carried structured clones, so these travel tagged
 (`{ "$mefi": ... }`) and the frame says `tagged: true`: bytes, `Date`,
@@ -103,7 +104,9 @@ Electron build can still read what the Rust host saved.
 npm run host:build      # cargo build, target folder outside the checkout
 npm run host            # build and run Studio on the Rust host (source run)
 npm run host:test       # the host's Rust unit tests
+npm run host:core       # the engine crate's binary, which the parity tests run
 node --test tests/rust_host_bridge.test.mjs   # both halves of the bridge, no Rust needed
+node --test tests/rust_parity_eyes.test.mjs   # Rust against eyes.mjs (needs host:core)
 ```
 
 `scripts/rust-host.mjs` puts Cargo's target folder in
@@ -157,6 +160,75 @@ line numbers) was taken on 3 October 2026. In short:
   `nativeImage` (PNG size read locally, the rest done by the host with the
   `image` crate, `toBitmap` in BGRA).
 
+## Stage 2: the engine moves into Rust
+
+The engine's logic goes into `crates/mefi-core`, a library with no window
+system that the host links (one Cargo workspace at the repository root). A
+module moves whole: its Rust version gives the same JSON for the same inputs,
+the host answers the engine's calls to it, and the JavaScript copy stays for
+the Electron build until stage 3.
+
+| Module | JavaScript | Rust | How the engine reaches it | Held together by |
+| --- | --- | --- | --- | --- |
+| OpenCode session store: 19 reads and 2 git helpers | `scripts/eyes.mjs` (worker methods) | `crates/mefi-core/src/eyes/` | `scripts/eyes-client.cjs` returns a host client under the Rust host; the host runs the read on a blocking thread and sends its JSON text on unparsed | `tests/rust_parity_eyes.test.mjs` |
+| Multi-PC sync, the worktree table and its actions | `scripts/sync.mjs` (`sync`, `inspect`, `remoteMoved`, `changedFiles`, `lostWork`), `worktrees.mjs`, `worktree-actions.mjs` | `crates/mefi-core/src/repo/` | `main.cjs`'s `loadModule` hands the module out with these functions answered by Rust (`scripts/rust-modules.cjs`); `check` and `inUse` are called back in the engine | `tests/rust_parity_repo.test.mjs` |
+
+### Two seams
+
+- **A client the engine already has** (the store): its Rust twin keeps the
+  same contract, so the callers do not change.
+- **`loadModule`**: every `.mjs` module the engine loads (25 of them, 44
+  call sites) passes through it. `scripts/rust-modules.cjs` lists, per module,
+  the functions Rust answers; under the Rust host the module is handed out
+  with those functions replaced, and the rest stays JavaScript. A function
+  argument crosses as `{ "$mefi": "fn", "id" }`; while the call runs, the host
+  sends `callback` frames and the engine answers with `callback-reply`, so
+  `sync`'s `check` (the project's `npm run check`) and a worktree action's
+  `inUse` still run in the engine.
+
+### How a port is held to the JavaScript
+
+- **Parity tests** (`tests/rust_parity_*.test.mjs`) run the JavaScript and
+  the `mefi-core` binary on the same inputs and require identical JSON. The
+  store's suite builds an OpenCode-shaped store with something for every
+  read, then runs about 55 calls through both, about 50 more on missing,
+  empty, partial and malformed stores, `eyes.mjs --dump` against
+  `mefi-core eyes-dump`, and the git helpers on a scratch repository. They
+  skip when the binary is not built (`npm run host:core`), as the Electron
+  fixtures skip without Electron, so **a change to a ported JavaScript module
+  is only checked against Rust on a PC that builds it.**
+- **JavaScript's rules** live in `crates/mefi-core/src/js.rs`: number
+  printing, Math.round, toFixed, toISOString, UTF-16 lengths and slices, and
+  ICU-like localeCompare order for ASCII. A key JavaScript would leave
+  undefined is left out, never written as null.
+- **The real store.** On 3 October all 12 of the engine's common reads matched
+  on the owner's 20 GB OpenCode store (2,421 sessions, 50,133 usage rows),
+  read-only, comparing only equality and sizes. Warm timings: most reads are
+  the same in both (SQLite does the work); `usageLedger` cold 2.1 s against
+  3.1 s, warm 22 ms against ~190 ms, because Rust keeps each ledger row as
+  JSON text and joins it.
+- **Live.** With `MEFI_HOST_SELFTEST`, a run of the Rust host reports
+  `rustCalls`: the engine calls each moved module answered. A page request
+  for `eyes:state` and the engine's own polling were served by Rust.
+
+### Porting the next module
+
+1. Read the JavaScript whole; port it into `crates/mefi-core/src/<module>/`
+   with the helpers in `js.rs` and `paths.rs`.
+2. Add `mefi-core <module>-batch` and a `tests/rust_parity_<module>.test.mjs`
+   that covers every branch, including missing and malformed input.
+3. Route the engine's calls: a `<module>.*` call in `src-tauri/src/engine.rs`,
+   and the JavaScript caller choosing the host under `MEFI_STUDIO_HOST=tauri`.
+4. Check with the self-test's `rustCalls`, then the gates.
+
+Suggested order: settings, keys and projects, then the rest of the git
+features (the Git chip, `scripts/git-host.cjs`), then the pure logic modules
+(`assistant.mjs`, `executor-core`, `task-*`, planning), then the services
+(the assistant loop, the executor that starts the builder CLIs, the
+watchers), and last the 302 page channels themselves. The board store (the
+other half of `eyes.mjs`) is switched off in `main.cjs`, so it waits; the
+live board is the JSON files and `main.cjs`'s board gateway.
+
 ## Parity table
 
 | Area | Status | Notes |
@@ -189,5 +261,7 @@ line numbers) was taken on 3 October 2026. In short:
   change to `main.cjs` or `preload.cjs` must keep both hosts working. The
   Electron build is still what ships.
 - Keep `tests/rust_host_bridge.test.mjs` green; it needs no Rust.
+- A change to a JavaScript module that has a Rust port changes both, and the
+  module's parity test passes with the binary built.
 - A channel moved into Rust in stage 2 keeps its exact payloads, so the page
   and the tests that pin them do not change.

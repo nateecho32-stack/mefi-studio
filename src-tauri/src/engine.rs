@@ -29,6 +29,8 @@ pub struct Engine {
     main: Mutex<Option<Writer>>,
     pushes: Mutex<Option<Channel<InvokeResponseBody>>>,
     pub evals: Mutex<HashMap<u64, oneshot::Sender<Result<String, String>>>>,
+    /// Engine functions a ported module is waiting on (callback frames).
+    callbacks: Mutex<HashMap<u64, std::sync::mpsc::Sender<Result<Value, String>>>>,
     /// Some(args) once the engine asked for app.relaunch; None args = same as this launch.
     pub relaunch: Mutex<Option<Option<Vec<String>>>>,
     exiting: AtomicBool,
@@ -57,6 +59,7 @@ impl Engine {
             main: Mutex::new(None),
             pushes: Mutex::new(None),
             evals: Mutex::new(HashMap::new()),
+            callbacks: Mutex::new(HashMap::new()),
             relaunch: Mutex::new(None),
             exiting: AtomicBool::new(false),
         })
@@ -252,6 +255,64 @@ impl Engine {
                     }
                 }
                 "push" => self.push(line.clone()),
+                "call" if head.api.as_deref().is_some_and(|api| api.starts_with("eyes.")) => {
+                    // A store read moved into Rust: answered on a blocking
+                    // thread, its JSON text sent back unparsed.
+                    let id = head.id.unwrap_or(0);
+                    let method = head.api.as_deref().unwrap_or_default().trim_start_matches("eyes.").to_string();
+                    count_rust_call(&format!("eyes.{method}"));
+                    let args = head.body.map(|raw| raw.get().to_string()).unwrap_or_else(|| "[]".into());
+                    let reply_to = tx.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let answer = tauri::async_runtime::spawn_blocking(move || {
+                            let list: Value = serde_json::from_str(&args).unwrap_or(Value::Null);
+                            let input = list.get(0).cloned().unwrap_or_else(|| json!({}));
+                            mefi_core::eyes::call_json(&method, &input)
+                        })
+                        .await;
+                        let frame = match answer {
+                            Ok(Ok(text)) => wire::with_body(&format!("{{\"t\":\"reply\",\"id\":{id},\"ok\":true"), text.as_bytes())
+                                .unwrap_or_else(|error| wire::value_frame(&json!({ "t": "reply", "id": id, "ok": false, "error": error }))),
+                            Ok(Err(error)) => wire::value_frame(&json!({ "t": "reply", "id": id, "ok": false, "error": error })),
+                            Err(error) => wire::value_frame(&json!({ "t": "reply", "id": id, "ok": false, "error": format!("the store read stopped: {error}") })),
+                        };
+                        let _ = reply_to.send(frame);
+                    });
+                }
+                "call" if head.api.as_deref().is_some_and(|api| api.starts_with("repo.")) => {
+                    // A module function moved into Rust (scripts/rust-modules.cjs):
+                    // run on a blocking thread, able to call the engine's
+                    // function arguments back while it runs.
+                    let id = head.id.unwrap_or(0);
+                    let api = head.api.clone().unwrap_or_default();
+                    count_rust_call(&api);
+                    let function = api.trim_start_matches("repo.").to_string();
+                    let args = head.body.map(|raw| raw.get().to_string()).unwrap_or_else(|| "[]".into());
+                    let callbacks = HostCallbacks { engine: self.clone(), writer: tx.clone() };
+                    let reply_to = tx.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let answer = tauri::async_runtime::spawn_blocking(move || {
+                            let list: Value = serde_json::from_str(&args).unwrap_or(Value::Null);
+                            let list = list.as_array().cloned().unwrap_or_default();
+                            mefi_core::repo::call(&function, &list, &callbacks).map(|value| value.to_string())
+                        })
+                        .await;
+                        let frame = match answer {
+                            Ok(Ok(text)) => wire::with_body(&format!("{{\"t\":\"reply\",\"id\":{id},\"ok\":true"), text.as_bytes())
+                                .unwrap_or_else(|error| wire::value_frame(&json!({ "t": "reply", "id": id, "ok": false, "error": error }))),
+                            Ok(Err(error)) => wire::value_frame(&json!({ "t": "reply", "id": id, "ok": false, "error": error })),
+                            Err(error) => wire::value_frame(&json!({ "t": "reply", "id": id, "ok": false, "error": format!("the call stopped: {error}") })),
+                        };
+                        let _ = reply_to.send(frame);
+                    });
+                }
+                "callback-reply" => {
+                    let frame: Value = serde_json::from_slice(&line).unwrap_or(Value::Null);
+                    let waiter = head.id.and_then(|id| self.callbacks.lock().ok().and_then(|mut map| map.remove(&id)));
+                    if let Some(waiter) = waiter {
+                        let _ = waiter.send(if frame["ok"] == json!(true) { Ok(frame["body"].clone()) } else { Err(frame["error"].as_str().unwrap_or("the engine function failed").to_string()) });
+                    }
+                }
                 "call" => {
                     let id = head.id.unwrap_or(0);
                     let api = head.api.clone().unwrap_or_default();
@@ -299,6 +360,41 @@ async fn relay_output(mut stream: Box<dyn tokio::io::AsyncRead + Unpin + Send>) 
                 let _ = std::io::stderr().write_all(&buf[..n]);
             }
         }
+    }
+}
+
+/// Runs an engine function a ported module was handed, by asking the engine.
+struct HostCallbacks {
+    engine: Arc<Engine>,
+    writer: Writer,
+}
+
+impl mefi_core::callbacks::Callbacks for HostCallbacks {
+    fn call(&self, handle: &Value, args: Vec<Value>) -> Result<Value, String> {
+        let id = self.engine.next_id.fetch_add(1, Ordering::Relaxed);
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.engine.callbacks.lock().map_err(|_| "engine state poisoned")?.insert(id, tx);
+        let frame = wire::value_frame(&json!({ "t": "callback", "id": id, "fn": handle["id"], "body": args }));
+        if self.writer.send(frame).is_err() {
+            self.engine.callbacks.lock().ok().map(|mut map| map.remove(&id));
+            return Err("Studio's engine is not running".into());
+        }
+        // sync's check runs the project's `npm run check`, up to 10 minutes.
+        let answer = rx.recv_timeout(std::time::Duration::from_secs(15 * 60));
+        self.engine.callbacks.lock().ok().map(|mut map| map.remove(&id));
+        answer.unwrap_or_else(|_| Err("the engine did not answer in time".into()))
+    }
+}
+
+/// How many engine calls each moved module answered in Rust (the self-test reports it).
+pub fn rust_calls() -> &'static Mutex<std::collections::BTreeMap<String, u64>> {
+    static CALLS: std::sync::OnceLock<Mutex<std::collections::BTreeMap<String, u64>>> = std::sync::OnceLock::new();
+    CALLS.get_or_init(|| Mutex::new(std::collections::BTreeMap::new()))
+}
+
+fn count_rust_call(name: &str) {
+    if let Ok(mut calls) = rust_calls().lock() {
+        *calls.entry(name.to_string()).or_insert(0) += 1;
     }
 }
 

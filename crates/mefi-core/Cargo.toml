@@ -1,0 +1,28 @@
+[package]
+name = "mefi-core"
+version = "0.4.5"
+edition = "2021"
+description = "Mefi's Studio AI+ engine in Rust: the parts of main.cjs and scripts/ that have moved (docs/rust-migration.md, stage 2)"
+license = "MIT"
+publish = false
+
+# The engine's logic, free of any window system: the Tauri host (src-tauri)
+# links it, and the mefi-core binary runs it from the command line so the
+# parity tests can hold each port against the JavaScript it replaces.
+
+[lib]
+name = "mefi_core"
+path = "src/lib.rs"
+
+[[bin]]
+name = "mefi-core"
+path = "src/bin/mefi-core.rs"
+
+[dependencies]
+rusqlite = { version = "0.40", features = ["bundled"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+indexmap = "2"
+regex = "1"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_System_SystemInformation", "Win32_System_Threading"] }

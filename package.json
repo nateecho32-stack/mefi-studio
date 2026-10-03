@@ -17,6 +17,7 @@
     "host": "node scripts/rust-host.mjs run",
     "host:build": "node scripts/rust-host.mjs build",
     "host:test": "node scripts/rust-host.mjs test",
+    "host:core": "node scripts/rust-host.mjs core-build",
     "serve": "node scripts/serve.mjs",
     "data": "node scripts/refresh-models.mjs",
     "data:offline": "node scripts/refresh-models.mjs --offline",

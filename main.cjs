@@ -113,6 +113,9 @@ const boardTrash = require("./scripts/board-trash.cjs");
 const { createMusicRecommender } = require("./scripts/music-recommendations.cjs");
 const { attachRendererRecovery } = require("./scripts/renderer-recovery.cjs");
 const { createEyesClient, wrapEyes } = require("./scripts/eyes-client.cjs");
+// Under the Rust host, engine module functions that moved to Rust answer from
+// there (scripts/rust-modules.cjs, docs/rust-migration.md stage 2).
+const rustModules = process.env.MEFI_STUDIO_HOST === "tauri" ? require("./scripts/rust-modules.cjs") : null;
 const { createModelPerformanceStore } = require("./scripts/model-performance.cjs");
 const { limitsFromPlan, aggregateUsage, mergeLedgers, rollupUsage, formatUsage, opencodeWindows, parseOpencodeUsage, describeOpencodeStatus, describeAccountStatus,
   parseOpenrouterKey, parseOpenrouterCredits, parseGatewayCredits, parseZaiQuota, providerInfo,
@@ -316,7 +319,8 @@ async function loadModule(rel) {
   const version = moduleVersions.get(rel) ?? 0;
   const cached = moduleCache.get(rel);
   if (cached && cached.version === version) return cached.module;
-  const module = await import(`${pathToFileURL(path.join(STUDIO_ROOT, rel)).href}?v=${version}`);
+  const imported = await import(`${pathToFileURL(path.join(STUDIO_ROOT, rel)).href}?v=${version}`);
+  const module = typeof rustModules !== "undefined" && rustModules ? rustModules.withRust(rel, imported) : imported;
   moduleCache.set(rel, { version, module });
   return module;
 }

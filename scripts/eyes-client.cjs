@@ -64,6 +64,69 @@ function rebuildError(shape) {
   return error;
 }
 
+// Under the Rust host (docs/rust-migration.md) the store reads run in Rust
+// (crates/mefi-core, held to eyes.mjs by tests/rust_parity_eyes.test.mjs),
+// not on a worker thread: the same methods with the same answers, reached
+// through the host's link. The Electron build keeps the worker.
+function rustHostCall() {
+  if (process.env.MEFI_STUDIO_HOST !== "tauri") return null;
+  try {
+    return require("./tauri-electron.cjs").__rust?.call ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// The worker client's contract over the host: call, restart, setVersion,
+// close, status. A read still times out on the caller's side; there is no
+// thread to restart, so restart and setVersion only count.
+function createHostEyesClient(hostCall, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+  let closed = false;
+  let version = 0;
+  let pending = 0;
+  const stats = { spawns: 0, calls: 0, failures: 0, restarts: 0 };
+  function call(method, args = {}, { timeoutMs: readTimeoutMs = timeoutMs } = {}) {
+    if (!EYES_WORKER_METHODS.includes(method)) return Promise.reject(new TypeError(`eyes worker: ${String(method)} is not a store read`));
+    if (closed) return Promise.reject(new Error("eyes worker client is closed"));
+    stats.calls += 1;
+    pending += 1;
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (outcome) => {
+        if (settled) return;
+        settled = true;
+        pending -= 1;
+        clearTimeout(timer);
+        outcome();
+      };
+      const timer = setTimeout(() => finish(() => {
+        stats.failures += 1;
+        reject(new Error(`${method}: store read timed out after ${readTimeoutMs} ms`));
+      }), readTimeoutMs);
+      timer.unref?.();
+      Promise.resolve()
+        .then(() => hostCall(`eyes.${method}`, args))
+        .then((result) => finish(() => resolve(result)), (error) => finish(() => {
+          stats.failures += 1;
+          reject(error instanceof Error ? error : new Error(String(error)));
+        }));
+    });
+  }
+  return {
+    call,
+    restart() {
+      stats.restarts += 1;
+    },
+    setVersion(next) {
+      version = Number(next) || 0;
+    },
+    async close() {
+      closed = true;
+    },
+    status: () => ({ running: !closed, pending, version, host: "rust", ...stats }),
+  };
+}
+
 function createEyesClient({
   studioRoot,
   modulePath = path.join(studioRoot, "scripts", "eyes.mjs"),
@@ -72,7 +135,11 @@ function createEyesClient({
   log = () => {},
   // Test seam: build the Worker (same options) so a fixture can observe it.
   spawnWorker = (file, options) => new Worker(file, options),
+  // Test seam: the Rust host's call, or null for the worker. Defaults to the
+  // host when Studio runs under it.
+  hostCall = rustHostCall(),
 } = {}) {
+  if (typeof hostCall === "function") return createHostEyesClient(hostCall, { timeoutMs });
   let worker = null;
   let generation = 0;
   let version = 0;
@@ -206,4 +273,4 @@ function wrapEyes(module, client, { methods = EYES_WORKER_METHODS } = {}) {
   return wrapped;
 }
 
-module.exports = { createEyesClient, wrapEyes, EYES_WORKER_METHODS, DEFAULT_TIMEOUT_MS };
+module.exports = { createEyesClient, createHostEyesClient, wrapEyes, EYES_WORKER_METHODS, DEFAULT_TIMEOUT_MS };

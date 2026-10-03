@@ -6,6 +6,20 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-02 - Maxwells-PC task plan provenance focused verification
+
+Source/provenance: local/task-plan-trace-20261002 in the separate mefi-studio-plan-trace checkout at b3a4f468348a4485112c6741026b565f106e9821 plus the aggregate-verified Health candidate. Original checkout and verified UI/loop, recap and Health candidates remain untouched. No commit, push, merge or release.
+
+Change: Task Details reads the current saved destination through its explicit planningId and existing scoped plan read. It labels missing, unreadable, foreign, ambiguous, stale, changed-specification, archived or unapproved context; the recorded brief is not replaced. The existing plan navigation is reused only for an identifiable scoped plan. Plan-only refreshes patch that section in place, retain other detail nodes and note drafts/focus, and move focus off a link if it becomes hidden. No prompt, dispatch, permission, task-store or publishing changes.
+
+Focused validation: 82 Node tests passed, zero failures/skips across task_overview_groups and tasks_ui. Meaningful cases cover explicit association, read-only inputs, foreign and duplicate plan identities, unreadable cached context, legacy scoped plans, missing/large destinations, changed/stale/archive/unapproved context, preserved briefs, existing navigation, plan-only refresh with draft/focus, unavailable/recovery transitions and late prior-project responses. Two initial DOM assertions needed fixture corrections: the UI normalizes placeholder punctuation to an ellipsis, and the existing task controls need the appropriate bridge for a Start action. Stable entry identity and existing task controls retained the intended assertions; corrected complete focused run passed.
+
+Expanded affected suites: 92 tests passed, zero failures/skips across task_overview_groups, tasks_ui, task_groups and task_groups_node_edges. The refresh test follows the visible History-to-Details flow; recovery makes the existing plan link available again without replacing the detail nodes.
+
+The Chromium fixture is prepared for desktop and 600x560 captures of current, changed, missing and foreign links, with text size, horizontal bounds, no overflow, original-brief and navigation-availability assertions. Visual, full aggregate and disposable-profile runtime checks remain pending coordinated server release; no heavy launch was made while game native tests owned the window.
+
+Dependency evidence: frozen Health candidate passed build/check/audit, full npm test (6,661 Node passes, zero failures, 16 skips; 248 Python tests OK with one skip; six path-lock checks), 25 Fleet size/view checks and waited real Fleet 10/10 steps. Its 1,012 source hashes remained unchanged and all test processes drained. Platform limitations remain native Close through synthetic Ctrl+W unverified and occlusion capability unavailable. That prior aggregate does not validate this new renderer change.
+
 ## 2026-10-02 - Maxwells-PC advisory handoff progress focused verification
 
 Source/provenance: local/fleet-handoff-health-20261002 in the separate mefi-studio-health checkout, based on b3a4f468348a4485112c6741026b565f106e9821 plus the aggregate-verified recap candidate. The frozen recap source, original checkout and prior UI/loop candidate remain untouched. No commit, push, merge or release.

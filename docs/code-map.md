@@ -268,6 +268,11 @@ outside the checkout).
 
 | File | Purpose |
 | --- | --- |
+| `crates/mefi-core/src/eyes/` | The OpenCode session store in Rust (stage 2): `eyes.mjs`'s 19 worker reads and its git helpers, held to it by `tests/rust_parity_eyes.test.mjs`. |
+| `crates/mefi-core/src/repo/` · `callbacks.rs` | Multi-PC sync, the worktree table and its actions in Rust (`sync.mjs`, `worktrees.mjs`, `worktree-actions.mjs`), held to them by `tests/rust_parity_repo.test.mjs`; function arguments arrive as handles the host calls back. |
+| `scripts/rust-modules.cjs` | Which engine module functions Rust answers under the Rust host; `main.cjs`'s `loadModule` hands those modules out with the functions replaced. |
+| `crates/mefi-core/src/js.rs` · `paths.rs` | JavaScript's rules a port must keep (number printing, rounding, toFixed, dates, UTF-16 slices, localeCompare order) and `path-scope.cjs`'s path rules. |
+| `crates/mefi-core/src/bin/mefi-core.rs` | The engine crate from the command line: one read, a batch, or the store dump, for the parity tests. |
 | `src-tauri/src/lib.rs` | The host's start: the single-instance lock, the `mefi` protocol, the page's commands, starting the engine, and leaving when it leaves. |
 | `src-tauri/src/engine.rs` | The engine sidecar: the named pipe, the launch token, frames in both directions, and the relaunch after an `app.relaunch`. |
 | `src-tauri/src/native.rs` | What the engine's Electron objects ask for: the window and its events, dialogs, tray, images, clipboard, idle state, power requests, login items, displays. |

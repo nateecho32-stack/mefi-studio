@@ -986,7 +986,52 @@ link.handlers.event = (frame) => {
   }
 };
 
+// ---- functions passed to Rust ----
+// A ported module's function argument (sync's `check`, a worktree action's
+// `inUse`) crosses as { $mefi: "fn", id }; while the call is in flight the
+// host may ask for it to run ("callback" frames) and gets its answer back.
+const callbackFunctions = new Map();
+let nextCallback = 1;
+function withHandles(value, held) {
+  if (typeof value === "function") {
+    const id = nextCallback++;
+    callbackFunctions.set(id, value);
+    held.push(id);
+    return { $mefi: "fn", id };
+  }
+  if (Array.isArray(value)) return value.map((item) => withHandles(item, held));
+  if (value && typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype) {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, withHandles(item, held)]));
+  }
+  return value;
+}
+function callWithFunctions(api, args) {
+  const held = [];
+  const encoded = (Array.isArray(args) ? args : []).map((arg) => withHandles(arg, held));
+  return link.call(api, ...encoded).finally(() => {
+    for (const id of held) callbackFunctions.delete(id);
+  });
+}
+link.handlers.callback = async (frame) => {
+  let reply;
+  try {
+    const fn = callbackFunctions.get(frame.fn);
+    if (!fn) throw new Error("that function is no longer available");
+    const args = frame.tagged ? wire.revive(frame.body) : frame.body;
+    const value = await fn(...(Array.isArray(args) ? args : []));
+    const { json, tagged } = wire.encode(value);
+    reply = wire.frame({ t: "callback-reply", id: frame.id, ok: true, ...(tagged ? { tagged: true } : {}) }, json);
+  } catch (error) {
+    reply = wire.frame({ t: "callback-reply", id: frame.id, ok: false, error: String(error?.message ?? error) });
+  }
+  link.write(reply);
+};
+
 module.exports = {
   app, BrowserWindow, WebContentsView, ipcMain, safeStorage, shell, dialog, clipboard, desktopCapturer,
   powerSaveBlocker, powerMonitor, Tray, Menu, nativeImage, screen, Notification, session,
+  // Not Electron: the engine modules that moved into Rust (crates/mefi-core)
+  // are reached through here: the store reads in scripts/eyes-client.cjs,
+  // and ported module functions through scripts/rust-modules.cjs.
+  __rust: Object.freeze({ call: (api, ...args) => link.call(api, ...args), callWithFunctions }),
 };

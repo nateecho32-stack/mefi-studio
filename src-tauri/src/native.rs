@@ -527,10 +527,28 @@ fn self_test(engine: Arc<Engine>, dir: PathBuf) {
             Err(error) => report["capture"] = json!({ "error": error }),
         }
         report["page"] = execute_javascript(&engine, "window.__mefiHost.stats()").await.unwrap_or_else(|error| json!({ "error": error }));
+        // One page request that the engine answers from the OpenCode store
+        // (which Rust reads now): sizes only, never contents.
+        report["eyesState"] = execute_javascript(
+            &engine,
+            "window.mefiStudio.eyesState().then((r) => ({ ok: r.ok, sessions: r.sessions?.length ?? null, changes: r.changes?.length ?? null, todos: r.todos?.length ?? null, error: r.error ?? null }))",
+        )
+        .await
+        .unwrap_or_else(|error| json!({ "error": error }));
+        // And one answered by a module function that moved (worktrees.listWorktrees).
+        // The Worktrees page needs an open project: the Studio folder itself.
+        let open_and_list = format!(
+            "window.mefiStudio.projectsAddPath({}).then(() => window.mefiStudio.worktreesList()).then((r) => ({{ ok: r.ok, repo: r.repo ?? null, rows: r.rows?.length ?? null, error: r.error ?? null }}))",
+            wire_string(&engine.studio.root.to_string_lossy())
+        );
+        report["worktrees"] = execute_javascript(&engine, &open_and_list)
+        .await
+        .unwrap_or_else(|error| json!({ "error": error }));
         #[cfg(windows)]
         if std::env::var("MEFI_HOST_SELFTEST_TOAST").as_deref() == Ok("1") {
             report["toast"] = json!(crate::toast::show(&engine, 9_000_000, "Mefi's Studio AI+", "Rust host self-test: notifications work.", true).err());
         }
+        report["rustCalls"] = json!(crate::engine::rust_calls().lock().map(|calls| calls.clone()).unwrap_or_default());
         let _ = std::fs::write(dir.join("selftest.json"), report.to_string());
     });
 }

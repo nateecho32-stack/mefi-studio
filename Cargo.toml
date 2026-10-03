@@ -1,0 +1,17 @@
+# The Rust half of Mefi's Studio AI+ (docs/rust-migration.md): the host
+# that replaces Electron, and the engine crate the JavaScript engine moves
+# into. Build through scripts/rust-host.mjs, which keeps the target folder
+# outside the checkout.
+[workspace]
+members = ["src-tauri", "crates/mefi-core"]
+resolver = "2"
+
+[profile.dev]
+# Dependencies are optimised once and cached; the host itself stays fast to rebuild.
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.release]
+codegen-units = 4
+lto = "thin"
+strip = true

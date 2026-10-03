@@ -22,6 +22,8 @@ path = "src/main.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+# The engine's Rust half (docs/rust-migration.md, stage 2).
+mefi-core = { path = "../crates/mefi-core" }
 tauri = { version = "2", features = ["tray-icon", "image-png", "image-ico", "devtools"] }
 tauri-plugin-single-instance = "2"
 tauri-plugin-opener = "2"
@@ -68,13 +70,3 @@ windows-sys = { version = "0.59", features = [
 # Tauri's CLI turns this on for release builds; plain `cargo build` leaves it
 # off. Studio never loads a dev server, so both serve the same files.
 custom-protocol = ["tauri/custom-protocol"]
-
-[profile.dev]
-# Dependencies are optimised once and cached; the host itself stays fast to rebuild.
-[profile.dev.package."*"]
-opt-level = 2
-
-[profile.release]
-codegen-units = 4
-lto = "thin"
-strip = true
