@@ -6,6 +6,49 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-29 - Publish completed work with signing activation deferred
+
+GitHub rejected the completed integration push because this PC's OAuth
+credential lacks the workflow scope. No SSH key is configured. Preserved the
+exact tested signing/smoke workflow as docs/release-workflow-signpath.yml and
+on local branch codex/release-signing-gated (491373c), restored only the
+active release workflow to GitHub main's bytes, and documented the activation
+step and credential requirement. All other finished work remains integrated.
+No tag/release was published. Runtime sources are unchanged since the 733-test
+integration and final Command renderer pass.
+
+- Workflow proposal bytes match 491373c:.github/workflows/release.yml.
+- Active workflow bytes match origin/main:.github/workflows/release.yml.
+- npm run check and npm run audit: PASS; no runtime changes need new tests.
+- Lost-work guard must pass before pushing; deferral is explicit in history.
+
+## 2026-09-29 - Preserve concurrent main fixes while landing finished branches
+
+Integrated the update safety net (e9b8b79) and completed dogfood fixes
+(54640ea) from GitHub main into the finished-branch integration. Preserved
+models: and remote: app-wide routing together with boot:healthy, all module
+contracts, Command-tree children, Vibe plan review, and both kinds of result
+review: pending checks show their elapsed time; failed/unavailable checks
+keep confirmation and send-back. The pending-check fixture now includes its
+real pending reason. Imported test rows without discarding either archive,
+and regenerated booklet.html. Fixed the dogfood transport test's missing
+ReadableStream import with node:stream/web.
+
+- build-booklet, npm run check: PASS (205 targets, 425 specs).
+- npm run audit: PASS, 0 findings. Whitespace/conflict checks: PASS.
+- npm run lint: PASS, 0 errors and the same 42 existing warnings.
+- Update-safety and overlapping host/renderer suites: 154 tests passed.
+- All dogfood-changed suites plus overlapping Vibe, Command, model tracker,
+  app-wide IPC, boot health, purity, booklet and startup suites: 733 passed,
+  0 failed, 0 skipped (13 s, concurrency 4).
+- agent_tools after the explicit stream import: 28 passed, 0 failed (2.5 s).
+- Final combined Command Electron fixture: 1 passed, 0 failed (54.4 s).
+- The preceding combined full-run evidence remains in the finished-work row:
+  all 4,910 behavior tests completed with 0 failures; Python and exclusive
+  probes passed. Two documented desktop render flakes made that full command
+  exit 1; both affected suites subsequently passed alone. No additional full
+  rerun was needed for this targeted conflict resolution.
+
 ## 2026-09-29 night - Dogfood fixes: link reading, tool-call leaks, refused plans, owner asks
 
 The fixes from a live dogfood run (an isolated Studio copy, handed only the

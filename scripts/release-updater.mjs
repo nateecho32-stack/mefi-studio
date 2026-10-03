@@ -14,6 +14,7 @@ import { mkdir, open, readdir, readFile, rm, stat, writeFile } from "node:fs/pro
 import path from "node:path";
 import { Readable, Transform } from "node:stream";
 import { once } from "node:events";
+import { pipeline } from "node:stream/promises";
 import zlib from "node:zlib";
 
 export const DEFAULT_REPO = "nateecho32-stack/mefi-studio";
@@ -30,6 +31,8 @@ export function parseVersion(value) {
   const text = String(value ?? "").trim().replace(/^v/i, "");
   const match = text.match(/^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/);
   if (!match) return null;
+  if (match.slice(1, 4).some(v => !Number.isSafeInteger(Number(v)) || /^0\d/.test(v))) return null;
+  if (match[4] && match[4].split(".").some(v => !v || (/^\d+$/.test(v) && (!Number.isSafeInteger(Number(v)) || /^0\d/.test(v))))) return null;
   return { raw: text, major: Number(match[1]), minor: Number(match[2]), patch: Number(match[3]), pre: match[4] ?? null };
 }
 
@@ -80,12 +83,7 @@ export function selectAsset(release, { platform = DEFAULT_PLATFORM, arch = DEFAU
   const assets = (Array.isArray(release?.assets) ? release.assets : []).filter((asset) => typeof asset?.name === "string");
   const zips = assets.filter((asset) => /\.zip$/i.test(asset.name));
   const wanted = releaseAssetName(release?.tag_name ?? release?.name ?? "", { platform, arch }).toLowerCase();
-  const asset =
-    zips.find((candidate) => candidate.name.toLowerCase() === wanted) ??
-    zips.find((candidate) => candidate.name.toLowerCase().includes(`${platform}-${arch}`)) ??
-    zips.find((candidate) => candidate.name.toLowerCase().includes(platform)) ??
-    zips[0] ??
-    null;
+  const asset = zips.find((candidate) => candidate.name.toLowerCase() === wanted) ?? null;
   if (!asset) return { asset: null, checksum: null };
   const checksum = assets.find((candidate) => candidate.name.toLowerCase() === `${asset.name.toLowerCase()}.sha256`) ?? null;
   return { asset, checksum };
@@ -128,6 +126,20 @@ export function githubHeaders(token = null) {
   return headers;
 }
 
+// Metadata controls executable downloads and credential destinations. Only
+// the selected repository's GitHub API asset endpoints may receive a token.
+export function validateBuildAssets(build, repo = DEFAULT_REPO) {
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) throw new Error("invalid update repository");
+  for (const asset of [build?.asset, build?.checksum].filter(Boolean)) {
+    const url = new URL(asset.url);
+    const prefix = `/repos/${repo}/`;
+    const suffix = url.pathname.slice(prefix.length);
+    if (url.origin !== "https://api.github.com" || url.username || url.password || url.search || url.hash || !url.pathname.startsWith(prefix) || !/^(?:releases\/assets\/\d+|actions\/artifacts\/\d+\/zip)$/.test(suffix)) throw new Error("update asset is outside the selected GitHub repository");
+    if (!Number.isSafeInteger(asset.size) || asset.size <= 0 || asset.size > 1024 * 1024 * 1024) throw new Error("invalid update asset size");
+  }
+  if (!build?.asset || (!/^sha256:[a-f\d]{64}$/i.test(build.asset.digest ?? "") && !build.checksum)) throw new Error("the build has no SHA-256 verification metadata");
+}
+
 function timeoutSignal(ms) {
   if (typeof AbortSignal?.timeout === "function") return AbortSignal.timeout(ms);
   const controller = new AbortController();
@@ -145,6 +157,7 @@ export async function checkForRelease({
   arch = DEFAULT_ARCH,
   apiBase = "https://api.github.com",
   timeoutMs = 15000,
+  allowStableReturn = false,
 } = {}) {
   const checkedAt = Date.now();
   const current = parseVersion(currentVersion);
@@ -176,10 +189,14 @@ export async function checkForRelease({
     }
     if (!response.ok) return { ok: false, error: `GitHub answered ${response.status}`, checkedAt };
     const json = await response.json();
+    if (!json.published_at) return { ok: false, error: "stable updates require a published release", checkedAt };
     const latest = describeRelease(json, { platform, arch });
     if (!latest) return { ok: false, error: "the latest release has no readable version", checkedAt };
+    if (latest.prerelease || parseVersion(latest.version)?.pre) return { ok: false, error: "stable updates require a published stable release", checkedAt };
     if (!latest.asset) return { ok: false, error: `release ${latest.tag} has no ${platform} zip asset`, checkedAt };
-    return { ok: true, current: current.raw, latest, update: isNewer(latest.version, current.raw) ? latest : null, checkedAt };
+    validateBuildAssets(latest, repo);
+    latest.channel = "stable";
+    return { ok: true, current: current.raw, latest, update: isNewer(latest.version, current.raw) || (allowStableReturn && current.pre && latest.version !== current.raw) ? latest : null, checkedAt };
   } catch (error) {
     const aborted = error?.name === "AbortError" || error?.name === "TimeoutError";
     return { ok: false, error: aborted ? "the release check timed out" : String(error?.message ?? error).slice(0, 300), checkedAt };
@@ -240,15 +257,13 @@ export async function downloadAsset({
   const body = response.body;
   const source = body && typeof body.getReader === "function" ? Readable.fromWeb(body) : body;
   if (!source) throw new Error("download response has no body");
-  await new Promise((resolve, reject) => {
-    source
-      .pipe(meter)
-      .pipe(createWriteStream(file))
-      .on("finish", resolve)
-      .on("error", reject);
-    source.on("error", reject);
-    meter.on("error", reject);
-  });
+  try {
+    await pipeline(source, meter, createWriteStream(file));
+    if (Number(asset.size) > 0 && received !== Number(asset.size)) throw new Error("download size does not match the GitHub asset");
+  } catch (error) {
+    await rm(file, { force: true }).catch(() => {});
+    throw error;
+  }
   return { path: file, bytes: received, total, sha256: hash.digest("hex") };
 }
 
@@ -540,7 +555,7 @@ export async function payloadRoot(stagingDir) {
   return null;
 }
 
-export async function stageUpdate({ zipPath, stagingDir, installRoot }) {
+export async function stageUpdate({ zipPath, stagingDir, installRoot, expectedVersion = null }) {
   await rm(stagingDir, { recursive: true, force: true });
   await mkdir(stagingDir, { recursive: true });
   await extractZip(zipPath, stagingDir);
@@ -549,6 +564,11 @@ export async function stageUpdate({ zipPath, stagingDir, installRoot }) {
   const payload = path.join(sourceRoot, "resources", "app");
   if (!(await isFile(path.join(payload, "main.cjs"))) || !(await isFile(path.join(payload, "preload.cjs")))) {
     throw new Error("the release payload is missing main.cjs or preload.cjs");
+  }
+  if (expectedVersion) {
+    const pkg = JSON.parse(await readFile(path.join(payload, "package.json"), "utf8"));
+    if (pkg.name !== "mefi-studio" || pkg.productName !== "Mefi's Studio AI+" || pkg.version !== expectedVersion || pkg.main !== "main.cjs") throw new Error("the staged build identity or version does not match GitHub");
+    if (!(await isFile(path.join(sourceRoot, `${PORTABLE_NAME}.exe`))) || !(await isFile(path.join(payload, "renderer", "booklet.html")))) throw new Error("the staged build is missing its executable or renderer");
   }
   return { sourceRoot, payloadRoot: payload, exePath: path.join(installRoot, `${PORTABLE_NAME}.exe`) };
 }

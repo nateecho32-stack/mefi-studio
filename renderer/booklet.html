@@ -13591,6 +13591,7 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
 <section class="settings-category" id="settings-category-system" data-settings-category-pane="system" aria-labelledby="settings-category-system-heading" hidden><header class="settings-category-head"><h2 id="settings-category-system-heading" tabindex="-1">System</h2><p>Updates, diagnostics and integrations</p></header>
 <details class="settings-optional settings-card" id="settings-updates" data-desktop-only><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-update"/></svg></span><span class="settings-summary-text"><b>Updates</b><span>Live update and published builds</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
         <div class="update-block" data-update-block>
+          <div id="source-updates">
           <p class="settings-eyebrow">Live update</p>
           <p class="muted">In development, Studio watches its source files and applies local changes. Reloads wait for active builders and result saves.</p>
           <div class="row tight update-row">
@@ -13598,8 +13599,11 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
             <button id="update-apply" class="ghost" disabled>Apply update</button>
             <span class="eyes-status" id="update-status" role="status">not watching</span>
           </div>
-          <p class="settings-eyebrow">Published builds</p>
-          <p class="muted">Published builds are checked on GitHub every 20 minutes. The portable app can download and install one from here; in development the checker reports only.</p>
+          </div>
+          <p class="settings-eyebrow">GitHub update channel</p>
+          <p class="muted">Stable (default) offers published release builds only. GitHub is checked every 20 minutes. A source checkout reports builds; installation requires the portable Windows app.</p>
+          <label class="switch"><input type="checkbox" id="release-development" aria-describedby="release-channel-warning"><span class="track"></span><span>Development / beta: receive built updates automatically</span></label>
+          <p class="muted" id="release-channel-warning">Development changes are untested by the owner, may be unstable, and may cause data loss. Enabling requires confirmation. Back up important work first. Turn this off to return to Stable; an older stable build may not understand development data.</p>
           <div class="row tight update-row" data-release-row>
             <button id="release-check" class="ghost" title="Ask GitHub for the newest published build now">Check GitHub</button>
             <button id="release-apply" class="ghost" hidden disabled>Update</button>
@@ -13611,7 +13615,7 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
           </div>
           <p class="muted bad-text" id="release-note" role="status" hidden></p>
           <div class="row tight update-row" id="release-token-row" hidden>
-            <input type="password" id="release-token" placeholder="GitHub token (read-only, for a private repo)" autocomplete="off" aria-label="GitHub update token">
+            <input type="password" id="release-token" placeholder="Existing GitHub token (Actions read for development)" autocomplete="off" aria-label="GitHub update token">
             <button id="release-token-save" class="ghost mini">Save token</button>
           </div>
           <p class="settings-eyebrow">What's new</p>
@@ -24929,7 +24933,7 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
     if (state === "applying") return { line: `installing ${version} · the app restarts`, button: "Installing…", busy: true };
     if (state === "rollingback") return { line: `going back to v${status?.previous?.from ?? "the saved version"} · the app restarts`, busy: true };
     if (state === "installed") return { line: `updated to v${status?.installed?.version ?? ""} · running this build`, installed: true };
-    if (state === "none") return { line: "no published release yet" };
+    if (state === "none") return { line: status?.unavailable ?? "no published release yet" };
     if (state === "current") return { line: `up to date${status?.current ? ` · v${status.current}` : ""}` };
     if (state === "error") return { line: `check failed · ${status?.error ?? "unknown"}`, bad: true, token: Boolean(status?.needsToken) };
     return { line: "not checked" };
@@ -24939,9 +24943,16 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
     if (status) releaseUpdateState = status;
     const state = releaseUpdateState;
     const view = releaseView(state);
+    const sourceUpdates = document.querySelector("#source-updates");
+    if (sourceUpdates) sourceUpdates.hidden = Boolean(state?.supported);
+    const development = document.querySelector("#release-development");
+    if (development) {
+      development.checked = state?.channel === "development";
+      development.disabled = Boolean(view.busy);
+    }
     const line = document.querySelector("#release-status");
     if (line) {
-      line.textContent = `release · ${view.line}`;
+      line.textContent = `${state?.channel === "development" ? "development / beta" : "stable"} · ${view.line}`;
       line.classList.toggle("bad-text", Boolean(view.bad));
     }
     const apply = document.querySelector("#release-apply");
@@ -25064,6 +25075,19 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
       return;
     }
     document.querySelector("#release-check")?.addEventListener("click", () => checkReleaseNow());
+    document.querySelector("#release-development")?.addEventListener("change", async (event) => {
+      const toggle = event.target;
+      const channel = toggle.checked ? "development" : "stable";
+      toggle.disabled = true;
+      try {
+        const result = await window.mefiStudio.releaseSetChannel?.(channel);
+        paintRelease(result?.status);
+        if (result?.ok === false) window.MefiToast?.(result.error, "bad");
+      } catch (error) {
+        paintRelease(releaseUpdateState);
+        window.MefiToast?.(`Channel change failed · ${String(error?.message ?? error)}`, "bad");
+      } finally { toggle.disabled = false; }
+    });
     document.querySelector("#release-apply")?.addEventListener("click", () => applyReleaseNow());
     document.querySelector("#release-rollback")?.addEventListener("click", () => rollbackReleaseNow());
     document.querySelector("#release-token-save")?.addEventListener("click", () => saveReleaseToken());

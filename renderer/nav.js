@@ -2957,7 +2957,7 @@
     if (state === "applying") return { line: `installing ${version} · the app restarts`, button: "Installing…", busy: true };
     if (state === "rollingback") return { line: `going back to v${status?.previous?.from ?? "the saved version"} · the app restarts`, busy: true };
     if (state === "installed") return { line: `updated to v${status?.installed?.version ?? ""} · running this build`, installed: true };
-    if (state === "none") return { line: "no published release yet" };
+    if (state === "none") return { line: status?.unavailable ?? "no published release yet" };
     if (state === "current") return { line: `up to date${status?.current ? ` · v${status.current}` : ""}` };
     if (state === "error") return { line: `check failed · ${status?.error ?? "unknown"}`, bad: true, token: Boolean(status?.needsToken) };
     return { line: "not checked" };
@@ -2967,9 +2967,16 @@
     if (status) releaseUpdateState = status;
     const state = releaseUpdateState;
     const view = releaseView(state);
+    const sourceUpdates = document.querySelector("#source-updates");
+    if (sourceUpdates) sourceUpdates.hidden = Boolean(state?.supported);
+    const development = document.querySelector("#release-development");
+    if (development) {
+      development.checked = state?.channel === "development";
+      development.disabled = Boolean(view.busy);
+    }
     const line = document.querySelector("#release-status");
     if (line) {
-      line.textContent = `release · ${view.line}`;
+      line.textContent = `${state?.channel === "development" ? "development / beta" : "stable"} · ${view.line}`;
       line.classList.toggle("bad-text", Boolean(view.bad));
     }
     const apply = document.querySelector("#release-apply");
@@ -3092,6 +3099,19 @@
       return;
     }
     document.querySelector("#release-check")?.addEventListener("click", () => checkReleaseNow());
+    document.querySelector("#release-development")?.addEventListener("change", async (event) => {
+      const toggle = event.target;
+      const channel = toggle.checked ? "development" : "stable";
+      toggle.disabled = true;
+      try {
+        const result = await window.mefiStudio.releaseSetChannel?.(channel);
+        paintRelease(result?.status);
+        if (result?.ok === false) window.MefiToast?.(result.error, "bad");
+      } catch (error) {
+        paintRelease(releaseUpdateState);
+        window.MefiToast?.(`Channel change failed · ${String(error?.message ?? error)}`, "bad");
+      } finally { toggle.disabled = false; }
+    });
     document.querySelector("#release-apply")?.addEventListener("click", () => applyReleaseNow());
     document.querySelector("#release-rollback")?.addEventListener("click", () => rollbackReleaseNow());
     document.querySelector("#release-token-save")?.addEventListener("click", () => saveReleaseToken());

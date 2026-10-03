@@ -252,6 +252,7 @@ const api = {
   appRestart: (options) => ipcRenderer.invoke("app:restart", options ?? {}),
   releaseStatus: () => ipcRenderer.invoke("release:status"),
   releaseCheck: () => ipcRenderer.invoke("release:check"),
+  releaseSetChannel: (channel) => ipcRenderer.invoke("release:set-channel", { channel }),
   releaseApply: () => ipcRenderer.invoke("release:apply"),
   releaseRollback: () => ipcRenderer.invoke("release:rollback"),
   // What's new (main.cjs "What's new"): the running version's notes, and what has been read.

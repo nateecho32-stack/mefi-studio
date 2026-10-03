@@ -39,6 +39,18 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-03 - Combined task-context and update-channel integration
+
+The two application branches are integrated without workflow changes. Both changelog entries and every unique test-history row are retained, and the booklet is regenerated from the combined sources. The rollback VM fixture now supplies the production project-switch state and pins refusal before any rollback side effect.
+
+Focused updater/boot-health suites: 44 passed. Build, check, audit and lint pass; lint retains 42 baseline warnings. The first full run completed: 6,796 Node tests, 6,779 passed, one failed, 16 skipped; 248 Python contracts OK with one skip and six normalized-path lock checks passed. Its sole failure was the CSS CLI Git subprocess refusing checkout ownership, not an application assertion; the unchanged CSS suite passes 14/14 with narrowly scoped Git trust. This failed aggregate is preserved as failed. Corrected full verification and exact-head CI/review are pending before main integration.
+
+Stable remains the default; development requires explicit warning/consent. Development artifact publishing is deferred, so no supported development artifact is promised by this application-only change. No release, provider action, UI-default activation or workflow publication is performed.
+
+## 2026-10-03 - Echo GitHub update channels - unfinished review checkpoint
+
+35 focused updater/channel tests pass, including native-consent cancellation, saved channel, stale responses, stable downgrade eligibility, platform/provenance/hash checks, nested artifacts, interrupted downloads and jobs starting during download. The isolated desktop renderer exercise passed after correcting the fixture's desktop capability and checking actual visibility; screenshots are local evidence. Check and application audit pass. Lint: zero errors, the existing 42 warnings. The full Windows npm test gate is still running and has reported failures in attempt_review_host and attempt_snapshots_host; these are untriaged, so this work is not merge-qualified. The initial restricted-account renderer launch failed; the same fixture ran on the real desktop. Official v0.4.4 was downloaded and verified against GitHub's SHA-256 into a separate folder. Original local state and PR3 were not changed. No release/tag published and no live development opt-in. Remaining: finish/triage full gate, final UI capture, CI and review, then integrate the prerequisite ahead of PR3.
+
 ## 2026-10-02 late evening - bounded review and tree harness completion
 
 **Result:** complete affected suites passed (29/29). Paired predecessor/candidate probes demonstrated that fixed sleeps can precede async metadata writes and animation callbacks. The isolated harness waits for durable end-shot metadata and the unchanged >1px movement plus radius-growth criterion, with five-second bounds. Controlled delayed completion and permanent-frame-absence checks are recorded in external evidence. Earlier red aggregate remains preserved; full supervised aggregate qualification pending. Application execution, logging, retention and exports are unchanged from the frozen log-diagnostics candidate.
@@ -331,49 +343,6 @@ safety net"). Built and gated in an isolated worktree (`C:\wt\za7`) off
 - Not covered: the helper has not yet updated a real installed portable build.
   The rehearsal drives the same PowerShell against a stand-in, and the first
   protected update in the field is the one after the release that carries this.
-
-## 2026-09-29 - Publish completed work with signing activation deferred
-
-GitHub rejected the completed integration push because this PC's OAuth
-credential lacks the workflow scope. No SSH key is configured. Preserved the
-exact tested signing/smoke workflow as docs/release-workflow-signpath.yml and
-on local branch codex/release-signing-gated (491373c), restored only the
-active release workflow to GitHub main's bytes, and documented the activation
-step and credential requirement. All other finished work remains integrated.
-No tag/release was published. Runtime sources are unchanged since the 733-test
-integration and final Command renderer pass.
-
-- Workflow proposal bytes match 491373c:.github/workflows/release.yml.
-- Active workflow bytes match origin/main:.github/workflows/release.yml.
-- npm run check and npm run audit: PASS; no runtime changes need new tests.
-- Lost-work guard must pass before pushing; deferral is explicit in history.
-
-## 2026-09-29 - Preserve concurrent main fixes while landing finished branches
-
-Integrated the update safety net (e9b8b79) and completed dogfood fixes
-(54640ea) from GitHub main into the finished-branch integration. Preserved
-models: and remote: app-wide routing together with boot:healthy, all module
-contracts, Command-tree children, Vibe plan review, and both kinds of result
-review: pending checks show their elapsed time; failed/unavailable checks
-keep confirmation and send-back. The pending-check fixture now includes its
-real pending reason. Imported test rows without discarding either archive,
-and regenerated booklet.html. Fixed the dogfood transport test's missing
-ReadableStream import with node:stream/web.
-
-- build-booklet, npm run check: PASS (205 targets, 425 specs).
-- npm run audit: PASS, 0 findings. Whitespace/conflict checks: PASS.
-- npm run lint: PASS, 0 errors and the same 42 existing warnings.
-- Update-safety and overlapping host/renderer suites: 154 tests passed.
-- All dogfood-changed suites plus overlapping Vibe, Command, model tracker,
-  app-wide IPC, boot health, purity, booklet and startup suites: 733 passed,
-  0 failed, 0 skipped (13 s, concurrency 4).
-- agent_tools after the explicit stream import: 28 passed, 0 failed (2.5 s).
-- Final combined Command Electron fixture: 1 passed, 0 failed (54.4 s).
-- The preceding combined full-run evidence remains in the finished-work row:
-  all 4,910 behavior tests completed with 0 failures; Python and exclusive
-  probes passed. Two documented desktop render flakes made that full command
-  exit 1; both affected suites subsequently passed alone. No additional full
-  rerun was needed for this targeted conflict resolution.
 
 ## Read Before Any Tests
 

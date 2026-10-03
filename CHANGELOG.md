@@ -50,6 +50,17 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 - Expanded session controls retain a readable conversation area in short
   windows, including 150% zoom, while keeping the draft intact.
+- Stable updates use published GitHub release builds only. An optional
+  Development / beta switch asks for confirmation about untested changes,
+  instability and possible data loss, then automatically receives packaged
+  artifacts from successful main builds. Returning to Stable stops development
+  updates and can restore the published stable build. Installed apps no longer
+  hot-swap raw source files from a nearby checkout; downloads require SHA-256,
+  matching platform and build identity, and development updates require rollback.
+  Development artifact publishing is deferred from this application-only
+  checkpoint; until the workflow is separately delivered, the channel reports
+  that no supported development artifact is available. This remains review work.
+
 - **Room for a session list, an inspector, a tab strip and a status bar (off by
   default, nothing changes yet).** The window's layout now keeps room for four
   panels that are not built yet. Nothing looks different: every page, sheet,
