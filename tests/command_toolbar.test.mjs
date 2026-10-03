@@ -81,9 +81,9 @@ test("Overview has its own frame glyph, and Spin is the one control that turns t
   assert.match(button(toolbar, "idle-fit"), /<use href="#g-fit"\/>/);
   const spin = button(toolbar, "idle-orbit");
   assert.match(spin, /aria-label="Spin"/);
-  assert.match(spin, /title="Spin on · Space pauses"/);
+  assert.match(spin, /title="Spin on · Space plays or pauses the video"/);
   assert.ok(!/>Orbit<|"Orbit"|Camera: orbit/.test(toolbar), "no second Orbit on the strip");
-  assert.ok(idle.includes('["cmd-orbit", "Space", "Pause / resume the spin"]'));
+  assert.ok(idle.includes('["cmd-orbit", "Space", "Play / pause the video or music"]'));
   assert.ok(idle.includes('["cmd-cam", "C", "Camera: overview / follow / free"]'));
 });
 
@@ -103,7 +103,7 @@ test("syncViewControls names Spin and Overview and carries the folded state on V
   const env = vm.createContext({ el, state });
   vm.runInContext(section("  function syncViewControls() {", "  function setOrbit("), env);
   env.syncViewControls();
-  assert.equal(el.orbitBtn.title, "Spin on · Space pauses");
+  assert.equal(el.orbitBtn.title, "Spin on · Space plays or pauses the video");
   assert.equal(el.orbitBtn.attrs["aria-pressed"], "true");
   assert.match(el.camOrbitBtn.title, /^Camera: overview — /);
   assert.ok(el.camOrbitBtn.title.includes("C cycles overview / follow / free"));

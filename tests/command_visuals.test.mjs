@@ -1102,19 +1102,18 @@ test("the Orbit switch and the camera mode the owner picks survive a restart; fo
   vm.runInContext(section(idle, "  function setOrbit(", "  // Camera autopilot."), env);
   vm.runInContext(section(idle, "  function setCamMode(", "  function setLabels("), env);
   const source = idle.replace(/\r\n/g, "\n");
-  assert.ok(source.includes('orbit: readStore("mefiStudio.cmdOrbit") === "auto" ? "auto" : "paused",'), "a launch starts from the saved Orbit switch");
+  assert.ok(source.includes('orbit: "auto",'), "a launch always spins");
   assert.ok(source.includes('camMode: CAM_MODES.includes(readStore("mefiStudio.cmdCam"))'), "and from the saved camera mode");
 
   env.setOrbit();
   assert.equal(state.orbit, "auto");
-  assert.equal(stores.get("mefiStudio.cmdOrbit"), "auto", "Space or the Spin button is saved");
+  assert.equal(stores.has("mefiStudio.cmdOrbit"), false, "the Spin switch is not saved");
   assert.deepEqual(toasts, ["spin resumed"], "the toolbar calls it Spin; Overview is the camera mode");
   // Focus borrows the orbit quietly; that loan is never saved.
   env.setOrbit(false, { quiet: true });
-  assert.equal(stores.get("mefiStudio.cmdOrbit"), "auto");
-  state.orbit = "auto"; state.focusRestore = { orbit: "auto" };
+    state.orbit = "auto"; state.focusRestore = { orbit: "auto" };
   env.setOrbit();
-  assert.equal(stores.get("mefiStudio.cmdOrbit"), "paused", "a pause pressed while focused is the owner's choice");
+  assert.equal(stores.has("mefiStudio.cmdOrbit"), false);
   assert.equal(state.focusRestore.orbit, "paused", "and leaving the focused node keeps it");
 
   env.setCamMode("follow");

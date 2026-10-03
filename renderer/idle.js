@@ -328,7 +328,7 @@
     // Command-hub state
     ambient: true,
     // The Orbit switch (Space) as the owner last left it, remembered per machine.
-    orbit: readStore("mefiStudio.cmdOrbit") === "auto" ? "auto" : "paused",
+    orbit: "auto",
     nodeStyle: "orbs",
     nodeLayout: "constellation",
     orbitTrails: false,
@@ -3862,7 +3862,7 @@
     else if (state.selected?.kind === "folded") text = "Enter lists them in the Explorer · ← → sessions · Esc clears";
     else if (state.selected) text = "Enter opens it in the Explorer · ↑ ↓ move · Esc clears";
     else if (state.camMode === "follow") text = state.follow ? `Following ${state.follow.title} · drag or zoom to hold your own view` : "Waiting for active work · the camera holds here";
-    else if (state.orbit === "paused") text = "spin paused · Space resumes · click a node · F fits";
+    else if (state.orbit === "paused") text = "spin paused · click a node · F fits";
     el.hint.textContent = text;
   }
 
@@ -11587,7 +11587,7 @@
       const running = state.orbit !== "paused";
       el.orbitBtn.disabled = flat;
       el.orbitBtn.setAttribute("aria-pressed", running && !flat ? "true" : "false");
-      el.orbitBtn.title = flat ? "Spin (3D view only)" : running ? "Spin on · Space pauses" : "Spin paused · Space resumes";
+      el.orbitBtn.title = flat ? "Spin (3D view only)" : running ? "Spin on · Space plays or pauses the video" : "Spin paused";
     }
     // The camera mode "orbit" reads as Overview on screen: Spin is the only
     // control that turns the tree, so the toolbar never shows two "Orbit"s.
@@ -11638,12 +11638,9 @@
               : "auto";
     const changed = next !== state.orbit;
     state.orbit = next;
-    // Focus borrows the orbit quietly; only the owner's own switch is saved,
-    // and it is also the setting that leaving a focused node goes back to.
-    if (!options.quiet) {
-      writeStore("mefiStudio.cmdOrbit", next);
-      if (state.focusRestore) state.focusRestore.orbit = next;
-    }
+    // Focus borrows the orbit quietly; the owner's own switch lasts for the
+    // session (a launch always spins) and is what leaving a focused node returns to.
+    if (!options.quiet && state.focusRestore) state.focusRestore.orbit = next;
     syncViewControls();
     renderHint();
     if (changed && !options.quiet) window.MefiToast?.(next === "paused" ? "spin paused" : "spin resumed", "info");
@@ -12708,7 +12705,7 @@
     ["cmd-branch", "Shift F", "Fit the selected branch"],
     ["cmd-home", "Home", "Select the root and fit"],
     ["cmd-zoom", "+ − 0", "Zoom in · out · reset"],
-    ["cmd-orbit", "Space", "Pause / resume the spin"],
+    ["cmd-orbit", "Space", "Play / pause the video or music"],
     ["cmd-cam", "C", "Camera: overview / follow / free"],
     ["cmd-view", "V", "Switch 3D orbit / flat 2D map"],
     ["cmd-labels", "L", "Node labels: auto / updates / all / none"],

@@ -13728,7 +13728,7 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
           <button id="idle-cam-orbit" class="ghost" data-cam="orbit" aria-pressed="true" title="Camera: overview — keep the whole tree framed (C cycles overview / follow / free)" aria-label="Camera: overview"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-frame"/></svg><span class="label">Overview</span></button>
           <button id="idle-cam-follow" class="ghost" data-cam="follow" aria-pressed="false" title="Camera: follow — track the agent's current work (C cycles overview / follow / free)" aria-label="Camera: follow"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-target"/></svg><span class="label">Follow</span></button>
         </div>
-        <button id="idle-orbit" class="ghost icon" aria-pressed="true" title="Spin on · Space pauses" aria-label="Spin"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-orbit"/></svg></button>
+        <button id="idle-orbit" class="ghost icon" aria-pressed="true" title="Spin on · Space plays or pauses the video" aria-label="Spin"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-orbit"/></svg></button>
       </div>
       <span class="tools-sep" aria-hidden="true"></span>
       <div class="cmd-tools-group" role="group" aria-label="View">
@@ -35916,7 +35916,7 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
     // Command-hub state
     ambient: true,
     // The Orbit switch (Space) as the owner last left it, remembered per machine.
-    orbit: readStore("mefiStudio.cmdOrbit") === "auto" ? "auto" : "paused",
+    orbit: "auto",
     nodeStyle: "orbs",
     nodeLayout: "constellation",
     orbitTrails: false,
@@ -39450,7 +39450,7 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
     else if (state.selected?.kind === "folded") text = "Enter lists them in the Explorer · ← → sessions · Esc clears";
     else if (state.selected) text = "Enter opens it in the Explorer · ↑ ↓ move · Esc clears";
     else if (state.camMode === "follow") text = state.follow ? `Following ${state.follow.title} · drag or zoom to hold your own view` : "Waiting for active work · the camera holds here";
-    else if (state.orbit === "paused") text = "spin paused · Space resumes · click a node · F fits";
+    else if (state.orbit === "paused") text = "spin paused · click a node · F fits";
     el.hint.textContent = text;
   }
 
@@ -47175,7 +47175,7 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
       const running = state.orbit !== "paused";
       el.orbitBtn.disabled = flat;
       el.orbitBtn.setAttribute("aria-pressed", running && !flat ? "true" : "false");
-      el.orbitBtn.title = flat ? "Spin (3D view only)" : running ? "Spin on · Space pauses" : "Spin paused · Space resumes";
+      el.orbitBtn.title = flat ? "Spin (3D view only)" : running ? "Spin on · Space plays or pauses the video" : "Spin paused";
     }
     // The camera mode "orbit" reads as Overview on screen: Spin is the only
     // control that turns the tree, so the toolbar never shows two "Orbit"s.
@@ -47226,12 +47226,9 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
               : "auto";
     const changed = next !== state.orbit;
     state.orbit = next;
-    // Focus borrows the orbit quietly; only the owner's own switch is saved,
-    // and it is also the setting that leaving a focused node goes back to.
-    if (!options.quiet) {
-      writeStore("mefiStudio.cmdOrbit", next);
-      if (state.focusRestore) state.focusRestore.orbit = next;
-    }
+    // Focus borrows the orbit quietly; the owner's own switch lasts for the
+    // session (a launch always spins) and is what leaving a focused node returns to.
+    if (!options.quiet && state.focusRestore) state.focusRestore.orbit = next;
     syncViewControls();
     renderHint();
     if (changed && !options.quiet) window.MefiToast?.(next === "paused" ? "spin paused" : "spin resumed", "info");
@@ -48296,7 +48293,7 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
     ["cmd-branch", "Shift F", "Fit the selected branch"],
     ["cmd-home", "Home", "Select the root and fit"],
     ["cmd-zoom", "+ − 0", "Zoom in · out · reset"],
-    ["cmd-orbit", "Space", "Pause / resume the spin"],
+    ["cmd-orbit", "Space", "Play / pause the video or music"],
     ["cmd-cam", "C", "Camera: overview / follow / free"],
     ["cmd-view", "V", "Switch 3D orbit / flat 2D map"],
     ["cmd-labels", "L", "Node labels: auto / updates / all / none"],
@@ -71625,7 +71622,7 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
     }
     if (!window.MefiNav?.release) priorFocus?.focus?.();
   }
-  window.MefiMusic = { init, open, openPreview, openAudio, closeAudio, toggleAudio, openSection, mountSettings, activateSettings, revealSettingsTarget, settingsAppearanceActive: () => settingsAppearance, leaveSettingsAppearance: (options) => setSettingsAppearance(false, options), close, status, graphPreferences, applyNodeStyle, applyNodeLayout, applyNodeEffects, getAudioElement: () => { init(); return activeDeck(); }, tune, stopRadio,
+  window.MefiMusic = { init, playPause: () => { init(); transportToggle(); }, open, openPreview, openAudio, closeAudio, toggleAudio, openSection, mountSettings, activateSettings, revealSettingsTarget, settingsAppearanceActive: () => settingsAppearance, leaveSettingsAppearance: (options) => setSettingsAppearance(false, options), close, status, graphPreferences, applyNodeStyle, applyNodeLayout, applyNodeEffects, getAudioElement: () => { init(); return activeDeck(); }, tune, stopRadio,
     stations: () => STATIONS.map((item) => ({ id: item.id, name: item.name, detail: item.detail, origin: item.origin, mirrors: item.mirrors.length })), setRecommender: (fn) => { recommender = typeof fn === "function" ? fn : null; render(); }, addFiles, setSource, applyTheme, applyCustomColors,
     // The free palettes as swatches, and the one on screen (Vibe's settings panel).
     themes: () => Object.entries(THEMES).map(([key, theme]) => ({ key, name: theme.name, accent: theme.accent, bright: theme.bright, bg: theme.bg, panel: theme.panel, ...(theme.accent2 ? { accent2: theme.accent2 } : {}) })),
