@@ -28,7 +28,14 @@ the weight is, not to be exact.
 | `eslint.config.js` | 71 | Check-only lint: an undefined identifier is an error, an unused one a warning, and there are no style rules. |
 | `package.json` | | `"type": "module"`, which is why [CONTRIBUTING.md](../CONTRIBUTING.md) sets a file-extension rule: `.cjs` for what `main.cjs` or `preload.cjs` requires, `.mjs` for what tests and other scripts import and for CLIs, `.js` only under `renderer/`. |
 
-## `scripts/` — main-process modules and CLIs
+## `scripts/` - main-process modules and CLIs
+
+GitHub update delivery reuses `release-updater.mjs` for stable discovery,
+verified downloads, ZIP staging and the portable replacement helper.
+`development-updater.mjs` admits successful main-build Actions artifacts and
+verifies their provenance; `package-development.mjs` builds those artifacts
+through the existing release packager without publishing a release. See
+[Update channels](update-channels.md) for controls and trust boundaries.
 
 ### The loop and the board
 

@@ -39,6 +39,10 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-03 - Echo GitHub update channels - unfinished review checkpoint
+
+35 focused updater/channel tests pass, including native-consent cancellation, saved channel, stale responses, stable downgrade eligibility, platform/provenance/hash checks, nested artifacts, interrupted downloads and jobs starting during download. The isolated desktop renderer exercise passed after correcting the fixture's desktop capability and checking actual visibility; screenshots are local evidence. Check and application audit pass. Lint: zero errors, the existing 42 warnings. The full Windows npm test gate is still running and has reported failures in attempt_review_host and attempt_snapshots_host; these are untriaged, so this work is not merge-qualified. The initial restricted-account renderer launch failed; the same fixture ran on the real desktop. Official v0.4.4 was downloaded and verified against GitHub's SHA-256 into a separate folder. Original local state and PR3 were not changed. No release/tag published and no live development opt-in. Remaining: finish/triage full gate, final UI capture, CI and review, then integrate the prerequisite ahead of PR3.
+
 ## 2026-09-30 - Waves A and B and the 0.5 shell on the integration branch: the layout contract, Size and density, Today and the Inbox, the frame, tabs and Build's sessions
 
 A cloud session (Linux, Node 24.21.0) carried the rest of 0.5.0's code onto the
@@ -743,46 +747,6 @@ duplicate "Verifying: ..." line are dropped.
   lock).
 - tasks_ui (62) and task_overview_render pass; before/after captures at
   1360x980 and 1920x1080 from a scratch copy of the task overview fixture.
-
-## 2026-09-28 - Reach your PCs from Discord: the Studio side of the DM remote
-
-The Studio half of the Discord remote (docs/remote.md). `scripts/remote.cjs`
-holds the pure rules (commands, the chat gate for a message from Discord,
-reply wording, alerts with quiet hours and an hourly cap, the approval PIN
-with its five-try lock); `scripts/hub-client.cjs` gains the `remote` feature
-(remoteHello / remoteReply / remoteNotice out, remote / remoteState in, only
-when the hub lists it and the owner turned it on); main.cjs "Discord remote"
-answers status, needs, made, digest, pause, resume and a plain DM (as
-`assistantMessage(text, { remote: true })`, with an interim "Mefi is on it…"
-reply), approves with the PIN against the scope shown, turns changes into
-alerts once a minute, and scrubs everything bound for Discord with
-`shareReview.scrub`. Work a Discord message files carries
-`origin.via = "remote"`, which `autonomy.needsApproval` holds in every mode,
-slices included. Settings: Friends › Your PCs › Reach this PC from Discord.
-
-- `npm run build-booklet`, `npm run check` (190 targets) and `npm run audit`
-  (0 errors, 0 warnings): PASS. eslint on the changed files: no new findings.
-- New suites: remote_rules (11), remote_host (9), remote_gate (4),
-  hub_client_remote (5), pc_remote_ui (5); module_purity holds remote.cjs to
-  its header. Focused: remote, hub_client, hub_host, pc_sync_ui, sync_host,
-  pc_setup, community_bridge, autonomy and booklet_build suites, 171 tests:
-  PASS.
-- `npm test` in C:\wt\away on 39a153d plus this change (before the interim
-  reply and the PIN placeholder): Node parallel stage 4436 tests, 4430 passed,
-  5 skipped, 1 failed: `booklet_build` "overlapping booklet builds" with EPERM
-  on a temp rename while another checkout ran its own tests; it passed solo
-  in 6.2 s. Electron lane 41 tests, 39 passed, 1 skipped, 1 failed:
-  `performance_render` "Profiler JSON download timed out"; both of its tests
-  passed solo. `command_render` 1/1, `eyes_toggle_electron` 1/1,
-  `occlusion_probe` 1 pass 1 skip. Python contracts OK (248, 1 skip).
-  Normalized-path lock passed.
-- After the interim reply: remote_host, remote_rules, remote_gate,
-  hub_client_remote, pc_remote_ui and hub_host, 45 tests: PASS; pc_remote_ui,
-  pc_sync_ui, booklet_build and remote_host again after the PIN placeholder,
-  31 tests: PASS.
-- Browser-pane preview of the real `pc-sync.js` with a fake bridge: the
-  section's status line, switch, name, alerts, digest, quiet hours, PIN row
-  and the PC list.
 
 ## Read Before Any Tests
 
