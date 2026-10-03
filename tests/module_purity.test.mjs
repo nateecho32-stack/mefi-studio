@@ -47,6 +47,9 @@ const PROMISES = [
   { file: "scripts/companion-friends.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (time", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   // Several logins per coding CLI; main.cjs's block of that name owns the folders and the marks file.
   { file: "scripts/cli-accounts.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (time is", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  // readSettings' memory and the launch timings; main.cjs's blocks of those names own their stat, reads and writes.
+  { file: "scripts/settings-cache.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (time", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  { file: "scripts/startup-marks.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (time", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
 ];
 
 const CLOCK = /\bDate\.now\s*\(|new\s+Date\s*\(\s*\)|\bperformance\.now\s*\(/;

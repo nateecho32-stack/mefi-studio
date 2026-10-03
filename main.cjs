@@ -1,6 +1,26 @@
 // Mefi's Studio AI+ — Electron main process (CommonJS: Electron's most reliable main format).
 // Window, tray and IPC; the service loop, executor and board gateway; settings, keys, updates and headless CLI flags.
 
+// ---- Startup marks --------------------------------------------------------------
+// Launch timings on one timeline, ms since this process's performance.timeOrigin
+// (scripts/startup-marks.cjs): this first statement, app ready, the window, its
+// dom-ready and did-finish-load, and the page's own marks (renderer/
+// startup-marks.js) over startup:marks. Trace gets one [startup] line when the
+// launch gate releases; --startup-report <file> or MEFI_STUDIO_STARTUP_REPORT=<file>
+// also writes them as JSON (docs/performance.md). MEFI_STUDIO_STARTUP_MARKS=0
+// turns both halves off.
+const startupMarks = process.env.MEFI_STUDIO_STARTUP_MARKS === "0" ? null
+  : optionalHelper("./scripts/startup-marks.cjs", () => require("./scripts/startup-marks.cjs"), null)?.createStartupMarks({
+    origin: performance.timeOrigin,
+    now: () => performance.now(),
+    argv: process.argv,
+    env: process.env,
+    log: (line) => logLine(line),
+    write: (file, report) => authStore.atomicWriteJson(path.resolve(file), report),
+    about: () => ({ version: app.getVersion(), electron: process.versions.electron, platform: process.platform, packaged: app.isPackaged, smoke: SMOKE, capture: CAPTURE }),
+  }) ?? null;
+// ---- end of the startup marks ---------------------------------------------------
+
 // Two helpers this file gained after the shipped builds already knew how to
 // carry them: scripts/updater.mjs holds a live payload until every local
 // require in it resolves (missingRequires), and the portable swap robocopies
@@ -171,6 +191,20 @@ const SETTINGS_PATH = path.join(app.getPath("userData"), "settings.json");
 // split): settings.json stays plain, copyable state, auth.json stays
 // machine-bound. A missing auth file simply means no keys are saved.
 const AUTH_PATH = path.join(app.getPath("userData"), "auth.json");
+// ---- Settings cache -----------------------------------------------------------
+// readSettings answers from memory while settings.json and auth.json keep the
+// same stat, one structured clone per caller (scripts/settings-cache.cjs has
+// the rules). writeSettings and the legacy-key migration invalidate it; any
+// other writer moves the stat. MEFI_STUDIO_SETTINGS_CACHE=0 reads both files
+// on every call, as before.
+const settingsCache = process.env.MEFI_STUDIO_SETTINGS_CACHE === "0" ? null
+  : optionalHelper("./scripts/settings-cache.cjs", () => require("./scripts/settings-cache.cjs"), null)?.createSettingsCache({
+    files: [SETTINGS_PATH, AUTH_PATH],
+    stat: (file) => stat(file, { bigint: true }),
+    read: () => readSettingsFiles(),
+    now: () => Date.now(),
+  }) ?? null;
+// ---- end of the settings cache ------------------------------------------------
 // settings.json health, shared by the startup read below and readSettings
 // (settingsFromDisk has the rules): the text last parsed or written here, the
 // session's saves held in memory while nothing good was ever read, the
@@ -18293,6 +18327,16 @@ function rememberAutonomySettings(settings) {
 }
 
 async function readSettings() {
+  // The settings cache (the block beside AUTH_PATH) answers while both files keep their stat.
+  if (typeof settingsCache !== "undefined" && settingsCache) return rememberAutonomySettings(await settingsCache.get());
+  return rememberAutonomySettings((await readSettingsFiles()).value);
+}
+
+// Both files as they are on disk, merged. `cacheable` is false while
+// settings.json is unreadable (the view is a fallback), for the read that
+// migrates legacy ciphertext, and when an auth file with content read as no
+// keys (locked or mid-write): none of those may be kept.
+async function readSettingsFiles() {
   let bytes = null, failure = null;
   try {
     bytes = await readFile(SETTINGS_PATH);
@@ -18305,9 +18349,11 @@ async function readSettings() {
   if (Object.keys(stale).length) {
     await authStore.writeAuthStore(AUTH_PATH, { ...auth, ...stale });
     await authStore.atomicWriteJson(SETTINGS_PATH, { ...plain, projects: projects.saved() });
-    return rememberAutonomySettings(authStore.mergeAuthFields(plain, { ...auth, ...stale }));
+    if (typeof settingsCache !== "undefined" && settingsCache) settingsCache.invalidate();
+    return { value: authStore.mergeAuthFields(plain, { ...auth, ...stale }), cacheable: false };
   }
-  return rememberAutonomySettings(authStore.mergeAuthFields(settings, auth));
+  const authLost = !Object.keys(auth).length && typeof settingsCache !== "undefined" && settingsCache ? await settingsCache.hasContent(AUTH_PATH) : false;
+  return { value: authStore.mergeAuthFields(settings, auth), cacheable: !settingsDisk.unreadable && !authLost };
 }
 
 // Callers pass the merged readSettings() view. Credential fields ride that
@@ -18315,6 +18361,8 @@ async function readSettings() {
 // slice replaces the store so a deleted key leaves disk too. A fresh install
 // with no keys anywhere writes no auth file at all.
 async function writeSettings(next) {
+  // The settings cache forgets its view before and after the files change.
+  if (typeof settingsCache !== "undefined" && settingsCache) settingsCache.invalidate();
   const { auth, plain } = authStore.splitAuthFields(next);
   const saved = { ...plain, projects: projects.saved() };
   if (settingsDisk.unreadable && settingsDisk.good === null) {
@@ -18332,6 +18380,7 @@ async function writeSettings(next) {
   if (Object.keys(auth).length || Object.keys(await authStore.readAuthStore(AUTH_PATH)).length) {
     await authStore.writeAuthStore(AUTH_PATH, auth);
   }
+  if (typeof settingsCache !== "undefined" && settingsCache) settingsCache.invalidate();
 }
 
 // One verdict for every settings.json read, the startup read included. A
@@ -19624,6 +19673,8 @@ function registerIpc() {
     return { ...result, ok: true, chosen: true };
   });
   ipcMain.handle("startup:begin", () => releaseStartupHold());
+  // The page's startup marks after its launch gate released (the Startup marks block).
+  ipcMain.handle("startup:marks", (_event, payload) => (typeof startupMarks !== "undefined" && startupMarks ? startupMarks.receive(payload) : { ok: false, error: "Startup marks are off." }));
   ipcMain.handle("planning:list", (_event, payload) => planningRequest("list", payload));
   ipcMain.handle("planning:action", (_event, payload) => planningRequest("action", payload));
   ipcMain.handle("planning:assist", (_event, payload) => planningRequest("assist", payload));
@@ -21494,6 +21545,7 @@ function createWindow() {
       backgroundThrottling: !SMOKE && !CAPTURE,
     },
   });
+  if (typeof startupMarks !== "undefined" && startupMarks) startupMarks.watch(window.webContents); // Startup marks
   if (saved?.maximized) window.maximize();
   guardWindowNavigation(window.webContents, page);
   // The page's bridge (preload.cjs) says it is listening and holds no
@@ -21535,7 +21587,8 @@ function createWindow() {
   }
   const view = window;
   const loadView = () => view.loadFile(page, {
-    query: { capture: CAPTURE ? "1" : "0", smoke: SMOKE ? "1" : "0" },
+    // marks=0: startup marks are off (MEFI_STUDIO_STARTUP_MARKS=0), so the page takes none.
+    query: { capture: CAPTURE ? "1" : "0", smoke: SMOKE ? "1" : "0", ...(typeof startupMarks !== "undefined" && startupMarks ? {} : { marks: "0" }) },
   });
   rendererRecovery = attachRendererRecovery({
     window: view,
@@ -21762,6 +21815,7 @@ async function captureTabs() {
 }
 
 app.whenReady().then(() => {
+  if (typeof startupMarks !== "undefined" && startupMarks) startupMarks.mark("ready"); // Startup marks
   registerIpc();
   if (process.argv.includes("--set-key")) {
     (async () => {

@@ -2019,7 +2019,9 @@
     let launch = null;
     const choose = window.MefiStartup?.choose ? async (context) => { launch = await window.MefiStartup.choose(context); return launch; } : null;
     const relaunch = () => Boolean(launch?.changed);
-    window.MefiBoot.run([
+    // renderer/startup-marks.js times each step, the launch choice and the release.
+    const launchGate = window.MefiStartupMarks?.wrapBoot?.(window.MefiBoot) ?? window.MefiBoot;
+    launchGate.run([
       { id: "workspace", label: "Your projects and work", load: (context) => { const retry = context.retry || relaunch(); return window.MefiWorkspace?.ready?.({ retry }); } },
       { id: "catalog", label: "Model catalog", load: paintCatalog },
       { id: "tree", label: "Session tree", load: async ({ retry }) => {

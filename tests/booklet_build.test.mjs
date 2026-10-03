@@ -24,6 +24,7 @@ const INLINE_SCRIPTS = [
   "file-inputs.js", "motion.js", "autonomy-ui.js",
   "performance-core.js",
   "profiler.js",
+  "startup-marks.js",
   "stage-labels.js",
   "node-visuals.js",
   "task-groups.js", "studio-ui.js", "agents.js", "companion-ui.js", "companion-hub.js",
