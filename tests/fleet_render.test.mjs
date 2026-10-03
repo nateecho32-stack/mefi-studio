@@ -47,6 +47,7 @@ test("the Fleet fits five window sizes, paints every view, follows a push, reach
     assert.deepEqual(report.errors, []); assert.deepEqual(report.networkAttempts, []); assert.deepEqual(report.processAttempts, []);
     assert.equal(report.layouts.length, 25, "five window sizes, five views each");
     assert.ok(report.layouts.every((layout) => layout.pageOverflow === false), "no view overflows the page at any size");
+    assert.equal(report.readRecovery.length, 2, "cached, unavailable and recovered states at desktop and narrow sizes");
     assert.ok(report.complete);
   } finally {
     assert.equal(path.dirname(fixture), path.resolve(tmpdir()));

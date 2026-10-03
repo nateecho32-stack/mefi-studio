@@ -14,6 +14,7 @@
 "use strict";
 
 const path = require("node:path");
+const logWriteHealth = require("./log-write-health.cjs");
 const { appendFile, mkdir, readFile, rename, rm, stat, writeFile } = require("node:fs/promises");
 
 const KINDS = Object.freeze([
@@ -169,7 +170,7 @@ function createStore({ file, maxBytes = 4 * 1024 * 1024, keepLines = 20000 } = {
         await trimFile(target, cap, keep);
       }
       return event;
-    }).catch(() => null);
+    }).catch(() => { logWriteHealth.failure("work-events"); return null; });
     chains.set(target, run);
     return run;
   }

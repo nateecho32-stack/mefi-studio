@@ -94,6 +94,7 @@ const agentIssues = require("./scripts/agent-issues.cjs");
 const brains = require("./scripts/brains.cjs");
 const taskDelegation = require("./scripts/task-delegation.cjs");
 const trace = require("./scripts/trace.cjs");
+const logWriteHealth = require("./scripts/log-write-health.cjs");
 const habitsLibrary = require("./scripts/habits.cjs");
 // Trace keeps the studio log and the window's warnings (see traceRows); made
 // here, before anything can log, so logLine never meets them uninitialised.
@@ -891,6 +892,7 @@ let manualRestartRetry = null; // a deferred manual restart waiting for the buil
 let executorClosing = false;
 function executorUpdateHold() {
   if (executorClosing) return "Studio is saving work before closing";
+  if (typeof releaseState !== "undefined" && ["applying", "rollingback"].includes(releaseState.state)) return "Studio is installing a verified build";
   return updateDrainRequested ? "Studio update waiting for current builds to finish" : null;
 }
 
@@ -979,6 +981,12 @@ async function applyRestart(files, { counted = true, stopAgents = false } = {}) 
 
 async function startUpdateWatch() {
   if (updater || SMOKE || CAPTURE || CLI_MODE) return { ok: true, running: Boolean(updater) };
+  // Installed channels consume verified built artifacts. Even a portable app
+  // beside a checkout must never hot-swap raw checkout/main files into itself.
+  if (app.isPackaged) {
+    send("update:event", updateEvent({ reason: "installed builds use GitHub update channels", watching: false }));
+    return { ok: true, running: false, disabled: true };
+  }
   // A container or service host runs a fixed checkout: there is no editor
   // beside it whose saves should hot-swap modules, so the stat-walk poll and
   // the restart-on-main.cjs behaviour are switched off for that install.
@@ -1070,6 +1078,34 @@ let releaseCheckInFlight = null;
 let releaseApplyInFlight = false;
 let releaseWatch = null;
 let ghTokenCache;
+let releaseChannel = "stable";
+let releaseChannelEpoch = 0;
+let releaseChannelSetting = false;
+
+async function setReleaseChannel(channel) {
+  const blocked = error => ({ ok: false, error, status: releaseStatus() });
+  if (!["stable", "development"].includes(channel)) return blocked("Unknown update channel.");
+  if (releaseApplyInFlight || releaseChannelSetting) return blocked("An update or channel change is in progress; try again when it finishes.");
+  if (channel === releaseChannel) return { ok: true, status: releaseStatus() };
+  releaseChannelSetting = true;
+  try {
+    const module = await loadModule("scripts/development-updater.mjs");
+    if (channel === "development") {
+      const choice = await dialog.showMessageBox(window, { type: "warning", title: "Enable Development / beta updates?", message: "Untested changes, instability and potential data loss", detail: module.DEVELOPMENT_WARNING, buttons: ["Keep Stable", "Enable Development / beta"], defaultId: 0, cancelId: 0, noLink: true });
+      if (choice.response !== 1) return { ok: true, cancelled: true, status: releaseStatus() };
+    }
+    await updateSettings(settings => { settings.release = { ...(settings.release ?? {}), channel }; });
+    releaseChannel = channel;
+    releaseChannelEpoch += 1;
+    publishRelease({ state: "idle", latest: null, staged: null, progress: null, error: null, needsToken: false, checkedAt: null, nextCheckAt: null, unavailable: null }, { force: true });
+    // A response already in flight belongs to the old channel. Its epoch is
+    // fenced below; check the new channel after it settles.
+    if (releaseCheckInFlight) await releaseCheckInFlight;
+    await checkRelease();
+    return { ok: true, status: releaseStatus() };
+  } catch (error) { return blocked(String(error?.message ?? error).slice(0,300)); }
+  finally { releaseChannelSetting = false; }
+}
 
 function releaseStatus() {
   return {
@@ -1078,6 +1114,8 @@ function releaseStatus() {
     repo: releaseState.repo ?? RELEASE_REPO ?? "nateecho32-stack/mefi-studio",
     supported: app.isPackaged && process.platform === "win32",
     previous: releasePrevious,
+    channel: releaseChannel,
+    automatic: releaseChannel === "development",
   };
 }
 
@@ -1149,7 +1187,9 @@ async function resolveGithubToken(settings) {
 async function checkRelease() {
   if (releaseCheckInFlight) return releaseCheckInFlight;
   if (["downloading", "applying"].includes(releaseState.state)) return releaseStatus();
+  const epoch = releaseChannelEpoch;
   releaseCheckInFlight = (async () => {
+    const channel = releaseChannel;
     // A re-check while an update is already known runs silently: flipping to
     // "checking" would hide the button for a moment every 20 minutes.
     if (!releaseState.latest || ["idle", "error", "installed"].includes(releaseState.state)) {
@@ -1159,18 +1199,20 @@ async function checkRelease() {
     const settings = await readSettings();
     const token = await resolveGithubToken(settings);
     const repo = RELEASE_REPO || module.DEFAULT_REPO;
-    const result = await module.checkForRelease({
+    const checker = channel === "development" ? (await loadModule("scripts/development-updater.mjs")).checkForDevelopment : module.checkForRelease;
+    const result = await checker({
       repo,
       currentVersion: app.getVersion(),
       token,
       platform: process.platform,
       arch: process.arch,
       timeoutMs: 15000,
+      allowStableReturn: channel === "stable",
     });
     const nextCheckAt = Date.now() + (Number(module.CHECK_INTERVAL_MS) || 20 * 60 * 1000);
     // A check that began before an apply must not set the state back to
     // "available" in the middle of its download.
-    if (releaseApplyInFlight) return releaseStatus();
+    if (releaseApplyInFlight || epoch !== releaseChannelEpoch) return releaseStatus();
     if (!result.ok) {
       // An empty releases page is a normal state, not a failure: this build is
       // the newest one that exists yet.
@@ -1186,17 +1228,23 @@ async function checkRelease() {
       });
       logLine(unpublished ? "[release] no published release yet" : `[release] check failed: ${result.error}`);
     } else {
-      publishRelease({ state: result.update ? "available" : "current", latest: result.latest, error: null, needsToken: false, checkedAt: result.checkedAt, nextCheckAt, repo });
+      publishRelease({ state: result.update ? "available" : result.latest ? "current" : "none", latest: result.latest, unavailable: result.unavailable ?? null, error: null, needsToken: false, checkedAt: result.checkedAt, nextCheckAt, repo });
       logLine(result.update ? `[release] v${result.update.version} available (running ${result.current})` : `[release] up to date (${result.current})`);
     }
     return releaseStatus();
   })()
     .catch((error) => {
+      if (epoch !== releaseChannelEpoch) return releaseStatus();
       publishRelease({ state: "error", error: String(error?.message ?? error).slice(0, 300), nextCheckAt: Date.now() + 20 * 60 * 1000 });
       return releaseStatus();
     })
     .finally(() => {
       releaseCheckInFlight = null;
+      if (releaseChannel === "development" && releaseState.state === "available" && app.isPackaged && process.platform === "win32") {
+        setImmediate(() => {
+          if (releaseChannel === "development" && releaseState.state === "available") applyReleaseUpdate().catch(error => logLine(`[release] automatic development update failed: ${error?.message ?? error}`));
+        });
+      }
     });
   return releaseCheckInFlight;
 }
@@ -1237,8 +1285,9 @@ async function downloadReleaseBuild() {
   const latest = releaseState.latest;
   if (!latest?.asset) throw new Error("no release is available to download");
   const module = await getReleaseUpdater();
+  module.validateBuildAssets(latest, releaseStatus().repo);
   const version = latest.version;
-  const root = path.join(app.getPath("temp"), "mefi-studio-update", `v${version}`);
+  const root = path.join(app.getPath("temp"), "mefi-studio-update", `v${version}-${process.pid}`);
   await rm(root, { recursive: true, force: true });
   await mkdir(root, { recursive: true });
   publishRelease({ state: "downloading", progress: { received: 0, total: latest.asset.size ?? 0, percent: 0 }, error: null });
@@ -1252,6 +1301,7 @@ async function downloadReleaseBuild() {
     onProgress: ({ received, total }) =>
       publishRelease({ progress: { received, total, percent: total ? Math.min(100, Math.floor((received / total) * 100)) : null } }),
   });
+  let zipPath = downloaded.path;
   let expected = typeof latest.asset.digest === "string" && latest.asset.digest.startsWith("sha256:")
     ? latest.asset.digest.slice(7).toLowerCase()
     : null;
@@ -1278,11 +1328,18 @@ async function downloadReleaseBuild() {
     await rm(root, { recursive: true, force: true });
     throw new Error("the downloaded build failed its SHA-256 check");
   }
+  if (!expected) throw new Error("the build has no readable SHA-256; it was not staged");
+  if (latest.channel === "development") {
+    const development = await loadModule("scripts/development-updater.mjs");
+    zipPath = await development.unpackDevelopment(downloaded, latest, path.join(root, "artifact"));
+  }
   logLine(`[release] downloaded v${version} (${Math.round(downloaded.bytes / (1024 * 1024))} MB${expected ? ", verified" : ", unverified: the release publishes no checksum"})`);
   const installRoot = path.dirname(process.execPath);
-  const prepared = await module.stageUpdate({ zipPath: downloaded.path, stagingDir: path.join(root, "staging"), installRoot });
+  const prepared = await module.stageUpdate({ zipPath, stagingDir: path.join(root, "staging"), installRoot, expectedVersion: version });
   const scriptPath = path.join(root, "apply-update.ps1");
   const logPath = path.join(root, "apply-update.log");
+  const safety = typeof releaseSafetyPlan === "function" ? await releaseSafetyPlan({ module, prepared, installRoot }) : null;
+  if (latest.channel === "development" && (!safety || !safety.watch)) throw new Error("development updates require a saved previous build and boot-health rollback");
   await module.writeApplyScript(scriptPath, {
     sourceRoot: prepared.sourceRoot,
     installRoot,
@@ -1293,7 +1350,7 @@ async function downloadReleaseBuild() {
     logPath,
     // A saved copy of this build and a watch on the new one (the safety net
     // below); null keeps the plain swap.
-    safety: typeof releaseSafetyPlan === "function" ? await releaseSafetyPlan({ module, prepared, installRoot }) : null,
+    safety,
   });
   publishRelease({ progress: null, latest: { ...latest, sha256: downloaded.sha256, verified: Boolean(expected) } });
   return { version, scriptPath, installRoot, exePath: prepared.exePath, verified: Boolean(expected) };
@@ -1305,17 +1362,31 @@ async function applyReleaseUpdate() {
     return { ok: false, error: "Release updates install into the portable Windows build. In development the live updater applies source changes.", status: releaseStatus() };
   }
   if (releaseState.state === "applying") return { ok: false, error: "the update is already applying", status: releaseStatus() };
+  if (projectSwitching) return { ok: false, error: "A project switch is saving progress; try again when it finishes.", status: releaseStatus() };
   if (activeChild && activeChild.exitCode === null) return { ok: false, error: "Love2D is running — close it and try again", status: releaseStatus() };
-  const running = autopilot.jobs.filter((job) => !job.finished || job.settlementPending);
+  const running = autopilot.jobs;
   if (running.length) return { ok: false, error: `${running.length} build job(s) still running — try again when they finish`, status: releaseStatus() };
-  if (!releaseState.latest) return { ok: false, error: "no release is available to install", status: releaseStatus() };
+  if (!releaseState.latest || releaseState.state !== "available") return { ok: false, error: "no eligible update is available to install", status: releaseStatus() };
+  if (releaseChannelSetting) return { ok: false, error: "a channel change is in progress", status: releaseStatus() };
+  if (releaseState.latest.channel !== releaseChannel) return { ok: false, error: "the build belongs to another update channel", status: releaseStatus() };
   if (releaseApplyInFlight) return { ok: false, error: "the update is already downloading", status: releaseStatus() };
   releaseApplyInFlight = true;
   try {
+    if (releaseChannel === "stable" && (await getReleaseUpdater()).compareVersions(releaseState.latest.version, app.getVersion()) < 0) {
+      const choice = await dialog.showMessageBox(window, { type: "warning", title: "Return to the published stable build?", message: `Install stable v${releaseState.latest.version}?`, detail: "Studio will restart. An older stable build may not understand data written by development builds. Back up important work first. Your existing data will be kept; the current build is saved for rollback.", buttons: ["Cancel", "Install Stable"], defaultId: 0, cancelId: 0, noLink: true });
+      if (choice.response !== 1) { releaseApplyInFlight = false; return { ok: true, cancelled: true, status: releaseStatus() }; }
+    }
     let prepared = releaseState.staged;
     if (!prepared || prepared.version !== releaseState.latest.version) {
       prepared = await downloadReleaseBuild();
       publishRelease({ staged: prepared });
+    }
+    // Jobs may have started while the download ran. Keep the verified staging
+    // and try on the next poll instead of stopping a worker to install a build.
+    if (projectSwitching || (activeChild && activeChild.exitCode === null) || autopilot.jobs.length) {
+      releaseApplyInFlight = false;
+      publishRelease({ state: "available", progress: null });
+      return { ok: false, deferred: true, error: "The build is ready; waiting for running jobs or Love2D to finish.", status: releaseStatus() };
     }
     publishRelease({ state: "applying", error: null });
     await updateSettings((settings) => {
@@ -1360,6 +1431,8 @@ async function applyReleaseUpdate() {
 
 // A boot that carries --released says which build the helper just installed.
 async function announceRelease() {
+  const channelSettings = await readSettings();
+  releaseChannel = channelSettings.release?.channel === "development" ? "development" : "stable";
   // Whatever an installing helper left behind is read on every boot, however
   // this one was started: a note about an update that did not stand, and the
   // saved copy the Roll back button would restore.
@@ -1493,8 +1566,9 @@ async function releaseRollback() {
   if (!app.isPackaged || process.platform !== "win32") return blocked("Rolling back applies to the portable Windows build.");
   if (!updateSafety || !releasePrevious) return blocked("There is no saved version to go back to.");
   if (releaseState.state === "applying" || releaseState.state === "rollingback" || releaseApplyInFlight) return blocked("an update is already in progress");
+  if (projectSwitching) return blocked("A project switch is saving progress; try again when it finishes.");
   if (activeChild && activeChild.exitCode === null) return blocked("Love2D is running — close it and try again");
-  const running = autopilot.jobs.filter((job) => !job.finished || job.settlementPending);
+  const running = autopilot.jobs;
   if (running.length) return blocked(`${running.length} build job(s) still running — try again when they finish`);
   releaseApplyInFlight = true;
   try {
@@ -14395,7 +14469,7 @@ async function executorLog(record) {
     } catch {
       await rm(temp, { force: true }).catch(() => {});
     }
-  }).catch(() => {});
+  }).catch(() => { if (typeof logWriteHealth !== "undefined") logWriteHealth.failure("executor"); });
   executorLogChain = run;
   return run;
 }
@@ -17739,9 +17813,18 @@ async function spawnNextJob(options) {
         logLine(`[autopilot] could not write the run context for "${assistantClip(job.title, 60)}": ${String(error?.message ?? error).slice(0, 160)}`);
       }
     }
+    let seatRecap = "";
+    if (job.kind === "task" && typeof fleetHost !== "undefined" && typeof fleetHost?.recap === "function") {
+      let recapTimer;
+      try {
+        const recorded = await Promise.race([fleetHost.recap({ runId: entry.id, taskId: job.ref.id }), new Promise((resolve) => { recapTimer = setTimeout(() => resolve(null), 2000); })]);
+        seatRecap = recorded?.text ? scrubOutbound(recorded.text) : "";
+      } catch { /* history must never prevent the claimed task starting */ }
+      finally { clearTimeout(recapTimer); }
+    }
     const built = executorCore.workerPrompt({
       title: job.title, taskId: job.ref.id, tasksFile: projectDataPath(TASKS_PATH), ref: job.ref, resumeCheckpoint: entry.resumeCheckpoint,
-      sections: { fail: failBit, memory: memoryBit, paths: pathsBit, brain: brainHints.brief, collab: collabBit, outside: typeof outsideWork !== "undefined" ? outsideWork.briefLine(job.ref, Date.now()) : "" }, clusterBrief, tail, promptMax: EXECUTOR_PROMPT_MAX - skillInstructions.length,
+      sections: { fail: failBit, memory: memoryBit, recap: seatRecap, paths: pathsBit, brain: brainHints.brief, collab: collabBit, outside: typeof outsideWork !== "undefined" ? outsideWork.briefLine(job.ref, Date.now()) : "" }, clusterBrief, tail, promptMax: EXECUTOR_PROMPT_MAX - skillInstructions.length,
       contextPath, platform: process.platform,
       brief: (maxChars) => taskContext.buildTaskHandoff(job.ref, { tasks, maxChars, contextPath }),
     });
@@ -20434,9 +20517,9 @@ async function traceRead({ channel = "studio", tail = 250, text = "", problems =
   try {
     const read = await traceRows(channel, { tail });
     const result = trace.query(read?.rows ?? [], { tail, text, problems: problems === true, level: ["error", "warn", "info"].includes(level) ? level : null, sources: Array.isArray(sources) ? sources.slice(0, 12).map(String) : null });
-    return { ok: true, channel, ...result, size: read?.size ?? 0, file: read?.file ?? null, dropped: channel === "studio" ? traceStudio.dropped() : 0 };
+    return { ok: true, channel, ...result, size: read?.size ?? 0, file: read?.file ?? null, dropped: channel === "studio" ? traceStudio.dropped() : 0, logWriteFailures: typeof logWriteHealth !== "undefined" ? logWriteHealth.snapshot() : [] };
   } catch (error) {
-    return { ok: false, channel, error: String(error.message ?? error).slice(0, 300) };
+    return { ok: false, channel, error: String(error.message ?? error).slice(0, 300), logWriteFailures: typeof logWriteHealth !== "undefined" ? logWriteHealth.snapshot() : [] };
   }
 }
 
@@ -23884,6 +23967,7 @@ function registerIpc() {
 
   // ---- GitHub release updates ---------------------------------------------
   ipcMain.handle("release:status", () => ({ ok: true, status: releaseStatus() }));
+  ipcMain.handle("release:set-channel", async (_event, { channel } = {}) => setReleaseChannel(channel));
   ipcMain.handle("release:check", async () => {
     await checkRelease();
     return { ok: true, status: releaseStatus() };

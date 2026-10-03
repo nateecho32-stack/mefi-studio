@@ -1,5 +1,36 @@
 # How Studio is put together
 
+The booklet builder declares one ordered, frozen `BOOKLET_INPUTS` inventory.
+Reads carry their source name with their content, so emission and error-source
+attribution cannot use independently maintained index lists. Fixtures reuse
+the inventory. The auditor parses the audited root's declaration as data;
+legacy build sources retain their literal-read audit contract. Duplicate or
+missing inputs fail before replacing the last complete build output.
+
+Brief restore and prerequisite edits order task replies against the accepted
+context version. A board update at the same version keeps its run state, which
+is outside brief history; a genuinely newer brief reply still applies. Project
+epochs fence callbacks, including errors. Board pushes schedule a backlog read
+so an action reply cannot replace a newer pushed view's scheduler summary.
+Host mutations and queue-refresh lifetime remain unchanged.
+
+Reference gathering checks the project identity, project epoch and gather
+generation before applying replies or handling save completion. Closing the
+detail invalidates its pending replies. Host queue work, provider calls and
+saved continuation journals retain their existing lifetime and cancellation.
+
+Task opens fence their asynchronous completion by project epoch and open
+generation. Returning to the same project or reopening the detail does not
+revive an older open's announcement, reference gather or error message.
+
+Worker stream parsing deduplicates an exact handoff title and brief within one
+run, because a CLI may repeat its final answer on stdout and stderr. Different
+titles or briefs retain separate handoffs.
+
+In the optional 0.5 shell, short Build session panels keep at least 60px of
+conversation visible when the composer controls are expanded. The controls
+scroll within the composer and preserve its unsent draft.
+
 First-time setup can install a missing coding CLI, open its sign-in and check
 its connection. A single Codex, Claude Code, Grok or Antigravity subscription
 can serve the assistant, first map, planning, agent roles and coding workers.
@@ -747,10 +778,21 @@ settings and per-model work-kind summaries for the shared controls.
 - **Work through backlog** works the project's existing tasks and ideas first,
   keeping a small runnable buffer; **Pause** holds every kind of new work (the
   same hold as Command's **New work** switch) while current workers finish.
-- The **task board** opens as plan cards with progress and a current step, and
-  holds prerequisites, handoff context and task history. Missing prerequisites
+- The **task board** opens as plan cards with progress and a current step. It
+  retains unchanged cards across board updates. Changed groups refresh in place
+  with their expansion and keyboard focus restored; insertion, removal and
+  sorting reconcile the displayed order. Retained cards are cleared on a project
+  switch. History drafts keep their existing project/task scope.
+  The board also holds prerequisites, handoff context and task history. Missing prerequisites
   and dependency cycles are surfaced for correction. History notes and ideas
   retain their draft, focus and text selection while live task details refresh.
+  Task Details also shows the linked plan's **current saved destination** using
+  its explicit planning ID and existing project-scoped plans read. Missing,
+  unreadable, foreign or ambiguous links show no borrowed destination; changed,
+  stale, archived or unapproved context is labelled without replacing the
+  task's recorded brief. **View linked plan** uses the existing navigation.
+  Plan-only refreshes patch this section in place, retaining note drafts and
+  focus; they do not alter task storage, prompts or dispatch.
   A running task's **Stop** asks twice. A task a grouped plan holds offers
   **Open group** instead of status, rename or delete changes, which the host
   refuses until the plan releases it.
@@ -1563,6 +1605,21 @@ failed process stays an error and cannot produce briefing requests.
   (renewed every 30 s), only for the open project, at most twice a second, and
   it waits while Studio is hidden. Snapshots carry clipped titles only: no
   prompts, paths, keys or addresses.
+- A seat's inspector and its next assigned builder share a deterministic
+  **Seat recap**: at most four recorded generations and 1,500 characters, with
+  repeated identical handoffs collapsed. Interrupted runs, reported completion
+  awaiting checks and verified outcomes stay distinct. Live generations are
+  excluded; the full 20-generation ledger stays intact. The worker receives it
+  as historical context alongside its current brief and interrupted-work
+  checkpoint. Recap lookup is project scoped and may wait at most two seconds;
+  a missing or unreadable history never prevents dispatch and makes no model call.
+- Fleet Health also describes **handoffs awaiting recorded verification**:
+  three distinct tasks from one builder seat within 24 hours produce a Note.
+  Repeated events for the same task do not inflate it; later verified or
+  human-confirmed evidence removes that task, and old events expire. The note
+  uses only this project's retained history and opens the source seat through
+  Look. It is informational: waiting for verification can be normal, the
+  attention count stays unchanged, and it never pauses or reroutes a worker.
 - The page (`renderer/fleet.js`) has an explorer (pods and seats with a status
   dot, walked with the arrow keys) and five views. **Graph** is the branches:
   pods as columns of seat cards, wired by why (a handoff, a delegation, a check,

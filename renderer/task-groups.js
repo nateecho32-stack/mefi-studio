@@ -184,5 +184,42 @@
     return [...result.values()];
   }
 
-  window.MefiTaskGroups = { groupTasks, graphTasks, overviewGroups, isLiveTask };
+  // Only an explicit task link and the current project's scoped plan read
+  // establish provenance. This never changes the recorded task or its brief.
+  function planTrace(task, { plans = [], projectId = "", unavailable = false } = {}) {
+    const planId = idOf(task?.planningId), currentProject = idOf(projectId);
+    if (!planId) return null;
+    const absent = (state, message) => ({ state, planId, title: "", destination: "", message, canOpen: false });
+    if (!currentProject) return absent("unavailable", "The linked plan could not be read. Its destination is not shown.");
+    if (task.projectId && idOf(task.projectId) !== currentProject) return absent("foreign", "This task's plan link belongs to another project.");
+    if (unavailable) return absent("unavailable", "The linked plan could not be read. Its destination is not shown.");
+    const matching = rows(plans).filter(plan => object(plan) && idOf(plan.id) === planId && (!plan.projectId || idOf(plan.projectId) === currentProject));
+    if (!matching.length) return absent("missing", "The linked plan is not available in this project.");
+    if (matching.length !== 1) return absent("ambiguous", "More than one saved plan has this ID. Its destination cannot be identified.");
+    const plan = matching[0], spec = object(plan.spec) ? plan.spec : null;
+    const title = typeof plan.title === "string" ? plan.title.trim().slice(0, 180) : "";
+    const fullDestination = typeof plan.destination === "string" ? plan.destination.trim() : "";
+    const messages = [];
+    let state = "current";
+    if (plan.status === "archived") { state = "changed"; messages.push("The linked plan is archived."); }
+    if (spec?.stale) { state = "changed"; messages.push("The saved plan needs revision."); }
+    if (idOf(task.planningSpecId) && idOf(task.planningSpecId) !== idOf(spec?.id)) {
+      state = "changed"; messages.push("The saved specification differs from the one recorded on this task.");
+    }
+    if (Array.isArray(plan.taskIds) && !plan.taskIds.includes(task.id)) {
+      state = "changed"; messages.push("This task is no longer listed in the saved plan.");
+    }
+    if (!spec?.approvedAt) {
+      if (state === "current") state = "unconfirmed";
+      messages.push("The saved plan has no current approval recorded.");
+    }
+    if (!fullDestination) messages.push("No destination is recorded in this plan.");
+    const destinationTruncated = fullDestination.length > 16000;
+    if (destinationTruncated) messages.push("The destination is shortened here. View the plan for its full text.");
+    if (state !== "current") messages.push("This task's recorded brief is unchanged.");
+    return { state, planId, title: title || "Saved plan", destination: fullDestination.slice(0, 16000), destinationTruncated,
+      message: messages.join(" "), canOpen: true };
+  }
+
+  window.MefiTaskGroups = { groupTasks, graphTasks, overviewGroups, isLiveTask, planTrace };
 })();

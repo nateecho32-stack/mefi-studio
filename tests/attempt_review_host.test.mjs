@@ -17,6 +17,7 @@ import { execFileSync } from "node:child_process";
 import { deflateSync } from "node:zlib";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { rm } from "node:fs/promises";
 import path from "node:path";
 import vm from "node:vm";
 import { EventEmitter } from "node:events";
@@ -39,7 +40,9 @@ const block = main.slice(from, to + END.length);
 
 const TASK = "task_0123456789abcdef";
 const plain = (value) => JSON.parse(JSON.stringify(value));
-const cleanup = (t, dir) => t.after(() => rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 }));
+// begin() prunes refs in the background. Yield during retries so Git's close
+// handlers can drain before Windows removes the throwaway repository.
+const cleanup = (t, dir) => t.after(() => rm(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 }));
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 function fakePng() {
   const header = Buffer.alloc(13); header.writeUInt32BE(1280, 0); header.writeUInt32BE(800, 4); header[8] = 8; header[9] = 2;
@@ -347,7 +350,8 @@ test("a merge-back in progress keeps the project's folder busy, and a merged wor
   assert.equal(h.evaluate(`reviewBusy(${JSON.stringify(h.root)})`), true, "the project's folder is busy while it merges");
   await gate; await ended;
   h.review.afterMerge(entry, { merged: true });
-  await delay(60);
+  const mergedDeadline = Date.now() + 5000;
+  while (JSON.parse(readFileSync(path.join(h.dataDir, "attempt-evidence", TASK, "1", "meta.json"), "utf8")).after?.state !== "captured" && Date.now() < mergedDeadline) await delay(10);
   assert.equal(h.state.captures.length, 2, "merged: the preview shows it now");
   h.review.mergeDone(entry);
   assert.equal(h.evaluate(`reviewBusy(${JSON.stringify(h.root)})`), false);
@@ -359,7 +363,8 @@ test("a merge-back in progress keeps the project's folder busy, and a merged wor
   await h.review.begin(kept, h.job);
   await h.review.end(kept, { ok: true });
   h.review.afterMerge(kept, { merged: false, reason: "conflict" });
-  await delay(60);
+  const keptDeadline = Date.now() + 5000;
+  while (JSON.parse(readFileSync(path.join(h.dataDir, "attempt-evidence", TASK, "2", "meta.json"), "utf8")).after?.reason !== "not-merged" && Date.now() < keptDeadline) await delay(10);
   assert.equal(h.state.captures.length, 3, "no shot for work that is not in the folder");
   assert.match(readFileSync(path.join(h.dataDir, "attempt-evidence", TASK, "2", "meta.json"), "utf8"), /"after":\{"state":"skipped","reason":"not-merged"/);
 });
@@ -371,7 +376,9 @@ test("a claim cancelled before its worker started drops the start picture it mad
   assert.equal(h.refs().length, 1);
   assert.ok(existsSync(path.join(h.dataDir, "attempt-evidence", TASK, "1", "before.png")), "the start shot is there before the claim goes");
   h.review.discard(cancelled);
-  await delay(300);
+  const deadline = Date.now() + 10000;
+  while (!h.state.sent.some(([channel, payload]) => channel === "review:changed" && payload.what === "dropped") && Date.now() < deadline) await delay(25);
+  assert.equal(h.state.sent.some(([channel, payload]) => channel === "review:changed" && payload.what === "dropped"), true, "discard completes within its bound");
   assert.deepEqual(h.refs(), [], "no empty attempt is left to be the one the page shows");
   assert.equal(existsSync(path.join(h.dataDir, "attempt-evidence", TASK, "1")), false, "nor a start shot with nothing after it");
   assert.equal(h.state.sent.some(([channel, payload]) => channel === "review:changed" && payload.what === "dropped"), true, "and the page is told");

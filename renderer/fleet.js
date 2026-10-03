@@ -31,6 +31,7 @@
     sort: { key: "state", dir: 1 }, groups: new Set(), text: "", collapsed: new Set(),
     camera: null, manual: false, layout: null, layoutKey: "", drag: null, treeKey: "",
     detail: null, detailKey: "", detailFetch: 0, painted: {},
+    readIssue: null, snapshotTicket: 0, scopeKnown: false, scopeId: null,
   };
   let initialized = false;
   const tabButtons = new Map();
@@ -141,17 +142,43 @@
   async function lease(on) {
     try { await api()?.fleetWatch?.({ id: "fleet-view", on }); } catch { /* the lease lapses by itself */ }
   }
+  function currentScope() {
+    if (typeof window.MefiWorkspace?.activeProjectId === "function") return { known: true, id: window.MefiWorkspace.activeProjectId() || null };
+    return { known: state.scopeKnown, id: state.scopeId };
+  }
+  function clearContent() {
+    const active = document.activeElement;
+    const lostFocus = ["side", "panels", "inspector"].some((id) => $(id)?.contains?.(active));
+    for (const id of ["tree", "graph", "table", "recent", "nodes", "health", "inspector"]) $(id)?.replaceChildren();
+    if ($("inspector")) $("inspector").dataset.mode = "fleet";
+    for (const button of tabButtons.values()) if (button.children[1]) { button.children[1].textContent = ""; button.children[1].hidden = true; }
+    if (lostFocus && state.open) tabButtons.get(state.tab)?.focus?.({ preventScroll: true });
+  }
+  function paintReadIssue() {
+    if (!state.readIssue) return false;
+    const cached = Boolean(state.view);
+    if ($("body")) $("body").dataset.readState = cached ? "cached" : "unavailable";
+    status(cached ? `Last confirmed team. ${state.readIssue}` : state.readIssue, "bad");
+    return true;
+  }
+  function failedRead(error) {
+    state.readIssue = typeof error === "string" && error.trim() ? short(error, 240) : plain(error, "The fleet could not be read.");
+    if (!state.view) clearContent();
+    // Cached same-project facts remain usable; a project with no confirmed snapshot stays empty.
+    loading(!state.view);
+    if (state.open) paintReadIssue();
+  }
   async function refresh() {
-    if (!api()?.fleetSnapshot) { loading(false); status("Fleet shows your team in the desktop app."); return; }
+    if (!api()?.fleetSnapshot) { failedRead("Fleet shows your team in the desktop app."); return; }
     const epoch = state.epoch;
+    const ticket = ++state.snapshotTicket;
     try {
       const view = await api().fleetSnapshot();
       // A read asked for before the project changed answers for the old project.
-      if (epoch === state.epoch) apply(view);
+      if (epoch === state.epoch && ticket === state.snapshotTicket) apply(view);
     } catch (error) {
-      if (epoch !== state.epoch) return;
-      loading(false);
-      status(plain(error, "The fleet could not be read."), "bad");
+      if (epoch !== state.epoch || ticket !== state.snapshotTicket) return;
+      failedRead(error);
     }
   }
   // While a project's team is being read the old one cannot be clicked, so a Stop that belongs to
@@ -161,10 +188,30 @@
     const body = $("body");
     if (body) body.dataset.loading = on ? "1" : "0";
   }
-  function apply(view) {
-    if (!view || view.ok === false) { loading(false); if (view?.error) status(view.error, "bad"); return; }
+  function apply(view, pushed = false) {
+    const scope = currentScope();
+    // Workspace exposes no selection as null; the host's empty store has the
+    // fixed project_none identity. It is the same scope, never another team.
+    const scopedId = view?.projectId === "project_none" ? null : view?.projectId ?? null;
+    // Pushes from a project already left cannot establish the new project's facts.
+    if (view && Object.prototype.hasOwnProperty.call(view, "projectId") && scope.known && scopedId !== scope.id) {
+      if (!pushed) failedRead("This project's team could not be confirmed.");
+      return;
+    }
+    if (pushed && !scope.known && state.epoch > 0) return;
+    if (!view || view.ok === false) {
+      if (pushed) state.snapshotTicket++;
+      failedRead(view?.error);
+      return;
+    }
+    if (scope.known && scopedId !== scope.id) { failedRead("This project's team could not be confirmed."); return; }
     // Never go back in time: a read that a newer push of the same project overtook is dropped.
     if (state.view && view.projectId === state.view.projectId && (view.rev ?? 0) < (state.view.rev ?? 0)) return;
+    if (pushed) state.snapshotTicket++;
+    state.scopeKnown = true;
+    state.scopeId = scopedId;
+    state.readIssue = null;
+    if ($("body")) $("body").dataset.readState = "ready";
     if (view.projectId !== state.projectId) {
       state.projectId = view.projectId ?? null;
       state.manual = false;
@@ -178,7 +225,7 @@
     schedulePaint();
   }
   function start() {
-    if (!state.subscribed && typeof api()?.onFleetUpdate === "function") { state.subscribed = true; api().onFleetUpdate((view) => apply(view)); }
+    if (!state.subscribed && typeof api()?.onFleetUpdate === "function") { state.subscribed = true; api().onFleetUpdate((view) => apply(view, true)); }
     if (!state.view) loading(true);
     void refresh();
     void lease(true);
@@ -206,7 +253,7 @@
   function paint() {
     const view = state.view;
     if (!state.open) return;
-    if (!view) { status("Reading the team…"); return; }
+    if (!view) { if (!paintReadIssue()) status("Reading the team…"); return; }
     state.stale = false;
     paintStatus(view);
     paintTabs(view);
@@ -215,6 +262,7 @@
     paintPanel(view);
   }
   function paintStatus(view) {
+    if (paintReadIssue()) return;
     const loop = view.loop;
     const counts = view.counts ?? {};
     const parts = [`${counts.seats ?? 0} seats`, `${counts.working ?? 0} working`, `${counts.attention ?? 0} need attention`, `${counts.openRows ?? 0} ready to take`];
@@ -1114,6 +1162,7 @@
       box.append(section("Last run", el("p", "fleet-now-title", short(seat.last.title || "untitled", 90)), chipOf(OUTCOME_LABEL[seat.last.outcome] ?? "ended", OUTCOME_TONE[seat.last.outcome] ?? "quiet")));
     }
     const runtime = el("dl", "fleet-facts");
+    if (detail?.recap?.text) box.append(section("Seat recap", el("p", "fleet-recap", detail.recap.text)));
     runtime.append(fact("Runtime", seat.runtime?.via || "not set"), fact("Model", modelName(seat.runtime?.model) || "not set"), fact("Context", Number.isFinite(seat.ctx) ? percent(seat.ctx) : "not measured"));
     box.append(section("Runtime", runtime), section("Runs", generationsList(detail, seat, phase)), section("Works with", wiresList(view, seat, detail)));
     const recent = el("ul", "fleet-ins-list");
@@ -1141,7 +1190,7 @@
     setText(live.dd.branch, now.branch || "the shared checkout");
   }
   function structureKey(view, seat, detail, phase) {
-    return JSON.stringify([phase, seat.id, seat.status, seat.text, seat.gen, seat.now?.taskId, seat.now?.runId, seat.now?.stopping, Boolean(seat.now), seat.last?.outcome, seat.last?.title, seat.last?.runId, seat.runtime,
+    return JSON.stringify([phase, seat.id, seat.status, seat.text, seat.gen, seat.now?.taskId, seat.now?.runId, seat.now?.stopping, Boolean(seat.now), seat.last?.outcome, seat.last?.title, seat.last?.runId, seat.runtime, detail?.recap?.text,
       (detail?.lineage ?? []).map((gen) => [gen.gen, gen.outcome, gen.running, gen.merge?.merged]), (detail?.edges ?? view.edges ?? []).filter((edge) => edge.from === seat.id || edge.to === seat.id).map((edge) => [edge.from, edge.to, edge.kind, edge.count]),
       (detail?.recent ?? []).slice(0, 5).map((row) => row.seq), (view.health ?? []).filter((item) => item.seatId === seat.id).map((item) => item.id)]);
   }
@@ -1181,7 +1230,7 @@
     state.treeKey = "";
     start();
     if (state.view) schedulePaint();
-    else status("Reading the team…");
+    else if (!paintReadIssue()) status("Reading the team…");
     requestAnimationFrame(() => { measureBar(); tabButtons.get(state.tab)?.focus?.({ preventScroll: true }); });
   }
   function close() {
@@ -1224,10 +1273,16 @@
       schedulePaint();
     });
     // The host keeps one fleet per project: a switch starts from a new snapshot.
-    window.addEventListener("mefi:project-changed", () => {
+    window.addEventListener("mefi:project-changed", (event) => {
       state.epoch += 1;
+      state.snapshotTicket += 1;
+      state.detailFetch += 1;
       clearTimeout(state.detailTimer);
-      Object.assign(state, { view: null, selected: null, projectId: null, detail: null, detailTimer: 0, detailPending: 0, layoutKey: "", treeKey: "", painted: {} });
+      const hasScope = Object.prototype.hasOwnProperty.call(event?.detail ?? {}, "projectId");
+      const scope = hasScope ? { known: true, id: event.detail.projectId || null } : typeof window.MefiWorkspace?.activeProjectId === "function" ? { known: true, id: window.MefiWorkspace.activeProjectId() || null } : { known: false, id: null };
+      Object.assign(state, { view: null, selected: null, projectId: null, detail: null, detailTimer: 0, detailPending: 0, layout: null, layoutKey: "", treeKey: "", painted: {}, readIssue: null, scopeKnown: scope.known, scopeId: scope.id });
+      clearContent();
+      if ($("body")) $("body").dataset.readState = "reading";
       loading(true);
       if (state.open) { status("Reading the team…"); void lease(true); void refresh(); }
     });

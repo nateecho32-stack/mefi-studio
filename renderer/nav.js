@@ -20,6 +20,7 @@
 
   // Layer bookkeeping. Other modules read it; only claim/release write it.
   const state = { sheet: null, transient: null, returnTo: null, commandFrom: null, focusReturn: { sheet: null, transient: null } };
+  let focusClaimSequence = 0;
   // assistant holds the service tone (ok | busy | warn | offline | paused), painted
   // as a dot on the Explorer's dock item and tool button.
   const badges = { sessions: 0, progress: 0, tasks: 0, ideas: 0, machine: null, assistant: null, questions: 0 };
@@ -1012,7 +1013,13 @@
       if (page) sheet.removeAttribute("aria-modal");
       else sheet.setAttribute("aria-modal", "true");
     }
+    const focusClaim = ++focusClaimSequence;
+    const focusBeforeClaim = document.activeElement;
     requestAnimationFrame(() => {
+      // Navigation supplies initial focus only while its claim is current.
+      // A later user focus must survive a delayed or covered-window frame.
+      if (focusClaim !== focusClaimSequence || state[dest.layer] !== id ||
+          document.activeElement !== focusBeforeClaim || !visibleNavTarget(root)) return;
       const requested = dest.focus ? Array.from(document.querySelectorAll?.(dest.focus) ?? []).find(visibleNavTarget) : null;
       const selected = Array.from(root?.querySelectorAll?.('[aria-selected="true"]') ?? []).find(visibleNavTarget);
       const target = requested ?? selected ?? sheet;
@@ -1027,6 +1034,7 @@
   function release(id) {
     const dest = get(id);
     const layer = dest?.layer ?? (state.sheet === id ? "sheet" : state.transient === id ? "transient" : null);
+    if (state.sheet === id || state.transient === id) focusClaimSequence += 1;
     if (state.sheet === id) {
       state.sheet = null;
       delete document.body.dataset.sheet;
@@ -2949,7 +2957,7 @@
     if (state === "applying") return { line: `installing ${version} · the app restarts`, button: "Installing…", busy: true };
     if (state === "rollingback") return { line: `going back to v${status?.previous?.from ?? "the saved version"} · the app restarts`, busy: true };
     if (state === "installed") return { line: `updated to v${status?.installed?.version ?? ""} · running this build`, installed: true };
-    if (state === "none") return { line: "no published release yet" };
+    if (state === "none") return { line: status?.unavailable ?? "no published release yet" };
     if (state === "current") return { line: `up to date${status?.current ? ` · v${status.current}` : ""}` };
     if (state === "error") return { line: `check failed · ${status?.error ?? "unknown"}`, bad: true, token: Boolean(status?.needsToken) };
     return { line: "not checked" };
@@ -2959,9 +2967,16 @@
     if (status) releaseUpdateState = status;
     const state = releaseUpdateState;
     const view = releaseView(state);
+    const sourceUpdates = document.querySelector("#source-updates");
+    if (sourceUpdates) sourceUpdates.hidden = Boolean(state?.supported);
+    const development = document.querySelector("#release-development");
+    if (development) {
+      development.checked = state?.channel === "development";
+      development.disabled = Boolean(view.busy);
+    }
     const line = document.querySelector("#release-status");
     if (line) {
-      line.textContent = `release · ${view.line}`;
+      line.textContent = `${state?.channel === "development" ? "development / beta" : "stable"} · ${view.line}`;
       line.classList.toggle("bad-text", Boolean(view.bad));
     }
     const apply = document.querySelector("#release-apply");
@@ -3084,6 +3099,19 @@
       return;
     }
     document.querySelector("#release-check")?.addEventListener("click", () => checkReleaseNow());
+    document.querySelector("#release-development")?.addEventListener("change", async (event) => {
+      const toggle = event.target;
+      const channel = toggle.checked ? "development" : "stable";
+      toggle.disabled = true;
+      try {
+        const result = await window.mefiStudio.releaseSetChannel?.(channel);
+        paintRelease(result?.status);
+        if (result?.ok === false) window.MefiToast?.(result.error, "bad");
+      } catch (error) {
+        paintRelease(releaseUpdateState);
+        window.MefiToast?.(`Channel change failed · ${String(error?.message ?? error)}`, "bad");
+      } finally { toggle.disabled = false; }
+    });
     document.querySelector("#release-apply")?.addEventListener("click", () => applyReleaseNow());
     document.querySelector("#release-rollback")?.addEventListener("click", () => rollbackReleaseNow());
     document.querySelector("#release-token-save")?.addEventListener("click", () => saveReleaseToken());

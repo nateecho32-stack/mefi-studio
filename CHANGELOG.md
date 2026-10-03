@@ -7,6 +7,60 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- Booklet scripts and styles use one ordered inventory for reads, emission,
+  error-source attribution and fixtures. Audits read the audited tree's declared
+  inventory and report missing or duplicate inputs.
+
+- Task brief restore and prerequisite replies preserve newer accepted brief and
+  run state. Returning to a project cannot revive an older detail action reply.
+
+- Reference gather replies cannot save into another project or repaint a closed
+  detail. New gathers supersede older replies without cancelling host work;
+  stale success, error and save completions leave the current view alone.
+
+- Pending task opens stop their detail, announcement and reference-gather actions
+  after a project switch, closing the view or opening a newer detail. A stale
+  failed read cannot replace the current detail's status.
+
+- Task overview updates retain unchanged cards and folds instead of rebuilding
+  the whole board. Changed groups refresh their content and actions while
+  preserving expansion and keyboard focus; project switches clear retained cards.
+
+- Fleet labels cached team facts after a failed refresh, clears the previous
+  project's content on a switch, and restores controls only after a confirmed
+  scoped snapshot. Older replies cannot overwrite a newer read or push outcome.
+
+- Task Details shows the linked plan's current saved destination without changing
+  the task's recorded brief. Missing, unreadable, foreign, ambiguous, changed,
+  archived or unapproved plan context is labelled honestly. Plan-only refreshes
+  retain note drafts and focus; View linked plan reuses the existing navigation.
+
+- Fleet Health adds an informational note when a seat hands off three distinct
+  tasks within a day without later recorded verification. Duplicate events do
+  not inflate it, verified or human-confirmed evidence clears each task, and
+  Look opens the source seat. The note never pauses agents or changes dispatch.
+
+- Fleet seats retain a deterministic recap of their recent recorded generations,
+  capped at 1,500 characters. The inspector shows it and the next assigned worker
+  receives the same history alongside its current brief and saved progress;
+  interrupted runs and unverified completion reports remain clearly labelled.
+
+- Identical worker handoffs repeated across stdout and stderr are admitted once;
+  distinct follow-up briefs remain separate.
+
+- Expanded session controls retain a readable conversation area in short
+  windows, including 150% zoom, while keeping the draft intact.
+- Stable updates use published GitHub release builds only. An optional
+  Development / beta switch asks for confirmation about untested changes,
+  instability and possible data loss, then automatically receives packaged
+  artifacts from successful main builds. Returning to Stable stops development
+  updates and can restore the published stable build. Installed apps no longer
+  hot-swap raw source files from a nearby checkout; downloads require SHA-256,
+  matching platform and build identity, and development updates require rollback.
+  Development artifact publishing is deferred from this application-only
+  checkpoint; until the workflow is separately delivered, the channel reports
+  that no supported development artifact is available. This remains review work.
+
 - **Room for a session list, an inspector, a tab strip and a status bar (off by
   default, nothing changes yet).** The window's layout now keeps room for four
   panels that are not built yet. Nothing looks different: every page, sheet,

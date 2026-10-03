@@ -118,6 +118,7 @@ app.whenReady().then(async () => {
     responses.eyesState.pngs = [{path:path.join(root,"review-evidence.png"),name:"Review evidence",mtime:now,size:0}];
     responses.eyesLog = {ok:true,text:"[fixture] Sample review started.\n[fixture] Compact navigation updated.\n[fixture] Waiting for visual comparison decision."};
   }
+  if (process.env.MEFI_RELEASE_CHANNEL_CAPTURE) require("./release-channel-fixture.cjs").seed(responses);
   // Pure graph helpers supply the same valid catalog and default map as Studio;
   // this imports no host services, project state, credentials or worker code.
   const brains = require(path.resolve(__dirname, "../../scripts/brains.cjs"));
@@ -136,6 +137,7 @@ app.whenReady().then(async () => {
     contextBridge.exposeInMainWorld("mefiStudio",{
       ...Object.fromEntries(Object.keys(responses).map(key=>[key,async()=>{if(key==='eyesCollisions'&&collisionReads++===0)await new Promise(resolve=>setTimeout(resolve,5000));return responses[key];}])),
       ...Object.fromEntries(Object.keys(listeners).map(key=>[key,callback=>{listeners[key].push(callback);return()=>{};}])),
+      ${process.env.MEFI_RELEASE_CHANNEL_CAPTURE ? require("./release-channel-fixture.cjs").bridge() : ""}
       assistantMessage:async()=>({ok:false,error:'Messages are disabled in this isolated review fixture.'}),
       assistantPrefs:async patch=>{responses.assistantState.state.prefs={...responses.assistantState.state.prefs,...patch};return {ok:true,prefs:responses.assistantState.state.prefs};},
       prefsSet:async patch=>{responses.prefsGet.prefs={...responses.prefsGet.prefs,...patch};return responses.prefsGet;},
@@ -264,6 +266,10 @@ app.whenReady().then(async () => {
   await pinMotion();
   if (process.env.MEFI_TREE_DYNAMICS_CAPTURE) {
     await require("./tree-dynamics-fixture.cjs").capture({ contents, run, until, sleep, capturePage, report, root });
+    finish(); return;
+  }
+  if (process.env.MEFI_RELEASE_CHANNEL_CAPTURE) {
+    await require("./release-channel-fixture.cjs").capture({ window, run, until, sleep, capturePage, report, root });
     finish(); return;
   }
   if (process.env.MEFI_NODE_VIEWS_CAPTURE) {

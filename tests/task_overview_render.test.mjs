@@ -30,13 +30,18 @@ test("task overview and delegated details show confirmed progress, navigate subt
     let report;
     try { report = JSON.parse(await readFile(path.join(fixture, "report.json"), "utf8")); } catch {}
     const artifacts = process.env.MEFI_TASK_OVERVIEW_CAPTURE_DIR;
+    let traceCapturesRetained = null;
     if (artifacts && path.isAbsolute(artifacts)) {
       await mkdir(artifacts, { recursive: true });
-      await Promise.all(["report.json", "task-overview-wide.png", "task-overview-narrow.png", "task-overview-detail.png", "task-overview-discussion.png", "task-delegation-wide.png", "task-delegation-narrow.png"].filter((name) => existsSync(path.join(fixture, name))).map((name) => copyFile(path.join(fixture, name), path.join(artifacts, name))));
+      const captures = (await readdir(fixture)).filter(name => name === "report.json" || /^task-(overview|delegation|plan-trace)-.*\.png$/.test(name));
+      await Promise.all(captures.map(name => copyFile(path.join(fixture, name), path.join(artifacts, name))));
+      traceCapturesRetained = captures.filter(name => name.startsWith("task-plan-trace-")).length;
       t.diagnostic(`Task overview screenshots: ${artifacts}`);
     }
     assert.equal(code, 0, `${output}\n${report?.failure || "No fixture report"}`);
     assert.deepEqual(report.errors, []); assert.deepEqual(report.networkAttempts, []); assert.deepEqual(report.processAttempts, []);
+    assert.equal(report.gatherRaces.length, 13);
+    assert.equal(report.openRaces.length, 6);
     assert.equal(report.rawTaskCount, 95);
     assert.ok(report.confirmedProgress && report.discussionProgress && report.preservedSearch && report.originalDetail);
     assert.ok(report.narrowLayout.width <= 601 && !report.narrowLayout.overflow, JSON.stringify(report.narrowLayout));
@@ -48,6 +53,12 @@ test("task overview and delegated details show confirmed progress, navigate subt
     assert.ok(report.delegationNarrow.width <= 601);
     assert.equal(Number(report.sharedOverview.value), 1);
     assert.equal(Number(report.sharedOverview.max), 3, "the parent integration step remains part of the shared goal");
+    assert.equal(report.planTrace.length, 8, "current, changed, missing and foreign links at desktop and narrow sizes");
+    assert.equal(report.retention.length, 2, "native retained-card identity, insertion/removal/order, expansion and focus at both sizes");
+    assert.ok(report.retention.every(row => row.kept.identity && row.kept.focus && row.kept.expanded && row.kept.changed && row.reordered.identity && row.reordered.focus && row.changedFocus.button && row.changedFocus.expanded));
+    if (traceCapturesRetained !== null) assert.equal(traceCapturesRetained, 8, "all eight trace screenshots are retained for review");
+    assert.ok(report.planTrace.every(trace => !trace.pageOverflow && !trace.destinationOverflow && trace.left >= -1 && trace.right <= trace.width + 1 && trace.fontSizes.every(size => size >= 12)));
+    assert.equal(report.planTrace.filter(trace => trace.size === "narrow" && trace.width <= 601).length, 4);
   } finally {
     assert.ok(path.dirname(fixture) === path.resolve(tmpdir()) && path.basename(fixture).startsWith("mefi-task-overview-render-"));
     // Electron can still hold the folder for a moment after it exits. A locked

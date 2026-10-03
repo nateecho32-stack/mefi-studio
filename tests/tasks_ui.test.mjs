@@ -17,22 +17,43 @@ class Element {
   }
   set textContent(text) {
     if (this.ownerDocument?.activeElement !== this && this.contains(this.ownerDocument?.activeElement)) this.ownerDocument.activeElement = null;
+    for (const child of this.children) { child.parentNode = null; child.detached = true; }
     this.ownText = String(text); this.children = [];
   }
   get textContent() { return (this.ownText ?? "") + this.children.map((child) => child.textContent).join(""); }
-  append(...children) { this.children.push(...children); }
-  insertBefore(child, next) { const index = this.children.indexOf(next); this.children.splice(index < 0 ? this.children.length : index, 0, child); }
+  get isConnected() { return this.parentNode ? this.parentNode.isConnected : !this.detached; }
+  append(...children) { for (const child of children) this.insertBefore(child, null); }
+  insertBefore(child, next) {
+    if (child === next) return;
+    child.parentNode?.removeChild(child);
+    const index = this.children.indexOf(next); this.children.splice(index < 0 ? this.children.length : index, 0, child);
+    child.parentNode = this; child.detached = false;
+  }
+  removeChild(child) {
+    if (child.contains(this.ownerDocument?.activeElement)) this.ownerDocument.activeElement = null;
+    this.children.splice(this.children.indexOf(child), 1); child.parentNode = null; child.detached = true; return child;
+  }
+  moveBefore(child, next) {
+    const focused = this.ownerDocument?.activeElement;
+    this.insertBefore(child, next);
+    if (focused?.isConnected && this.ownerDocument) this.ownerDocument.activeElement = focused;
+  }
   addEventListener(name, fn) { (this.listeners[name] ??= []).push(fn); }
   setAttribute(name, value) { this.attrs[name] = value; }
   querySelectorAll(selector) {
     const match = (el) => selector === "[data-filter]" ? !!el.dataset.filter
       : selector.startsWith('[data-filter="') ? el.dataset.filter === selector.slice(14, -2)
       : selector === "li.selected" ? el.tagName === "li" && el.classList.contains("selected")
+      : selector.startsWith(".") ? el.hasClass(selector.slice(1))
       : selector === "input" ? el.tagName === "input" : false;
     return this.children.flatMap((child) => [...(match(child) ? [child] : []), ...child.querySelectorAll(selector)]);
   }
   querySelector(selector) { return this.querySelectorAll(selector)[0] ?? null; }
-  closest() { return this; }
+  hasClass(name) { return this.classList.contains(name) || (this.className || "").split(/\s+/).includes(name); }
+  closest(selector) {
+    for (let el = this; el; el = el.parentNode) if (selector.split(/,\s*/).some(part => part.startsWith(".") ? el.hasClass(part.slice(1)) : part === "[data-filter]" ? !!el.dataset.filter : el.tagName === part)) return el;
+    return null;
+  }
   contains(element) { return Boolean(element) && (element === this || this.children.some((child) => child.contains(element))); }
   focus() { if (this.ownerDocument) this.ownerDocument.activeElement = this; }
   setSelectionRange(start, end, direction) { this.selectionStart = start; this.selectionEnd = end; this.selectionDirection = direction; }
@@ -40,7 +61,7 @@ class Element {
   click() { for (const fn of this.listeners.click ?? []) fn({ target: this, stopPropagation() {}, preventDefault() {} }); }
 }
 
-function environment({ tasks = [], filter = "all", saveOk = true, prefsWait = null, bridge = {}, overview = false, timers = null, clock = null } = {}) {
+function environment({ tasks = [], filter = "all", saveOk = true, prefsWait = null, bridge = {}, overview = false, timers = null, clock = null, detailActions = false } = {}) {
   const els = new Map();
   const document = { readyState: "loading", activeElement: null, getElementById: (id) => get(id), createElement: (tag) => new Element(tag, document), querySelectorAll: () => [], addEventListener() {} };
   const get = (id) => { if (!els.has(id)) els.set(id, new Element("div", document)); return els.get(id); };
@@ -74,10 +95,223 @@ function environment({ tasks = [], filter = "all", saveOk = true, prefsWait = nu
   });
   vm.runInContext(stageSource, context);
   if (overview) vm.runInContext(groupsSource, context);
-  vm.runInContext(source, context);
+  vm.runInContext(detailActions ? source.replace('window.MefiTasks = {', 'window.MefiTasks = { __detailAction: taskDetailAction,') : source, context);
   const api = context.window.MefiTasks; api.init();
   return { api, get, document, window: context.window, saved, notifications, events, broadcast: (rows) => onTasks(rows), project: (activeId) => onProjects({ activeId }), live: (value) => onAssistantStatus(value), poll: () => polls.get("tasks.board")?.() };
 }
+
+for (const action of ["restore", "dependencies"]) {
+  for (const scenario of ["older brief", "same version newer status", "unrelated push valid reply", "own push", "valid reply", "valid rejection", "A-B-A success", "A-B-A rejection"]) {
+    test(`detail ${action} preserves accepted state: ${scenario}`, async () => {
+      let projectId = "a", resolve, reject;
+      const row = (patch = {}) => ({ id: "same", projectId, title: "Task", status: "open", prompt: "Original", contextVersion: 2, ...patch });
+      const env = environment({ detailActions: true, bridge: {
+        tasksList: async () => ({ ok: true, projectId, tasks: [row()] }),
+        [action === "dependencies" ? "tasksDependencies" : "tasksRestore"]: () => new Promise((yes, no) => { resolve = yes; reject = no; }),
+      } });
+      await env.api.open({ taskId: "same" });
+      const pending = env.api.__detailAction(env.api.state.tasks[0], action, {});
+      const reply = row({ prompt: "Saved", contextVersion: 3 });
+      let expected = scenario === "valid rejection" ? row() : reply;
+      if (scenario === "older brief") expected = row({ prompt: "Newest", contextVersion: 4 });
+      if (scenario === "same version newer status") expected = row({ prompt: "Saved", contextVersion: 3, status: "running", runProgress: { stage: "building" } });
+      if (["older brief", "same version newer status", "own push"].includes(scenario)) env.broadcast([expected]);
+      if (scenario === "unrelated push valid reply") env.broadcast([row(), { id: "other", projectId, title: "Other", status: "done" }]);
+      if (scenario.startsWith("A-B-A")) {
+        projectId = "b"; env.project(projectId); await env.api.open({ taskId: "same" });
+        projectId = "a"; env.project(projectId); await env.api.open({ taskId: "same" });
+        expected = row();
+      }
+      if (scenario.endsWith("rejection")) reject(new Error("Expired action"));
+      else resolve({ ok: true, task: reply, backlog: { projectId, expiredReplyMarker: true } });
+      await pending;
+      assert.equal(JSON.stringify(env.api.state.tasks[0]), JSON.stringify(expected));
+      if (scenario.startsWith("A-B-A")) assert.equal(env.get("task-detail").textContent.includes("Expired action"), false);
+      if (scenario === "valid rejection") assert.equal(env.get("task-detail").textContent.includes("Expired action"), true);
+      if (!["valid reply"].includes(scenario)) assert.notEqual(env.api.state.backlog?.expiredReplyMarker, true);
+    });
+  }
+}
+
+for (const scenario of ["A-B success", "A-B error", "A-B rejection", "A-B-A success", "A-B-A error", "close", "close-reopen", "new gather success", "new gather error", "new gather rejection", "valid success", "valid error", "valid rejection"]) {
+  test(`reference gather fences its deferred completion: ${scenario}`, async () => {
+    let projectId = "a";
+    const requests = [];
+    const refs = label => ({ verdict: "Useful", coverage: 10, files: [label], code: [], sessions: [], chats: [], pngs: [], web: [], ideas: [] });
+    const env = environment({ bridge: {
+      tasksList: async () => ({ ok: true, projectId, tasks: [{ id: "same", projectId, title: `${projectId} task`, status: "open", prompt: "Fixture brief" }] }),
+      referenceGather: () => new Promise((resolve, reject) => requests.push({ resolve, reject })),
+      referenceCancel: () => { throw new Error("Renderer must never cancel host/project work"); },
+    } });
+    await env.api.open({ taskId: "same", gather: true });
+    assert.equal(requests.length, 1);
+    if (scenario.startsWith("A-B")) {
+      projectId = "b"; env.project(projectId); await env.api.open({ taskId: "same" });
+      if (scenario.startsWith("A-B-A")) { projectId = "a"; env.project(projectId); await env.api.open({ taskId: "same" }); }
+    }
+    if (scenario.startsWith("close")) { env.api.close(); if (scenario === "close-reopen") await env.api.open({ taskId: "same" }); }
+    if (scenario.startsWith("new gather")) {
+      env.get("reference-run").click(); assert.equal(requests.length, 2);
+      requests[1].resolve({ ok: true, references: refs("new-result.txt") }); await settle(); await settle();
+    }
+    const savedBefore = env.saved.length, noticesBefore = env.notifications.length;
+    env.get("reference-status").textContent = "Current detail status";
+    if (scenario.includes("rejection")) requests[0].reject(new Error("old rejected read"));
+    else requests[0].resolve(scenario.includes("error") ? { ok: false, error: "old failed read" } : { ok: true, references: refs("old-result.txt") });
+    await settle(); await settle();
+    const valid = scenario.startsWith("valid");
+    assert.equal(env.saved.length - savedBefore, scenario === "valid success" ? 1 : 0);
+    if (!valid) {
+      assert.equal(env.get("reference-status").textContent, "Current detail status");
+      assert.equal(env.notifications.length, noticesBefore);
+      assert.ok(!env.api.state.tasks.some(t => t.refs?.some(ref => ref.title === "old-result.txt")));
+      assert.ok(!env.api.state.references?.files?.includes("old-result.txt"));
+    } else if (scenario === "valid success") assert.equal(env.saved.at(-1)[0].refs[0].title, "old-result.txt");
+    else assert.match(env.get("reference-status").textContent, /old (failed|rejected) read/);
+  });
+}
+
+test("coalesced reference requests share host work but save only the newest gather generation", async () => {
+  let finish, calls = 0;
+  const shared = new Promise(resolve => { finish = resolve; });
+  const env = environment({ tasks: [{ id: "same", title: "Shared task", status: "open" }], bridge: {
+    referenceGather: () => { calls += 1; return shared; },
+  } });
+  await env.api.open({ taskId: "same", gather: true }); env.get("reference-run").click();
+  assert.equal(calls, 2);
+  finish({ ok: true, references: { files: ["shared.txt"], code: [], sessions: [], chats: [], web: [], ideas: [], pngs: [] } });
+  await settle(); await settle();
+  assert.equal(env.saved.length, 1); assert.equal(env.saved[0][0].refs.length, 1);
+});
+
+for (const outcome of ["success", "failure"]) {
+  test(`reference save completion does not repaint a switched project: ${outcome}`, async () => {
+    let projectId = "a", finishSave;
+    const env = environment({ bridge: {
+      tasksList: async () => ({ ok: true, projectId, tasks: [{ id: "same", projectId, title: `${projectId} task`, status: "open" }] }),
+      referenceGather: async () => ({ ok: true, references: { files: ["a.txt"], code: [], sessions: [], chats: [], web: [], ideas: [], pngs: [] } }),
+      tasksSave: () => new Promise(resolve => { finishSave = resolve; }),
+    } });
+    await env.api.open({ taskId: "same", gather: true }); await settle();
+    assert.equal(typeof finishSave, "function");
+    projectId = "b"; env.project(projectId); await env.api.open({ taskId: "same" });
+    env.get("reference-status").textContent = "B status"; const notices = env.notifications.length;
+    finishSave({ ok: outcome === "success", error: "A save failed" }); await settle(); await settle();
+    assert.equal(env.get("reference-status").textContent, "B status"); assert.equal(env.notifications.length, notices);
+    assert.ok(!env.api.state.tasks[0].refs?.length);
+  });
+}
+
+for (const scenario of ["same-id project switch", "A-B-A", "close", "close-reopen", "rejected old read", "valid completion"]) {
+  test(`pending task open fences side effects: ${scenario}`, async () => {
+    let projectId = "a", pending = null;
+    const gathers = [];
+    const rows = () => [{ id: "same", projectId, title: `${projectId} task`, prompt: "Gather this task", status: "open" }];
+    const env = environment({ bridge: {
+      tasksList: () => pending ? (pending = null, held) : Promise.resolve({ ok: true, projectId, tasks: rows() }),
+      referenceGather: async () => { gathers.push(projectId); return { ok: false, error: "fixture completion" }; },
+    } });
+    await env.api.open({ taskId: "same" });
+    env.events.length = 0;
+    let resolve, reject;
+    const held = new Promise((yes, no) => { resolve = yes; reject = no; });
+    pending = true;
+    const old = env.api.open({ taskId: "same", gather: true, panel: "references" });
+    if (["same-id project switch", "A-B-A", "rejected old read"].includes(scenario)) {
+      projectId = "b"; env.project(projectId);
+      await env.api.open({ taskId: "same" });
+      if (scenario === "A-B-A") { projectId = "a"; env.project(projectId); await env.api.open({ taskId: "same" }); }
+    }
+    if (scenario.startsWith("close")) { env.api.close(); if (scenario === "close-reopen") await env.api.open({ taskId: "same" }); }
+    env.events.length = 0;
+    env.get("reference-status").textContent = "Current detail status";
+    if (scenario === "rejected old read") reject(new Error("old read failed"));
+    else resolve({ ok: true, projectId: "a", tasks: [{ id: "same", projectId: "a", title: "a task", prompt: "Gather this task", status: "open" }] });
+    await old;
+    assert.equal(gathers.length, scenario === "valid completion" ? 1 : 0);
+    const opened = env.events.filter(event => event.type === "mefi:task-opened");
+    assert.equal(opened.length, scenario === "valid completion" ? 1 : 0);
+    if (scenario !== "valid completion") assert.equal(env.get("reference-status").textContent, "Current detail status");
+  });
+}
+
+test("task details show the current saved destination and reuse scoped plan navigation without saving work", async () => {
+  const task = { id: "linked", projectId: "p", title: "Build export", status: "open", planningId: "plan", planningSpecId: "spec", prompt: "Original approved task brief" };
+  const plan = { id: "plan", projectId: "p", title: "Portable export", destination: "Keep accented names\nPreserve final empty fields", taskIds: ["linked"], spec: { id: "spec", approvedAt: 123 } };
+  const env = environment({ tasks: [task], overview: true, bridge: {
+    tasksList: async () => ({ ok: true, projectId: "p", tasks: [task] }),
+    planningList: async () => ({ ok: true, projectId: "p", plans: [plan] }),
+  } });
+  const navigation = []; env.window.MefiNav.go = (route, params) => navigation.push({ route, params: { ...params } });
+  await env.api.open({ taskId: "linked" });
+  const trace = descendants(env.get("task-detail")).find(node => node.dataset.taskPanel === "plan-trace");
+  assert.equal(trace.dataset.state, "current"); assert.match(trace.textContent, /Current saved destinationPortable export/);
+  assert.ok(trace.textContent.includes(plan.destination));
+  assert.ok(env.get("task-detail").textContent.includes(task.prompt));
+  const link = descendants(trace).find(node => node.dataset.taskAction === "view-plan");
+  assert.equal(link.textContent, "View linked plan"); assert.equal(link.hidden, false); link.click();
+  assert.deepEqual(navigation, [{ route: "plans", params: { planId: "plan" } }]);
+  assert.deepEqual(env.saved, []); assert.equal(task.prompt, "Original approved task brief");
+});
+
+test("plan-only refreshes retain note drafts and focus, disclose changed scope, and hide unreadable cached context", async () => {
+  const task = { id: "linked", projectId: "p", title: "Build export", status: "open", planningId: "plan", planningSpecId: "original" };
+  let plan = { id: "plan", projectId: "p", title: "Portable export", destination: "Initial destination", taskIds: ["linked"], spec: { id: "original", approvedAt: 123 } };
+  let foreignReply = false;
+  const env = environment({ tasks: [task], overview: true, clock: { now: 1000000 }, bridge: {
+    tasksList: async () => ({ ok: true, projectId: "p", tasks: [task] }),
+    planningList: async () => foreignReply ? { ok: true, projectId: "q", plans: [{ ...plan, projectId: "q", destination: "Private foreign destination" }] } : { ok: true, projectId: "p", plans: [plan] },
+  } });
+  await env.api.open({ taskId: "linked" });
+  const trace = descendants(env.get("task-detail")).find(node => node.dataset.taskPanel === "plan-trace");
+  env.get("task-tab-history").click();
+  const note = descendants(env.get("task-detail")).find(node => node.dataset.taskEntryKey === "p/linked/logs");
+  assert.ok(note, "the task's note input is available");
+  note.value = "Unsaved note draft"; note.focus();
+  plan = { ...plan, destination: "Changed destination", spec: { id: "revised", approvedAt: 456 } };
+  await env.poll(); await settle();
+  assert.equal(descendants(env.get("task-detail")).find(node => node.dataset.taskPanel === "plan-trace"), trace);
+  assert.equal(descendants(env.get("task-detail")).find(node => node.dataset.taskEntryKey === "p/linked/logs"), note);
+  assert.equal(note.value, "Unsaved note draft"); assert.equal(env.document.activeElement, note);
+  assert.equal(trace.dataset.state, "changed"); assert.match(trace.textContent, /Changed destination/);
+  assert.match(trace.textContent, /specification differs/); assert.match(trace.textContent, /recorded brief is unchanged/);
+  env.get("task-tab-details").click();
+  const link = descendants(trace).find(node => node.dataset.taskAction === "view-plan"); link.focus();
+  foreignReply = true; await env.poll(); await settle();
+  assert.equal(trace.dataset.state, "unavailable"); assert.equal(link.hidden, true);
+  assert.doesNotMatch(trace.textContent, /Changed destination|Private foreign destination/);
+  assert.equal(env.document.activeElement, trace, "focus does not stay on the hidden link");
+  foreignReply = false; await env.poll(); await settle();
+  assert.equal(trace.dataset.state, "changed"); assert.equal(link.hidden, false);
+  assert.match(trace.textContent, /Changed destination/);
+  assert.deepEqual(env.saved, []);
+});
+
+test("missing links remain honest without blocking task controls and late prior-project plans cannot overwrite current detail", async () => {
+  const task = { id: "linked", projectId: "p", title: "Build export", status: "open", planningId: "plan" };
+  const missing = environment({ tasks: [task], overview: true, bridge: {
+    tasksList: async () => ({ ok: true, projectId: "p", tasks: [task] }),
+    planningList: async () => ({ ok: true, projectId: "p", plans: [] }),
+  } });
+  await missing.api.open({ taskId: "linked" });
+  const trace = descendants(missing.get("task-detail")).find(node => node.dataset.taskPanel === "plan-trace");
+  assert.equal(trace.dataset.state, "missing"); assert.match(trace.textContent, /not available in this project/);
+  assert.equal(descendants(trace).find(node => node.dataset.taskAction === "view-plan").hidden, true);
+  assert.ok(missing.get("task-status-row").children.some(node => node.textContent === "Delete"), "missing plan context leaves existing task controls available");
+  let projectId = "p", finish;
+  const pending = new Promise(resolve => { finish = resolve; });
+  const env = environment({ overview: true, bridge: {
+    tasksList: async () => ({ ok: true, projectId, tasks: [{ ...task, projectId }] }),
+    planningList: ({ projectId }) => projectId === "p" ? pending : Promise.resolve({ ok: true, projectId, plans: [{ id: "plan", projectId, title: "Current project plan", destination: "Current project destination", spec: { approvedAt: 123 } }] }),
+  } });
+  const opening = env.api.open({ taskId: "linked" }); await settle();
+  projectId = "q"; env.project(projectId); await settle(); env.api.selectTask("linked");
+  finish({ ok: true, projectId: "p", plans: [{ id: "plan", projectId: "p", title: "Private previous plan", destination: "Private previous destination" }] });
+  await opening; await settle();
+  const current = descendants(env.get("task-detail")).find(node => node.dataset.taskPanel === "plan-trace");
+  assert.ok(current.textContent.includes("Current project destination"));
+  assert.doesNotMatch(current.textContent, /Private previous/); assert.deepEqual(env.saved, []);
+});
 
 test("workflow summary uses the current project's exact worker and recorded checks without promoting worker claims", async () => {
   const env = environment();
@@ -434,6 +668,136 @@ test("an in-flight board load cannot overwrite a newer completion broadcast", as
 
 const descendants = (element) => element.children.flatMap((child) => [child, ...descendants(child)]);
 const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+const overviewCards = (env) => descendants(env.get("task-list")).filter((element) => element.dataset.overviewId);
+const overviewCardFor = (env, id) => overviewCards(env).find((element) => element.dataset.overviewId === id);
+const overviewFold = (card) => descendants(card).find((element) => element.className === "task-overview-details");
+
+test("single-row updates keep every unrelated overview card and its focused expanded content", async () => {
+  const clock = { now: 1000000 };
+  const tasks = Array.from({ length: 100 }, (_, index) => ({ id: `task-${index}`, projectId: "p", title: `Task ${index}`, status: "open", updatedAt: index }));
+  const env = environment({ tasks, overview: true, clock });
+  await env.api.open(); await settle();
+  const before = new Map(overviewCards(env).map(card => [card.dataset.overviewId, card]));
+  const heading = env.get("task-list").children[0], kept = before.get("task-20"), fold = overviewFold(kept);
+  fold.open = true; fold.children[0].focus();
+  clock.now += 1000;
+  env.broadcast(tasks.map(task => task.id === "task-50" ? { ...task, title: "Updated task 50" } : { ...task }));
+  await settle();
+  assert.equal(overviewCards(env).length, 100);
+  for (const [id, card] of before) assert.equal(overviewCardFor(env, id) === card, id !== "task-50", id);
+  assert.equal(env.get("task-list").children[0], heading);
+  assert.equal(env.document.activeElement, fold.children[0]); assert.equal(fold.open, true);
+  assert.match(overviewCardFor(env, "task-50").textContent, /Updated task 50/);
+});
+
+test("overview insertion, removal and sorting retain unchanged cards and reorder focus with both DOM paths", async () => {
+  for (const nativeMove of [true, false]) {
+    const clock = { now: 1000000 }, a = { id: "a", title: "A", status: "open", updatedAt: 20 }, b = { id: "b", title: "B", status: "open", updatedAt: 10 };
+    const env = environment({ tasks: [a, b], overview: true, clock }); await env.api.open();
+    if (!nativeMove) env.get("task-list").moveBefore = undefined;
+    const aCard = overviewCardFor(env, "a"), bCard = overviewCardFor(env, "b"); bCard.focus();
+    clock.now += 1000; env.broadcast([a, b, { id: "c", title: "C", status: "active", updatedAt: 0 }]); await settle();
+    assert.deepEqual(overviewCards(env).map(card => card.dataset.overviewId), ["c", "a", "b"]);
+    assert.equal(overviewCardFor(env, "a"), aCard); assert.equal(overviewCardFor(env, "b"), bCard); assert.equal(env.document.activeElement, bCard);
+    clock.now += 1000; env.broadcast([b, { ...a, updatedAt: 1 }]); await settle();
+    assert.deepEqual(overviewCards(env).map(card => card.dataset.overviewId), ["b", "a"]);
+    assert.equal(overviewCardFor(env, "b"), bCard); assert.equal(env.document.activeElement, bCard);
+    clock.now += 1000; env.broadcast([b]); await settle();
+    assert.equal(overviewCardFor(env, "a"), undefined); assert.equal(overviewCardFor(env, "b"), bCard);
+  }
+});
+
+test("same-count parent and planning membership changes rebuild affected groups without disturbing unrelated work", async () => {
+  const clock = { now: 1000000 };
+  let plans = [], rows = ["parent", "child", "other"].map(id => ({ id, projectId: "p", title: id, status: "open" }));
+  const env = environment({ tasks: rows, overview: true, clock, bridge: { planningList: async () => ({ ok: true, projectId: "p", plans }) } });
+  await env.api.open(); const other = overviewCardFor(env, "other"), parent = overviewCardFor(env, "parent");
+  clock.now += 1000; rows = rows.map(row => row.id === "child" ? { ...row, parentTaskId: "parent" } : row); env.broadcast(rows); await settle();
+  assert.equal(overviewCards(env).length, 2); assert.notEqual(overviewCardFor(env, "parent"), parent); assert.equal(overviewCardFor(env, "other"), other);
+  assert.match(overviewCardFor(env, "parent").textContent, /2 tasks in this card/);
+  plans = [{ id: "plan", projectId: "p", title: "Saved plan", taskIds: ["child"], status: "converted" }];
+  clock.now += 1000; env.poll(); await settle(); await settle();
+  assert.ok(overviewCardFor(env, "planning:plan")); assert.equal(overviewCardFor(env, "other"), other);
+  const saved = overviewCardFor(env, "planning:plan"); plans = [{ ...plans[0], title: "Changed saved destination", destination: "New acceptance scope" }];
+  clock.now += 1000; env.poll(); await settle(); await settle();
+  assert.notEqual(overviewCardFor(env, "planning:plan"), saved); assert.match(overviewCardFor(env, "planning:plan").textContent, /New acceptance scope/);
+  assert.equal(overviewCardFor(env, "other"), other);
+});
+
+test("changed cards preserve immediate fold state and member button focus, while finished cards retain their fold", async () => {
+  const clock = { now: 1000000 };
+  const rows = [{ id: "a", title: "A", status: "open" }, { id: "b", title: "B", status: "open", parentTaskId: "a" }, { id: "done", title: "Done", status: "done", verification: { state: "manual" } }];
+  const env = environment({ tasks: rows, overview: true, clock }); await env.api.open();
+  const old = overviewCardFor(env, "a"), details = overviewFold(old); details.open = true;
+  const member = descendants(old).find(node => node.dataset.taskId === "b"), button = descendants(member).find(node => node.tagName === "button"); button.focus();
+  const finished = descendants(env.get("task-list")).find(node => node.className === "task-overview-finished-fold"); finished.open = true;
+  clock.now += 1000; env.broadcast([rows[1], { ...rows[0], title: "A changed" }, rows[2]]); await settle();
+  const changed = overviewCardFor(env, "a"); assert.notEqual(changed, old); assert.equal(overviewFold(changed).open, true);
+  assert.equal(env.document.activeElement.closest(".task-row").dataset.taskId, "b"); assert.equal(env.document.activeElement.textContent, button.textContent);
+  assert.equal(descendants(env.get("task-list")).find(node => node.className === "task-overview-finished-fold"), finished); assert.equal(finished.open, true);
+  clock.now += 1000; env.broadcast(rows.map(row => row.id === "a" ? { ...row, status: "done", verification: { state: "manual" } } : row.id === "b" ? { ...row, status: "done", verification: { state: "manual" } } : row)); await settle();
+  assert.equal(finished.open, true); assert.match(finished.textContent, /Confirmed plans & tasks.*2/);
+});
+
+test("retained row actions use the newest canonical snapshot, and detached project actions are inert", async () => {
+  const clock = { now: 1000000 }, task = { id: "same", projectId: "p", title: "Local", status: "open" };
+  const env = environment({ tasks: [task], overview: true, clock }); await env.api.open();
+  const card = overviewCardFor(env, "same"), button = descendants(card).find(node => node.tagName === "button");
+  const fresh = { ...task, runProgress: { outputTail: "New checkpoint" } }; clock.now += 1000; env.broadcast([fresh]); await settle();
+  assert.equal(overviewCardFor(env, "same"), card); button.click(); await settle();
+  assert.equal(env.saved.at(-1)[0].status, "done"); assert.equal(env.saved.at(-1)[0].runProgress.outputTail, "New checkpoint");
+  const count = env.saved.length; env.project("q"); button.click(); card.listeners.keydown[0]({ target: card, key: "Enter", preventDefault() {} }); await settle();
+  assert.equal(env.saved.length, count); assert.notEqual(env.api.state.selected, "same");
+});
+
+test("hidden reopen and stale board reads keep the newest cards and preserve unrelated drafts", async () => {
+  const clock = { now: 1000000 }, a = { id: "a", projectId: "p", title: "A", status: "open" }, b = { id: "b", projectId: "p", title: "B", status: "open" };
+  let delayed = false, finish;
+  const env = environment({ overview: true, clock, bridge: { tasksList: () => delayed ? new Promise(resolve => { finish = resolve; }) : Promise.resolve({ ok: true, projectId: "p", tasks: [a, b] }) } });
+  await env.api.open({ taskId: "a" }); env.get("task-tab-history").click();
+  const note = () => descendants(env.get("task-detail")).find(node => node.placeholder === "Log a note…");
+  assert.ok(note(), JSON.stringify({ selected: env.api.state.selected, status: env.get("task-status").textContent, detail: env.get("task-detail").textContent }));
+  note().value = "Draft note"; note().listeners.input[0](); env.get("task-new").value = "Draft new work";
+  const kept = overviewCardFor(env, "a"); env.api.close(); delayed = true;
+  const opening = env.api.open(); clock.now += 1000; env.broadcast([a, { ...b, title: "Newest B" }]); await settle();
+  finish({ ok: true, projectId: "p", tasks: [a, b] }); await opening;
+  assert.equal(overviewCardFor(env, "a"), kept); assert.match(overviewCardFor(env, "b").textContent, /Newest B/);
+  assert.equal(note().value, "Draft note"); assert.equal(env.get("task-new").value, "Draft new work");
+});
+
+test("project changes never reuse same-ID cards or stale plan responses and reject foreign board pushes", async () => {
+  const clock = { now: 1000000 }; let project = "p", delayed = false, finish;
+  const task = () => ({ id: "same", projectId: project, title: `Private ${project}`, status: "open" });
+  const env = environment({ overview: true, clock, bridge: {
+    tasksList: async () => ({ ok: true, projectId: project, tasks: [task()] }),
+    planningList: () => delayed ? new Promise(resolve => { finish = resolve; }) : Promise.resolve({ ok: true, projectId: project, plans: [] }),
+  } });
+  await env.api.open(); const old = overviewCardFor(env, "same"); delayed = true; env.poll(); await settle();
+  const stale = finish; delayed = false; project = "q"; env.project("q"); await settle(); await settle();
+  stale({ ok: true, projectId: "p", plans: [{ id: "old", projectId: "p", title: "Foreign plan" }] }); await settle();
+  const current = overviewCardFor(env, "same"); assert.notEqual(current, old); assert.match(current.textContent, /Private q/);
+  clock.now += 1000; env.broadcast([{ id: "same", projectId: "p", title: "Foreign task", status: "open" }]); await settle();
+  assert.equal(overviewCardFor(env, "same"), current); assert.doesNotMatch(env.get("task-list").textContent, /Foreign|Private p/);
+});
+
+test("same-count scheduler action and reason changes invalidate only the affected overview card", async () => {
+  const clock = { now: 1000000 }, rows = ["a", "b"].map(id => ({ id, projectId: "p", title: id, status: "open" }));
+  let states = [], calls = [];
+  const env = environment({ tasks: rows, overview: true, clock, bridge: {
+    backlogStatus: async () => ({ ok: true, projectId: "p", taskStates: states }),
+    tasksAction: async value => { calls.push({ ...value }); return { ok: true }; },
+  } }); await env.api.open(); const kept = overviewCardFor(env, "b"), old = overviewCardFor(env, "a");
+  states = [{ id: "a", stage: "blocked", blockedBy: "owner", reason: "Owner stopped this worker" }];
+  clock.now += 1000; env.poll(); await settle(); await settle();
+  assert.notEqual(overviewCardFor(env, "a"), old); assert.equal(overviewCardFor(env, "b"), kept);
+  const resume = descendants(overviewCardFor(env, "a")).find(node => node.dataset.taskAction === "resume"); assert.ok(resume);
+  resume.click(); await settle(); assert.equal(calls[0].taskId, "a"); assert.equal(calls[0].projectId, "p"); assert.equal(calls[0].action, "retry");
+  states = [{ id: "a", stage: "blocked", blockedBy: "dependencies", reason: "Wait for recorded checks" }];
+  clock.now += 1000; env.poll(); await settle(); await settle();
+  assert.doesNotMatch(overviewCardFor(env, "a").textContent, /Resume/); assert.match(overviewCardFor(env, "a").textContent, /Wait for recorded checks/);
+  assert.equal(overviewCardFor(env, "b"), kept);
+});
 
 test("shared-task details link delegated builders and count only confirmed subtasks", async () => {
   const tasks = [

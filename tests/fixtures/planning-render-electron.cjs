@@ -100,10 +100,13 @@ app.whenReady().then(async () => {
   assert.ok(report.stepCards.validIcons && report.stepCards.entrance && report.stepCards.compact, "compact cards slide in with real shared icons");
   await capture("planning-empty.png");
   await run("const title=document.getElementById('plans-title');title.value='A warmer first welcome';title.dispatchEvent(new Event('input',{bubbles:true}));title.focus();");
+  // Navigation has visited other surfaces since boot. Reassert the fixture's
+  // active-page emulation before native keys and the actual :focus paint check.
+  await contents.debugger.sendCommand("Emulation.setFocusEmulationEnabled", { enabled: true });
   contents.sendInputEvent({ type: "keyDown", keyCode: "Enter" }); contents.sendInputEvent({ type: "keyUp", keyCode: "Enter" });
   await until("document.activeElement.id==='plans-destination'");
   report.focus = await run("const field=document.getElementById('plans-destination');return {focused:field.matches(':focus'),docFocus:document.hasFocus(),active:document.activeElement.id,tint:getComputedStyle(field).getPropertyValue('--tint-gold-1'),shadow:getComputedStyle(field).boxShadow};");
-  await until("getComputedStyle(document.getElementById('plans-destination')).boxShadow!=='none'&&!getComputedStyle(document.getElementById('plans-destination')).boxShadow.startsWith('rgba(0, 0, 0, 0)')");
+  await until("getComputedStyle(document.getElementById('plans-destination')).boxShadow!=='none'&&!getComputedStyle(document.getElementById('plans-destination')).boxShadow.startsWith('rgba(0, 0, 0, 0)')").catch(error => { throw new Error(`${error.message}; focus=${JSON.stringify(report.focus)}`); });
   report.keyboardGlow = await run("const field=document.activeElement;return {shadow:getComputedStyle(field).boxShadow,departing:document.getElementById('plans-title').parentElement.dataset.departing};");
   assert.notEqual(report.keyboardGlow.shadow, "none"); assert.equal(report.keyboardGlow.departing, "true");
   await run("const field=document.getElementById('plans-destination');field.value='Help someone feel at home in their workspace in the first five minutes.';field.dispatchEvent(new Event('input',{bubbles:true}));document.getElementById('plans-out-of-scope').value='Account sync and collaboration can wait.';document.getElementById('plans-out-of-scope').dispatchEvent(new Event('input',{bubbles:true}));");

@@ -22,6 +22,30 @@ import { executorHost } from "./fixtures/host_executor.mjs";
 import { createRequire } from "node:module";
 const { createProjects } = createRequire(import.meta.url)("../scripts/projects.cjs");
 
+test("actual prompt assembly passes the assigned run's recap and still dispatches if history is unavailable", async () => {
+  for (const fail of [false, true]) {
+    const h = executorHost({ tasks: [{ id: "task_recap", title: "Current work", prompt: "Keep the current obligation", status: "open", createdAt: 1 }] });
+    const calls = [];
+    h.env.scrubOutbound = text => text;
+    h.env.fleetHost = { recap: async payload => { calls.push(payload); if (fail) throw Error("History store unavailable"); return { text: "Previous generation stopped after its parser checkpoint" }; } };
+    h.wake();await h.pump();assert.equal(h.starts.length, 1);
+    assert.equal(calls[0].runId, h.starts[0].runId);assert.equal(calls[0].taskId, "task_recap");
+    assert.match(h.starts[0].child.prompt, /Keep the current obligation/);
+    if (fail) assert.doesNotMatch(h.starts[0].child.prompt, /Previous generation stopped/);
+    else assert.match(h.starts[0].child.prompt, /Previous generation stopped after its parser checkpoint/);
+  }
+});
+
+test("a stalled recap read cannot strand a claimed task before its worker starts", async () => {
+  const h = executorHost({ tasks: [{ id: "task_recap", title: "Current work", prompt: "Finish current work", status: "open", createdAt: 1 }] });
+  h.env.fleetHost = { recap: () => new Promise(() => {}) };
+  h.wake();const pending = h.pump();
+  for (let turn = 0; turn < 100 && !h.timers.some(timer => timer.delay === 2000); turn += 1) await new Promise(resolve => setImmediate(resolve));
+  const deadline = h.timers.find(timer => timer.delay === 2000);assert.ok(deadline);deadline.fn();
+  await pending;assert.equal(h.starts.length, 1);assert.equal(h.autopilot.jobs[0].taskId, "task_recap");
+  assert.doesNotMatch(h.starts[0].child.prompt, /RECORDED SEAT RECAP/);
+});
+
 const source = (await readFile(new URL("../main.cjs", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const section = (start, end) => {
   const from = source.indexOf(start), to = source.indexOf(end, from + start.length);

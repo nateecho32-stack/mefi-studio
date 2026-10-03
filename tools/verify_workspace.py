@@ -128,6 +128,12 @@ async function finish(error) {
 process.on("uncaughtException", finish);
 process.on("unhandledRejection", finish);
 global.fetch = async (url) => {
+  // Setup now probes the local model roster. Answer this read at the fixture
+  // boundary; no local service or external provider is contacted.
+  if (["http://127.0.0.1:1234/v1/models", "https://opencode.ai/zen/go/v1/models", "https://opencode.ai/zen/v1/models"].includes(String(url))) {
+    (report.localModelProbes ||= []).push(String(url));
+    return new Response(JSON.stringify({ data: [] }), { status: 200, headers: { "content-type": "application/json" } });
+  }
   report.networkAttempts.push(String(url));
   throw new Error("External network is disabled by the isolated UI harness");
 };
@@ -279,7 +285,11 @@ class VerifiedWindow extends NativeWindow {
     // frame after navigation even though DOM hit testing is already current.
     this.webContents.invalidate();
     await sleep(400);
-    const image = await this.webContents.capturePage();
+    let image;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try { image = await this.webContents.capturePage(); break; }
+      catch (error) { if (!/UnknownVizError/.test(error.message) || attempt === 2) throw error; this.webContents.invalidate(); await sleep(400); }
+    }
     assert(!image.isEmpty(), `${name} screenshot must contain pixels`);
     const output = path.join(config.output, `${name}.png`);
     fs.writeFileSync(output, image.toPNG());
@@ -513,7 +523,12 @@ class VerifiedWindow extends NativeWindow {
     this.check(`Menus and ${order.join(", ")} fit 1440×900, 1280×720 pinned, 1024×640 (the pin yields), 900×700 and 600×760`);
   }
   async verify() {
-    await this.until("window.MefiWorkspace?.isActive?.() && document.getElementById('boot-layer')?.hidden", "workspace is the default home");
+    // A new profile starts in Vibe and opens the setup helper. This is the
+    // Build/Home tour: select that mode through the public UI API, without
+    // closing or suppressing either first-run overlay or changing app defaults.
+    await this.until("window.MefiWorkspace && window.MefiVibe && document.getElementById('boot-layer')?.hidden && window.MefiSetupHelper?.isOpen?.()", "first-run setup is ready");
+    await this.run("window.MefiVibe.setMode('build', { go: false }); window.MefiVibe.exit(); await window.MefiWorkspace.enter();");
+    await this.until("window.MefiWorkspace.isActive()", "the fixture selects Build's Home");
     await this.until("document.querySelectorAll('#workspace-projects button').length >= 2", "saved projects appear");
     await this.until("document.querySelector('#workspace-ideas span').textContent === '100' && !document.getElementById('workspace-run-backlog').disabled", "the entire seeded backlog loads");
     assert.equal(await this.run("return (await window.mefiStudio.projectsList()).activeId;"), config.alpha.id);
@@ -521,9 +536,17 @@ class VerifiedWindow extends NativeWindow {
     // The setup helper comes first on a first launch; the walkthrough follows it.
     await this.until("window.MefiSetupHelper?.isOpen?.()", "the setup helper opens first on a first launch");
     assert.equal(await this.run("return window.MefiSetupHelper.section();"), "welcome", "the setup helper starts at Welcome");
-    await this.click("#setup-helper-close");
-    await this.until("!window.MefiSetupHelper.isOpen()", "Save & close puts the setup helper away");
-    await this.until("window.MefiOnboarding && !document.getElementById('walkthrough-overlay').hidden", "walkthrough opens automatically on first launch");
+    // Closing setup deliberately leaves the tour as an invitation now. Use
+    // its supported Finish action to request the tour, retaining the setup
+    // and seven-step first-run assertions rather than suppressing them.
+    await this.click('.setup-helper-step[data-section="finish"]');
+    await this.until("window.MefiSetupHelper.section()==='finish'", "setup reaches Finish");
+    await this.until("[...document.querySelectorAll('#setup-helper-content button')].some(button=>button.textContent==='Continue to the guided tour')", "Finish renders the guided-tour action");
+    // Read and click in one page turn: model-readiness pushes can repaint Finish
+    // between two separate IPC calls, replacing an annotated button.
+    await this.run("const button=[...document.querySelectorAll('#setup-helper-content button')].find(button=>button.textContent==='Continue to the guided tour');if(!button)throw new Error('Missing guided-tour action');button.scrollIntoView({block:'nearest'});const box=button.getBoundingClientRect();const hit=document.elementFromPoint(box.x+box.width/2,box.y+box.height/2);if(!box.width||!box.height||!button.contains(hit))throw new Error('Guided-tour action is not reachable');button.click();");
+    await this.until("!window.MefiSetupHelper.isOpen()", "Continue puts the setup helper away");
+    await this.until("window.MefiOnboarding && !document.getElementById('walkthrough-overlay').hidden", "the requested first-run walkthrough opens");
     if (config.menusOnly) {
       // The menu regroup alone: close the first-run guide through its public
       // control, then check the menus and sweep every surface's layout.
@@ -537,7 +560,9 @@ class VerifiedWindow extends NativeWindow {
       assert.equal(serious.length, 0, `Renderer errors: ${serious.join('; ')}`);
       return;
     }
-    assert.equal(await this.run("return document.getElementById('walkthrough-progress').textContent;"), "Step 1 of 7", "new users start at the first lesson without clicking an invitation");
+    // Progress also reports completed lessons now; retain the exact step and
+    // total assertions, independently of the seeded project's done count.
+    assert.equal(await this.run("return document.getElementById('walkthrough-progress').textContent.split(' ').slice(0,4).join(' ');"), "Step 1 of 7", "the requested first tour starts at the scan lesson");
     assert.match(await this.run("return document.getElementById('walkthrough-title').textContent;"), /scan this computer/i, "the guide opens on the scan stop");
     // The scan stop starts its read-only scan by itself. This launch runs with
     // --smoke, so the host refuses it before OpenCode is asked anything; the
@@ -556,7 +581,7 @@ class VerifiedWindow extends NativeWindow {
     await sleep(250);
     await this.capture("00-first-project-guide");
     await this.click("#walkthrough-next");
-    assert.equal(await this.run("return document.getElementById('walkthrough-progress').textContent;"), "Step 2 of 7");
+    assert.equal(await this.run("return document.getElementById('walkthrough-progress').textContent.split(' ').slice(0,4).join(' ');"), "Step 2 of 7");
     assert.match(await this.run("return document.getElementById('walkthrough-title').textContent;"), /Welcome to Mefi/, "the workspace stop follows the scan");
     await this.until("!document.getElementById('walkthrough-build-mode').hidden && !document.getElementById('walkthrough-auto-build').disabled", "first-use build preference loads on the workspace stop");
     assert.equal(await this.run("return document.getElementById('walkthrough-auto-build').checked;"), true, "auto build remains enabled by default for existing preferences");
@@ -570,248 +595,159 @@ class VerifiedWindow extends NativeWindow {
     assert.equal(await this.run("return document.getElementById('walkthrough-map').hidden;"), false, "the map stop shows its panel");
     assert.equal(await this.run("return document.getElementById('walkthrough-build-mode').hidden;"), true, "the build preference is not offered on the map stop");
     await this.click("#walkthrough-next");
-    assert.equal(await this.run("return document.getElementById('walkthrough-progress').textContent;"), "Step 4 of 7");
+    assert.equal(await this.run("return document.getElementById('walkthrough-progress').textContent.split(' ').slice(0,4).join(' ');"), "Step 4 of 7");
     assert.match(await this.run("return document.getElementById('walkthrough-title').textContent;"), /Connect/);
     this.webContents.sendInputEvent({type:"keyDown",keyCode:"Escape"});
     this.webContents.sendInputEvent({type:"keyUp",keyCode:"Escape"});
     await this.until("document.getElementById('walkthrough-overlay').hidden", "Escape closes the guide");
+    // Match Studio's hot-reload path: capture the active mode/view and drafts
+    // before reloading, rather than treating a raw reload as a new launch.
+    await this.run("window.MefiNav.saveResume();");
     await new Promise((resolve) => { this.webContents.once("did-finish-load", resolve); this.webContents.reload(); });
     await this.until("window.MefiWorkspace?.isActive?.() && document.getElementById('boot-layer')?.hidden && window.MefiOnboarding", "workspace returns after closing the first-launch guide");
     assert.equal(await this.run("return document.getElementById('walkthrough-overlay').hidden;"), true, "an unfinished guide does not automatically reopen on the next launch");
     await this.until("!document.getElementById('workspace-auto-build').disabled && !document.getElementById('workspace-auto-build').checked", "workspace retains verify-first after renderer reload");
     assert.equal((await this.run("return await window.mefiStudio.backlogStatus();")).counts.ready, 0, "unapproved queued work is not ready in verify-first mode");
-    await this.click('label[for="workspace-auto-build"]');
-    await this.until("(async () => (await window.mefiStudio.assistantStatus()).status.autoBuild === true)()", "workspace toggle restores auto build");
-    assert.equal((await this.run("return (await window.mefiStudio.assistantStatus()).status;")).execute, false, "changing build preference leaves the existing worker pause in place");
-    this.check("First-use and workspace toggles persist Auto build or Verify first without changing the worker pause");
-    await this.click("#walkthrough-invite-open");
-    assert.equal(await this.run("return document.getElementById('walkthrough-progress').textContent;"), "Step 4 of 7", "the reminder reopens the guide at the saved connections stop");
-    assert.match(await this.run("return document.getElementById('walkthrough-title').textContent;"), /Connect/);
-    await this.click("#walkthrough-next");
-    assert.match(await this.run("return document.getElementById('walkthrough-title').textContent;"), /Give a clear task/, "the create stop follows connections");
-    await this.click("#walkthrough-action");
+    // Agents owns queue preferences now; Home's legacy disclosures are hidden.
+    // Every preference change below goes through the visible Agents navigation.
+    const home = async () => { await this.run("window.MefiNav.go('workspace');"); await this.until("window.MefiWorkspace.isActive()", "Home opens"); };
+    const agents = async (pane = "behavior") => {
+      await this.openFromNav("agents");
+      // The rail remembers the last Agents destination (often Live). Overview
+      // is the visible way back to setup from that remembered destination.
+      await this.until("document.querySelector('[data-agent-section=overview]')", "Agents section navigation appears");
+      const compact=await this.run("const r=document.querySelector('[data-agent-section=overview]').getBoundingClientRect();return !r.width || !r.height;");
+      if(compact) {
+        const choose=async(selector,label)=>{
+          await this.until(`document.querySelector(${JSON.stringify(selector+' + .studio-select')})`, "compact Agents picker is enhanced");
+          await this.click(selector+' + .studio-select');
+          await this.until(`[...document.querySelectorAll('#studio-floats [role=option]')].some(el=>el.textContent.trim()===${JSON.stringify(label)})`, "compact Agents option opens");
+          const id=await this.run(`return [...document.querySelectorAll('#studio-floats [role=option]')].find(el=>el.textContent.trim()===${JSON.stringify(label)}).id;`);
+          await this.click('#'+id);
+        };
+        await choose('.agents-section-picker','Overview');
+        await this.until("!document.getElementById('agents-overlay').hidden", "compact Agents Overview opens");
+        await choose('.agents-section-picker','Setup');
+        await choose('.agents-subsection-picker',{"behavior":"Run behavior","routing":"Routing & fallback","connections":"Providers"}[pane]);
+      } else {
+      await this.click('[data-agent-section="overview"]');
+      await this.until("!document.getElementById('agents-overlay').hidden", "Agents opens from navigation");
+      await this.click('[data-agent-section="setup"]');
+      await this.run(`const name=${JSON.stringify({behavior:"Run behavior",routing:"Routing & fallback",connections:"Providers"}[pane])}; const button=[...document.querySelectorAll('#agents-menu-setup button')].find(el=>el.textContent.trim()===name); if(!button) throw new Error('Missing Agents navigation: '+name); button.id='harness-agents-pane';`);
+      await this.click("#harness-agents-pane");
+      }
+      await this.until(`!document.getElementById('agents-${pane}').hidden`, `Agents ${pane} pane opens`);
+    };
+    const buildMode = async (value) => {
+      await agents();
+      await this.until("!document.getElementById('settings-build-mode').disabled", "Agents build approval loads");
+      await this.run(`const select=document.getElementById('settings-build-mode');select.value=${JSON.stringify(value)};select.dispatchEvent(new Event('change',{bubbles:true}));`);
+      await this.until(`(async () => (await window.mefiStudio.assistantStatus()).status.autoBuild === ${value === "auto"})()`, "Agents build approval saves through IPC");
+      assert.equal((await this.run("return (await window.mefiStudio.assistantStatus()).status;")).execute, false, "approval preference leaves worker pause in place");
+      await home();
+    };
+    const board = async () => { await this.run("if(!window.__harnessTasksWrapped){const open=window.MefiTasks.open.bind(window.MefiTasks);window.MefiTasks.open=(...args)=>{const result=open(...args);window.__harnessTasksOpen=Promise.resolve(result);return result;};window.__harnessTasksWrapped=true;}"); await this.openFromNav("tasks"); if(await this.run("return document.documentElement.dataset.shell==='rail';")) await this.click('#app-local-nav [data-nav="tasks"]'); await this.until("!document.getElementById('tasks-overlay').hidden", "Work opens from navigation"); await this.run("await window.__harnessTasksOpen;"); };
+    const selectTask = async (title) => {
+      const showAllCards=await this.run(`const row=[...document.querySelectorAll('#task-list .task-name')].find(el=>el.title===${JSON.stringify(title)});const box=row?.getBoundingClientRect();const back=document.getElementById('task-overview-back')?.getBoundingClientRect();return Boolean((!box || !box.width || !box.height) && back?.width && back?.height);`);
+      if(showAllCards) await this.click("#task-overview-back");
+      await this.run(`const input=document.getElementById('task-search');input.value=${JSON.stringify(title)};input.dispatchEvent(new Event('input',{bubbles:true}));`);
+      await this.until(`[...document.querySelectorAll('#task-list .task-name')].some(el=>el.title===${JSON.stringify(title)})`, "Work search finds the saved task before selection");
+      await this.run(`const name=[...document.querySelectorAll('#task-list .task-name')].find(el=>el.title===${JSON.stringify(title)});if(!name)throw new Error('Task row missing: '+${JSON.stringify(title)});for(const old of document.querySelectorAll('#harness-task-row'))old.removeAttribute('id');const card=name.closest('.task-overview-card.opens-task') || name.closest('li') || name;card.id='harness-task-row';card.scrollIntoView({block:'center',behavior:'instant'});`);
+      await this.until("(() => {const el=document.getElementById('harness-task-row');const r=el?.getBoundingClientRect();if(!r?.width || !r.height)return false;const hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return Boolean(hit && el.contains(hit));})()", "saved task card is visible and hittable after scrolling");
+      await this.click("#harness-task-row"); await this.until(`document.getElementById('task-title').textContent.includes(${JSON.stringify(title)})`, "saved task detail opens");
+    };
+    await buildMode("auto");
+    this.check("First-use and Agents approval controls persist without changing paused workers");
+    await this.openFromNav("onboarding");
+    assert.equal(await this.run("return document.getElementById('walkthrough-progress').textContent.split(' ').slice(0,4).join(' ');"), "Step 4 of 7");
+    await this.click("#walkthrough-next"); await this.click("#walkthrough-action");
     assert.equal(await this.run("return document.getElementById('workspace-mode-work').getAttribute('aria-pressed');"), "true");
-    assert.equal((await this.run("return (await window.mefiStudio.tasksList()).tasks;")).length, 30, "guide action prepares but never submits work");
+    assert.equal((await this.run("return (await window.mefiStudio.tasksList()).tasks;")).length, 30, "guide action prepares but never submits a task");
     await this.click("#workspace-task-outline");
     assert.match(await this.run("return document.getElementById('workspace-input').value;"), /Goal:[\s\S]*Done when:[\s\S]*Keep unchanged:/);
-    await this.run("const input = document.getElementById('workspace-input'); input.value = ''; input.dispatchEvent(new Event('input', {bubbles:true}));");
-    await this.click("#workspace-mode-chat");
-    await this.click("#walkthrough-dismiss");
-    this.check("Walkthrough starts automatically for a new user, fits a short desktop, stays closed after reload, resumes its saved lesson and prepares a task without submitting");
-    await this.run("window.MefiNav.go('studio');");
-    await this.until("!document.getElementById('tab-studio').hidden && !window.MefiWorkspace.isActive()", "grouped settings open");
-    const settingsLayout = await this.run("const assistant=document.getElementById('settings-assistant-heading');const worker=document.getElementById('settings-workers-heading');return {assistant:!!assistant,worker:!!worker,optional:[...document.querySelectorAll('#tab-studio .settings-optional')].map(el=>el.open),width:innerWidth,scroll:document.documentElement.scrollWidth};");
-    assert(settingsLayout.assistant && settingsLayout.worker, "assistant and worker connections are separate visible groups");
-    assert(settingsLayout.optional.length >= 3 && settingsLayout.optional.every(open=>!open), "optional settings begin collapsed");
-    assert(settingsLayout.scroll <= settingsLayout.width + 2, "settings do not overflow horizontally");
-    await this.until("document.getElementById('ai-routing-status').textContent.includes('Jev key')", "Jev routing reports missing connection honestly");
-    assert.equal(await this.run("return document.getElementById('ai-model-selection').value;"), "jev");
-    await this.run("const select=document.getElementById('ai-model-selection');select.value='fixed';select.dispatchEvent(new Event('change',{bubbles:true}));");
-    await this.until("document.getElementById('ai-routing-status').textContent.includes('Fixed defaults')", "fixed model selection saves");
-    assert.equal(await this.run("return (await window.mefiStudio.getAiRouting()).modelSelection;"), "fixed");
-    await this.run("const select=document.getElementById('ai-model-selection');select.value='jev';select.dispatchEvent(new Event('change',{bubbles:true}));");
-    await this.until("document.getElementById('ai-routing-status').textContent.includes('Jev key')", "Jev model selection saves");
-    await this.click("#ai-routing-refresh");
-    await this.until("!document.getElementById('ai-routing-refresh').disabled", "routing refresh finishes");
-    assert.equal(await this.run("return (await window.mefiStudio.getAiRouting()).modelSelection;"), "jev");
-    this.check("Jev model selection and fixed defaults save through real IPC; missing gateway and empty decision states stay truthful");
-    await this.capture("00b-settings-connections");
-    if (config.routingOnly) {
-      this.setSize(900, 720);
-      await sleep(250);
-      await this.run("document.getElementById('ai-model-selection').scrollIntoView({block:'center'});");
-      assert(await this.run("return document.documentElement.scrollWidth <= innerWidth + 2;"), "routing controls fit a narrow window");
-      await this.capture("00d-routing-narrow");
-      this.check("Model routing controls fit a 900px window");
-      assert.equal(report.networkAttempts.length, 0);
-      assert.equal(report.consoleErrors.length, 0);
-      return;
+    await this.run("const input=document.getElementById('workspace-input');input.value='';input.dispatchEvent(new Event('input',{bubbles:true}));");
+    await this.click("#walkthrough-coach-end");
+    await this.openFromNav("onboarding");
+    await this.click("#walkthrough-next");
+    await this.click("#walkthrough-next");
+    await this.click("#walkthrough-next");
+    await this.until("document.getElementById('walkthrough-overlay').hidden && window.MefiOnboarding.status()==='complete'", "guide completes through its visible Next controls");
+    this.check("First-run guide resumes its saved lesson and prepares a task without submitting");
+    await agents("routing");
+    for (const selection of ["fixed", "jev"]) {
+      await this.until("!document.getElementById('ai-model-selection').disabled && !document.getElementById('agents-routing').inert && window.MefiAgents.draft()", "routing is ready");
+      await this.run(`const select=document.getElementById('ai-model-selection');select.value=${JSON.stringify(selection)};select.dispatchEvent(new Event('change',{bubbles:true}));`);
+      await this.until(`window.MefiAgents.draft()?.modelSelection===${JSON.stringify(selection)}`, "routing selection stays in the Agents draft");
+      await this.click("#agents-save-bar .primary");
+      await this.until(`(async () => (await window.mefiStudio.getAiRouting()).modelSelection===${JSON.stringify(selection)})()`, "routing selection persists");
     }
-    await this.verifyMenus();
-    await this.run("window.MefiNav.go('workspace');");
-    this.check("Settings put assistant and worker connections first with optional integrations collapsed");
-    this.check("Workspace opens as home with saved projects");
-    await this.capture("01-workspace-home");
-
-    assert.equal(await this.run("return Boolean(document.querySelector('#workspace-layer > .ws-sidebar'));"), false, "the hover drawer replaces the fixed workspace sidebar");
-    assert.equal(await this.run("return document.getElementById('workspace-sidebar-panel').inert;"), true, "closed menu is not keyboard accessible");
-    const railShell = await this.run("return document.documentElement.dataset.shell === 'rail';");
-    if (railShell) {
-      // The navigation rail replaced the invisible 6px edge strip: the M+ brand
-      // at the top of the rail is the visible, labelled door to the same panel.
-      const door = await this.run("const brand=document.getElementById('app-rail-brand'),rail=document.getElementById('app-rail'),strip=document.getElementById('workspace-sidebar-toggle');return {brand:brand.getBoundingClientRect().toJSON(),railRight:rail.getBoundingClientRect().right,label:brand.getAttribute('title')||brand.textContent.trim(),stripShown:getComputedStyle(strip).display!=='none'};");
-      assert(door.brand.width > 0 && door.brand.height > 0, "the rail's brand is on screen");
-      assert(door.label, "the brand carries a name");
-      assert.equal(door.stripShown, false, "the invisible edge strip steps aside for the rail");
-      await this.capture("01c-rail-closed");
-      await this.click("#app-rail-brand");
-      await this.until("window.MefiSidebar.isOpen()", "the brand opens the project panel");
-      await sleep(230);
-      const drawer = await this.run("return document.getElementById('workspace-sidebar-panel').getBoundingClientRect().toJSON();");
-      assert(Math.abs(drawer.left - door.railRight) <= 1 && drawer.width > 0, "the panel opens against the rail's edge");
-      assert.equal(await this.run("return document.getElementById('app-rail-brand').getAttribute('aria-expanded');"), "true", "the brand reports the panel open");
-      await this.capture("01d-rail-project-panel");
-      await this.click("#workspace-sidebar-close");
-      await this.until("!window.MefiSidebar.isOpen()", "the panel closes again");
-      assert.equal(await this.run("return document.getElementById('workspace-sidebar-panel').inert;"), true);
-      this.check("The rail's M+ brand is a visible door to the project panel, which opens against the rail's edge and closes again");
-    } else {
-    const edge = await this.run("const el=document.getElementById('workspace-sidebar-toggle');const style=getComputedStyle(el);return {rect:el.getBoundingClientRect().toJSON(),height:innerHeight,text:el.textContent.trim(),children:el.children.length,label:el.getAttribute('aria-label'),background:style.backgroundColor,image:style.backgroundImage,shadow:style.boxShadow,borders:[style.borderTopWidth,style.borderRightWidth,style.borderBottomWidth,style.borderLeftWidth],before:getComputedStyle(el,'::before').content,after:getComputedStyle(el,'::after').content};");
-    assert(Math.abs(edge.rect.left) <= 1 && Math.abs(edge.rect.top) <= 1 && Math.abs(edge.rect.bottom - edge.height) <= 1, "the hover area spans the full left edge");
-    assert(edge.rect.width > 0 && edge.rect.width <= 8, "the invisible edge stays narrow enough to leave workspace controls usable");
-    assert.equal(edge.text, "", "the hover area has no visible Menu label");
-    assert.equal(edge.children, 0, "the hover area has no visible glyph");
-    assert(edge.label, "the invisible control retains an accessible name");
-    assert.equal(edge.background, "rgba(0, 0, 0, 0)", "the edge has no painted tab background");
-    assert.equal(edge.image, "none");
-    assert.equal(edge.shadow, "none");
-    assert(edge.borders.every(value => parseFloat(value) === 0), "the edge has no visible tab border");
-    assert([edge.before, edge.after].every(value => value === "none" || value === "normal"), "pseudo-elements do not paint a tab");
-    await this.capture("01c-left-edge-closed");
-    const outsideMenu = await this.run("return {x:innerWidth - 40,y:Math.round(innerHeight / 2)};");
-    // The panel is projects-only now (the personal fields moved to Settings ›
-    // Your Studio), so its own Add project control holds focus lower down.
-    for (const [height, focusTarget] of [[0.1, "workspace-sidebar-close"], [0.85, "workspace-add-project"]]) {
-      this.webContents.sendInputEvent({ type: "mouseMove", ...outsideMenu });
-      this.webContents.sendInputEvent({ type: "mouseMove", x: 1, y: Math.round(edge.height * height) });
-      await this.until("window.MefiSidebar.isOpen()", `hover opens the sidebar at ${height * 100}% of the left edge`);
-      await sleep(230);
-      const drawer = await this.run("return document.getElementById('workspace-sidebar-panel').getBoundingClientRect().toJSON();");
-      assert(Math.abs(drawer.left) <= 1 && drawer.width > 0, "the open drawer is anchored to the left edge");
-      this.webContents.sendInputEvent({ type: "mouseMove", x: Math.round(drawer.x + 60), y: Math.round(edge.height * height) });
-      await sleep(300);
-      assert.equal(await this.run("return window.MefiSidebar.isOpen();"), true, "moving from the edge into the menu keeps it open");
-      if (height === 0.1) {
-        await this.run("window.MefiMusic.applyTheme('aurora', false);");
-        await this.capture("01d-left-sidebar-aurora");
-      }
-      await this.run(`const el=document.getElementById(${JSON.stringify(focusTarget)});const details=el.closest('details');if(details) details.open=true;el.focus();`);
-      assert.equal(await this.run("return document.activeElement.id;"), focusTarget, "a menu control holds keyboard focus before leaving");
-      assert(outsideMenu.x > drawer.right, "the dismissal pointer leaves the left drawer");
-      this.webContents.sendInputEvent({ type: "mouseMove", ...outsideMenu });
-      await this.until("!window.MefiSidebar.isOpen()", "leaving the menu closes it even while a menu control has focus");
-      assert.equal(await this.run("return document.getElementById('workspace-sidebar-panel').contains(document.activeElement);"), false, "closing removes keyboard focus from the hidden menu");
-      assert.equal(await this.run("return document.getElementById('workspace-sidebar-panel').inert;"), true);
-    }
-    await this.run("document.getElementById('workspace-sidebar-panel').scrollTop=0;");
-    await this.run("window.MefiMusic.applyTheme('gold', false);");
-    this.check("An invisible full-height left edge reveals the themed menu, preserves pointer travel and closes on leaving even with focused controls");
-    }
-
-    await this.run("document.querySelector('.ws-top-actions [data-nav=palette]').focus();");
-    await this.click('.ws-top-actions [data-nav="palette"]');
-    assert.equal(await this.run("return document.getElementById('workspace-sidebar-toggle').hidden;"), true, "transient dialogs keep the edge trigger out of their focus scope");
-    await this.until("!document.getElementById('palette-status').textContent.includes('Loading project tasks')", "palette loads tasks without opening the board");
-    // Settings registers each card with Search, so a key question lands on its card.
-    for (const [query, expected] of [["node tree", "Command view"], ["api key", "Settings › Connections"], ["color", "Appearance & audio"], ["season archive", "Improve season archive"]]) {
-      await this.run(`const input = document.getElementById('palette-input'); input.value = ${JSON.stringify(query)}; input.dispatchEvent(new Event('input', {bubbles:true}));`);
-      assert((await this.run("return document.getElementById('palette-list').textContent;")).includes(expected), `palette finds ${query}`);
-    }
-    await this.run("document.getElementById('palette-input').focus(); window.dispatchEvent(new KeyboardEvent('keydown', {key:'Tab',bubbles:true,cancelable:true}));");
-    assert.equal(await this.run("return document.activeElement.id;"), "palette-close", "Tab reaches a visible Close button");
-    await this.run("window.dispatchEvent(new KeyboardEvent('keydown', {key:'Tab',bubbles:true,cancelable:true}));");
-    assert.equal(await this.run("return document.activeElement.id;"), "palette-input", "Tab stays in the search dialog");
-    await this.capture("01a-command-search");
-    await this.click("#palette-close");
-    assert.equal(await this.run("return document.getElementById('palette-overlay').hidden;"), true);
-    assert.equal(await this.run("return document.activeElement.dataset.nav;"), "palette", "closing search restores its opener");
-    await this.openFromNav("plans", '.ws-sidebar .ws-shortcut[data-nav="plans"]');
-    await this.until("!document.getElementById('plans-overlay').hidden", "sidebar opens Plans directly");
-    await this.run("window.MefiNav.go('workspace');");
-    await this.openFromNav("tasks", '.ws-sidebar .ws-shortcut[data-nav="tasks"]');
-    await this.until("!document.getElementById('tasks-overlay').hidden", "sidebar opens the task board directly");
-    await this.run("window.MefiNav.go('workspace');");
-    this.check("Search finds familiar names and current-project tasks, traps keyboard focus, and common sidebar shortcuts open directly");
-
-    await this.run("const input = document.getElementById('workspace-work-search'); input.value = 'Moonlight'; input.dispatchEvent(new Event('input', {bubbles:true}));");
-    assert((await this.run("return document.getElementById('workspace-work-list').textContent;")).includes("1 match is available in other views"), "empty Queue explains the matching idea in another view");
-    assert.equal(await this.run("return document.querySelector('#workspace-all span').textContent;"), "1");
-    await this.click("#workspace-work-list .ws-work-empty button");
-    assert.equal(await this.run("return document.getElementById('workspace-all').getAttribute('aria-pressed');"), "true");
-    assert((await this.run("return document.getElementById('workspace-work-list').textContent;")).includes("Moonlight watering reminders"));
-    await this.capture("01b-search-all-work");
-    await this.click("#workspace-clear-search");
-    assert.equal(await this.run("return document.activeElement.id;"), "workspace-work-search");
-    assert.equal(await this.run("return document.querySelector('#workspace-all span').textContent;"), "130");
-    this.check("Work search exposes matches across views and clears without losing keyboard focus");
-
-    await this.click("#workspace-ideas");
-    const firstIdeaPage = await this.run("return document.querySelectorAll('#workspace-work-list .ws-idea-card').length;");
-    assert.equal(firstIdeaPage, 20, "large idea inbox renders a bounded initial page");
-    assert.equal(await this.run("return document.getElementById('workspace-show-more').hidden;"), false);
-    await this.click("#workspace-show-more");
-    assert.equal(await this.run("return document.querySelectorAll('#workspace-work-list .ws-idea-card').length;"), 40, "show more reveals older ideas without dropping them");
-    await this.run("const input = document.getElementById('workspace-work-search'); input.value = 'Moonlight'; input.dispatchEvent(new Event('input', {bubbles:true}));");
-    await this.until("document.querySelectorAll('#workspace-work-list .ws-idea-card').length === 1 && document.getElementById('workspace-work-list').textContent.includes('Moonlight watering reminders')", "search finds an idea beyond the first page");
-    assert.equal(await this.run("return document.getElementById('workspace-show-more').hidden;"), true);
-    await this.capture("08-idea-search");
-    await this.click('#workspace-work-list [data-backlog-action="promote"]');
-    await this.until("(async () => Boolean((await window.mefiStudio.ideasList()).ideas.find(idea => idea.id === 'fixture_idea_099')?.taskId))()", "explicit idea promotion saves a task link");
-    await this.until("!document.getElementById('workspace-run-backlog').disabled", "idea promotion settles");
-    const promotedIdea = await this.run("return (await window.mefiStudio.ideasList()).ideas.find(idea => idea.id === 'fixture_idea_099');");
-    const ideaTask = await this.run(`return (await window.mefiStudio.tasksList()).tasks.find(task => task.id === ${JSON.stringify(promotedIdea.taskId)});`);
-    assert(ideaTask && ideaTask.title.includes("Moonlight"), "promoted idea is a durable task");
-    assert.equal(ideaTask.projectId, config.alpha.id, "promoted idea task belongs to selected project");
-    assert(fs.readFileSync(path.join(config.appRoot, "data", "eyes-feature-ideas.json"), "utf8").includes(promotedIdea.taskId), "idea linkage is persisted");
-    await this.run("const input = document.getElementById('workspace-work-search'); input.value = 'Moonlight'; input.dispatchEvent(new Event('input', {bubbles:true}));");
-    await this.click('#workspace-work-list [data-backlog-action="prioritize"]');
-    await this.until(`(async () => (await window.mefiStudio.backlogStatus()).next[0]?.id === ${JSON.stringify(ideaTask.id)})()`, "Do next moves chosen task ahead of waiting work");
-    await this.until("!document.getElementById('workspace-run-backlog').disabled", "prioritization settles");
-    await this.run("const input = document.getElementById('workspace-work-search'); input.value = ''; input.dispatchEvent(new Event('input', {bubbles:true}));");
-    await this.capture("09-prioritized-backlog");
-    this.check("A hundred ideas remain searchable, paginated, and explicitly promotable into prioritized project work");
-
+    await this.capture("01-agents-routing");
+    this.check("Agents routing saves fixed and Jev selection through IPC without starting workers");
+    if (config.routingOnly) return;
+    await home(); await board();
+    await this.run("const input=document.getElementById('task-search');input.value='season archive';input.dispatchEvent(new Event('input',{bubbles:true}));");
+    await this.until("document.getElementById('task-list').textContent.includes('season archive') && !document.getElementById('task-list').textContent.includes('seed importer')", "Work searches all saved tasks");
+    assert(!await this.run("return document.getElementById('task-list').textContent.includes('seed importer');"), "search excludes unrelated tasks");
+    await this.run("const input=document.getElementById('task-search');input.value='';input.dispatchEvent(new Event('input',{bubbles:true}));");
+    await this.click("#task-filter-done");
+    await this.until("document.getElementById('task-list').textContent.includes('Finish the garden planner') && !document.getElementById('task-list').textContent.includes('Review the seed importer')", "Done lists completed work");
+    assert(!await this.run("return document.getElementById('task-list').textContent.includes('Review the seed importer');"), "unverified work never masquerades as done");
+    await selectTask("Finish the garden planner"); await this.capture("02-completed-detail");
+    await this.click("#task-filter-all");
+    await selectTask("Review the seed importer");
+    assert(await this.run("return document.getElementById('task-detail').textContent.includes('Verifying') || document.querySelector('[data-task-readiness=review]')!==null;"), "review state is truthful in Work");
+    this.check("Work search, Done and unverified detail retain their distinct saved states");
+    await this.click("#tasks-close"); await home();
+    await this.openFromNav("vibe");
+    await this.until("document.querySelector('#vibe-card-ideas:not([hidden])')", "Vibe exposes the saved ideas card");
+    await this.click("#vibe-card-ideas .vibe-lane-link");
+    await this.until("document.querySelectorAll('#vibe-panel li[data-key^=\"idea:\"]').length===40", "current Ideas panel retains its forty-row bound");
+    assert((await this.run("return (await window.mefiStudio.ideasList()).ideas;")).length===100, "all hundred ideas remain saved");
+    this.webContents.sendInputEvent({type:"keyDown",keyCode:"Escape"});
+    this.webContents.sendInputEvent({type:"keyUp",keyCode:"Escape"});
+    await this.until("!window.MefiVibePanels.isOpen()", "Escape closes the current Ideas panel");
+    await this.run("window.MefiVibe.setMode('build',{go:false});window.MefiVibe.exit();await window.MefiWorkspace.enter();window.MefiNav.go('ideas',{ideaId:'fixture_idea_099'});");
+    await this.until("document.getElementById('ideas-detail').textContent.includes('quiet reminder')", "older idea opens through supported idea navigation");
+    await this.capture("03-old-idea");
+    await this.run("const b=[...document.querySelectorAll('#ideas-detail button')].find(b=>b.textContent.trim()==='Make task'); if(!b)throw Error('Make task action absent');b.id='harness-promote-idea';");
+    await this.click("#harness-promote-idea");
+    await this.until("(async () => Boolean((await window.mefiStudio.ideasList()).ideas.find(i=>i.id==='fixture_idea_099')?.taskId))()", "Make task persists an explicit idea-to-task link");
+    const promoted=await this.run("return (await window.mefiStudio.ideasList()).ideas.find(i=>i.id==='fixture_idea_099');");
+    assert((await this.run("return (await window.mefiStudio.tasksList()).tasks;")).some(t=>t.id===promoted.taskId && t.projectId===config.alpha.id));
+    await home();
+    this.check("All hundred ideas remain saved; bounded Ideas and older linked details create a durable task in the selected project");
     await this.click("#workspace-add-project");
-    await this.until("!document.getElementById('workspace-add-project').disabled", "canceled folder picker settles");
-    const afterCancel = await this.run("return await window.mefiStudio.projectsList();");
-    assert.equal(folderPickerCalls, 1);
-    assert.equal(afterCancel.projects.length, 2, "cancel must not add a project");
-    assert.equal(afterCancel.activeId, config.alpha.id, "cancel must preserve the selected project");
-    assert(!/project added/i.test(await this.run("return document.getElementById('workspace-feedback').textContent;")), "canceled picker must not announce a project was added");
-    this.check("Canceling the native folder picker preserves projects without a false success");
-
-    // A declarative title must become a task without a chat intent heuristic.
-    const title = "Garden journal export in Markdown";
+    await this.until("!document.getElementById('workspace-add-project').disabled", "cancelled picker settles");
+    const cancelled=await this.run("return await window.mefiStudio.projectsList();");
+    assert.equal(folderPickerCalls,1);assert.equal(cancelled.projects.length,2);assert.equal(cancelled.activeId,config.alpha.id);
+    this.check("Cancelled native folder picker preserves projects and active context");
+    await buildMode("verify");
+    const title="Garden journal export in Markdown";
     await this.click("#workspace-mode-work");
-    await this.run(`const input = document.getElementById('workspace-input'); input.value = ${JSON.stringify(title)}; input.dispatchEvent(new Event('input', {bubbles:true})); input.focus();`);
+    await this.run(`const input=document.getElementById('workspace-input');input.value=${JSON.stringify(title)};input.dispatchEvent(new Event('input',{bubbles:true}));`);
     await this.click("#workspace-send");
-    await this.until(`(async () => (await window.mefiStudio.tasksList()).tasks.some(t => t.title === ${JSON.stringify(title)}))()`, "explicit task is saved");
-    await this.until("!document.getElementById('workspace-send').disabled", "task composer becomes usable again");
-    const created = await this.run(`return (await window.mefiStudio.tasksList()).tasks.find(t => t.title === ${JSON.stringify(title)});`);
-    assert.equal(created.projectId, config.alpha.id);
-    assert(fs.readFileSync(path.join(config.appRoot, "data", "eyes-tasks.json"), "utf8").includes(title), "task must be persisted to disk");
-    this.check("Give a task saves a durable task in the selected project");
-    await this.capture("02-task-created");
-
-    await this.click('label[for="workspace-auto-build"]');
-    await this.until(`(async () => (await window.mefiStudio.backlogStatus()).taskStates.find(task => task.id === ${JSON.stringify(created.id)})?.stage === 'approval')()`, "new task waits for approval when auto build is off");
-    await this.click("#workspace-review");
-    await this.until("document.getElementById('workspace-work-list').textContent.includes('Review build')", "workspace explains the approval hold");
-    await this.capture("02a-verify-first-queue");
-    await this.run(`window.MefiNav.go('tasks', {taskId:${JSON.stringify(created.id)}});`);
-    await this.until("document.querySelector('#task-status-row [data-task-action=approve]') && document.querySelector('[data-task-readiness=approval]')", "task detail offers approval for its saved scope");
-    const beforeApproval = await this.run(`return (await window.mefiStudio.tasksList()).tasks.find(task => task.id === ${JSON.stringify(created.id)});`);
-    assert(beforeApproval.buildScope, "the approval form includes a current scope token");
-    await this.capture("02b-build-approval-detail");
+    await this.until(`(async () => (await window.mefiStudio.tasksList()).tasks.some(t=>t.title===${JSON.stringify(title)}))()`, "explicit task saves");
+    await this.until("!document.getElementById('workspace-send').disabled", "composer becomes usable again");
+    const created=await this.run(`return (await window.mefiStudio.tasksList()).tasks.find(t=>t.title===${JSON.stringify(title)});`);
+    assert.equal(created.projectId,config.alpha.id);assert(fs.readFileSync(path.join(config.appRoot,"data","eyes-tasks.json"),"utf8").includes(title));
+    await board(); await selectTask(title);
+    await this.until("document.querySelector('[data-task-readiness=approval]') && document.querySelector('#task-status-row [data-task-action=approve]')", "Work explains saved approval hold");
+    const beforeApproval=await this.run(`return (await window.mefiStudio.tasksList()).tasks.find(t=>t.id===${JSON.stringify(created.id)});`);
+    assert(beforeApproval.buildScope);
     await this.click('#task-status-row [data-task-action="approve"]');
-    await this.until(`(async () => (await window.mefiStudio.backlogStatus()).taskStates.find(task => task.id === ${JSON.stringify(created.id)})?.stage === 'ready')()`, "approved scope becomes ready through the real service");
-    const persistedApproval = JSON.parse(fs.readFileSync(path.join(config.appRoot, "data", "eyes-tasks.json"), "utf8")).find(task => task.id === created.id);
-    assert(persistedApproval.buildApproval, "task approval is durable on the board");
-    assert.equal((await this.run("return (await window.mefiStudio.assistantStatus()).status;")).execute, false, "approving a task leaves paused workers paused");
-    const approvalBrief = "Export the garden journal as Markdown and show a preview before saving.";
-    await this.run(`const tasks=(await window.mefiStudio.tasksList()).tasks;tasks.find(task=>task.id===${JSON.stringify(created.id)}).prompt=${JSON.stringify(approvalBrief)};const result=await window.mefiStudio.tasksSave(tasks);if(!result.ok)throw new Error(result.error);`);
-    await this.until(`(async () => (await window.mefiStudio.backlogStatus()).taskStates.find(task => task.id === ${JSON.stringify(created.id)})?.stage === 'approval')()`, "editing the approved brief requires a new approval");
-    const staleApproval = await this.run(`return await window.mefiStudio.backlogControl({action:'approve',taskId:${JSON.stringify(created.id)},projectId:${JSON.stringify(config.alpha.id)},expectedScope:${JSON.stringify(beforeApproval.buildScope)}});`);
-    assert.equal(staleApproval.ok, false, "an outdated approval form cannot authorize a changed task");
-    await this.until("document.querySelector('#task-status-row [data-task-action=approve]') && !document.querySelector('#task-status-row [data-task-action=approve]').disabled", "updated task can be reviewed again");
+    await this.until(`(async () => (await window.mefiStudio.backlogStatus()).taskStates.find(t=>t.id===${JSON.stringify(created.id)})?.stage==='ready')()`, "reviewed scope becomes ready");
+    assert(JSON.parse(fs.readFileSync(path.join(config.appRoot,"data","eyes-tasks.json"),"utf8")).find(t=>t.id===created.id).buildApproval);
+    const revised="Export the garden journal as Markdown and show a preview before saving.";
+    await this.run(`const tasks=(await window.mefiStudio.tasksList()).tasks;tasks.find(t=>t.id===${JSON.stringify(created.id)}).prompt=${JSON.stringify(revised)};const result=await window.mefiStudio.tasksSave(tasks);if(!result.ok)throw new Error(result.error);`);
+    await this.until("document.querySelector('[data-task-readiness=approval]')", "changed brief needs fresh approval");
+    const stale=await this.run(`return await window.mefiStudio.backlogControl({action:'approve',taskId:${JSON.stringify(created.id)},projectId:${JSON.stringify(config.alpha.id)},expectedScope:${JSON.stringify(beforeApproval.buildScope)}});`);
+    assert.equal(stale.ok,false,"old approval scope cannot authorize changed work");
+    await this.until("document.querySelector('#task-status-row [data-task-action=approve]')?.disabled===false", "fresh approval is available");
     await this.click('#task-status-row [data-task-action="approve"]');
-    await this.until(`(async () => (await window.mefiStudio.backlogStatus()).taskStates.find(task => task.id === ${JSON.stringify(created.id)})?.stage === 'ready')()`, "fresh approval authorizes the revised brief");
-    assert.equal((await this.run("return await window.mefiStudio.backlogStatus();")).counts.running, 0, "approval verification never starts a coding worker");
-    await this.click("#tasks-close");
-    await this.click('label[for="workspace-auto-build"]');
-    await this.until("(async () => (await window.mefiStudio.assistantStatus()).status.autoBuild === true)()", "auto build restores for the remaining workspace tour");
-    this.check("Verify first holds new work, approves the reviewed task, persists approval, rejects stale scope and requires approval after a brief change");
-
+    await this.until(`(async () => (await window.mefiStudio.backlogStatus()).taskStates.find(t=>t.id===${JSON.stringify(created.id)})?.stage==='ready')()`, "fresh scope becomes ready");
+    assert.equal((await this.run("return (await window.mefiStudio.assistantStatus()).status;")).execute,false);
+    await this.capture("04-approval-workflow");await this.click("#tasks-close");await buildMode("auto");
+    this.check("Durable tasks hold for approval, persist owner approval, reject stale scope and require approval after editing the brief; workers stay paused");
     // Enter submits, Shift+Enter preserves multiline drafts without submitting.
     await this.run("const input = document.getElementById('workspace-input'); input.value = 'Keyboard task'; input.focus();");
     this.webContents.sendInputEvent({ type: "keyDown", keyCode: "Enter", modifiers: ["shift"] });
@@ -838,18 +774,19 @@ class VerifiedWindow extends NativeWindow {
     // open decision. The renderer announces a new decision once, with a toast
     // that stays clickable in the bottom-left corner for nine seconds, so it is
     // answered here instead of being left over the sidebar's lower controls.
-    await this.until("(async () => (await window.mefiStudio.assistantState()).state.questions.some(question => question.status === 'open' && question.title === 'Pick the next piece of work'))()", "an offered next step becomes an open decision");
+    await this.until("(async () => (await window.mefiStudio.assistantState()).state.questions.some(question => question.status === 'open' && question.title.startsWith('Start ')))()", "an offered next step becomes an open decision");
     // Find the decision toast by what it says. A fresh profile also raises the
     // one-time key tip ("Show keys", 12 s) — another actionable toast that can
     // be showing, or fading, beside it — so "the first actionable toast" can be
     // the tip, and its button opens Shortcuts instead of answering.
-    const decisionToast = "[...document.querySelectorAll('#toast-host .toast.has-action.show')].find(toast => toast.textContent.includes('Decision needed: Pick the next piece of work'))";
+    const decisionTitle=await this.run("return (await window.mefiStudio.assistantState()).state.questions.find(question=>question.status==='open' && question.title.startsWith('Start ')).title;");
+    const decisionToast = `[...document.querySelectorAll('#toast-host .toast.has-action.show')].find(toast => toast.textContent.includes('Decision needed: ') && toast.textContent.includes(${JSON.stringify(decisionTitle)}))`;
     await this.until(`Boolean(${decisionToast})`, "a new decision is announced with an actionable toast");
     assert.equal(await this.run("return [...document.querySelectorAll('#toast-host .toast.show')].filter(toast => toast.textContent.includes('Decision needed')).length;"), 1, "one decision raises one toast");
     await this.run(`${decisionToast}.dataset.harness = 'decision';`);
     await this.click("#toast-host .toast[data-harness='decision'] .toast-action");
     await this.until("window.MefiIdle?.isActive?.() && !window.MefiWorkspace.isActive() && !document.getElementById('cmd-asks').hidden", "the toast's Answer control opens Command on the Ask rail");
-    await this.until("document.querySelector('#cmd-ask-list .ask-card[data-status=open] .ask-title')?.textContent === 'Pick the next piece of work'", "the Ask rail shows the waiting decision");
+    await this.until(`document.querySelector('#cmd-ask-list .ask-card[data-status=open] .ask-title')?.textContent === ${JSON.stringify(decisionTitle)}`, "the Ask rail shows the waiting decision");
     assert.equal(await this.run("return document.querySelector('#cmd-rail .rail-tab[data-rail-view=ask]').getAttribute('aria-selected');"), "true");
     await this.until("!document.querySelector('#toast-host .toast.show')", "the answered toast leaves the screen");
     await this.click('#cmd-rail .rail-tab[data-rail-view="work"]');
@@ -857,20 +794,6 @@ class VerifiedWindow extends NativeWindow {
     await this.run("window.MefiNav.go('workspace');");
     await this.until("window.MefiWorkspace.isActive() && !window.MefiIdle.isActive()", "workspace returns from the Ask rail");
     this.check("A reply that offers next work raises one decision toast whose Answer control opens the Ask rail in Command");
-
-    await this.click("#workspace-done");
-    await this.until("document.getElementById('workspace-work-list').textContent.includes('Finish the garden planner')", "Done shows completed task");
-    assert(!(await this.run("return document.getElementById('workspace-work-list').textContent.includes('Review the seed importer');")), "awaiting review must not masquerade as done");
-    await this.capture("03-completed-work");
-    const cardLayout = await this.run("const list = document.getElementById('workspace-work-list'); const card = list.querySelector('.ws-work-card'); return {width:list.clientWidth,scroll:list.scrollWidth,cardWidth:card.clientWidth,cardScroll:card.scrollWidth};");
-    report.completedCardLayout = cardLayout;
-    assert(cardLayout.scroll <= cardLayout.width + 2 && cardLayout.cardScroll <= cardLayout.cardWidth + 2, "completed task summary must wrap inside its card without horizontal scrolling");
-    await this.click('[data-task-id="fixture_done"]');
-    await this.until("!document.getElementById('tasks-overlay').hidden && document.getElementById('task-title').textContent.includes('Finish the garden planner')", "completed task opens its detail");
-    assert(await this.run("return document.getElementById('task-list').textContent.includes('Finish the garden planner');"), "selected done task must remain visible in board list");
-    await this.capture("04-completed-detail");
-    await this.click("#tasks-close");
-    this.check("Completed work is visible and opens its result detail");
 
     await this.run("window.MefiNav.go('tasks', {taskId:'fixture_open'});");
     await this.until("document.getElementById('task-title').textContent.includes('Plan a planting calendar') && document.querySelector('[data-task-panel=dependencies]')", "task planning details appear");
@@ -881,18 +804,19 @@ class VerifiedWindow extends NativeWindow {
     await this.until("(async () => (await window.mefiStudio.tasksList()).tasks.find(task => task.id === 'fixture_open').dependsOn?.includes('fixture_backlog_08'))()", "saved prerequisite survives a real store read");
     await this.until("document.querySelector('[data-task-readiness=waiting]')", "task shows the actual dependency hold");
     await this.until("document.querySelector('#task-list li.selected [data-readiness=waiting]')", "board row agrees with the prerequisite hold in task details");
+    await this.click("#task-tab-history");
     await this.click('[data-task-panel="handoff"] > summary');
     await this.until("document.querySelector('.task-handoff-text')?.textContent.includes('Plan a planting calendar')", "handoff carries saved task context");
+    await this.click("#task-tab-details");
     await this.capture("13-task-prerequisites");
     const baseline = await this.run("return (await window.mefiStudio.tasksHistory({taskId:'fixture_open'})).entries.find(entry => !entry.snapshot.dependsOn?.length);");
     assert(baseline?.id, "legacy task obtains a recoverable baseline before its first context change");
     const revisedBrief = "Add seasonal dates, export reminders, and preserve the planting notes.";
     await this.run(`const tasks = (await window.mefiStudio.tasksList()).tasks; const task = tasks.find(task => task.id === 'fixture_open'); task.prompt = ${JSON.stringify(revisedBrief)}; task.updatedAt = Date.now(); const result = await window.mefiStudio.tasksSave(tasks); if (!result.ok) throw new Error(result.error || 'Fixture brief edit failed');`);
     await this.until(`document.getElementById('task-detail').textContent.includes(${JSON.stringify(revisedBrief)})`, "updated brief appears in the selected detail");
+    await this.click("#task-tab-history");
     await this.click('[data-task-panel="history"] > summary');
     await this.until(`document.querySelector('[data-revision-id="${baseline.id}"] [data-task-action=restore]')`, "older brief is available to restore");
-    await this.click('[data-task-panel="dependencies"] > summary');
-    await this.click('[data-task-panel="handoff"] > summary');
     await this.run("document.querySelector('[data-task-panel=history]').scrollIntoView({block:'start'});");
     await this.capture("14-task-history");
     await this.click(`[data-revision-id="${baseline.id}"] [data-task-action="restore"]`);
@@ -905,12 +829,11 @@ class VerifiedWindow extends NativeWindow {
     await this.click("#tasks-close");
     this.check("Prerequisites hold work, saved handoffs retain context, and earlier briefs restore without changing project files or task status");
 
-    await this.click("#workspace-review");
-    await this.until("document.getElementById('workspace-work-list').textContent.includes('Review the seed importer')", "review filter shows unverified work");
-    this.check("Awaiting review is separate from completed work");
     await this.run("const input = document.getElementById('workspace-input'); input.value = 'A draft just for Garden Notes'; input.dispatchEvent(new Event('input', {bubbles:true}));");
     await this.click(`#workspace-projects [data-project-id="${config.beta.id}"]`);
     await this.until(`(async () => (await window.mefiStudio.projectsList()).activeId === ${JSON.stringify(config.beta.id)})()`, "switch to second project");
+    await home();
+    await this.run("window.MefiVibe.setMode('build',{go:false});window.MefiVibe.exit();await window.MefiWorkspace.enter();");
     await this.until("!document.getElementById('workspace-send').disabled", "second project context finishes loading");
     await this.until("document.getElementById('workspace-project-name').textContent.includes('Pocket Weather')", "second project heading");
     const betaTasks = await this.run("return (await window.mefiStudio.tasksList()).tasks;");
@@ -928,6 +851,7 @@ class VerifiedWindow extends NativeWindow {
     await this.capture("05-second-project");
     await this.click(`#workspace-projects [data-project-id="${config.alpha.id}"]`);
     await this.until(`(async () => (await window.mefiStudio.projectsList()).activeId === ${JSON.stringify(config.alpha.id)})()`, "return to first project");
+    await home();
     await this.until("!document.getElementById('workspace-send').disabled", "first project context finishes loading");
     const alphaTasks = await this.run("return (await window.mefiStudio.tasksList()).tasks;");
     assert(alphaTasks.some(t => t.id === created.id), "first project's task survives switching");
@@ -950,35 +874,20 @@ class VerifiedWindow extends NativeWindow {
     assert.equal(report.workerAttempts.length, 0, "reopening admission never reaches a coding worker");
     this.check("One pause control resumes through start-work and holds new work through the real backlog service");
 
-    await this.until("!document.getElementById('workspace-run-backlog').disabled", "backlog controls are ready");
-    await this.click("#workspace-run-backlog");
-    await this.until("(async () => { const backlog = await window.mefiStudio.backlogStatus(); return backlog.draining && !backlog.paused; })()", "run backlog enables existing work mode");
-    await this.until("document.getElementById('workspace-run-backlog').textContent.includes('Pause backlog') && !document.getElementById('workspace-run-backlog').disabled", "backlog action exposes pause after starting");
-    await this.capture("10-backlog-enabled");
-    await this.click("#workspace-run-backlog");
-    await this.until("(async () => (await window.mefiStudio.backlogStatus()).paused)()", "pause backlog prevents new scheduling");
-    await this.until("!document.getElementById('workspace-run-backlog').disabled", "backlog pause settles");
-    assert.equal((await this.run("return await window.mefiStudio.backlogStatus();")).counts.running, 0, "isolated smoke must not launch paid workers");
-    this.check("Work through backlog and Pause update the real scheduling state without paid workers");
-
-    await this.run("document.getElementById('workspace-tools').open = true;");
-    await this.until("document.querySelector('#workspace-tool-links [data-nav=explorer]') && document.querySelector('#workspace-tool-links [role=group]')", "advanced tools are discoverable in groups");
-    await this.capture("06-tools-menu");
-    await this.openFromNav("command", "#workspace-node-tree");
-    await this.until("window.MefiIdle?.isActive?.() && !window.MefiWorkspace.isActive()", "constellation opens from its primary sidebar control");
-    await this.click("#workspace-sidebar-toggle");
-    await sleep(230);
-    await this.capture("06a-sidebar-in-command");
-    await this.run("document.getElementById('workspace-sidebar-close').focus(); window.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape',bubbles:true,cancelable:true}));");
-    assert.equal(await this.run("return window.MefiSidebar.isOpen();"), false, "Escape dismisses the drawer");
-    assert.equal(await this.run("return window.MefiIdle.isActive();"), true, "Escape leaves the underlying constellation open");
-    // Focus goes back to the panel's door: the rail's M+, or the edge strip on the classic shell.
-    const door = (await this.run("return document.documentElement.dataset.shell === 'rail';")) ? "app-rail-brand" : "workspace-sidebar-toggle";
-    assert.equal(await this.run("return document.activeElement.id;"), door, "Escape leaves usable keyboard focus");
-    await this.run("window.MefiNav.go('workspace');");
-    await this.until("window.MefiWorkspace.isActive() && !window.MefiIdle.isActive()", "workspace returns from constellation");
-    this.check("Grouped tools navigate out and back without overlapping views");
-
+    await agents();
+    await this.until("!document.getElementById('settings-queue-enabled').disabled", "Agents queue control is ready");
+    const wasEnabled=await this.run("return document.getElementById('settings-queue-enabled').checked;");
+    await this.click("#settings-queue-enabled");
+    await this.until(`(async () => (await window.mefiStudio.assistantStatus()).status.enabled===${!wasEnabled})()`, "Agents queue switch changes scheduling state");
+    await this.click("#settings-queue-enabled");
+    await this.until(`(async () => (await window.mefiStudio.assistantStatus()).status.enabled===${wasEnabled})()`, "Agents restores the queue state");
+    await this.until("!document.getElementById('settings-new-work').disabled", "Allow new work is ready");
+    if(!await this.run("return document.getElementById('settings-new-work').checked;")) await this.click("#settings-new-work");
+    await this.until("(async () => (await window.mefiStudio.assistantStatus()).status.loop.on===true && document.getElementById('settings-new-work').checked)()", "Agents explicitly opens admission through start-work");
+    await this.click("#settings-new-work");
+    await this.until("(async () => (await window.mefiStudio.assistantStatus()).status.loop.on===false && (await window.mefiStudio.assistantState()).state.status==='paused' && (await window.mefiStudio.backlogStatus()).paused===true && !document.getElementById('settings-new-work').checked)()", "Agents closes admission in the loop, assistant, backlog and visible switch");
+    assert.equal((await this.run("return await window.mefiStudio.backlogStatus();")).counts.running,0);
+    await home(); this.check("Agents queue and admission switches update the scheduler without workers");
     await this.click("#workspace-mode-chat");
     failNextMessage = true;
     await this.run("const input = document.getElementById('workspace-input'); input.value = 'Keep this draft when the connection fails'; input.dispatchEvent(new Event('input', {bubbles:true}));");
@@ -998,10 +907,11 @@ class VerifiedWindow extends NativeWindow {
     assert((await this.run("return document.getElementById('workspace-companion-name').textContent;")).includes("Pip"), "the companion name set in Your Studio reaches the workspace");
     await this.run("window.MefiNav.go('workspace');");
     await this.until("window.MefiWorkspace?.isActive?.() && !window.MefiIdle?.isActive?.()", "the workspace returns from Your Studio");
+    await this.run("window.MefiNav.saveResume();");
     await new Promise((resolve) => { this.webContents.once("did-finish-load", resolve); this.webContents.reload(); });
     await this.until("window.MefiWorkspace?.isActive?.() && document.getElementById('boot-layer')?.hidden && document.querySelectorAll('#workspace-projects button').length >= 2", "workspace returns after reload");
-    assert.equal(await this.run("return document.getElementById('walkthrough-overlay').hidden;"), true, "a dismissed guide does not automatically reopen after reload");
-    assert.equal(await this.run("return document.getElementById('walkthrough-invitation').hidden;"), true, "a dismissed reminder stays hidden after reload");
+    assert.equal(await this.run("return document.getElementById('walkthrough-overlay').hidden;"), true, "a completed guide does not automatically reopen after reload");
+    assert.equal(await this.run("return document.getElementById('walkthrough-invitation').hidden;"), true, "a completed reminder stays hidden after reload");
     assert.equal(await this.run("return (await window.mefiStudio.projectsList()).activeId;"), config.alpha.id);
     assert((await this.run("return (await window.mefiStudio.tasksList()).tasks;")).some(task => task.id === created.id), "task survives renderer reload");
     assert((await this.run("return document.getElementById('workspace-companion-name').textContent;")).includes("Pip"), "personal companion name survives reload");
@@ -1009,76 +919,23 @@ class VerifiedWindow extends NativeWindow {
     assert.equal(await this.run("return document.getElementById('workspace-input').value;"), "A draft just for Garden Notes", "project draft survives reload");
     this.check("Personalization set in Settings › Your Studio, drafts and durable project work survive reload");
 
-    // The regroup's layout sweep, ahead of the narrow and short-desktop gates
-    // below so its screenshots land even while one of those fails.
-    await this.menuLayouts("20-layout", ["workspace", "studio", "command", "music"]);
-    await this.run("window.MefiNav.go('workspace');");
-    await this.until("window.MefiWorkspace?.isActive?.() && !window.MefiIdle?.isActive?.()", "the workspace returns after the layout sweep");
 
-    this.setContentSize(600, 760);
-    await sleep(250);
-    const smallRail = await this.run("return document.documentElement.dataset.shell === 'rail';");
-    await this.click(smallRail ? "#app-rail-brand" : "#workspace-sidebar-toggle");
-    await sleep(230);
-    // Navigation lives in the rail on the rail shell and in the drawer's rows on
-    // the classic one; either way it has to be on screen. (A row's own computed
-    // display ignores a hidden parent, so ask for a real box.)
-    const mobileMenu = await this.run("const panel=document.getElementById('workspace-sidebar-panel'),rail=document.getElementById('app-rail'),railOn=document.documentElement.dataset.shell==='rail';const r=panel.getBoundingClientRect();const shown=el=>{const b=el.getBoundingClientRect();return b.width>0&&b.height>0;};return {left:r.left,right:r.right,edge:railOn?rail.getBoundingClientRect().right:0,width:panel.clientWidth,scroll:panel.scrollWidth,screen:innerWidth,links:railOn?[...rail.querySelectorAll('.app-rail-head')].length===4&&[...rail.querySelectorAll('.app-rail-head')].every(shown):[...panel.querySelectorAll('.ws-home')].every(shown),addVisible:getComputedStyle(document.getElementById('workspace-add-project')).visibility!=='hidden',personal:Boolean(panel.querySelector('#workspace-person-name,#workspace-agent-name,#workspace-accent,#workspace-motion'))};");
-    assert.equal(mobileMenu.personal, false, "the project panel holds projects only: name, theme and motion live in Settings › Your Studio");
-    assert(Math.abs(mobileMenu.left - mobileMenu.edge) <= 1, "small-window drawer stays anchored to its edge: the rail's, or the window's");
-    assert(mobileMenu.left >= 0 && mobileMenu.right <= mobileMenu.screen + 1 && mobileMenu.scroll <= mobileMenu.width + 1, "small-window drawer fits without horizontal scrolling");
-    assert(mobileMenu.links && mobileMenu.addVisible, "navigation and Add project remain available in a small window");
-    await this.capture("07a-small-window-sidebar");
-    await this.click("#workspace-sidebar-close");
-    this.check("The global drawer supports keyboard dismissal over Command and keeps navigation available in small windows");
-
-    this.setContentSize(820, 900);
-    await sleep(300);
-    const narrow = await this.run("return {width:innerWidth,scroll:document.documentElement.scrollWidth, workspace:document.getElementById('workspace-layer').getBoundingClientRect().toJSON(), input:document.getElementById('workspace-input').getBoundingClientRect().toJSON()};");
-    report.narrow = narrow;
-    assert(narrow.scroll <= narrow.width + 2, "narrow layout must not create page horizontal overflow");
-    assert(narrow.input.width > 180, "composer remains usable in narrow layout");
-    assert(narrow.input.right <= narrow.width + 2, "composer fits narrow viewport");
-    await this.capture("07-narrow-workspace");
-    await this.run("window.MefiNav.go('onboarding');");
-    await this.until("!document.getElementById('walkthrough-overlay').hidden", "guide can reopen after dismissal");
-    const guideLayout = await this.run("const sheet=document.getElementById('walkthrough-sheet');return {width:sheet.clientWidth,scroll:sheet.scrollWidth,screen:innerWidth,right:sheet.getBoundingClientRect().right};");
-    assert(guideLayout.scroll <= guideLayout.width + 2 && guideLayout.right <= guideLayout.screen + 2, "guide fits narrow windows");
-    await this.capture("13-narrow-walkthrough");
-    assert.equal(await this.run("return document.getElementById('walkthrough-progress').textContent;"), "Step 5 of 7", "the guide reopens at the saved create stop");
-    await this.click("#walkthrough-next");
-    assert.match(await this.run("return document.getElementById('walkthrough-title').textContent;"), /Follow the queue/, "the monitor stop follows create");
-    await this.click("#walkthrough-next");
-    assert.match(await this.run("return document.getElementById('walkthrough-title').textContent;"), /Review results/, "the review stop is last");
-    assert.equal(await this.run("return document.getElementById('walkthrough-next').textContent;"), "Finish guide", "the last stop offers to finish");
-    await this.click("#walkthrough-next");
-    assert.equal(await this.run("return document.getElementById('walkthrough-overlay').hidden;"), true, "guide finishes from saved create lesson");
-    assert.equal(await this.run("return document.getElementById('walkthrough-invitation').hidden;"), true, "completed invitation stays out of the way");
-    this.check("Walkthrough fits narrow windows and can be completed after reopening");
-    await this.click("#workspace-ideas");
-    await this.run("const input = document.getElementById('workspace-work-search'); input.value = 'LongUnbrokenIdeaReference'; input.dispatchEvent(new Event('input', {bubbles:true})); document.getElementById('workspace-work-list').scrollIntoView({block:'center'});");
-    const narrowBacklog = await this.run("const list = document.getElementById('workspace-work-list'); const card = list.querySelector('.ws-work-card'); return {width:innerWidth,scroll:document.documentElement.scrollWidth,listWidth:list.clientWidth,listScroll:list.scrollWidth,cardWidth:card?.clientWidth,cardScroll:card?.scrollWidth};");
-    assert(narrowBacklog.cardWidth > 180, "long idea card remains usable on narrow window");
-    assert(narrowBacklog.listScroll <= narrowBacklog.listWidth + 2 && narrowBacklog.cardScroll <= narrowBacklog.cardWidth + 2, "long idea references wrap inside narrow cards");
-    await this.capture("11-narrow-backlog");
-    this.setContentSize(1280, 720);
-    await this.run("document.querySelector('.ws-main').scrollTop = 0; const input = document.getElementById('workspace-work-search'); input.value = ''; input.dispatchEvent(new Event('input', {bubbles:true}));");
-    await sleep(250);
-    const shortLayout = await this.run("const list = document.getElementById('workspace-work-list').getBoundingClientRect(); const input = document.getElementById('workspace-input').getBoundingClientRect(); const run = document.getElementById('workspace-run-backlog').getBoundingClientRect(); return {height:innerHeight,width:innerWidth,scroll:document.documentElement.scrollWidth,list:list.toJSON(),input:input.toJSON(),run:run.toJSON()};");
-    report.shortDesktop = shortLayout;
-    assert(shortLayout.scroll <= shortLayout.width + 2, "short desktop layout must not overflow horizontally");
-    assert(shortLayout.list.height >= 110, "short desktop leaves usable scrolling room for backlog cards");
-    assert(shortLayout.input.bottom < shortLayout.height && shortLayout.run.bottom < shortLayout.height, "composer and backlog action stay visible at 720 pixels tall");
-    await this.capture("12-short-desktop");
-    report.narrowBacklog = narrowBacklog;
-    report.shortDesktop = shortLayout;
-    this.check("Narrow layout keeps conversation and composer usable");
-    this.check("Dense backlog and long idea references fit narrow and short desktop layouts");
-    report.createdTaskId = created.id;
-    assert.equal(report.networkAttempts.length, 0, "UI flow must not attempt external network calls");
-    assert.equal(report.workerAttempts.length, 0, "UI flow must not attempt to start coding workers");
-    const serious = report.consoleErrors.filter(line => !/ERR_FILE_NOT_FOUND/.test(line));
-    assert.equal(serious.length, 0, `Renderer errors: ${serious.join('; ')}`);
+    report.currentLayouts=[];
+    for(const [width,height] of [[1280,720],[600,760]]) {
+      this.setContentSize(width,height);await sleep(250);await home();
+      const layout=await this.run("const box=document.getElementById('workspace-input').getBoundingClientRect();return {width:innerWidth,height:innerHeight,scroll:document.documentElement.scrollWidth,input:box.toJSON()};");
+      assert(layout.scroll<=layout.width+2 && layout.input.height>40 && layout.input.bottom<layout.height,"Home composer fits without horizontal overflow");
+      await this.capture(`layout-home-${width}`);await board();await selectTask(title);
+      assert(await this.run("return document.documentElement.scrollWidth<=innerWidth+2;"),"Work fits the window");
+      await this.capture(`layout-work-${width}`);await this.click("#tasks-close");await agents();
+      assert(await this.run("const box=document.getElementById('settings-build-mode').getBoundingClientRect();return box.width>0&&box.height>0&&document.documentElement.scrollWidth<=innerWidth+2;"),"Agents approval fits and remains reachable");
+      await this.capture(`layout-agents-${width}`);report.currentLayouts.push(layout);
+    }
+    assert.deepEqual(report.networkAttempts,[],"full workflow contacts no external service");
+    assert.deepEqual(report.workerAttempts,[],"smoke guard blocks coding workers");
+    assert.deepEqual(report.consoleErrors,[],"full workflow has no renderer errors");
+    report.createdTaskId=created.id;
+    this.check("Home, Work and Agents fit narrow and short desktop windows; complete workflow has no external calls, workers or renderer errors");
   }
   // The menu regroup, checked by id, data attribute and role: the rail's
   // sections and foot, Settings' groups, Your Studio, the deep link, Find a

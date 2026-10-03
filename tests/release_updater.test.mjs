@@ -357,7 +357,7 @@ test("the host, bridge and page wire the rollback and the boot flag", async () =
   assert.ok(main.includes('path.join(STUDIO_ROOT, "data", "boot-health.json")'), "the health file is written where the helper reads it");
   assert.match(main, /ipcMain\.handle\("boot:healthy"/);
   assert.match(main, /ipcMain\.handle\("release:rollback"/);
-  assert.match(main, /safety: typeof releaseSafetyPlan === "function"/, "the download hands the helper its safety plan, guarded for hosts without it");
+  assert.match(main, /const safety = typeof releaseSafetyPlan === "function"/, "the download resolves the guarded safety plan before passing it to the helper");
   assert.match(main, /MEFI_STUDIO_NO_ROLLBACK/, "the safety net has a kill switch");
   assert.ok(main.includes('arg === "--released" || arg === "--rolled-back"'), "neither flag is carried into later relaunches");
   assert.match(main, /bootHealthStart\(\);/);
@@ -389,6 +389,6 @@ test("a first run with no release reads 'no published release yet', not a failur
 
   // The panel renders that state as an ordinary line, and keeps 'check failed'
   // for genuine trouble (network, refusal, bad token) rather than masking it.
-  assert.ok(nav.includes('if (state === "none") return { line: "no published release yet" };'), "the panel shows 'no published release yet' before any release exists");
+  assert.ok(nav.includes('if (state === "none") return { line: status?.unavailable ?? "no published release yet" };'), "the panel shows the channel's truthful empty state");
   assert.ok(nav.includes('if (state === "error") return { line: `check failed'), "a genuine check error still reads 'check failed'");
 });

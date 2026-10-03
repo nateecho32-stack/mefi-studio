@@ -741,6 +741,7 @@ app.whenReady().then(async () => {
       assert.equal(before.hint, !folds, `${label}: and the line that says what the words will do: ${JSON.stringify(before)}`);
       if (short) assert.equal(before.top, false, `${label}: a short window hides the Note | Ask | Change row too: ${JSON.stringify(before)}`);
       if (folds) {
+        await run("const input=document.getElementById('sessions-input');input.value='Keep this draft while session controls are open.';input.dispatchEvent(new Event('input', { bubbles: true }));");
         await click("#sessions-compose .sx-more");
         const opened = await run(boxState);
         assert.equal(opened.open, "true"); assert.equal(opened.chips, true, `${label}: More brings the chips back: ${JSON.stringify(opened)}`); assert.equal(opened.worker, true);
@@ -748,6 +749,10 @@ app.whenReady().then(async () => {
         await capture(`sessions-more-${id === "task_ask" ? "ask" : "review"}-${width}${height < 520 ? "-short" : ""}${zoom === 1 ? "" : "-zoom"}.png`);
         const inside = await run("const form = document.getElementById('sessions-compose').getBoundingClientRect(); const send = document.getElementById('sessions-send').getBoundingClientRect(); const bar = document.querySelector('.shell-status')?.getBoundingClientRect(); const free = bar ? bar.top : innerHeight; return { ok: form.bottom <= free + 1 && send.bottom <= free + 1 && form.top >= 0, form: [Math.round(form.top), Math.round(form.bottom)], send: [Math.round(send.top), Math.round(send.bottom)], free, inner: innerHeight };");
         assert.equal(inside.ok, true, `${label}: opened, the whole box is still on screen and clear of the status bar: ${JSON.stringify(inside)}`);
+        const readable = await run("const scroll=document.getElementById('sessions-thread-scroll');return { height:scroll.clientHeight, overflow:scroll.scrollHeight>scroll.clientHeight, draft:document.getElementById('sessions-input').value };");
+        (report.expandedLayouts ||= []).push({ label, id, ...readable });
+        assert.ok(readable.height>=60, `${label}: expanded controls retain at least 60px of conversation: ${JSON.stringify(readable)}`);
+        assert.equal(readable.draft, 'Keep this draft while session controls are open.');
         await click("#sessions-compose .sx-more");
         assert.equal((await run(boxState)).chips, false, `${label}: and More folds it again`);
       }

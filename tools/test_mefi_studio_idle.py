@@ -7,6 +7,7 @@ snapshot API it renders from, and the wiring (bundle, template, autoplay).
 No network, no key, no Electron.
 """
 from pathlib import Path
+import json
 import re
 import unittest
 
@@ -24,6 +25,7 @@ class MefiStudioIdleTests(unittest.TestCase):
         cls.main = (STUDIO / "main.cjs").read_text(encoding="utf-8")
         cls.template = (STUDIO / "renderer" / "booklet.template.html").read_text(encoding="utf-8")
         cls.build = (STUDIO / "scripts" / "build-booklet.mjs").read_text(encoding="utf-8")
+        cls.booklet_inputs = json.loads(re.search(r"export const BOOKLET_INPUTS = (\{[\s\S]*?\})\s*;", cls.build).group(1))
         cls.guide = (ROOT / "TESTRUNS.md").read_text(encoding="utf-8")
 
     def test_quiet_clock_is_five_minutes(self):
@@ -79,7 +81,7 @@ class MefiStudioIdleTests(unittest.TestCase):
 
     def test_wiring_snapshot_bundle_template_autoplay(self):
         self.assertRegex(self.tree, r"snapshot:\s*\(\)\s*=>\s*\(?\s*\{")
-        self.assertIn('readFile(path.join(RENDERER, "idle.js")', self.build)
+        self.assertIn("idle.js", self.booklet_inputs["scripts"])
         for element_id in ("idle-layer", "idle-hud", "idle-profile", "idle-zen", "idle-reactive", "idle-exit", "idle-open"):
             with self.subTest(element_id=element_id):
                 self.assertIn(f'id="{element_id}"', self.template)
@@ -113,7 +115,7 @@ class MefiStudioIdleTests(unittest.TestCase):
                            "idle-ambience-pop", "nav-command", "nav-tools", "help-grid", "footer-keys"):
             with self.subTest(element_id=element_id):
                 self.assertIn(f'id="{element_id}"', self.template)
-        self.assertIn('readFile(path.join(RENDERER, "nav.js")', self.build)
+        self.assertIn("nav.js", self.booklet_inputs["scripts"])
         self.assertIn("window.MefiNav = {", (STUDIO / "renderer" / "nav.js").read_text(encoding="utf-8"))
         for marker in ("drawLabels(", "handleKey", "clearSearch", "anchorSessionId"):
             with self.subTest(marker=marker):

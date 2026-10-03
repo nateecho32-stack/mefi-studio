@@ -14,6 +14,7 @@ import { createHash } from "node:crypto";
 import * as nodeFs from "node:fs";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { rm } from "node:fs/promises";
 import path from "node:path";
 import { sync } from "../scripts/sync.mjs";
 
@@ -22,7 +23,8 @@ const { createAttemptSnapshots } = require("../scripts/attempt-snapshots-host.cj
 const rules = require("../scripts/attempt-snapshots.cjs");
 
 const PLAIN = process.platform !== "win32";
-const cleanup = (t, dir) => t.after(() => rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 }));
+// Let background ref pruning and Git close handlers drain during Windows retries.
+const cleanup = (t, dir) => t.after(() => rm(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 }));
 
 // A git of the person's own: no global or system config leaks into a fixture.
 function isolated(base) {

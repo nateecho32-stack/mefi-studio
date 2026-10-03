@@ -78,8 +78,9 @@ moves to 0.5.x instead of holding the release.
   the session list (the app keeps none). Design source: `docs/prototype/`.
 - **Load times, agents sending only what is new, logging and Friends 2.0** (the
   work planned for the skipped 0.4.5 and 0.4.6): measured first, then fixed.
-- **Worktrees in Studio:** landed (see above), with the mark on Build's task
-  rows; what remains is the Worktrees entry in the new shell.
+- **Worktrees in Studio:** implemented, including the entry in the new shell
+  and the mark on Build's task rows. The current Windows aggregate exercises
+  the Worktrees page; attended owner workflow checks remain.
 
 ## What still needs the owner
 

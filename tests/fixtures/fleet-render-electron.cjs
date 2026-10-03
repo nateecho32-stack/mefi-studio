@@ -40,7 +40,17 @@ process.on("uncaughtException", finish); process.on("unhandledRejection", finish
 const T0 = Date.now() - 20 * 60 * 1000;
 function team({ progress = 0.42, step = "Editing main.cjs", extra = false } = {}) {
   const state = fleet.emptyState();
-  const tasks = Array.from({ length: 7 }, (_, index) => ({ id: `task_${index + 1}`, title: `Task number ${index + 1}: a fairly long title that has to be clipped`, status: "active" }));
+  // Two recorded generations behind the live builder: the inspector's recap
+  // must distinguish interruption from independently verified completion.
+  fleet.observeTasks(state, [{ id: "prior_task", title: "Save the parser checkpoint", status: "active" }], T0 - 60000);
+  fleet.observeEvent(state, { kind: "agent.out", at: T0 - 60000, runId: "prior_stopped", taskId: "prior_task", title: "Save the parser checkpoint" });
+  fleet.observeFinish(state, { runId: "prior_stopped", userStop: true, result: { parts: { done: "Saved the parser checkpoint", remaining: "Verify the saved parser" } } });
+  fleet.observeEvent(state, { kind: "agent.home", at: T0 - 50000, runId: "prior_stopped", ok: false });
+  fleet.observeEvent(state, { kind: "agent.out", at: T0 - 40000, runId: "prior_verified", taskId: "prior_task", title: "Verify the saved parser" });
+  fleet.observeFinish(state, { runId: "prior_verified", ok: true, result: { parts: { done: "Verified the parser with its exact project check" } } });
+  fleet.observeEvent(state, { kind: "agent.home", at: T0 - 30000, runId: "prior_verified", ok: true });
+  fleet.observeTasks(state, [{ id: "prior_task", title: "Verify the saved parser", status: "done", verification: { state: "verified", at: T0 - 20000 } }], T0 - 20000);
+  const tasks = Array.from({ length: 7 }, (_, index) => ({ id: `task_${index + 1}`, title: `Task number ${index + 1}: a fairly long title that has to be clipped`, status: "active", ...(index >= 1 && index <= 3 ? { fromRun: "run_1" } : {}) }));
   fleet.observeTasks(state, tasks, T0);
   const running = tasks.slice(0, 6).map((task, index) => ({ id: `run_${index + 1}`, taskId: task.id, title: task.title, startedAt: T0 + index * 1000, phase: "building", currentStep: index === 0 ? step : `Reading file ${index}`, progress: index === 0 ? progress : 0.1 * (index + 1), lastOutputAt: T0 + 900000 }));
   fleet.observeStatus(state, { parallel: 6, loop: { state: "running", on: true, tone: "live", headline: "Agents are running", reason: "", ready: 3, running: 6 }, running }, T0 + 5000);
@@ -90,7 +100,7 @@ app.whenReady().then(async () => {
   };
   const preload = path.join(root, "fleet-preload.cjs");
   fs.writeFileSync(preload, `const {contextBridge}=require('electron');const responses=${JSON.stringify(responses)};const calls=[];const subscribers=[];
-    const views={current:${JSON.stringify(first.view)}};const details=${JSON.stringify(first.details)};
+    const views={current:${JSON.stringify(first.view)}};const details=${JSON.stringify(first.details)};const projectSubscribers=[];
     const bridge=Object.fromEntries(Object.keys(responses).map(key=>[key,async()=>responses[key]]));
     const record=(name,result)=>async(...args)=>{calls.push({name,args:JSON.parse(JSON.stringify(args))});return typeof result==='function'?result(...args):result;};
     bridge.fleetSnapshot=record('fleetSnapshot',()=>views.current);bridge.fleetWatch=record('fleetWatch',{ok:true,watching:true});
@@ -98,8 +108,9 @@ app.whenReady().then(async () => {
     bridge.fleetAction=record('fleetAction',{ok:true});bridge.onFleetUpdate=callback=>{subscribers.push(callback);};
     bridge.assistantControl=record('assistantControl',{ok:true});
     for(const name of ['onTasks','onProjects','onAssistantStatus','onAssistant','onProjectPreview','onSettingsChanged','onStudioLog','onAutoSetup'])bridge[name]=()=>()=>{};
+    bridge.onProjects=callback=>{projectSubscribers.push(callback);return()=>{};};
     contextBridge.exposeInMainWorld('mefiStudio',bridge);
-    contextBridge.exposeInMainWorld('fleetFixture',{calls:()=>calls,push:view=>{views.current=view;for(const callback of subscribers)callback(view);}});
+    contextBridge.exposeInMainWorld('fleetFixture',{calls:()=>calls,push:view=>{views.current=view;for(const callback of subscribers)callback(view);},project:id=>{responses.projectsList={ok:true,activeId:id,projects:[{id,name:'Recovery fixture',path:${JSON.stringify(root)}}]};for(const callback of projectSubscribers)callback(responses.projectsList);}});
     localStorage.setItem('mefiStudio.commandHome','0');localStorage.setItem('mefiStudio.zen','0');localStorage.setItem('mefiStudio.zenReactive','0');localStorage.setItem('mefiStudio.keyHint.v1','1');localStorage.setItem('mefiStudio.walkthrough.v1',JSON.stringify({version:1,step:0,status:'complete'}));
   `);
   const window = new BrowserWindow({ show: false, width: 1440, height: 900, frame: false, webPreferences: { preload, contextIsolation: true, nodeIntegration: false, sandbox: true, offscreen: true, backgroundThrottling: false } });
@@ -191,6 +202,34 @@ app.whenReady().then(async () => {
   if (drawer.over) assert.ok(drawer.card.r <= drawer.box.l + 1 || drawer.card.l >= drawer.box.r - 1, "the drawer does not cover the selected seat: " + JSON.stringify(drawer));
   report.drawer = drawer;
   await capture("fleet-selected.png");
+  report.recap = await run("const p=document.querySelector('#fleet-inspector .fleet-recap');return {text:p?.textContent,overflow:p? p.scrollWidth>p.clientWidth+1:true};");
+  assert.match(report.recap.text, /Interrupted; progress saved/);assert.match(report.recap.text, /Verified/);
+  assert.doesNotMatch(report.recap.text, /Editing main\.cjs/);assert.ok(report.recap.text.length <= 1500);assert.equal(report.recap.overflow,false);
+  for (const [width,height] of [[1440,900],[600,560]]) {
+    window.setContentSize(width,height);await sleep(200);
+    await run("document.querySelector('#fleet-inspector .fleet-recap').scrollIntoView({block:'center'});");
+    const fitting = await run("const p=document.querySelector('#fleet-inspector .fleet-recap'),b=p.getBoundingClientRect();return {x:b.x,right:b.right,viewport:innerWidth,overflow:p.scrollWidth>p.clientWidth+1};");
+    assert.ok(fitting.x>=-1&&fitting.right<=fitting.viewport+1);assert.equal(fitting.overflow,false);
+    await capture(`fleet-recap-${width}.png`);
+  }
+  report.handoffHealth = [];
+  for (const [width,height] of [[1440,900],[600,560]]) {
+    window.setContentSize(width,height);await sleep(200);
+    await run("document.getElementById('fleet-tab-health').click();");
+    const note = await run("const n=[...document.querySelectorAll('#fleet-health .fleet-signal')].find(n=>n.querySelector('.fleet-signal-summary').textContent.includes('handed-off tasks'));n?.scrollIntoView({block:'center'});return n?{text:n.textContent,tone:n.dataset.severity,chip:n.querySelector('.fleet-chip').textContent,overflow:n.scrollWidth>n.clientWidth+1}:null;");
+    assert.ok(note);assert.equal(note.tone,"info");assert.equal(note.chip,"Note");assert.equal(note.overflow,false);
+    assert.match(note.text,/3 handed-off tasks have no recorded verification/);
+    assert.match(note.text,/Waiting for verification can be normal/);
+    await run("const n=[...document.querySelectorAll('#fleet-health .fleet-signal')].find(n=>n.querySelector('.fleet-signal-summary').textContent.includes('handed-off tasks'));n.querySelector('.fleet-signal-go').click();");
+    await until("window.MefiFleet.current().selected === 'builder-1'", "handoff note opens its source seat");
+    await run("document.getElementById('fleet-tab-health').click();const n=[...document.querySelectorAll('#fleet-health .fleet-signal')].find(n=>n.querySelector('.fleet-signal-summary').textContent.includes('handed-off tasks'));n.scrollIntoView({block:'center'});");
+    assert.match(await run("return document.getElementById('fleet-inspector').textContent;"),/builder-1@fleet-fixture/);
+    const layout=await run(measure);assert.equal(layout.pageOverflow,false);
+    report.handoffHealth.push({width,height,...note,inspectorSeat:"builder-1",pageOverflow:layout.pageOverflow});
+    await capture(`fleet-handoff-health-${width}.png`);
+  }
+  await run("document.getElementById('fleet-tab-graph').click();");
+  window.setContentSize(1100,720);await sleep(200);
 
   await run("document.querySelector('#fleet-tree .fleet-row[data-kind=\"team\"]').focus();");
   const stops = await run("return [...document.querySelectorAll('#fleet-tree .fleet-row')].filter((row) => row.tabIndex === 0).length;");
@@ -264,6 +303,33 @@ app.whenReady().then(async () => {
   assert.equal(watches[0], true);
   assert.equal(watches.at(-1), false, "closing gives the lease back");
   assert.ok(report.calls.some((call) => call.startsWith("fleetSnapshot")) && report.calls.some((call) => call.startsWith("fleetSeat:")));
+  // Read failures preserve only confirmed same-project facts. A project event
+  // uses the real Workspace subscription, not a replacement scope function.
+  report.readRecovery = [];
+  for (const [width,height] of [[1440,900],[600,560]]) {
+    window.setContentSize(width,height); await sleep(200);
+    await run(`window.fleetFixture.push(${JSON.stringify(third)});window.fleetFixture.project('project_fixture');window.MefiNav.go('fleet',{tab:'table'});`);
+    await until("document.getElementById('fleet-body').dataset.readState === 'ready' && document.querySelectorAll('#fleet-table .fleet-tr').length > 0", "confirmed team before read failure");
+    await run("window.MefiFleet.select(null);window.fleetFixture.push({ok:false,error:'The team could not be refreshed.'});document.getElementById('fleet-tab-graph').click();document.getElementById('fleet-tab-table').click();");
+    await until("document.getElementById('fleet-body').dataset.readState === 'cached'", "cached facts labelled");
+    const inspect = `const s=document.getElementById('fleet-status'),b=s.getBoundingClientRect();return {state:document.getElementById('fleet-body').dataset.readState,text:s.textContent,font:Number.parseFloat(getComputedStyle(s).fontSize),statusFits:b.x>=-1&&b.right<=innerWidth+1,overflow:document.documentElement.scrollWidth>innerWidth+1,rows:document.querySelectorAll('#fleet-table .fleet-tr').length,inert:['side','panels','inspector'].map(id=>document.getElementById('fleet-'+id).inert),selected:window.MefiFleet.current().selected};`;
+    const cached = await run(inspect);
+    assert.equal(cached.text,"Last confirmed team. The team could not be refreshed.");assert.ok(cached.rows>=seats);assert.ok(cached.font>=12);assert.equal(cached.statusFits,true);assert.equal(cached.overflow,false);
+    await capture(`fleet-read-cached-${width}.png`);
+    await run("window.fleetFixture.project('project_recovery');");
+    await until("document.getElementById('fleet-body').dataset.readState === 'unavailable'", "new project read failure");
+    const unavailable = await run(inspect);
+    assert.equal(unavailable.rows,0);assert.deepEqual(unavailable.inert,[true,true,true]);assert.equal(unavailable.selected,null);assert.equal(unavailable.text,"The team could not be refreshed.");assert.ok(unavailable.font>=12);assert.equal(unavailable.statusFits,true);assert.equal(unavailable.overflow,false);
+    assert.equal(await run("return ['tree','graph','table','recent','nodes','health','inspector'].every(id=>document.getElementById('fleet-'+id).children.length===0);"),true,"no previous-project content survives");
+    await capture(`fleet-read-unavailable-${width}.png`);
+    await run(`window.fleetFixture.push(${JSON.stringify({...third,projectId:"project_recovery",projectName:"Recovered team",rev:1})});`);
+    await until("document.getElementById('fleet-body').dataset.readState === 'ready' && document.querySelectorAll('#fleet-table .fleet-tr').length > 0", "scoped snapshot recovers team");
+    const recovered = await run(inspect);
+    assert.deepEqual(recovered.inert,[false,false,false]);assert.ok(recovered.rows>=seats);assert.doesNotMatch(recovered.text,/confirmed|refreshed/);assert.equal(recovered.overflow,false);
+    await capture(`fleet-read-recovered-${width}.png`);
+    report.readRecovery.push({width,height,cached,unavailable,recovered});
+    await run("window.MefiFleet.close();");
+  }
   assert.deepEqual(report.errors, [], "no console errors");
   report.complete = true;
   finish();

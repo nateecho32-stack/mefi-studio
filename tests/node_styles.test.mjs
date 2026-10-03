@@ -1,3 +1,4 @@
+import { parseBookletInputs } from "../scripts/build-booklet.mjs";
 // renderer/node-styles.js (window.MefiNodeStyles): the painters the Command
 // view and the tree rail share. The module loads whole into a vm holding only
 // `window` (tests/fixtures/node-styles-harness.mjs), so nothing here depends
@@ -79,16 +80,10 @@ test("the module is cut into its owners' banner sections, in order, each registe
 });
 
 test("registration: the module is bundled before the rail and the Command view, everywhere it is listed", () => {
-  assert.match(build, /readFile\(path\.join\(RENDERER, "node-styles\.js"\), "utf8"\)/);
-  const parts = build.match(/const codeParts = \[([^\]]+)\]/)[1].split(",").map((name) => name.trim());
-  assert.ok(parts.indexOf("nodeStyles") >= 0 && parts.indexOf("nodeStyles") < parts.indexOf("tree") && parts.indexOf("nodeStyles") < parts.indexOf("idle"), "codeParts: nodeStyles, tree, idle");
-  assert.equal(parts.indexOf("nodeStyles"), parts.indexOf("tracker") + 1);
-  const sources = [...build.match(/const CODE_SOURCES = \[([^\]]+)\]/)[1].matchAll(/"([\w.-]+)\.js"/g)].map((match) => match[1]);
-  assert.equal(sources.indexOf("node-styles"), parts.indexOf("nodeStyles"), "CODE_SOURCES stays index-aligned with codeParts");
-  assert.ok(sources.indexOf("node-styles") < sources.indexOf("tree3d") && sources.indexOf("node-styles") < sources.indexOf("idle"));
-  const read = build.match(/const \[styles, [^\]]+\] = await Promise\.all/)[0];
-  assert.ok(read.indexOf("nodeStyles") > read.indexOf("tracker") && read.indexOf("nodeStyles") < read.indexOf("tree"), "the destructured read list names it between tracker and tree");
-  assert.ok(bookletTest.includes('"node-styles.js",'), "the booklet fixture copies it");
+  const sources = parseBookletInputs(build).scripts;
+  assert.ok(sources.indexOf("node-styles.js") >= 0 && sources.indexOf("node-styles.js") < sources.indexOf("tree3d.js") && sources.indexOf("node-styles.js") < sources.indexOf("idle.js"));
+  assert.equal(sources.indexOf("node-styles.js"), sources.indexOf("tracker.js") + 1);
+  assert.ok(bookletTest.includes("BOOKLET_INPUTS.scripts"), "the booklet fixture copies the shared script inventory");
 });
 
 test("the Void shapes are built once, frozen, only in node-styles.js", () => {

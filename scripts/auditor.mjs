@@ -9,6 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import studioPaths from "./paths.cjs";
 import { findUnusedSelectors, usageIndex } from "./check-css.mjs";
+import { parseBookletInputs } from "./build-booklet.mjs";
 
 const STUDIO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -56,9 +57,26 @@ export async function audit({ root = STUDIO } = {}) {
   const rendererFiles = ((await readdirOrNull(RENDERER)) ?? []).filter((name) => name.endsWith(".js"));
 
   // 1. every renderer script must be inlined by the build (or the app ships without it)
-  const bundled = new Set(matchAll(buildText, /readFile\(path\.join\(RENDERER, "([\w.-]+)"\)/g));
+  let inputs = null;
+  try { inputs = parseBookletInputs(buildText); }
+  catch (error) { add("error", "build", `Invalid booklet input inventory: ${error.message}`); }
+  // Older build sources and focused fixture trees predate the inventory.
+  // Read their literal inputs as before; a malformed declared inventory never
+  // falls back to that path and cannot silently pass its wiring check.
+  const declared = /export\s+const\s+BOOKLET_INPUTS\s*=/.test(buildText);
+  const bundled = new Set(inputs?.scripts ?? (declared ? [] : matchAll(buildText, /readFile\(path\.join\(RENDERER, "([\w.-]+)"\)/g)));
   for (const file of rendererFiles) {
     if (!bundled.has(file)) add("error", "build", `renderer/${file} is not inlined by build-booklet.mjs`);
+  }
+  if (inputs) {
+    const rendererNames = (await readdirOrNull(RENDERER)) ?? [];
+    const present = new Set(rendererNames);
+    for (const file of [...inputs.scripts, ...inputs.styles]) {
+      if (!present.has(file)) add("error", "build", `Declared booklet input renderer/${file} is missing`);
+    }
+    for (const file of rendererNames.filter((name) => name.endsWith(".css"))) {
+      if (!inputs.styles.includes(file)) add("error", "build", `renderer/${file} is not inlined by build-booklet.mjs`);
+    }
   }
 
   // 2. preload bridge <-> main IPC: every invoked channel needs a handler,

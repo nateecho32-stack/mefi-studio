@@ -12,6 +12,14 @@ import core from "../scripts/executor-core.cjs";
 
 const MINUTE = 60000;
 const NOW = 10_000_000;
+
+test("seat recap context is capped and budgeted without replacing the task, resume or verdict sentinel", () => {
+  const built = core.workerPrompt({ title: "Current", taskId: "current", tasksFile: "tasks.json", ref: { id: "current" }, resumeCheckpoint: { pending: true, runId: "stopped" }, sections: { recap: "H".repeat(3000) }, tail: " Print MEFI_JOB_DONE", promptMax: 6000, brief: () => "CURRENT TASK OBLIGATION ".repeat(1000) });
+  assert.ok(built.prompt.length <= 6000);assert.match(built.prompt, /CURRENT TASK OBLIGATION/);
+  assert.match(built.prompt, /CONTINUE INTERRUPTED WORK/);assert.match(built.prompt, /history only; the current task brief takes precedence/);
+  assert.ok(built.prompt.includes("H".repeat(1500)));assert.ok(!built.prompt.includes("H".repeat(1501)));
+  assert.ok(built.prompt.endsWith(" Print MEFI_JOB_DONE"));
+});
 const source = (await readFile(new URL("../main.cjs", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 // The host's own MEFI_NEXT/MEFI_CALL reader, lifted from main.cjs with its constants.
 const handoffHost = vm.createContext({ EXECUTOR_NEXT_MARK: "MEFI_NEXT:", EXECUTOR_CALL_MARK: "MEFI_CALL:", EXECUTOR_CALLABLE: new Set(["auditor", "reference"]) });
@@ -658,6 +666,16 @@ test("a heavier retry is pending from the owner's retry-deep until the next atte
 const lineState = (extra = {}) => ({ spoke: false, sawDone: false, resultNote: null, depth: 0, handoffs: [], calls: new Set(), issues: [], outputTail: [], outputLog: [], ...extra });
 const read = (state, line, extra = {}) => core.readWorkerLine(state, line, { now: NOW, startedAt: NOW - 30000, doneMark: "MEFI_JOB_DONE", maxDepth: 3, maxHandoffs: 3, assistant, parseHandoff, ...extra });
 const take = (state, line, extra = {}, stdout = true) => core.applyWorkerLine(state, read(state, line, extra), { stdout });
+
+test("a CLI repeating its handoff on stdout and stderr admits it once, without merging distinct briefs", () => {
+  const state = lineState();
+  take(state, "MEFI_NEXT: Verify greeting :: Run the exact greeting check", {}, false);
+  take(state, "MEFI_NEXT: Verify greeting :: Run the exact greeting check", {}, true);
+  assert.equal(state.handoffs.length, 1);
+  take(state, "MEFI_NEXT: Verify greeting :: Check the translated greeting", {}, true);
+  take(state, "MEFI_NEXT: Verify another file :: Run the exact greeting check", {}, true);
+  assert.equal(state.handoffs.length, 3, "distinct title or brief still creates separate work");
+});
 
 test("the sentinel counts only as a line of its own, colour or not, never quoted in prose", () => {
   assert.equal(read(lineState(), "MEFI_JOB_DONE").sawDone, true);
