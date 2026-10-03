@@ -90,6 +90,10 @@ const habitsLibrary = require("./scripts/habits.cjs");
 // here, before anything can log, so logLine never meets them uninitialised.
 const traceStudio = trace.ring(trace.LIMITS.ring);
 const traceRenderer = trace.ring(1000);
+// The log core keeps those lines on disk too, in this PC's own local folder
+// (the "Log core" block). Without either helper the log stays in memory only.
+const logCoreModule = optionalHelper("./scripts/log-core.cjs", () => require("./scripts/log-core.cjs"), null);
+const localDirs = optionalHelper("./scripts/local-dirs.cjs", () => require("./scripts/local-dirs.cjs"), null);
 const requestSizing = require("./scripts/request-sizing.cjs");
 const newApp = require("./scripts/new-app.cjs");
 const executorResume = require("./scripts/executor-resume.cjs");
@@ -899,6 +903,8 @@ async function applyRestart(files, { counted = true, stopAgents = false } = {}) 
   stopMachineWatch();
   // app.exit bypasses before-quit; save the same continuations as a normal exit.
   stopAssistant();
+  // The log's last lines too, and its folder lock, which the relaunch takes.
+  if (typeof logCoreFlushSync === "function") logCoreFlushSync();
   // Free the lock before relaunching, or the new instance can lose the race
   // against this one exiting and quit itself.
   app.releaseSingleInstanceLock();
@@ -1266,6 +1272,7 @@ async function applyReleaseUpdate() {
     });
     helper.unref();
     logLine(`[release] applying v${prepared.version}; helper pid ${helper.pid}`);
+    if (typeof logCoreFlushSync === "function") logCoreFlushSync();
     app.releaseSingleInstanceLock();
     app.exit(0);
     return { ok: true, applying: true, version: prepared.version, status: releaseStatus() };
@@ -6581,6 +6588,7 @@ function assistantLog(kind, text, extra = null, role = null) {
   const entry = { at: Date.now(), kind, text: String(text).slice(0, 400), ...(who ? { role: who } : {}) };
   assistantState.log.push(entry);
   assistantTrim(assistantState.log, assistantCaps().log);
+  if (typeof logCorePersist === "function") logCorePersist("assistant", `${kind}: ${entry.text}`, { t: entry.at, lvl: kind === "error" ? "error" : null, src: who || kind });
   if (kind !== "tick" && kind !== "message" && kind !== "reply" && kind !== "notice" && kind !== "think") logLine(`[assistant] ${entry.text}`);
   if (SMOKE) console.log(`[assistant] ${kind}: ${entry.text}`);
   // The log row stays {at, kind, text} plus the calling role on error rows;
@@ -16492,7 +16500,7 @@ async function spawnNextJob(options) {
         }, 500);
         entry.activityTimer.unref?.();
       }
-      if (read.plain) logLine(`[${runLabel}] ${read.plain}`);
+      if (read.plain) logLine(`[${runLabel}] ${read.plain}`, { echo: true, run: entry.id, task: job.ref?.id ?? null });
       // A runner's first line is how long it took to start — the evidence
       // the start watchdog sets its budget from (executorCore.startBudgetMs).
       // A start also ends any run of consecutive start kills.
@@ -18329,6 +18337,7 @@ async function writeSettings(next) {
     Object.assign(settingsDisk, { good: JSON.stringify(saved), held: null, unreadable: false });
   }
   rememberAutonomySettings(next);
+  if (typeof logCoreSettings === "function") logCoreSettings(next);
   if (Object.keys(auth).length || Object.keys(await authStore.readAuthStore(AUTH_PATH)).length) {
     await authStore.writeAuthStore(AUTH_PATH, auth);
   }
@@ -18532,7 +18541,7 @@ const TRACE_CHANNELS = Object.freeze([
   { id: "renderer", label: "Window", area: "renderer", detail: "Warnings and errors from Studio's own window." },
 ]);
 async function traceRows(id, { tail = 250 } = {}) {
-  if (id === "studio") return { rows: traceStudio.rows(), size: traceStudio.size() };
+  if (id === "studio") return { rows: traceStudio.rows(), size: traceStudio.size(), file: typeof logCoreFolder === "function" ? logCoreFolder() : null };
   if (id === "renderer") return { rows: traceRenderer.rows(), size: traceRenderer.size() };
   if (id === "assistant") {
     const log = Array.isArray(assistantState?.log) ? assistantState.log : [];
@@ -18569,12 +18578,19 @@ async function traceChannels() {
   }
   return { ok: true, channels };
 }
-async function traceRead({ channel = "studio", tail = 250, text = "", problems = false, level = null, sources = null } = {}) {
+// `before` pages the studio channel's older lines from disk ("Log core"): a
+// time in ms (lines older than it) or the `next` cursor of the last page.
+async function traceRead({ channel = "studio", tail = 250, text = "", problems = false, level = null, sources = null, before = null } = {}) {
   if (!TRACE_CHANNELS.some((item) => item.id === channel)) return { ok: false, error: "Choose a log channel." };
+  const filters = { tail, text, problems: problems === true, level: ["error", "warn", "info"].includes(level) ? level : null, sources: Array.isArray(sources) ? sources.slice(0, 12).map(String) : null };
   try {
+    if (before !== null && before !== undefined && before !== "") {
+      if (channel !== "studio" || typeof logCoreReadPage !== "function") return { ok: false, channel, error: "Older lines are kept for the studio log only." };
+      return await logCoreReadPage({ channel, before, ...filters });
+    }
     const read = await traceRows(channel, { tail });
-    const result = trace.query(read?.rows ?? [], { tail, text, problems: problems === true, level: ["error", "warn", "info"].includes(level) ? level : null, sources: Array.isArray(sources) ? sources.slice(0, 12).map(String) : null });
-    return { ok: true, channel, ...result, size: read?.size ?? 0, file: read?.file ?? null, dropped: channel === "studio" ? traceStudio.dropped() : 0 };
+    const result = trace.query(read?.rows ?? [], filters);
+    return { ok: true, channel, ...result, size: read?.size ?? 0, file: read?.file ?? null, dropped: channel === "studio" ? traceStudio.dropped() : 0, older: channel === "studio" && Boolean(read?.file) };
   } catch (error) {
     return { ok: false, channel, error: String(error.message ?? error).slice(0, 300) };
   }
@@ -18585,6 +18601,9 @@ function logLine(line) {
   if (text.length > STUDIO_LOG_LINE_MAX) text = `${text.slice(0, STUDIO_LOG_LINE_MAX)}… (${text.length - STUDIO_LOG_LINE_MAX} more characters)`;
   // A slice of this code run on its own (the host suites) has no Trace ring.
   if (typeof traceStudio !== "undefined") traceStudio.push(trace.studioRow(text, Date.now()));
+  // Kept on disk as well ("Log core"), except a worker's own output: the
+  // executor's wire marks it with a second argument, { echo, run, task }.
+  if (typeof logCorePersist === "function") logCorePersist("studio", text, arguments[1]);
   studioLogPending.push(text);
   if (studioLogPending.length > STUDIO_LOG_BATCH_MAX) {
     studioLogDropped += studioLogPending.length - STUDIO_LOG_BATCH_MAX;
@@ -21526,6 +21545,7 @@ function createWindow() {
     if (!level) return;
     const where = details.sourceId ? `${String(details.sourceId).split(/[\\/]/).pop()}${details.lineNumber ? `:${details.lineNumber}` : ""}` : "window";
     traceRenderer.push(trace.rendererRow({ at: Date.now(), level, source: where.slice(0, 40), text: String(details.message ?? "") }));
+    if (typeof logCorePersist === "function") logCorePersist("renderer", String(details.message ?? ""), { lvl: level, src: where.slice(0, 40) });
   });
   if (SMOKE || CAPTURE) {
     window.webContents.on("console-message", (...args) => {
@@ -22119,6 +22139,7 @@ process.on("exit", () => {
     const pid = entry.pid ?? entry.child?.pid;
     if (pid) spawn("taskkill", ["/pid", String(pid), "/t", "/f"], { windowsHide: true, stdio: "ignore" });
   }
+  if (typeof logCoreFlushSync === "function") logCoreFlushSync();
 });
 
 // The eyes worker holds a read-only handle on the OpenCode store; drop it
