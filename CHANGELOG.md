@@ -7,6 +7,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- Your PCs can explicitly start a coordinator and pair check workers. Queued
+  Studio checks use isolated exact-commit checkouts, retain restart journals,
+  and hold uncertain assignments for owner recovery. Services stay off after
+  app restart; another PC requires trusted HTTPS and separate network setup.
+
 - Failed automatic development updates wait an hour before retrying the same
   build; manual updates remain available. Missing or malformed build metadata
   falls back to an older eligible build, and failed channel changes show a reason.

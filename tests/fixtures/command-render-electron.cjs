@@ -119,6 +119,7 @@ app.whenReady().then(async () => {
     responses.eyesLog = {ok:true,text:"[fixture] Sample review started.\n[fixture] Compact navigation updated.\n[fixture] Waiting for visual comparison decision."};
   }
   if (process.env.MEFI_RELEASE_CHANNEL_CAPTURE) require("./release-channel-fixture.cjs").seed(responses);
+  if (process.env.MEFI_PAIRED_WORKER_CAPTURE) require("./paired-worker-ui-fixture.cjs").seed(responses);
   // Pure graph helpers supply the same valid catalog and default map as Studio;
   // this imports no host services, project state, credentials or worker code.
   const brains = require(path.resolve(__dirname, "../../scripts/brains.cjs"));
@@ -270,6 +271,10 @@ app.whenReady().then(async () => {
   }
   if (process.env.MEFI_RELEASE_CHANNEL_CAPTURE) {
     await require("./release-channel-fixture.cjs").capture({ window, run, until, sleep, capturePage, report, root });
+    finish(); return;
+  }
+  if (process.env.MEFI_PAIRED_WORKER_CAPTURE) {
+    await require("./paired-worker-ui-fixture.cjs").capture({ window, run, until, sleep, capturePage, report, root });
     finish(); return;
   }
   if (process.env.MEFI_NODE_VIEWS_CAPTURE) {

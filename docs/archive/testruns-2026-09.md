@@ -6,6 +6,84 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-30 - Waves A and B and the 0.5 shell on the integration branch: the layout contract, Size and density, Today and the Inbox, the frame, tabs and Build's sessions
+
+A cloud session (Linux, Node 24.21.0) carried the rest of 0.5.0's code onto the
+integration branch `claude/funny-einstein-19ljkq`, and `main` followed by
+fast-forward only, each time after Windows CI was green on the exact commit (`main`
+was at 27821c8 when this was written). On `main` now: Recently deleted and plan
+versions, project search and rules for agents, changed files with Accept and
+Revert, advisory checks, before and after pictures, a time limit and usage,
+pictures on a message, the `@ # /` picker and the Skills page, Windows
+notifications, Report a problem and the crash prompt, What's new, and the new shell
+behind `?layout=v2` (off by default): the layout contract, Size and density with a
+live preview, Today and the Inbox, the frame, the tab strip, and Build's session
+list, thread and inspector. No executable was built, no tag was pushed and
+`gh-pages` was not touched.
+
+- Windows CI (`ci.yml`, windows-latest): runs 172, 173, 178 and 179 failed and
+  were fixed, each on a Windows-only cause the Linux run cannot show. 172: the
+  real-npm advisory check (an npm script cannot run through a quoted `node.exe`
+  path with a space) and two attempt snapshot tests that made file names with `"`
+  (Windows cannot hold one). 173: `gitignore_lite` named the device (`\\.\nul`) as
+  git's config path, which git for Windows does not take, and `skills_host`
+  compared the 8.3 short temp folder (`RUNNER~1`) with the long name the host
+  resolves to. 178 and 179: the Size page's test required its stylesheet to be the
+  last one joined into the booklet, which stopped being true when the frame's and
+  the tab strip's stylesheets followed it. Green: runs 174 to 177 and 180 to 185,
+  on `main` 177 (2760c58) and 184 (b815d8b), each with the Linux smoke
+  (`studio-linux.yml`, runs 125 and 126); run 185 is the head with Build's
+  sessions, 27821c8.
+- GitHub push protection declined the first push of the Windows-notification
+  work: one Slack-shaped fake token in `tests/crash_report.test.mjs`. The owner
+  chose to rewrite the nine unpushed commits that carried it; the string is built
+  from pieces now, the commits were re-signed with the same authors, dates and
+  messages, the other 18 kept their ids, and the old history is in local backup
+  refs. Pushed as a plain fast-forward.
+- `npm run test:fast` (Linux, Node 24.21.0) on the tree of 27821c8: 6,598 tests,
+  6,570 pass, 0 fail, 28 skipped, 103 s. On 1c3f8d1, before any of this: 5,999
+  tests, 5,971 pass, 111 s. Python contracts (`unittest discover -s tools -p
+  "test_mefi_studio_*.py"`): 248 tests OK, 3 skipped. `npm run check` and `npm run
+  audit` clean; `npm run lint` 42 warnings, 0 errors, the same 42 as the base.
+- A `core.autocrlf=true` clone (CRLF checkout, as on the PC) found one failure the
+  LF suite cannot: `image_attach_host` matched a pattern that spans a line break in
+  `preload.cjs`; the test now reads it with LF endings. Four Python pins looked at
+  code the picture work changed on purpose and were updated to those forms.
+- The slices were built apart, each against a stand-in for the others, and met for
+  the first time here. What the window tests found when they did, all fixed, none
+  of it visible to a slice's own tests: Today's "Open task" asked the tab strip
+  for a Task board tab that cannot say which task it was given (a tab keeps only
+  the params that say which place it is), so the task was dropped on the way to the
+  page (read from the code, not reproduced before the fix); it now asks the
+  session panels and the thread opens in a tab of its own, and a window check
+  follows the whole path from Vibe's Today (28518c3, and the check in this row's
+  commit).
+  The session box with More open ran 30 px under the status bar in the smallest
+  window (400 x 373 CSS px): the box may shrink there and scrolls inside itself
+  (a789f2b). A drawer moved focus to the first control in its region, which for
+  the session inspector with no session open is one inside a hidden panel, so it
+  opened with focus left on its button (2d4cdde). The tab strip's row had a border
+  that took a pixel from the strip, which then shrank itself a pixel at a time,
+  and Build's Home started behind the bar (76954bb). Four window tests had
+  stand-ins for what is now really in the window (the frame's regions, the pill,
+  the status item, the strip's room) and now use the real thing, and the Size test
+  judges its columns by the room the page has, not the window's width.
+- Electron lane (one suite at a time as an unprivileged user under xvfb,
+  1920x1080, two at a time) on 27821c8: 39 suites, 38 pass. New in it:
+  `layout_contract_render` (5.5 minutes; every page's geometry against the
+  recording made on the base commit, four window sizes, both modes, v2 inside the
+  free area), `shell_render`, `tabs_render`, `today_render`, `size_render` and
+  `sessions_render`. `project_map_render` fails at 600x560 and 150% zoom on this
+  Linux box with or without this work (9 px over its box), as before.
+  `today_render` failed once, in a lane with two other suites running ("focus never
+  falls out to the page while tabbing through Today": one of 60 real Tab presses
+  landed while Vibe's lane repainted); it passed alone twice (56 s) and in the
+  pair before.
+- Not run here: `npm test` on the PC (the Windows Electron lane), the attended
+  looks the owners still owe (tree brightness, the new layout on the laptop), real
+  Windows fonts and display scaling, and every item in
+  `docs/release-scope-0.5.0.md` under "What still needs the owner".
+
 ## 2026-09-30 - Phase 0 landing: tree brightness, media player, Build's sessions layout and Worktrees on main
 
 A cloud session (Linux, Node 24.21.0) finished the parked branches on the

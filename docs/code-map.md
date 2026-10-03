@@ -12,6 +12,13 @@ the weight is, not to be exact.
 
 ## Four runtimes
 
+Paired repository checks use `scripts/paired-coordinator.cjs` (persistent queue,
+registry, fences and progress archives), `paired-transport.cjs` (bounded worker
+HTTP/HTTPS protocol), `paired-worker.cjs` (restart journal and exact-commit fixed
+check runner), and `paired-worker-host.cjs` (lazy desktop consent and encrypted
+pairing adapter). `renderer/pc-sync.js` owns the setup disclosure; `paired:*`
+channels in main and preload bridge it. This is separate from coding agents.
+
 | Runtime | Entry | Talks to the others through |
 | --- | --- | --- |
 | Electron main process | `main.cjs`, plus the `scripts/*.cjs` it requires | IPC through `preload.cjs`; child processes through `scripts/platform.cjs` |

@@ -39,6 +39,61 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-03 Paired workers review milestone - aggregate and baseline comparison
+
+Corrected slice: 22 focused tests pass; real HTTP loopback and Git/Node run the
+six fixed Studio checks at exact commit ae5f26c in a fresh checkout. Check,
+audit and build pass; lint has 42 baseline warnings and no errors. Real Chromium
+pairing/recovery UI passes at desktop and 600px with a simulated bridge.
+
+Corrected npm test exits 1: 6,824 Node tests, 6,807 pass, one Command musical-
+movement fixture failure, 16 skips. Python runs 248 tests OK with one skip;
+all six normalized-path lock checks pass. The same unchanged candidate's
+isolated Command fixture then passes 1/1. Clean main ae5f26c also fails that
+fixture's musical-geometry checks, establishing a baseline instability on this
+desktop. The prior preserved candidate's complete aggregate passed 6,801/6,817
+Node tests with 16 skips plus Python and locks. Red logs remain preserved;
+neither the fixture nor unrelated music runtime was changed or disabled.
+
+CodeRabbit completed reviews of 11 tracked files and then all 24 staged files
+twice, raising 6, 2 and 3 issues. Valid issues are addressed with focused tests;
+bounded Previous/Older progress pages and persisted-grant late-result
+reconciliation resolve suggestions without unbounded lists or repeated jobs.
+Final follow-up review and exact-head CI outcomes are reported separately.
+Desktop limitations: compositor occlusion unavailable and synthetic native
+Ctrl+W unverified. LAN/cross-network, AI editing and terminal-job retries remain
+outside this first check-worker profile; no live owner grants were activated.
+
+## 2026-10-03 Paired worker recovery and bounded history qualification
+
+Corrected candidate: 22 focused coordinator/worker/desktop/UI tests pass. Real
+temporary HTTP loopback runs all six Studio checks at exact merged commit
+ae5f26c, without changing source or creating a production pairing. Persisted
+start grants fence late-success reconciliation; pre-start expired jobs cannot
+claim success. Failure injection proves archive append retries are idempotent,
+command deadlines settle and hold recovery, and shutdown/restart admission is
+bounded. Progress retains only 20 displayed lines with previous/next navigation.
+Check and audit pass; offline lint retains 42 baseline warnings and zero errors.
+The preserved first candidate passed the full Node/Electron, 248 Python and
+six normalized-lock checks; the corrected aggregate run is reported separately.
+CodeRabbit completed three reviews (6, 2 and 3 issues). Valid issues were fixed
+and tested; history uses bounded pages rather than unbounded append, and late
+success requires a persisted grant instead of rejecting every expired reply.
+Native UI captures are bridge simulations; LAN/cross-network operation and
+distributed AI execution remain unqualified. No live network or owner grants.
+
+## 2026-10-03 Paired repository checks first vertical slice
+
+Isolated opt-in coordinator and worker qualification: 15/15 focused tests pass
+with durable queue/registry restart, persisted single start grants, lost reply
+reconciliation, stale lease/fence refusal, disconnect abort, bounded transport,
+encrypted pairing adapter, and real Git/Node exact-commit checks preserving dirty
+source. Real Chromium setup/recovery fixture passes 1/1 at desktop and 600px;
+bridge is simulated, zero external network/process attempts. Status stays local
+until disclosure; no service or owner grant activates on startup. Detail folds
+survive status refresh. No live LAN/cross-network or AI delegation qualification.
+Full repository gates are reported separately with their actual outcomes.
+
 ## 2026-10-03 - Completed updater review and final channel cleanup
 
 CodeRabbit completed the combined updater delta at 85bc4e6: 21 files reviewed, two minor issues. The channel-toggle cleanup now keeps the switch disabled during checking, downloading, installing or rollback, and the changelog makes deferred artifact publishing explicit. The original three partial review issues were fixed in 85bc4e6. Native screenshot evidence uses an isolated bridge; live update channels, credentials and provider state are untouched.
@@ -148,116 +203,6 @@ Fleet recap batch: deterministic recorded history from up to four prior generati
 Focused validation: 148 Node tests passed, zero failures/skips across fleet, fleet_host, executor_core and executor_lifecycle, including cross-project and project-switch isolation, saved interruption/verification history, handoff identity, bounded text/prompt budget, actual prompt delivery, unavailable history and a stalled lookup. Initial new history test needed its active board seed before checking the observed verified transition; corrected focused run passed. Fleet Chromium fixture passed in 31.1 seconds: 25 layout/view combinations across five size/zoom cases, desktop/narrow recap geometry, real inspector content, no renderer errors, network or child attempts. Screenshots retained at 1440x900 and 600x560. Build-booklet, check and audit passed; zero audit findings/errors/warnings. Required full aggregate gate is pending parent coordination of the shared server CPU window; this row does not claim aggregate validation of the recap batch.
 
 Separate live evidence: the unchanged prior candidate passed actual native restart during a real Codex worker, app PID 10360 -> 7212, original app exit 0. Interrupted progress/claims persisted without a failure charge; old worker process tree drained before explicit resume, paused dwell admitted no worker, exactly one resumed worker completed and the actual project check/verifier reached Done/Verified; shipped review Accept ran once. Both workers were sequential and the same one task survived. This used disposable Git/project/profile and existing authorized ChatGPT login. No production tasks, credentials, original checkout, default Classic or release state changed. The complete raw active-native-restart report/controller/screenshots stay outside Git under task-2/evidence.
-
-## 2026-10-02 - Maxwells-PC modern UI and live-loop verification
-
-Source/provenance: isolated branch local/ui-loop-current-20261001 at b3a4f468348a4485112c6741026b565f106e9821. Independently reproduced on the server; Echo's uncommitted patch was unavailable and was not assumed transferred. The installed OneDrive checkout remains clean at 1dd9518be7b8843616cd56778f8d834fcb534e58. No push, merge, release, production restart, credentials or default-setting changes.
-
-Product changes: expanded optional session controls preserve a 60 px conversation area and the draft in short windows, including 150% zoom. A real Codex worker repeated its identical MEFI_NEXT title/brief on stdout and stderr; executor-core now admits that pair once per run while preserving distinct titles or briefs. No other lifecycle implementation changed.
-
-Harness repairs: asynchronous Windows cleanup lets background Git completion drain; cancelled claims wait for the actual dropped event within a bound instead of sleeping 300 ms. Plans reasserts its existing CDP focus emulation before native Enter, preserving the actual focus-paint assertion. The full workspace verifier follows current Agents navigation and compact pickers, the Finish-to-tour flow, completed guide, named decision cards, current Work search/overview/History views, project switching, saveResume reload, and admission semantics. Visibility/hit tests, durable-store checks, scope approval/rejection, worker guards, and renderer-error checks remain enforced.
-
-Final aggregate on frozen source, Node 24.9.0 and Python 3.10: build-booklet, check, audit and npm test all exit 0. CPU: 6599 tests, 6585 pass, 0 fail, 14 skip. Desktop: 62 tests, 61 pass, 0 fail, 1 skip. Exclusive Command and Eyes: 1 pass each; occlusion: 2 pass. Node total: 6665 tests, 6650 pass, 0 fail, 15 skip. Python: 248 tests, OK with 1 skip. Normalized-path lock: 6 checks pass. Node stage 1322 s, Python 53 s, whole npm test 1376 s. No source-drift warning. Audit: 0 findings, errors or warnings. Booklet hash bfe811c509c8.
-
-Complete modern workspace UI run: 17 workflows, 17 screenshots, 1280x720 and 600x760 layouts, 0 external network attempts, 0 coding-worker attempts and 0 renderer errors. The complete Sessions fixture also passes in the aggregate at six sizes with pictures, Accept/Revert/Undo, expanded controls, draft retention, reload, layout-off checks and 32 screenshots. Focused loop/handoff: 79 pass. Focused cleanup/snapshot/CSS: 66 pass, 3 skip.
-
-Real provider probes use the scoped official Codex 0.160.0 CLI and existing ChatGPT authentication: actual greeting edit plus delegated worker and both local checks pass; a real unsupported-model rejection settles without edits, false completion or handoff; stop/save kills a real isolated Codex child, saves pending progress, reopens without a failure charge and pauses admission, then explicit test resume edits and checks successfully. Board/storage, timers, helper delivery and window relaunch are fixture adapters. These probes do not establish a real application relaunch, cross-process database recovery, or provider-backed Done/Accept. No production project/profile was used.
-
-Earlier failures are retained in current-combined.log: Windows cleanup/cancellation timing and default-CLI Git ownership were harness/environment issues; the earlier Plans focus failure used the original fixture and passes after fixture repair. The Git ownership workaround is process-scoped to the verified isolated clone, with no global Git configuration change. The earlier diagnostic source-drift warning is historical; the final aggregate held source still.
-
-Evidence and deliverables remain under task-2/evidence: final gate logs, modern UI report/screenshots, real provider-probe reports and a b3a4f46-based candidate patch. Private CLI logs and production data are not part of the patch or screenshot deliverables.
-
-## 2026-10-01 - Maxwells-PC isolated current-main short-session validation
-
-Source/provenance: independently reproduced on b3a4f468348a4485112c6741026b565f106e9821, branch local/ui-loop-current-20261001. The installed clean OneDrive checkout is 1dd9518be7b8843616cd56778f8d834fcb534e58, an ancestor 290 commits behind; it was not modified. Echo's uncommitted working patch was unavailable. The earlier local old-baseline patch and test counts are historical, superseded by this run.
-
-Change: optional 0.5 session layout keeps a 60 px conversation minimum in short windows with controls expanded. A renderer regression failed before the CSS change at 600x560 and 150% zoom (0 px); after the change, asking and reviewing both retain 60 px and the draft. No lifecycle implementation or app defaults changed.
-
-Validation: Node 24.9.0 portable runtime; booklet bfe811c509c8; check and audit pass. Focused lifecycle/resume/delegation/verification/provider-isolation/updater-continuity suites: 190 pass. Complete standalone session fixture passes at six sizes with Accept/Revert/Undo, pictures, reload, layout-off checks and 32 screenshots; it also passes in the combined gate. Scoped disposable real-app IPC probe passes setup/tour/verify-first persistence, synthetic assistant-message failure with draft/retry retained, and reload with workers paused. External calls and coding workers were blocked. No actual provider delegation or Codex CLI execution is claimed (Codex CLI absent).
-
-The legacy full tools/verify_workspace.py is still red: current agents.js deliberately hides the old Home queue disclosures and settings the verifier clicks. First-run harness assumptions were updated to follow the supported Finish-to-tour flow and saveResume reload path; no workflow assertions were removed. The separate scoped IPC probe does not replace this full workflow gate.
-
-Combined gate results and CPU triage are recorded in the external current-status.json and current-combined.log. Initial CPU stage: 6579 pass, 5 fail, 14 skip; serial triage: 64 pass, 2 fail, 3 skip, retaining a Windows EPERM cleanup and CSS CLI child error. Subsequent CSS solo: 14 pass; direct cascade checker: equivalent. Remaining cancelled snapshot assertion and cleanup failures did not repeat in serial triage. No changes made to snapshot/lifecycle behavior on this evidence.
-
-Evidence: task-2/evidence contains current-session screenshots, current-ipc-probe report, complete gate/triage logs and the final b3a4f46-based patch. No credentials or production profile copied; no push, merge, release or production agent action.
-
-## 2026-09-30 - Waves A and B and the 0.5 shell on the integration branch: the layout contract, Size and density, Today and the Inbox, the frame, tabs and Build's sessions
-
-A cloud session (Linux, Node 24.21.0) carried the rest of 0.5.0's code onto the
-integration branch `claude/funny-einstein-19ljkq`, and `main` followed by
-fast-forward only, each time after Windows CI was green on the exact commit (`main`
-was at 27821c8 when this was written). On `main` now: Recently deleted and plan
-versions, project search and rules for agents, changed files with Accept and
-Revert, advisory checks, before and after pictures, a time limit and usage,
-pictures on a message, the `@ # /` picker and the Skills page, Windows
-notifications, Report a problem and the crash prompt, What's new, and the new shell
-behind `?layout=v2` (off by default): the layout contract, Size and density with a
-live preview, Today and the Inbox, the frame, the tab strip, and Build's session
-list, thread and inspector. No executable was built, no tag was pushed and
-`gh-pages` was not touched.
-
-- Windows CI (`ci.yml`, windows-latest): runs 172, 173, 178 and 179 failed and
-  were fixed, each on a Windows-only cause the Linux run cannot show. 172: the
-  real-npm advisory check (an npm script cannot run through a quoted `node.exe`
-  path with a space) and two attempt snapshot tests that made file names with `"`
-  (Windows cannot hold one). 173: `gitignore_lite` named the device (`\\.\nul`) as
-  git's config path, which git for Windows does not take, and `skills_host`
-  compared the 8.3 short temp folder (`RUNNER~1`) with the long name the host
-  resolves to. 178 and 179: the Size page's test required its stylesheet to be the
-  last one joined into the booklet, which stopped being true when the frame's and
-  the tab strip's stylesheets followed it. Green: runs 174 to 177 and 180 to 185,
-  on `main` 177 (2760c58) and 184 (b815d8b), each with the Linux smoke
-  (`studio-linux.yml`, runs 125 and 126); run 185 is the head with Build's
-  sessions, 27821c8.
-- GitHub push protection declined the first push of the Windows-notification
-  work: one Slack-shaped fake token in `tests/crash_report.test.mjs`. The owner
-  chose to rewrite the nine unpushed commits that carried it; the string is built
-  from pieces now, the commits were re-signed with the same authors, dates and
-  messages, the other 18 kept their ids, and the old history is in local backup
-  refs. Pushed as a plain fast-forward.
-- `npm run test:fast` (Linux, Node 24.21.0) on the tree of 27821c8: 6,598 tests,
-  6,570 pass, 0 fail, 28 skipped, 103 s. On 1c3f8d1, before any of this: 5,999
-  tests, 5,971 pass, 111 s. Python contracts (`unittest discover -s tools -p
-  "test_mefi_studio_*.py"`): 248 tests OK, 3 skipped. `npm run check` and `npm run
-  audit` clean; `npm run lint` 42 warnings, 0 errors, the same 42 as the base.
-- A `core.autocrlf=true` clone (CRLF checkout, as on the PC) found one failure the
-  LF suite cannot: `image_attach_host` matched a pattern that spans a line break in
-  `preload.cjs`; the test now reads it with LF endings. Four Python pins looked at
-  code the picture work changed on purpose and were updated to those forms.
-- The slices were built apart, each against a stand-in for the others, and met for
-  the first time here. What the window tests found when they did, all fixed, none
-  of it visible to a slice's own tests: Today's "Open task" asked the tab strip
-  for a Task board tab that cannot say which task it was given (a tab keeps only
-  the params that say which place it is), so the task was dropped on the way to the
-  page (read from the code, not reproduced before the fix); it now asks the
-  session panels and the thread opens in a tab of its own, and a window check
-  follows the whole path from Vibe's Today (28518c3, and the check in this row's
-  commit).
-  The session box with More open ran 30 px under the status bar in the smallest
-  window (400 x 373 CSS px): the box may shrink there and scrolls inside itself
-  (a789f2b). A drawer moved focus to the first control in its region, which for
-  the session inspector with no session open is one inside a hidden panel, so it
-  opened with focus left on its button (2d4cdde). The tab strip's row had a border
-  that took a pixel from the strip, which then shrank itself a pixel at a time,
-  and Build's Home started behind the bar (76954bb). Four window tests had
-  stand-ins for what is now really in the window (the frame's regions, the pill,
-  the status item, the strip's room) and now use the real thing, and the Size test
-  judges its columns by the room the page has, not the window's width.
-- Electron lane (one suite at a time as an unprivileged user under xvfb,
-  1920x1080, two at a time) on 27821c8: 39 suites, 38 pass. New in it:
-  `layout_contract_render` (5.5 minutes; every page's geometry against the
-  recording made on the base commit, four window sizes, both modes, v2 inside the
-  free area), `shell_render`, `tabs_render`, `today_render`, `size_render` and
-  `sessions_render`. `project_map_render` fails at 600x560 and 150% zoom on this
-  Linux box with or without this work (9 px over its box), as before.
-  `today_render` failed once, in a lane with two other suites running ("focus never
-  falls out to the page while tabbing through Today": one of 60 real Tab presses
-  landed while Vibe's lane repainted); it passed alone twice (56 s) and in the
-  pair before.
-- Not run here: `npm test` on the PC (the Windows Electron lane), the attended
-  looks the owners still owe (tree brightness, the new layout on the laptop), real
-  Windows fonts and display scaling, and every item in
-  `docs/release-scope-0.5.0.md` under "What still needs the owner".
 
 ## Read Before Any Tests
 

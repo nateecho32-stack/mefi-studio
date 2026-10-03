@@ -1374,6 +1374,7 @@ async function applyReleaseUpdate() {
   }
   if (releaseState.state === "applying") return { ok: false, error: "the update is already applying", status: releaseStatus() };
   if (projectSwitching) return { ok: false, error: "A project switch is saving progress; try again when it finishes.", status: releaseStatus() };
+  if (typeof pairedWorkersBusy === "function" && pairedWorkersBusy()) return { ok: false, error: "Stop paired workers and the coordinator before installing an update.", status: releaseStatus() };
   if (activeChild && activeChild.exitCode === null) return { ok: false, error: "Love2D is running — close it and try again", status: releaseStatus() };
   const running = autopilot.jobs;
   if (running.length) return { ok: false, error: `${running.length} build job(s) still running — try again when they finish`, status: releaseStatus() };
@@ -1394,10 +1395,10 @@ async function applyReleaseUpdate() {
     }
     // Jobs may have started while the download ran. Keep the verified staging
     // and try on the next poll instead of stopping a worker to install a build.
-    if (projectSwitching || (activeChild && activeChild.exitCode === null) || autopilot.jobs.length) {
+    if (projectSwitching || (typeof pairedWorkersBusy === "function" && pairedWorkersBusy()) || (activeChild && activeChild.exitCode === null) || autopilot.jobs.length) {
       releaseApplyInFlight = false;
       publishRelease({ state: "available", progress: null });
-      return { ok: false, deferred: true, error: "The build is ready; waiting for running jobs or Love2D to finish.", status: releaseStatus() };
+      return { ok: false, deferred: true, error: "The build is ready; waiting for running jobs, Love2D or paired worker services to stop.", status: releaseStatus() };
     }
     publishRelease({ state: "applying", error: null });
     await updateSettings((settings) => {
@@ -1573,6 +1574,7 @@ async function releaseScanPrevious() {
 // this process, the same way an update is applied.
 async function releaseRollback() {
   const blocked = (error) => ({ ok: false, error, status: releaseStatus() });
+  if (typeof pairedWorkersBusy === "function" && pairedWorkersBusy()) return blocked("Stop paired worker services before rolling back Studio.");
   if (SMOKE || CAPTURE || CLI_MODE) return blocked("rolling back is unavailable in this mode");
   if (!app.isPackaged || process.platform !== "win32") return blocked("Rolling back applies to the portable Windows build.");
   if (!updateSafety || !releasePrevious) return blocked("There is no saved version to go back to.");
@@ -3036,6 +3038,61 @@ async function libraryUse(shelf, id, from) {
   return vaultUse(entry, { anyProject: entry.source === "file" });
 }
 // ---- end of the Your PCs vault ---------------------------------------------------
+
+// ---- Paired check workers: opt-in durable coordinator ---------------------------
+let pairedWorkersHost = null;
+let pairedWorkersClosing = false;
+let pairedWorkersQuitSaved = false;
+function pairedWorkersBusy() { return pairedWorkersHost?.isRunning() === true; }
+function pairedWorkersDesktop() {
+  if (SMOKE || CAPTURE || CLI_MODE) throw new Error("Paired workers are disabled in capture and CLI modes.");
+  if (pairedWorkersClosing) throw new Error("Studio is closing its paired workers.");
+  if (!pairedWorkersHost) {
+    pairedWorkersHost = require("./scripts/paired-worker-host.cjs").createPairedHost({
+      directory: path.join(app.getPath("userData"), "paired-workers"), readSettings, updateSettings,
+      encryptionAvailable: communityKeystore,
+      seal: value => safeStorage.encryptString(value).toString("base64"),
+      unseal: value => safeStorage.decryptString(Buffer.from(value, "base64")),
+      project: async () => {
+        const root = projectRoot(), repo = await vaultProjectRepo();
+        const result = await vaultRun("git", ["-c", `safe.directory=${root.replace(/\\/g, "/")}`, "-C", root, "rev-parse", "HEAD"]);
+        return { root, repo, commit: result.ok ? result.stdout.trim() : null };
+      },
+      confirm: async (message, detail) => (await dialog.showMessageBox(window, { type: "warning", title: "Paired repository checks", message, detail, buttons: ["Cancel", "Continue"], defaultId: 0, cancelId: 0, noLink: true })).response === 1,
+      chooseTLS: async () => {
+        const certificate = await dialog.showOpenDialog(window, { title: "Choose the trusted TLS certificate (PEM)", properties: ["openFile"] });
+        if (certificate.canceled) return null;
+        const key = await dialog.showOpenDialog(window, { title: "Choose its private key (PEM)", properties: ["openFile"] });
+        return key.canceled ? null : { cert: certificate.filePaths[0], key: key.filePaths[0] };
+      },
+    });
+  }
+  return pairedWorkersHost;
+}
+async function pairedWorkersCall(method, ...args) {
+  try { return await pairedWorkersDesktop()[method](...args); }
+  catch (error) { return { ok: false, error: require("./scripts/redaction.cjs").scrubOutbound(String(error?.message ?? "Paired workers could not complete the action.")).slice(0, 400) }; }
+}
+async function pairedWorkersClose(timeoutMs = 15000) {
+  if (!pairedWorkersHost) return;
+  let timer;
+  try {
+    await Promise.race([
+      Promise.resolve().then(() => pairedWorkersHost.close()),
+      new Promise((_resolve, reject) => { timer = setTimeout(() => reject(new Error("Paired workers did not finish stopping; their saved journals need recovery.")), timeoutMs); }),
+    ]);
+  } finally { clearTimeout(timer); }
+}
+function pairedWorkersQuit(event) {
+  if (!pairedWorkersHost || pairedWorkersQuitSaved) return false;
+  event.preventDefault();
+  if (!pairedWorkersClosing) {
+    pairedWorkersClosing = true;
+    pairedWorkersClose().catch(() => {}).finally(() => { pairedWorkersQuitSaved = true; app.quit(); });
+  }
+  return true;
+}
+// ---- end of paired check workers -----------------------------------------------
 
 // ---- Cowork claims: agents on several PCs, one set of files ----------------------
 // A cowork room linked to the project's GitHub repository (Friends › Rooms,
@@ -20155,6 +20212,13 @@ async function stopAllAgents({ reason = "stopped by user", pauseAssistant = true
 async function restartStudio({ stopAgents = true, reason = "restarting", files = [] } = {}) {
   if (activeChild && activeChild.exitCode === null) return { deferred: true, reason: "Love2D is running" };
   if (projectSwitching) return { deferred: true, reason: "Project switch is saving progress before update" };
+  const closingPaired = typeof pairedWorkersClose === "function";
+  if (closingPaired) {
+    pairedWorkersClosing = true;
+    try { await pairedWorkersClose(); }
+    catch (error) { pairedWorkersClosing = false; return { ok: false, error: String(error?.message ?? "Could not stop paired workers.") }; }
+  }
+  try {
   if (stopAgents) {
     const stopped = await stopAllAgents({ reason, pauseAssistant: true, pauseExecutor: true });
     if (stopped?.ok === false) return stopped;
@@ -20166,6 +20230,7 @@ async function restartStudio({ stopAgents = true, reason = "restarting", files =
     }
   }
   return applyRestart(files, { counted: false });
+  } finally { if (closingPaired) pairedWorkersClosing = false; }
 }
 
 // Retained manual-mode default; automatic mode uses measured resources.
@@ -24052,6 +24117,18 @@ function registerIpc() {
   // Friends › Your PCs (the "Multi-PC sync" block). Project-gated, unlike
   // hub:*: both act on the open project's folder, so a switch waits for them.
   ipcMain.handle("sync:status", async () => syncProject(false));
+  // Explicit pairing/setup actions; no startup listener or automatic work.
+  ipcMain.handle("paired:status", async (_event, payload) => pairedWorkersCall("status", { before: typeof payload?.before === "string" ? payload.before.slice(0, 80) : null }));
+  ipcMain.handle("paired:coordinator", async (_event, payload) => payload?.action === "stop" ? pairedWorkersCall("stopCoordinator") : payload?.action === "start" ? pairedWorkersCall("startCoordinator", { port: payload?.port, mode: payload?.mode, url: typeof payload?.url === "string" ? payload.url.slice(0, 2048) : "" }) : { ok: false, error: "Choose a coordinator action." });
+  ipcMain.handle("paired:invite", async () => pairedWorkersCall("invite"));
+  ipcMain.handle("paired:pair", async (_event, payload) => pairedWorkersCall("pairWorker", typeof payload?.code === "string" ? payload.code.slice(0, 2049) : ""));
+  ipcMain.handle("paired:worker", async (_event, payload) => {
+    const actions = { start: "startWorker", stop: "stopWorker", forget: "forgetWorker", recover: "confirmStopped" };
+    return Object.hasOwn(actions, payload?.action) ? pairedWorkersCall(actions[payload.action], typeof payload?.jobId === "string" ? payload.jobId.slice(0, 80) : "") : { ok: false, error: "Choose a worker action." };
+  });
+  ipcMain.handle("paired:enqueue", async () => pairedWorkersCall("enqueue"));
+  ipcMain.handle("paired:revoke", async (_event, payload) => pairedWorkersCall("revoke", typeof payload?.workerId === "string" ? payload.workerId.slice(0, 80) : ""));
+  ipcMain.handle("paired:history", async (_event, payload) => pairedWorkersCall("history", typeof payload?.jobId === "string" ? payload.jobId.slice(0, 80) : "", { chunk: payload?.chunk, offset: payload?.offset }));
   ipcMain.handle("sync:run", async (_event, payload) => syncProject(true, { rebase: payload?.rebase === true }));
   // "Keep this PC up to date": syncFollow's safe fast-forward, on by default.
   ipcMain.handle("sync:follow", async (_event, payload) => {
@@ -25038,6 +25115,7 @@ app.on("window-all-closed", () => {
 let quitCheckpointSaved = false;
 app.on("before-quit", (event) => {
   app.isQuitting = true;
+  if (typeof pairedWorkersQuit === "function" && pairedWorkersQuit(event)) return;
   // Reaching here is the user's own doing — Alt+F4, the close button, the
   // tray's Quit. Record it before anything winds down, so the next launch
   // asks which folder to open instead of resuming this one. An update

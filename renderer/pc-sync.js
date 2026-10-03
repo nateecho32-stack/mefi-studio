@@ -336,6 +336,91 @@
     return box;
   }
 
+  function pairedSection(api) {
+    const box = node("details", "pc-setup"); box.id = "pc-paired-workers";
+    const status = node("p", "muted pc-setup-status", "Off until you start the coordinator or worker."); status.id = "paired-status"; status.setAttribute("role", "status");
+    const controls = new Set(), jobRows = new Map(), workers = node("ul", "pc-sync-list"), jobs = node("div"), recovery = node("ul", "pc-sync-list");
+    let busy = false, latest = null, timer = null, cursor = null;
+    const field = (id, label, type = "text", value = "") => {
+      const input = node("input", "pc-setup-repos"); input.id = id; input.type = type; input.value = value; input.autocomplete = "off";
+      const wrapper = node("label", "pc-paired-field", label); wrapper.append(input); return { wrapper, input };
+    };
+    const button = (id, label, work) => { const result = node("button", "ghost pc-sync-run", label); result.id = id; result.type = "button"; result.addEventListener("click", () => { void act(work); }); controls.add(result); return result; };
+    const port = field("paired-port", "Coordinator port", "number", "42240"); port.input.min = "1"; port.input.max = "65535";
+    const address = field("paired-address", "HTTPS address other PCs will use (optional for loopback)", "url"); address.input.placeholder = "https://your-coordinator-address";
+    const mode = node("select", "pc-setup-repos"); mode.id = "paired-mode"; mode.setAttribute("aria-label", "Coordinator connection");
+    for (const [value, label] of [["loopback", "Loopback only"], ["https", "HTTPS on this PC's network interfaces"]]) { const option = node("option", "", label); option.value = value; mode.append(option); } mode.value = "loopback";
+    const startCoordinator = button("paired-coordinator-start", "Start coordinator", () => api.pairedCoordinator("start", { port: Number(port.input.value), mode: mode.value, url: address.input.value }));
+    const stopCoordinator = button("paired-coordinator-stop", "Stop coordinator", () => api.pairedCoordinator("stop"));
+    const invite = button("paired-invite", "Pair another PC", async () => { const answer = await api.pairedInvite(); if (answer?.code && box.open) { invitation.input.value = answer.code; invitation.wrapper.hidden = copy.hidden = false; } return answer; });
+    const enqueue = button("paired-enqueue", "Queue this project's saved commit", () => api.pairedEnqueue());
+    const invitation = field("paired-invitation", "One-use pairing code (expires in five minutes)", "password"); invitation.input.readOnly = true; invitation.wrapper.hidden = true;
+    const copy = button("paired-copy", "Copy pairing code", async () => { try { await navigator.clipboard.writeText(invitation.input.value); } catch { invitation.input.focus?.(); invitation.input.select?.(); throw new Error("Select the pairing code and copy it on this PC."); } return { ok: true }; }); copy.hidden = true;
+    const code = field("paired-code", "Paste the coordinator's pairing code", "password");
+    const pair = button("paired-pair", "Pair this PC", async () => { const answer = await api.pairedPair(code.input.value); if (answer?.ok && !answer.cancelled) code.input.value = ""; return answer; });
+    const startWorker = button("paired-worker-start", "Start worker", () => api.pairedWorker("start"));
+    const stopWorker = button("paired-worker-stop", "Stop worker", () => api.pairedWorker("stop"));
+    const forget = button("paired-worker-forget", "Forget pairing", () => api.pairedWorker("forget"));
+    const refreshButton = button("paired-refresh", "Refresh", async () => { cursor = null; return api.pairedStatus(); });
+    const older = button("paired-older", "Older jobs", async () => { cursor = latest?.coordinator?.nextCursor ?? null; return api.pairedStatus({ before: cursor }); });
+    const actions = (...buttons) => { const row = node("div", "pc-sync-actions"); row.append(...buttons); return row; };
+    box.append(node("summary", "", "Paired repository checks"), status,
+      node("p", "muted", "Make this PC the coordinator, or pair it as a worker. The first profile checks Studio at an exact saved commit in a fresh checkout. Your current changes stay here. Nothing starts automatically after an app restart."),
+      node("h5", "", "Coordinator"), port.wrapper, mode, address.wrapper, actions(startCoordinator, stopCoordinator, invite, enqueue), invitation.wrapper, actions(copy),
+      node("h5", "", "This PC as a worker"), code.wrapper, actions(pair, startWorker, stopWorker, forget), recovery,
+      node("p", "muted", "Other PCs require trusted HTTPS, directly or through an existing reverse proxy. Certificate, network access and firewall setup are owner steps. A lost or uncertain assignment waits for recovery; it is never automatically run again."),
+      node("h5", "", "Paired PCs"), workers, node("h5", "", "Recent jobs"), jobs, actions(refreshButton, older));
+    function paintControls() {
+      for (const control of controls) control.disabled = busy;
+      const coordinator = latest?.coordinator, worker = latest?.worker;
+      startCoordinator.disabled ||= Boolean(coordinator?.running); stopCoordinator.disabled ||= !coordinator?.running; invite.disabled ||= !coordinator?.running;
+      startWorker.disabled ||= !worker?.paired || Boolean(worker?.running); stopWorker.disabled ||= !worker?.running; forget.disabled ||= !worker?.paired;
+      pair.disabled ||= latest?.encryptionAvailable === false; older.disabled ||= !latest?.coordinator?.nextCursor;
+    }
+    function paint(answer) {
+      if (!answer?.ok) { status.textContent = answer?.error || "Paired workers did not answer."; return; }
+      latest = answer; const coordinator = answer.coordinator, worker = answer.worker;
+      for (const control of controls) if (control.id.startsWith("paired-revoke-") || control.id.startsWith("paired-recover-")) controls.delete(control);
+      status.textContent = [coordinator?.running ? `Coordinator: ${coordinator.url}` : "Coordinator off", worker?.running ? `Worker running for ${worker.repo}` : worker?.paired ? "Worker paired, stopped" : "Worker not paired", worker?.error].filter(Boolean).join(" · ");
+      workers.replaceChildren(...(coordinator?.workers ?? []).map(item => { const row = node("li", "", `${item.name} · ${item.revoked ? "revoked" : item.repos.join(", ")}`); if (!item.revoked) row.append(button(`paired-revoke-${item.id}`, "Revoke", () => api.pairedRevoke(item.id))); return row; }));
+      recovery.replaceChildren(...(worker?.uncertain ?? []).map(id => { const row = node("li", "", `Check ${id.slice(0, 8)} needs restart recovery. `); row.append(button(`paired-recover-${id}`, "Confirm previous check stopped", () => api.pairedWorker("recover", id))); return row; }));
+      const visible = new Set((coordinator?.jobs ?? []).map(job => job.id));
+      for (const [id, row] of jobRows) if (!visible.has(id)) { controls.delete(row.more); controls.delete(row.back); jobRows.delete(id); }
+      jobs.replaceChildren(...(coordinator?.jobs ?? []).map(job => {
+        let row = jobRows.get(job.id);
+        if (!row) {
+          row = { detail: node("details", "pc-setup"), summary: node("summary"), line: node("p", "muted"), recent: node("ul", "pc-sync-list"), history: node("ul", "pc-sync-list"), chunk: 0, offset: 0, exhausted: false };
+          const loadHistory = async () => {
+            const page = await api.pairedHistory(job.id, { chunk: row.chunk, offset: row.offset }); if (page?.ok === false) return page;
+            row.history.replaceChildren(...(page.lines ?? []).map(line => node("li", "", line.text)));
+            row.previous = page.previous; row.back.hidden = !row.previous;
+            if (page.next != null) row.offset = page.next; else if (row.chunk < row.job.archiveChunks) { row.chunk++; row.offset = 0; } else { row.offset += (page.lines ?? []).length; row.exhausted = true; row.more.hidden = true; }
+            return { ok: true };
+          };
+          row.more = button(`paired-history-${job.id}`, "Older progress", loadHistory);
+          row.back = button(`paired-history-back-${job.id}`, "Previous progress page", async () => { if (!row.previous) return { ok: true }; row.chunk = row.previous.chunk; row.offset = row.previous.offset; row.exhausted = false; return loadHistory(); }); row.back.hidden = true;
+          row.detail.append(row.summary, row.line, row.recent, row.more, row.back, row.history); jobRows.set(job.id, row);
+        }
+        if ((row.job?.archived ?? 0) < (job.archived ?? 0)) row.exhausted = false;
+        row.job = job; row.summary.textContent = `${job.spec.repo} · ${job.spec.commit.slice(0, 8)} · ${job.state}`;
+        row.line.textContent = job.result?.summary || (job.state === "uncertain" ? "Held until the assigned PC confirms its previous process stopped." : "Waiting for a paired worker or check result.");
+        row.recent.replaceChildren(...(job.progress ?? []).slice(-3).map(line => node("li", "", line.text))); row.more.hidden = !job.archived || row.exhausted;
+        return row.detail;
+      })); paintControls();
+    }
+    async function refresh() { try { paint(await api.pairedStatus({ before: cursor })); } catch (error) { status.textContent = plain(error, "Paired workers did not answer."); } }
+    async function act(work) {
+      if (busy) return; busy = true; paintControls(); box.setAttribute("aria-busy", "true");
+      try { const answer = await work(); if (answer?.ok === false) throw new Error(answer.error || "Paired worker action failed."); if (answer?.coordinator) paint(answer); else await refresh(); }
+      catch (error) { status.textContent = plain(error, "Paired worker action failed."); }
+      finally { busy = false; box.removeAttribute("aria-busy"); paintControls(); }
+    }
+    let pollGeneration = 0;
+    const poll = async generation => { if (generation !== pollGeneration || !box.open || !box.isConnected) return; if (!busy && box.checkVisibility?.() !== false) await refresh(); if (generation === pollGeneration && box.open && box.isConnected) timer = setTimeout(() => poll(generation), 5000); };
+    box.addEventListener("toggle", () => { clearTimeout(timer); const generation = ++pollGeneration; if (box.open) { void refresh(); timer = setTimeout(() => poll(generation), 5000); } else { invitation.input.value = ""; invitation.wrapper.hidden = copy.hidden = true; } });
+    paintControls(); return box;
+  }
+
   function card() {
     const root = node("section", "pc-sync");
     root.setAttribute("aria-labelledby", "pc-sync-title");
@@ -374,6 +459,7 @@
       root.append(follow);
     }
     if (typeof api?.pcSetupStatus === "function") root.append(setupSection(api));
+    if (typeof api?.pairedStatus === "function") root.append(pairedSection(api));
     // Reach this PC from Discord (the remote section above).
     if (typeof api?.remoteStatus === "function") root.append(remoteSection(api));
     // Share between my PCs and Share with friends (renderer/pc-vault.js).

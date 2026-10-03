@@ -349,6 +349,14 @@ const api = {
   // ask for a rebase onto GitHub's commits. onSyncEvent carries every answer,
   // including the background look behind the Friends badge.
   syncStatus: () => ipcRenderer.invoke("sync:status"),
+  pairedStatus: (options) => ipcRenderer.invoke("paired:status", { before: typeof options?.before === "string" ? options.before.slice(0, 80) : null }),
+  pairedCoordinator: (action, options) => ipcRenderer.invoke("paired:coordinator", { action, port: options?.port, mode: options?.mode, url: options?.url }),
+  pairedInvite: () => ipcRenderer.invoke("paired:invite"),
+  pairedPair: (code) => ipcRenderer.invoke("paired:pair", { code: typeof code === "string" ? code.slice(0, 2049) : "" }),
+  pairedWorker: (action, jobId) => ipcRenderer.invoke("paired:worker", { action, jobId }),
+  pairedEnqueue: () => ipcRenderer.invoke("paired:enqueue"),
+  pairedRevoke: (workerId) => ipcRenderer.invoke("paired:revoke", { workerId }),
+  pairedHistory: (jobId, options) => ipcRenderer.invoke("paired:history", { jobId, chunk: options?.chunk, offset: options?.offset }),
   syncRun: (options) => ipcRenderer.invoke("sync:run", { rebase: options?.rebase === true }),
   // "Keep this PC up to date": no argument reads it, true or false sets it.
   syncFollow: (on) => ipcRenderer.invoke("sync:follow", typeof on === "boolean" ? { on } : {}),

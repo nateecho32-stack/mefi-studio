@@ -1,5 +1,13 @@
 # How Studio is put together
 
+Friends > Your PCs has an optional paired repository-check coordinator. The
+desktop adapter loads only when requested. Local IPC owns queueing, invitations,
+revocation and setup; the network protocol exposes only authenticated worker
+operations. Atomic coordinator and worker journals persist each start grant
+before execution. Expired assignments remain uncertain rather than moving to
+another worker. See [paired-workers.md](paired-workers.md) for the first profile,
+transport requirements, recovery and activation steps.
+
 The booklet builder declares one ordered, frozen `BOOKLET_INPUTS` inventory.
 Reads carry their source name with their content, so emission and error-source
 attribution cannot use independently maintained index lists. Fixtures reuse
