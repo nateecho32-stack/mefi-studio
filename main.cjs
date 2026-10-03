@@ -1241,8 +1241,19 @@ async function checkRelease() {
     .finally(() => {
       releaseCheckInFlight = null;
       if (releaseChannel === "development" && releaseState.state === "available" && app.isPackaged && process.platform === "win32") {
-        setImmediate(() => {
-          if (releaseChannel === "development" && releaseState.state === "available") applyReleaseUpdate().catch(error => logLine(`[release] automatic development update failed: ${error?.message ?? error}`));
+        const version = releaseState.latest?.version;
+        const retryReady = () => checkRelease.developmentAutoFailure?.version !== version || Date.now() - checkRelease.developmentAutoFailure.at >= 60 * 60 * 1000;
+        if (!version || !retryReady()) return;
+        setImmediate(async () => {
+          if (releaseChannel !== "development" || releaseState.state !== "available" || releaseState.latest?.version !== version || !retryReady()) return;
+          try {
+            const result = await applyReleaseUpdate();
+            if (result?.ok === false && result.status?.state === "error") checkRelease.developmentAutoFailure = { version, at: Date.now() };
+            else if (result?.ok === true) checkRelease.developmentAutoFailure = null;
+          } catch (error) {
+            checkRelease.developmentAutoFailure = { version, at: Date.now() };
+            logLine(`[release] automatic development update failed: ${error?.message ?? error}`);
+          }
         });
       }
     });

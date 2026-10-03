@@ -49,6 +49,24 @@ test("access failures and missing existing credentials are truthful", async () =
   const denied = await check({fetchImpl:async()=>({ok:false,status:403})}); assert.equal(denied.ok,false); assert.equal(denied.needsToken,true);
   assert.equal((await check({fetchImpl:async()=>{throw new Error("offline");}})).ok,false);
 });
+
+test("unusable package metadata falls back to an older eligible build without hiding access failures", async () => {
+  const newerCommit="c".repeat(40);
+  const olderContent={content:Buffer.from(JSON.stringify({version:"0.4.5"})).toString("base64")};
+  const fetchWithNewest = newest => async url => {
+    if(url.includes("/contents/"))return url.endsWith(newerCommit)?newest:json(olderContent);
+    if(url.includes("/artifacts?"))return json({artifacts:url.includes("/runs/13/")?[artifact({id:91,workflow_run:{id:13,head_sha:newerCommit}})]:[artifact()]});
+    return json({workflow_runs:[run({id:13,run_number:101,head_sha:newerCommit}),run()]});
+  };
+  for(const newest of [json({}),json({content:Buffer.from("broken JSON").toString("base64")}),json({content:Buffer.from("null").toString("base64")}),{ok:false,status:404}]){
+    const result=await check({fetchImpl:fetchWithNewest(newest)});
+    assert.equal(result.ok,true);assert.equal(result.update.version,"0.4.5-dev.100.1");assert.equal(result.latest.commit,commit);
+  }
+  for(const status of [401,403,500]){
+    const result=await check({fetchImpl:fetchWithNewest({ok:false,status})});
+    assert.equal(result.ok,false);assert.equal(result.needsToken,status!==500);
+  }
+});
 function stable(tag = "v0.4.4", extra = {}) {
   return { tag_name:tag, published_at:"2026-01-01", assets:[{name:releaseAssetName(tag),url:`https://api.github.com/repos/${repo}/releases/assets/1`,size:10,digest:`sha256:${"a".repeat(64)}`}], ...extra };
 }

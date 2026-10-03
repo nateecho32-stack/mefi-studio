@@ -46,6 +46,43 @@ test("automatic installation is scheduled only for development and rechecks opt-
   for(const channel of ["stable","development"]){const h=checkHost(channel);const pending=h.check();h.finish({ok:true,latest:{version:"0.4.5"},update:{version:"0.4.5"}});await pending;assert.equal(h.calls.queued.length,channel==="development"?1:0);h.context.releaseChannel="stable";for(const f of h.calls.queued)await f();assert.equal(h.calls.auto,0);}
 });
 
+test("failed automatic builds back off by version while manual attempts and newer builds remain available",async()=>{
+  const h=checkHost("development");let now=1000;
+  h.context.Date={now:()=>now};
+  h.context.applyReleaseUpdate=async()=>{h.calls.auto++;return {ok:false,status:{state:"error"}};};
+  h.finish({ok:true,latest:{version:"0.4.5-dev.100.1"},update:{version:"0.4.5-dev.100.1"}});
+  const drain=async()=>{for(const callback of h.calls.queued.splice(0))await callback();};
+  await h.check();await drain();assert.equal(h.calls.auto,1);
+  await h.check();await drain();assert.equal(h.calls.auto,1);
+  await h.context.applyReleaseUpdate();assert.equal(h.calls.auto,2);
+  now+=60*60*1000;await h.check();await drain();assert.equal(h.calls.auto,3);
+  h.context.checkRelease.developmentAutoFailure={version:"older-build",at:now};
+  await h.check();await drain();assert.equal(h.calls.auto,4);
+});
+
+test("busy automatic updates do not back off and thrown failures do",async()=>{
+  const h=checkHost("development");h.finish({ok:true,latest:{version:"0.4.5"},update:{version:"0.4.5"}});
+  h.context.applyReleaseUpdate=async()=>{h.calls.auto++;return {ok:false,deferred:true,status:{state:"available"}};};
+  const drain=async()=>{for(const callback of h.calls.queued.splice(0))await callback();};
+  await h.check();await drain();await h.check();await drain();assert.equal(h.calls.auto,2);
+  h.context.applyReleaseUpdate=async()=>{h.calls.auto++;throw new Error("download interrupted");};
+  await h.check();await drain();await h.check();await drain();assert.equal(h.calls.auto,3);
+});
+
+test("channel failures show a useful fallback and preserve the bridge's reason",async()=>{
+  const nav=(await readFile(new URL("../renderer/nav.js",import.meta.url),"utf8")).replace(/\r\n/g,"\n");
+  const start=nav.indexOf('document.querySelector("#release-development")?.addEventListener("change",');
+  const end=nav.indexOf('\n    });',start)+9;
+  assert.ok(start>=0&&end>start);
+  for(const error of [undefined,"Settings could not be saved"]){
+    let handler;const toasts=[];const toggle={checked:true,disabled:false};
+    const context=vm.createContext({document:{querySelector:()=>({addEventListener:(_event,f)=>{handler=f;}})},window:{mefiStudio:{releaseSetChannel:async()=>({ok:false,error})},MefiToast:message=>toasts.push(message)},paintRelease:()=>{},releaseUpdateState:{channel:"stable"}});
+    vm.runInContext(nav.slice(start,end),context);await handler({target:toggle});
+    assert.equal(toggle.disabled,false);assert.equal(toasts.length,1);
+    if(error)assert.equal(toasts[0],error);else assert.match(toasts[0],/Could not change.*try again/);
+  }
+});
+
 test("jobs and project switches that begin during download retain verified staging instead of restarting",async()=>{
   for(const kind of ["job","switch"]){
     const context=vm.createContext({SMOKE:false,CAPTURE:false,CLI_MODE:false,app:{isPackaged:true,getVersion:()=>"0.4.4"},process:{platform:"win32"},projectSwitching:false,activeChild:null,autopilot:{jobs:[]},releaseApplyInFlight:false,releaseChannelSetting:false,releaseChannel:"stable",releaseState:{state:"available",latest:{version:"0.4.5",channel:"stable"},staged:null},getReleaseUpdater:async()=>({compareVersions:()=>1}),releaseStatus:()=>context.releaseState,publishRelease:p=>{context.releaseState={...context.releaseState,...p};},downloadReleaseBuild:async()=>{if(kind==="job")context.autopilot.jobs.push({finished:true,settlementPending:false});else context.projectSwitching=true;return {version:"0.4.5"};},logLine:()=>{}});

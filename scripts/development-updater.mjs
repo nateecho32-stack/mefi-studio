@@ -15,7 +15,11 @@ export async function checkForDevelopment({ repo = DEFAULT_REPO, currentVersion,
   if (!/^[\w.-]+\/[\w.-]+$/.test(repo) || !parseVersion(currentVersion)) return { ok: false, error: "invalid repository or current version", checkedAt };
   const get = async (suffix) => {
     const response = await fetchImpl(`https://api.github.com/repos/${repo}/${suffix}`, { headers: githubHeaders(token), redirect: "error", signal: AbortSignal.timeout(15000) });
-    if (!response.ok) throw new Error(response.status === 401 || response.status === 403 ? "GitHub Actions access refused; an existing GitHub login with Actions read access is required to download development artifacts" : `GitHub Actions answered ${response.status}`);
+    if (!response.ok) {
+      const error = new Error(response.status === 401 || response.status === 403 ? "GitHub Actions access refused; an existing GitHub login with Actions read access is required to download development artifacts" : `GitHub Actions answered ${response.status}`);
+      error.status = response.status;
+      throw error;
+    }
     return response.json();
   };
   try {
@@ -28,9 +32,13 @@ export async function checkForDevelopment({ repo = DEFAULT_REPO, currentVersion,
       // GitHub artifacts have no custom metadata fields. Version discovery is
       // from the package.json at the exact built commit, never raw main HEAD.
       if (!/^[a-f\d]{40}$/.test(run.head_sha)) continue;
-      const response = await get(`contents/package.json?ref=${run.head_sha}`);
-      const pkg = JSON.parse(Buffer.from(response.content, "base64").toString("utf8"));
-      const base = parseVersion(pkg.version);
+      let response;
+      try { response = await get(`contents/package.json?ref=${run.head_sha}`); }
+      catch (error) { if (error.status === 404) continue; throw error; }
+      let pkg;
+      try { pkg = JSON.parse(Buffer.from(response.content, "base64").toString("utf8")); }
+      catch { continue; }
+      const base = parseVersion(pkg?.version);
       if (!base || base.pre) continue;
       const buildVersion = `${base.major}.${base.minor}.${base.patch}-dev.${run.run_number}.${run.run_attempt}`;
       const latest = { channel: "development", version: buildVersion, tag: `v${buildVersion}`, name: "Development / beta", htmlUrl: run.html_url, publishedAt: artifact.created_at, prerelease: true, runId: run.id, commit: run.head_sha, asset: { id: artifact.id, name: "development-artifact.zip", size: artifact.size_in_bytes, url: artifact.archive_download_url, digest: artifact.digest }, checksum: null };

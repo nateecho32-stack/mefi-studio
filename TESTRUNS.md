@@ -39,6 +39,14 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-03 - Combined updater gate and review follow-up
+
+The combined application head b481ec0 passed the corrected full Windows gate with process-scoped Git trust: 6,796 Node tests, 6,780 passed, zero failed, 16 skipped; 248 Python contracts OK with one skip; six lock checks passed. Its three exact-head GitHub runs passed on Windows and Linux. The earlier failed aggregate remains recorded separately.
+
+CodeRabbit's updater-delta review timed out after 18.5 minutes with three minor partial findings and no completion event. Follow-up fixes add per-version automatic retry backoff, a useful channel-failure message and fallback past unusable package metadata without hiding access failures. Focused updater/boot-health tests pass 48/48; the isolated real-Chromium channel fixture passes, including cancelled consent, missing artifacts and narrow geometry. Final follow-up checks, exact-head CI and a completed review remain required before landing.
+
+Native compositor occlusion is unavailable in this Windows session and synthetic Ctrl+W is not acted on by the native window; those established limitations remain. Screenshots use an isolated bridge and do not change live settings or prove a merge. No workflow, release, credential or provider action is included.
+
 ## 2026-10-03 - Combined task-context and update-channel integration
 
 The two application branches are integrated without workflow changes. Both changelog entries and every unique test-history row are retained, and the booklet is regenerated from the combined sources. The rollback VM fixture now supplies the production project-switch state and pins refusal before any rollback side effect.
@@ -302,47 +310,6 @@ touched.
 - Not run: `npm test` on the PC (the Windows Electron lane), the attended look
   at tree brightness, and the startup benchmark for the compile cache on Windows
   (`tools/benchmark_startup.py`; the Linux figures are in `docs/performance.md`).
-
-## 2026-09-30 - Update safety net: a saved copy, a boot watch and Roll back (ZA7)
-
-The installing helper (`scripts/release-updater.mjs`) now saves the running
-build outside the install folder, starts the new build and waits for
-`data/boot-health.json`, starts it once more if it never reports, and restores
-the saved build on a second failure; `release:rollback` and a Roll back row in
-Settings › Updates do the same by hand. The records' shapes are in
-`scripts/update-safety.cjs`; `main.cjs` owns the I/O ("Release updates: the
-safety net"). Built and gated in an isolated worktree (`C:\wt\za7`) off
-`origin/main` at 519d656, from the Bezi-informed plan (ZA7).
-
-- New `tests/update_rehearsal.test.mjs` runs the real PowerShell helper and
-  robocopy against a scratch portable folder (a name with a space and a
-  non-ASCII letter) with a `.cmd` stand-in for the app: a good update keeps
-  `resources/app/data` and saves the old build; a build that exits at once and
-  one that hangs are each tried twice, then the old build comes back with the
-  files the update added removed and the owner's data untouched; a backup that
-  cannot be made skips the update and restarts the current build; Roll back
-  restores the saved build; the plain swap is unchanged without the option; the
-  script carries a byte order mark. 7 tests, about 70 s, Windows only. This is
-  the first time anything ran the helper before a release.
-- `tests/update_safety.test.mjs` (the pure records), `tests/boot_health_host.test.mjs`
-  (`main.cjs`'s block against stubs) and the wiring pins in
-  `tests/release_updater.test.mjs` and `tests/app_wide_ipc.test.mjs`
-  (`boot:healthy` answers through a project switch, `release:rollback` waits).
-  `scripts/update-safety.cjs` is registered in `tests/module_purity.test.mjs`.
-- `npm run check`, `npm run audit` (0 findings) and `npm run lint` (0 errors;
-  no new warnings in the touched files): PASS.
-- `npm test`: Node suites 4881 tests, 4872 pass, 7 skipped, 2 fail; the
-  serialized Electron lane 48 tests, 47 pass, 1 skipped; `eyes_toggle_electron`
-  fails ("show must snap exactly one immediate refresh (got 2)"). Python
-  contracts 248 tests OK (1 skipped); normalized-path lock PASS. The two Node
-  failures, `git_actions` ("a real index.lock that clears in time") and `sync`
-  ("diverged main is reported", a `git clone` that failed after 44 s), are load
-  flakes: both files pass alone, 87 of 87. `eyes_toggle_electron` fails the
-  same way on a clean `origin/main` checkout (control run at 519d656), so it is
-  not this change.
-- Not covered: the helper has not yet updated a real installed portable build.
-  The rehearsal drives the same PowerShell against a stand-in, and the first
-  protected update in the field is the one after the release that carries this.
 
 ## Read Before Any Tests
 

@@ -3106,7 +3106,7 @@
       try {
         const result = await window.mefiStudio.releaseSetChannel?.(channel);
         paintRelease(result?.status);
-        if (result?.ok === false) window.MefiToast?.(result.error, "bad");
+        if (result?.ok === false) window.MefiToast?.(result.error || "Could not change the update channel. Please try again.", "bad");
       } catch (error) {
         paintRelease(releaseUpdateState);
         window.MefiToast?.(`Channel change failed · ${String(error?.message ?? error)}`, "bad");

@@ -7,6 +7,10 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- Failed automatic development updates wait an hour before retrying the same
+  build; manual updates remain available. Missing or malformed build metadata
+  falls back to an older eligible build, and failed channel changes show a reason.
+
 - Booklet scripts and styles use one ordered inventory for reads, emission,
   error-source attribution and fixtures. Audits read the audited tree's declared
   inventory and report missing or duplicate inputs.
