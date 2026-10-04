@@ -631,6 +631,165 @@
     "agents-queue": "settings-automation",
   };
   let settingsCategory = SETTINGS_CATEGORIES[readStore("mefiStudio.settingsCategory")] ? readStore("mefiStudio.settingsCategory") : "general";
+
+  // ---- Settings in the 0.5 layout: the prototype's places ----
+  // With html[data-layout="v2"] Settings is filed the way the 0.5 prototype
+  // files it (docs/prototype/mefi-studio-0.5-v5.html, SET_SUBS): General,
+  // Notifications, Appearance with Size and density under it, Map look and
+  // Sound and music; then Updates and help (Updates, Report a problem) and
+  // Advanced (System). Nothing is copied. A place is a category pane, and the
+  // cards that become places of their own move into theirs with their ids,
+  // controls and host calls, so a deep link, a Search entry or the walkthrough
+  // still lands on the same control. Map look is the Appearance pane at its
+  // Nodes and Layout sections; Size and density is its own page
+  // (renderer/size.js), so its row goes there. A category these places do not
+  // name (Connections, Models and Automation, until renderer/agents.js takes
+  // them to Agents › Setup) keeps its row at the end. The layout is chosen at
+  // launch, so the filing runs once a page, and never with the layout off.
+  // The prototype's Design system sheet has no counterpart in the app yet.
+  const SETTINGS_PLACES = Object.freeze([
+    { id: "general", label: "General", glyph: "g-studio", about: "Names, startup and community" },
+    { id: "notifications", label: "Notifications", glyph: "g-bell", about: "Windows notifications while Studio is in the background, and quiet hours", cards: ["settings-notifications"] },
+    { id: "appearance", label: "Appearance", glyph: "g-style", looks: ["themes", "interface"] },
+    { id: "size", label: "Size and density", glyph: "g-textsize", route: "size", sub: true },
+    { id: "looks", label: "Map look", glyph: "g-target", pane: "appearance", looks: ["nodes", "layout"] },
+    { id: "audio", label: "Sound and music", glyph: "g-audio", about: "Sound effects, and the music and video the Map reacts to" },
+    { id: "updates", label: "Updates", glyph: "g-update", group: "Updates and help", about: "Update, and go back to the build before if the new one misbehaves", cards: ["settings-updates"] },
+    { id: "problem", label: "Report a problem", glyph: "g-flag", group: "Updates and help", cards: ["settings-report"] },
+    { id: "system", label: "System", glyph: "g-gauge", group: "Advanced", about: "Diagnostics, and the optional projects Studio can start for you" },
+  ]);
+  let settingsFiled = false;
+  const settingsLayoutV2 = () => document.documentElement?.dataset?.layout === "v2";
+  const settingsPlace = (key) => (settingsFiled ? SETTINGS_PLACES.find((place) => place.id === key && !place.route) ?? null : null);
+  // The pane a category shows: Map look is the Appearance pane.
+  const settingsPane = (category) => settingsPlace(category)?.pane ?? category;
+  function settingsGlyph(id) {
+    const svg = document.createElementNS?.("http://www.w3.org/2000/svg", "svg") ?? document.createElement("svg");
+    svg.setAttribute("class", "glyph"); svg.setAttribute("aria-hidden", "true"); svg.setAttribute("focusable", "false");
+    const use = document.createElementNS?.("http://www.w3.org/2000/svg", "use") ?? document.createElement("use");
+    use.setAttribute("href", `#${id}`); svg.append(use);
+    return svg;
+  }
+  function settingsPlaceRow(place) {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = `settings-nav-item${place.sub ? " is-sub" : ""}`;
+    if (place.route) { row.dataset.nav = place.route; row.title = `${place.label}: a live preview beside the controls`; }
+    else { row.dataset.settingsCategory = place.id; row.setAttribute("aria-current", "false"); }
+    const label = document.createElement("span"); label.className = "label"; label.textContent = place.label;
+    row.append(settingsGlyph(place.glyph), label);
+    return row;
+  }
+  function fileSettingsV2() {
+    const sections = document.getElementById("settings-sections");
+    const list = document.getElementById("settings-nav-list");
+    if (settingsFiled || !settingsLayoutV2() || !sections || !list || typeof document.querySelector !== "function") return false;
+    settingsFiled = true;
+    for (const place of SETTINGS_PLACES) if (!place.route) SETTINGS_CATEGORIES[place.id] = place.label;
+    // The panes: a place with cards of its own gets a pane, after the pane before it.
+    let previous = document.getElementById("settings-category-general");
+    for (const place of SETTINGS_PLACES) {
+      if (place.route || place.pane) continue;
+      let pane = document.getElementById(`settings-category-${place.id}`);
+      if (!pane && place.cards) {
+        pane = document.createElement("section");
+        pane.className = "settings-category"; pane.id = `settings-category-${place.id}`; pane.hidden = true;
+        pane.dataset.settingsCategoryPane = place.id;
+        pane.setAttribute("aria-labelledby", `${pane.id}-heading`);
+        const head = document.createElement("header"); head.className = "settings-category-head";
+        const title = document.createElement("h2"); title.id = `${pane.id}-heading`; title.tabIndex = -1; title.textContent = place.label;
+        head.append(title);
+        pane.append(head);
+        if (previous?.nextSibling) sections.insertBefore(pane, previous.nextSibling); else sections.append(pane);
+      }
+      if (!pane) continue;
+      for (const id of place.cards ?? []) {
+        const card = document.getElementById(id);
+        if (!card || card.closest?.("[data-settings-category-pane]") === pane) continue;
+        card.remove?.(); pane.append(card);
+        // The card is the page: its own title is the page's (styles.css hides its summary).
+        card.dataset.settingsPlaceCard = place.id;
+      }
+      const about = pane.querySelector(".settings-category-head p") ?? pane.querySelector(".settings-category-head")?.appendChild(document.createElement("p"));
+      if (about && place.about) about.textContent = place.about;
+      const heading = pane.querySelector(".settings-category-head h2");
+      if (heading && heading.textContent !== place.label && !heading.firstElementChild) heading.textContent = place.label;
+      previous = pane;
+    }
+    // Diagnostics no longer holds Report a problem.
+    const diagnostics = document.querySelector("#settings-diagnostics .settings-summary-text > span");
+    if (diagnostics) diagnostics.textContent = "Performance, checks and machine status";
+    // The list: the places in order, under their group headings, then any category they do not name.
+    const kept = [...list.querySelectorAll("[data-settings-category]")].filter((row) => !SETTINGS_PLACES.some((place) => place.id === row.dataset.settingsCategory));
+    const groups = [];
+    for (const place of SETTINGS_PLACES) {
+      let group = groups.at(-1);
+      if (!group || group.name !== (place.group ?? null)) {
+        const node = document.createElement("div"); node.className = "settings-nav-group";
+        if (place.group) {
+          const heading = document.createElement("p"); heading.className = "settings-nav-heading";
+          heading.id = `settings-nav-group-${groups.length}`; heading.textContent = place.group;
+          node.setAttribute("role", "group"); node.setAttribute("aria-labelledby", heading.id);
+          node.append(heading);
+        }
+        group = { name: place.group ?? null, node };
+        groups.push(group);
+      }
+      group.node.append(settingsPlaceRow(place));
+    }
+    if (kept.length) { const node = document.createElement("div"); node.className = "settings-nav-group"; node.append(...kept); groups.push({ node }); }
+    list.replaceChildren(...groups.map((group) => group.node));
+    list.dataset.places = "v2";
+    // Find a setting sits at the top of the page, beside its title.
+    const find = document.querySelector("#settings-nav .settings-find");
+    if (find) { find.remove?.(); sections.prepend(find); }
+    document.getElementById("tab-studio")?.setAttribute("data-places", "v2");
+    // The place you were on last time, now that the places exist.
+    const stored = readStore("mefiStudio.settingsCategory");
+    if (SETTINGS_CATEGORIES[stored] && document.querySelector(`[data-settings-category-pane="${settingsPane(stored)}"]`)) settingsCategory = stored;
+    // Search names each control by its new place.
+    settingsSearchRegistered.clear();
+    registerSettingsSearch();
+    return true;
+  }
+  // The place a jump lands on: a control under Nodes or Layout is Map look's.
+  function settingsPlaceFor(pane, target, section) {
+    const key = pane.dataset.settingsCategoryPane;
+    if (!settingsFiled || key !== "appearance") return key;
+    const asked = String(section ?? "").trim().toLowerCase().replace(/[\s_]+/g, "-").replace(/^settings-/, "");
+    if (asked === "looks" || asked === "map-look") return "looks";
+    if (asked === "appearance" || asked === "category-appearance") return "appearance";
+    const panel = target?.closest?.("[data-appearance-panel]")?.dataset?.appearancePanel;
+    return panel === "nodes" || panel === "layout" ? "looks" : "appearance";
+  }
+  // Appearance and Map look share a pane: each opens at its own first section.
+  function showSettingsLook(category) {
+    const looks = settingsPlace(category)?.looks;
+    if (!looks) return;
+    const sections = document.getElementById("appearance-sections");
+    const current = sections?.querySelector?.('[aria-pressed="true"]')?.dataset?.appearanceSection;
+    if (looks.includes(current)) return;
+    sections?.querySelector?.(`[data-appearance-section="${looks[0]}"]`)?.click?.();
+  }
+  // A place's own cards are the page: open while it shows. The prototype's pages
+  // show their panels open, so a place's folded cards open the first time it
+  // shows in a launch and stay as you leave them after that. A card read when it
+  // opens (Notifications, Report a problem, Community) reads then, not at launch.
+  const settingsPlacesShown = new Set();
+  function openSettingsPlace(category) {
+    const place = settingsPlace(category);
+    if (!place) return;
+    const pane = document.querySelector(`[data-settings-category-pane="${settingsPane(category)}"]`);
+    if (pane && !settingsPlacesShown.has(category)) {
+      settingsPlacesShown.add(category);
+      for (const card of pane.querySelectorAll?.("details.settings-card") ?? []) if ((card.parentElement ?? card.parentNode) === pane && !card.open) card.open = true;
+    }
+    for (const id of place.cards ?? []) {
+      const card = document.getElementById(id);
+      if (card && card.tagName === "DETAILS" && !card.open) card.open = true;
+    }
+    if (category === "problem" && window.MefiReport && !window.MefiReport.state?.view && !window.MefiReport.state?.loading) void window.MefiReport.load?.();
+  }
   let settingsMatches = [];
   let settingsSearchRegistered = new Set();
   let settingsControlSerial = 0;
@@ -643,7 +802,7 @@
     const raw = String(section ?? "").trim();
     if (document.getElementById(raw)?.closest?.("#settings-sections")) return raw;
     const key = raw.toLowerCase().replace(/[\s_]+/g, "-").replace(/^settings-/, "");
-    const id = SETTINGS_CATEGORIES[key] ? `settings-category-${key}` : SETTINGS_ALIASES[key] ?? `settings-${key}`;
+    const id = SETTINGS_CATEGORIES[key] ? `settings-category-${settingsPane(key)}` : SETTINGS_ALIASES[key] ?? `settings-${key}`;
     return document.getElementById(id) ? id : null;
   }
   // A choice button's textContent runs its parts together ("Fullevery
@@ -695,6 +854,15 @@
   }
   function syncSettingsNav() {
     for (const row of document.querySelectorAll("#settings-nav [data-settings-category]")) row.setAttribute("aria-current", String(row.dataset.settingsCategory === settingsCategory));
+    // Appearance and Map look show their own sections of the shared pane (styles.css), under their own title.
+    if (!settingsFiled) return;
+    document.getElementById("tab-studio")?.setAttribute("data-settings-place", settingsQuery() ? "search" : settingsCategory);
+    const looks = settingsCategory === "looks";
+    const heading = document.getElementById("settings-category-appearance-heading");
+    if (heading && heading.textContent !== (looks ? "Map look" : "Appearance")) heading.textContent = looks ? "Map look" : "Appearance";
+    const about = heading?.parentElement?.querySelector?.("p");
+    const words = looks ? "How the Map draws your work. Changes show on the Map straight away." : "Themes, colours and how the interface moves.";
+    if (about && about.textContent !== words) about.textContent = words;
   }
   function syncSettingsAutomation() {
     const current = window.MefiIdle?.queueSettings?.();
@@ -723,6 +891,7 @@
   function mountSettingsControls() {
     // Catalog-only embeds expose the facade without mounting Settings markup.
     if (typeof document.querySelector !== "function") return;
+    fileSettingsV2();
     const move = (node, host) => { if (node && host && (node.parentElement ?? node.parentNode) !== host) { node.remove?.(); host.appendChild(node); } };
     const appearance = document.getElementById("settings-appearance-controls");
     for (const selector of [".settings-you-theme", ".settings-you-motion", "#settings-companion-motion"]) move(document.querySelector(selector), appearance);
@@ -758,7 +927,7 @@
   }
   function paintSettingsRows() {
     mountSettingsControls();
-    if (document.querySelector && !document.querySelector(`[data-settings-category-pane="${settingsCategory}"]`)) settingsCategory = "general";
+    if (document.querySelector && !document.querySelector(`[data-settings-category-pane="${settingsPane(settingsCategory)}"]`)) settingsCategory = "general";
     const query = settingsQuery();
     const words = query.split(/\s+/).filter(Boolean);
     settingsMatches = words.length ? settingsEntries().filter((item) => words.every((word) => `${SETTINGS_CATEGORIES[item.category]} ${item.terms}`.toLowerCase().includes(word))) : [];
@@ -774,10 +943,11 @@
         row.append(path, name); results.appendChild(row);
       }
     }
-    for (const pane of document.querySelectorAll("[data-settings-category-pane]")) pane.hidden = Boolean(query) || pane.dataset.settingsCategoryPane !== settingsCategory;
+    for (const pane of document.querySelectorAll("[data-settings-category-pane]")) pane.hidden = Boolean(query) || pane.dataset.settingsCategoryPane !== settingsPane(settingsCategory);
     if (document.getElementById("tab-studio")?.hidden === false) {
-      window.MefiMusic?.activateSettings?.(query ? null : settingsCategory);
+      window.MefiMusic?.activateSettings?.(query ? null : settingsPane(settingsCategory));
       if (settingsCategory === "automation") void loadSettingsAutomation();
+      if (!query) openSettingsPlace(settingsCategory);
     }
     const empty = document.getElementById("settings-find-empty"); if (empty) empty.hidden = !query || settingsMatches.length > 0;
     const status = document.getElementById("settings-find-status"); if (status) status.textContent = !query ? "" : settingsMatches.length ? `${settingsMatches.length} setting${settingsMatches.length === 1 ? "" : "s"}` : "No settings match";
@@ -797,10 +967,11 @@
     if (!target) return false;
     const pane = target.closest?.("[data-settings-category-pane]");
     if (!pane) return false;
-    settingsCategory = pane.dataset.settingsCategoryPane;
+    settingsCategory = settingsPlaceFor(pane, target, section);
     writeStore("mefiStudio.settingsCategory", settingsCategory);
     clearSettingsFind();
     if (!settingsAvailable(target)) return false;
+    if (target === pane) showSettingsLook(settingsCategory);
     window.MefiMusic?.revealSettingsTarget?.(target);
     let parent = target;
     while (parent && parent !== pane) { if (parent.tagName === "DETAILS") parent.open = true; parent = parent.parentElement ?? parent.parentNode; }
@@ -2047,6 +2218,11 @@
   });
   wireSettingsNav();
   registerSettingsSearch();
+  // renderer/nav.js sets the 0.5 layout once the page has loaded: Settings is
+  // filed into its places then (or at the first Settings paint after it).
+  const fileSettingsOnce = () => { if (fileSettingsV2()) paintSettingsRows(); };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fileSettingsOnce, { once: true });
+  else fileSettingsOnce();
   document.getElementById("refresh-btn").addEventListener("click", () => refresh("manual"));
   document.getElementById("print-btn").addEventListener("click", () => window.print());
 
@@ -2129,7 +2305,9 @@
 
   // The one facade nav.js drives: tabs (with a Settings card to land on),
   // catalog refresh, the shortcut sheet, and the Settings jump itself.
-  window.MefiBooklet = { showTab, refresh, toggleHelp, jumpToSettings, initStudio };
+  // settingsPlaces: the 0.5 layout's Settings places in order (null in the classic layout), for a list drawn elsewhere.
+  const settingsPlaces = () => (settingsFiled ? SETTINGS_PLACES.map((place) => ({ id: place.id, label: place.label, glyph: place.glyph, group: place.group ?? null, sub: Boolean(place.sub), route: place.route ?? null, current: !place.route && place.id === settingsCategory })) : null);
+  window.MefiBooklet = { showTab, refresh, toggleHelp, jumpToSettings, initStudio, settingsPlaces };
 
   const headless = new URLSearchParams(window.location.search);
   const capture = headless.get("capture") === "1";

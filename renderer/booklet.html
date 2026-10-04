@@ -4544,6 +4544,139 @@ html[data-shell="rail"] .settings-card { scroll-margin-top: calc(var(--shell-y0)
   .settings-nav-item { padding: 6px 8px; font-size: 11px; min-width: 0; }
   .settings-nav-item .glyph { display: none; }
 }
+/* ---- Settings in the 0.5 layout --------------------------------------------------
+   renderer/booklet.js files Settings into the 0.5 prototype's places when
+   html[data-layout="v2"] is on and marks #tab-studio[data-places="v2"]; nothing
+   here matches anything otherwise. The places are a list beside one page at a
+   time; the page has its title with Find a setting at its right, and each card
+   is a panel of rows: the words on the left, the control on the right (the
+   prototype's .setrow). Sizes come from the 0.5 type ladder (renderer/size.css,
+   never under 12 px) and density's settings row padding (--d-set); the size
+   tokens the cards already use are re-pointed at that ladder here, so a card
+   written for the classic layout reads at least 12 px too. */
+.settings-place-only { display: none; }
+#tab-studio[data-places="v2"] {
+  --fs-2xs: var(--f12, 12px); --fs-xs: var(--f12, 12px); --fs-sm: var(--f125, 12.5px); --fs-md: var(--f135, 13.5px); --fs-base: var(--f14, 14px);
+  --place-card: color-mix(in srgb, var(--panel-solid) 72%, transparent);
+  --place-edge: color-mix(in srgb, var(--ivory) 10%, transparent);
+  --place-rule: color-mix(in srgb, var(--ivory) 7%, transparent);
+}
+#tab-studio[data-places="v2"] .settings-place-only { display: block; }
+#tab-studio[data-places="v2"] .settings-layout { grid-template-columns: 236px minmax(0, 1fr); gap: 32px; }
+/* the list of places */
+html #tab-studio[data-places="v2"] .settings-nav { gap: 6px; padding: 4px; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
+#tab-studio[data-places="v2"] .settings-nav-list { gap: 12px; }
+#tab-studio[data-places="v2"] .settings-nav-group { gap: 2px; }
+#tab-studio[data-places="v2"] .settings-nav-heading { padding: 2px 12px 4px; color: var(--muted); font: 600 var(--f125, 12.5px)/1.3 var(--font-ui); letter-spacing: 0; text-transform: none; }
+#tab-studio[data-places="v2"] .settings-nav-item { min-height: 38px; padding: 0 12px; gap: 11px; border-radius: 10px; color: var(--muted); font-size: var(--f14, 14px); font-weight: 500; }
+#tab-studio[data-places="v2"] .settings-nav-item.is-sub { min-height: 32px; padding-left: 30px; font-size: var(--f13, 13px); }
+#tab-studio[data-places="v2"] .settings-nav-item .glyph { width: 16px; height: 16px; flex: none; color: var(--muted); opacity: 1; }
+#tab-studio[data-places="v2"] .settings-nav-item.is-sub .glyph { width: 14px; height: 14px; }
+#tab-studio[data-places="v2"] .settings-nav-item:hover { color: var(--ivory); background: var(--tint-gold-1); border-color: transparent; }
+#tab-studio[data-places="v2"] .settings-nav-item[aria-current="true"] { color: var(--ivory); font-weight: 600; background: var(--tint-gold-3); border-color: color-mix(in srgb, var(--gold) 34%, transparent); box-shadow: none; }
+#tab-studio[data-places="v2"] .settings-nav-item[aria-current="true"] .glyph { color: var(--gold-bright); }
+#tab-studio[data-places="v2"] .settings-config-open { justify-self: start; min-height: 32px; margin-top: 8px; padding: 0 12px; border-color: transparent; background: transparent; color: var(--muted); font-size: var(--f125, 12.5px); }
+#tab-studio[data-places="v2"] .settings-config-open:hover { color: var(--ivory); background: var(--tint-gold-1); }
+/* the page: its title, and Find a setting at its right */
+#tab-studio[data-places="v2"] .settings-sections { position: relative; gap: 14px; width: 100%; max-width: 860px; }
+#tab-studio[data-places="v2"]:is([data-settings-place="notifications"], [data-settings-place="problem"]) .settings-sections { max-width: 980px; }
+#tab-studio[data-places="v2"] .settings-sections > .settings-find { position: absolute; top: 0; right: 0; z-index: 1; width: min(280px, 38%); min-height: 38px; padding: 0 12px; border-radius: 10px; }
+#tab-studio[data-places="v2"] .settings-sections > .settings-find input { min-height: 36px; font-size: var(--f135, 13.5px); }
+#tab-studio[data-places="v2"] .settings-category-head { display: block; min-height: 40px; padding: 0 calc(min(280px, 38%) + 20px) 0 0; border-bottom: 0; text-align: left; }
+#tab-studio[data-places="v2"] .settings-category-head h2 { font: 650 var(--f22, 22px)/1.3 var(--font-display); letter-spacing: -.01em; }
+#tab-studio[data-places="v2"] .settings-category-head p { margin-top: 4px; color: var(--muted); font-size: var(--f135, 13.5px); line-height: 1.5; max-width: 70ch; }
+#tab-studio[data-places="v2"] :is(.settings-search-results, .settings-find-empty) { margin-top: 56px; }
+#tab-studio[data-places="v2"] .settings-result-path { font-size: var(--f12, 12px); }
+#tab-studio[data-places="v2"] .settings-search-result { justify-items: start; text-align: left; }
+#tab-studio[data-places="v2"] .settings-search-result strong { font-size: var(--f14, 14px); font-weight: 600; }
+/* the appearance sidebar keeps its own head: Find sits above it, not over it */
+body.appearance-settings-active #tab-studio[data-places="v2"] .settings-sections > .settings-find { position: static; width: auto; margin: 0 0 4px; }
+body.appearance-settings-active #tab-studio[data-places="v2"] .settings-category-head { padding-right: 0; }
+body.appearance-settings-active #tab-studio[data-places="v2"] :is(.settings-search-results, .settings-find-empty) { margin-top: 0; }
+/* Where the list is a strip of chips over the page (a narrow page, or the Appearance sidebar), every place is a chip that wraps; the headings step aside. */
+body.appearance-settings-active #tab-studio[data-places="v2"] .settings-nav-list { display: flex; flex-wrap: wrap; gap: 4px; overflow: visible; }
+body.appearance-settings-active #tab-studio[data-places="v2"] .settings-nav-group { display: contents; }
+body.appearance-settings-active #tab-studio[data-places="v2"] .settings-nav-heading { display: none; }
+body.appearance-settings-active #tab-studio[data-places="v2"] .settings-nav-item { flex: 0 1 auto; min-height: 32px; padding: 0 10px; font-size: var(--f12, 12px); }
+@container settings (max-width: 720px) {
+  #tab-studio[data-places="v2"] .settings-layout { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  #tab-studio[data-places="v2"] .settings-nav-list { display: flex; flex-wrap: wrap; gap: 4px; overflow: visible; }
+  #tab-studio[data-places="v2"] .settings-nav-group { display: contents; }
+  #tab-studio[data-places="v2"] .settings-nav-heading { display: none; }
+  #tab-studio[data-places="v2"] .settings-nav-item, #tab-studio[data-places="v2"] .settings-nav-item.is-sub { flex: 0 1 auto; min-height: 32px; padding: 0 10px; font-size: var(--f12, 12px); }
+  #tab-studio[data-places="v2"] .settings-sections > .settings-find { position: static; width: auto; }
+  #tab-studio[data-places="v2"] .settings-category-head { padding-right: 0; }
+  #tab-studio[data-places="v2"] :is(.settings-search-results, .settings-find-empty) { margin-top: 0; }
+  #tab-studio[data-places="v2"] :is(.settings-you-fields, #settings-studio) > .field { grid-template-columns: minmax(0, 1fr); }
+  #tab-studio[data-places="v2"] :is(.settings-you-fields, #settings-studio) > .field > :is(input, select) { grid-column: 1; grid-row: auto; }
+  /* the strip sticks over the page as it scrolls, so it is solid */
+  html #tab-studio[data-places="v2"] .settings-nav { padding: 8px 12px; background: var(--panel-solid); box-shadow: var(--shadow-1); }
+}
+/* Sound and music: the sound effects first, then music and video, its words beside its button. */
+#tab-studio[data-places="v2"] #settings-category-audio > .settings-category-head { order: -2; }
+#tab-studio[data-places="v2"] #settings-audio-effects { order: -1; }
+#tab-studio[data-places="v2"] #settings-audio-media { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 20px; }
+#tab-studio[data-places="v2"] #settings-audio-media > * { grid-column: 1 / -1; }
+#tab-studio[data-places="v2"] #settings-audio-media > h3:first-child { margin: 0 0 4px; font: 650 var(--f14, 14px)/1.35 var(--font-ui); }
+#tab-studio[data-places="v2"] #settings-audio-media > p:nth-child(2) { grid-column: 1; margin: 0; font-size: var(--f13, 13px); }
+#tab-studio[data-places="v2"] #settings-audio-media > button:nth-child(3) { grid-column: 2; grid-row: 2; }
+/* The Appearance sidebar's own small print reads at 12 px or more too. */
+#tab-studio[data-places="v2"] :is(.music-fineprint, .music-node-label, .music-node-choice strong, .music-node-choice small, .music-effect-copy small, .studio-style-choice strong, .music-void-theme-label) { font-size: var(--f12, 12px); }
+#tab-studio[data-places="v2"] .settings-media .music-theme { font-size: var(--f12, 12px); }
+/* Appearance and Map look are one pane: each shows its own sections */
+#tab-studio[data-places="v2"][data-settings-place="appearance"] :is([data-appearance-section="nodes"], [data-appearance-section="layout"]),
+#tab-studio[data-places="v2"][data-settings-place="looks"] :is([data-appearance-section="themes"], [data-appearance-section="interface"]) { display: none; }
+/* cards are panels */
+#tab-studio[data-places="v2"] .settings-card { padding: 16px 18px; border: 1px solid var(--place-edge); border-radius: 14px; background: var(--place-card); }
+#tab-studio[data-places="v2"] .settings-optional > summary { gap: 10px; font-size: var(--f14, 14px); }
+#tab-studio[data-places="v2"] .settings-summary-text { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 16px; }
+#tab-studio[data-places="v2"] .settings-summary-text > b { font: 650 var(--f14, 14px)/1.35 var(--font-ui); }
+#tab-studio[data-places="v2"] .settings-summary-text > span { color: var(--muted); font-size: var(--f13, 13px); }
+#tab-studio[data-places="v2"] .settings-optional[open] > summary { padding-bottom: 6px; margin-bottom: 4px; border-bottom: 0; }
+#tab-studio[data-places="v2"] .settings-advanced > summary { font-size: var(--f14, 14px); font-weight: 650; }
+#tab-studio[data-places="v2"] .settings-advanced[open] > summary { padding-bottom: 6px; margin-bottom: 4px; border-bottom: 0; }
+#tab-studio[data-places="v2"] :is(.settings-optional, .settings-card) > p { font-size: var(--f13, 13px); line-height: 1.55; }
+#tab-studio[data-places="v2"] .settings-eyebrow { margin: 4px 0 8px; color: var(--ivory); font: 650 var(--f14, 14px)/1.35 var(--font-ui); letter-spacing: 0; text-transform: none; }
+#tab-studio[data-places="v2"] .settings-eyebrow .muted { margin-left: 8px; font-weight: 400; font-size: var(--f13, 13px); }
+/* rows: the words on the left, the control on the right */
+#tab-studio[data-places="v2"] .settings-control { padding: calc(var(--d-set, 10px) + 2px) 0; }
+#tab-studio[data-places="v2"] .settings-control + .settings-control { border-top-color: var(--place-rule); }
+#tab-studio[data-places="v2"] .settings-control b { font-size: var(--f14, 14px); font-weight: 600; color: var(--ivory); }
+#tab-studio[data-places="v2"] .settings-control small { font-size: var(--f13, 13px); }
+#tab-studio[data-places="v2"] :is(.settings-you-switches, #settings-appearance-controls, #settings-tree-controls, #settings-audio-controls, #settings-behavior-controls) { display: grid; gap: 0; margin-top: 0; }
+#tab-studio[data-places="v2"] :is(.settings-you-switches, #settings-appearance-controls, #settings-tree-controls, #settings-audio-controls) > label.switch { display: flex; flex-direction: row; justify-content: space-between; align-items: center; gap: 16px; padding: calc(var(--d-set, 10px) + 2px) 0; color: var(--ivory); font-size: var(--f14, 14px); font-weight: 600; }
+#tab-studio[data-places="v2"] :is(.settings-you-switches, #settings-appearance-controls, #settings-tree-controls, #settings-audio-controls) > label + label { border-top: 1px solid var(--place-rule); }
+#tab-studio[data-places="v2"] :is(.settings-you-switches, #settings-appearance-controls, #settings-tree-controls, #settings-audio-controls) > label.switch > .track { flex: none; order: 2; margin-left: auto; }
+#tab-studio[data-places="v2"] :is(#settings-tree-controls, #settings-audio-controls) > label { color: var(--ivory); font-size: var(--f14, 14px); font-weight: 600; }
+#tab-studio[data-places="v2"] .settings-you-fields { gap: 0; grid-template-columns: 1fr; }
+#tab-studio[data-places="v2"] .settings-you-fields > .field, #tab-studio[data-places="v2"] #settings-studio > .field { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, 260px); align-items: center; gap: 4px 20px; padding: calc(var(--d-set, 10px) + 2px) 0; }
+#tab-studio[data-places="v2"] #settings-studio > .field { border-top: 1px solid var(--place-rule); }
+#tab-studio[data-places="v2"] :is(.settings-you-fields, #settings-studio) > .field > .field-label { grid-column: 1; color: var(--ivory); font-size: var(--f14, 14px); font-weight: 600; letter-spacing: 0; }
+#tab-studio[data-places="v2"] :is(.settings-you-fields, #settings-studio) > .field > :is(input, select) { grid-column: 2; grid-row: 1 / span 2; }
+#tab-studio[data-places="v2"] :is(.settings-you-fields, #settings-studio) > .field > .field-hint { grid-column: 1; color: var(--muted); font-size: var(--f13, 13px); }
+#tab-studio[data-places="v2"] #settings-studio > :is(.settings-you-switches, .settings-mode-row) { border-top: 1px solid var(--place-rule); }
+#tab-studio[data-places="v2"] :is(#idle-home-hint, #open-at-login-hint) { margin: 0 0 8px; font-size: var(--f13, 13px); }
+#tab-studio[data-places="v2"] .settings-mode-row { padding-top: calc(var(--d-set, 10px) + 2px); }
+/* A place that is one card (Notifications, Updates, Report a problem): the card
+   is the page, so its own title steps aside and its groups are the panels. */
+#tab-studio[data-places="v2"] [data-settings-place-card] { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+#tab-studio[data-places="v2"] details[data-settings-place-card] > summary { display: none; }
+#tab-studio[data-places="v2"] [data-settings-place-card] .settings-place-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 14px; align-items: start; }
+#tab-studio[data-places="v2"] [data-settings-place-card] .settings-place-col { display: grid; gap: 14px; min-width: 0; }
+#tab-studio[data-places="v2"] [data-settings-place-card] .settings-place-group { margin: 0; padding: 16px 18px; border: 1px solid var(--place-edge); border-radius: 14px; background: var(--place-card); }
+#tab-studio[data-places="v2"] [data-settings-place-card] .settings-place-group[hidden] { display: none; }
+#tab-studio[data-places="v2"] [data-settings-place-card] .update-block { display: grid; gap: 14px; margin: 0; padding: 0; border: 0; }
+#tab-studio[data-places="v2"] [data-settings-place-card] .settings-place-group > .settings-eyebrow:first-child { margin-top: 0; }
+#tab-studio[data-places="v2"] .alerts-lead { margin: 0 0 4px; font-size: var(--f13, 13px); }
+#tab-studio[data-places="v2"] .alerts-sample { max-width: none; padding: 12px 14px; }
+#tab-studio[data-places="v2"] .alerts-titles { max-width: 280px; }
+/* Report a problem: what would be in the zip and its preview on the left, what never is and what happens next on the right */
+#tab-studio[data-places="v2"] .settings-report { margin: 0; padding: 0; border: 0; }
+#tab-studio[data-places="v2"] .settings-report > :is(.settings-eyebrow, .report-title) { display: none; }
+#tab-studio[data-places="v2"] .settings-report > p.muted { margin: 0 0 14px; font-size: var(--f135, 13.5px); }
+#tab-studio[data-places="v2"] [data-settings-place-card] .report-preview.settings-place-group { margin: 0; padding: 0; overflow: hidden; }
+#tab-studio[data-places="v2"] .report-actions { margin: 0; }
+#tab-studio[data-places="v2"] .report-file-name { font-size: var(--f13, 13px); }
 .ws-compose-bottom { flex-wrap: wrap; }
 .ws-compose-bottom > span { flex: 1 1 120px; }
 .ws-feedback-row { flex-wrap: wrap; }
@@ -13756,6 +13889,11 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
         </details>
 <details class="settings-optional settings-card" id="settings-notifications" data-desktop-only><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-bell"/></svg></span><span class="settings-summary-text"><b>Notifications</b><span>Windows alerts, taskbar flash and count, quiet hours</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
           <!-- Notifications (renderer/alerts.js, main.cjs "Notifications"): Studio tells Windows when something waits on you, only while Studio is not the window you are looking at. -->
+          <!-- Four groups in two columns: the 0.5 layout shows each as a panel, side by side (styles.css, "Settings in the 0.5 layout"). -->
+          <div class="settings-place-cols">
+          <div class="settings-place-col">
+          <div class="settings-place-group" id="alerts-group-background">
+          <p class="settings-eyebrow settings-place-only">When Studio is in the background</p>
           <p class="muted alerts-lead">Studio tells Windows when something waits on you, and only while Studio isn't the window you are looking at.</p>
           <p class="settings-status alerts-note" id="alerts-note" role="status" hidden></p>
           <div class="settings-control-list alerts-rows" id="alerts-rows">
@@ -13767,18 +13905,29 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
             <label class="settings-control"><span><b>Show a count on the taskbar icon</b><small>The number of things waiting on you.</small></span><input id="alerts-badge" type="checkbox" role="switch" data-alerts="badge"></label>
             <label class="settings-control"><span><b>Play a sound</b><small>Windows' own notification sound, for anything that needs you.</small></span><input id="alerts-sound" type="checkbox" role="switch" data-alerts="sound"></label>
           </div>
+          </div>
+          <div class="settings-place-group" id="alerts-group-quiet">
           <p class="settings-eyebrow">Quiet hours <span class="muted">shared with the Discord remote</span></p>
           <div class="settings-control-list">
             <label class="settings-control"><span><b>Stay quiet at night</b><small>No notifications inside this window. The inbox still fills, and the count still shows.</small></span><input id="alerts-quiet" type="checkbox" role="switch"></label>
             <div class="settings-control alerts-times" id="alerts-quiet-times" hidden><span><b>Quiet between</b><small id="alerts-quiet-note">The Discord remote keeps the same hours.</small></span><span class="alerts-time-pair"><select id="alerts-quiet-from" aria-label="Quiet hours start"><option value="00:00">12:00 AM</option><option value="01:00">1:00 AM</option><option value="02:00">2:00 AM</option><option value="03:00">3:00 AM</option><option value="04:00">4:00 AM</option><option value="05:00">5:00 AM</option><option value="06:00">6:00 AM</option><option value="07:00">7:00 AM</option><option value="08:00">8:00 AM</option><option value="09:00">9:00 AM</option><option value="10:00">10:00 AM</option><option value="11:00">11:00 AM</option><option value="12:00">12:00 PM</option><option value="13:00">1:00 PM</option><option value="14:00">2:00 PM</option><option value="15:00">3:00 PM</option><option value="16:00">4:00 PM</option><option value="17:00">5:00 PM</option><option value="18:00">6:00 PM</option><option value="19:00">7:00 PM</option><option value="20:00">8:00 PM</option><option value="21:00">9:00 PM</option><option value="22:00">10:00 PM</option><option value="23:00">11:00 PM</option></select><span class="muted">until</span><select id="alerts-quiet-to" aria-label="Quiet hours end"><option value="00:00">12:00 AM</option><option value="01:00">1:00 AM</option><option value="02:00">2:00 AM</option><option value="03:00">3:00 AM</option><option value="04:00">4:00 AM</option><option value="05:00">5:00 AM</option><option value="06:00">6:00 AM</option><option value="07:00">7:00 AM</option><option value="08:00">8:00 AM</option><option value="09:00">9:00 AM</option><option value="10:00">10:00 AM</option><option value="11:00">11:00 AM</option><option value="12:00">12:00 PM</option><option value="13:00">1:00 PM</option><option value="14:00">2:00 PM</option><option value="15:00">3:00 PM</option><option value="16:00">4:00 PM</option><option value="17:00">5:00 PM</option><option value="18:00">6:00 PM</option><option value="19:00">7:00 PM</option><option value="20:00">8:00 PM</option><option value="21:00">9:00 PM</option><option value="22:00">10:00 PM</option><option value="23:00">11:00 PM</option></select></span></div>
           </div>
+          </div>
+          </div>
+          <div class="settings-place-col">
+          <div class="settings-place-group" id="alerts-group-words">
           <p class="settings-eyebrow">What a notification says</p>
           <div class="segmented alerts-titles" id="alerts-titles" role="group" aria-label="What a notification says"><button type="button" data-value="generic" aria-pressed="true">Generic</button><button type="button" data-value="titles" aria-pressed="false">Task titles</button></div>
           <p class="muted" id="alerts-titles-note">Windows keeps notification text in its history and can show it on the lock screen, so Studio says only that something needs you.</p>
           <div class="alerts-sample" aria-hidden="true"><span class="alerts-sample-from">Mefi Studio · now</span><b id="alerts-sample-title">Something needs you</b><span id="alerts-sample-body">A task is waiting for your answer.</span></div>
+          </div>
+          <div class="settings-place-group" id="alerts-group-try">
           <p class="settings-eyebrow">Try it</p>
           <p class="muted">Studio never sends a notification while you are looking at it. Send the test, then switch to another window: it arrives as you do, and waits up to a minute for that.</p>
           <div class="row tight alerts-actions"><button id="alerts-test" class="primary" type="button">Send me a test notification</button><span class="settings-status" id="alerts-status" role="status"></span></div>
+          </div>
+          </div>
+          </div>
         </details>
 <details class="settings-optional settings-card" id="settings-community"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-community"/></svg></span><span class="settings-summary-text"><b>Community</b><span>Your link to the Void Engine Discord</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
           
@@ -14079,7 +14228,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
 <section class="settings-category" id="settings-category-system" data-settings-category-pane="system" aria-labelledby="settings-category-system-heading" hidden><header class="settings-category-head"><h2 id="settings-category-system-heading" tabindex="-1">System</h2><p>Updates, diagnostics and integrations</p></header>
 <details class="settings-optional settings-card" id="settings-updates" data-desktop-only><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-update"/></svg></span><span class="settings-summary-text"><b>Updates</b><span>Live update and published builds</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
         <div class="update-block" data-update-block>
-          <div id="source-updates">
+          <div id="source-updates" class="settings-place-group">
           <p class="settings-eyebrow">Live update</p>
           <p class="muted">In development, Studio watches its source files and applies local changes. Reloads wait for active builders and result saves.</p>
           <div class="row tight update-row">
@@ -14088,6 +14237,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
             <span class="eyes-status" id="update-status" role="status">not watching</span>
           </div>
           </div>
+          <div class="settings-place-group" id="update-group-channel">
           <p class="settings-eyebrow">GitHub update channel</p>
           <p class="muted">Stable (default) offers published release builds only. GitHub is checked every 20 minutes. A source checkout reports builds; installation requires the portable Windows app.</p>
           <label class="switch"><input type="checkbox" id="release-development" aria-describedby="release-channel-warning"><span class="track"></span><span>Development / beta: receive built updates automatically</span></label>
@@ -14106,11 +14256,14 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
             <input type="password" id="release-token" placeholder="Existing GitHub token (Actions read for development)" autocomplete="off" aria-label="GitHub update token">
             <button id="release-token-save" class="ghost mini">Save token</button>
           </div>
+          </div>
+          <div class="settings-place-group" id="update-group-news">
           <p class="settings-eyebrow">What's new</p>
           <!-- renderer/whats-new.js: the versions up to this one, in plain words (assets/whats-new.json). -->
           <div id="whats-new-list" class="whats-new-list" role="list" aria-label="What's new, version by version"><p class="muted whats-new-empty">Reading this build's notes…</p></div>
           <label class="switch" title="After an update installs, Studio shows one toast with What's new. It never opens a window by itself."><input type="checkbox" id="whats-new-on" checked><span class="track"></span><span>Tell me what's new after an update</span></label>
           <p class="muted" id="whats-new-note" role="status" hidden></p>
+          </div>
         </div>
         </details>
 <details class="settings-optional settings-card" id="settings-diagnostics"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-gauge"/></svg></span><span class="settings-summary-text"><b>Diagnostics</b><span>Performance, checks, machine status and Report a problem</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
@@ -14131,6 +14284,11 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
             <h3 class="report-title">Read it, then save it</h3>
             <p class="muted">Studio builds a small bundle on this PC. Read every file first, then save it as a zip. Nothing is uploaded: you attach it to a message yourself.</p>
             <p class="settings-status report-crash" id="report-crash" role="status" hidden></p>
+            <!-- Two columns of panels in the 0.5 layout (styles.css, "Settings in the 0.5 layout"); one column, in this order, otherwise. -->
+            <div class="settings-place-cols">
+            <div class="settings-place-col">
+            <div class="settings-place-group" id="report-group-zip">
+            <p class="settings-eyebrow settings-place-only">What would be in the zip</p>
             <div class="report-files" id="report-files" role="list" aria-label="What would be in the zip"><p class="muted report-empty">Building the report…</p></div>
             <p class="muted report-total" id="report-total"></p>
             <div class="settings-you-switches report-switches">
@@ -14139,7 +14297,8 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
               <label class="switch" title="After a crash or a hang, the next start says so once and offers this report."><input type="checkbox" id="report-prompt" checked><span class="track"></span><span>Tell me when Studio closes unexpectedly</span></label>
             </div>
             <p class="muted" id="report-prompt-note" role="status" hidden></p>
-            <div class="report-preview">
+            </div>
+            <div class="report-preview settings-place-group" id="report-group-preview">
               <p class="report-preview-head"><b class="report-file-name" id="report-preview-name">manifest.json</b><span class="muted"> · read-only preview</span></p>
               <pre class="log report-pre" id="report-pre" tabindex="0" aria-label="Preview of the selected file"></pre>
             </div>
@@ -14148,8 +14307,13 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
               <button id="report-refresh" class="ghost" type="button" title="Build the report again from what Studio knows now">Read it again</button>
               <span class="settings-status" id="report-status" role="status"></span>
             </div>
+            </div>
+            <div class="settings-place-col">
+            <div class="settings-place-group" id="report-group-never">
             <p class="settings-eyebrow">Never included</p>
             <ul class="report-never" id="report-never" aria-label="What a report never holds"></ul>
+            </div>
+            <div class="settings-place-group" id="report-group-next">
             <p class="settings-eyebrow">What happens next</p>
             <ol class="report-next">
               <li><b>Studio saves the zip where you choose.</b> A Save dialog, because Documents may live in OneDrive.</li>
@@ -14157,6 +14321,9 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
               <li><b>You attach it to a message yourself.</b> The Void Engine Discord is one place. Studio never sends it.</li>
             </ol>
             <button id="report-discord" class="ghost mini" type="button">Open the Discord invite <span aria-hidden="true">↗</span></button>
+            </div>
+            </div>
+            </div>
           </div>
         </details>
 <details class="settings-optional settings-card" id="settings-integrations"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-plug"/></svg></span><span class="settings-summary-text"><b>Integrations</b><span>Optional: Ruins Runner and Love2D</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary><p class="muted">Requires a separate game project and its LÖVE runtime. This integration is optional for Studio.</p><div class="row studio-actions" id="studio-actions"><button data-action="launch">Launch Love2D studio</button><button data-action="smoke">Run smoke</button><button data-action="game">Launch Ruins Runner</button><button data-action="stop">Stop game</button></div><p class="muted" id="studio-hint"></p></details>
@@ -74994,8 +75161,11 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     });
     // The report is built when the card is opened, not at launch.
     const card = $("settings-diagnostics");
-    card?.addEventListener("toggle", () => { if (card.open && !state.view) void load(); });
-    if (card?.open) void load();
+    // In the 0.5 layout Report a problem is a Settings place of its own (renderer/booklet.js), which builds it when it shows:
+    // Diagnostics then no longer holds it, and opening Diagnostics builds nothing.
+    const holds = () => Boolean(card?.contains?.($(REPORT_SECTION)));
+    card?.addEventListener("toggle", () => { if (card.open && !state.view && holds()) void load(); });
+    if (card?.open && holds()) void load();
     api().onReportCrashed?.(() => whenVisible(() => whenBooted(crashed)));
     window.MefiNav?.register?.({
       id: "settings:report", label: "Settings › System › Report a problem", short: "Report a problem", kind: "action", layer: null, section: "settings", group: "system",
@@ -99921,6 +100091,165 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     "agents-queue": "settings-automation",
   };
   let settingsCategory = SETTINGS_CATEGORIES[readStore("mefiStudio.settingsCategory")] ? readStore("mefiStudio.settingsCategory") : "general";
+
+  // ---- Settings in the 0.5 layout: the prototype's places ----
+  // With html[data-layout="v2"] Settings is filed the way the 0.5 prototype
+  // files it (docs/prototype/mefi-studio-0.5-v5.html, SET_SUBS): General,
+  // Notifications, Appearance with Size and density under it, Map look and
+  // Sound and music; then Updates and help (Updates, Report a problem) and
+  // Advanced (System). Nothing is copied. A place is a category pane, and the
+  // cards that become places of their own move into theirs with their ids,
+  // controls and host calls, so a deep link, a Search entry or the walkthrough
+  // still lands on the same control. Map look is the Appearance pane at its
+  // Nodes and Layout sections; Size and density is its own page
+  // (renderer/size.js), so its row goes there. A category these places do not
+  // name (Connections, Models and Automation, until renderer/agents.js takes
+  // them to Agents › Setup) keeps its row at the end. The layout is chosen at
+  // launch, so the filing runs once a page, and never with the layout off.
+  // The prototype's Design system sheet has no counterpart in the app yet.
+  const SETTINGS_PLACES = Object.freeze([
+    { id: "general", label: "General", glyph: "g-studio", about: "Names, startup and community" },
+    { id: "notifications", label: "Notifications", glyph: "g-bell", about: "Windows notifications while Studio is in the background, and quiet hours", cards: ["settings-notifications"] },
+    { id: "appearance", label: "Appearance", glyph: "g-style", looks: ["themes", "interface"] },
+    { id: "size", label: "Size and density", glyph: "g-textsize", route: "size", sub: true },
+    { id: "looks", label: "Map look", glyph: "g-target", pane: "appearance", looks: ["nodes", "layout"] },
+    { id: "audio", label: "Sound and music", glyph: "g-audio", about: "Sound effects, and the music and video the Map reacts to" },
+    { id: "updates", label: "Updates", glyph: "g-update", group: "Updates and help", about: "Update, and go back to the build before if the new one misbehaves", cards: ["settings-updates"] },
+    { id: "problem", label: "Report a problem", glyph: "g-flag", group: "Updates and help", cards: ["settings-report"] },
+    { id: "system", label: "System", glyph: "g-gauge", group: "Advanced", about: "Diagnostics, and the optional projects Studio can start for you" },
+  ]);
+  let settingsFiled = false;
+  const settingsLayoutV2 = () => document.documentElement?.dataset?.layout === "v2";
+  const settingsPlace = (key) => (settingsFiled ? SETTINGS_PLACES.find((place) => place.id === key && !place.route) ?? null : null);
+  // The pane a category shows: Map look is the Appearance pane.
+  const settingsPane = (category) => settingsPlace(category)?.pane ?? category;
+  function settingsGlyph(id) {
+    const svg = document.createElementNS?.("http://www.w3.org/2000/svg", "svg") ?? document.createElement("svg");
+    svg.setAttribute("class", "glyph"); svg.setAttribute("aria-hidden", "true"); svg.setAttribute("focusable", "false");
+    const use = document.createElementNS?.("http://www.w3.org/2000/svg", "use") ?? document.createElement("use");
+    use.setAttribute("href", `#${id}`); svg.append(use);
+    return svg;
+  }
+  function settingsPlaceRow(place) {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = `settings-nav-item${place.sub ? " is-sub" : ""}`;
+    if (place.route) { row.dataset.nav = place.route; row.title = `${place.label}: a live preview beside the controls`; }
+    else { row.dataset.settingsCategory = place.id; row.setAttribute("aria-current", "false"); }
+    const label = document.createElement("span"); label.className = "label"; label.textContent = place.label;
+    row.append(settingsGlyph(place.glyph), label);
+    return row;
+  }
+  function fileSettingsV2() {
+    const sections = document.getElementById("settings-sections");
+    const list = document.getElementById("settings-nav-list");
+    if (settingsFiled || !settingsLayoutV2() || !sections || !list || typeof document.querySelector !== "function") return false;
+    settingsFiled = true;
+    for (const place of SETTINGS_PLACES) if (!place.route) SETTINGS_CATEGORIES[place.id] = place.label;
+    // The panes: a place with cards of its own gets a pane, after the pane before it.
+    let previous = document.getElementById("settings-category-general");
+    for (const place of SETTINGS_PLACES) {
+      if (place.route || place.pane) continue;
+      let pane = document.getElementById(`settings-category-${place.id}`);
+      if (!pane && place.cards) {
+        pane = document.createElement("section");
+        pane.className = "settings-category"; pane.id = `settings-category-${place.id}`; pane.hidden = true;
+        pane.dataset.settingsCategoryPane = place.id;
+        pane.setAttribute("aria-labelledby", `${pane.id}-heading`);
+        const head = document.createElement("header"); head.className = "settings-category-head";
+        const title = document.createElement("h2"); title.id = `${pane.id}-heading`; title.tabIndex = -1; title.textContent = place.label;
+        head.append(title);
+        pane.append(head);
+        if (previous?.nextSibling) sections.insertBefore(pane, previous.nextSibling); else sections.append(pane);
+      }
+      if (!pane) continue;
+      for (const id of place.cards ?? []) {
+        const card = document.getElementById(id);
+        if (!card || card.closest?.("[data-settings-category-pane]") === pane) continue;
+        card.remove?.(); pane.append(card);
+        // The card is the page: its own title is the page's (styles.css hides its summary).
+        card.dataset.settingsPlaceCard = place.id;
+      }
+      const about = pane.querySelector(".settings-category-head p") ?? pane.querySelector(".settings-category-head")?.appendChild(document.createElement("p"));
+      if (about && place.about) about.textContent = place.about;
+      const heading = pane.querySelector(".settings-category-head h2");
+      if (heading && heading.textContent !== place.label && !heading.firstElementChild) heading.textContent = place.label;
+      previous = pane;
+    }
+    // Diagnostics no longer holds Report a problem.
+    const diagnostics = document.querySelector("#settings-diagnostics .settings-summary-text > span");
+    if (diagnostics) diagnostics.textContent = "Performance, checks and machine status";
+    // The list: the places in order, under their group headings, then any category they do not name.
+    const kept = [...list.querySelectorAll("[data-settings-category]")].filter((row) => !SETTINGS_PLACES.some((place) => place.id === row.dataset.settingsCategory));
+    const groups = [];
+    for (const place of SETTINGS_PLACES) {
+      let group = groups.at(-1);
+      if (!group || group.name !== (place.group ?? null)) {
+        const node = document.createElement("div"); node.className = "settings-nav-group";
+        if (place.group) {
+          const heading = document.createElement("p"); heading.className = "settings-nav-heading";
+          heading.id = `settings-nav-group-${groups.length}`; heading.textContent = place.group;
+          node.setAttribute("role", "group"); node.setAttribute("aria-labelledby", heading.id);
+          node.append(heading);
+        }
+        group = { name: place.group ?? null, node };
+        groups.push(group);
+      }
+      group.node.append(settingsPlaceRow(place));
+    }
+    if (kept.length) { const node = document.createElement("div"); node.className = "settings-nav-group"; node.append(...kept); groups.push({ node }); }
+    list.replaceChildren(...groups.map((group) => group.node));
+    list.dataset.places = "v2";
+    // Find a setting sits at the top of the page, beside its title.
+    const find = document.querySelector("#settings-nav .settings-find");
+    if (find) { find.remove?.(); sections.prepend(find); }
+    document.getElementById("tab-studio")?.setAttribute("data-places", "v2");
+    // The place you were on last time, now that the places exist.
+    const stored = readStore("mefiStudio.settingsCategory");
+    if (SETTINGS_CATEGORIES[stored] && document.querySelector(`[data-settings-category-pane="${settingsPane(stored)}"]`)) settingsCategory = stored;
+    // Search names each control by its new place.
+    settingsSearchRegistered.clear();
+    registerSettingsSearch();
+    return true;
+  }
+  // The place a jump lands on: a control under Nodes or Layout is Map look's.
+  function settingsPlaceFor(pane, target, section) {
+    const key = pane.dataset.settingsCategoryPane;
+    if (!settingsFiled || key !== "appearance") return key;
+    const asked = String(section ?? "").trim().toLowerCase().replace(/[\s_]+/g, "-").replace(/^settings-/, "");
+    if (asked === "looks" || asked === "map-look") return "looks";
+    if (asked === "appearance" || asked === "category-appearance") return "appearance";
+    const panel = target?.closest?.("[data-appearance-panel]")?.dataset?.appearancePanel;
+    return panel === "nodes" || panel === "layout" ? "looks" : "appearance";
+  }
+  // Appearance and Map look share a pane: each opens at its own first section.
+  function showSettingsLook(category) {
+    const looks = settingsPlace(category)?.looks;
+    if (!looks) return;
+    const sections = document.getElementById("appearance-sections");
+    const current = sections?.querySelector?.('[aria-pressed="true"]')?.dataset?.appearanceSection;
+    if (looks.includes(current)) return;
+    sections?.querySelector?.(`[data-appearance-section="${looks[0]}"]`)?.click?.();
+  }
+  // A place's own cards are the page: open while it shows. The prototype's pages
+  // show their panels open, so a place's folded cards open the first time it
+  // shows in a launch and stay as you leave them after that. A card read when it
+  // opens (Notifications, Report a problem, Community) reads then, not at launch.
+  const settingsPlacesShown = new Set();
+  function openSettingsPlace(category) {
+    const place = settingsPlace(category);
+    if (!place) return;
+    const pane = document.querySelector(`[data-settings-category-pane="${settingsPane(category)}"]`);
+    if (pane && !settingsPlacesShown.has(category)) {
+      settingsPlacesShown.add(category);
+      for (const card of pane.querySelectorAll?.("details.settings-card") ?? []) if ((card.parentElement ?? card.parentNode) === pane && !card.open) card.open = true;
+    }
+    for (const id of place.cards ?? []) {
+      const card = document.getElementById(id);
+      if (card && card.tagName === "DETAILS" && !card.open) card.open = true;
+    }
+    if (category === "problem" && window.MefiReport && !window.MefiReport.state?.view && !window.MefiReport.state?.loading) void window.MefiReport.load?.();
+  }
   let settingsMatches = [];
   let settingsSearchRegistered = new Set();
   let settingsControlSerial = 0;
@@ -99933,7 +100262,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const raw = String(section ?? "").trim();
     if (document.getElementById(raw)?.closest?.("#settings-sections")) return raw;
     const key = raw.toLowerCase().replace(/[\s_]+/g, "-").replace(/^settings-/, "");
-    const id = SETTINGS_CATEGORIES[key] ? `settings-category-${key}` : SETTINGS_ALIASES[key] ?? `settings-${key}`;
+    const id = SETTINGS_CATEGORIES[key] ? `settings-category-${settingsPane(key)}` : SETTINGS_ALIASES[key] ?? `settings-${key}`;
     return document.getElementById(id) ? id : null;
   }
   // A choice button's textContent runs its parts together ("Fullevery
@@ -99985,6 +100314,15 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
   function syncSettingsNav() {
     for (const row of document.querySelectorAll("#settings-nav [data-settings-category]")) row.setAttribute("aria-current", String(row.dataset.settingsCategory === settingsCategory));
+    // Appearance and Map look show their own sections of the shared pane (styles.css), under their own title.
+    if (!settingsFiled) return;
+    document.getElementById("tab-studio")?.setAttribute("data-settings-place", settingsQuery() ? "search" : settingsCategory);
+    const looks = settingsCategory === "looks";
+    const heading = document.getElementById("settings-category-appearance-heading");
+    if (heading && heading.textContent !== (looks ? "Map look" : "Appearance")) heading.textContent = looks ? "Map look" : "Appearance";
+    const about = heading?.parentElement?.querySelector?.("p");
+    const words = looks ? "How the Map draws your work. Changes show on the Map straight away." : "Themes, colours and how the interface moves.";
+    if (about && about.textContent !== words) about.textContent = words;
   }
   function syncSettingsAutomation() {
     const current = window.MefiIdle?.queueSettings?.();
@@ -100013,6 +100351,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   function mountSettingsControls() {
     // Catalog-only embeds expose the facade without mounting Settings markup.
     if (typeof document.querySelector !== "function") return;
+    fileSettingsV2();
     const move = (node, host) => { if (node && host && (node.parentElement ?? node.parentNode) !== host) { node.remove?.(); host.appendChild(node); } };
     const appearance = document.getElementById("settings-appearance-controls");
     for (const selector of [".settings-you-theme", ".settings-you-motion", "#settings-companion-motion"]) move(document.querySelector(selector), appearance);
@@ -100048,7 +100387,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
   function paintSettingsRows() {
     mountSettingsControls();
-    if (document.querySelector && !document.querySelector(`[data-settings-category-pane="${settingsCategory}"]`)) settingsCategory = "general";
+    if (document.querySelector && !document.querySelector(`[data-settings-category-pane="${settingsPane(settingsCategory)}"]`)) settingsCategory = "general";
     const query = settingsQuery();
     const words = query.split(/\s+/).filter(Boolean);
     settingsMatches = words.length ? settingsEntries().filter((item) => words.every((word) => `${SETTINGS_CATEGORIES[item.category]} ${item.terms}`.toLowerCase().includes(word))) : [];
@@ -100064,10 +100403,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         row.append(path, name); results.appendChild(row);
       }
     }
-    for (const pane of document.querySelectorAll("[data-settings-category-pane]")) pane.hidden = Boolean(query) || pane.dataset.settingsCategoryPane !== settingsCategory;
+    for (const pane of document.querySelectorAll("[data-settings-category-pane]")) pane.hidden = Boolean(query) || pane.dataset.settingsCategoryPane !== settingsPane(settingsCategory);
     if (document.getElementById("tab-studio")?.hidden === false) {
-      window.MefiMusic?.activateSettings?.(query ? null : settingsCategory);
+      window.MefiMusic?.activateSettings?.(query ? null : settingsPane(settingsCategory));
       if (settingsCategory === "automation") void loadSettingsAutomation();
+      if (!query) openSettingsPlace(settingsCategory);
     }
     const empty = document.getElementById("settings-find-empty"); if (empty) empty.hidden = !query || settingsMatches.length > 0;
     const status = document.getElementById("settings-find-status"); if (status) status.textContent = !query ? "" : settingsMatches.length ? `${settingsMatches.length} setting${settingsMatches.length === 1 ? "" : "s"}` : "No settings match";
@@ -100087,10 +100427,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (!target) return false;
     const pane = target.closest?.("[data-settings-category-pane]");
     if (!pane) return false;
-    settingsCategory = pane.dataset.settingsCategoryPane;
+    settingsCategory = settingsPlaceFor(pane, target, section);
     writeStore("mefiStudio.settingsCategory", settingsCategory);
     clearSettingsFind();
     if (!settingsAvailable(target)) return false;
+    if (target === pane) showSettingsLook(settingsCategory);
     window.MefiMusic?.revealSettingsTarget?.(target);
     let parent = target;
     while (parent && parent !== pane) { if (parent.tagName === "DETAILS") parent.open = true; parent = parent.parentElement ?? parent.parentNode; }
@@ -101337,6 +101678,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   });
   wireSettingsNav();
   registerSettingsSearch();
+  // renderer/nav.js sets the 0.5 layout once the page has loaded: Settings is
+  // filed into its places then (or at the first Settings paint after it).
+  const fileSettingsOnce = () => { if (fileSettingsV2()) paintSettingsRows(); };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fileSettingsOnce, { once: true });
+  else fileSettingsOnce();
   document.getElementById("refresh-btn").addEventListener("click", () => refresh("manual"));
   document.getElementById("print-btn").addEventListener("click", () => window.print());
 
@@ -101419,7 +101765,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 
   // The one facade nav.js drives: tabs (with a Settings card to land on),
   // catalog refresh, the shortcut sheet, and the Settings jump itself.
-  window.MefiBooklet = { showTab, refresh, toggleHelp, jumpToSettings, initStudio };
+  // settingsPlaces: the 0.5 layout's Settings places in order (null in the classic layout), for a list drawn elsewhere.
+  const settingsPlaces = () => (settingsFiled ? SETTINGS_PLACES.map((place) => ({ id: place.id, label: place.label, glyph: place.glyph, group: place.group ?? null, sub: Boolean(place.sub), route: place.route ?? null, current: !place.route && place.id === settingsCategory })) : null);
+  window.MefiBooklet = { showTab, refresh, toggleHelp, jumpToSettings, initStudio, settingsPlaces };
 
   const headless = new URLSearchParams(window.location.search);
   const capture = headless.get("capture") === "1";

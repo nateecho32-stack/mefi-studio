@@ -58,12 +58,18 @@ const CARDS = ["settings-setup", "settings-assistant", "settings-routing", "sett
 
 // desktop: a bridge with launchStudio (the desktop app); false is the browser
 // build. storage seeds localStorage; coach: whether the walkthrough coach shows.
-function environment({ desktop = true, storage = {}, coach = false, noMotion = false, audioMarkup = "", bridge: extra = {} } = {}) {
+function environment({ desktop = true, storage = {}, coach = false, noMotion = false, audioMarkup = "", bridge: extra = {}, layout = null } = {}) {
   const { document, elements, get, body, documentElement } = createDom({ fromTemplate: () => true });
   const page = parse(settingsHtml);
   if (audioMarkup) page.querySelector("#settings-audio-media").append(parse(audioMarkup));
   body.append(page);
   for (const node of page.descendants()) if (node.id) elements.set(node.id, node);
+  // The 0.5 layout (renderer/nav.js writes html[data-layout]); the panes Settings makes for it are found by id like the template's.
+  if (layout) {
+    documentElement.dataset.layout = layout;
+    const byId = document.getElementById;
+    document.getElementById = (id) => byId(id) ?? body.querySelector(`#${id}`);
+  }
   get("booklet-data").textContent = JSON.stringify(CATALOG);
   get("walkthrough-coach").hidden = !coach;
   documentElement.scrollHeight = 4000;
@@ -459,4 +465,111 @@ test("a found Server Styler checkout keeps its card, in Settings and in both sea
   assert.equal(env.registered.find((item) => item.id === "settings:settings-styler").hidden(), false);
   await env.type("server styler");
   assert.ok(env.results().includes("settings-styler"));
+});
+
+// ---- the 0.5 layout: the prototype's places (booklet.js, "Settings in the 0.5 layout") ----
+const placeRows = (env) => env.el("settings-nav-list").children.map((group) => [group.querySelector(".settings-nav-heading")?.textContent ?? null, group.querySelectorAll(".settings-nav-item").map((row) => row.dataset.settingsCategory ?? `nav:${row.dataset.nav}`)]);
+const paneOf = (env, id) => env.document.getElementById(id)?.closest("[data-settings-category-pane]")?.dataset.settingsCategoryPane ?? null;
+
+test("the 0.5 layout files Settings into the prototype's places, in its order and under its headings", () => {
+  const env = environment({ layout: "v2" });
+  assert.deepEqual(placeRows(env), [
+    [null, ["general", "notifications", "appearance", "nav:size", "looks", "audio"]],
+    ["Updates and help", ["updates", "problem"]],
+    ["Advanced", ["system"]],
+    // Categories the places do not name keep a row until renderer/agents.js takes them to Agents › Setup.
+    [null, ["connections", "models", "automation"]],
+  ]);
+  const rows = env.el("settings-nav").querySelectorAll(".settings-nav-item");
+  assert.deepEqual(rows.map((row) => row.querySelector(".label").textContent).slice(0, 9), ["General", "Notifications", "Appearance", "Size and density", "Map look", "Sound and music", "Updates", "Report a problem", "System"]);
+  assert.ok(rows.find((row) => row.dataset.nav === "size").classList.contains("is-sub"), "Size and density sits under Appearance");
+  assert.equal(env.el("settings-nav-list").dataset.places, "v2");
+  assert.equal(env.el("tab-studio").getAttribute("data-places"), "v2");
+  // The cards that become places of their own move, ids and all; nothing is copied.
+  for (const [card, place] of [["settings-notifications", "notifications"], ["settings-updates", "updates"], ["settings-report", "problem"], ["settings-studio", "general"], ["settings-community", "general"], ["settings-diagnostics", "system"], ["settings-integrations", "system"]]) assert.equal(paneOf(env, card), place, `${card} is in ${place}`);
+  for (const id of ["alerts-quiet", "release-check", "report-replace", "whats-new-on"]) assert.equal(env.body.querySelectorAll(`#${id}`).length, 1, `${id} exists once`);
+  assert.equal(env.document.getElementById("settings-notifications").dataset.settingsPlaceCard, "notifications");
+  assert.equal(env.document.getElementById("settings-category-notifications-heading").textContent, "Notifications");
+  assert.equal(env.document.getElementById("settings-category-audio-heading").textContent, "Sound and music");
+  assert.equal(env.document.getElementById("settings-category-general").querySelector(".settings-category-head p").textContent, "Names, startup and community", "General no longer says it holds notifications");
+  // Find a setting moves to the page, beside its title.
+  assert.equal(env.document.getElementById("settings-find").closest("#settings-nav"), null);
+  assert.ok(env.document.getElementById("settings-find").closest("#settings-sections"));
+  assert.deepEqual(JSON.parse(JSON.stringify(env.booklet.settingsPlaces().map((place) => [place.id, place.group, place.sub, place.route]))), [["general", null, false, null], ["notifications", null, false, null], ["appearance", null, false, null], ["size", null, true, "size"], ["looks", null, false, null], ["audio", null, false, null], ["updates", "Updates and help", false, null], ["problem", "Updates and help", false, null], ["system", "Advanced", false, null]]);
+});
+
+test("the classic layout keeps its seven categories, and no place of the 0.5 layout", () => {
+  const env = environment();
+  assert.equal(env.booklet.settingsPlaces(), null);
+  assert.equal(env.el("tab-studio").getAttribute("data-places"), null);
+  assert.equal(env.el("settings-find").closest("#settings-nav")?.id, "settings-nav");
+  assert.equal(paneOf(env, "settings-notifications"), "general");
+  assert.equal(paneOf(env, "settings-report"), "system");
+  assert.equal(env.document.querySelector('[data-settings-category-pane="notifications"]'), null);
+});
+
+test("a place shows alone, its cards open when it shows, and the place you were on comes back", () => {
+  const env = environment({ layout: "v2" });
+  env.booklet.showTab("studio");
+  assert.deepEqual(env.panes(), ["general"]);
+  assert.equal(env.el("settings-notifications").open, false, "Notifications are read when they open, not at launch");
+  assert.equal(env.el("settings-community").open, true, "a place shows its panels open the first time");
+  env.el("settings-community").open = false;
+  env.booklet.showTab("studio", { category: "notifications" });
+  assert.deepEqual(env.panes(), ["notifications"]);
+  assert.deepEqual(env.current(), ["notifications"]);
+  assert.equal(env.el("settings-notifications").open, true, "the card is the page");
+  assert.equal(env.el("tab-studio").getAttribute("data-settings-place"), "notifications");
+  assert.equal(env.store.get("mefiStudio.settingsCategory"), "notifications");
+  env.booklet.showTab("studio", { category: "general" });
+  assert.equal(env.el("settings-community").open, false, "and after that stays as you left it");
+  env.booklet.showTab("studio", { category: "notifications" });
+  const again = environment({ layout: "v2", storage: { "mefiStudio.settingsCategory": "notifications" } });
+  again.booklet.showTab("studio");
+  assert.deepEqual(again.panes(), ["notifications"]);
+  // The classic layout does not know the place and opens on General.
+  const classic = environment({ storage: { "mefiStudio.settingsCategory": "notifications" } });
+  classic.booklet.showTab("studio");
+  assert.deepEqual(classic.panes(), ["general"]);
+});
+
+test("Map look is the Appearance pane at its Nodes section, Appearance at Theme, each under its own title", () => {
+  const env = environment({ layout: "v2" });
+  const clicked = [];
+  for (const button of env.el("appearance-sections").querySelectorAll("[data-appearance-section]")) {
+    button.addEventListener("click", () => { clicked.push(button.dataset.appearanceSection); for (const other of env.el("appearance-sections").querySelectorAll("[data-appearance-section]")) other.setAttribute("aria-pressed", String(other === button)); });
+  }
+  env.booklet.showTab("studio");
+  assert.equal(env.booklet.jumpToSettings("looks"), true);
+  assert.deepEqual(env.panes(), ["appearance"]);
+  assert.deepEqual(env.current(), ["looks"]);
+  assert.equal(env.el("tab-studio").getAttribute("data-settings-place"), "looks");
+  assert.deepEqual(clicked, ["nodes"]);
+  assert.equal(env.el("settings-category-appearance-heading").textContent, "Map look");
+  assert.equal(env.booklet.jumpToSettings("appearance"), true);
+  assert.deepEqual(env.current(), ["appearance"]);
+  assert.deepEqual(clicked, ["nodes", "themes"]);
+  assert.equal(env.el("settings-category-appearance-heading").textContent, "Appearance");
+  // A control under Nodes or Layout belongs to Map look; one under Interface to Appearance.
+  env.el("settings-tree").dataset.appearancePanel = "nodes";
+  env.el("settings-appearance").dataset.appearancePanel = "interface";
+  env.booklet.jumpToSettings("settings-tree");
+  assert.deepEqual(env.current(), ["looks"]);
+  env.booklet.jumpToSettings("settings-appearance");
+  assert.deepEqual(env.current(), ["appearance"]);
+});
+
+test("deep links and Search land on the place that holds a control now", async () => {
+  const env = environment({ layout: "v2" });
+  for (const [section, place] of [["settings-updates", "updates"], ["updates", "updates"], ["release-check", "updates"], ["settings-report", "problem"], ["report", "problem"], ["alerts-quiet", "notifications"], ["notifications", "notifications"], ["settings-community", "general"], ["settings-diagnostics", "system"], ["audio", "audio"], ["music", "audio"]]) {
+    assert.equal(env.booklet.jumpToSettings(section), true, section);
+    assert.deepEqual(env.current(), [place], `${section} lands on ${place}`);
+  }
+  await env.type("stay quiet");
+  assert.deepEqual(env.results(), ["alerts-quiet"]);
+  assert.match(env.el("settings-search-results").textContent, /Settings \/ Notifications/);
+  const quiet = env.registered.filter((item) => item.id === "settings:alerts-quiet").at(-1);
+  assert.equal(quiet.label, "Settings › Notifications › Stay quiet at night", "global Search names the new place");
+  const save = env.registered.filter((item) => item.id === "settings:report-save").at(-1);
+  assert.equal(save.label, "Settings › Report a problem › Save zip…");
 });

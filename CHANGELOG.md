@@ -7,6 +7,16 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Settings in the 0.5 layout, as the 0.5 prototype files it.** With the new
+  layout on (`?layout=v2`), Settings lists General, Notifications, Appearance
+  (with Size and density under it), Map look and Sound and music, then Updates
+  and Report a problem under "Updates and help" and System under "Advanced".
+  Notifications, Updates and Report a problem are now pages of their own, laid
+  out as panels side by side; Map look is the Nodes and Layout half of
+  Appearance; Find a setting sits beside the page title; rows put the words on
+  the left and the switch on the right, and no text is under 12 px. Every
+  setting, deep link and Search result still reaches the same control. The
+  classic layout is unchanged.
 - **The 0.5 layout's top bar says where you are.** With the new layout on
   (`?layout=v2`), the bar's middle is a breadcrumb, as in the 0.5 prototype:
   the project and the open session (or Today), or the project, section and

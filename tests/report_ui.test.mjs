@@ -302,3 +302,17 @@ test("the crash rows the page can name are the ones the host can write", () => {
   const words = [...source.matchAll(/^\s+"([a-z-]+)": "[^"]+",?$/gm)].map((match) => match[1]);
   assert.deepEqual(words.sort(), [...crashReport.CRASH_KINDS].sort(), "every kind has a sentence, and there is no sentence for a kind that does not exist");
 });
+
+test("in the 0.5 layout Report a problem is its own Settings place: opening Diagnostics, which no longer holds it, builds nothing, and the place builds it when it shows", async (t) => {
+  const p = await page(t);
+  // renderer/booklet.js moves the report out of Diagnostics into its own place.
+  const report = p.get("settings-report");
+  report.remove();
+  p.dom.document.body.append(report);
+  await p.open();
+  assert.deepEqual(p.calls, [], "opening Diagnostics alone builds no report");
+  await p.report.load();
+  await p.settle();
+  assert.deepEqual(p.calls, ["reportPreview"], "the place's own load builds it");
+  assert.deepEqual(p.names(), ["manifest.json", "tasks-summary.json", "trace-tail.log", "builders.log"]);
+});
