@@ -6,6 +6,14 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-02 — Deferred reference-gather project and generation fences
+
+**Scope:** Separate candidate from fully verified task-open-race; project identity/epoch and gather generation fence replies and save completions. No host cancellation, provider or dispatch changes.
+
+**Results:** 113 focused Tasks/group tests pass, including 16 new gather regressions. Host pool suite exercised unchanged cancellation and queue contracts; exact results in external evidence. Native baseline/candidate cases prepared but not launched while the game owns the window. Full aggregate queued.
+
+**Limits:** Unit bridges only, no production writes or provider calls. Original verified candidates and focus-failure evidence preserved. No publication.
+
 ## 2026-10-02 — Pending task-open project and view fences
 
 **Scope:** Isolated candidate derived byte-for-byte from the verified task-card retention source; original preserved.
