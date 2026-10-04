@@ -30,7 +30,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   biggest AI and developer-tool news beside your projects: a lead, three
   stories, In brief and a Studio wire of CLI releases, gathered once a day
   from ten news wires, headlines and short summaries only. Offline it shows
-  yesterday's edition; Settings › General turns it off.
+  yesterday's edition; Settings › General turns it off. Above the news,
+  "Since you were away" says what changed in your recent projects (finished
+  tasks, questions waiting on you, new commits), which models are new since
+  your last visit (OpenCode Go, Zen, Claude, z.ai, OpenRouter and your ChatGPT
+  plan), and what is new in Studio; a project's name picks it in the chooser.
 - **Models › Catalog and Performance get a face lift.** The catalog is one
   aligned table under a sticky toolbar whose column names sort it, with a
   quality bar per row, four picks (top quality, best value, biggest context,
