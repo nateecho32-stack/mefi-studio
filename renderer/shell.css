@@ -236,12 +236,14 @@ html[data-frame] .shell-usage { display: inline-flex; align-items: center; gap: 
 html[data-frame] .shell-usage[hidden] { display: none; }
 html[data-frame] .shell-meter { display: inline-block; width: 46px; height: 5px; border-radius: 3px; background: color-mix(in srgb, var(--ivory) 14%, transparent); overflow: hidden; flex: none; }
 html[data-frame] .shell-meter i { display: block; height: 100%; border-radius: 3px; background: var(--gold); }
+/* The prototype tells the two windows apart: the first in the accent, the second in the info blue. */
+html[data-frame] .shell-meter-button + .shell-meter-button .shell-meter i { background: var(--info); }
 html[data-frame] .shell-meter-button[data-tone="warn"] .shell-meter i { background: var(--warn); }
 html[data-frame] .shell-player[data-playing="true"] .glyph { color: var(--gold-bright); }
 html[data-frame] .shell-player-title { max-width: 18ch; overflow: hidden; text-overflow: ellipsis; }
 html[data-frame] .shell-status-extra { display: inline-flex; align-items: center; gap: 4px; flex: none; }
 html[data-frame] .shell-status-extra:empty { display: none; }
-@media (max-width: 899.98px) { html[data-frame] .shell-player-title, html[data-frame] .shell-permission .shell-status-word, html[data-frame] .shell-usage { display: none; } }
+@media (max-width: 899.98px) { html[data-frame] .shell-player-title, html[data-frame] .shell-permission .shell-status-word, html[data-frame] .shell-usage, html[data-frame] .shell-usage-sep, html[data-frame] .shell-machine { display: none; } }
 @media (max-width: 560px) { html[data-frame] .shell-status-item.shell-layout-button .shell-status-word { display: none; } html[data-frame] .shell-cost { display: none; } }
 
 /* ---- the layout menu ---- */

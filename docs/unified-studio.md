@@ -247,14 +247,17 @@ Ask rail, the Task board's Review filter).
 **The status bar**: the Layout menu button (the list, the inspector and the
 tab strip as switches, each mode's widths side by side, Reset layout with
 Undo, Size and density, and Worktrees when that page exists), what is running,
-what waits on you, and on the right only what a module has: the usage meters
-(`MefiUsageTracker.brief()`, the last reading, no new read), the player
-pill (opens the music and video menu), the permission mode and today's cost
-when the ledger has recorded one. An item nobody has data for is not drawn,
-and nothing here polls: it repaints, coalesced to 60 ms and only while the
-window is visible, from the pushes the page already gets (`onTasks`,
-`onAssistant`, `onAssistantStatus`, `onProjects`), the events of the modules it
-reads and `MefiToday.onChange`.
+what waits on you, the usage meters after a rule (`MefiUsageTracker.brief()`,
+the last reading, no new read; the second window in the info blue), and on the
+right only what a module has, in the prototype's order: the player pill (opens
+the music and video menu), the machine's load ("CPU 34% · Mem 61%", from the
+resource watcher's `machine:status` push, rounded, opens the machine status),
+today's cost when the ledger has recorded one, and the permission mode. An item
+nobody has data for is not drawn, and nothing here polls: it repaints, coalesced
+to 60 ms and only while the window is visible, from the pushes the page already
+gets (`onTasks`, `onAssistant`, `onAssistantStatus`, `onProjects`,
+`onMachineStatus`, which repaints only when the rounded load moved), the events
+of the modules it reads and `MefiToday.onChange`.
 
 **Modes.** Vibe and Build are the modes of one shell (`MefiVibe.mode()`). Each
 keeps its own list, inspector and tab strip, and switching applies the other's

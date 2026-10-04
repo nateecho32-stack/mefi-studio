@@ -196,6 +196,7 @@
     timer: 0,
     stale: false,         // a change came while the window was hidden
     todayWatched: false,  // MefiToday.onChange has been subscribed to
+    machine: null,        // the machine's load as the last machine:status push said it (machineOf)
   };
   let applying = 0;
 
@@ -886,7 +887,8 @@
   // ---- the feed: what the bars say -------------------------------------------------------------
   // Only what the app already holds: MefiWorkspace's board and status, the assistant's
   // digest, MefiToday's count when it is there, the usage tracker's last reading, the
-  // player's status and the permission mode. An item nobody has data for is left out.
+  // player's status, the machine's load from the resource watcher's push and the
+  // permission mode. An item nobody has data for is left out.
   const openQuestions = (assistant) => (Array.isArray(assistant?.questions) ? assistant.questions : []).filter((question) => question && question.status === "open");
   function runKind(status, assistant, running) {
     const loop = status?.loop;
@@ -931,7 +933,26 @@
       const level = window.MefiAutonomy?.state?.()?.level;
       permission = level ? String(window.MefiAutonomy.label?.() || level) : null;
     } catch { /* no mode yet */ }
-    return { needs, working: running.length, run: loaded ? runKind(status, assistant, running) : null, plan, cost, player, permission };
+    return { needs, working: running.length, run: loaded ? runKind(status, assistant, running) : null, plan, cost, player, permission, machine: state.machine };
+  }
+  // The machine's load, from the resource watcher's own push (main's machine:status, the reading Home's Machine tile and the
+  // rail's badge already get): CPU and the share of memory in use, rounded, and whether it holds new workers back. Only these
+  // few numbers are kept, never the pushed status itself. A reading with neither number is no reading.
+  function machineOf(status) {
+    const resources = status?.capacity?.resources;
+    if (!resources || typeof resources !== "object") return null;
+    const cpu = finite(resources.cpuPercent) ? Math.round(clamp(resources.cpuPercent, 0, 100)) : null;
+    const total = resources.totalMemoryMB, free = resources.availableMemoryMB;
+    const mem = finite(total) && total > 0 && finite(free) && free >= 0 && free <= total ? Math.round((1 - free / total) * 100) : null;
+    if (cpu === null && mem === null) return null;
+    const held = status.wait === true;
+    return { cpu, mem, held, reason: held ? String(status.capacity?.reason || "").slice(0, 160) : "" };
+  }
+  function onMachine(status) {
+    const next = machineOf(status);
+    if (JSON.stringify(next) === JSON.stringify(state.machine)) return;
+    state.machine = next;
+    scheduleLive();
   }
   function scheduleLive() {
     if (!state.on || state.timer) return;
@@ -1022,15 +1043,20 @@
     items.layout.setAttribute("aria-haspopup", "dialog");
     items.layout.setAttribute("aria-expanded", "false");
     items.layout.setAttribute("title", "Layout: list, inspector, tab strip and sizes");
-    items.layout.append(icon("layout"), text("span", "shell-status-word", "Layout"));
+    items.layout.append(icon("panelL"), text("span", "shell-status-word", "Layout"));
     const working = item("working", "shell-working", () => nav()?.go?.("command"), "Nothing running");
     working.append(el("i", "shell-dot", { "aria-hidden": "true" }), text("span", "", ""));
     const waiting = item("waiting", "shell-waiting", () => openInbox(waiting), "Waiting on you");
     waiting.append(icon("bell"), text("span", "", ""));
     items.usage = el("span", "shell-usage");
+    // The prototype's second rule: between what waits on you and the usage meters, there only while the meters are.
+    items.usageSep = el("span", "shell-sep-v shell-usage-sep", { "aria-hidden": "true" });
     item("player", "shell-player", () => { const music = window.MefiMusic; if (typeof music?.toggleAudio === "function") music.toggleAudio(); else nav()?.go?.("audio"); }, "Music and video");
     items.player.setAttribute("aria-haspopup", "true");
     items.player.append(icon("audio"), text("span", "shell-player-title", ""));
+    // The machine's load opens the machine status (the Explorer's diagnostics), where Home's Machine tile goes too.
+    item("machine", "shell-machine", () => { const n = nav(); if (n?.get?.("machine")) n.go?.("machine"); else n?.go?.("explorer", { panel: "diagnostics" }); }, "Machine load");
+    items.machine.append(text("span", "", ""));
     item("permission", "shell-permission", () => { const autonomy = window.MefiAutonomy; if (typeof autonomy?.openSettings === "function") autonomy.openSettings(); else nav()?.go?.("agents", { section: "setup" }); }, "Permission mode");
     items.permission.append(icon("shield"), text("span", "shell-status-word", ""));
     item("cost", "shell-cost", () => nav()?.go?.("usage"), "Today's cost");
@@ -1038,10 +1064,14 @@
     const extra = el("span", "shell-status-extra");
     state.stacks.status = extra;
     state.statusParts = { items, working, waiting };
-    bar.append(items.layout, el("span", "shell-sep-v", { "aria-hidden": "true" }), working, waiting, items.usage, el("span", "shell-spacer"), extra, items.player, items.cost, items.permission);
-    for (const node of [working, waiting, items.player, items.permission, items.cost]) node.hidden = true;
+    // The prototype's order: Layout | working, waiting | meters ... the player, the machine, today's cost, the permission mode.
+    bar.append(items.layout, el("span", "shell-sep-v", { "aria-hidden": "true" }), working, waiting, items.usageSep, items.usage, el("span", "shell-spacer"), extra, items.player, items.machine, items.cost, items.permission);
+    for (const node of [working, waiting, items.player, items.machine, items.permission, items.cost]) node.hidden = true;
     items.usage.hidden = true;
+    items.usageSep.hidden = true;
   }
+  // The tracker's short names for the plan windows, in the prototype's words ("5 h", "Week"); any other window keeps its own.
+  const METER_WORDS = Object.freeze({ "5h": "5 h", Wk: "Week", Mo: "Month" });
   function usageMeter(one) {
     const percent = Math.round(one.percent);
     const node = button("shell-btn shell-status-item shell-meter-button", `${one.label || one.short} ${percent} percent used`, () => nav()?.go?.("usage"));
@@ -1050,7 +1080,7 @@
     const fill = el("i");
     setVar(fill, "width", `${clamp(one.percent, 0, 100)}%`);
     bar.append(fill);
-    node.append(text("span", "shell-meter-label", one.short), bar, text("span", "shell-meter-value", `${percent}%`));
+    node.append(text("span", "shell-meter-label", METER_WORDS[one.short] || one.short), bar, text("span", "shell-meter-value", `${percent}%`));
     if (one.percent >= 90) node.dataset.tone = "warn";
     return node;
   }
@@ -1078,6 +1108,7 @@
     const shown = windows.length > 1 ? [windows[0], windows.slice(1).reduce((best, one) => (one.percent > best.percent ? one : best))] : windows;
     for (const one of shown) items.usage.append(usageMeter(one));
     items.usage.hidden = !shown.length;
+    items.usageSep.hidden = !shown.length;
     items.player.hidden = !live.player;
     if (live.player) {
       items.player.children[1].textContent = live.player.title;
@@ -1090,6 +1121,15 @@
       items.permission.children[1].textContent = live.permission;
       items.permission.setAttribute("aria-label", `Permission mode: ${live.permission}`);
       items.permission.setAttribute("title", `Permission mode: ${live.permission}. Change it.`);
+    }
+    const machine = live.machine;
+    items.machine.hidden = !machine;
+    if (machine) {
+      const words = [machine.cpu === null ? "" : `CPU ${machine.cpu}%`, machine.mem === null ? "" : `Mem ${machine.mem}%`].filter(Boolean).join(" · ");
+      const spoken = [machine.cpu === null ? "" : `CPU ${machine.cpu} percent`, machine.mem === null ? "" : `memory ${machine.mem} percent in use`].filter(Boolean).join(", ");
+      items.machine.children[0].textContent = words;
+      items.machine.setAttribute("aria-label", `Machine load: ${spoken}. Open the machine status`);
+      items.machine.setAttribute("title", `Machine load: ${spoken}.${machine.held ? ` New workers wait${machine.reason ? `: ${machine.reason}` : "."}` : ""} Open the machine status.`);
     }
     items.cost.hidden = live.cost === null;
     if (live.cost !== null) {
@@ -1416,6 +1456,8 @@
     document.addEventListener("pointerdown", (event) => { if (!state.on) return; outsideMenu(event); outsideDrawer(event); }, true);
     // The pushes the page already gets; nothing here polls.
     for (const subscribe of ["onTasks", "onAssistant", "onAssistantStatus", "onProjects"]) { try { window.mefiStudio?.[subscribe]?.(() => scheduleLive()); } catch { /* a bridge without the push */ } }
+    // The resource watcher's pass, every few seconds: kept only when the rounded load moved, so most passes repaint nothing.
+    try { window.mefiStudio?.["onMachineStatus"]?.((status) => onMachine(status)); } catch { /* a bridge without the push */ }
     if (typeof MutationObserver === "function") {
       try {
         const attributes = new MutationObserver(() => { if (state.on) sync("attribute"); });

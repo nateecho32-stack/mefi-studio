@@ -194,13 +194,17 @@ function bridge(seedData) {
     learningState: () => ({ ok: true, projectId: pid, decisions: { enabled: true, scope: "blend" }, models: "blend", profiles: {} }),
     openrouterModels: () => ({ ok: true, models: [] }), agentModels: () => ({ ok: true, models: [] }),
     workStats: () => ({ ok: true, projectId: pid, totals: { tasks: 12, runs: 31, tokens: 1234567, activeDays: 9, verified: 7 }, peakHour: 14, days: [], models: [], store: { ok: true, error: null } }),
+    // The status bar's right-hand facts: a plan's two windows, what today's recorded calls cost (the usage tracker's own reads).
+    usageTracker: () => ({ ok: true, today: { calls: 14, usage: { costUsd: { known: 1.92, knownRecords: 14 } } } }),
+    opencodeCredits: () => ({ ok: true, fetchedAt: Date.now(), usage: { rolling: { percent: 20, resetsAt: new Date(Date.now() + 3 * 3600000).toISOString() }, weekly: { percent: 50, resetsAt: new Date(Date.now() + 4 * 86400000).toISOString() } } }),
+    usageAccounts: () => ({ ok: true, accounts: [] }),
   };
   const api = {};
   for (const [name, handler] of Object.entries(handlers)) {
     api[name] = async (...args) => { calls.push({ name, args: clone(args) }); return clone(handler(args[0] ?? {}, args)); };
   }
   const callbacks = {};
-  for (const name of ["onTasks", "onProjects", "onAssistant", "onAssistantStatus", "onProjectPreview", "onSettingsChanged", "onStudioLog", "onAutoSetup", "onReviewChanged"]) api[name] = (callback) => { (callbacks[name] ||= []).push(callback); return () => {}; };
+  for (const name of ["onTasks", "onProjects", "onAssistant", "onAssistantStatus", "onProjectPreview", "onSettingsChanged", "onStudioLog", "onAutoSetup", "onReviewChanged", "onMachineStatus"]) api[name] = (callback) => { (callbacks[name] ||= []).push(callback); return () => {}; };
   contextBridge.exposeInMainWorld("mefiStudio", api);
   contextBridge.exposeInMainWorld("sessionsFixture", {
     calls: () => calls, clear: () => { calls.length = 0; }, state: () => clone({ changes: data.changes, tasks: data.tasks.map((row) => ({ id: row.id, title: row.title, status: row.status })), questions: data.questions.length, decisions: data.decisions.length, messages: data.messages.length }),
@@ -230,6 +234,61 @@ const measure = `
     small, scrollers, wide, spill,
     fold: document.documentElement.dataset.layoutFold || '',
   };`;
+
+// ---- what a person can read, in real pixels: no text under 12 px and none under 4.5:1 against what is behind it ----------------------------
+// Runs in the page for the visible text under `rootSelector`. The background is every layer behind the text, from the page's own
+// background up, each composited with its alpha (a gradient counts as the mean of its stops); text in a control that is disabled or
+// faded (opacity under 1) is left out, as WCAG leaves it out. Answers the failures and what was looked at.
+function readableProbe(rootSelector) {
+  const parse = (value) => {
+    const text = String(value || "").trim();
+    let match = /^rgba?\(([^)]+)\)$/.exec(text);
+    if (match) { const parts = match[1].split(/[\s,/]+/).filter(Boolean).map(Number); return { r: parts[0], g: parts[1], b: parts[2], a: parts.length > 3 ? parts[3] : 1 }; }
+    match = /^color\(srgb ([^)]+)\)$/.exec(text);
+    if (match) { const [rgb, alpha] = match[1].split("/"); const channels = rgb.trim().split(/\s+/).map(Number); return { r: channels[0] * 255, g: channels[1] * 255, b: channels[2] * 255, a: alpha === undefined ? 1 : Number(alpha) }; }
+    return null;
+  };
+  const over = (top, under) => ({ r: top.r * top.a + under.r * (1 - top.a), g: top.g * top.a + under.g * (1 - top.a), b: top.b * top.a + under.b * (1 - top.a), a: 1 });
+  const gradient = (image) => {
+    const stops = String(image || "").match(/rgba?\([^)]+\)|color\(srgb [^)]+\)/g);
+    if (!stops || !/gradient/.test(image)) return null;
+    const colors = stops.map(parse).filter(Boolean);
+    if (!colors.length) return null;
+    const mean = (key) => colors.reduce((sum, color) => sum + color[key], 0) / colors.length;
+    return { r: mean("r"), g: mean("g"), b: mean("b"), a: mean("a") };
+  };
+  const luminance = (color) => { const channel = (value) => { const v = value / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * channel(color.r) + 0.7152 * channel(color.g) + 0.0722 * channel(color.b); };
+  const ratio = (a, b) => { const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05); };
+  const base = parse(getComputedStyle(document.documentElement).getPropertyValue("--bg")) || parse(getComputedStyle(document.body).backgroundColor) || { r: 0, g: 0, b: 0, a: 1 };
+  const root = document.querySelector(rootSelector);
+  if (!root) return { missing: rootSelector, failures: [], small: [], looked: 0 };
+  const shown = (node) => { const r = node.getBoundingClientRect(); const s = getComputedStyle(node); return r.width > 0 && r.height > 0 && s.visibility !== "hidden" && s.display !== "none"; };
+  const leaves = [...root.querySelectorAll("*")].filter((node) => shown(node) && [...node.childNodes].some((child) => child.nodeType === 3 && child.textContent.trim()));
+  const failures = [], small = [];
+  let looked = 0, skipped = 0;
+  for (const node of leaves) {
+    if (parseFloat(getComputedStyle(node).fontSize) < 12) small.push(`${node.className || node.tagName}:${getComputedStyle(node).fontSize}:${node.textContent.trim().slice(0, 24)}`);
+    let faded = false;
+    const chain = [];
+    for (let walk = node; walk && walk.nodeType === 1; walk = walk.parentElement) {
+      const style = getComputedStyle(walk);
+      if (Number(style.opacity) < 0.99 || walk.disabled === true || walk.getAttribute?.("aria-disabled") === "true") faded = true;
+      chain.push(style);
+    }
+    if (faded) { skipped += 1; continue; }
+    let behind = base;
+    for (const style of chain.reverse()) {
+      const fill = gradient(style.backgroundImage) || parse(style.backgroundColor);
+      if (fill && fill.a > 0) behind = over(fill, behind);
+    }
+    const ink = parse(getComputedStyle(node).color);
+    if (!ink) continue;
+    looked += 1;
+    const value = ratio(over(ink, behind), behind);
+    if (value < 4.5) failures.push({ text: node.textContent.trim().slice(0, 40), cls: String(node.className || node.tagName).slice(0, 40), ratio: Math.round(value * 100) / 100 });
+  }
+  return { failures, small, looked, skipped };
+}
 
 app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
@@ -356,6 +415,66 @@ app.whenReady().then(async () => {
   const settle = () => sleep(450);
   const toastAction = (label) => run(`const node = [...document.querySelectorAll('#toast-host .toast-action')].find((item) => item.textContent.trim() === ${q(label)}); if (!node) throw new Error('no toast action ' + ${q(label)}); node.click();`);
   const waitToast = (label) => until(`[...document.querySelectorAll('#toast-host .toast-action')].some((item) => item.textContent.trim() === ${q(label)})`, `a toast offers ${label}`);
+
+  // ---- the chrome at 1920x1080, beside the prototype's shots (docs/prototype/): the status bar, Search and the Inbox ----------------------
+  // Everything a person reads there is checked in every theme (12 px and 4.5:1, readableProbe). It runs on the board as it starts (the
+  // question still open), on Build's Home with no session open, and leaves it as it found it: Aurora on, the player's own status back.
+  const THEMES = ["aurora", "gold", "midnight", "forest", "violet", "ember", "rose", "void", "eclipse", "abyss", "dusk"];
+  const readable = async (rootSelector, label) => {
+    const misses = [];
+    for (const theme of THEMES) {
+      await run(`window.MefiMusic.applyTheme(${q(theme)}, false); await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));`);
+      const seen = await run(`return (${readableProbe.toString()})(${q(rootSelector)});`);
+      assert.ok(!seen.missing && seen.looked > 0, `${label}: there is text to read under ${rootSelector}: ${JSON.stringify(seen)}`);
+      assert.deepEqual(seen.small, [], `${label} (${theme}): no text under 12 px`);
+      for (const miss of seen.failures) misses.push({ theme, ...miss });
+    }
+    await run("window.MefiMusic.applyTheme('aurora', false);");
+    assert.deepEqual(misses, [], `${label}: every text reads at 4.5:1 or better in every theme`);
+    (report.readable ||= {})[label] = THEMES.length;
+  };
+  const statusBar = `const bar = document.getElementById('shell-status'); const box = bar.getBoundingClientRect();
+    const items = [...bar.querySelectorAll('[data-item]')].filter((node) => !node.hidden && getComputedStyle(node).display !== 'none').map((node) => { const r = node.getBoundingClientRect(); return { key: node.dataset.item, x: Math.round(r.left), r: Math.round(r.right), top: Math.round(r.top), bottom: Math.round(r.bottom), text: node.textContent.trim() }; });
+    return { bar: [Math.round(box.left), Math.round(box.top), Math.round(box.right), Math.round(box.bottom)], items, overlaps: items.slice(1).filter((one, at) => one.x < items[at].r - 0.5).map((one) => one.key), overflow: bar.scrollWidth > bar.clientWidth + 1 };`;
+  async function chromeGallery() {
+    await size(1920, 1080, 1);
+    await run("for (const name of ['list', 'inspector']) window.MefiShell.open(name);");
+    // Build's Home with no session open (a session would read its pictures, which the list's own checks below count).
+    await until("window.MefiSessions.selected() === null && document.body.classList.contains('workspace-active')", "Build's Home, no session open");
+    // The status bar: the machine's load from the watcher's push, the plan's two windows and today's cost from the usage reads, and a
+    // player that plays (its status stood in: the fixture has no network to play anything from).
+    await run("window.sessionsFixture.push('onMachineStatus', { wait: false, capacity: { canStart: true, reason: null, resources: { cpuPercent: 34.2, availableMemoryMB: 6390, totalMemoryMB: 16384, lagMs: 14 } } });");
+    await run("window.__playerStatus = window.MefiMusic.status; window.MefiMusic.status = () => ({ ...window.__playerStatus(), playing: true, title: 'Deep Focus, hour two', source: 'local', queueLength: 1 }); window.dispatchEvent(new CustomEvent('mefi-music-change'));");
+    await until("window.MefiUsageTracker?.brief?.()?.plan && ['machine', 'player', 'cost', 'waiting'].every((key) => !document.querySelector(`#shell-status [data-item=${key}]`).hidden)", "the status bar has its facts");
+    await sleep(300);
+    const wide = await run(statusBar);
+    report.statusBar = wide;
+    assert.deepEqual(wide.items.map((one) => one.key), ["layout", "working", "waiting", "player", "machine", "cost", "permission"], `the prototype's order: ${JSON.stringify(wide.items)}`);
+    assert.deepEqual(wide.items.map((one) => one.text), ["Layout", "3 working", "1 waiting on you", "Deep Focus, hour two", "CPU 34% · Mem 61%", "$1.92 today", "Auto"]);
+    assert.equal(await run("return document.querySelectorAll('#shell-status .shell-meter-button').length;"), 2, "the plan's two windows");
+    assert.ok(wide.items.every((one) => one.top >= wide.bar[1] && one.bottom <= wide.bar[3]), `every item sits inside the bar: ${JSON.stringify(wide)}`);
+    assert.deepEqual([wide.overlaps, wide.overflow], [[], false], "nothing overlaps and nothing is cut off");
+    await capture("chrome-status-1920.png");
+    await readable("#shell-status", "the status bar");
+    // A small window keeps what matters: the machine's load and the meters go first.
+    await size(600, 560, 1);
+    const narrow = await run(statusBar);
+    assert.deepEqual(narrow.items.map((one) => one.key).filter((key) => key === "machine"), [], "no machine load under 900 px");
+    assert.deepEqual([narrow.overlaps, narrow.overflow], [[], false], `600 px: nothing overlaps or is cut off: ${JSON.stringify(narrow)}`);
+    assert.equal(await run("return getComputedStyle(document.querySelector('#shell-status .shell-usage')).display;"), "none");
+    await size(1920, 1080, 1);
+    step("the status bar at 1920x1080 and 600 px");
+    await run("window.MefiMusic.status = window.__playerStatus; delete window.__playerStatus; window.dispatchEvent(new CustomEvent('mefi-music-change'));");
+    await size(1440, 900, 1);
+  }
+  if (only === "chrome") {
+    await chromeGallery();
+    assert.deepEqual(report.errors, [], "no console errors");
+    report.complete = true;
+    finish();
+    return;
+  }
+  await chromeGallery();
 
   // ---- the list ---------------------------------------------------------------------------------------------------------------------------
   const groups = await run("return [...document.querySelectorAll('#sessions-list .sx-gh')].map((node) => [node.dataset.key, node.firstElementChild.textContent, node.querySelector('.sx-count').textContent]);");
