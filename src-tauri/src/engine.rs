@@ -379,7 +379,9 @@ impl mefi_core::callbacks::Callbacks for HostCallbacks {
         let id = self.engine.next_id.fetch_add(1, Ordering::Relaxed);
         let (tx, rx) = std::sync::mpsc::channel();
         self.engine.callbacks.lock().map_err(|_| "engine state poisoned")?.insert(id, tx);
-        let frame = wire::value_frame(&json!({ "t": "callback", "id": id, "fn": handle["id"], "body": args }));
+        // Bytes (a picture for a preview) cross tagged, as every other frame's do.
+        let tagged = args.iter().any(native::holds_tag);
+        let frame = wire::value_frame(&json!({ "t": "callback", "id": id, "fn": handle["id"], "tagged": tagged, "body": args }));
         if self.writer.send(frame).is_err() {
             self.engine.callbacks.lock().ok().map(|mut map| map.remove(&id));
             return Err("Studio's engine is not running".into());

@@ -23,6 +23,7 @@ rusqlite = { version = "0.40", features = ["bundled"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 indexmap = "2"
 regex = "1"
+base64 = "0.22"
 unicode-normalization = "0.1"
 
 [target.'cfg(windows)'.dependencies]

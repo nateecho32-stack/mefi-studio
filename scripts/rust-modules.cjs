@@ -110,6 +110,33 @@ const FACTORIES = Object.freeze({
       OFF,
     });
   },
+  // A message's pictures (scripts/image-store.cjs createImageStore): Rust reads
+  // and writes the attachments folder and checks every picture
+  // (image-attach.cjs's rules). The folder, the ids still named and the
+  // preview maker are called back; `keep` answers a Set, which cannot cross,
+  // so it goes as an array, and a preview's bytes come back as a Buffer.
+  // `folder` stays the engine's (main.cjs reads it without waiting).
+  "image-store": (collaborators, host) => {
+    const path = require("node:path");
+    const bytesOf = (value) => (Buffer.isBuffer(value) || ArrayBuffer.isView(value) ? Buffer.from(value)
+      : value?.$mefi === "bytes" ? Buffer.from(String(value.b64 ?? ""), "base64") : Buffer.alloc(0));
+    const sent = {
+      dir: collaborators.dir,
+      ...(typeof collaborators.keep === "function" ? { keep: async () => [...((await collaborators.keep()) ?? [])] } : {}),
+      ...(typeof collaborators.thumbnail === "function" ? { thumbnail: (bytes, mime) => collaborators.thumbnail(bytesOf(bytes), mime) } : {}),
+    };
+    const call = (name, ...args) => host.callWithFunctions(`core.images.${name}`, [sent, ...args]);
+    const said = (lead) => (error) => ({ ok: false, error: `${lead}${String(error?.message ?? error).slice(0, 120)}` });
+    return Object.freeze({
+      save: (request = {}) => call("save", request ?? {}).catch(said("The picture could not be saved: ")),
+      resolve: (value) => call("resolve", value ?? null).catch(said("")),
+      load: (entry) => call("load", entry),
+      read: (id) => call("read", id ?? null).catch(said("The picture could not be read: ")),
+      remove: (id) => call("remove", id ?? null).catch(() => ({ ok: true })),
+      prune: (options = {}) => call("prune", { ...(options?.keep instanceof Set ? { keep: [...options.keep] } : Array.isArray(options?.keep) ? { keep: options.keep } : {}) }),
+      folder: () => path.resolve(String(collaborators.dir())),
+    });
+  },
   // Before and after shots (scripts/evidence-window.cjs createEvidenceWindow):
   // the host opens its own hidden window (src-tauri/src/views.rs
   // evidence.capture) and keeps the same request rule in Rust. Like the

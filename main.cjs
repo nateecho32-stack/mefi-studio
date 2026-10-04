@@ -12711,11 +12711,10 @@ const imageAttachOn = () => process.env.MEFI_STUDIO_NO_IMAGE_ATTACH !== "1";
 const imageScope = () => (imageScopeLoaded ??= new (require("node:async_hooks").AsyncLocalStorage)());
 const PICTURES_OFF = "Picture attachments are switched off on this PC.";
 function imageStore() {
-  return (imageStoreLoaded ??= require("./scripts/image-store.cjs").createImageStore({
-    dir: () => path.join(path.dirname(projectDataPath(TASKS_PATH)), "attachments"),
-    keep: imageNamedIds,
-    thumbnail: imageThumbnail,
-  }));
+  if (imageStoreLoaded) return imageStoreLoaded;
+  const collaborators = { dir: () => path.join(path.dirname(projectDataPath(TASKS_PATH)), "attachments"), keep: imageNamedIds, thumbnail: imageThumbnail };
+  // Under the Rust host the folder is read and written in Rust (scripts/rust-modules.cjs factory).
+  return (imageStoreLoaded = (typeof rustModules !== "undefined" && rustModules?.factory("image-store", collaborators)) || require("./scripts/image-store.cjs").createImageStore(collaborators));
 }
 // Every picture a message or a task still names, so cleanup never removes one.
 async function imageNamedIds() {
