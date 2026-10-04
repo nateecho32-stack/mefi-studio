@@ -185,6 +185,7 @@ the Electron build until stage 3.
 | The @ picker's project file search (and its .gitignore reader) | `scripts/project-files.cjs`, `gitignore-lite.cjs`, `mentions.cjs` `cleanPath` | `crates/mefi-core/src/files/` | `main.cjs`'s `projectFilesHost` takes a Rust-backed factory (`scripts/rust-modules.cjs` `factory`); the project root is called back in the engine | `tests/rust_parity_files.test.mjs` |
 | Multi-PC sync, the worktree table and its actions | `scripts/sync.mjs` (`sync`, `inspect`, `remoteMoved`, `changedFiles`, `lostWork`), `worktrees.mjs`, `worktree-actions.mjs` | `crates/mefi-core/src/repo/` | `main.cjs`'s `loadModule` hands the module out with these functions answered by Rust (`scripts/rust-modules.cjs`); `check` and `inUse` are called back in the engine | `tests/rust_parity_repo.test.mjs` |
 | The Git chip's actions: glance, the launch list's glance, Save (preview and commit), push, Publish, Link, owners, name check, account | `scripts/git-actions.cjs`, with the `git-link.cjs` rules it reads (scrub, `classifyPush`, `classifyGh`, `pathBlocked`, names, `.gitignore` and license text, `publishPlan`), `pc-setup.cjs`'s three readers, `redaction.cjs` `maskCredentials` and the `share-review.cjs` rules a save scans for | `crates/mefi-core/src/git/` | `main.cjs`'s `gitHost()` takes a Rust-backed `git-actions` factory; git and gh run from Rust, on the PATH of the engine's `env` (called back once per call); a push's `check`, link's `isListed` and publish's `onProgress` are called back. `scripts/git-host.cjs` (the chip's state and queue) and `describe`/`chip` stay JavaScript for now | `tests/rust_parity_git.test.mjs` |
+| The Skills page's files: list, read, save, create, delete, import, export | `scripts/skills.cjs` with `skill-format.cjs` | `crates/mefi-core/src/skills/` | `main.cjs`'s `skillsHost()` takes a Rust-backed `skills` factory; the project root, the switch, the safety folder and the inventory are called back, and the zip writer too (the factory adds the SKILL.md-only filter, since a function cannot cross); `enabled` and `OFF` stay the engine's | `tests/rust_parity_skills.test.mjs` |
 
 ### Two seams
 
@@ -269,8 +270,8 @@ It moves with its callers and the board state, as one subsystem.
    and the JavaScript caller choosing the host under `MEFI_STUDIO_HOST=tauri`.
 4. Check with the self-test's `rustCalls`, then the gates.
 
-Suggested order: the remaining factory-shaped modules (skills, the image
-store, attempt snapshots), then settings, keys and projects together (writes
+Suggested order: the remaining factory-shaped modules (the image store,
+attempt snapshots; skills moved on 4 October), then settings, keys and projects together (writes
 inject `projects.saved()`, `auth.json` is split off, 59 `updateSettings`
 sites), with `scripts/git-host.cjs` and git-link's `describe` once the
 settings and sync they read are in Rust, then the pure logic modules

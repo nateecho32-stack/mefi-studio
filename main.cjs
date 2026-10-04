@@ -12874,13 +12874,16 @@ async function pictureExtras(user) {
 // nothing is saved, created, deleted or imported. The module loads on first use.
 let skillsHostLoaded = null;
 function skillsHost() {
-  return (skillsHostLoaded ??= require("./scripts/skills.cjs").createSkills({
+  if (skillsHostLoaded) return skillsHostLoaded;
+  const collaborators = {
     root: () => (projects.open() ? projectRoot() : null),
     enabled: () => process.env.MEFI_STUDIO_NO_SKILL_EDIT !== "1",
     backups: () => path.join(path.dirname(projectDataPath(TASKS_PATH)), "skill-backups"),
     inventory: (root) => agentAddons.inventory(root),
     zip: async (source, target, options) => (await loadModule("scripts/release-updater.mjs")).zipDirectory(source, target, options),
-  }));
+  };
+  // Under the Rust host the folders are read and written in Rust (scripts/rust-modules.cjs factory).
+  return (skillsHostLoaded = (typeof rustModules !== "undefined" && rustModules?.factory("skills", collaborators)) || require("./scripts/skills.cjs").createSkills(collaborators));
 }
 // Import: the owner picks a folder; only its SKILL.md is read, under the rules of a save.
 async function skillsImport() {

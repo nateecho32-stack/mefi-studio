@@ -128,3 +128,30 @@ test("the evidence-window factory asks the host for a shot and answers like crea
   assert.deepEqual(lines.slice(-2), ["[review] shot not taken (the host closed at <address>)", "[review] shot not taken (timed out)"]);
   withEnv("evidence-window", () => assert.equal(factory("evidence-window", {}, host), null));
 });
+
+test("the skills factory sends the collaborators first, keeps enabled and OFF the engine's, and filters the zip to SKILL.md", async () => {
+  assert.ok(FACTORIES.skills);
+  const calls = [];
+  const host = { callWithFunctions: async (api, args) => { calls.push({ api, args }); return { ok: true, api }; } };
+  const zipped = [];
+  const collaborators = { root: () => "C:\p", enabled: () => false, zip: async (source, target, options) => zipped.push({ source, target, options }) };
+  const skills = withEnv(undefined, () => factory("skills", collaborators, host));
+  assert.equal(skills.enabled(), false, "answered by the engine, without waiting");
+  assert.equal(skills.OFF, require("../scripts/skills.cjs").OFF);
+  await skills.list();
+  await skills.read("a");
+  await skills.save({ name: "a" });
+  await skills.delete("a");
+  await skills.exportTo({ name: "a", target: "C:\out", kind: "zip" });
+  assert.deepEqual(calls.map((call) => call.api), ["core.skills.list", "core.skills.read", "core.skills.save", "core.skills.delete", "core.skills.exportTo"]);
+  const sent = calls[0].args[0];
+  assert.equal(sent.root, collaborators.root);
+  assert.notEqual(sent.zip, collaborators.zip, "the zip writer is wrapped");
+  await sent.zip("C:\p\.agents\skills\a", "C:\out.zip.part", { rootName: "a" });
+  assert.equal(zipped[0].options.rootName, "a");
+  assert.equal(zipped[0].options.include("SKILL.md"), true);
+  assert.equal(zipped[0].options.include("script.sh"), false, "only SKILL.md goes in the zip, as the JavaScript asked");
+  const failing = factory("skills", {}, { callWithFunctions: async () => { throw new Error("pipe closed"); } });
+  assert.deepEqual(await failing.list(), { ok: false, error: "That could not be done (pipe closed)." });
+  withEnv("skills", () => assert.equal(factory("skills", {}, host), null));
+});

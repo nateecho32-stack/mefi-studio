@@ -83,6 +83,33 @@ const FACTORIES = Object.freeze({
       identity: guarded("identity"),
     });
   },
+  // The Skills page's files (scripts/skills.cjs createSkills): Rust reads and
+  // writes the folders; the project root, the switch, the safety folder and
+  // the inventory are called back, and so is the zip writer, with the
+  // SKILL.md-only filter added here because a function cannot cross. `enabled`
+  // and `OFF` stay the engine's own: main.cjs reads them without waiting.
+  // Like the JavaScript, every method answers and none throws.
+  "skills": (collaborators, host) => {
+    const { OFF } = require("./skills.cjs");
+    const zip = typeof collaborators?.zip === "function"
+      ? (source, target, options = {}) => collaborators.zip(source, target, { ...options, include: (relative) => relative === "SKILL.md" })
+      : undefined;
+    const sent = { ...collaborators, zip };
+    const call = (name, ...args) => host.callWithFunctions(`core.skills.${name}`, [sent, ...args])
+      .catch((error) => ({ ok: false, error: `That could not be done (${String(error?.message ?? error).slice(0, 80)}).` }));
+    const enabled = typeof collaborators?.enabled === "function" ? collaborators.enabled : () => true;
+    return Object.freeze({
+      list: () => call("list"),
+      read: (name) => call("read", name),
+      save: (draft = {}) => call("save", draft ?? {}),
+      create: (draft = {}) => call("create", draft ?? {}),
+      delete: (name) => call("delete", name),
+      importFrom: (folder) => call("importFrom", folder),
+      exportTo: (request = {}) => call("exportTo", request ?? {}),
+      enabled,
+      OFF,
+    });
+  },
   // Before and after shots (scripts/evidence-window.cjs createEvidenceWindow):
   // the host opens its own hidden window (src-tauri/src/views.rs
   // evidence.capture) and keeps the same request rule in Rust. Like the
