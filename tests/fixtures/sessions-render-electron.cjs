@@ -830,6 +830,23 @@ app.whenReady().then(async () => {
   }
   assert.equal(report.layouts.length, 12, "two sessions at six sizes");
   step("every panel fits six window sizes");
+  // ---- the Work view at 1920x1080, beside the prototype's shots (docs/prototype/) ------------------------------------------------------------
+  await size(1920, 1080, 1);
+  await run("for (const name of ['list', 'inspector']) window.MefiShell.open(name);");
+  const gallery = async (name, setup, ready) => { await run(setup); await until(ready, name); await sleep(450); await capture(name); };
+  await gallery("work-1920-plan.png", "window.MefiSessions.select('task_ask'); window.MefiSessions.setTab('plan');", "document.querySelector('#sessions-head .sx-title')?.textContent.includes('empty state') && !document.getElementById('sessions-pane-plan').hidden");
+  await gallery("work-1920-worktree.png", "window.MefiSessions.select('task_run'); window.MefiSessions.setTab('wt');", "/Only on this PC/.test(document.getElementById('sessions-pane-wt')?.textContent || '')");
+  await gallery("work-1920-agent.png", "window.MefiSessions.setTab('agent');", "document.querySelector('#sessions-pane-agent .sx-icard') && !document.getElementById('sessions-pane-agent').hidden");
+  await run("window.MefiSessions.setTab('plan');");
+  await gallery("work-1920-project.png", "window.MefiNav.go('workspace');", "window.MefiSessions.selected() === null && !document.getElementById('sessions-project-insp').hidden");
+  await gallery("work-1920-backlog.png", "document.getElementById('sessions-tab-backlog').click();", "document.querySelector('#sessions-list .sx-scan')");
+  await run("document.getElementById('sessions-tab-sessions').click();");
+  await gallery("work-1920-project-menu.png", "document.getElementById('sessions-project').click();", "document.getElementById('sessions-project-menu')");
+  await press("Escape");
+  await gallery("work-1920-worktrees-page.png", "window.MefiNav.go('worktrees');", "!document.getElementById('shell-pages').hidden && document.getElementById('shell-inspector').hidden");
+  await run("window.MefiNav.go('workspace');");
+  await until("!document.getElementById('shell-inspector').hidden", "back on Home");
+  step("the Work view at 1920x1080");
   await size(1440, 900, 1);
 
   // ---- switching it off, and on again ---------------------------------------------------------------------------------------------------------
