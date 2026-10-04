@@ -6,6 +6,10 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-02 late evening - Booklet inventory contract adaptation after aggregate discovery
+
+First frozen inventory aggregate exposed five Node wiring cases that still asserted individual builder reads and parallel codeParts lists. Updated those five files plus two Python contract files to read the declared inventory while retaining source membership, startup prefix, module dependency ordering, stylesheet adjacency, fixture coverage and CLI/export contracts. Updated Node suites: 125 passed. Focused Python: 3 passed. Builder/auditor/renderer bytes match the first inventory candidate; original LF/CRLF equivalence evidence remains applicable and preserved. Build/check/audit passed. Full repeated aggregate queued after first frozen run completes; prior failure/source retained, candidate unqualified and unlanded. No runtime, shell-default, production/provider or publication changes.
+
 ## 2026-10-02 evening - Isolated booklet input consolidation focused validation
 
 One ordered inventory covers current 76 scripts and 28 stylesheets. Preserved old builder and candidate emitted byte-identical booklet and source manifest under identical LF and CRLF inputs; new build reported changed=false over each baseline output. Five build cases and 31 inventory/source-location/auditor cases passed, including 16 new missing/duplicate/order/foreign-root contracts. Build/check/audit passed. Native and full aggregate remain queued while game owns the heavy window. Isolated candidate unqualified and unlanded; verified detail-action candidate preserved. No provider, production, shell-default or release changes.

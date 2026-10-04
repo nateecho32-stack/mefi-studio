@@ -39,6 +39,23 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-04 The v2 Work view lands on main with Rust stage 2
+
+Branch `land/ui-work-view` in `C:\wt\land-ui`: origin/main 90661df (Rust stage
+2's five ports) with wip/ui-work-view 898fe49 merged (only TESTRUNS.md
+conflicted: both new rows kept, newest first, one more older row rotated),
+plus fe59dd3: a key hint inside a filled button takes the button's ink (New
+task's "Ctrl N" was pale on teal, under 4.5:1; shell_frame_css pins it).
+
+Full `npm test` on fe59dd3: Node 6900 tests, 6885 pass, 14 skipped, 1 fail
+(project_preview, the whole file in 0.9 s under load: 18/18 alone); Electron
+lane 75: 72 pass, 1 skipped, 2 fail: layout_contract_render and shell_render
+(viewport 1921x1081, as on clean main on this PC); Python 248 OK; path lock
+ok; `npm run audit` 0 findings; `npm run check` ok (271 targets).
+sessions_render with captures passes (1/1); 1920x1080 captures in
+`C:\wt\shots\land-ui\`, the Work view beside the prototype in
+`C:\wt\gap\after-work\compare\`.
+
 ## 2026-10-04 The v2 Work view closer to the 0.5 prototype: breadcrumb, list head, run menu, inspector
 
 Branch `wip/ui-work-view` (worktree off main 39d98e3, node_modules junctioned),
@@ -361,10 +378,6 @@ Stable remains the default; development requires explicit warning/consent. Devel
 Booklet v3 full aggregate completed with 6760 Node tests: 6743 passed, one Tasks retained-focus assertion failed, 16 skipped. Python 248 OK (one skip), locks six passed, real provider-free Fleet ten steps passed; build/check/audit passed. Active task-new, connected retained summary, unchanged card identity/expansion and changed-card checks match the preserved prior symptom. Booklet remains frozen, unqualified and unlanded. Original inventory run (obsolete wiring/partial packaging fixture plus Plans/tree native timeouts), stopped v2, and all prior failures remain reachable in local evidence. Unchanged tree passed controlled repeat and v3 aggregate; no cause claimed for native timeouts.
 
 Exact production claim() source under controlled frame scheduling demonstrates unconditional task-new focus after later summary/search focus or release. Verified predecessor and booklet v3 navigation bytes match and reproduce the ordering. A separate isolated candidate guards pending initial focus against a newer claim, release, hidden destination or changed active element. Eleven focused cases plus existing navigation/startup/settings contracts passed: 58/58. Unchanged predecessor fails the focus regression cases. Input drafts and valid default navigation focus are covered. Native focus event stack/timing instrumentation and trusted-pointer controlled predecessor/booklet/candidate comparison are prepared, not launched: game owns the native window. Native source-attribution probe remains queued. No production/provider actions, shell default changes, push/merge/release or Library retry. Candidate unqualified pending native attribution and full aggregate; source-level evidence is not a native cause claim.
-
-## 2026-10-02 late evening - Booklet inventory contract adaptation after aggregate discovery
-
-First frozen inventory aggregate exposed five Node wiring cases that still asserted individual builder reads and parallel codeParts lists. Updated those five files plus two Python contract files to read the declared inventory while retaining source membership, startup prefix, module dependency ordering, stylesheet adjacency, fixture coverage and CLI/export contracts. Updated Node suites: 125 passed. Focused Python: 3 passed. Builder/auditor/renderer bytes match the first inventory candidate; original LF/CRLF equivalence evidence remains applicable and preserved. Build/check/audit passed. Full repeated aggregate queued after first frozen run completes; prior failure/source retained, candidate unqualified and unlanded. No runtime, shell-default, production/provider or publication changes.
 
 ## Read Before Any Tests
 
