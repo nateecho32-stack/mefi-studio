@@ -8,8 +8,8 @@
 //! test can hold each one to its JavaScript.
 
 mod actions;
-mod rules;
-mod run;
+pub(crate) mod rules;
+pub(crate) mod run;
 
 use serde_json::{json, Value};
 

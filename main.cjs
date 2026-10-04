@@ -22013,7 +22013,10 @@ async function readReviewPrefs() {
   return reviewPrefs();
 }
 
-const attemptSnapshotsHost = () => (reviewHosts.snapshots ??= require("./scripts/attempt-snapshots-host.cjs").createAttemptSnapshots({ disabled: () => !reviewPrefs().snapshots, log: (line) => logLine(line) }));
+const attemptSnapshotsHost = () => (reviewHosts.snapshots ??= (() => {
+  const collaborators = { disabled: () => !reviewPrefs().snapshots, log: (line) => logLine(line) };
+  return (typeof rustModules !== "undefined" && rustModules?.factory("attempt-snapshots", collaborators)) || require("./scripts/attempt-snapshots-host.cjs").createAttemptSnapshots(collaborators);
+})());
 const attemptEvidenceHost = () => (reviewHosts.evidence ??= require("./scripts/attempt-evidence-host.cjs").createAttemptEvidence({
   // The project's own data folder (never the repository): attempt-evidence/<task>/<n>/ goes inside it.
   root: () => path.dirname(projectDataPath(TASKS_PATH)),

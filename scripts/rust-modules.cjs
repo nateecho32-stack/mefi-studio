@@ -137,6 +137,31 @@ const FACTORIES = Object.freeze({
       folder: () => path.resolve(String(collaborators.dir())),
     });
   },
+  // Changed files, Accept and Revert (scripts/attempt-snapshots-host.cjs
+  // createAttemptSnapshots): Rust runs git, makes the before and after
+  // pictures and puts files back, with attempt-snapshots.cjs's rules. The
+  // kill switch and the log line are called back; the engine's environment
+  // goes with each call, and a revert's or an undo's `busy(root)` with its
+  // request. Like the JavaScript, every method answers and none throws.
+  "attempt-snapshots": (collaborators, host) => {
+    const rules = require("./attempt-snapshots.cjs");
+    const envNow = typeof collaborators?.env === "function" ? collaborators.env : () => process.env;
+    const sent = {
+      ...(typeof collaborators?.disabled === "function" ? { disabled: collaborators.disabled } : {}),
+      ...(typeof collaborators?.log === "function" ? { log: collaborators.log } : {}),
+      ...(typeof collaborators?.now === "function" ? { now: collaborators.now } : {}),
+    };
+    const failed = () => ({ ok: false, reason: "unreadable", error: rules.unavailable("unreadable") });
+    const call = (name, request) => Promise.resolve()
+      .then(() => host.callWithFunctions(`core.snapshots.${name}`, [{ ...sent, env: { ...(envNow() ?? process.env) } }, request]))
+      .catch(failed);
+    const method = (name) => (request = {}) => call(name, request ?? {});
+    return Object.freeze({
+      begin: method("begin"), end: method("end"), drop: method("drop"), changes: method("changes"), diff: method("diff"),
+      revert: method("revert"), undo: method("undo"), prune: method("prune"), attempts: method("attempts"),
+      probe: (root) => call("probe", root ?? null),
+    });
+  },
   // Before and after shots (scripts/evidence-window.cjs createEvidenceWindow):
   // the host opens its own hidden window (src-tauri/src/views.rs
   // evidence.capture) and keeps the same request rule in Rust. Like the

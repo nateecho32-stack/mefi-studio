@@ -147,10 +147,35 @@ fn kill_tree(child: &mut std::process::Child) {
     let _ = child.kill();
 }
 
+/// What one command did, as bytes, with its exit code (attempt snapshots read
+/// file contents and `git diff --quiet`'s answer).
+#[derive(Clone, Debug, Default)]
+pub struct Raw {
+    pub ok: bool,
+    /// The exit code; None when the command was ended (time, output) or never ran.
+    pub code: Option<i32>,
+    pub stdout: Vec<u8>,
+    /// Already cleaned, as `Ran::stderr`.
+    pub stderr: String,
+    pub timed_out: bool,
+    pub overflow: bool,
+    pub missing: bool,
+}
+
 /// git-actions `run(command, args, options)`; `clean` is its credential scrub.
 pub fn run(command: &str, args: &[String], options: &Options, env: &Value, kill_grace_ms: u64, clean: &dyn Fn(&str) -> String) -> Ran {
-    let child_env = child_env(env, options.reads);
-    let missing = |message: String| Ran { ok: false, stdout: String::new(), stderr: clean(&message), timed_out: false, missing: true };
+    let raw = run_raw(command, args, options, env, &[], kill_grace_ms, clean);
+    Ran { ok: raw.ok, stdout: String::from_utf8_lossy(&raw.stdout).into_owned(), stderr: raw.stderr, timed_out: raw.timed_out, missing: raw.missing }
+}
+
+/// `run`, with variables set after the engine's (`extra`, which may name
+/// `GIT_INDEX_FILE`: the redirect filter applies to inherited ones only), and
+/// the answer as bytes with its exit code.
+pub fn run_raw(command: &str, args: &[String], options: &Options, env: &Value, extra: &[(String, String)], kill_grace_ms: u64, clean: &dyn Fn(&str) -> String) -> Raw {
+    let mut child_env = child_env(env, options.reads);
+    child_env.retain(|(key, _)| !extra.iter().any(|(name, _)| name.eq_ignore_ascii_case(key)));
+    child_env.extend(extra.iter().cloned());
+    let missing = |message: String| Raw { ok: false, code: None, stdout: Vec::new(), stderr: clean(&message), timed_out: false, overflow: false, missing: true };
     // Node reports a missing working folder as the command missing (spawn ENOENT).
     if options.cwd.is_some_and(|cwd| !Path::new(cwd).is_dir()) {
         return missing(format!("spawn {command} ENOENT"));
@@ -170,7 +195,7 @@ pub fn run(command: &str, args: &[String], options: &Options, env: &Value, kill_
     let mut child = match process.spawn() {
         Ok(child) => child,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return missing(format!("spawn {command} ENOENT")),
-        Err(error) => return Ran { ok: false, stdout: String::new(), stderr: clean(&format!("spawn {command} {error}")), timed_out: false, missing: false },
+        Err(error) => return Raw { ok: false, code: None, stdout: Vec::new(), stderr: clean(&format!("spawn {command} {error}")), timed_out: false, overflow: false, missing: false },
     };
     if let (Some(input), Some(mut stdin)) = (options.input.clone(), child.stdin.take()) {
         std::thread::spawn(move || {
@@ -227,5 +252,5 @@ pub fn run(command: &str, args: &[String], options: &Options, env: &Value, kill_
     } else {
         format!("Command failed: {command} {}\n", args.join(" "))
     };
-    Ran { ok, stdout: String::from_utf8_lossy(&stdout).into_owned(), stderr: clean(&message), timed_out: timed_out && !overflow, missing: false }
+    Raw { ok, code: if overflow { None } else { status.and_then(|status| status.code()) }, stdout, stderr: clean(&message), timed_out: timed_out && !overflow, overflow, missing: false }
 }

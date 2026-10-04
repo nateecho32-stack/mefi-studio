@@ -182,3 +182,33 @@ test("the image-store factory turns the named-ids Set into an array, hands previ
   await assert.rejects(failing.load({ path: "x" }), /pipe closed/, "load rejects, as the JavaScript's does");
   withEnv("image-store", () => assert.equal(factory("image-store", collaborators, host), null));
 });
+
+test("the attempt-snapshots factory sends the engine's environment with each call, keeps busy with its request, and never throws", async () => {
+  assert.ok(FACTORIES["attempt-snapshots"]);
+  const calls = [];
+  const host = { callWithFunctions: async (api, args) => { calls.push({ api, args }); return { ok: true, api }; } };
+  const busy = () => false;
+  const collaborators = { disabled: () => false, log: () => {}, env: () => ({ PATH: "C:\\Git\\cmd", HOME: "C:\\Users\\me" }) };
+  const snaps = withEnv(undefined, () => factory("attempt-snapshots", collaborators, host));
+  assert.deepEqual(Object.keys(snaps).sort(), ["attempts", "begin", "changes", "diff", "drop", "end", "probe", "prune", "revert", "undo"]);
+  await snaps.begin({ root: "C:\\p", taskId: "task_1", runId: "run_1_1" });
+  await snaps.revert({ root: "C:\\p", taskId: "task_1", scope: "attempt", busy });
+  await snaps.changes();
+  await snaps.probe("C:\\p");
+  assert.deepEqual(calls.map((call) => call.api), ["core.snapshots.begin", "core.snapshots.revert", "core.snapshots.changes", "core.snapshots.probe"]);
+  const [sent, request] = calls[1].args;
+  assert.equal(sent.disabled, collaborators.disabled);
+  assert.equal(sent.log, collaborators.log);
+  assert.deepEqual(sent.env, { PATH: "C:\\Git\\cmd", HOME: "C:\\Users\\me" }, "the environment goes as a value, read fresh per call");
+  assert.equal(request.busy, busy, "busy crosses with its request, as a function");
+  assert.deepEqual(calls[2].args[1], {}, "no request crosses as an empty one");
+  assert.equal(calls[3].args[1], "C:\\p", "probe takes the folder itself");
+  const rules = require("../scripts/attempt-snapshots.cjs");
+  const failing = factory("attempt-snapshots", collaborators, { callWithFunctions: async () => { throw new Error("pipe closed"); } });
+  for (const method of ["begin", "changes", "revert", "undo", "probe"]) {
+    assert.deepEqual(await failing[method]({}), { ok: false, reason: "unreadable", error: rules.unavailable("unreadable") }, method);
+  }
+  const throwing = factory("attempt-snapshots", collaborators, { callWithFunctions: () => { throw new Error("no link"); } });
+  assert.equal((await throwing.diff({})).reason, "unreadable", "a host that throws at once still answers");
+  withEnv("attempt-snapshots", () => assert.equal(factory("attempt-snapshots", collaborators, host), null));
+});

@@ -187,6 +187,7 @@ the Electron build until stage 3.
 | The Git chip's actions: glance, the launch list's glance, Save (preview and commit), push, Publish, Link, owners, name check, account | `scripts/git-actions.cjs`, with the `git-link.cjs` rules it reads (scrub, `classifyPush`, `classifyGh`, `pathBlocked`, names, `.gitignore` and license text, `publishPlan`), `pc-setup.cjs`'s three readers, `redaction.cjs` `maskCredentials` and the `share-review.cjs` rules a save scans for | `crates/mefi-core/src/git/` | `main.cjs`'s `gitHost()` takes a Rust-backed `git-actions` factory; git and gh run from Rust, on the PATH of the engine's `env` (called back once per call); a push's `check`, link's `isListed` and publish's `onProgress` are called back. `scripts/git-host.cjs` (the chip's state and queue) and `describe`/`chip` stay JavaScript for now | `tests/rust_parity_git.test.mjs` |
 | The Skills page's files: list, read, save, create, delete, import, export | `scripts/skills.cjs` with `skill-format.cjs` | `crates/mefi-core/src/skills/` | `main.cjs`'s `skillsHost()` takes a Rust-backed `skills` factory; the project root, the switch, the safety folder and the inventory are called back, and the zip writer too (the factory adds the SKILL.md-only filter, since a function cannot cross); `enabled` and `OFF` stay the engine's | `tests/rust_parity_skills.test.mjs` |
 | A message's pictures: save, resolve, load, read, remove, prune, and the checks every picture meets (sniff, dimensions, name, size, ids) | `scripts/image-store.cjs` with `image-attach.cjs`'s checks (its request shapes and vision index stay JavaScript: requests are built with them on the spot) | `crates/mefi-core/src/images/` | `main.cjs`'s `imageStore()` takes a Rust-backed `image-store` factory; the folder, the ids still named (a Set, sent as an array) and the preview maker (handed a Buffer) are called back; `folder()` stays the engine's | `tests/rust_parity_images.test.mjs` |
+| Attempt review: the before and after pictures, Changed files, one file's diff, Revert and its undo, pruning and dropping | `scripts/attempt-snapshots-host.cjs` with all of `attempt-snapshots.cjs`'s rules (ref names, the commit message, what a snapshot leaves out, git's raw, numstat and diff output, the revert plan) | `crates/mefi-core/src/snapshots/` | `main.cjs`'s `attemptSnapshotsHost()` takes a Rust-backed `attempt-snapshots` factory; git runs from Rust on the engine's environment (sent with each call), the kill switch and the log line are called back, and a revert's or an undo's `busy(root)` crosses with its request. One writer per folder and three folder reads at once, as in the JavaScript | `tests/rust_parity_snapshots.test.mjs` (the same attempt on twin repositories with a fixed clock gives the same commits) |
 
 ### Two seams
 
@@ -271,8 +272,8 @@ It moves with its callers and the board state, as one subsystem.
    and the JavaScript caller choosing the host under `MEFI_STUDIO_HOST=tauri`.
 4. Check with the self-test's `rustCalls`, then the gates.
 
-Suggested order: the remaining factory-shaped module (attempt snapshots; skills and the
-image store moved on 4 October), then settings, keys and projects together (writes
+Suggested order: the factory-shaped modules are done (skills, the image store and attempt
+snapshots moved on 4 October); next settings, keys and projects together (writes
 inject `projects.saved()`, `auth.json` is split off, 59 `updateSettings`
 sites), with `scripts/git-host.cjs` and git-link's `describe` once the
 settings and sync they read are in Rust, then the pure logic modules

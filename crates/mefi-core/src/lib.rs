@@ -19,6 +19,9 @@
 //!   of image-attach.cjs), behind a Rust-backed factory.
 //! - `skills`: the Skills page's files (scripts/skills.cjs and
 //!   skill-format.cjs), behind a Rust-backed factory.
+//! - `snapshots`: attempt snapshots, Changed files and Revert
+//!   (scripts/attempt-snapshots-host.cjs and attempt-snapshots.cjs), behind a
+//!   Rust-backed factory.
 //!
 //! `jsre` runs JavaScript regular expressions with JavaScript's meaning.
 
@@ -32,6 +35,7 @@ pub mod jsre;
 pub mod paths;
 pub mod repo;
 pub mod skills;
+pub mod snapshots;
 
 /// Any ported module function by its `<module>.<function>` name.
 pub fn dispatch(function: &str, args: &[serde_json::Value], callbacks: &dyn callbacks::Callbacks) -> Result<serde_json::Value, String> {
@@ -40,6 +44,7 @@ pub fn dispatch(function: &str, args: &[serde_json::Value], callbacks: &dyn call
         Some(("git", name)) => git::call(name, args, callbacks),
         Some(("skills", name)) => skills::call(name, args, callbacks),
         Some(("images", name)) => images::call(name, args, callbacks),
+        Some(("snapshots", name)) => snapshots::call(name, args, callbacks),
         _ => repo::call(function, args, callbacks),
     }
 }
