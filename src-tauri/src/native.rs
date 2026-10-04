@@ -320,6 +320,8 @@ fn create_window(engine: &Arc<Engine>, options: &Value) -> Result<(), String> {
         match payload.event() {
             PageLoadEvent::Started => {
                 load_engine.clear_push_channel();
+                #[cfg(windows)]
+                crate::loopback::stop_all();
                 load_engine.event("webContents:did-start-navigation", json!({ "url": url }));
             }
             // did-finish-load or did-fail-load comes from how the navigation
@@ -610,13 +612,13 @@ fn self_test(engine: Arc<Engine>, dir: PathBuf) {
             report["evidenceRefused"] = crate::views::capture(&engine, "http://localhost:1/", &json!({ "allow": { "host": host } })).await;
             report["localStorage"] = execute_javascript(&engine, "({ carried: localStorage.getItem('mefiStudio.selftest.carried'), unicode: localStorage.getItem('mefiStudio.selftest.unicode'), keys: localStorage.length })").await.unwrap_or_else(|error| json!({ "error": error }));
             if std::env::var("MEFI_HOST_SELFTEST_DISPLAY").as_deref() == Ok("1") {
-                let armed = execute_javascript(&engine, "(() => { window.__probeDisplay = 'waiting'; document.addEventListener('click', () => { navigator.mediaDevices.getDisplayMedia({ video: true, audio: true }).then((stream) => { window.__probeDisplay = { video: stream.getVideoTracks().length, audio: stream.getAudioTracks().length, label: stream.getVideoTracks()[0]?.label ?? '' }; stream.getTracks().forEach((track) => track.stop()); }, (error) => { window.__probeDisplay = 'error: ' + error.name + ' ' + error.message; }); }, { once: true, capture: true }); return true; })()").await;
+                let armed = execute_javascript(&engine, "(() => { window.__probeDisplay = 'waiting'; document.addEventListener('click', () => { navigator.mediaDevices.getDisplayMedia({ video: true, audio: true }).then(async (stream) => { const ctx = new AudioContext(); const tone = ctx.createOscillator(); const gain = ctx.createGain(); gain.gain.value = 0.03; tone.frequency.value = 440; tone.connect(gain).connect(ctx.destination); tone.start(); const analyser = ctx.createAnalyser(); ctx.createMediaStreamSource(stream).connect(analyser); const data = new Float32Array(analyser.fftSize); let peak = 0; for (let i = 0; i < 30; i += 1) { await new Promise((r) => setTimeout(r, 100)); analyser.getFloatTimeDomainData(data); for (const v of data) peak = Math.max(peak, Math.abs(v)); } tone.stop(); stream.getTracks().forEach((track) => track.stop()); ctx.close(); window.__probeDisplay = { video: stream.getVideoTracks().length, audio: stream.getAudioTracks().length, peak }; }, (error) => { window.__probeDisplay = 'error: ' + error.name + ' ' + error.message; }); }, { once: true, capture: true }); return true; })()").await;
                 if let Some(window) = main_window(&engine.app) {
                     for kind in ["mousePressed", "mouseReleased"] {
                         let _ = crate::webview2::devtools_command(window.as_ref(), "Input.dispatchMouseEvent".into(), json!({ "type": kind, "x": 3, "y": 300, "button": "left", "clickCount": 1 })).await;
                     }
                 }
-                tokio::time::sleep(Duration::from_secs(5)).await;
+                tokio::time::sleep(Duration::from_secs(6)).await;
                 report["displayMedia"] = json!({ "armed": armed.is_ok(), "result": execute_javascript(&engine, "window.__probeDisplay").await.unwrap_or_else(|error| json!({ "error": error })) });
             }
             // A real file dropped on the page (a trusted drop from the DevTools

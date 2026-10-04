@@ -59,6 +59,27 @@ pub fn ipc_eval_result(id: u64, ok: bool, value: String, engine: State<'_, Arc<E
     }
 }
 
+/// Zen's desktop audio (src/loopback.rs): the system's sound, streamed to
+/// the page as mono float samples; answers { id, rate }.
+#[tauri::command]
+pub async fn audio_loopback_start(channel: Channel<InvokeResponseBody>) -> Result<Value, String> {
+    #[cfg(windows)]
+    {
+        tauri::async_runtime::spawn_blocking(move || crate::loopback::start(channel)).await.map_err(|error| error.to_string())?
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = channel;
+        Err("desktop audio needs Windows".into())
+    }
+}
+
+#[tauri::command]
+pub fn audio_loopback_stop(id: u64) {
+    #[cfg(windows)]
+    crate::loopback::stop_one(id);
+}
+
 /// Kept for a page that wants the host's view of itself (Help › About).
 #[tauri::command]
 pub fn ipc_host(engine: State<'_, Arc<Engine>>) -> Value {

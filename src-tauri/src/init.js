@@ -183,6 +183,55 @@
     }
   }, true);
 
+  // Zen's desktop audio (renderer/idle.js asks getDisplayMedia for the
+  // screen with sound). Electron answered with loopback audio and no picker;
+  // here the host records the system's sound (src/loopback.rs) and it plays
+  // into a MediaStream with one audio track and no video. Stopping the track
+  // stops the recording. A request without audio still gets WebView2's own.
+  const loopbackStream = async () => {
+    const context = new AudioContext({ latencyHint: "interactive" });
+    const destination = context.createMediaStreamDestination();
+    const channel = new (core().Channel)();
+    let rate = 48000;
+    let next = 0;
+    channel.onmessage = (message) => {
+      if (!(message instanceof ArrayBuffer) || message.byteLength < 4 || context.state === "closed") return;
+      const samples = new Float32Array(message);
+      const buffer = context.createBuffer(1, samples.length, rate);
+      buffer.copyToChannel(samples, 0);
+      const source = context.createBufferSource();
+      source.buffer = buffer;
+      source.connect(destination);
+      // A little ahead of now; after a gap (nothing playing) start afresh.
+      const now = context.currentTime;
+      if (next < now + 0.01 || next > now + 0.4) next = now + 0.06;
+      source.start(next);
+      next += buffer.duration;
+    };
+    let id = null;
+    try {
+      const opened = await core().invoke("audio_loopback_start", { channel });
+      id = opened.id;
+      rate = Number(opened.rate) || rate;
+    } catch (error) {
+      context.close().catch(() => {});
+      throw new DOMException(String(error?.message ?? error ?? "desktop audio is unavailable"), "NotReadableError");
+    }
+    const [track] = destination.stream.getAudioTracks();
+    const stopTrack = track.stop.bind(track);
+    track.stop = () => {
+      stopTrack();
+      core().invoke("audio_loopback_stop", { id }).catch(() => {});
+      context.close().catch(() => {});
+    };
+    return destination.stream;
+  };
+  const devices = window.navigator?.mediaDevices;
+  if (location.hostname === "mefi.localhost" && typeof devices?.getDisplayMedia === "function") {
+    const ownPicker = devices.getDisplayMedia.bind(devices);
+    devices.getDisplayMedia = (constraints = {}) => (constraints?.audio && window.__TAURI__?.core ? loopbackStream() : ownPicker(constraints));
+  }
+
   // Local images (evidence shots, pictures) through the host's file route.
   const fileUrl = (path) => `${location.origin}/__file/${encodeURIComponent(String(path).replace(/\\/g, "/"))}`;
 

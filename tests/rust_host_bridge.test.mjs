@@ -500,3 +500,77 @@ test("the Electron build's localStorage fills only the keys the page has not wri
   pageWith({ imported: null, storage: none });
   assert.equal(none.size, 0);
 });
+
+test("Zen's desktop audio is the host's loopback sound, with no picker and no video", async () => {
+  const init = readFileSync(path.join(root, "src-tauri", "src", "init.js"), "utf8");
+  const invokes = [];
+  const channels = [];
+  const started = [];
+  let closed = 0;
+  let pickerAsked = 0;
+  class FakeTrack { constructor() { this.stopped = false; } stop() { this.stopped = true; } }
+  class FakeContext {
+    constructor() { this.state = "running"; this.currentTime = 1; this.track = new FakeTrack(); }
+    createMediaStreamDestination() { const track = this.track; return { stream: { getAudioTracks: () => [track], getVideoTracks: () => [], getTracks: () => [track] } }; }
+    createBuffer(channelCount, length, rate) { return { channelCount, length, rate, duration: length / rate, data: null, copyToChannel(samples) { this.data = samples; } }; }
+    createBufferSource() { return { connect() {}, start: (at) => started.push(at), buffer: null }; }
+    close() { closed += 1; this.state = "closed"; return Promise.resolve(); }
+  }
+  const context = {
+    console: { log() {}, warn() {}, error() {} },
+    TextEncoder, TextDecoder, btoa, atob, Promise, Uint8Array, Float32Array, ArrayBuffer, JSON, Date, Number, String, Object, Array, Map, WeakMap, Error,
+    DOMException, setTimeout, clearTimeout,
+    location: { origin: "http://mefi.localhost", hostname: "mefi.localhost" },
+    document: { addEventListener() {} },
+    addEventListener() {},
+    navigator: { mediaDevices: { getDisplayMedia: async () => { pickerAsked += 1; return "picker"; } } },
+    AudioContext: FakeContext,
+    reportError(error) { throw error; },
+    __TAURI__: {
+      core: {
+        Channel: class { constructor() { this.onmessage = null; channels.push(this); } },
+        invoke: async (command, args) => {
+          invokes.push({ command, args });
+          if (command === "audio_loopback_start") return { id: 7, rate: 44100 };
+          return null;
+        },
+      },
+    },
+  };
+  context.window = context;
+  context.globalThis = context;
+  vm.createContext(context);
+  vm.runInContext(init.replace("/*__MEFI_PRELOAD__*/", ""), context, { filename: "init.js" });
+
+  // Without sound the request is WebView2's own (its picker).
+  assert.equal(await context.navigator.mediaDevices.getDisplayMedia({ video: true }), "picker");
+  assert.equal(pickerAsked, 1);
+
+  const stream = await context.navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+  assert.equal(pickerAsked, 1, "no picker for desktop audio");
+  assert.equal(stream.getAudioTracks().length, 1);
+  assert.equal(stream.getVideoTracks().length, 0);
+  const start = invokes.find((call) => call.command === "audio_loopback_start");
+  assert.ok(start && start.args.channel === channels.at(-1), "the samples arrive on a channel of their own");
+
+  // Samples play in order a little ahead of now, at the device's rate.
+  const samples = new Float32Array(2205).fill(0.25);
+  channels.at(-1).onmessage(samples.buffer);
+  channels.at(-1).onmessage(samples.buffer);
+  assert.equal(started.length, 2);
+  assert.ok(Math.abs(started[0] - 1.06) < 1e-9);
+  assert.ok(Math.abs(started[1] - (1.06 + 2205 / 44100)) < 1e-9);
+  channels.at(-1).onmessage("not samples");
+  assert.equal(started.length, 2);
+
+  // Stopping the track stops the recording and the context.
+  stream.getAudioTracks()[0].stop();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(JSON.parse(JSON.stringify(invokes.at(-1))), { command: "audio_loopback_stop", args: { id: 7 } });
+  assert.equal(closed, 1);
+
+  // A host that cannot record answers like a refused capture.
+  context.__TAURI__.core.invoke = async (command) => { if (command === "audio_loopback_start") throw new Error("no output device"); return null; };
+  await assert.rejects(context.navigator.mediaDevices.getDisplayMedia({ audio: true }), (error) => error.name === "NotReadableError" && /no output device/.test(error.message));
+  assert.equal(closed, 2);
+});

@@ -21,7 +21,7 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   files and the Recycle Bin now work as they do on Electron, a page that fails
   to load is reported, and the first launch brings over what the Electron
   build kept in the page (panel sizes, names, plan drafts). Zen's desktop
-  audio asks which screen to share; tick "share system audio" there.
+  audio listens to what the PC plays without asking which screen to share.
 - A portable build can now ship on the Rust host (`npm run package:host`):
   the same folder as the Electron build, with Node beside the program. The
   updater in this version can install either kind of build and roll back

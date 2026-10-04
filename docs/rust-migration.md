@@ -139,7 +139,9 @@ browser through that page and a second one (titles, back and forward, mute,
 a refused `mailto:`, close), takes an evidence shot of it (`evidence.png`),
 reads two `localStorage` keys a seeded Electron profile left, and drops a real
 file on the page through the DevTools protocol (the page must get its path);
-`MEFI_HOST_SELFTEST_DISPLAY=1` adds a clicked `getDisplayMedia` request. On 3 October it
+`MEFI_HOST_SELFTEST_DISPLAY=1` adds a clicked `getDisplayMedia` request
+while the page plays a quiet 440 Hz tone, and reports the peak that came back
+through the loopback stream. On 3 October it
 recorded a 1825×1175 capture of the launch screen, 40 invokes, 29 channels
 listened to, pushes on five of them, and a toast Windows accepted.
 
@@ -295,7 +297,7 @@ live board is the JSON files and `main.cjs`'s board gateway.
 | Media browser (`WebContentsView`) | done | A child webview of Studio's window with its own WebView2 profile (`src-tauri/src/views.rs`, Tauri's `unstable` feature for `Window::add_child`); the shim's `WebContentsView` drives it. Only http(s) pages, no pop-ups (they become navigations), downloads, permissions or other apps' links; Ctrl+L goes to Studio's address field |
 | Evidence shots (offscreen second window) | done | `evidence.capture` in the host: an in-private window off every screen with occlusion tracking off, the attempt-evidence request rule in Rust (`views::allow_request`), 1280x800 PNG; `main.cjs` takes it through the `evidence-window` factory |
 | Dropped files' paths (`webUtils.getPathForFile`) | done | init.js holds each drop, posts its files as `"mefi-drop:<id>"` with `postMessageWithAdditionalObjects` (a string: Tauri's message handler runs first and stops WebView2's chain on anything else), the host answers with the paths, and the same drop goes on |
-| Zen's desktop audio without a picker | accepted difference | WebView2 shows its own picker: choose a screen and tick "share system audio". Chromium's `--auto-select-desktop-capture-source` skips the picker but gives no audio track (tried 4 October), which is worse |
+| Zen's desktop audio without a picker | done | The host records the default output device in loopback (WASAPI, `src-tauri/src/loopback.rs`) and streams mono float samples on a Tauri channel; init.js answers a `getDisplayMedia` that asks for audio with a MediaStream holding that sound and no video, so no picker opens. Stopping the track stops the recording; a page navigation stops them all. (Chromium's `--auto-select-desktop-capture-source` skipped the picker but gave no audio track.) |
 | Page `localStorage` from the Electron build | done | `src-tauri/src/local_storage.rs` reads a copy of Electron's LevelDB (`rusty-leveldb`), hands the `file://` page's items to init.js, which writes the keys the page does not have; a marker file in `userData/WebView2` ends the hand-over |
 | Shell `trashItem` | done | `SHFileOperationW` with undo (the Recycle Bin), no UI |
 | Page load failures (`did-fail-load`) | done | WebView2 `NavigationCompleted`: a failed navigation is reported with Chromium's net error (-3 aborted, -105 name not resolved, ...); an HTTP error page still finishes, as in Electron |

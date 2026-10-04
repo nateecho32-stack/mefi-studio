@@ -6,6 +6,8 @@
 mod bridge;
 pub mod engine;
 mod local_storage;
+#[cfg(windows)]
+mod loopback;
 mod native;
 mod oscrypt;
 mod paths;
@@ -91,6 +93,8 @@ pub fn run() {
             bridge::ipc_menu,
             bridge::ipc_eval_result,
             bridge::ipc_host,
+            bridge::audio_loopback_start,
+            bridge::audio_loopback_stop,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
