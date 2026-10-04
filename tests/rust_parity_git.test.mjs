@@ -23,7 +23,7 @@ import { coreBinary } from "../scripts/rust-host.mjs";
 const require = createRequire(import.meta.url);
 const { createGitActions, parts } = require("../scripts/git-actions.cjs");
 const rules = require("../scripts/git-link.cjs");
-const { signedInAccount, filesystemOf, githubRemote } = require("../scripts/pc-setup.cjs");
+const { signedInAccount, filesystemQuery, filesystemOf, githubRemote } = require("../scripts/pc-setup.cjs");
 const { maskCredentials } = require("../scripts/redaction.cjs");
 
 const binary = coreBinary();
@@ -143,7 +143,8 @@ test("the pure helpers answer like the JavaScript", { skip }, () => {
   ]) add("rules.publishPlan", [plan], () => rules.publishPlan(plan));
   const auth = "github.com\n  \u2713 Logged in to github.com account octo-cat (keyring)\n";
   for (const text of [auth, "Logged in to github.com as old-style", "nothing"]) add("rules.signedInAccount", [text], () => signedInAccount(text));
-  for (const text of ["File System Name :               NTFS", "file system name: exFAT", "?"]) add("rules.filesystemOf", [text], () => filesystemOf(text));
+  for (const folder of ["C:\\Users\\me\\app", "e:/x", "\\\\server\\share", "/home/me", "", "1:"]) add("rules.filesystemQuery", [folder], () => filesystemQuery(folder));
+  for (const text of ["NTFS\r\n", "  exFAT  ", "", "File System Name : NTFS", "FAT32\nNTFS", "a".repeat(33), "?"]) add("rules.filesystemOf", [text], () => filesystemOf(text));
   for (const url of ["https://github.com/octo-cat/app.git", "https://x:y@github.com/octo-cat/app/", "git@github.com:octo-cat/app.git", "ssh://git@github.com/octo-cat/app", "https://gitlab.com/a/b", " https://github.com/octo-cat/my.app.git \n", ""]) {
     add("rules.githubRemote", [url], () => githubRemote(url));
   }

@@ -155,6 +155,10 @@ pub fn call(function: &str, args: &[Value], callbacks: &dyn Callbacks) -> Result
             json!(rules::license_text(&text(args.first()), &holder, year))
         }
         "rules.signedInAccount" => json!(rules::signed_in_account(&text(args.first()))),
+        "rules.filesystemQuery" => match rules::filesystem_query(&text(args.first())) {
+            Some((command, args, timeout)) => json!({ "command": command, "args": args, "timeout": timeout }),
+            None => Value::Null,
+        },
         "rules.filesystemOf" => json!(rules::filesystem_of(&text(args.first()))),
         "rules.githubRemote" => json!(rules::github_remote(&text(args.first()))),
         other => return Err(format!("git.{other} has not moved to Rust")),

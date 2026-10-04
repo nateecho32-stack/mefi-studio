@@ -822,7 +822,7 @@ test("the REAL publishPreview's invalid-name answer reaches the dialog as issue 
   const folder = mkdtempSync(path.join(tmpdir(), "gh-issue-"));
   try {
     writeFileSync(path.join(folder, "a.txt"), "hello\n");
-    // git runs for real in the throwaway folder; gh, fsutil and anything else are simply not installed.
+    // git runs for real in the throwaway folder; gh, PowerShell and anything else are simply not installed.
     const onlyGit = (command, args, options, callback) => {
       if (command === "git") return execFile(command, args, options, callback);
       callback(Object.assign(new Error(`spawn ${command} ENOENT`), { code: "ENOENT" }), "", "");

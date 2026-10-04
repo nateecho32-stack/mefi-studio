@@ -6,6 +6,10 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-02 - Tasks overview card retention focused qualification
+
+Isolated local/task-card-retention-20261002 candidate, derived from the aggregate-verified Fleet recovery source. Tasks UI and task overview grouping: 90 passed, 0 failed, including unchanged DOM identity, insertion/removal/reorder, grouping changes, focus/expansion, canonical actions, drafts, hidden reopen, stale reads and project isolation. Paired Electron benchmarks and aggregate gate are pending; no performance improvement is claimed yet.
+
 ## 2026-10-02 - Fleet read failure and recovery: isolated focused validation
 
 79 focused Fleet model, host, layout and UI tests passed. The real Chromium fixture passed all 25 existing layouts plus cached, unavailable and recovered states at 1440x900 and 600x560, with no page overflow, console errors, network attempts or child execution. Project switches clear all old team content; same-project errors persist across repaint; deterministic deferred tests cover late success, rejection and push ordering. Host run-identity checks remain unchanged. Full aggregate validation follows on the frozen candidate; its separate evidence records the outcome without changing tested source.

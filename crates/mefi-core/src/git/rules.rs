@@ -596,9 +596,19 @@ pub fn signed_in_account(output: &str) -> Option<String> {
     js_regex!(r"Logged in to github\.com (?:account|as) ([A-Za-z0-9-]{1,39})", "i").captures(output).and_then(|found| found.get(1)).map(|found| found.as_str().to_string())
 }
 
-/// `filesystemOf(output)`: fsutil's "File System Name : NTFS".
+/// `filesystemQuery(folder)`: the PowerShell command that names a folder's
+/// drive's file system (fsutil needs an administrator), or None without a
+/// drive letter. Only the letter goes into the script.
+pub fn filesystem_query(folder: &str) -> Option<(String, Vec<String>, u64)> {
+    let letter = js_regex!(r"^([A-Za-z]):", "").captures(folder).and_then(|found| found.get(1)).map(|found| found.as_str().to_string())?;
+    let script = format!("try {{ [IO.DriveInfo]::new('{letter}:').DriveFormat }} catch {{ (Get-CimInstance Win32_LogicalDisk -Filter 'DeviceID=''{letter}:''').FileSystem }}");
+    Some(("powershell.exe".into(), vec!["-NoProfile".into(), "-NonInteractive".into(), "-Command".into(), script], 10000))
+}
+
+/// `filesystemOf(output)`: the query prints the bare name ("NTFS", "exFAT"); anything else is unknown.
 pub fn filesystem_of(output: &str) -> Option<String> {
-    js_regex!(r"File System Name\s*:\s*([A-Za-z0-9]+)", "i").captures(output).and_then(|found| found.get(1)).map(|found| found.as_str().to_string())
+    let name = js::trim(output);
+    js_regex!(r"^[A-Za-z0-9]{1,32}$", "").is_match(name).then(|| name.to_string())
 }
 
 /// `githubRemote(url)`: owner/name for a github.com remote, else null.

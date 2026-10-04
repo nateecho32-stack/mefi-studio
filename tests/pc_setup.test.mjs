@@ -8,18 +8,22 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
+import { execFile as spawnFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import vm from "node:vm";
 
 const require = createRequire(import.meta.url);
-const { signedInAccount, filesystemOf, githubRemote, setupScript, createPcSetup } = require("../scripts/pc-setup.cjs");
+const { signedInAccount, filesystemQuery, filesystemOf, githubRemote, setupScript, createPcSetup } = require("../scripts/pc-setup.cjs");
+
+// The drive query's command line for a drive letter, as the fake keys calls.
+const volume = (letter) => { const query = filesystemQuery(`${letter}:\\`); return [query.command, ...query.args].join(" "); };
 
 function fake({ answers = {}, files = [], settings = null, platform = "win32" } = {}) {
   const calls = [], spawned = [];
   const execFile = (command, args, options, done) => {
     const key = [command, ...args].join(" ");
-    calls.push({ key, cwd: options.cwd, env: options.env });
+    calls.push({ key, cwd: options.cwd, env: options.env, timeout: options.timeout });
     const answer = Object.entries(answers).find(([pattern]) => key.startsWith(pattern))?.[1];
     if (!answer) return done(Object.assign(new Error("not found"), { code: "ENOENT" }), "", "");
     if (answer.fail) return done(Object.assign(new Error("failed"), { code: 1 }), answer.stdout ?? "", answer.stderr ?? "");
@@ -46,8 +50,11 @@ test("the sign-in, drive and remote readers keep only what they need", () => {
   assert.equal(signedInAccount("✓ Logged in to github.com account octo-cat (keyring)\n- Token: gho_abc123"), "octo-cat");
   assert.equal(signedInAccount("✓ Logged in to github.com as octo-cat (oauth_token)"), "octo-cat", "older gh wording");
   assert.equal(signedInAccount("You are not logged into any GitHub hosts."), null);
-  assert.equal(filesystemOf("Volume Name : Data\nFile System Name : exFAT\n"), "exFAT");
-  assert.equal(filesystemOf("garbage"), null);
+  assert.equal(filesystemOf("exFAT\r\n"), "exFAT");
+  assert.equal(filesystemOf("NTFS"), "NTFS");
+  assert.equal(filesystemOf(""), null, "a drive that is not ready prints nothing");
+  assert.equal(filesystemOf("Error 3: The system cannot find the path specified."), null, "an error is not a name");
+  assert.equal(filesystemOf("NTFS\r\nexFAT\r\n"), null, "one drive, one name");
   assert.equal(githubRemote("https://github.com/nateecho32-stack/mefi-studio.git"), "nateecho32-stack/mefi-studio");
   assert.equal(githubRemote("https://user:token@github.com/a/b.git"), "a/b", "credentials never come along");
   assert.equal(githubRemote("git@github.com:a/b.git"), "a/b");
@@ -55,9 +62,36 @@ test("the sign-in, drive and remote readers keep only what they need", () => {
   assert.equal(githubRemote("E:/local/mirror"), null);
 });
 
+// fsutil answers "Access is denied" without elevation, so its exFAT warning could never show.
+test("the drive query needs no administrator, names only the drive letter and stops after 10 s", async () => {
+  const query = filesystemQuery("E:\\code\\app");
+  assert.equal(query.command, "powershell.exe");
+  assert.deepEqual(query.args.slice(0, -1), ["-NoProfile", "-NonInteractive", "-Command"]);
+  assert.equal(query.args.at(-1), "try { [IO.DriveInfo]::new('E:').DriveFormat } catch { (Get-CimInstance Win32_LogicalDisk -Filter 'DeviceID=''E:''').FileSystem }");
+  assert.equal(query.timeout, 10000);
+  assert.doesNotMatch(filesystemQuery("C:'); Remove-Item x #").args.at(-1), /Remove-Item/, "only the letter goes in");
+  for (const folder of ["\\\\server\\share\\app", "code/app", "", null]) assert.equal(filesystemQuery(folder), null, String(folder));
+  const { setup, calls } = fake({ answers: { ...ready, "git rev-parse": { stdout: "E:/code/app" } } });
+  const unknown = await setup.status("E:/code/app");
+  assert.deepEqual([unknown.project.filesystem, unknown.project.weakDrive], [null, false], "a drive that does not answer is unknown, not weak");
+  assert.equal(calls.find((call) => call.key === volume("E"))?.timeout, 10000);
+  assert.ok(!calls.some((call) => call.key.startsWith("fsutil")), "fsutil never runs");
+  const mac = fake({ platform: "darwin", answers: { ...ready, "git rev-parse": { stdout: "/code/app" } } });
+  await mac.setup.status("/code/app");
+  assert.ok(!mac.calls.some((call) => call.key.startsWith("powershell.exe")), "no drive query off Windows");
+});
+
+test("the drive query names this PC's system drive without elevation", { skip: process.platform !== "win32" && "Windows only" }, async () => {
+  const query = filesystemQuery(process.env.SystemDrive || "C:");
+  const stdout = await new Promise((resolve) => {
+    spawnFile(query.command, query.args, { windowsHide: true, timeout: query.timeout }, (error, out, err) => resolve(error ? `${error.message}\n${err}` : out));
+  });
+  assert.notEqual(filesystemOf(stdout), null, `the query answered: ${stdout}`);
+});
+
 test("a ready PC with a synced project on NTFS has nothing to do, and no token leaves", async () => {
   const { setup } = fake({
-    answers: { ...ready, "git rev-parse": { stdout: "C:/code/app" }, "git remote get-url": { stdout: "https://github.com/me/app.git" }, "fsutil fsinfo volumeinfo C:\\": { stdout: "File System Name : NTFS" } },
+    answers: { ...ready, "git rev-parse": { stdout: "C:/code/app" }, "git remote get-url": { stdout: "https://github.com/me/app.git" }, [volume("C")]: { stdout: "NTFS\r\n" } },
     files: ["package.json", "node_modules"],
     settings: '{"hooks":{"SessionStart":[{"hooks":[{"command":"node scripts/sync.mjs --hook"}]}]}}',
   });
@@ -73,7 +107,7 @@ test("a ready PC with a synced project on NTFS has nothing to do, and no token l
 
 test("a new PC gets its steps in order, and an exFAT project is told why to move", async () => {
   const { setup } = fake({
-    answers: { "git --version": ready["git --version"], "gh --version": ready["gh --version"], "gh auth status": { fail: true, stderr: "You are not logged into any GitHub hosts." }, "git rev-parse": { stdout: "E:/code/app" }, "git remote get-url": { stdout: "E:/mirror" }, "fsutil fsinfo volumeinfo E:\\": { stdout: "File System Name : exFAT" } },
+    answers: { "git --version": ready["git --version"], "gh --version": ready["gh --version"], "gh auth status": { fail: true, stderr: "You are not logged into any GitHub hosts." }, "git rev-parse": { stdout: "E:/code/app" }, "git remote get-url": { stdout: "E:/mirror" }, [volume("E")]: { stdout: "exFAT\r\n" } },
     files: ["package.json"],
   });
   const status = await setup.status("E:/code/app");
@@ -113,7 +147,7 @@ test("a clone takes a listed repository into a picked NTFS folder, and nothing e
     { nameWithOwner: "me/app", isPrivate: true, description: "My app", updatedAt: "2026-09-27T00:00:00Z" },
     { nameWithOwner: "me/site; calc.exe", isPrivate: false },
   ]);
-  const { setup, calls } = fake({ answers: { "gh repo list": { stdout: listing }, "fsutil fsinfo volumeinfo C:\\": { stdout: "File System Name : NTFS" }, "fsutil fsinfo volumeinfo E:\\": { stdout: "File System Name : exFAT" }, "gh repo clone me/app": { stdout: "" } }, files: ["C:\\code\\taken"] });
+  const { setup, calls } = fake({ answers: { "gh repo list": { stdout: listing }, [volume("C")]: { stdout: "NTFS\r\n" }, [volume("E")]: { stdout: "exFAT\r\n" }, "gh repo clone me/app": { stdout: "" } }, files: ["C:\\code\\taken"] });
   assert.match((await setup.clone("me/app", "C:\\code")).error, /Choose a repository from your list/, "nothing is listed yet");
   const listed = await setup.repos();
   assert.deepEqual(listed.repos.map((row) => row.repo), ["me/app"], "an odd name never reaches the list");

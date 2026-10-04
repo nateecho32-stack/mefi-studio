@@ -113,6 +113,25 @@ invokes, 29 channels listened to, live pushes and an accepted toast. Electron
 44.4.1 safeStorage round trip verified both ways on synthetic data in a scratch
 app folder. No change to what the Electron build does.
 
+## 2026-10-03 Weak-drive check without administrator rights
+
+`fsutil fsinfo volumeinfo C:\` refuses a normal user on the owner's PC
+("Error 3", and "Error 5: Access is denied" for `C:`), so the Publish
+dialog's weak-drive warning and Set up this PC's exFAT/FAT checks could never
+show. Both now ask PowerShell for `[IO.DriveInfo]::new('C:').DriveFormat`,
+falling back to CIM `Win32_LogicalDisk` under constrained language mode, with
+the 10 s timeout kept. Timed from Node's execFile (4 runs each): DriveInfo
+194-315 ms, CIM 369-784 ms, Get-Volume 1139-1667 ms; the CIM fallback under
+constrained language 327-362 ms; a missing drive prints nothing (unknown).
+
+`npm run check`, `npm run lint` (no new warnings) and `npm run audit` pass.
+`tests/pc_setup.test.mjs` 8/8, including a live query of the system drive
+without elevation; `tests/git_actions.test.mjs` plus `tests/git_host.test.mjs`
+118/118; `npm run test:fast` 6745 pass, 0 fail, 14 skipped (365 s). Not run
+against a real exFAT drive (none on this PC). The Rust port on
+`wip/rust-host` (`drive_of`, `rules::filesystem_of`, parity cases) still
+runs fsutil and must follow.
+
 ## 2026-10-03 Paired restart boundary review follow-up
 
 All three Windows push/PR and Linux PR checks pass at first milestone commit
@@ -251,10 +270,6 @@ One ordered inventory covers current 76 scripts and 28 stylesheets. Preserved ol
 **Results:** 97 focused Tasks/group tests pass, including six asynchronous open regressions. Native baseline reproduces a same-ID cross-project gather/announcement; native candidate passes six cases. Broader overview/delegation/plan/retention fixture passes on repeat. Build, check and audit pass. Full aggregate pending coordinated window.
 
 **Limits:** Provider-free synthetic bridges, no production actions. Initial native sandbox launch failure and an earlier native retention-focus failure preserved in external evidence; no assertions weakened. No push, merge or release.
-
-## 2026-10-02 - Tasks overview card retention focused qualification
-
-Isolated local/task-card-retention-20261002 candidate, derived from the aggregate-verified Fleet recovery source. Tasks UI and task overview grouping: 90 passed, 0 failed, including unchanged DOM identity, insertion/removal/reorder, grouping changes, focus/expansion, canonical actions, drafts, hidden reopen, stale reads and project isolation. Paired Electron benchmarks and aggregate gate are pending; no performance improvement is claimed yet.
 
 ## Read Before Any Tests
 

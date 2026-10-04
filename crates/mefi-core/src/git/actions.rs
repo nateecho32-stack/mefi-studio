@@ -1344,11 +1344,11 @@ impl<'a> Ctx<'a> {
 
     /// Which file system a folder's drive has, and whether it can keep Git (exFAT and FAT cannot).
     fn drive_of(&self, root: &str) -> (Option<String>, bool) {
-        if !cfg!(windows) || !js_regex!(r"^[A-Za-z]:", "").is_match(root) {
+        let Some((command, args, timeout)) = (if cfg!(windows) { rules::filesystem_query(root) } else { None }) else {
             return (None, false);
-        }
-        let drive = format!("{}\\", js::slice(root, 0, Some(2)));
-        let answer = self.run("fsutil", &["fsinfo", "volumeinfo", &drive], None, 10000, false, None, 4 * MIB);
+        };
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        let answer = self.run(&command, &args, None, timeout, false, None, 4 * MIB);
         let filesystem = rules::filesystem_of(&answer.stdout);
         let weak = filesystem.as_deref().is_some_and(|name| ["EXFAT", "FAT", "FAT32"].contains(&name.to_uppercase().as_str()));
         (filesystem, weak)
