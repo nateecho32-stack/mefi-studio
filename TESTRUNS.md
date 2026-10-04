@@ -39,6 +39,40 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-04 Rust stage 1 finished: the host's last Electron gaps, the portable host build and the updater bridge
+
+Branch `wip/rust-host` (main merged at 1178ac7), gated in a short-path
+worktree (`C:\wt\rust-gate`, node_modules junctioned). New on the Rust host:
+the Media browser as a child webview, evidence shots in a hidden in-private
+window, dropped files' paths, the Electron build's page localStorage carried
+over once, Zen's desktop audio from WASAPI loopback, did-fail-load,
+trashItem, the page's WebView2 profile under userData; `npm run
+package:host` builds the portable host layout and `release-updater.mjs` can
+install and roll back either kind of build.
+
+Full `npm test` at 087fa29: Node 6788 tests, 6774 pass, 0 fail, 14 skipped;
+Electron lane 74: 71 pass, 1 skipped, 2 fail (`layout_contract_render`
+viewport 1921x1081 and `shell_render`), and both fail identically on a clean
+origin/main worktree (1178ac7) on this PC, so they are this display's state;
+Python 248 OK (1 skipped); path lock ok. After the last commits (ca10561):
+`npm run check` ok (265 targets), `npm run test:fast` 6788 tests, 0 fail, 14
+skipped, `npm run audit` 0 findings, lint 0 errors. `tests/rust_host_bridge`
+8/8 (new: Media browser through the shim, drop, localStorage hand-over,
+loopback stream), `rust_modules` 5/5 (new: evidence factory),
+`package_host` and `update_host_bridge` (new) with the updater suites 48/48,
+`rust_parity_git` 2/2 with the PowerShell drive check, host unit tests 15/15.
+
+Live, debug host and then the packaged release build run as an installed copy
+(no MEFI_STUDIO_ROOT: found resources/app, ran its own node.exe), each with
+`MEFI_HOST_SELFTEST_WEB` against a local page and a scratch userData seeded by
+Electron 44: Media browser titles A/B, back/forward, mute, refused mailto:,
+close; evidence PNG 1280x800 with no third-party request leaving (the beacon
+server saw none from the shot's page); localStorage keys carried (Latin-1 and
+UTF-16); a real file dropped through the DevTools protocol got its path; a
+clicked getDisplayMedia gave 1 audio track, 0 video, no picker, and peak
+0.029 back while the page played a 440 Hz tone at gain 0.03. Release host
+build 4 min (2 jobs), portable folder 123 MB.
+
 ## 2026-10-03 Rust stage 2: the Git chip's actions move into Rust
 
 Branch `wip/rust-host`, after d428f9d. `scripts/git-actions.cjs` (glance,
@@ -262,14 +296,6 @@ One ordered inventory covers current 76 scripts and 28 stylesheets. Preserved ol
 **Results:** 113 focused Tasks/group tests pass, including 16 new gather regressions. Host pool suite exercised unchanged cancellation and queue contracts; exact results in external evidence. Native baseline/candidate cases prepared but not launched while the game owns the window. Full aggregate queued.
 
 **Limits:** Unit bridges only, no production writes or provider calls. Original verified candidates and focus-failure evidence preserved. No publication.
-
-## 2026-10-02 — Pending task-open project and view fences
-
-**Scope:** Isolated candidate derived byte-for-byte from the verified task-card retention source; original preserved.
-
-**Results:** 97 focused Tasks/group tests pass, including six asynchronous open regressions. Native baseline reproduces a same-ID cross-project gather/announcement; native candidate passes six cases. Broader overview/delegation/plan/retention fixture passes on repeat. Build, check and audit pass. Full aggregate pending coordinated window.
-
-**Limits:** Provider-free synthetic bridges, no production actions. Initial native sandbox launch failure and an earlier native retention-focus failure preserved in external evidence; no assertions weakened. No push, merge or release.
 
 ## Read Before Any Tests
 
