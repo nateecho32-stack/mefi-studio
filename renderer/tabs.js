@@ -797,7 +797,8 @@
   }
   function paintItem(entry, rec, info, n, total, ctx) {
     const active = rec.id === S.active;
-    const count = rec.home ? needCount() : 0;
+    // Home and the Inbox say how many wait on you: the Inbox's own count, one number everywhere.
+    const count = rec.home || rec.route?.id === "inbox" ? needCount() : 0;
     const attn = !active && (rec.badge === true || (isSession(rec.route) && S.needs.has(rec.route.params.taskId)));
     const hint = n < 8 ? ` · Ctrl ${n + 1}` : n === total - 1 ? " · Ctrl 9" : "";
     const label = `${info.title}${rec.pin && !rec.home ? ", pinned" : ""}${rec.prev ? ", preview" : ""}${attn ? ", needs you" : ""}`;

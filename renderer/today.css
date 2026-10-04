@@ -177,14 +177,19 @@
 
 /* ---- one thing that waits on you: the popover's row and the page's card ----------------------------------------- */
 .today-need { display: grid; grid-template-columns: minmax(0, 1fr); gap: 7px; min-width: 0; padding: 11px 12px; border: 1px solid var(--t-edge); border-radius: 12px; background: var(--t-well); }
-.today-need.is-current { border-color: var(--t-edge-hi); box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold) 18%, transparent); }
+.today-need.is-current { border-color: color-mix(in srgb, var(--gold) 70%, transparent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold) 18%, transparent); }
 .today-need.is-later { opacity: .72; }
 .today-need.is-busy { opacity: .75; }
 .today-need-kind { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; color: var(--t-soft); font-size: var(--t-f12); font-weight: 650; }
 .today-need[data-tone="warn"] .today-need-label { color: var(--t-warn); }
 .today-need[data-tone="bad"] .today-need-label { color: var(--t-bad); }
 .today-need[data-tone="info"] .today-need-label { color: var(--t-info); }
-.today-need-from { min-width: 0; overflow-wrap: anywhere; color: var(--t-soft); font-weight: 500; }
+/* The prototype's card: the kind's own mark in its tone, then the task it comes from (or how a result's checks went) under the question. */
+.today-need-glyph { flex: none; width: 13px; height: 13px; color: var(--t-soft); }
+.today-need[data-tone="warn"] .today-need-glyph { color: var(--t-warn); }
+.today-need[data-tone="bad"] .today-need-glyph { color: var(--t-bad); }
+.today-need[data-tone="info"] .today-need-glyph { color: var(--t-info); }
+.today-need-from { margin: -3px 0 0; min-width: 0; overflow-wrap: anywhere; color: var(--t-soft); font-size: var(--t-f13); line-height: 1.4; }
 .today-need-time { margin-left: auto; color: var(--t-faint); font-weight: 500; }
 .today-need-title { margin: 0; color: var(--t-ink); font: 600 var(--t-f14)/1.4 var(--font-ui); overflow-wrap: anywhere; }
 .today-need-detail, .today-need-hint { margin: 0; color: var(--t-soft); font-size: var(--t-f13); line-height: 1.5; overflow-wrap: anywhere; }
@@ -195,6 +200,11 @@
 .today-option { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; max-width: 100%; min-height: 32px; padding: 5px 11px; border: 1px solid var(--t-edge); border-radius: 10px; background: color-mix(in srgb, var(--ivory) 6%, transparent); color: var(--t-ink); font: 550 var(--t-f13)/1.3 var(--font-ui); text-align: left; cursor: pointer; }
 .today-option:hover:not(:disabled) { border-color: var(--t-edge-hi); background: color-mix(in srgb, var(--ivory) 10%, transparent); }
 .today-option.is-recommended { border-color: color-mix(in srgb, var(--gold) 45%, transparent); background: color-mix(in srgb, var(--gold) 10%, transparent); }
+/* The first option is the filled one, as the prototype draws it (the recommended one comes first); its key and its mark take its ink. */
+.today-option.is-first { border-color: transparent; background: linear-gradient(135deg, var(--gold-bright), var(--gold)); color: var(--ink); }
+.today-option.is-first:hover:not(:disabled) { border-color: transparent; background: linear-gradient(135deg, var(--gold-bright), var(--gold)); filter: brightness(1.06); }
+.today-option.is-first .today-key { border-color: color-mix(in srgb, currentColor 45%, transparent); background: transparent; color: inherit; }
+.today-option.is-first .today-rec { background: color-mix(in srgb, currentColor 14%, transparent); color: inherit; }
 .today-option:disabled { opacity: .55; cursor: progress; }
 .today-option-label { min-width: 0; overflow-wrap: anywhere; }
 .today-rec { flex: none; padding: 1px 7px; border-radius: 999px; background: color-mix(in srgb, var(--gold) 20%, transparent); color: var(--gold-bright); font-size: var(--t-f12); font-weight: 650; }
@@ -234,8 +244,12 @@
 /* ---- pages: Today in Build, and the Inbox kept open ------------------------------------------------------------- */
 .today-sheet, .inbox-sheet { display: flex; flex-direction: column; }
 .today-page-body, .inbox-body { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: var(--t-gap); flex: 1 1 auto; min-height: 0; padding: var(--s3, 12px) var(--s5, 20px) var(--s5, 20px); overflow-x: hidden; overflow-y: auto; }
-.inbox-lead { margin: 0; color: var(--t-soft); font-size: var(--t-f14); line-height: 1.5; }
-.inbox-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 10px; align-items: start; min-width: 0; }
+/* Work › Inbox as the prototype lays it out: one column of the page's width, centred, the cards two abreast at 1920 px. */
+.inbox-body { grid-template-columns: minmax(0, 1020px); justify-content: center; }
+.inbox-lead { margin: 0; max-width: 70ch; color: var(--t-soft); font-size: var(--t-f14); line-height: 1.5; }
+/* How many wait is said for a screen reader; the tab, the pill and the status bar show the number. */
+.inbox-count { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.inbox-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 10px; align-items: start; min-width: 0; }
 .inbox-list[hidden] { display: none; }
 .inbox-list .today-need { background: var(--surface-raised, var(--t-card)); }
 .inbox-decided-wrap { min-width: 0; }

@@ -224,7 +224,7 @@ settings and per-model work-kind summaries for the shared controls.
 | **Menu** (the rail) | New task and Search sit above **Home**, **Work**, **Agents** and **Friends**, with one local row for the current group's views. Friends and its Rooms, Your PCs and Playground links open the existing companion menu at the matching card; Search finds them too. Recent tasks belong to the current project; Settings and Help stay at the foot. Help contains Start here, Shortcuts and Community. The project selector at the top opens the project panel. The registry in `renderer/nav.js` preserves existing shortcuts and destination IDs. |
 | **Layout contract** | The room the shell keeps for a session list, an inspector, a tab strip and a status bar that are not built yet: four `--shell-*` sizes (all 0), four derived edges the pages read, `html[data-layout="v2"]` to turn them on, one setter (`MefiNav.layout.set`) and one free-area rectangle (`MefiNav.usable()`). See `docs/unified-studio.md`. |
 | **Today** | Vibe's Home in the 0.5 layout (`html[data-layout="v2"]`, `renderer/today.js`): the greeting and the box that builds or talks, then one line per session in four groups, **Needs you**, **Running**, **Review** and **Done today**. In Build the same board is a page, reached from its pinned tab. See Getting around. |
-| **Inbox** | Everything that waits on the owner in one list (`MefiToday.openInbox`): open questions and permissions, approvals, finished work to check and tasks that stopped. "N need you" is the digest the app already keeps (`assistantState.needsYou`, the list the taskbar count is read from), never a second counter. It opens as a popover under the top bar's pill (Ctrl J) or stays open as a page. See Getting around. |
+| **Inbox** | Everything that waits on the owner in one list (`MefiToday.openInbox`): open questions and permissions, approvals, finished work to check and tasks that stopped. "N need you" is the digest the app already keeps (`assistantState.needsYou`, the list the taskbar count is read from), never a second counter: the pill, the status bar, Home's chip, the tabs and the session list's Needs you all read it. It opens as a popover under the top bar's pill (Ctrl J) or stays open as a page, **Work › Inbox**. See Getting around. |
 | **Frame (layout v2)** | What `renderer/shell.js` (`window.MefiShell`) draws in the contract's room when the 0.5 layout is on: a top bar (list toggle, Vibe and Build switch, where you are, Search, "N need you", "N working", inspector toggle), the list and inspector columns with splitters and, in a small window, drawers, the tab strip's row, `main` for other modules' pages, and a status bar with the Layout menu. Vibe and Build each keep their own widths. Turned on in Settings ("Try the 0.5 layout"), in Search ("Switch layout"), by `?layout=v2` or by `MEFI_STUDIO_LAYOUT=v2`. See `docs/unified-studio.md`. |
 | **Tab strip** (layout v2) | The row of tabs in the shell's tab region: Home pinned at the left, the pages and sessions you add, pins that stay, one italic preview tab, and Studio closing what you finished with (Undo, Recently closed, Ctrl+Shift+T). A tab is a remembered place, not a live page. Switches in Configuration › UI & Surfaces › Tab behaviour; see "Tabs you add and pin". |
 | **Worktree** | Another folder holding the same project on its own branch, so two pieces of work never share files. Task runs make one each (`.mefi/worktrees/<runId>` on `mefi/<runId>`) while "Give each run its own worktree" is on; **Work › Worktrees** lists them all and merges or removes them. |
@@ -421,9 +421,14 @@ settings and per-model work-kind summaries for the shared controls.
   question answers on its line with its first two options. The live node tree
   stays behind it. In Build the same board is the **Today** page (registry
   route `today`, hidden in Vibe where it is the front door).
-  The **Inbox** lists each thing with what it is, which task it comes from and
-  how long it has waited, the options the app offers (a permission is a
-  question; the safe answer is first), a free answer and **Decide later**
+  The **Inbox** lists each thing as the 0.5 prototype draws it: what it is,
+  with its own mark, and who asked (the worker on the task now, else the one
+  that ran it last), how long it has waited, the question, then the task it
+  comes from (a result says how its recorded checks went, "2 of 3 checks
+  passed"); the options the app offers (a permission is a question; the safe
+  answer is first, and the first option is the filled one); a result offers
+  **Approve and finish**, **Review changes** (its session on the Changes tab,
+  nothing sent) and **Send it back**; then a free answer and **Decide later**
   (this session only: it goes last and still counts). Every action calls what
   the rest of the app calls (`assistant:answer`, `backlog:control`,
   `tasks:action`), is refused while in flight and after it landed, and leaves a
@@ -432,8 +437,18 @@ settings and per-model work-kind summaries for the shared controls.
   footer). The popover is anchored to the pill (`openInbox(anchor)`; upward from
   a bar at the foot), holds the keyboard while it is open (J and K, digits,
   Enter, Esc; Studio's and Vibe's one-key shortcuts stay out of it) and is also
-  a page (route `inbox`). `MefiToday.count()` and `onChange()` are what the
-  pill reads. A click on a Windows notification lands on the task, or on the
+  **Work › Inbox**, a page of Work's own (route `inbox`, in Work's page list and
+  breadcrumb; its tab carries the count), the cards two abreast in the page's
+  own width. It is the one list of what waits on you: `MefiToday.count()` and
+  `onChange()` are what the top bar's pill, the status bar, Home's own "N need
+  you" (which opens it) and the Home and Inbox tabs read, and
+  `MefiToday.needTasks()` is what the session list files under **Needs you**
+  (`MefiBuilder.reading`), with the tasks whose questions are open: exactly
+  the sessions the Inbox holds for a decision (a result to review stays under
+  Review). A task the reading calls blocked
+  that the Inbox does not hold (a failed check that retries by itself, a step
+  whose go-ahead is asked once for its whole request) waits with the queue.
+  A click on a Windows notification lands on the task, or on the
   Inbox when several were told (`alerts:open` carries `count`, `alerts.js` asks
   `MefiToday.openFromAlert`). Nothing is stored.
 - Vibe can run on its own. When something holds every agent back, a banner

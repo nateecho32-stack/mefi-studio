@@ -643,8 +643,8 @@ app.whenReady().then(async () => {
   await until(`document.querySelector(${JSON.stringify(`${popCard("blocked:t_stuck")} .today-need-options`)})`, "and it is back as a card that waits on you");
   // The result to check.
   await run("window.todayFixture.clear();");
-  assert.equal(await press(`${popCard("review:t_review")} .today-need-options button`, "Confirm done"), true);
-  await until("window.todayFixture.calls().some((call) => call.name === 'tasksAction')", "Confirm done reaches the host");
+  assert.equal(await press(`${popCard("review:t_review")} .today-need-options button`, "Approve and finish"), true);
+  await until("window.todayFixture.calls().some((call) => call.name === 'tasksAction')", "Approve and finish reaches the host");
   assert.deepEqual(await calls("tasksAction"), [{ taskId: "t_review", projectId: "today-project", action: "status", status: "done" }]);
   // What Mefi decided for you, with its Undo.
   assert.match(await text("#today-inbox .today-inbox-foot"), /^Mefi decided · Merged a duplicate cardUndoAll 1$/);

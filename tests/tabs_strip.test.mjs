@@ -4,7 +4,7 @@
 // geometry and real input are tests/tabs_render.test.mjs's (Electron).
 import test from "node:test";
 import assert from "node:assert/strict";
-import { tabsEnv, task } from "./fixtures/tabs-env.mjs";
+import { REGISTRY, tabsEnv, task } from "./fixtures/tabs-env.mjs";
 
 const plain = (value) => JSON.parse(JSON.stringify(value));
 const session = (t, id, options = {}) => t.tabs.open("workspace", { view: "task", taskId: id, projectId: "p1" }, { preview: false, ...options });
@@ -136,6 +136,21 @@ test("Home is the first tab: pinned, without a close button, counted by the Toda
   t.window.MefiToday.count = () => 0;
   t.tabs.flush();
   assert.equal(t.items()[0].querySelector(".ts-count").hidden, true, "it goes away with the need");
+});
+
+test("the Inbox's tab carries the Inbox's count, the same number as Home's: one list, one number", async () => {
+  const inbox = { id: "inbox", label: "Inbox", short: "Inbox", kind: "overlay", layer: "sheet", section: "work", glyph: "g-bell", showIn: { palette: true } };
+  const t = await tabsEnv({ registry: [...REGISTRY, inbox] });
+  t.window.MefiToday = { count: () => 2, onChange: () => () => {} };
+  page(t, "inbox"); page(t, "fleet");
+  t.tabs.flush();
+  const chip = t.itemOf("Inbox").querySelector(".ts-count");
+  assert.deepEqual([chip.hidden, chip.textContent, chip.title], [false, "2", "2 need you"]);
+  assert.equal(t.items()[0].querySelector(".ts-count").textContent, "2", "Home says the same");
+  assert.equal(t.itemOf("Fleet").querySelector(".ts-count").hidden, true, "no other page counts");
+  t.window.MefiToday.count = () => 0;
+  t.tabs.flush();
+  assert.equal(t.itemOf("Inbox").querySelector(".ts-count").hidden, true, "it goes with the need");
 });
 
 test("what a tab says: its words, its glyph, pinned ones short, the preview in a way a screen reader can tell", async () => {

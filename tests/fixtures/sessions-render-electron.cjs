@@ -114,14 +114,24 @@ function bridge(seedData) {
     { path: "src/export/names.ts", dir: "src/export/", name: "names.ts", oldPath: null, status: "added", additions: 52, deletions: 0, binary: false, kind: "file", state: data.changes.reverted ? "reverted" : "can-revert" },
     { path: "tests/export.test.ts", dir: "tests/", name: "export.test.ts", oldPath: null, status: "added", additions: 33, deletions: 14, binary: false, kind: "file", state: data.changes.reverted ? "reverted" : "can-revert" },
   ];
+  // What the host's own list of what waits on you says (scripts/companion.cjs queue(), assistantState.needsYou, the list the taskbar
+  // count is read from): every open question, and the task whose check failed, parked until someone decides. The backlog lists that
+  // task as blocked with its reason, as the scheduler does.
+  const failedOpen = () => data.tasks.find((row) => row.id === "task_failed" && row.status === "open" && row.verification?.state === "failed") ?? null;
+  const digest = () => {
+    const items = data.questions.filter((question) => question.status === "open").map((question) => ({ id: question.id, kind: "question", taskId: question.context?.taskId ?? null, title: question.title, at: question.at, actions: (question.options || []).map((option) => ({ id: option.id, label: option.label })) }));
+    const failed = failedOpen();
+    if (failed) items.push({ id: "parked:task_failed", kind: "parked", taskId: failed.id, title: failed.title, at: failed.updatedAt });
+    return { items, counts: { total: items.length } };
+  };
   const handlers = {
     projectsList: () => ({ ok: true, activeId: pid, projects: [{ id: pid, name: "Notes app", path: data.root }] }),
     tasksList: () => ({ ok: true, projectId: pid, tasks: data.tasks }),
     ideasList: () => ({ ok: true, ideas: data.ideas }),
     planningList: () => ({ ok: true, projectId: pid, plans: [] }),
-    assistantState: () => ({ ok: true, state: { projectId: pid, status: "running", agents: [], messages: data.messages, prefs: { proactive: true, parallel: 8, aiParallel: 4, memoryAlign: true, loopGuard: true, loopGuardApply: true, compactHistory: true, keepAwake: true, background: true }, work: [], questions: data.questions } }),
+    assistantState: () => ({ ok: true, state: { projectId: pid, status: "running", agents: [], messages: data.messages, prefs: { proactive: true, parallel: 8, aiParallel: 4, memoryAlign: true, loopGuard: true, loopGuardApply: true, compactHistory: true, keepAwake: true, background: true }, work: [], questions: data.questions, needsYou: digest() } }),
     assistantStatus: () => ({ ok: true, status: { projectId: pid, enabled: true, execute: true, autoBuild: true, minutes: 5, parallel: 3, adaptiveParallel: true, mode: "swarm", running: data.running, history: [] } }),
-    backlogStatus: () => ({ ok: true, projectId: pid, paused: false, draining: false, counts: {}, taskStates: [], next: [] }),
+    backlogStatus: () => { const failed = failedOpen(); return { ok: true, projectId: pid, paused: false, draining: false, counts: {}, taskStates: failed ? [{ id: failed.id, stage: "blocked" }] : [], next: [], approval: [], blocked: failed ? [{ id: failed.id, kind: "task", title: failed.title, blockedBy: null, reason: failed.verification.reason, canRetry: true }] : [] }; },
     tasksAttempts: ({ taskId }) => {
       const attempts = {
         task_ask: [{ runId: "run_ask_1", startedAt: t - 46 * 60000, via: "OpenCode", fallbacks: [], finishedAt: null, ok: null, stopped: false, limitMinutes: 25, seconds: null, result: "", tail: [], release: null, outcome: "unrecorded" }],
@@ -450,7 +460,7 @@ app.whenReady().then(async () => {
     const wide = await run(statusBar);
     report.statusBar = wide;
     assert.deepEqual(wide.items.map((one) => one.key), ["layout", "working", "waiting", "player", "machine", "cost", "permission"], `the prototype's order: ${JSON.stringify(wide.items)}`);
-    assert.deepEqual(wide.items.map((one) => one.text), ["Layout", "3 working", "1 waiting on you", "Deep Focus, hour two", "CPU 34% · Mem 61%", "$1.92 today", "Auto"]);
+    assert.deepEqual(wide.items.map((one) => one.text), ["Layout", "3 working", "2 waiting on you", "Deep Focus, hour two", "CPU 34% · Mem 61%", "$1.92 today", "Auto"]);
     assert.equal(await run("return document.querySelectorAll('#shell-status .shell-meter-button').length;"), 2, "the plan's two windows");
     assert.ok(wide.items.every((one) => one.top >= wide.bar[1] && one.bottom <= wide.bar[3]), `every item sits inside the bar: ${JSON.stringify(wide)}`);
     assert.deepEqual([wide.overlaps, wide.overflow], [[], false], "nothing overlaps and nothing is cut off");
@@ -503,6 +513,61 @@ app.whenReady().then(async () => {
     await press("Escape");
     await until("document.getElementById('palette-overlay').hidden", "Escape closes Search");
     step("Search at 1920x1080 and 600 px");
+    // One Inbox: the pill, the status bar, Home's own chip, the session list's Needs you and the popover all say the same two.
+    await until("document.querySelector('#shell-need .shell-pill-n')?.textContent === '2'", "the pill counts the Inbox's two");
+    const counts = await run(`return { pill: document.querySelector('#shell-need').textContent.trim(), bar: document.querySelector('#shell-status [data-item=waiting]').textContent.trim(), home: document.getElementById('workspace-attention-shortcut')?.textContent.trim() ?? null,
+      needs: document.querySelector('#sessions-list .sx-gh[data-key="group:needs"] .sx-count')?.textContent ?? null, rows: [...document.querySelectorAll('#sessions-list .sx-row')].slice(0, 2).map((node) => node.dataset.key), today: window.MefiToday.count() };`);
+    report.oneList = counts;
+    assert.deepEqual(counts, { pill: "2 need you", bar: "2 waiting on you", home: "2 need you", needs: "2", rows: ["task_ask", "task_failed"], today: 2 }, `one list, one number: ${JSON.stringify(counts)}`);
+    // The popover, under the pill: the prototype's cards.
+    await click("#shell-need");
+    await until("!document.getElementById('today-inbox').hidden && document.querySelectorAll('#today-inbox .today-need').length === 2", "the pill opens the Inbox with its two");
+    await sleep(400);
+    const inbox = `const pop = document.getElementById('today-inbox').getBoundingClientRect(); const pill = document.getElementById('shell-need').getBoundingClientRect();
+      const cards = [...document.querySelectorAll('#today-inbox .today-need')].map((card) => ({ key: card.dataset.key, kind: card.querySelector('.today-need-label')?.textContent, from: card.querySelector('.today-need-from')?.textContent ?? '', title: card.querySelector('.today-need-title')?.textContent, glyph: Boolean(card.querySelector('.today-need-kind svg')),
+        buttons: [...card.querySelectorAll('.today-need-options button')].map((node) => node.textContent.trim()), first: card.querySelector('.today-option.is-first')?.textContent.trim() ?? null, wide: card.scrollWidth > card.clientWidth + 1 }));
+      return { pop: [Math.round(pop.left), Math.round(pop.top), Math.round(pop.right), Math.round(pop.bottom), Math.round(pop.width)], pill: [Math.round(pill.left), Math.round(pill.bottom), Math.round(pill.right)], inner: [innerWidth, innerHeight], cards, head: document.querySelector('#today-inbox .today-inbox-head')?.textContent.replace(/\\s+/g, ' ').trim() };`;
+    const pop = await run(inbox);
+    report.inbox = pop;
+    assert.deepEqual(pop.cards.map((card) => [card.key, card.kind, card.from, card.glyph]), [["question:q_1", "Question · OpenCode", "Add an empty state to the notes list", true], ["blocked:task_failed", "Checks failed · Codex", "", true]], `what each is and who asked, the task it comes from: ${JSON.stringify(pop.cards)}`);
+    assert.deepEqual(pop.cards[0].buttons, ["1Yes, reuse itRecommended", "2Only when there are no notes"], "the app's own options, the recommended first");
+    assert.equal(pop.cards[0].first, "1Yes, reuse itRecommended", "the first is the filled one");
+    assert.deepEqual(pop.cards[1].buttons, ["Try again", "It's done", "Drop it"]);
+    assert.ok(pop.pop[1] >= pop.pill[1] && pop.pop[2] <= pop.inner[0] && pop.pop[3] <= pop.inner[1], `under the pill, inside the window: ${JSON.stringify(pop)}`);
+    assert.equal(pop.pop[4], 452, "the prototype's width");
+    assert.ok(pop.cards.every((card) => !card.wide), "nothing in a card is cut off");
+    await capture("chrome-inbox-popover-1920.png");
+    await readable("#today-inbox", "the Inbox popover");
+    await press("Escape");
+    await until("document.getElementById('today-inbox').hidden", "Escape closes the popover");
+    // Work › Inbox: the page, in Work's pages, the tab counting the same two.
+    await run("window.MefiNav.go('inbox');");
+    await until("!document.getElementById('inbox-overlay').hidden && document.querySelectorAll('#inbox-list .today-need').length === 2", "Work › Inbox opens with its two");
+    await sleep(500);
+    const page = await run(`const list = document.getElementById('inbox-list'); const cards = [...list.querySelectorAll('.today-need')].map((card) => card.getBoundingClientRect());
+      return { trail: [...document.querySelectorAll('#shell-top .shell-trail .shell-crumb')].map((node) => node.textContent), pages: [...document.querySelectorAll('#shell-pages-list .shell-page')].map((node) => [node.dataset.page, node.getAttribute('aria-current')]),
+        tab: [...document.querySelectorAll('#shell-tabs .ts-item')].map((node) => [node.querySelector('.ts-title')?.textContent, node.querySelector('.ts-count')?.hidden === false ? node.querySelector('.ts-count').textContent : null]).find((row) => row[0] === 'Inbox') ?? null,
+        lead: document.getElementById('inbox-lead').firstChild?.textContent ?? '', count: document.querySelector('#inbox-lead .inbox-count')?.textContent ?? '',
+        columns: new Set(cards.map((box) => Math.round(box.left))).size, width: Math.round(list.getBoundingClientRect().width), rail: document.querySelector('#app-rail .app-rail-head[aria-current="page"]')?.dataset.section ?? null };`);
+    report.inboxPage = page;
+    assert.deepEqual(page.trail, ["Notes app", "Work", "Inbox"], "Work › Inbox, as the prototype's breadcrumb");
+    assert.ok(page.pages.some(([id, current]) => id === "inbox" && current === "page"), `a page of Work's own: ${JSON.stringify(page.pages)}`);
+    assert.deepEqual(page.tab, ["Inbox", "2"], "the tab counts the same two");
+    assert.equal(page.rail, "work", "the rail says Work");
+    assert.match(page.lead, /^Everything waiting on you in one place: .* Ctrl J opens the same list from anywhere\. $/);
+    assert.equal(page.count, "2 things wait on you.");
+    assert.equal(page.columns, 2, "two abreast at 1920 px, as the prototype");
+    assert.ok(page.width <= 1021, `the page's own width, centred: ${page.width}`);
+    await capture("chrome-inbox-page-1920.png");
+    await readable("#inbox-overlay", "Work › Inbox");
+    await size(600, 560, 1);
+    const thin = await run("const list = document.getElementById('inbox-list').getBoundingClientRect(); const cards = [...document.querySelectorAll('#inbox-list .today-need')]; return { right: list.right, inner: innerWidth, wide: cards.some((card) => card.scrollWidth > card.clientWidth + 1), columns: new Set(cards.map((card) => Math.round(card.getBoundingClientRect().left))).size };");
+    assert.ok(thin.right <= thin.inner + 1 && !thin.wide && thin.columns === 1, `600 px: one column, nothing cut off: ${JSON.stringify(thin)}`);
+    await size(1920, 1080, 1);
+    await run("window.MefiNav.close('inbox');");
+    await until("document.getElementById('inbox-overlay').hidden", "the page closes");
+    await run("window.MefiNav.go('workspace');");
+    step("one Inbox: the pill, the status bar, Home, the list and the tab say the same; the popover and Work › Inbox at 1920 and 600 px");
     await run("window.MefiMusic.status = window.__playerStatus; delete window.__playerStatus; window.dispatchEvent(new CustomEvent('mefi-music-change'));");
     await size(1440, 900, 1);
   }

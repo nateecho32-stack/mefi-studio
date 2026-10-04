@@ -27,7 +27,10 @@ test("the popover lists each thing with what it is, which task it is from and ho
   assert.equal(node.getAttribute("aria-label"), "Inbox");
   assert.equal(node.querySelector(".today-inbox-count").textContent, "4", "the popover's own count is the list's length");
   const [first] = node.querySelectorAll(".today-need");
-  assert.match(words(first), /^Questionfrom Search notes by tag4 minShould #Work and #work count as the same tag\?/, "kind, from which task, how long, what");
+  assert.match(words(first), /^Question4 minShould #Work and #work count as the same tag\?Search notes by tag/, "as the prototype: what it is, how long it has waited, what it asks, then the task it comes from");
+  assert.equal(first.querySelector(".today-need-from").textContent, "Search notes by tag", "the task, under the question");
+  assert.equal(first.querySelector(".today-need-kind .today-need-glyph")?.tagName, "svg", "the kind's own mark, not a dot");
+  assert.equal(first.querySelector(".today-dot"), null);
   assert.equal(first.querySelector("time").textContent, "4 min");
   assert.equal(first.getAttribute("aria-labelledby"), first.querySelector("h5").id, "each card is named by what it asks");
   assert.deepEqual(node.querySelectorAll(".today-need").map((card) => card.dataset.key), ["question:q1", "approval:t5", "blocked:t6", "review:t7"]);
@@ -35,6 +38,53 @@ test("the popover lists each thing with what it is, which task it is from and ho
   const before = node.querySelectorAll(".today-need");
   await t.push(board({ needs: [needQuestion(), needApproval(), needBlocked(), needReview()] }));
   assert.deepEqual(node.querySelectorAll(".today-need").map((card, index) => card === before[index]), [true, true, true, true], "a repaint that changes nothing rebuilds nothing");
+});
+
+test("a card says who asked (the worker on the task, else the one that ran it last) and how a result's checks went, from what the board holds", async () => {
+  const data = board({
+    needs: [needQuestion(), needReview()],
+    running: [{ taskId: "t1", title: "Search notes by tag", route: "OpenCode", phase: "building" }],
+    tasks: [{ id: "t7", title: "Rename the settings tab", status: "awaiting_verification", lastAttempt: { route: "Claude Code" }, verificationRun: { state: "running", results: [{ name: "typecheck", ok: true }, { name: "export", ok: true }, { name: "lint", ok: null }] } }],
+  });
+  const t = await loadToday({ data });
+  await open(t);
+  assert.equal(cardOf(t, "question:q1").querySelector(".today-need-label").textContent, "Question · OpenCode", "the worker on the task asked it");
+  const review = cardOf(t, "review:t7");
+  assert.equal(review.querySelector(".today-need-label").textContent, "Ready for review · Claude Code", "the one that ran it last");
+  assert.equal(review.querySelector(".today-need-from").textContent, "2 of 3 checks passed", "what its own check run recorded, nothing read for it");
+  assert.equal(review.querySelector(".today-need-glyph path").getAttribute("d"), "M3.25 8.4 6.4 11.5l6.35-7", "a result wears the tick");
+  // Nobody known, no checks recorded: the line is left out, never made up.
+  const bare = await loadToday({ data: board({ needs: [needReview()] }) });
+  await open(bare);
+  assert.equal(cardOf(bare, "review:t7").querySelector(".today-need-label").textContent, "Ready for review");
+  assert.equal(cardOf(bare, "review:t7").querySelector(".today-need-from"), null);
+});
+
+test("Review changes opens the result's session on its Changes tab and sends nothing; without the session panels it opens the task", async () => {
+  const sessions = [];
+  const panels = { active: () => true, open: (...args) => { sessions.push(plain(args)); return true; } };
+  const t = await loadToday({ data: board({ needs: [needReview()] }), extras: { MefiSessions: panels } });
+  await open(t);
+  await press(t, buttonNamed(cardOf(t, "review:t7"), "Review changes"));
+  assert.deepEqual(sessions, [["t7", { preview: true, tab: "changes" }]]);
+  assert.deepEqual(t.calls, [], "looking is not a decision: no host call");
+  assert.equal(inboxOf(t).hidden, true, "and the popover gets out of the way");
+  const u = await loadToday({ data: board({ needs: [needReview()] }) });
+  await open(u);
+  await press(u, buttonNamed(cardOf(u, "review:t7"), "Review changes"));
+  assert.deepEqual(u.nav.gone, [["tasks", { taskId: "t7", projectId: "p1", filter: "all" }]]);
+});
+
+test("needTasks is the sessions the Inbox holds for a decision other than a question: not a result to review, not one just decided, and nothing with the layout off", async () => {
+  const t = await loadToday({ data: board({ needs: [needQuestion(), needApproval(), needBlocked(), needFamily(), needReview()] }) });
+  await t.settle();
+  assert.deepEqual([...t.today.needTasks()].sort(), ["t10", "t5", "t6"], "the go-ahead, the stuck one and the request whose steps wait (once, for all its steps); a question's task the list reads from the questions themselves");
+  assert.equal(t.today.needTasks(), t.today.needTasks(), "kept while nothing moved: the session list asks once per row");
+  await open(t);
+  await press(t, buttonNamed(cardOf(t, "approval:t5"), "Approve build"));
+  assert.deepEqual([...t.today.needTasks()].sort(), ["t10", "t6"], "a decision taken here leaves it at once");
+  const off = await loadToday({ layout: "v1", data: board({ needs: [needQuestion()] }) });
+  assert.equal(off.today.needTasks(), null, "no Inbox, no list: the reading decides as before");
 });
 
 test("an answer is one host call with the question, the option and the project, then a Decided line; a second press does nothing", async () => {
@@ -220,9 +270,12 @@ test("a result to check is confirmed or sent back; one whose check is still runn
   await open(t);
   let card = cardOf(t, "review:t7");
   assert.match(words(card), /The checker could not start a browser\./, "the checker's word is shown");
-  assert.deepEqual(card.querySelectorAll(".today-need-options button").map((node) => node.textContent), ["Confirm done", "Send it back"]);
-  await press(t, buttonNamed(card, "Confirm done"));
+  assert.equal(card.querySelector(".today-need-label").textContent, "Ready for review", "the prototype's word for it");
+  assert.deepEqual(card.querySelectorAll(".today-need-options button").map((node) => node.textContent), ["Approve and finish", "Review changes", "Send it back"], "the prototype's two (the thread's own words), then Send it back");
+  assert.deepEqual(t.callsOf("tasksAction"), []);
+  await press(t, buttonNamed(card, "Approve and finish"));
   assert.deepEqual(t.callsOf("tasksAction"), [{ taskId: "t7", projectId: "p1", action: "status", status: "done" }]);
+  assert.match(words(cardOf(t, "review:t7")), /Decided · Approved and finished/);
   assert.ok(buttonNamed(cardOf(t, "review:t7"), "Undo"), "a confirmation can be reopened");
   const back = await loadToday({ data: board({ needs: [needReview()] }) });
   await open(back);
@@ -243,7 +296,9 @@ test("a permission is answered through the question's own options, recommended f
   await open(t);
   const card = cardOf(t, "question:q9");
   assert.equal(card.dataset.kind, "permission");
-  assert.match(words(card), /^Permissionfrom Fix the sidebar/);
+  assert.match(words(card), /^Permission.*builder-3 wants to write outside its taskFix the sidebar/, "what it is, what it asks, the task it comes from");
+  assert.equal(card.querySelector(".today-need-glyph path:nth-child(2)") !== null, true, "a permission wears the lock");
+  assert.deepEqual(card.querySelectorAll(".today-option").map((node) => node.classList.contains("is-first")), [true, false, false], "the first option, the recommended one here, is the filled one");
   assert.deepEqual(card.querySelectorAll("[data-option]").map((node) => node.dataset.option), ["deny", "grant", "hold"], "the safe answer first");
   await press(t, card.querySelector('[data-option="grant"]'));
   assert.deepEqual(t.callsOf("assistantAnswer"), [{ id: "q9", optionId: "grant", projectId: "p1" }]);
@@ -582,13 +637,14 @@ test("Open as a tab keeps the list open as a page, through the registry", async 
   assert.deepEqual(t.nav.claimed, ["inbox"]);
   const overlay = t.get("inbox-overlay");
   assert.equal(overlay.hidden, false);
-  assert.match(t.get("inbox-lead").textContent, /^1 thing waits on you\.$/);
+  assert.match(t.get("inbox-lead").textContent, /^Everything waiting on you in one place: questions, permissions, approvals, reviews and tasks that stopped\. Ctrl J opens the same list from anywhere\. /, "the prototype's words for the page");
+  assert.equal(t.get("inbox-lead").querySelector(".inbox-count").textContent, "1 thing waits on you.", "and how many, said for a screen reader");
   assert.equal(t.get("inbox-list").querySelectorAll(".today-need").length, 1);
   assert.equal(t.get("inbox-empty").hidden, true);
   // The same card, the same call, the same Decided line.
   await press(t, t.get("inbox-list").querySelector('[data-option="yes"]'));
   assert.deepEqual(t.callsOf("assistantAnswer"), [{ id: "q1", optionId: "yes", projectId: "p1" }]);
-  assert.match(t.get("inbox-lead").textContent, /^Nothing is waiting on you\.$/);
+  assert.equal(t.get("inbox-lead").querySelector(".inbox-count").textContent, "Nothing is waiting on you.");
   // Close goes through the nav so its history stays right.
   await t.get("inbox-close").click();
   assert.deepEqual(t.nav.closed, ["inbox"]);
@@ -659,7 +715,7 @@ const EVERY_ACTION = [
   ["a stuck task is tried again", () => board({ needs: [needBlocked()] }), "blocked:t6", "Try again", "tasksAction", 1],
   ["a stuck task is marked done", () => board({ needs: [needBlocked()] }), "blocked:t6", "It's done", "tasksAction", 1],
   ["a stuck task is dropped", () => board({ needs: [needBlocked()] }), "blocked:t6", "Drop it", "tasksAction", 1],
-  ["a result is confirmed", () => board({ needs: [needReview()] }), "review:t7", "Confirm done", "tasksAction", 1],
+  ["a result is confirmed", () => board({ needs: [needReview()] }), "review:t7", "Approve and finish", "tasksAction", 1],
   ["a result is sent back", () => board({ needs: [needReview()] }), "review:t7", "Send it back", "tasksAction", 1],
   ["a long check is marked done", () => board({ needs: [needReview({ checking: true, since: NOW - 50 * 60000 })] }), "review:t7", "It's done", "tasksAction", 1],
 ];

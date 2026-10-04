@@ -123,15 +123,26 @@
   // One reading for the menu dot, the session's pill and the groups, from the
   // same summary Home and Work already share (MefiTasks.workflowSummary).
   const isDone = (task) => ["done", "archived", "completed"].includes(task?.status);
+  // In the 0.5 layout the Inbox (renderer/today.js) is the one list of what waits on you, read from the host's own digest (the
+  // list the taskbar count and the notifications come from): a session is Needs you exactly when the Inbox holds it for a
+  // decision (its open questions are read here from the same questions; the rest is MefiToday.needTasks()). One the reading
+  // calls blocked or waiting for a go-ahead that the Inbox does not hold (a failed check that will
+  // retry by itself, a step of a request whose go-ahead is asked once for all its steps) waits with the queue instead. With
+  // no Inbox (the classic layout) the reading alone decides, as before.
+  function inboxTasks() {
+    try { const today = window.MefiToday; return today?.isOn?.() && typeof today.needTasks === "function" ? today.needTasks() : null; } catch { return null; }
+  }
   function reading(task, data = snapshot()) {
     const summary = window.MefiTasks?.workflowSummary?.(task, { status: data.status, backlog: data.backlog, assistant: data.assistant }) ?? null;
     const question = (data.assistant?.questions || []).find((item) => item?.status === "open" && (item.context?.taskId || item.taskId) === task.id);
     const stage = summary?.stage || (isDone(task) ? "done" : task.status === "active" ? "running" : task.status === "awaiting_verification" ? "review" : "ready");
-    const tone = question || ["blocked", "approval"].includes(stage) ? "ask"
+    const inbox = inboxTasks();
+    const listed = inbox && typeof inbox.has === "function" ? inbox.has(String(task.id)) : null;
+    const tone = question || listed === true || (listed === null && ["blocked", "approval"].includes(stage)) ? "ask"
       : stage === "running" ? "run"
       : stage === "review" ? "check"
       : stage === "done" ? (task.dropped ? "dropped" : "done")
-      : ["waiting", "cooling", "deferred", "grouped"].includes(stage) ? "wait"
+      : ["waiting", "cooling", "deferred", "grouped", "blocked", "approval"].includes(stage) ? "wait"
       : "ready";
     const label = question ? "Needs your answer" : summary?.label || (tone === "done" ? "Done" : "Queued");
     return { stage, tone, label, summary, question };

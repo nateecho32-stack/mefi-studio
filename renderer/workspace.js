@@ -848,13 +848,15 @@
     $("dash-workers-note").textContent = running.length ? running.map((job) => job.title || "task").slice(0, 2).join(" · ") : limit ? `Up to ${limit} at once` : state.status.adaptiveParallel ? "Machine managed" : "";
     const questions = (Array.isArray(state.assistant.questions) ? state.assistant.questions : []).filter((question) => question?.status === "open");
     const review = scoped(state.tasks).filter((task) => taskView(task).filter === "review");
-    const waiting = questions.length + review.length;
+    // In the 0.5 layout the Inbox is the one list of what waits on you: Home says its count, as the pill and the status bar do.
+    const inbox = inboxCount();
+    const waiting = inbox ?? questions.length + review.length;
     if ($("attention-shortcut")) {
       $("attention-shortcut").hidden = !waiting;
       $("attention-shortcut").textContent = `${waiting} need${waiting === 1 ? "s" : ""} you`;
     }
     $("dash-attention").dataset.tone = questions.length ? "warn" : review.length ? "busy" : "idle";
-    $("dash-attention").dataset.target = questions.length ? "ask" : "review";
+    $("dash-attention").dataset.target = inbox !== null ? "inbox" : questions.length ? "ask" : "review";
     $("dash-attention-value").textContent = waiting ? `${waiting} waiting` : "Nothing waiting";
     // Review holds three different decisions: a build awaiting approval, a
     // blocker only you can clear, and finished work to check. Name each.
@@ -872,6 +874,15 @@
     const summary = state.backlog?.summary || "";
     // The backlog summary usually already reads "N ready to work on".
     $("dash-next-note").textContent = next ? (/\bready\b/i.test(summary) ? summary : [`${ready} ready`, summary].filter(Boolean).join(" · ")) : summary;
+  }
+  // The Inbox's count while it is there (layout v2's renderer/today.js), else null: Home then counts as it always did.
+  function inboxCount() {
+    try { const today = window.MefiToday; if (!today?.isOn?.()) return null; const count = Number(today.count()); return Number.isFinite(count) ? Math.max(0, Math.floor(count)) : null; } catch { return null; }
+  }
+  // Where "N need you" and the attention tile go: the Inbox under the chip when it is there, else the questions or the review filter.
+  function openAttention(anchor) {
+    if ($("dash-attention")?.dataset.target === "inbox" && window.MefiToday?.openInbox?.(anchor) === true) return;
+    if ($("dash-attention")?.dataset.target === "ask") window.MefiNav?.go?.("command", { rail: "ask" }); else showFilter("review");
   }
   function renderMachineTile() {
     if (!$("dash-machine")) return;
@@ -1350,8 +1361,10 @@
     api()?.onProjectPreview?.((value) => { if (value?.projectId !== state.activeId) return; revisions.preview += 1; adoptPreview(value); });
     api()?.onMachineStatus?.((status) => { state.machine = status || null; if (active()) renderMachineTile(); });
     window.addEventListener("mefi:usage-report", (event) => { state.usage = event.detail || null; if (active()) renderUsageTile(); });
-    $("dash-attention")?.addEventListener("click", () => { if ($("dash-attention").dataset.target === "ask") window.MefiNav?.go?.("command", { rail: "ask" }); else showFilter("review"); });
-    $("attention-shortcut")?.addEventListener("click", () => { if ($("dash-attention").dataset.target === "ask") window.MefiNav?.go?.("command", { rail: "ask" }); else showFilter("review"); });
+    $("dash-attention")?.addEventListener("click", () => openAttention($("dash-attention")));
+    $("attention-shortcut")?.addEventListener("click", () => openAttention($("attention-shortcut")));
+    // The Inbox moved (a decision taken in it, a digest that arrived): Home's count follows.
+    window.addEventListener("mefi:inbox", () => { if (active()) renderDashboard(); });
     $("dash-next")?.addEventListener("click", () => showFilter("open"));
     $("dash-usage")?.addEventListener("click", () => window.MefiUsageTracker?.openTab?.());
     personalize(); renderProjects(); renderWork(); renderBacklog();

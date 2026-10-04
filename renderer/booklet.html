@@ -10643,14 +10643,19 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 
 /* ---- one thing that waits on you: the popover's row and the page's card ----------------------------------------- */
 .today-need { display: grid; grid-template-columns: minmax(0, 1fr); gap: 7px; min-width: 0; padding: 11px 12px; border: 1px solid var(--t-edge); border-radius: 12px; background: var(--t-well); }
-.today-need.is-current { border-color: var(--t-edge-hi); box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold) 18%, transparent); }
+.today-need.is-current { border-color: color-mix(in srgb, var(--gold) 70%, transparent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold) 18%, transparent); }
 .today-need.is-later { opacity: .72; }
 .today-need.is-busy { opacity: .75; }
 .today-need-kind { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; color: var(--t-soft); font-size: var(--t-f12); font-weight: 650; }
 .today-need[data-tone="warn"] .today-need-label { color: var(--t-warn); }
 .today-need[data-tone="bad"] .today-need-label { color: var(--t-bad); }
 .today-need[data-tone="info"] .today-need-label { color: var(--t-info); }
-.today-need-from { min-width: 0; overflow-wrap: anywhere; color: var(--t-soft); font-weight: 500; }
+/* The prototype's card: the kind's own mark in its tone, then the task it comes from (or how a result's checks went) under the question. */
+.today-need-glyph { flex: none; width: 13px; height: 13px; color: var(--t-soft); }
+.today-need[data-tone="warn"] .today-need-glyph { color: var(--t-warn); }
+.today-need[data-tone="bad"] .today-need-glyph { color: var(--t-bad); }
+.today-need[data-tone="info"] .today-need-glyph { color: var(--t-info); }
+.today-need-from { margin: -3px 0 0; min-width: 0; overflow-wrap: anywhere; color: var(--t-soft); font-size: var(--t-f13); line-height: 1.4; }
 .today-need-time { margin-left: auto; color: var(--t-faint); font-weight: 500; }
 .today-need-title { margin: 0; color: var(--t-ink); font: 600 var(--t-f14)/1.4 var(--font-ui); overflow-wrap: anywhere; }
 .today-need-detail, .today-need-hint { margin: 0; color: var(--t-soft); font-size: var(--t-f13); line-height: 1.5; overflow-wrap: anywhere; }
@@ -10661,6 +10666,11 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 .today-option { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; max-width: 100%; min-height: 32px; padding: 5px 11px; border: 1px solid var(--t-edge); border-radius: 10px; background: color-mix(in srgb, var(--ivory) 6%, transparent); color: var(--t-ink); font: 550 var(--t-f13)/1.3 var(--font-ui); text-align: left; cursor: pointer; }
 .today-option:hover:not(:disabled) { border-color: var(--t-edge-hi); background: color-mix(in srgb, var(--ivory) 10%, transparent); }
 .today-option.is-recommended { border-color: color-mix(in srgb, var(--gold) 45%, transparent); background: color-mix(in srgb, var(--gold) 10%, transparent); }
+/* The first option is the filled one, as the prototype draws it (the recommended one comes first); its key and its mark take its ink. */
+.today-option.is-first { border-color: transparent; background: linear-gradient(135deg, var(--gold-bright), var(--gold)); color: var(--ink); }
+.today-option.is-first:hover:not(:disabled) { border-color: transparent; background: linear-gradient(135deg, var(--gold-bright), var(--gold)); filter: brightness(1.06); }
+.today-option.is-first .today-key { border-color: color-mix(in srgb, currentColor 45%, transparent); background: transparent; color: inherit; }
+.today-option.is-first .today-rec { background: color-mix(in srgb, currentColor 14%, transparent); color: inherit; }
 .today-option:disabled { opacity: .55; cursor: progress; }
 .today-option-label { min-width: 0; overflow-wrap: anywhere; }
 .today-rec { flex: none; padding: 1px 7px; border-radius: 999px; background: color-mix(in srgb, var(--gold) 20%, transparent); color: var(--gold-bright); font-size: var(--t-f12); font-weight: 650; }
@@ -10700,8 +10710,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 /* ---- pages: Today in Build, and the Inbox kept open ------------------------------------------------------------- */
 .today-sheet, .inbox-sheet { display: flex; flex-direction: column; }
 .today-page-body, .inbox-body { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: var(--t-gap); flex: 1 1 auto; min-height: 0; padding: var(--s3, 12px) var(--s5, 20px) var(--s5, 20px); overflow-x: hidden; overflow-y: auto; }
-.inbox-lead { margin: 0; color: var(--t-soft); font-size: var(--t-f14); line-height: 1.5; }
-.inbox-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 10px; align-items: start; min-width: 0; }
+/* Work › Inbox as the prototype lays it out: one column of the page's width, centred, the cards two abreast at 1920 px. */
+.inbox-body { grid-template-columns: minmax(0, 1020px); justify-content: center; }
+.inbox-lead { margin: 0; max-width: 70ch; color: var(--t-soft); font-size: var(--t-f14); line-height: 1.5; }
+/* How many wait is said for a screen reader; the tab, the pill and the status bar show the number. */
+.inbox-count { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.inbox-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 10px; align-items: start; min-width: 0; }
 .inbox-list[hidden] { display: none; }
 .inbox-list .today-need { background: var(--surface-raised, var(--t-card)); }
 .inbox-decided-wrap { min-width: 0; }
@@ -23972,7 +23986,8 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
   ];
   const LOCAL_ROUTES = Object.freeze({
     home: ["workspace"],
-    work: ["tasks", "plans", "ideas", "analyzer", "worktrees"],
+    // "inbox" is the 0.5 layout's Work › Inbox (renderer/today.js registers it there only); a route nobody registered is skipped.
+    work: ["tasks", "plans", "ideas", "inbox", "analyzer", "worktrees"],
     agents: ["agents", "command", "fleet", "eyes", "trace", "explorer", "overhead", "agent-brain", "skills", "brains", "context", "booklet", "graph", "usage"],
     settings: ["studio"],
   });
@@ -24162,7 +24177,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     if (nav.dataset.section !== section) {
       nav.dataset.section = section;
       nav.textContent = "";
-      if (section !== "agents" || !window.MefiAgents?.paintNav) for (const route of routes) nav.append(navButton(get(route), "app-local-link", { key: false }));
+      if (section !== "agents" || !window.MefiAgents?.paintNav) for (const route of routes) { const dest = get(route); if (dest) nav.append(navButton(dest, "app-local-link", { key: false })); }
     }
     if (section === "agents") window.MefiAgents?.paintNav?.(nav, id);
     paintHistory(nav);
@@ -69245,13 +69260,15 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     $("dash-workers-note").textContent = running.length ? running.map((job) => job.title || "task").slice(0, 2).join(" · ") : limit ? `Up to ${limit} at once` : state.status.adaptiveParallel ? "Machine managed" : "";
     const questions = (Array.isArray(state.assistant.questions) ? state.assistant.questions : []).filter((question) => question?.status === "open");
     const review = scoped(state.tasks).filter((task) => taskView(task).filter === "review");
-    const waiting = questions.length + review.length;
+    // In the 0.5 layout the Inbox is the one list of what waits on you: Home says its count, as the pill and the status bar do.
+    const inbox = inboxCount();
+    const waiting = inbox ?? questions.length + review.length;
     if ($("attention-shortcut")) {
       $("attention-shortcut").hidden = !waiting;
       $("attention-shortcut").textContent = `${waiting} need${waiting === 1 ? "s" : ""} you`;
     }
     $("dash-attention").dataset.tone = questions.length ? "warn" : review.length ? "busy" : "idle";
-    $("dash-attention").dataset.target = questions.length ? "ask" : "review";
+    $("dash-attention").dataset.target = inbox !== null ? "inbox" : questions.length ? "ask" : "review";
     $("dash-attention-value").textContent = waiting ? `${waiting} waiting` : "Nothing waiting";
     // Review holds three different decisions: a build awaiting approval, a
     // blocker only you can clear, and finished work to check. Name each.
@@ -69269,6 +69286,15 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     const summary = state.backlog?.summary || "";
     // The backlog summary usually already reads "N ready to work on".
     $("dash-next-note").textContent = next ? (/\bready\b/i.test(summary) ? summary : [`${ready} ready`, summary].filter(Boolean).join(" · ")) : summary;
+  }
+  // The Inbox's count while it is there (layout v2's renderer/today.js), else null: Home then counts as it always did.
+  function inboxCount() {
+    try { const today = window.MefiToday; if (!today?.isOn?.()) return null; const count = Number(today.count()); return Number.isFinite(count) ? Math.max(0, Math.floor(count)) : null; } catch { return null; }
+  }
+  // Where "N need you" and the attention tile go: the Inbox under the chip when it is there, else the questions or the review filter.
+  function openAttention(anchor) {
+    if ($("dash-attention")?.dataset.target === "inbox" && window.MefiToday?.openInbox?.(anchor) === true) return;
+    if ($("dash-attention")?.dataset.target === "ask") window.MefiNav?.go?.("command", { rail: "ask" }); else showFilter("review");
   }
   function renderMachineTile() {
     if (!$("dash-machine")) return;
@@ -69747,8 +69773,10 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     api()?.onProjectPreview?.((value) => { if (value?.projectId !== state.activeId) return; revisions.preview += 1; adoptPreview(value); });
     api()?.onMachineStatus?.((status) => { state.machine = status || null; if (active()) renderMachineTile(); });
     window.addEventListener("mefi:usage-report", (event) => { state.usage = event.detail || null; if (active()) renderUsageTile(); });
-    $("dash-attention")?.addEventListener("click", () => { if ($("dash-attention").dataset.target === "ask") window.MefiNav?.go?.("command", { rail: "ask" }); else showFilter("review"); });
-    $("attention-shortcut")?.addEventListener("click", () => { if ($("dash-attention").dataset.target === "ask") window.MefiNav?.go?.("command", { rail: "ask" }); else showFilter("review"); });
+    $("dash-attention")?.addEventListener("click", () => openAttention($("dash-attention")));
+    $("attention-shortcut")?.addEventListener("click", () => openAttention($("attention-shortcut")));
+    // The Inbox moved (a decision taken in it, a digest that arrived): Home's count follows.
+    window.addEventListener("mefi:inbox", () => { if (active()) renderDashboard(); });
     $("dash-next")?.addEventListener("click", () => showFilter("open"));
     $("dash-usage")?.addEventListener("click", () => window.MefiUsageTracker?.openTab?.());
     personalize(); renderProjects(); renderWork(); renderBacklog();
@@ -89076,8 +89104,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 // "Decided" line, and has an Undo where the app has one (a drop or a done can
 // be reopened; Mefi's own decisions undo through autonomy:undo). "N need you" is
 // that list's length, not a second count: count() and onChange() are what the
-// top bar's pill reads, and openInbox(anchor) what it opens (a popover under the
-// pill, and a page, the registry route "inbox", for keeping it open).
+// top bar's pill, the status bar, Home's own chip and the Inbox tab read,
+// needTasks() is which sessions the session list files under Needs you, and
+// openInbox(anchor) what the pill opens (a popover under the pill, and a page,
+// Work > Inbox, the registry route "inbox", for keeping it open). Each card
+// reads as the 0.5 prototype's: what it is and who asked, how long it has
+// waited, the question, the task it comes from, and the app's own options.
 //
 // Everything it shows comes from MefiVibe.data() and watch() (renderer/vibe.js),
 // so the front door and this page never disagree. Nothing is stored: the pieces
@@ -89183,8 +89215,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (need.kind === "review") {
       if (need.checking) return [done];
       const verifying = task?.status === "verifying";
+      // The prototype's two, then the one more this app has: Approve and finish (the thread's own words), Review changes (the
+      // session on its Changes tab, nothing sent), and Send it back.
       return [
-        { id: "confirm", label: "Confirm done", primary: true, title: "You checked the result yourself: mark it complete", call: tasks({ action: "status", status: "done" }), decided: "Confirmed done", undo: reopen(data, id) },
+        { id: "confirm", label: "Approve and finish", primary: true, title: "You checked the result yourself: mark it complete", call: tasks({ action: "status", status: "done" }), decided: "Approved and finished", undo: reopen(data, id) },
+        { id: "changes", label: "Review changes", title: "Open the session on what it changed", go: () => openChanges(id) },
         { id: "back", label: "Send it back", disabled: verifying, title: verifying ? "Its check is running right now; try again when it settles" : "Return it to the queue for another attempt", call: tasks({ action: "retry" }), decided: "Sent back" },
       ];
     }
@@ -89205,9 +89240,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     } else if (need.kind === "approval" || need.kind === "family") {
       kind = "approval"; label = need.kind === "family" ? "Steps to approve" : "Waiting for your go-ahead";
     } else if (need.kind === "blocked") {
-      kind = "failure"; label = HOLD_LABEL[need.row?.blockedBy] || "Stuck";
+      kind = "failure"; label = HOLD_LABEL[need.row?.blockedBy] || (task?.verification?.state === "failed" ? "Checks failed" : "Stuck");
     } else if (need.kind === "review") {
-      kind = "review"; label = need.checking ? "Still checking" : "Finished · yours to check";
+      kind = "review"; label = need.checking ? "Still checking" : "Ready for review";
     }
     const row = digestRow(digest, need);
     const at = time(row?.at) || time(question?.at) || time(need.since) || time(task?.awaitingAt) || time(task?.updatedAt) || 0;
@@ -89224,10 +89259,16 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     else if (need.kind === "approval") detail = "Your permission settings require approval of this brief before it can start.";
     else if (need.kind === "family") detail = `${plural((need.rows || []).length, "step")} wait for your go-ahead. Your request runs last, to put them together and check the whole thing.`;
     const suggested = suggestion && options.find((option) => option.id === suggestion.optionId);
+    // Who asked: the worker on the task now (the run's route), else the one that ran it last. A result says how its checks went.
+    const taskId = question ? context.taskId || null : need.id;
+    const job = taskId ? (Array.isArray(data.running) ? data.running : []).find((row) => row?.taskId === taskId) ?? null : null;
+    const who = clip(job?.route || job?.cli || task?.lastAttempt?.route || "", 40);
+    const results = need.kind === "review" && Array.isArray(task?.verificationRun?.results) ? task.verificationRun.results : [];
+    const facts = results.length ? `${results.filter((result) => result?.ok === true).length} of ${plural(results.length, "check")} passed` : "";
     const hint = suggestion ? `Mefi suggests: ${suggested?.label || "your review"}${suggestion.reason ? `, because ${clip(suggestion.reason, 160).replace(/^because\s+/i, "")}` : ""}` : "";
     return {
       key: `${need.kind}:${need.id}`, need, kind, label, tone: TONES[kind], title: clip(need.title, 200) || "Something needs you",
-      from: question ? clip(context.taskTitle || task?.title || "", 90) : "", taskId: question ? context.taskId || null : need.id,
+      from: question ? clip(context.taskTitle || task?.title || "", 90) : "", taskId, who, facts,
       at, detail, hint, options, evidence: Array.isArray(context.evidence) ? context.evidence.slice(-3).map((line) => clip(line, 200)) : [],
       steps: need.kind === "family" ? (data.families || []).find((family) => family.id === need.id)?.steps?.map((step) => clip(step.title, 90)) ?? [] : [],
     };
@@ -89250,7 +89291,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }
     for (const [key, entry] of handled) {
       if (seen.has(key) || now >= entry.showUntil) continue;
-      const ghost = { key, handled: entry, need: null, kind: entry.kind, label: entry.kindLabel, tone: entry.tone, title: entry.title, from: "", taskId: entry.taskId, at: 0, detail: "", hint: "", options: [], evidence: [], steps: [] };
+      const ghost = { key, handled: entry, need: null, kind: entry.kind, label: entry.kindLabel, tone: entry.tone, title: entry.title, from: "", taskId: entry.taskId, who: "", facts: "", at: 0, detail: "", hint: "", options: [], evidence: [], steps: [] };
       drawn.splice(Math.min(entry.index ?? drawn.length, drawn.length), 0, ghost);
     }
     const count = drawn.filter((item) => !item.handled).length;
@@ -89314,6 +89355,20 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 
   function model() { return build(state.data || vibe()?.data?.() || {}, { handled: state.handled, detail: detailLevel() }); }
   function count() { return state.on ? model().count : 0; }
+  // The sessions the Inbox holds for a decision other than a question (a go-ahead, steps to approve, a task that stopped), and not
+  // for a review (that one stays under Review): the session list files these under Needs you (renderer/builder.js reading), with
+  // the tasks that have an open question, which it reads from the same questions itself (so an answer leaves at once, whichever
+  // copy of the board is fresher). Kept until the data or a decision moves, since the list asks once per row.
+  let needCache = { data: undefined, key: "", set: new Set() };
+  function needTasks() {
+    if (!state.on) return null;
+    const data = state.data || vibe()?.data?.() || {};
+    const key = [...state.handled.keys()].join("\u0001");
+    if (needCache.data === data && needCache.key === key) return needCache.set;
+    const set = new Set(model().items.filter((item) => !item.handled && item.need && item.need.kind !== "question" && item.kind !== "review" && item.taskId).map((item) => String(item.taskId)));
+    needCache = { data, key, set };
+    return set;
+  }
   function items() { return state.on ? model().items.filter((item) => !item.handled).map((item) => ({ key: item.key, kind: item.kind, title: item.title, taskId: item.taskId, at: item.at })) : []; }
 
   // The pill's number and the Inbox's rows move together: tell whoever listens when either does. What start() found is
@@ -89436,6 +89491,31 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     return true;
   }
   function openPlan(planId) { window.MefiNav?.go?.("plans", { planId }); }
+  // A result to review opens as its session on the Changes tab (the session panels' own), else as the task.
+  function openChanges(taskId) {
+    if (!taskId) return false;
+    closeInbox({ restore: false });
+    const sessions = window.MefiSessions;
+    if (sessions?.active?.() && sessions.open?.(String(taskId), { preview: true, tab: "changes" })) return true;
+    return openTask(taskId);
+  }
+  // The kind of a card as the prototype draws it: a question or a failure with its mark, a permission with a lock, a
+  // go-ahead or a result with a tick, a plan with the spark.
+  const KIND_PATHS = Object.freeze({
+    question: ["M8 2.25a5.75 5.75 0 1 0 0 11.5a5.75 5.75 0 0 0 0-11.5z", "M8 5.1v3.4", "M8 10.75v.1"],
+    permission: ["M4.25 7.25h7.5v6h-7.5z", "M5.75 7.25V5.5a2.25 2.25 0 0 1 4.5 0v1.75"],
+    approval: ["M3.25 8.4 6.4 11.5l6.35-7"],
+  });
+  function kindGlyph(kind) {
+    if (kind === "plan") { const sprite = glyph("g-spark"); sprite.classList?.add?.("today-need-glyph"); return sprite; }
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "glyph today-need-glyph"); svg.setAttribute("aria-hidden", "true"); svg.setAttribute("focusable", "false"); svg.setAttribute("viewBox", "0 0 16 16");
+    for (const d of KIND_PATHS[kind === "failure" ? "question" : kind === "review" ? "approval" : kind] || KIND_PATHS.question) {
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", d); svg.append(path);
+    }
+    return svg;
+  }
 
   function renderDecided(item, entry, key = item.key) {
     const node = el("article", "today-need is-decided");
@@ -89461,14 +89541,17 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     node.dataset.key = item.key; node.dataset.kind = item.kind; node.dataset.tone = item.tone;
     node.tabIndex = -1;
     node.setAttribute("aria-busy", String(busy));
+    // As the prototype has it: what it is and who asked, how long it has waited; the question; then the task it comes from
+    // (or how a result's checks went).
     const head = el("div", "today-need-kind");
-    head.append(el("i", "today-dot"), el("span", "today-need-label", item.label));
-    if (item.from) head.append(el("span", "today-need-from", `from ${item.from}`));
+    head.append(kindGlyph(item.kind), el("span", "today-need-label", item.who ? `${item.label} · ${item.who}` : item.label));
     if (item.at) { const when = el("time", "today-need-time", waited(item.at)); when.title = `Waiting ${waited(item.at)}`; head.append(when); }
     const title = el("h5", "today-need-title", item.title);
     title.id = `today-need-${String(item.key).replace(/[^A-Za-z0-9_-]/g, "-")}`;
     node.setAttribute("aria-labelledby", title.id);
     node.append(head, title);
+    const under = item.from && item.from !== item.title ? item.from : item.facts;
+    if (under) node.append(el("p", "today-need-from", under));
     if (item.detail && !(ctx.compact && item.kind !== "question" && item.detail.length > 140)) node.append(el("p", "today-need-detail", ctx.compact ? clip(item.detail, 160) : item.detail));
     if (item.hint) node.append(el("p", "today-need-hint", item.hint));
     if (!ctx.compact && item.evidence.length) node.append(el("pre", "today-need-evidence", item.evidence.join("\n")));
@@ -89488,7 +89571,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       input.addEventListener("input", () => state.drafts.set(item.key, { text: input.value, optionId: typed?.id ?? null }));
       input.addEventListener("keydown", (event) => { if (event.key === "Enter" && !event.isComposing) { event.preventDefault(); form.requestSubmit?.() ?? form.trigger?.("submit"); } });
       item.options.forEach((option, index) => {
-        const choose = el("button", `today-option${option.recommended ? " is-recommended" : ""}`);
+        const choose = el("button", `today-option${index === 0 ? " is-first" : ""}${option.recommended ? " is-recommended" : ""}`);
         choose.type = "button"; choose.dataset.option = option.id; choose.disabled = lock;
         if (index < 9) choose.append(el("kbd", "today-key", String(index + 1)));
         choose.append(el("span", "today-option-label", option.label));
@@ -89512,7 +89595,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       node.append(choices, form);
     } else {
       for (const action of actionsOf(item, state.data || {})) {
-        choices.append(button(action.label, `today-btn${action.primary ? " primary" : ""}`, () => void perform(item, action), { title: action.title, disabled: lock || action.disabled, confirm: action.confirm }));
+        // A way to look (Review changes) only goes somewhere; everything else is a decision, through perform().
+        const run = typeof action.go === "function" ? () => action.go() : () => void perform(item, action);
+        choices.append(button(action.label, `today-btn${action.primary ? " primary" : ""}`, run, { title: action.title, disabled: lock || action.disabled, confirm: action.confirm }));
       }
       if (choices.children.length) node.append(choices);
     }
@@ -89555,7 +89640,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       try { target.focus?.({ preventScroll: true }); if (field) field.setSelectionRange?.(field.value.length, field.value.length); } catch { /* not focusable */ }
     }
   }
-  const itemSignature = (item, ctx, now) => JSON.stringify([item.key, item.title, item.label, item.detail, item.hint, item.options.map((option) => [option.id, option.label, option.recommended]), item.at ? Math.floor(now / 60000) : 0, item.handled ? [item.handled.label, Boolean(item.handled.undo)] : 0,
+  const itemSignature = (item, ctx, now) => JSON.stringify([item.key, item.title, item.label, item.who, item.facts, item.from, item.detail, item.hint, item.options.map((option) => [option.id, option.label, option.recommended]), item.at ? Math.floor(now / 60000) : 0, item.handled ? [item.handled.label, Boolean(item.handled.undo)] : 0,
     state.busy.has(item.key), state.errors.get(item.key) ?? null, state.later.has(item.key), ctx.compact ? 1 : 0, (state.data || {}).projectId ?? null, window.MefiAutonomy?.state?.()?.level ?? null]);
   function orderItems(list) { return [...list.filter((item) => !state.later.has(item.key)), ...list.filter((item) => state.later.has(item.key))]; }
 
@@ -89744,8 +89829,15 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const now = Date.now();
     const list = orderItems(model().items);
     const open = list.filter((item) => !item.handled).length;
+    // The prototype's words for the page, and how many wait, said for a screen reader (the tab and the pill show the number).
     const lead = byId("inbox-lead");
-    if (lead) lead.textContent = open ? `${plural(open, "thing")} ${open === 1 ? "waits" : "wait"} on you.` : "Nothing is waiting on you.";
+    if (lead) {
+      const said = open ? `${plural(open, "thing")} ${open === 1 ? "waits" : "wait"} on you.` : "Nothing is waiting on you.";
+      if (lead.dataset.said !== said) {
+        lead.dataset.said = said;
+        lead.replaceChildren(document.createTextNode("Everything waiting on you in one place: questions, permissions, approvals, reviews and tasks that stopped. Ctrl J opens the same list from anywhere. "), el("span", "inbox-count", said));
+      }
+    }
     const holder = byId("inbox-list");
     if (holder) {
       reconcile(holder, list.map((item) => ({ key: item.key, sig: itemSignature(item, { compact: false }, now), build: () => renderNeed(item, { compact: false }) })));
@@ -90117,7 +90209,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       open: (params) => openTodayPage(params), close: () => closeTodayPage(), isOpen: () => overlayOpen("today-overlay"),
     });
     nav.register({
-      id: "inbox", label: "Inbox", short: "Inbox", kind: "overlay", layer: "sheet", section: "home", group: "surfaces", key: null, glyph: "g-bell", badge: null,
+      id: "inbox", label: "Inbox", short: "Inbox", kind: "overlay", layer: "sheet", section: "work", group: "surfaces", key: null, glyph: "g-bell", badge: null,
       desc: "Everything waiting on you: questions, permissions, approvals, reviews and tasks that stopped",
       searchTerms: "inbox needs you questions permission approval review failed stuck decide answer waiting",
       showIn: showIn({ palette: true, help: true }),
@@ -90170,7 +90262,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 
   window.MefiToday = {
     start, stop, show, hide, isOn: () => state.on, takesNeeds: () => state.on,
-    count, items, onChange, openInbox, closeInbox, toggleInbox, isInboxOpen: inboxIsOpen, ownsKeys, openInboxPage, closeInboxPage, openPage: openTodayPage, closePage: closeTodayPage,
+    count, items, needTasks, onChange, openInbox, closeInbox, toggleInbox, isInboxOpen: inboxIsOpen, ownsKeys, openInboxPage, closeInboxPage, openPage: openTodayPage, closePage: closeTodayPage,
     openNeed, openFromAlert, refresh: () => Promise.resolve(vibe()?.refresh?.()).then(() => { onData(); }),
     // For tests and anything driving Studio: the pure model, and what is in flight.
     build, snapshot: () => { const current = model(); return { count: current.count, items: current.items.map((item) => ({ key: item.key, kind: item.kind, handled: Boolean(item.handled) })), groups: Object.fromEntries(GROUPS.map(([key]) => [key, current.board[key].map((card) => card.key)])), host: state.host, inbox: state.inbox.open, later: [...state.later], busy: [...state.busy] }; },
@@ -91107,15 +91199,26 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // One reading for the menu dot, the session's pill and the groups, from the
   // same summary Home and Work already share (MefiTasks.workflowSummary).
   const isDone = (task) => ["done", "archived", "completed"].includes(task?.status);
+  // In the 0.5 layout the Inbox (renderer/today.js) is the one list of what waits on you, read from the host's own digest (the
+  // list the taskbar count and the notifications come from): a session is Needs you exactly when the Inbox holds it for a
+  // decision (its open questions are read here from the same questions; the rest is MefiToday.needTasks()). One the reading
+  // calls blocked or waiting for a go-ahead that the Inbox does not hold (a failed check that will
+  // retry by itself, a step of a request whose go-ahead is asked once for all its steps) waits with the queue instead. With
+  // no Inbox (the classic layout) the reading alone decides, as before.
+  function inboxTasks() {
+    try { const today = window.MefiToday; return today?.isOn?.() && typeof today.needTasks === "function" ? today.needTasks() : null; } catch { return null; }
+  }
   function reading(task, data = snapshot()) {
     const summary = window.MefiTasks?.workflowSummary?.(task, { status: data.status, backlog: data.backlog, assistant: data.assistant }) ?? null;
     const question = (data.assistant?.questions || []).find((item) => item?.status === "open" && (item.context?.taskId || item.taskId) === task.id);
     const stage = summary?.stage || (isDone(task) ? "done" : task.status === "active" ? "running" : task.status === "awaiting_verification" ? "review" : "ready");
-    const tone = question || ["blocked", "approval"].includes(stage) ? "ask"
+    const inbox = inboxTasks();
+    const listed = inbox && typeof inbox.has === "function" ? inbox.has(String(task.id)) : null;
+    const tone = question || listed === true || (listed === null && ["blocked", "approval"].includes(stage)) ? "ask"
       : stage === "running" ? "run"
       : stage === "review" ? "check"
       : stage === "done" ? (task.dropped ? "dropped" : "done")
-      : ["waiting", "cooling", "deferred", "grouped"].includes(stage) ? "wait"
+      : ["waiting", "cooling", "deferred", "grouped", "blocked", "approval"].includes(stage) ? "wait"
       : "ready";
     const label = question ? "Needs your answer" : summary?.label || (tone === "done" ? "Done" : "Queued");
     return { stage, tone, label, summary, question };
@@ -96387,7 +96490,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
   function paintItem(entry, rec, info, n, total, ctx) {
     const active = rec.id === S.active;
-    const count = rec.home ? needCount() : 0;
+    // Home and the Inbox say how many wait on you: the Inbox's own count, one number everywhere.
+    const count = rec.home || rec.route?.id === "inbox" ? needCount() : 0;
     const attn = !active && (rec.badge === true || (isSession(rec.route) && S.needs.has(rec.route.params.taskId)));
     const hint = n < 8 ? ` · Ctrl ${n + 1}` : n === total - 1 ? " · Ctrl 9" : "";
     const label = `${info.title}${rec.pin && !rec.home ? ", pinned" : ""}${rec.prev ? ", preview" : ""}${attn ? ", needs you" : ""}`;
@@ -97581,6 +97685,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     listen(window, "mefi:worktrees", () => { if (readWorktrees()) schedule(); });
     listen(window, "mefi:appearance", () => { S.painted.clear(); schedule(); });
     listen(window, "mefi:autonomy-changed", () => { S.painted.delete("thread"); schedule(); });
+    // Needs you is the Inbox's list: when that moves (a decision taken in it, a digest that arrived), the groups follow.
+    listen(window, "mefi:inbox", again);
     listen(window, "mefi:shell-layout", () => { updateShort(); schedule(); });
     listen(window, "mefi:layout", () => { updateShort(); schedule(); });
     listen(window, "resize", () => { if (updateShort()) schedule(); });

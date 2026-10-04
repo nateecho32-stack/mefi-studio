@@ -335,6 +335,8 @@
     listen(window, "mefi:worktrees", () => { if (readWorktrees()) schedule(); });
     listen(window, "mefi:appearance", () => { S.painted.clear(); schedule(); });
     listen(window, "mefi:autonomy-changed", () => { S.painted.delete("thread"); schedule(); });
+    // Needs you is the Inbox's list: when that moves (a decision taken in it, a digest that arrived), the groups follow.
+    listen(window, "mefi:inbox", again);
     listen(window, "mefi:shell-layout", () => { updateShort(); schedule(); });
     listen(window, "mefi:layout", () => { updateShort(); schedule(); });
     listen(window, "resize", () => { if (updateShort()) schedule(); });

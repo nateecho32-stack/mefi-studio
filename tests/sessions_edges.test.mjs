@@ -99,6 +99,20 @@ test("a project the workspace opened without announcing it (the first one at lau
   assert.deepEqual(a.rowKeys(), ["idea:i1"]);
 });
 
+test("Needs you follows the Inbox: when the Inbox moves (a decision taken in it, a digest that arrived) the list's groups follow, with no push of their own", async () => {
+  const a = await open();
+  await a.settle();
+  const needs = () => a.all("list", ".sx-gh").find((node) => node.dataset.key === "group:needs")?.querySelector(".sx-count").textContent ?? "0";
+  assert.equal(needs(), "1", "the open question, as the reading says without an Inbox");
+  const held = new Set(["asking", "queued"]);
+  a.window.MefiToday = { isOn: () => true, needTasks: () => held };
+  a.env.emit("mefi:inbox"); await a.settle();
+  assert.equal(needs(), "2", "the Inbox holds the queued one for a decision too: it is Needs you");
+  held.delete("queued");
+  a.env.emit("mefi:inbox"); await a.settle();
+  assert.equal(needs(), "1", "decided in the Inbox: it leaves Needs you at once");
+});
+
 test("the page's appearance, permission and layout signals draw what they change: the companion's name, what Mefi decided, a short window", async () => {
   const decisions = [];
   const messages = [{ id: "n1", role: "assistant", kind: "notice", text: "A notice for you", at: mins(3), projectId: "p1", taskId: "queued" }];
