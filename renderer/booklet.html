@@ -730,9 +730,9 @@ body.command-active .home-tab {
 .catalog-pick-value small { font-size: var(--fs-xs); font-weight: 400; letter-spacing: 0; color: var(--muted); }
 .catalog-pick-note { font-size: var(--fs-xs); color: var(--muted); }
 
-/* Sticky under the local navigation; dense material, since rows scroll under it. */
+/* Sticky at the top of the free area (under the local navigation and tabs); dense material, since rows scroll under it. */
 #tab-booklet .catalog-toolbar {
-  position: sticky; top: var(--shell-local-h, 0px); z-index: 3;
+  position: sticky; top: var(--shell-y0, 0px); z-index: 3;
   display: grid; gap: 10px; margin: 0; padding: 12px var(--catalog-pad) 0;
   border: 1px solid var(--line); border-bottom: 0; border-radius: var(--r-lg) var(--r-lg) 0 0;
   background: var(--studio-menu-fill, var(--panel-solid)); backdrop-filter: var(--studio-menu-blur, none);
@@ -754,7 +754,7 @@ body.command-active .home-tab {
 
 /* The rows: one surface, hairline dividers, the full card folded under each. */
 #cards.catalog-list { gap: 0; margin-bottom: var(--s5); border: 1px solid var(--line); border-top: 0; border-radius: 0 0 var(--r-lg) var(--r-lg); background: var(--surface-raised); overflow: clip; }
-#cards > .catalog-row { padding: 0; gap: 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; box-shadow: none; overflow: visible; scroll-margin: calc(var(--shell-local-h, 0px) + 150px) 0 24px; }
+#cards > .catalog-row { padding: 0; gap: 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; box-shadow: none; overflow: visible; scroll-margin: calc(var(--shell-y0, 0px) + 150px) 0 24px; }
 #cards > .catalog-row:first-child { border-top: 0; }
 #cards > .catalog-row::before { content: none; }
 .catalog-summary { display: grid; grid-template-columns: var(--catalog-cols); gap: var(--catalog-gap); align-items: center; padding: 9px var(--catalog-pad); list-style: none; transition: background-color var(--motion-fast) var(--ease-out); }
