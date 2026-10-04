@@ -777,11 +777,19 @@
   }
 
   // "Open and start agents": called once the studio is up, never before.
+  // The Studio Daily's "Since you were away" names a project: select its row,
+  // without opening it, and hand the keyboard to Open.
+  function pick(id) {
+    if (state.busy || !state.rows.has(id)) return false;
+    select(id, { focus: false });
+    ui.open?.focus?.();
+    return true;
+  }
   async function begin() {
     if (!api()?.startupBegin) return { ok: false, error: "Desktop app only." };
     try { return await api().startupBegin(); }
     catch (error) { console.warn("Starting the agents failed", error); return { ok: false, error: error?.message || "Starting the agents failed." }; }
   }
 
-  window.MefiStartup = { choose, begin, available, navigateProjects, relative, splitPath, state: () => ({ projects: state.projects.map((project) => project.id), selectedId: state.selectedId, busy: state.busy }) };
+  window.MefiStartup = { choose, begin, pick, available, navigateProjects, relative, splitPath, state: () => ({ projects: state.projects.map((project) => project.id), selectedId: state.selectedId, busy: state.busy }) };
 })();

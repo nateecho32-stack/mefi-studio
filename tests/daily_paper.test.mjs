@@ -334,3 +334,102 @@ test("Settings › General: Daily news on the launch screen saves settings.ui.da
   const hiddenRow = environment(older, { scripts: [paperSource] });
   assert.equal(hiddenRow.get("launch-daily-news-row").hidden, true, "a host without the paper hides the switch");
 });
+
+// ---- Since you were away (main.cjs newsAway + What's new) ----
+
+const AWAY = {
+  ok: true, day: "2026-10-04",
+  models: { firstVisit: false, drops: [
+    { source: "zen", sourceName: "Zen", id: "gpt-6.1-sol", name: "GPT-6.1 Sol", releaseDate: "2026-09-29" },
+    { source: "go", sourceName: "OpenCode Go", id: "deepseek-v5", name: "DeepSeek V5", releaseDate: "2026-10-03" },
+  ] },
+  projects: [
+    { id: projectA.id, name: "Alpha", since: Date.now() - 5 * 3600000, finished: { count: 2, latest: [{ id: "t1", title: "Pin favourite notes" }, { id: "t2", title: "Rename notes" }] }, waiting: { count: 1, latest: [{ id: "q1", title: "Show the empty state on search?" }] }, running: 1, commits: { count: 3, unpulled: 2, latest: [{ subject: "Add export" }] }, quiet: false },
+    { id: projectB.id, name: "Beta", since: null, finished: { count: 0, latest: [] }, waiting: { count: 0, latest: [] }, running: 0, commits: { count: 0, unpulled: 0, latest: [] }, quiet: true },
+  ],
+};
+const NOTES = { ok: true, enabled: true, current: "0.4.6", history: [
+  { version: "0.4.6", notes: ["The launch screen is a daily paper.", "Codex workers run over codex app-server."], unread: true },
+  { version: "0.4.5", notes: ["Older."], unread: false },
+] };
+
+test("the front page opens with what changed while you were away: your projects, new models and Studio's own news", async () => {
+  const away = deferred();
+  const host = bridge({ newsAway: () => { host.calls.push(["newsAway"]); return away.promise; }, releaseWhatsNew: async () => NOTES });
+  const env = environment(host.api, { scripts: [paperSource, startupSource] });
+  env.startup.choose({ isCurrent: () => true });
+  await flush();
+  const rows = env.rows();
+  assert.equal(env.document.activeElement, rows[1]);
+  host.answer.resolve({ ok: true, edition: EDITION });
+  await flush();
+  assert.equal(env.news().querySelector(".paper-away"), null, "nothing drawn before the host answers");
+
+  away.resolve(AWAY);
+  await flush();
+  const band = env.news().querySelector(".paper-away");
+  assert.ok(band, "the band is up");
+  assert.equal(env.news().children[0], band, "above the lead");
+  assert.equal(band.querySelector(".paper-away-title").textContent, "Since you were away");
+  const alpha = band.querySelector(".paper-away-projects").querySelectorAll(".paper-away-project")[0];
+  const facts = alpha.querySelectorAll(".paper-away-fact").map((fact) => [fact.dataset.tone, fact.textContent]);
+  assert.deepEqual(facts, [
+    ["ask", "1 question waiting on you: Show the empty state on search?"],
+    ["done", "2 tasks finished: Pin favourite notes, Rename notes"],
+    ["run", "1 task running"],
+    ["git", "3 new commits · 2 not pulled yet: Add export"],
+  ]);
+  assert.match(alpha.querySelector(".paper-away-meta").textContent, /^opened 5 h ago$/);
+  const beta = band.querySelectorAll(".paper-away-project")[1];
+  assert.equal(beta.querySelector(".paper-away-fact").textContent, "Nothing new since you were here.");
+  assert.equal(beta.querySelector(".paper-away-meta").textContent, "not opened yet");
+  const models = band.querySelector(".paper-away-models");
+  assert.equal(models.querySelector(".paper-section-title").textContent, "New models");
+  assert.deepEqual(models.querySelectorAll(".paper-away-model-name").map((name) => name.textContent), ["GPT-6.1 Sol", "DeepSeek V5"]);
+  assert.equal(models.querySelectorAll(".paper-away-meta")[0].textContent, "Zen · Sep 29");
+  const studio = band.querySelector(".paper-away-studio");
+  assert.equal(studio.querySelector(".paper-away-version").textContent, "New in 0.4.6");
+  assert.deepEqual(studio.querySelectorAll(".paper-away-change").map((line) => line.textContent), NOTES.history[0].notes);
+
+  // Late, and no focus taken; the chooser's rows are untouched.
+  assert.equal(env.document.activeElement, rows[1]);
+  assert.ok(env.rows().every((row, index) => row === rows[index]));
+  // A project's name selects it in the chooser and hands the keyboard to Open, without opening it.
+  await alpha.querySelector(".paper-away-name").click();
+  assert.equal(env.startup.state().selectedId, projectA.id);
+  assert.equal(env.document.activeElement, env.get("boot-open"));
+  assert.deepEqual(plain(host.calls.filter(([name]) => name === "choose")), [], "nothing was opened");
+  // The project names join the Tab cycle before the stories.
+  assert.equal(env.paper.controls()[0], alpha.querySelector(".paper-away-name"));
+  assert.deepEqual(plain(host.calls.filter(([name]) => name === "newsAway")), [["newsAway"]], "asked once");
+});
+
+test("the band says so when nothing is new, and a first visit shows the last two weeks' models", async () => {
+  const host = bridge({
+    newsAway: async () => ({ ok: true, models: { firstVisit: true, drops: [{ source: "claude", sourceName: "Claude", id: "claude-opus-5-5", name: "Claude Opus 5.5", releaseDate: "2026-09-22" }] }, projects: [] }),
+    releaseWhatsNew: async () => ({ ok: true, enabled: true, current: "0.4.6", history: [{ version: "0.4.6", notes: ["x"], unread: false }] }),
+  });
+  const env = environment(host.api);
+  env.startup.choose();
+  await flush();
+  const band = env.news().querySelector(".paper-away");
+  assert.ok(band, "drawn even while the news is still loading");
+  assert.ok(env.news().querySelector(".paper-skeleton"), "above the placeholders");
+  assert.match(band.querySelector(".paper-away-projects").querySelector(".paper-away-empty").textContent, /^Open a folder/);
+  assert.equal(band.querySelector(".paper-away-models").querySelector(".paper-section-title").textContent, "Recent models");
+  assert.match(band.querySelector(".paper-away-models").textContent, /Released in the last two weeks/);
+  assert.equal(band.querySelector(".paper-away-studio").querySelector(".paper-away-empty").textContent, "You are on Studio 0.4.6. Nothing new to read.");
+});
+
+test("the paper switched off on the host, or a host without newsAway, draws no band", async () => {
+  const off = bridge({ newsAway: async () => ({ ok: true, disabled: true }), releaseWhatsNew: async () => NOTES });
+  const env = environment(off.api);
+  env.startup.choose();
+  off.answer.resolve({ ok: true, edition: EDITION });
+  await flush();
+  assert.equal(env.news().querySelector(".paper-away"), null);
+  const older = environment(bridge().api);
+  older.startup.choose();
+  await flush();
+  assert.equal(older.news().querySelector(".paper-away"), null, "no newsAway, no What's new: today's paper as it was");
+});

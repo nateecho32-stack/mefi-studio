@@ -149,6 +149,7 @@ const api = {
   // The Studio Daily: the launch screen's newspaper and its updates.
   newsEdition: (options) => ipcRenderer.invoke("news:edition", { refresh: options?.refresh === true }),
   onNewsEdition: (callback) => ipcRenderer.on("news:edition", (_event, edition) => callback(edition)),
+  newsAway: () => ipcRenderer.invoke("news:away"),
   shellReveal: (filePath) => ipcRenderer.invoke("shell:reveal", filePath),
   shellCopy: (text) => ipcRenderer.invoke("shell:copy", text),
   eyesPickPng: () => ipcRenderer.invoke("eyes:pick-png"),

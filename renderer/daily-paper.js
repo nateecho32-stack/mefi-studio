@@ -3,7 +3,10 @@
 // be asked; the paper then fills #paper-mast and #paper-news inside
 // #boot-layer, beside the .boot-card it never touches. The chooser stays
 // interactive from the first frame: the paper takes no focus, moves no node
-// of the card, and news arriving late only redraws the news column.
+// of the card, and news arriving late only redraws the news column. Above
+// the news, "Since you were away" (window.mefiStudio.newsAway and
+// releaseWhatsNew) says what changed in the recent projects, which models are
+// new and what is new in Studio; a project's name selects it in the chooser.
 //
 // The host keeps one edition a day (scripts/daily-news-host.cjs) and answers
 // window.mefiStudio.newsEdition({ refresh }); onNewsEdition pushes a newer
@@ -20,7 +23,7 @@
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const SECTIONS = { MODELS: "Models", TOOLS: "Tools", RESEARCH: "Research", INDUSTRY: "Industry", STUDIO: "Studio" };
   const WIRE_TAGS = { release: "Release", model: "New model", studio: "Studio", news: "News" };
-  const state = { on: false, run: 0, edition: null, stamp: "", loading: false, refreshing: false, listening: false, links: [], els: null };
+  const state = { on: false, run: 0, edition: null, stamp: "", loading: false, refreshing: false, listening: false, links: [], els: null, away: null, studio: null };
 
   function node(tag, className, text) {
     const element = document.createElement(tag);
@@ -185,6 +188,127 @@
     return wrap;
   }
 
+  // ---- since you were away ----
+  // A band above the news from the host (window.mefiStudio.newsAway, main.cjs
+  // "The Studio Daily: since you were away") and What's new: each recent
+  // project's changes since it was last opened, the models new since the last
+  // day the paper was shown, and Studio's own unread changes. It draws when
+  // its answers arrive and never takes the focus; a project's name selects
+  // that project in the chooser (MefiStartup.pick) without opening it.
+  const AWAY_MODELS = 8;
+  const plural = (count, one, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
+  function shortDay(text) {
+    const date = dayOf(text);
+    return Number.isNaN(date.getTime()) ? "" : `${MONTHS[date.getMonth()]} ${date.getDate()}`;
+  }
+  function awayProject(digest) {
+    const item = node("li", "paper-away-project");
+    item.dataset.projectId = String(digest.id ?? "");
+    const name = node("button", "paper-away-name", String(digest.name ?? "Project"));
+    name.type = "button";
+    name.dataset.storyId = `project:${digest.id}`;
+    name.addEventListener("click", () => window.MefiStartup?.pick?.(digest.id));
+    state.links.push(name);
+    const head = node("p", "paper-away-line");
+    head.append(name, node("span", "paper-away-meta", digest.since ? `opened ${ago(digest.since)}` : "not opened yet"));
+    const facts = node("ul", "paper-away-facts");
+    let count = 0;
+    const fact = (tone, words) => {
+      const line = node("li", "paper-away-fact", words);
+      line.dataset.tone = tone;
+      facts.append(line);
+      count += 1;
+    };
+    const first = (list, key) => (Array.isArray(list) && list[0]?.[key] ? `: ${list[0][key]}` : "");
+    if (digest.waiting?.count) fact("ask", `${plural(digest.waiting.count, "question")} waiting on you${first(digest.waiting.latest, "title")}`);
+    if (digest.finished?.count) fact("done", `${plural(digest.finished.count, "task")} finished${digest.finished.latest?.length ? `: ${digest.finished.latest.map((task) => task.title).join(", ")}` : ""}`);
+    if (digest.running) fact("run", `${plural(digest.running, "task")} running`);
+    const commits = digest.commits ?? {};
+    if (commits.count || commits.unpulled) fact("git", `${[commits.count ? plural(commits.count, "new commit") : "", commits.unpulled ? `${commits.unpulled} not pulled yet` : ""].filter(Boolean).join(" · ")}${first(commits.latest, "subject")}`);
+    if (!count) fact("quiet", "Nothing new since you were here.");
+    item.append(head, facts);
+    return item;
+  }
+  function awayProjects(list) {
+    const column = node("section", "paper-away-col paper-away-projects");
+    column.dataset.part = "projects";
+    column.append(node("h3", "paper-section-title", "Your projects"));
+    if (!list.length) {
+      column.append(node("p", "paper-away-empty", "Open a folder and its news shows up here: finished work, questions for you and new commits."));
+      return column;
+    }
+    const items = node("ul", "paper-away-list");
+    for (const digest of list) items.append(awayProject(digest));
+    column.append(items);
+    return column;
+  }
+  function awayModels(models) {
+    const column = node("section", "paper-away-col paper-away-models");
+    column.dataset.part = "models";
+    const drops = Array.isArray(models?.drops) ? models.drops : [];
+    column.append(node("h3", "paper-section-title", models?.firstVisit ? "Recent models" : "New models"));
+    if (!drops.length) {
+      column.append(node("p", "paper-away-empty", models?.firstVisit ? "No model came out in the last two weeks." : "No new models since your last visit."));
+      return column;
+    }
+    const items = node("ul", "paper-away-list");
+    for (const drop of drops.slice(0, AWAY_MODELS)) {
+      const item = node("li", "paper-away-model");
+      item.dataset.source = String(drop.source ?? "");
+      item.append(node("span", "paper-away-model-name", String(drop.name ?? drop.id ?? "")), node("span", "paper-away-meta", [drop.sourceName, drop.releaseDate ? shortDay(drop.releaseDate) : ""].filter(Boolean).join(" · ")));
+      items.append(item);
+    }
+    column.append(items);
+    const more = drops.length - AWAY_MODELS;
+    if (more > 0) column.append(node("p", "paper-away-note", `and ${plural(more, "more model")}`));
+    if (models.firstVisit) column.append(node("p", "paper-away-note", "Released in the last two weeks. From tomorrow, only what is new since your last visit."));
+    return column;
+  }
+  function awayStudio(notes) {
+    const column = node("section", "paper-away-col paper-away-studio");
+    column.dataset.part = "studio";
+    column.append(node("h3", "paper-section-title", "Studio"));
+    const unread = notes?.enabled === false ? [] : (Array.isArray(notes?.history) ? notes.history : []).filter((entry) => entry?.unread && Array.isArray(entry.notes) && entry.notes.length);
+    if (!unread.length) {
+      column.append(node("p", "paper-away-empty", notes?.current ? `You are on Studio ${notes.current}. Nothing new to read.` : "Nothing new in Studio."));
+      return column;
+    }
+    for (const entry of unread.slice(0, 2)) {
+      column.append(node("p", "paper-away-version", `New in ${entry.version}`));
+      const items = node("ul", "paper-away-list");
+      for (const line of entry.notes.slice(0, 3)) items.append(node("li", "paper-away-change", String(line)));
+      column.append(items);
+    }
+    return column;
+  }
+  function awayBand() {
+    const away = state.away;
+    if (!away && !state.studio) return null;
+    const section = node("section", "paper-away");
+    section.setAttribute("aria-labelledby", "paper-away-title");
+    const head = node("div", "paper-away-head");
+    const title = node("h2", "paper-away-title", "Since you were away");
+    title.id = "paper-away-title";
+    head.append(node("p", "paper-kicker", "Your studio"), title);
+    const grid = node("div", "paper-away-grid");
+    grid.append(awayProjects(Array.isArray(away?.projects) ? away.projects : []), awayModels(away?.models), awayStudio(state.studio));
+    section.append(head, grid);
+    return section;
+  }
+  async function loadAway() {
+    const run = state.run;
+    const [away, studio] = await Promise.all([
+      Promise.resolve(typeof api()?.newsAway === "function" ? api().newsAway() : null).catch(() => null),
+      Promise.resolve(typeof api()?.releaseWhatsNew === "function" ? api().releaseWhatsNew() : null).catch(() => null),
+    ]);
+    if (run !== state.run || !state.on || away?.disabled) return;
+    state.away = away?.ok ? away : null;
+    state.studio = studio?.ok ? studio : null;
+    if (!state.away && !state.studio) return;
+    if (state.edition) paintNews();
+    else paintLoading();
+  }
+
   // ---- drawing ----
   function glyph() {
     if (typeof document.createElementNS !== "function") return null;
@@ -246,7 +370,7 @@
     state.links = [];
     news.dataset.state = "loading";
     news.setAttribute("aria-busy", "true");
-    news.replaceChildren(skeleton());
+    news.replaceChildren(...[awayBand(), skeleton()].filter(Boolean));
   }
   // Redraws the news column only. A story link that had the keyboard hands
   // it to the same story in the new paper, or to Refresh.
@@ -256,6 +380,7 @@
     const active = document.activeElement;
     const held = active && typeof news.contains === "function" && news.contains(active) ? String(active.dataset?.storyId ?? "") : null;
     state.links = [];
+    const band = awayBand();
     const parts = [edition.lead ? lead(edition.lead) : waiting()];
     if (edition.top?.length) parts.push(row(edition.top));
     const lower = node("div", "paper-lower");
@@ -263,6 +388,7 @@
     lower.append(wire(edition.wire ?? []));
     parts.push(lower);
     for (const part of parts) part.classList?.add?.("paper-enter");
+    if (band) parts.unshift(band);
     news.dataset.state = edition.lead ? "ready" : "empty";
     news.setAttribute("aria-busy", "false");
     news.replaceChildren(...parts);
@@ -324,6 +450,8 @@
     state.on = true;
     state.edition = null;
     state.stamp = "";
+    state.away = null;
+    state.studio = null;
     state.loading = true;
     state.refreshing = false;
     layer.dataset.paper = "on";
@@ -333,6 +461,7 @@
     paintMast();
     listen();
     void load(false);
+    void loadAway();
     return true;
   }
   // boot.js's Tab cycle: the stories in reading order, then Refresh.

@@ -2552,6 +2552,121 @@ async function releaseWhatsNewSet(payload = {}) {
 }
 // ---- end of what's new ----------------------------------------------------------
 
+// ---- The Studio Daily: since you were away ------------------------------------
+// The launch screen's own band above the news (renderer/daily-paper.js): the
+// models that are new since the last day the paper was shown, and each recent
+// project's changes since it was last opened (finished tasks, open questions,
+// running work, new commits). scripts/front-page.cjs holds the rules. Boards
+// and git are read, never written, and git never fetches: commits are what the
+// folder already has. The model lists are the catalog file the refresh keeps,
+// plus OpenRouter's list and the ChatGPT plan's (only when signed in), each
+// read at most once a local day and kept in userData/news/models-seen.json
+// with the day's baseline. Settings › General's daily news switch turns all
+// of it off. Never throws: a project that cannot be read is left out.
+const frontPage = require("./scripts/front-page.cjs");
+const NEWS_AWAY_GIT_MS = 5000;
+const NEWS_AWAY_BOARD_MAX = 32 * 1024 * 1024;
+let newsAwayOpenrouter = null;
+let newsAwayInFlight = null;
+
+function newsAwayDay(at = new Date()) {
+  return `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, "0")}-${String(at.getDate()).padStart(2, "0")}`;
+}
+
+// The lists only a network has, once a day; the rest of the day reuses them.
+async function newsAwayLists(saved, day) {
+  const kept = saved?.day === day && saved?.current && typeof saved.current === "object" ? saved.current : null;
+  const lists = {};
+  if (Array.isArray(kept?.openrouter)) lists.openrouter = kept.openrouter;
+  else {
+    try {
+      newsAwayOpenrouter ??= require("./scripts/openrouter-catalog.cjs").createCatalog();
+      const answer = await Promise.race([newsAwayOpenrouter({}), new Promise((resolve) => setTimeout(() => resolve(null), 8000).unref?.())]);
+      if (answer?.ok && Array.isArray(answer.models)) lists.openrouter = answer.models;
+    } catch { /* offline: OpenRouter is left out today */ }
+  }
+  if (Array.isArray(kept?.chatgpt)) lists.chatgpt = kept.chatgpt;
+  else {
+    try {
+      const status = typeof chatgptPlanStatus === "function" ? await chatgptPlanStatus() : null;
+      if (status?.signedIn) {
+        const listed = await chatgptPlan().listModels({});
+        if (listed?.ok && Array.isArray(listed.models)) lists.chatgpt = listed.models.map((model) => ({ id: model.slug, name: model.display_name || model.title || model.slug }));
+      }
+    } catch { /* not signed in, or the plan did not answer */ }
+  }
+  return lists;
+}
+
+async function newsAwayRead(file) {
+  try {
+    const info = await stat(file);
+    if (!info.isFile() || info.size > NEWS_AWAY_BOARD_MAX) return null;
+    return JSON.parse(await readFile(file, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+// The commits the folder has since `since`, on its branch and its upstream,
+// and how many of the upstream's are not pulled yet. No fetch.
+async function newsAwayGit(root, since) {
+  if (typeof outsideGit !== "function" || typeof root !== "string" || !existsSync(path.join(root, ".git"))) return null;
+  const span = since ? [`--since=@${Math.floor(since / 1000)}`] : ["--max-count=5"];
+  const format = ["log", "--no-merges", "--max-count=40", "--format=%ct%x1f%s", ...span];
+  let log = await outsideGit(root, [...format, "HEAD", "@{upstream}"], NEWS_AWAY_GIT_MS);
+  if (!log.ok) log = await outsideGit(root, [...format, "HEAD"], NEWS_AWAY_GIT_MS);
+  const commits = log.ok ? log.stdout.split(/\r?\n/).filter(Boolean).map((line) => {
+    const [at, subject] = line.split("\x1f");
+    return { at: Number(at) * 1000, subject };
+  }) : [];
+  const behind = await outsideGit(root, ["rev-list", "--count", "HEAD..@{upstream}"], NEWS_AWAY_GIT_MS);
+  return { commits, unpulled: behind.ok ? Number.parseInt(behind.stdout, 10) || 0 : 0 };
+}
+
+async function newsAwayDigest(project) {
+  const since = Number.isFinite(project?.openedAt) ? project.openedAt : null;
+  const [board, assistant, git] = await Promise.all([
+    newsAwayRead(projects.dataPath(TASKS_PATH, project)),
+    newsAwayRead(projects.dataPath(ASSISTANT_PATH, project)),
+    newsAwayGit(project.path, since).catch(() => null),
+  ]);
+  return frontPage.projectDigest({ project, since, tasks: Array.isArray(board) ? board : [], questions: Array.isArray(assistant?.questions) ? assistant.questions : [], git });
+}
+
+async function newsAway() {
+  if (newsAwayInFlight) return newsAwayInFlight;
+  newsAwayInFlight = (async () => {
+    try {
+      const settings = await readSettings().catch(() => ({}));
+      if (settings?.ui?.dailyNews === false) return { ok: true, disabled: true };
+      const day = newsAwayDay();
+      const dir = path.join(app.getPath("userData"), "news");
+      const file = path.join(dir, "models-seen.json");
+      const saved = await newsAwayRead(file);
+      const [catalog, lists] = await Promise.all([catalogDocument.read().catch(() => null), newsAwayLists(saved, day)]);
+      const rolled = frontPage.rollModels(saved, frontPage.modelSnapshot(catalog, lists), day);
+      if (rolled.record && JSON.stringify(rolled.record) !== JSON.stringify(saved)) {
+        try {
+          await mkdir(dir, { recursive: true });
+          const temp = `${file}.${process.pid}.tmp`;
+          await writeFile(temp, JSON.stringify(rolled.record), "utf8");
+          await rename(temp, file);
+        } catch (error) {
+          logLine(`[news] the model list was not saved (${String(error?.message ?? error).slice(0, 80)})`);
+        }
+      }
+      const list = await projectLaunchFacts(projects.list());
+      const digests = await Promise.all(frontPage.recentProjects(list?.projects).map((project) => newsAwayDigest(project).catch(() => null)));
+      return { ok: true, day, models: { drops: rolled.drops, firstVisit: rolled.firstVisit }, projects: digests.filter(Boolean) };
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error).slice(0, 200) };
+    }
+  })().finally(() => { newsAwayInFlight = null; });
+  return newsAwayInFlight;
+}
+// ---- end of since you were away -------------------------------------------------
+
 // ---- Report a problem: the report, the session marker and the crash prompt ---------
 // Settings › System › Diagnostics builds a small report on this PC: the owner
 // reads every file, then saves it as a zip where a Save dialog says. Nothing is
@@ -23833,6 +23948,8 @@ function registerIpc() {
   });
   dailyNews.onChange((edition) => send("news:edition", edition));
   ipcMain.handle("news:edition", (_event, payload) => dailyNews.edition({ refresh: payload?.refresh === true }));
+  // "Since you were away" above the news (the block of that name).
+  ipcMain.handle("news:away", () => (typeof newsAway === "function" ? newsAway() : { ok: false, error: "unavailable" }));
   if (!SMOKE && !CAPTURE && !CLI_MODE) {
     dailyNews.start();
     app.on("before-quit", () => dailyNews.stop());
