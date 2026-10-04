@@ -240,6 +240,32 @@ pub fn iso_string(ms: f64) -> Option<String> {
     Some(format!("{year_text}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{milli:03}Z"))
 }
 
+/// A character JavaScript's `trim` and `\s` count as space (U+FEFF yes,
+/// U+0085 no, unlike Rust's `char::is_whitespace`).
+pub fn is_space(c: char) -> bool {
+    matches!(c, '\t' | '\n' | '\u{b}' | '\u{c}' | '\r' | ' ' | '\u{a0}' | '\u{1680}' | '\u{2000}'..='\u{200a}' | '\u{2028}' | '\u{2029}' | '\u{202f}' | '\u{205f}' | '\u{3000}' | '\u{feff}')
+}
+
+/// `text.trim()`.
+pub fn trim(text: &str) -> &str {
+    text.trim_matches(is_space)
+}
+
+/// `text.split(/\r?\n/)`: a `\r` goes only when a `\n` follows it.
+pub fn split_lines(text: &str) -> Vec<&str> {
+    let mut parts: Vec<&str> = text.split('\n').collect();
+    let last = parts.len() - 1;
+    for part in parts.iter_mut().take(last) {
+        *part = part.strip_suffix('\r').unwrap_or(part);
+    }
+    parts
+}
+
+/// `a < b` for strings: UTF-16 code unit order.
+pub fn utf16_cmp(a: &str, b: &str) -> Ordering {
+    a.encode_utf16().cmp(b.encode_utf16())
+}
+
 /// `text.length`: UTF-16 code units.
 pub fn utf16_len(text: &str) -> usize {
     text.encode_utf16().count()

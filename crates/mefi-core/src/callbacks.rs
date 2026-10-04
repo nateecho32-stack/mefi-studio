@@ -5,11 +5,24 @@
 //! is a function that always answers `v` (the parity tests use it, having no
 //! engine to call back).
 
+use std::time::Duration;
+
 use serde_json::Value;
 
-/// Calls a `{ "$mefi": "fn" }` handle in whatever process owns it.
-pub trait Callbacks {
+/// The error a call answers when its time ran out.
+pub const TIMED_OUT: &str = "the engine did not answer in time";
+
+/// Calls a `{ "$mefi": "fn" }` handle in whatever process owns it. A port may
+/// work on several threads at once (three glances in parallel), so a caller
+/// is shared between them.
+pub trait Callbacks: Sync {
     fn call(&self, handle: &Value, args: Vec<Value>) -> Result<Value, String>;
+
+    /// The same, giving up after `limit` with [`TIMED_OUT`]. Callers that
+    /// cannot wait that long override it; the default waits as `call` does.
+    fn call_within(&self, handle: &Value, args: Vec<Value>, _limit: Duration) -> Result<Value, String> {
+        self.call(handle, args)
+    }
 }
 
 /// No engine to call back: only constant handles answer.
@@ -32,5 +45,13 @@ pub fn invoke(callbacks: &dyn Callbacks, handle: &Value, args: Vec<Value>) -> Re
         Some("const") => Ok(handle.get("value").cloned().unwrap_or(Value::Null)),
         Some("fn") => callbacks.call(handle, args),
         _ => Err("not a function".into()),
+    }
+}
+
+/// Calls a function argument, giving up after `limit`.
+pub fn invoke_within(callbacks: &dyn Callbacks, handle: &Value, args: Vec<Value>, limit: Duration) -> Result<Value, String> {
+    match handle.get("$mefi").and_then(Value::as_str) {
+        Some("fn") => callbacks.call_within(handle, args, limit),
+        _ => invoke(callbacks, handle, args),
     }
 }

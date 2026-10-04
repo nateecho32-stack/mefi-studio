@@ -14,7 +14,9 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   On the Rust host the OpenCode session store is now read by Rust: the same
   answers, and the usage ledger's repeat reads about nine times faster.
   Multi-PC sync, the Worktrees page's list, merge, remove and forget, and the
-  @ picker's file search run in Rust there too.
+  @ picker's file search run in Rust there too, and so does the Git chip's
+  work: its look at each project, Save and push, Publish and Link, with the
+  same checks for keys, big files and folders that must stay out.
 
 - Your PCs can explicitly start a coordinator and pair check workers. Queued
   Studio checks use isolated exact-commit checkouts, retain restart journals,

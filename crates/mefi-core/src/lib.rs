@@ -12,11 +12,17 @@
 
 //! - `files`: the @ picker's project file search (scripts/project-files.cjs
 //!   with gitignore-lite.cjs), behind a Rust-backed factory.
+//! - `git`: the Git chip's host actions (scripts/git-actions.cjs and the
+//!   git-link.cjs rules they read), behind a Rust-backed factory.
+//!
+//! `jsre` runs JavaScript regular expressions with JavaScript's meaning.
 
 pub mod callbacks;
 pub mod eyes;
 pub mod files;
+pub mod git;
 pub mod js;
+pub mod jsre;
 pub mod paths;
 pub mod repo;
 
@@ -24,6 +30,7 @@ pub mod repo;
 pub fn dispatch(function: &str, args: &[serde_json::Value], callbacks: &dyn callbacks::Callbacks) -> Result<serde_json::Value, String> {
     match function.split_once('.') {
         Some(("files", name)) => files::call(name, args, callbacks),
+        Some(("git", name)) => git::call(name, args, callbacks),
         _ => repo::call(function, args, callbacks),
     }
 }

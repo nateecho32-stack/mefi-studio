@@ -16,6 +16,12 @@ const PORTED = Object.freeze({
   "scripts/worktree-actions.mjs": Object.freeze({ key: "worktree-actions", functions: Object.freeze(["mergeWorktree", "removeWorktree", "pruneWorktrees", "worktreeFolder"]) }),
 });
 
+// The kill switch: MEFI_STUDIO_RUST_OFF=git-actions,sync (or "all") keeps
+// those ports on their JavaScript under the Rust host, read at each lookup.
+function off(name, env = process.env) {
+  return String(env.MEFI_STUDIO_RUST_OFF ?? "").split(",").map((item) => item.trim()).some((item) => item === name || item === "all");
+}
+
 function rustHost() {
   if (process.env.MEFI_STUDIO_HOST !== "tauri") return null;
   try {
@@ -29,7 +35,7 @@ function rustHost() {
 // functions calling Rust. `host` is a seam for tests.
 function withRust(rel, module, host = rustHost()) {
   const entry = PORTED[String(rel ?? "").replace(/\\/g, "/")];
-  if (!entry || !host || typeof host.callWithFunctions !== "function") return module;
+  if (!entry || off(entry.key) || !host || typeof host.callWithFunctions !== "function") return module;
   const served = Object.create(null);
   Object.assign(served, module);
   for (const name of entry.functions) {
@@ -54,13 +60,36 @@ const FACTORIES = Object.freeze({
       },
     });
   },
+  // The Git chip's actions (scripts/git-actions.cjs createGitActions). git and
+  // gh run from Rust; the engine's `env` is called back once per call, and a
+  // push's `check`, link's `isListed` and publish's `onProgress` when used.
+  // Like the JavaScript, every method answers and none throws.
+  "git-actions": (collaborators, host) => {
+    const call = (name, ...args) => host.callWithFunctions(`core.git.${name}`, [collaborators, ...args]);
+    const failed = (error) => ({ ok: false, kind: "error", error: `Something went wrong: ${String(error?.message ?? error).replace(/(:\/\/)[^\s/]*@/g, "$1")}` });
+    const guarded = (name) => (...args) => call(name, ...args).catch(failed);
+    return Object.freeze({
+      glance: (root, options = {}) => call("glance", root, options ?? {}).catch(() => null),
+      glanceMany: (list) => call("glanceMany", list).catch(() => []),
+      preview: (root, options = {}) => guarded("preview")(root, options ?? {}),
+      save: (root, options = {}) => guarded("save")(root, options ?? {}),
+      pushBranch: (root, options = {}) => guarded("pushBranch")(root, options ?? {}),
+      publish: (root, options = {}) => guarded("publish")(root, options ?? {}),
+      link: (root, options = {}) => guarded("link")(root, options ?? {}),
+      owners: guarded("owners"),
+      nameCheck: (owner, name) => guarded("nameCheck")(owner, name),
+      publishPreview: (root, options = {}) => guarded("publishPreview")(root, options ?? {}),
+      account: guarded("account"),
+      identity: guarded("identity"),
+    });
+  },
 });
 
 // The Rust-backed object for a host factory, or null to use the JavaScript one.
 function factory(name, collaborators, host = rustHost()) {
   const make = FACTORIES[name];
-  if (!make || !host || typeof host.callWithFunctions !== "function") return null;
+  if (!make || off(name) || !host || typeof host.callWithFunctions !== "function") return null;
   return make(collaborators, host);
 }
 
-module.exports = { PORTED, FACTORIES, withRust, factory };
+module.exports = { PORTED, FACTORIES, withRust, factory, off };

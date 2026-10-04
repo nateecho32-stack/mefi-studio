@@ -39,6 +39,35 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-03 Rust stage 2: the Git chip's actions move into Rust
+
+Branch `wip/rust-host`, after d428f9d. `scripts/git-actions.cjs` (glance,
+glanceMany, preview, save, pushBranch, publish, link, owners, nameCheck,
+publishPreview, account, identity) and the git-link/pc-setup/redaction/
+share-review rules it reads now have a Rust port in
+`crates/mefi-core/src/git/`, reached through the `git-actions` factory under
+the Rust host only. New: `jsre.rs` (JavaScript regexes with JavaScript's
+meaning) and the `MEFI_STUDIO_RUST_OFF` kill switch.
+
+`npm run check` ok (265 targets); `npm run test:fast` 6773 tests, 0 fail,
+14 skipped; lint 0 errors, 42 warnings (all pre-existing); audit ok;
+mefi-core 26 unit tests, host 13. Parity: `tests/rust_parity_git.test.mjs`
+(2 tests: about 330 pure-helper calls, and 89 steps on two identical
+folder trees with a local bare GitHub and a fake gh: every kind of save
+row, secrets by name and content, UTF-16 keys, a junction out of the
+project, 50/100 MB files, lock retries, merge in progress, push with a
+failing and a passing check, a rejected push, every publish path including
+resume and a taken name, and link related/unrelated/empty), all identical,
+with identical commit ids; `tests/rust_modules.test.mjs` 4 tests. The Git
+chip's existing suites (git_actions, git_host, git_link, git_link_host) and
+the other three parity suites: 202 tests, 0 fail. Live self-test on the Rust
+host: `git:state`, `projects:glance` and `git:save-preview` answered through
+Rust (rustCalls core.git.glance 3, glanceMany 1, preview 1); this checkout's
+preview (17 rows) and glance were byte-identical JSON to the JavaScript's.
+Timing on this checkout: glance about 330 ms and preview about 720 ms in
+both (git's own time). `fsutil fsinfo volumeinfo` is refused without admin
+on this PC, so the weak-drive check reads unknown in both languages.
+
 ## 2026-10-03 Rust stage 2: the store and repo modules move into Rust
 
 Branch `wip/rust-host`, after 80b1e0e. The OpenCode store reads
@@ -226,10 +255,6 @@ One ordered inventory covers current 76 scripts and 28 stylesheets. Preserved ol
 ## 2026-10-02 - Tasks overview card retention focused qualification
 
 Isolated local/task-card-retention-20261002 candidate, derived from the aggregate-verified Fleet recovery source. Tasks UI and task overview grouping: 90 passed, 0 failed, including unchanged DOM identity, insertion/removal/reorder, grouping changes, focus/expansion, canonical actions, drafts, hidden reopen, stale reads and project isolation. Paired Electron benchmarks and aggregate gate are pending; no performance improvement is claimed yet.
-
-## 2026-10-02 - Fleet read failure and recovery: isolated focused validation
-
-79 focused Fleet model, host, layout and UI tests passed. The real Chromium fixture passed all 25 existing layouts plus cached, unavailable and recovered states at 1440x900 and 600x560, with no page overflow, console errors, network attempts or child execution. Project switches clear all old team content; same-project errors persist across repaint; deterministic deferred tests cover late success, rejection and push ordering. Host run-identity checks remain unchanged. Full aggregate validation follows on the frozen candidate; its separate evidence records the outcome without changing tested source.
 
 ## Read Before Any Tests
 

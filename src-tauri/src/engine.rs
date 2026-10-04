@@ -371,6 +371,11 @@ struct HostCallbacks {
 
 impl mefi_core::callbacks::Callbacks for HostCallbacks {
     fn call(&self, handle: &Value, args: Vec<Value>) -> Result<Value, String> {
+        // sync's check runs the project's `npm run check`, up to 10 minutes.
+        self.call_within(handle, args, std::time::Duration::from_secs(15 * 60))
+    }
+
+    fn call_within(&self, handle: &Value, args: Vec<Value>, limit: std::time::Duration) -> Result<Value, String> {
         let id = self.engine.next_id.fetch_add(1, Ordering::Relaxed);
         let (tx, rx) = std::sync::mpsc::channel();
         self.engine.callbacks.lock().map_err(|_| "engine state poisoned")?.insert(id, tx);
@@ -379,10 +384,9 @@ impl mefi_core::callbacks::Callbacks for HostCallbacks {
             self.engine.callbacks.lock().ok().map(|mut map| map.remove(&id));
             return Err("Studio's engine is not running".into());
         }
-        // sync's check runs the project's `npm run check`, up to 10 minutes.
-        let answer = rx.recv_timeout(std::time::Duration::from_secs(15 * 60));
+        let answer = rx.recv_timeout(limit);
         self.engine.callbacks.lock().ok().map(|mut map| map.remove(&id));
-        answer.unwrap_or_else(|_| Err("the engine did not answer in time".into()))
+        answer.unwrap_or_else(|_| Err(mefi_core::callbacks::TIMED_OUT.into()))
     }
 }
 

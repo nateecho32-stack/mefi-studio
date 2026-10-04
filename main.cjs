@@ -24204,7 +24204,9 @@ function registerIpc() {
     const link = require("./scripts/git-link.cjs");
     const { createGitActions } = require("./scripts/git-actions.cjs");
     const { createGitHost } = require("./scripts/git-host.cjs");
-    const actions = createGitActions({ execFile: require("node:child_process").execFile, exists: existsSync, readText: (file) => readFile(file, "utf8").catch(() => null), env: () => process.env });
+    const collaborators = { execFile: require("node:child_process").execFile, exists: existsSync, readText: (file) => readFile(file, "utf8").catch(() => null), env: () => process.env };
+    // Under the Rust host the actions run in Rust (scripts/rust-modules.cjs factory); the engine's env is called back.
+    const actions = (typeof rustModules !== "undefined" && rustModules?.factory("git-actions", collaborators)) || createGitActions(collaborators);
     // `later` lets the chip's "Done" end by itself (git-host settle): an unref'd timer, so it never keeps Studio alive.
     // (No comments inside the object: tests/git_link_host.test.mjs reads its keys.)
     gitHostInstance = createGitHost({

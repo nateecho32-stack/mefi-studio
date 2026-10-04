@@ -544,6 +544,14 @@ fn self_test(engine: Arc<Engine>, dir: PathBuf) {
         report["worktrees"] = execute_javascript(&engine, &open_and_list)
         .await
         .unwrap_or_else(|error| json!({ "error": error }));
+        // The Git chip (git-actions moved too): its state, the launch list's
+        // glance and the save preview, all read-only. Counts and ids only.
+        report["git"] = execute_javascript(
+            &engine,
+            "Promise.all([window.mefiStudio.gitState({}), window.mefiStudio.projectsGlance(), window.mefiStudio.gitSavePreview({})]).then(([state, glance, preview]) => ({ state: state.ok ? state.model?.id ?? null : state.error, branch: state.model?.branch ?? null, glance: glance.ok ? glance.items?.length ?? null : glance.error, chips: (glance.items ?? []).filter((item) => item.chip).length, preview: preview.ok ? preview.files?.length ?? null : preview.error ?? preview.kind }))",
+        )
+        .await
+        .unwrap_or_else(|error| json!({ "error": error }));
         #[cfg(windows)]
         if std::env::var("MEFI_HOST_SELFTEST_TOAST").as_deref() == Ok("1") {
             report["toast"] = json!(crate::toast::show(&engine, 9_000_000, "Mefi's Studio AI+", "Rust host self-test: notifications work.", true).err());

@@ -173,6 +173,7 @@ the Electron build until stage 3.
 | OpenCode session store: 19 reads and 2 git helpers | `scripts/eyes.mjs` (worker methods) | `crates/mefi-core/src/eyes/` | `scripts/eyes-client.cjs` returns a host client under the Rust host; the host runs the read on a blocking thread and sends its JSON text on unparsed | `tests/rust_parity_eyes.test.mjs` |
 | The @ picker's project file search (and its .gitignore reader) | `scripts/project-files.cjs`, `gitignore-lite.cjs`, `mentions.cjs` `cleanPath` | `crates/mefi-core/src/files/` | `main.cjs`'s `projectFilesHost` takes a Rust-backed factory (`scripts/rust-modules.cjs` `factory`); the project root is called back in the engine | `tests/rust_parity_files.test.mjs` |
 | Multi-PC sync, the worktree table and its actions | `scripts/sync.mjs` (`sync`, `inspect`, `remoteMoved`, `changedFiles`, `lostWork`), `worktrees.mjs`, `worktree-actions.mjs` | `crates/mefi-core/src/repo/` | `main.cjs`'s `loadModule` hands the module out with these functions answered by Rust (`scripts/rust-modules.cjs`); `check` and `inUse` are called back in the engine | `tests/rust_parity_repo.test.mjs` |
+| The Git chip's actions: glance, the launch list's glance, Save (preview and commit), push, Publish, Link, owners, name check, account | `scripts/git-actions.cjs`, with the `git-link.cjs` rules it reads (scrub, `classifyPush`, `classifyGh`, `pathBlocked`, names, `.gitignore` and license text, `publishPlan`), `pc-setup.cjs`'s three readers, `redaction.cjs` `maskCredentials` and the `share-review.cjs` rules a save scans for | `crates/mefi-core/src/git/` | `main.cjs`'s `gitHost()` takes a Rust-backed `git-actions` factory; git and gh run from Rust, on the PATH of the engine's `env` (called back once per call); a push's `check`, link's `isListed` and publish's `onProgress` are called back. `scripts/git-host.cjs` (the chip's state and queue) and `describe`/`chip` stay JavaScript for now | `tests/rust_parity_git.test.mjs` |
 
 ### Two seams
 
@@ -191,7 +192,14 @@ the Electron build until stage 3.
   collaborators as functions and expose async methods):
   `rust-modules.cjs` `factory(name, collaborators)` returns an object with
   the same methods answered by Rust; the collaborators stay in the engine and
-  are called back each call.
+  are called back each call. Where the JavaScript's collaborators are its IO
+  (`createGitActions`'s `execFile` and `fs`), Rust does that IO itself and
+  only calls back what the engine alone knows (its `env`).
+
+**The kill switch.** `MEFI_STUDIO_RUST_OFF=git-actions,sync` (module keys or
+factory names, or `all`) keeps those ports on their JavaScript under the Rust
+host. It is read at each lookup, so a divergence found live can be compared
+by restarting with the port off. `tests/rust_modules.test.mjs` pins it.
 
 What does not move this way: fine-grained pure logic called synchronously
 with whole boards (`backlog.workState` runs per card per tick with every
@@ -210,9 +218,21 @@ It moves with its callers and the board state, as one subsystem.
   fixtures skip without Electron, so **a change to a ported JavaScript module
   is only checked against Rust on a PC that builds it.**
 - **JavaScript's rules** live in `crates/mefi-core/src/js.rs`: number
-  printing, Math.round, toFixed, toISOString, UTF-16 lengths and slices, and
-  ICU-like localeCompare order for ASCII. A key JavaScript would leave
-  undefined is left out, never written as null.
+  printing, Math.round, toFixed, toISOString, UTF-16 lengths and slices,
+  `trim` and `\s` (U+FEFF yes, U+0085 no), `split(/\r?\n/)`, and ICU-like
+  localeCompare order for ASCII. A key JavaScript would leave undefined is
+  left out, never written as null.
+- **JavaScript's regular expressions** run through `crates/mefi-core/src/jsre.rs`
+  (`js_regex!(source, flags)`): a port copies the pattern exactly as the
+  JavaScript writes it, and gets ASCII `\b`/`\w`/`\d`, JavaScript's `\s` and
+  `.`, and an `i` that folds ASCII only. Lookaround and backreferences are
+  refused when the pattern is built, never answered differently.
+- **Real tools, fake services.** The Git chip's suite builds two identical
+  folder trees (fixed identity and dates, so commit ids match), stands a
+  local bare repository in for GitHub through `url.insteadOf`, and answers
+  `gh` with a copy of node.exe named gh.exe whose preloaded script
+  (`NODE_OPTIONS`, forward slashes) replays a table and does nothing in any
+  other Node process. Both languages find it on the PATH they are handed.
 - **The real store.** On 3 October all 12 of the engine's common reads matched
   on the owner's 20 GB OpenCode store (2,421 sessions, 50,133 usage rows),
   read-only, comparing only equality and sizes. Warm timings: most reads are
@@ -221,7 +241,12 @@ It moves with its callers and the board state, as one subsystem.
   JSON text and joins it.
 - **Live.** With `MEFI_HOST_SELFTEST`, a run of the Rust host reports
   `rustCalls`: the engine calls each moved module answered. A page request
-  for `eyes:state` and the engine's own polling were served by Rust.
+  for `eyes:state` and the engine's own polling were served by Rust. On
+  3 October the Git chip's state, the launch list's glance and the save
+  preview of this checkout were answered by Rust (`core.git.glance`,
+  `glanceMany`, `preview`), and the same preview and glance from the
+  JavaScript were byte-identical JSON. Their time is git's: about the same
+  in both.
 
 ### Porting the next module
 
@@ -233,8 +258,11 @@ It moves with its callers and the board state, as one subsystem.
    and the JavaScript caller choosing the host under `MEFI_STUDIO_HOST=tauri`.
 4. Check with the self-test's `rustCalls`, then the gates.
 
-Suggested order: settings, keys and projects, then the rest of the git
-features (the Git chip, `scripts/git-host.cjs`), then the pure logic modules
+Suggested order: the remaining factory-shaped modules (skills, the image
+store, attempt snapshots), then settings, keys and projects together (writes
+inject `projects.saved()`, `auth.json` is split off, 59 `updateSettings`
+sites), with `scripts/git-host.cjs` and git-link's `describe` once the
+settings and sync they read are in Rust, then the pure logic modules
 (`assistant.mjs`, `executor-core`, `task-*`, planning), then the services
 (the assistant loop, the executor that starts the builder CLIs, the
 watchers), and last the 302 page channels themselves. The board store (the
