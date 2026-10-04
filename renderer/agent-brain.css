@@ -317,7 +317,7 @@ html[data-motion="off"] .pm-stage *, html[data-motion="off"] .pm-navigation * { 
 
 /* ---- the companion: an orb in the menu foot and its panel ---- */
 .companion-orb { position: relative; width: 38px; height: 38px; margin: 0 auto 6px; border-radius: 50%; border: 1px solid var(--hairline-strong); background: radial-gradient(circle at 35% 30%, var(--tint-gold-3), transparent 70%), var(--panel-solid); color: var(--gold-bright); cursor: pointer; display: grid; place-items: center; padding: 0; }
-.companion-orb.floating { position: fixed; left: 14px; bottom: 14px; z-index: var(--z-sheet); margin: 0; }
+.companion-orb.floating { position: fixed; left: 14px; bottom: calc(14px + var(--shell-y1)); z-index: var(--z-sheet); margin: 0; }
 .companion-orb:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
 .companion-face svg, .companion-avatar svg { width: 26px; height: 26px; display: block; }
 .companion-face .c-body, .companion-avatar .c-body { fill: var(--tint-gold-3); stroke: currentColor; stroke-width: 1.4; }

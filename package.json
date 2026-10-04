@@ -14,6 +14,11 @@
     "postinstall": "node scripts/fetch-electron.mjs",
     "start": "electron .",
     "start:web": "node scripts/serve.mjs",
+    "host": "node scripts/rust-host.mjs run",
+    "host:build": "node scripts/rust-host.mjs build",
+    "host:build:release": "node scripts/rust-host.mjs release-build",
+    "host:test": "node scripts/rust-host.mjs test",
+    "host:core": "node scripts/rust-host.mjs core-build",
     "serve": "node scripts/serve.mjs",
     "data": "node scripts/refresh-models.mjs",
     "data:offline": "node scripts/refresh-models.mjs --offline",
@@ -28,6 +33,7 @@
     "reconcile-board": "node scripts/reconcile-board.mjs",
     "policy-lab": "node scripts/policy-lab.mjs",
     "sync": "node scripts/sync.mjs",
+    "worktrees": "node scripts/worktrees.mjs",
     "jev:status": "electron . --jev-status",
     "jev:models": "electron . --jev-models",
     "jev:probe": "electron . --jev-probe",
@@ -38,7 +44,9 @@
     "test:fast": "node scripts/run-node-tests.mjs --fast",
     "lint": "npx --yes eslint@9 --no-config-lookup -c eslint.config.js .",
     "package": "node scripts/package-portable.mjs",
-    "package:release": "npm run build-booklet && node scripts/package-portable.mjs --release"
+    "package:release": "npm run build-booklet && node scripts/package-portable.mjs --release",
+    "package:host": "node scripts/package-portable.mjs --host tauri",
+    "package:host:release": "npm run build-booklet && node scripts/package-portable.mjs --host tauri --release"
   },
   "devDependencies": {
     "electron": "44.4.1",

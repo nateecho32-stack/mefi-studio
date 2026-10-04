@@ -2,7 +2,7 @@
 (function () {
   "use strict";
 
-  const state = { ideas: [], selected: null, view: "list", clusterFilter: null, projectId: null };
+  const state = { ideas: [], selected: null, view: "list", clusterFilter: null, projectId: null, trash: false };
   const el = {};
   let initialized = false;
   let ideaRevision = 0;
@@ -60,11 +60,14 @@
       if (!result?.ok || !Array.isArray(result.ideas)) throw new Error(result?.error || "Couldn't load saved ideas.");
       state.projectId = result.projectId || state.projectId;
       state.ideas = result.ideas;
+      // Whether Recently deleted is keeping deletes (main.cjs "Board trash"), so the
+      // Delete question can say what is true.
+      state.trash = result.trash === true;
       renderAll();
     } catch (error) { if (revision === ideaRevision) el.status.textContent = error.message; }
   }
 
-  async function act(action, payload = {}) {
+  async function act(action, payload = {}, after = null) {
     if (!window.mefiStudio?.ideasAction) return false;
     const projectId = state.projectId;
     try {
@@ -72,9 +75,39 @@
       if (projectId !== state.projectId) return false;
       if (!result?.ok) throw new Error(result?.error || "Couldn't save the idea.");
       await load();
+      after?.(result);
       return true;
     } catch (error) { if (projectId === state.projectId) window.MefiToast?.(error.message, "bad"); return false; }
   }
+
+  // Recently deleted (main.cjs "Board trash"): a delete that was kept says so in its
+  // reply, and the toast offers Undo for a few seconds. After that the same button
+  // waits in Tools › Recently deleted for 30 days. With the switch off nothing was
+  // kept, so nothing is offered.
+  const UNDO_MS = 8000;
+  const clipName = (value) => { const flat = String(value ?? "").replace(/\s+/g, " ").trim(); return flat.length > 40 ? `${flat.slice(0, 39).trimEnd()}…` : flat || "Untitled"; };
+  async function undoDelete(rows) {
+    const projectId = state.projectId;
+    let back = 0;
+    let failure = "";
+    for (const row of rows) {
+      let result;
+      try { result = await window.mefiStudio.ideasAction({ action: "restore", ideaId: row.id, projectId }); } catch (error) { result = { ok: false, error: error?.message }; }
+      if (result?.ok) back += 1; else failure = result?.error || "Recently deleted could not be read";
+    }
+    if (projectId === state.projectId) await load();
+    if (failure) window.MefiToast?.(`${back ? `${back} put back · ` : ""}Not put back · ${failure}`, "bad");
+    else window.MefiToast?.(back === 1 ? `Put back “${clipName(rows[0].title)}”` : `Put back ${back} ideas`, "good");
+  }
+  const offerUndo = (result, message) => {
+    const kept = Array.isArray(result?.trashed) ? result.trashed.filter((row) => row?.kind === "idea") : [];
+    if (!kept.length || !window.mefiStudio?.ideasAction) return false;
+    window.MefiToast?.(message(kept.length, Number(result.notKept) || 0), "good", { duration: UNDO_MS, action: { label: "Undo", run: () => undoDelete(kept) } });
+    return true;
+  };
+  // "owner" is the person at the keyboard (Search's "idea ..."): it reads as "you".
+  const SOURCE_LABELS = { owner: "you" };
+  const sourceOf = (idea) => SOURCE_LABELS[idea?.source] || idea?.source;
 
   const STATUS_LABELS = { new: "New", keep: "Kept", accepted: "Task made", done: "Done" };
   function statusTag(idea) {
@@ -135,7 +168,7 @@
       // printing "undefined · Invalid Date"; the New badge already says unread.
       const at = idea.at == null || idea.at === "" ? NaN : new Date(idea.at).getTime();
       const saysNew = String(idea.status || "new") === "new";
-      meta.textContent = [idea.source, Number.isFinite(at) ? new Date(at).toLocaleString() : "", idea.read || saysNew ? "" : "unread"].filter(Boolean).join(" · ");
+      meta.textContent = [sourceOf(idea), Number.isFinite(at) ? new Date(at).toLocaleString() : "", idea.read || saysNew ? "" : "unread"].filter(Boolean).join(" · ");
       li.append(meta);
       // Focusable because nav's claim() focuses "#ideas-list li".
       li.tabIndex = 0;
@@ -186,7 +219,7 @@
     const meta = document.createElement("p");
     meta.className = "idea-detail-meta";
     const at = idea.at == null || idea.at === "" ? NaN : new Date(idea.at).getTime();
-    meta.append(statusTag(idea), document.createTextNode(` ${[idea.source ? `From ${idea.source}` : "", Number.isFinite(at) ? new Date(at).toLocaleString() : ""].filter(Boolean).join(" · ")}`));
+    meta.append(statusTag(idea), document.createTextNode(` ${[idea.source ? `From ${sourceOf(idea)}` : "", Number.isFinite(at) ? new Date(at).toLocaleString() : ""].filter(Boolean).join(" · ")}`));
     el.detail.append(meta);
     const title = document.createElement("p");
     title.className = "idea-detail-text";
@@ -260,8 +293,9 @@
       renderDetail();
     });
     action("Delete", async () => {
-      if (typeof window.MefiConfirm === "function" && !(await window.MefiConfirm(`Delete the idea "${String(idea.title ?? idea.detail ?? "").slice(0, 60)}"? This cannot be undone.`, { label: "Delete" }))) return;
-      if (window.mefiStudio?.ideasAction) { act("delete", { ideaId: idea.id }); return; }
+      const name = String(idea.title ?? idea.detail ?? "").slice(0, 60);
+      if (typeof window.MefiConfirm === "function" && !(await window.MefiConfirm(`Delete the idea "${name}"? ${state.trash ? "You can bring it back from Recently deleted for 30 days." : "This cannot be undone."}`, { label: "Delete" }))) return;
+      if (window.mefiStudio?.ideasAction) { act("delete", { ideaId: idea.id }, (result) => offerUndo(result, () => `Deleted “${clipName(name)}”`)); return; }
       state.ideas = state.ideas.filter((item) => item.id !== idea.id);
       state.selected = null;
       save();
@@ -467,6 +501,7 @@
       openButton: "ideas-open",
       graphCol: "ideas-graph-col",
       tools: "ideas-tools",
+      recent: "ideas-recent",
       back: "ideas-back",
     })) {
       el[key] = document.getElementById(id);
@@ -480,6 +515,8 @@
     el.ai?.addEventListener("click", () => scan(true));
     // A button that just armed (Clear finished ideas) keeps the menu open for its second press.
     el.tools?.addEventListener("click", (event) => { const button = event.target.closest?.("button"); if (button && !button.classList?.contains?.("danger-armed")) el.tools.open = false; });
+    // Tools › Recently deleted: ideas only, read each time the menu opens (the list itself lives in tasks.js).
+    el.tools?.addEventListener("toggle", () => { if (el.tools.open) void window.MefiTasks?.showRecentlyDeleted?.(el.recent, { kinds: ["idea"], projectId: state.projectId }); });
     el.tools?.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && el.tools.open) { event.preventDefault(); event.stopPropagation(); el.tools.open = false; el.tools.querySelector("summary")?.focus(); }
     });
@@ -487,7 +524,8 @@
     el.back?.addEventListener("click", () => { el.overlay.dataset.detail = "false"; layoutCards(true); el.list?.querySelector("li.selected")?.focus(); });
     const clean = async () => {
       if (window.mefiStudio?.ideasAction) {
-        if (await act("clean", { ideaIds: state.ideas.filter((idea) => idea.status === "done").map((idea) => idea.id) })) el.status.textContent = "Removed finished ideas; accepted work stays available.";
+        const cleaned = await act("clean", { ideaIds: state.ideas.filter((idea) => idea.status === "done").map((idea) => idea.id) }, (result) => offerUndo(result, (kept, notKept) => `Removed ${kept + notKept} finished idea${kept + notKept === 1 ? "" : "s"}${notKept ? ` · the newest ${kept} can be brought back` : ""}`));
+        if (cleaned) el.status.textContent = "Removed finished ideas; accepted work stays available.";
         return;
       }
       state.ideas = state.ideas.filter((idea) => idea.status !== "done");

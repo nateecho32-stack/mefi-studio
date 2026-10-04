@@ -250,6 +250,8 @@
 
   function imageUrl(filePath) {
     // encodeURI keeps # and ?, which would cut a path like C#\... short.
+    // The Rust host serves local pictures itself; its page cannot load file: URLs.
+    if (window.__mefiHost?.fileUrl) return window.__mefiHost.fileUrl(filePath);
     return encodeURI("file:///" + filePath.replace(/\\/g, "/")).replace(/#/g, "%23").replace(/\?/g, "%3F");
   }
 

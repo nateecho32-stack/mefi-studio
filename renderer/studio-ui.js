@@ -42,12 +42,27 @@
   function scheduleSoon() {
     if (!soon && !frame) soon = setTimeout(() => { soon = 0; schedule(); }, 150);
   }
+  // A scroll hint's thumb: where the visible part sits in the whole, drawn as a
+  // short bar on the pane's edge (an indicator only; it never takes layout
+  // width and never catches the pointer). `offset` is scrollTop or scrollLeft,
+  // `view` the visible length, `total` the scrollable length, `track` the room
+  // to draw in. Null when there is nothing to scroll; never shorter than
+  // MIN_THUMB, never past either end.
+  const MIN_THUMB = 28;
+  function thumbOf(offset, view, total, track) {
+    const room = total - view;
+    if (!(room > 2) || !(track > 0)) return null;
+    const size = Math.min(track, Math.max(MIN_THUMB, Math.round(track * (view / total))));
+    const at = Math.round((track - size) * Math.min(1, Math.max(0, offset / room)));
+    return { size, at };
+  }
   function track(el) {
     if (!el || regions.has(el) || el.closest?.(".studio-scroll-hint")) return;
     const css = getComputedStyle(el);
     if (el !== document.scrollingElement && !/(auto|scroll)/.test(`${css.overflowX} ${css.overflowY}`)) return;
     const hint = node("div", "studio-scroll-hint");
-    const region = { el, hint, buttons: {}, addedTab: false, stop: null };
+    const region = { el, hint, buttons: {}, addedTab: false, stop: null, thumbs: { y: node("i", "studio-scroll-thumb thumb-y"), x: node("i", "studio-scroll-thumb thumb-x") }, seen: { top: el.scrollTop, left: el.scrollLeft }, fade: 0 };
+    for (const bar of Object.values(region.thumbs)) { bar.hidden = true; hint.append(bar); }
     for (const [direction, glyph] of [["up", "↑"], ["down", "↓"], ["left", "←"], ["right", "→"]]) {
       const button = node("button", `studio-scroll-arrow scroll-${direction}`, glyph);
       button.type = "button"; button.setAttribute("aria-label", `Scroll ${direction}`);
@@ -164,7 +179,10 @@
         // leaving it where it last stood, which may now be under a menu.
         arrows.push({ button, point: arrowPosition(el, button, direction, left, top, right - left, bottom - top) });
       }
-      Object.assign(update, { hidden: false, left, top, width: right - left, height: bottom - top, directions, active, arrows,
+      // 3 px of edge on each side, and room for the other axis's bar in the corner.
+      const thumbs = { y: y ? thumbOf(el.scrollTop, height, el.scrollHeight, bottom - top - (x ? 12 : 6)) : null, x: x ? thumbOf(el.scrollLeft, width, el.scrollWidth, right - left - (y ? 12 : 6)) : null };
+      const moved = region.seen.top !== el.scrollTop || region.seen.left !== el.scrollLeft;
+      Object.assign(update, { hidden: false, left, top, width: right - left, height: bottom - top, directions, active, arrows, thumbs, moved, seen: { top: el.scrollTop, left: el.scrollLeft },
         owner: el.id || el.className || el.tagName,
         addTab: el.tabIndex < 0 && !el.hasAttribute("tabindex") && !el.matches("input, textarea, select, html, body") });
     }
@@ -175,6 +193,8 @@
       if (hint.hidden !== update.hidden) hint.hidden = update.hidden;
       if (update.hidden) {
         region.stop();
+        clearTimeout(region.fade);
+        hint.classList.remove("scrolling");
         if (update.removeTab) { el.removeAttribute("tabindex"); region.addedTab = false; }
         continue;
       }
@@ -190,6 +210,22 @@
         hint.classList.toggle(`can-${direction}`, can);
       }
       hint.classList.toggle("active", update.active);
+      // The thumb shows while the pointer is over the pane and for a moment after it scrolls.
+      for (const axis of ["y", "x"]) {
+        const bar = region.thumbs[axis], geometry = update.thumbs[axis];
+        if (bar.hidden !== !geometry) bar.hidden = !geometry;
+        if (!geometry) continue;
+        const [lengthKey, offsetKey] = axis === "y" ? ["height", "top"] : ["width", "left"];
+        const length = `${geometry.size}px`, offset = `${geometry.at + 3}px`;
+        if (bar.style[lengthKey] !== length) bar.style[lengthKey] = length;
+        if (bar.style[offsetKey] !== offset) bar.style[offsetKey] = offset;
+      }
+      if (update.moved) {
+        hint.classList.add("scrolling");
+        clearTimeout(region.fade);
+        region.fade = setTimeout(() => hint.classList.remove("scrolling"), 900);
+      }
+      region.seen = update.seen;
       for (const { button, point } of update.arrows) {
         if (!point) continue;
         const style = { left: `${point[0]}px`, top: `${point[1]}px`, right: "auto", bottom: "auto" };
@@ -235,13 +271,15 @@
     if (!popup) return;
     if (!visible(popup.button) || popup.select.disabled) { closeSelect(); return; }
     const box = popup.button.getBoundingClientRect();
+    // Layout v2 keeps the list inside the free area (nav.js usable()); v1 is the window.
+    const area = window.MefiNav?.layout?.on?.() ? window.MefiNav.usable() : { left: 0, top: 0, right: innerWidth, bottom: innerHeight };
     // Wide form fields need not turn a handful of choices into long bars.
-    const width = Math.min(popup.columns > 1 ? popup.columns * 132 + 16 : Math.max(240, Math.min(360, box.width)), innerWidth - 24);
-    const maxHeight = Math.min(380, innerHeight - 24);
+    const width = Math.min(popup.columns > 1 ? popup.columns * 132 + 16 : Math.max(240, Math.min(360, box.width)), area.right - area.left - 24);
+    const maxHeight = Math.min(380, area.bottom - area.top - 24);
     popup.root.style.width = `${width}px`; popup.root.style.maxHeight = `${maxHeight}px`;
     const height = popup.root.getBoundingClientRect().height;
-    const top = box.bottom + 6 + height <= innerHeight - 12 ? box.bottom + 6 : Math.max(12, box.top - height - 6);
-    popup.root.style.left = `${Math.max(12, Math.min(box.left, innerWidth - width - 12))}px`;
+    const top = box.bottom + 6 + height <= area.bottom - 12 ? box.bottom + 6 : Math.max(area.top + 12, box.top - height - 6);
+    popup.root.style.left = `${Math.max(area.left + 12, Math.min(box.left, area.right - width - 12))}px`;
     popup.root.style.top = `${top}px`;
   }
   function choose(option) {
@@ -368,6 +406,11 @@
     select.addEventListener("focus", () => button.focus());
   }
   const appearanceKey = "mefiStudio.appearance";
+  // What html[data-density] says. Two levels, compact and comfortable, are all the window has
+  // known and any other value is comfortable; the 0.5 layout (html[data-layout="v2"], which
+  // renderer/size.js and size.css serve) adds "spacious". The store may hold a v2 choice while
+  // the window is v1: it is kept as it is and read as comfortable there.
+  const densityOf = (value) => (value === "compact" || (value === "spacious" && document.documentElement.dataset.layout === "v2") ? value : "comfortable");
   let appearance;
   try { appearance = JSON.parse(localStorage.getItem(appearanceKey) || "null"); } catch {}
   appearance = { preset: "studio", density: "comfortable", glass: 45, glow: 35, ...(appearance || {}) };
@@ -376,7 +419,7 @@
     appearance = { ...appearance, ...(patch.preset ? presets[patch.preset] : {}), ...patch };
     if (!presets[appearance.preset]) appearance.preset = "studio";
     const root = document.documentElement;
-    root.dataset.studioStyle = appearance.preset; root.dataset.density = appearance.density === "compact" ? "compact" : "comfortable";
+    root.dataset.studioStyle = appearance.preset; root.dataset.density = densityOf(appearance.density);
     root.dataset.studioMaterial = Number(appearance.glass) > 0 ? "glass" : "solid";
     root.style.setProperty("--studio-glass", String(Math.max(0, Math.min(100, Number(appearance.glass) || 0)) / 100));
     root.style.setProperty("--studio-glow", String(Math.max(0, Math.min(100, Number(appearance.glow) || 0)) / 100));
@@ -407,7 +450,7 @@
       control.setAttribute("aria-label", title); row.append(node("span", "", title), control); card.append(row); fields[key] = control;
       control.addEventListener("input", () => applyAppearance({ [key]: key === "density" ? control.value : Number(control.value) }));
     }
-    const sync = () => { for (const [key, field] of Object.entries(fields)) field.value = appearance[key]; schedule(); };
+    const sync = () => { for (const [key, field] of Object.entries(fields)) field.value = key === "density" ? densityOf(appearance.density) : appearance[key]; schedule(); };
     sync(); parent.prepend(card); applyAppearance({}, false); scan(card);
   }
   // ---- menus: one highlight that glides ------------------------------------

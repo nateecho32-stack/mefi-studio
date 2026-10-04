@@ -69,8 +69,13 @@ const heavyLane = selected.filter((file) => !inSerialized(file) && heavy.has(fil
 const exclusive = selected.filter(inSerialized);
 
 if (listOnly) {
-  for (const file of selected) console.log(path.relative(studio, file).split(path.sep).join("/"));
-  process.exit(0);
+  // One write, and exit only when it has been taken: process.exit() straight after
+  // console.log drops whatever a pipe has not accepted yet, so a slow reader (or a
+  // small pipe on a busy machine) got a list cut off part way, and the guard in
+  // tests/run_node_tests_fast.test.mjs failed at random.
+  const text = selected.map((file) => `${path.relative(studio, file).split(path.sep).join("/")}\n`).join("");
+  process.stdout.write(text, () => process.exit(0));
+  await new Promise(() => {}); // the write callback ends the process
 }
 
 console.log(

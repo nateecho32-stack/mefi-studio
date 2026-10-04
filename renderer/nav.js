@@ -20,6 +20,7 @@
 
   // Layer bookkeeping. Other modules read it; only claim/release write it.
   const state = { sheet: null, transient: null, returnTo: null, commandFrom: null, focusReturn: { sheet: null, transient: null } };
+  let focusClaimSequence = 0;
   // assistant holds the service tone (ok | busy | warn | offline | paused), painted
   // as a dot on the Explorer's dock item and tool button.
   const badges = { sessions: 0, progress: 0, tasks: 0, ideas: 0, machine: null, assistant: null, questions: 0 };
@@ -517,6 +518,46 @@
       isOpen: () => overlayOpen("analyzer-overlay"),
     },
     {
+      id: "worktrees",
+      label: "Worktrees",
+      short: "Worktrees",
+      kind: "overlay",
+      layer: "sheet",
+      section: "work",
+      group: "tools",
+      key: null,
+      glyph: "g-worktree",
+      badge: null,
+      desc: "Every worktree of this project: which hold work only this PC has, and which are safe to merge or remove",
+      searchTerms: "worktrees worktree branches runs folders checkout merge remove forget prune parallel isolated stranded git",
+      showIn: showIn({ tools: true, palette: true, help: true }),
+      element: "worktrees-overlay",
+      focus: "#worktrees-refresh",
+      open: (params) => window.MefiWorktrees?.open?.(params),
+      close: () => window.MefiWorktrees?.close?.(),
+      isOpen: () => overlayOpen("worktrees-overlay"),
+    },
+    {
+      id: "skills",
+      label: "Skills",
+      short: "Skills",
+      kind: "overlay",
+      layer: "sheet",
+      section: "agents",
+      group: "tools",
+      key: null,
+      glyph: "g-skills",
+      badge: null,
+      desc: "Reusable instructions kept as plain files in this project, and the /names that call them",
+      searchTerms: "skills skill instructions slash command SKILL.md .agents reusable playbook import export starter agents",
+      showIn: showIn({ tools: true, palette: true, help: true }),
+      element: "skills-overlay",
+      focus: "#skills-new",
+      open: (params) => window.MefiSkills?.open?.(params),
+      close: () => window.MefiSkills?.close?.(),
+      isOpen: () => overlayOpen("skills-overlay"),
+    },
+    {
       id: "palette",
       commandPrimary: true,
       label: "Search Studio",
@@ -765,8 +806,10 @@
     window.MefiModelLab?.show?.(view);
   }
 
-  const WORKSPACE_PAGES = new Set(["tasks", "plans", "ideas", "brains", "analyzer", "explorer", "trace", "fleet", "overhead", "agent-brain", "agents"]);
+  const WORKSPACE_PAGES = new Set(["tasks", "plans", "ideas", "brains", "analyzer", "worktrees", "explorer", "trace", "fleet", "overhead", "agent-brain", "skills", "agents", "today", "inbox"]);
   const isWorkspacePage = (dest) => document.documentElement?.dataset?.shell === "rail" && WORKSPACE_PAGES.has(dest?.id);
+  // Settings' Size and density page (renderer/size.js, registered only in layout v2) is a page of the workspace too.
+  WORKSPACE_PAGES.add("size");
   function syncPageInert() {
     const page = isWorkspacePage(get(state.sheet));
     for (const node of document.querySelectorAll?.("body > header, #tab-booklet, #tab-graph, #tab-eyes, #tab-studio, #workspace-layer, #vibe-layer, #idle-layer, #idle-hud, #tree-rail") ?? []) {
@@ -970,7 +1013,13 @@
       if (page) sheet.removeAttribute("aria-modal");
       else sheet.setAttribute("aria-modal", "true");
     }
+    const focusClaim = ++focusClaimSequence;
+    const focusBeforeClaim = document.activeElement;
     requestAnimationFrame(() => {
+      // Navigation supplies initial focus only while its claim is current.
+      // A later user focus must survive a delayed or covered-window frame.
+      if (focusClaim !== focusClaimSequence || state[dest.layer] !== id ||
+          document.activeElement !== focusBeforeClaim || !visibleNavTarget(root)) return;
       const requested = dest.focus ? Array.from(document.querySelectorAll?.(dest.focus) ?? []).find(visibleNavTarget) : null;
       const selected = Array.from(root?.querySelectorAll?.('[aria-selected="true"]') ?? []).find(visibleNavTarget);
       const target = requested ?? selected ?? sheet;
@@ -985,6 +1034,7 @@
   function release(id) {
     const dest = get(id);
     const layer = dest?.layer ?? (state.sheet === id ? "sheet" : state.transient === id ? "transient" : null);
+    if (state.sheet === id || state.transient === id) focusClaimSequence += 1;
     if (state.sheet === id) {
       state.sheet = null;
       delete document.body.dataset.sheet;
@@ -1029,7 +1079,8 @@
       // In Vibe mode these pages open from Vibe, so Back with nothing behind
       // it goes there instead of stopping on Build's section home.
       if (vibeMode()) return go("vibe");
-      const home = sectionOf(get(id)) === "agents" ? "agents" : "tasks";
+      // A page of Settings (Size and density) has no history when it was opened from Configuration or Search: back to Settings.
+      const home = sectionOf(get(id)) === "agents" ? "agents" : sectionOf(get(id)) === "settings" ? "studio" : "tasks";
       if (id !== home) return go(home);
       return;
     }
@@ -1057,6 +1108,12 @@
   function go(id, params = {}, options = {}) {
     const redirected = window.MefiAgents?.redirect?.(id, params);
     if (redirected) return go(redirected.id, redirected.params, options);
+    // ---- sessions (renderer/sessions.js) ----
+    // In the 0.5 layout a task opened by its id (the palette, a notification, a link) is a session: the thread shows it.
+    // The task board stays one press away (board: true).
+    const sessionRoute = window.MefiSessions?.redirect?.(id, params);
+    if (sessionRoute) return go(sessionRoute.id, sessionRoute.params, options);
+    // ---- end of sessions ----
     // In Vibe mode, Home is Vibe: every Home button, H and Esc out of Command land there.
     if (id === "workspace" && window.MefiVibe?.mode?.() === "vibe") id = "vibe";
     closeHelpMenu();
@@ -1422,8 +1479,8 @@
   ];
   const LOCAL_ROUTES = Object.freeze({
     home: ["workspace"],
-    work: ["tasks", "plans", "ideas", "analyzer"],
-    agents: ["agents", "command", "fleet", "eyes", "trace", "explorer", "overhead", "agent-brain", "brains", "context", "booklet", "graph", "usage"],
+    work: ["tasks", "plans", "ideas", "analyzer", "worktrees"],
+    agents: ["agents", "command", "fleet", "eyes", "trace", "explorer", "overhead", "agent-brain", "skills", "brains", "context", "booklet", "graph", "usage"],
     settings: ["studio"],
   });
 
@@ -1455,6 +1512,8 @@
   }
 
   function paintRecentTasks() {
+    // Build's sessions layout lists the whole board itself (builder.js).
+    if (window.MefiBuilder?.paintRail?.()) return;
     const list = document.getElementById("app-rail-recent-list");
     if (!list) return;
     const projectId = (window.MefiWorkspace?.activeProjectId?.() || window.MefiWorkspace?.state?.activeId) || taskProjectId || recentProjectId;
@@ -1569,6 +1628,8 @@
       if (!menu.hidden) menu.querySelector("button")?.focus?.();
     });
     foot.append(help, menu, ...kept);
+    // Build's sessions layout adds the mode switch, the work list and you.
+    window.MefiBuilder?.decorateRail?.({ sections, foot });
     paintBadges(document.getElementById("app-rail"));
     paintRail();
   }
@@ -1629,7 +1690,8 @@
     const section = sectionOf(get(id));
     for (const group of rail.querySelectorAll(".app-rail-section")) group.classList.toggle("current", group.dataset.section === section);
     for (const button of rail.querySelectorAll(".app-rail-head, .app-rail-foot-item[data-nav]")) {
-      const selected = button.classList.contains("app-rail-head") ? button.dataset.section === section : button.dataset.nav === id;
+      // Settings stays lit on its own pages (Size and density), as a section's head does.
+      const selected = button.classList.contains("app-rail-head") ? button.dataset.section === section : button.dataset.nav === id || (section === "settings" && button.dataset.nav === "studio");
       if (selected) button.setAttribute("aria-current", "page");
       else button.removeAttribute("aria-current");
     }
@@ -1740,6 +1802,222 @@
   function setShell(on) {
     try { localStorage.setItem(SHELL_KEY, on ? "rail" : "classic"); } catch { /* this launch only */ }
     return applyShell(Boolean(on) || vibeMode());
+  }
+
+  // ---- the layout contract -----------------------------------------------
+  // docs/unified-studio.md, "Layout contract". html[data-layout="v2"] is the
+  // second attribute the 0.5.0 plan asks for (a third data-shell value would
+  // read as classic to every `=== "rail"` gate): it says four regions the
+  // shell can grow, a session list, an inspector, a tab strip and a status
+  // bar, may take room from the window. v1, the default, is the attribute
+  // absent, and nothing here is wired then: no listener, no stored key, no
+  // inline style. The regions themselves are built later; this is what they
+  // stand on: --shell-list-w, --shell-inspector-w, --shell-tabs-h and
+  // --shell-status-h (styles.css, all 0px, with the free area's edges derived
+  // from them and the rail), the one function that writes them (layout.set),
+  // the fold rule for small windows, and usable(), the rectangle a floating
+  // thing keeps inside. This is the only writer of html[data-layout] and of
+  // html[data-layout-fold]; tests/layout_contract_nav.test.mjs pins that.
+  const LAYOUT_KEY = "mefiStudio.layout";
+  const LAYOUT_REGIONS = Object.freeze({
+    list: Object.freeze({ variable: "--shell-list-w", max: 420, folds: true }),
+    inspector: Object.freeze({ variable: "--shell-inspector-w", max: 640, folds: true }),
+    tabs: Object.freeze({ variable: "--shell-tabs-h", max: 48, folds: false }),
+    status: Object.freeze({ variable: "--shell-status-h", max: 40, folds: false }),
+  });
+  // Below this width (CSS px) the list and the inspector stop being columns. The
+  // geometry is styles.css's (@media (max-width: 899.98px), instant and
+  // independent of any script, so usable() is right even when a resize handler
+  // reads it before this file's own); this keeps html[data-layout-fold] in
+  // step for the regions that become drawers.
+  const LAYOUT_FOLD_BELOW = 900;
+  // The main area never gets less than this from the list and the inspector.
+  const LAYOUT_MAIN_MIN = 320;
+  const layoutRequested = { list: 0, inspector: 0, tabs: 0, status: 0 };
+  let layoutApplied = { list: 0, inspector: 0, tabs: 0, status: 0 };
+  let layoutResize = null;
+
+  // ?layout=v1|v2 wins for one launch. A diagnostic launch (?smoke=1,
+  // ?capture=1) stays v1 unless it asks, so the render fixtures see the layout
+  // they were written for; otherwise the saved choice, and v1 by default.
+  function layoutChoice() {
+    try {
+      const search = String(location.search || "");
+      const param = new URLSearchParams(search).get("layout");
+      if (param === "v1" || param === "v2") return param;
+      if (/[?&](?:smoke|capture)=1(?:&|$)/.test(search)) return "v1";
+      return localStorage.getItem(LAYOUT_KEY) === "v2" ? "v2" : "v1";
+    } catch {
+      return "v1";
+    }
+  }
+  const layoutOn = () => document.documentElement?.dataset?.layout === "v2";
+  const viewportSize = () => ({
+    w: Number(window.innerWidth) || document.documentElement?.clientWidth || 0,
+    h: Number(window.innerHeight) || document.documentElement?.clientHeight || 0,
+  });
+  // The numbers in px of a custom property, or null where there is no computed style to ask.
+  function cssLength(name, from = document.documentElement) {
+    try {
+      const value = parseFloat(getComputedStyle(from).getPropertyValue(name));
+      return Number.isFinite(value) ? value : null;
+    } catch {
+      return null;
+    }
+  }
+  function layoutNarrow() {
+    try {
+      if (typeof window.matchMedia === "function") return Boolean(window.matchMedia(`(max-width: ${LAYOUT_FOLD_BELOW - 0.02}px)`).matches);
+    } catch { /* fall back to the width */ }
+    const { w } = viewportSize();
+    return w > 0 && w < LAYOUT_FOLD_BELOW;
+  }
+  // The regions that are drawers rather than columns at this width.
+  const layoutFolded = () => (layoutOn() && layoutNarrow() ? Object.keys(LAYOUT_REGIONS).filter((name) => LAYOUT_REGIONS[name].folds) : []);
+  // What the rail (Build's or Vibe's) takes at rest; the open rail covers the page instead.
+  function railRest() {
+    const shown = ["app-rail", "vibe-rail"].some((id) => {
+      const box = document.getElementById?.(id)?.getBoundingClientRect?.();
+      return Boolean(box && box.width > 0 && box.height > 0);
+    });
+    if (!shown) return 0;
+    return cssLength("--shell-rail-w") ?? (document.documentElement.dataset.railPinned !== undefined ? 256 : 64);
+  }
+  // What each region gets: the widths asked for, cut back so the rail, the list and
+  // the inspector leave the main area LAYOUT_MAIN_MIN (the inspector gives way
+  // first), and nothing at all for the regions that fold.
+  function layoutFit() {
+    const folded = layoutFolded();
+    let room = Math.max(0, viewportSize().w - railRest() - LAYOUT_MAIN_MIN);
+    const fit = { list: 0, inspector: 0, tabs: layoutRequested.tabs, status: layoutRequested.status };
+    for (const name of ["list", "inspector"]) {
+      if (folded.includes(name)) continue;
+      fit[name] = Math.min(layoutRequested[name], room);
+      room -= fit[name];
+    }
+    return fit;
+  }
+  // Writes the variables (only where they are not 0, so a region that is not
+  // there leaves no trace) and the fold attribute. True when anything changed.
+  function paintLayout() {
+    if (!layoutOn()) return false;
+    const root = document.documentElement;
+    const fit = layoutFit();
+    const folded = layoutFolded().join(" ");
+    let changed = false;
+    for (const [name, region] of Object.entries(LAYOUT_REGIONS)) {
+      if (fit[name] === layoutApplied[name]) continue;
+      changed = true;
+      if (fit[name] > 0) root.style?.setProperty?.(region.variable, `${fit[name]}px`);
+      else root.style?.removeProperty?.(region.variable);
+    }
+    if ((root.dataset.layoutFold || "") !== folded) {
+      changed = true;
+      if (folded) root.dataset.layoutFold = folded; else delete root.dataset.layoutFold;
+    }
+    layoutApplied = fit;
+    return changed;
+  }
+  function clearLayout() {
+    const root = document.documentElement;
+    for (const name of Object.keys(LAYOUT_REGIONS)) {
+      root.style?.removeProperty?.(LAYOUT_REGIONS[name].variable);
+      layoutRequested[name] = 0;
+    }
+    delete root.dataset.layoutFold;
+    layoutApplied = { list: 0, inspector: 0, tabs: 0, status: 0 };
+  }
+  // Tells whoever measures the window. A change of size dispatches a resize,
+  // as the rail's pin does, so the orb, the media window and Command's graph
+  // fit again without each learning a new event; mefi:layout carries the detail.
+  function announceLayout(resized) {
+    const detail = { on: layoutOn(), fold: layoutFolded(), ...layoutApplied };
+    try { window.dispatchEvent(new CustomEvent("mefi:layout", { detail })); } catch { /* no events here */ }
+    if (resized) { try { window.dispatchEvent(new Event("resize")); } catch { /* no events here */ } }
+  }
+  function wireLayout(on) {
+    if (on && !layoutResize) {
+      layoutResize = () => { if (paintLayout()) announceLayout(false); };
+      window.addEventListener("resize", layoutResize);
+    } else if (!on && layoutResize) {
+      window.removeEventListener("resize", layoutResize);
+      layoutResize = null;
+    }
+  }
+
+  // The writer of html[data-layout]: v2 on or off, now. init() asks the launch
+  // (layoutChoice), setLayout() the person's saved choice.
+  function applyLayout(on = layoutChoice() === "v2") {
+    const root = document.documentElement;
+    if (!root) return false;
+    const was = layoutOn();
+    if (on) root.dataset.layout = "v2"; else delete root.dataset.layout;
+    wireLayout(Boolean(on));
+    if (on) paintLayout(); else if (was) clearLayout();
+    if (on || was) announceLayout(false);
+    // ---- sessions (renderer/sessions.js) ----
+    // Build's session list, thread and inspector are drawn only while the 0.5 layout is on.
+    if (on) window.MefiSessions?.attach?.(); else if (was) window.MefiSessions?.detach?.();
+    // ---- end of sessions ----
+    return Boolean(on);
+  }
+  function setLayout(choice) {
+    const next = choice === "v2" ? "v2" : "v1";
+    try { localStorage.setItem(LAYOUT_KEY, next); } catch { /* this launch only */ }
+    return applyLayout(next === "v2");
+  }
+
+  // The one way a region claims room: set("list", 280). The value is cut to
+  // the region's range and then to what the window can spare (layoutFit); it
+  // answers with what the region got. Nothing happens in v1.
+  function setRegion(name, value) {
+    const region = LAYOUT_REGIONS[name];
+    if (!region || !layoutOn()) return 0;
+    const number = Math.round(Number(value));
+    if (!Number.isFinite(number)) return layoutApplied[name];
+    layoutRequested[name] = Math.min(region.max, Math.max(0, number));
+    if (paintLayout()) announceLayout(true);
+    return layoutApplied[name];
+  }
+  const layout = Object.freeze({
+    on: layoutOn,
+    // What a region asked for, cut to its range; what it has now (folded, or cut back for room); the regions that are drawers now.
+    get: (name) => (name === undefined ? { ...layoutRequested } : layoutRequested[name] ?? 0),
+    used: (name) => { paintLayout(); return name === undefined ? { ...layoutApplied } : layoutApplied[name] ?? 0; },
+    fold: () => layoutFolded(),
+    set: setRegion,
+    reset: () => { for (const name of Object.keys(LAYOUT_REGIONS)) setRegion(name, 0); },
+    RANGES: Object.freeze(Object.fromEntries(Object.entries(LAYOUT_REGIONS).map(([name, region]) => [name, Object.freeze([0, region.max])]))),
+    FOLD_BELOW: LAYOUT_FOLD_BELOW,
+    MAIN_MIN: LAYOUT_MAIN_MIN,
+  });
+
+  // The rectangle of the window that chrome has left, in CSS px: what a
+  // floating thing (the companion's orb, the media window, a toast) stays inside.
+  // In v1 it is what each of those measured for itself: the right of the rail's
+  // real box (the open rail included, since it opens over the page) and
+  // below the local navigation's, to the window's other edges. In v2 it also
+  // clears the list, the tab strip, the inspector and the status bar, read from
+  // the same variables the layers use (so a fold is already in them).
+  function usable() {
+    const { w, h } = viewportSize();
+    const box = (id) => {
+      const rect = document.getElementById?.(id)?.getBoundingClientRect?.();
+      return rect && rect.width > 0 && rect.height > 0 ? rect : null;
+    };
+    const rail = box("app-rail"), bar = box("app-local-nav");
+    let left = rail ? rail.right : 0, top = bar ? bar.bottom : 0, right = w, bottom = h;
+    if (layoutOn()) {
+      paintLayout();
+      const length = (name, from) => cssLength(name, from) ?? 0;
+      left = Math.max(left, railRest() + (cssLength("--shell-list-w") ?? layoutApplied.list));
+      // The strip sits under the local navigation, or at the window's top where there is none (Vibe's own Home);
+      // the 0.5 shell's top bar (renderer/shell.js) is that row on every page, so with it the strip sits under it.
+      top = Math.max(top, (bar || box("shell-top") ? length("--shell-local-h", document.body || document.documentElement) : 0) + (cssLength("--shell-tabs-h") ?? layoutApplied.tabs));
+      right = w - (cssLength("--shell-inspector-w") ?? layoutApplied.inspector);
+      bottom = h - (cssLength("--shell-status-h") ?? layoutApplied.status);
+    }
+    return { left, top, right, bottom, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
   }
 
   function wireRail() {
@@ -2679,7 +2957,7 @@
     if (state === "applying") return { line: `installing ${version} · the app restarts`, button: "Installing…", busy: true };
     if (state === "rollingback") return { line: `going back to v${status?.previous?.from ?? "the saved version"} · the app restarts`, busy: true };
     if (state === "installed") return { line: `updated to v${status?.installed?.version ?? ""} · running this build`, installed: true };
-    if (state === "none") return { line: "no published release yet" };
+    if (state === "none") return { line: status?.unavailable ?? "no published release yet" };
     if (state === "current") return { line: `up to date${status?.current ? ` · v${status.current}` : ""}` };
     if (state === "error") return { line: `check failed · ${status?.error ?? "unknown"}`, bad: true, token: Boolean(status?.needsToken) };
     return { line: "not checked" };
@@ -2689,9 +2967,16 @@
     if (status) releaseUpdateState = status;
     const state = releaseUpdateState;
     const view = releaseView(state);
+    const sourceUpdates = document.querySelector("#source-updates");
+    if (sourceUpdates) sourceUpdates.hidden = Boolean(state?.supported);
+    const development = document.querySelector("#release-development");
+    if (development) {
+      development.checked = state?.channel === "development";
+      development.disabled = Boolean(view.busy);
+    }
     const line = document.querySelector("#release-status");
     if (line) {
-      line.textContent = `release · ${view.line}`;
+      line.textContent = `${state?.channel === "development" ? "development / beta" : "stable"} · ${view.line}`;
       line.classList.toggle("bad-text", Boolean(view.bad));
     }
     const apply = document.querySelector("#release-apply");
@@ -2814,6 +3099,19 @@
       return;
     }
     document.querySelector("#release-check")?.addEventListener("click", () => checkReleaseNow());
+    document.querySelector("#release-development")?.addEventListener("change", async (event) => {
+      const toggle = event.target;
+      const channel = toggle.checked ? "development" : "stable";
+      toggle.disabled = true;
+      try {
+        const result = await window.mefiStudio.releaseSetChannel?.(channel);
+        paintRelease(result?.status);
+        if (result?.ok === false) window.MefiToast?.(result.error || "Could not change the update channel. Please try again.", "bad");
+      } catch (error) {
+        paintRelease(releaseUpdateState);
+        window.MefiToast?.(`Channel change failed · ${String(error?.message ?? error)}`, "bad");
+      } finally { toggle.disabled = Boolean(releaseView(releaseUpdateState).busy); }
+    });
     document.querySelector("#release-apply")?.addEventListener("click", () => applyReleaseNow());
     document.querySelector("#release-rollback")?.addEventListener("click", () => rollbackReleaseNow());
     document.querySelector("#release-token-save")?.addEventListener("click", () => saveReleaseToken());
@@ -2864,6 +3162,8 @@
       focus: active && active !== document.body && active.id ? active.id : null,
       explorer: window.MefiExplorer?.saveState?.() ?? null,
       tasks: window.MefiTasks?.saveState?.() ?? null,
+      // Layout v2's tab strip writes what it had pending and says where it was (renderer/tabs.js); null when it is not running.
+      tabs: window.MefiTabs?.saveState?.() ?? null,
     };
     try {
       localStorage.setItem(RESUME_KEY, JSON.stringify(payload));
@@ -3003,6 +3303,7 @@
     renderTools();
     renderDock();
     applyShell();
+    applyLayout();
     wireRail();
     renderSheetLinks();
     paintCurrent();
@@ -3125,6 +3426,10 @@
     RAIL_SLOTS,
     applyShell,
     setShell,
+    applyLayout,
+    setLayout,
+    layout,
+    usable,
     setRailPinned,
     paintCurrent,
     current,

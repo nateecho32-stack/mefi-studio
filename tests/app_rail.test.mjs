@@ -204,7 +204,7 @@ test("each group has one local navigation row and the foot groups Help", () => {
   const { nav, rail, document } = load({ search: "?shell=rail" });
   nav.applyShell();
   assert.equal(rail().querySelectorAll(".app-rail-children").length, 2, "Friends tools and recent tasks expand with the rail");
-  for (const [section, routes] of Object.entries({work: ["tasks", "plans", "ideas", "analyzer"], agents: ["agents", "command", "fleet", "eyes", "trace", "explorer", "overhead", "agent-brain", "brains", "context", "booklet", "graph", "usage"]})) {
+  for (const [section, routes] of Object.entries({work: ["tasks", "plans", "ideas", "analyzer", "worktrees"], agents: ["agents", "command", "fleet", "eyes", "trace", "explorer", "overhead", "agent-brain", "skills", "brains", "context", "booklet", "graph", "usage"]})) {
     nav.paintLocalNav(section, routes[1]);
     const local = document.getElementById("app-local-nav");
     assert.deepEqual(local.querySelectorAll("[data-nav]").map(button => button.dataset.nav), routes);
@@ -342,8 +342,8 @@ test("sectionLabel names every record's section, the palette's result kinds", ()
   const { nav } = load();
   const label = (id) => nav.sectionLabel(nav.get(id));
   assert.equal(label("workspace"), "Home");
-  for (const id of ["tasks", "plans", "ideas", "analyzer", "scanIdeas"]) assert.equal(label(id), "Work", id);
-  for (const id of ["brains", "command", "eyes", "explorer", "overhead", "pinRail", "audit", "machine"]) assert.equal(label(id), "Agents", id);
+  for (const id of ["tasks", "plans", "ideas", "analyzer", "worktrees", "scanIdeas"]) assert.equal(label(id), "Work", id);
+  for (const id of ["brains", "command", "eyes", "explorer", "overhead", "skills", "pinRail", "audit", "machine"]) assert.equal(label(id), "Agents", id);
   for (const id of ["booklet", "graph", "search", "refresh", "print"]) assert.equal(label(id), "Agents", id);
   for (const id of ["studio", "music", "profiler", "motion", "shellRail"]) assert.equal(label(id), "Settings", id);
   for (const id of ["palette", "onboarding", "help"]) assert.equal(label(id), "Help", id);

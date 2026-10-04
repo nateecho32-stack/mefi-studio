@@ -87,9 +87,9 @@ function ghFake({ account = "octo-cat", orgs = [], views = {}, userId = "4242", 
   };
 }
 
-// The module under test on top of a recording execFile: git runs for real, gh and fsutil are answered
-// by the fakes, and `intercept` may answer (or fail) any call first.
-function harness(t, box, { gh = ghFake(), intercept = null, statOf = null, fsutil = null, ...more } = {}) {
+// The module under test on top of a recording execFile: git runs for real, gh and the drive query
+// (PowerShell) are answered by the fakes, and `intercept` may answer (or fail) any call first.
+function harness(t, box, { gh = ghFake(), intercept = null, statOf = null, volume = null, ...more } = {}) {
   const calls = [];
   const events = [];
   const sleeps = [];
@@ -101,7 +101,7 @@ function harness(t, box, { gh = ghFake(), intercept = null, statOf = null, fsuti
     try {
       answer = intercept?.(command, args, options) ?? null;
       if (!answer && command === "gh") answer = gh(args, options);
-      if (!answer && command === "fsutil") answer = fsutil?.(args) ?? { stdout: "File System Name : NTFS" };
+      if (!answer && command === "powershell.exe") answer = volume?.(args) ?? { stdout: "NTFS\r\n" };
     } catch (error) { unexpected.push(error.message); answer = { fail: true, stderr: error.message }; }
     if (!answer) return spawnFile(command, args, options, done);
     if (answer.fail) done(Object.assign(new Error(answer.message ?? answer.stderr ?? "failed"), { code: answer.code ?? 1, killed: answer.killed }), answer.stdout ?? "", answer.stderr ?? "");
@@ -127,7 +127,8 @@ const sizes = (map) => (file) => {
 // Whatever else a call did, it never forced, never skipped a hook, never added everything, never used a shell.
 function assertGentle(calls) {
   for (const call of calls) {
-    assert.ok(["git", "gh", "fsutil"].includes(call.command), `only git, gh and fsutil run (${call.command})`);
+    assert.ok(["git", "gh", "powershell.exe"].includes(call.command), `only git, gh and the drive query run (${call.command})`);
+    if (call.command === "powershell.exe") assert.match(call.args.at(-1), /^try \{ \[IO\.DriveInfo\]::new\('[A-Za-z]:'\)\.DriveFormat \}/, "PowerShell only ever names a drive's file system");
     assert.equal(call.shell, undefined, "no shell");
     assert.ok(Array.isArray(call.args), "argv arrays");
     for (const arg of call.args) assert.doesNotMatch(String(arg), /^(?:--force|--force-with-lease|-f|--no-verify|-n|--all|-A|--amend)$/, `${call.command} ${call.args.join(" ")}`);
@@ -891,9 +892,11 @@ test("publishing stops for a missing GitHub CLI, a signed-out account, an exFAT 
   assert.deepEqual([out.ok, out.kind, out.fix, out.error], [false, "not-signed-in", "sign-in", "Sign in to GitHub first."]);
   assert.ok(!existsSync(path.join(cwd, ".git")) && !existsSync(path.join(cwd, ".gitignore")), "nothing was made before the sign-in check");
   if (/^[A-Za-z]:/.test(cwd)) {
-    const weak = harness(t, box, { fsutil: () => ({ stdout: "Volume Name : Backup\nFile System Name : exFAT\n" }) });
+    const weak = harness(t, box, { volume: () => ({ stdout: "exFAT\r\n" }) });
     const exfat = await weak.actions.publish(cwd, { owner: "octo-cat", name: "app" });
     assert.deepEqual([exfat.ok, exfat.kind], [false, "weak-drive"]);
+    const asked = weak.calls.find((call) => call.command === "powershell.exe");
+    assert.deepEqual([asked.args.at(-1).includes(`::new('${cwd[0]}:')`), asked.timeout], [true, 10000], "the project's own drive, for at most 10 s");
     assert.match(exfat.error, /cannot keep a Git project reliably/);
     assert.ok(!existsSync(path.join(cwd, ".git")));
     assert.equal((await weak.actions.publishPreview(cwd, { owner: "octo-cat", name: "app" })).weakDrive, true);

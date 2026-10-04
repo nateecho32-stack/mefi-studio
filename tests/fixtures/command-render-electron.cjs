@@ -118,6 +118,8 @@ app.whenReady().then(async () => {
     responses.eyesState.pngs = [{path:path.join(root,"review-evidence.png"),name:"Review evidence",mtime:now,size:0}];
     responses.eyesLog = {ok:true,text:"[fixture] Sample review started.\n[fixture] Compact navigation updated.\n[fixture] Waiting for visual comparison decision."};
   }
+  if (process.env.MEFI_RELEASE_CHANNEL_CAPTURE) require("./release-channel-fixture.cjs").seed(responses);
+  if (process.env.MEFI_PAIRED_WORKER_CAPTURE) require("./paired-worker-ui-fixture.cjs").seed(responses);
   // Pure graph helpers supply the same valid catalog and default map as Studio;
   // this imports no host services, project state, credentials or worker code.
   const brains = require(path.resolve(__dirname, "../../scripts/brains.cjs"));
@@ -136,6 +138,7 @@ app.whenReady().then(async () => {
     contextBridge.exposeInMainWorld("mefiStudio",{
       ...Object.fromEntries(Object.keys(responses).map(key=>[key,async()=>{if(key==='eyesCollisions'&&collisionReads++===0)await new Promise(resolve=>setTimeout(resolve,5000));return responses[key];}])),
       ...Object.fromEntries(Object.keys(listeners).map(key=>[key,callback=>{listeners[key].push(callback);return()=>{};}])),
+      ${process.env.MEFI_RELEASE_CHANNEL_CAPTURE ? require("./release-channel-fixture.cjs").bridge() : ""}
       assistantMessage:async()=>({ok:false,error:'Messages are disabled in this isolated review fixture.'}),
       assistantPrefs:async patch=>{responses.assistantState.state.prefs={...responses.assistantState.state.prefs,...patch};return {ok:true,prefs:responses.assistantState.state.prefs};},
       prefsSet:async patch=>{responses.prefsGet.prefs={...responses.prefsGet.prefs,...patch};return responses.prefsGet;},
@@ -264,6 +267,14 @@ app.whenReady().then(async () => {
   await pinMotion();
   if (process.env.MEFI_TREE_DYNAMICS_CAPTURE) {
     await require("./tree-dynamics-fixture.cjs").capture({ contents, run, until, sleep, capturePage, report, root });
+    finish(); return;
+  }
+  if (process.env.MEFI_RELEASE_CHANNEL_CAPTURE) {
+    await require("./release-channel-fixture.cjs").capture({ window, run, until, sleep, capturePage, report, root });
+    finish(); return;
+  }
+  if (process.env.MEFI_PAIRED_WORKER_CAPTURE) {
+    await require("./paired-worker-ui-fixture.cjs").capture({ window, run, until, sleep, capturePage, report, root });
     finish(); return;
   }
   if (process.env.MEFI_NODE_VIEWS_CAPTURE) {
@@ -1013,15 +1024,19 @@ app.whenReady().then(async () => {
   const newWorkLayout = async (id, label) => {
     const layout = await run(`
       const input=document.getElementById(${JSON.stringify(id)}),label=input.closest('.new-work-toggle'),track=label.querySelector('.track');
+      // A toast is a passing notice that a narrow window lets cross the page; this asks about the page, so it is set aside while the point is tested.
+      const toasts=document.getElementById('toast-host'),toastDisplay=toasts?toasts.style.display:'';
+      if(toasts)toasts.style.display='none';
       const box=label.getBoundingClientRect(),trackBox=track.getBoundingClientRect(),style=getComputedStyle(label);
       const hit=document.elementFromPoint(trackBox.x+trackBox.width/2,trackBox.y+trackBox.height/2);
-      return {id:input.id,label:${JSON.stringify(label)},width:innerWidth,height:innerHeight,scroll:document.documentElement.scrollWidth,box:box.toJSON(),track:trackBox.toJSON(),text:label.textContent.trim(),visible:style.display!=='none'&&style.visibility!=='hidden',reachable:hit===label||label.contains(hit)};
+      if(toasts)toasts.style.display=toastDisplay;
+      return {id:input.id,label:${JSON.stringify(label)},width:innerWidth,height:innerHeight,scroll:document.documentElement.scrollWidth,box:box.toJSON(),track:trackBox.toJSON(),text:label.textContent.trim(),visible:style.display!=='none'&&style.visibility!=='hidden',reachable:hit===label||label.contains(hit),covered:hit===label||label.contains(hit)?'':(hit?hit.tagName+'#'+hit.id+'.'+String(hit.className)+' '+JSON.stringify(hit.getBoundingClientRect()):'nothing')};
     `);
     report.newWork.layouts.push(layout);
     assert.ok(layout.visible && layout.box.width > 70 && layout.box.height >= 14, `${label}: visible labelled New work switch`);
     assert.match(layout.text, /New work/);
     assert.ok(layout.box.x >= 0 && layout.box.right <= layout.width && layout.box.y >= 0 && layout.box.bottom <= layout.height, `${label}: switch fits the visible viewport`);
-    assert.ok(layout.reachable, `${label}: pointer reaches the switch track`);
+    assert.ok(layout.reachable, `${label}: pointer reaches the switch track (something else is on top of it: ${layout.covered})`);
     assert.ok(layout.scroll <= layout.width + 2, `${label}: no horizontal overflow`);
   };
   for (const [width, label] of [[1280, "desktop"], [600, "narrow"]]) {

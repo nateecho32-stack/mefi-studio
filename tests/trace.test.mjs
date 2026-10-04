@@ -61,12 +61,12 @@ test("the query filters and tails, while counts and sources describe the whole c
 });
 
 const source = await readFile(new URL("../renderer/trace.js", import.meta.url), "utf8");
-async function sheet() {
+async function sheet(logWriteFailures = []) {
   const calls = [];
   const rows = [{ at: Date.UTC(2026, 8, 26, 10, 0, 0), level: "error", source: "agents", text: "worker failed" }, { at: Date.UTC(2026, 8, 26, 10, 0, 1), level: "info", source: "assistant", text: "tick" }];
   const api = {
     traceChannels: async () => { calls.push(["channels"]); return { ok: true, channels: [{ id: "studio", label: "Studio log", area: "main", size: 2048, lines: 2, problems: 1, errors: 1, detail: "Everything" }, { id: "executor", label: "Runs", area: "agents", size: 0, lines: 0, problems: 0, errors: 0 }] }; },
-    traceRead: async (payload) => { calls.push(["read", payload.channel, payload.problems, payload.level, payload.sources]); return { ok: true, channel: payload.channel, rows, total: 2, matched: 2, counts: { error: 1, warn: 0, info: 1 }, sources: [["agents", 1], ["assistant", 1]], size: 2048, file: payload.channel === "executor" ? "C:/data/executor-log.jsonl" : null }; },
+    traceRead: async (payload) => { calls.push(["read", payload.channel, payload.problems, payload.level, payload.sources]); return { ok: true, logWriteFailures, channel: payload.channel, rows, total: 2, matched: 2, counts: { error: 1, warn: 0, info: 1 }, sources: [["agents", 1], ["assistant", 1]], size: 2048, file: payload.channel === "executor" ? "C:/data/executor-log.jsonl" : null }; },
     shellReveal: async (file) => { calls.push(["reveal", file]); return { ok: true }; },
   };
   const { document, get } = createDom({ ids: templateIds((id) => id.startsWith("trace-")) });
@@ -112,9 +112,9 @@ test("the sheet lists the channels, reads one and draws its lines newest first",
 // The host side (main.cjs): the channels it lists and what a read returns.
 const main = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
 const hostSource = main.slice(main.indexOf("const TRACE_CHANNELS = Object.freeze(["), main.indexOf("function logLine(line) {"));
-function host() {
+function host(logWriteHealth) {
   const env = {
-    trace, traceStudio: trace.ring(10), traceRenderer: trace.ring(10), assistantState: { log: [{ at: 1, kind: "error", role: "keeper", text: "prune failed" }] },
+    logWriteHealth, trace, traceStudio: trace.ring(10), traceRenderer: trace.ring(10), assistantState: { log: [{ at: 1, kind: "error", role: "keeper", text: "prune failed" }] },
     projectDataPath: (file) => file, EXECUTOR_LOG_PATH: "C:/data/executor-log.jsonl",
     brainLedgerTail: async () => [{ at: 2, event: "finish", title: "A", via: "m", ok: false, seconds: 3 }],
     stat: async () => ({ size: 900 }),
@@ -135,4 +135,11 @@ test("the host lists every channel with its size and problems, and reads one", a
   assert.equal(runs.rows[0].level, "error");
   assert.equal((await env.traceRead({ channel: "opencode", problems: true })).rows.length, 1);
   assert.equal((await env.traceRead({ channel: "nope" })).ok, false);
+});
+
+test("Trace shows session write failures", async () => {
+ const { trace: api, get, settle } = await sheet([{channel:"executor",count:2,lastFailureAt:123},{channel:"work-events",count:0,lastFailureAt:null}]); api.open(); await settle(); assert.match(get("trace-status").textContent,/History write failures this session: executor 2/); assert.equal(get("trace-status").dataset.tone,"bad"); assert.doesNotMatch(get("trace-status").textContent,/work-events/);
+});
+test("host returns detached failure metadata for successful and failed reads", async () => {
+ const health = require("../scripts/log-write-health.cjs").createHealth({now:()=>123}); health.failure("executor"); const env=host(health); const result=plain(await env.traceRead({channel:"studio"})); assert.deepEqual(result.logWriteFailures,health.snapshot()); result.logWriteFailures[0].count=99; assert.equal(health.snapshot()[0].count,1); env.brainLedgerTail=async()=>{throw Error("unreadable fixture");}; const failed=plain(await env.traceRead({channel:"executor"})); assert.equal(failed.ok,false); assert.deepEqual(failed.logWriteFailures,health.snapshot());
 });

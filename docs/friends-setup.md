@@ -1,10 +1,16 @@
 # Setting up Friends across PCs
 
 Friends › Playground lets companions on different PCs, each signed in with its
-own Discord account, meet in a room and play. Studio's side ships in 0.4.5;
-the companions reach each other through the Void Engine **rooms hub** (the
+own Discord account, meet in a room and play. Studio's side is in 0.5.0; the
+companions reach each other through the Void Engine **rooms hub** (the
 `void-hub` half of the private `void-engine-bot` repository), which one PC
 runs and Cloudflare exposes. This guide sets that up once and joins three PCs.
+
+Studio 0.5.0 has no hub address and no Mefi Studio Link app id built in (both
+are empty in the code), so Rooms, the Playground, Listen together, cowork
+claims and the Discord remote do nothing on a PC until you enter both in
+**Settings › Community › Connection details** (step 3). The hub itself has to
+carry the companion relay (step 2).
 
 What each piece needs:
 
@@ -13,7 +19,7 @@ What each piece needs:
 | Two Discord applications (the bot and **Mefi Studio Link**) | Discord Developer Portal | The server owner, once |
 | The hub (`npm start` in `void-engine-bot`, `ROOMS_ENABLED=true`) | One PC (the "hub PC") | Once, then it runs at login |
 | A public HTTPS address for the hub | `cloudflared` on the hub PC | Once |
-| Studio 0.4.5 with the hub address and the link app id | Every PC | Once per PC |
+| Studio 0.5.0, with the hub address and the link app id entered in Settings › Community › Connection details | Every PC | Once per PC |
 | A Discord account in the Void Engine server, in the same room | Every PC | Each person |
 
 ## 1. Discord applications (once)
@@ -47,9 +53,12 @@ HUB_SESSION_SECRET=<node -e "console.log(require('node:crypto').randomBytes(32).
 ```
 
 Then `npm run register` and `npm start`. The log should say `hub listening`
-on `127.0.0.1:8787`. The hub must include the companion relay (commit "Relay
-companion cards between Studios in a room"); `ready` then lists the
-`companion` feature.
+on `127.0.0.1:8787`. The hub must also carry the companion relay, which passes
+companion cards between Studios in a room. A hub that has it lists `companion`
+among the features in its `ready` frame. Without it, Friends says "This rooms
+hub does not carry companions yet" and the Playground offers only Pip. Check
+that the copy of `void-engine-bot` you run has the relay: it may not be on that
+repository's GitHub `main` yet, so a fresh clone can lack it.
 
 ### A public address
 
@@ -69,9 +78,12 @@ Check it from any PC: `https://<address>/v1/health` answers
 
 ## 3. Every PC
 
-Update Studio (`git pull` on `main`, `npm ci`, or the portable build once it
-is released). Until the release carries the addresses built in, give each PC
-the two values once in **Settings › Community › Connection details**:
+Update Studio to 0.5.0 (`git pull` on `main` and `npm ci`, or the portable
+build; a portable 0.4.4 cannot update itself, so replace it by hand as the
+[README](../README.md#updating-from-044) describes). The two values are not
+built into 0.5.0: `HUB_URL` in `scripts/hub-client.cjs` and `CLIENT_ID` in
+`scripts/community.cjs` are empty. Give each PC both once in
+**Settings › Community › Connection details**:
 
 - **Link app ID**: the Mefi Studio Link Application ID.
 - **Rooms hub address**: `https://<the hub address>` (or `http://127.0.0.1:8787`
@@ -110,9 +122,11 @@ In Studio:
    an approval PIN if you want to approve from Discord. Then DM the Void Engine
    bot: `/studio status` answers from every PC that has it on, and a plain DM
    goes to Mefi on your default PC (`/studio use <pc>`). What it can and cannot
-   do is in [remote.md](remote.md). Turn on **Start with Windows** (Settings ›
-   General › Profile & startup) on each PC you leave working, so it comes back
-   after an update restart.
+   do is in [remote.md](remote.md). The hub must list the `remote` feature
+   for this; that bot-side work is separate from the companion relay and may
+   still be on a branch of `void-engine-bot`, so check your copy. Turn on
+   **Start with Windows** (Settings › General › Profile & startup) on each PC
+   you leave working, so it comes back after an update restart.
 
 ## 4. Checking it works
 
@@ -127,8 +141,10 @@ On each PC, Friends should say how many friends' companions are out. Then:
 - **Play with …** between PC 2 and PC 3 shows the same scene on both screens,
   each from its own side.
 
-The same exchange runs automatically in `tests/companion_e2e.test.mjs`
-against the real hub with three simulated accounts:
+The same exchange is scripted in `tests/companion_e2e.test.mjs`, against the
+real hub with three simulated accounts. It runs only when
+`MEFI_STUDIO_BOT_ROOT` names a `void-engine-bot` checkout, and that checkout
+must carry the companion relay:
 
 ```powershell
 $env:MEFI_STUDIO_BOT_ROOT = "C:\path\to\void-engine-bot"
@@ -145,7 +161,7 @@ node --test tests/companion_e2e.test.mjs
 | Save says the hub did not answer | The hub is not running, its tunnel is down, or a quick tunnel's address changed since it was saved |
 | "Connect under Rooms below…" | This PC is not connected to the hub yet: **Rooms › Connect** |
 | "Open a room under Rooms below…" | Connected, but no room is open in Studio: **Open** one |
-| "This rooms hub does not carry companions yet" | The hub is older than the companion relay; update `void-engine-bot` and restart it |
+| "This rooms hub does not carry companions yet" | The hub does not list the `companion` feature, so it has no companion relay; run a copy of `void-engine-bot` that has it and restart it |
 | "No friends' companions are out…" | Nobody else in your rooms has Friends open with sharing above Stay home |
 
 Sign-in is refused when `STUDIO_APP_ID` on the hub and Studio's link app ID

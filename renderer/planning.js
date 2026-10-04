@@ -1047,36 +1047,57 @@
       button(`Create ${count} ${count === 1 ? "task" : "tasks"}`, actions, () => act("convert", {}, null, "Approved tasks are in your project's queue."), "convert", true, !item.spec?.approvedAt || Boolean(local.specDirty) || !count || unsavedPlan(item));
     }
   }
+  // Versions: every edit of the plan is kept, whole, with when, who and what it did.
+  // Open one to read what it said, then Restore this version: its wording comes back as
+  // a NEW version (restoring 2 of 3 makes 4), so nothing is rewritten or lost, and you
+  // confirm what we understand and approve the specification again before any task.
+  // The newest twenty are listed; Show older versions pages back through the rest.
+  const VERSIONS_SHOWN = 20;
   function history(item) {
     if (!item.history?.length) return;
     const local = draft(); const area = node("details", "planning-card", undefined, $("editor") || $("detail")); area.id = "plans-history";
-    node("summary", "", `Plan history · ${countLabel(item.history.length, "saved revision")}`, area);
-    node("p", "planning-subtle", "Earlier decisions and specifications remain available here after you change the plan. Copy any text you want to use in a new revision.", area);
-    const labels = { create: "Plan created", update: "Destination saved", "add-unknown": "Unknown added", "remove-unknown": "Unknown set aside", "add-question": "Question added", "edit-question": "Question edited", resolve: "Decision recorded", reopen: "Decision reopened", "add-note": "Interview line saved", "confirm-understanding": "Understanding confirmed", "draft-spec": "Specification drafted", "approve-spec": "Specification approved", "begin-conversion": "Task creation started", "mark-converted": "Tasks created", archive: "Plan archived", restore: "Plan restored" };
-    const limit = local.historyLimit || 12;
+    area.open = Boolean(local.historyOpen);
+    area.addEventListener("toggle", () => { local.historyOpen = Boolean(area.open); });
+    node("summary", "", `Versions · ${countLabel(item.history.length, "saved version")} · every edit is kept`, area);
+    node("p", "planning-subtle", "Earlier decisions and specifications stay available here after you change the plan. Open a version to read it, then restore it if you want it back: its wording returns as a new version and nothing is lost. You can also copy any text into a new edit.", area);
+    const labels = { create: "Plan created", update: "Destination saved", "add-unknown": "Unknown added", "remove-unknown": "Unknown set aside", "add-question": "Question added", "edit-question": "Question edited", resolve: "Decision recorded", reopen: "Decision reopened", "add-note": "Interview line saved", "confirm-understanding": "Understanding confirmed", "draft-spec": "Specification drafted", "approve-spec": "Specification approved", "begin-conversion": "Task creation started", "mark-converted": "Tasks created", archive: "Plan archived", restore: "Plan restored", "restore-version": "Version restored", migrated: "First version kept" };
+    const authors = { user: "You", assistant: "Mefi", host: "Studio" };
+    const limit = local.historyLimit || VERSIONS_SHOWN;
+    const newest = item.history.at(-1)?.version;
     for (const entry of [...item.history].reverse().slice(0, limit)) {
       const row = node("details", "", undefined, area);
-      node("summary", "", [`Revision ${entry.version}`, labels[entry.action] || "Plan updated", dateOf(entry.at)].filter(Boolean).join(" · "), row);
+      const isCurrent = entry.version === newest;
+      node("summary", "", [`Version ${entry.version}`, isCurrent ? "current" : "", entry.note || labels[entry.action] || "Plan updated", authors[entry.by] || "", dateOf(entry.at)].filter(Boolean).join(" · "), row);
       let loaded = false;
       row.addEventListener("toggle", () => {
         if (!row.open || loaded) return; loaded = true;
-        const snapshot = entry.snapshot; if (!snapshot) { node("p", "planning-subtle", "This older revision has no saved snapshot.", row); return; }
+        const snapshot = entry.snapshot; if (!snapshot) { node("p", "planning-subtle", "This older version has no saved snapshot.", row); return; }
+        if (!isCurrent && !frozen(item)) {
+          const actions = node("div", "planning-actions", undefined, row);
+          button("Restore this version", actions, () => {
+            // Restoring replaces the saved plan, so unsaved changes are saved or cleared first.
+            if (unsavedPlan(plan())) { note("Save or clear your unsaved changes before restoring a version.", true); return; }
+            local.historyOpen = true;
+            void act("restore-version", { toVersion: entry.version }, null, `Restored version ${entry.version} as version ${(plan()?.version ?? item.version) + 1}. Nothing was lost.`);
+          }, `restore-version-${entry.version}`);
+          node("p", "planning-subtle", `Brings this wording back as version ${item.version + 1}; every version stays in the list. You confirm what we understand and approve the specification again before any tasks are made.`, row);
+        }
         node("h4", "", snapshot.title, row); node("p", "planning-answer", `Destination: ${snapshot.destination}`, row);
         if (snapshot.outOfScope) node("p", "planning-answer planning-subtle", `Outside this plan: ${snapshot.outOfScope}`, row);
         if (entry.reason) node("p", "planning-answer", `Reason: ${entry.reason}`, row);
         for (const question of snapshot.questions || []) {
           const decision = node("article", "planning-note", undefined, row); node("strong", "", question.question, decision);
-          node("p", "", question.status === "resolved" ? question.resolution : "Open at this revision", decision);
+          node("p", "", question.status === "resolved" ? question.resolution : "Open at this version", decision);
           if (question.evidence) node("p", "planning-subtle", `Evidence: ${question.evidence}`, decision);
         }
         if (snapshot.spec) {
-          const spec = node("details", "", undefined, row); node("summary", "", "Specification and task briefs at this revision", spec);
+          const spec = node("details", "", undefined, row); node("summary", "", "Specification and task briefs at this version", spec);
           node("p", "planning-answer", snapshot.spec.text, spec);
           for (const task of snapshot.spec.tasks || []) { const card = node("article", "planning-note", undefined, spec); node("strong", "", task.title, card); node("p", "", task.prompt, card); node("p", "", `Acceptance: ${Array.isArray(task.acceptance) ? task.acceptance.join("\n") : task.acceptance}`, card); }
         }
       });
     }
-    if (item.history.length > limit) button("Show older revisions", area, () => { local.historyLimit = limit + 12; render(); if ($("history")) { $("history").open = true; $("history").scrollIntoView?.({ block: "nearest" }); } });
+    if (item.history.length > limit) button("Show older versions", area, () => { local.historyLimit = limit + VERSIONS_SHOWN; local.historyOpen = true; render(); if ($("history")) { $("history").open = true; $("history").scrollIntoView?.({ block: "nearest" }); } });
   }
   // What the folder already holds, read by the desktop app when the plans
   // list is fetched: wayfinder maps and tickets on the repo's issue tracker

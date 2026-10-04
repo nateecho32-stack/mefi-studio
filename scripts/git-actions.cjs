@@ -36,7 +36,7 @@ const path = require("node:path");
 const { withholdCredentials } = require("./platform.cjs");
 const { maskCredentials } = require("./redaction.cjs");
 const { RULES: SHARE_RULES } = require("./share-review.cjs");
-const { signedInAccount, filesystemOf, githubRemote } = require("./pc-setup.cjs");
+const { signedInAccount, filesystemQuery, filesystemOf, githubRemote } = require("./pc-setup.cjs");
 const rules = require("./git-link.cjs");
 
 const MIB = 1024 * 1024;
@@ -855,8 +855,9 @@ function createGitActions({
 
   // Which drive a folder sits on, and whether it can keep a Git project (exFAT and FAT cannot).
   async function driveOf(root) {
-    if (platform !== "win32" || !/^[A-Za-z]:/.test(root)) return { filesystem: null, weak: false };
-    const answer = await run("fsutil", ["fsinfo", "volumeinfo", `${root.slice(0, 2)}\\`], { timeout: 10000 });
+    const query = platform === "win32" ? filesystemQuery(root) : null;
+    if (!query) return { filesystem: null, weak: false };
+    const answer = await run(query.command, query.args, { timeout: query.timeout });
     const filesystem = filesystemOf(answer.stdout);
     return { filesystem, weak: WEAK_FILESYSTEMS.has(String(filesystem ?? "").toUpperCase()) };
   }

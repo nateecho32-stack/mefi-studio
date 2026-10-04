@@ -1355,7 +1355,7 @@ test("the stylesheet keeps the touch sizes, the chip's place before the task sho
   assert.doesNotMatch(styles, /\.gs-slot\[data-variant="bar"\] \{[^}]*background: var\(--bg\)/, "no solid patch against the bar's glass");
   assert.match(styles, /:root\[data-studio-theme-tone="light"\] button\.gs-seg-item\[aria-checked="true"\] \{ color: var\(--ivory\); \}/, "gold-bright on the selected tint is 3.8:1 on a light palette");
   assert.match(styles, /button\.gs-held \{ opacity: \.4; cursor: not-allowed; \}/);
-  assert.match(styles, /\.gs-sheet\.sheet \{[^}]*width: min\(var\(--gs-w, 480px\), calc\(100vw - var\(--shell-rail-w, 0px\) - 32px\)\)/, "the rail shell moves the overlay over by the rail's width: at 600px a sheet 568 wide ran 32px off the right edge");
+  assert.match(styles, /\.gs-sheet\.sheet \{[^}]*width: min\(var\(--gs-w, 480px\), calc\(100vw - var\(--shell-x0, 0px\) - var\(--shell-x1, 0px\) - 32px\)\)/, "the overlay is moved over by the rail (and, in layout v2, the regions: --shell-x0 and --shell-x1 are the free area's edges): at 600px a sheet 568 wide ran 32px off the right edge");
   assert.match(styles, /\.gs-pop:focus-visible \{ outline: none;/, "the popover root takes the focus by script: no ring around the whole popover");
   assert.match(styles, /\.gs-repos \{[^}]*margin: -4px; padding: 4px; overflow: auto;/, "the scrolling list leaves room for the focused repository's ring");
   assert.match(styles, /\.gs-chip-badge \{[^}]*background: var\(--gold\);[^}]*color: var\(--ink\);/, "--ink is picked against --gold");

@@ -11,7 +11,9 @@ is landing: its Phase 1 is `1d86a1a`, and its Phase 2 unifies the sections. It d
 | 0. Sync, verify, tidy | Done. Lost work restored by `dc85f68`, the only restore. `perf/hidden-surfaces` merged (`3954e1a`). Duplicate branches deleted. Menu Phase 1 (`loop`) landed (`1d86a1a`). Configuration lists the setup helper's sections and a pinned walkthrough (`340a8da`), and `npm run sync` catches a merge that drops another branch's work (`40e35a6`). |
 | 1. Seats and the fleet model | Done (`5438f6d`, `8a3dd13`): `scripts/fleet.cjs`, `scripts/fleet-host.cjs`, five guarded hooks and four `fleet:*` calls. |
 | 2. Live › Fleet | Done: the Fleet page (explorer, Graph, Table, Recent, Tree, Health, seat inspector) under Agents › Live. It moves to the Live section with one line when the menu session's slice (a) lands. What differs from the list below is under **As built**. |
-| 3–8 | Planned |
+| 3, 5, 7-8 | Planned; task metrics from Phase 7 are already implemented. The bounded Phase 7 handoff-progress note is implemented and aggregate/visual/runtime verified in a separate frozen candidate; landing is pending. |
+| 4. Missions and Refocus | The bounded read-only task-detail destination provenance slice is aggregate/visual/runtime verified in the frozen plan-trace candidate (2026-10-02), and included in the separately verified Fleet recovery candidate. Landing remains pending. Existing plan overview, approved-task destination context and verified completion are reused. New project-intent schema, Refocus prompt changes and drift detection remain planned. |
+| 6. Continuity and seat editor | Seat recaps implemented and aggregate/visual/runtime verified in a separate frozen candidate: deterministic recorded history, a 1.5k character bound, inspector view and the next assigned worker's context. Seat editor and team spec export/import remain planned; landing is pending. |
 
 ## Why
 
@@ -233,8 +235,11 @@ no prompts, no absolute paths.
    - this doc, `architecture.md` and `code-map.md`.
 
 **As built.**
-- Step 0 (the booklet prep) and steps 1–2 (`ui-kit.js`, `panels.js`) were not built. The three
-  hand-aligned build lists were edited by hand. `MefiUi` already has `arm` and `plainError`, the
+- Step 0 (the booklet prep) is implemented in a separate isolated candidate:
+  one ordered script/style inventory drives reads, emission, source attribution,
+  fixtures and auditing. LF/CRLF byte-equivalence and focused contracts are checked;
+  aggregate qualification and landing remain pending. Steps 1-2 (`ui-kit.js`,
+  `panels.js`) were not built. `MefiUi` already has `arm` and `plainError`, the
   graph is DOM cards with SVG wires (so no canvas or camera helper was needed), and a panel contract has
   no second user until Phase 5, which is where it belongs.
 - Fleet has no global key: Command owns F, C, V, L, S and N in its own view. It is reached from Live

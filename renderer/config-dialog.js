@@ -160,7 +160,12 @@
     const head = el("header", "config-pane-head");
     head.append(el("h3", "config-pane-title", category.title), el("p", "config-pane-about", category.about));
     pane.append(head);
-    if (category.id === "ui") pane.append(scaleControl());
+    if (category.id === "ui") {
+      pane.append(scaleControl());
+      // Layout v2's Tab behaviour card (renderer/tabs.js): null, and so nothing here, unless the tab strip is running.
+      const tabs = window.MefiTabs?.configCard?.();
+      if (tabs) pane.append(tabs);
+    }
     if (!rows.length) { if (category.id !== "ui") pane.append(el("p", "config-empty", "Nothing is filed here yet.")); return; }
     // Grouped by where each setting lives (Settings › General, Agents …).
     const groups = new Map();
@@ -284,6 +289,16 @@
     if (initialized || !$("overlay")) return;
     initialized = true;
     $("close").addEventListener("click", () => close());
+    // Ctrl +, Ctrl - and Ctrl 0 move the scale without this dialog (main.cjs stepUiZoom): keep
+    // the slider in step, and say the result once the presses settle rather than once per press.
+    let zoomTold = 0;
+    api()?.onUiZoom?.((payload) => {
+      if (!Number.isFinite(payload?.factor)) return;
+      state.zoom = payload.factor;
+      if (isOpen() && state.category === "ui" && !state.query) render();
+      clearTimeout(zoomTold);
+      zoomTold = setTimeout(() => window.MefiToast?.(`Interface scale ${Math.round(payload.factor * 100)}%`), 350);
+    });
     $("search").addEventListener("input", () => { state.query = $("search").value; render(); });
     $("search").addEventListener("keydown", (event) => {
       if (event.key === "Enter") { const first = $("pane").querySelector(".config-item"); if (first) { event.preventDefault(); first.click(); } }

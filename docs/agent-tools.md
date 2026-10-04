@@ -83,9 +83,81 @@ tool names and success/failure, without arguments or results.
 
 Project reads are off by default. Enabling them allows text files up to 32 KB
 inside the selected project. Traversal, symlinks outside the project, hidden
-paths, `data`, `dist`, `node_modules`, common credential files, binary files and
-alternate data streams are rejected. This is a limited research tool, not a
-general filesystem or shell interface.
+paths, `data`, `dist`, `node_modules`, keys and databases, files whose names say
+they hold credentials, binary files and alternate data streams are rejected.
+This is a limited research tool, not a general filesystem or shell interface.
+
+## Listing and searching project files (`project_list`, `project_search`)
+
+**Read project files** is one switch for three tools. Wherever a role may read a
+file, Studio's own models can also list a folder and search the project's text
+files, so "where is the login handled?" needs no guessing at file names. They
+are read-only, pure Node (no shell, no `ripgrep`, no `git`), and only for
+Studio's own models: Claude Code, Codex and OpenCode have their own file tools,
+and the tool server they are given never offers these two.
+
+`project_list` takes `path` (a folder, default the project's own), `depth` (1 to
+3) and `limit` (up to 300) and returns `{ path, entries: [{ path, type, bytes }] }`
+folders first, then files, each in name order. `type` is `dir`, `file`,
+`binary` (by its extension, or a NUL byte in its first bytes) or `link`;
+paths are from the project's folder, ready for `project_read`.
+
+`project_search` takes `query` (1 to 300 characters, matched within a single
+line) and returns the matching lines as `results: [{ file, matches: [{ line, text, before, after }] }]` with
+`matches`, `files` and `searched` counts. The query is literal text unless
+`regex` is true (a JavaScript regular expression); both ignore case unless
+`caseSensitive` is true. `path` narrows it to a folder or one file, `glob`
+narrows it by name (`*.ts` at any depth, `src/**/*.js` from the project's
+folder, `{a,b}` for alternatives, `!` to exclude), `context` (0 to 3) adds lines
+around each match, `maxResults` (default 30, at most 100) and `perFile` (default
+5, at most 20) cap what comes back. A file with more matches than `perFile` is
+marked `more`.
+
+What they leave out, always:
+
+- Anything `.gitignore` says (the project's own, each folder's, and
+  `.git/info/exclude`), with `!` bringing a name back, as git reads it.
+- Hidden files and folders (which covers `.env`, `.git` and Studio's own
+  `.mefi` worktrees, so a task run's copy of the same file is never found
+  twice), `data`, `dist` and `node_modules` at any depth, keys and stores by
+  name (`*.pem`, `*.key`, `*.p12`, `id_rsa`, `*.db`, `*.sqlite`, `*.tfstate`),
+  and data files whose names say they hold secrets (`secrets.yaml`,
+  `db-password.txt`, `token.json`, `credentials.json`). Source called
+  `token.ts` or `password.py` is code and stays. A file that opens with a
+  private-key header on a line of its own is skipped whatever it is called.
+  These are never opened, named or returned; the answer only counts them
+  (`skipped.private`).
+- `coverage`, `__pycache__` and `bower_components` anywhere, and `build`, `out`,
+  `target`, `vendor`, `venv`, `env`, `tmp`, `temp`, `logs` and `cache` at the top
+  of the project (a source folder called `cache` lower down stays). An ignored
+  or noisy folder can still be named as the `path`; the rules below it apply.
+- Binary files, files over 512 KB and files that cannot be read (counted as
+  `skipped.binary`, `large`, `unreadable`, never returned). UTF-16 text has NUL
+  bytes, so it counts as binary.
+- Symbolic links and junctions: a listing shows a `link`, and nothing follows it.
+
+What they refuse: a `path` outside the project or on the private list, in
+every spelling and on every platform: absolute, drive-letter, network (`\\server`),
+`\\?\` and `..` forms, alternate data streams (`name:stream`), Windows device
+names (`CON`, `NUL`, `COM1`...), wildcards, control characters, and a link that
+resolves outside the project or onto a private folder. Refusals are tool
+errors the model reads, like a regular expression that does not compile, one
+that matches the empty line (it would match every line), or one that backtracks
+without end: patterns run in a sandbox with a 250 ms limit per file and the
+call is stopped with "too slow to run safely". A `.gitignore` or a `glob` is
+matched by a plain wildcard walk, never compiled into a regular expression, so
+a hostile one costs time, not a hang.
+
+Limits: one call returns at most 10,000 characters of JSON, so a result is
+never cut inside itself by the tool loop's 12,000-character slice; it stops and
+says why in `note` (`truncated: true`). A search reads at most 5,000 files, 24
+MB and 10 seconds, and looks at no more than 20,000 folder entries; a line is
+read to 4,000 characters and shown as a 200-character excerpt around the match.
+Every result line is masked like everything Studio sends a model: credentials
+and home folders are replaced. Results are untrusted project data, like a
+file's text.
+
+`MEFI_STUDIO_NO_PROJECT_SEARCH=1` removes both tools and leaves `project_read`.
 
 ## Register a trusted MCP server
 
@@ -138,7 +210,9 @@ tools are denied by the host even if a model asks for them.
 ## Coding workers
 
 OpenCode, Claude Code and Codex receive a per-run MCP attachment exposing
-Studio search, web page reads, project reads and selected MCP tools; OpenCode
+Studio search, web page reads, project reads (not the list and search tools
+above: a coding worker has its own), selected MCP tools and, for builders
+only, `run_check` and `project_logs` (below); OpenCode
 and Claude Code also take the optional desk tool. OpenCode reads its config file through
 `OPENCODE_CONFIG` and Claude Code through `--mcp-config`; Codex has no
 per-run config file flag, so the server is passed as `-c mcp_servers.*`
@@ -162,3 +236,72 @@ Skills are discovered from project/user `.agents/skills`, `.claude/skills`,
 `.config/opencode/skills`). Add a named folder containing `SKILL.md`, reload
 saved settings and choose it on the agent. Selected skills are capped at 16 KB
 of prompt content; oversized or unavailable entries are skipped.
+
+## Checks and logs for builders (`run_check`, `project_logs`)
+
+Two tools exist only for the **builder** role, the coding workers above. They
+are never offered to chat, planning, the companion, scout, overseer, lead, desk
+or any other role, and the host refuses a call for them from any other role
+even when a model asks. They ride the same per-run attachment as the tools
+above, so a worker sees them in its own tool list.
+
+- **`run_check { id }`** runs one of the checks the project already has and
+  returns its result (`ok`, `warn`, `bad` or `skipped`, a short detail, the
+  time) with the last lines of its output. An id the project does not have
+  answers with the ones it does have. It is advisory: a result never decides
+  whether a task is done and never changes a task.
+- **`project_logs { lines }`** returns the last `lines` (1 to 200, default 60)
+  of the output of the project's preview or dev server *as Studio captured it*.
+  Studio starts and owns the preview (a builder is told not to start a server
+  itself), so this is how a builder reads its output. When Studio has captured
+  nothing (no preview started by Studio, or one that printed nothing) it says
+  so instead of guessing.
+
+**What a project has.** Studio reads the folder, never a model, to decide:
+
+| id | Found from | Runs |
+| --- | --- | --- |
+| `typecheck` | a `package.json` script named `typecheck`, `type-check`, `check:types`, `tsc`, `test:types` or `types` (first in that order) | `npm run <script>` |
+| `lint` | a script named `lint`, `lint:check` or `eslint`; never one that fixes files (`--fix`, `--write`) | `npm run <script>` |
+| `build` | a script named `build`; it writes files, so it does not run on its own | `npm run build` |
+| `ruff` | `ruff.toml`, `.ruff.toml` or `[tool.ruff]` in `pyproject.toml` | `ruff check .` |
+| `mypy` | `mypy.ini`, `[tool.mypy]` or `[mypy]` in `setup.cfg` | `mypy .` |
+| `cargo-check` | `Cargo.toml`; not run on its own (it compiles) | `cargo check --message-format short` |
+| `go-vet` | `go.mod` | `go vet ./...` |
+
+A tool call names an id and nothing else: the command always comes from this
+table, so a model cannot ask for a command of its own. Only these programs are
+started (npm, ruff, mypy, cargo, go), without a shell where one can be avoided
+(npm is a `.cmd` file on Windows, so it goes through `cmd.exe` with a command
+line built from the checked words), in the run's own folder, with no input,
+with Studio's own credentials withheld from the environment
+(`scripts/platform.cjs`), and at most two checks at a time. A check that runs
+longer than 120 seconds (90 for a builder's call) is ended together with
+everything it started and reads as a warning ("Stopped after ..."), not as a
+failure. Output is kept only from its end, up to 256 KB while it runs, then
+4,000 characters for a builder or 1,500 for the page, with colour codes
+removed and anything that looks like a credential masked. Results are labelled
+untrusted project output.
+
+**Turning it off.** `MEFI_STUDIO_NO_ADVISORY_CHECKS=1` removes both tools from
+every list, refuses the calls and stops the checks that run on their own.
+The same is Settings' `review.advisory` (on by default); `review.advisoryBuild`
+(off by default) lets the build join the checks that run by themselves. A run
+that started with the setting off keeps its own tool list until it ends.
+
+`project_logs` reads a file that goes with the run: Studio writes the last 200
+lines it captured into `preview.log` in the run's private tool folder (mode
+0600, replaced whole whenever the preview prints something, deleted when the
+run ends). Lines are cleaned of colour codes and of URL parameters, private
+keys never enter it, and credentials are masked again when they are read.
+
+**After an attempt.** The checks the project has (typecheck and lint; the build
+only when `review.advisoryBuild` is on) also run by themselves once a builder's
+attempt ends, in the folder it worked in, when it changed something and the
+owner did not stop it. The results are kept with the attempt's before and after
+shots in the project's data folder (`attempt-evidence/<task>/<n>/checks.json`;
+never in the repository and never in a problem report) and appear under **Tasks
+› a task › Evidence › Changes and checks › Checks** as "Advisory, never blocks
+Done". They never change a task, and a run is not held for them: a worktree
+run's merge-back waits for them (they read its own checkout) for six minutes at
+most, nothing else waits at all. See docs/architecture.md "Attempt review".

@@ -41,6 +41,14 @@ const PROMISES = [
   { file: "scripts/desk.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   // The Discord remote's rules (docs/remote.md); main.cjs "Discord remote" owns the I/O.
   { file: "scripts/remote.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  // Windows notifications, the taskbar flash and the count on the taskbar icon: when Studio may speak, what it says and the picture of the count; alerts-host.cjs and main.cjs "Notifications" own the window, the Notification and the clock.
+  { file: "scripts/alerts.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (time is", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  { file: "scripts/badge-icon.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  // Report a problem: what a report holds, how it is redacted and how a session ended, and the zip it is saved as; report-host.cjs and main.cjs "Report a problem" own the I/O.
+  { file: "scripts/crash-report.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (time is", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  { file: "scripts/zip-lite.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  // What's new after an update (assets/whats-new.json); main.cjs "What's new" owns the file and the setting.
+  { file: "scripts/whats-new.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   { file: "scripts/desk-resolve.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   { file: "scripts/companion.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (time", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   { file: "scripts/outside-work.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
@@ -57,6 +65,26 @@ const PROMISES = [
   { file: "scripts/model-community.cjs", says: "Pure module: no Electron, no filesystem, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "clock"] },
   // The records an installing update helper and the app pass each other; main.cjs "Release updates: the safety net" owns the I/O.
   { file: "scripts/update-safety.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (time is", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  // A task's usage tab and its time limit (renderer/tasks.js); main's "Task time limit" block owns the timer, the stop and the reads.
+  { file: "scripts/task-cap.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  { file: "scripts/task-metrics.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (`now` is", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  { file: "scripts/image-attach.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  { file: "scripts/skill-format.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  { file: "scripts/mentions.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  { file: "scripts/gitignore-lite.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  // Build's Home greeting card (renderer/builder.js); main's "work:stats" handler reads the ledgers and passes their rows and `now` in.
+  { file: "scripts/work-stats.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  // The project's standing rules for its agents (ZA8); agent-addons.cjs reads the two project files and puts the block in a prompt.
+  { file: "scripts/agent-rules.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  // What Studio's own models may see of a project's files (ZA9); project-search.cjs owns the folder walk and the reads.
+  { file: "scripts/project-ignore.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  // Recently deleted (ZA3): the rules and the store's shape; main.cjs "Board trash" owns the file.
+  { file: "scripts/board-trash.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (time is", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  // Attempt review: snapshots, changed files, Accept and Revert, advisory checks, before and after shots, and their switches; the *-host modules and main's "Attempt review" block own the I/O.
+  { file: "scripts/attempt-snapshots.cjs", says: "Pure module: no Electron, no filesystem, no network, no processes, no", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  { file: "scripts/review-prefs.cjs", says: "Pure module: no Electron, no filesystem, no network, no processes, no", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  { file: "scripts/advisory-checks.cjs", says: "Pure module: no Electron, no filesystem, no network, no processes, no", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  { file: "scripts/attempt-evidence.cjs", says: "Pure module: no Electron, no filesystem, no network, no processes, no", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
 ];
 
 const CLOCK = /\bDate\.now\s*\(|new\s+Date\s*\(\s*\)|\bperformance\.now\s*\(/;

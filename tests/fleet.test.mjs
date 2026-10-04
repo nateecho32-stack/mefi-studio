@@ -20,6 +20,117 @@ function view(state, at, extra = {}) {
 
 const seat = (snapshot, id) => snapshot.pods.flatMap((pod) => pod.seats).find((item) => item.id === id);
 
+function handedOffTasks() {
+  const state = fleet.emptyState();
+  const tasks = [{ id: "parent_task", title: "Prepare the parser", status: "active" },
+    ...Array.from({ length: 3 }, (_, index) => ({ id: `child_${index}`, title: `Check parser part ${index}`, status: "active", fromRun: "parent_run" }))];
+  fleet.observeTasks(state, tasks, T0);
+  const parent = { id: "parent_run", taskId: "parent_task", title: "Prepare the parser", startedAt: T0, phase: "building", lastOutputAt: T0 };
+  start(state, { runId: parent.id, taskId: parent.taskId, at: T0 });
+  for (let index = 0; index < 3; index += 1) {
+    start(state, { runId: `child_run_${index}`, taskId: `child_${index}`, at: T0 + (index + 1) * 1000, others: [parent] });
+    fleet.observeEvent(state, { kind: "agent.home", runId: `child_run_${index}`, at: T0 + (index + 1) * 1000 + 1, ok: true });
+  }
+  return { state, tasks, parent };
+}
+
+const handoffNotes = (state, at = T0 + 5000) => fleet.health(state, at).filter(item => item.id.startsWith("handoff-progress:"));
+
+test("real handoff observations produce an informational note without changing history, dispatch or attention", () => {
+  const { state } = handedOffTasks();
+  const before = fleet.serialize(state);
+  const notes = handoffNotes(state);
+  assert.equal(notes.length, 1); assert.equal(notes[0].seatId, "builder-1");
+  assert.equal(notes[0].severity, "info"); assert.equal(notes[0].count, 3);
+  assert.match(notes[0].why, /Waiting for verification can be normal/);
+  assert.deepEqual(notes[0].evidence.map(item => item.taskId), ["child_2", "child_1", "child_0"]);
+  assert.deepEqual(notes[0].inspect, { view: "seat", seatId: "builder-1" });
+  assert.equal(view(state, T0 + 5000).counts.attention, 0);
+  assert.deepEqual(fleet.serialize(state), before);
+  assert.equal(state.live.runs.get("parent_run").seatId, "builder-1");
+});
+
+test("repeated handoff events and title changes cannot inflate distinct task activity", () => {
+  const { state } = handedOffTasks();
+  state.recent = state.recent.filter(item => item.kind !== "handed_off" || item.taskId !== "child_2");
+  const original = state.recent.find(item => item.kind === "handed_off" && item.taskId === "child_0");
+  state.recent.push(...Array.from({ length: 10 }, (_, index) => ({ ...original, at: T0 + 4000 + index, title: `Updated title ${index}` })));
+  assert.deepEqual(handoffNotes(state), []);
+});
+
+test("a reported completion stays pending, while verified or human-confirmed child evidence clears its note", () => {
+  for (const outcome of ["verified", "manual"]) {
+    const { state, tasks } = handedOffTasks();
+    assert.equal(handoffNotes(state).length, 1, "successful reports alone are not verified progress");
+    fleet.observeTasks(state, tasks.map(task => task.id === "child_1" ? { ...task, status: "done", verification: { state: outcome, at: T0 + 6000 } } : task), T0 + 6000);
+    assert.deepEqual(handoffNotes(state, T0 + 7000), []);
+    assert.deepEqual(handoffNotes(fleet.normalize(fleet.serialize(state)), T0 + 7000), []);
+  }
+});
+
+test("handoff notes expire, ignore future events, and do not reuse verification from before a new handoff", () => {
+  const { state, tasks, parent } = handedOffTasks();
+  assert.deepEqual(handoffNotes(state, T0 + fleet.LIMITS.handoffWindowMs + 5000), []);
+  const row = state.recent.find(item => item.kind === "handed_off" && item.taskId === "child_2");
+  row.at = T0 + 100000;
+  assert.deepEqual(handoffNotes(state), []);
+  row.at = T0 + 3000;
+  fleet.observeTasks(state, tasks.map(task => task.id === "child_1" ? { ...task, status: "done", verification: { state: "verified", at: T0 + 6000 } } : task), T0 + 6000);
+  assert.deepEqual(handoffNotes(state, T0 + 7000), []);
+  fleet.observeTasks(state, tasks, T0 + 8000);
+  start(state, { runId: "child_retry", taskId: "child_1", at: T0 + 9000, others: [parent] });
+  assert.equal(handoffNotes(state, T0 + 10000)[0].count, 3);
+});
+
+test("seat recaps retain interrupted and verified history without treating a live run as finished", () => {
+  const state = fleet.emptyState();
+  fleet.observeTasks(state, [{ id: "task_a", status: "active" }], T0);
+  start(state, { runId: "interrupted", taskId: "task_a", at: T0 });
+  fleet.observeFinish(state, { runId: "interrupted", userStop: true, result: { parts: { done: "Saved parser checkpoint", remaining: "Finish parser" } } });
+  fleet.observeEvent(state, { kind: "agent.home", at: T0 + 1000, runId: "interrupted", ok: false });
+  start(state, { runId: "resumed", taskId: "task_a", at: T0 + 2000 });
+  fleet.observeFinish(state, { runId: "resumed", ok: true, result: { parts: { done: "Parser tests passed" } } });
+  fleet.observeEvent(state, { kind: "agent.home", at: T0 + 3000, runId: "resumed", ok: true });
+  const pending = fleet.seatRecap(state, "builder-1");
+  assert.match(pending.text, /verification pending/);
+  fleet.observeTasks(state, [{ id: "task_a", status: "done", verification: { state: "verified", at: T0 + 4000 } }], T0 + 4000);
+  start(state, { runId: "current", taskId: "task_b", title: "Unfinished current task", at: T0 + 5000 });
+  const recap = fleet.runRecap(state, "current", "task_b");
+  assert.deepEqual(recap.generations.map(gen => gen.outcome), ["verified", "stopped"]);
+  assert.match(recap.text, /Verified/); assert.match(recap.text, /Interrupted; progress saved/);
+  assert.match(recap.text, /Finish parser/); assert.doesNotMatch(recap.text, /Unfinished current task/);
+  assert.equal(fleet.runRecap(state, "current", "different_task"), null);
+  assert.equal(fleet.runRecap(state, "unknown_run", "task_b"), null);
+  const reloaded = fleet.normalize(fleet.serialize(state));
+  assert.match(fleet.seatRecap(reloaded, "builder-1").text, /Saved parser checkpoint/);
+});
+
+test("seat recap handoffs collapse exact repeats and retain distinct saved child tasks", () => {
+  const state = fleet.emptyState();
+  start(state, { runId: "parent", taskId: "task_a", at: T0 });
+  fleet.observeEvent(state, { kind: "agent.home", at: T0 + 1000, runId: "parent", ok: true });
+  const row = { kind: "handed_off", from: "builder-1", to: "builder-2", taskId: "child_a", title: "Verify parser", at: T0 + 2000 };
+  state.recent.push(row, { ...row }, { ...row, taskId: "child_b" });
+  const recap = fleet.seatRecap(state, "builder-1");
+  assert.deepEqual(recap.handoffs.map(item => item.taskId), ["child_b", "child_a"]);
+  assert.equal(recap.text.split("Handed to").length - 1, 2);
+});
+
+test("seat recaps stay bounded and retain the newest generations without rewriting the ledger", () => {
+  const state = fleet.emptyState();
+  for (let index = 0; index < 8; index += 1) {
+    start(state, { runId: `run_${index}`, taskId: "task_a", title: "T".repeat(90), at: T0 + index * 2000 });
+    fleet.observeFinish(state, { runId: `run_${index}`, ok: true, result: { parts: { done: "D".repeat(160), remaining: "R".repeat(160) } } });
+    fleet.observeEvent(state, { kind: "agent.home", at: T0 + index * 2000 + 1000, runId: `run_${index}`, ok: true });
+  }
+  const before = fleet.serialize(state);
+  const recap = fleet.seatRecap(state, "builder-1");
+  assert.equal(recap.generations.length, 4); assert.equal(recap.generations[0].runId, "run_7");
+  assert.ok(recap.text.length <= 1500); assert.equal(recap.truncated, true);
+  assert.deepEqual(fleet.serialize(state), before); assert.equal(state.seats["builder-1"].lineage.length, 8);
+  assert.equal(fleet.seatRecap(state, "not-a-seat"), null);
+});
+
 test("a team shows its pods left to right with a builder seat per parallel slot and the core seats", () => {
   const state = fleet.emptyState();
   fleet.observeStatus(state, { parallel: 2, loop: { state: "idle", on: true, ready: 0 }, running: [] }, T0);

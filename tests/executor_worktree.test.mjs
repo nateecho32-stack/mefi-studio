@@ -38,6 +38,43 @@ test("the feature is opt-in and run ids stay flat tokens", () => {
   }
 });
 
+test("the owner's saved choice turns worktree runs on through prefer(); the environment switch stays its own", (t) => {
+  const saved = process.env.MEFI_STUDIO_WORKTREE_RUNS;
+  delete process.env.MEFI_STUDIO_WORKTREE_RUNS;
+  t.after(() => {
+    worktrees.prefer(false);
+    if (saved === undefined) delete process.env.MEFI_STUDIO_WORKTREE_RUNS; else process.env.MEFI_STUDIO_WORKTREE_RUNS = saved;
+  });
+  assert.equal(typeof worktrees.prefer, "function", "main.cjs hands the saved choice over through prefer()");
+  assert.equal(worktrees.enabled(), false, "off until someone turns it on");
+  assert.equal(worktrees.enabled({}), false);
+
+  assert.equal(worktrees.prefer(true), true, "prefer() answers with what it now holds");
+  assert.equal(worktrees.enabled({}), true, "a saved yes turns it on with no environment switch");
+  assert.equal(worktrees.enabled(), true, "the call main.cjs's Worktree chip makes, with the real environment");
+  assert.equal(worktrees.enabled({ MEFI_STUDIO_WORKTREE_RUNS: "0" }), true, "the environment's 0 does not switch a saved yes off: the chip does");
+
+  assert.equal(worktrees.prefer(false), false);
+  assert.equal(worktrees.enabled({}), false, "turning the chip off restores the default");
+  assert.equal(worktrees.enabled(), false);
+
+  assert.equal(worktrees.enabled({ MEFI_STUDIO_WORKTREE_RUNS: "1" }), true, "the environment switch forces it on with no saved choice");
+  worktrees.prefer(true);
+  worktrees.prefer(false);
+  assert.equal(worktrees.enabled({ MEFI_STUDIO_WORKTREE_RUNS: "1" }), true, "and clearing the saved choice never clears the environment's");
+  process.env.MEFI_STUDIO_WORKTREE_RUNS = "1";
+  assert.equal(worktrees.enabled(), true, "the real environment counts too");
+  delete process.env.MEFI_STUDIO_WORKTREE_RUNS;
+
+  // Only a real yes counts, so a settings file that says "true" or 1 by hand
+  // cannot start giving every run its own checkout.
+  for (const loose of ["true", "yes", "1", 1, {}, [], null, undefined, 0, false]) {
+    assert.equal(worktrees.prefer(loose), false, `${JSON.stringify(loose)} is not a yes`);
+    assert.equal(worktrees.enabled({}), false);
+  }
+  assert.equal(worktrees.prefer(true), true, "and a yes after a not-yes still turns it on");
+});
+
 test("prepare checks a run out into its own worktree; settle merges a committed run back and cleans up", async (t) => {
   const repo = await makeRepo();
   t.after(() => rm(repo, { recursive: true, force: true }));

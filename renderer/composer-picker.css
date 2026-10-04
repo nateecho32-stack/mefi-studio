@@ -1,0 +1,23 @@
+/* @ # / suggestions in Home's message box (renderer/composer-picker.js): the chips
+   under the words, and the popup. The popup lives on <body> and the script places it,
+   because the composer clips (in the sessions layout, overflows) and must not decide
+   where it shows. Nothing here is smaller than 12px. */
+.composer-mentions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0; padding: 2px 16px 4px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.composer-mentions[hidden], .composer-picker[hidden] { display: none; }
+.composer-mentions-label { color: var(--muted); }
+.composer-mention { max-width: 100%; padding: 1px 9px; border: 1px solid var(--hairline-strong); border-radius: var(--r-pill, 999px); background: color-mix(in srgb, var(--ivory) 5%, transparent); color: var(--ivory); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.composer-mention.file { border-color: color-mix(in srgb, var(--gold) 55%, var(--hairline-strong)); }
+.composer-mention.task { border-color: color-mix(in srgb, var(--gold-bright) 40%, var(--hairline-strong)); }
+.composer-mention.skill { border-style: dashed; }
+
+/* Above #studio-floats (z 180): its scroll-fade gradients are drawn over whatever sits on a scrolling pane, including a popup. */
+.composer-picker { position: fixed; z-index: 200; display: flex; flex-direction: column; max-height: min(340px, 55vh); overflow: hidden auto; border: 1px solid var(--hairline-strong); border-radius: 14px; background: var(--panel-solid); box-shadow: 0 12px 34px rgb(0 0 0 / .4); color: var(--ivory); font-size: 12px; }
+.composer-picker-head { padding: 9px 12px 5px; color: var(--muted); font-size: 12px; }
+.composer-picker-item { display: flex; align-items: baseline; gap: 12px; width: 100%; min-height: 32px; padding: 6px 12px; border: 0; border-radius: 0; background: transparent; color: var(--ivory); font: 500 13px/1.35 var(--font-ui); text-align: left; cursor: pointer; }
+.composer-picker-item b { flex: 0 1 auto; min-width: 0; overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.composer-picker-item small { flex: 1 1 0; min-width: 0; overflow: hidden; color: var(--muted); font-size: 12px; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+.composer-picker-item.current, .composer-picker-item:hover { background: color-mix(in srgb, var(--gold) 18%, transparent); }
+.composer-picker-foot { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 6px 12px 8px; border-top: 1px solid var(--hairline); color: var(--muted); font-size: 12px; }
+
+/* Sessions layout: the chips take a full line under the words. */
+html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-mentions { order: 0; flex: 1 1 100%; padding: 0 8px 2px; }

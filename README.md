@@ -125,7 +125,7 @@ Every session, task and agent is a node. Agents orbit the assistant, fly to the 
 
 Settings keeps **General**, **Appearance**, **Audio** and **System**. Connections, model routing, team roles and workflow behavior now live in **Agents › Setup**. **Find a setting** searches individual controls and opens the matching category and disclosure. Connection forms and advanced options expand in place. Appearance includes Focus, Studio and Atmosphere presets and the live canvas preview. Agents and the companion share confirmed operational controls.
 
-The main menu groups the app into **Home**, **Work**, **Agents** and **Friends**. See [Unified Studio](docs/unified-studio.md) for team presets, configuration scope, scrollbar-free navigation and the adaptive companion. The [0.4.5 scope](docs/release-scope-0.4.5.md) records what is included in the next release and what is deferred.
+The main menu groups the app into **Home**, **Work**, **Agents** and **Friends**. See [Unified Studio](docs/unified-studio.md) for team presets, configuration scope, scrollbar-free navigation and the adaptive companion. The [0.5.0 scope](docs/release-scope-0.5.0.md) records what is included in the next release and what is deferred.
 A local navigation row exposes each group's tools, while **Settings**, **Search**
 and **Help** stay available. See the [interface inventory](docs/interface-remaster.md)
 for the full set of screens and interior menus.

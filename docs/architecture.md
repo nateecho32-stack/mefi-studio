@@ -1,5 +1,44 @@
 # How Studio is put together
 
+Friends > Your PCs has an optional paired repository-check coordinator. The
+desktop adapter loads only when requested. Local IPC owns queueing, invitations,
+revocation and setup; the network protocol exposes only authenticated worker
+operations. Atomic coordinator and worker journals persist each start grant
+before execution. Expired assignments remain uncertain rather than moving to
+another worker. See [paired-workers.md](paired-workers.md) for the first profile,
+transport requirements, recovery and activation steps.
+
+The booklet builder declares one ordered, frozen `BOOKLET_INPUTS` inventory.
+Reads carry their source name with their content, so emission and error-source
+attribution cannot use independently maintained index lists. Fixtures reuse
+the inventory. The auditor parses the audited root's declaration as data;
+legacy build sources retain their literal-read audit contract. Duplicate or
+missing inputs fail before replacing the last complete build output.
+
+Brief restore and prerequisite edits order task replies against the accepted
+context version. A board update at the same version keeps its run state, which
+is outside brief history; a genuinely newer brief reply still applies. Project
+epochs fence callbacks, including errors. Board pushes schedule a backlog read
+so an action reply cannot replace a newer pushed view's scheduler summary.
+Host mutations and queue-refresh lifetime remain unchanged.
+
+Reference gathering checks the project identity, project epoch and gather
+generation before applying replies or handling save completion. Closing the
+detail invalidates its pending replies. Host queue work, provider calls and
+saved continuation journals retain their existing lifetime and cancellation.
+
+Task opens fence their asynchronous completion by project epoch and open
+generation. Returning to the same project or reopening the detail does not
+revive an older open's announcement, reference gather or error message.
+
+Worker stream parsing deduplicates an exact handoff title and brief within one
+run, because a CLI may repeat its final answer on stdout and stderr. Different
+titles or briefs retain separate handoffs.
+
+In the optional 0.5 shell, short Build session panels keep at least 60px of
+conversation visible when the composer controls are expanded. The controls
+scroll within the composer and preserve its unsent draft.
+
 First-time setup can install a missing coding CLI, open its sign-in and check
 its connection. A single Codex, Claude Code, Grok or Antigravity subscription
 can serve the assistant, first map, planning, agent roles and coding workers.
@@ -38,7 +77,14 @@ read a page you paste or a search found: public `http`/`https` addresses
 only, local and private ones refused, 15 seconds and 512 KB per read, and a
 long page in parts. The host executes bounded research turns
 for model calls; OpenCode and Claude builders receive the same tools through
-MCP. A reply's tool request is never shown as its answer. See
+MCP. Where a role may read project files, Studio's own models can also list a
+folder and search the project's text files (`project_list`, `project_search`,
+`scripts/project-search.cjs` with the rules in `scripts/project-ignore.cjs`):
+read-only, no shell, honouring `.gitignore`, never following links, never
+returning hidden or private files, and each answer under 10,000 characters;
+coding CLIs have their own file tools and are never offered these two, and
+`MEFI_STUDIO_NO_PROJECT_SEARCH=1` removes them. A reply's tool request is never
+shown as its answer. See
 [Agent tools](agent-tools.md) for setup, execution limits and the
 distinction between Studio permissions and native coding CLI access.
 
@@ -176,6 +222,13 @@ settings and per-model work-kind summaries for the shared controls.
 | Term | Meaning |
 | --- | --- |
 | **Menu** (the rail) | New task and Search sit above **Home**, **Work**, **Agents** and **Friends**, with one local row for the current group's views. Friends and its Rooms, Your PCs and Playground links open the existing companion menu at the matching card; Search finds them too. Recent tasks belong to the current project; Settings and Help stay at the foot. Help contains Start here, Shortcuts and Community. The project selector at the top opens the project panel. The registry in `renderer/nav.js` preserves existing shortcuts and destination IDs. |
+| **Layout contract** | The room the shell keeps for a session list, an inspector, a tab strip and a status bar that are not built yet: four `--shell-*` sizes (all 0), four derived edges the pages read, `html[data-layout="v2"]` to turn them on, one setter (`MefiNav.layout.set`) and one free-area rectangle (`MefiNav.usable()`). See `docs/unified-studio.md`. |
+| **Today** | Vibe's Home in the 0.5 layout (`html[data-layout="v2"]`, `renderer/today.js`): the greeting and the box that builds or talks, then one line per session in four groups, **Needs you**, **Running**, **Review** and **Done today**. In Build the same board is a page, reached from its pinned tab. See Getting around. |
+| **Inbox** | Everything that waits on the owner in one list (`MefiToday.openInbox`): open questions and permissions, approvals, finished work to check and tasks that stopped. "N need you" is the digest the app already keeps (`assistantState.needsYou`, the list the taskbar count is read from), never a second counter. It opens as a popover under the top bar's pill (Ctrl J) or stays open as a page. See Getting around. |
+| **Frame (layout v2)** | What `renderer/shell.js` (`window.MefiShell`) draws in the contract's room when the 0.5 layout is on: a top bar (list toggle, Vibe and Build switch, where you are, Search, "N need you", "N working", inspector toggle), the list and inspector columns with splitters and, in a small window, drawers, the tab strip's row, `main` for other modules' pages, and a status bar with the Layout menu. Vibe and Build each keep their own widths. Turned on in Settings ("Try the 0.5 layout"), in Search ("Switch layout"), by `?layout=v2` or by `MEFI_STUDIO_LAYOUT=v2`. See `docs/unified-studio.md`. |
+| **Tab strip** (layout v2) | The row of tabs in the shell's tab region: Home pinned at the left, the pages and sessions you add, pins that stay, one italic preview tab, and Studio closing what you finished with (Undo, Recently closed, Ctrl+Shift+T). A tab is a remembered place, not a live page. Switches in Configuration › UI & Surfaces › Tab behaviour; see "Tabs you add and pin". |
+| **Worktree** | Another folder holding the same project on its own branch, so two pieces of work never share files. Task runs make one each (`.mefi/worktrees/<runId>` on `mefi/<runId>`) while "Give each run its own worktree" is on; **Work › Worktrees** lists them all and merges or removes them. |
+| **Attempt review** | What Studio keeps around each builder attempt: a **picture** of the folder at its start and end (private git refs, only on this PC), the list of **changed files** with Accept and Revert, the **advisory checks** that ran after it and **before and after shots** of the project preview. It is the "Changes and checks" section of a task's Evidence tab. |
 | **Workspace** | The home screen (`H`): current task, app preview and conversation. Project queue, Studio status and setup information expand when needed. |
 | **Command view** | The 3D node tree (`D`): sessions, tasks and agents as orbs, with a right panel for Work, Assistant, Runs and Ask, and agent settings in the top toolbar. |
 | **Booklet** | Historically the single-file model catalog; today `renderer/booklet.html` is the whole app bundled into one file by `npm run build-booklet`. The **Model catalog** tab (`1`) is the part that kept the name. |
@@ -183,12 +236,15 @@ settings and per-model work-kind summaries for the shared controls.
 | **Activity & evidence** (A-Eyes) | Tab `3`: a read-only view of the OpenCode session store: change feed, diffs, screenshots with pins, log tail. The "eyes worker" is the thread that reads that store. |
 | **Settings** | `4` or `Ctrl ,`: four single-pane categories, **General**, **Appearance**, **Audio** and **System**. Providers, routing and run behavior moved to **Agents › Setup** (Team & models, Providers, Routing & fallback, Run behavior); the old Connections, Models and Automation links redirect there. Search finds individual controls and opens their category and containing disclosures. `MefiNav.go("studio", { category: "appearance" })` opens a category; legacy section links such as `settings-updates` still work. |
 | **Preferences** | General holds names and startup. Appearance holds themes, motion, blur, node styles and canvas effects; Audio links to the music dropdown and holds sound effects. Older Preferences and Your Studio links resolve to General. |
-| **Diagnostics** | Settings › System: speed probe, profiler, auditor, machine tools and connection log. Auditor and machine links reveal Sessions' Diagnostics panel. |
-| **Search Studio** | The palette (`Ctrl K`), once called Key commands. It finds any page, tool, Settings card, action, task, node or model by familiar terms, and groups its results by menu section. |
+| **Size and density** | The 0.5 layout's four size settings on one page, with a live miniature of the window beside the controls: **interface scale** (the window's zoom), **text size**, **density** (Compact, Comfortable, Spacious) and **detail** (Titles, Titles and status, Everything). Only in `html[data-layout="v2"]`; components size themselves with `--text-scale`, `--d-*` and `--dt-*`, and `window.MefiSize` is the model. See "Size and density (layout v2)" under Workspace and work. |
+| **Diagnostics** | Settings › System: speed probe, profiler, auditor, machine tools, connection log and Report a problem. Auditor and machine links reveal Sessions' Diagnostics panel. |
+| **Notifications** | Settings › General: Windows alerts for what waits on you (only while Studio is not in front), the taskbar flash and count, and quiet hours shared with the Discord remote. |
+| **Search Studio** | The palette (`Ctrl K`), once called Key commands. It finds any page, tool, Settings card, action, task, node or model by familiar terms, and groups its results by menu section. Empty, it lists what you last opened (**Recent**); `task …` or `idea …` adds one on Enter. |
 | **Help** | The menu-foot popover containing onboarding, shortcuts and Community. These destinations are also available through Search; late-registered Community remains supported by the navigation registry. |
 | **Task** | One unit of work on the project board, with a brief, acceptance checks, prerequisites, attempts and evidence. New cards gather local references automatically when Automatic references is on; the configurable scout can use GPT-6 Luna on the fast tier to choose one verified starting file. |
-| **Idea** | A note in the feature-idea inbox; it becomes a task only when you or **Work through backlog** promote it. |
+| **Idea** | A note in the feature-idea inbox; it becomes a task only when you or **Work through backlog** promote it. One you typed yourself (Search's `idea …`) reads **From you**. |
 | **Plan** | A structured route from an unclear idea to tasks: unknowns, decisions, a specification you approve, then tasks. |
+| **Recently deleted** | The list of tasks and ideas you deleted in this project, kept 30 days (at most 50, oldest dropped first). Each keeps its whole record and its place, so it comes back as it was, never over a card that is there again. |
 | **Session** | One coding-worker run recorded in the OpenCode store. Tasks map to sessions in **Overhead**. A session another one spawned (its `parentId`) is a **sub-agent session**: the tree and the Command view hang the newest three busy in the last six hours under their parent, count the rest as "+n sub-agents", and fly each home into its parent when it leaves; they are not counted as sessions. |
 | **Builder / coding worker** | The CLI that edits your files: `opencode` (preferred), `claude`, `codex`, `grok` or `agy`. |
 | **Agent roles** | The service loop's satellites: **watcher** (stale sessions), **machine** (CPU, memory, leases), **auditor** (findings), **keeper** (pruning), **thinker** (what next), **briefer** (summaries), **responder** (chat), **foreman** (hands out work), **compactor** (context), **overseer** (reviews the loop), **scout** (finds task context). Agents share work state and messages in the Agents work hub. |
@@ -350,6 +406,36 @@ settings and per-model work-kind summaries for the shared controls.
   recommended one first, or a box for your own words. An answer goes through
   the same call as Command's Ask tab, then the drawer moves to the next
   decision or closes. **Open in Watch** shows the decision in Command instead.
+- **Today and the Inbox** (0.5 layout only; `renderer/today.js` and
+  `today.css`; with `html[data-layout="v2"]` absent nothing of it renders,
+  listens, polls or calls the host). Today is a second reader of the picture
+  `renderer/vibe.js` already keeps (`MefiVibe.data()` and `watch()`), so the front
+  door, its panels and the board never disagree. In Vibe it moves the front
+  door's own greeting, box, starting points and notices into its page (they
+  are put back when it stops, so Build it, Suggest a next step and the drafts
+  keep going through Vibe's code) and draws under them one line per session:
+  **Needs you** (the digest), **Running**, **Review** (work being checked and
+  plans waiting on you) and **Done today**, each line as much as
+  `html[data-detail]` says (titles, plus status, everything). A line opens its
+  session (`MefiTabs.open` when there is a tab strip, else `MefiNav.go`); a
+  question answers on its line with its first two options. The live node tree
+  stays behind it. In Build the same board is the **Today** page (registry
+  route `today`, hidden in Vibe where it is the front door).
+  The **Inbox** lists each thing with what it is, which task it comes from and
+  how long it has waited, the options the app offers (a permission is a
+  question; the safe answer is first), a free answer and **Decide later**
+  (this session only: it goes last and still counts). Every action calls what
+  the rest of the app calls (`assistant:answer`, `backlog:control`,
+  `tasks:action`), is refused while in flight and after it landed, and leaves a
+  **Decided** line with an **Undo** only where the app has a way back (a drop
+  or a done reopens; Mefi's own decisions undo through `autonomy:undo`, from the
+  footer). The popover is anchored to the pill (`openInbox(anchor)`; upward from
+  a bar at the foot), holds the keyboard while it is open (J and K, digits,
+  Enter, Esc; Studio's and Vibe's one-key shortcuts stay out of it) and is also
+  a page (route `inbox`). `MefiToday.count()` and `onChange()` are what the
+  pill reads. A click on a Windows notification lands on the task, or on the
+  Inbox when several were told (`alerts:open` carries `count`, `alerts.js` asks
+  `MefiToday.openFromAlert`). Nothing is stored.
 - Vibe can run on its own. When something holds every agent back, a banner
   under the box names it and carries its fix: **Start agents** after a launch
   that left them off (the launch screen's Open with Start agents off), **Resume** when new
@@ -601,6 +687,27 @@ settings and per-model work-kind summaries for the shared controls.
   total the agent's habits add to every prompt. `agent-addons.cjs` appends a
   role's habits wherever its skills go (seats, roles, the builder), and a
   team snapshot carries `agentHabits` like `agentSkills`.
+- **Rules** (Agents › Setup › Team & models, under the roles;
+  `scripts/agent-rules.cjs`): up to 4,000 characters of standing rules for the
+  project, and two switches that also send its own `AGENTS.md` and `CLAUDE.md`.
+  Stored as `agentRules` in the team like `agentSkills` and `agentHabits`: a
+  project with no team of its own reads the Studio defaults' rules, saving them
+  for such a project gives it a team of its own (a copy of the defaults plus
+  the rules), a saved team (preset) never carries them and applying one keeps
+  the project's, and a running task keeps the rules it started with. Too long
+  is refused with "Nothing was cut", never trimmed. `agent-addons.cjs`
+  `instructions()` puts the rules first in every prompt of a role that runs on
+  Studio's own models (the assistant roles, lead, desk, overseer, companion,
+  scout, and builders on Grok or Antigravity), reading each file fresh for the
+  request, at most 8,000 characters of it, and once when CLAUDE.md repeats
+  AGENTS.md. Claude Code, Codex and OpenCode builders read those two files
+  themselves, so they get the owner's text only. The files go to the models as
+  instructions, so they are switched on per project, off until the owner does. The card has its own Save and
+  Discard (`agents:save` with `action: "rules"`, so the rest of a half-edited
+  team is not applied), counts a draft the way the prompt does (headings plus
+  text, four characters a token) and lists who reads what from the same table
+  the prompt uses. `MEFI_STUDIO_NO_AGENT_RULES=1` sends no rules and keeps the
+  saved ones.
 - **Trace** (Live, next to Activity; `renderer/trace.js`) reads Studio's logs
   as channels: the studio log (every line the host logs, kept in a bounded
   ring since it was only ever streamed to the window), the assistant's log,
@@ -692,16 +799,60 @@ settings and per-model work-kind summaries for the shared controls.
 - **Work through backlog** works the project's existing tasks and ideas first,
   keeping a small runnable buffer; **Pause** holds every kind of new work (the
   same hold as Command's **New work** switch) while current workers finish.
-- The **task board** opens as plan cards with progress and a current step, and
-  holds prerequisites, handoff context and task history. Missing prerequisites
+- The **task board** opens as plan cards with progress and a current step. It
+  retains unchanged cards across board updates. Changed groups refresh in place
+  with their expansion and keyboard focus restored; insertion, removal and
+  sorting reconcile the displayed order. Retained cards are cleared on a project
+  switch. History drafts keep their existing project/task scope.
+  The board also holds prerequisites, handoff context and task history. Missing prerequisites
   and dependency cycles are surfaced for correction. History notes and ideas
   retain their draft, focus and text selection while live task details refresh.
+  Task Details also shows the linked plan's **current saved destination** using
+  its explicit planning ID and existing project-scoped plans read. Missing,
+  unreadable, foreign or ambiguous links show no borrowed destination; changed,
+  stale, archived or unapproved context is labelled without replacing the
+  task's recorded brief. **View linked plan** uses the existing navigation.
+  Plan-only refreshes patch this section in place, retaining note drafts and
+  focus; they do not alter task storage, prompts or dispatch.
   A running task's **Stop** asks twice. A task a grouped plan holds offers
   **Open group** instead of status, rename or delete changes, which the host
   refuses until the plan releases it.
+- **Deleting a task or an idea can be undone.** Delete on the Task board or in
+  Ideas answers with **Deleted “…”** and an **Undo** for about eight seconds;
+  after that, **Task board › More › Recently deleted** (and **Ideas › Tools ›
+  Recently deleted**, ideas only) lists what can still be put back, each with a
+  **Restore**, and a row whose card is back is greyed out. **Clear finished
+  ideas** offers one Undo for all of them. Behind that, delete first keeps the
+  whole record (`scripts/board-trash.cjs`; `main.cjs`, "Board trash") in the project's
+  own `board-trash.json`, beside its board files: 30 days, at most 50 items,
+  oldest dropped first, with who deleted it and when. That copy is written
+  before the board write that removes the card (`mutateBoard`'s `beforeWrite`,
+  inside the board lock), so a crash between the two can leave the card in both
+  places and never in neither, and a copy that cannot be written stops the
+  delete. `tasks:undelete`, an ideas `restore` action and `board:trash` put one
+  back or list what can be. A restore returns the record under its own id at its
+  old place and never overwrites a card that is there again: it says so and keeps
+  the copy. `MEFI_STUDIO_NO_BOARD_TRASH=1` gives the old delete-for-good
+  behaviour back (the list is empty and nothing is read or written); what was
+  already kept stays in the file until it is lifted. Housekeeping never puts
+  anything here: only deletes you make do, and the compactor's clean-ups of
+  duplicate cards, which nobody deleted, are not among them.
 - **Search Studio** (`Ctrl K`) finds pages, tools, tasks and settings by
   familiar terms. **Settings › General** holds names and startup behavior;
   **Appearance** holds themes, motion, panel blur and canvas presentation.
+  With the box empty Search starts with **Recent**: the last things you opened
+  or ran from it in this project (eight are remembered and six shown, in the
+  page's own storage, so nothing waits on the host); a target that has gone
+  since, such as a deleted task, is skipped without a word. Typing `task …` or
+  `idea …` with some text puts one **Add task** or **Add idea** row on top of
+  the results; Enter adds it (a task through `tasks:create`, the board's one
+  way in; an idea through `ideas:action` as one from you) and a toast offers
+  **Open**. Nothing is added before Enter; `task` alone, `tasks …` or the word
+  inside a longer one is a plain search, and a query that is exactly the name of
+  the top result keeps that result first with the Add row one down.
+  `settings.ui.searchRecents` or `searchQuickCreate` set to false, or
+  `MEFI_STUDIO_NO_SEARCH_RECENTS=1` or `MEFI_STUDIO_NO_QUICK_CREATE=1`, turns
+  each off.
 
 Ideas uses a responsive inbox of compact cards with a title, a short detail
 preview, status and source. Selecting a card opens the existing detail and
@@ -709,6 +860,96 @@ actions; the Graph view remains available. Tasks and Ideas share
 `renderer/card-layout.js` to reserve each card's measured height, update when
 cards or the window resize, respect reduced motion, and release observers
 and pending animations when the view closes.
+
+#### Size and density (layout v2)
+
+`renderer/size.js` (`window.MefiSize`) and `renderer/size.css` hold the 0.5
+layout's size settings and the tokens its components size themselves with.
+They exist only for `html[data-layout="v2"]`, which `size.js` checks once after
+`nav.js` has chosen it. With the layout off the file defines its object and
+does nothing else: no listener, no registry record, no host call and no
+storage, and `html[data-density]` keeps its two older values. The layout
+switch is the switch; nothing here reaches the person unasked.
+
+**The page.** Settings › Appearance has a **Size and density** row where its
+Density list was, and the page is also in Configuration › UI & Surfaces, in
+Search and in the status bar's Layout menu (`MefiSize.open()`, which enters
+through `MefiNav.go("size")`, so the page is a route of Settings). In the rail
+shell it is a page of Settings: Back leaves to Settings. Four controls sit on
+the left: **Interface scale** (the window's own zoom, 70 to 150 % in steps of
+5, `main.cjs` `ui:zoom`; Ctrl +, Ctrl − and Ctrl 0 move the same scale and the
+page follows them), **Text size** (80 to 140 % in steps of 10, named Smallest
+to Largest), **Density** and **Detail**. On the right a **miniature** of the
+window on invented sample data (rail, list, top bar, tab strip, thread,
+inspector and status bar) is drawn by the same tokens and rules as the real
+panels, under its own scope (`.size-mini[data-mini-density]`,
+`[data-mini-detail]`, `--mini-text-scale`; never the root's). It shows the
+**draft** while the window keeps what it has, and approximates the interface
+scale with CSS `zoom` (`--mini-zoom`). **Apply** (enabled only when something
+differs; Ctrl or Cmd + Enter does it too) puts the draft on the whole window
+and offers **Undo** in a toast; **Reset** applies the defaults (and has an
+Undo); **Discard changes** puts the window's own values back in the controls.
+Leaving the page keeps the draft until you return or discard it, and nothing
+is stored for a draft. A change made elsewhere (Ctrl +, a style preset) moves
+every control the person has not touched. A read-only **Panels** table says
+what the list, inspector, tab strip, status bar and rail take now
+(`MefiShell.size`, else `MefiNav.layout.used`). Pages from before the 0.5
+layout are drawn in fixed pixels, so the interface scale is what resizes them;
+the page says so.
+
+| Setting | Values | Kept in | Sets |
+| --- | --- | --- | --- |
+| Interface scale | 70 to 150 %, steps of 5; 100 | the host: `settings.ui.zoom` (`ui:zoom`, `ui:zoom-get`, `ui:zoom-changed`) | the window's zoom |
+| Text size | 0.8 to 1.4, steps of 0.1; 1 | `mefiStudio.appearance` `text`; `--text-scale` on the root | the words of the 0.5 panels |
+| Density | `compact`, `comfortable`, `spacious`; comfortable | `mefiStudio.appearance` `density`; `html[data-density]` | `--d-*` |
+| Detail | `titles`, `status`, `all`; status | `mefiStudio.appearance` `detail`; `html[data-detail]` | `--dt-*` |
+
+The last three live in the existing appearance store (`window.MefiAppearance`
+is its only reader and writer). The store gains `v: 2`, `text` and `detail`;
+`density` gains `spacious`, which a window without the 0.5 layout reads as
+comfortable, so the older rules keyed on `html[data-density="compact"]` are
+untouched; and every older key and value still reads (no `text` is 1, no
+`detail` is titles and status). Nothing is written until something is applied.
+The first write to a store that is not yet `v: 2` keeps its old text once under
+`mefiStudio.appearance.backup.v1`. Applying announces `mefi:appearance`, as
+every appearance change does, and `MefiSize.onChange(cb)` says what changed and
+why (`apply`, `undo`, `reset`, `keys`, `host`, `appearance` or `open`).
+
+**Tokens for components.** A 0.5 component follows the settings by using these,
+with no code of its own:
+
+| Token | Comfortable | Compact | Spacious | Used for |
+| --- | --- | --- | --- | --- |
+| `--d-row` | 8px | 5px | 11px | a session row's padding, top and bottom |
+| `--d-gh` | 12px | 8px | 16px | space above a group heading in a list |
+| `--d-stp` | 8px | 5px | 11px | a plan step's padding |
+| `--d-seat` | 9px | 6px | 12px | a team seat row's padding |
+| `--d-set` | 10px | 7px | 13px | a settings row's padding |
+| `--d-gap` | 14px | 10px | 20px | the gap between blocks of a thread or a column of cards |
+| `--d-lrow` | 10px | 7px | 13px | a row of Today's lists |
+| `--d-pad` | 14px | 11px | 18px | the inspector's padding |
+| `--d-bub` | 12px | 9px | 15px | a message bubble's padding |
+| `--d-top` | 48px | 44px | 52px | the top bar's height |
+| `--d-tab` | 38px | 34px | 42px | the tab strip's height |
+| `--d-card` | 12px | 9px | 15px | a board card's padding |
+| `--d-col` | 12px | 9px | 16px | the gap between board cards |
+
+| Token | Titles | Titles and status | Everything | Used as |
+| --- | --- | --- | --- | --- |
+| `--dt-meta` | none | block | block | `display` of a row's status line |
+| `--dt-prog` | none | block | block | `display` of a row's progress bar |
+| `--dt-more` | none | none | flex | `display` of a row's extra line (worker, branch, changes, checks) |
+| `--dt-q` | none | block | block | `display` of a board card's open question |
+| `--dt-qf` | none | flex | flex | `display` of its answer buttons |
+
+Text is `max(12px, calc(Npx * var(--text-scale, 1)))`, so it is never under
+12 px; the ladder `--f12`, `--f125`, `--f13`, `--f135`, `--f14`, `--f15`,
+`--f16`, `--f18`, `--f20` and `--f22` names each step once (`font-size:
+var(--f14)`). A height that is a token (`var(--d-top)`) needs no code. A region
+that must be told its size in numbers (`MefiNav.layout.set`) reads
+`MefiSize.metric("tab")` (a token in px, from `--d-tab`) and listens to
+`MefiSize.onChange`. `size.css` follows the layout contract and reads none of
+the `--shell-*` sizes.
 
 ### Planning
 
@@ -771,6 +1012,24 @@ create its tasks. Assistant suggestions and interview lines never resolve a
 question, confirm the understanding or approve work, and planning itself cannot
 launch coding workers. Manual controls work without an AI key; plans and their
 revision history stay in the project's ignored local `planning.json`.
+
+Every edit of a plan is a **version**: the whole plan as saved, with when, who
+(you, Mefi's own suggestion, or Studio) and a one-line note of what it did.
+`restore-version` brings an earlier version back as a *new* one (restoring
+version 2 of 3 makes version 4), so history is only ever added to and nothing is
+lost. Only you can restore, and not over a plan that is archived or has begun
+creating tasks. The restored wording, your recorded decisions and its
+specification come back, but the confirmed reading and any approval belonged to
+the version they were given on, so both are asked for again before tasks can be
+made. Every version is kept (the store has always kept a full snapshot per edit;
+a hard cap would make the file unreadable to an older build after a **Roll
+back**). In the Plans sheet the **Versions** section (formerly Plan history) lists
+the newest twenty, each with what it did, who made it and when, and **Show older
+versions** pages back through the rest; open one to read its wording, then
+**Restore this version**, which waits for unsaved changes to be saved or cleared. A
+plan saved with no history gets its current wording as version 1 the first time
+it is read; the first save after that keeps one copy of the old file beside it
+(`planning.json.before-versions.bak`).
 
 **Archive plan** sets a plan aside without deleting it: it becomes read-only,
 folds under **Show archived** in the list, and drops out of the assistant's
@@ -886,7 +1145,173 @@ failed process stays an error and cannot produce briefing requests.
   run that left uncommitted edits keeps its checkout for recovery, and a
   crashed attempt's branch is renamed aside (`mefi/orphan/...`) instead of
   deleted. A worktree starts from HEAD, so a run does not see other sessions'
-  uncommitted work until it lands.
+  uncommitted work until it lands. Besides the environment switch, "Give each
+  run its own worktree" (settings.executor.worktreeRuns; the Worktree chip in
+  Build's composer and a switch on the page below) turns it on.
+- **Work › Worktrees** (renderer/worktrees.js; main.cjs "Worktrees";
+  scripts/worktrees.mjs reads, scripts/worktree-actions.mjs writes) lists every
+  worktree of the open project, worst first, and says which hold work only this
+  PC has (uncommitted files, or commits on a detached HEAD no branch holds),
+  which are on GitHub but not merged and which are merged and safe to remove.
+  A task run's row names its task. **Open folder** hands the folder to the file
+  manager. **Merge into main** fast-forwards the main checkout on this PC
+  (a merge commit only when asked; refused while the worktree or the main
+  checkout has uncommitted files, while the main checkout is on another
+  branch or mid-merge, and while a run works in it; a conflicting merge is
+  undone) and never pushes. **Remove** takes the folder away, never the main
+  checkout, a locked worktree or a run's folder while it works; a folder that
+  holds uncommitted files or commits on no branch needs a second, explicit
+  yes and is first kept as `refs/mefi/rescue/<name>-<time>`, and a branch that
+  is not fully merged is never deleted. **Forget missing folders** is
+  `git worktree prune`. Every action names a folder from the list and the host
+  only acts on a folder git lists for the open project. `npm run worktrees`
+  prints the same table (`--json` for other tools); it changes nothing. In
+  Build's task list a task whose run has a worktree wears a small branch mark
+  (`MefiWorktrees.peek()`, at most one quiet read every 8 s; the page announces
+  `mefi:worktrees` when its list changes, and a project change drops the list).
+- **A task's usage and its time limit** (the **Usage & limit** fold in a task's
+  Evidence; `renderer/tasks.js`, `scripts/task-metrics.cjs`,
+  `scripts/task-cap.cjs`, main.cjs "Task time limit"). `task:metrics` answers
+  for one task: this attempt's time, tokens and cost, and the whole task's
+  (every attempt, and its delegated sub-tasks), read from what Studio already
+  keeps: the executor ledger for which runs there were, how long each took and
+  which route ran it, Studio's own call ledger by run id, and OpenCode's store
+  by session inside each attempt's time window (a session a retry reused does
+  not charge the retry its predecessor's turns). A route that reports nothing
+  says **Not reported**: Claude Code, Codex, Grok and Antigravity run as
+  builders print no token counts and no price, so their attempts carry a
+  measured time only; a plan or subscription that prices no call is
+  **Unpriced**, never free; a store that could not be read is **Unavailable**,
+  and the whole task's total says when it is partial. The read happens when the
+  fold is opened. **Stop an attempt after N min** is a per-task limit
+  (`task.capMinutes`, 5 to 240 in steps of 5, 25 when unset, set by
+  `tasks:cap`). The timer is `min(EXECUTOR_KILL_MS, limit)`, so a limit can
+  shorten an attempt but not lengthen it: a longer number is kept and the fold
+  says the app's own 25 minutes wins. A run that reaches its limit is stopped
+  through the owner's stop path (`stopExecutorJob`): its progress is saved,
+  nothing is charged to the card or counted against the model, no failure is
+  asked about, the ledger row says `stopped` with `limitMinutes`, and the card
+  waits for you (an `ownerHold` of kind `limit`, worded "Stopped at the time
+  limit", not "Stopped by you") instead of starting the same attempt again;
+  "work on it" or "try again" carries on. Changing the limit while a run is
+  live moves its timer at once, and the worker is told a budget of 60% of its
+  limit (15 of the default 25 minutes, as before). The hard kill with no limit
+  in force is still a failure. `MEFI_STUDIO_NO_TASK_CAP=1` switches limits off
+  (the old single 25 minute failure kill, `tasks:cap` refuses, the fold says so).
+- **Pictures on a message** (Home's message box; `renderer/composer-pictures.js`,
+  `scripts/image-attach.cjs`, `scripts/image-store.cjs`, main.cjs "Picture
+  attachments"). **Attach picture**, a picture pasted with nothing else on the
+  clipboard, or a picture dropped into the box (a text file dropped with it still
+  goes to **Add files**) is sent to `assistant:image` as `{ name, mime, data }`.
+  The host decides by the file's own bytes, not its name or the declared type:
+  PNG, JPEG, WebP or GIF, at most 5 MB, at most 25 million pixels, four to a
+  message; SVG (which can carry script), PDF, BMP and everything else are
+  refused. It is kept under the project's data folder (`attachments/`, two files
+  per picture, written atomically, never in the repository, never in a problem
+  report) and answered with an opaque id (`img_` and 24 hex digits) and a small
+  preview. A message names its pictures by id (`assistant:message` `images`,
+  `tasks:create` `images`); the thread keeps id, name, type and size, never a
+  path, and a message whose picture has gone is refused whole, like an over-long
+  one. A picture nobody sent is removed after a day, one a message or a task
+  still names never is, and the folder is held to 300 pictures and 300 MB.
+  What reaches a model follows the catalog: `agentProfiles.capabilities().vision`
+  is true only when `data/models.json` lists `image` among the model's input
+  modalities (a model it does not list, and any custom or local one, is taken
+  as not seeing). A model that sees is sent the picture in the provider's own
+  request shape (an `image_url` data URL for chat completions, `input_image`
+  for the Responses API; an Anthropic `image` source block is built for the
+  day a Messages route exists, and none does yet). A model that does not see is
+  sent the request unchanged and the reply says once, by the model's name, that
+  it could not look at the picture. A coding CLI is never sent a picture: it
+  gets one plain line, "The owner attached <name> at <path>", and a task made
+  from the box carries the same line in its brief. The box shows what will
+  happen before the message goes ("Sent to <model>, which can read images", or
+  "<model> can't see images"), and a picture is not redacted the way text is,
+  which it says. `MEFI_STUDIO_NO_IMAGE_ATTACH=1` switches all of it off: the
+  channel refuses, a message naming a picture is refused, and the box asks once
+  at start and shows no button. `assistant:image-read { id }` gives one saved
+  picture back as a data URL (with its name, type, size and dimensions, never a
+  path) so Build's thread can show what a message or a brief carries: only an id
+  the store saved, only while a project is open, only when the record and the
+  bytes still agree, and refused by the same switch.
+- **@ # / in a message** (Home's message box: `renderer/composer-picker.js`,
+  `scripts/mentions.cjs`, `scripts/project-files.cjs`, `scripts/gitignore-lite.cjs`,
+  main.cjs "Mentions in a message"). Typing `@` offers the open project's files by
+  name, `#` its tasks and `/` its skills, in a popup that answers the keyboard
+  first (arrows, Enter or Tab to pick, Esc to close, and no key taken while it is
+  closed) and opens nothing for an email address, a word with `@`, `#` or `/`
+  inside it, a path or a URL. What a message points at shows as chips under the
+  box: `@src/app.js` (or `@"a file with spaces.md"`; a bare name such as a
+  Makefile is inserted quoted, because a bare `@word` only counts as a file when
+  it has a `.` or `/` in it), `#"a task's title"`, `/skill-name`. The grammar is
+  one (the page and the host read a message the same way; a test holds them
+  together). `project:files { query, limit }` answers **names only**: a bounded
+  breadth-first walk (30,000 files, 6,000 folders, 12 levels, 1.5 s, kept for
+  15 s), fuzzy on the name and then the path, never outside the project and
+  never through a link, leaving out what the read tool would refuse (hidden
+  paths, `data`, `dist`, `node_modules`, `.pem` `.key` `.db`
+  `credentials.json` `settings.json`; the picker never offers a path the model
+  would be refused) plus `build`, `out`, `coverage`, `__pycache__` and whatever
+  the project's `.gitignore` files ignore (a small reader that agrees with `git
+  check-ignore` on a real tree). `agents:skills` lists the skills the inventory
+  (`agent-addons.cjs`) finds with a one-line description each, one of each name
+  (the project's before the home folder's, `.agents/skills` before other tools'
+  folders). A chat message that says `/skill-name` is sent with that skill's own
+  text added to what the model is told (after the chat's instructions, through
+  the outbound scrubber): at most four skills, inside 16,000 characters shared
+  between them; the first one is added whatever its size (a skill over 16,000
+  characters "only loads when called", and this is that call), a later one that
+  does not fit is left out and the reply says so, and so does a skill that does
+  not exist, when it was plainly meant as one (it starts the message, or it has
+  a dash in its name; `/tmp` in the middle of a sentence is just a word). A chat
+  message that says `@path` gets one sentence after its words naming the files
+  that exist in the project, through real folders and not excluded, never their
+  contents: whether the model may read one is what its tools already decide (the
+  project-read switch, `docs/agent-tools.md`). The thread keeps exactly what was
+  typed, and a Discord message gets none of it. A task made in Create task mode
+  keeps its `@` and `/` words as typed; only chat expands them. `settings.ui.
+  composerPicker = false` (Settings › You, "Suggest files, tasks and skills
+  while I type"; on by default) or `MEFI_STUDIO_NO_COMPOSER_PICKER=1` switches
+  the popup, the chips, both channels and the expansion off.
+- **Skills** (`scripts/skill-format.cjs`, `scripts/skills.cjs`, main.cjs "Skills";
+  the page is Agents › Setup › Skills). A skill is `<project>/.agents/skills/<name>/
+  SKILL.md`: front matter with `name` and `description`, then the instructions.
+  The name is the folder and the `/command`: lowercase letters, numbers and
+  dashes, up to 64 (not a name Windows keeps for devices). The file is at most
+  32,000 bytes, which is what the inventory accepts, so a bigger one would save
+  and then never be listed; agents load skills by themselves only while the ones
+  they chose fit in 16,000 characters, and the page says when a skill is over
+  that and so loads only when called by name. `skills:list`, `read`, `save`,
+  `create`, `delete`, `import` and `export` take a **name**, never a path: the
+  host builds every path from the open project's root and a checked name, and
+  the only place it writes inside a project is that one file. `.agents`,
+  `.agents/skills` and the skill's own folder must be real folders (a link is
+  refused, and a `SKILL.md` that is a link is not a skill, as in the inventory).
+  `create` and `import` never overwrite (a new folder, made so that two made at
+  once cannot both succeed); `save` replaces an existing skill and keeps any
+  other front-matter keys it had (another tool's `allowed-tools`, say); every
+  write is a temporary file and a rename. A save that changes text, and a delete,
+  first keep the old text in `data/projects/<id>/skill-backups/<name>/` (ten per
+  skill, outside the project) and refuse to go on when that copy cannot be made.
+  Delete removes the `SKILL.md` and the folder only if nothing else is in it.
+  `import` opens a folder dialog here, reads that folder's `SKILL.md` only, and
+  holds it to exactly the rules of a save (front matter with a valid name and a
+  description, instructions, under 32 KB, text); the file goes in as it was
+  written and the page is told how many other files were left. `export` checks
+  the skill, opens a Save dialog and writes a new folder or a zip (`<name>/
+  SKILL.md`) where the owner chose. The page also lists the skills the inventory
+  finds elsewhere (other tools' folders, the home folder), read-only, and offers
+  a few starters. `MEFI_STUDIO_NO_SKILL_EDIT=1` makes the page read-only: no
+  save, create, delete or import, and no dialog for an import. The page
+  (`renderer/skills.js`, **Agents › Setup › Skills**, also in the palette) lists
+  each skill with what it is for, where it lives, its size and anything that keeps
+  agents from using it (no front matter, no description, a name that does not
+  agree with its folder, over 32 KB, over 16 KB so that it loads only when called);
+  **New skill** and **Edit** share one editor (name, when to use it, instructions,
+  a byte counter, and what the size means) that says what is wrong as you type
+  using the host's own rules written again (a test holds the two together), and a
+  name cannot change once a skill exists because it is the folder. Delete asks
+  twice. The page sends names and text, never a path.
 
 ### Command center and the node tree
 
@@ -907,7 +1332,11 @@ failed process stays an error and cannot produce briefing requests.
   and light edges around the chosen node shape. These controls also live directly
   in the video's media settings, synchronize across panels, and persist locally.
   Brightness applies to the separate node/connection paint passes; labels, menus,
-  video brightness, transparency and tree position remain independent.
+  video brightness, transparency and tree position remain independent. **Fast
+  brightness** (on by default; `fastBrightness` in `mefiStudio.treeDynamics.v1`)
+  paints each brightened pass once into a scratch layer and lays it down with one
+  filtered draw, instead of filtering every shape; turn it off to get the old
+  per-shape path back ([performance.md](performance.md) has the measurements).
 - **Tree modes & movement**, in Appearance › Layout and Music & video › Audio
   reactions, shares saved controls across both panels. **Steady** disables music
   and video reactions; **Music**, **Video**, and **Music + video** select the inputs.
@@ -1197,6 +1626,21 @@ failed process stays an error and cannot produce briefing requests.
   (renewed every 30 s), only for the open project, at most twice a second, and
   it waits while Studio is hidden. Snapshots carry clipped titles only: no
   prompts, paths, keys or addresses.
+- A seat's inspector and its next assigned builder share a deterministic
+  **Seat recap**: at most four recorded generations and 1,500 characters, with
+  repeated identical handoffs collapsed. Interrupted runs, reported completion
+  awaiting checks and verified outcomes stay distinct. Live generations are
+  excluded; the full 20-generation ledger stays intact. The worker receives it
+  as historical context alongside its current brief and interrupted-work
+  checkpoint. Recap lookup is project scoped and may wait at most two seconds;
+  a missing or unreadable history never prevents dispatch and makes no model call.
+- Fleet Health also describes **handoffs awaiting recorded verification**:
+  three distinct tasks from one builder seat within 24 hours produce a Note.
+  Repeated events for the same task do not inflate it; later verified or
+  human-confirmed evidence removes that task, and old events expire. The note
+  uses only this project's retained history and opens the source seat through
+  Look. It is informational: waiting for verification can be normal, the
+  attention count stays unchanged, and it never pauses or reroutes a worker.
 - The page (`renderer/fleet.js`) has an explorer (pods and seats with a status
   dot, walked with the arrow keys) and five views. **Graph** is the branches:
   pods as columns of seat cards, wired by why (a handoff, a delegation, a check,
@@ -1525,8 +1969,70 @@ failed process stays an error and cannot produce briefing requests.
   logs and references, a feature-idea inbox and graph, task-to-session mapping,
   and in-app frame/scope/hitch capture with JSON export.
 - **Settings › Diagnostics** gathers the speed probe, **Open profiler**, **Run
-  auditor** and **Machine**. The auditor's findings and the machine readout
-  open in the Explorer, where the machine controls stay.
+  auditor**, **Machine** and **Report a problem**. The auditor's findings and
+  the machine readout open in the Explorer, where the machine controls stay.
+- **Report a problem** (`renderer/report.js`) builds a small bundle on this PC
+  that the owner reads in full before anything is saved: `manifest.json`
+  (Studio's version, the install kind, the OS, the model route and the builder
+  in use), `tasks-summary.json` (one line per task: state, builder, checks),
+  `trace-tail.log` (the last 1,000 rows of Studio's log), `builders.log`
+  (recent builder output) and, after a crash, `crash.jsonl`. Every file is
+  redacted the same way: `scripts/redaction.cjs`, then this PC's user and PC
+  names, e-mail and network addresses, more token shapes, the project's and
+  Studio's folders, and long drive paths cut to their last two steps; **Replace
+  task titles with numbers** swaps every task title and the project's name for
+  `Task N` and `Project 1`. **Save zip…** (`report:save`) asks where to save
+  (Documents may live in OneDrive), writes exactly the bundle that was
+  previewed (`report:preview`) and shows it in Explorer. Nothing is uploaded or
+  sent: the owner attaches the file to a message. A report never holds
+  `settings.json`, the sign-in files, the vault, screenshots and evidence or
+  project files; that list is in `crash-report.cjs` (`NEVER_INCLUDED`), shown
+  beside the file list and tested against it. The rules are pure
+  (`scripts/crash-report.cjs`), the zip writer is `scripts/zip-lite.cjs`, the
+  host is `scripts/report-host.cjs` and main.cjs's "Report a problem" block.
+- **Notifications** (Settings › General, `renderer/alerts.js`) tell Windows
+  when something waits on the owner: a question, an approval or a permission
+  (`need`, `perm`), a task that failed after Mefi stopped retrying (`fail`) and,
+  when switched on, one that finished (`done`). Nothing is sent while a Studio
+  window is in front (shown, not minimized, focused) with somebody at the PC (a
+  locked screen, or ten minutes without input, counts as away), nothing inside
+  quiet hours, nothing about the same task and kind twice in fifteen minutes, and no
+  more than twelve an hour; the words are generic ("Something needs you")
+  unless the owner chose task titles, because Windows keeps notification text
+  in its history. A thing must still be waiting twenty seconds after it came up,
+  so a question the assistant answers by itself never pings, and a burst is one
+  notification. The taskbar button flashes until Studio is focused and carries a
+  red count of what waits on the owner (the needs-you digest): the numbered
+  overlay icon is drawn in `scripts/badge-icon.cjs`, without a canvas, at 16 px
+  or 32 px for a scaled display. Quiet hours are the Discord remote's own
+  (`settings.remote.quiet`): one clock, shown and changed from both cards. The
+  defaults are need and failed on, finished off, flash and count on, sound off,
+  quiet hours off. The rules are pure (`scripts/alerts.cjs`: `decide`), the host
+  is `scripts/alerts-host.cjs` (queue, settle, look, show, click) and main.cjs's
+  "Notifications" block holds four one-line hooks (a question asked or
+  answered, the tasks the owner cares about, a project switch, the window's
+  focus). The bridge is `alerts:get`, `alerts:set` (validated) and `alerts:test`
+  (it waits up to a minute for the owner to look away), and one push,
+  `alerts:open { kind, id, taskId, projectId }`, when a notification is clicked:
+  main brings Studio up first and the page opens the task (else Home).
+  Windows needs an application user model id for a toast; it is fixed at
+  `MefiStudio.StudioAIPlus` so a portable, a moved and an updated copy are one
+  app. `MEFI_STUDIO_NO_ALERTS=1` or the master switch turns all of it off, the
+  id included; `MEFI_STUDIO_KEEP_APP_ID=1` leaves only the id to Electron (for a
+  taskbar button pinned under the old id, which Windows groups by it).
+- **Studio closed unexpectedly.** Studio writes `data/session-marker.json`
+  (`running`) at launch and closes it with a reason on a quit, on any exit with
+  code 0 (the update restart and the roll back are `app.exit(0)`) and when
+  Windows signs out; a marker still `running` at the next start is a session
+  that never closed. A row goes to `data/crash.jsonl` (the last 50 rows of the
+  last 7 days) when the window dies or hangs, main throws or the GPU process is
+  lost. The next start says so once (`report:crashed`, sent when the page is up
+  and, in the page, when the startup gate is gone): one toast with **Review the
+  report**, which opens the card, and **Dismiss**. A clean quit, an update
+  restart, an update that was rolled back (its own note says so) and a
+  development run that was only stopped never say it.
+  `MEFI_STUDIO_NO_CRASH_PROMPT=1` or the switch in the card silences the toast;
+  the record is still written.
 - **Settings › Discord Server Styler** starts the bot and local dashboard from
   a sibling `discord-server-styler/` checkout or `MEFI_STYLER_ROOT`, shows
   whether the bot is online or needs setup, and can open the dashboard or bot
@@ -1591,6 +2097,32 @@ the helper's PowerShell in `scripts/release-updater.mjs`, and
 protects the updates made from it, not the update that installs it.
 `MEFI_STUDIO_NO_ROLLBACK=1` restores the plain swap.
 
+**What's new.** After an update installs, Studio says what changed, once, in
+plain words: one toast, "Studio updated to 0.5.0", with a **What's new** action
+that opens a small sheet with that version's notes and **Got it**. It never
+opens a window by itself, and a first install is silent. The words are
+`assets/whats-new.json`, `{ "<version>": ["one plain sentence", ...] }` for the
+last five versions with notes, written from `CHANGELOG.md` by
+`scripts/release-notes.mjs` whenever `scripts/package-portable.mjs` runs (so a
+package carries the notes of its own version; the file is committed, and
+`node scripts/release-notes.mjs --check` fails when it no longer matches the
+changelog's released sections; `tests/release_notes.test.mjs` runs that check on
+the repository). A bullet's sentence is its bold lead; a bold label such as
+"**Trace** (Live, beside Activity): ..." joins the bullet's first sentence;
+`<!-- notes: ... -->` inside a bullet says the sentence itself, and
+`<!-- internal -->`, an "Internal:" or "Tests:" lead or a "### Internal"
+heading keeps a bullet out. At most six sentences a version. The host side is
+main.cjs's "What's new" block (`release:whats-new`, `release:whats-new-seen`
+and `release:whats-new-set`, all app-wide) over `scripts/whats-new.cjs`: what
+has been read is `settings.whatsNew` `{ on, seen, announced }`; a missing
+`settings.json` at launch is a fresh install and its version is sealed as read;
+a build older than the one already read (a roll back) says nothing; a toast that
+was shown is not shown again at the next launch, and the notes stay in
+**Settings › Updates**, marked New until read. The page waits for a visible
+window and for the startup gate before it makes the toast (the gate hides the
+page and sits above every toast). `MEFI_STUDIO_NO_WHATS_NEW=1` or the "Tell me
+what's new after an update" switch there turns the toast off.
+
 Build and publish a release with `node scripts/package-release.mjs --version
 vX.Y.Z --publish`, or push a `v*` tag and let
 `.github/workflows/release.yml` run. A private repository needs a read-only
@@ -1650,6 +2182,321 @@ Sign-in uses the same setup window as Friends › Your PCs and is polled until a
 account appears; Studio never sees a password or a token. The launch screen's
 rows carry the same chips through `projects:glance` (local, no network, three
 at a time, a second and a half each).
+
+### Attempt review: changed files, Accept and Revert, advisory checks, before and after shots
+
+A task that a builder has worked on has a **Changes and checks** section in its
+Evidence tab (`renderer/review.js`, `window.MefiReview`; Tasks › a task ›
+Evidence). It opens by itself for a task that ran, reads nothing until it is
+open, and has three panels: **Changed files**, **Checks** and **Preview**, and
+a small "What Studio keeps for each attempt" area with the three switches. The
+page only asks and shows; the host (`main.cjs`, the "Attempt review" block)
+keeps the record. Nothing in it can fail, stop or slow a run beyond one short
+wait.
+
+**The pictures.** When a builder run starts (after its worktree is prepared,
+while its prompt is built) and again when it ends, the host takes a picture of
+the folder the run works in (the project, or the run's own worktree): a git
+commit that only the refs `refs/mefi/attempts/<task>/<n>/before` and
+`.../after` point at (`scripts/attempt-snapshots.cjs` is pure: names, parsing,
+the revert plan; `scripts/attempt-snapshots-host.cjs` runs git). It is built
+with a temporary index (a copy of the real one, named by `GIT_INDEX_FILE`:
+`git add -A`, `write-tree`, `commit-tree`, `update-ref`), so the person's
+index, HEAD, branch and working files are never touched, and `.gitignore` is
+honoured because git does the adding. Files over 5 MiB (2 MiB for a binary),
+or past 64 MiB in all, are left out and named; a folder where more than 20,000
+files changed gets no picture and says so. Git runs without a shell and
+without prompts, with Studio's own keys withheld, under a fixed identity
+("Mefi's Studio"). Attempt numbers are per task and shared with the shots.
+Each task keeps its newest 20 attempts (300 tasks); older refs are pruned.
+
+- **Local only.** The refs are never pushed (Studio's own sync pushes branches
+  and nothing else; a test pushes to a bare origin and finds no `refs/mefi`).
+  Nothing that builds a problem report, a support bundle or an export may
+  include them: `refs/mefi/**` and `<project data>/attempt-evidence/**` (the
+  shots and check results, which live in the project's data folder, never in
+  the repository) are off limits there. A folder that is not a git repository,
+  has no git, sits inside another repository or has snapshots switched off has
+  no pictures, and the section says which.
+- **Shared folders.** Two runs working in the same folder see each other's
+  changes in their lists; both attempts record that, and the section says some
+  files may not be from this attempt. A run in its own worktree is listed from
+  either folder, and its files can be put back in the project once merged.
+- **Changed files** (`tasks:changes`, `tasks:diff`): the files between the two
+  pictures from `git diff`, with +/- , added, deleted, renamed (with its old
+  name), binary, link and submodule marks, and for each whether it **can be
+  reverted**, **changed since** (edited after the attempt ended) or is **back
+  as before**. A running attempt is read from the folder as it is now (kept 8
+  seconds so a busy board does not make git read the folder again and again)
+  and cannot be accepted or reverted. One file's diff comes on demand, cut at
+  200 KB or 2,500 lines.
+- **Accept** (`tasks:accept`) records the owner's word on the card
+  (`task.acceptedAttempts`: attempt, run, time, "owner") and changes no other
+  field; it is not Done and does not touch Done. It can be undone, and it waits
+  while a worker runs.
+- **Revert file / Revert attempt** (`tasks:revert`) put files back to the
+  start picture, and only files in the attempt's own change set: a file is
+  written back only while it still holds what the attempt left (otherwise the
+  whole revert refuses, names the files and changes nothing, and offers to
+  revert the unchanged ones), a file the attempt added is removed only while it
+  is still the attempt's copy, renames are undone both ways, a link is put
+  back only on platforms that make links, and a submodule or a type change is
+  refused. Before a byte moves Studio keeps a
+  safety picture (`.../<n>/reverted-<time>`), so a revert has an **Undo**
+  (`undo` with its receipt). Files are written to a temporary name and renamed,
+  inside the project folder's real path (a link pointing out of it is never
+  written through), with git's own line-ending and attribute conversions, and
+  a part-way failure puts back what was already written. Nothing runs
+  `git reset`, `clean`, `checkout .`, `stash` or `commit`. A revert refuses
+  while anything works in the folder, including a finished run's merge-back,
+  and is checked again after the safety picture. Reverting the whole attempt
+  first checks that the task can be reopened (the ordinary status path's own
+  refusals), then reopens it through that path and removes the Accept for that
+  attempt. Files git ignores, such as `node_modules`, are not in the picture
+  and cannot be restored.
+
+**Advisory checks.** After an attempt that changed something and was not
+stopped by the owner, the project's typecheck and lint (the build only when
+`review.advisoryBuild` is on) run in the run's folder; see docs/agent-tools.md
+"Checks and logs for builders" for what a project has, the limits and the
+builder tools `run_check` and `project_logs`. Results are kept at
+`attempt-evidence/<task>/<n>/checks.json`, shown under Checks as "Advisory,
+never blocks Done", and each check has a Run button (a build writes files, so
+it runs only on request and only while no builder works on the project).
+
+**Before and after shots.** When Studio's own project preview is running, a
+hidden window takes a 1280 x 800 PNG at the start and at the end of an attempt
+(`scripts/attempt-evidence.cjs` is pure: whether to capture, which requests
+are allowed, names, pruning and the sentences; `attempt-evidence-host.cjs` keeps
+the files; `evidence-window.cjs` owns the window). The window is an offscreen
+`BrowserWindow` that is never shown, focused or in the taskbar, sandboxed, with
+no Node, context isolation on and an in-memory session; only the preview's own
+localhost origin (and data: or blob: pieces of the page) may be requested, no
+pop-up, download or permission is granted, a redirect elsewhere is stopped, and
+it is given up on after 15 seconds and closed. A worktree run's "after" shot
+waits for its merge, because the preview shows the project's folder; if the
+work was not merged there is no shot and the page says so. Files live in
+`<project data>/attempt-evidence/<task>/<n>/{before,after}.png` (with
+`meta.json`); each task keeps pictures for its newest 10 attempts and folders
+for 20, and the whole folder stays under 200 MB. A picture over 6 MiB is not
+kept and one over 3 MiB is listed without being sent to the page. With no
+preview running nothing is captured and the page says "The preview was not
+running when this task started." A screenshot can show a secret, so they stay
+on this PC and are never added to a problem report.
+
+**Settings and kill switches.** Each of the three has a setting
+(`settings.review`, on by default except the build) and an environment
+variable that wins over it and shows in the section as "Switched off for this
+launch":
+
+| Part | Setting | Environment variable |
+| --- | --- | --- |
+| Before and after pictures, the changed-files list, Accept and Revert | `review.snapshots` | `MEFI_STUDIO_NO_ATTEMPT_SNAPSHOTS=1` |
+| Advisory checks after an attempt, `run_check`, `project_logs` | `review.advisory` (and `review.advisoryBuild`, off) | `MEFI_STUDIO_NO_ADVISORY_CHECKS=1` |
+| Before and after shots | `review.shots` | `MEFI_STUDIO_NO_EVIDENCE_SHOTS=1` |
+
+Switching one off leaves the other two running. With all three off a run is
+not touched at all.
+
+**How a run is protected.** `spawnNextJob` reaches the block through `typeof`
+guards and one door that drops a throw or a rejection. The worker starts when
+the start picture and shot are done or after 25 seconds (the shot is given up
+on after 8; a late picture is never kept), and the launch gates are read
+again after that wait, so a stop or pause that landed meanwhile cancels the
+claim and drops its picture. The end picture, the after shot and the checks run
+in the background and are not awaited, except a worktree run's merge-back,
+which waits for them for six minutes at most. A failure is one log line with
+the kind of error and the run id, never a message or a path. The heavy read of
+a folder is limited to three at once.
+
+**Known limits.** A project folder nested inside another git repository gets
+no pictures (the outer project owns the list). Parallel runs sharing one
+folder are flagged, not separated. The build writes files, so it is off by
+default and, run by hand, may leave a kept worktree dirty. Shots need Studio's
+own preview; an app the person runs elsewhere is not captured.
+
+### Tabs you add and pin (layout v2)
+
+With layout v2 on (`html[data-layout="v2"]`) the shell's tab region holds a
+strip of tabs (`renderer/tabs.js`, `window.MefiTabs`, and `tabs.css`, whose
+classes all start with `ts-`). The owner adds the tabs they want, pins the ones
+that stay, and Studio keeps the rest tidy. With v2 off, or without `MefiShell`,
+the script starts nothing: no element, listener, timer, stored key or host call
+(`start()` declines and `open()` is plain `MefiNav.go`).
+
+- **A tab is a remembered place, not a live page.** Pages are singletons, so a
+  tab is `{ route: { id, params } }`: a registry id plus the few params that say
+  which place. Only those are identity: Home (`workspace`, no view), Chat, one
+  session (`view: "task"`, `taskId`) and, for Agents, its overview or one of
+  its four Setup panes. A filter or a card to scroll to is where you are inside
+  a page, never another tab. Vibe is Home in another mode, so it is the same
+  tab. Friends, Search and Configuration are not places and never get a tab.
+  Opening a tab asks `MefiNav.go(id, params)` for the page; Home asks for its own
+  view (`{ view: "home" }`), because in Build a bare `go("workspace")` brings
+  back the session you last had open. The add button lists every page the
+  registry offers, this project's sessions and Recently closed, with one search
+  box (Enter opens, Shift+Enter opens and pins).
+- **The strip follows where the app is.** `MefiNav.go` is not the only way a
+  page opens, so the strip reads `mefi:nav`, a watcher on the body's `class` and
+  `data-sheet`, and `MefiNav.current()`. A place with no tab of its own becomes
+  (or replaces) the italic **preview tab**. The pages whose own view is not in
+  `current()` have readers (`MefiTabs.reader(id, fn)`; built in: `MefiBuilder.view()`
+  for Home and `MefiAgents.params()`), and what a page was last opened with is
+  remembered for when it comes back from under another. A page that was just
+  asked for has a short grace window (800 ms) before the strip trusts what is
+  showing, and nothing is read while the launch screen is up.
+- **Managed behaviours, each with a switch** in Configuration › UI & Surfaces ›
+  Tab behaviour (also from the strip's settings button and Search), one master
+  switch above them, all on by default and kept in `mefiStudio.tabs.prefs.v1`:
+  the preview tab (typing, pinning, a double-click or arranging it keeps it);
+  what an agent that needs you does (badge only, **a background tab with a
+  badge**, or open and focus; the first look at the board is only a baseline, so
+  old questions are not announced, and a badge goes when the need does);
+  closing tabs of finished sessions after an idle time (Never, 10, **30**, 60
+  minutes; one timer set for the next tab that could be due, never polling); at
+  most **8** unpinned tabs (3 to 12, or no limit), the one used longest ago
+  closing with an Undo toast; Recently closed (10 per project) with
+  Ctrl+Shift+T; and a quiet "Pin Fleet?" chip after three visits, never twice
+  for the same page, and not used up while nobody could see it. A pinned tab is
+  never closed by Studio, and everything Studio closes can be reopened.
+  `MEFI_STUDIO_NO_TAB_MANAGER=1` turns all of it off for one run (main.cjs "Tab
+  switches" puts `tabsManage: false` on `prefs:get`; the settings cannot turn it
+  back on), and the card says so.
+- **Keys** (window capture, nothing taken while Search or Configuration is up,
+  from IME composition, or from a field that needs it): Ctrl+T add, Ctrl+W
+  close (Home stays), Ctrl+Tab and Ctrl+Shift+Tab (or PageDown and PageUp)
+  cycle, Ctrl+1 to 9 jump (9 is the last), Ctrl+Shift+T reopen; Ctrl+Alt+P pin,
+  Alt+W close and Alt+Shift+T reopen, these three only where no text is being
+  typed; a tab is moved with Ctrl+Shift+Left and Right, or dragged. Other
+  Ctrl+Alt chords (AltGr on many keyboards) are never taken. Alt+Left and Right
+  stay Back and Forward (nav.js). The application menu's Close is also Ctrl+W:
+  the strip takes the key first (`preventDefault`), so with layout v2 Ctrl+W
+  closes a tab (on Home it does nothing) and never the window; the window's own
+  close button, Alt+F4 and Quit (Ctrl+Q) still do. `tests/tabs_render.test.mjs`
+  checks that a page that takes the key keeps its window, against the real menu
+  template.
+- **Stored per project, with pins that follow you.** `mefiStudio.tabs.v1.<projectId>`
+  holds that project's tabs, its Recently closed list and the tab that was showing;
+  `mefiStudio.tabs.global.v1` holds the pins of pages (a session's pin stays with its
+  project), the id counter and what the suggestion has counted and offered. A tab is
+  `{ id, route, title, pin, prev, used, at }`; a record the strip cannot use
+  (a page that has left the registry, a deleted session) is skipped without a word.
+  A burst of changes is written once, 300 ms after the last; saveResume (nav.js),
+  the window hiding and `stop()` write at once. The launch page decides which tab is
+  showing. Nothing is written until something changes, and every storage access is
+  guarded.
+- **Small windows.** Below 900 CSS px (the contract's fold) the strip is one menu
+  button with every tab in it; above it, tabs that do not fit fold into "N more"
+  (Home, pins and the tab you are on never fold). Its height comes from `--d-tab`
+  (28 to 48, 38 without SIZE) through `MefiShell.resize("tabs", px)`.
+- **Where the page starts.** The strip is `--shell-tabs-h` high (0 in v1), under
+  the local navigation, or at the window's top where Build's session layout
+  hides that bar. Pages start at `--shell-y0`; that layout's own layer
+  (`#workspace-layer`, builder.css) starts at `--shell-tabs-h`, so the strip
+  never covers a page's top bar.
+- **Accessibility.** `tablist` / `tab` with one tab stop that follows focus, arrow
+  keys, Home and End, Enter and Space, Delete, the menu key, a polite live region for
+  moves and closings, the shell's main area as the `tabpanel` of the selected tab
+  (unless FRAME gave it a role), a visible focus ring, text never under 12px.
+
+`tests/tabs_model.test.mjs`, `tabs_observer.test.mjs`, `tabs_persist.test.mjs`,
+`tabs_strip.test.mjs` and `tabs_host.test.mjs` run the script over a fake DOM with
+a stub nav and shell (`tests/fixtures/tabs-env.mjs`); `tabs_render.test.mjs` runs
+it in a real window at five sizes with real input. **Known limits:** an in-page
+view change that nothing announces (Build's view switch) is seen at the next
+trigger, not instantly (`MefiTabs.reader` is the hook for a page that can say);
+Friends opens as a window over whatever is showing and gets no tab; after Enter
+on a tab the page it opens takes the keyboard, as any page does.
+
+### Build's desktop in the 0.5 frame: the session list, the thread and the inspector
+
+With the new layout on (`html[data-layout="v2"]`, off by default; `?layout=v2`
+or `MefiNav.setLayout("v2")`) Build's Home is three panels that
+`renderer/sessions.js` (`window.MefiSessions`, with `renderer/sessions.css`)
+hands to the shell's regions (`MefiShell.mount("list" | "main" | "inspector",
+key, element, { title, order })`). The panels only read what the page already
+holds (`MefiWorkspace.snapshot()` and the pushes it gets) and what
+`renderer/builder.js` and `renderer/review.js` export for them; the session
+logic (what a task is reading as, the groups, what a task offers, how a question,
+a note, an Ask and a Change go through, what "Done when" says, the chips' host
+calls) stays in builder.js, so the Sessions layout of Home and these panels can
+never disagree. Nothing is drawn unless the layout is on and a shell is there.
+
+- **The list.** This project's tasks as sessions, grouped Needs you, Running,
+  Review, Queued and Done, newest first (pinned first), one status dot, a title
+  and one line of words each; what a row says follows `html[data-detail]`
+  (titles, plus status, everything: the stylesheet decides, the row always
+  draws every line). A run in its own worktree wears a branch mark, from the
+  list `MefiWorktrees` already holds. Above it: the project and its branch (the
+  project switcher), **New task** (Ctrl N: Home's own message box in its task
+  purpose), and **Sessions | Backlog** (the backlog lists ideas nobody has made
+  a task of); under it a filter. A row's menu is open in a new tab, pin, rename
+  (`tasks:action rename`), stop and delete (the board's own `tasks:delete` behind
+  the styled confirm, with Undo from Recently deleted). Finished work shows twelve
+  rows and offers twenty-five more at a time.
+- **The thread.** The selected task's title and chips, then what happened in order:
+  the brief (with the pictures it names, read back by opaque id through
+  `assistant:image-read`, never as a path), each run as a card with its steps and
+  what it said, the live "now" line, notes, Asks and their answers (rebuilt from
+  the conversation, so they survive a reload, pictures included), the record of
+  what Mefi decided with its Undo (`autonomy:undo`), banners for review, failure,
+  approval and done, a line linking to the Changes tab and the before and after
+  shots of the attempt (`tasks:evidence`) on one comparison frame with a
+  lightbox. A question that waits on you is docked above the box: the option it
+  recommends first, what Mefi suggests and why (named, never acted on), your own
+  words, and **Decide later**, which only puts the card away (the task stays in
+  Needs you). There is no countdown, because this app's host decides at once
+  where the permission mode allows it and keeps the record, and waits otherwise;
+  a countdown would count to nothing. The box takes a Note, an Ask or a Change
+  through `MefiBuilder.sendWords`, with Attach picture and the `@ # /` picker
+  bound to it (a Note cannot carry a picture), and the chips for the branch, the
+  Worktree switch, the permission mode and the coding worker and its tier.
+- **The inspector.** Plan (where the task stands, the brief read back as its
+  outline, what it is done when, the earlier versions of the brief with Restore:
+  `tasks:history`, `tasks:restore`), Changes and Checks (review.js's own panels,
+  mounted one at a time with `MefiReview.mount(host, { taskId, projectId, panel })`,
+  Changes whenever a session is open so its count is live), Preview (the project
+  preview's controls through the workspace's own `previewAction`, and review.js's
+  Before and After; an embedded live preview is not here) and Agent (who is on it,
+  what it is doing, usage and the time limit in tasks.js's own words, Stop). A task
+  opens on its changes once it has any and on its plan before that, settled when
+  the list has been read; the tab a person picks is theirs and is remembered.
+- **Selection and memory.** The selected session follows the router:
+  `mefi:nav` for Home with `{ view: "task", taskId }`, and `nav.go("tasks",
+  { taskId })` (the palette, a notification's `alerts:open`, Home's "View task") is
+  redirected to it by one marked block in `nav.js`; the task board stays one press
+  away (`board: true`, which the thread's board button sets). What is open, the
+  list it was on, the folded groups and each task's tab are remembered per project
+  (`mefiStudio.sessions.v1`, twelve projects). A session that is no longer on the
+  board is let go of with one line.
+- **Coming and going.** `nav.js applyLayout` calls `MefiSessions.attach()` when the
+  layout turns on and `detach()` when it turns off, so turning v2 on or off at run
+  time draws or removes the panels; a shell that is not there yet is waited for
+  (its `mefi:shell-layout` event, and a short retry). While the thread shows, Home
+  is covered (`inert`) so its scroll fades and tab stops stay out of the way. A
+  window nobody can see is not drawn; it is drawn once, current, when it comes back.
+- **Kill switch.** `?sessions=off` for one launch, or `mefiStudio.sessions` saved as
+  `off` (`MefiSessions.setEnabled(false)` writes it), puts the panels away and
+  leaves Home as it is; `?sessions=on` wins for one launch. With the layout off
+  nothing of this is drawn, listened to, stored or asked of the host.
+
+Tests: `tests/sessions_list.test.mjs`, `tests/sessions_thread.test.mjs`,
+`tests/sessions_inspector.test.mjs` and `tests/sessions_edges.test.mjs` (the host's
+pushes, the clock tick, the page's signals, refusals and failures, and the keys
+that need real focus) run the real builder.js in the shared fake DOM
+(`tests/fixtures/sessions-env.mjs`); `tests/builder_kit.test.mjs` and
+`tests/review_panels.test.mjs` pin what builder.js and review.js hand the panels;
+`tests/sessions_render.test.mjs` runs the lot in a real window at six sizes with
+a stand-in for the shell's regions.
+
+**Known limits.** The panels depend on the shell to place them and to fold them into
+drawers below 900 CSS px; "See the changes" asks the shell for a closed or folded
+inspector the way it offers (`open("inspector")` when it has `open` and `isOpen`,
+else `reveal`, else a `resize` of a column that is at 0 and not folded). With Home's
+own Sessions layout (`homeLayout=sessions`) also on, its menu list repeats this list:
+leave Home on its default. There are no Drafts (the app keeps none); Ctrl N is not
+bound in Vibe; a Note cannot carry a picture. Windows' high-contrast mode is not
+handled here or anywhere else in the app (a status dot is colour plus words).
 
 ### Community
 

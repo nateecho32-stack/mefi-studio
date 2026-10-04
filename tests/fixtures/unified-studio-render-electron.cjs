@@ -283,6 +283,14 @@ app.whenReady().then(async () => {
   report.compactChoices=true;
   await run("document.getElementById('agents-body').scrollTop=0;window.MefiScroll.refresh();"); await sleep(80);
   assert.ok(await run("const hint=[...document.querySelectorAll('.studio-scroll-hint')].find(el=>el.dataset.scrollOwner==='agents-body');return hint&&!hint.hidden&&!hint.querySelector('[data-direction=down]').hidden&&hint.querySelector('[data-direction=up]').hidden;"));
+  // The overflow thumb is an indicator in the hint layer: present while the pane can scroll, a share of it, inside the hint, no pointer, and the pane reserves no width for a scrollbar.
+  const thumb = await run("const body=document.getElementById('agents-body'),hint=[...document.querySelectorAll('.studio-scroll-hint')].find(el=>el.dataset.scrollOwner==='agents-body'),bar=hint.querySelector('.thumb-y'),h=hint.getBoundingClientRect(),b=bar.getBoundingClientRect(),s=getComputedStyle(body);return {hidden:bar.hidden,height:Math.round(b.height),hint:Math.round(h.height),top:Math.round(b.top-h.top),inside:bar.parentElement===hint,pointer:getComputedStyle(bar).pointerEvents,gutter:Math.round(body.offsetWidth-body.clientWidth-parseFloat(s.borderLeftWidth)-parseFloat(s.borderRightWidth)),flat:hint.querySelector('.thumb-x').hidden};");
+  assert.equal(thumb.hidden,false,'a pane that can scroll has a thumb');
+  assert.ok(thumb.inside&&thumb.pointer==='none','the thumb is an indicator in the hint layer and never catches the pointer');
+  assert.ok(thumb.height>=28&&thumb.height<thumb.hint&&thumb.top>=0&&thumb.top<=8,'the thumb is a share of the pane, at its top before any scroll');
+  assert.equal(thumb.gutter,0,'the pane reserves no width for a scrollbar');
+  assert.equal(thumb.flat,true,'no horizontal overflow, no horizontal thumb');
+  report.scrollThumb=true;
   await run("[...document.querySelectorAll('.studio-scroll-hint')].find(el=>el.dataset.scrollOwner==='agents-body').querySelector('[data-direction=down]').click();"); await sleep(120);
   assert.ok(await run("return document.getElementById('agents-body').scrollTop>100;"));
   report.overflow=true;
@@ -298,6 +306,8 @@ app.whenReady().then(async () => {
   await sleep(220); assert.equal(await run("return document.getElementById('agents-body').scrollTop;"),heldTop,'releasing the arrow stops it');
   await run("const body=document.getElementById('agents-body');body.scrollTop=body.scrollHeight;window.MefiScroll.refresh();");
   await until("[...document.querySelectorAll('.studio-scroll-hint')].find(el=>el.dataset.scrollOwner==='agents-body').querySelector('[data-direction=down]').hidden",'boundary removes the down arrow');
+  const atEnd = await run("const hint=[...document.querySelectorAll('.studio-scroll-hint')].find(el=>el.dataset.scrollOwner==='agents-body'),h=hint.getBoundingClientRect(),b=hint.querySelector('.thumb-y').getBoundingClientRect();return Math.round(h.bottom-b.bottom);");
+  assert.ok(atEnd>=0&&atEnd<=8,'at the end of the pane the thumb rests on its bottom edge');
   report.keyboardAndHold=true;
   await run("window.unifiedFixture.stale();document.querySelector('#agents-save-bar .primary').click();");await sleep(100);
   assert.ok(await run("return document.getElementById('agents-save-status').textContent.includes('changed')&&document.getElementById('agents-team-name').value==='My independent team';"));

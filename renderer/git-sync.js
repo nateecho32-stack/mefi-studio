@@ -494,15 +494,18 @@
     // The layout size, not the drawn one: the popover opens through a scale.
     const rect = root.getBoundingClientRect();
     const width = root.offsetWidth || rect.width || 340, height = root.offsetHeight || rect.height || 0;
-    const wide = window.innerWidth || 1920, tall = window.innerHeight || 1080;
-    const right = box.left + box.width / 2 > wide / 2;
-    const left = Math.max(12, Math.min(right ? box.right - width : box.left, wide - width - 12));
-    const flip = box.bottom + 8 + height > tall - 12 && box.top - 8 - height >= 12;
+    // Layout v2 keeps it inside the free area (nav.js usable()); v1 is the window.
+    const area = window.MefiNav?.layout?.on?.() ? window.MefiNav.usable() : null;
+    const wide = area ? area.right : window.innerWidth || 1920, tall = area ? area.bottom : window.innerHeight || 1080;
+    const edge = area ? area.left : 0, roof = area ? area.top : 0;
+    const right = box.left + box.width / 2 > (edge + wide) / 2;
+    const left = Math.max(edge + 12, Math.min(right ? box.right - width : box.left, wide - width - 12));
+    const flip = box.bottom + 8 + height > tall - 12 && box.top - 8 - height >= roof + 12;
     const top = flip ? box.top - 8 - height : box.bottom + 8;
     css(root, "left", `${Math.round(left)}px`);
-    css(root, "top", `${Math.max(8, Math.round(top))}px`);
+    css(root, "top", `${Math.max(roof + 8, Math.round(top))}px`);
     // A long list (Show more) scrolls inside the room that is left, so the footer never ends up below the window.
-    css(root, "max-height", `${Math.max(160, Math.floor(tall - Math.max(8, top) - 12))}px`);
+    css(root, "max-height", `${Math.max(160, Math.floor(tall - Math.max(roof + 8, top) - 12))}px`);
     css(root, "--gs-from", `${flip ? "bottom" : "top"} ${right ? "right" : "left"}`);
   }
   function disarm() {

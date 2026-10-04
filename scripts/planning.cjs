@@ -16,6 +16,11 @@ const QUESTION_TYPES = ["discussion", "research", "prototype", "prerequisite"];
 const NOTE_KINDS = Object.freeze({ user: ["note", "answer"], assistant: ["question", "interpretation", "advice", "conflict"] });
 // `plans` caps the plans in play; archived plans stay on file up to `stored`.
 const LIMITS = Object.freeze({ plans: 300, stored: 1000, title: 180, destination: 16000, outOfScope: 12000, unknowns: 80, questions: 80, question: 4000, resolution: 16000, evidence: 16000, spec: 60000, tasks: 40, prompt: 16000, acceptance: 4000, notes: 200, note: 16000 });
+// Who a version came from: you, Mefi's own suggestion, or Studio itself (task
+// creation and the first-read migration). Versions before this was recorded have
+// no author; a reader shows them without one.
+const VERSION_AUTHORS = Object.freeze(["user", "assistant", "host"]);
+const VERSION_NOTE_MAX = 160;
 const lockKey = Symbol.for("mefi-studio.planning-store-locks");
 const locks = globalThis[lockKey] ??= new Map();
 const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -166,6 +171,10 @@ function validatePlan(plan, projectId, { history = true } = {}) {
     for (const entry of plan.history) {
       if (!object(entry) || entry.version !== revision + 1 || entry.version > plan.version) fail("Planning history revisions are invalid.");
       time(entry.at, "History time"); string(entry.action, "History action", 100);
+      // Recorded since versions got an author and a one-line note; older entries have neither.
+      if (entry.by != null && !VERSION_AUTHORS.includes(entry.by)) fail("Planning history author is invalid.");
+      if (entry.note != null) string(entry.note, "History note", VERSION_NOTE_MAX, { optional: true });
+      if (entry.restoredFrom != null && (!Number.isSafeInteger(entry.restoredFrom) || entry.restoredFrom < 1 || entry.restoredFrom >= entry.version)) fail("Planning history restore reference is invalid.");
       if (!object(entry.snapshot) || entry.snapshot.id !== plan.id || entry.snapshot.version !== entry.version) fail("Planning history snapshot is invalid.");
       validatePlan(entry.snapshot, projectId, { history: false });
       revision = entry.version;
@@ -181,8 +190,54 @@ function snapshot(plan) {
   return copy(body);
 }
 
-function record(plan, action, now, details = {}) {
-  plan.history.push({ version: plan.version, at: now, action, ...copy(details), snapshot: snapshot(plan) });
+// Every edit is a version: the whole plan as it was saved, with when, who, and a
+// one-line note of what changed. Versions are only ever added; restoring an old
+// one adds a new one (see "restore-version").
+function record(plan, action, now, details = {}, { by = "user", note = "" } = {}) {
+  plan.history.push({ version: plan.version, at: now, action, ...copy(details), by, ...(note ? { note: oneLine(note, VERSION_NOTE_MAX) } : {}), snapshot: snapshot(plan) });
+}
+
+const oneLine = (value, max) => {
+  const flat = String(value ?? "").replace(/\s+/g, " ").trim();
+  return flat.length > max ? `${flat.slice(0, max - 1).trimEnd()}…` : flat;
+};
+const quoted = (value, max = 60) => `\u201c${oneLine(value, max)}\u201d`;
+const joined = (parts) => parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}` : parts[0] || "the plan";
+
+// The line a version wears in the list: what this edit did, in words. It only
+// reads what the action just did, never anything a model wrote as a claim, and
+// it cannot fail an edit.
+function versionNote(action, previous, plan, payload, details) {
+  try {
+    const asked = (id) => quoted((plan.questions.find((item) => item.id === id) || previous.questions?.find((item) => item.id === id))?.question);
+    switch (action) {
+      case "create": return "Started the plan";
+      case "update": {
+        const parts = [];
+        if (previous.title !== plan.title) parts.push("the name");
+        if (previous.destination !== plan.destination) parts.push("the destination");
+        if (previous.outOfScope !== plan.outOfScope) parts.push("what it leaves for later");
+        if (parts.length === 1 && parts[0] === "the name") return `Renamed the plan to ${quoted(plan.title)}`;
+        return `Changed ${joined(parts)}${details.reopened?.length ? "; earlier decisions reopened" : ""}`;
+      }
+      case "add-unknown": return `Added an unknown: ${quoted(payload.text)}`;
+      case "remove-unknown": return `Set aside an unknown: ${quoted(details.unknown?.text)}`;
+      case "add-question": return details.unknown ? `Turned an unknown into a question: ${quoted(payload.question)}` : `Added a question: ${quoted(payload.question)}`;
+      case "edit-question": return `Edited the question ${asked(payload.questionId)}`;
+      case "resolve": return `Decided ${asked(payload.questionId)}`;
+      case "reopen": return `Reopened ${asked(payload.questionId)}${details.reopened?.length > 1 ? `; ${details.reopened.length - 1} more reopened` : ""}`;
+      case "add-note": return `Added a line to ${asked(payload.questionId)}`;
+      case "confirm-understanding": return "Confirmed what we understand";
+      case "draft-spec": return `Drafted the specification (${plan.spec?.tasks?.length ?? 0} task${plan.spec?.tasks?.length === 1 ? "" : "s"})`;
+      case "approve-spec": return "Approved the specification";
+      case "begin-conversion": return "Started creating the tasks";
+      case "mark-converted": return `Created ${plan.taskIds.length} task${plan.taskIds.length === 1 ? "" : "s"}`;
+      case "archive": return "Archived the plan";
+      case "restore": return "Restored the plan from the archive";
+      case "restore-version": return `Restored version ${details.restoredFrom}`;
+      default: return "";
+    }
+  } catch { return ""; }
 }
 
 function invalidate(plan) {
@@ -226,13 +281,14 @@ function applyPlanningAction(plans, payload, { project, now = Date.now(), actor 
     if (actor === "assistant" && !["add-unknown", "add-question", "add-note", "draft-spec"].includes(action)) fail("The assistant can propose planning content; only you can confirm decisions and approve work.");
     if (["begin-conversion", "mark-converted"].includes(action) && actor !== "host") fail("Only the host can record implementation task creation.");
     if (["resolve", "approve-spec", "confirm-understanding"].includes(action) && actor !== "user") fail("This decision needs explicit human confirmation.");
+    if (action === "restore-version" && actor !== "user") fail("Only you can restore an earlier version of a plan.");
     time(now, "Mutation time");
     if (!Array.isArray(plans)) fail("Planning data is invalid.");
     if (action === "create") {
       if (plans.filter((plan) => plan.archivedAt == null).length >= LIMITS.plans) fail(`This project already has ${LIMITS.plans} plans in play. Archive one you no longer need.`);
       if (plans.length >= LIMITS.stored) fail(`This project already keeps ${LIMITS.stored} plans, including archived ones.`);
       const plan = { id: `plan_${randomUUID()}`, projectId: project.id, title: string(payload.title, "Plan title", LIMITS.title), destination: string(payload.destination, "Destination", LIMITS.destination), outOfScope: string(payload.outOfScope, "Out of scope", LIMITS.outOfScope, { optional: true }), unknowns: [], questions: [], spec: null, status: "planning", version: 1, history: [], createdAt: now, updatedAt: now, taskIds: [] };
-      record(plan, action, now); validatePlan(plan, project.id); plans.push(plan);
+      record(plan, action, now, {}, { by: actor, note: versionNote(action, {}, plan, payload, {}) }); validatePlan(plan, project.id); plans.push(plan);
       return { ok: true, plan: copy(plan), plans: copy(plans) };
     }
     const index = plans.findIndex((plan) => plan.id === payload.planId && plan.projectId === project.id);
@@ -355,9 +411,26 @@ function applyPlanningAction(plans, payload, { project, now = Date.now(), actor 
       }
       case "archive": plan.archivedAt = now; break;
       case "restore": delete plan.archivedAt; break;
+      // An earlier version becomes the newest one: its wording comes back as a NEW
+      // version (restoring version 2 of 3 makes version 4), so nothing is rewritten
+      // and nothing is lost. What you confirmed and approved belongs to the version
+      // it was given on: the restored wording asks for both again before any tasks.
+      case "restore-version": {
+        const target = payload.toVersion;
+        if (!Number.isSafeInteger(target) || target < 1) fail("Choose the version to restore.");
+        if (target === previous.version) fail("That is already the current version.");
+        const entry = previous.history.find((item) => item.version === target);
+        if (!entry?.snapshot) fail("That version is not in this plan's history.");
+        const old = entry.snapshot;
+        if (["converting", "converted"].includes(old.status)) fail("Tasks were created from that version, so it cannot be brought back.");
+        Object.assign(plan, { title: old.title, destination: old.destination, outOfScope: old.outOfScope ?? "", unknowns: copy(old.unknowns), questions: copy(old.questions), spec: old.spec ? copy(old.spec) : null });
+        invalidate(plan);
+        details.restoredFrom = target;
+        break;
+      }
       default: fail("Unknown planning action.");
     }
-    plan.version += 1; plan.updatedAt = now; record(plan, action, now, details); validatePlan(plan, project.id); plans[index] = plan;
+    plan.version += 1; plan.updatedAt = now; record(plan, action, now, details, { by: actor, note: versionNote(action, previous, plan, payload, details) }); validatePlan(plan, project.id); plans[index] = plan;
     return { ok: true, plan: copy(plan), plans: copy(plans) };
   } catch (error) { return { ok: false, error: error.message, plans: copy(plans) }; }
 }
@@ -378,6 +451,19 @@ function buildImplementationTasks(plan, { project, now = Date.now() } = {}) {
   }, { now, log: `Created from approved plan: ${plan.title}`, origin: { kind: "planning", by: "owner" } }));
 }
 
+// A plan saved with no history (a file older than versions, or one edited by hand)
+// gets its current wording as version 1 the first time it is read, so it has a
+// version to go back to. The time is the plan's own, so reading it again gives
+// the same version 1; nothing is written until the next real edit, which keeps a
+// copy of the file it replaces (see createPlanningStore).
+function withHistory(plan) {
+  if (!object(plan) || (Array.isArray(plan.history) && plan.history.length)) return { plan, migrated: false };
+  const body = { ...plan, version: 1 };
+  delete body.history;
+  const at = Number.isSafeInteger(plan.updatedAt) ? plan.updatedAt : plan.createdAt;
+  return { plan: { ...body, history: [{ version: 1, at, action: "migrated", by: "host", note: "Kept as the first version when versions were added", snapshot: copy(body) }] }, migrated: true };
+}
+
 function createPlanningStore({ filePath, project, now = Date.now } = {}) {
   if (typeof filePath !== "string" || !filePath.trim()) fail("A planning file path is required.");
   if (!object(project) || !project.id) fail("A project is required for planning.");
@@ -395,14 +481,24 @@ function createPlanningStore({ filePath, project, now = Date.now } = {}) {
     if (new Set(plans.map((plan) => plan?.id)).size !== plans.length) fail("Plan IDs must be unique.");
     for (const plan of plans) validatePlan(plan, capturedProject.id);
   }
-  async function load() {
-    let state;
-    try { state = JSON.parse(await fs.readFile(file, "utf8")); }
-    catch (error) { if (error.code === "ENOENT") return []; throw new Error("Could not read planning data; the existing file was preserved.", { cause: error }); }
+  // The plans as saved, any without history given their version 1 in memory, and
+  // the file's text when that happened (the first save after it keeps a copy).
+  async function read() {
+    let text, state;
+    try { text = await fs.readFile(file, "utf8"); state = JSON.parse(text); }
+    catch (error) { if (error.code === "ENOENT") return { plans: [], text: null, migrated: 0 }; throw new Error("Could not read planning data; the existing file was preserved.", { cause: error }); }
     try {
       if (!object(state) || state.version !== FORMAT_VERSION || state.projectId !== capturedProject.id) fail("Planning format or project is invalid.");
-      validate(state.plans); return state.plans;
+      let migrated = 0;
+      const plans = Array.isArray(state.plans) ? state.plans.map((plan) => { const out = withHistory(plan); if (out.migrated) migrated += 1; return out.plan; }) : state.plans;
+      validate(plans); return { plans, text, migrated };
     } catch (error) { throw new Error(`Invalid planning data; the existing file was preserved. ${error.message}`, { cause: error }); }
+  }
+  const load = async () => (await read()).plans;
+  // One copy, ever, of the file as it was before versions were added to it.
+  async function keepBeforeVersions(text) {
+    try { await fs.writeFile(`${file}.before-versions.bak`, text, { flag: "wx", mode: 0o600 }); }
+    catch (error) { if (error.code !== "EEXIST") throw new Error("Could not keep a copy of the planning file before adding versions to it; nothing was saved.", { cause: error }); }
   }
   async function save(plans) {
     validate(plans);
@@ -417,9 +513,12 @@ function createPlanningStore({ filePath, project, now = Date.now } = {}) {
   }
   const transaction = (callback) => serialized(async () => {
     if (typeof callback !== "function") fail("A planning transaction callback is required.");
-    const current = await load(), plans = copy(current), before = JSON.stringify(current);
+    const { plans: current, text, migrated } = await read(), plans = copy(current), before = JSON.stringify(current);
     const result = await callback(plans);
-    if (result?.ok !== false && JSON.stringify(plans) !== before) await save(plans);
+    if (result?.ok !== false && JSON.stringify(plans) !== before) {
+      if (migrated && text !== null) await keepBeforeVersions(text);
+      await save(plans);
+    }
     return copy(result);
   });
   return {
@@ -432,4 +531,4 @@ function createPlanningStore({ filePath, project, now = Date.now } = {}) {
   };
 }
 
-module.exports = { FORMAT_VERSION, QUESTION_TYPES, NOTE_KINDS, NOTE_LABELS, LIMITS, applyPlanningAction, buildImplementationTasks, createPlanningStore };
+module.exports = { FORMAT_VERSION, QUESTION_TYPES, NOTE_KINDS, NOTE_LABELS, LIMITS, VERSION_AUTHORS, applyPlanningAction, buildImplementationTasks, createPlanningStore, withHistory };

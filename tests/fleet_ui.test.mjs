@@ -51,7 +51,7 @@ function load({ state = world().state, detail = true } = {}) {
       fleetSnapshot: async () => {
         calls.snapshot += 1;
         const next = holder.queue?.shift();
-        if (next) { if (next.gate) await next.gate; return next.view; }
+        if (next) { if (next.gate) await next.gate; if (next.error) throw next.error; return next.view; }
         if (holder.delay) await holder.delay;
         return holder.view;
       },
@@ -565,10 +565,134 @@ test("an error line is replaced by the next good snapshot even when the counts d
   await h.opened();
   const good = h.$("status").textContent;
   h.holder.push({ ok: false, error: "The fleet could not be read." });
-  assert.equal(h.$("status").textContent, "The fleet could not be read.");
+  assert.equal(h.$("status").textContent, "Last confirmed team. The fleet could not be read.");
   h.holder.push(viewOf(h.state, 2));
   await h.flush();
   assert.equal(h.$("status").textContent, good);
+});
+
+const deferred = () => { let release; const gate = new Promise(resolve => { release = resolve; }); return { gate, release }; };
+const switchProject = (h, projectId) => { for (const fn of h.listeners["mefi:project-changed"]) fn({ detail: { projectId } }); };
+const assertEmptyTeam = (h) => {
+  for (const id of ["tree", "graph", "table", "recent", "nodes", "health", "inspector"]) assert.equal(h.$(id).children.length, 0, `${id} holds no previous project's content`);
+  for (const id of ["side", "panels", "inspector"]) assert.equal(h.$(id).inert, true, `${id} stays unavailable without a confirmed team`);
+  assert.equal(h.$("inspector").dataset.mode, "fleet");
+  assert.equal(h.fleet.current().selected, null);
+  assert.deepEqual(h.calls.action, [], "read failure starts no agent action");
+};
+
+test("a failed new-project read clears the old team for rejected and unsuccessful replies", async t => {
+  for (const kind of ["rejected", "unsuccessful"]) await t.test(kind, async () => {
+    const h = load(); await h.opened(); h.fleet.select("builder-1"); await h.flush();
+    assert.match(h.$("inspector").textContent, /Wire the fleet/);
+    const pending = deferred();
+    h.holder.queue = [{ gate: pending.gate, ...(kind === "rejected" ? { error: new Error("New project read failed") } : { view: { ok: false, error: "New project read failed" } }) }];
+    switchProject(h, "project_2");
+    assertEmptyTeam(h);
+    pending.release(); await h.flush();
+    assertEmptyTeam(h);
+    assert.equal(h.fleet.current().projectId, null);
+    assert.equal(h.$("body").dataset.readState, "unavailable");
+    assert.equal(h.$("status").textContent, "New project read failed");
+    h.holder.push(viewOf(h.state, 9)); await h.flush();
+    assertEmptyTeam(h);
+    assert.equal(h.$("status").textContent, "New project read failed", "a late old-project push cannot recover the new project");
+    h.holder.push({ ...viewOf(h.state, 1), projectId: "project_2", project: { name: "Other Game", slug: "other" } }); await h.flush();
+    assert.equal(h.fleet.current().projectId, "project_2");
+    assert.equal(h.$("body").dataset.readState, "ready");
+    assert.match(h.$("tree").textContent, /Other Game/);
+    for (const id of ["side", "panels", "inspector"]) assert.equal(h.$(id).inert, false);
+  });
+});
+
+test("same-project cached facts remain labelled through selection, tabs and hide/show until an equal-revision recovery", async () => {
+  const h = load(); await h.opened();
+  const card = cardOf(h, "builder-1"), good = h.$("status").textContent;
+  h.holder.view = { ok: false, error: "Snapshot temporarily unavailable" };
+  h.holder.push(h.holder.view);
+  h.fleet.select("builder-1"); await h.flush();
+  assert.equal(cardOf(h, "builder-1"), card, "the confirmed snapshot is retained in place");
+  assert.equal(h.$("body").dataset.readState, "cached");
+  assert.equal(h.$("status").textContent, "Last confirmed team. Snapshot temporarily unavailable");
+  h.$("tabs").children.find(tab => tab.dataset.tab === "table").click(); await h.flush();
+  assert.match(h.$("status").textContent, /^Last confirmed team\./);
+  h.document.hidden = true; h.fleet.select(null); await h.flush();
+  h.document.hidden = false;
+  for (const fn of h.document.body.listeners.visibilitychange) fn({});
+  await h.flush();
+  assert.equal(h.$("status").textContent, "Last confirmed team. Snapshot temporarily unavailable");
+  h.holder.push(viewOf(h.state, 1)); await h.flush();
+  assert.equal(h.$("status").textContent, good, "same revision and unchanged counts still confirm recovery");
+  assert.equal(h.$("body").dataset.readState, "ready");
+});
+
+test("an older successful read cannot erase the latest requested read's failure", async () => {
+  const h = load(); await h.opened(); const old = deferred(), fresh = deferred();
+  h.holder.queue = [{ gate: old.gate, view: viewOf(h.state, 20) }, { gate: fresh.gate, view: { ok: false, error: "Latest read failed" } }];
+  h.intervals[0].fn(); h.intervals[0].fn();
+  fresh.release(); await h.flush();
+  old.release(); await h.flush();
+  assert.equal(h.$("status").textContent, "Last confirmed team. Latest read failed");
+  assert.equal(h.$("body").dataset.readState, "cached");
+});
+
+test("an older rejected read cannot overwrite the latest requested read's success", async () => {
+  const h = load(); await h.opened(); const old = deferred(), fresh = deferred();
+  const next = { ...viewOf(h.state, 3), counts: { seats: 7, working: 2, attention: 0, openRows: 5 } };
+  h.holder.queue = [{ gate: old.gate, error: new Error("Old read failed") }, { gate: fresh.gate, view: next }];
+  h.intervals[0].fn(); h.intervals[0].fn();
+  fresh.release(); await h.flush(); old.release(); await h.flush();
+  assert.match(h.$("status").textContent, /2 working.*5 ready to take/);
+  assert.doesNotMatch(h.$("status").textContent, /failed|Last confirmed/);
+  assert.equal(h.$("body").dataset.readState, "ready");
+});
+
+test("push outcomes supersede pending reads without old revisions claiming recovery", async t => {
+  for (const kind of ["success", "failure"]) await t.test(kind, async () => {
+    const h = load(); await h.opened(); const old = deferred();
+    h.holder.queue = [{ gate: old.gate, ...(kind === "success" ? { error: new Error("Older failure") } : { view: viewOf(h.state, 20) }) }];
+    h.intervals[0].fn();
+    h.holder.push(kind === "success" ? { ...viewOf(h.state, 5), counts: { seats: 8, working: 2, attention: 0, openRows: 1 } } : { ok: false, error: "Newest push failed" });
+    await h.flush(); old.release(); await h.flush();
+    if (kind === "success") { assert.match(h.$("status").textContent, /^8 seats/); assert.equal(h.$("body").dataset.readState, "ready"); }
+    else {
+      assert.equal(h.$("status").textContent, "Last confirmed team. Newest push failed");
+      h.holder.push(viewOf(h.state, 0)); await h.flush();
+      assert.equal(h.$("body").dataset.readState, "cached", "an older revision is not successful recovery");
+    }
+  });
+});
+
+test("late prior-project success and rejection cannot replace the failed new project's state", async t => {
+  for (const kind of ["success", "rejection"]) await t.test(kind, async () => {
+    const h = load(); await h.opened(); const old = deferred();
+    h.holder.queue = [{ gate: old.gate, ...(kind === "success" ? { view: viewOf(h.state, 8) } : { error: new Error("Old project rejected") }) }, { view: { ok: false, error: "New project unavailable" } }];
+    h.intervals[0].fn(); switchProject(h, "project_2"); await h.flush();
+    old.release(); await h.flush(); assertEmptyTeam(h);
+    assert.equal(h.$("status").textContent, "New project unavailable");
+  });
+});
+
+test("a known scope rejects a foreign snapshot and a project with no selection never borrows a team", async () => {
+  const h = load(); h.window.MefiWorkspace = { activeProjectId: () => "project_2" };
+  await h.opened(); assertEmptyTeam(h);
+  assert.match(h.$("status").textContent, /could not be confirmed/);
+  h.holder.push(viewOf(h.state, 9)); await h.flush(); assertEmptyTeam(h);
+  h.window.MefiWorkspace.activeProjectId = () => null;
+  switchProject(h, null); await h.flush(); assertEmptyTeam(h);
+  assert.equal(h.fleet.current().projectId, null);
+});
+
+test("no selection accepts the host's empty project_none scope but an open project rejects it", async () => {
+  const h = load(); h.window.MefiWorkspace = { activeProjectId: () => null };
+  h.holder.view = { ...viewOf(h.state, 1), projectId: "project_none" };
+  await h.opened();
+  assert.equal(h.$("body").dataset.readState, "ready");
+  assert.ok(h.$("graph").children.length > 0);
+  assert.equal(h.$("panels").inert, false);
+  h.window.MefiWorkspace.activeProjectId = () => "project_2";
+  switchProject(h, "project_2"); await h.flush(); assertEmptyTeam(h);
+  assert.match(h.$("status").textContent, /could not be confirmed/);
 });
 
 test("rows that stay are left attached when others come and go, and a reorder hands the focus back", async () => {

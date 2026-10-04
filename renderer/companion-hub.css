@@ -47,8 +47,8 @@
 .agent-guide-greeting .agent-play { width: 64px; height: 64px; }
 .agent-guide-details { margin: 12px 0; padding: 10px 0; border-block: 1px solid var(--hairline); }
 .agent-guide-details > summary { color: var(--muted); cursor: pointer; font-size: 12px; }
-html[data-shell=rail] .overlay .walkthrough-sheet[data-agent-step], .overlay .walkthrough-sheet[data-agent-step] { width: min(660px, calc(100vw - var(--shell-rail-w, 0px) - 32px)); transition: width 420ms cubic-bezier(.22,1,.36,1); }
-html[data-shell=rail] .overlay .walkthrough-sheet[data-agent-step="2"], .overlay .walkthrough-sheet[data-agent-step="2"] { width: min(740px, calc(100vw - var(--shell-rail-w, 0px) - 32px)); }
+html[data-shell=rail] .overlay .walkthrough-sheet[data-agent-step], .overlay .walkthrough-sheet[data-agent-step] { width: min(660px, calc(100vw - var(--shell-x0, 0px) - var(--shell-x1, 0px) - 32px)); transition: width 420ms cubic-bezier(.22,1,.36,1); }
+html[data-shell=rail] .overlay .walkthrough-sheet[data-agent-step="2"], .overlay .walkthrough-sheet[data-agent-step="2"] { width: min(740px, calc(100vw - var(--shell-x0, 0px) - var(--shell-x1, 0px) - 32px)); }
 #walkthrough-cli-choice { max-width: 100%; }
 @media (max-width: 650px) {
   html[data-shell=rail] #walkthrough-overlay { left: 0; }
@@ -125,6 +125,8 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 .pc-setup > summary { cursor: pointer; font-size: 12px; font-weight: 600; }
 .pc-setup > :not(summary) { margin-top: 8px; }
 .pc-setup-repos { flex: 1 1 180px; min-width: 0; max-width: 100%; }
+.pc-paired-field { display: grid; gap: 4px; min-width: 0; margin-block: 8px; }
+.pc-paired-field input { box-sizing: border-box; width: 100%; min-width: 0; }
 .pc-setup-list { list-style: none; padding-left: 0; }
 .pc-setup-links-head { margin: 10px 0 0; font-size: 12px; font-weight: 600; }
 .pc-setup-links button { margin-left: 8px; }

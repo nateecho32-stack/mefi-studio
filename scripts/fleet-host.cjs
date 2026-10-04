@@ -231,8 +231,19 @@ function createFleetHost(options = {}) {
       return fleet.seatDetail(s.state, String(payload?.seatId ?? ""), { projectId: s.id, projectName: s.name, roster: rosterRows(), team: await teamOf(s), at });
     },
 
-    // A watch lease per open Fleet view. A new watcher gets a snapshot pushed
-    // at once; renewals only extend the lease.
+    async recap({ runId, taskId } = {}) {
+      const s = scope();
+      const current = status();
+      const at = now();
+      await ready(s);
+      if (String(projectId()) !== s.id || !isActive(s.id)) return null;
+      // Prompt assembly may precede the trailing executor push: use the
+      // actual status to resolve this run's assigned seat, never guess it.
+      if (fleet.observeStatus(s.state, current, at)) changed(s);
+      return fleet.runRecap(s.state, runId, taskId);
+    },
+
+    // A new Fleet watcher gets a snapshot at once; renewals extend the lease.
     watch(payload = {}) {
       const s = scope();
       const key = String(payload?.id ?? "fleet").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40) || "fleet";

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Mefi's Studio AI+",
+  "version": "../package.json",
+  "identifier": "io.github.nateecho32-stack.mefi-studio",
+  "build": {
+    "frontendDist": "boot"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": false,
+    "icon": ["../assets/icon.ico", "../assets/icon-256.png"]
+  }
+}

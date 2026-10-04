@@ -153,6 +153,32 @@ test("media and Appearance brightness controls synchronize, disable sliders and 
   assert.equal(d.preferences().mode, "hybrid"); assert.equal(d.preferences().width, .5);
 });
 
+test("Fast brightness is a saved paint switch that is on by default, keeps the shape running and survives both Reset buttons", () => {
+  const { d, Element, storage } = setup(), all = root => [root, ...root.children.flatMap(all)];
+  assert.equal(d.preferences().fastBrightness, true); assert.equal(d.fastBrightness(), true);
+  assert.equal(setup(new Map([["mefiStudio.treeDynamics.v1", JSON.stringify({ nodeBrightness: 1.5 })]])).d.fastBrightness(), true, "a record saved before the switch existed keeps it on");
+  d.update({ mode: "video" }); d.setVideoAvailable(true);
+  const token = d.sampleRequest().revision;
+  d.update({ nodeBrightness: 1.6, fastBrightness: false });
+  assert.equal(d.fastBrightness(), false); assert.equal(d.preferences().fastBrightness, false);
+  assert.equal(d.sampleRequest().revision, token, "a paint switch does not restart the live shape");
+  assert.equal(setup(storage).d.fastBrightness(), false, "it is saved with the other tree preferences");
+  assert.equal(d.brightness("nodes"), 1.6, "the brightness itself is untouched");
+  const pen = { filter: "none" }, restore = d.beginPaint([pen], "nodes");
+  assert.equal(pen.filter, "brightness(1.6)", "beginPaint, the filter around a pass, is the same with the switch off"); restore(); assert.equal(pen.filter, "none");
+  const a = d.mount(new Element("section"), "appearance"), b = d.mountVisibility(new Element("section"), "media");
+  const toggle = all(a).find(e => e.id === "appearance-tree-fastBrightness"), copy = all(b).find(e => e.id === "media-tree-fastBrightness");
+  assert.equal(toggle.type, "checkbox"); assert.equal(toggle.checked, false); assert.equal(copy.checked, false, "the media window's copy reads the same value");
+  toggle.checked = true; toggle.events.change();
+  assert.equal(d.fastBrightness(), true); assert.equal(copy.checked, true, "and follows a change");
+  copy.checked = false; copy.events.change();
+  for (const button of all(a).filter(e => e.tagName === "button")) button.events.click();
+  assert.equal(d.fastBrightness(), false, "neither Reset button turns a kill switch back on");
+  assert.equal(d.preferences().nodeBrightness, 1, "though Reset tree brightness still restores the look");
+  d.update({ fastBrightness: "no" });
+  assert.equal(d.fastBrightness(), true, "a value that is not true or false falls back to on");
+});
+
 test("taking the camera eases the live shape back to the anchors, while reduced motion lets go at once", () => {
   const nodes = graph(); const { d } = setup(); d.update({ shape: "ring", smoothing: 2 });
   const shaped = settled(d, nodes);

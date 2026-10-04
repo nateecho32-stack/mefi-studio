@@ -4053,8 +4053,19 @@
     if (dock) bottom = Math.min(bottom, dock.top - 24);
     // The app's navigation rail floats over the canvas's left edge, the way the
     // work rail floats over its right; fit the graph beside it, not under it.
+    // The shell says where its chrome ends (nav.js usable()): in layout v1 that is
+    // the rail's own box, in v2 the session list, the inspector and the status
+    // bar as well. Without it, the rail alone.
     const appRail = visibleBox(el.appRail);
-    if (appRail) left = Math.max(left, appRail.right + 28);
+    const nav = globalThis.window?.MefiNav;
+    const shell = nav?.usable?.();
+    const regions = Boolean(shell && nav.layout?.on?.());
+    const chromeLeft = shell ? shell.left : appRail ? appRail.right : 0;
+    if (chromeLeft > 0) left = Math.max(left, chromeLeft + 28);
+    if (regions) {
+      right = Math.min(right, shell.right - 28);
+      bottom = Math.min(bottom, shell.bottom - 86);
+    }
     // The merged rail owns the right gutter; when it is collapsed its short
     // header still blocks the top strip.
     if (rail) {
@@ -4079,8 +4090,8 @@
     // At compact widths CSS can put the feed above the map. Only reserve a
     // side panel if it leaves enough room for an actual interactive graph.
     if (right - left < 220) {
-      left = appRail ? appRail.right + 12 : 24;
-      right = el.width - 24;
+      left = chromeLeft > 0 ? chromeLeft + 12 : 24;
+      right = (regions ? Math.min(el.width, shell.right) : el.width) - 24;
       if (feed && feed.height < el.height * 0.48) top = Math.max(top, feed.bottom + 20);
     }
     if (bottom - top < 160) top = Math.max(20, bottom - 160);
@@ -4396,9 +4407,11 @@
     ORBIT.time = time; ORBIT.still = still; ORBIT.detail = node._detail ?? 3; ORBIT.motion = node._m ?? null; ORBIT.theme = state.nodeTheme ?? null;
     return ORBIT;
   }
-  function drawNodeSurface(ctx, node, p, radius, tint, { selected = false, active = false, alpha = 1, time = 0, still = false, detail = 3, chosen = false, motion = null } = {}) {
+  function drawNodeSurface(ctx, node, p, radius, tint, { selected = false, active = false, alpha = 1, time = 0, still = false, detail = 3, chosen = false, motion = null, outlineOn = null } = {}) {
     node._extraGlow = state.extraGlow === true;
-    globalThis.window?.MefiTreeDynamics?.outline?.(ctx, state.nodeStyle ?? "orbs", p, radius, motion, (node._fade ?? 1) * alpha);
+    // `outlineOn`: the real layer the outline paints on when `ctx` is the
+    // scratch of a brightened pass (toneBegin), which would tint its rim.
+    globalThis.window?.MefiTreeDynamics?.outline?.(outlineOn ?? ctx, state.nodeStyle ?? "orbs", p, radius, motion, (node._fade ?? 1) * alpha);
     const styles = globalThis.window?.MefiNodeStyles;
     if (styles) {
       // A node that wears a glyph (the hub's monogram, an agent's role) is
@@ -7344,7 +7357,7 @@
     const image = document.createElement("img");
     image.className = "idle-pop";
     // encodeURI keeps # and ?, which would cut a path like C#\... short.
-    image.src = encodeURI("file:///" + path.replace(/\\/g, "/")).replace(/#/g, "%23").replace(/\?/g, "%3F");
+    image.src = window.__mefiHost?.fileUrl?.(path) ?? encodeURI("file:///" + path.replace(/\\/g, "/")).replace(/#/g, "%23").replace(/\?/g, "%3F");
     image.style.setProperty("--x", `${(10 + Math.random() * 62).toFixed(2)}%`);
     image.style.setProperty("--y", `${(12 + Math.random() * 58).toFixed(2)}%`);
     image.style.setProperty("--tilt", `${(Math.random() * 10 - 5).toFixed(1)}deg`);
@@ -7840,9 +7853,104 @@
   function drawGraphConnections(ctx, projected, runningIds, audioLinked = false, time = 0, layers = null) {
     const profiler = globalThis.window?.MefiProfiler;
     const span = profiler?.begin("command.connections");
-    const restoreBrightness = globalThis.window?.MefiTreeDynamics?.beginPaint?.([ctx, layers?.far], "lines");
-    try { return drawGraphConnectionsImpl(ctx, projected, runningIds, audioLinked, time, layers); }
-    finally { restoreBrightness?.(); profiler?.end(span); }
+    // The far layer takes lines only while a branch is focused (penFor).
+    const farPen = layers?.focusIds && layers.far && layers.far !== ctx ? layers.far : null;
+    const tone = toneBegin("lines", ctx, farPen);
+    try {
+      if (!tone) return drawGraphConnectionsImpl(ctx, projected, runningIds, audioLinked, time, layers);
+      return drawGraphConnectionsImpl(tone.near, projected, runningIds, audioLinked, time, farPen ? { ...layers, far: tone.far } : layers);
+    } finally { tone?.finish(); profiler?.end(span); }
+  }
+
+  // Tree brightness away from 100% (Appearance › Tree brightness & outlines)
+  // was a canvas filter set around the whole wires or nodes pass, and a canvas
+  // draws every shape made under a filter through its own layer the size of
+  // the canvas. A busy tree at 200% ran hundreds of those a frame: about
+  // 250 ms of work for an integrated GPU, and Command, Home and Vibe fell to
+  // 4-8 fps. A pass now paints plain into a scratch canvas per layer and one
+  // filtered drawImage lays each down, four filter passes a frame at most.
+  // The scratch starts from its layer's drawing state and hands back the
+  // state the pass left, so what draws next is unchanged. Where the pass's
+  // own shapes overlap, the filter meets their blend rather than each shape:
+  // that differs only where a brightened shape would clip at full intensity.
+  const TONE_PEN = ["globalAlpha", "globalCompositeOperation", "fillStyle", "strokeStyle", "lineWidth", "lineCap", "lineJoin", "miterLimit", "lineDashOffset",
+    "shadowOffsetX", "shadowOffsetY", "shadowBlur", "shadowColor", "font", "textAlign", "textBaseline", "direction", "letterSpacing", "wordSpacing",
+    "fontKerning", "fontStretch", "fontVariantCaps", "textRendering", "imageSmoothingEnabled", "imageSmoothingQuality"];
+  const toneScratch = new Map();
+  function copyPen(from, to) {
+    for (const key of TONE_PEN) if (key in from && to[key] !== from[key]) to[key] = from[key];
+    if (typeof from.getLineDash === "function") to.setLineDash(from.getLineDash());
+    if (typeof from.getTransform === "function") to.setTransform(from.getTransform());
+  }
+  function toneScratchFor(slot, target) {
+    const bitmap = target?.canvas;
+    if (typeof OffscreenCanvas !== "function" || !(bitmap?.width > 0) || !(bitmap?.height > 0)) return null;
+    let entry = toneScratch.get(slot);
+    if (!entry) {
+      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+      const pen = canvas.getContext("2d");
+      if (!pen) return null;
+      toneScratch.set(slot, entry = { canvas, pen });
+    }
+    if (entry.canvas.width !== bitmap.width || entry.canvas.height !== bitmap.height) {
+      entry.canvas.width = bitmap.width;
+      entry.canvas.height = bitmap.height;
+    }
+    return entry;
+  }
+  // Node outlines are black and white, which a brightness above 100% leaves as
+  // it is, so on the nodes pass they paint on the real layer, not in the
+  // scratch (`outside`): a node's coloured rim then brightens over them as it
+  // did when every shape was filtered alone, where in the scratch it mixed
+  // with the black first and came out gold or teal instead of pale. The
+  // scratch is laid down last, so where a node overlaps one drawn before it,
+  // its ring ends up under the one behind. Laying the scratch down and clearing
+  // it before such an outline fixes that and was measured: a full bitmap copy
+  // each time, and 2 to 4 times fewer frames in the software renderer (see
+  // docs/performance.md, "Tree brightness"). Below 100% nothing clamps, so
+  // outlines stay in the pass and are exact.
+  // `far` only when the pass paints on the far layer this frame (a focus).
+  // Returns null at 100%, else the pens to paint with and finish().
+  function toneBegin(kind, near, far = null) {
+    const dynamics = globalThis.window?.MefiTreeDynamics;
+    const amount = dynamics?.brightness?.(kind) ?? 1;
+    if (amount === 1 || typeof dynamics?.beginPaint !== "function") return null;
+    // Appearance › Fast brightness off (read only here, after the 100% return,
+    // so the default path costs nothing) keeps the scratch canvases out of it.
+    const layers = dynamics.fastBrightness?.() === false ? null
+      : [["near", near], ["far", far]].filter(([, target]) => target).map(([slot, target]) => ({ target, scratch: toneScratchFor(slot, target) }));
+    if (!layers || layers.some((layer) => !layer.scratch)) {
+      // The switch is off, or no scratch canvas here (a bare harness): the
+      // filter around the pass, as before.
+      const restore = dynamics.beginPaint([near, far], kind);
+      return { near, far, finish: () => restore?.() };
+    }
+    for (const { target, scratch } of layers) {
+      scratch.pen.setTransform(1, 0, 0, 1, 0, 0);
+      scratch.pen.clearRect(0, 0, scratch.canvas.width, scratch.canvas.height);
+      copyPen(target, scratch.pen);
+    }
+    return {
+      near: layers[0].scratch.pen,
+      far: layers[1]?.scratch.pen ?? null,
+      // Whether the outlines of this pass paint on the real layers: above
+      // 100%, with outlines on (drawNodeSurface).
+      outside: amount > 1 && dynamics.outlinesOn?.() === true,
+      finish() {
+        for (const { target, scratch } of layers) {
+          target.save();
+          target.setTransform(1, 0, 0, 1, 0, 0);
+          target.globalAlpha = 1;
+          target.globalCompositeOperation = "source-over";
+          target.shadowColor = "rgba(0, 0, 0, 0)";
+          const restore = dynamics.beginPaint([target], kind);
+          target.drawImage(scratch.canvas, 0, 0);
+          restore?.();
+          target.restore();
+          copyPen(scratch.pen, target);
+        }
+      },
+    };
   }
 
   // An agent tether's dash, handed to a style that draws the tether itself.
@@ -9351,7 +9459,7 @@
     // The surface's flags and the arrival/selection options: one scratch each
     // for the frame, filled per node (drawNodeSurface reads its flags at once;
     // a style's hook never keeps its options).
-    const surfaceFlags = { selected: false, active: false, alpha: 1, time, still, detail: 3, chosen: false, motion: null };
+    const surfaceFlags = { selected: false, active: false, alpha: 1, time, still, detail: 3, chosen: false, motion: null, outlineOn: null };
     const overlay = { kind: "task", selected: false, chosen: false, hover: false, active: false, alpha: 1, time, still, detail: 3, motion: null, theme: state.nodeTheme ?? null };
     // A Void look marks a selection a few pixels off the node whatever its
     // size (Prism's arcs round a 3 px todo reach 2.2 radii), past what its
@@ -9359,12 +9467,15 @@
     const selectReachFloor = nodeStyles ? nodeStyles.PREMIUM.includes(state.nodeStyle) : false;
     const growNow = Date.now();
     const nodesSpan = profiler?.begin("command.nodes");
-    const restoreNodeBrightness = globalThis.window?.MefiTreeDynamics?.beginPaint?.([ctx, far], "nodes");
+    // Brightness (toneBegin): the far layer takes nodes only while a branch
+    // is focused (layerFor).
+    const nodeTone = toneBegin("nodes", ctx, focusIds && far !== ctx ? far : null);
     try {
     for (const { node, p } of ordered) {
       if (node._absorbed) continue;
       // outside the focused branch an orb paints on the far (blurred) layer
-      const ctx = layerFor(node);
+      const layer = layerFor(node);
+      const ctx = !nodeTone ? layer : layer === el.ctx ? nodeTone.near : nodeTone.far ?? layer;
       const nodeScale = node._scale ?? 1;
       if (nodeScale <= 0.02) continue;
       const visual = nodeVisualProfile(node);
@@ -9404,7 +9515,7 @@
       let detail = 3;
       if (nodeStyles) {
         const lit = active || Boolean(selected);
-        const cap = Math.min(costCap, ctx !== el.ctx || factor <= 0.3 ? 1 : state.cameraMoving && !lit ? 2 : 3);
+        const cap = Math.min(costCap, layer !== el.ctx || factor <= 0.3 ? 1 : state.cameraMoving && !lit ? 2 : 3);
         detail = nodeStyles.tier(radius, lit ? cap + 1 : cap);
       }
       // The same tier reaches the node's orbit, ring and hub dress below, and
@@ -9420,6 +9531,7 @@
       const surface = surfaceFlags;
       surface.selected = Boolean(selected); surface.active = active; surface.alpha = Math.max(0.35, visual.alpha * factor);
       surface.detail = detail; surface.chosen = chosen; surface.motion = motion;
+      surface.outlineOn = nodeTone?.outside ? layer : null;
       drawNodeSurface(ctx, node, p, radius, tint, surface);
       if (nodeStyles) {
         // A style's arrival (t01 runs over the node's grow) and its selection
@@ -9470,7 +9582,7 @@
       // The badge pops in as the hold starts and shrinks away once read.
       if (hold && (!hold.ackedAt || !still && growNow - hold.ackedAt < DONE_BADGE_OUT_MS)) drawDoneBadge(ctx, node, p, radius, time, still, hold, growNow, dim);
     }
-    } finally { restoreNodeBrightness?.(); profiler?.end(nodesSpan); }
+    } finally { nodeTone?.finish(); profiler?.end(nodesSpan); }
 
     // The finish beats in the chosen node style (node-styles.js done and
     // absorb), over the flights home the blend above set up: the work pops

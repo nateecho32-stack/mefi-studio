@@ -11,6 +11,16 @@ const gitRepoFields = (options) => ({
   ...gitProject(options),
 });
 
+// The review calls (main.cjs "Attempt review": changed files, Accept, Revert, advisory checks, before and after
+// shots): plain fields only, strings cut to a sane length, the attempt a whole number.
+const reviewBody = (payload) => ({
+  taskId: gitText(payload?.taskId, 200),
+  ...(Number.isSafeInteger(payload?.attempt) ? { attempt: payload.attempt } : {}),
+  ...(typeof payload?.runId === "string" ? { runId: payload.runId.slice(0, 80) } : {}),
+  ...gitProject(payload),
+});
+const reviewChoices = (payload) => Object.fromEntries(["snapshots", "advisory", "advisoryBuild", "shots"].filter((key) => typeof payload?.[key] === "boolean").map((key) => [key, payload[key]]));
+
 const api = {
   mediaSceneSample: (rect) => ipcRenderer.invoke("media:scene-sample", rect),
   youtubeSearch: (query) => ipcRenderer.invoke("media:youtube-search", query),
@@ -57,6 +67,15 @@ const api = {
   agentModels: (provider) => ipcRenderer.invoke("agents:models", { provider }),
   agentsSave: (payload) => ipcRenderer.invoke("agents:save", payload),
   agentsPreset: (payload) => ipcRenderer.invoke("agents:preset", payload),
+  skillsList: () => ipcRenderer.invoke("skills:list"),
+  skillsRead: (name) => ipcRenderer.invoke("skills:read", { name: typeof name === "string" ? name.slice(0, 100) : "" }),
+  skillsSave: (draft) => ipcRenderer.invoke("skills:save", { name: typeof draft?.name === "string" ? draft.name.slice(0, 100) : "", description: typeof draft?.description === "string" ? draft.description : "", body: typeof draft?.body === "string" ? draft.body : "" }),
+  skillsCreate: (draft) => ipcRenderer.invoke("skills:create", { name: typeof draft?.name === "string" ? draft.name.slice(0, 100) : "", description: typeof draft?.description === "string" ? draft.description : "", body: typeof draft?.body === "string" ? draft.body : "" }),
+  skillsDelete: (name) => ipcRenderer.invoke("skills:delete", { name: typeof name === "string" ? name.slice(0, 100) : "" }),
+  skillsImport: () => ipcRenderer.invoke("skills:import"),
+  skillsExport: (payload) => ipcRenderer.invoke("skills:export", { name: typeof payload?.name === "string" ? payload.name.slice(0, 100) : "", kind: payload?.kind === "zip" ? "zip" : "folder" }),
+  projectFiles: (payload) => ipcRenderer.invoke("project:files", { query: typeof payload?.query === "string" ? payload.query.slice(0, 200) : "", limit: Number.isFinite(Number(payload?.limit)) ? Math.min(25, Math.max(1, Math.floor(Number(payload.limit)))) : 8 }),
+  agentsSkills: () => ipcRenderer.invoke("agents:skills"),
   openrouterModels: (options = {}) => ipcRenderer.invoke("openrouter:models", { refresh: options?.refresh === true }),
   autoSetup: () => ipcRenderer.invoke("settings:auto-setup"),
   // The first launch of a fresh install runs auto setup by itself (main.cjs
@@ -114,6 +133,10 @@ const api = {
   onModelProbeProgress: (callback) => ipcRenderer.on("models:probe-progress", (_event, data) => callback(data)),
   usageTracker: () => ipcRenderer.invoke("usage:tracker", {}),
   usageForTask: (taskId) => ipcRenderer.invoke("usage:task", { taskId }),
+  // Build's Home: the greeting card's counts, and where the composer runs.
+  workStats: (options = {}) => ipcRenderer.invoke("work:stats", { range: ["all", "30d", "7d"].includes(options?.range) ? options.range : "all" }),
+  workWhere: () => ipcRenderer.invoke("work:where", {}),
+  workWorktrees: (on) => ipcRenderer.invoke("work:worktrees", { on: on === true }),
   opencodeCredits: () => ipcRenderer.invoke("opencode:credits", {}),
   usageAccounts: (options = {}) => ipcRenderer.invoke("usage:accounts", { probe: options?.probe === true }),
   // Sign in with ChatGPT: the owner's ChatGPT plan pays for Studio's Responses calls.
@@ -137,6 +160,8 @@ const api = {
   // Configuration's interface scale (main.cjs ui:zoom).
   uiZoom: (payload) => ipcRenderer.invoke("ui:zoom", payload ?? {}),
   uiZoomGet: () => ipcRenderer.invoke("ui:zoom-get"),
+  // Ctrl +, Ctrl - and Ctrl 0 changed the scale (main.cjs stepUiZoom): { factor }.
+  onUiZoom: (callback) => ipcRenderer.on("ui:zoom-changed", (_event, payload) => callback(payload)),
   eyesPinsRead: () => ipcRenderer.invoke("eyes:pins-read"),
   eyesPinsWrite: (pins) => ipcRenderer.invoke("eyes:pins-write", pins),
   eyesWatch: (running) => ipcRenderer.invoke("eyes:watch", { running }),
@@ -151,7 +176,11 @@ const api = {
   backlogStatus: () => ipcRenderer.invoke("assistant:backlog"),
   backlogControl: (payload) => ipcRenderer.invoke("assistant:backlog-control", payload ?? {}),
   assistantState: () => ipcRenderer.invoke("assistant:state"),
-  assistantMessage: (text, projectId, context) => ipcRenderer.invoke("assistant:message", { text, projectId, context }),
+  assistantMessage: (text, projectId, context, images) => ipcRenderer.invoke("assistant:message", { text, projectId, context, images }),
+  // Pictures on a message (main.cjs "Picture attachments"): keep one (its bytes as base64) and get an id back, or take one away.
+  assistantImage: (payload) => ipcRenderer.invoke("assistant:image", { name: typeof payload?.name === "string" ? payload.name.slice(0, 200) : "", mime: typeof payload?.mime === "string" ? payload.mime.slice(0, 100) : "", data: payload?.data, ...(payload?.probe === true ? { probe: true } : {}) }),
+  assistantImageRemove: (payload) => ipcRenderer.invoke("assistant:image-remove", { id: typeof payload?.id === "string" ? payload.id.slice(0, 80) : "" }),
+  assistantImageRead: (payload) => ipcRenderer.invoke("assistant:image-read", { id: typeof payload?.id === "string" ? payload.id.slice(0, 80) : "" }),
   musicRecommend: (payload) => ipcRenderer.invoke("music:recommend", payload ?? {}),
   assistantWorkOn: (target) => ipcRenderer.invoke("assistant:work-on", target ?? {}),
   assistantFocus: (target) => ipcRenderer.invoke("assistant:focus", target ?? null),
@@ -198,8 +227,27 @@ const api = {
   tasksAttempts: (payload) => ipcRenderer.invoke("tasks:attempts", payload ?? {}),
   tasksRestore: (payload) => ipcRenderer.invoke("tasks:restore", payload ?? {}),
   tasksDelete: (payload) => ipcRenderer.invoke("tasks:delete", payload ?? {}),
+  // Recently deleted (main.cjs "Board trash"): put a deleted task back, and list
+  // what can be put back. An idea comes back through ideasAction({ action: "restore" }).
+  tasksUndelete: (payload) => ipcRenderer.invoke("tasks:undelete", payload ?? {}),
+  boardTrash: (payload) => ipcRenderer.invoke("board:trash", payload ?? {}),
   tasksAction: (payload) => ipcRenderer.invoke("tasks:action", payload ?? {}),
+  // The task's Usage tab (main.cjs "Task time limit"): what it took, and Stop an attempt after N minutes.
+  taskMetrics: (payload) => ipcRenderer.invoke("task:metrics", { taskId: typeof payload?.taskId === "string" ? payload.taskId.slice(0, 200) : "", ...(typeof payload?.projectId === "string" ? { projectId: payload.projectId.slice(0, 200) } : {}) }),
+  tasksCap: (payload) => ipcRenderer.invoke("tasks:cap", { taskId: typeof payload?.taskId === "string" ? payload.taskId.slice(0, 200) : "", minutes: payload?.minutes, ...(typeof payload?.projectId === "string" ? { projectId: payload.projectId.slice(0, 200) } : {}) }),
   tasksSave: (tasks) => ipcRenderer.invoke("tasks:save", tasks),
+  // Changed files and what goes with them (scripts/attempt-snapshots-host.cjs, advisory-checks-host.cjs, attempt-evidence-host.cjs).
+  tasksChanges: (payload) => ipcRenderer.invoke("tasks:changes", reviewBody(payload)),
+  tasksDiff: (payload) => ipcRenderer.invoke("tasks:diff", { ...reviewBody(payload), path: gitText(payload?.path, 1024) }),
+  tasksAccept: (payload) => ipcRenderer.invoke("tasks:accept", { ...reviewBody(payload), accepted: payload?.accepted !== false }),
+  tasksRevert: (payload) => ipcRenderer.invoke("tasks:revert", { ...reviewBody(payload), scope: payload?.scope === "file" ? "file" : payload?.scope === "attempt" ? "attempt" : "", path: gitText(payload?.path, 1024), partial: payload?.partial === true, undo: gitText(payload?.undo, 40) }),
+  tasksChecks: (payload) => ipcRenderer.invoke("tasks:checks", reviewBody(payload)),
+  tasksCheckRun: (payload) => ipcRenderer.invoke("tasks:check-run", { ...reviewBody(payload), id: gitText(payload?.id, 40) }),
+  tasksEvidence: (payload) => ipcRenderer.invoke("tasks:evidence", reviewBody(payload)),
+  // The three review switches (snapshots, advisory checks and their build, shots); with no choice it only reads.
+  reviewPrefs: (payload) => ipcRenderer.invoke("review:prefs", reviewChoices(payload)),
+  // One attempt's record changed (its start or end picture, a shot, its checks, an Accept or a Revert): { projectId, taskId, attempt, what }.
+  onReviewChanged: (callback) => ipcRenderer.on("review:changed", (_event, payload) => callback(payload)),
   ideasList: () => ipcRenderer.invoke("ideas:list"),
   ideasSave: (ideas) => ipcRenderer.invoke("ideas:save", ideas),
   ideasAction: (payload) => ipcRenderer.invoke("ideas:action", payload ?? {}),
@@ -213,10 +261,31 @@ const api = {
   appRestart: (options) => ipcRenderer.invoke("app:restart", options ?? {}),
   releaseStatus: () => ipcRenderer.invoke("release:status"),
   releaseCheck: () => ipcRenderer.invoke("release:check"),
+  releaseSetChannel: (channel) => ipcRenderer.invoke("release:set-channel", { channel }),
   releaseApply: () => ipcRenderer.invoke("release:apply"),
   releaseRollback: () => ipcRenderer.invoke("release:rollback"),
+  // What's new (main.cjs "What's new"): the running version's notes, and what has been read.
+  releaseWhatsNew: () => ipcRenderer.invoke("release:whats-new"),
+  releaseWhatsNewSeen: (payload) => ipcRenderer.invoke("release:whats-new-seen", { version: gitText(payload?.version, 40), how: payload?.how === "announce" ? "announce" : "read" }),
+  releaseWhatsNewSet: (on) => ipcRenderer.invoke("release:whats-new-set", { on: on === true }),
   // The renderer says its shell mounted: the flag an installing helper waits for.
   bootHealthy: () => ipcRenderer.invoke("boot:healthy"),
+  // Report a problem and the crash prompt (main.cjs "Report a problem"): the owner
+  // reads every file of the report, then saves it as a zip. Nothing is sent
+  // anywhere. onReportCrashed is the one push: the last session did not close.
+  reportPreview: (options) => ipcRenderer.invoke("report:preview", { replaceTitles: options?.replaceTitles === true, includeCrash: options?.includeCrash !== false }),
+  reportSave: (payload) => ipcRenderer.invoke("report:save", { token: gitText(payload?.token, 64) }),
+  reportDismiss: () => ipcRenderer.invoke("report:dismiss"),
+  reportSet: (payload) => ipcRenderer.invoke("report:set", typeof payload?.prompt === "boolean" ? { prompt: payload.prompt } : {}),
+  onReportCrashed: (callback) => ipcRenderer.on("report:crashed", (_event, payload) => callback(payload)),
+  // Notifications (main.cjs "Notifications"): Windows alerts, the taskbar flash and the count.
+  // The choices are validated in the host; the quiet hours are the Discord remote's own.
+  // alertsTest may take up to a minute: it waits for the owner to look away from Studio.
+  // onAlertsOpen is the one push: a notification was clicked, and main has already brought Studio up.
+  alertsGet: () => ipcRenderer.invoke("alerts:get"),
+  alertsSet: (patch) => ipcRenderer.invoke("alerts:set", patch && typeof patch === "object" && !Array.isArray(patch) ? patch : {}),
+  alertsTest: () => ipcRenderer.invoke("alerts:test"),
+  onAlertsOpen: (callback) => ipcRenderer.on("alerts:open", (_event, payload) => callback(payload)),
   // Void Engine Discord link (main.cjs "Discord community link"): every call
   // answers { ok, status } with the public status only; tokens never cross.
   communityStatus: () => ipcRenderer.invoke("community:status"),
@@ -289,6 +358,14 @@ const api = {
   // ask for a rebase onto GitHub's commits. onSyncEvent carries every answer,
   // including the background look behind the Friends badge.
   syncStatus: () => ipcRenderer.invoke("sync:status"),
+  pairedStatus: (options) => ipcRenderer.invoke("paired:status", { before: typeof options?.before === "string" ? options.before.slice(0, 80) : null }),
+  pairedCoordinator: (action, options) => ipcRenderer.invoke("paired:coordinator", { action, port: options?.port, mode: options?.mode, url: options?.url }),
+  pairedInvite: () => ipcRenderer.invoke("paired:invite"),
+  pairedPair: (code) => ipcRenderer.invoke("paired:pair", { code: typeof code === "string" ? code.slice(0, 2049) : "" }),
+  pairedWorker: (action, jobId) => ipcRenderer.invoke("paired:worker", { action, jobId }),
+  pairedEnqueue: () => ipcRenderer.invoke("paired:enqueue"),
+  pairedRevoke: (workerId) => ipcRenderer.invoke("paired:revoke", { workerId }),
+  pairedHistory: (jobId, options) => ipcRenderer.invoke("paired:history", { jobId, chunk: options?.chunk, offset: options?.offset }),
   syncRun: (options) => ipcRenderer.invoke("sync:run", { rebase: options?.rebase === true }),
   // "Keep this PC up to date": no argument reads it, true or false sets it.
   syncFollow: (on) => ipcRenderer.invoke("sync:follow", typeof on === "boolean" ? { on } : {}),
@@ -421,6 +498,13 @@ const api = {
   }),
   gitLinkRepos: () => ipcRenderer.invoke("git:link-repos"),
   gitLink: (repo, options) => ipcRenderer.invoke("git:link", { repo: gitText(repo, 200), ...gitProject(options) }),
+  // The Worktrees page (main.cjs "Worktrees"): every worktree of the open project,
+  // and what may be done to one. A folder is only ever one the last list returned.
+  worktreesList: (options) => ipcRenderer.invoke("worktrees:list", gitProject(options)),
+  worktreesMerge: (payload) => ipcRenderer.invoke("worktrees:merge", { path: gitText(payload?.path, 1024), mode: payload?.mode === "merge" ? "merge" : "ff", remove: payload?.remove === true, anyway: payload?.anyway === true, ...gitProject(payload) }),
+  worktreesRemove: (payload) => ipcRenderer.invoke("worktrees:remove", { path: gitText(payload?.path, 1024), force: payload?.force === true, deleteBranch: payload?.deleteBranch === true, ...gitProject(payload) }),
+  worktreesForget: (options) => ipcRenderer.invoke("worktrees:forget", gitProject(options)),
+  worktreesOpen: (payload) => ipcRenderer.invoke("worktrees:open", { path: gitText(payload?.path, 1024), ...gitProject(payload) }),
   // The signed-in GitHub account's NAME (never a token) and whether git and gh exist.
   githubAccount: () => ipcRenderer.invoke("pc-setup:account"),
   // The launch screen's per-project glance (branch, ahead/behind, the chip), by project id.

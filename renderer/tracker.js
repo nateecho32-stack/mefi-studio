@@ -836,6 +836,20 @@
     });
   }
 
-  window.MefiUsageTracker = { refresh, tick, open, openTab, init, setOpen, report: () => state.report };
+  // A plain reading for the 0.5 shell's status bar (renderer/shell.js): the lead plan's windows and what
+  // today's recorded calls cost, from the last report; null before there is one. It reads nothing itself.
+  function brief() {
+    const report = state.report;
+    if (!report) return null;
+    const lead = leadPlan(plansOf(accountsOf(report)));
+    const local = report.local?.ok === false ? null : report.local;
+    const cost = local?.today?.usage?.costUsd;
+    return {
+      at: state.at,
+      plan: lead ? { label: lead.label, windows: lead.windows.map((window) => ({ short: window.short, label: window.label, percent: finite(window.percent) ? window.percent : null })) } : null,
+      today: local?.today ? { calls: local.today.calls ?? 0, costUsd: cost?.knownRecords > 0 && finite(cost.known) ? cost.known : null } : null,
+    };
+  }
+  window.MefiUsageTracker = { refresh, tick, open, openTab, init, setOpen, report: () => state.report, brief };
   init();
 })();

@@ -971,7 +971,7 @@
         const read = toggle("Read web pages you link", tools.webRead ?? tools.webSearch !== false, (value) => { readFollows = false; void set("webRead", value); }, "Pages you name, or that the agent finds by searching, are fetched from this computer. Local and private network addresses are refused.", { disabled: !supported });
         box.append(toggle("Search the web", tools.webSearch !== false, (value) => { if (readFollows) read.querySelector("input").checked = value; void set("webSearch", value); }, "Search queries leave this computer. Bing is built in; a BRAVE_SEARCH_API_KEY variable switches to Brave.", { disabled: !supported }));
         box.append(read);
-        box.append(toggle("Read project files", tools.projectRead === true, (value) => void set("projectRead", value), "Small text files inside this project. Hidden files, credentials and app data are excluded.", { disabled: !supported }));
+        box.append(toggle("Read project files", tools.projectRead === true, (value) => void set("projectRead", value), role === "builder" ? "Small text files inside this project. The coding tool has its own file listing and search. Hidden files, credentials and app data are excluded." : "Read small text files, list folders and search the text files inside this project. Hidden files, credentials and app data are excluded.", { disabled: !supported }));
         body.append(box);
         const mcp = card("MCP tools", "Trusted stdio servers from ~/.mefi-studio/mcp.json. Allowing a tool lets its server run for this agent with its own credentials.");
         const allowed = tools.mcpTools || [];

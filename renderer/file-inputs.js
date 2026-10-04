@@ -12,7 +12,7 @@
     const picker = document.createElement("input"); picker.type = "file"; picker.multiple = true; picker.hidden = true;
     const status = document.createElement("span"); status.setAttribute("role", "status"); status.textContent = "Drop text or code files into the box";
     bar.append(pick, picker, status); input.insertAdjacentElement("afterend", bar);
-    const state = { reading: false }; bindings.set(input, state);
+    const state = { reading: false, add: null }; bindings.set(input, state);
     const unavailable = () => input.disabled || input.readOnly || blocked();
     async function add(files, selectedScope = scope()) {
       if (unavailable() || state.reading) return;
@@ -45,6 +45,7 @@
         status.textContent = [blocks.length ? `${blocks.length} file${blocks.length === 1 ? "" : "s"} added to the draft. Review before sending.` : "No files added.", ...errors].join(" ");
       } finally { state.reading = false; pick.disabled = false; picker.value = ""; }
     }
+    state.add = (files) => add(files);
     let pickerScope;
     pick.addEventListener("click", () => { if (!unavailable()) { pickerScope = scope(); picker.click(); } });
     picker.addEventListener("change", () => { void add(picker.files, pickerScope); });
@@ -54,5 +55,6 @@
   }
   // A file dropped outside supported surfaces must never navigate away.
   for (const name of ["dragover", "drop"]) document.addEventListener(name, (event) => { if (hasFiles(event)) event.preventDefault(); });
-  window.MefiFileInputs = { bind, isReading: (input) => bindings.get(input)?.reading === true };
+  // The text and code files among a mixed drop (a picture goes to renderer/composer-inputs.js, the rest come here).
+  window.MefiFileInputs = { bind, isReading: (input) => bindings.get(input)?.reading === true, addFiles: (input, files) => bindings.get(input)?.add?.(files) };
 })();

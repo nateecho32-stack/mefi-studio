@@ -1,6 +1,137 @@
 # Agent loop and startup measurements
 
 
+## Tree brightness paints a pass once, not every shape, September 30, 2026
+
+Appearance › Tree brightness & outlines set a canvas filter (`brightness(2)`
+at 200%) around the whole nodes pass and the whole wires pass. Chromium
+draws every shape made under a canvas filter through a layer, so a busy tree
+ran hundreds of filter passes a frame. Scripts took about 13 ms a frame; the
+rest was waiting on the graphics card.
+
+**The owner's numbers, from their laptop** (integrated Radeon 860M, hardware
+rendering, a seeded project through the probe on `wip/tree-brightness-gpu`,
+their look: Atmosphere with glass and glow at 100, Singularity, helix, orbit
+trails, extra glow, the deep-space sky, tree brightness 200% for nodes and
+lines, outlines on). They are not numbers measured on the machine that landed
+this change:
+
+| | before | after |
+| --- | --- | --- |
+| Vibe | 4.6 fps, GPU 98-100% | 42 fps, GPU 50% |
+| Command | 8.8 fps, GPU 98-100% | 36 fps, GPU 37% |
+| Home | 4.1 fps, GPU 98-100% | 43 fps, GPU 20% |
+
+At those speeds the detail governor (`state.frameCost`, JavaScript time only)
+also held nodes at tiers 1-2, so the owner had been seeing simplified nodes.
+
+**How it works.** `toneBegin` in idle.js, called by `drawGraphConnections` and
+by the nodes pass of `drawFrame`, paints the pass plain into a scratch
+`OffscreenCanvas` per layer (near, and far only while a branch is focused).
+The scratch starts with its layer's pen (fill, stroke, line, alpha, blend,
+font, dash, transform), and `finish()` lays it down with one
+`drawImage` under `brightness(n)`, then hands back the pen the pass left, so
+what draws next is unchanged. That is at most four filter passes a frame. At
+100% `toneBegin` returns before it reads anything else, and the pass runs as
+it always did.
+
+**The kill switch.** Appearance › Tree brightness & outlines › Fast
+brightness (also in the media window's copy of that section), saved as
+`fastBrightness` in `mefiStudio.treeDynamics.v1`, on by default. Off, the pass
+runs under the filter as before: exact at any level, and slow on a busy tree.
+Neither Reset button touches it. Without `OffscreenCanvas`, or a 2D context
+for it, or a layer that has no size yet, `toneBegin` falls back the same way.
+
+**What differs, and how much.** The filter now meets the blend of a pass's
+shapes, not each shape, so a small coloured accent over a dark core (a
+Singularity crescent, the progress meter's fill, glyph edges) keeps more of
+its colour at 200%, where a brightened shape clipped at full intensity before
+it was mixed. Outlines were the visible part: black and white come through
+`brightness()` unchanged above 100% (white just clips), but in the scratch a
+node's coloured rim mixed with the black ring first and came out gold or teal
+instead of pale. Outlines now paint on the real layer, under the scratch, when
+brightness is above 100% and outlines are on; below 100% nothing clamps, and
+they stay in the pass. On the owner's PC the pixels that differ from the
+per-shape filter by more than 8 levels (equal detail tiers) were 0.71% with
+outlines in the scratch, and 0.15% in a probe that drew them on the layer.
+
+Measured here on 30 September (software rendering under Xvfb, Electron 44, no
+graphics card, so colours and layer sizes only and no fps). A seeded Command
+view (48 nodes), owner's look, detail tier pinned to 3, still frame, against
+the same page with Fast brightness off. Two runs of one setting differ by
+0.01%:
+
+| Window | outlines in the scratch (before) | outlines on the layer (landed) | and the scratch laid down first |
+| --- | --- | --- | --- |
+| 1536 x 930 | 0.81% | 0.20% | 0.20% |
+| 900 x 560 | 1.78% | 0.45% | 0.37% |
+| 720 x 460 | 1.86% | 0.69% | 0.37% |
+
+With outlines on the layer: a focused branch (the far layer) 0.20%; nodes 50%
+and lines 60% 0.04% (exact, outlines stay in the pass); nodes 150% and lines
+60% 0.25%; lines alone at 200% 0.003%; Vibe 0.06%; and outlines off at 200%
+0.20%, the same as with them on, so what is left is the accent colour above,
+which is the owner's call, not outlines.
+
+**Why outlines are not laid down in order.** The scratch goes down after the
+pass, so an outline on the layer sits under every node in it: where two nodes
+overlap, the ring of the front one ends up under the one behind (the last
+column above is the version that lays the scratch down and clears it before an
+outline that touches a node already in it). That version was built and
+measured, and not landed. In this renderer, at 1536 x 930:
+
+- a 160 px square drawn under `filter = brightness(2)` took 8.8 ms, the same as
+  a tiny arc drawn under it (8.8 ms) and close to the whole canvas (13.4 ms):
+  the filter's layer is the clip, not the shape. The same draw inside a clip
+  to its own rectangle took 0.3 ms;
+- a draw from a canvas followed by a write to it (the clear) took 2.9 ms,
+  against 0.08 ms for the draw alone: Chromium copies the whole bitmap when a
+  canvas it drew from is drawn on again;
+- the lay-down version, unclipped and clearing after each, drew 2 to 4 times
+  fewer frames than the landed one (23 to 45 rectangles a frame).
+
+Clipping each lay-down fixes the first cost, not the copy. Whether a full
+texture copy per overlap is cheap on the owner's card needs a measurement there.
+Painting each node into a small tile and laying the tile down under a clipped
+filter would keep the order exactly and pay for no full-canvas layer, and is
+untried.
+
+Tests: tests/command_tone_brightness.test.mjs (`toneBegin`: null at 100%, one
+scratch per layer reused and resized, the pen in and out, one filtered
+lay-down, the fallback, the switch, the far layer only with a focus, the wires
+pass through a throw, and outlines on the layer before the scratch goes down),
+the switch cases in tests/tree_dynamics.test.mjs, and, in Electron under
+Xvfb, tests/tree_dynamics_render.test.mjs and tests/node_paint_cache.test.mjs.
+tests/command_render.test.mjs stops at "Assistant narrow: pointer reaches the
+switch track" on this branch's base as well.
+
+Worth a look in the live app at 200%, with Fast brightness off for the
+side-by-side: Singularity's crescent and the progress meter's fill (they keep
+more colour), and the rings of two overlapping nodes (the front one's ring
+runs under the one behind).
+
+Still open: the accent colour above; a check of the live window
+(`tools/profile_live_studio.mjs` refuses it, because the live window loads
+`dist\Mefi Studio AI+\resources\app\renderer\booklet.html`); and the detail
+governor, which sees JavaScript time only and cannot tell when the card is
+the bottleneck.
+
+## Studio's own modules load from a compile cache, September 30, 2026
+
+`main.cjs` now calls `module.enableCompileCache()` before its first require, so
+the hundred or so `scripts/*.cjs` modules it loads are compiled once and read
+back compiled on the next launch. The cache is keyed by each file's content and
+Node's version, so an update cannot load stale code; `MEFI_STUDIO_NO_COMPILE_CACHE=1`
+turns it off (`tests/compile_cache.test.mjs`).
+
+Measured on the cloud Linux machine (Node 24, 95 modules required in a loop,
+median of three): 95 ms without the cache, 50 ms from the second run on. That is
+module loading only, on a fast disk; it is not a Windows number. The startup
+benchmark (`tools/benchmark_startup.py`, three runs) belongs on the PC before
+and after, and the result goes into the TESTRUNS row. Bundling `main.cjs` for
+packaged builds is the larger lever, and is left alone: the updater's
+`missingRequires` scan reads `require()` calls out of the shipped files.
+
 ## Work for surfaces nobody can see, September 27, 2026
 
 A read-only audit of the push paths found per-push work aimed at hidden

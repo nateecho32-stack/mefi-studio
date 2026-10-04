@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
+import { BOOKLET_INPUTS } from "../scripts/build-booklet.mjs";
 
 test("portable builds ship only public catalogs and release builds cannot inherit either local data store", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "mefi-package-privacy-"));
@@ -22,7 +23,10 @@ test("portable builds ship only public catalogs and release builds cannot inheri
     for (const file of ["main.cjs", "preload.cjs", "README.md", "GETTING_STARTED.md", "renderer/booklet.html", "renderer/booklet.template.html", "assets/icon.ico", "node_modules/electron/dist/electron.exe"]) await write(file, "fixture");
     await write("scripts/placeholder", "");
     await copyFile(new URL("../scripts/package-portable.mjs", import.meta.url), path.join(root, "scripts/package-portable.mjs"));
-    for (const file of ["auditor.mjs", "check-css.mjs", "paths.cjs", "stamp-exe.mjs"]) await copyFile(new URL(`../scripts/${file}`, import.meta.url), path.join(root, "scripts", file));
+    for (const file of ["auditor.mjs", "check-css.mjs", "paths.cjs", "stamp-exe.mjs", "build-booklet.mjs", "booklet-source-location.cjs"]) await copyFile(new URL(`../scripts/${file}`, import.meta.url), path.join(root, "scripts", file));
+    // The real packager copies all scripts and renderer inputs. Keep this
+    // minimal privacy fixture complete under the shared build inventory.
+    for (const file of [...BOOKLET_INPUTS.scripts, ...BOOKLET_INPUTS.styles]) await write(`renderer/${file}`, "");
     await write("data/models.json", '{"models":[]}'); await write("data/curated.json", "{}");
     await write("data/settings.json", '{"secret":"SOURCE-PRIVATE"}');
     await write("data/projects/a/planning.json", "PRIVATE-PLAN");

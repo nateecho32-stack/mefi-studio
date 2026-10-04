@@ -138,7 +138,7 @@
   function on(listener) { if (typeof listener === "function") listeners.add(listener); return () => listeners.delete(listener); }
 
   // ---- what a run has done, stage by stage ------------------------------------------------
-  const TOOL_WORDS = { web_search: "searched the web", web_read: "read a web page", project_read: "read a file" };
+  const TOOL_WORDS = { web_search: "searched the web", web_read: "read a web page", project_read: "read a file", project_list: "listed a folder", project_search: "searched the project" };
   // Why sizing kept a request one card when the lead did not choose that
   // (main.cjs vibeBuild's sized step, size "kept"): never "Best as one task".
   const KEPT = { timeout: "The lead took too long, so it's one task", "no-answer": "No lead model answered, so it's one task", "too-many": "The plan had too many steps, so it's one task" };

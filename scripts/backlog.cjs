@@ -216,6 +216,11 @@ function workState(item, now = Date.now(), { tasks = null, autoBuild = true, app
   const queued = !item.status || item.status === "open" || item.status === "pending" || item.status === "queued";
   if (queued && item.ownerHold && typeof item.ownerHold === "object" && !Array.isArray(item.ownerHold)) {
     const why = String(item.ownerHold.reason ?? "").replace(/\s+/g, " ").trim().slice(0, 80).trim();
+    // Studio's own stop at the task's time limit (task-cap.cjs): nothing failed, and the words say who stopped it.
+    if (item.ownerHold.kind === "limit") {
+      const minutes = Number(item.ownerHold.minutes);
+      return { stage: "blocked", blockedBy: "owner", reason: `Stopped at the time limit${Number.isFinite(minutes) ? ` (${Math.round(minutes)} min)` : ""} — progress saved; say "work on it" or "try again" to continue` };
+    }
     return { stage: "blocked", blockedBy: "owner", reason: `Stopped by you${why ? ` (${why})` : ""} — say "work on it" or "try again" to resume it` };
   }
   // Work done outside Studio: a queued card waits while it is checked against

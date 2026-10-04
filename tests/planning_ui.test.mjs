@@ -820,3 +820,114 @@ test("Plans lists at once, then fills in the project read, the folder scan and w
   assert.equal(env.el("where-export").attributes["aria-pressed"], "true");
   assert.equal(env.calls.length, 0, "pinning a plan to the map is not a plan save");
 });
+
+// ---- Versions: every edit kept, and Restore this version (ZA3) --------------------------
+function editedPlan(count) {
+  const project = { id: "project-a" }; const plans = [];
+  let result = planning.applyPlanningAction(plans, { action: "create", title: "Saved idea", destination: "Saved outcome", outOfScope: "" }, { project, now: 1_700_000_000_000 });
+  for (let n = 1; n < count; n += 1) {
+    result = planning.applyPlanningAction(plans, { action: "update", planId: result.plan.id, version: result.plan.version, title: `Title ${n + 1}` }, { project, now: 1_700_000_000_000 + n * 1000 });
+    assert.equal(result.ok, true, result.error);
+  }
+  return result.plan;
+}
+const versionRows = (env) => env.el("history").children.filter((child) => child.tagName === "details");
+const open = async (row) => { row.open = true; await row.trigger("toggle"); };
+const rowButtons = (row) => row.querySelectorAll("button");
+
+test("Versions lists every edit newest first with what it did, who made it and when, and marks the current one", async () => {
+  const env = await environment(editedPlan(3));
+  const area = env.el("history");
+  assert.ok(area, "the Versions section is on the plan");
+  assert.equal(area.children[0].textContent, "Versions · 3 saved versions · every edit is kept");
+  const rows = versionRows(env);
+  assert.equal(rows.length, 3);
+  const summaries = rows.map((row) => row.children[0].textContent);
+  assert.match(summaries[0], /^Version 3 · current · Renamed the plan to “Title 3” · You · /);
+  assert.match(summaries[1], /^Version 2 · Renamed the plan to “Title 2” · You · /);
+  assert.match(summaries[2], /^Version 1 · Started the plan · You · /);
+  assert.equal(area.open, false, "it starts closed");
+});
+
+test("an older version opens to its wording with Restore this version; the current one has none", async () => {
+  const env = await environment(editedPlan(3));
+  const [current, second] = versionRows(env);
+  await open(current);
+  assert.equal(rowButtons(current).length, 0, "nothing to restore on the version you are already on");
+  assert.match(current.textContent, /Title 3/);
+  await open(second);
+  const buttons = rowButtons(second);
+  assert.deepEqual(buttons.map((button) => button.textContent), ["Restore this version"]);
+  assert.equal(buttons[0].id, "plans-restore-version-2");
+  assert.match(second.textContent, /Brings this wording back as version 4; every version stays in the list\./);
+  assert.match(second.textContent, /approve the specification again before any tasks are made/);
+  assert.match(second.textContent, /Title 2/);
+});
+
+test("Restore this version makes it the newest version, keeps every version, and says nothing was lost", async () => {
+  const env = await environment(editedPlan(3));
+  await open(versionRows(env)[2]);
+  await env.el("restore-version-1").trigger("click");
+  const request = env.calls.at(-1);
+  assert.deepEqual([request.action, request.toVersion, request.version, request.projectId], ["restore-version", 1, 3, "project-a"]);
+  const saved = env.data["project-a"][0];
+  assert.equal(saved.version, 4, "restoring version 1 of 3 makes version 4");
+  assert.equal(saved.title, "Saved idea");
+  assert.deepEqual(saved.history.map((entry) => entry.version), [1, 2, 3, 4]);
+  assert.equal(saved.history.at(-1).restoredFrom, 1);
+  assert.equal(env.el("title").value, "Saved idea", "the sheet shows the restored wording");
+  assert.match(env.el("notice").textContent, /Restored version 1 as version 4\. Nothing was lost\./);
+  const area = env.el("history");
+  assert.equal(area.open, true, "the list stays open so you can see the new version");
+  const rows = versionRows(env);
+  assert.equal(rows.length, 4);
+  assert.match(rows[0].children[0].textContent, /^Version 4 · current · Restored version 1 · You · /);
+});
+
+test("Restore waits for unsaved changes, and is not offered on an archived plan or one that made tasks", async () => {
+  const env = await environment(editedPlan(2));
+  await env.input("destination", "Words I have not saved yet");
+  await open(versionRows(env)[1]);
+  const before = env.calls.length;
+  await env.el("restore-version-1").trigger("click");
+  assert.equal(env.calls.length, before, "nothing was sent");
+  assert.match(env.el("notice").textContent, /Save or clear your unsaved changes before restoring a version\./);
+  assert.equal(env.el("notice").dataset.error, "true");
+  assert.equal(env.data["project-a"][0].version, 2);
+  // Archived: read-only, so no Restore on any version.
+  const project = { id: "project-a" }; const plans = [structuredClone(editedPlan(3))];
+  const archived = planning.applyPlanningAction(plans, { action: "archive", planId: plans[0].id, version: plans[0].version }, { project, now: 1_800_000_000_000 });
+  assert.equal(archived.ok, true, archived.error);
+  const shelved = await environment(archived.plan);
+  const old = versionRows(shelved)[3];
+  await open(old);
+  assert.equal(rowButtons(old).length, 0);
+  assert.match(old.textContent, /Saved idea/, "it can still be read");
+});
+
+test("twenty versions are listed and Show older versions pages back through the rest", async () => {
+  const env = await environment(editedPlan(45));
+  assert.equal(versionRows(env).length, 20);
+  assert.match(env.el("history").children[0].textContent, /45 saved versions/);
+  const more = () => env.el("history").querySelectorAll("button").find((button) => button.textContent === "Show older versions");
+  await more().trigger("click");
+  assert.equal(versionRows(env).length, 40);
+  assert.equal(env.el("history").open, true);
+  await more().trigger("click");
+  assert.equal(versionRows(env).length, 45);
+  assert.equal(more(), undefined, "nothing older is left to show");
+  // Every version is still reachable and restorable, the oldest included.
+  await open(versionRows(env).at(-1));
+  assert.match(versionRows(env).at(-1).children[0].textContent, /^Version 1 · Started the plan/);
+  assert.ok(env.el("restore-version-1"));
+});
+
+test("versions saved before authors and notes existed still list, by what they did", async () => {
+  const plan = editedPlan(3);
+  plan.history.forEach((entry) => { delete entry.by; delete entry.note; });
+  const env = await environment(plan);
+  const summaries = versionRows(env).map((row) => row.children[0].textContent);
+  assert.match(summaries[0], /^Version 3 · current · Destination saved · /);
+  assert.doesNotMatch(summaries[0], /You|Mefi|Studio/);
+  assert.match(summaries[2], /^Version 1 · Plan created · /);
+});

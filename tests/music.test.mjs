@@ -9,7 +9,10 @@ vm.runInContext(`${source.slice(source.indexOf("  const THEMES"), source.indexOf
 const helpers = pure.api;
 const flush = async () => { for (let index = 0; index < 15; index += 1) await Promise.resolve(); };
 
-function environment({ menuSaved = null, queueSaved = null, mediaVolumeSaved = null, resume = null, saved = null, recommend, preview = false, previewRegistered = false, workspaceActive = false, audioLink = null, search = "", premiumSaved = null, hint = null, community = null, bridge = null } = {}) {
+// mediaWindow: true stands in for renderer/media-window.js (env.player records
+// what the menu asks of it); intersection: true gives the feed an
+// IntersectionObserver that env.reach() fires, so paging needs no scrolling.
+function environment({ menuSaved = null, queueSaved = null, mediaVolumeSaved = null, resume = null, saved = null, recommend, preview = false, previewRegistered = false, workspaceActive = false, audioLink = null, search = "", premiumSaved = null, hint = null, community = null, bridge = null, mediaWindow = false, intersection = false } = {}) {
   const ids = new Map();
   const events = [];
   const revoked = [];
@@ -26,6 +29,7 @@ function environment({ menuSaved = null, queueSaved = null, mediaVolumeSaved = n
   const writes = [];
   const toasts = [];
   const lifecycle = [];
+  const typeScopes = [];
   const frames = new Map();
   const listeners = new Map();
   const documentListeners = new Map();
@@ -56,6 +60,8 @@ function environment({ menuSaved = null, queueSaved = null, mediaVolumeSaved = n
     click() { if (!this.disabled) this.dispatch("click"); }
     focus() { document.activeElement = this; }
     contains(node) { return node === this || this.children.some((child) => child.contains(node)); }
+    // Only the two selectors the menu asks: a tag name, or "[hidden]".
+    closest(selector) { for (let node = this; node; node = node.parentElement) if (selector === "[hidden]" ? node.hidden : node.tagName === selector) return node; return null; }
     getBoundingClientRect() { return previewRect; }
   }
   class Audio extends Element {
@@ -94,7 +100,8 @@ function environment({ menuSaved = null, queueSaved = null, mediaVolumeSaved = n
       clearTimeout: (id) => { timers.delete(id); },
       setInterval: (callback, delay = 0) => { const every = Math.max(minInterval, delay); timers.set(++timerId, { at: clock + every, every, callback }); return timerId; },
       clearInterval: (id) => { timers.delete(id); },
-      MefiNav: { get: (id) => (previewRegistered && id === "appearancePreview") || ["help", "palette", "profiler"].includes(id) ? { id, kind: "overlay" } : null, claim: (id) => lifecycle.push(`claim:${id}`), release: (id) => lifecycle.push(`release:${id}`) },
+      // typeScope: nav.js sends typing in the menu to the box a resolver names.
+      MefiNav: { get: (id) => (previewRegistered && id === "appearancePreview") || ["help", "palette", "profiler"].includes(id) ? { id, kind: "overlay" } : null, claim: (id) => lifecycle.push(`claim:${id}`), release: (id) => lifecycle.push(`release:${id}`), typeScope: (node, resolve) => typeScopes.push([node, resolve]) },
       ...(preview || audioLink ? {
         MefiIdle: {
           ...(preview ? { setSettingsPreview: (rect) => lifecycle.push(rect ? { ...rect } : "preview:close"), status: () => ({ view: treeView }), setView: (view) => { treeView = view; listeners.get("mefi-tree-view")?.({ detail: { view } }); } } : {}),
@@ -114,10 +121,40 @@ function environment({ menuSaved = null, queueSaved = null, mediaVolumeSaved = n
     async open(url) { const result = await context.window.mefiStudio.mediaBrowserOpen(url); if (result?.ok) { this.active = true; this.state = result.state || { url, title: "Media browser" }; } return result; },
     close() { this.active = false; },
   }) };
+  // What music.js asks of the player window, recorded; the placement it
+  // reports back follows the same rules as media-window.js (docked only while
+  // shown, not minimized and not a backdrop).
+  const player = { calls: [], options: null, host: null, shown: null, inset: null, aside: null, minimized: false, background: false, docked: false, refuseDock: false };
+  const publish = () => {
+    const visible = Boolean(player.shown), backdrop = visible && player.background && !player.minimized && player.shown.shape !== "browser";
+    player.docked = Boolean(player.host) && visible && !player.minimized && !backdrop;
+    player.options.onPlacement?.({ background: backdrop, minimized: player.minimized, docked: player.docked, visible });
+  };
+  if (mediaWindow) context.window.MefiMediaWindow = { create: (options) => {
+    player.options = options;
+    return {
+      show: (link) => { player.calls.push(["show", link.label ?? null]); player.shown = link; publish(); },
+      hide: () => { player.calls.push(["hide"]); player.shown = null; player.minimized = false; publish(); },
+      reveal: () => player.calls.push(["reveal"]),
+      dock: (host) => { player.calls.push(["dock", host ? host.id : null]); if (host && player.refuseDock) return false; player.host = host || null; publish(); return player.docked; },
+      clip: (inset) => { player.calls.push(["clip", inset]); player.inset = inset; },
+      avoid: (rect) => { player.calls.push(["avoid", rect ? { ...rect } : null]); player.aside = rect || null; },
+      rename: (label) => player.calls.push(["rename", label]),
+      setBackground: (value) => { player.calls.push(["background", Boolean(value)]); player.background = Boolean(value); publish(); },
+      snapshot: () => ({ minimized: player.minimized }),
+      restore: (value) => { player.calls.push(["restore", value ?? null]); if (value && Boolean(value.minimized) !== player.minimized) { player.minimized = Boolean(value.minimized); publish(); } },
+      minimize: () => { player.minimized = !player.minimized; publish(); },
+      beginMove: () => {}, moveKey: () => {},
+    };
+  } };
+  const observers = [];
+  if (intersection) context.window.IntersectionObserver = class { constructor(callback, options) { this.callback = callback; this.options = options; this.targets = []; observers.push(this); } observe(target) { this.targets.push(target); } disconnect() { this.targets = []; } };
   vm.runInContext(source, context);
   const music = context.window.MefiMusic;
   music.init();
-  return { music, window: context.window, ids, events, revoked, opened, styles, storage, document, audio, audios, refused, lifecycle, writes, toasts,
+  return { music, window: context.window, ids, events, revoked, opened, styles, storage, document, audio, audios, refused, lifecycle, writes, toasts, player, observers, typeScopes,
+    // The list's end scrolls into view: every observer that watches something is told so.
+    reach: () => { for (const observer of observers) if (observer.targets.length) observer.callback(observer.targets.map((target) => ({ target, isIntersecting: true }))); },
     // Intervals created after this tick no faster than `ms`, like a hidden window.
     throttle: (ms) => { minInterval = ms; },
     // Runs every timer that falls due, in order, as if `ms` had passed.
@@ -772,7 +809,9 @@ test("Changing station mid-song crosses over on a second deck, then releases the
   env.advance(600);
   assert.ok(deckB.volume > 0 && deckB.volume < .7, "mid-fade both decks sound");
   assert.ok(deckA.volume > 0 && deckA.volume < .7);
-  env.ids.get("music-radio-volume").value = ".4"; env.ids.get("music-radio-volume").dispatch("input");
+  // The card's one slider (0 to 100) is the master level for radio and local
+  // music alike; it replaced the radio panel's own 0 to 1 slider.
+  env.ids.get("music-volume").value = "40"; env.ids.get("music-volume").dispatch("input");
   env.advance(1000);
   assert.equal(deckB.volume, .4, "a volume change made mid-fade is where the fade lands");
   assert.equal(deckA.paused, true);
@@ -1082,7 +1121,15 @@ test("Appearance holds only visual controls; the audio dropdown owns every playe
     assert.equal(sheet.contains(env.ids.get(id)), false, id);
   }
   assert.equal(dropdown.hidden, true);
-  assert.equal(sound.children[2], env.ids.get("music-local-tab").parentElement, "the source tabs follow the mini browser launcher");
+  // The mini player moved the source tabs out of the card and up into the
+  // menu's header (Music, Radio, Video), ahead of the card; the card starts
+  // with the video stage.
+  const header = env.ids.get("music-dropdown-heading").parentElement, tabs = env.ids.get("music-local-tab").parentElement;
+  assert.equal(tabs.parentElement, header, "the source tabs sit in the menu's header");
+  assert.equal(header.parentElement, dropdown);
+  assert.deepEqual(tabs.children.map((tab) => tab.id), ["music-local-tab", "music-radio-tab", "music-link-tab"]);
+  assert.equal(sound.contains(tabs), false, "the card no longer carries the source tabs");
+  assert.equal(sound.parentElement.parentElement, dropdown, "the card is the body's first part, under the header");
   env.music.open(); env.frames();
   assert.equal(dropdown.hidden, true, "Appearance never opens the media menu");
 });
@@ -1152,8 +1199,10 @@ test("Clicking a hovered opener or using a setting holds the menu open for adjus
     const anchor = env.ids.get("settings-audio-open"), dropdown = env.ids.get("music-dropdown");
     anchor.dispatch("pointerenter", { pointerType: "mouse" }); env.advance(200);
     assert.equal(env.ids.get("music-radio-panel").hidden, false);
+    assert.equal(dropdown.dataset.source, "radio", "the card shows the saved source");
+    // The volume slider is the setting being adjusted (it is the card's, for every source).
     if (interaction === "click") env.music.toggleAudio(anchor);
-    else dropdown.dispatch(interaction, { target: env.ids.get("music-radio-volume") });
+    else dropdown.dispatch(interaction, { target: env.ids.get("music-volume") });
     anchor.dispatch("pointerleave"); dropdown.dispatch("pointerleave"); env.advance(1000);
     assert.equal(dropdown.hidden, false, interaction);
     dropdown.dispatch("keydown", { key: "Escape" });
@@ -1163,16 +1212,21 @@ test("Clicking a hovered opener or using a setting holds the menu open for adjus
 });
 
 test("Opening video controls on hover keeps the video visible and entering its frame holds the menu open", () => {
-  const env = environment();
+  const env = environment({ mediaWindow: true });
   env.music.playLink("https://youtu.be/dQw4w9WgXcQ");
   const anchor = env.ids.get("idle-music-toggle"), dropdown = env.ids.get("music-dropdown");
-  const stage = env.ids.get("music-video-stage");
-  stage.getBoundingClientRect = () => ({ top: 280 });
-  dropdown.getBoundingClientRect = () => ({ top: 72, width: 1080 });
-  const header = env.ids.get("music-dropdown-heading").parentElement;
-  header.getBoundingClientRect = () => ({ height: 54 });
+  const stage = env.ids.get("music-video-stage"), card = env.ids.get("music-sound"), body = card.parentElement;
+  // The menu was last left scrolled; every visit starts at the top of the card.
+  body.scrollTop = 300; card.scrollTop = 200;
   anchor.dispatch("pointerenter", { pointerType: "mouse" }); env.advance(200);
-  assert.equal(dropdown.scrollTop, 142, "reveal the video instead of scrolling past it to advanced settings");
+  assert.equal(dropdown.hidden, false);
+  // The old menu scrolled 142 px to bring the video into view. The mini player
+  // holds the video in the card's own stage, at the top, so nothing scrolls.
+  assert.equal(body.scrollTop, 0); assert.equal(card.scrollTop, 0);
+  assert.equal(dropdown.scrollTop, undefined, "the menu itself is not a scroller any more");
+  assert.equal(stage.hidden, false, "the stage shows the loaded video");
+  assert.equal(stage.dataset.docked, "true"); assert.equal(env.player.host, stage, "the player window is carried into the stage");
+  assert.equal(env.player.docked, true);
   const frame = env.music.linkElement().element;
   dropdown.dispatch("pointerleave");
   frame.parentElement.dispatch("pointerenter");
@@ -1503,7 +1557,9 @@ test("revealing local controls preserves a live radio stream until Play explicit
   env.music.addFiles([file("Focus.mp3")]);
   env.music.tune("groovesalad"); await flush();
   const deck = env.music.getAudioElement(), stream = deck.src, writes = env.writes.length, events = env.events.length;
-  env.music.revealSettingsTarget(env.ids.get("music-play"));
+  // Play is the card's transport for every source now, so it belongs to no
+  // source panel; the local panel's own control is Add audio files.
+  env.music.revealSettingsTarget(env.ids.get("music-add-files"));
   assert.equal(env.ids.get("music-local-panel").hidden, false);
   assert.equal(env.music.status().source, "radio");
   assert.equal(deck.src, stream); assert.equal(deck.paused, false);
@@ -1521,7 +1577,8 @@ test("revealing radio controls leaves the existing link player mounted and saved
   env.music.loadSpotify("https://open.spotify.com/album/37i9dQZF1DX7zqr9q1MPG7");
   const frames = () => env.ids.get("music-link-panel").children.flatMap((child) => child.children).filter((child) => child.tagName === "iframe");
   const player = frames()[0], writes = env.writes.length, events = env.events.length;
-  env.music.revealSettingsTarget(env.ids.get("music-radio-volume"));
+  // The radio panel keeps its state line and stop button; its volume moved to the card.
+  env.music.revealSettingsTarget(env.ids.get("music-radio-state"));
   assert.equal(env.ids.get("music-radio-panel").hidden, false);
   assert.equal(env.music.status().source, "link");
   assert.equal(frames()[0], player);
@@ -1770,6 +1827,7 @@ test("video queue adds without interrupting playback, reorders, removes and surv
   const current = env.music.linkElement().element;
   const add = (url, next = false) => { env.ids.get("music-link-url").value = url; env.ids.get(next ? "music-link-queue-first" : "music-link-queue-add").click(); };
   add("https://vimeo.com/12345678"); add("https://example.com/second.mp4"); add("https://example.com/first.mp4", true);
+  assert.equal(env.ids.get("music-link-url").value, "", "a queued link leaves the box empty and ready for the next one");
   assert.equal(env.music.linkElement().element, current);
   const list = env.ids.get("music-link-queue-list"); assert.equal(list.children.length, 3);
   list.children[2].children[1].children[1].click();
@@ -1781,7 +1839,8 @@ test("video queue adds without interrupting playback, reorders, removes and surv
   assert.equal(restored.music.linkElement(), null); assert.equal(restored.ids.get("music-link-queue-list").children.length, 2);
   restored.ids.get("music-link-queue-next").click();
   assert.equal(restored.music.linkElement().url, queue[0].url); assert.equal(restored.ids.get("music-link-queue-list").children.length, 1);
-  restored.ids.get("music-link-next").click(); assert.equal(restored.music.linkElement().url, queue[1].url);
+  // Next is the card's one transport button now; with a queue it plays the queue.
+  restored.ids.get("music-next").click(); assert.equal(restored.music.linkElement().url, queue[1].url);
   assert.equal(restored.ids.get("music-link-queue-next").disabled, true);
 });
 
@@ -1795,7 +1854,7 @@ test("queued end events advance once, ignore stale or foreign frames and restart
   yt(0); const repeated = env.music.linkElement().element;
   assert.notEqual(repeated, first); assert.equal(env.music.linkElement().url, urls[0]);
   yt(0); assert.equal(env.ids.get("music-link-queue-list").children.length, 2, "late old-frame end cannot consume another item");
-  env.ids.get("music-link-next").click(); const vimeo = env.music.linkElement().element;
+  env.ids.get("music-next").click(); const vimeo = env.music.linkElement().element;
   const vm = event => env.message({ source: vimeo.contentWindow, origin: "https://player.vimeo.com", data: { event, data: { seconds: 9 } } });
   vm("play"); vm("ended"); assert.equal(env.music.linkElement().url, urls[2]);
   assert.equal(env.ids.get("music-link-queue-list").children.length, 0);
@@ -1807,15 +1866,16 @@ test("queued end events advance once, ignore stale or foreign frames and restart
 test("queue validates persisted entries, bounds storage and keeps manual queue ahead of explorer results", async () => {
   const env = environment({ queueSaved: [{ url: "javascript:alert(1)" }, { url: "https://www.twitch.tv/example" }, { url: "https://example.com/queued.mp4", title: "Queued" }], bridge: { youtubeSearch: async () => ({ ok: true, results: [{ id: YT, title: "First" }, { id: "M7lc1UVf-VE", title: "Second" }] }) } });
   assert.equal(env.ids.get("music-link-queue-list").children.length, 1);
-  env.ids.get("music-youtube-query").value = "music"; env.ids.get("music-youtube-search").click(); await flush();
+  // One box now searches (words) or plays (a link); Go with words searches YouTube.
+  env.ids.get("music-link-url").value = "music"; env.ids.get("music-link-load").click(); await flush();
   const results = env.ids.get("music-youtube-results");
   results.children[0].children[1].click(); results.children[1].children[2].click();
   assert.equal(env.ids.get("music-link-queue-list").children.length, 2);
-  env.ids.get("music-link-next").click(); assert.equal(env.music.linkElement().url, "https://example.com/queued.mp4");
+  env.ids.get("music-next").click(); assert.equal(env.music.linkElement().url, "https://example.com/queued.mp4");
   results.children[0].children[3].click();
   assert.match(JSON.parse(env.storage.get("mefiStudio.mediaQueue.v1"))[0].url, new RegExp(YT));
-  env.ids.get("music-link-url").value = "https://example.com/repeat.mp4";
-  for (let index = 0; index < 55; index++) env.ids.get("music-link-queue-add").click();
+  // A queued link empties the box, so every one of the 55 attempts types its link again.
+  for (let index = 0; index < 55; index++) { env.ids.get("music-link-url").value = "https://example.com/repeat.mp4"; env.ids.get("music-link-queue-add").click(); }
   assert.equal(JSON.parse(env.storage.get("mefiStudio.mediaQueue.v1")).length, 50);
   assert.equal(env.ids.get("music-link-queue-list").children.length, 50);
 });
@@ -1823,32 +1883,46 @@ test("queue validates persisted entries, bounds storage and keeps manual queue a
 test("video volume and mute control YouTube, Vimeo and native files and survive reload", async () => {
   const env = environment(); env.music.playLink(`https://www.youtube.com/watch?v=${YT}`);
   let frame = env.music.linkElement().element;
-  env.ids.get("music-link-volume").value = "35"; env.ids.get("music-link-volume").dispatch("input");
+  // One slider (0 to 100) and one mute button drive whichever video is on.
+  env.ids.get("music-volume").value = "35"; env.ids.get("music-volume").dispatch("input");
   assert.equal(frame.messages.at(-2)[0].func, "setVolume"); assert.equal(frame.messages.at(-2)[0].args[0], 35);
-  env.ids.get("music-link-mute").click(); assert.equal(frame.messages.at(-1)[0].func, "mute");
+  env.ids.get("music-mute").click(); assert.equal(frame.messages.at(-1)[0].func, "mute");
   const restored = environment({ mediaVolumeSaved: JSON.parse(env.storage.get("mefiStudio.mediaVolume.v1")) });
   restored.music.playLink(`https://www.youtube.com/watch?v=${YT}`); frame = restored.music.linkElement().element;
   restored.message({ source: frame.contentWindow, origin: "https://www.youtube-nocookie.com", data: { event: "onReady" } });
   assert.equal(frame.messages.at(-2)[0].args[0], 35); assert.equal(frame.messages.at(-1)[0].func, "mute");
-  restored.message({ source: frame.contentWindow, origin: "https://www.youtube-nocookie.com", data: { event: "infoDelivery", info: { volume: 60, muted: false } } });
-  assert.equal(restored.ids.get("music-link-volume").value, "60"); assert.equal(restored.ids.get("music-link-mute").attrs["aria-pressed"], "false");
+  // Studio has just asked the player for 35 and mute, so a report of another
+  // level right after is the player echoing an older one: ignored for 1.5 s.
+  const report = { source: frame.contentWindow, origin: "https://www.youtube-nocookie.com", data: { event: "infoDelivery", info: { volume: 60, muted: false } } };
+  restored.message(report);
+  assert.equal(restored.ids.get("music-mute").attrs["aria-pressed"], "true", "the echo does not unmute");
+  assert.deepEqual(JSON.parse(restored.storage.get("mefiStudio.mediaVolume.v1")), { volume: .35, muted: true }, "the echo is not saved");
+  // Later, the same report is a change made in the player itself, and Studio follows it.
+  restored.advance(1600); restored.message(report);
+  assert.equal(restored.ids.get("music-volume").value, "60"); assert.equal(restored.ids.get("music-mute").attrs["aria-pressed"], "false");
+  assert.deepEqual(JSON.parse(restored.storage.get("mefiStudio.mediaVolume.v1")), { volume: .6, muted: false });
   env.music.playLink("https://vimeo.com/12345678"); frame = env.music.linkElement().element;
-  env.ids.get("music-link-volume").value = "20"; env.ids.get("music-link-volume").dispatch("input");
+  env.ids.get("music-volume").value = "20"; env.ids.get("music-volume").dispatch("input");
   assert.deepEqual(frame.messages.at(-2)[0], { method: "setVolume", value: .2 });
   env.music.playLink("https://example.com/video.mp4"); frame = env.music.linkElement().element;
   assert.equal(frame.volume, .2); assert.equal(frame.muted, false);
-  env.ids.get("music-link-mute").click(); assert.equal(frame.muted, true);
+  env.ids.get("music-mute").click(); assert.equal(frame.muted, true);
 });
 
 test("YouTube explorer plays results, advances to the next result and supports playlist Next", async () => {
   const env = environment({ bridge: { youtubeSearch: async query => { assert.equal(query, "quiet music"); return { ok: true, results: [{ id: YT, title: "First", channel: "One" }, { id: "M7lc1UVf-VE", title: "Second" }] }; } } });
-  env.ids.get("music-youtube-query").value = "quiet music"; env.ids.get("music-youtube-search").click(); await flush();
+  // The box takes words; Go searches YouTube, and the words stay for the next look.
+  env.ids.get("music-link-url").value = "quiet music"; env.ids.get("music-link-load").click(); await flush();
   const results = env.ids.get("music-youtube-results"); assert.equal(results.children.length, 2);
   results.children[0].children[1].click(); assert.match(env.music.linkElement().url, new RegExp(YT));
-  env.ids.get("music-link-next").click(); assert.match(env.music.linkElement().url, /M7lc1UVf-VE/);
+  assert.equal(env.ids.get("music-link-url").value, "quiet music", "playing a result keeps the search in the box");
+  env.ids.get("music-next").click(); assert.match(env.music.linkElement().url, /M7lc1UVf-VE/);
+  // A playlist plays its own order, even when its video is also one of the
+  // results on screen (the first result is this playlist's video).
   env.music.playLink(`https://www.youtube.com/watch?v=${YT}&list=PLabcdefghijk`);
-  const frame = env.music.linkElement().element; env.ids.get("music-link-next").click();
+  const frame = env.music.linkElement().element; env.ids.get("music-next").click();
   assert.equal(frame.messages.at(-1)[0].func, "nextVideo");
+  assert.equal(env.music.linkElement().element, frame, "Next inside a playlist does not leave it for the results");
 });
 
 test("YouTube restores observed position and playback, ignores foreign messages and follows playlist changes", async () => {
@@ -1902,4 +1976,802 @@ test("A recent open link returns within ten minutes, while closed, expired and d
   assert.equal(env.storage.has("mefiStudio.mediaResume.v1"), false);
   const closed = environment({ saved: { source: "link", links: [url] } }); await flush();
   assert.equal(closed.music.linkElement(), null, "link history alone does not reopen a dismissed player");
+});
+
+// ---- The mini player (2026-09 redesign): one card, one transport, quick tree
+// switches, sections, the YouTube feed and the drops onto Up next.
+const wordsOf = (env) => Object.fromEntries(["kicker", "title", "detail"].map((part) => [part, findAll(env.document.body, (node) => node.className === `music-now-${part}`)[0].textContent]));
+const timesOf = (env) => findAll(env.document.body, (node) => node.className === "music-now-time").map((node) => node.textContent);
+const thumbOf = (env) => findAll(env.document.body, (node) => node.className === "music-now-thumb")[0];
+const OTHER = "M7lc1UVf-VE";
+
+test("A loaded YouTube video asks for its thumbnail only while the menu is open and the video is not in the card", () => {
+  const env = environment({ mediaWindow: true });
+  const address = `https://i.ytimg.com/vi/${YT}/mqdefault.jpg`, thumb = thumbOf(env);
+  env.music.playLink(`https://youtu.be/${YT}`);
+  assert.ok(!thumb.src, "a closed menu shows nobody a picture, so a loaded link reaches no image host");
+  const restored = environment({ saved: { source: "link", links: [`https://youtu.be/${YT}`] } });
+  assert.ok(!thumbOf(restored).src, "nor does a link remembered from the last session, before the menu opens");
+  // The video plays behind the work: the card is left with its picture.
+  env.ids.get("music-video-background").click();
+  env.music.openAudio();
+  assert.equal(thumb.src, address, "the thumbnail is rebuilt from the validated video id");
+  assert.equal(thumb.hidden, false);
+  // The video comes back into the card's stage: it needs no picture.
+  env.ids.get("music-video-background").click(); env.frames();
+  assert.equal(env.player.docked, true);
+  assert.ok(!thumb.src); assert.equal(thumb.hidden, true);
+  env.music.closeAudio(); env.music.playLink(`https://youtu.be/${OTHER}`);
+  assert.ok(!thumb.src, "changing video while the menu is closed asks for nothing either");
+});
+
+test("The Content Security Policy lets the menu show YouTube thumbnails from that one host and no other image host", async () => {
+  const template = await readFile(new URL("../renderer/booklet.template.html", import.meta.url), "utf8");
+  const policy = /http-equiv="Content-Security-Policy" content="([^"]+)"/.exec(template)[1];
+  const images = policy.split(";").map((part) => part.trim().split(/\s+/)).find(([key]) => key === "img-src").slice(1);
+  assert.ok(images.includes("https://i.ytimg.com"));
+  assert.ok(!images.includes("https:") && !images.includes("*"), "thumbnails do not open every https image host");
+});
+
+test("The card's transport plays, pauses, steps and seeks local music, and each button says what it can do", async () => {
+  const env = environment();
+  const [previous, toggle, next, seek, volume, mute] = ["music-previous", "music-play", "music-next", "music-seek", "music-volume", "music-mute"].map((id) => env.ids.get(id));
+  let picker = 0; env.ids.get("music-files").addEventListener("click", () => { picker++; });
+  assert.deepEqual([previous.disabled, next.disabled, seek.disabled], [true, true, true], "nothing to step through or seek before a track is added");
+  assert.deepEqual(wordsOf(env), { kicker: "Your soundtrack", title: "Your own soundtrack", detail: "Add music from your computer to get started." });
+  toggle.click(); assert.equal(picker, 1, "with nothing loaded, Play opens the file picker");
+  env.music.addFiles([file("One.mp3"), file("Two.mp3")]);
+  assert.deepEqual(wordsOf(env), { kicker: "Ready to play", title: "One", detail: "Track 1 of 2 · Local audio" });
+  assert.deepEqual([previous.disabled, next.disabled, seek.disabled], [false, false, false]);
+  assert.equal(seek.max, "120"); assert.deepEqual(timesOf(env), ["0:00", "2:00"]);
+  toggle.click(); await flush();
+  assert.equal(toggle.dataset.playing, "true"); assert.equal(toggle.attrs["aria-label"], "Pause"); assert.equal(wordsOf(env).kicker, "Now playing");
+  seek.value = "42"; seek.dispatch("input");
+  assert.equal(env.audio.currentTime, 42); assert.equal(timesOf(env)[0], "0:42");
+  previous.click(); await flush();
+  assert.equal(env.audio.currentTime, 0, "Back restarts a track that is well under way"); assert.equal(wordsOf(env).title, "One");
+  previous.click(); await flush();
+  assert.equal(wordsOf(env).title, "Two", "Back at the start steps to the previous track, wrapping round");
+  assert.equal(env.audio.paused, false, "and plays it");
+  next.click(); await flush(); assert.equal(wordsOf(env).title, "One", "Next wraps round as well");
+  toggle.click();
+  assert.equal(env.audio.paused, true); assert.equal(toggle.dataset.playing, "false"); assert.equal(toggle.attrs["aria-label"], "Play");
+  // One slider (0 to 100) is the level; Mute holds the sound at zero without saving silence.
+  volume.value = "35"; volume.dispatch("input");
+  assert.equal(env.audio.volume, .35); assert.equal(JSON.parse(env.storage.get("mefiStudio.music.v1")).volume, .35);
+  mute.click();
+  assert.equal(env.audio.volume, 0); assert.equal(mute.attrs["aria-pressed"], "true"); assert.equal(mute.attrs["aria-label"], "Unmute");
+  assert.equal(volume.value, "0", "a muted slider rests at zero");
+  assert.equal(JSON.parse(env.storage.get("mefiStudio.music.v1")).volume, .35, "Mute is for now: the saved level is not zeroed");
+  assert.equal(environment({ saved: JSON.parse(env.storage.get("mefiStudio.music.v1")) }).audio.volume, .35, "so the next launch is not silent");
+  volume.value = "50"; volume.dispatch("input");
+  assert.equal(env.audio.volume, .5); assert.equal(mute.attrs["aria-pressed"], "false", "raising the level is a request to hear it");
+  volume.value = "250"; volume.dispatch("input"); assert.equal(env.audio.volume, 1, "the slider's value is clamped");
+  volume.value = "oops"; volume.dispatch("input"); assert.equal(env.audio.volume, 0);
+});
+
+test("The transport steps through the radio stations and starts or stops the stream; the bar reads Live, not a time", async () => {
+  const env = environment(); env.music.setSource("radio");
+  const ids = env.music.stations().map((station) => station.id);
+  const [previous, toggle, next, seek] = ["music-previous", "music-play", "music-next", "music-seek"].map((id) => env.ids.get(id));
+  // A tune answers on a later tick; the card repaints on the next frame.
+  const settled = async () => { await flush(); env.frames(); };
+  assert.deepEqual(wordsOf(env), { kicker: "Ad-free radio", title: "Pick a station", detail: "Listener-funded stations. No ads, ever." });
+  assert.deepEqual([previous.disabled, toggle.disabled, next.disabled, seek.disabled], [false, false, false, true]);
+  assert.equal(toggle.attrs["aria-label"], "Play the radio"); assert.deepEqual(timesOf(env), ["Live", ""]);
+  assert.equal(findAll(env.document.body, (node) => node.className === "music-now-seek")[0].dataset.live, "true");
+  toggle.click(); await settled();
+  assert.equal(env.music.status().station, ids[0], "Play with nothing tuned starts the first station");
+  assert.deepEqual(wordsOf(env), { kicker: "Live radio", title: "Groove Salad", detail: "Chilled ambient beats · SomaFM" });
+  assert.equal(toggle.dataset.playing, "true"); assert.equal(toggle.attrs["aria-label"], "Stop the radio");
+  next.click(); await settled();
+  assert.equal(env.music.status().station, ids[1], "Next tunes the station after this one");
+  assert.equal(wordsOf(env).title, "Drone Zone");
+  previous.click(); await settled(); previous.click(); await settled();
+  assert.equal(env.music.status().station, ids.at(-1), "Back from the first station wraps to the last");
+  next.click(); await settled(); assert.equal(env.music.status().station, ids[0], "and Next from the last wraps to the first");
+  toggle.click(); env.frames();
+  assert.equal(env.music.status().radioPhase, "idle", "Stop ends the stream"); assert.equal(toggle.dataset.playing, "false");
+  assert.equal(env.music.status().station, ids[0], "but the station stays chosen");
+  toggle.click(); await settled(); assert.equal(env.music.status().radioPhase, "playing"); assert.equal(env.music.status().station, ids[0], "Play tunes it again");
+  const fresh = environment(); fresh.music.setSource("radio");
+  fresh.ids.get("music-previous").click(); await flush();
+  assert.equal(fresh.music.status().station, ids.at(-1), "Back with nothing tuned starts from the last station");
+});
+
+test("The card follows the stream's own trouble, not only the radio panel: holding the sound, then a station that is unavailable", async () => {
+  const env = environment(); env.music.tune("groovesalad"); await flush(); env.frames();
+  const toggle = env.ids.get("music-play");
+  assert.equal(wordsOf(env).kicker, "Live radio");
+  env.audio.dispatch("waiting"); env.frames();
+  assert.equal(wordsOf(env).kicker, "Holding the sound…");
+  assert.equal(toggle.dataset.playing, "true", "a buffering stream is still the source, so it can still be stopped");
+  const spent = environment();
+  for (const host of ["ice1", "ice2", "ice4"]) spent.refused.add(mirror("groovesalad", host));
+  spent.music.tune("groovesalad"); await flush(); await flush(); spent.frames();
+  assert.equal(spent.music.status().radioPhase, "error");
+  assert.equal(wordsOf(spent).kicker, "Station unavailable");
+  assert.equal(spent.ids.get("music-play").dataset.playing, "false"); assert.equal(spent.ids.get("music-play").attrs["aria-label"], "Play the radio", "Play tries the station again");
+});
+
+test("The transport drives a YouTube video: the embed names it and gives its length, Play and Pause show at once, a drag on the bar previews and release settles", () => {
+  const env = environment(); env.music.playLink(`https://youtu.be/${YT}`);
+  const frame = env.music.linkElement().element;
+  const say = (data) => env.message({ source: frame.contentWindow, origin: "https://www.youtube-nocookie.com", data });
+  const commands = () => frame.messages.map(([message]) => message).filter((message) => message.event === "command").map((message) => [message.func, ...message.args]);
+  const [toggle, seek] = ["music-play", "music-seek"].map((id) => env.ids.get(id));
+  // Before the embed reports, the card has only the link's own label.
+  assert.deepEqual(wordsOf(env), { kicker: "YouTube", title: "YouTube video", detail: "YouTube" });
+  assert.equal(seek.disabled, true, "no length is known yet"); assert.deepEqual(timesOf(env), ["0:00", "--:--"]);
+  say({ event: "initialDelivery", info: { currentTime: 0, duration: 225, playerState: 1, volume: 70, muted: false, videoData: { video_id: YT, title: "Night Drive — Lo-fi mix", author: "Studio Test Channel" } } });
+  env.frames();
+  assert.deepEqual(commands().slice(0, 1), [["addEventListener", "onStateChange"]], "the first report subscribes to state changes");
+  assert.deepEqual(wordsOf(env), { kicker: "Now playing", title: "Night Drive — Lo-fi mix", detail: "Studio Test Channel · YouTube" }, "the title and channel are the embed's own");
+  assert.equal(seek.disabled, false); assert.equal(seek.max, "225"); assert.deepEqual(timesOf(env), ["0:00", "3:45"]);
+  toggle.click();
+  assert.deepEqual(commands().at(-1), ["pauseVideo"]);
+  assert.equal(toggle.dataset.playing, "false", "the card shows the change at once; the player's next report confirms it");
+  assert.equal(wordsOf(env).kicker, "Paused");
+  toggle.click(); assert.deepEqual(commands().at(-1), ["playVideo"]); assert.equal(toggle.dataset.playing, "true");
+  // A drag on the bar previews on the player a few times a second, and release settles it.
+  seek.value = "60"; seek.dispatch("input");
+  assert.deepEqual(commands().at(-1), ["seekTo", 60, false]);
+  seek.value = "70"; seek.dispatch("input");
+  assert.deepEqual(commands().at(-1), ["seekTo", 60, false], "a drag inside 180 ms sends nothing more");
+  env.advance(200); seek.value = "80"; seek.dispatch("input");
+  assert.deepEqual(commands().at(-1), ["seekTo", 80, false]);
+  seek.dispatch("change"); assert.deepEqual(commands().at(-1), ["seekTo", 80, true], "release settles it");
+  // Right after a seek, a report from the old place is not believed; later it is.
+  say({ event: "infoDelivery", info: { currentTime: 3, playerState: 1 } }); env.frames();
+  assert.equal(seek.value, "80");
+  env.advance(1300); say({ event: "infoDelivery", info: { currentTime: 3, playerState: 1 } }); env.frames();
+  assert.equal(seek.value, "3");
+  // Between two reports a playing video keeps moving at its own pace, so the
+  // bar does not stutter, but never more than two seconds past the last report.
+  env.advance(1000); env.music.setRecommender(null); assert.equal(timesOf(env)[0], "0:04");
+  env.advance(5000); env.music.setRecommender(null); assert.equal(timesOf(env)[0], "0:05", "a player that has gone quiet is not run on");
+  say({ event: "onStateChange", info: 2 }); env.frames();
+  assert.equal(wordsOf(env).kicker, "Paused", "the player's report is the last word");
+  assert.equal(timesOf(env)[0], "0:03", "and the bar rests where the player last said it was");
+  env.advance(1000); env.music.setRecommender(null); assert.equal(timesOf(env)[0], "0:03", "a paused video does not move");
+});
+
+test("The transport drives a Vimeo video through its message API: title and length on ready, then play, pause, seek and volume", () => {
+  const env = environment(); env.music.playLink("https://vimeo.com/12345678");
+  const frame = env.music.linkElement().element;
+  const say = (data) => env.message({ source: frame.contentWindow, origin: "https://player.vimeo.com", data });
+  const sent = () => frame.messages.map(([message]) => message);
+  const [toggle, seek, volume, mute] = ["music-play", "music-seek", "music-volume", "music-mute"].map((id) => env.ids.get(id));
+  frame.dispatch("load");
+  assert.deepEqual(sent().map((message) => message.value), ["timeupdate", "play", "pause", "ended", "volumechange"], "it subscribes to the player's events");
+  say({ event: "ready" });
+  assert.deepEqual(sent().slice(-4), [{ method: "getVideoTitle" }, { method: "getDuration" }, { method: "setVolume", value: .7 }, { method: "setMuted", value: false }], "ready asks for the title and length and sets Studio's level");
+  say({ method: "getVideoTitle", value: "A fixture film" }); say({ method: "getDuration", value: 300 });
+  say({ event: "play", data: { seconds: 12, duration: 300 } }); env.frames();
+  assert.deepEqual(wordsOf(env), { kicker: "Now playing", title: "A fixture film", detail: "Vimeo" });
+  assert.equal(seek.max, "300"); assert.deepEqual(timesOf(env), ["0:12", "5:00"]);
+  toggle.click(); assert.deepEqual(sent().at(-1), { method: "pause" }); assert.equal(toggle.dataset.playing, "false");
+  toggle.click(); assert.deepEqual(sent().at(-1), { method: "play" });
+  seek.value = "90"; seek.dispatch("input"); assert.deepEqual(sent().at(-1), { method: "setCurrentTime", value: 90 });
+  volume.value = "50"; volume.dispatch("input"); assert.deepEqual(sent().slice(-2), [{ method: "setVolume", value: .5 }, { method: "setMuted", value: false }]);
+  mute.click(); assert.deepEqual(sent().at(-1), { method: "setMuted", value: true });
+  // The same echo rule as YouTube: the player's report of an older level, just after Studio's own, is ignored.
+  say({ event: "volumechange", data: { volume: .9, muted: false } });
+  assert.equal(mute.attrs["aria-pressed"], "true");
+  env.advance(1600); say({ event: "volumechange", data: { volume: .9, muted: false } });
+  assert.equal(volume.value, "90"); assert.equal(mute.attrs["aria-pressed"], "false");
+});
+
+test("The transport drives a plain video file through its own element, and the file's own controls move the card", async () => {
+  const env = environment(); env.music.playLink("https://example.com/clip.mp4");
+  const player = env.music.linkElement().element;
+  // The fixture element gets the parts of a media element the transport uses.
+  Object.assign(player, { paused: true, ended: false, currentTime: 0, duration: 90,
+    play() { this.paused = false; this.dispatch("play"); return Promise.resolve(); }, pause() { this.paused = true; this.dispatch("pause"); } });
+  const [previous, toggle, seek, volume, mute] = ["music-previous", "music-play", "music-seek", "music-volume", "music-mute"].map((id) => env.ids.get(id));
+  player.dispatch("loadedmetadata"); env.frames();
+  assert.equal(seek.disabled, false); assert.equal(seek.max, "90"); assert.deepEqual(timesOf(env), ["0:00", "1:30"]);
+  assert.deepEqual(wordsOf(env), { kicker: "Paused", title: "Video file · clip.mp4", detail: "Web" }, "a file that has not started is a paused one: Studio can start it");
+  toggle.click(); env.frames();
+  assert.equal(player.paused, false); assert.equal(toggle.dataset.playing, "true", "the card follows the file's own play event");
+  assert.equal(wordsOf(env).kicker, "Now playing");
+  toggle.click(); env.frames();
+  assert.equal(player.paused, true); assert.equal(toggle.dataset.playing, "false"); assert.equal(wordsOf(env).kicker, "Paused");
+  seek.value = "30"; seek.dispatch("input"); assert.equal(player.currentTime, 30); assert.equal(timesOf(env)[0], "0:30");
+  previous.click(); assert.equal(player.currentTime, 0, "Back restarts a file that is under way");
+  volume.value = "40"; volume.dispatch("input");
+  assert.equal(player.volume, .4); assert.deepEqual(JSON.parse(env.storage.get("mefiStudio.mediaVolume.v1")), { volume: .4, muted: false });
+  mute.click(); assert.equal(player.muted, true);
+  // Its own controls move the level (never Studio's music level), and the card follows at once.
+  Object.assign(player, { volume: .25, muted: false }); player.dispatch("volumechange");
+  assert.equal(volume.value, "25"); assert.equal(mute.attrs["aria-pressed"], "false");
+  assert.deepEqual(JSON.parse(env.storage.get("mefiStudio.mediaVolume.v1")), { volume: .25, muted: false });
+  assert.equal(env.music.status().source, "link"); assert.equal(env.audio.volume, .7, "the local music level is a separate saved level");
+  player.error = { code: 4 }; toggle.click(); player.dispatch("error"); env.frames();
+  assert.equal(toggle.dataset.playing, "false"); assert.match(noticeOf(env).textContent, /could not be played/);
+});
+
+test("A level the player reports right after Studio set one is ignored for 1.5 seconds, and never while Studio's slider is held", () => {
+  const env = environment(); env.music.playLink(`https://youtu.be/${YT}`);
+  const frame = env.music.linkElement().element, volume = env.ids.get("music-volume");
+  const say = (level, muted = false) => env.message({ source: frame.contentWindow, origin: "https://www.youtube-nocookie.com", data: { event: "infoDelivery", info: { volume: level, muted } } });
+  const saved = () => JSON.parse(env.storage.get("mefiStudio.mediaVolume.v1") ?? "null");
+  say(70); // the first report applies Studio's level (70) to the player
+  assert.equal(frame.messages.filter(([message]) => message.func === "setVolume").length, 1);
+  say(55); assert.equal(volume.value, "70", "a different level at once is the player echoing an older one");
+  env.advance(1400); say(55); assert.equal(volume.value, "70", "still inside the 1.5 seconds");
+  env.advance(200); say(55); assert.equal(volume.value, "55", "later, it is a change made in the player itself");
+  assert.equal(saved().volume, .55);
+  const volumeWrites = () => env.writes.filter(([key]) => key === "mefiStudio.mediaVolume.v1").length;
+  const writes = volumeWrites(); say(55.4); assert.equal(volumeWrites(), writes, "a report of the level Studio already has changes nothing");
+  // Studio's own change starts the guard again.
+  volume.value = "80"; volume.dispatch("input"); env.advance(500); say(55); assert.equal(saved().volume, .8);
+  // Holding the slider, no report moves it, however old Studio's last word is.
+  env.advance(5000); volume.focus(); say(20); assert.equal(saved().volume, .8);
+  env.document.activeElement = null; say(20); assert.equal(volume.value, "20");
+  // The mute state is a report too.
+  env.advance(2000); say(20, true); assert.equal(env.ids.get("music-mute").attrs["aria-pressed"], "true");
+});
+
+test("The floating player's bar carries the same transport, and both bars follow one state", () => {
+  const env = environment({ mediaWindow: true }); env.music.playLink(`https://youtu.be/${YT}`);
+  const frame = env.music.linkElement().element, bar = env.player.options.transport;
+  const ids = ["previous", "play", "next", "mute", "volume"].map((name) => `media-window-${name}`);
+  for (const id of ids) assert.equal(bar.contains(env.ids.get(id)), true, `${id} rides in the window's bar`);
+  const say = (data) => env.message({ source: frame.contentWindow, origin: "https://www.youtube-nocookie.com", data });
+  const commands = () => frame.messages.map(([message]) => message).filter((message) => message.event === "command").map((message) => [message.func, ...message.args]);
+  say({ event: "infoDelivery", info: { currentTime: 10, duration: 200, playerState: 1, volume: 70, muted: false, videoData: { video_id: YT, title: "Bar", author: "A" } } }); env.frames();
+  const [play, next, mute, volume] = ["play", "next", "mute", "volume"].map((name) => env.ids.get(`media-window-${name}`));
+  assert.equal(play.dataset.playing, "true"); assert.equal(play.attrs["aria-label"], "Pause");
+  play.click(); assert.deepEqual(commands().at(-1), ["pauseVideo"]);
+  assert.equal(env.ids.get("music-play").dataset.playing, "false", "the card follows the bar");
+  volume.value = "30"; volume.dispatch("input");
+  assert.deepEqual(commands().slice(-2), [["setVolume", 30], ["unMute"]]);
+  assert.equal(env.ids.get("music-volume").value, "30", "one level for both sliders");
+  env.ids.get("music-mute").click(); assert.equal(mute.attrs["aria-pressed"], "true"); assert.equal(volume.value, "0");
+  assert.equal(next.disabled, false);
+  // The window's own buttons reach the menu and Studio: settings opens the media menu, Close stops the video.
+  env.player.options.onSettings(); assert.equal(env.ids.get("music-dropdown").hidden, false);
+  env.player.options.onClose(); assert.equal(env.music.linkElement(), null); assert.equal(env.music.status().provider, null);
+});
+
+test("Spotify, SoundCloud and a website keep their own controls: the card disables what Studio cannot drive", async () => {
+  const env = environment({ bridge: { mediaBrowserOpen: async () => ({ ok: true, state: { url: "https://example.com/radio", title: "Fixture radio" } }) } });
+  const [previous, toggle, next, seek, volume, mute] = ["music-previous", "music-play", "music-next", "music-seek", "music-volume", "music-mute"].map((id) => env.ids.get(id));
+  env.music.loadSpotify("https://open.spotify.com/album/37i9dQZF1DX7zqr9q1MPG7");
+  assert.deepEqual(wordsOf(env), { kicker: "Spotify", title: "Spotify album", detail: "Spotify · play and pause inside its player" });
+  assert.equal(toggle.disabled, true); assert.equal(toggle.title, "Use the player’s own play button");
+  assert.deepEqual([volume.disabled, mute.disabled, seek.disabled], [true, true, true], "no levels or time Studio can move");
+  assert.deepEqual([previous.disabled, next.disabled], [false, false], "but the queue and history still step");
+  env.music.playLink("https://soundcloud.com/forss/flickermood");
+  assert.equal(wordsOf(env).kicker, "SoundCloud"); assert.equal(toggle.disabled, true);
+  env.music.playLink("https://open.spotify.com/socialsession/5Ab3xYz09kLmNoPq");
+  assert.equal(wordsOf(env).kicker, "SoundCloud", "a Spotify Jam is handed off and leaves the card alone");
+  // The website: no transport of Studio's own, just a way on to what is queued.
+  await env.music.playLink("https://example.com/radio"); await flush();
+  assert.deepEqual(wordsOf(env), { kicker: "Browsing", title: "Fixture radio", detail: "Use the website’s own play controls." });
+  assert.deepEqual([toggle.disabled, previous.disabled, next.disabled, volume.disabled], [true, true, true, true]);
+  env.ids.get("music-link-url").value = "https://example.com/next.mp4"; env.ids.get("music-link-queue-add").click();
+  assert.equal(next.disabled, false, "with something queued, Next is the way out of the website");
+});
+
+const feedNoteOf = (env) => findAll(env.document.body, (node) => node.className === "music-fineprint music-feed-note")[0];
+
+test("Next takes the queue first, then the feed, and asks for a pick when nothing is lined up", async () => {
+  const env = environment({ bridge: { youtubeSearch: async () => ({ ok: true, results: [{ id: YT, title: "First" }, { id: OTHER, title: "Second" }] }) } });
+  env.music.setSource("link");
+  const [previous, toggle, next] = ["music-previous", "music-play", "music-next"].map((id) => env.ids.get(id));
+  const dropdown = env.ids.get("music-dropdown"), box = env.ids.get("music-link-url");
+  assert.deepEqual(wordsOf(env), { kicker: "Video & links", title: "Nothing playing yet", detail: "Search YouTube or paste a link." });
+  assert.deepEqual([previous.disabled, toggle.disabled, next.disabled], [true, true, false], "with nothing on and nothing queued, only Next (to look for something) is live");
+  next.click();
+  assert.equal(dropdown.hidden, false); assert.equal(dropdown.dataset.size, "full"); assert.equal(dropdown.dataset.section, "browse");
+  assert.equal(feedNoteOf(env).textContent, "Pick what plays next: click a video to queue it, or drag it onto Up next.");
+  // A queued video makes Play live, and starts it.
+  box.value = "https://example.com/queued.mp4"; env.ids.get("music-link-queue-add").click();
+  assert.equal(toggle.disabled, false); assert.equal(wordsOf(env).detail, "1 waiting in Up next");
+  toggle.click(); assert.equal(env.music.linkElement().url, "https://example.com/queued.mp4");
+  // Search, play the first result, and queue a link behind it: Next takes the queue, then the next result.
+  box.value = "quiet"; env.ids.get("music-link-load").click(); await flush();
+  const results = env.ids.get("music-youtube-results");
+  results.children[0].children[1].click(); assert.match(env.music.linkElement().url, new RegExp(YT));
+  box.value = "https://example.com/second.mp4"; env.ids.get("music-link-queue-add").click();
+  next.click(); assert.equal(env.music.linkElement().url, "https://example.com/second.mp4", "a queued video comes before the feed");
+  results.children[0].children[1].click();
+  next.click(); assert.match(env.music.linkElement().url, new RegExp(OTHER), "with the queue empty, Next follows the feed");
+  // The last result has nothing after it: the menu opens Browse and asks for a pick.
+  dropdown.dataset.section = ""; env.music.openSection("picture"); feedNoteOf(env).textContent = "";
+  next.click();
+  assert.equal(dropdown.dataset.section, "browse"); assert.equal(feedNoteOf(env).textContent, "Pick what plays next: click a video to queue it, or drag it onto Up next.");
+  // A link with a start time is still the video on the feed, so Next still finds its place.
+  env.music.playLink(`https://youtu.be/${YT}?t=90`); next.click();
+  assert.match(env.music.linkElement().url, new RegExp(OTHER), "the feed matches the video, not the exact link");
+});
+
+test("Back restarts a video that is under way, then goes back through the ones played, and a playlist steps its own way back", () => {
+  const env = environment();
+  const A = `https://www.youtube.com/watch?v=${YT}`, B = `https://www.youtube.com/watch?v=${OTHER}`, C = "https://vimeo.com/12345678";
+  const previous = env.ids.get("music-previous");
+  env.music.playLink(A); env.music.playLink(B); env.music.playLink(C);
+  previous.click(); assert.equal(env.music.linkElement().url, B, "Back at the start of a video goes to the one played before");
+  previous.click(); assert.equal(env.music.linkElement().url, A);
+  previous.click(); assert.equal(env.music.linkElement().url, A, "with nothing before it there is nowhere further back");
+  const frame = env.music.linkElement().element;
+  const commands = () => frame.messages.map(([message]) => message).filter((message) => message.event === "command").map((message) => [message.func, ...message.args]);
+  env.message({ source: frame.contentWindow, origin: "https://www.youtube-nocookie.com", data: { event: "infoDelivery", info: { currentTime: 42, duration: 200, playerState: 1 } } });
+  previous.click();
+  assert.deepEqual(commands().at(-1), ["seekTo", 0, true], "a video well under way restarts rather than leaving");
+  assert.equal(env.music.linkElement().element, frame);
+  env.message({ source: frame.contentWindow, origin: "https://www.youtube-nocookie.com", data: { event: "infoDelivery", info: { currentTime: 3, duration: 200, playerState: 1 } } });
+  env.advance(1300);
+  const playlist = environment();
+  playlist.music.playLink(`https://www.youtube.com/watch?v=${YT}&list=PLabcdefghijk`);
+  const list = playlist.music.linkElement().element;
+  playlist.ids.get("music-previous").click();
+  assert.deepEqual(list.messages.at(-1)[0], { event: "command", func: "previousVideo", args: [], id: "studio-media", channel: "widget" }, "inside a playlist, Back is the playlist's own");
+});
+
+test("The eight quick tree switches each flip one setting, mirror the Tree section, and stay dim while the tree is not listening", () => {
+  const calls = [];
+  let status = { selection: "auto", reactive: false, listening: false, pending: false, error: null, response: .35, label: "Audio link off", effects: { waves: true, splitBands: true, nodes: true, motion: true, percussion: false, background: false } };
+  const env = environment({ audioLink: {
+    audioStatus: () => status,
+    setMusicReactive: (on) => { calls.push(["react", on]); status = { ...status, reactive: on, listening: on, label: on ? "Track linked" : "Audio link off" }; },
+    setAudioEffects: (effects) => { calls.push(["effects", { ...effects }]); status = { ...status, effects: { ...status.effects, ...effects } }; },
+    setAudioSource() {}, setAudioResponse() {},
+  } });
+  const keys = ["react", "waves", "nodes", "motion", "percussion", "background", "orbitTrails", "extraGlow"];
+  const chip = (key) => env.ids.get(`music-quick-${key}`);
+  const pressed = () => Object.fromEntries(keys.map((key) => [key, chip(key).attrs["aria-pressed"] === "true"]));
+  assert.deepEqual(chip("react").parentElement.children.map((node) => node.dataset.quick), keys, "eight switches, in this order");
+  assert.deepEqual(keys.map((key) => chip(key).children[1].textContent), ["React", "Waves", "Glow", "Motion", "Drums", "Aura", "Trails", "Halos"]);
+  assert.ok(keys.every((key) => chip(key).title), "each says what it does");
+  assert.deepEqual(pressed(), { react: false, waves: true, nodes: true, motion: true, percussion: false, background: false, orbitTrails: false, extraGlow: false });
+  const quickState = () => findAll(env.document.body, (node) => node.className === "music-quick-state")[0].textContent;
+  assert.equal(quickState(), "The tree is not listening");
+  assert.deepEqual(keys.map((key) => chip(key).dataset.idle), ["false", "true", "true", "true", "true", "true", "false", "false"], "reactions rest dim until the tree listens; Trails and Halos never depend on it");
+  chip("react").click();
+  assert.deepEqual(calls.at(-1), ["react", true]); assert.equal(chip("react").attrs["aria-pressed"], "true"); assert.equal(quickState(), "Track linked");
+  assert.deepEqual(keys.map((key) => chip(key).dataset.idle), keys.map(() => "false"));
+  chip("waves").click(); assert.deepEqual(calls.at(-1), ["effects", { waves: false }]); assert.equal(chip("waves").attrs["aria-pressed"], "false");
+  chip("percussion").click(); assert.deepEqual(calls.at(-1), ["effects", { percussion: true }]); assert.equal(chip("percussion").attrs["aria-pressed"], "true");
+  assert.equal(calls.length, 3, "one setting per press, and nothing else moves");
+  // The Tree section's own checkboxes drive the same chips.
+  const input = env.ids.get("music-audio-motion"); status = { ...status, effects: { ...status.effects, motion: false } }; input.checked = false; input.dispatch("change");
+  assert.equal(chip("motion").attrs["aria-pressed"], "false");
+  // Trails and Halos are the tree's look, saved with the other preferences, and the Appearance checkboxes follow.
+  const before = env.events.filter((event) => event.type === "mefi-tree-preferences").length;
+  chip("orbitTrails").click();
+  assert.equal(env.music.status().orbitTrails, true); assert.equal(chip("orbitTrails").attrs["aria-pressed"], "true"); assert.equal(env.ids.get("music-orbit-trails").checked, true);
+  assert.equal(JSON.parse(env.storage.get("mefiStudio.music.v1")).orbitTrails, true);
+  assert.equal(env.events.filter((event) => event.type === "mefi-tree-preferences").length, before + 1);
+  chip("extraGlow").click(); chip("orbitTrails").click();
+  assert.deepEqual({ ...env.music.graphPreferences() }, { nodeStyle: "orbs", nodeLayout: "constellation", orbitTrails: false, extraGlow: true });
+  env.ids.get("music-extra-glow").checked = false; env.ids.get("music-extra-glow").dispatch("change");
+  assert.equal(chip("extraGlow").attrs["aria-pressed"], "false", "the Appearance checkbox drives the chip too");
+  chip("react").click(); assert.deepEqual(calls.at(-1), ["react", false]); assert.equal(chip("react").attrs["aria-pressed"], "false");
+  // Without the Command audio API only the tree's look can be switched.
+  const bare = environment();
+  assert.deepEqual(keys.map((key) => bare.ids.get(`music-quick-${key}`).disabled), [true, true, true, true, true, true, false, false]);
+});
+
+test("The section chips unfold the mini player into one section at a time, and a second click or the unfold button folds it back", () => {
+  const env = environment();
+  const dropdown = env.ids.get("music-dropdown"), deck = env.ids.get("music-deck"), expand = env.ids.get("music-dropdown-expand");
+  const strip = deck.parentElement.children.find((node) => node.className === "music-sections");
+  const chips = () => strip.children;
+  const shown = () => Object.fromEntries(["music-local-panel", "music-radio-panel", "music-link-panel", "music-audio-reactions", "music-more"].map((id) => [id.replace("music-", ""), !env.ids.get(id).hidden]));
+  env.music.openAudio();
+  assert.equal(strip.attrs.role, "tablist");
+  assert.deepEqual(chips().map((chip) => chip.dataset.section), ["tracks", "tree", "more"], "Music: its own list first, then the two every source has");
+  assert.deepEqual(chips().map((chip) => chip.children[1].textContent), ["Tracks", "Tree", "More"]);
+  assert.equal(dropdown.dataset.size, "compact"); assert.equal(deck.hidden, true);
+  assert.equal(expand.attrs["aria-expanded"], "false"); assert.equal(expand.attrs["aria-label"], "Show more");
+  assert.deepEqual(chips().map((chip) => chip.attrs["aria-selected"]), ["false", "false", "false"]);
+  assert.deepEqual(chips().map((chip) => chip.tabIndex), [0, -1, -1], "one keyboard stop while folded");
+  env.ids.get("music-section-tree").click();
+  assert.equal(dropdown.dataset.size, "full"); assert.equal(dropdown.dataset.section, "tree"); assert.equal(deck.hidden, false);
+  assert.deepEqual(shown(), { "local-panel": false, "radio-panel": false, "link-panel": false, "audio-reactions": true, more: false });
+  assert.deepEqual(chips().map((chip) => chip.attrs["aria-selected"]), ["false", "true", "false"]);
+  assert.deepEqual(chips().map((chip) => chip.tabIndex), [-1, 0, -1]);
+  assert.equal(expand.attrs["aria-expanded"], "true"); assert.equal(expand.attrs["aria-label"], "Show less"); assert.equal(expand.dataset.open, "true");
+  env.ids.get("music-section-more").click();
+  assert.equal(dropdown.dataset.section, "more"); assert.equal(dropdown.dataset.size, "full", "another chip changes the section without folding");
+  assert.deepEqual(shown(), { "local-panel": false, "radio-panel": false, "link-panel": false, "audio-reactions": false, more: true });
+  assert.equal(env.ids.get("music-more").contains(env.music.togetherHost()), true, "Listen together lives in More");
+  env.ids.get("music-section-more").click();
+  assert.equal(dropdown.dataset.size, "compact"); assert.equal(deck.hidden, true, "a second click on the open section folds it");
+  expand.click(); assert.equal(dropdown.dataset.section, "more", "Unfold reopens the section last shown"); assert.equal(dropdown.dataset.size, "full");
+  expand.click(); assert.equal(dropdown.dataset.size, "compact", "and folds it again");
+  assert.equal(env.music.openSection("browse"), "more", "a section this source does not have opens the one it last showed");
+  assert.equal(env.music.openSection("tracks"), "tracks"); assert.deepEqual(shown(), { "local-panel": true, "radio-panel": false, "link-panel": false, "audio-reactions": false, more: false });
+  // Every visit starts folded, and the last section is saved without unfolding the next visit.
+  assert.equal(JSON.parse(env.storage.get("mefiStudio.mediaMenu.v1")).section, "tracks");
+  env.music.closeAudio(); env.music.openAudio(); assert.equal(dropdown.dataset.size, "compact"); assert.equal(deck.hidden, true);
+  const restored = environment({ menuSaved: { section: "more" } }); restored.music.openAudio();
+  assert.equal(restored.ids.get("music-dropdown").dataset.size, "compact");
+  // Each source has its own first section, and a source's list gives way to the next source's.
+  env.music.setSource("radio");
+  assert.deepEqual(chips().map((chip) => chip.dataset.section), ["stations", "tree", "more"]);
+  env.ids.get("music-section-stations").click(); assert.deepEqual(shown(), { "local-panel": false, "radio-panel": true, "link-panel": false, "audio-reactions": false, more: false });
+  env.music.setSource("link");
+  assert.deepEqual(chips().map((chip) => chip.dataset.section), ["browse", "picture", "tree", "more"]);
+  assert.equal(dropdown.dataset.section, "browse", "the unfolded list follows the source rather than staying on a list it no longer has");
+  assert.deepEqual(shown(), { "local-panel": false, "radio-panel": false, "link-panel": true, "audio-reactions": false, more: false });
+  env.ids.get("music-section-picture").click();
+  assert.equal(env.ids.get("music-link-panel").hidden, false); assert.equal(strip.children[1].attrs["aria-selected"], "true");
+  // A hidden menu is opened by asking for a section.
+  env.music.closeAudio(); assert.equal(dropdown.hidden, true);
+  env.music.openSection("more"); assert.equal(dropdown.hidden, false); assert.equal(dropdown.dataset.section, "more"); assert.equal(dropdown.dataset.size, "full");
+});
+
+test("The section chips move focus with the arrow keys, Home and End", () => {
+  const env = environment(); env.music.setSource("link"); env.music.openAudio();
+  const strip = env.ids.get("music-deck").parentElement.children.find((node) => node.className === "music-sections");
+  const press = (key) => strip.dispatch("keydown", { key });
+  const order = ["browse", "picture", "tree", "more"].map((key) => env.ids.get(`music-section-${key}`));
+  order[0].focus(); press("ArrowRight"); assert.equal(env.document.activeElement, order[1]);
+  press("End"); assert.equal(env.document.activeElement, order[3]);
+  press("ArrowRight"); assert.equal(env.document.activeElement, order[0], "wraps round");
+  press("ArrowLeft"); assert.equal(env.document.activeElement, order[3]);
+  press("Home"); assert.equal(env.document.activeElement, order[0]);
+  env.document.activeElement = env.document.body; press("ArrowRight"); assert.equal(env.document.activeElement, env.document.body, "a key press from elsewhere moves nothing");
+});
+
+test("Unfolding eases the menu from one size to the next and settles when the animation ends; reduced motion just switches", () => {
+  const env = environment();
+  const dropdown = env.ids.get("music-dropdown");
+  const sizes = { compact: { width: 396, height: 520 }, full: { width: 900, height: 640 } };
+  dropdown.getBoundingClientRect = () => sizes[dropdown.dataset.size];
+  const runs = [];
+  dropdown.animate = (frames, options) => { const run = { frames, options, cancelled: false, cancel() { this.cancelled = true; this.oncancel?.(); } }; runs.push(run); return run; };
+  dropdown.getAnimations = () => runs.filter((run) => !run.cancelled && !run.finished);
+  env.music.openAudio();
+  env.ids.get("music-section-tree").click();
+  assert.equal(runs.length, 1);
+  const plain = (value) => JSON.parse(JSON.stringify(value)); // from the menu's own realm
+  assert.deepEqual(plain(runs[0].frames), [{ width: "396px", height: "520px" }, { width: "900px", height: "640px" }]);
+  assert.equal(runs[0].options.duration, 280); assert.equal(runs[0].id, "music-morph"); assert.equal(dropdown.dataset.morphing, "true");
+  env.ids.get("music-section-more").click();
+  assert.equal(runs.length, 1, "moving between sections of the same size animates nothing");
+  runs[0].finished = true; runs[0].onfinish();
+  assert.equal(dropdown.dataset.morphing, undefined, "the menu settles when the animation ends");
+  env.ids.get("music-section-more").click();
+  assert.equal(runs.length, 2); assert.deepEqual(plain(runs[1].frames), [{ width: "900px", height: "640px" }, { width: "396px", height: "520px" }], "folding eases back down");
+  env.ids.get("music-section-tree").click();
+  assert.equal(runs[1].cancelled, true, "a change while one is running takes over from it");
+  assert.equal(runs.length, 3); assert.equal(dropdown.dataset.morphing, "true");
+  env.window.matchMedia = () => ({ matches: true });
+  env.ids.get("music-section-tree").click();
+  assert.equal(dropdown.dataset.size, "compact"); assert.equal(runs.length, 3, "with reduced motion the menu just switches");
+  env.window.matchMedia = undefined; env.window.MefiMotion = { off: () => true };
+  env.ids.get("music-section-tree").click(); assert.equal(dropdown.dataset.size, "full"); assert.equal(runs.length, 3, "and so does Studio's own motion switch");
+  env.music.closeAudio(); assert.equal(runs.at(-1).cancelled, true, "closing the menu stops an animation still running");
+});
+
+test("Typing in the menu goes to the Browse box while a video source shows, and to nothing on the others", () => {
+  const env = environment(); env.music.openAudio();
+  const dropdown = env.ids.get("music-dropdown"), box = env.ids.get("music-link-url");
+  assert.equal(env.typeScopes.length, 1); const [scoped, resolve] = env.typeScopes[0];
+  assert.equal(scoped, dropdown); assert.equal(dropdown.dataset.typeScope, "");
+  assert.equal(box.dataset.typeHere, "", "the Browse box is where typing lands"); assert.equal(box.parentElement.parentElement.dataset.typeScope, "");
+  assert.equal(resolve(), null, "on Music the card has no box to type into"); assert.equal(dropdown.dataset.size, "compact");
+  env.music.setSource("link");
+  assert.equal(resolve(), box, "on Video, typing on the folded card opens Browse and names its box");
+  assert.equal(dropdown.dataset.size, "full"); assert.equal(dropdown.dataset.section, "browse");
+  env.music.closeAudio(); env.music.openAudio(); assert.equal(env.typeScopes.length, 1, "the menu registers once, however often it opens");
+});
+
+test("Companion hub's Friends & listening rooms opens the media menu on More, where Listen together lives", async () => {
+  const hub = await readFile(new URL("../renderer/companion-hub.js", import.meta.url), "utf8");
+  const action = /action\("Friends & listening rooms", \(\) => \{([^}]*)\}\)/.exec(hub);
+  assert.ok(action, "the hub keeps its Friends & listening rooms action");
+  const calls = [...action[1].matchAll(/window\.MefiMusic\?\.(\w+)\?\.\(([^)]*)\)/g)].map((match) => [match[1], match[2] ? JSON.parse(match[2]) : undefined]);
+  assert.deepEqual(calls, [["openAudio", undefined], ["setSource", "link"], ["openSection", "more"]], "it opens the menu on Video, then on More");
+  // Those calls, made on the menu itself, land on More with Listen together inside it.
+  const env = environment();
+  for (const [name, argument] of calls) env.music[name](argument);
+  assert.equal(env.ids.get("music-dropdown").hidden, false); assert.equal(env.ids.get("music-dropdown").dataset.section, "more");
+  assert.equal(env.ids.get("music-more").hidden, false); assert.equal(env.ids.get("music-more").contains(env.music.togetherHost()), true);
+  assert.doesNotMatch(hub, /togetherHost\(\)\?\.scrollIntoView/, "it no longer scrolls a host that lives in a section");
+});
+
+// ---- Browse: the YouTube feed. `page` builds a list of results with ids v0000000000, v0000000001, ...
+const page = (from, count) => Array.from({ length: count }, (_, index) => ({ id: `v${String(from + index).padStart(10, "0")}`, title: `Video ${from + index}`, channel: "A channel", duration: "3:12" }));
+const cardsOf = (env) => env.ids.get("music-youtube-results").children;
+const feedTitleOf = (env) => findAll(env.document.body, (node) => node.className === "music-feed-head")[0].children[0].textContent;
+const ideasOf = (env) => findAll(env.document.body, (node) => node.className === "ghost music-feed-idea");
+const plain = (value) => JSON.parse(JSON.stringify(value)); // a value from the menu's own realm
+
+test("Browse lists videos like the playing one, then pages on as the end scrolls into view, without repeats or overlapping requests", async () => {
+  const asked = [];
+  const env = environment({ intersection: true, bridge: { youtubeSearch: async (request) => {
+    asked.push(request);
+    if (request.related) return { ok: true, results: page(0, 3), more: "token-1" };
+    if (request.more === "token-1") return { ok: true, results: page(2, 3), more: "token-2" };
+    if (request.more === "token-2") return { ok: true, results: page(5, 1), more: null };
+    return { ok: false, error: "unexpected" };
+  } } });
+  env.music.playLink(`https://youtu.be/${YT}`);
+  env.music.openSection("browse"); await flush();
+  assert.deepEqual(plain(asked), [{ related: YT }], "Browse opens on videos like the one that is playing");
+  assert.equal(cardsOf(env).length, 3);
+  assert.equal(feedTitleOf(env), "More like this video");
+  assert.equal(feedNoteOf(env).textContent, "3 videos · click to add, drag onto Up next to place it · scroll for more.");
+  const end = findAll(env.document.body, (node) => node.className === "music-feed-end")[0];
+  assert.equal(end.hidden, false);
+  assert.equal(env.observers.length, 1); assert.deepEqual(env.observers[0].targets, [end], "the list's end is what is watched");
+  assert.equal(env.observers[0].options.root, env.ids.get("music-deck"), "against the deck that scrolls");
+  env.reach(); env.reach(); await flush();
+  assert.equal(asked.length, 2, "two nudges at once make one request");
+  assert.deepEqual(plain(asked[1]), { more: "token-1" });
+  assert.deepEqual(cardsOf(env).map((card) => card.dataset.key), [0, 1, 2, 3, 4].map((index) => page(index, 1)[0].id), "a video the next page repeats is listed once");
+  assert.equal(feedNoteOf(env).textContent, "5 videos · click to add, drag onto Up next to place it · scroll for more.");
+  env.reach(); await flush();
+  assert.equal(cardsOf(env).length, 6); assert.equal(end.hidden, true, "no token, no more to wait for");
+  assert.equal(feedNoteOf(env).textContent, "6 videos · click to add, drag onto Up next to place it.");
+  env.reach(); await flush(); assert.equal(asked.length, 3, "the last page leaves nothing to ask for");
+  assert.equal(feedTitleOf(env), "More like this video", "paging keeps the list's title");
+});
+
+test("Browse pages only while it is on show, and a new search starts a list of its own", async () => {
+  const asked = [];
+  const env = environment({ intersection: true, bridge: { youtubeSearch: async (request) => {
+    asked.push(request);
+    return typeof request === "string" ? { ok: true, results: page(request === "first" ? 0 : 50, 2), more: `more-${request}` } : { ok: true, results: page(80, 2), more: null };
+  } } });
+  const box = env.ids.get("music-link-url");
+  env.music.setSource("link"); // the Browse box lives on the Video source
+  box.value = "first"; env.ids.get("music-link-load").click(); await flush();
+  assert.equal(feedTitleOf(env), "Results for “first”"); assert.equal(cardsOf(env).length, 2);
+  env.ids.get("music-section-more").click(); env.reach(); await flush();
+  assert.equal(asked.length, 1, "a section that is not Browse asks for nothing");
+  env.ids.get("music-section-more").click(); env.ids.get("music-dropdown-expand").click();
+  env.music.closeAudio(); env.reach(); await flush();
+  assert.equal(asked.length, 1, "nor does a closed menu");
+  env.music.openSection("browse"); env.reach(); await flush();
+  assert.deepEqual(plain(asked.at(-1)), { more: "more-first" }); assert.equal(cardsOf(env).length, 4);
+  box.value = "second"; env.ids.get("music-link-load").click(); await flush();
+  assert.equal(feedTitleOf(env), "Results for “second”");
+  assert.deepEqual(cardsOf(env).map((card) => card.dataset.key), [page(50, 1)[0].id, page(51, 1)[0].id], "a new search replaces the list instead of adding to it");
+  env.reach(); await flush(); assert.deepEqual(plain(asked.at(-1)), { more: "more-second" }, "and pages on from its own token");
+});
+
+test("A new search replaces a slow one: the older answer, arriving late, is dropped", async () => {
+  for (const order of [[0, 1], [1, 0]]) {
+    const pending = [];
+    const env = environment({ bridge: { youtubeSearch: (request) => new Promise((resolve) => pending.push({ request, resolve })) } });
+    const box = env.ids.get("music-link-url"), go = env.ids.get("music-link-load");
+    env.music.setSource("link");
+    box.value = "alpha"; go.click(); box.value = "beta"; go.click();
+    assert.deepEqual(plain(pending.map((entry) => entry.request)), ["alpha", "beta"]);
+    // alpha's answer has two videos, beta's three; each order of arrival ends on beta's.
+    const answers = [() => pending[0].resolve({ ok: true, results: page(0, 2) }), () => pending[1].resolve({ ok: true, results: page(10, 3) })];
+    for (const index of order) { answers[index](); await flush(); }
+    assert.equal(feedTitleOf(env), "Results for “beta”", `answered ${order}`);
+    assert.deepEqual(cardsOf(env).map((card) => card.dataset.key), [10, 11, 12].map((index) => page(index, 1)[0].id), `only the newest search's answer is shown (${order})`);
+  }
+  const failing = []; const env = environment({ bridge: { youtubeSearch: (request) => new Promise((resolve, reject) => failing.push({ request, resolve, reject })) } });
+  env.music.setSource("link");
+  env.ids.get("music-link-url").value = "alpha"; env.ids.get("music-link-load").click();
+  env.ids.get("music-link-url").value = "beta"; env.ids.get("music-link-load").click();
+  failing[1].resolve({ ok: true, results: page(0, 2) }); await flush();
+  failing[0].reject(new Error("late trouble")); await flush();
+  assert.equal(feedNoteOf(env).textContent.includes("late trouble"), false, "a superseded search that fails says nothing");
+  assert.equal(cardsOf(env).length, 2);
+});
+
+test("Browse says so when YouTube cannot be reached, finds nothing, or is not part of this build, and only ever lists well-formed videos", async () => {
+  const failing = environment({ bridge: { youtubeSearch: async () => ({ ok: false, error: "YouTube is unavailable right now. Try again, or paste a video link." }) } });
+  failing.ids.get("music-link-url").value = "lofi"; failing.ids.get("music-link-load").click(); await flush();
+  assert.equal(feedNoteOf(failing).textContent, "YouTube is unavailable right now. Try again, or paste a video link."); assert.equal(cardsOf(failing).length, 0);
+  const empty = environment({ bridge: { youtubeSearch: async () => ({ ok: true, results: [] }) } });
+  empty.ids.get("music-link-url").value = "nothing here"; empty.ids.get("music-link-load").click(); await flush();
+  assert.equal(feedNoteOf(empty).textContent, "No videos found. Try another search.");
+  const bare = environment();
+  bare.ids.get("music-link-url").value = "lofi"; bare.ids.get("music-link-load").click(); await flush();
+  assert.equal(feedNoteOf(bare).textContent, "Restart Studio to browse YouTube here.");
+  const blank = environment({ bridge: { youtubeSearch: async () => { throw new Error("must not be asked"); } } });
+  blank.ids.get("music-link-url").value = "   "; blank.ids.get("music-link-load").click(); await flush();
+  assert.equal(blank.document.activeElement, blank.ids.get("music-link-url"), "an empty box only takes the caret");
+  const rough = [...page(0, 45), { id: "short", title: "Bad id" }, { id: "v0000000900", title: 7 }, null, "text", { id: "v0000000901", title: "T".repeat(300), channel: "C".repeat(300), duration: "9".repeat(40) }, { id: "v0000000902" }];
+  const tidy = environment({ bridge: { youtubeSearch: async () => ({ ok: true, results: rough, more: "x".repeat(9000) }) } });
+  tidy.ids.get("music-link-url").value = "rough"; tidy.ids.get("music-link-load").click(); await flush();
+  assert.equal(cardsOf(tidy).length, 40, "a page shows at most forty videos");
+  assert.ok(cardsOf(tidy).every((card) => /^[\w-]{11}$/.test(card.dataset.key)));
+  const long = environment({ bridge: { youtubeSearch: async () => ({ ok: true, results: [{ id: "v0000000901", title: "T".repeat(300), channel: "C".repeat(300), duration: "9".repeat(40) }], more: "x".repeat(9000) }) } });
+  long.ids.get("music-link-url").value = "long"; long.ids.get("music-link-load").click(); await flush();
+  const words = cardsOf(long)[0].children[0];
+  assert.equal(words.children[1].textContent.length, 200, "a title is cut at 200 characters");
+  assert.equal(words.children[2].textContent.length, 120, "a channel at 120");
+  assert.equal(words.children[0].children[1].textContent.length, 20, "a length at 20");
+  assert.equal(findAll(long.document.body, (node) => node.className === "music-feed-end")[0].hidden, true, "an oversize token is not kept");
+});
+
+test("Each video card shows a thumbnail from the validated id, plays or queues on a click, and marks what is playing and what waits", async () => {
+  const env = environment({ bridge: { youtubeSearch: async () => ({ ok: true, results: page(0, 4) }) } });
+  const box = env.ids.get("music-link-url");
+  box.value = "cards"; env.ids.get("music-link-load").click(); await flush();
+  const card = (index) => cardsOf(env)[index], id = (index) => page(index, 1)[0].id, mark = (index) => card(index).dataset.state || "";
+  const picture = findAll(card(0), (node) => node.tagName === "img")[0];
+  assert.equal(picture.src, `https://i.ytimg.com/vi/${id(0)}/mqdefault.jpg`); assert.equal(picture.loading, "lazy"); assert.equal(picture.draggable, false);
+  assert.equal(findAll(card(0), (node) => node.className === "music-yt-time")[0].textContent, "3:12", "the length sits on the picture");
+  picture.dispatch("error"); assert.equal(picture.hidden, true, "a picture that does not load leaves the quiet tile");
+  assert.match(card(0).title, /click to play it; drag it onto Up next to place it$/);
+  assert.equal(card(0).children.slice(1).map((node) => node.attrs["aria-label"]).join("|"), "Play Video 0 now|Add Video 0 to queue|Queue Video 0 next");
+  // With nothing on, a click plays; the search stays in the box.
+  card(0).dispatch("click", { target: card(0).children[0] });
+  assert.equal(env.music.linkElement().url, `https://www.youtube.com/watch?v=${id(0)}`); assert.equal(box.value, "cards");
+  assert.equal(mark(0), "playing"); assert.equal(mark(1), "");
+  assert.match(card(1).title, /click to add it to Up next/);
+  // With something on, a click lines the video up behind it, and the card says so.
+  card(1).dispatch("click", { target: card(1).children[0] });
+  assert.equal(env.music.linkElement().url, `https://www.youtube.com/watch?v=${id(0)}`, "the playing video is not interrupted");
+  assert.equal(mark(1), "queued"); assert.equal(JSON.parse(env.storage.get("mefiStudio.mediaQueue.v1"))[0].url, `https://www.youtube.com/watch?v=${id(1)}`);
+  card(0).dispatch("click", { target: card(0).children[0] });
+  assert.equal(JSON.parse(env.storage.get("mefiStudio.mediaQueue.v1")).length, 1, "clicking the video that is playing adds nothing");
+  // A click on a card's own buttons is theirs: it does not also pick the card.
+  card(2).dispatch("click", { target: card(2).children[2] });
+  assert.equal(JSON.parse(env.storage.get("mefiStudio.mediaQueue.v1")).length, 1);
+  card(2).children[2].click(); assert.equal(mark(2), "queued"); assert.equal(JSON.parse(env.storage.get("mefiStudio.mediaQueue.v1")).length, 2);
+  card(3).children[3].click(); assert.equal(JSON.parse(env.storage.get("mefiStudio.mediaQueue.v1"))[0].url, `https://www.youtube.com/watch?v=${id(3)}`, "Queue next goes to the front");
+  // Playing the queued video takes its mark from the queue and gives it to the player.
+  env.ids.get("music-link-queue-next").click();
+  assert.equal(mark(3), "playing"); assert.equal(mark(0), "", "the video that finished is no longer marked");
+  // Removing a queued video takes its mark away.
+  env.ids.get("music-link-queue-list").children[0].children[1].children[2].click();
+  assert.equal(mark(1), "");
+  // Closing the video makes the hint true again: with nothing on, a click plays.
+  env.ids.get("music-link-close").click();
+  assert.match(card(1).title, /click to play it; drag it onto Up next to place it$/); assert.equal(mark(3), "");
+});
+
+test("Browse's ideas start a search, and the playing YouTube video adds a way to more like it", async () => {
+  const asked = [];
+  const env = environment({ bridge: { youtubeSearch: async (request) => { asked.push(request); return { ok: true, results: page(0, 2) }; } } });
+  env.music.openSection("browse");
+  assert.deepEqual(ideasOf(env).map((idea) => idea.textContent), ["lofi beats", "synthwave", "jazz for work", "ambient focus", "piano covers", "nature 4K", "retro game music", "deep house"], "with nothing playing, ideas to start from");
+  ideasOf(env)[2].click(); await flush();
+  assert.equal(asked.at(-1), "jazz for work"); assert.equal(env.ids.get("music-link-url").value, "jazz for work");
+  assert.equal(feedTitleOf(env), "Results for “jazz for work”");
+  env.music.playLink(`https://youtu.be/${YT}`);
+  assert.equal(ideasOf(env)[0].textContent, "More like this video"); assert.equal(ideasOf(env)[0].dataset.kind, "related");
+  ideasOf(env)[0].click(); await flush();
+  assert.deepEqual(plain(asked.at(-1)), { related: YT }); assert.equal(feedTitleOf(env), "More like this video");
+  env.music.playLink("https://example.com/clip.mp4");
+  assert.deepEqual(ideasOf(env).map((idea) => idea.dataset.kind), Array(8).fill(undefined), "a video file has no more like it to ask for");
+  env.ids.get("music-link-close").click();
+  assert.equal(ideasOf(env).length, 8, "closing the video leaves the ideas");
+});
+
+// ---- Drag and drop: a card onto Up next, a row within it, either onto the card.
+// A stand-in for a DataTransfer, and a helper that fires one drag event and reports what the menu did with it.
+const transfer = (data = {}) => {
+  const store = new Map(Object.entries(data));
+  const carrier = { types: [...store.keys()], effectAllowed: "", dropEffect: "", setData(type, value) { store.set(type, String(value)); carrier.types = [...store.keys()]; }, getData: (type) => store.get(type) ?? "" };
+  return carrier;
+};
+const fire = (node, type, detail = {}) => { const result = { prevented: false, stopped: false }; node.dispatch(type, { ...detail, preventDefault: () => { result.prevented = true; }, stopPropagation: () => { result.stopped = true; } }); return result; };
+// Rows have no layout here: each is 40 px tall, one under another, so a row's middle is at 20, 60, 100, ...
+const layoutRows = (env) => env.ids.get("music-link-queue-list").children.forEach((row, index) => { row.getBoundingClientRect = () => ({ top: index * 40, height: 40 }); });
+const queuedNames = (env) => JSON.parse(env.storage.get("mefiStudio.mediaQueue.v1")).map((item) => item.title);
+const saved = (...names) => names.map((name) => ({ url: `https://example.com/${name.toLowerCase()}.mp4`, title: name }));
+
+test("A card dragged onto Up next lands exactly where it is dropped, and the box shows where", async () => {
+  const env = environment({ queueSaved: saved("A", "B", "C"), bridge: { youtubeSearch: async () => ({ ok: true, results: page(0, 3) }) } });
+  env.music.setSource("link");
+  env.ids.get("music-link-url").value = "cards"; env.ids.get("music-link-load").click(); await flush();
+  const dropdown = env.ids.get("music-dropdown"), list = env.ids.get("music-link-queue-list"), box = list.parentElement, card = cardsOf(env)[1];
+  const url = `https://www.youtube.com/watch?v=${page(1, 1)[0].id}`;
+  layoutRows(env);
+  const carried = transfer();
+  fire(card, "dragstart", { dataTransfer: carried });
+  assert.deepEqual(carried.types.toSorted(), ["application/x-mefi-media", "text/plain", "text/uri-list"], "a card carries its video, as a link too, and no place in the queue");
+  assert.deepEqual(JSON.parse(carried.getData("application/x-mefi-media")), { url, title: "Video 1" });
+  assert.equal(carried.getData("text/uri-list"), url); assert.equal(carried.effectAllowed, "copy"); assert.equal(dropdown.dataset.dragging, "media");
+  assert.equal(card.draggable, true);
+  const over = fire(box, "dragover", { dataTransfer: carried, clientY: 50 });
+  assert.equal(over.prevented, true); assert.equal(carried.dropEffect, "copy");
+  assert.equal(list.children[1].dataset.drop, "before", "the row the card would go before is marked"); assert.equal(box.dataset.drop, "row");
+  fire(box, "dragover", { dataTransfer: carried, clientY: 500 });
+  assert.equal(list.children[1].dataset.drop, undefined, "the mark follows the pointer"); assert.equal(box.dataset.drop, "end", "past the last row it goes to the end");
+  fire(box, "dragleave", { relatedTarget: env.document.body }); assert.equal(box.dataset.drop, "", "leaving the box clears the mark");
+  fire(box, "dragleave", { relatedTarget: list.children[0] }); // moving between rows is not leaving
+  const dropped = fire(box, "drop", { dataTransfer: carried, clientY: 50 });
+  assert.deepEqual(queuedNames(env), ["A", "Video 1", "B", "C"], "dropped between A and B");
+  assert.equal(dropped.prevented, true); assert.equal(dropped.stopped, true); assert.equal(box.dataset.drop, "");
+  assert.equal(noticeOf(env).textContent, "Video 1 is number 2 in Up next.");
+  layoutRows(env);
+  fire(box, "drop", { dataTransfer: carried, clientY: 5 });
+  assert.equal(queuedNames(env)[0], "Video 1"); assert.equal(noticeOf(env).textContent, "Video 1 will play next.", "dropped at the top");
+  layoutRows(env);
+  fire(box, "drop", { dataTransfer: carried, clientY: 900 });
+  assert.equal(queuedNames(env).at(-1), "Video 1", "dropped past the last row");
+  assert.equal(queuedNames(env).length, 6);
+  fire(card, "dragend", { dataTransfer: carried });
+  assert.equal(dropdown.dataset.dragging, undefined, "the menu stops showing a drag"); assert.equal(box.dataset.drop, "");
+  assert.equal(card.dataset.state, "queued", "the card is marked as waiting");
+});
+
+test("Up next takes a link dragged in from Discord or a browser, and ignores files, plain words and what cannot be queued", () => {
+  const env = environment({ queueSaved: saved("A", "B") });
+  const list = env.ids.get("music-link-queue-list"), box = list.parentElement;
+  layoutRows(env);
+  const foreign = transfer({ "text/uri-list": "# from Discord\r\nhttps://example.com/discord.mp4\r\n" });
+  assert.equal(fire(box, "dragover", { dataTransfer: foreign, clientY: 30 }).prevented, true, "a link may be dropped here");
+  fire(box, "drop", { dataTransfer: foreign, clientY: 30 });
+  assert.deepEqual(queuedNames(env), ["A", "Video file · discord.mp4", "B"], "it is queued where it lands, under the name its link gives it");
+  // A browser only sends the drop where the dragover was accepted, so what is refused there never arrives.
+  for (const rejected of [transfer({ Files: "" }), transfer({ "text/plain": "just words" }), transfer({})]) {
+    assert.equal(fire(box, "dragover", { dataTransfer: rejected, clientY: 30 }).prevented, false, JSON.stringify(rejected.types));
+    fire(box, "drop", { dataTransfer: rejected, clientY: 30 });
+  }
+  assert.equal(queuedNames(env).length, 3, "and even a drop that did arrive queues nothing");
+  fire(box, "drop", { dataTransfer: transfer({ "text/uri-list": "https://example.com/some-page" }), clientY: 30 });
+  assert.equal(queuedNames(env).length, 3, "a page is not a video");
+  assert.equal(noticeOf(env).dataset.error, "true"); assert.match(noticeOf(env).textContent, /playable media link/);
+  const full = environment({ queueSaved: Array.from({ length: 50 }, (_, index) => ({ url: `https://example.com/${index}.mp4`, title: `N${index}` })) });
+  fire(full.ids.get("music-link-queue-list").parentElement, "drop", { dataTransfer: transfer({ "text/uri-list": "https://example.com/extra.mp4" }), clientY: 0 });
+  assert.equal(queuedNames(full).length, 50, "the queue holds fifty and no more"); assert.equal(noticeOf(full).dataset.error, "true");
+});
+
+test("Dragging a row of Up next reorders it, and dropping it where it is, or right after itself, changes nothing", () => {
+  const env = environment({ queueSaved: [...saved("A", "B", "C"), { url: `https://www.youtube.com/watch?v=${YT}`, title: "D" }] });
+  const list = env.ids.get("music-link-queue-list"), box = list.parentElement, dropdown = env.ids.get("music-dropdown");
+  assert.deepEqual(list.children.map((row) => row.dataset.thumb), ["false", "false", "false", "true"], "a YouTube row shows its picture, the others a quiet tile");
+  const move = (from, y) => {
+    layoutRows(env);
+    const carried = transfer(), row = list.children[from];
+    fire(row, "dragstart", { dataTransfer: carried });
+    assert.equal(carried.getData("application/x-mefi-queue"), String(from)); assert.equal(carried.effectAllowed, "move"); assert.equal(dropdown.dataset.dragging, "queue");
+    assert.equal(fire(box, "dragover", { dataTransfer: carried, clientY: y }).prevented, true); assert.equal(carried.dropEffect, "move");
+    fire(box, "drop", { dataTransfer: carried, clientY: y });
+    fire(row, "dragend", { dataTransfer: carried });
+    assert.equal(dropdown.dataset.dragging, undefined);
+    return queuedNames(env).join("");
+  };
+  assert.equal(move(0, 900), "BCDA", "the first row dragged past the last goes to the end");
+  assert.equal(move(3, 5), "ABCD", "and back to the top");
+  assert.equal(move(1, 45), "ABCD", "dropped back where it was");
+  assert.equal(move(1, 70), "ABCD", "or right after itself");
+  assert.equal(move(1, 130), "ACBD", "dragged down over one row");
+  assert.equal(move(2, 5), "BACD", "dragged up to the top");
+  assert.equal(list.children.length, 4, "a move never adds or drops a row");
+  // Its place was read when the drag began. If the queue changed since, the row is found again by its link.
+  const shifted = environment({ queueSaved: saved("A", "B", "C", "D") });
+  const carried = transfer(); layoutRows(shifted);
+  const rows = shifted.ids.get("music-link-queue-list").children;
+  fire(rows[2], "dragstart", { dataTransfer: carried });
+  shifted.ids.get("music-link-queue-next").click(); // a video ends and takes the head while the drag is under way
+  layoutRows(shifted);
+  fire(shifted.ids.get("music-link-queue-list").parentElement, "drop", { dataTransfer: carried, clientY: 5 });
+  assert.deepEqual(queuedNames(shifted), ["C", "B", "D"], "C, not the row that took its place, is the one that moves");
+  const gone = environment({ queueSaved: saved("A", "B", "C") });
+  const lost = transfer(); layoutRows(gone);
+  fire(gone.ids.get("music-link-queue-list").children[0], "dragstart", { dataTransfer: lost });
+  gone.ids.get("music-link-queue-next").click(); layoutRows(gone);
+  fire(gone.ids.get("music-link-queue-list").parentElement, "drop", { dataTransfer: lost, clientY: 900 });
+  assert.deepEqual(queuedNames(gone), ["B", "C"], "a row that has since left the queue is not copied back into it");
+});
+
+test("A video dropped on the card plays now, and a row dropped there leaves Up next as it plays", async () => {
+  const env = environment({ queueSaved: saved("A", "B", "C"), bridge: { youtubeSearch: async () => ({ ok: true, results: page(0, 2) }) } });
+  env.music.setSource("link");
+  env.ids.get("music-link-url").value = "cards"; env.ids.get("music-link-load").click(); await flush();
+  const nowCard = findAll(env.document.body, (node) => node.className === "music-now-card")[0], list = env.ids.get("music-link-queue-list");
+  layoutRows(env);
+  const carried = transfer(); fire(cardsOf(env)[0], "dragstart", { dataTransfer: carried });
+  assert.equal(fire(nowCard, "dragover", { dataTransfer: carried }).prevented, true); assert.equal(carried.dropEffect, "copy"); assert.equal(nowCard.dataset.drop, "true");
+  fire(nowCard, "dragleave", { relatedTarget: env.document.body }); assert.equal(nowCard.dataset.drop, undefined);
+  for (const ignored of [transfer({ Files: "" }), transfer({ "text/uri-list": "https://example.com/x.mp4" })]) assert.equal(fire(nowCard, "dragover", { dataTransfer: ignored }).prevented, false, "only a video from the menu is dropped here");
+  const played = fire(nowCard, "drop", { dataTransfer: carried });
+  assert.equal(env.music.linkElement().url, `https://www.youtube.com/watch?v=${page(0, 1)[0].id}`); assert.equal(played.prevented, true);
+  assert.equal(nowCard.dataset.drop, undefined); assert.deepEqual(queuedNames(env), ["A", "B", "C"], "playing a card does not touch Up next");
+  assert.equal(env.ids.get("music-link-url").value, "cards", "and keeps the search in the box");
+  const row = transfer(); fire(list.children[1], "dragstart", { dataTransfer: row });
+  fire(nowCard, "drop", { dataTransfer: row });
+  assert.equal(env.music.linkElement().url, "https://example.com/b.mp4"); assert.deepEqual(queuedNames(env), ["A", "C"], "the row that was dropped is taken out of the queue as it plays");
+  const stale = transfer({ "application/x-mefi-media": JSON.stringify({ url: "https://example.com/c.mp4", title: "C" }), "application/x-mefi-queue": "0" });
+  fire(nowCard, "drop", { dataTransfer: stale });
+  assert.equal(env.music.linkElement().url, "https://example.com/c.mp4"); assert.deepEqual(queuedNames(env), ["A", "C"], "a row whose place has changed plays without a queue row being taken");
 });

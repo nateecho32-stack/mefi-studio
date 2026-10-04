@@ -1,6 +1,13 @@
 // Mefi's Studio AI+ — Electron main process (CommonJS: Electron's most reliable main format).
 // Window, tray and IPC; the service loop, executor and board gateway; settings, keys, updates and headless CLI flags.
 
+// Node's compile cache: the hundred or so modules below are compiled once and read back
+// compiled on the next launch (about 90 ms down to 50 ms of module loading on a fast Linux
+// box; the gain is larger where file reads are slow). It is keyed by each file's content
+// and Node's version, so an update can never load stale code. Before any other require, so
+// they all benefit; MEFI_STUDIO_NO_COMPILE_CACHE=1 turns it off.
+try { if (process.env.MEFI_STUDIO_NO_COMPILE_CACHE !== "1") require("node:module").enableCompileCache?.(); } catch { /* an older Node has none: modules compile as before */ }
+
 // Two helpers this file gained after the shipped builds already knew how to
 // carry them: scripts/updater.mjs holds a live payload until every local
 // require in it resolves (missingRequires), and the portable swap robocopies
@@ -72,6 +79,8 @@ const outsideWork = require("./scripts/outside-work.cjs");
 const executorActivity = require("./scripts/executor-activity.cjs");
 const taskHandoffs = require("./scripts/task-handoffs.cjs");
 const executorWorktrees = require("./scripts/executor-worktrees.cjs");
+// Build's Home greeting card: the work one project's ledgers record.
+const workStats = require("./scripts/work-stats.cjs");
 const agentModes = require("./scripts/agent-modes.cjs");
 const agentProfiles = require("./scripts/agent-profiles.cjs");
 const agentAddons = require("./scripts/agent-addons.cjs");
@@ -85,6 +94,7 @@ const agentIssues = require("./scripts/agent-issues.cjs");
 const brains = require("./scripts/brains.cjs");
 const taskDelegation = require("./scripts/task-delegation.cjs");
 const trace = require("./scripts/trace.cjs");
+const logWriteHealth = require("./scripts/log-write-health.cjs");
 const habitsLibrary = require("./scripts/habits.cjs");
 // Trace keeps the studio log and the window's warnings (see traceRows); made
 // here, before anything can log, so logLine never meets them uninitialised.
@@ -101,11 +111,16 @@ const { createPlanningStore } = require("./scripts/planning.cjs");
 const { createPlanningService } = require("./scripts/planning-service.cjs");
 const projectWork = require("./scripts/project-work.cjs");
 const { applyIdeaAction, applyRequestAction } = require("./scripts/idea-actions.cjs");
+// Recently deleted: what the "Board trash" block keeps of a deleted task or idea.
+const boardTrash = require("./scripts/board-trash.cjs");
 const { createMusicRecommender } = require("./scripts/music-recommendations.cjs");
 // The Studio Daily, the launch screen's newspaper (renderer/daily-paper.js).
 const dailyNewsHost = require("./scripts/daily-news-host.cjs");
 const { attachRendererRecovery } = require("./scripts/renderer-recovery.cjs");
 const { createEyesClient, wrapEyes } = require("./scripts/eyes-client.cjs");
+// Under the Rust host, engine module functions that moved to Rust answer from
+// there (scripts/rust-modules.cjs, docs/rust-migration.md stage 2).
+const rustModules = process.env.MEFI_STUDIO_HOST === "tauri" ? require("./scripts/rust-modules.cjs") : null;
 const { createModelPerformanceStore } = require("./scripts/model-performance.cjs");
 const { limitsFromPlan, aggregateUsage, mergeLedgers, rollupUsage, formatUsage, opencodeWindows, parseOpencodeUsage, describeOpencodeStatus, describeAccountStatus,
   parseOpenrouterKey, parseOpenrouterCredits, parseGatewayCredits, parseZaiQuota, providerInfo,
@@ -129,10 +144,29 @@ const community = optionalHelper("./scripts/community.cjs", () => require("./scr
 // the saved copy's manifest, an update that did not stand). See "Release
 // updates: the safety net" below and scripts/update-safety.cjs.
 const updateSafety = optionalHelper("./scripts/update-safety.cjs", () => require("./scripts/update-safety.cjs"), null);
+// The rules for "What's new" after an update (which version has been read, when
+// the toast may speak). Without them the feature is simply absent.
+const whatsNew = optionalHelper("./scripts/whats-new.cjs", () => require("./scripts/whats-new.cjs"), null);
+// Report a problem and the crash prompt: what a report holds and how a session
+// ended (crash-report), the host that reads and writes for it (report-host) and
+// the zip it is saved as (zip-lite). See "Report a problem" below; without any
+// of the three the feature is simply absent.
+const crashReport = optionalHelper("./scripts/crash-report.cjs", () => require("./scripts/crash-report.cjs"), null);
+const reportHostModule = crashReport ? optionalHelper("./scripts/report-host.cjs", () => require("./scripts/report-host.cjs"), null) : null;
+const zipLite = reportHostModule ? optionalHelper("./scripts/zip-lite.cjs", () => require("./scripts/zip-lite.cjs"), null) : null;
+// Windows notifications, the taskbar flash and the count on the taskbar icon:
+// the rules (alerts), the host that watches and shows (alerts-host) and the
+// drawn overlay icon (badge-icon). See "Notifications" below; without the rules
+// or the host the feature is simply absent, without the icon there is no count.
+const alertsRules = optionalHelper("./scripts/alerts.cjs", () => require("./scripts/alerts.cjs"), null);
+const alertsHostModule = alertsRules ? optionalHelper("./scripts/alerts-host.cjs", () => require("./scripts/alerts-host.cjs"), null) : null;
+const badgeIcon = alertsHostModule ? optionalHelper("./scripts/badge-icon.cjs", () => require("./scripts/badge-icon.cjs"), null) : null;
 const discordOAuth = community
   ? optionalHelper("./scripts/discord-oauth.cjs", () => require("./scripts/discord-oauth.cjs"), null)
   : null;
-const electron = require("electron");
+// Under the Rust host (src-tauri, docs/rust-migration.md) this engine runs on
+// plain Node and Electron's API comes from the host through a shim.
+const electron = process.env.MEFI_STUDIO_HOST === "tauri" ? require("./scripts/tauri-electron.cjs") : require("electron");
 
 if (typeof electron === "string" || !electron.app) {
   console.error(
@@ -143,7 +177,7 @@ if (typeof electron === "string" || !electron.app) {
   process.exit(1);
 }
 
-const { app, BrowserWindow, ipcMain, safeStorage, shell, dialog, clipboard, desktopCapturer, powerSaveBlocker, Tray, Menu, nativeImage, screen } = electron;
+const { app, BrowserWindow, ipcMain, safeStorage, shell, dialog, clipboard, desktopCapturer, powerSaveBlocker, powerMonitor, Tray, Menu, nativeImage, screen, Notification } = electron;
 const performanceProfiler = createPerformanceProfiler({ getAppMetrics: () => app.getAppMetrics() });
 
 const STUDIO_ROOT = __dirname;
@@ -162,6 +196,20 @@ const CLI_MODE = process.argv.some((arg) =>
 // screen's question.
 const LOGIN_ARG = "--at-login";
 const AT_LOGIN = !SMOKE && !CAPTURE && !CLI_MODE && process.argv.includes(LOGIN_ARG);
+
+// ---- Layout v2's way in (docs/unified-studio.md, "Layout contract", "Turning it on") ----
+// MEFI_STUDIO_LAYOUT=v2 opens the window in the 0.5 layout for this launch and =v1 in the
+// classic one, which beats whatever was saved: it is the kill switch. The page reads the
+// choice as ?layout= (renderer/nav.js). Anything else leaves it to the page: the Settings
+// switch, Search's "Switch layout", or classic when nothing was saved.
+const layoutFromEnv = () => {
+  try {
+    const wanted = String(process.env.MEFI_STUDIO_LAYOUT ?? "").trim().toLowerCase();
+    return wanted === "v1" || wanted === "v2" ? wanted : "";
+  } catch { return ""; }
+};
+const layoutQuery = () => { const layout = layoutFromEnv(); return layout ? { layout } : {}; };
+// ---- end of Layout v2's way in ----
 
 // GUI launches are single-instance: two windows would fight over the same
 // userData cache and double every watcher. CLI runs skip the lock so headless
@@ -232,16 +280,28 @@ function handleProjectIpc(channel, handler) {
 // is the PC's own and may open a freshly cloned project, which a gated
 // handler would wait on. The community model feed and the probe results
 // (models:) live in this PC's user data, and a probe run lasts minutes, which
-// a gated handler would hold every project switch for. (Declared beside the
-// wrapper so the tests that load it from here up to app.setName see it.)
+// a gated handler would hold every project switch for. Notifications (alerts:)
+// are the PC's own: their card works with no project open, and a test
+// notification waits up to a minute for the owner to look away from Studio.
 // The ChatGPT plan sign-in (chatgpt-plan:) waits minutes in the browser and
 // the launch screen's newspaper (news:) is asked for before any project is
-// open; neither belongs to a project.
-const APP_WIDE_PREFIXES = ["projects:", "project-preview:", "performance:", "startup:", "community:", "hub:", "remote:", "styler:", "catalog:", "speed:", "shell:", "pc-setup:", "models:", "chatgpt-plan:", "news:"];
-const APP_WIDE_CHANNELS = new Set(["usage:accounts", "opencode:credits", "release:status", "release:check", "update:status", "update:set", "settings:get-key", "boot:healthy"]);
+// open; neither belongs to a project. (Declared beside the wrapper so the
+// tests that load it from here up to app.setName see it.)
+const APP_WIDE_PREFIXES = ["projects:", "project-preview:", "performance:", "startup:", "community:", "hub:", "remote:", "styler:", "catalog:", "speed:", "shell:", "pc-setup:", "models:", "alerts:", "chatgpt-plan:", "news:"];
+const APP_WIDE_CHANNELS = new Set(["usage:accounts", "opencode:credits", "release:status", "release:check", "update:status", "update:set", "settings:get-key", "boot:healthy", "release:whats-new", "release:whats-new-seen", "release:whats-new-set", "report:dismiss", "report:set"]);
 ipcMain.handle = handleProjectIpc;
 
 app.setName("Mefi's Studio AI+");
+// Windows shows a toast under an application user model id, and groups the
+// taskbar button by it. The id is fixed here so it never follows the product
+// name or the install folder: a portable copy, a moved copy and an updated copy
+// are one app to Windows. MEFI_STUDIO_NO_ALERTS=1 leaves the id to Electron, as
+// before alerts existed, and so does MEFI_STUDIO_KEEP_APP_ID=1 (for a taskbar
+// button pinned before this id existed, which Windows groups by the old id).
+const ALERTS_APP_ID = "MefiStudio.StudioAIPlus";
+if (process.platform === "win32" && process.env.MEFI_STUDIO_NO_ALERTS !== "1" && process.env.MEFI_STUDIO_KEEP_APP_ID !== "1") {
+  try { app.setAppUserModelId(ALERTS_APP_ID); } catch { /* Windows keeps the id Electron chose */ }
+}
 
 let window = null;
 let rendererRecovery = null;
@@ -266,7 +326,8 @@ async function loadModule(rel) {
   const version = moduleVersions.get(rel) ?? 0;
   const cached = moduleCache.get(rel);
   if (cached && cached.version === version) return cached.module;
-  const module = await import(`${pathToFileURL(path.join(STUDIO_ROOT, rel)).href}?v=${version}`);
+  const imported = await import(`${pathToFileURL(path.join(STUDIO_ROOT, rel)).href}?v=${version}`);
+  const module = typeof rustModules !== "undefined" && rustModules ? rustModules.withRust(rel, imported) : imported;
   moduleCache.set(rel, { version, module });
   return module;
 }
@@ -740,9 +801,13 @@ function applicationMenu() {
         { label: "Force Reload", accelerator: "CmdOrCtrl+Shift+R", click: () => reloadKeepingPlace({ ignoreCache: true }).catch(() => {}) },
         { role: "toggleDevTools" },
         { type: "separator" },
-        { role: "resetZoom" },
-        { role: "zoomIn" },
-        { role: "zoomOut" },
+        // The interface scale (Configuration › UI & Surfaces) by keyboard: the same
+        // 70% to 150% ladder, saved, so a reload does not undo it. The roles these
+        // replace zoomed without saving and without a limit.
+        { label: "Actual size", accelerator: "CmdOrCtrl+0", click: () => { stepUiZoom(0).catch(() => {}); } },
+        { label: "Zoom in", accelerator: "CmdOrCtrl+Plus", click: () => { stepUiZoom(1).catch(() => {}); } },
+        { label: "Zoom in (=)", accelerator: "CmdOrCtrl+=", visible: false, click: () => { stepUiZoom(1).catch(() => {}); } },
+        { label: "Zoom out", accelerator: "CmdOrCtrl+-", click: () => { stepUiZoom(-1).catch(() => {}); } },
         { type: "separator" },
         { role: "togglefullscreen" },
       ],
@@ -840,6 +905,7 @@ let manualRestartRetry = null; // a deferred manual restart waiting for the buil
 let executorClosing = false;
 function executorUpdateHold() {
   if (executorClosing) return "Studio is saving work before closing";
+  if (typeof releaseState !== "undefined" && ["applying", "rollingback"].includes(releaseState.state)) return "Studio is installing a verified build";
   return updateDrainRequested ? "Studio update waiting for current builds to finish" : null;
 }
 
@@ -913,6 +979,15 @@ async function applyRestart(files, { counted = true, stopAgents = false } = {}) 
   // off between saving the old project and selecting the new one.
   if (projectSwitching) return { deferred: true, reason: "Project switch is saving progress before update" };
   if (autopilot.jobs.length) return { deferred: true, reason: `${autopilot.jobs.length} build job(s) finishing before update; new dispatches wait` };
+  if (typeof pairedWorkersPrepareRestart === "function") {
+    const prepared = await pairedWorkersPrepareRestart();
+    if (prepared?.ok === false) return prepared;
+    // Closing an owned check may await its final journal/report. Protect any
+    // project or game that began during that wait before the synchronous exit.
+    if (projectSwitching) return { deferred: true, reason: "Project switch is saving progress before update" };
+    if (activeChild && activeChild.exitCode === null) return { deferred: true, reason: "Love2D is running" };
+    if (autopilot.jobs.length) return { deferred: true, reason: `${autopilot.jobs.length} build job(s) finishing before update; new dispatches wait` };
+  }
   stopUpdateWatch();
   stopEyesWatch();
   stopMachineWatch();
@@ -928,6 +1003,12 @@ async function applyRestart(files, { counted = true, stopAgents = false } = {}) 
 
 async function startUpdateWatch() {
   if (updater || SMOKE || CAPTURE || CLI_MODE) return { ok: true, running: Boolean(updater) };
+  // Installed channels consume verified built artifacts. Even a portable app
+  // beside a checkout must never hot-swap raw checkout/main files into itself.
+  if (app.isPackaged) {
+    send("update:event", updateEvent({ reason: "installed builds use GitHub update channels", watching: false }));
+    return { ok: true, running: false, disabled: true };
+  }
   // A container or service host runs a fixed checkout: there is no editor
   // beside it whose saves should hot-swap modules, so the stat-walk poll and
   // the restart-on-main.cjs behaviour are switched off for that install.
@@ -1019,6 +1100,34 @@ let releaseCheckInFlight = null;
 let releaseApplyInFlight = false;
 let releaseWatch = null;
 let ghTokenCache;
+let releaseChannel = "stable";
+let releaseChannelEpoch = 0;
+let releaseChannelSetting = false;
+
+async function setReleaseChannel(channel) {
+  const blocked = error => ({ ok: false, error, status: releaseStatus() });
+  if (!["stable", "development"].includes(channel)) return blocked("Unknown update channel.");
+  if (releaseApplyInFlight || releaseChannelSetting) return blocked("An update or channel change is in progress; try again when it finishes.");
+  if (channel === releaseChannel) return { ok: true, status: releaseStatus() };
+  releaseChannelSetting = true;
+  try {
+    const module = await loadModule("scripts/development-updater.mjs");
+    if (channel === "development") {
+      const choice = await dialog.showMessageBox(window, { type: "warning", title: "Enable Development / beta updates?", message: "Untested changes, instability and potential data loss", detail: module.DEVELOPMENT_WARNING, buttons: ["Keep Stable", "Enable Development / beta"], defaultId: 0, cancelId: 0, noLink: true });
+      if (choice.response !== 1) return { ok: true, cancelled: true, status: releaseStatus() };
+    }
+    await updateSettings(settings => { settings.release = { ...(settings.release ?? {}), channel }; });
+    releaseChannel = channel;
+    releaseChannelEpoch += 1;
+    publishRelease({ state: "idle", latest: null, staged: null, progress: null, error: null, needsToken: false, checkedAt: null, nextCheckAt: null, unavailable: null }, { force: true });
+    // A response already in flight belongs to the old channel. Its epoch is
+    // fenced below; check the new channel after it settles.
+    if (releaseCheckInFlight) await releaseCheckInFlight;
+    await checkRelease();
+    return { ok: true, status: releaseStatus() };
+  } catch (error) { return blocked(String(error?.message ?? error).slice(0,300)); }
+  finally { releaseChannelSetting = false; }
+}
 
 function releaseStatus() {
   return {
@@ -1027,6 +1136,8 @@ function releaseStatus() {
     repo: releaseState.repo ?? RELEASE_REPO ?? "nateecho32-stack/mefi-studio",
     supported: app.isPackaged && process.platform === "win32",
     previous: releasePrevious,
+    channel: releaseChannel,
+    automatic: releaseChannel === "development",
   };
 }
 
@@ -1098,7 +1209,9 @@ async function resolveGithubToken(settings) {
 async function checkRelease() {
   if (releaseCheckInFlight) return releaseCheckInFlight;
   if (["downloading", "applying"].includes(releaseState.state)) return releaseStatus();
+  const epoch = releaseChannelEpoch;
   releaseCheckInFlight = (async () => {
+    const channel = releaseChannel;
     // A re-check while an update is already known runs silently: flipping to
     // "checking" would hide the button for a moment every 20 minutes.
     if (!releaseState.latest || ["idle", "error", "installed"].includes(releaseState.state)) {
@@ -1108,18 +1221,20 @@ async function checkRelease() {
     const settings = await readSettings();
     const token = await resolveGithubToken(settings);
     const repo = RELEASE_REPO || module.DEFAULT_REPO;
-    const result = await module.checkForRelease({
+    const checker = channel === "development" ? (await loadModule("scripts/development-updater.mjs")).checkForDevelopment : module.checkForRelease;
+    const result = await checker({
       repo,
       currentVersion: app.getVersion(),
       token,
       platform: process.platform,
       arch: process.arch,
       timeoutMs: 15000,
+      allowStableReturn: channel === "stable",
     });
     const nextCheckAt = Date.now() + (Number(module.CHECK_INTERVAL_MS) || 20 * 60 * 1000);
     // A check that began before an apply must not set the state back to
     // "available" in the middle of its download.
-    if (releaseApplyInFlight) return releaseStatus();
+    if (releaseApplyInFlight || epoch !== releaseChannelEpoch) return releaseStatus();
     if (!result.ok) {
       // An empty releases page is a normal state, not a failure: this build is
       // the newest one that exists yet.
@@ -1135,17 +1250,34 @@ async function checkRelease() {
       });
       logLine(unpublished ? "[release] no published release yet" : `[release] check failed: ${result.error}`);
     } else {
-      publishRelease({ state: result.update ? "available" : "current", latest: result.latest, error: null, needsToken: false, checkedAt: result.checkedAt, nextCheckAt, repo });
+      publishRelease({ state: result.update ? "available" : result.latest ? "current" : "none", latest: result.latest, unavailable: result.unavailable ?? null, error: null, needsToken: false, checkedAt: result.checkedAt, nextCheckAt, repo });
       logLine(result.update ? `[release] v${result.update.version} available (running ${result.current})` : `[release] up to date (${result.current})`);
     }
     return releaseStatus();
   })()
     .catch((error) => {
+      if (epoch !== releaseChannelEpoch) return releaseStatus();
       publishRelease({ state: "error", error: String(error?.message ?? error).slice(0, 300), nextCheckAt: Date.now() + 20 * 60 * 1000 });
       return releaseStatus();
     })
     .finally(() => {
       releaseCheckInFlight = null;
+      if (releaseChannel === "development" && releaseState.state === "available" && app.isPackaged && process.platform === "win32") {
+        const version = releaseState.latest?.version;
+        const retryReady = () => checkRelease.developmentAutoFailure?.version !== version || Date.now() - checkRelease.developmentAutoFailure.at >= 60 * 60 * 1000;
+        if (!version || !retryReady()) return;
+        setImmediate(async () => {
+          if (releaseChannel !== "development" || releaseState.state !== "available" || releaseState.latest?.version !== version || !retryReady()) return;
+          try {
+            const result = await applyReleaseUpdate();
+            if (result?.ok === false && result.status?.state === "error") checkRelease.developmentAutoFailure = { version, at: Date.now() };
+            else if (result?.ok === true) checkRelease.developmentAutoFailure = null;
+          } catch (error) {
+            checkRelease.developmentAutoFailure = { version, at: Date.now() };
+            logLine(`[release] automatic development update failed: ${error?.message ?? error}`);
+          }
+        });
+      }
     });
   return releaseCheckInFlight;
 }
@@ -1186,8 +1318,9 @@ async function downloadReleaseBuild() {
   const latest = releaseState.latest;
   if (!latest?.asset) throw new Error("no release is available to download");
   const module = await getReleaseUpdater();
+  module.validateBuildAssets(latest, releaseStatus().repo);
   const version = latest.version;
-  const root = path.join(app.getPath("temp"), "mefi-studio-update", `v${version}`);
+  const root = path.join(app.getPath("temp"), "mefi-studio-update", `v${version}-${process.pid}`);
   await rm(root, { recursive: true, force: true });
   await mkdir(root, { recursive: true });
   publishRelease({ state: "downloading", progress: { received: 0, total: latest.asset.size ?? 0, percent: 0 }, error: null });
@@ -1201,6 +1334,7 @@ async function downloadReleaseBuild() {
     onProgress: ({ received, total }) =>
       publishRelease({ progress: { received, total, percent: total ? Math.min(100, Math.floor((received / total) * 100)) : null } }),
   });
+  let zipPath = downloaded.path;
   let expected = typeof latest.asset.digest === "string" && latest.asset.digest.startsWith("sha256:")
     ? latest.asset.digest.slice(7).toLowerCase()
     : null;
@@ -1227,11 +1361,18 @@ async function downloadReleaseBuild() {
     await rm(root, { recursive: true, force: true });
     throw new Error("the downloaded build failed its SHA-256 check");
   }
+  if (!expected) throw new Error("the build has no readable SHA-256; it was not staged");
+  if (latest.channel === "development") {
+    const development = await loadModule("scripts/development-updater.mjs");
+    zipPath = await development.unpackDevelopment(downloaded, latest, path.join(root, "artifact"));
+  }
   logLine(`[release] downloaded v${version} (${Math.round(downloaded.bytes / (1024 * 1024))} MB${expected ? ", verified" : ", unverified: the release publishes no checksum"})`);
-  const installRoot = path.dirname(process.execPath);
-  const prepared = await module.stageUpdate({ zipPath: downloaded.path, stagingDir: path.join(root, "staging"), installRoot });
+  const installRoot = path.dirname(app.getPath("exe"));
+  const prepared = await module.stageUpdate({ zipPath, stagingDir: path.join(root, "staging"), installRoot, expectedVersion: version });
   const scriptPath = path.join(root, "apply-update.ps1");
   const logPath = path.join(root, "apply-update.log");
+  const safety = typeof releaseSafetyPlan === "function" ? await releaseSafetyPlan({ module, prepared, installRoot }) : null;
+  if (latest.channel === "development" && (!safety || !safety.watch)) throw new Error("development updates require a saved previous build and boot-health rollback");
   await module.writeApplyScript(scriptPath, {
     sourceRoot: prepared.sourceRoot,
     installRoot,
@@ -1242,7 +1383,7 @@ async function downloadReleaseBuild() {
     logPath,
     // A saved copy of this build and a watch on the new one (the safety net
     // below); null keeps the plain swap.
-    safety: typeof releaseSafetyPlan === "function" ? await releaseSafetyPlan({ module, prepared, installRoot }) : null,
+    safety,
   });
   publishRelease({ progress: null, latest: { ...latest, sha256: downloaded.sha256, verified: Boolean(expected) } });
   return { version, scriptPath, installRoot, exePath: prepared.exePath, verified: Boolean(expected) };
@@ -1254,17 +1395,32 @@ async function applyReleaseUpdate() {
     return { ok: false, error: "Release updates install into the portable Windows build. In development the live updater applies source changes.", status: releaseStatus() };
   }
   if (releaseState.state === "applying") return { ok: false, error: "the update is already applying", status: releaseStatus() };
+  if (projectSwitching) return { ok: false, error: "A project switch is saving progress; try again when it finishes.", status: releaseStatus() };
+  if (typeof pairedWorkersBusy === "function" && pairedWorkersBusy()) return { ok: false, error: "Stop paired workers and the coordinator before installing an update.", status: releaseStatus() };
   if (activeChild && activeChild.exitCode === null) return { ok: false, error: "Love2D is running — close it and try again", status: releaseStatus() };
-  const running = autopilot.jobs.filter((job) => !job.finished || job.settlementPending);
+  const running = autopilot.jobs;
   if (running.length) return { ok: false, error: `${running.length} build job(s) still running — try again when they finish`, status: releaseStatus() };
-  if (!releaseState.latest) return { ok: false, error: "no release is available to install", status: releaseStatus() };
+  if (!releaseState.latest || releaseState.state !== "available") return { ok: false, error: "no eligible update is available to install", status: releaseStatus() };
+  if (releaseChannelSetting) return { ok: false, error: "a channel change is in progress", status: releaseStatus() };
+  if (releaseState.latest.channel !== releaseChannel) return { ok: false, error: "the build belongs to another update channel", status: releaseStatus() };
   if (releaseApplyInFlight) return { ok: false, error: "the update is already downloading", status: releaseStatus() };
   releaseApplyInFlight = true;
   try {
+    if (releaseChannel === "stable" && (await getReleaseUpdater()).compareVersions(releaseState.latest.version, app.getVersion()) < 0) {
+      const choice = await dialog.showMessageBox(window, { type: "warning", title: "Return to the published stable build?", message: `Install stable v${releaseState.latest.version}?`, detail: "Studio will restart. An older stable build may not understand data written by development builds. Back up important work first. Your existing data will be kept; the current build is saved for rollback.", buttons: ["Cancel", "Install Stable"], defaultId: 0, cancelId: 0, noLink: true });
+      if (choice.response !== 1) { releaseApplyInFlight = false; return { ok: true, cancelled: true, status: releaseStatus() }; }
+    }
     let prepared = releaseState.staged;
     if (!prepared || prepared.version !== releaseState.latest.version) {
       prepared = await downloadReleaseBuild();
       publishRelease({ staged: prepared });
+    }
+    // Jobs may have started while the download ran. Keep the verified staging
+    // and try on the next poll instead of stopping a worker to install a build.
+    if (projectSwitching || (typeof pairedWorkersBusy === "function" && pairedWorkersBusy()) || (activeChild && activeChild.exitCode === null) || autopilot.jobs.length) {
+      releaseApplyInFlight = false;
+      publishRelease({ state: "available", progress: null });
+      return { ok: false, deferred: true, error: "The build is ready; waiting for running jobs, Love2D or paired worker services to stop.", status: releaseStatus() };
     }
     publishRelease({ state: "applying", error: null });
     await updateSettings((settings) => {
@@ -1309,6 +1465,8 @@ async function applyReleaseUpdate() {
 
 // A boot that carries --released says which build the helper just installed.
 async function announceRelease() {
+  const channelSettings = await readSettings();
+  releaseChannel = channelSettings.release?.channel === "development" ? "development" : "stable";
   // Whatever an installing helper left behind is read on every boot, however
   // this one was started: a note about an update that did not stand, and the
   // saved copy the Roll back button would restore.
@@ -1422,7 +1580,7 @@ async function releaseSafetyBoot() {
 async function releaseScanPrevious() {
   if (!updateSafety || !app.isPackaged || process.platform !== "win32") return;
   const module = await getReleaseUpdater();
-  const installRoot = path.dirname(process.execPath);
+  const installRoot = path.dirname(app.getPath("exe"));
   const folder = module.rollbackFolder(installRoot, process.env, updateSafety.installKey);
   let previous = null;
   if (folder) {
@@ -1438,17 +1596,19 @@ async function releaseScanPrevious() {
 // this process, the same way an update is applied.
 async function releaseRollback() {
   const blocked = (error) => ({ ok: false, error, status: releaseStatus() });
+  if (typeof pairedWorkersBusy === "function" && pairedWorkersBusy()) return blocked("Stop paired worker services before rolling back Studio.");
   if (SMOKE || CAPTURE || CLI_MODE) return blocked("rolling back is unavailable in this mode");
   if (!app.isPackaged || process.platform !== "win32") return blocked("Rolling back applies to the portable Windows build.");
   if (!updateSafety || !releasePrevious) return blocked("There is no saved version to go back to.");
   if (releaseState.state === "applying" || releaseState.state === "rollingback" || releaseApplyInFlight) return blocked("an update is already in progress");
+  if (projectSwitching) return blocked("A project switch is saving progress; try again when it finishes.");
   if (activeChild && activeChild.exitCode === null) return blocked("Love2D is running — close it and try again");
-  const running = autopilot.jobs.filter((job) => !job.finished || job.settlementPending);
+  const running = autopilot.jobs;
   if (running.length) return blocked(`${running.length} build job(s) still running — try again when they finish`);
   releaseApplyInFlight = true;
   try {
     const module = await getReleaseUpdater();
-    const installRoot = path.dirname(process.execPath);
+    const installRoot = path.dirname(app.getPath("exe"));
     const backupRoot = module.rollbackFolder(installRoot, process.env, updateSafety.installKey);
     if (!backupRoot || !existsSync(path.join(backupRoot, "install"))) throw new Error("the saved version is no longer on disk");
     const root = path.join(app.getPath("temp"), "mefi-studio-update", `rollback-${Date.now()}`);
@@ -1456,7 +1616,7 @@ async function releaseRollback() {
     const scriptPath = path.join(root, "rollback-update.ps1");
     await module.writeRollbackScript(scriptPath, {
       installRoot,
-      exePath: process.execPath,
+      exePath: app.getPath("exe"),
       pid: process.pid,
       restoreVersion: releasePrevious.from,
       replacedVersion: app.getVersion(),
@@ -2320,6 +2480,231 @@ async function stampProjectOpened(id) {
 }
 // ---- end of the GitHub link ---------------------------------------------------
 
+// ---- What's new: the notes for the version that is running ----------------------
+// After an update installs, Studio says what changed, once, in plain words: one
+// toast with a What's new action, never a window at launch, never on a first
+// install. The words are assets/whats-new.json (scripts/release-notes.mjs writes
+// it from CHANGELOG.md when the app is packaged); what has been read is
+// settings.whatsNew { on, seen, announced }; scripts/whats-new.cjs holds the
+// rules. MEFI_STUDIO_NO_WHATS_NEW=1 and the switch in Settings › Updates turn it
+// off. A missing settings.json at launch is a fresh install (settingsFromDisk
+// reads it as {}): that version is sealed as read, so its second launch is not
+// mistaken for an update. A build older than the one already read (a roll back)
+// says nothing.
+const WHATS_NEW_PATH = path.join(STUDIO_ROOT, "assets", "whats-new.json");
+const WHATS_NEW_FRESH_INSTALL = settingsDisk.good === null && settingsDisk.unreadable !== true;
+let whatsNewTable = null;
+
+// Harness windows (smoke, capture, the CLI modes) and the kill switch never announce.
+const whatsNewOff = () => SMOKE || CAPTURE || CLI_MODE || process.env.MEFI_STUDIO_NO_WHATS_NEW === "1";
+
+async function whatsNewRead() {
+  if (whatsNewTable) return whatsNewTable;
+  let raw = null;
+  try { raw = JSON.parse(String(await readFile(WHATS_NEW_PATH, "utf8")).replace(/^\uFEFF/, "")); } catch {}
+  whatsNewTable = whatsNew.normalizeTable(raw);
+  return whatsNewTable;
+}
+
+async function releaseWhatsNew() {
+  if (!whatsNew) return { ok: false, error: "unavailable" };
+  try {
+    const current = app.getVersion();
+    let saved = (await readSettings()).whatsNew;
+    if (WHATS_NEW_FRESH_INSTALL && !whatsNewOff()) {
+      const sealed = whatsNew.sealFirstInstall({ settings: saved, current });
+      if (sealed) {
+        await updateSettings((settings) => { settings.whatsNew = whatsNew.sealFirstInstall({ settings: settings.whatsNew, current }) ?? whatsNew.settingsFrom(settings.whatsNew); });
+        saved = sealed;
+      }
+    }
+    return { ok: true, ...whatsNew.view({ table: await whatsNewRead(), current, settings: saved, killed: whatsNewOff() }) };
+  } catch (error) {
+    return { ok: false, error: String(error?.message ?? error).slice(0, 200) };
+  }
+}
+
+// `how` "announce" records that the toast was shown; "read" that the owner read
+// the notes (never backwards, and never past the running version).
+async function releaseWhatsNewSeen(payload = {}) {
+  if (!whatsNew) return { ok: false, error: "unavailable" };
+  const current = whatsNew.cleanVersion(app.getVersion());
+  const version = whatsNew.cleanVersion(payload?.version);
+  if (!version || !current || whatsNew.compareVersions(version, current) > 0) return { ok: false, error: "That is not a version this build knows." };
+  const how = payload?.how === "announce" ? "announce" : "read";
+  await updateSettings((settings) => {
+    const next = whatsNew.markVersion({ settings: settings.whatsNew, version, how });
+    if (!next) return false;
+    settings.whatsNew = next;
+  });
+  return releaseWhatsNew();
+}
+
+async function releaseWhatsNewSet(payload = {}) {
+  if (!whatsNew) return { ok: false, error: "unavailable" };
+  if (typeof payload?.on !== "boolean") return { ok: false, error: "The switch is on or off." };
+  await updateSettings((settings) => {
+    const saved = whatsNew.settingsFrom(settings.whatsNew);
+    if (saved.on === payload.on) return false;
+    settings.whatsNew = { ...saved, on: payload.on };
+  });
+  return releaseWhatsNew();
+}
+// ---- end of what's new ----------------------------------------------------------
+
+// ---- Report a problem: the report, the session marker and the crash prompt ---------
+// Settings › System › Diagnostics builds a small report on this PC: the owner
+// reads every file, then saves it as a zip where a Save dialog says. Nothing is
+// uploaded or sent. scripts/crash-report.cjs decides what is in it (and what
+// never is: settings.json, the sign-in files, the vault, screenshots, project
+// files); scripts/report-host.cjs does the reading and writing.
+//   - data/session-marker.json: "running" while Studio runs, "closed" with a
+//     reason when Studio chose to close (a quit, a Windows sign-out, and any
+//     exit with code 0: the update restarts and the roll back are app.exit(0)
+//     paths). A marker still "running" at the next start is a session that
+//     never closed.
+//   - data/crash.jsonl: a row when the window dies or hangs, main throws or the
+//     GPU process is lost, kept to the last 50 rows of the last 7 days.
+//   - the next start says "Studio closed unexpectedly" once (report:crashed),
+//     unless MEFI_STUDIO_NO_CRASH_PROMPT=1 or the switch in the card is off. A
+//     clean quit, an update restart, a roll back and a development run that was
+//     only stopped never say it.
+let reportHost = null;
+
+function reportCollect() {
+  return (async () => {
+    const settings = await readSettings();
+    const project = projects.current();
+    let tasks = [];
+    try { tasks = (await (await getEyes()).readJson(TASKS_PATH, [])).filter((task) => task && typeof task === "object" && !task.archived); } catch {}
+    tasks.sort((a, b) => (Number(b.updatedAt) || 0) - (Number(a.updatedAt) || 0));
+    const ledger = await brainLedgerTail(projectDataPath(EXECUTOR_LOG_PATH), 1024 * 1024);
+    const trace = [...traceStudio.rows().map((row) => ({ ...row, source: row.source })), ...traceRenderer.rows().map((row) => ({ ...row, source: `window:${row.source}` }))]
+      .sort((a, b) => (Number(a.at) || 0) - (Number(b.at) || 0));
+    let user = "";
+    try { user = os.userInfo().username; } catch {}
+    return {
+      studio: { version: app.getVersion(), install: app.isPackaged ? "portable" : "source" },
+      os: { platform: process.platform, release: os.release(), arch: process.arch },
+      runtime: { electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node },
+      project: { name: project?.name ?? "" },
+      route: { provider: settings.aiProvider ?? "auto", models: Object.fromEntries(Object.entries(settings.aiModels && typeof settings.aiModels === "object" ? settings.aiModels : {}).filter(([, model]) => typeof model === "string")) },
+      builder: { cli: settings.executorCli ?? "opencode", tier: settings.executorTier ?? "auto" },
+      tasks: tasks.slice(0, crashReport.LIMITS.tasks).map((task) => ({ id: task.id, title: task.title, status: task.status, verification: task.verification ? { state: task.verification.state, checks: task.verification.checks } : null, builder: task.lastAttempt?.route ?? null, updatedAt: task.updatedAt })),
+      trace: trace.slice(-crashReport.LIMITS.traceRows),
+      builderRuns: ledger.filter((row) => row?.event === "finish").slice(-crashReport.LIMITS.builderRuns).map((row) => ({ at: row.at, runId: row.runId, taskId: typeof row.task === "string" ? row.task : null, title: row.title, ok: row.ok, code: row.code, seconds: row.seconds, tail: Array.isArray(row.tail) ? row.tail.slice(-40) : [] })),
+      scrub: {
+        roots: [{ path: projectRoot(), label: "<project>" }, { path: STUDIO_ROOT, label: "<studio>" }, { path: os.homedir(), label: "~" }],
+        names: [{ name: user, label: "<user>" }, { name: os.hostname(), label: "<pc>" }],
+      },
+    };
+  })();
+}
+
+// Called once Electron is ready, before the window: judges the last session and
+// starts this one's marker. Harness windows and the CLI modes keep none.
+function reportStart() {
+  if (SMOKE || CAPTURE || CLI_MODE || !reportHostModule || !zipLite || reportHost) return;
+  try {
+    reportHost = reportHostModule.createReportHost({
+      fs: require("node:fs"), rep: crashReport, zip: zipLite, dataDir: path.join(STUDIO_ROOT, "data"), updateResultPath: UPDATE_RESULT_PATH, env: process.env,
+      pid: process.pid, version: app.getVersion(), install: app.isPackaged ? "portable" : "source",
+      collect: reportCollect, getWindow: () => (window && !window.isDestroyed() ? window : null),
+      showSaveDialog: (parent, options) => (parent ? dialog.showSaveDialog(parent, options) : dialog.showSaveDialog(options)),
+      showItemInFolder: (file) => shell.showItemInFolder(file), documentsPath: () => app.getPath("documents"),
+      send: (payload) => send("report:crashed", payload), readSettings, updateSettings, log: (line) => logLine(line), id: () => crypto.randomBytes(6).toString("hex"),
+    });
+    reportHost.boot();
+  } catch (error) {
+    reportHost = null;
+    logLine(`[report] could not start (${String(error?.code ?? error?.name ?? "error").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40) || "error"})`);
+  }
+}
+// Each of these is one guarded line at the place that knows: a failure is never Studio's.
+const reportRecord = (kind, detail, extra) => { try { reportHost?.record(kind, detail, extra); } catch {} };
+const reportEnd = (why) => { try { reportHost?.end(why); } catch {} };
+process.on("uncaughtExceptionMonitor", (error, origin) => reportRecord("main-exception", `${error?.name ?? "Error"}: ${String(error?.message ?? error).slice(0, 160)}`, { origin: String(origin ?? "") }));
+// An exit with code 0 is Studio's own choice (app.quit, app.exit for an update
+// restart or a roll back); a crash never reaches here, and a failing exit code
+// leaves the marker "running" so the next start says so.
+process.on("exit", (code) => { if (code === 0) reportEnd("exit"); });
+app.on("child-process-gone", (_event, details) => { if (details?.type === "GPU" && details.reason !== "clean-exit") reportRecord("gpu-gone", details.reason, { exitCode: details.exitCode }); });
+// ---- end of report a problem ------------------------------------------------------
+
+// ---- Notifications: Windows alerts, the taskbar flash and the count ------------------
+// Settings › General › Notifications (renderer/alerts.js). Studio tells Windows
+// when something waits on the owner (a question, an approval, a permission, a
+// task that failed after the retries, and a finished one when asked), only while
+// Studio is not the window being looked at, never inside quiet hours (the
+// Discord remote's own, settings.remote.quiet), at most twelve an hour, and in
+// generic words unless the owner chose task titles. The taskbar button flashes
+// until Studio is focused and carries the count of what waits on the owner.
+// scripts/alerts.cjs decides, scripts/alerts-host.cjs watches and shows, and the
+// hooks below only tell it what main already knows: a question asked or
+// answered (assistantQuestion, assistantEmit), the tasks the owner cares about
+// moving (assistantObserveTasks), another project's queue (selectProject) and
+// the window's own focus. They set a timer and return: nothing runs per line
+// or per write. MEFI_STUDIO_NO_ALERTS=1 or the master switch turns it all off.
+let alertsHost = null;
+
+// The page must be there to hear a click: a window that had to be made again is still loading.
+function alertsSendOpen(payload) {
+  const contents = window?.webContents;
+  if (!contents || contents.isDestroyed?.()) return;
+  if (contents.isLoading?.()) {
+    contents.once("did-finish-load", () => setTimeout(() => send("alerts:open", payload), 1500).unref?.());
+    return;
+  }
+  send("alerts:open", payload);
+}
+
+// Studio is "being looked at" when one of its windows is in front (shown, not
+// minimized, focused) and somebody is at the PC: a locked screen, or ten
+// minutes without a key or a click, is nobody looking even when Studio is the
+// window in front, and a PC left working is the point of all this.
+const ALERTS_IDLE_SECONDS = 600;
+function alertsLooked() {
+  const inFront = BrowserWindow.getAllWindows().some((win) => !win.isDestroyed() && win.isVisible() && !win.isMinimized() && win.isFocused());
+  if (!inFront) return false;
+  try {
+    const state = powerMonitor.getSystemIdleState(ALERTS_IDLE_SECONDS);
+    return state !== "locked" && state !== "idle";
+  } catch {
+    return true;
+  }
+}
+
+function alertsStart() {
+  if (SMOKE || CAPTURE || CLI_MODE || !alertsRules || !alertsHostModule || alertsHost) return;
+  try {
+    const iconFile = path.join(STUDIO_ROOT, "assets", "icon-256.png");
+    alertsHost = alertsHostModule.createAlertsHost({
+      rules: alertsRules, icon: badgeIcon, Notification, nativeImage, iconPath: existsSync(iconFile) ? iconFile : "", platform: process.platform, env: process.env,
+      getWindow: () => (window && !window.isDestroyed() ? window : null),
+      isLooked: alertsLooked,
+      showWindow, send: alertsSendOpen, readSettings, updateSettings, log: (line) => logLine(line),
+      digest: (now) => (projects.open() ? assistantNeedsYouDigest(now) : null),
+      questionOpen: (id) => (assistantState?.questions ?? []).some((question) => question?.id === id && question.status === "open"),
+      projectId: () => (projects.open() ? projects.current().id : null),
+      scale: () => { try { return screen.getPrimaryDisplay().scaleFactor; } catch { return 1; } },
+      remotePush: () => { if (typeof remotePush === "function") remotePush(); },
+    });
+    void alertsHost.start();
+  } catch (error) {
+    alertsHost = null;
+    logLine(`[alerts] could not start (${String(error?.code ?? error?.name ?? "error").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40) || "error"})`);
+  }
+}
+// Each of these is one guarded line at the place that knows: a failure is never Studio's.
+const alertsQuestion = (question) => { try { alertsHost?.question(question); } catch {} };
+const alertsTasks = (events, attention, projectId) => { try { alertsHost?.tasks(events, attention, projectId); } catch {} };
+const alertsPoke = () => { try { alertsHost?.poke(); } catch {} };
+const alertsFocus = () => { try { alertsHost?.focus(); } catch {} };
+const alertsAway = () => { try { alertsHost?.away(); } catch {} };
+const alertsWindow = () => { try { alertsHost?.windowMade(); } catch {} };
+const alertsStop = () => { try { alertsHost?.close(); } catch {} };
+// ---- end of notifications ---------------------------------------------------------
+
 // ---- Your PCs vault: memory and setup between the owner's PCs ------------------
 // Friends › Your PCs › Share between my PCs (renderer/pc-vault.js). One private
 // GitHub repository per owner (scripts/pc-vault.cjs), every file in it sealed
@@ -2675,6 +3060,69 @@ async function libraryUse(shelf, id, from) {
   return vaultUse(entry, { anyProject: entry.source === "file" });
 }
 // ---- end of the Your PCs vault ---------------------------------------------------
+
+// ---- Paired check workers: opt-in durable coordinator ---------------------------
+let pairedWorkersHost = null;
+let pairedWorkersClosing = false;
+let pairedWorkersQuitSaved = false;
+function pairedWorkersBusy() { return pairedWorkersHost?.isRunning() === true; }
+function pairedWorkersDesktop() {
+  if (SMOKE || CAPTURE || CLI_MODE) throw new Error("Paired workers are disabled in capture and CLI modes.");
+  if (pairedWorkersClosing) throw new Error("Studio is closing its paired workers.");
+  if (!pairedWorkersHost) {
+    pairedWorkersHost = require("./scripts/paired-worker-host.cjs").createPairedHost({
+      directory: path.join(app.getPath("userData"), "paired-workers"), readSettings, updateSettings,
+      encryptionAvailable: communityKeystore,
+      seal: value => safeStorage.encryptString(value).toString("base64"),
+      unseal: value => safeStorage.decryptString(Buffer.from(value, "base64")),
+      project: async () => {
+        const root = projectRoot(), repo = await vaultProjectRepo();
+        const result = await vaultRun("git", ["-c", `safe.directory=${root.replace(/\\/g, "/")}`, "-C", root, "rev-parse", "HEAD"]);
+        return { root, repo, commit: result.ok ? result.stdout.trim() : null };
+      },
+      confirm: async (message, detail) => (await dialog.showMessageBox(window, { type: "warning", title: "Paired repository checks", message, detail, buttons: ["Cancel", "Continue"], defaultId: 0, cancelId: 0, noLink: true })).response === 1,
+      chooseTLS: async () => {
+        const certificate = await dialog.showOpenDialog(window, { title: "Choose the trusted TLS certificate (PEM)", properties: ["openFile"] });
+        if (certificate.canceled) return null;
+        const key = await dialog.showOpenDialog(window, { title: "Choose its private key (PEM)", properties: ["openFile"] });
+        return key.canceled ? null : { cert: certificate.filePaths[0], key: key.filePaths[0] };
+      },
+    });
+  }
+  return pairedWorkersHost;
+}
+async function pairedWorkersCall(method, ...args) {
+  try { return await pairedWorkersDesktop()[method](...args); }
+  catch (error) { return { ok: false, error: require("./scripts/redaction.cjs").scrubOutbound(String(error?.message ?? "Paired workers could not complete the action.")).slice(0, 400) }; }
+}
+async function pairedWorkersClose(timeoutMs = 15000) {
+  if (!pairedWorkersHost) return;
+  let timer;
+  try {
+    await Promise.race([
+      Promise.resolve().then(() => pairedWorkersHost.close()),
+      new Promise((_resolve, reject) => { timer = setTimeout(() => reject(new Error("Paired workers did not finish stopping; their saved journals need recovery.")), timeoutMs); }),
+    ]);
+  } finally { clearTimeout(timer); }
+}
+async function pairedWorkersPrepareRestart() {
+  if (!pairedWorkersHost) return { ok: true };
+  const previous = pairedWorkersClosing;
+  pairedWorkersClosing = true;
+  try { await pairedWorkersClose(); return { ok: true }; }
+  catch { return { ok: false, error: "Could not stop paired workers; their saved journals need recovery." }; }
+  finally { pairedWorkersClosing = previous; }
+}
+function pairedWorkersQuit(event) {
+  if (!pairedWorkersHost || pairedWorkersQuitSaved) return false;
+  event.preventDefault();
+  if (!pairedWorkersClosing) {
+    pairedWorkersClosing = true;
+    pairedWorkersClose().catch(() => {}).finally(() => { pairedWorkersQuitSaved = true; app.quit(); });
+  }
+  return true;
+}
+// ---- end of paired check workers -----------------------------------------------
 
 // ---- Cowork claims: agents on several PCs, one set of files ----------------------
 // A cowork room linked to the project's GitHub repository (Friends › Rooms,
@@ -4966,11 +5414,11 @@ async function usageTrackerLimits() {
 // the eyes worker and covers the month the account windows span; a store that
 // cannot be read leaves the Studio ledger standing and says so.
 const USAGE_LEDGER_DAYS = 35;
-async function codingSessionUsage(now) {
+async function codingSessionUsage(now, days = USAGE_LEDGER_DAYS) {
   try {
     const eyes = await getEyes();
     if (typeof eyes.usageLedger !== "function") return { ok: false, rows: [], error: "The store reader has no usage ledger." };
-    const result = await eyes.usageLedger({ since: now - USAGE_LEDGER_DAYS * 86400000, now });
+    const result = await eyes.usageLedger({ since: now - days * 86400000, now });
     const rows = Array.isArray(result?.rows) ? result.rows : [];
     // An empty ledger from a store without its session schema is not "no
     // coding turns": the panel says what the store is missing instead.
@@ -5771,7 +6219,7 @@ async function chatCompletion(endpoint, apiKey, model, body, { sessionHeader = n
 function responsesRequest(body) {
   const messages = Array.isArray(body.messages) ? body.messages : [];
   const instructions = messages.filter((message) => message.role === "system").map((message) => message.content).join("\n\n");
-  const request = { model: body.model, input: messages.filter((message) => message.role !== "system").map(({ role, content }) => ({ role, content })), max_output_tokens: body.max_tokens };
+  const request = { model: body.model, input: messages.filter((message) => message.role !== "system").map(({ role, content }) => ({ role, content: Array.isArray(content) ? require("./scripts/image-attach.cjs").responsesParts(content) : content })), max_output_tokens: body.max_tokens };
   if (instructions) request.instructions = instructions;
   if (body.reasoning_effort) request.reasoning = { effort: body.reasoning_effort };
   if (body.service_tier) request.service_tier = body.service_tier;
@@ -6318,11 +6766,13 @@ async function cliAssistantCall(route, system, user, maxTokens, { role = "routin
     // next (cliAccountTurn): every subscription login answers before the
     // keyed fallback below. Sliced hosts without the block run one login.
     const turn = typeof cliAccountTurn === "function" ? cliAccountTurn : (_provider, call) => call({});
+    // A picture on the message is only named to a CLI, in one plain line (the "Picture attachments" block).
+    const said = typeof imageCliText === "function" ? imageCliText(user) : user;
     try {
-      cli = await turn(route.provider, (login) => route.provider === "grok" ? grokCompletion(system, user, route.model)
-        : route.provider === "claude" ? claudeCompletion(system, user, route.model, login)
-          : route.provider === "codex" ? codexCompletion(system, user, route.model, login)
-            : antigravityCompletion(system, user, route.model));
+      cli = await turn(route.provider, (login) => route.provider === "grok" ? grokCompletion(system, said, route.model)
+        : route.provider === "claude" ? claudeCompletion(system, said, route.model, login)
+          : route.provider === "codex" ? codexCompletion(system, said, route.model, login)
+            : antigravityCompletion(system, said, route.model));
     } finally {
       settleProvider(route.provider, gate, cli);
     }
@@ -6401,12 +6851,17 @@ async function httpAssistantCall(route, system, user, maxTokens, { taskType = "r
     if (!gate.allowed) return providerSkipped(candidate.provider, gate);
     let result;
     try {
-      result = candidate.provider === "chatgpt"
-        ? await chatgptPlanCall(candidate, requestBody(candidate), { taskType, source, timeoutMs, effort: candidate === route ? effort : null, serviceTier: candidate === route ? serviceTier : null })
-        : await chatCompletion(candidate.endpoint, candidate.apiKey, candidate.model, requestBody(candidate), {
+      // A picture on the message goes in only when this model can see it (the "Picture attachments" block).
+      // The ChatGPT plan has its own client and takes the plain body.
+      if (candidate.provider === "chatgpt") {
+        result = await chatgptPlanCall(candidate, requestBody(candidate), { taskType, source, timeoutMs, effort: candidate === route ? effort : null, serviceTier: candidate === route ? serviceTier : null });
+      } else {
+        const wire = typeof imageBodyFor === "function" ? await imageBodyFor(candidate, requestBody(candidate)) : requestBody(candidate);
+        result = await chatCompletion(candidate.endpoint, candidate.apiKey, candidate.model, wire, {
           sessionHeader: candidate.provider === "opencode" ? await assistantSessionId() : null,
           provider: candidate.provider, taskType, source, timeoutMs,
         });
+      }
     } finally {
       settleProvider(candidate.provider, gate, result);
     }
@@ -7358,6 +7813,8 @@ function assistantFix(kind, text, ok = true) {
 // either way), so the renderer never sees more than ~4 pushes a second.
 // State keys the page already holds ride by reference (assistantPush).
 function assistantEmit(event) {
+  // A question asked, answered or expired changes what waits on the owner: the taskbar count looks again.
+  if (event?.kind === "question" && typeof alertsPoke === "function") alertsPoke();
   if (assistantEmitTimer) {
     if (!assistantEmitPending || (ASSISTANT_EVENT_RANK[event.kind] ?? 1) >= (ASSISTANT_EVENT_RANK[assistantEmitPending.kind] ?? 1)) assistantEmitPending = event;
     return;
@@ -11203,6 +11660,8 @@ function assistantObserveTasks(tasks) {
     const result = taskOversight.taskEvents(taskEventIndexes.get(projectId) ?? null, tasks, { now: Date.now(), isOwned: assistantOwnsTask, autoBuild: autopilot.autoBuild !== false, approve: autopilot.approve, watchAll: true });
     taskEventIndexes.set(projectId, result.index);
     events = result.events;
+    // Notifications hears the same events: a parked task, an approval wait, a finished one.
+    if (typeof alertsTasks === "function") alertsTasks(result.events, result.attention, projectId);
     // The agents' own cards the owner never touched still reach the owner
     // when only the owner can move them: one rolling "needs you" line.
     if (Array.isArray(result.attention) && result.attention.length) assistantNeedsYouNotice(result.attention, projectId);
@@ -11629,7 +12088,7 @@ async function assistantChatAction(action = {}, { focused = null, remote = false
 // order. Null when no model answered (no route, a timeout, a provider error):
 // the local reply then answers. A reply that came back as prose is still the
 // reply, with the local classifier's actions standing in for the missing ones.
-async function assistantOverseerTurn({ user, text, intent, facts, did, slot, focused, generation = assistantBrakeGeneration }) {
+async function assistantOverseerTurn({ user, text, intent, facts, did, slot, focused, generation = assistantBrakeGeneration, extras = null }) {
   let companionReady = false;
   if (typeof seatChoice === "function" && typeof readAgentSettings === "function") {
     try {
@@ -11662,19 +12121,24 @@ async function assistantOverseerTurn({ user, text, intent, facts, did, slot, foc
   }));
   // What the owner sees as "N need you", counted the way their badge is.
   const needsYou = typeof assistantNeedsYouDigest === "function" ? await assistantNeedsYouDigest() : null;
-  const body = taskOversight.packChatPayload({ message: text, did, ...(user?.ui ? { ui: user.ui } : {}), ...(needsYou ? { needsYou } : {}), decisionContext, asks, events, ...(outside ? { outside } : {}), board, thread, focus: focus ?? null, suggestions, facts: rest },
+  // Skills the owner named (/skill-name) ride the system prompt, and the files they pointed at (@path) are one line after
+  // their words: only for the model, never in the thread (the "Mentions in a message" block).
+  const chatSystem = ASSISTANT_CHAT_SYSTEM + (extras?.system ?? "");
+  const body = taskOversight.packChatPayload({ message: extras?.message ? `${text}\n\n${extras.message}` : text, did, ...(user?.ui ? { ui: user.ui } : {}), ...(needsYou ? { needsYou } : {}), decisionContext, asks, events, ...(outside ? { outside } : {}), board, thread, focus: focus ?? null, suggestions, facts: rest },
     CHAT_PAYLOAD_BUDGET, { sectionBudgets: CHAT_SECTION_BUDGETS });
   // A CLI answers slower than an endpoint. A slow reply is not an outage: only
   // a provider error takes the AI offline for the other roles. The whole turn
   // (model, ordering wait, actions) must fit the pool's 150 s job deadline.
   const budgetMs = route.cli ? 90000 : 45000;
   let timer = null;
-  const call = await Promise.race([
+  const ask = () => Promise.race([
     typeof seatFetch === "function"
-      ? seatFetch("companion", ASSISTANT_CHAT_SYSTEM, body, 1500, { fallback: (system = ASSISTANT_CHAT_SYSTEM) => assistantFetch(system, body, 1500, { taskType: "conversation", allowCli: DATA_ONLY_CLIS, skillRole: null }) })
-      : assistantFetch(ASSISTANT_CHAT_SYSTEM, body, 1500, { taskType: "conversation", allowCli: DATA_ONLY_CLIS }),
+      ? seatFetch("companion", chatSystem, body, 1500, { fallback: (system = chatSystem) => assistantFetch(system, body, 1500, { taskType: "conversation", allowCli: DATA_ONLY_CLIS, skillRole: null }) })
+      : assistantFetch(chatSystem, body, 1500, { taskType: "conversation", allowCli: DATA_ONLY_CLIS }),
     new Promise((resolve) => (timer = setTimeout(() => resolve({ ok: false, timedOut: true, error: `no reply within ${Math.round(budgetMs / 1000)} s` }), budgetMs))),
   ]);
+  // A picture on the message rides a scope around the call, so every request it makes can carry it.
+  const call = await (typeof extras?.run === "function" ? extras.run(ask) : ask());
   clearTimeout(timer);
   if (!call?.ok || !String(call.text ?? "").trim()) {
     if (call?.timedOut) logLine(`[assistant] chat reply abandoned: ${call.error}`);
@@ -11810,6 +12274,8 @@ async function assistantRespond(user, entry = null) {
   // reply survives any failure above it.
   let folderTarget = null;
   let offers = null;
+  // What the message brings beyond its words (a picture, the "Picture attachments" block): the model call runs inside its scope.
+  let extras = null;
   const done = [];
   const slot = assistantChatSlot();
   try {
@@ -11866,10 +12332,11 @@ async function assistantRespond(user, entry = null) {
       local = { ...local, actions: [] };
     }
     const generation = assistantBrakeGeneration;
+    try { extras = typeof messageExtras === "function" ? await messageExtras(user) : null; } catch (error) { logError(`message extras failed: ${error.message}`); }
     let turn = null;
     if (assistantAiUsable()) {
       try {
-        turn = await assistantOverseerTurn({ user, text, intent, facts, did: [...done], slot, focused: assistantFocusSubject(facts), generation });
+        turn = await assistantOverseerTurn({ user, text, intent, facts, did: [...done], slot, focused: assistantFocusSubject(facts), generation, extras });
       } catch (error) {
         // Nothing ran yet (the actions keep their own outcomes): the local
         // reply answers as if no model had.
@@ -12029,6 +12496,9 @@ async function assistantRespond(user, entry = null) {
       ? `${reply} ${confirmations.map((note) => (/[.!?]$/.test(note) ? note : `${note}.`)).join(" ")}`.trim()
       : `${reply} Done: ${confirmations.join("; ")}.`;
   }
+  // What the message brought that no model used (a picture a model cannot see), said once, plainly.
+  const extraNotes = typeof extras?.notes === "function" ? extras.notes() : [];
+  if (extraNotes.length) reply = `${reply} ${extraNotes.join(" ")}`.trim();
   // The owner switched projects while this reply ran: the thread in memory is
   // now the other project's, and this reply must not land in it.
   if (user.projectId && !assistantOwnsProject(user.projectId)) {
@@ -12071,13 +12541,25 @@ function assistantUiContext(value) {
 async function assistantMessage(raw, options = {}) {
   const text = String(raw ?? "").trim();
   if (!text) return { ok: false, error: "empty" };
+  // A message longer than this is refused whole, not cut: the box that sent it keeps what was typed, so
+  // nothing the owner wrote is silently dropped from the thread or from what the model reads. (Inline, so
+  // the vm suites that slice this function out of main.cjs need nothing else.)
+  const limit = 16000;
+  if (text.length > limit) {
+    const say = (count) => count.toLocaleString("en-US");
+    return { ok: false, error: `That message is ${say(text.length)} characters and Mefi reads up to ${say(limit)} at once, so nothing was sent. Cut it down or send it in parts.`, limit, length: text.length };
+  }
   await ensureAssistant();
+  // Pictures ride along by id (the "Picture attachments" block); a message whose picture is gone is refused whole, like an over-long one.
+  const pictures = typeof attachedPictures === "function" ? await attachedPictures(options?.images) : { ok: true, images: [] };
+  if (!pictures.ok) return { ok: false, error: pictures.error };
   // The manner the owner chose for their companion rides every chat box's
   // message the same way (companion-pet.cjs; the model reads ui.personality).
   const manner = typeof agentBrain !== "undefined" && agentBrain?.companionManner ? await agentBrain.companionManner().catch(() => null) : null;
   const seen = assistantUiContext(options?.context);
   const ui = seen || manner ? { ...(seen ?? {}), ...(manner ? { personality: manner } : {}) } : null;
-  const user = { id: assistantMessageId(), projectId: projects.current().id, at: Date.now(), role: "user", text: text.slice(0, 16000), via: "local", intent: "chat", ...(ui ? { ui } : {}) };
+  const user = { id: assistantMessageId(), projectId: projects.current().id, at: Date.now(), role: "user", text, via: "local", intent: "chat", ...(ui ? { ui } : {}),
+    ...(pictures.images.length ? { images: pictures.images.map(({ id, name, mime, bytes }) => ({ id, name, mime, bytes })) } : {}) };
   // Sent from Discord (the "Discord remote" block): the chat gate narrows what
   // it may do, and the work it files waits for the owner's OK.
   if (options?.remote === true) user.remote = true;
@@ -12094,6 +12576,304 @@ async function assistantMessage(raw, options = {}) {
   }
   return { ok: true, reply, state: assistantState };
 }
+
+// ---- Picture attachments: a picture on a message (docs/architecture.md, "Pictures on a message") ----
+// `assistant:image` saves one picture (PNG, JPEG, WebP or GIF by its bytes, at
+// most 5 MB, at most 4 a message) under the project's data folder and hands back
+// an id and a small preview; a message carries the ids (`images`), never paths.
+// When the model that answers can look at pictures (the model catalog says so:
+// agentProfiles.capabilities().vision) the picture goes in the provider's own
+// format (scripts/image-attach.cjs); a model that can not see says so once in
+// the reply, and the message and its picture are saved either way. A coding CLI
+// is never sent a picture, only one plain line naming the file. A task made
+// from the box carries the same line in its brief. The pictures a call carries
+// ride an AsyncLocalStorage scope opened around the model call
+// (messageExtras().run), so the request builders need no new parameter.
+// MEFI_STUDIO_NO_IMAGE_ATTACH=1 switches it all off. Modules load on first use.
+let imageLibLoaded = null, imageStoreLoaded = null, imageScopeLoaded = null, visionDocument = null;
+const imageLib = () => (imageLibLoaded ??= require("./scripts/image-attach.cjs"));
+const imageAttachOn = () => process.env.MEFI_STUDIO_NO_IMAGE_ATTACH !== "1";
+const imageScope = () => (imageScopeLoaded ??= new (require("node:async_hooks").AsyncLocalStorage)());
+const PICTURES_OFF = "Picture attachments are switched off on this PC.";
+function imageStore() {
+  return (imageStoreLoaded ??= require("./scripts/image-store.cjs").createImageStore({
+    dir: () => path.join(path.dirname(projectDataPath(TASKS_PATH)), "attachments"),
+    keep: imageNamedIds,
+    thumbnail: imageThumbnail,
+  }));
+}
+// Every picture a message or a task still names, so cleanup never removes one.
+async function imageNamedIds() {
+  const named = new Set();
+  const grab = (text) => { for (const match of String(text ?? "").matchAll(/img_[a-f0-9]{24}/g)) named.add(match[0]); };
+  for (const message of assistantState?.messages ?? []) for (const image of Array.isArray(message?.images) ? message.images : []) if (image?.id) named.add(image.id);
+  try {
+    for (const task of await (await getEyes()).readJson(TASKS_PATH, [])) { grab(task?.prompt); grab(task?.description); grab(task?.details); grab(task?.note); }
+  } catch { /* the thread alone keeps what it names */ }
+  return named;
+}
+// A small preview for the composer. Electron's nativeImage reads PNG and JPEG; the page makes its own for the rest.
+async function imageThumbnail(bytes, mime) {
+  if (mime !== "image/png" && mime !== "image/jpeg") return null;
+  const image = nativeImage.createFromBuffer(Buffer.from(bytes));
+  if (image.isEmpty()) return null;
+  const { width, height } = image.getSize();
+  const scale = Math.min(1, 96 / Math.max(width, height, 1));
+  const small = scale < 1 ? image.resize({ width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)), quality: "good" }) : image;
+  return mime === "image/jpeg" ? `data:image/jpeg;base64,${small.toJPEG(70).toString("base64")}` : small.toDataURL();
+}
+// The catalog says which models take pictures; the profiles module reads it through useCatalog.
+async function visionReady() {
+  try {
+    const document = await catalogDocument.read();
+    if (document !== visionDocument) { visionDocument = document; agentProfiles.useCatalog(document); }
+  } catch { /* until the catalog reads, no model is known to see */ }
+}
+// What the chat's own route will do with a picture, for the box to say before the message is sent.
+async function chatPictureHint() {
+  try {
+    await visionReady();
+    const settings = await (typeof readAgentSettings === "function" ? readAgentSettings() : readSettings());
+    const chosen = seatChoice(settings, "companion");
+    let provider = null, model = null;
+    if (chosen.provider === "zen" && decryptKey(settings, "zenApiKeyEncrypted")) { provider = "zen"; model = chosen.model || SEAT_DEFAULTS.companion.model; }
+    else {
+      const route = await resolveAiRoute("routine", { allowCli: DATA_ONLY_CLIS });
+      if (route?.ok) { provider = route.provider ?? null; model = route.model ?? null; }
+    }
+    if (!provider) return { sees: null, model: null };
+    return { sees: agentProfiles.capabilities(provider, model).vision === true, model: model || null };
+  } catch { return { sees: null, model: null }; }
+}
+// assistant:image { name, mime, data }: keep one picture, answer with its id and a preview.
+async function saveMessagePicture(payload = {}) {
+  if (!imageAttachOn()) return { ok: false, off: true, error: PICTURES_OFF };
+  // { probe: true }: the box asks once whether pictures are on at all, so a PC that switched them off never shows the button.
+  if (payload?.probe === true) return { ok: true, probe: true };
+  if (!projects.open()) return { ok: false, error: "Open a project folder first - pictures are kept with the project." };
+  const saved = await imageStore().save({ name: payload?.name, mime: payload?.mime, data: payload?.data });
+  if (!saved.ok) return saved;
+  return { ...saved, vision: await chatPictureHint() };
+}
+async function removeMessagePicture(payload = {}) {
+  if (!imageAttachOn()) return { ok: false, off: true, error: PICTURES_OFF };
+  return imageStore().remove(String(payload?.id ?? ""));
+}
+// assistant:image-read { id }: one saved picture as a data URL, for Build's thread to show what a message or a
+// brief carries. Only an id this folder holds is read, it is checked like any other use of a picture, and
+// MEFI_STUDIO_NO_IMAGE_ATTACH=1 refuses it like the rest.
+async function readMessagePicture(payload = {}) {
+  if (!imageAttachOn()) return { ok: false, off: true, error: PICTURES_OFF };
+  if (!projects.open()) return { ok: false, error: "Open a project folder first - pictures are kept with the project." };
+  return imageStore().read(String(payload?.id ?? ""));
+}
+// The pictures a message names, checked and found: { ok, images: [{ id, name, mime, bytes, path }] }.
+async function attachedPictures(value) {
+  if (value === undefined || value === null || (Array.isArray(value) && !value.length)) return { ok: true, images: [] };
+  if (!imageAttachOn()) return { ok: false, error: PICTURES_OFF };
+  return imageStore().resolve(value);
+}
+// A brief that names its pictures in plain lines (a task's prompt, a CLI's request): where each one is.
+async function withPictureLines(text, value) {
+  const found = await attachedPictures(value);
+  if (!found.ok) return found;
+  return { ok: true, text: found.images.length ? `${text}\n\n${imageLib().attachedLines(found.images)}` : text, images: found.images };
+}
+// The request builder's half (httpAssistantCall): this call's request with the pictures in it when the model that
+// answers can see them, the request as it was when it can not. The call is told which happened.
+async function imageBodyFor(candidate, body) {
+  const state = imageScope().getStore();
+  if (!state?.images?.length) return body;
+  await visionReady();
+  const lib = imageLib();
+  if (agentProfiles.capabilities(candidate.provider, candidate.model).vision !== true) {
+    state.unseen ??= { model: String(candidate.model ?? "") };
+    return body;
+  }
+  try {
+    state.loaded ??= await Promise.all(state.images.map((image) => imageStore().load(image)));
+    const sent = lib.attachBody(body, state.loaded, lib.formatFor(candidate.endpoint));
+    state.seen = String(candidate.model ?? "") || "the model";
+    return sent;
+  } catch (error) {
+    logLine(`[assistant] a picture could not be added to the request: ${String(error?.message ?? error).slice(0, 160)}`);
+    state.unseen ??= { model: String(candidate.model ?? "") };
+    return body;
+  }
+}
+// The CLI's half (cliAssistantCall): a coding CLI gets one plain line per picture in its text, never the picture.
+function imageCliText(user) {
+  const state = imageScope().getStore();
+  if (!state?.images?.length) return user;
+  const lines = imageLib().attachedLines(state.images.filter((image) => !String(user).includes(imageLib().attachedLine(image))));
+  state.unseen ??= { model: "" };
+  return lines ? `${user}\n\n${lines}` : user;
+}
+// What a message brings beyond its words, for the reply to use: null when it brings nothing (the common case).
+// Pictures (this block) and mentions (the "Mentions in a message" block) each add what they have.
+async function messageExtras(user) {
+  const pictures = await pictureExtras(user);
+  let mention = null;
+  if (typeof mentionExtras === "function") { try { mention = await mentionExtras(user); } catch (error) { logLine(`[assistant] mentions could not be read: ${String(error?.message ?? error).slice(0, 160)}`); } }
+  if (!pictures && !mention) return null;
+  return {
+    images: pictures?.images ?? [],
+    run: pictures?.run ?? ((call) => call()),
+    system: mention?.system ?? "",
+    message: mention?.message ?? "",
+    notes: () => [...(pictures?.notes() ?? []), ...(mention?.notes() ?? [])],
+  };
+}
+async function pictureExtras(user) {
+  const named = (Array.isArray(user?.images) ? user.images : []).filter((image) => image && typeof image.id === "string");
+  if (!named.length || !imageAttachOn()) return null;
+  // Each picture is found on its own: one that has since been cleared does not take the others with it.
+  const images = [], gone = [];
+  for (const image of named) {
+    const found = await imageStore().resolve([image.id]);
+    if (found.ok && found.images.length) images.push(found.images[0]); else gone.push(String(image.name ?? "").trim());
+  }
+  const state = images.length ? { images, seen: null, unseen: null, loaded: null } : null;
+  return {
+    images,
+    // The model call runs inside this scope, so every request it makes can see the pictures.
+    run: (call) => (state ? imageScope().run(state, call) : call()),
+    // One plain sentence per thing that did not reach the model, each said once.
+    notes: () => {
+      const said = [];
+      if (gone.length) said.push(`${gone.length === 1 && gone[0] ? `"${gone[0]}" is` : gone.length === 1 ? "A picture is" : "Some pictures are"} no longer saved, so I answered without ${gone.length === 1 ? "it" : "them"}.`);
+      if (state && !state.seen) said.push(imageLib().unseenNote({ model: state.unseen?.model || "", count: state.images.length, noModel: !state.unseen }));
+      return said;
+    },
+  };
+}
+// ---- end of picture attachments ---------------------------------------------------------
+
+// ---- Skills: the Skills page's files (docs/architecture.md, "Skills") ----
+// skills:list / read / save / create / delete / import / export keep one project's skills as plain files,
+// <project>/.agents/skills/<name>/SKILL.md, and nowhere else inside the project (scripts/skills.cjs; the rules
+// are scripts/skill-format.cjs). The page sends a NAME, never a path; import and export take their folders from
+// a dialog opened here. A save that replaces text, and a delete, first keep the old text under the project's
+// data folder (skill-backups/, ten per skill). The inventory the agents read (agent-addons.cjs) is what lists
+// these files, so a saved skill is one the team can pick. MEFI_STUDIO_NO_SKILL_EDIT=1 makes the page read-only:
+// nothing is saved, created, deleted or imported. The module loads on first use.
+let skillsHostLoaded = null;
+function skillsHost() {
+  return (skillsHostLoaded ??= require("./scripts/skills.cjs").createSkills({
+    root: () => (projects.open() ? projectRoot() : null),
+    enabled: () => process.env.MEFI_STUDIO_NO_SKILL_EDIT !== "1",
+    backups: () => path.join(path.dirname(projectDataPath(TASKS_PATH)), "skill-backups"),
+    inventory: (root) => agentAddons.inventory(root),
+    zip: async (source, target, options) => (await loadModule("scripts/release-updater.mjs")).zipDirectory(source, target, options),
+  }));
+}
+// Import: the owner picks a folder; only its SKILL.md is read, under the rules of a save.
+async function skillsImport() {
+  const host = skillsHost();
+  if (!host.enabled()) return { ok: false, off: true, error: host.OFF };
+  const picked = await dialog.showOpenDialog(window, { title: "Import a skill: choose its folder", properties: ["openDirectory"], buttonLabel: "Import" });
+  if (picked.canceled || !picked.filePaths?.[0]) return { ok: false, canceled: true };
+  return host.importFrom(picked.filePaths[0]);
+}
+// Export: the skill is checked first (no dialog for a name that is not there), then the owner picks where it goes.
+async function skillsExport(payload = {}) {
+  const host = skillsHost();
+  const name = String(payload?.name ?? "");
+  const kind = payload?.kind === "zip" ? "zip" : "folder";
+  const found = await host.read(name);
+  if (!found.ok) return found;
+  const picked = await dialog.showSaveDialog(window, {
+    title: kind === "zip" ? "Export a skill as a zip" : "Export a skill as a folder", buttonLabel: "Export",
+    defaultPath: path.join(app.getPath("documents"), kind === "zip" ? `${name}.zip` : name),
+    ...(kind === "zip" ? { filters: [{ name: "Zip file", extensions: ["zip"] }] } : {}),
+  });
+  if (picked.canceled || !picked.filePath) return { ok: false, canceled: true };
+  return host.exportTo({ name, target: picked.filePath, kind });
+}
+// ---- end of skills ---------------------------------------------------------------------
+
+// ---- Mentions in a message: @ files, / skills (docs/architecture.md, "@ # / in a message") ----
+// The box (renderer/composer-picker.js) offers a project's files, its tasks and its skills as a person types
+// @ # /. The host's half:
+//  - project:files { query, limit }: file NAMES of the open project, fuzzy and bounded (scripts/project-files.cjs),
+//    leaving out what the read tool would refuse and what .gitignore leaves out. Never contents.
+//  - agents:skills: the skills the inventory (agent-addons.cjs) finds, each with its one-line description.
+//  - A chat message that says /skill-name gets that skill's own text in what the model is told (the system
+//    prompt), inside a budget (scripts/mentions.cjs); one that is missing, or too long, is said in the reply.
+//  - A chat message that says @path gets one sentence after its words naming the project files that exist:
+//    their names, never their contents (the model's own tools decide whether it may read them).
+// Nothing is added to the thread, and a Discord message gets none of it. settings.ui.composerPicker = false
+// (Settings) or MEFI_STUDIO_NO_COMPOSER_PICKER=1 switches all of it off. Modules load on first use.
+let mentionLibLoaded = null, projectFilesLoaded = null;
+const mentionLib = () => (mentionLibLoaded ??= require("./scripts/mentions.cjs"));
+const PICKER_OFF = "The @ # / suggestions are switched off. Turn them on in Settings.";
+async function composerPickerOn() {
+  if (process.env.MEFI_STUDIO_NO_COMPOSER_PICKER === "1") return false;
+  try { return (await readSettings())?.ui?.composerPicker !== false; } catch { return true; }
+}
+function projectFilesHost() {
+  const collaborators = { root: () => (projects.open() ? projectRoot() : null) };
+  // Under the Rust host the search runs in Rust (scripts/rust-modules.cjs factory).
+  return (projectFilesLoaded ??= (typeof rustModules !== "undefined" && rustModules?.factory("project-files", collaborators)) || require("./scripts/project-files.cjs").createProjectFiles(collaborators));
+}
+async function searchProjectFiles(payload = {}) {
+  if (!(await composerPickerOn())) return { ok: false, off: true, error: PICKER_OFF };
+  return projectFilesHost().search({ query: payload?.query, limit: payload?.limit });
+}
+// The inventory's skills, one of each name: the project's before the home folder's, .agents before other tools' folders.
+async function mentionSkills() {
+  const seen = new Set(), rows = [];
+  for (const row of await agentAddons.inventory(projectRoot())) { if (!seen.has(row.name)) { seen.add(row.name); rows.push(row); } }
+  return rows;
+}
+async function listPickerSkills() {
+  if (!(await composerPickerOn())) return { ok: false, off: true, error: PICKER_OFF };
+  if (!projects.open()) return { ok: false, error: "Open a project first." };
+  const format = require("./scripts/skill-format.cjs");
+  const skills = [];
+  for (const row of (await mentionSkills()).slice(0, 100)) {
+    let head = "";
+    try {
+      const handle = await require("node:fs/promises").open(row.file, "r");
+      try { const { bytesRead, buffer } = await handle.read(Buffer.alloc(4096), 0, 4096, 0); head = buffer.subarray(0, bytesRead).toString("utf8"); } finally { await handle.close(); }
+    } catch { /* a skill that can not be read lists with no description */ }
+    skills.push({ name: row.name, description: format.describe(head), scope: row.scope });
+  }
+  return { ok: true, skills };
+}
+// What a chat message's mentions bring: { system, message, notes } for the reply path, or null when there is nothing.
+async function mentionExtras(user) {
+  const text = String(user?.text ?? "");
+  if (!text || user?.remote === true || !/[@/]/.test(text)) return null;
+  if (!projects.open() || !(await composerPickerOn())) return null;
+  const lib = mentionLib();
+  let system = "", message = "";
+  const missing = [];
+  let skipped = [];
+  const calls = lib.skillCalls(text);
+  if (calls.length) {
+    const rows = await mentionSkills().catch(() => []);
+    const found = [];
+    for (const call of calls) {
+      const row = rows.find((item) => item.name === call.name);
+      if (!row) { if (call.asked) missing.push(call.name); continue; }
+      let body = "";
+      try { body = await readFile(row.file, "utf8"); } catch { /* read again next time */ }
+      if (body) found.push({ name: row.name, text: body });
+    }
+    const section = lib.skillSection(found);
+    if (section.text) system = scrubOutbound(section.text);
+    skipped = section.skipped;
+  }
+  const paths = lib.files(text);
+  if (paths.length) {
+    const real = await projectFilesHost().resolve(paths).catch(() => []);
+    if (real.length) message = lib.fileLine(real);
+  }
+  if (!system && !message && !missing.length && !skipped.length) return null;
+  return { system, message, notes: () => lib.notes({ missing, skipped }) };
+}
+// ---- end of mentions in a message --------------------------------------------------------
 
 // The card's Work on it: the node becomes the assistant's NEXT piece of work.
 // It is focused (follow-ups and the gold ring follow), pinned to the front of
@@ -13417,6 +14197,8 @@ function assistantQuestion(payload = {}) {
   assistantTrim(assistantState.questions, assistantCaps().questions);
   assistantLog("question", `${question.kind === "suggestion" ? "suggested" : "asked"}: ${title}`);
   assistantEmit({ kind: "question", ...question });
+  // Windows hears of it only if it is still waiting in twenty seconds (Notifications).
+  if (typeof alertsQuestion === "function") alertsQuestion(question);
   saveAssistant({ force: true }).catch(() => {});
   return question;
 }
@@ -13904,7 +14686,7 @@ async function executorLog(record) {
     } catch {
       await rm(temp, { force: true }).catch(() => {});
     }
-  }).catch(() => {});
+  }).catch(() => { if (typeof logWriteHealth !== "undefined") logWriteHealth.failure("executor"); });
   executorLogChain = run;
   return run;
 }
@@ -14587,18 +15369,30 @@ async function restoreTaskContext({ taskId, revisionId, projectId } = {}) {
 async function deleteTask({ taskId, projectId } = {}) {
   const error = taskProjectError(projectId);
   if (error) return { ok: false, error };
-  const result = await mutateBoard((board) => {
-    const task = board.tasks.find((item) => item?.id === taskId);
-    if (!task) return { ok: false, error: "Task not found in this project." };
-    if (task.runId || ["active", "running", "awaiting_verification", "verifying", "absorbed"].includes(task.status) || autopilot.jobs.some((job) => job.taskId === taskId)) return { ok: false, error: "Wait for the worker or its group to finish before deleting this task." };
-    const dependents = board.tasks.filter((item) => backlog.dependencyIds(item).includes(taskId));
-    if (dependents.length) return { ok: false, error: "Other tasks depend on this one. Remove their prerequisite links before deleting it." };
-    recordDroppedHandoff(board, task);
-    return { ok: true, tasks: board.tasks.filter((item) => item.id !== taskId) };
-  });
+  // Recently deleted (the "Board trash" block): the record is kept BEFORE the
+  // board write that removes it, and `sink` says what can be brought back. With
+  // the block off or absent (MEFI_STUDIO_NO_BOARD_TRASH=1) a delete is for good.
+  const sink = { kept: [], removed: 0 };
+  let result;
+  try {
+    result = await mutateBoard((board) => {
+      const task = board.tasks.find((item) => item?.id === taskId);
+      if (!task) return { ok: false, error: "Task not found in this project." };
+      if (task.runId || ["active", "running", "awaiting_verification", "verifying", "absorbed"].includes(task.status) || autopilot.jobs.some((job) => job.taskId === taskId)) return { ok: false, error: "Wait for the worker or its group to finish before deleting this task." };
+      const dependents = board.tasks.filter((item) => backlog.dependencyIds(item).includes(taskId));
+      if (dependents.length) return { ok: false, error: "Other tasks depend on this one. Remove their prerequisite links before deleting it." };
+      recordDroppedHandoff(board, task);
+      return { ok: true, tasks: board.tasks.filter((item) => item.id !== taskId) };
+    }, typeof boardTrashBefore === "function" ? boardTrashBefore("task", { via: "tasks:delete" }, sink) : undefined);
+  } catch (failure) {
+    // A copy kept for a delete that then failed is taken out again if the card is still on the board.
+    if (sink.kept.length && typeof boardTrashReconcile === "function") await boardTrashReconcile("task", sink);
+    if (!failure?.boardTrash) throw failure;
+    return { ok: false, error: failure.message };
+  }
   if (!result.ok) return { ok: false, error: result.error };
   await refreshAutopilotQueue();
-  return { ok: true, tasks: result.tasks.map(taskView), backlog: await backlogStatus() };
+  return { ok: true, tasks: result.tasks.map(taskView), backlog: await backlogStatus(), ...(typeof boardTrashReply === "function" ? boardTrashReply(sink) : {}) };
 }
 
 // A follow-up the owner drops or deletes stays settled for the parent that
@@ -14772,6 +15566,206 @@ function workTitleKey(value) {
   // one (compactKey delegates to it), Work on it unwrap included.
   return assistantModule?.compactKey ? assistantModule.compactKey(value) : workAdmission.titleKey(value);
 }
+
+// ---- Board trash: Recently deleted tasks and ideas ---------------------------
+// scripts/board-trash.cjs holds the rules; this block owns the file and the
+// calls. Deleting a task or an idea keeps its whole record in board-trash.json
+// beside the project's board files, 30 days and at most 50 items, so the delete
+// can be undone: from the toast's Undo, or later from the Recently deleted list
+// (`tasks:undelete`, `ideas:action` restore, `board:trash`). The copy is written
+// BEFORE the board write that removes it: mutateBoard's beforeWrite runs inside
+// the board lock, so a crash between the two leaves the card in both places and
+// never in neither, and when the copy cannot be written the card is not deleted.
+// A restore puts the record back under its id at its place and never over a card
+// that is there. MEFI_STUDIO_NO_BOARD_TRASH=1 turns all of it off: a delete is
+// for good again (the old behaviour) and nothing here reads or writes the file.
+// A function, not a constant: host suites run slices of this file with no STUDIO_ROOT.
+const boardTrashPath = () => path.join(STUDIO_ROOT, "data", "board-trash.json");
+const BOARD_TRASH_OFF = "Recently deleted is switched off for this run of Studio (MEFI_STUDIO_NO_BOARD_TRASH), so nothing was kept and nothing can be put back.";
+const boardTrashOn = () => process.env.MEFI_STUDIO_NO_BOARD_TRASH !== "1";
+// A short reason for a log line or a message, with no path in it: an fs error's text
+// names the file ("EACCES: permission denied, open 'C:\Users\…'"), and logs and
+// messages must not carry personal paths. A known code becomes words; anything else
+// keeps what comes before the first quoted name or drive path (a folder called
+// Mefi's Studio has an apostrophe in it, so quotes cannot be matched in pairs).
+function boardTrashWhy(failure) {
+  const code = typeof failure?.code === "string" ? failure.code : "";
+  const words = { ENOSPC: "the disk is full", EACCES: "permission denied", EPERM: "permission denied", EBUSY: "the file is in use", EROFS: "the disk is read-only" };
+  if (words[code]) return words[code];
+  const whole = String(failure?.message ?? failure ?? "").replace(/\s+/g, " ").trim();
+  let text = whole.split(/['"`]|\b[A-Za-z]:[\\/]|\\\\\S/)[0];
+  if (text !== whole) text = text.replace(/,\s*\w+\s*$/, "");
+  text = text.trim().slice(0, 120);
+  return code && !text.includes(code) ? `${code}${text ? ` · ${text}` : ""}` : text || "unknown error";
+}
+const boardTrashStores = new Map();
+// One store per project file, bound to the project it was made for: a switch
+// while a call is in flight cannot move it to another project's file.
+function boardTrashStore() {
+  const project = projects.current();
+  const file = projects.dataPath(boardTrashPath(), project);
+  let store = boardTrashStores.get(file);
+  if (!store) {
+    const inProject = (run) => projects.run(project, run);
+    store = boardTrash.createTrashStore({
+      // A file that is not there is an empty list; any other failure to read it
+      // is an error, never an empty list to write over.
+      read: () => inProject(async () => {
+        try { return await readFile(file, "utf8"); } catch (error) { if (error?.code === "ENOENT") return null; throw error; }
+      }),
+      // A temp file and a rename, like the board's own files.
+      write: (document) => inProject(async () => (await getEyes()).writeJson(boardTrashPath(), document)),
+      now: () => Date.now(),
+      // A file that will not read is set aside before the next write covers it.
+      setAside: (text) => inProject(async () => {
+        await writeFile(`${file}.unreadable-${Date.now()}.txt`, text);
+        logLine("[board] Recently deleted could not be read; its bytes were set aside beside it");
+      }),
+    });
+    boardTrashStores.set(file, store);
+  }
+  return store;
+}
+
+// What a delete hands mutateBoard so the records it removes are kept first.
+// `sink` collects what was kept (and how many were removed) for the reply.
+// Undefined when Recently deleted is off, which is the old behaviour.
+function boardTrashBefore(kind, { via, by = "owner" } = {}, sink = { kept: [], removed: 0 }) {
+  if (!boardTrashOn()) return undefined;
+  const key = kind === "task" ? "tasks" : "ideas";
+  return {
+    beforeWrite: async ({ before, after }) => {
+      const rows = boardTrash.removed(kind, before[key], after[key], { by, via });
+      if (!rows.length) return;
+      let out;
+      try { out = await boardTrashStore().keep(rows); }
+      catch (failure) {
+        const why = boardTrashWhy(failure);
+        logLine(`[board] Recently deleted failed to keep ${rows.length} ${kind}${rows.length === 1 ? "" : "s"}, so nothing was deleted: ${why}`);
+        throw Object.assign(new Error(`Nothing was deleted: Studio could not keep a copy in Recently deleted first (${why}).`), { boardTrash: true });
+      }
+      sink.removed += rows.length;
+      sink.kept.push(...out.kept);
+      const shown = out.kept.slice(0, 8).map((row) => row.id).join(", ");
+      logLine(`[board] kept ${out.kept.length} deleted ${kind}${out.kept.length === 1 ? "" : "s"} in Recently deleted (${shown}${out.kept.length > 8 ? ", …" : ""})${out.dropped.length ? `; let go of ${out.dropped.length} older` : ""}`);
+    },
+  };
+}
+// What a delete's reply says was kept: small rows, never the records.
+const boardTrashReply = (sink) => (sink.kept.length ? { trashed: sink.kept.map(({ kind, id, title, deletedAt }) => ({ kind, id, title, deletedAt })), ...(sink.removed > sink.kept.length ? { notKept: sink.removed - sink.kept.length } : {}) } : {});
+
+// A copy kept for a delete that then failed is taken out again when the card is
+// still on the board, so the list never offers to restore a card that was never
+// deleted. Best effort: a copy that stays is harmless, the list flags it.
+async function boardTrashReconcile(kind, sink) {
+  try {
+    const rows = await (await getEyes()).readJson(kind === "task" ? TASKS_PATH : IDEAS_PATH, []);
+    const present = new Set((Array.isArray(rows) ? rows : []).map((row) => row?.id));
+    const store = boardTrashStore();
+    for (const item of sink.kept) if (present.has(item.id)) await store.remove(kind, item.id);
+  } catch (failure) {
+    logLine(`[board] could not tidy Recently deleted after a delete that did not land: ${boardTrashWhy(failure)}`);
+  }
+}
+
+// Put one kept record back: found in the list, checked and placed inside the
+// board lock (never over a card with its id), and only then taken off the list.
+// A prerequisite it named that is gone is reported, not dropped: the card then
+// waits, visibly, for a task that no longer exists.
+async function boardTrashPutBack(kind, id) {
+  if (!boardTrashOn()) return { ok: false, error: BOARD_TRASH_OFF };
+  const store = boardTrashStore();
+  const item = await store.find(kind, id);
+  if (!item) return { ok: false, error: `That ${kind} is not in Recently deleted any more. It may already be back, or it was deleted more than ${boardTrash.KEPT_DAYS} days ago.` };
+  let missing = [];
+  const result = await mutateBoard((board) => {
+    if (kind === "idea") {
+      const out = applyIdeaAction(board.ideas, { action: "restore", record: item.record, index: item.index, afterId: item.afterId });
+      return out.ok ? { ok: true, ideas: out.ideas } : { ok: false, error: out.error };
+    }
+    const out = boardTrash.place(board.tasks, item);
+    if (!out.ok) return { ok: false, error: out.error };
+    missing = backlog.dependencyIds(item.record).filter((dependency) => !board.tasks.some((task) => task.id === dependency));
+    return { ok: true, tasks: out.rows, revisionNote: "Put back from Recently deleted" };
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  try { await store.remove(kind, id); }
+  catch (failure) { logLine(`[board] a ${kind} was put back but its copy stayed in Recently deleted: ${boardTrashWhy(failure)}`); }
+  logLine(`[board] put back ${kind} ${id} from Recently deleted`);
+  return { ok: true, item, result, missing };
+}
+
+async function undeleteTask({ taskId, projectId } = {}) {
+  const error = taskProjectError(projectId);
+  if (error) return { ok: false, error };
+  const id = typeof taskId === "string" ? taskId : "";
+  if (!id) return { ok: false, error: "Choose a deleted task to put back." };
+  const back = await boardTrashPutBack("task", id);
+  if (!back.ok) return { ok: false, error: back.error };
+  await refreshAutopilotQueue();
+  assistantAskForWork("a deleted task was put back");
+  const task = back.result.tasks.find((row) => row.id === id);
+  return {
+    ok: true, projectId: projects.current().id, task: taskView(task), tasks: back.result.tasks.map(taskView), backlog: await backlogStatus(),
+    restored: { kind: "task", id, title: back.item.title },
+    ...(back.missing.length ? { warning: `It waits for ${back.missing.length === 1 ? "a task" : `${back.missing.length} tasks`} that ${back.missing.length === 1 ? "is" : "are"} no longer on the board. Open it to change its prerequisites.` } : {}),
+  };
+}
+
+async function restoreIdea({ ideaId } = {}) {
+  const id = typeof ideaId === "string" ? ideaId : "";
+  if (!id) return { ok: false, error: "Choose a deleted idea to put back." };
+  const back = await boardTrashPutBack("idea", id);
+  if (!back.ok) return { ok: false, error: back.error, projectId: projects.current().id };
+  return { ok: true, projectId: projects.current().id, ideas: back.result.ideas, restored: { kind: "idea", id, title: back.item.title } };
+}
+
+// The Recently deleted list: newest first, each with when it goes and whether a
+// restore would be refused now. The records stay here.
+async function boardTrashList({ projectId, kinds = null } = {}) {
+  const error = taskProjectError(projectId);
+  if (error) return { ok: false, error };
+  const base = { projectId: projects.current().id, keptDays: boardTrash.KEPT_DAYS, max: boardTrash.MAX_ITEMS };
+  if (!boardTrashOn()) return { ok: true, enabled: false, items: [], ...base };
+  try {
+    const eyes = await getEyes();
+    const [tasks, ideas] = await Promise.all([eyes.readJson(TASKS_PATH, []), eyes.readJson(IDEAS_PATH, [])]);
+    const present = new Set([...(Array.isArray(tasks) ? tasks : []).map((row) => `task:${row?.id}`), ...(Array.isArray(ideas) ? ideas : []).map((row) => `idea:${row?.id}`)]);
+    const items = await boardTrashStore().list({ exists: (kind, id) => present.has(`${kind}:${id}`), kinds: Array.isArray(kinds) ? kinds.filter((kind) => boardTrash.KINDS.includes(kind)) : null });
+    return { ok: true, enabled: true, items, ...base };
+  } catch (failure) {
+    return { ok: false, error: `Recently deleted could not be read: ${boardTrashWhy(failure)}`, ...base };
+  }
+}
+// ---- end of Board trash ------------------------------------------------------
+
+// ---- Search switches ---------------------------------------------------------
+// Search (renderer/palette.js) has two extras nobody asked for: Recent, when the
+// box is empty, and "task …" / "idea …" adding a card on Enter. Each is on unless
+// settings.ui says searchRecents / searchQuickCreate false, or this run says so
+// with MEFI_STUDIO_NO_SEARCH_RECENTS=1 / MEFI_STUDIO_NO_QUICK_CREATE=1 (a switch
+// for one machine, or for a test). prefs:get puts the answer on the page's prefs.
+function searchSwitchesOff() {
+  return {
+    ...(process.env.MEFI_STUDIO_NO_SEARCH_RECENTS === "1" ? { searchRecents: false } : {}),
+    ...(process.env.MEFI_STUDIO_NO_QUICK_CREATE === "1" ? { searchQuickCreate: false } : {}),
+  };
+}
+// ---- end of Search switches --------------------------------------------------
+
+// ---- Tab switches --------------------------------------------------------------
+// Layout v2's tab strip (renderer/tabs.js) opens, closes, replaces and offers
+// things on its own: a preview tab, a background tab for an agent that needs you,
+// tabs of finished work closing after a while, a cap on open tabs and a pin
+// suggestion. Each has a switch in Configuration › UI & Surfaces (kept in the
+// page's storage, mefiStudio.tabs.prefs.v1) and one master switch turns all of it
+// off. This run can say so too, with MEFI_STUDIO_NO_TAB_MANAGER=1 (a switch for one
+// machine, or for a test): prefs:get puts tabsManage: false on the page's prefs and
+// the strip keeps to what you do yourself. Only the value 1 counts.
+function tabSwitchesOff() {
+  return process.env.MEFI_STUDIO_NO_TAB_MANAGER === "1" ? { tabsManage: false } : {};
+}
+// ---- end of Tab switches -----------------------------------------------------
 
 // The shared theme keys from the pure module — the SAME keys the compactor
 // and the promotion pass use, so "the same work" means one thing everywhere.
@@ -15609,7 +16603,15 @@ function sameRows(next, prev) {
 // process (a fresh parse after the file changed underneath) is hashed as
 // before, so drift written by another process is still recorded.
 const revisionBodies = new WeakMap();
-async function mutateBoard(mutator) {
+// `options.beforeWrite({ before, after })` (optional, async) is for a caller that
+// must keep what a change removes BEFORE the change lands: Recently deleted
+// (the "Board trash" block). It runs inside the lock, after the mutator has
+// accepted the change and before any file is written, with the rows as they were
+// read and the rows about to be written. If it throws, nothing is written and
+// the error reaches the caller. A store transaction cannot await, so a change
+// that carries one takes the file path below, which reads and writes the same
+// rows through readJson and writeJson.
+async function mutateBoard(mutator, options = {}) {
   const eyes = await getEyes();
   let project = null;
   try { project = projects.current(); } catch {}
@@ -15663,7 +16665,7 @@ async function mutateBoard(mutator) {
     // ride the gateway either way. The gateway AWAITS it: the result is a
     // Promise, and broadcasting off `result.written` before resolution sent
     // no mutation events at all.
-    if (typeof eyes.boardMutate === "function" && eyes.boardEnabled()) {
+    if (typeof eyes.boardMutate === "function" && eyes.boardEnabled() && typeof options?.beforeWrite !== "function") {
       const result = await eyes.boardMutate(applyMutation);
       const events = { requests: "eyes:requests", tasks: "eyes:tasks", ideas: "eyes:ideas" };
       for (const key of result.written ?? []) send(events[key], key === "tasks" ? result[key].map(taskView) : result[key]);
@@ -15690,6 +16692,7 @@ async function mutateBoard(mutator) {
       tasks: patch.tasks ?? board.tasks,
       ideas: patch.ideas ?? board.ideas,
     };
+    if (typeof options?.beforeWrite === "function" && patch.ok !== false) await options.beforeWrite({ before: original, after: result });
     const written = [];
     for (const [file, key, event] of [
       [REQUESTS_PATH, "requests", "eyes:requests"],
@@ -16591,6 +17594,11 @@ async function spawnNextJob(options) {
 
     depth: Number(job.ref?.depth) || 0, // how far down a handoff chain this run sits
   };
+  // Attempt review's hooks (the "Attempt review" block): a picture of the run's folder and a shot of the preview around the
+  // worker. The typeof guard keeps the vm-sliced test hosts inert, and nothing a hook does can reach the run: a throw or a
+  // rejection is dropped here, so a failed picture can never fail, hold or re-queue the work.
+  const reviewing = typeof attemptReview === "object" && attemptReview !== null ? attemptReview : null;
+  const reviewHook = (name, ...args) => { try { return reviewing ? reviewing[name](...args) : null; } catch { return null; } };
   // Resolve against this dispatch's selected project, and retain the module
   // that owns the registry: a live module reload must not strand its claims.
   const claimRegistry = assistantModule;
@@ -16616,6 +17624,7 @@ async function spawnNextJob(options) {
     if (typeof agentBrain !== "undefined" && agentBrain && entry?.deskTool) agentBrain.releaseDeskTool(entry.id);
     if (typeof agentToolConfigs !== "undefined" && entry?.toolConfigs) agentToolConfigs.remove(entry.toolConfigs).catch(() => {});
     if (entry?.promptFile) rm(entry.promptFile, { force: true }).catch(() => {});
+    if (entry?.attemptStart) reviewHook("discard", entry);
     if (entry.releaseReason == null) {
       entry.releaseReason = (typeof reason === "string" && reason) || (typeof reapReason === "string" && reapReason) || null;
       if (entry.releaseReason && charged === true && job.ref?.id) {
@@ -16827,6 +17836,9 @@ async function spawnNextJob(options) {
       }
     }
   }
+  // Attempt review (ZB1, ZB5): a picture of the run's folder and a shot of the preview, begun now and finished (or given up
+  // on, after 25 s) before the worker starts, so neither can miss what it changes. The "Attempt review" block owns the rest.
+  if (reviewing) entry.attemptStart = Promise.resolve(reviewHook("begin", entry, job)).catch(() => null);
   // Merge-back for whichever terminal path the run takes (normal finish or a
   // stale-run discard): serialized per repository by the module's queue, and
   // every non-success outcome keeps the branch — and the checkout too when the
@@ -16835,14 +17847,18 @@ async function spawnNextJob(options) {
   // hosts that do not carry this prologue.
   const settleEntryWorktree = () => {
     if (!entry.worktree || !worktreeManager) return;
-    worktreeManager.settle(entry.worktree)
+    // Attempt review: the end picture, the checks and the shot read the run's own checkout, so they finish before it is merged back and removed.
+    Promise.resolve(reviewHook("beforeMerge", entry)).catch(() => null)
+      .then(() => worktreeManager.settle(entry.worktree))
       .then((result) => {
         // Merged, or kept on its branch: the fleet shows it on the seat.
         if (typeof fleetHost !== "undefined" && fleetHost) fleetHost.observeMerge({ runId: entry.id, branch: entry.worktree.branch, merged: result?.merged === true, reason: result?.reason });
         if (!result?.merged) logLine(`[autopilot] worktree merge-back kept branch ${entry.worktree.branch}: ${String(result?.reason ?? "unknown").slice(0, 160)}`);
         else if (result.keptWorktree) logLine(`[autopilot] worktree kept for recovery (${String(result.reason ?? "").slice(0, 120)}): ${result.keptWorktree}`);
+        reviewHook("afterMerge", entry, result);
       })
-      .catch((error) => logLine(`[autopilot] worktree merge-back failed: ${String(error?.message ?? error).slice(0, 160)}`));
+      .catch((error) => logLine(`[autopilot] worktree merge-back failed: ${String(error?.message ?? error).slice(0, 160)}`))
+      .finally(() => { reviewHook("mergeDone", entry); });
   };
   // Policy Lab PR1 — the attempt's identity: handoff lineage, the claim, the
   // route and the acceptance baseline it will be judged against. The prompt
@@ -16884,7 +17900,7 @@ async function spawnNextJob(options) {
   // code is not the success signal; that sentinel line coming back is.
   const tail = executorCore.promptTail({
     runId: entry.id, taskId: job.ref?.id, depth: entry.depth, maxDepth: EXECUTOR_MAX_DEPTH, maxHandoffs: EXECUTOR_MAX_HANDOFFS,
-    nextMark: EXECUTOR_NEXT_MARK, callMark: EXECUTOR_CALL_MARK, budgetMinutes: EXECUTOR_BUDGET_MINUTES, doneMark: EXECUTOR_DONE_MARK,
+    nextMark: EXECUTOR_NEXT_MARK, callMark: EXECUTOR_CALL_MARK, budgetMinutes: typeof taskToldBudget === "function" ? taskToldBudget(job.ref, entry) : EXECUTOR_BUDGET_MINUTES, doneMark: EXECUTOR_DONE_MARK,
     protocol: brainHints.protocol,
   });
   // Push memory: the builder gets a compiled mini-index of what the studio
@@ -16994,12 +18010,15 @@ async function spawnNextJob(options) {
       // A folder that cannot be written is no reason to drop the work: the
       // run goes ahead without Studio tools, and the log says so.
       entry.toolConfigs = await agentToolConfigs.prepare({ root: entry.worktree?.path || projectRoot(), settings: entry.agentConfiguration?.configuration || await readAgentSettings(), desk: entry.deskTool,
-        script: path.join(STUDIO_ROOT, "scripts", "agent-tools-mcp.cjs") }).catch((error) => {
+        script: path.join(STUDIO_ROOT, "scripts", "agent-tools-mcp.cjs"), ...(typeof reviewToolOptions === "function" ? reviewToolOptions(entry) : {}) }).catch((error) => {
         logLine(`[autopilot] Studio tools not attached to "${assistantClip(job.title, 60)}": ${String(error?.message ?? error).slice(0, 160)}`);
         return null;
       });
     }
-    const skillInstructions = typeof agentAddons === "undefined" ? "" : scrubOutbound(await agentAddons.instructions(projectRoot(), entry.agentConfiguration?.configuration || await readAgentSettings(), "builder"));
+    // The route's CLI decides how the project's rules reach this builder: Claude Code,
+    // Codex and OpenCode read AGENTS.md and CLAUDE.md themselves, so they get the owner's
+    // own rules text only (agent-rules.cjs deliversFiles).
+    const skillInstructions = typeof agentAddons === "undefined" ? "" : scrubOutbound(await agentAddons.instructions(projectRoot(), entry.agentConfiguration?.configuration || await readAgentSettings(), "builder", { cli: runRoute?.cli }));
     // A task's saved record goes to the worker as its own small run file
     // (writeTaskRunContext); the handoff header points at it. Only when that
     // write fails is the builder sent to the whole board file, as before.
@@ -17011,9 +18030,18 @@ async function spawnNextJob(options) {
         logLine(`[autopilot] could not write the run context for "${assistantClip(job.title, 60)}": ${String(error?.message ?? error).slice(0, 160)}`);
       }
     }
+    let seatRecap = "";
+    if (job.kind === "task" && typeof fleetHost !== "undefined" && typeof fleetHost?.recap === "function") {
+      let recapTimer;
+      try {
+        const recorded = await Promise.race([fleetHost.recap({ runId: entry.id, taskId: job.ref.id }), new Promise((resolve) => { recapTimer = setTimeout(() => resolve(null), 2000); })]);
+        seatRecap = recorded?.text ? scrubOutbound(recorded.text) : "";
+      } catch { /* history must never prevent the claimed task starting */ }
+      finally { clearTimeout(recapTimer); }
+    }
     const built = executorCore.workerPrompt({
       title: job.title, taskId: job.ref.id, tasksFile: projectDataPath(TASKS_PATH), ref: job.ref, resumeCheckpoint: entry.resumeCheckpoint,
-      sections: { fail: failBit, memory: memoryBit, paths: pathsBit, brain: brainHints.brief, collab: collabBit, outside: typeof outsideWork !== "undefined" ? outsideWork.briefLine(job.ref, Date.now()) : "" }, clusterBrief, tail, promptMax: EXECUTOR_PROMPT_MAX - skillInstructions.length,
+      sections: { fail: failBit, memory: memoryBit, recap: seatRecap, paths: pathsBit, brain: brainHints.brief, collab: collabBit, outside: typeof outsideWork !== "undefined" ? outsideWork.briefLine(job.ref, Date.now()) : "" }, clusterBrief, tail, promptMax: EXECUTOR_PROMPT_MAX - skillInstructions.length,
       contextPath, platform: process.platform,
       brief: (maxChars) => taskContext.buildTaskHandoff(job.ref, { tasks, maxChars, contextPath }),
     });
@@ -17041,6 +18069,17 @@ async function spawnNextJob(options) {
       entry.promptFile = file;
     } catch (error) {
       logLine(`[autopilot] could not write the grok prompt file for "${assistantClip(job.title, 60)}": ${String(error?.message ?? error).slice(0, 160)}`);
+    }
+  }
+  // Attempt review: the start picture and shot are done (or given up on, after 25 s) before the worker is created, so neither
+  // can miss what it changes. The wait can be long, so the gates are read again like after a slow checkout: a stop, a pause or a
+  // project switch that landed meanwhile cancels the claim instead of starting a worker nobody tracks.
+  if (entry.attemptStart) {
+    await entry.attemptStart;
+    if (entry.finished || projectSwitching || !launchAllowed(entry)) {
+      if (entry.worktree && typeof worktreeManager === "object" && worktreeManager) await worktreeManager.discard(entry.worktree).catch(() => {});
+      await cancelClaim("paused while the start picture was taken");
+      return "lost";
     }
   }
   // finish() sits above the spawn so a synchronous spawn failure (argument
@@ -17078,6 +18117,8 @@ async function spawnNextJob(options) {
     // (autopilotHousekeeping) marks it done.
     const ok = errorMessage == null && (entry.sawDone || code === 0);
     if (!ok && errorMessage && !userStop) autopilot.lastError = errorMessage;
+    // Attempt review (ZB1, ZB3, ZB5): the end picture, the after shot and the advisory checks, in the background. A worktree run's merge-back waits for them (settleEntryWorktree); nothing else does.
+    if (entry.attemptStart) Promise.resolve(reviewHook("end", entry, { ok, userStop })).catch(() => {});
     // What the run actually said: the sentinel and the MEFI_RESULT line are
     // recorded as sawDone/result, so neither stands in for its last words.
     const lastWords = executorCore.lastWords(entry.outputTail, EXECUTOR_DONE_MARK);
@@ -17377,8 +18418,9 @@ async function spawnNextJob(options) {
       runVerificationJobs().catch((error) => logLine(`[autopilot] verification run failed: ${error.message}`));
     } else if (userStop) {
       // The operator's stop is not the task's or the infrastructure's fault.
-      pushAutopilotHistory("stopped", `stopped on request: ${job.title} · progress saved`);
-      logLine(`[autopilot] stopped on request: "${assistantClip(job.title, 60)}" — progress saved`);
+      const limited = Number.isFinite(entry.capStop?.minutes) ? entry.capStop.minutes : null;
+      pushAutopilotHistory("stopped", limited === null ? `stopped on request: ${job.title} · progress saved` : `stopped at its ${limited} min time limit: ${job.title} · progress saved, nothing failed`);
+      logLine(limited === null ? `[autopilot] stopped on request: "${assistantClip(job.title, 60)}" — progress saved` : `[autopilot] stopped at the time limit (${limited} min): "${assistantClip(job.title, 60)}" — progress saved`);
     } else {
       // The last output line usually says what actually went wrong — keep it
       // so the feed and the chat reply can name the issue, not just "exit 1".
@@ -17702,11 +18744,24 @@ async function spawnNextJob(options) {
       inputError = String(error.message ?? error);
       logLine(`[autopilot] ${label} prompt input failed: ${inputError}`);
     });
-    if (timeout) clearTimeout(timeout);
-    timeout = setTimeout(() => {
-      stop("killed after budget", false, "budget");
-    }, EXECUTOR_KILL_MS);
-    timeout.unref?.();
+    // The attempt's time limit: min(EXECUTOR_KILL_MS, the task's own limit)
+    // (scripts/task-cap.cjs, the "Task time limit" block). A limit that ends the
+    // run stops it through the owner's stop path, so nothing is charged; the
+    // hard kill alone, or a limit switched off, ends it as a failure as before.
+    // A `tasks:cap` change while the run is live re-arms the timer (armLimit).
+    const limitedAt = Date.now();
+    const armLimit = () => {
+      if (timeout) clearTimeout(timeout);
+      const limit = typeof taskRunLimit === "function" ? taskRunLimit(job.ref, entry) : null;
+      const wait = Math.max(0, (limit ? limit.ms : EXECUTOR_KILL_MS) - (Date.now() - limitedAt));
+      timeout = setTimeout(() => {
+        if (limit?.byCap && typeof stopAtTimeLimit === "function" && stopAtTimeLimit(entry, limit.minutes)) return;
+        stop("killed after budget", false, "budget");
+      }, wait);
+      timeout.unref?.();
+    };
+    entry.armLimit = () => { if (current()) armLimit(); };
+    armLimit();
     if (startWatchdog) clearTimeout(startWatchdog);
     // Wedged-start watchdog. A run that has neither registered an OpenCode
     // session nor printed a line within the start budget is not slow, it is
@@ -19182,6 +20237,118 @@ async function stopTaskRun({ taskId, reason = "stopped by you" } = {}) {
   return { ok: true, stopped, held: true };
 }
 
+// ---- Task time limit: "Stop an attempt after N minutes" (docs/architecture.md, "A task's usage and its time limit") ----
+// One attempt of one task runs for at most min(EXECUTOR_KILL_MS, the task's own
+// limit, task.capMinutes: 5 to 240 in steps of 5, 25 when unset). The arithmetic
+// and the words are scripts/task-cap.cjs (pure). When the LIMIT is what ends the
+// run, spawnNextJob's timer calls stopAtTimeLimit, which is the owner's Stop
+// (stopExecutorJob): the checkpoint is saved, nothing is charged to the card or
+// to the model, no failure is asked about, and the card waits for the owner (an
+// ownerHold of kind "limit", so it does not simply start the same attempt again).
+// The hard kill with no limit in force is a failure as it always was.
+// MEFI_STUDIO_NO_TASK_CAP=1 switches all of it off. Loaded on first use.
+let taskCapLoaded = null;
+const taskCapLib = () => (taskCapLoaded ??= require("./scripts/task-cap.cjs"));
+const taskCapOn = () => taskCapLib().enabled(process.env);
+// What one attempt may take, { ms, byCap, minutes }; null when the limit cannot be worked out, which
+// leaves the hard kill exactly as it was (a side path never fails a run). `entry` carries a limit the
+// owner changed while it ran.
+function taskRunLimit(task, entry = null) {
+  try {
+    const lib = taskCapLib();
+    const capMinutes = Number.isFinite(entry?.capOverride) ? entry.capOverride : null;
+    return lib.limit({ killMs: EXECUTOR_KILL_MS, task, capMinutes, on: lib.enabled(process.env) });
+  } catch (error) {
+    logLine(`[autopilot] time limit unavailable, the hard kill applies: ${String(error?.message ?? error).slice(0, 160)}`);
+    return null;
+  }
+}
+// The minutes the worker is told it has: the usual budget, scaled down for a shorter limit.
+function taskToldBudget(task, entry = null) {
+  try {
+    const lib = taskCapLib();
+    return lib.enabled(process.env) ? lib.toldBudgetMinutes(EXECUTOR_BUDGET_MINUTES, taskRunLimit(task, entry).ms) : EXECUTOR_BUDGET_MINUTES;
+  } catch { return EXECUTOR_BUDGET_MINUTES; }
+}
+// The limit ends the run: stop it as the owner's Stop would. True when the stop was issued.
+function stopAtTimeLimit(job, minutes) {
+  if (!job || (job.finished && !job.settlementPending)) return false;
+  try {
+    const lib = taskCapLib();
+    const hold = lib.holdFor({ minutes, now: Date.now() });
+    const before = { ownerHold: job.ownerHold, capStop: job.capStop, stopUser: job.stopUser };
+    job.ownerHold = hold;
+    job.capStop = { minutes, at: hold.at };
+    delete job.resumeRequested;
+    if (!stopExecutorJob(job, lib.stopReason(minutes))) {
+      // Not stopped: the hard kill that follows is the failure it always was, so leave no trace of a stop.
+      job.ownerHold = before.ownerHold;
+      job.capStop = before.capStop;
+      if (before.stopUser === undefined) delete job.stopUser; else job.stopUser = before.stopUser;
+      return false;
+    }
+    assistantLog("control", `stopped the worker on ${job.taskId ?? job.id} at its ${minutes} min time limit — progress saved · held for you`);
+    logLine(`[autopilot] time limit: "${assistantClip(job.title, 60)}" stopped after ${minutes} min, progress saved`);
+    emitAutopilot();
+    return true;
+  } catch (error) {
+    logLine(`[autopilot] time limit stop failed, falling back to the hard kill: ${String(error?.message ?? error).slice(0, 160)}`);
+    return false;
+  }
+}
+// tasks:cap { taskId, minutes, projectId }: the owner's limit for this task's attempts.
+async function setTaskCap({ taskId, minutes, projectId } = {}) {
+  const error = taskProjectError(projectId);
+  if (error) return { ok: false, error };
+  const lib = taskCapLib();
+  if (!lib.enabled(process.env)) return { ok: false, off: true, error: "Time limits are switched off on this PC (MEFI_STUDIO_NO_TASK_CAP)." };
+  const wanted = lib.normalize(minutes);
+  if (!wanted.ok) return { ok: false, error: wanted.error };
+  const result = await mutateBoard((board) => {
+    const task = board.tasks.find((item) => item?.id === taskId);
+    if (!task) return { ok: false, error: "Task not found in this project." };
+    if (task.capMinutes !== wanted.minutes) {
+      task.capMinutes = wanted.minutes;
+      task.updatedAt = Date.now();
+    }
+    return { ok: true };
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  // An attempt that is running follows the new limit now: a shorter one may stop it at once.
+  for (const job of autopilot.jobs ?? []) {
+    if (job.taskId !== taskId || job.finished || typeof job.armLimit !== "function") continue;
+    job.capOverride = wanted.minutes;
+    job.armLimit();
+  }
+  const limit = taskRunLimit({ capMinutes: wanted.minutes });
+  return { ok: true, taskId, minutes: wanted.minutes, clamped: wanted.clamped, effectiveMinutes: limit.minutes, ceilingMinutes: lib.ceilingMinutes(EXECUTOR_KILL_MS), task: taskView(result.tasks.find((task) => task.id === taskId)) };
+}
+// task:metrics { taskId, projectId }: this attempt's and the whole task's time, tokens and cost.
+// The two ledgers usage:task reads (Studio's calls, OpenCode's turns) plus the executor ledger.
+async function readTaskMetrics({ taskId, projectId } = {}) {
+  const error = taskProjectError(projectId);
+  if (error) return { ok: false, error };
+  try {
+    const now = Date.now();
+    const eyes = await getEyes();
+    const tasks = await eyes.readJson(TASKS_PATH, []);
+    const task = tasks.find((row) => row?.id === taskId);
+    if (!task) return { ok: false, error: "That task is not on the board." };
+    let ledger = "";
+    try { ledger = await readFile(projectDataPath(EXECUTOR_LOG_PATH), "utf8"); } catch (failure) { if (failure?.code !== "ENOENT") throw failure; }
+    let usageRows = null, storeOk = false;
+    try {
+      const [state, store] = await Promise.all([modelPerformanceStore().read(), codingSessionUsage(now)]);
+      usageRows = mergeLedgers({ studio: state.observations, store: store.rows });
+      storeOk = store.ok === true;
+    } catch (failure) { logLine(`[usage] task metrics could not read the usage ledgers: ${String(failure?.message ?? failure).slice(0, 160)}`); }
+    return require("./scripts/task-metrics.cjs").taskMetrics({ task, tasks, ledger, usageRows, storeOk, now, killMs: EXECUTOR_KILL_MS, capOn: taskCapOn(), projectId: projects.current().id });
+  } catch (failure) {
+    return { ok: false, error: `The usage could not be read: ${String(failure?.message ?? failure).slice(0, 160)}` };
+  }
+}
+// ---- end of the task time limit ---------------------------------------------------
+
 async function stopAllAgents({ reason = "stopped by user", pauseAssistant = true, pauseExecutor = true, waitMs = 20000 } = {}) {
   if (stopAllPromise) return stopAllPromise;
   stopAllPromise = (async () => {
@@ -19226,6 +20393,9 @@ async function stopAllAgents({ reason = "stopped by user", pauseAssistant = true
 async function restartStudio({ stopAgents = true, reason = "restarting", files = [] } = {}) {
   if (activeChild && activeChild.exitCode === null) return { deferred: true, reason: "Love2D is running" };
   if (projectSwitching) return { deferred: true, reason: "Project switch is saving progress before update" };
+  const closingPaired = typeof pairedWorkersClose === "function";
+  if (closingPaired) pairedWorkersClosing = true;
+  try {
   if (stopAgents) {
     const stopped = await stopAllAgents({ reason, pauseAssistant: true, pauseExecutor: true });
     if (stopped?.ok === false) return stopped;
@@ -19236,7 +20406,8 @@ async function restartStudio({ stopAgents = true, reason = "restarting", files =
       if (saved?.ok === false) return { ok: false, error: `Could not save agent progress: ${saved.error}` };
     }
   }
-  return applyRestart(files, { counted: false });
+  return await applyRestart(files, { counted: false });
+  } finally { if (closingPaired) pairedWorkersClosing = false; }
 }
 
 // Retained manual-mode default; automatic mode uses measured resources.
@@ -19564,6 +20735,23 @@ function zoomFactorOf(value) {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? Math.min(1.5, Math.max(0.7, Math.round(number * 20) / 20)) : 1;
 }
+// Ctrl +, Ctrl - and Ctrl 0 walk this ladder (fine below 130%, coarser above), from
+// wherever the slider left the scale; 0 is back to 100%.
+const ZOOM_STEPS = [0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1, 1.05, 1.1, 1.15, 1.2, 1.25, 1.3, 1.4, 1.5];
+function zoomStepOf(current, direction) {
+  const at = zoomFactorOf(current);
+  if (!direction) return 1;
+  return direction > 0
+    ? ZOOM_STEPS.find((step) => step > at + 0.0005) ?? ZOOM_STEPS[ZOOM_STEPS.length - 1]
+    : [...ZOOM_STEPS].reverse().find((step) => step < at - 0.0005) ?? ZOOM_STEPS[0];
+}
+async function stepUiZoom(direction) {
+  if (!window || window.isDestroyed()) return;
+  const next = zoomStepOf(window.webContents.getZoomFactor(), direction);
+  window.webContents.setZoomFactor(next);
+  await updateSettings((settings) => { settings.ui = { ...(settings.ui ?? {}), zoom: next }; });
+  send("ui:zoom-changed", { factor: next });
+}
 async function traceChannels() {
   const channels = [];
   for (const channel of TRACE_CHANNELS) {
@@ -19582,9 +20770,9 @@ async function traceRead({ channel = "studio", tail = 250, text = "", problems =
   try {
     const read = await traceRows(channel, { tail });
     const result = trace.query(read?.rows ?? [], { tail, text, problems: problems === true, level: ["error", "warn", "info"].includes(level) ? level : null, sources: Array.isArray(sources) ? sources.slice(0, 12).map(String) : null });
-    return { ok: true, channel, ...result, size: read?.size ?? 0, file: read?.file ?? null, dropped: channel === "studio" ? traceStudio.dropped() : 0 };
+    return { ok: true, channel, ...result, size: read?.size ?? 0, file: read?.file ?? null, dropped: channel === "studio" ? traceStudio.dropped() : 0, logWriteFailures: typeof logWriteHealth !== "undefined" ? logWriteHealth.snapshot() : [] };
   } catch (error) {
-    return { ok: false, channel, error: String(error.message ?? error).slice(0, 300) };
+    return { ok: false, channel, error: String(error.message ?? error).slice(0, 300), logWriteFailures: typeof logWriteHealth !== "undefined" ? logWriteHealth.snapshot() : [] };
   }
 }
 
@@ -20597,6 +21785,8 @@ async function selectProject(id, { saveProgress = false } = {}) {
   } finally {
     projectSwitching = false;
     if (assistantLoop) projects.run(projects.active(), () => assistantSchedule());
+    // Another project has another queue: the taskbar count looks again.
+    if (typeof alertsPoke === "function") alertsPoke();
   }
 }
 
@@ -20608,7 +21798,7 @@ function projectPreviewService() {
     const { createProjectPreview } = require("./scripts/project-preview.cjs");
     projectPreviewManager = createProjectPreview({
       openExternal: (url) => shell.openExternal(url),
-      onChange: (state) => send("project-preview:changed", state),
+      onChange: (state) => { send("project-preview:changed", state); if (typeof reviewMirrorPreviewLogs === "function") reviewMirrorPreviewLogs(state); },
     });
   }
   return projectPreviewManager;
@@ -20673,6 +21863,411 @@ function registerProjectPreviewIpc() {
   // app.exit (live updates) bypasses before-quit; terminate only owned trees.
   process.on("exit", () => projectPreviewManager?.disposeSync());
 }
+
+// ---- Attempt review: before and after pictures, changed files, advisory checks and shots ----
+// ZB1 and ZB2 (Changed files, Accept, Revert file, Revert attempt), ZB3 (advisory checks) and ZB5 (before and after
+// shots of the preview); docs/architecture.md "Attempt review". Around every builder attempt this block keeps a picture
+// of the folder the run works in (scripts/attempt-snapshots-host.cjs: refs/mefi/attempts/<task>/<n>/before and after,
+// local, never pushed), a screenshot of the project preview when one is running (scripts/attempt-evidence-host.cjs,
+// scripts/evidence-window.cjs) and the advisory lint and typecheck results (scripts/advisory-checks-host.cjs), and answers
+// the page's tasks:changes, tasks:diff, tasks:accept, tasks:revert, tasks:checks, tasks:check-run, tasks:evidence and
+// review:prefs. Each of the three has a setting (settings.review) and a kill switch (MEFI_STUDIO_NO_ATTEMPT_SNAPSHOTS,
+// MEFI_STUDIO_NO_ADVISORY_CHECKS, MEFI_STUDIO_NO_EVIDENCE_SHOTS; scripts/review-prefs.cjs), and none can fail or stop a
+// run: each step has its own time limit, the run waits only for the start picture and shot (25 s at most), and a failure
+// is one log line without a path in it. spawnNextJob reaches attemptReview through `typeof` guards, because the vm-sliced
+// executor hosts do not carry this block. Nothing here changes a task's Done state: Accept records the owner's word on
+// the card (acceptedAttempts), and a whole-attempt Revert reopens the task through the ordinary status path.
+const REVIEW_START_CAP_MS = 25000;
+const REVIEW_SHOT_WAIT_MS = 8000;
+const REVIEW_END_CAP_MS = 6 * 60 * 1000;
+const reviewHosts = {};
+const reviewText = (value, max = 200) => (typeof value === "string" ? value.slice(0, max) : "");
+const reviewNumber = (value) => (Number.isSafeInteger(value) && value >= 1 && value <= 999999 ? value : null);
+const reviewDelay = (ms) => new Promise((resolve) => { const timer = setTimeout(resolve, ms); timer.unref?.(); });
+const reviewKey = (folder) => { const resolved = path.resolve(String(folder ?? "")); return process.platform === "win32" ? resolved.toLowerCase() : resolved; };
+const reviewFailure = (error) => String(error?.message ?? error).replace(/([a-z][a-z0-9+.-]*:\/\/)[^/@\s]+@/gi, "$1").slice(0, 200);
+const reviewRules = () => (reviewHosts.rules ??= require("./scripts/attempt-snapshots.cjs"));
+
+// The owner's choices and the environment's, as last read (the kill switches are read on every use).
+let reviewPrefsCache = null;
+const reviewPrefs = () => reviewPrefsCache ?? require("./scripts/review-prefs.cjs").prefsFrom(null, process.env);
+async function readReviewPrefs() {
+  try { reviewPrefsCache = require("./scripts/review-prefs.cjs").prefsFrom((await readSettings()).review, process.env); } catch { /* the last view stands */ }
+  return reviewPrefs();
+}
+
+const attemptSnapshotsHost = () => (reviewHosts.snapshots ??= require("./scripts/attempt-snapshots-host.cjs").createAttemptSnapshots({ disabled: () => !reviewPrefs().snapshots, log: (line) => logLine(line) }));
+const attemptEvidenceHost = () => (reviewHosts.evidence ??= require("./scripts/attempt-evidence-host.cjs").createAttemptEvidence({
+  // The project's own data folder (never the repository): attempt-evidence/<task>/<n>/ goes inside it.
+  root: () => path.dirname(projectDataPath(TASKS_PATH)),
+  capture: (url, options) => (window && !window.isDestroyed()
+    // Under the Rust host the host takes the shot (scripts/rust-modules.cjs factory).
+    ? (reviewHosts.window ??= (typeof rustModules !== "undefined" && rustModules?.factory("evidence-window", { log: (line) => logLine(line) })) || require("./scripts/evidence-window.cjs").createEvidenceWindow({ electron, log: (line) => logLine(line) })).capture(url, options)
+    : Promise.resolve({ ok: false, error: "no window" })),
+  log: (line) => logLine(line),
+}));
+const advisoryHost = () => (reviewHosts.advisory ??= require("./scripts/advisory-checks-host.cjs").createAdvisoryChecks({ disabled: () => !reviewPrefs().advisory, log: (line) => logLine(line) }));
+
+// What is working in a folder right now. A run in its own worktree edits that folder, not the project's; the project's
+// folder is also busy while a finished run is being merged into it.
+const reviewJobs = () => (typeof autopilot !== "undefined" ? autopilot.jobs ?? [] : []).filter((job) => job && !job.finished);
+const reviewFolder = (job) => job.worktree?.path || job.projectPath;
+const reviewSettling = new Map();
+const reviewBusy = (root) => reviewJobs().some((job) => reviewKey(reviewFolder(job)) === reviewKey(root)) || (reviewSettling.get(reviewKey(root)) ?? 0) > 0;
+
+// The project preview's own status, read without starting or probing anything new.
+async function reviewPreviewStatus(project) {
+  if (!projectPreviewManager || projectPreviewQuit === true || !project?.id) return null;
+  try { const state = await projectPreviewManager.status(project, { urls: [] }); return { phase: state.phase, url: state.url }; } catch { return null; }
+}
+const reviewChanged = (entry, what) => { try { send("review:changed", { projectId: entry?.projectId ?? projects.current().id, taskId: entry?.attempt?.taskId ?? entry?.taskId ?? null, attempt: entry?.attempt?.n ?? null, what }); } catch { /* a missing window is not a failure */ } };
+
+async function reviewShot(entry, phase, cancelled = null) {
+  const attempt = entry.attempt;
+  if (!attempt || !reviewPrefs().shots) return null;
+  const preview = await reviewPreviewStatus(entry.project ?? projects.current());
+  const result = await attemptEvidenceHost().shot({ taskId: attempt.taskId, n: attempt.n, runId: entry.id, phase, preview, prefs: reviewPrefs(), cancelled });
+  if (result?.captured) reviewChanged(entry, "shot");
+  return result;
+}
+async function reviewAdvisory(entry) {
+  const attempt = entry.attempt;
+  const results = await advisoryHost().runAll(attempt.root, { prefs: reviewPrefs() });
+  if (!results.length) return null;
+  await attemptEvidenceHost().saveChecks({ taskId: attempt.taskId, n: attempt.n, runId: entry.id, results });
+  reviewChanged(entry, "checks");
+  return results;
+}
+
+const attemptReview = {
+  // The run's start: a picture of its folder, then a shot of the preview. The worker starts when this answers (at most
+  // REVIEW_START_CAP_MS later), so neither can miss what the worker changes; the work itself goes on if it is slow.
+  begin(entry, job) {
+    if (!entry || job?.kind !== "task" || !job.ref?.id) return Promise.resolve(null);
+    const work = projects.run(entry.project ?? projects.current(), async () => {
+      const prefs = await readReviewPrefs();
+      if (!prefs.snapshots && !prefs.shots && !prefs.advisory) return null;
+      const taskId = job.ref.id;
+      const folder = entry.worktree?.path || entry.projectPath;
+      const numbers = await attemptEvidenceHost().numbers(taskId);
+      // Runs sharing this folder see each other's changes in their lists: both say so.
+      const together = reviewJobs().filter((other) => other !== entry && Boolean(other.worktree) === Boolean(entry.worktree) && reviewKey(reviewFolder(other)) === reviewKey(folder));
+      entry.attemptOverlap = new Set(together.map((other) => other.id));
+      for (const other of together) other.attemptOverlap?.add?.(entry.id);
+      let n = null;
+      let snapshots = false;
+      if (prefs.snapshots) {
+        // A picture that cannot be taken is one log line: the attempt still has its number and its shot.
+        try {
+          const started = await attemptSnapshotsHost().begin({ root: folder, taskId, runId: entry.id, worktree: Boolean(entry.worktree), overlap: [...entry.attemptOverlap], numbers });
+          if (started?.ok) { n = started.n; snapshots = true; }
+        } catch (error) { logLine(`[review] the start picture was not taken (${error?.code || error?.name || "error"}) run ${entry.id}`); }
+      }
+      n ??= reviewRules().nextAttempt(numbers);
+      entry.attempt = { n, taskId, root: folder, snapshots };
+      reviewChanged(entry, "started");
+      let gaveUp = false;
+      await Promise.race([reviewShot(entry, "before", () => gaveUp), reviewDelay(REVIEW_SHOT_WAIT_MS).then(() => { gaveUp = true; })]);
+      return entry.attempt;
+    }).catch((error) => { logLine(`[review] the start of an attempt was not recorded (${error?.code || error?.name || "error"}) run ${entry.id}`); return null; });
+    entry.attemptStartWork = work;
+    return Promise.race([work, reviewDelay(REVIEW_START_CAP_MS).then(() => null)]);
+  },
+  // The run's end: the end picture, the after shot (a worktree run's waits for its merge) and the advisory checks. Answers
+  // when they are done or after REVIEW_END_CAP_MS; a worktree run's merge-back waits for that, nothing else does.
+  end(entry, { ok = false, userStop = false } = {}) {
+    if (!entry?.attemptStartWork) return Promise.resolve(null);
+    const work = projects.run(entry.project ?? projects.current(), async () => {
+      await entry.attemptStartWork;
+      const attempt = entry.attempt;
+      if (!attempt) return null;
+      let changed = null;
+      if (attempt.snapshots) {
+        try {
+          const ended = await attemptSnapshotsHost().end({ root: attempt.root, taskId: attempt.taskId, n: attempt.n, runId: entry.id, worktree: Boolean(entry.worktree), overlap: [...(entry.attemptOverlap ?? [])] });
+          attempt.ended = ended?.ok === true;
+          if (ended?.ok) changed = ended.changed;
+          reviewChanged(entry, "ended");
+        } catch (error) { logLine(`[review] the end picture was not taken (${error?.code || error?.name || "error"}) run ${entry.id}`); }
+      }
+      if (!entry.worktree) await reviewShot(entry, "after");
+      // Checks look at a run that changed something (or, with no pictures, one that reported it was done), and never at one the owner stopped.
+      if (reviewPrefs().advisory && !userStop && changed !== false && (attempt.snapshots || ok)) await reviewAdvisory(entry);
+      return attempt;
+    }).catch((error) => { logLine(`[review] the end of an attempt was not recorded (${error?.code || error?.name || "error"}) run ${entry.id}`); return null; });
+    entry.attemptEnd = Promise.race([work, reviewDelay(REVIEW_END_CAP_MS).then(() => null)]);
+    return entry.attemptEnd;
+  },
+  // A worktree run's merge waits for the end picture, the checks and the shot, which read the run's own folder.
+  beforeMerge(entry) {
+    const key = reviewKey(entry?.projectPath);
+    reviewSettling.set(key, (reviewSettling.get(key) ?? 0) + 1);
+    entry.attemptMerging = true;
+    return Promise.resolve(entry.attemptEnd ?? null).catch(() => null);
+  },
+  // The merge is over (merged, kept on its branch or failed): the project's folder is free again, and a merged run is shot.
+  afterMerge(entry, result) {
+    if (!entry?.attempt || !entry.worktree) return;
+    projects.run(entry.project ?? projects.current(), async () => {
+      if (result?.merged) await reviewShot(entry, "after");
+      else await attemptEvidenceHost().skip({ taskId: entry.attempt.taskId, n: entry.attempt.n, runId: entry.id, phase: "after", reason: "not-merged" });
+    }).catch(() => {});
+  },
+  mergeDone(entry) {
+    if (!entry?.attemptMerging) return;
+    entry.attemptMerging = false;
+    const key = reviewKey(entry.projectPath);
+    reviewSettling.set(key, Math.max(0, (reviewSettling.get(key) ?? 1) - 1));
+  },
+  // A claim cancelled before its worker started has no attempt to show: its start picture, and the start shot's folder, go.
+  discard(entry) {
+    const work = entry?.attemptStartWork;
+    if (!work || entry.attemptEnd) return;
+    work.then(async (attempt) => {
+      if (!attempt) return;
+      if (attempt.snapshots) await attemptSnapshotsHost().drop({ root: attempt.root, taskId: attempt.taskId, n: attempt.n });
+      await attemptEvidenceHost().drop({ taskId: attempt.taskId, n: attempt.n });
+      reviewChanged(entry, "dropped");
+    }).catch(() => {});
+  },
+};
+
+// What a builder's per-run tool folder gets for run_check and project_logs: whether they are on, and the preview output so far.
+const reviewLogsText = (project) => {
+  const tail = projectPreviewManager?.tail?.(project, 200);
+  return tail?.lines?.length ? `${tail.lines.join("\n")}\n` : "";
+};
+function reviewToolOptions(entry) {
+  // Called while a run's prompt is built: a failure here must not look like a prompt that could not be built.
+  try { return { review: { advisory: reviewPrefs().advisory }, logs: reviewLogsText(entry?.project) }; } catch { return {}; }
+}
+// The preview printed something: the files running builders read their project_logs from are replaced whole, after a short pause.
+const reviewLogTimers = new Map();
+function reviewMirrorPreviewLogs(state) {
+  if (!state?.projectId) return;
+  for (const job of reviewJobs()) {
+    if (job.projectId !== state.projectId || !job.toolConfigs?.logs || reviewLogTimers.has(job.id)) continue;
+    const timer = setTimeout(() => {
+      reviewLogTimers.delete(job.id);
+      const text = reviewLogsText(job.project);
+      if (job.finished || text === job.toolConfigs?.logsSent) return;
+      if (job.toolConfigs) job.toolConfigs.logsSent = text;
+      agentToolConfigs.updateLogs(job.toolConfigs, text).catch(() => {});
+    }, 600);
+    timer.unref?.();
+    reviewLogTimers.set(job.id, timer);
+  }
+}
+
+// ---- what the page asks ----
+const reviewTask = async (taskId) => {
+  const tasks = await (await getEyes()).readJson(TASKS_PATH, []);
+  return (Array.isArray(tasks) ? tasks : []).find((item) => item?.id === taskId) ?? null;
+};
+const reviewOff = async (feature) => {
+  const prefs = await readReviewPrefs();
+  return prefs[feature] ? null : { off: true, forced: prefs.forced[feature] === true };
+};
+
+async function reviewChanges(body, root) {
+  const taskId = reviewText(body.taskId);
+  if (!taskId) return { ok: false, error: "Choose a task first." };
+  const off = await reviewOff("snapshots");
+  if (off) return { ok: true, available: false, reason: "off", forced: off.forced, note: reviewRules().unavailable("off"), taskId };
+  const live = reviewJobs().find((job) => job.taskId === taskId) ?? null;
+  const result = await attemptSnapshotsHost().changes({ root, taskId, attempt: reviewNumber(body.attempt), runId: reviewText(body.runId, 80) || null, running: Boolean(live) });
+  if (!result.ok || result.available === false) return { ...result, taskId };
+  const task = await reviewTask(taskId);
+  const accepted = new Set((Array.isArray(task?.acceptedAttempts) ? task.acceptedAttempts : []).map((row) => row?.n));
+  const waiting = Boolean(live) || reviewBusy(root);
+  const running = Boolean(live) && live.id === result.runId;
+  const pickable = result.state === "ended" && !waiting;
+  return {
+    ...result, taskId, projectId: projects.current().id,
+    attempts: (result.attempts ?? []).map((row) => ({ ...row, accepted: accepted.has(row.n), running: Boolean(live) && live.id === row.runId })),
+    accepted: result.attempt != null && accepted.has(result.attempt), running, waiting,
+    canAccept: pickable && result.files.length > 0,
+    canRevert: pickable && result.files.some((file) => file.state === "can-revert"),
+  };
+}
+
+async function reviewDiff(body, root) {
+  const taskId = reviewText(body.taskId);
+  const off = await reviewOff("snapshots");
+  if (off) return { ok: false, reason: "off", error: reviewRules().unavailable("off") };
+  return attemptSnapshotsHost().diff({ root, taskId, attempt: reviewNumber(body.attempt), runId: reviewText(body.runId, 80) || null, path: reviewText(body.path, 1024), running: reviewJobs().some((job) => job.taskId === taskId) });
+}
+
+// The owner's word on an attempt, kept on the card (acceptedAttempts: { n, runId, at, by }). No other field changes, and
+// nothing about Done: Accept is a record, not a verdict.
+async function reviewAccept(body, root) {
+  const taskId = reviewText(body.taskId);
+  const n = reviewNumber(body.attempt);
+  if (!taskId || !n) return { ok: false, error: "Choose an attempt first." };
+  if (reviewJobs().some((job) => job.taskId === taskId)) return { ok: false, busy: true, error: "Accept waits until the task is paused or finished, so nothing changes under a running agent." };
+  const found = await attemptSnapshotsHost().attempts({ root, taskId });
+  const attempt = found.attempts?.find((row) => row.n === n);
+  if (!attempt) return { ok: false, error: "That attempt has no record to accept." };
+  const accepted = body.accepted !== false;
+  const now = Date.now();
+  const result = await mutateBoard((board) => {
+    const task = board.tasks.find((item) => item?.id === taskId);
+    if (!task) return { ok: false, error: "Task not found in this project." };
+    const rows = (Array.isArray(task.acceptedAttempts) ? task.acceptedAttempts : []).filter((row) => row && row.n !== n);
+    const next = accepted ? [...rows, { n, runId: attempt.runId ?? null, at: now, by: "owner" }].slice(-20) : rows;
+    if (next.length) task.acceptedAttempts = next; else delete task.acceptedAttempts;
+    return { ok: true };
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  reviewChanged({ projectId: projects.current().id, attempt: { taskId, n } }, "accept");
+  return { ok: true, accepted, attempt: n, at: accepted ? now : null, task: taskView(result.tasks.find((task) => task.id === taskId)) };
+}
+
+// Why a whole-attempt revert cannot reopen the task right now (the same refusals the status path has), so the files are
+// not put back and the card left as it was.
+async function reviewReopenBlocker(taskId) {
+  const task = await reviewTask(taskId);
+  if (!task) return "Task not found in this project.";
+  if (reviewJobs().some((job) => job.taskId === taskId) || (task.runId && !["awaiting_verification", "verifying"].includes(task.status))) return "This task has a worker. Let it finish before reverting its attempt.";
+  if (["awaiting_verification", "verifying"].includes(task.status)) return "This task is being checked. Let the check finish, then revert.";
+  if (task.absorbedInto) return "This task belongs to a group. Work with the group's plan until it releases the member.";
+  const tasks = await (await getEyes()).readJson(TASKS_PATH, []);
+  const readiness = backlog.workState(task, Date.now(), { tasks });
+  if (readiness.blockedBy === "dependencies") return readiness.reason;
+  return null;
+}
+
+async function reviewRevert(body, root) {
+  const taskId = reviewText(body.taskId);
+  if (!taskId) return { ok: false, error: "Choose a task first." };
+  const off = await reviewOff("snapshots");
+  if (off) return { ok: false, reason: "off", error: reviewRules().unavailable("off") };
+  const attempt = reviewNumber(body.attempt);
+  const runId = reviewText(body.runId, 80) || null;
+  const snaps = attemptSnapshotsHost();
+  if (reviewJobs().some((job) => job.taskId === taskId)) return { ok: false, busy: true, error: "This task has a worker. Revert waits until it is paused or finished, so nothing changes under a running agent." };
+  if (typeof body.undo === "string" && body.undo) {
+    const undone = await snaps.undo({ root, taskId, attempt, runId, receipt: body.undo, busy: reviewBusy });
+    if (undone.ok) reviewChanged({ projectId: projects.current().id, attempt: { taskId, n: attempt } }, "revert");
+    return { ...undone, undo: true };
+  }
+  const scope = body.scope === "file" ? "file" : body.scope === "attempt" ? "attempt" : null;
+  const file = scope === "file" ? reviewText(body.path, 1024) : null;
+  if (!scope || (scope === "file" && !file)) return { ok: false, error: "Choose one file or the whole attempt." };
+  const whole = scope === "attempt" && body.partial !== true;
+  if (whole) {
+    const blocker = await reviewReopenBlocker(taskId);
+    if (blocker) return { ok: false, blocked: true, error: blocker };
+  }
+  const result = await snaps.revert({ root, taskId, attempt, runId, scope, path: file, partial: body.partial === true, busy: reviewBusy });
+  if (!result.ok) return result;
+  let reopened = null;
+  if (whole) {
+    // The whole attempt is back: the task is open again through the ordinary status path, without the owner's Accept for it.
+    reopened = await taskAction({ taskId, projectId: projects.current().id, action: "status", status: "open" });
+    await mutateBoard((board) => {
+      const task = board.tasks.find((item) => item?.id === taskId);
+      if (!task) return { ok: false };
+      if (Array.isArray(task.acceptedAttempts)) { task.acceptedAttempts = task.acceptedAttempts.filter((row) => row?.n !== attempt); if (!task.acceptedAttempts.length) delete task.acceptedAttempts; }
+      task.logs = [...(Array.isArray(task.logs) ? task.logs : []), { at: Date.now(), kind: "status", text: `Attempt ${attempt ?? ""} reverted by you: ${result.files ?? result.reverted} file${(result.files ?? result.reverted) === 1 ? "" : "s"} put back${reopened?.ok ? ". The task was reopened." : "."}` }].slice(-40);
+      return { ok: true };
+    }).catch(() => {});
+  }
+  reviewChanged({ projectId: projects.current().id, attempt: { taskId, n: attempt } }, "revert");
+  return { ...result, scope, reopened: reopened?.ok === true, ...(reopened && !reopened.ok ? { reopenError: reopened.error } : {}) };
+}
+
+// The attempt a page means when it names none: the newest one any record holds.
+async function reviewLatestAttempt(root, taskId) {
+  const found = await attemptSnapshotsHost().attempts({ root, taskId });
+  const numbers = [...(found.attempts ?? []).map((row) => row.n), ...(await attemptEvidenceHost().numbers(taskId))];
+  return numbers.length ? Math.max(...numbers) : null;
+}
+
+async function reviewChecks(body, root) {
+  const taskId = reviewText(body.taskId);
+  if (!taskId) return { ok: false, error: "Choose a task first." };
+  const off = await reviewOff("advisory");
+  if (off) return { ok: true, available: false, reason: "off", forced: off.forced, taskId };
+  const n = reviewNumber(body.attempt) ?? await reviewLatestAttempt(root, taskId);
+  const advisory = require("./scripts/advisory-checks.cjs");
+  const prefs = reviewPrefs();
+  const saved = n ? await attemptEvidenceHost().readChecks({ taskId, n }) : { results: [], at: null };
+  const detected = await advisoryHost().detect(root);
+  return {
+    ok: true, available: true, taskId, projectId: projects.current().id, attempt: n, at: saved.at ?? null,
+    results: saved.results.length ? saved.results : detected.map((check) => advisory.placeholder(check, prefs)),
+    detected: detected.map(({ id, label, kind, auto, writes, skip }) => ({ id, label, kind, auto, writes, ...(skip ? { skip } : {}) })),
+    none: detected.length === 0, build: prefs.advisoryBuild,
+  };
+}
+
+// Run one check now, in the project's folder (a builder's own run_check goes through its tool folder instead). A build
+// writes files, so it waits while a builder works in the folder.
+async function reviewCheckRun(body, root) {
+  const taskId = reviewText(body.taskId);
+  const id = reviewText(body.id, 40);
+  if (!taskId || !/^[a-z][a-z0-9-]{0,30}$/.test(id)) return { ok: false, error: "Choose a check first." };
+  const off = await reviewOff("advisory");
+  if (off) return { ok: false, reason: "off", error: "Advisory checks are switched off on this PC." };
+  const check = (await advisoryHost().detect(root)).find((item) => item.id === id);
+  if (!check) return { ok: false, error: "This project does not have that check." };
+  if (check.writes && (reviewJobs().length || reviewBusy(root))) return { ok: false, busy: true, error: "A build writes files, so it waits until no builder is working on this project." };
+  const n = reviewNumber(body.attempt) ?? await reviewLatestAttempt(root, taskId);
+  const { result } = await advisoryHost().run(root, check);
+  let results = [result];
+  if (n) {
+    const evidence = attemptEvidenceHost();
+    const saved = await evidence.readChecks({ taskId, n });
+    results = [...saved.results.filter((row) => row?.id !== id), result];
+    await evidence.saveChecks({ taskId, n, runId: saved.runId ?? null, results, ranAt: Date.now() });
+    reviewChanged({ projectId: projects.current().id, attempt: { taskId, n } }, "checks");
+  }
+  return { ok: true, attempt: n, result, results };
+}
+
+async function reviewEvidence(body, root) {
+  const taskId = reviewText(body.taskId);
+  if (!taskId) return { ok: false, error: "Choose a task first." };
+  const prefs = await readReviewPrefs();
+  const n = reviewNumber(body.attempt) ?? await reviewLatestAttempt(root, taskId);
+  const read = n ? await attemptEvidenceHost().read({ taskId, n }) : { ok: true, attempt: null, shots: [], notes: {}, privacy: require("./scripts/attempt-evidence.cjs").PRIVACY };
+  return { ...read, taskId, projectId: projects.current().id, enabled: prefs.shots, forced: prefs.forced.shots };
+}
+
+function registerAttemptReviewIpc() {
+  const call = (run) => async (_event, payload) => {
+    const body = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
+    try {
+      const wrong = taskProjectError(body.projectId);
+      if (wrong) return { ok: false, error: wrong };
+      if (!projects.open()) return { ok: false, error: "Open a project first." };
+      return await run(body, projectRoot());
+    } catch (error) { return { ok: false, error: reviewFailure(error) }; }
+  };
+  ipcMain.handle("tasks:changes", call(reviewChanges));
+  ipcMain.handle("tasks:diff", call(reviewDiff));
+  ipcMain.handle("tasks:accept", call(reviewAccept));
+  ipcMain.handle("tasks:revert", call(reviewRevert));
+  ipcMain.handle("tasks:checks", call(reviewChecks));
+  ipcMain.handle("tasks:check-run", call(reviewCheckRun));
+  ipcMain.handle("tasks:evidence", call(reviewEvidence));
+  // The three switches (Settings' review.* and the page's own toggles); the environment's kill switches show as `forced`.
+  ipcMain.handle("review:prefs", async (_event, payload) => {
+    try {
+      const { projectId: _project, ...choices } = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
+      if (Object.keys(choices).length) {
+        const patch = require("./scripts/review-prefs.cjs").patchFrom(choices);
+        if (!patch.ok) return { ok: false, error: patch.error };
+        await updateSettings((saved) => { saved.review = { ...(saved.review && typeof saved.review === "object" ? saved.review : {}), ...patch.patch }; });
+      }
+      const { snapshots, advisory, advisoryBuild, shots, saved, forced } = await readReviewPrefs();
+      return { ok: true, prefs: { snapshots, advisory, advisoryBuild, shots }, saved, forced };
+    } catch (error) { return { ok: false, error: reviewFailure(error) }; }
+  });
+  readReviewPrefs().catch(() => {});
+}
+// ---- end of attempt review ----
 
 // Catalogs are shared across projects. Keep parsed documents while their file
 // identity is unchanged and share concurrent reads, including the stat check.
@@ -20933,9 +22528,15 @@ function registerIpc() {
   ipcMain.handle("planning:prepare", (_event, payload) => planningRequest("prepare", payload));
   ipcMain.handle("tasks:create", (_event, payload = {}) => composerTask(payload ?? {}));
   ipcMain.handle("vibe:build", (_event, payload = {}) => vibeBuild(payload ?? {}));
-  async function composerTask({ title, prompt, projectId, intake = null, ideaId = null, ideaIds = null } = {}) {
+  async function composerTask({ title, prompt, projectId, intake = null, ideaId = null, ideaIds = null, images = null } = {}) {
     if (projectId && projectId !== projects.current().id) return { ok: false, error: "The selected project changed. Add this task again in its intended project." };
     if (!String(title ?? "").trim()) return { ok: false, error: "Give your task a title." };
+    // Pictures the owner attached are named in the brief, one plain line each, for a builder to open.
+    if (Array.isArray(images) && images.length) {
+      const briefed = await withPictureLines(prompt ?? title, images);
+      if (!briefed.ok) return { ok: false, error: briefed.error };
+      prompt = briefed.text;
+    }
     await ensureAssistant();
     // The same admission as chat work (the whole brief against the board, the
     // inbox and live workers), so a sentence sent in chat and pasted here is
@@ -21496,7 +23097,10 @@ function registerIpc() {
       }
     }
     const habits = habitsLibrary.library().map((habit) => ({ ...habit, costs: Object.fromEntries(habit.variants.map((variant) => [variant.id, habitsLibrary.cost(habit.id, variant.id)])) }));
-    return { ...state, name: scope === "defaults" ? "Studio defaults" : state.name, scope, configuration: agentProfiles.extract(effective), routing, seats, choices, skills, mcpTools, habits,
+    // The Rules card: the limits, both project files as they are now (the Studio
+    // defaults have no one folder), each section's cost and who reads what.
+    const rulesInfo = await agentAddons.rulesState(projectRoot(), { files: scope !== "defaults" }).catch(() => null);
+    return { ...state, name: scope === "defaults" ? "Studio defaults" : state.name, scope, configuration: agentProfiles.extract(effective), routing, seats, choices, skills, mcpTools, habits, rulesInfo,
       capabilities: Object.fromEntries(["routine", "heavy"].map((role) => {
         const provider = roleProvider(effective, role);
         const model = assistantModelOverride(effective, role, provider);
@@ -21520,7 +23124,7 @@ function registerIpc() {
   async function saveAgentTeam(payload, preset = false) {
     const projectId = projects.active().id;
     if (payload?.projectId !== projectId) return { ok: false, stale: true, error: "The active project changed. Your draft has been kept." };
-    const allowed = preset ? ["preset-save", "preset-delete", "apply"] : ["save", "inherit"];
+    const allowed = preset ? ["preset-save", "preset-delete", "apply"] : ["save", "inherit", "rules"];
     if (!allowed.includes(payload.action)) return { ok: false, error: "Unknown agent setup action." };
     let result;
     const settings = await updateSettings((settings) => {
@@ -21529,13 +23133,25 @@ function registerIpc() {
       return result.ok;
     });
     if (!result?.ok) return result;
-    providerBreaker.reset();
+    // Rules change what is said to a model, not which route answers: a paused route stays paused.
+    if (payload.action !== "rules") providerBreaker.reset();
     if (["save", "inherit", "apply"].includes(payload.action)) resetAssistantAiBackoff();
     send("settings:changed", { agents: true, projectId, revision: result.revision });
     return agentsView(settings, projectId, payload.scope === "defaults" ? "defaults" : "project");
   }
   ipcMain.handle("agents:save", (_event, payload) => saveAgentTeam(payload, false));
   ipcMain.handle("agents:preset", (_event, payload) => saveAgentTeam(payload, true));
+  // The Skills page (the "Skills" block): names in, never paths.
+  ipcMain.handle("skills:list", () => skillsHost().list());
+  ipcMain.handle("skills:read", (_event, payload) => skillsHost().read(String(payload?.name ?? "")));
+  ipcMain.handle("skills:save", (_event, payload) => skillsHost().save({ name: payload?.name, description: payload?.description, body: payload?.body }));
+  ipcMain.handle("skills:create", (_event, payload) => skillsHost().create({ name: payload?.name, description: payload?.description, body: payload?.body }));
+  ipcMain.handle("skills:delete", (_event, payload) => skillsHost().delete(String(payload?.name ?? "")));
+  ipcMain.handle("skills:import", () => skillsImport());
+  ipcMain.handle("skills:export", (_event, payload) => skillsExport({ name: payload?.name, kind: payload?.kind }));
+  // The @ # / picker (the "Mentions in a message" block).
+  ipcMain.handle("project:files", (_event, payload) => searchProjectFiles(payload ?? {}));
+  ipcMain.handle("agents:skills", () => listPickerSkills());
 
   // The patch lands on the queue's fresh read, so a save landing beside it
   // keeps its change; a refusal writes nothing. The two endpoints are this
@@ -21926,6 +23542,56 @@ function registerIpc() {
     }
   });
 
+  // Build's Home (renderer/builder.js). The greeting card counts tasks, runs,
+  // tokens, active days, the peak hour and the models that ran, for this
+  // project over one range, from the executor ledger, both usage ledgers and
+  // the board (scripts/work-stats.cjs). Home asks on every visit, so each
+  // range is kept a minute per project; the coding-turn read reaches back the
+  // twenty-two weeks the card's heatmap draws.
+  const workStatsCache = new Map();
+  ipcMain.handle("work:stats", async (_event, { range = "all" } = {}) => {
+    try {
+      const now = Date.now();
+      const project = projects.current();
+      const key = `${project.id}:${range}`;
+      const cached = workStatsCache.get(key);
+      if (cached && now - cached.at < 60000) return cached.value;
+      let ledger = "";
+      try { ledger = await readFile(projectDataPath(EXECUTOR_LOG_PATH), "utf8"); } catch (failure) { if (failure?.code !== "ENOENT") throw failure; }
+      const eyes = await getEyes();
+      const [state, store, tasks] = await Promise.all([modelPerformanceStore().read(), codingSessionUsage(now, Math.max(USAGE_LEDGER_DAYS, workStats.HEAT_DAYS)), eyes.readJson(TASKS_PATH, [])]);
+      const usage = mergeLedgers({ studio: state.observations, store: store.rows });
+      const value = { ok: true, projectId: project.id, ...workStats.workStats({ ledger, observations: state.observations, usage, tasks, now, range }), store: { ok: store.ok, error: store.error ?? null } };
+      workStatsCache.set(key, { at: now, value });
+      return value;
+    } catch (error) {
+      return { ok: false, error: `The work stats could not be read: ${String(error?.message ?? error).slice(0, 160)}` };
+    }
+  });
+  // Where Build's composer runs: the open folder's branch and how many paths
+  // are uncommitted, from the read-only look "work done outside Studio" takes
+  // (no fetch, no lock), and whether each run gets its own worktree.
+  const worktreeView = () => ({ on: executorWorktrees.enabled(), forced: process.env.MEFI_STUDIO_WORKTREE_RUNS === "1" });
+  ipcMain.handle("work:where", async () => {
+    try {
+      const project = projects.current();
+      const seen = await outsideWorkLook(project?.path);
+      if (!seen?.top) return { ok: true, projectId: project?.id ?? null, repo: false, branch: null, dirty: 0, worktrees: worktreeView() };
+      return { ok: true, projectId: project.id, repo: true, branch: seen.look.branch, head: seen.look.head ? seen.look.head.slice(0, 7) : null, dirty: seen.statuses.length, worktrees: worktreeView() };
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error).slice(0, 160) };
+    }
+  });
+  // The Worktree chip: the owner's saved choice (settings.executor
+  // .worktreeRuns) for runs in their own checkout; the environment switch
+  // (MEFI_STUDIO_WORKTREE_RUNS=1) still forces it on.
+  ipcMain.handle("work:worktrees", async (_event, { on } = {}) => {
+    const settings = await updateSettings((next) => { next.executor = { ...(next.executor ?? {}), worktreeRuns: on === true }; });
+    executorWorktrees.prefer(settings.executor?.worktreeRuns === true);
+    return { ok: true, worktrees: worktreeView() };
+  });
+  readSettings().then((settings) => executorWorktrees.prefer(settings?.executor?.worktreeRuns === true), () => {});
+
   // The account read is separate from the ledger: it can be unavailable while
   // local totals stay exact, and it never borrows numbers from either side.
   ipcMain.handle("opencode:credits", async () => {
@@ -22128,11 +23794,15 @@ function registerIpc() {
     if (assistantExpireQuestions()) saveAssistant().catch(() => {});
     return { ok: true, state: assistantState };
   });
-  ipcMain.handle("assistant:message", async (_event, { text, projectId, context } = {}) => {
+  ipcMain.handle("assistant:message", async (_event, { text, projectId, context, images } = {}) => {
     if (projectId && projectId !== projects.current().id) return { ok: false, error: "The selected project changed. Send your message again in its intended project." };
     if (!projects.open()) return { ok: false, error: "Open a project folder first - the assistant works inside a project." };
-    return assistantMessage(text, { context });
+    return assistantMessage(text, { context, images });
   });
+  // Pictures on a message (the "Picture attachments" block): keep one, or take one away before it is sent.
+  ipcMain.handle("assistant:image", (_event, payload) => saveMessagePicture(payload ?? {}));
+  ipcMain.handle("assistant:image-remove", (_event, payload) => removeMessagePicture(payload ?? {}));
+  ipcMain.handle("assistant:image-read", (_event, payload) => readMessagePicture(payload ?? {}));
   // Suggestions are data-only, so a CLI login answers them the way it answers
   // planning: DATA_ONLY_CLIS through the CLI text call, tools disabled.
   const recommendMusic = createMusicRecommender({ resolveRoute: resolveAiRoute, allowCli: DATA_ONLY_CLIS,
@@ -22459,18 +24129,40 @@ function registerIpc() {
   ipcMain.handle("tasks:attempts", (_event, payload) => readTaskAttempts(payload ?? {}));
   ipcMain.handle("tasks:restore", (_event, payload) => restoreTaskContext(payload ?? {}));
   ipcMain.handle("tasks:delete", (_event, payload) => deleteTask(payload ?? {}));
+  // ---- Board trash channels (the "Board trash" block above) ----
+  // Project-gated like the rest of tasks:*. An idea comes back through
+  // ideas:action { action: "restore" }, the house pattern for ideas.
+  ipcMain.handle("tasks:undelete", (_event, payload) => undeleteTask(payload ?? {}));
+  ipcMain.handle("board:trash", (_event, payload) => boardTrashList(payload ?? {}));
+  // ---- end of Board trash channels ----
   ipcMain.handle("tasks:action", (_event, payload) => taskAction(payload ?? {}));
+  // Changed files, Accept, Revert, advisory checks and before/after shots (the "Attempt review" block).
+  registerAttemptReviewIpc();
+  // The task's time limit (the "Task time limit" block): tasks:cap sets it, task:metrics reads what the task took.
+  ipcMain.handle("tasks:cap", (_event, payload) => setTaskCap(payload ?? {}));
+  ipcMain.handle("task:metrics", (_event, payload) => readTaskMetrics(payload ?? {}));
   ipcMain.handle("tasks:save", async (_event, tasks) => {
     return saveTaskEdits(tasks);
   });
   ipcMain.handle("ideas:list", async () => {
     const eyes = await getEyes();
-    return { ok: true, ideas: await eyes.readJson(IDEAS_PATH, []), projectId: projects.current().id };
+    return { ok: true, ideas: await eyes.readJson(IDEAS_PATH, []), projectId: projects.current().id, trash: boardTrashOn() };
   });
   ipcMain.handle("ideas:action", async (_event, payload = {}) => {
     if (!payload.projectId || payload.projectId !== projects.current().id) return { ok: false, error: "Reload this project's ideas before changing them." };
-    const result = await mutateBoard((board) => applyIdeaAction(board.ideas, payload));
-    return { ok: result.ok, error: result.error, projectId: projects.current().id, ideas: result.ideas, ...(result.idea ? { idea: result.idea, added: result.added } : {}) };
+    // Recently deleted (the "Board trash" block): a deleted idea comes back from
+    // the list, never from a record the caller sends; a delete keeps its record first.
+    if (payload.action === "restore") return restoreIdea(payload);
+    const sink = { kept: [], removed: 0 };
+    let result;
+    try {
+      result = await mutateBoard((board) => applyIdeaAction(board.ideas, payload), ["delete", "clean"].includes(payload.action) ? boardTrashBefore("idea", { via: `ideas:action:${payload.action}` }, sink) : undefined);
+    } catch (failure) {
+      if (sink.kept.length) await boardTrashReconcile("idea", sink);
+      if (!failure?.boardTrash) throw failure;
+      return { ok: false, error: failure.message, projectId: projects.current().id };
+    }
+    return { ok: result.ok, error: result.error, projectId: projects.current().id, ideas: result.ideas, ...(result.idea ? { idea: result.idea, added: result.added } : {}), ...boardTrashReply(sink) };
   });
   // A view's list is merged by id onto the latest ideas inside the board
   // gateway: only what a view may change (read, and the status it chose) is
@@ -22518,7 +24210,13 @@ function registerIpc() {
   ipcMain.handle("prefs:get", async () => {
     const settings = await readSettings();
     const loginItem = loginItemState();
-    return { ok: true, prefs: { blurMenu: true, useWeb: false, useTree: true, autoReference: true, proactive: true, ...(settings.ui ?? {}), openAtLogin: loginItem.on }, loginItem };
+    // Search's two switches (the "Search switches" block): the environment can
+    // turn either off for this run. (typeof: the tests that run this handler on
+    // its own have no such function.)
+    const searchOff = typeof searchSwitchesOff === "function" ? searchSwitchesOff() : {};
+    // The tab strip's master switch (the "Tab switches" block), for this run.
+    const tabsOff = typeof tabSwitchesOff === "function" ? tabSwitchesOff() : {};
+    return { ok: true, prefs: { blurMenu: true, useWeb: false, useTree: true, autoReference: true, proactive: true, ...(settings.ui ?? {}), ...searchOff, ...tabsOff, openAtLogin: loginItem.on }, loginItem };
   });
   ipcMain.handle("prefs:set", async (_event, prefs) => {
     const next = { ...(prefs ?? {}) };
@@ -22632,6 +24330,7 @@ function registerIpc() {
 
   // ---- GitHub release updates ---------------------------------------------
   ipcMain.handle("release:status", () => ({ ok: true, status: releaseStatus() }));
+  ipcMain.handle("release:set-channel", async (_event, { channel } = {}) => setReleaseChannel(channel));
   ipcMain.handle("release:check", async () => {
     await checkRelease();
     return { ok: true, status: releaseStatus() };
@@ -22639,6 +24338,26 @@ function registerIpc() {
   ipcMain.handle("release:apply", async () => applyReleaseUpdate());
   ipcMain.handle("release:rollback", async () => releaseRollback());
   ipcMain.handle("boot:healthy", async () => bootHealthy("renderer"));
+  // ---- What's new (the "What's new" block) ------------------------------------
+  // App-wide: about the running build, not the open project.
+  ipcMain.handle("release:whats-new", async () => releaseWhatsNew());
+  ipcMain.handle("release:whats-new-seen", async (_event, payload) => releaseWhatsNewSeen(payload ?? {}));
+  ipcMain.handle("release:whats-new-set", async (_event, payload) => releaseWhatsNewSet(payload ?? {}));
+  // ---- Report a problem (the "Report a problem" block) --------------------------
+  // preview and save read the open project's tasks and log, so a project switch
+  // waits for them; the prompt's own state (dismiss, the switch) is the app's.
+  const reportOff = { ok: false, error: "Reports are not available in this build." };
+  ipcMain.handle("report:preview", async (_event, options) => (reportHost ? reportHost.preview({ replaceTitles: options?.replaceTitles === true, includeCrash: options?.includeCrash !== false }) : reportOff));
+  ipcMain.handle("report:save", async (_event, payload) => (reportHost ? reportHost.save({ token: typeof payload?.token === "string" ? payload.token : "" }) : reportOff));
+  ipcMain.handle("report:dismiss", async () => (reportHost ? reportHost.dismiss() : reportOff));
+  ipcMain.handle("report:set", async (_event, payload) => (reportHost ? reportHost.setPrompt(payload?.prompt) : reportOff));
+  // ---- Notifications (the "Notifications" block) --------------------------------
+  // The PC's own (alerts: is app-wide): the card works with no project open.
+  // alerts:test may take up to a minute: it waits for the owner to look away.
+  const alertsOff = { ok: false, error: "Notifications are not available in this build." };
+  ipcMain.handle("alerts:get", async () => (alertsHost ? alertsHost.state() : alertsOff));
+  ipcMain.handle("alerts:set", async (_event, patch) => (alertsHost ? alertsHost.set(patch) : alertsOff));
+  ipcMain.handle("alerts:test", async () => (alertsHost ? alertsHost.test() : alertsOff));
 
   // ---- Community ----------------------------------------------------------
   // The Void Engine Discord link (the "Discord community link" block beside
@@ -22685,6 +24404,18 @@ function registerIpc() {
   // Friends › Your PCs (the "Multi-PC sync" block). Project-gated, unlike
   // hub:*: both act on the open project's folder, so a switch waits for them.
   ipcMain.handle("sync:status", async () => syncProject(false));
+  // Explicit pairing/setup actions; no startup listener or automatic work.
+  ipcMain.handle("paired:status", async (_event, payload) => pairedWorkersCall("status", { before: typeof payload?.before === "string" ? payload.before.slice(0, 80) : null }));
+  ipcMain.handle("paired:coordinator", async (_event, payload) => payload?.action === "stop" ? pairedWorkersCall("stopCoordinator") : payload?.action === "start" ? pairedWorkersCall("startCoordinator", { port: payload?.port, mode: payload?.mode, url: typeof payload?.url === "string" ? payload.url.slice(0, 2048) : "" }) : { ok: false, error: "Choose a coordinator action." });
+  ipcMain.handle("paired:invite", async () => pairedWorkersCall("invite"));
+  ipcMain.handle("paired:pair", async (_event, payload) => pairedWorkersCall("pairWorker", typeof payload?.code === "string" ? payload.code.slice(0, 2049) : ""));
+  ipcMain.handle("paired:worker", async (_event, payload) => {
+    const actions = { start: "startWorker", stop: "stopWorker", forget: "forgetWorker", recover: "confirmStopped" };
+    return Object.hasOwn(actions, payload?.action) ? pairedWorkersCall(actions[payload.action], typeof payload?.jobId === "string" ? payload.jobId.slice(0, 80) : "") : { ok: false, error: "Choose a worker action." };
+  });
+  ipcMain.handle("paired:enqueue", async () => pairedWorkersCall("enqueue"));
+  ipcMain.handle("paired:revoke", async (_event, payload) => pairedWorkersCall("revoke", typeof payload?.workerId === "string" ? payload.workerId.slice(0, 80) : ""));
+  ipcMain.handle("paired:history", async (_event, payload) => pairedWorkersCall("history", typeof payload?.jobId === "string" ? payload.jobId.slice(0, 80) : "", { chunk: payload?.chunk, offset: payload?.offset }));
   ipcMain.handle("sync:run", async (_event, payload) => syncProject(true, { rebase: payload?.rebase === true }));
   // "Keep this PC up to date": syncFollow's safe fast-forward, on by default.
   ipcMain.handle("sync:follow", async (_event, payload) => {
@@ -22739,7 +24470,9 @@ function registerIpc() {
     const link = require("./scripts/git-link.cjs");
     const { createGitActions } = require("./scripts/git-actions.cjs");
     const { createGitHost } = require("./scripts/git-host.cjs");
-    const actions = createGitActions({ execFile: require("node:child_process").execFile, exists: existsSync, readText: (file) => readFile(file, "utf8").catch(() => null), env: () => process.env });
+    const collaborators = { execFile: require("node:child_process").execFile, exists: existsSync, readText: (file) => readFile(file, "utf8").catch(() => null), env: () => process.env };
+    // Under the Rust host the actions run in Rust (scripts/rust-modules.cjs factory); the engine's env is called back.
+    const actions = (typeof rustModules !== "undefined" && rustModules?.factory("git-actions", collaborators)) || createGitActions(collaborators);
     // `later` lets the chip's "Done" end by itself (git-host settle): an unref'd timer, so it never keeps Studio alive.
     // (No comments inside the object: tests/git_link_host.test.mjs reads its keys.)
     gitHostInstance = createGitHost({
@@ -22786,6 +24519,67 @@ function registerIpc() {
     return accountNow;
   }));
   ipcMain.handle("projects:glance", gitCall((host, payload) => host.glance(Array.isArray(payload.ids) ? payload.ids.filter((id) => typeof id === "string").slice(0, 100) : undefined)));
+
+  // ---- Worktrees (scripts/worktrees.mjs reads, scripts/worktree-actions.mjs writes) ----
+  // The Worktrees page under Work: every worktree of the open project, and Merge
+  // into main, Remove and Forget missing folders on the ones git lists for it.
+  // Project-gated like git:* (a switch waits), one writer at a time. The renderer
+  // names a folder from the last list; the module acts only on a folder git itself
+  // lists, so a path from outside the list does nothing. Nothing here pushes,
+  // fetches or forces; a run's own folder is never touched while it works.
+  let worktreeWrites = Promise.resolve();
+  const worktreeJobs = () => (typeof autopilot !== "undefined" ? autopilot.jobs ?? [] : []).filter((job) => job && !job.finished);
+  const worktreeInUse = (folder) => worktreeJobs().some((job) => job.worktree?.path && (path.basename(job.worktree.path) === path.basename(String(folder)) || path.resolve(job.worktree.path).toLowerCase() === path.resolve(String(folder)).toLowerCase()));
+  const worktreeCall = (run) => async (_event, payload) => {
+    const open = projects.open();
+    const root = open ? projectRoot() : null;
+    if (!root) return { ok: false, error: "Open a project first." };
+    const body = payload && typeof payload === "object" ? payload : {};
+    if (typeof body.projectId === "string" && body.projectId !== projects.active().id) return { ok: false, error: "The selected project changed. Try again in its intended project." };
+    try { return await run(root, body); }
+    catch (error) { return { ok: false, error: String(error?.message ?? error).replace(/([a-z][a-z0-9+.-]*:\/\/)[^/@\s]+@/gi, "$1").slice(0, 300) }; }
+  };
+  const worktreeWrite = (task) => {
+    const next = worktreeWrites.then(task);
+    worktreeWrites = next.catch(() => {});
+    return next;
+  };
+  // The task a run worktree belongs to, from the executor ledger's start row
+  // (runId, task id, title); the ledger is read only when a run worktree is listed.
+  const worktreeTasks = async (rows) => {
+    if (!rows.some((row) => row.kind === "run")) return new Map();
+    let ledger = "";
+    try { ledger = await readFile(projectDataPath(EXECUTOR_LOG_PATH), "utf8"); } catch { return new Map(); }
+    const wanted = new Set(rows.filter((row) => row.kind === "run").map((row) => path.basename(row.path)));
+    const found = new Map();
+    for (const line of ledger.split("\n")) {
+      if (!line.includes('"start"')) continue;
+      let record = null;
+      try { record = JSON.parse(line); } catch { continue; }
+      if (record?.event === "start" && wanted.has(record.runId)) found.set(record.runId, { taskId: typeof record.task === "string" ? record.task : null, title: String(record.title ?? "").slice(0, 160), at: Number(record.at) || null });
+    }
+    return found;
+  };
+  ipcMain.handle("worktrees:list", worktreeCall(async (root) => {
+    const list = await (await loadModule("scripts/worktrees.mjs")).listWorktrees(root);
+    if (!list.repo) return { ok: true, repo: false, projectId: projects.active().id, enabled: worktreeView() };
+    const tasks = await worktreeTasks(list.rows);
+    const rows = list.rows.map((row) => ({ ...row, task: row.kind === "run" ? tasks.get(path.basename(row.path)) ?? null : null, busy: row.kind !== "primary" && worktreeInUse(row.path) }));
+    return { ok: true, ...list, rows, projectId: projects.active().id, enabled: worktreeView(), builders: worktreeJobs().length > 0 };
+  }));
+  ipcMain.handle("worktrees:merge", worktreeCall((root, payload) => worktreeWrite(async () => (await loadModule("scripts/worktree-actions.mjs")).mergeWorktree(root, String(payload.path ?? ""), {
+    mode: payload.mode === "merge" ? "merge" : "ff", remove: payload.remove === true, anyway: payload.anyway === true, builders: worktreeJobs().length > 0, inUse: worktreeInUse,
+  }))));
+  ipcMain.handle("worktrees:remove", worktreeCall((root, payload) => worktreeWrite(async () => (await loadModule("scripts/worktree-actions.mjs")).removeWorktree(root, String(payload.path ?? ""), {
+    force: payload.force === true, deleteBranch: payload.deleteBranch === true, inUse: worktreeInUse,
+  }))));
+  ipcMain.handle("worktrees:forget", worktreeCall((root) => worktreeWrite(async () => (await loadModule("scripts/worktree-actions.mjs")).pruneWorktrees(root))));
+  ipcMain.handle("worktrees:open", worktreeCall(async (root, payload) => {
+    const found = await (await loadModule("scripts/worktree-actions.mjs")).worktreeFolder(root, String(payload.path ?? ""));
+    if (!found.ok) return found;
+    const failed = await shell.openPath(found.path);
+    return failed ? { ok: false, error: String(failed).slice(0, 200) } : { ok: true };
+  }));
 
   // ---- Your PCs vault (the "Your PCs vault" block) ----------------------------
   // Friends › Your PCs › Share between my PCs. Project-gated: brains, recipes,
@@ -23025,7 +24819,7 @@ function createWindow() {
   }
   const view = window;
   const loadView = () => view.loadFile(page, {
-    query: { capture: CAPTURE ? "1" : "0", smoke: SMOKE ? "1" : "0" },
+    query: { capture: CAPTURE ? "1" : "0", smoke: SMOKE ? "1" : "0", ...layoutQuery() },
   });
   rendererRecovery = attachRendererRecovery({
     window: view,
@@ -23051,6 +24845,15 @@ function createWindow() {
     },
   });
   loadView().catch(() => {}); // did-fail-load owns the bounded recovery path.
+  // What went wrong is written down for Report a problem (data/crash.jsonl).
+  window.webContents.on("render-process-gone", (_event, details) => { if (details?.reason !== "clean-exit") reportRecord("renderer-gone", details?.reason, { exitCode: details?.exitCode }); });
+  window.on("unresponsive", () => reportRecord("renderer-unresponsive", "the window stopped responding"));
+  // Windows signing out or shutting down closes Studio without a quit.
+  window.on("session-end", () => reportEnd("session-end"));
+  // Notifications: coming to the front ends the taskbar flash; leaving it (or hiding, or minimizing) lets a waiting test go.
+  window.on("focus", () => { if (typeof alertsFocus === "function") alertsFocus(); });
+  for (const name of ["blur", "hide", "minimize"]) window.on(name, () => { if (typeof alertsAway === "function") alertsAway(); });
+  if (typeof alertsWindow === "function") alertsWindow();
   // Background mode: closing parks the app in the tray and the assistant
   // keeps ticking; Quit lives in the tray menu.
   window.on("close", (event) => {
@@ -23254,6 +25057,8 @@ async function captureTabs() {
 app.whenReady().then(() => {
   registerIpc();
   bootHealthStart();
+  reportStart();
+  alertsStart();
   if (process.argv.includes("--set-key")) {
     (async () => {
       const key = process.env.MEFI_STUDIO_KEY;
@@ -23514,6 +25319,8 @@ app.whenReady().then(() => {
   // Both are fire-and-forget: a failure is logged, never an unhandled rejection.
   if (!SMOKE && !CAPTURE && !CLI_MODE) setTimeout(() => startUpdateWatch().catch((error) => logLine(`[update] watch failed: ${error?.message ?? error}`)), 3500);
   if (!SMOKE && !CAPTURE && !CLI_MODE) setTimeout(() => startReleaseWatch(), 6000);
+  // A fresh install's first launch seals its version as read (releaseWhatsNew), even if no page asks.
+  if (WHATS_NEW_FRESH_INSTALL && !whatsNewOff()) setTimeout(() => { releaseWhatsNew().catch(() => {}); }, 6000).unref?.();
   // Its first look is 15 s in; nothing reaches Discord unless a link exists.
   if (!SMOKE && !CAPTURE && !CLI_MODE) startCommunityWatch();
   // Friends › Your PCs badge: a fetch-only look 45 s in, then every 15 minutes.
@@ -23526,6 +25333,8 @@ app.whenReady().then(() => {
   if (!SMOKE && !CAPTURE && !CLI_MODE) setTimeout(() => { remoteApply(); }, 20000).unref?.();
   if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => announceRestart().catch(() => {}));
   if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => announceRelease().catch(() => {}));
+  // "Studio closed unexpectedly", once, after the page has had a moment to come up.
+  if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => setTimeout(() => { reportHost?.pageUp().catch(() => {}); }, reportHostModule?.PROMPT_DELAY_MS ?? 2500).unref?.());
   if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => bootHealthWatch());
   // The assistant service runs on its own clock, renderer or not; the smoke
   // exercises its keyless path, the capture tour never needs it.
@@ -23595,12 +25404,15 @@ app.on("window-all-closed", () => {
 let quitCheckpointSaved = false;
 app.on("before-quit", (event) => {
   app.isQuitting = true;
+  if (typeof pairedWorkersQuit === "function" && pairedWorkersQuit(event)) return;
   // Reaching here is the user's own doing — Alt+F4, the close button, the
   // tray's Quit. Record it before anything winds down, so the next launch
   // asks which folder to open instead of resuming this one. An update
   // relaunch calls app.exit and never reaches this listener, so it keeps its
   // place; so does a crash, which never gets to write anything at all.
   endSession("quit");
+  if (typeof reportEnd === "function") reportEnd("quit");
+  if (typeof alertsStop === "function") alertsStop();
   if (typeof outsideWorkQuit === "function") outsideWorkQuit();
   executorClosing = true;
   performanceProfiler.stop();

@@ -60,6 +60,12 @@ app.whenReady().then(async () => {
     companionWelcome: {ok:true}, companionSeen: {ok:true},
     brainState: {ok:true,tasks:[],recent:[]}, brainPlaybook: {ok:true,recipes:[]}, brainMap: {ok:true,map:{systems:[],edges:[],files:[]}},
   });
+  // The Rules card: the host's limits, both project files and who reads what (scripts/agent-rules.cjs is the real table).
+  const agentRules = require(path.join(__dirname, "..", "..", "scripts", "agent-rules.cjs"));
+  responses.agentsState.rulesInfo = { limit: 4000, fileCap: 8000, disabled: false, overhead: agentRules.overhead(), readers: agentRules.readers(), files: {
+    agents: { name: "AGENTS.md", note: "the project's own agent notes", found: true, problem: null, bytes: 1840, used: 1800, capped: false, same: null },
+    claude: { name: "CLAUDE.md", note: "Claude Code's project notes", found: false, problem: null, bytes: 0, used: 0, capped: false, same: null },
+  } };
   // Exercise catalog search; short menus now use the shared compact tile picker.
   responses.agentsState.mcpTools = [{ id: "docs/search", server: "docs", name: "search", description: "Search fixture documentation" }];
   responses.openrouterModels.models.push(...Array.from({ length: 30 }, (_, index) => ({ id: "fixture/model-" + index, name: "Other model " + index })));
@@ -80,7 +86,9 @@ app.whenReady().then(async () => {
     for(const name of ['projectPreviewStart','projectPreviewOpen','projectPreviewStop'])bridge[name]=async value=>{calls.push({name,value});return responses.projectPreviewStatus;};
     bridge.onStudioLog=()=>{};bridge.onAutoSetup=()=>{};
     bridge.agentsState=async payload=>({...responses.agentsState,projectId:responses.projectsList.activeId});
-    bridge.agentsSave=async payload=>{calls.push({name:'agentsSave',value:payload});if(payload.revision!==responses.agentsState.revision)return {ok:false,stale:true,error:'Agent settings changed. Your draft has been kept.'};Object.assign(responses.agentsState,{revision:payload.revision+1,configuration:payload.configuration,name:payload.name,inherited:false});return responses.agentsState;};
+    bridge.agentsSave=async payload=>{calls.push({name:'agentsSave',value:payload});if(payload.revision!==responses.agentsState.revision)return {ok:false,stale:true,error:'Agent settings changed. Your draft has been kept.'};
+      if(payload.action==='rules'){const next={...responses.agentsState.configuration},rules=payload.rules,text=rules.text.trimEnd();if(text||rules.agents||rules.claude)next.agentRules={text,agents:rules.agents===true,claude:rules.claude===true};else delete next.agentRules;Object.assign(responses.agentsState,{revision:payload.revision+1,configuration:next,inherited:false,name:responses.agentsState.inherited?'Project team':responses.agentsState.name});return responses.agentsState;}
+      Object.assign(responses.agentsState,{revision:payload.revision+1,configuration:payload.configuration,name:payload.name,inherited:false});return responses.agentsState;};
     bridge.companionPrefs=async patch=>{calls.push({name:'companionPrefs',value:patch});Object.assign(responses.companionState,patch);return {ok:true};};
     bridge.assistantAutopilot=async patch=>{calls.push({name:'assistantAutopilot',value:patch});Object.assign(responses.assistantStatus.status,patch);return {ok:true,...responses.assistantStatus.status};};
     bridge.assistantControl=async action=>{calls.push({name:'assistantControl',value:action});responses.assistantState.state.status=action==='pause'?'paused':'running';return {ok:true,state:responses.assistantState.state};};
@@ -154,6 +162,55 @@ app.whenReady().then(async () => {
   await until("document.getElementById('agent-companion-model')?.value==='openai/gpt-6-fixture'",'persisted model');
   assert.equal(await run("return window.MefiAgents.draft().agentSeats.companion.effort;"),'high');
   assert.deepEqual(await run("return window.MefiAgents.draft().agentTools.companion;"), { webSearch: false, projectRead: true, mcpTools: ["docs/search"] });
+  // Project rules: typed in the real text box, counted, refused past 4,000 characters
+  // without cutting anything, saved on their own and kept through a whole-team Apply.
+  await until("document.getElementById('agents-rules-text')", 'Rules card');
+  assert.ok(await reachable('#agents-rules-text')); assert.ok(await reachable('#agents-rules-agents'));
+  assert.equal(await run("return document.getElementById('agents-rules-save').disabled;"), true, 'nothing to save yet');
+  assert.equal(await run("return document.querySelectorAll('#agents-rules-readers .agents-rules-reader').length;"), 5);
+  assert.match(await run("return document.querySelector('#agents-rules .agents-rules-file[data-file=agents] small').textContent;"), /^1\.8 KB · about 450 tokens/);
+  assert.match(await run("return document.querySelector('#agents-rules .agents-rules-file[data-file=claude] small').textContent;"), /^Not in this project's folder/);
+  await click('#agents-rules-text'); contents.insertText('Use LÖVE 11.5.\nRun npm run check first.');
+  await until("document.getElementById('agents-rules-state').textContent==='Unsaved changes'", 'typed rules noticed');
+  const typed = await run("const box=document.getElementById('agents-rules-text');return {value:box.value,count:document.querySelector('#agents-rules .agents-rules-count span').textContent};");
+  assert.equal(typed.value, 'Use LÖVE 11.5.\nRun npm run check first.'); assert.equal(typed.count, typed.value.length + ' of 4,000 characters');
+  await click('#agents-rules-agents');
+  assert.equal(await run("return window.unifiedFixture.calls().some(c=>c.name==='agentsSave'&&c.value.action==='rules');"), false, 'nothing is saved until Save');
+  await capture('agent-rules-typed.png');
+  await click('#agents-rules-save');
+  await until("document.getElementById('agents-rules-state').textContent.startsWith('Rules saved')", 'rules saved on their own');
+  const sent = await run("return window.unifiedFixture.calls().filter(c=>c.name==='agentsSave'&&c.value.action==='rules').map(c=>c.value);");
+  assert.equal(sent.length, 1); assert.equal(sent[0].configuration, undefined, 'the team is not sent with the rules');
+  assert.deepEqual(sent[0].rules, { text: 'Use LÖVE 11.5.\nRun npm run check first.', agents: true, claude: false });
+  assert.deepEqual(await run("return window.MefiAgents.draft().agentRules;"), { text: 'Use LÖVE 11.5.\nRun npm run check first.', agents: true, claude: false });
+  assert.equal(await run("return document.getElementById('agents-rules-save').disabled;"), true);
+  // Past the limit: said in words, Save waits, and the text is not cut (a real paste of 4,001 characters).
+  await click('#agents-rules-text'); await run("document.getElementById('agents-rules-text').select();"); contents.insertText('a'.repeat(4001));
+  await until("document.getElementById('agents-rules-warn').hidden===false", 'over-length warning');
+  assert.equal(await run("return document.getElementById('agents-rules-text').value.length;"), 4001, 'a paste is never cut');
+  assert.equal(await run("return document.getElementById('agents-rules-save').disabled;"), true);
+  assert.match(await run("return document.getElementById('agents-rules-warn').textContent;"), /Nothing was cut\. Trim it/);
+  await capture('agent-rules-over.png');
+  // Discard asks twice, then the saved rules are back.
+  await click('#agents-rules-discard');
+  assert.equal(await run("return document.getElementById('agents-rules-text').value.length;"), 4001, 'the first press only asks');
+  await click('#agents-rules-discard');
+  assert.equal(await run("return document.getElementById('agents-rules-text').value;"), 'Use LÖVE 11.5.\nRun npm run check first.');
+  // The whole-team Apply carries the saved rules (not the working copy), and a reload shows them.
+  await run("const i=document.querySelector('[aria-label=\"Subtask model ID\"]');i.value='fixture/model';i.dispatchEvent(new Event('change',{bubbles:true}));");
+  await click('#agents-rules-text'); contents.insertText(' UNSAVED');
+  await until("document.getElementById('agents-rules-state').textContent==='Unsaved changes'", 'a new rules edit');
+  await run("document.querySelector('#agents-save-bar .primary').click();");
+  await until("document.getElementById('agents-save-status').textContent.startsWith('Saved')",'apply after rules');
+  const applied = await run("return window.unifiedFixture.calls().filter(c=>c.name==='agentsSave'&&c.value.action==='save').map(c=>c.value).at(-1);");
+  assert.deepEqual(applied.configuration.agentRules, { text: 'Use LÖVE 11.5.\nRun npm run check first.', agents: true, claude: false }, 'Apply sends the saved rules, never a half-typed edit');
+  assert.equal(await run("return document.getElementById('agents-rules-text').value;"), 'Use LÖVE 11.5.\nRun npm run check first. UNSAVED', 'the typed edit is still in the box after the Apply');
+  assert.equal(await run("return document.getElementById('agents-rules-state').textContent;"), 'Unsaved changes');
+  await click('#agents-rules-discard'); await click('#agents-rules-discard');
+  await run("window.MefiAgents.reload();");
+  await until("document.getElementById('agents-rules-text')?.value==='Use LÖVE 11.5.\\nRun npm run check first.'",'persisted rules');
+  assert.equal(await run("return document.getElementById('agents-rules-agents').checked;"), true);
+  report.rulesCard = true;
   // Switching a provider cannot carry the previous provider's model; switching
   // back restores it even after saving and reloading the project team.
   await click('#agent-companion-provider'); await click('#agent-companion-providers [data-provider=zen]');
@@ -184,7 +241,8 @@ app.whenReady().then(async () => {
     const layout=await run("const body=document.getElementById('agents-body');return {width:innerWidth,overflow:body.scrollWidth>body.clientWidth+1||document.documentElement.scrollWidth>innerWidth+1,wide:[...body.querySelectorAll('*')].filter(e=>e.getClientRects().length && e.getBoundingClientRect().right>body.getBoundingClientRect().right+1).slice(0,12).map(e=>({id:e.id,cls:e.className,width:e.getBoundingClientRect().width}))};");
     report.layouts.push({width,height,zoom,...layout}); if(layout.overflow) await capture('agent-overflow.png'); assert.equal(layout.overflow,false,JSON.stringify(report.layouts.at(-1)));
     assert.ok(await reachable('#agent-companion-provider')); assert.ok(await reachable('#agent-companion-add'));
-    if(zoom===1) { await run("document.getElementById('agents-body').scrollTop=0;"); await capture('agent-team-'+width+'.png'); }
+    assert.ok(await reachable('#agents-rules-text')); assert.ok(await reachable('#agents-rules-agents'));
+    if(zoom===1) { await run("document.getElementById('agents-body').scrollTop=0;"); await capture('agent-team-'+width+'.png'); await run("document.getElementById('agents-rules').scrollIntoView({block:'start'});"); await capture('agent-rules-'+width+'.png'); }
   }
   window.setContentSize(1100,720); contents.setZoomFactor(1);
   await run("document.getElementById('settings-guided-cli').click();");

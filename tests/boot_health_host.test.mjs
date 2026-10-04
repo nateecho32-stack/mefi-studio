@@ -27,7 +27,7 @@ const BACKUP = `${LOCAL}\\MefiStudio\\rollback\\${KEY}`;
 // Objects built inside the vm context carry another realm's prototypes.
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
-function host({ packaged = true, flags = {}, files = {}, env = {}, jobs = [], child = null, installExists = true, state = "current" } = {}) {
+function host({ packaged = true, flags = {}, files = {}, env = {}, jobs = [], child = null, installExists = true, state = "current", switching = false } = {}) {
   const calls = { writes: [], removed: [], published: [], logs: [], timers: [], spawned: [], exited: 0, settings: 0, resumes: 0, stopped: [], scripts: [] };
   const fsFiles = new Map(Object.entries(files));
   const releaseModule = {
@@ -40,7 +40,7 @@ function host({ packaged = true, flags = {}, files = {}, env = {}, jobs = [], ch
     STUDIO_ROOT: ROOT,
     path: path.win32,
     updateSafety,
-    app: { isPackaged: packaged, getVersion: () => "0.4.6", getPath: () => "C:\\Temp", releaseSingleInstanceLock: () => {}, exit: () => { calls.exited += 1; } },
+    app: { isPackaged: packaged, getVersion: () => "0.4.6", getPath: (name) => (name === "exe" ? `${INSTALL}\\Mefi Studio AI+.exe` : "C:\\Temp"), releaseSingleInstanceLock: () => {}, exit: () => { calls.exited += 1; } },
     process: { env: { LOCALAPPDATA: LOCAL, ComSpec: "cmd.exe", ...env }, platform: "win32", execPath: `${INSTALL}\\Mefi Studio AI+.exe`, pid: 4321 },
     mkdirSync: () => {},
     writeFileSync: (file, text) => calls.writes.push({ file, text }),
@@ -60,6 +60,7 @@ function host({ packaged = true, flags = {}, files = {}, env = {}, jobs = [], ch
     releaseStatus: () => ({ state: "status" }),
     publishRelease: (patch, options) => { calls.published.push({ patch, options }); return {}; },
     activeChild: child,
+    projectSwitching: switching,
     autopilot: { jobs },
     updateSettings: async (fn) => { calls.settings += 1; fn({}); },
     window: null,
@@ -185,6 +186,10 @@ test("Roll back refuses without a saved copy, mid-update, with builders running 
   };
   const busy = await ready({ jobs: [{ finished: false }] });
   assert.match((await busy.context.releaseRollback()).error, /1 build job\(s\) still running/);
+  const switching = await ready({ switching: true });
+  assert.match((await switching.context.releaseRollback()).error, /project switch is saving progress/);
+  assert.equal(switching.calls.exited, 0);
+  assert.equal(switching.calls.scripts.length, 0);
   const dev = await ready({ packaged: false });
   assert.match((await dev.context.releaseRollback()).error, /portable Windows build/);
   const applying = await ready({ state: "applying" });

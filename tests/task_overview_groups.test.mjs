@@ -5,6 +5,56 @@ import vm from "node:vm";
 const env = vm.createContext({ window: {} });
 vm.runInContext(await readFile(new URL("../renderer/task-groups.js", import.meta.url), "utf8"), env);
 const { overviewGroups } = env.window.MefiTaskGroups;
+const { planTrace } = env.window.MefiTaskGroups;
+
+test("plan provenance follows explicit current-project identity and leaves recorded tasks and plans unchanged", () => {
+  const task = { id: "task", projectId: "p", planningId: "plan", planningSpecId: "approved", prompt: "Original approved scope" };
+  const plan = { id: "plan", projectId: "p", title: "Offline export", destination: "Keep accented names\nPreserve final empty fields", taskIds: ["task"], spec: { id: "approved", approvedAt: 123 } };
+  const before = JSON.stringify({ task, plan });
+  const trace = planTrace(task, { plans: [plan], projectId: "p" });
+  assert.equal(trace.state, "current"); assert.equal(trace.title, plan.title);
+  assert.equal(trace.destination, plan.destination); assert.equal(trace.canOpen, true);
+  assert.equal(JSON.stringify({ task, plan }), before);
+  assert.equal(planTrace({ id: "ordinary", title: plan.title }, { plans: [plan], projectId: "p" }), null, "matching words never establish provenance");
+});
+
+test("foreign, missing, ambiguous and unreadable plan links reveal no cached or foreign destination", () => {
+  const task = { id: "task", projectId: "p", planningId: "shared" };
+  const foreign = { id: "shared", projectId: "q", title: "Private foreign plan", destination: "Private foreign destination" };
+  assert.equal(planTrace(task, { plans: [foreign], projectId: "p" }).state, "missing");
+  const local = { ...foreign, projectId: "p", title: "Cached plan", destination: "Cached destination" };
+  for (const options of [{ plans: [local], projectId: "p", unavailable: true }, { plans: [local], projectId: "" }, { plans: [local, { ...local }], projectId: "p" }, { plans: [foreign], projectId: "q" }]) {
+    const trace = planTrace(task, options);
+    assert.equal(trace.canOpen, false); assert.equal(trace.title, ""); assert.equal(trace.destination, "");
+    assert.doesNotMatch(JSON.stringify(trace), /Private foreign destination|Cached destination/);
+  }
+  assert.equal(planTrace(task, { plans: [local, { ...local }], projectId: "p" }).state, "ambiguous");
+});
+
+test("changed, stale, archived and unapproved plans disclose current saved context without replacing the task brief", () => {
+  const task = { id: "task", projectId: "p", planningId: "plan", planningSpecId: "old", prompt: "Keep the old approved acceptance checks" };
+  const plan = { id: "plan", projectId: "p", title: "Updated plan", destination: "Current saved destination", taskIds: ["task"], spec: { id: "new", approvedAt: 123 } };
+  let trace = planTrace(task, { plans: [plan], projectId: "p" });
+  assert.equal(trace.state, "changed"); assert.match(trace.message, /specification differs/);
+  assert.match(trace.message, /recorded brief is unchanged/); assert.equal(trace.destination, plan.destination);
+  trace = planTrace(task, { plans: [{ ...plan, spec: { id: "old", approvedAt: 123, stale: true } }], projectId: "p" });
+  assert.match(trace.message, /needs revision/);
+  assert.match(planTrace(task, { plans: [{ ...plan, status: "archived" }], projectId: "p" }).message, /archived/);
+  assert.match(planTrace(task, { plans: [{ ...plan, taskIds: [] }], projectId: "p" }).message, /no longer listed/);
+  trace = planTrace({ ...task, planningSpecId: undefined }, { plans: [{ ...plan, spec: null }], projectId: "p" });
+  assert.equal(trace.state, "unconfirmed"); assert.match(trace.message, /no current approval/);
+  assert.equal(task.prompt, "Keep the old approved acceptance checks");
+});
+
+test("legacy scoped plans, empty destinations and malformed large destinations remain explicit and bounded", () => {
+  const task = { id: "task", projectId: "p", planningId: "plan" };
+  const legacy = { id: "plan", title: "Legacy plan", spec: { approvedAt: 123 } };
+  assert.match(planTrace(task, { plans: [legacy], projectId: "p" }).message, /No destination/);
+  const large = { ...legacy, destination: "D".repeat(20000) };
+  const trace = planTrace(task, { plans: [large], projectId: "p" });
+  assert.equal(trace.destination.length, 16000); assert.equal(trace.destinationTruncated, true);
+  assert.match(trace.message, /shortened here/); assert.equal(large.destination.length, 20000);
+});
 
 test("delegated builders stay beneath the shared task in the board and Command graph", () => {
   const tasks = [

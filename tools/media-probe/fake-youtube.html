@@ -1,0 +1,38 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+html,body{margin:0;height:100%;overflow:hidden;background:#101820;font:600 15px system-ui;color:#fff}
+#art{position:absolute;inset:0;background:radial-gradient(ellipse at 30% 30%,#e0b36a,transparent 45%),radial-gradient(ellipse at 75% 70%,#3aa38f,transparent 50%),linear-gradient(160deg,#1d3557,#0b1320)}
+#t{position:absolute;left:14px;top:12px;text-shadow:0 2px 8px #000}#c{position:absolute;left:14px;bottom:44px;font:12px monospace;text-shadow:0 1px 4px #000}
+#bar{position:absolute;left:0;right:0;bottom:0;height:36px;background:linear-gradient(transparent,#000a)}#p{position:absolute;left:12px;right:12px;bottom:28px;height:3px;background:#fff4}#f{height:100%;width:0;background:#f33}
+#gear{position:absolute;right:10px;bottom:6px;width:26px;height:24px;border:0;background:#fff3;color:#fff}
+</style></head><body><div id="art"></div><div id="t"></div><div id="c"></div><div id="bar"></div><div id="p"><div id="f"></div></div><button id="gear">⚙</button><script>
+const id = (location.pathname.split("/").pop() || "video").slice(0, 11);
+const titles = { dQw4w9WgXcQ: ["Night Drive — Lo-fi mix", "Studio Test Channel"], "M7lc1UVf-VE": ["Aurora timelapse over the fjords", "Northern Lights TV"] };
+const [title, author] = titles[id] || ["Fixture video " + id, "Fixture uploads"];
+const autoplay = /[?&]autoplay=1/.test(location.search);
+const startMatch = /[?&]start=(\d+)/.exec(location.search);
+const s = { t: Number(startMatch ? startMatch[1] : 0), d: 225, playing: autoplay, vol: 100, muted: /[?&]mute=1/.test(location.search), last: performance.now(), listening: false };
+document.getElementById("t").textContent = title;
+function info() { return { currentTime: s.t, duration: s.d, playerState: s.playing ? 1 : 2, volume: s.vol, muted: s.muted, videoData: { video_id: id, title, author } }; }
+function send(event, extra) { parent.postMessage(JSON.stringify({ event, id: "studio-media", channel: "widget", ...extra }), "*"); }
+addEventListener("message", (e) => {
+  let m; try { m = JSON.parse(e.data); } catch { return; }
+  if (m.event === "listening") { if (!s.listening) { s.listening = true; send("initialDelivery", { info: info() }); send("onReady", {}); } return; }
+  if (m.event !== "command") return;
+  parent.postMessage(JSON.stringify({ probeCommand: m.func, args: m.args }), "*");
+  if (m.func === "playVideo") s.playing = true;
+  if (m.func === "pauseVideo") s.playing = false;
+  if (m.func === "seekTo") s.t = Math.max(0, Math.min(s.d, Number(m.args[0]) || 0));
+  if (m.func === "setVolume") s.vol = Math.max(0, Math.min(100, Number(m.args[0]) || 0));
+  if (m.func === "mute") s.muted = true;
+  if (m.func === "unMute") s.muted = false;
+  if (s.listening) send("infoDelivery", { info: info() });
+});
+setInterval(() => {
+  const now = performance.now();
+  if (s.playing) s.t = Math.min(s.d, s.t + (now - s.last) / 1000);
+  s.last = now;
+  document.getElementById("c").textContent = (s.playing ? "▶ " : "❚❚ ") + s.t.toFixed(1) + " / " + s.d + " · vol " + s.vol + (s.muted ? " (muted)" : "");
+  document.getElementById("f").style.width = (s.t / s.d * 100) + "%";
+  if (s.listening) send("infoDelivery", { info: info() });
+}, 250);
+</script></body></html>

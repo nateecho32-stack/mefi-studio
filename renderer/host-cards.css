@@ -1,0 +1,72 @@
+/* Settings cards and small sheets for what the host tells you: Notifications
+   (renderer/alerts.js), Report a problem and the crash prompt
+   (renderer/report.js) and What's new (renderer/whats-new.js). Theme tokens
+   only, nothing under 12px, no scroll gutters: the app hides scrollbars and
+   draws its own indicator. */
+
+/* ---- What's new: Settings › Updates ---------------------------------------- */
+.whats-new-list { display: grid; gap: 2px; margin: 0 0 10px; }
+.whats-new-row { display: flex; align-items: center; gap: var(--s3); padding: 8px 0; border-bottom: 1px solid color-mix(in srgb, var(--hairline) 60%, transparent); }
+.whats-new-words { display: grid; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.whats-new-words b { color: var(--ivory); font-size: var(--fs-md); font-weight: 600; }
+.whats-new-words small { color: var(--muted); font-size: var(--fs-sm); line-height: 1.45; overflow-wrap: anywhere; }
+.whats-new-fresh { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: var(--r-pill); background: color-mix(in srgb, var(--gold) 20%, transparent); color: var(--gold-bright); font-size: var(--fs-sm); font-weight: 600; vertical-align: 1px; }
+.whats-new-link { justify-self: start; margin-top: 6px; }
+.whats-new-empty { margin: 4px 0; }
+
+/* ---- What's new: the sheet --------------------------------------------------- */
+.whats-new-sheet { position: fixed; inset: 0; z-index: calc(var(--z-toast) - 2); display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--bg-deep) 52%, transparent); backdrop-filter: blur(6px); }
+.whats-new-sheet[hidden] { display: none; }
+.whats-new-card { position: relative; width: min(520px, 100%); max-height: calc(100vh - 32px); padding: 20px 22px 18px; overflow: auto; border: 1px solid color-mix(in srgb, var(--ivory) 12%, transparent); border-radius: var(--r-xl); background: color-mix(in srgb, var(--panel-solid) 97%, transparent); color: var(--ivory); box-shadow: 0 40px 100px -40px color-mix(in srgb, var(--bg-deep) 95%, transparent); }
+.whats-new-head { display: flex; align-items: center; justify-content: space-between; }
+.whats-new-tag { display: inline-flex; align-items: center; gap: 7px; min-height: 28px; padding: 0 12px; border-radius: var(--r-pill); background: color-mix(in srgb, var(--gold) 18%, transparent); color: var(--gold-bright); font-size: var(--fs-sm); font-weight: 650; letter-spacing: .04em; text-transform: uppercase; }
+.whats-new-tag .glyph { width: 13px; height: 13px; }
+.whats-new-card h2 { margin: 14px 0 8px; font: 650 22px/1.25 var(--font-display); letter-spacing: -.01em; }
+.whats-new-notes { display: grid; gap: 8px; margin: 0 0 14px; padding-left: 18px; color: var(--ivory); font-size: var(--fs-md); line-height: 1.5; }
+.whats-new-notes.is-dim { color: var(--muted); }
+.whats-new-before { margin: 4px 0 12px; }
+.whats-new-before-head { margin: 0 0 6px; color: var(--gold); font-size: var(--fs-sm); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.whats-new-foot { display: flex; align-items: center; justify-content: flex-end; gap: var(--s3); flex-wrap: wrap; }
+.whats-new-foot .ghost { margin-right: auto; }
+.whats-new-sheet button:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
+
+/* ---- Report a problem: Settings › System › Diagnostics ---------------------------- */
+.settings-report { margin-top: 18px; padding-top: 4px; border-top: 1px solid color-mix(in srgb, var(--hairline) 60%, transparent); }
+.settings-report[hidden] { display: none; }
+.report-title { margin: 0 0 4px; }
+.report-crash { padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); border-radius: var(--r-md); background: color-mix(in srgb, var(--warn) 10%, transparent); color: var(--ivory); font-size: var(--fs-sm); }
+.report-files { display: grid; gap: 2px; margin: 10px 0 4px; }
+.report-file { display: flex; align-items: center; gap: var(--s3); padding: 8px 10px; border: 1px solid transparent; border-radius: var(--r-md); }
+.report-file.is-selected { border-color: color-mix(in srgb, var(--gold) 38%, transparent); background: color-mix(in srgb, var(--gold) 8%, transparent); }
+.report-file-words { display: grid; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.report-file-name { font: 600 var(--fs-md)/1.3 ui-monospace, Consolas, "Cascadia Mono", monospace; color: var(--ivory); }
+.report-file-words small { color: var(--muted); font-size: var(--fs-sm); line-height: 1.4; }
+.report-file-size { flex: none; min-width: 58px; text-align: right; color: var(--muted); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.report-total { margin: 2px 0 10px; }
+.report-switches { margin-bottom: 8px; }
+.report-preview { margin: 12px 0; border: 1px solid var(--hairline); border-radius: var(--r-lg); background: color-mix(in srgb, var(--bg-deep) 40%, transparent); }
+.report-preview-head { margin: 0; padding: 8px 12px; border-bottom: 1px solid color-mix(in srgb, var(--hairline) 60%, transparent); font-size: var(--fs-sm); }
+.report-pre { margin: 0; max-height: 300px; padding: 10px 12px; overflow: auto; border: 0; background: transparent; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--fs-sm); line-height: 1.5; }
+.report-actions { align-items: center; flex-wrap: wrap; }
+.report-never { display: grid; gap: 6px; margin: 0 0 8px; padding: 0; list-style: none; }
+.report-never-row { display: block; padding: 6px 10px; border-left: 2px solid color-mix(in srgb, var(--gold) 40%, transparent); color: var(--ivory); font-size: var(--fs-sm); }
+.report-never-row small { color: var(--muted); font-size: var(--fs-sm); }
+.report-next { display: grid; gap: 6px; margin: 0 0 10px; padding-left: 20px; color: var(--muted); font-size: var(--fs-sm); line-height: 1.5; }
+.report-next b { color: var(--ivory); font-weight: 600; }
+
+/* ---- Notifications: Settings › General ------------------------------------------------ */
+.alerts-lead { margin: 0 0 8px; }
+.alerts-note { margin: 0 0 10px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); border-radius: var(--r-md); background: color-mix(in srgb, var(--warn) 10%, transparent); color: var(--ivory); font-size: var(--fs-sm); }
+.alerts-note[hidden] { display: none; }
+.alerts-rows.is-dim .settings-control + .settings-control { opacity: .55; }
+.alerts-times[hidden] { display: none; }
+/* .settings-control > span makes every direct span a grid: the pair of times needs to outweigh it. */
+.settings-control > .alerts-time-pair { display: flex; flex: none; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.alerts-time-pair select { width: auto; min-width: 104px; }
+.alerts-titles { max-width: 360px; margin-bottom: 8px; }
+.alerts-titles > button { min-height: 36px; justify-items: center; text-align: center; }
+.alerts-sample { display: grid; gap: 2px; max-width: 360px; margin: 6px 0 12px; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: var(--r-md); background: color-mix(in srgb, var(--surface-sunk) 70%, transparent); }
+.alerts-sample b { color: var(--ivory); font-size: var(--fs-md); font-weight: 600; }
+.alerts-sample span { color: var(--muted); font-size: var(--fs-sm); line-height: 1.4; overflow-wrap: anywhere; }
+.alerts-sample .alerts-sample-from { color: var(--dim); font-size: var(--fs-sm); }
+.alerts-actions { align-items: center; flex-wrap: wrap; }

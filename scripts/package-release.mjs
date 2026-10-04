@@ -2,13 +2,18 @@
 //
 //   node scripts/package-release.mjs --version v0.2.0
 //   node scripts/package-release.mjs --version v0.2.0 --publish
+//   node scripts/package-release.mjs --version v0.2.0 --host tauri [--host-exe <path>] [--node <path>]
 //
-// The zip carries the whole portable folder (Electron runtime + resources/app,
-// no data/) under a "Mefi Studio AI+" root, which is exactly the layout
+// The zip carries the whole portable folder (the runtime + resources/app, no
+// data/) under a "Mefi Studio AI+" root, which is exactly the layout
 // scripts/release-updater.mjs stages and swaps into an installed app. A
 // sibling .sha256 file names the digest so the updater can verify a download.
+// --host picks the runtime (scripts/package-portable.mjs): electron (the
+// default) keeps the asset name every installed copy looks for; tauri, the
+// Rust host with node.exe beside it, adds "-tauri" to it (releaseAssetName).
 // --publish uses the GitHub CLI: it creates the release (and its tag, when the
-// tag is not pushed yet) or uploads over an existing one.
+// tag is not pushed yet) or uploads over an existing one, so a second run
+// with the other host adds its zip to the same release.
 import { spawn } from "node:child_process";
 import { readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -19,7 +24,9 @@ import {
   DEFAULT_PLATFORM,
   DEFAULT_REPO,
   PORTABLE_NAME,
+  normalizeHost,
   parseVersion,
+  portableHost,
   releaseAssetName,
   sha256File,
   zipDirectory,
@@ -32,6 +39,8 @@ const RELEASE_TITLE = "Mefi Studio";
 const argv = process.argv.slice(2);
 const flag = (name) => argv.includes(name);
 const value = (name, fallback = null) => {
+  const joined = argv.find((arg) => arg.startsWith(`${name}=`));
+  if (joined) return joined.slice(name.length + 1) || fallback;
   const index = argv.indexOf(name);
   return index >= 0 && argv[index + 1] ? argv[index + 1] : fallback;
 };
@@ -52,16 +61,25 @@ async function isFile(file) {
   }
 }
 
-async function portableRoots() {
+// The release folders package-portable.mjs made for one version and host,
+// newest first: mefi-studio-<version>-<host>-<6 random characters>, or the
+// older mefi-studio-<version>-<6 characters> of an Electron build. The exact
+// pattern keeps 0.4.6 from matching a 0.4.6-beta.1 folder, and the runtime
+// beside the program must agree with the host the name gives.
+async function portableRoots(versionRaw, host) {
   const releases = path.join(STUDIO, "dist", "releases");
   const entries = await readdir(releases, { withFileTypes: true }).catch(() => []);
+  const escaped = `mefi-studio-${versionRaw.replace(/[^a-zA-Z0-9.-]/g, "-")}`.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`^${escaped}-(?:(electron|tauri)-)?[A-Za-z0-9]{6}$`);
   const roots = [];
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
+    const match = pattern.exec(entry.name);
+    if (!match || (match[1] ?? "electron") !== host) continue;
     const root = path.join(releases, entry.name, PORTABLE_NAME);
-    if (await isFile(path.join(root, "resources", "app", "main.cjs"))) {
-      roots.push({ root, info: await stat(root) });
-    }
+    if (!(await isFile(path.join(root, "resources", "app", "main.cjs")))) continue;
+    if ((await portableHost(root)) !== host) continue;
+    roots.push({ root, info: await stat(root) });
   }
   roots.sort((a, b) => b.info.mtimeMs - a.info.mtimeMs);
   return roots.map((entry) => entry.root);
@@ -78,6 +96,11 @@ if (!version) {
 const repo = value("--repo", DEFAULT_REPO);
 const publish = flag("--publish");
 const skipBuild = flag("--skip-build");
+const host = normalizeHost(value("--host", "electron"));
+if (!host) {
+  console.error(`unknown --host ${value("--host")} (use electron or tauri)`);
+  process.exit(1);
+}
 
 if (pkg.version !== version.raw) {
   pkg.version = version.raw;
@@ -88,20 +111,20 @@ if (pkg.version !== version.raw) {
 if (!skipBuild) {
   const built = await build({ root: STUDIO });
   console.log(`built renderer/booklet.html — ${built.models} models`);
-  await run(process.execPath, [path.join(STUDIO, "scripts", "package-portable.mjs"), "--release"]);
+  const passed = ["--host-exe", "--node"].flatMap((name) => (value(name) ? [name, value(name)] : []));
+  await run(process.execPath, [path.join(STUDIO, "scripts", "package-portable.mjs"), "--release", "--host", host, ...passed]);
 }
 
-const roots = await portableRoots();
-// Exact version prefix, no fallback: `.includes("0.4.1")` matched a 0.4.10
+// Exact version and host, no fallback: `.includes("0.4.1")` matched a 0.4.10
 // folder, and the newest folder of any version was zipped as this release.
-const portable = roots.find((root) => path.basename(path.dirname(root)).startsWith(`mefi-studio-${version.raw.replace(/[^a-zA-Z0-9.-]/g, "-")}-`));
+const [portable] = await portableRoots(version.raw, host);
 if (!portable) {
-  console.error(`no packaged release folder for ${version.raw} under dist/releases — run without --skip-build`);
+  console.error(`no packaged ${host} release folder for ${version.raw} under dist/releases — run without --skip-build`);
   process.exit(1);
 }
-console.log(`portable folder: ${path.relative(STUDIO, portable)}`);
+console.log(`portable folder (${host} host): ${path.relative(STUDIO, portable)}`);
 
-const zipName = releaseAssetName(version.raw, { platform: DEFAULT_PLATFORM, arch: DEFAULT_ARCH });
+const zipName = releaseAssetName(version.raw, { platform: DEFAULT_PLATFORM, arch: DEFAULT_ARCH, host });
 const zipPath = path.join(STUDIO, "dist", "releases", zipName);
 const checksumPath = `${zipPath}.sha256`;
 await rm(zipPath, { force: true });
@@ -139,7 +162,7 @@ if (publish) {
       "--title",
       `${RELEASE_TITLE} v${version.raw}`,
       "--notes",
-      `Portable Windows build of ${RELEASE_TITLE} v${version.raw}.\n\nStudio checks this release from its App updates block and installs it in place; user data (data/) never travels in the zip.`,
+      `Portable Windows build of ${RELEASE_TITLE} v${version.raw}${host === "tauri" ? " on the Rust host" : ""}.\n\nStudio checks this release from its App updates block and installs it in place; user data (data/) never travels in the zip.`,
     ]);
   }
   console.log(`published: https://github.com/${repo}/releases/tag/${tag}`);

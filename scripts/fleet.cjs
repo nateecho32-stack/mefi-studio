@@ -24,6 +24,8 @@ const LIMITS = Object.freeze({
   builders: 12,
   title: 90,
   text: 160,
+  recap: 1500,
+  recapGenerations: 4,
   // A run the executor status dropped without coming home is concluded after
   // this long: agent.home normally lands first, a crashed run never does.
   goneGraceMs: 90 * 1000,
@@ -32,6 +34,8 @@ const LIMITS = Object.freeze({
   loopMs: 10 * MINUTE,
   retryGenerations: 3,
   retryWindowMs: 24 * HOUR,
+  handoffTasks: 3,
+  handoffWindowMs: 24 * HOUR,
   keptBranchMs: 24 * HOUR,
   escalationMs: 6 * HOUR,
 });
@@ -655,9 +659,49 @@ function rosterSeat(state, seatId, row, { slug, team }) {
   };
 }
 
+// An observation, not a verdict about productivity: normal work can wait for
+// verification. Count distinct child identities, never event volume, and
+// only describe evidence retained by this project's bounded ledger.
+function handoffHealth(state, at) {
+  if (finite(at) === null) return [];
+  const verified = new Map();
+  const recordVerified = (taskId, time) => {
+    if (taskId && finite(time) !== null && time <= at) verified.set(taskId, Math.max(verified.get(taskId) ?? 0, time));
+  };
+  for (const item of state.recent) if (item.kind === "verified") recordVerified(item.taskId, item.at);
+  for (const seat of Object.values(state.seats)) {
+    for (const gen of seat.lineage) if (gen.outcome === "verified") recordVerified(gen.taskId, gen.startedAt);
+  }
+  const bySeat = new Map();
+  for (const item of state.recent) {
+    if (item.kind !== "handed_off" || !item.taskId || !builderIndex(item.from) || !state.seats[item.from] ||
+        !item.to || item.to === item.from || item.at < at - LIMITS.handoffWindowMs || item.at > at) continue;
+    const tasks = bySeat.get(item.from) ?? new Map();
+    const previous = tasks.get(item.taskId);
+    if (!previous || item.at > previous.at) tasks.set(item.taskId, item);
+    bySeat.set(item.from, tasks);
+  }
+  const signals = [];
+  for (const [seatId, tasks] of bySeat) {
+    const pending = [...tasks.values()].filter(item => (verified.get(item.taskId) ?? -1) < item.at).sort((a, b) => b.at - a.at || a.taskId.localeCompare(b.taskId));
+    if (pending.length < LIMITS.handoffTasks) continue;
+    signals.push({
+      id: `handoff-progress:${seatId}`, severity: "info", seatId,
+      summary: `${pending.length} handed-off tasks have no recorded verification`,
+      reason: clip(pending.map(item => item.title || item.taskId).join("; "), LIMITS.text),
+      why: "The retained history shows handoffs without later verification for these tasks. Waiting for verification can be normal; this note does not mean the work is stalled.",
+      threshold: `${LIMITS.handoffTasks} distinct tasks handed off in the last 24 hours`,
+      confidence: "recorded history only", count: pending.length,
+      evidence: pending.slice(0, LIMITS.lineage).map(({ taskId, title, to, at }) => ({ taskId, title, to, at })),
+      inspect: { view: "seat", seatId },
+    });
+  }
+  return signals;
+}
+
 function health(state, at) {
   const live = state.live;
-  const out = [];
+  const out = handoffHealth(state, at);
   const minutes = (ms) => Math.max(1, Math.round(ms / MINUTE));
   for (const run of live.runs.values()) {
     if (run.goneAt !== null) continue;
@@ -748,6 +792,51 @@ function snapshot(state, { projectId = null, projectName = "", roster = [], team
 
 // One seat in full, for its inspector: every generation it has had, newest
 // first, its wires and the rows it took part in.
+// Recorded handover only: live work is not a result, and a done report does
+// not become verified until the board's evidence changes its outcome.
+function seatRecap(state, seatId, { excludeRunId = null } = {}) {
+  const id = seatIdent(seatId);
+  if (!id || !state.seats[id]) return null;
+  const seen = new Set();
+  const generations = state.seats[id].lineage.slice().reverse().filter((gen) => {
+    if (!gen.runId || gen.runId === excludeRunId || state.live.runs.has(gen.runId) || !gen.outcome || seen.has(gen.runId)) return false;
+    seen.add(gen.runId);
+    return true;
+  }).slice(0, LIMITS.recapGenerations);
+  if (!generations.length) return null;
+  const labels = { verified: "Verified", awaiting: "Reported complete; verification pending", stopped: "Interrupted; progress saved", failed: "Failed", lost: "Ended without a completion report", rejected: "Completion rejected" };
+  const lines = [`Seat ${id}: recorded previous work, not new task requirements.`];
+  for (const gen of generations) {
+    lines.push(`Generation ${gen.gen} (${gen.runId}), task ${gen.taskId || "unknown"}: ${gen.title || "Untitled"}. ${labels[gen.outcome] || gen.outcome}.`);
+    if (gen.result?.done) lines.push(`Reported result: ${gen.result.done}`);
+    if (gen.result?.next) lines.push(`Reported remaining work: ${gen.result.next}`);
+    if (gen.reason) lines.push(`Recorded reason: ${gen.reason}`);
+  }
+  const oldest = Math.min(...generations.map((gen) => gen.startedAt ?? Infinity));
+  const current = [...state.live.runs.values()].find((run) => run.seatId === id);
+  const newest = current?.startedAt ?? Infinity;
+  const handoffs = [];
+  const handed = new Set();
+  for (const item of state.recent.slice().reverse()) {
+    if (item.kind !== "handed_off" || item.from !== id || item.at < oldest || item.at > newest) continue;
+    const key = JSON.stringify([item.taskId, item.to, item.title]);
+    if (handed.has(key)) continue;
+    handed.add(key);
+    handoffs.push({ taskId: item.taskId, to: item.to, title: item.title });
+    if (handoffs.length === LIMITS.recapGenerations) break;
+  }
+  for (const item of handoffs) lines.push(`Handed to ${item.to || "another seat"}: ${item.title || "Untitled"} (${item.taskId || "unknown task"}).`);
+  const full = lines.join("\n");
+  const text = full.length > LIMITS.recap ? `${full.slice(0, LIMITS.recap - 1)}…` : full;
+  return { text, truncated: full.length > LIMITS.recap, generations: generations.map((gen) => ({ runId: gen.runId, taskId: gen.taskId, gen: gen.gen, outcome: gen.outcome })), handoffs };
+}
+
+function runRecap(state, runId, taskId) {
+  const run = state.live.runs.get(ident(runId));
+  if (!run || !run.taskId || run.taskId !== ident(taskId)) return null;
+  return seatRecap(state, run.seatId, { excludeRunId: run.runId });
+}
+
 function seatDetail(state, seatId, context = {}) {
   const id = seatIdent(seatId);
   const view = snapshot(state, context);
@@ -758,6 +847,7 @@ function seatDetail(state, seatId, context = {}) {
     ok: true,
     seat,
     lineage,
+    recap: seatRecap(state, id),
     edges: view.edges.filter((item) => item.from === id || item.to === id),
     recent: state.recent.filter((item) => item.from === id || item.to === id).slice(-LIMITS.seatRecent).reverse(),
     health: view.health.filter((signal) => signal.seatId === id),
@@ -781,4 +871,6 @@ module.exports = {
   health,
   snapshot,
   seatDetail,
+  seatRecap,
+  runRecap,
 };

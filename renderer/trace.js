@@ -124,10 +124,14 @@
       item.setAttribute("aria-pressed", chips[index].getAttribute("aria-pressed"));
     });
   }
+  function writeFailureNote(result) {
+    const failures = (result.logWriteFailures || []).filter((row) => ["executor", "work-events"].includes(row.channel) && Number.isSafeInteger(row.count) && row.count > 0);
+    return failures.length ? "History write failures this session: " + failures.map((row) => row.channel + " " + row.count + " (last " + clock(row.lastFailureAt) + ")").join("; ") : "";
+  }
   function render() {
     const result = state.result;
     if (!result) return;
-    if (result.ok === false) { status(result.error || "The log could not be read.", "bad"); $("lines").replaceChildren(); return; }
+    if (result.ok === false) { status([result.error || "The log could not be read.", writeFailureNote(result)].filter(Boolean).join(" · "), "bad"); $("lines").replaceChildren(); return; }
     const counts = result.counts || { error: 0, warn: 0, info: 0 };
     const levels = $("levels");
     syncChips(levels, LEVELS.map(([key, label]) => {
@@ -142,6 +146,8 @@
     $("file").hidden = !result.file;
     const shown = result.rows || [];
     status(result.total ? `${shown.length} of ${result.matched} matching line${result.matched === 1 ? "" : "s"} (${result.total} in this channel${result.dropped ? `, ${result.dropped} older lines rotated out` : ""})` : "");
+    const failureNote = writeFailureNote(result);
+    if (failureNote) status([$("status").textContent, failureNote].filter(Boolean).join(" · "), "bad");
     const signature = JSON.stringify([state.channel, state.newest, shown.length, shown[0]?.at, shown[0]?.text, shown.at(-1)?.at, shown.at(-1)?.text]);
     if (signature === state.signature) return;
     state.signature = signature;

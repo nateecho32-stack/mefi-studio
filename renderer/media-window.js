@@ -1,15 +1,22 @@
-// A persistent home for the Links player. Moving this surface only
-// changes geometry: its iframe/video is never reparented or recreated.
+// A persistent home for the Links player. Its iframe/video is never
+// recreated: floating, the surface only changes geometry; docked in the
+// media menu, the whole surface is carried into the menu's stage with a
+// state-preserving move (moveBefore), so it scrolls and animates with the
+// menu natively instead of being chased there frame by frame.
 (() => {
   "use strict";
   const STORAGE_KEY = "mefiStudio.mediaWindow.v1";
   const GAP = 16;
   const TOOLBAR_HEIGHT = 44; // 36px controls and the gap above playback.
+  const NARROW = 420; // the whole bar (title, transport, volume, window buttons) needs about this much.
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
   const finite = (value, fallback) => Number.isFinite(value) ? value : fallback;
   const distance = (point, box) => Math.hypot(Math.max(box.x - point.x, 0, point.x - box.x - box.width), Math.max(box.y - point.y, 0, point.y - box.y - box.height));
+  // Only a state-preserving move may carry a live player: append or
+  // insertBefore would unload its iframe and restart playback.
+  const canCarry = (host) => typeof host?.moveBefore === "function";
 
-  function create({ content, onClose, onSettings, settingsHost, onPlacement }) {
+  function create({ content, onClose, onSettings, settingsHost, onPlacement, transport }) {
     let saved;
     try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"); } catch {}
     let pinned = saved?.pinned === true;
@@ -22,7 +29,11 @@
     let trackDark = saved?.trackDark === true, sceneTimer = null, sceneBusy = false;
     let darkCandidate = -1, darkStreak = 0, darkCurrent = 4, darkMovedAt = 0;
     let knownTasks = null, projectId = null, taskRevision = 0;
-    let box = null, dockBox = null, dockDetached = false, placementStamp = "", shape = "video", minimized = false, gesture = null;
+    // dockHost: the menu's stage while the menu shows this player. dockClip:
+    // the part of a docked website outside the menu's scroller (a native view
+    // is not clipped by the page). aside: the open menu's rect, which a
+    // floating player steps clear of without saving the move.
+    let box = null, dockHost = null, dockClip = null, dockDetached = false, aside = null, placementStamp = "", shape = "video", minimized = false, gesture = null;
     let visible = false, hovered = false, yielded = false, awaySince = 0, lastDistance = Infinity, graceUntil = 0;
     let size = {};
     for (const key of ["video", "tall", "compact", "audio", "browser"]) {
@@ -105,12 +116,15 @@
     });
     const caption = document.createElement("button");
     caption.type = "button"; caption.className = "media-window-caption";
-    caption.id = "media-window-settings"; caption.title = "Open Audio settings";
-    caption.textContent = "Settings"; caption.setAttribute("aria-label", caption.title);
+    caption.id = "media-window-settings"; caption.title = "Music & video controls";
+    caption.innerHTML = '<svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-sliders"/></svg>';
+    caption.setAttribute("aria-label", caption.title);
     caption.addEventListener("click", onSettings);
     const toolbar = document.createElement("div"); toolbar.className = "media-window-toolbar";
     toolbar.setAttribute("role", "toolbar"); toolbar.setAttribute("aria-label", "Media window controls");
-    toolbar.append(move, caption, minimize, close);
+    // The player's own transport (music.js paints it) rides between the
+    // title and the window buttons, so a floating video is playable as is.
+    toolbar.append(move, ...(transport ? [transport] : []), caption, minimize, close);
     let toolbarInSettings = false;
     controls.append(backgroundButton, opacityLabel, treeOpacityLabel, brightnessLabel, darkButton, fadeButton, restoreButton, pin, dodge);
     window.MefiTreeDynamics?.mountVisibility?.(controls, "media");
@@ -131,6 +145,14 @@
     document.body.append(root);
 
     function bounds() {
+      // The shell knows what chrome there is: the rail and the local navigation
+      // and, in layout v2, the list, the tab strip, the inspector and the status
+      // bar. In v1 that is the very measurement below.
+      const area = window.MefiNav?.usable?.();
+      if (area) {
+        const left = clamp(area.left, 0, Math.max(0, window.innerWidth - 320));
+        return { left: left + GAP, top: Math.max(GAP, area.top + GAP), right: area.right - GAP, bottom: area.bottom - GAP };
+      }
       // Keep the menu and local navigation reachable even at the 600px app minimum.
       const rail = document.getElementById("app-rail")?.getBoundingClientRect();
       const nav = document.getElementById("app-local-nav")?.getBoundingClientRect();
@@ -149,20 +171,57 @@
       const height = clamp(finite(candidate.height, 248), minHeight, maxHeight);
       return { width, height, x: clamp(finite(candidate.x, area.right - width), area.left, area.right - width), y: clamp(finite(candidate.y, area.bottom - height), area.top, area.bottom - height) };
     }
+    // A floating player under the open menu steps to the nearest clear side
+    // of it; the saved place is untouched, so it returns when the menu closes.
+    function stepAside(current) {
+      if (!aside) return current;
+      if (current.x >= aside.right || current.x + current.width <= aside.left || current.y >= aside.bottom || current.y + current.height <= aside.top) return current;
+      const area = bounds(), gap = 12;
+      const options = [
+        { ...current, x: aside.left - gap - current.width }, { ...current, y: aside.bottom + gap },
+        { ...current, x: aside.right + gap }, { ...current, y: aside.top - gap - current.height },
+      ].filter((option) => option.x >= area.left && option.y >= area.top && option.x + option.width <= area.right && option.y + option.height <= area.bottom);
+      options.sort((a, b) => Math.hypot(a.x - current.x, a.y - current.y) - Math.hypot(b.x - current.x, b.y - current.y));
+      return options[0] || current;
+    }
     function visibleBox() {
-      if (minimized) return { ...box, width: Math.min(box.width, 304), height: 60 };
+      if (minimized) return stepAside({ ...box, width: Math.min(box.width, 304), height: 60 });
       if (background && shape !== "browser") { const area = bounds(); return { x: area.left, y: area.top, width: area.right - area.left, height: area.bottom - area.top }; }
-      return dockBox || box;
+      return stepAside(box);
+    }
+    const parentOf = () => root.parentElement ?? root.parentNode;
+    function carry(host) {
+      if (parentOf() === host) return true;
+      try { host.moveBefore(root, null); return true; } catch { return false; }
     }
     function layout() {
       if (!box) return;
       box = fit(box);
-      const current = visibleBox();
-      const docked = Boolean(dockBox && !minimized && !(background && shape !== "browser"));
-      root.dataset.docked = String(docked);
-      root.style.clipPath = docked && dockBox.clip ? `inset(${dockBox.clip.join("px ")}px)` : "none";
-      Object.assign(root.style, { left: `${current.x}px`, top: `${current.y}px`, width: `${current.width}px`, height: `${current.height}px` });
-      for (const grip of edges) grip.hidden = docked || minimized || background && shape !== "browser";
+      // Docked, the menu's stage sizes the player and the menu's own scroll
+      // moves it; a backdrop or a minimized pill always lives on the page.
+      let inMenu = Boolean(dockHost && visible && !minimized && !(background && shape !== "browser"));
+      if (inMenu && !carry(dockHost)) { dockHost = null; inMenu = false; }
+      if (!inMenu && parentOf() !== document.body) carry(document.body);
+      // Docking and undocking are jumps. The glide is for a floating player stepping aside; laid on a change
+      // of frame (the stage's `inset: 0` against a place on the page) it flew the player in from the page's
+      // corner whenever the menu closed after a step aside.
+      if ((root.dataset.docked === "true") !== inMenu) root.dataset.dodging = "false";
+      root.dataset.docked = String(inMenu);
+      let narrow = false;
+      if (inMenu) {
+        Object.assign(root.style, { left: "", top: "", width: "", height: "" });
+        root.style.clipPath = dockClip ? `inset(${dockClip.join("px ")}px)` : "none";
+      } else {
+        const current = visibleBox();
+        root.style.clipPath = "none";
+        Object.assign(root.style, { left: `${current.x}px`, top: `${current.y}px`, width: `${current.width}px`, height: `${current.height}px` });
+        // Too narrow for the whole bar (a small window with the rail open): the
+        // volume stays with the menu, so the transport and the window's own
+        // buttons, Close among them, never run off the edge.
+        narrow = !minimized && current.width < NARROW;
+      }
+      root.dataset.narrow = String(narrow);
+      for (const grip of edges) grip.hidden = inMenu || minimized || background && shape !== "browser";
       paintVideo();
     }
     function persist() {
@@ -188,7 +247,8 @@
         if (backdrop) controls.prepend(toolbar);
         else root.insertBefore(toolbar, content);
       }
-      toolbar.hidden = browsing && !minimized;
+      // In the menu, the menu's own card is the toolbar.
+      toolbar.hidden = browsing && !minimized || root.dataset.docked === "true";
       caption.hidden = minimized;
       const backdropChanged = document.body.dataset.mediaBackground !== String(backdrop);
       root.dataset.background = String(backdrop);
@@ -314,7 +374,7 @@
     }
     function start(event, edge = "move") {
       if (event.button !== 0 || gesture || !visible || background && !minimized && shape !== "browser") return;
-      if (dockBox) { detach(); layout(); }
+      if (root.dataset.docked === "true") detach();
       event.preventDefault(); event.stopPropagation();
       gesture = { edge, x: event.clientX, y: event.clientY, box: { ...box }, target: event.currentTarget, pointerId: event.pointerId };
       root.dataset.dodging = "false";
@@ -326,11 +386,13 @@
     function detach() {
       // A drag begins where the user grabbed the docked player, rather than
       // jumping back to the last floating position under the same pointer.
-      if (!minimized) {
-        box = fit(dockBox);
+      const drawn = root.getBoundingClientRect?.();
+      if (!minimized && drawn?.width > 0 && drawn?.height > 0) {
+        box = fit({ x: drawn.left, y: drawn.top, width: drawn.width, height: drawn.height });
         size = { ...size, [shape]: { width: box.width, height: box.height } };
       }
-      dockBox = null; dockDetached = true;
+      dockHost = null; dockClip = null; dockDetached = true;
+      layout();
     }
     function changed(dx, dy, edge, origin) {
       const { area, minWidth, minHeight } = limits();
@@ -348,14 +410,16 @@
       root.dataset.interacting = "false";
       try { previous.target.releasePointerCapture?.(previous.pointerId); } catch {}
       if (previous.edge !== "move") size = { ...size, [shape]: { width: box.width, height: box.height } };
+      // A deliberate move is where the player lives now, even beside the menu.
+      aside = null;
       persist(); graceUntil = now() + 1600;
     }
     function keyboard(event, edge) {
       const vectors = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
       if (!vectors[event.key] || !box || background && !minimized && shape !== "browser") return;
-      if (dockBox) detach();
+      if (root.dataset.docked === "true") detach();
       event.preventDefault(); event.stopPropagation();
-      root.dataset.dodging = "false";
+      root.dataset.dodging = "false"; aside = null;
       const step = event.shiftKey ? 2 : 16;
       box = changed(vectors[event.key][0] * step, vectors[event.key][1] * step, edge, box);
       if (edge !== "move") size = { ...size, [shape]: { width: box.width, height: box.height } };
@@ -371,7 +435,7 @@
         box = changed(event.clientX - gesture.x, event.clientY - gesture.y, gesture.edge, gesture.box);
         layout(); return;
       }
-      if (!visible || minimized || dockBox || background || shape === "browser" || event.buttons || event.pointerType && event.pointerType !== "mouse") return;
+      if (!visible || minimized || root.dataset.docked === "true" || background || shape === "browser" || event.buttons || event.pointerType && event.pointerType !== "mouse") return;
       const point = { x: event.clientX, y: event.clientY }, gap = distance(point, box), time = now();
       const approaching = gap < lastDistance; lastDistance = gap;
       // After one dodge, following the player always wins. Rearm only after
@@ -417,7 +481,30 @@
     });
     seedTasks();
     paintToggles();
-    return { show, hide, reveal, dock: value => { if (!value) dockDetached = false; if (value && dockDetached || JSON.stringify(value) === JSON.stringify(dockBox)) return; dockBox = value; layout(); },
+    return { show, hide, reveal,
+      // Carry the player into the menu's stage (an element), or home with
+      // null. A player dragged out of the menu stays out until it closes.
+      dock: host => {
+        if (!host) { dockDetached = false; dockClip = null; }
+        else if (dockDetached || !canCarry(host)) return false;
+        if (host !== dockHost || !host && parentOf() !== document.body) { dockHost = host || null; layout(); }
+        return root.dataset.docked === "true";
+      },
+      // Top, right, bottom and left insets of a docked website that lie
+      // outside the menu's scroller: media-browser.js clips its native view to them.
+      clip: inset => {
+        const next = Array.isArray(inset) && inset.length === 4 && inset.every(Number.isFinite) && inset.some((value) => value > 0) ? inset.map((value) => Math.max(0, Math.round(value))) : null;
+        if (String(next) === String(dockClip)) return;
+        dockClip = next;
+        if (root.dataset.docked === "true") root.style.clipPath = dockClip ? `inset(${dockClip.join("px ")}px)` : "none";
+      },
+      // The open menu's rect (left, top, right, bottom), or null once it closes.
+      avoid: rect => {
+        const next = rect && [rect.left, rect.top, rect.right, rect.bottom].every(Number.isFinite) ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom } : null;
+        if (JSON.stringify(next) === JSON.stringify(aside)) return;
+        aside = next; root.dataset.dodging = "true"; layout();
+      },
+      rename: label => { move.textContent = `⠿ ${String(label || "Media").slice(0, 160)}`; },
       setBackground: value => { if (Boolean(value) !== background) backgroundButton.click(); },
       beginMove: start, moveKey: event => keyboard(event, "move"), minimize: () => minimize.click(),
       snapshot: () => ({ minimized }), restore: (value) => { if (Boolean(value?.minimized) !== minimized) setMinimized(value?.minimized, { focus: false }); } };

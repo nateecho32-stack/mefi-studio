@@ -37,7 +37,8 @@
   const UNPAINTED = Object.freeze({ view: "", rows: null });
   let paintedList = UNPAINTED;
   let paintedDetail = UNPAINTED;
-  const state = { tasks: [], plans: [], plansError: null, selected: null, filter: "all", readiness: "all", projectId: null, query: "", doneCollapsed: false, renaming: false, prefs: { blurMenu: true, useWeb: false, useTree: true, autoReference: true, useReference: true }, references: null };
+  const state = { tasks: [], plans: [], plansError: null, plansLoaded: false, selected: null, filter: "all", readiness: "all", projectId: null, query: "", doneCollapsed: false, renaming: false, prefs: { blurMenu: true, useWeb: false, useTree: true, autoReference: true, useReference: true }, references: null };
+  let planTracePanel = null, paintedPlanTrace = "";
   // Two-step delete: the id of the task whose Delete button is armed right now.
   let deleteArmed = null;
   // Two-step Stop, kept here rather than on the button for the same reason:
@@ -55,6 +56,7 @@
   const dependencyDrafts = new Map();
   const contextReads = new Map();
   const attemptReads = new Map();
+  const usageReads = new Map();
   const detailExpanded = new Map();
   const detailViews = new Map();
   const projectSelections = new Map();
@@ -86,9 +88,12 @@
   let detailBusy = null;
   let backlogRead = 0;
   let projectEpoch = 0;
+  let openRead = 0;
+  let gatherRead = 0;
   let createPending = false;
   const createDrafts = new Map();
   const overviewExpanded = new Set();
+  let overviewPaint = null;
   let plansRead = 0;
   const taskKey = (task) => `${task?.projectId || state.backlog?.projectId || ""}/${task?.id || ""}`;
   const node = (tag, className, text) => Object.assign(document.createElement(tag), { className, textContent: text ?? "" });
@@ -426,8 +431,13 @@
   }
 
   function taskRow(task) {
+    const epoch = projectEpoch;
+    // Kept rows may outlive an identical board snapshot. Act on the current
+    // canonical row, and never on a detached row from a previous project.
+    const current = () => epoch === projectEpoch ? state.tasks.find((row) => row.id === task.id) : null;
     const li = document.createElement("li");
     li.classList.add("task-row");
+    li.dataset.taskId = task.id;
     li.style.setProperty("--task-color", task.color ?? COLORS[0]);
     if (task.id === state.selected) li.classList.add("selected");
     if (isDone(task)) li.classList.add("done-row");
@@ -453,8 +463,8 @@
     // One-click finish (or reopen) without leaving the board.
     const actions = document.createElement("span");
     actions.className = "row-actions";
-    if (isDone(task)) actions.append(rowButton("↺", "Reopen — back to the open board", () => setTaskStatus(task, "open")));
-    else actions.append(rowButton("✓", "Mark done — moves it under the Done mark", () => setTaskStatus(task, "done")));
+    if (isDone(task)) actions.append(rowButton("↺", "Reopen - back to the open board", () => { const row = current(); if (row) setTaskStatus(row, "open"); }));
+    else actions.append(rowButton("✓", "Mark done - moves it under the Done mark", () => { const row = current(); if (row) setTaskStatus(row, "done"); }));
     li.append(dot, text, actions);
     // The brief rides under the title in the Done view — the same digest the
     // detail pane shows, so the list answers "what got done" at a glance.
@@ -468,6 +478,7 @@
     // Focusable because nav's claim() may focus a row in this list.
     li.tabIndex = 0;
     li.addEventListener("click", () => {
+      if (!current()) return;
       window.MefiNav?.note?.("tasks", { taskId: task.id, projectId: state.projectId });
       state.selected = task.id;
       renderList();
@@ -531,12 +542,13 @@
 
   function renderList() {
     paintedList = UNPAINTED;
-    cardLayout?.stop();
-    els.list.textContent = "";
     renderFilters();
     els.overlay?.classList.toggle("task-overview-mode", state.filter !== "done");
     els.overlay?.classList.toggle("task-detail-open", Boolean(selectedTask()));
     if (state.filter !== "done" && window.MefiTaskGroups?.overviewGroups) { renderOverview(); return; }
+    cardLayout?.stop();
+    overviewPaint = null;
+    els.list.textContent = "";
     // A selected done task must be visible, so unfold the mark it lives under.
     const selected = selectedTask();
     if (selected && isDone(selected)) state.doneCollapsed = false;
@@ -627,6 +639,7 @@
 
   function overviewCard(model) {
     const { group, counts, stage, planning } = model;
+    const epoch = projectEpoch;
     const card = node("li", "task-overview-card");
     card.dataset.overviewId = group.id;
     card.dataset.stage = stage;
@@ -673,10 +686,10 @@
     }
     if (stage === "done" && group.task) card.append(node("p", "task-overview-note", doneSummary(group.task)));
     const actions = node("div", "task-overview-actions");
-    if (group.planId && (group.plan || group.kind === "approved-plan")) actions.append(rowButton(planning ? "Continue planning" : "View plan", "Open the saved destination, discussion and decisions", () => { close(); window.MefiPlanning?.open?.({ planId: group.planId }); }));
+    if (group.planId && (group.plan || group.kind === "approved-plan")) actions.append(rowButton(planning ? "Continue planning" : "View plan", "Open the saved destination, discussion and decisions", () => { if (epoch !== projectEpoch) return; close(); window.MefiPlanning?.open?.({ planId: group.planId }); }));
     const release = model.current && !model.current.unavailable ? holdAction(model.current) : null;
     if (release && !release.disabled) {
-      const button = rowButton(release.label, release.title, release.run);
+      const button = rowButton(release.label, release.title, () => { if (epoch === projectEpoch) release.run(); });
       button.dataset.taskAction = release.action;
       actions.append(button);
     }
@@ -688,7 +701,7 @@
       card.classList.add("opens-task");
       card.tabIndex = 0;
       card.title = `Open ${shortTitle(target)}`;
-      const openTarget = () => window.MefiTasks.selectTask(target.id);
+      const openTarget = () => { if (epoch === projectEpoch && state.tasks.some((task) => task.id === target.id)) window.MefiTasks.selectTask(target.id); };
       card.addEventListener("click", (event) => { if (!event.target?.closest?.("button, a, input, select, summary, .task-overview-details")) openTarget(); });
       card.addEventListener("keydown", (event) => { if (event.target === card && event.key === "Enter") { event.preventDefault(); openTarget(); } });
     }
@@ -700,7 +713,7 @@
       const details = node("details", "task-overview-details");
       details.open = overviewExpanded.has(group.id) || detailsRows.some((member) => member.id === state.selected);
       details.append(node("summary", "", `${detailsRows.length} ${detailsRows.length === 1 ? "task" : "tasks"} in this card`));
-      details.addEventListener("toggle", () => { details.open ? overviewExpanded.add(group.id) : overviewExpanded.delete(group.id); });
+      details.addEventListener("toggle", () => { if (epoch === projectEpoch && els.list.contains(details)) details.open ? overviewExpanded.add(group.id) : overviewExpanded.delete(group.id); });
       const list = node("ul", "pin-list task-overview-members");
       for (const member of detailsRows) {
         if (member.canonical !== false) list.append(taskRow(member.task));
@@ -716,7 +729,89 @@
     return card;
   }
 
+  // Keep stable nodes in place, including focused descendants. moveBefore
+  // preserves browser state on reorder; older renderers restore focus below.
+  function reconcileOverviewChildren(parent, children) {
+    const wanted = new Set(children);
+    for (const child of [...parent.children]) if (!wanted.has(child)) parent.removeChild(child);
+    for (let index = 0; index < children.length; index += 1) {
+      const child = children[index], before = parent.children[index] || null;
+      if (child === before) continue;
+      if (child.parentNode && child.isConnected && parent.isConnected && parent.moveBefore) parent.moveBefore(child, before);
+      else parent.insertBefore(child, before);
+    }
+  }
+
+  function overviewFocus() {
+    const active = document.activeElement;
+    if (!active || !els.list.contains(active)) return null;
+    const card = active.closest?.(".task-overview-card");
+    const fold = active.closest?.(".task-overview-finished-fold");
+    if (!card) return fold ? { active, finished: true } : null;
+    const path = [];
+    for (let item = active; item && item !== card; item = item.parentNode) path.unshift([...item.parentNode.children].indexOf(item));
+    const row = active.closest?.(".task-row"), rowPath = [];
+    if (row) for (let item = active; item && item !== row; item = item.parentNode) rowPath.unshift([...item.parentNode.children].indexOf(item));
+    return { active, id: card.dataset.overviewId, path, tag: active.tagName, text: active.textContent, action: active.dataset.taskAction,
+      row: row?.dataset.taskId, rowPath };
+  }
+
+  function restoreOverviewFocus(focus) {
+    if (!focus || document.activeElement === focus.active && focus.active.isConnected) return;
+    if (focus.active.isConnected) { focus.active.focus?.({ preventScroll: true }); return; }
+    if (focus.finished) { overviewPaint?.finished?.summary.focus?.({ preventScroll: true }); return; }
+    const card = overviewPaint?.cards.get(focus.id)?.card;
+    if (!card) return;
+    let target = card;
+    if (focus.row) {
+      target = [...card.querySelectorAll(".task-row")].find((row) => row.dataset.taskId === focus.row);
+      for (const index of focus.rowPath) target = target?.children[index];
+    } else for (const index of focus.path) target = target?.children[index];
+    // Never transfer a removed member's button focus onto a different task.
+    if (!target || target.tagName !== focus.tag || target.dataset.taskAction !== focus.action ||
+        (focus.row && target.closest?.(".task-row")?.dataset.taskId !== focus.row) ||
+        (String(target.tagName).toLowerCase() === "button" && target.textContent !== focus.text)) target = card;
+    if (target === card && !card.classList.contains("opens-task")) card.tabIndex = -1;
+    target.focus?.({ preventScroll: true });
+  }
+
+  function overviewCardSignature(model, signatures, now) {
+    const group = model.group;
+    const row = (task) => {
+      if (!task) return null;
+      if (!signatures.has(task)) signatures.set(task, rowSignature(task, now));
+      return [signatures.get(task), scheduledTask(task), task.id === state.selected];
+    };
+    // Full row fields retain the existing paint contract, excluding only live
+    // runProgress. Scheduler reasons/actions, saved-plan changes and canonical
+    // membership must also invalidate the affected card, even at equal counts.
+    return JSON.stringify([state.filter, Boolean(window.mefiStudio?.tasksAction), group.id, group.kind, group.title, group.planId,
+      group.plan, row(group.task), (group.members || []).map((member) => [member.id, member.canonical, member.readOnly, row(member.task)])]);
+  }
+
+  function retainedOverviewCard(model, signatures, now) {
+    const id = model.group.id, signature = overviewCardSignature(model, signatures, now);
+    const prior = overviewPaint.cards.get(id);
+    if (prior?.signature === signature) return prior.card;
+    const details = prior?.card.querySelector(".task-overview-details");
+    // toggle is queued by the browser; capture the actual fold before replacing
+    // a changed card instead of relying on the event having already fired.
+    if (details) details.open ? overviewExpanded.add(id) : overviewExpanded.delete(id);
+    const card = overviewCard(model);
+    overviewPaint.cards.set(id, { signature, card });
+    return card;
+  }
+
   function renderOverview() {
+    const focus = overviewFocus();
+    if (!overviewPaint || overviewPaint.epoch !== projectEpoch) {
+      const heading = node("li", "task-overview-summary");
+      const count = node("strong", ""), explanation = node("span", "");
+      heading.append(count);
+      overviewPaint = { epoch: projectEpoch, cards: new Map(), heading, count, explanation,
+        note: node("li", "task-overview-note", "Saved plans could not be refreshed. Task progress is still available."),
+        empty: mutedLi(emptyListMessage(0)), finished: null };
+    }
     const groups = window.MefiTaskGroups.overviewGroups(state.tasks, { plans: state.plans });
     const query = state.query.trim().toLowerCase();
     const models = groups.map(overviewModel).filter((model) => {
@@ -732,25 +827,45 @@
     models.sort((a, b) => rank[a.stage] - rank[b.stage] || (b.group.plan?.updatedAt || b.group.task?.updatedAt || 0) - (a.group.plan?.updatedAt || a.group.task?.updatedAt || 0));
     // The chips count tasks and the list shows cards; say how the two relate
     // only when they differ.
-    const heading = node("li", "task-overview-summary");
+    const { heading, count, explanation } = overviewPaint;
     const taskCount = summary()[state.filter] ?? 0;
-    heading.append(node("strong", "", `${models.length} ${models.length === 1 ? "card" : "cards"}`));
-    if (taskCount !== models.length) heading.append(node("span", "", `from ${taskCount} ${taskCount === 1 ? "task" : "tasks"} — related tasks share a card`));
-    els.list.append(heading);
-    if (state.plansError) els.list.append(node("li", "task-overview-note", "Saved plans could not be refreshed. Task progress is still available."));
+    const text = `${models.length} ${models.length === 1 ? "card" : "cards"}`;
+    if (count.textContent !== text) count.textContent = text;
+    const why = `from ${taskCount} ${taskCount === 1 ? "task" : "tasks"} - related tasks share a card`;
+    if (explanation.textContent !== why) explanation.textContent = why;
+    reconcileOverviewChildren(heading, taskCount !== models.length ? [count, explanation] : [count]);
+    const children = [heading];
+    if (state.plansError) children.push(overviewPaint.note);
+    const signatures = new Map(), now = Date.now();
     const finished = models.filter((model) => model.stage === "done");
-    for (const model of models.filter((model) => model.stage !== "done")) els.list.append(overviewCard(model));
+    for (const model of models.filter((model) => model.stage !== "done")) children.push(retainedOverviewCard(model, signatures, now));
     if (finished.length) {
-      const row = node("li", "task-overview-finished");
-      const details = node("details", "task-overview-finished-fold");
-      details.open = overviewExpanded.has("finished") || finished.some((model) => model.work.some((task) => task.id === state.selected));
-      details.append(node("summary", "", `Confirmed plans & tasks · ${finished.length}`));
-      details.addEventListener("toggle", () => { details.open ? overviewExpanded.add("finished") : overviewExpanded.delete("finished"); });
-      const list = node("ul", "pin-list task-overview-finished-list");
-      for (const model of finished) list.append(overviewCard(model));
-      details.append(list); row.append(details); els.list.append(row);
+      if (!overviewPaint.finished) {
+        const row = node("li", "task-overview-finished"), details = node("details", "task-overview-finished-fold");
+        const summary = node("summary", ""), list = node("ul", "pin-list task-overview-finished-list");
+        details.open = overviewExpanded.has("finished");
+        const epoch = projectEpoch;
+        details.addEventListener("toggle", () => { if (epoch === projectEpoch && els.list.contains(details)) details.open ? overviewExpanded.add("finished") : overviewExpanded.delete("finished"); });
+        details.append(summary, list); row.append(details);
+        overviewPaint.finished = { row, details, summary, list };
+      }
+      const fold = overviewPaint.finished;
+      const label = `Confirmed plans & tasks · ${finished.length}`;
+      if (fold.summary.textContent !== label) fold.summary.textContent = label;
+      if (finished.some((model) => model.work.some((task) => task.id === state.selected))) fold.details.open = true;
+      reconcileOverviewChildren(fold.list, finished.map((model) => retainedOverviewCard(model, signatures, now)));
+      children.push(fold.row);
     }
-    if (!models.length) els.list.append(mutedLi(emptyListMessage(0)));
+    if (!models.length) {
+      const message = emptyListMessage(0);
+      if (overviewPaint.empty.textContent !== message) overviewPaint.empty.textContent = message;
+      children.push(overviewPaint.empty);
+    }
+    reconcileOverviewChildren(els.list, children);
+    const visible = new Set(models.map((model) => model.group.id));
+    for (const id of overviewPaint.cards.keys()) if (!visible.has(id)) overviewPaint.cards.delete(id);
+    if (!finished.length) overviewPaint.finished = null;
+    restoreOverviewFocus(focus);
     watchMasonry();
   }
 
@@ -770,15 +885,18 @@
     const epoch = projectEpoch, projectId = state.projectId, read = ++plansRead;
     try {
       const result = await api.planningList(projectId ? { projectId } : {});
-      if (epoch !== projectEpoch || read !== plansRead || projectId !== state.projectId || result?.projectId && projectId && result.projectId !== projectId) return;
+      if (epoch !== projectEpoch || read !== plansRead || projectId !== state.projectId) return;
+      if (result?.projectId && projectId && result.projectId !== projectId) throw new Error("Plan project mismatch");
       if (!result?.ok || !Array.isArray(result.plans)) throw new Error("Plans unavailable");
       state.plans = result.plans.filter((plan) => !plan.projectId || !projectId || plan.projectId === projectId);
       state.plansError = null;
+      state.plansLoaded = true;
     } catch {
       if (epoch !== projectEpoch || read !== plansRead) return;
       state.plansError = true;
+      state.plansLoaded = false;
     }
-    if (!els.overlay.hidden) paintIfChanged();
+    if (!els.overlay.hidden) { paintIfChanged(); refreshPlanTrace(); }
   }
 
   async function load(options = {}) {
@@ -967,8 +1085,95 @@
         window.MefiToast?.(`Task not deleted · ${result?.error || "the task store could not be written"}`, "bad");
         return;
       }
-      window.MefiToast?.(`Task deleted · ${task.title}`, "good");
+      // Recently deleted (main.cjs "Board trash") kept it: the toast can undo the delete
+      // for a few seconds, and the list under More brings it back after that. With
+      // the switch off (MEFI_STUDIO_NO_BOARD_TRASH) nothing was kept and the toast says only that.
+      const kept = Array.isArray(result?.trashed) && result.trashed.some((row) => row?.kind === "task" && row.id === task.id);
+      if (kept && window.mefiStudio?.tasksUndelete) window.MefiToast?.(`Deleted “${clipName(task.title)}”`, "good", { duration: UNDO_MS, action: { label: "Undo", run: () => undoDelete(task) } });
+      else window.MefiToast?.(`Task deleted · ${task.title}`, "good");
     });
+  }
+
+  // ---------- Recently deleted ----------
+  // How long a delete toast offers Undo. After it is gone the same button waits in
+  // More › Recently deleted for 30 days.
+  const UNDO_MS = 8000;
+  const clipName = (value) => { const flat = String(value ?? "").replace(/\s+/g, " ").trim(); return flat.length > 40 ? `${flat.slice(0, 39).trimEnd()}…` : flat || "Untitled"; };
+  async function undoDelete(task) {
+    const projectId = task.projectId || state.backlog?.projectId || state.projectId || undefined;
+    let result;
+    try { result = await window.mefiStudio.tasksUndelete({ taskId: task.id, projectId }); } catch (error) { result = { ok: false, error: error?.message }; }
+    if (!result?.ok) { window.MefiToast?.(`Not put back · ${result?.error || "Recently deleted could not be read"}`, "bad"); return; }
+    if (Array.isArray(result.tasks) && (!result.projectId || !state.projectId || result.projectId === state.projectId)) { taskRevision += 1; state.tasks = result.tasks; hydrated = true; }
+    state.selected = task.id;
+    syncBadge();
+    if (!els.overlay?.hidden) { renderList(); renderDetail(); revealSelected(); }
+    window.MefiToast?.(`Put back “${clipName(task.title)}”${result.warning ? ` · ${result.warning}` : ""}`, result.warning ? "warn" : "good");
+  }
+  // One list per place that shows it: the Task board's More menu (tasks and ideas)
+  // and the Ideas sheet's Tools menu (ideas). A read that lands after a newer one
+  // for the same place is dropped.
+  const trashReads = new WeakMap();
+  async function showRecentlyDeleted(container, options = {}) {
+    if (!container) return;
+    const api = window.mefiStudio;
+    if (typeof api?.boardTrash !== "function") { container.hidden = true; return; }
+    const token = (trashReads.get(container) || 0) + 1;
+    trashReads.set(container, token);
+    const kinds = Array.isArray(options.kinds) && options.kinds.length ? options.kinds : null;
+    container.hidden = false;
+    container.textContent = "";
+    const list = node("ul", "recent-deleted-list");
+    const note = node("p", "recent-deleted-note", "Looking…");
+    note.setAttribute("role", "status");
+    container.append(node("h4", "recent-deleted-heading", "Recently deleted"), list, note);
+    const asked = options.projectId || state.projectId || null;
+    let result;
+    try { result = await api.boardTrash({ ...(asked ? { projectId: asked } : {}), ...(kinds ? { kinds } : {}) }); } catch (error) { result = { ok: false, error: error?.message }; }
+    if (trashReads.get(container) !== token) return;
+    // Switched off (MEFI_STUDIO_NO_BOARD_TRASH): nothing was kept, and the list says why it is empty.
+    if (result?.ok && result.enabled === false) { note.textContent = "Switched off for this run of Studio, so deletes are for good."; return; }
+    if (!result?.ok) {
+      // The host says "Recently deleted could not be read: why"; the heading above already names the list.
+      const why = String(result?.error || "").replace(/^Recently deleted could not be read:?\s*/i, "").trim();
+      note.textContent = `Could not be read · ${why || "try again"}`;
+      return;
+    }
+    const days = Number(result.keptDays) || 30;
+    const items = Array.isArray(result.items) ? result.items : [];
+    note.textContent = items.length ? `Kept for ${days} days, then let go.` : `Nothing deleted lately. What you delete stays here for ${days} days.`;
+    const scope = { ...options, projectId: result.projectId || asked };
+    for (const item of items) list.append(trashRow(item, container, scope));
+  }
+  function trashRow(item, container, options) {
+    const row = node("li", "recent-deleted-row");
+    row.dataset.kind = item.kind;
+    row.dataset.id = item.id;
+    const name = node("span", "recent-deleted-name", item.title || "Untitled");
+    name.title = item.title || "";
+    const button = node("button", "ghost mini", "Restore");
+    button.type = "button";
+    button.setAttribute("aria-label", `Restore ${item.kind === "idea" ? "the idea" : "the task"} ${item.title || ""}`.trim());
+    if (item.restorable === false) {
+      button.disabled = true;
+      button.title = "It is already back, so the deleted copy is kept and not put over it.";
+    }
+    button.addEventListener("click", () => { void restoreDeleted(item, container, options, button); });
+    row.append(node("span", "recent-deleted-kind", item.kind === "idea" ? "Idea" : "Task"), name, node("span", "recent-deleted-when", `Deleted ${relTime(Number(item.deletedAt) || Date.now())}`), button);
+    return row;
+  }
+  async function restoreDeleted(item, container, options, button) {
+    const api = window.mefiStudio;
+    button.disabled = true;
+    let result;
+    try {
+      result = item.kind === "idea"
+        ? await api.ideasAction({ action: "restore", ideaId: item.id, projectId: options.projectId })
+        : await api.tasksUndelete({ taskId: item.id, projectId: options.projectId });
+    } catch (error) { result = { ok: false, error: error?.message }; }
+    if (!result?.ok) window.MefiToast?.(`Not put back · ${result?.error || "Recently deleted could not be read"}`, "bad");
+    else window.MefiToast?.(`Put back “${clipName(item.title)}”${result.warning ? ` · ${result.warning}` : ""}`, result.warning ? "warn" : "good");
+    void showRecentlyDeleted(container, options);
   }
 
   // Who filed a card. Promotion keeps a request's own source (it used to
@@ -1222,24 +1427,33 @@
     const method = action === "dependencies" ? "tasksDependencies" : "tasksRestore";
     if (!api?.[method] || detailBusy) return;
     const key = taskKey(task), projectId = task.projectId || state.backlog?.projectId;
+    const epoch = projectEpoch, revision = taskRevision;
+    const current = () => epoch === projectEpoch && taskKey(selectedTask()) === key;
     detailBusy = key;
     detailMessages.set(key, { text: action === "dependencies" ? "Saving prerequisites…" : "Restoring this brief…" });
     renderDetail();
     try {
       const result = await api[method]({ taskId: task.id, projectId, ...payload });
       if (!result?.ok) throw new Error(result?.error || "The change could not be saved. Try again.");
-      if (taskKey(selectedTask()) !== key) return;
-      if (result.task) state.tasks = state.tasks.map((item) => item.id === task.id ? result.task : item);
-      if (result.backlog) state.backlog = result.backlog;
+      if (!current()) return;
+      const accepted = selectedTask();
+      // Context versions order brief edits. A push at the same version may
+      // carry newer run state, which is deliberately outside brief history.
+      const replyVersion = Number(result.task?.contextVersion) || 0;
+      const acceptedVersion = Number(accepted?.contextVersion) || 0;
+      const preserveAccepted = result.task && (replyVersion < acceptedVersion ||
+        (taskRevision !== revision && replyVersion === acceptedVersion));
+      if (result.task && !preserveAccepted) state.tasks = state.tasks.map((item) => item.id === task.id ? result.task : item);
+      if (result.backlog && taskRevision === revision) state.backlog = result.backlog;
       dependencyDrafts.delete(key);
       contextReads.delete(key);
       detailMessages.set(key, { text: action === "dependencies" ? "Prerequisites saved. The queue will wait for them to finish." : "Earlier brief restored. Files, task status, and completion evidence are unchanged." });
       renderList();
     } catch (error) {
-      detailMessages.set(key, { text: error.message, error: true });
+      if (current()) detailMessages.set(key, { text: error.message, error: true });
     } finally {
       detailBusy = null;
-      if (taskKey(selectedTask()) === key) renderDetail();
+      if (current()) renderDetail();
     }
   }
 
@@ -1448,6 +1662,138 @@
     (detailPanels.evidence || els.detail).append(fold);
   }
 
+  // Usage and the time limit (main.cjs "Task time limit"): this attempt and the
+  // whole task, in numbers the ledgers really hold, and "Stop an attempt after N
+  // min". A route that reports nothing says "Not reported", never a zero. Read
+  // only while the fold is open, so a task nobody looks at costs no ledger read.
+  const durationText = (seconds) => {
+    if (!Number.isFinite(seconds)) return "Not recorded";
+    if (seconds < 90) return `${Math.max(0, Math.round(seconds))} s`;
+    const minutes = Math.round(seconds / 60);
+    return minutes < 90 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, "0")} min`;
+  };
+  const countText = (value) => (value >= 1000 ? `${(value / 1000).toFixed(1)}k` : String(Math.round(value)));
+  const usageTokens = (tokens, plural = "") => {
+    if (!tokens) return "Not recorded";
+    if (tokens.state === "not-reported") return "Not reported";
+    if (tokens.state === "unavailable") return "Unavailable right now";
+    if (tokens.state !== "reported") return "None recorded yet";
+    const parts = [];
+    if (Number.isFinite(tokens.input)) parts.push(`${countText(tokens.input)} in`);
+    if (Number.isFinite(tokens.output)) parts.push(`${countText(tokens.output)} out`);
+    if (tokens.cacheRead > 0) parts.push(`${countText(tokens.cacheRead)} cached`);
+    if (!parts.length && Number.isFinite(tokens.total)) parts.push(`${countText(tokens.total)} total`);
+    return parts.join(" · ") + (tokens.partial ? `${plural} + some not reported` : "");
+  };
+  const usageCost = (cost) => {
+    if (!cost) return "Not recorded";
+    if (cost.state === "not-reported") return "Not reported";
+    if (cost.state === "unavailable") return "Unavailable right now";
+    const calls = (count) => `${count} call${count === 1 ? "" : "s"}`;
+    if (cost.state === "unpriced") return `Unpriced · ${calls(cost.unpricedCalls || 0)}`;
+    if (cost.state !== "reported") return "None recorded yet";
+    const usd = Number(cost.usd) || 0;
+    const money = `$${usd.toFixed(usd > 0 && usd < 0.01 ? 4 : 2)}`;
+    return `${money}${cost.unpricedCalls > 0 ? ` + ${cost.unpricedCalls} unpriced call${cost.unpricedCalls === 1 ? "" : "s"}` : ""}${cost.partial ? " + some not reported" : ""}`;
+  };
+  function requestTaskUsage(task) {
+    const api = window.mefiStudio;
+    if (!api?.taskMetrics) return null;
+    const key = taskKey(task);
+    const signature = JSON.stringify([task.runId, task.status, task.lastAttempt?.at, task.lastAttempt?.runId, task.updatedAt, task.capMinutes, taskRevision]);
+    const prior = usageReads.get(key);
+    if (prior?.signature === signature) return prior;
+    const record = { signature, loading: !prior?.report, report: prior?.report || null, error: "" };
+    usageReads.set(key, record);
+    const epoch = projectEpoch;
+    Promise.resolve(api.taskMetrics({ taskId: task.id, projectId: task.projectId || state.backlog?.projectId }))
+      .then((result) => { if (!result?.ok) throw new Error(result?.error || "The usage could not be read."); record.report = result; record.error = ""; })
+      .catch((error) => { record.error = error.message || "The usage could not be read."; })
+      .finally(() => {
+        if (usageReads.get(key) !== record || epoch !== projectEpoch) return;
+        record.loading = false;
+        if (!els.overlay.hidden && taskKey(selectedTask()) === key) refreshDetail();
+      });
+    return record;
+  }
+  async function changeTaskCap(task, minutes) {
+    const api = window.mefiStudio, key = taskKey(task);
+    if (!api?.tasksCap) return;
+    try {
+      const result = await api.tasksCap({ taskId: task.id, minutes, projectId: task.projectId || state.backlog?.projectId });
+      if (!result?.ok) throw new Error(result?.error || "The limit could not be saved.");
+      usageReads.delete(key);
+      if (!els.overlay.hidden && taskKey(selectedTask()) === key) refreshDetail();
+    } catch (error) { window.MefiToast?.(error.message || "The limit could not be saved.", "bad"); }
+  }
+  function renderTaskUsage(task) {
+    if (!window.mefiStudio?.taskMetrics) return;
+    const key = taskKey(task);
+    const fold = detailFold(task, "usage", "Usage & limit");
+    // Opening the fold is what asks for the read (after the fold's own toggle has run).
+    fold.children[0].addEventListener("click", () => { if (fold.open && !usageReads.get(key)?.report) { requestTaskUsage(task); refreshDetail(); } });
+    const read = fold.open ? requestTaskUsage(task) : usageReads.get(key) || null;
+    const report = read?.report;
+    if (report?.cap?.enabled) fold.children[0].textContent = `Usage & limit · stops an attempt after ${report.cap.effectiveMinutes} min`;
+    const row = (label, value, tone) => {
+      const line = node("div", "task-usage-row", "");
+      line.append(node("span", "", label), Object.assign(node("b", "", value), tone ? { dataset: { tone } } : {}));
+      return line;
+    };
+    const card = (title, hint) => { const box = node("section", "task-usage-card", ""); box.append(node("h4", "", title)); if (hint) box.append(node("span", "task-usage-tag", hint)); return box; };
+    if (!report) {
+      fold.append(node("p", "task-context-hint", read?.loading ? "Reading the usage…" : read?.error || "Open this to read what the task took."));
+      (detailPanels.evidence || els.detail).append(fold);
+      return;
+    }
+    const attempt = report.attempt;
+    const now = attempt ? card("This attempt", attempt.live ? "Running now" : attempt.stoppedAtLimit ? "Stopped at the time limit" : "") : null;
+    if (attempt) {
+      const seconds = attempt.live && Number.isFinite(attempt.startedAt) ? (Date.now() - attempt.startedAt) / 1000 : attempt.seconds;
+      now.append(row("Time", durationText(seconds)), row("Tokens", usageTokens(attempt.tokens), attempt.tokens?.state === "not-reported" ? "dim" : ""), row("Cost", usageCost(attempt.cost), attempt.cost?.state === "not-reported" ? "dim" : ""));
+      if (attempt.tokens?.state === "not-reported") now.append(node("p", "task-context-hint", `${attempt.route?.label || "This builder"} does not report tokens or cost to Studio. Time is measured here.`));
+      fold.append(now);
+    } else fold.append(node("p", "task-context-hint", "No attempt of this task is recorded yet."));
+    const whole = report.task;
+    if (whole?.attempts) {
+      const all = card("Whole task", whole.subtasks ? `with ${whole.subtasks} sub-task${whole.subtasks === 1 ? "" : "s"}` : "");
+      const timeOnly = whole.tokens?.state === "not-reported" && whole.cost?.state === "not-reported";
+      all.append(row("Attempts", String(whole.attempts)), row("Time", durationText(whole.seconds) + (whole.secondsUnknown ? " + some not recorded" : "")));
+      if (timeOnly) all.append(row("Tokens and cost", "Time only", "dim"));
+      else all.append(row("Tokens", usageTokens(whole.tokens)), row("Cost", usageCost(whole.cost)));
+      fold.append(all);
+    }
+    const cap = report.cap;
+    if (cap) {
+      const limit = card("Limit", "");
+      if (!cap.enabled) limit.append(node("p", "task-context-hint", "Time limits are switched off on this PC, so an attempt runs until Studio's own 25 minute limit."));
+      else {
+        const line = node("div", "task-usage-limit", "");
+        const words = node("div", "", "");
+        words.append(node("b", "", "Stop an attempt after"), node("span", "", "Saves progress and does not count as a failure."));
+        const stepper = node("div", "task-usage-stepper", "");
+        const step = (label, aria, delta) => {
+          const button = node("button", "ghost mini", label);
+          button.type = "button"; button.setAttribute("aria-label", aria); button.dataset.taskAction = delta < 0 ? "cap-shorter" : "cap-longer";
+          const next = Math.min(cap.ceilingMinutes, Math.max(cap.min, cap.effectiveMinutes + delta * cap.step));
+          button.disabled = next === cap.effectiveMinutes;
+          button.addEventListener("click", () => changeTaskCap(task, next));
+          return button;
+        };
+        stepper.append(step("−", "Shorter", -1), node("b", "", `${cap.effectiveMinutes} min`), step("+", "Longer", 1));
+        line.append(words, stepper);
+        limit.append(line);
+        if (cap.raised) limit.append(node("p", "task-context-hint", `This task asks for ${cap.minutes} min, but Studio ends every attempt at ${cap.ceilingMinutes} min at the latest.`));
+        else if (cap.effectiveMinutes >= cap.ceilingMinutes) limit.append(node("p", "task-context-hint", `${cap.ceilingMinutes} min is the longest Studio lets one attempt run.`));
+      }
+      fold.append(limit);
+    }
+    const reasons = Array.isArray(report.coverage?.reasons) ? report.coverage.reasons : [];
+    for (const reason of reasons.slice(0, 4)) fold.append(node("p", "task-context-hint", reason));
+    if (read?.error) fold.append(node("p", "task-context-hint", read.error));
+    (detailPanels.evidence || els.detail).append(fold);
+  }
+
   async function appendTaskEntry(task, field, input) {
     const text = input.value.trim(), key = taskKey(task), draftKey = `${key}/${field}`;
     if (!text || entryPending.has(key)) return;
@@ -1535,6 +1881,42 @@
     box.append(actions); parent.append(box);
   }
 
+  function currentPlanTrace(task) {
+    return window.MefiTaskGroups?.planTrace?.(task, { plans: state.plans, projectId: state.projectId, unavailable: !state.plansLoaded || Boolean(state.plansError) }) ?? null;
+  }
+  function refreshPlanTrace() {
+    const task = selectedTask(), panel = planTracePanel;
+    if (!panel || !task || panel.dataset.taskId !== task.id) return;
+    const trace = currentPlanTrace(task), signature = JSON.stringify(trace);
+    if (signature === paintedPlanTrace) return;
+    paintedPlanTrace = signature;
+    panel.planTrace = trace; panel.hidden = !trace;
+    if (!trace) return;
+    panel.dataset.state = trace.state;
+    const [heading, title, destination, message, origin] = panel.children;
+    heading.textContent = trace.title ? "Current saved destination" : "Linked plan destination";
+    title.textContent = trace.title; title.hidden = !trace.title;
+    destination.textContent = trace.destination; destination.hidden = !trace.destination;
+    message.textContent = trace.message; message.hidden = !trace.message;
+    origin.hidden = !trace.canOpen;
+    if (origin.hidden && document.activeElement === origin) panel.focus({ preventScroll: true });
+  }
+  function renderPlanTrace(task, body) {
+    if (!String(task.planningId || "").trim()) return;
+    const panel = node("section", "task-subpanel task-plan-trace");
+    panel.dataset.taskPanel = "plan-trace"; panel.dataset.taskId = task.id; panel.tabIndex = -1;
+    panel.setAttribute("aria-label", "Linked plan destination");
+    const origin = node("button", "ghost mini", "View linked plan");
+    origin.type = "button"; origin.dataset.taskAction = "view-plan";
+    origin.addEventListener("click", () => {
+      const current = selectedTask(), trace = currentPlanTrace(current);
+      if (current?.id === task.id && panel === planTracePanel && trace?.canOpen) window.MefiNav?.go?.("plans", { planId: trace.planId });
+      else refreshPlanTrace();
+    });
+    panel.append(node("h4", "", ""), node("p", "task-plan-title", ""), node("p", "task-plan-destination", ""), node("p", "task-context-hint", ""), origin);
+    body.append(panel); planTracePanel = panel; paintedPlanTrace = ""; refreshPlanTrace();
+  }
+
   function renderDetail() {
     paintedDetail = UNPAINTED;
     const task = selectedTask();
@@ -1549,6 +1931,7 @@
     if (els.overviewBack) els.overviewBack.hidden = !task;
     els.detail.textContent = "";
     detailPanels = {};
+    planTracePanel = null; paintedPlanTrace = "";
     els.statusRow.textContent = "";
     renderTitle(task);
     if (!task) {
@@ -1574,13 +1957,7 @@
     meta.className = "muted who task-meta";
     meta.textContent = metaLine(task);
     body.append(meta);
-    if (task.planningId) {
-      const origin = node("button", "ghost mini", "View approved plan");
-      origin.type = "button";
-      origin.dataset.taskAction = "view-plan";
-      origin.addEventListener("click", () => window.MefiNav?.go?.("plans", { planId: task.planningId }));
-      body.append(origin);
-    }
+    renderPlanTrace(task, body);
     // An owner hold's reason (and its remedy) is the readiness line below, so
     // it is not repeated up here; nor is a pending check or a reason the
     // status box above already gives.
@@ -1716,6 +2093,14 @@
         entryList(task.remaining, (line) => Object.assign(document.createElement("li"), { textContent: String(line) }));
       }
     }
+    // What the last attempt changed, its advisory checks and its before and after shots (renderer/review.js).
+    if (window.MefiReview?.mount && (task.lastAttempt || task.runId || task.verification || isDone(task) || needsReview(task))) {
+      const review = detailFold(task, "review", "Changes and checks");
+      if (!detailExpanded.has(`${taskKey(task)}/review`) && (task.lastAttempt || task.runId)) review.open = true;
+      window.MefiReview.mount(review, { taskId: task.id, projectId: task.projectId || state.backlog?.projectId || state.projectId });
+      body.append(review);
+    }
+    renderTaskUsage(task);
     renderTaskAttempts(task);
     if (!body.children.length) body.append(node("p", "muted", "Evidence appears here after a worker runs and completion checks finish."));
     body = detailPanels.history;
@@ -1819,7 +2204,7 @@
       const li = document.createElement("li");
       const img = document.createElement("img");
       // encodeURI keeps # and ?, which would cut a path like C#\... short.
-      img.src = encodeURI("file:///" + png.path.replace(/\\/g, "/")).replace(/#/g, "%23").replace(/\?/g, "%3F");
+      img.src = window.__mefiHost?.fileUrl?.(png.path) ?? encodeURI("file:///" + png.path.replace(/\\/g, "/")).replace(/#/g, "%23").replace(/\?/g, "%3F");
       img.alt = png.name;
       img.style.maxWidth = "100%";
       img.style.borderRadius = "8px";
@@ -1844,6 +2229,8 @@
   }
 
   async function gather() {
+    const epoch = projectEpoch, projectId = state.projectId, read = ++gatherRead;
+    const current = () => epoch === projectEpoch && projectId === state.projectId && read === gatherRead && !els.overlay.hidden;
     const taskId = selectedTask()?.id ?? null;
     const text = taskId ? `${selectedTask().title}. ${selectedTask().prompt ?? ""}` : els.newInput.value.trim();
     if (!text) {
@@ -1856,13 +2243,21 @@
     }
     status("gathering references…");
     // taskId rides along so a gather the assistant journals and restarts after
-    // a close can still attach its refs to the right task.
-    const result = await window.mefiStudio?.referenceGather?.({
-      text,
-      taskId,
-      useWeb: Boolean(state.prefs.useWeb),
-      useTree: state.prefs.useTree !== false,
-    });
+    // a close can still attach its refs to the right task. This view ignores
+    // stale replies without cancelling that host-owned work or its journal.
+    let result;
+    try {
+      result = await window.mefiStudio?.referenceGather?.({
+        text,
+        taskId,
+        useWeb: Boolean(state.prefs.useWeb),
+        useTree: state.prefs.useTree !== false,
+      });
+    } catch (error) {
+      if (current()) status(error?.message || "reference failed", true);
+      return;
+    }
+    if (!current()) return;
     if (!result?.ok) {
       status(result?.error ?? "reference failed", true);
       return;
@@ -1889,7 +2284,9 @@
       };
       state.tasks = state.tasks.map((item) => (item === task ? edited : item));
       let error = "The task store could not be written.";
-      if (!(await save((message) => { error = message; }))) {
+      const saved = await save((message) => { error = message; });
+      if (!current()) return;
+      if (!saved) {
         if (state.tasks.includes(edited)) state.tasks = state.tasks.map((item) => (item === edited ? task : item));
         const message = `References found, but not saved to the task · ${error}`;
         status(message, true);
@@ -1956,6 +2353,8 @@
   function open(options) {
     window.MefiNav?.claim?.("tasks");
     const params = optionsOf(options);
+    const epoch = projectEpoch, read = ++openRead;
+    const current = () => epoch === projectEpoch && read === openRead && !els.overlay.hidden;
     els.overlay.hidden = false;
     watchMasonry();
     // Set the selection before load() so the first render already shows it.
@@ -1964,6 +2363,7 @@
     if (typeof params.taskId === "string" && params.taskId && !elsewhere) state.selected = params.taskId;
     return load({ ...params, restoreSelection: !params.filter && !params.readiness })
       .then(() => {
+        if (!current()) return;
         if (typeof params.projectId === "string" && params.projectId && state.projectId && params.projectId !== state.projectId) {
           if (!elsewhere && state.selected === params.taskId) { state.selected = null; renderList(); renderDetail(); }
           status("That task belongs to another project. Switch projects to open it.", true);
@@ -1976,13 +2376,16 @@
         if (params.gather) { showDetailView("references"); gather(); }
         if (task) focusNarrowDetail();
       })
-      .catch(() => status("tasks unavailable · the store could not be read", true));
+      .catch(() => { if (current()) status("tasks unavailable · the store could not be read", true); });
   }
 
   function close() {
+    openRead += 1;
+    gatherRead += 1;
     if (els.overlay.hidden) return;
     els.overlay.hidden = true;
     cardLayout?.stop();
+    if (els.tools) els.tools.open = false;
     window.MefiNav?.release?.("tasks");
   }
 
@@ -2021,6 +2424,8 @@
       prefAuto: "pref-auto",
       close: "tasks-close",
       overhead: "tasks-overhead",
+      tools: "tasks-tools",
+      recent: "tasks-recent",
       openButton: "tasks-open",
       filters: "task-filters",
       overviewBack: "task-overview-back",
@@ -2089,6 +2494,14 @@
       if (!chip || !FILTERS.includes(chip.dataset.filter)) return;
       selectFilter(chip.dataset.filter);
     });
+    // More: Recently deleted. The list is read each time the menu opens; Esc and a
+    // click outside close it, and it never stays open behind a closed sheet.
+    if (els.tools && typeof window.mefiStudio?.boardTrash !== "function") els.tools.hidden = true;
+    els.tools?.addEventListener("toggle", () => { if (els.tools.open) void showRecentlyDeleted(els.recent); });
+    els.tools?.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && els.tools.open) { event.preventDefault(); event.stopPropagation(); els.tools.open = false; els.tools.querySelector("summary")?.focus?.(); }
+    });
+    document.addEventListener("pointerdown", (event) => { if (els.tools?.open && !els.tools.contains(event.target)) els.tools.open = false; });
     // The single owner of #tasks-overhead; overhead.js no longer binds it too.
     els.overhead?.addEventListener("click", () => {
       if (window.MefiNav) window.MefiNav.go("overhead");
@@ -2119,8 +2532,9 @@
       createDrafts.set(state.projectId || "", els.newInput?.value || "");
       projectEpoch += 1; taskRevision += 1; backlogRead += 1; plansRead += 1; liveRevision += 1; assistantRevision += 1;
       if (state.selected) projectSelections.set(state.projectId, state.selected);
-      state.projectId = result.activeId; state.tasks = []; state.plans = []; state.plansError = null; state.selected = projectSelections.get(result.activeId) || null; state.backlog = null; state.live = {}; state.assistant = {};
+      state.projectId = result.activeId; state.tasks = []; state.plans = []; state.plansError = null; state.plansLoaded = false; state.selected = projectSelections.get(result.activeId) || null; state.backlog = null; state.live = {}; state.assistant = {};
       overviewExpanded.clear();
+      overviewPaint = null;
       state.readiness = "all"; state.query = ""; hydrated = false; hydrating = null;
       status("", false);
       if (els.search) els.search.value = "";
@@ -2164,11 +2578,15 @@
     open,
     close,
     addTask,
+    // Recently deleted, for the Ideas sheet's own menu (it lists ideas only).
+    showRecentlyDeleted,
     state,
     describe,
     shortTitle,
     workflowSummary,
     summary,
+    // The words the Usage & limit fold uses for time, tokens and cost, so the v2 inspector's Agent tab says the same.
+    usage: { durationText, usageTokens, usageCost, countText },
     // What a live-update reload hands back to open(): the task on screen.
     saveState: () => ({ taskId: state.selected ?? null, projectId: state.projectId, filter: state.filter, readiness: state.readiness, panel: detailViews.get(taskKey(selectedTask())) || "details" }),
     selectTask: (id) => {

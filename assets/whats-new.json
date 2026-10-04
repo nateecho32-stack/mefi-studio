@@ -1,0 +1,39 @@
+{
+  "0.4.4": [
+    "The Void collection is free.",
+    "Work done outside Studio.",
+    "Trace (Live, beside Activity): Studio's logs as channels in one viewer.",
+    "New app beside Vibe's project picker: name it and say what it should be, and Studio makes an empty folder under Mefi Apps in your home folder, starts git in it."
+  ],
+  "0.4.2": [
+    "Vibe mode brings conversation, task creation, live work and decisions into one focused workspace, with the full Build workspace a switch away.",
+    "Remastered node styles give all eight looks distinct shapes, motion, wires and completion effects, with clearer previews, light-theme contrast and support for reduced motion.",
+    "A test run that pauses for a few seconds is no longer killed as hung.",
+    "Studio does less work while nothing changes.",
+    "Builders get a small context file instead of the whole board."
+  ],
+  "0.4.0": [
+    "Links replaces the Spotify tab in Settings › Audio.",
+    "Listen together in the Links tab.",
+    "Share what I'm playing, off by default, lets the Void Engine bot's /nowplaying show your current link, station or \"Local music\".",
+    "Home is glass over the live node tree.",
+    "Claude Code and Antigravity builders are no longer killed for working quietly.",
+    "Long runs no longer park the executor."
+  ],
+  "0.3.3": [
+    "Discord Server Styler controls.",
+    "Void Engine Discord perks.",
+    "Owner controls for the loop guard.",
+    "Duplicate card families become one owner decision.",
+    "Repeating work is put to you once.",
+    "Task run history."
+  ],
+  "0.3.0": [
+    "Loop guard and memory alignment.",
+    "Planning and reading can each answer through their own provider, and OpenCode Zen is a route.",
+    "Ad-free radio in Style & sound.",
+    "One navigation rail replaces three menus.",
+    "Brain maps is a proper node editor.",
+    "A model route that keeps failing is paused instead of retried every turn."
+  ]
+}

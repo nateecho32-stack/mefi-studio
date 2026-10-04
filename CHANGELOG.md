@@ -37,6 +37,408 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   newest) and the plan in one quiet line; Performance leads with KPI tiles, a
   leaderboard with inline bars, a task type switch and one card explaining how
   rankings fill in.
+
+- Studio is moving from Electron to Rust in stages (docs/rust-migration.md).
+  A source checkout can now run on the new Rust host with `npm run host`: the
+  same screens, saved settings and API keys, with the engine running beside
+  it under Node. The Electron build is unchanged and is still what ships.
+  On the Rust host the OpenCode session store is now read by Rust: the same
+  answers, and the usage ledger's repeat reads about nine times faster.
+  Multi-PC sync, the Worktrees page's list, merge, remove and forget, and the
+  @ picker's file search run in Rust there too, and so does the Git chip's
+  work: its look at each project, Save and push, Publish and Link, with the
+  same checks for keys, big files and folders that must stay out.
+- On the Rust host the Media browser, before and after screenshots, dropped
+  files and the Recycle Bin now work as they do on Electron, a page that fails
+  to load is reported, and the first launch brings over what the Electron
+  build kept in the page (panel sizes, names, plan drafts). Zen's desktop
+  audio listens to what the PC plays without asking which screen to share.
+- A portable build can now ship on the Rust host (`npm run package:host`):
+  the same folder as the Electron build, with Node beside the program. The
+  updater in this version can install either kind of build and roll back
+  from either, so the next releases can move to the Rust host.
+
+- The Publish dialog's "This drive cannot keep a Git project reliably" warning
+  and Set up this PC's exFAT/FAT drive checks work without administrator
+  rights. They asked `fsutil`, which Windows refuses to a normal user, so they
+  never showed; they now ask PowerShell, which takes about 0.2 s.
+
+- Your PCs can explicitly start a coordinator and pair check workers. Queued
+  Studio checks use isolated exact-commit checkouts, retain restart journals,
+  and hold uncertain assignments for owner recovery. Services stay off after
+  app restart; another PC requires trusted HTTPS and separate network setup.
+
+- Failed automatic development updates wait an hour before retrying the same
+  build; manual updates remain available. Missing or malformed build metadata
+  falls back to an older eligible build, and failed channel changes show a reason.
+
+- Booklet scripts and styles use one ordered inventory for reads, emission,
+  error-source attribution and fixtures. Audits read the audited tree's declared
+  inventory and report missing or duplicate inputs.
+
+- Task brief restore and prerequisite replies preserve newer accepted brief and
+  run state. Returning to a project cannot revive an older detail action reply.
+
+- Reference gather replies cannot save into another project or repaint a closed
+  detail. New gathers supersede older replies without cancelling host work;
+  stale success, error and save completions leave the current view alone.
+
+- Pending task opens stop their detail, announcement and reference-gather actions
+  after a project switch, closing the view or opening a newer detail. A stale
+  failed read cannot replace the current detail's status.
+
+- Task overview updates retain unchanged cards and folds instead of rebuilding
+  the whole board. Changed groups refresh their content and actions while
+  preserving expansion and keyboard focus; project switches clear retained cards.
+
+- Fleet labels cached team facts after a failed refresh, clears the previous
+  project's content on a switch, and restores controls only after a confirmed
+  scoped snapshot. Older replies cannot overwrite a newer read or push outcome.
+
+- Task Details shows the linked plan's current saved destination without changing
+  the task's recorded brief. Missing, unreadable, foreign, ambiguous, changed,
+  archived or unapproved plan context is labelled honestly. Plan-only refreshes
+  retain note drafts and focus; View linked plan reuses the existing navigation.
+
+- Fleet Health adds an informational note when a seat hands off three distinct
+  tasks within a day without later recorded verification. Duplicate events do
+  not inflate it, verified or human-confirmed evidence clears each task, and
+  Look opens the source seat. The note never pauses agents or changes dispatch.
+
+- Fleet seats retain a deterministic recap of their recent recorded generations,
+  capped at 1,500 characters. The inspector shows it and the next assigned worker
+  receives the same history alongside its current brief and saved progress;
+  interrupted runs and unverified completion reports remain clearly labelled.
+
+- Identical worker handoffs repeated across stdout and stderr are admitted once;
+  distinct follow-up briefs remain separate.
+
+- Expanded session controls retain a readable conversation area in short
+  windows, including 150% zoom, while keeping the draft intact.
+- Stable updates use published GitHub release builds only. An optional
+  Development / beta switch asks for confirmation about untested changes,
+  instability and possible data loss. Once artifact publishing is separately
+  delivered, it can automatically receive packaged artifacts from successful
+  main builds. Returning to Stable stops development
+  updates and can restore the published stable build. Installed apps no longer
+  hot-swap raw source files from a nearby checkout; downloads require SHA-256,
+  matching platform and build identity, and development updates require rollback.
+  Development artifact publishing is deferred from this application-only
+  checkpoint; until the workflow is separately delivered, the channel reports
+  that no supported development artifact is available. This remains review work.
+
+- **Room for a session list, an inspector, a tab strip and a status bar (off by
+  default, nothing changes yet).** The window's layout now keeps room for four
+  panels that are not built yet. Nothing looks different: every page, sheet,
+  toast, the companion's orb and the media window are exactly where they were,
+  checked to the hundredth of a pixel in four window sizes. Developers can try
+  the wider layout with `?layout=v2`; below 900 px wide the list and the
+  inspector fold away.
+- **One place decides where the free space is.** The companion's orb, the media
+  window, toasts and pop-up lists ask the shell where the window is free, so they
+  will stay clear of the new panels.
+- **Size and density, with a live preview (new layout only).** Settings has a
+  Size and density page: make text bigger or smaller (never under 12 px), pick
+  Compact, Comfortable or Spacious rows, and choose how much each row shows
+  (titles, status or everything). A miniature of the window beside the controls
+  changes as you drag, so you do not have to flip back and forth. **Apply** puts
+  it on the whole window (with **Undo**), **Reset** goes back to the defaults, and
+  leaving the page keeps what you have not applied. The interface scale is on the
+  same page, and Ctrl +, Ctrl - and Ctrl 0 still move it and the page follows.
+  Spacious is new; older windows read it as Comfortable, and Settings ›
+  Appearance points to this page instead of a separate Density list. The first
+  time a new choice is saved, your old appearance settings are backed up.
+- **Today, Vibe's home in the new layout (new layout only).** Your box to build or
+  talk, and under it a board with one line for everything, in four groups: Needs
+  you, Running, Review and Done today. How much each line says follows your Size
+  and density setting, and a question can be answered right on its line. The
+  node tree stays behind it.
+- **An Inbox for everything waiting on you (new layout only).** Questions and
+  permissions, approvals, finished work to check and tasks that stopped, in one
+  place, with what each is, which task it is from and how long it has waited. Your
+  choices use the same buttons as before, leave a "Decided" line, and can be
+  undone where Studio has a way back. Open it from the "N need you" button, with
+  Ctrl J, or as a page.
+- **Clicking a Windows notification opens the task it was about, or the Inbox when
+  it told you about several things (new layout only).**
+- **A new, optional 0.5 layout, with a bar, a list, an inspector and a status bar
+  around every page (classic stays the default).** Turn it on in Settings ("Try
+  the 0.5 layout") or with Search ("Switch layout: 0.5 or classic"); Studio
+  reloads to switch. `MEFI_STUDIO_LAYOUT=v2` opens Studio in it for one launch, and
+  `MEFI_STUDIO_LAYOUT=v1` forces the classic layout whatever was saved.
+- **The 0.5 layout's top bar** has a list toggle, a Vibe | Build switch (Ctrl M),
+  where you are, Search, how many things need you, how much is working with a
+  pause button, and an inspector toggle.
+- **The 0.5 layout's status bar** has a Layout menu (list, inspector and tab strip
+  switches, each mode's widths, Reset layout with Undo, Size and density), what is
+  running and what waits on you. When Studio has them it also shows usage meters,
+  the player, the permission mode and today's cost.
+- **Resize the list and the inspector by dragging their edge, with the arrow keys
+  (Shift for bigger steps, Home and End for the ends), or by double-clicking to
+  reset (new layout only).** Vibe and Build each remember their own layout. Ctrl B
+  shows or hides the list, and [ the inspector. In a small window they open as
+  drawers over the page and close on Esc or a click outside.
+- **Tabs you add and pin (new layout only).** With the 0.5 layout on, a row of
+  tabs sits at the top of the window. Home stays at the left. Press + (or Ctrl+T)
+  to open any page, or one of this project's sessions, in a tab; pin the ones you
+  always want so they stay; drag a tab to put it where you like. Each project keeps
+  its own tabs, pinned pages follow you into every project, and your tabs are still
+  there after Studio restarts or updates itself. In a small window the row becomes
+  one button with a menu of every tab, and Build's session page starts right under
+  the row.
+- **Studio keeps your tabs tidy, and every part has a switch (Configuration ›
+  UI & Surfaces › Tab behaviour, or the sliders button on the row).** A page you
+  only look at opens in one italic preview tab that your next click replaces,
+  until you type in it, pin it or double-click it. When an agent needs you, its tab
+  gets a badge and opens in the background (or only gets the badge, or takes you
+  there: your choice). Tabs of finished sessions close after 30 minutes you have
+  not opened them. At most 8 unpinned tabs are kept (3 to 12, or no limit): the one
+  you used longest ago closes, with an Undo. After you open the same page three
+  times, a small chip offers to pin it, once. Pinned tabs never close by
+  themselves, and whatever Studio closes comes back from Recently closed or with
+  Ctrl+Shift+T. One master switch turns all of it off, and so does starting Studio
+  with `MEFI_STUDIO_NO_TAB_MANAGER=1` (for that run).
+- **Keys for tabs (new layout only).** Ctrl+T opens the add menu, Ctrl+W closes the
+  tab you are on, Ctrl+Tab and Ctrl+Shift+Tab move between tabs, Ctrl+1 to 9 jump to
+  one (9 is the last), Ctrl+Shift+T brings the last closed tab back, Ctrl+Alt+P
+  pins or unpins, Ctrl+Shift+Left and Right move the tab, and a middle-click
+  closes it. With the 0.5 layout on, Ctrl+W no longer closes the Studio window (its
+  close button and Ctrl+Q still do). Nothing is taken from a box you are typing in.
+- **Build's tasks as a session list (new layout only, off by default).** With
+  the new layout on (`?layout=v2`), Build's Home lists this project's tasks as
+  sessions: Needs you, Running, Review, Queued and Done, newest first, each with
+  a status dot, its title and a line of words (Settings' detail level picks
+  titles only, titles and status, or everything). A run in its own worktree
+  wears a branch mark. Each row's menu opens it in a new tab, pins, renames,
+  stops or deletes it (a delete asks first and can be undone from Recently
+  deleted). A filter box and a Sessions | Backlog switch narrow the list; Ctrl N
+  starts a task. Developers can switch the panels off with `?sessions=off`.
+- **Each session opens as a thread (new layout only).** It shows the brief with
+  its pictures, every run with its steps and what it said, a live line while a
+  worker is on it, your notes, your questions to Mefi and the answers, what Mefi
+  decided for you (with Undo), and before and after shots that open larger. A
+  question that waits on you sits above the message box with its options, what
+  Mefi suggests, a box for your own words and Decide later. The box at the foot
+  takes a Note, an Ask or a Change, with Attach picture, the @ # / picker and
+  chips for the branch, Worktree, permission mode and coding worker. In a small
+  window it folds behind a More button.
+- **An inspector beside the thread (new layout only).** Plan (where it stands,
+  the brief, what it is done when, earlier versions with Restore), Changes and
+  Checks (the same files, diffs, Accept, Revert and checks as the task board,
+  with live counts on the tabs), Preview (the project's preview controls and
+  Before and After) and Agent (who is on it, what it took, the time limit,
+  Stop).
+- **A task opened from anywhere lands in its thread (new layout only).** The
+  palette, a notification, a tab and View task select the session and show it.
+  Each project remembers its open session, folded groups and inspector tabs
+  across a reload. The task board is still one press away.
+- **Build's Home can list your tasks like sessions, in a coding-agent desktop
+  layout (off by default).** Search › Switch Home layout turns it on. The menu
+  lists this project's tasks the way the Claude Code and Codex desktop apps list
+  sessions (Chat with Mefi, Pinned, Needs you, Working, then by day). The page
+  opens on a greeting card that counts what has been built here (tasks, runs,
+  tokens, active days, peak hour, top model and a heat map of the last twenty
+  weeks) over the composer, with chips for the project, its branch, the
+  permission mode, the coding worker and **Worktree**. A task opens as a session
+  with its brief, runs, checks and a Note / Ask / Change composer, and Activity,
+  Preview, Queue and Status become panes that dock beside the page or pop out as
+  windows. The composer stays on one line at 1920 wide and the Permissions menu
+  is no longer cut off.
+- **Windows tells you when something needs you.** When a question, an approval, a
+  permission or a task that failed after Mefi stopped retrying is still waiting 20
+  seconds on, and Studio is not the window you are looking at, Windows shows one
+  notification (a finished task only if you switch that on). Nothing is sent while
+  you are looking at Studio, inside quiet hours, twice for the same task within 15
+  minutes, or more than 12 an hour. The words are generic ("Something needs you")
+  unless you choose task titles in Settings › General › Notifications, which also
+  has a test button. Clicking a notification brings Studio up and opens the task.
+- **The taskbar icon flashes and shows a count.** It flashes until you switch back
+  to Studio and shows a number for what is waiting on you. Both can be switched
+  off, and so can all notifications (the master switch, or
+  `MEFI_STUDIO_NO_ALERTS=1`).
+- **Quiet hours are shared with the Discord remote.** The hours you set for one now
+  keep the other quiet too; change them in either place.
+- **Windows knows Studio by a fixed name.** Notifications and the taskbar button
+  use the id `MefiStudio.StudioAIPlus`, so a portable, a moved and an updated copy
+  are one app. A taskbar button pinned earlier may need pinning again;
+  `MEFI_STUDIO_KEEP_APP_ID=1` keeps the old id.
+- **Report a problem.** Settings › System › Diagnostics builds a small report on this
+  PC: Studio's version, one line per task, the last 1,000 log rows, what the
+  builders said and, after a crash, what Studio wrote down. Keys, home folders, this
+  PC's names, e-mail and network addresses are removed; you can read every file
+  first, swap task titles for numbers, and save it as a zip where you choose.
+  Nothing is uploaded, and settings, sign-in files, the vault, screenshots and
+  project files never go in.
+- **Studio tells you when it closed unexpectedly.** After a crash, a freeze or a lost
+  window, the next start shows one toast with Review the report and Dismiss, once
+  per crash. A normal quit, an update restart and a rolled-back update never show
+  it. Switch it off in the Report a problem card or with
+  `MEFI_STUDIO_NO_CRASH_PROMPT=1`.
+- **Studio says what changed after an update.** A toast "Studio updated to X" with a
+  What's new button opens a short sheet of that version's notes, once. It never
+  opens a window by itself and is silent on a first install. The notes stay in
+  Settings › Updates, marked New until read; "Tell me what's new after an update"
+  turns the toast off (or `MEFI_STUDIO_NO_WHATS_NEW=1`).
+- **Each task can have its own time limit.** In a task's Evidence, pick Stop an
+  attempt after 5 to 240 minutes (25 unless you change it). A run that hits its
+  limit is stopped the way your Stop button stops it: progress is saved, it does
+  not count as a failure, and the card waits for you. Studio's own 25 minute
+  ceiling still applies, and the page says so if you ask for longer.
+  `MEFI_STUDIO_NO_TASK_CAP=1` switches limits off.
+- **A task's Evidence shows its usage.** A new Usage & limit section gives the
+  time, tokens and cost of this attempt and of the whole task. A builder that
+  reports nothing says Not reported, and a plan that does not price a call says
+  Unpriced, instead of showing zero.
+- **You can attach pictures to a message.** In Home's message box, use Attach
+  picture, paste one, or drop it in (PNG, JPEG, WebP or GIF, up to 5 MB each, four
+  per message). A model that can see pictures is sent them; one that cannot says
+  so once in its reply. Coding tools and tasks made from the box are told where
+  the file is, in one plain line. Pictures stay on this PC under the project's
+  data folder. `MEFI_STUDIO_NO_IMAGE_ATTACH=1` switches it off.
+- **Typing @, # or / in Home's message box suggests what you mean.** `@` offers
+  the project's files, `#` its tasks and `/` its skills, and what a message points
+  at shows as small chips under the box. Saying /skill-name in chat gives Mefi
+  that skill's instructions for that reply; `@path` tells Mefi the file exists
+  and never sends its contents. A Settings switch, "Suggest files, tasks and
+  skills while I type", turns it off (or `MEFI_STUDIO_NO_COMPOSER_PICKER=1`).
+- **A Skills page: Agents › Setup › Skills.** See the skills your project keeps,
+  write or edit one with checks as you type, start from a ready-made example,
+  import one from a folder, export one as a folder or zip, and delete one (it
+  asks twice; a copy of the old text is kept on this PC). Skills that other tools
+  keep are listed read-only. It writes only under `.agents/skills`, and
+  `MEFI_STUDIO_NO_SKILL_EDIT=1` makes it read-only.
+- **A task a worker has run shows what changed, and lets you take it back.** Its
+  Evidence tab has a new "Changes and checks" section: the files the attempt
+  changed with their changes, a before and after look at the preview, and the
+  checks that ran. Accept changes, put one file back, or put the whole attempt
+  back: Revert attempt asks twice, reopens the task and keeps a copy of the
+  folder first so it can be undone, and Studio never overwrites a file you
+  edited after the attempt ended.
+- **Studio keeps a private before and after picture of the folder for each
+  attempt.** It is local git data, only on this PC and never pushed, and it does
+  not touch your index, branch or files.
+- **After an attempt, Studio runs the project's lint and typecheck and shows the
+  result as advice.** It never stops a task from being done. Builders can run the
+  same checks and read the preview's output themselves.
+- **When Studio's own preview is running, it takes a before and after screenshot
+  for each attempt.** Screenshots stay on this PC and are never added to a
+  problem report. Three switches (pictures, checks and their build, screenshots)
+  sit under "What Studio keeps for each attempt", and each can be turned off with
+  an environment variable (`MEFI_STUDIO_NO_ATTEMPT_SNAPSHOTS=1`,
+  `MEFI_STUDIO_NO_ADVISORY_CHECKS=1`, `MEFI_STUDIO_NO_EVIDENCE_SHOTS=1`).
+- **Deleting a task or an idea can be undone.** A toast with Undo stays for about
+  eight seconds on the Task board and in Ideas, and Clear finished ideas gets one
+  Undo for all of them. A new Recently deleted list (Task board › More for tasks
+  and ideas, Ideas › Tools for ideas) keeps deleted cards for 30 days, up to 50
+  per project; Restore puts a card back where it was and never over one that is
+  there again. A delete keeps a copy first, and if Studio cannot keep the copy,
+  nothing is deleted and it says why. `MEFI_STUDIO_NO_BOARD_TRASH=1` gives the
+  old delete-for-good back.
+- **Plans keep every edit as a version.** Each one records who made it (you,
+  Mefi or Studio), when, and a one-line note. Versions (it was Plan history) lists
+  the newest 20, and Restore this version brings an older one back as a new
+  version: nothing is erased, and you confirm and approve again before tasks are
+  made.
+- **Search (Ctrl K) starts with what you used last, and can add work.** The empty
+  box shows Recent (what you last opened or ran from it, kept for each project).
+  Type "task ..." or "idea ..." and press Enter to add one; a toast offers Open,
+  and an idea added this way reads "From you". Both can be switched off:
+  settings `ui.searchRecents` and `ui.searchQuickCreate` set to false, or
+  `MEFI_STUDIO_NO_SEARCH_RECENTS=1` and `MEFI_STUDIO_NO_QUICK_CREATE=1`.
+- **Rules for your agents: a new card in Agents › Team & models.** Write up to
+  4,000 characters of standing rules for a project and every Studio model working
+  on it reads them first. A rule text that is too long is refused, never cut. Two
+  switches on the card also send the project's own AGENTS.md and CLAUDE.md (the
+  first 8,000 characters of each, read fresh each time); they are off until you
+  switch them on, because their text reaches the models as instructions. Claude
+  Code, Codex and OpenCode keep reading those files themselves, so they are given
+  only your written rules; Grok and Antigravity builders are given the files by
+  Studio. The card shows what the rules add to every request and who reads what.
+  A project that follows the Studio defaults shows their rules; saving rules for
+  it gives it a team of its own, and "Use Studio defaults" asks twice before it
+  would drop a project's rules. Saved teams do not carry rules, and applying one
+  keeps the project's. `MEFI_STUDIO_NO_AGENT_RULES=1` turns the rules off.
+- **Studio's own models can list a project's folders and search its text.** When
+  Read project files is on, they no longer guess file names: `project_list` and
+  `project_search` follow .gitignore, skip hidden, private, binary and very large
+  files, and never follow a link out of the project. Read project files now also
+  refuses key and database files and data files whose names say they hold
+  secrets. Coding CLIs keep their own tools. `MEFI_STUDIO_NO_PROJECT_SEARCH=1`
+  removes the two tools.
+- **Media player fixes.** Next in a YouTube playlist follows the playlist. A
+  remembered video link no longer asks YouTube for its picture until you open the
+  media menu. The card follows radio and buffering; its ideas, hints and Up next
+  drags stay current. In a small window the floating player keeps Close inside
+  its bar and no longer flies in from the corner when the menu closes.
+- **Small text in Build's sessions layout is no longer under 12 px.** The
+  count beside the branch, the hints under the composer, the labels on panes, the
+  "you" line at the foot of the menu and a few other notes were 10.5 to 11.5 px.
+  A real-window test now opens that layout at five window sizes and checks the
+  task list, the branch mark, the composer's one-line row and this size. In a
+  very short window (the smallest one at 150% zoom) the words box is one line
+  high, so the whole message box, with its Attach picture button and Send, stays
+  on screen; drag the box taller when there is room.
+- **Tree brightness is much lighter on the graphics card.** Command, Home and
+  Vibe paint brightened nodes and lines once per pass instead of once per shape
+  (on the owner's laptop at 200%: Vibe 4.6 to 42 fps, Command 8.8 to 36, Home 4.1
+  to 43). Node outlines stay pale over the real layer. Appearance › Tree
+  brightness & outlines › Fast brightness turns it off if a look changes.
+- **Studio's own code loads from a compile cache after the first launch.** Each
+  of the hundred or so files behind the window is compiled once and read back
+  compiled the next time (module loading dropped from about 90 ms to 50 ms on a
+  fast Linux machine; more where disk reads are slow). It is keyed by each file's
+  content, so an update can never load old code. `MEFI_STUDIO_NO_COMPILE_CACHE=1`
+  turns it off.
+- **A chat message over 16,000 characters is refused, not cut.** Every box that
+  talks to Mefi used to send only the first 16,000 characters of a very long
+  paste and keep that in the thread, so the rest vanished without a word. It now
+  says how long the message was and that nothing was sent, and the box keeps what
+  you typed.
+- **Commits made in a detached worktree now count as work only this PC has.**
+  The Friends badge, the session report and the question before closing Studio
+  listed a worktree only when it had uncommitted files, and every branch's
+  commits by branch, so commits on a detached HEAD (which belong to no branch)
+  were invisible until the folder was deleted. They are listed when no branch,
+  local or on GitHub, holds them.
+- **Ctrl +, Ctrl − and Ctrl 0 change the interface scale, and it is remembered.**
+  They walk the same 70% to 150% ladder as the slider in Configuration › UI &
+  Surfaces (fine below 130%), from wherever the slider left it, and Ctrl 0 is
+  100%. They used to zoom without saving and without a limit, so a reload put
+  the scale back. A short line says where it ended, and an open slider follows.
+- **Worktrees have a page in Studio: Work › Worktrees.** It lists every
+  worktree of the open project, worst first: which hold work that only this PC
+  has, which are on GitHub but not merged and which are merged and safe to
+  remove, with the task a run belongs to. From it you can open a folder, merge a
+  branch into main (a fast-forward; a merge commit only when you ask for one,
+  and never while the worktree or the main checkout has uncommitted files),
+  remove a folder (two presses; a folder holding uncommitted files or commits on
+  no branch keeps a copy as `refs/mefi/rescue/…` first) and forget folders that
+  are gone, and turn on "Give each run its own worktree". Nothing on the page
+  pushes, and a run's folder is left alone while it works.
+- **Build's task list marks tasks that work in their own worktree.** A small
+  branch mark sits on the row of any task whose run has a worktree, so you can
+  see which work lives in another folder without opening Work › Worktrees. It
+  follows that page (a merged run's mark goes) and starts over when you switch
+  projects. Switching projects also clears the Worktrees page's old list at once
+  instead of showing it until the next read.
+- **Panes that can scroll show a slim indicator.** Scrollbars stay hidden
+  everywhere, so it was easy to miss that a pane scrolled. While the pointer is
+  over a pane that overflows, and for a moment after you scroll it, a thin
+  indicator on its edge shows where you are. It takes no room from the pane,
+  never catches a click, and does not exist on panes that fit.
+- **`npm run worktrees` lists every worktree of a project.** Each row shows the
+  branch, how far it is from `main`, what is uncommitted or unpushed and what to
+  do about it (push it, land it, or remove it because it is merged). `--json`
+  gives the same rows to other tools. It changes nothing.
+- **The multi-PC sync report no longer cries wolf.** A shallow clone (such as a
+  cloud session's) reported its whole history as "not pushed yet"; the check now
+  fetches back far enough to compare `main` with GitHub's, or says they were not
+  compared. Branches built on `gh-pages` are listed as site branches, not as work
+  to bring into `main`.
+- **Security notes are up to date.** `SECURITY.md` now says what coding workers
+  (approval prompts off), link reading, the update safety net's saved copy and
+  audio-reactive input do with your data, and the Friends setup guide names the
+  0.5.0 release.
 - **Agents can read the web pages you link.** A new `web_read` tool, with its
   own **Read web pages you link** switch (in Agents › Setup and the setup
   helper's Tools & skills; it starts wherever the role's search switch is),

@@ -1,3 +1,32 @@
+> Plan update, 2026-09-30: **0.4.5 and 0.4.6 are skipped and everything ships as
+> 0.5.0.** The plan is `docs/plans/0.5.0-plan.md` (the design source is
+> `docs/prototype/`). Read "0.4.5" and "0.4.6" below as "0.5.0": the work in
+> section 1 (agents send only what is new, logging, load times, Friends 2.0) is
+> 0.5.0 scope, and its slices (`s1-boot`, `s2-log`, `s3-rows`, `s12-cli`,
+> `fh2-queue`) still exist only in worktrees on the owner's PCs, uncommitted:
+> push them as `wip/*` branches. `wip/builder-mode`, `wip/media-player-redesign`
+> and `wip/tree-brightness-gpu` (sections 6-8) are on `main`, finished with the
+> tests they were missing (see the 2026-09-30 "Phase 0 landing" row in
+> `TESTRUNS.md`); the local branches can be deleted once a PC has pulled `main`.
+> `wip/release-0.4.5` is kept for reference only (its SECURITY.md and Friends
+> setup guide are taken; its changelog cut is not). The shell prototype's latest
+> revision is `docs/prototype/mefi-studio-0.5-v5.html`, waiting on the owner's
+> approval before any of it is built. No exe is built and no `v*` tag is pushed
+> until the owner says so.
+>
+> Progress update, 2026-09-30 (evening): the rest of 0.5.0's code is written, gated
+> and on `main` (or on the integration branch `claude/funny-einstein-19ljkq`, which
+> `main` follows by fast-forward after Windows CI is green on the exact commit):
+> waves A and B (Windows notifications, Report a problem, What's new, undo for
+> deleted tasks, changed files with Accept and Revert, advisory checks, pictures on a
+> message, the `@ # /` picker, Skills) and the whole new shell behind `?layout=v2`,
+> which is off by default: the frame, tabs, Size and density, Today and the Inbox,
+> and Build's session list, thread and inspector. What is left is in
+> `docs/release-scope-0.5.0.md` under "What still needs the owner" (PC steps, what
+> to try by hand, decisions); the 2026-09-30 rows in `TESTRUNS.md` have the numbers.
+> Still only on the PCs: `feat/devday-2026`, the `s1-boot`, `s2-log`, `s3-rows` and
+> `s12-cli` slices, `overhaul/phase2` and `codex/release-signing-gated`.
+>
 > Integration update, 2026-09-29: the finished issue links, commit checklist,
 > packaging fixes, signing workflow, Studio model tracker, Vibe/key tips and
 > Command-tree child sessions are integrated. The older handoffs below remain

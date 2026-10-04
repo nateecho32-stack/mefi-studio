@@ -5,8 +5,12 @@ const { AsyncLocalStorage } = require("node:async_hooks");
 const addons = require("./agent-addons.cjs");
 const tools = require("./agent-tools.cjs");
 const habits = require("./habits.cjs");
+const agentRules = require("./agent-rules.cjs");
+// Loaded on first use: the picture rules are not needed at startup.
+let imagesLoaded = null;
+const images = () => (imagesLoaded ??= require("./image-attach.cjs"));
 const runtime = new AsyncLocalStorage();
-const FIELDS = Object.freeze(["aiProvider", "aiRoleProviders", "aiModels", "aiModelsByProvider", "aiAutoProviders", "aiAutoFallback", "aiFallbackOpenCode", "aiSubscriptionFirst", "modelSelection", "executorCli", "executorModel", "executorModels", "executorTier", "executorTierModels", "codexHarness", "agentSeats", "agentSubtasks", "agentSkills", "agentHabits", "agentTools", "agentBrain", "agentEfforts", "agentMode", "agentReporting"]);
+const FIELDS = Object.freeze(["aiProvider", "aiRoleProviders", "aiModels", "aiModelsByProvider", "aiAutoProviders", "aiAutoFallback", "aiFallbackOpenCode", "aiSubscriptionFirst", "modelSelection", "executorCli", "executorModel", "executorModels", "executorTier", "executorTierModels", "codexHarness", "agentSeats", "agentSubtasks", "agentSkills", "agentHabits", "agentRules", "agentTools", "agentBrain", "agentEfforts", "agentMode", "agentReporting"]);
 const PROVIDERS = Object.freeze(["auto", "zai", "opencode", "zen", "openrouter", "grok", "claude", "codex", "chatgpt", "antigravity", "lmstudio", "custom"]);
 const CLIS = Object.freeze(["opencode", "grok", "claude", "codex", "antigravity"]);
 const EFFORTS = Object.freeze(["minimal", "low", "medium", "high", "xhigh", "max"]);
@@ -27,12 +31,19 @@ function effective(settings, projectId, snapshot) {
   for (const field of FIELDS) delete result[field];
   return { ...result, ...extract(selected) };
 }
+// Which models take a picture is read from the model catalog (data/models.json)
+// and nothing else: the host hands the parsed document to useCatalog once it has
+// it, and until then, or for a model the catalog does not list, `vision` is false.
+let visionIndex = null;
+function useCatalog(document) {
+  visionIndex = document && typeof document === "object" ? images().visionIndex(document) : null;
+}
 function capabilities(provider, model = "") {
   const id = String(model).toLowerCase().replace(/^openai\//, "");
   const extended = /^gpt-6(?:\.\d+)?-/.test(id);
   // Zen and the ChatGPT plan both reach OpenAI's Responses API, which takes an effort.
   const reasoning = (provider === "zen" || provider === "chatgpt" || provider === "openrouter" && /^openai\//i.test(model)) && (extended || /^(gpt-5(?:[.-]|$)|o[134](?:-|$))/.test(id));
-  return { efforts: reasoning ? extended ? [...EFFORTS] : ["low", "medium", "high"] : [], fast: provider === "zen" && extended, note: reasoning ? "Reasoning is sent to the selected model." : "Effort is managed by this provider or CLI." };
+  return { efforts: reasoning ? extended ? [...EFFORTS] : ["low", "medium", "high"] : [], fast: provider === "zen" && extended, vision: images().sees(visionIndex, provider, model), note: reasoning ? "Reasoning is sent to the selected model." : "Effort is managed by this provider or CLI." };
 }
 function validate(configuration) {
   if (!record(configuration)) return "A team configuration is required.";
@@ -72,9 +83,12 @@ function validate(configuration) {
   for (const [key, enabled] of Object.entries(configuration.agentBrain || {})) if (!["deskTool", "nestedDelegation", "headDrafts", "contextScout", "deskResolves"].includes(key) || typeof enabled !== "boolean") return "Unknown delegation switch.";
   if (configuration.agentSkills !== undefined) { const error = addons.validate(configuration.agentSkills); if (error) return error; }
   if (configuration.agentHabits !== undefined) { const error = habits.validate(configuration.agentHabits); if (error) return error; }
+  if (configuration.agentRules !== undefined) { const error = agentRules.validate(configuration.agentRules); if (error) return error; }
   if (configuration.agentTools !== undefined) { const error = tools.validate(configuration.agentTools); if (error) return error; }
   // Bound user strings and forbid nested prototype-shaped input. No credentials,
   // queue switches, endpoints or arbitrary settings can ride a team snapshot.
+  // The rules are the owner's own paragraphs (line breaks, 4,000 characters):
+  // agentRules.validate above is their bound, not a 160-character line.
   const inspect = (value, depth = 0) => {
     if (depth > 5) return false;
     if (typeof value === "string") return value.length <= 160 && !/[\u0000-\u001f]/.test(value);
@@ -82,12 +96,17 @@ function validate(configuration) {
     if (record(value)) return Object.keys(value).length <= 40 && Object.entries(value).every(([key, item]) => !["__proto__", "prototype", "constructor"].includes(key) && inspect(item, depth + 1));
     return typeof value === "boolean" || value === null;
   };
-  return inspect(configuration) ? null : "Invalid team configuration.";
+  const bounded = { ...configuration }; delete bounded.agentRules;
+  return inspect(bounded) ? null : "Invalid team configuration.";
 }
 function view(settings, projectId) {
   const saved = store(settings), project = saved.projects[projectId];
   return { ok: true, projectId, revision: saved.revision, inherited: !project, name: project?.name || "Studio defaults", configuration: extract(effective(settings, projectId)), defaults: extract(settings), presets: saved.presets.map((preset) => ({ ...preset, configuration: extract(preset.configuration) })), providers: [...PROVIDERS], clis: [...CLIS], efforts: [...EFFORTS] };
 }
+// The rules are a project's own words, so a saved team (a preset that any
+// project can apply) never carries them, and applying one leaves the project's
+// rules as they were.
+const withRules = (configuration, rules) => { const next = { ...configuration }; delete next.agentRules; if (rules !== undefined) next.agentRules = clone(rules); return next; };
 function mutate(settings, request, { id, projectId } = {}) {
   const saved = store(settings);
   if (request.revision !== saved.revision) return { ok: false, stale: true, error: "Agent settings changed. Reload the saved version or keep your draft and try again." };
@@ -95,6 +114,10 @@ function mutate(settings, request, { id, projectId } = {}) {
   const name = String(request.name || "My team").trim().slice(0, 80) || "My team";
   if (["save", "preset-save"].includes(action)) {
     const error = validate(request.configuration);
+    if (error) return { ok: false, error };
+  }
+  if (action === "rules") {
+    const error = agentRules.validate(request.rules);
     if (error) return { ok: false, error };
   }
   if (action === "save") {
@@ -105,12 +128,23 @@ function mutate(settings, request, { id, projectId } = {}) {
       if (!projectId || projectId === "project_none") return { ok: false, error: "Choose a project before saving its team." };
       saved.projects[projectId] = { name, configuration: extract(request.configuration) };
     }
+  } else if (action === "rules") {
+    // Only the rules change: the rest of the team stays as it was saved. A
+    // project with no team of its own gets one here, a copy of the Studio
+    // defaults with these rules (like any other field saved for a project).
+    const rules = agentRules.normalize(request.rules);
+    if (request.scope === "defaults") {
+      if (rules) settings.agentRules = rules; else delete settings.agentRules;
+    } else {
+      if (!projectId || projectId === "project_none") return { ok: false, error: "Choose a project before saving its rules." };
+      saved.projects[projectId] = { name: saved.projects[projectId]?.name || "Project team", configuration: withRules(extract(effective(settings, projectId)), rules || undefined) };
+    }
   } else if (action === "inherit") {
     delete saved.projects[projectId];
   } else if (action === "preset-save") {
     const at = saved.presets.findIndex((preset) => preset.id === request.id);
     if (request.id && at < 0) return { ok: false, error: "That preset no longer exists." };
-    const preset = { id: at < 0 ? id : saved.presets[at].id, name, configuration: extract(request.configuration) };
+    const preset = { id: at < 0 ? id : saved.presets[at].id, name, configuration: withRules(extract(request.configuration)) };
     if (!preset.id) return { ok: false, error: "A preset identity is required." };
     if (at < 0) saved.presets.push(preset); else saved.presets[at] = preset;
   } else if (action === "preset-delete") {
@@ -119,7 +153,7 @@ function mutate(settings, request, { id, projectId } = {}) {
     const preset = saved.presets.find((item) => item.id === request.id);
     if (!preset) return { ok: false, error: "That preset no longer exists." };
     if (!projectId || projectId === "project_none") return { ok: false, error: "Choose a project before applying a team." };
-    saved.projects[projectId] = { name: preset.name, configuration: extract(preset.configuration) };
+    saved.projects[projectId] = { name: preset.name, configuration: withRules(extract(preset.configuration), effective(settings, projectId).agentRules) };
   } else return { ok: false, error: "Unknown team action." };
   saved.revision += 1; settings.agentTeams = saved;
   return view(settings, projectId);
@@ -154,4 +188,4 @@ function resume(snapshot, projectId) {
   runtime.getStore().snapshot = clone(snapshot);
   return true;
 }
-module.exports = { FIELDS, PROVIDERS, CLIS, EFFORTS, extract, effective, capabilities, validate, view, mutate, capture, update, run, current, resume };
+module.exports = { FIELDS, PROVIDERS, CLIS, EFFORTS, extract, effective, capabilities, useCatalog, validate, view, mutate, capture, update, run, current, resume };

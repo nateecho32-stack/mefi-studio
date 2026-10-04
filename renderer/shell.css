@@ -1,0 +1,260 @@
+/* The 0.5 shell's frame (renderer/shell.js; docs/unified-studio.md, "The frame").
+   Everything here is under html[data-frame], which only shell.js writes, and
+   only while html[data-layout="v2"] is on and the rail shell is the shell: with
+   v2 off no rule below matches anything.
+
+   Geometry comes from the layout contract and nothing else. The free area's
+   edges are --shell-x0, -x1, -y0 and -y1 (styles.css, section 22); the rail's
+   width and the local navigation's height are read back from them
+   (--frame-rail-w is x0 minus the list, --frame-top-h is y0 minus the strip),
+   so this file never reads --shell-rail-w or --shell-local-h itself.
+
+   Stack, bottom to top: Home and the pages (65-80), the scrim and every column
+   and bar (81, with the local navigation), the rail (82, opening over the
+   page), then the layout menu over sheets. Text is max(12px, N * --text-scale),
+   colours are the app's own tokens, and no scroller reserves width. */
+
+html[data-frame] .shell-frame { display: contents; }
+html[data-frame] .shell-region[hidden], html[data-frame] .shell-scrim[hidden], html[data-frame] .shell-split[hidden] { display: none !important; }
+html[data-frame] .shell-region, html[data-frame] .shell-split {
+  --frame-rail-w: calc(var(--shell-x0) - var(--shell-list-w));
+  --frame-top-h: calc(var(--shell-y0) - var(--shell-tabs-h));
+  --frame-x0: calc(var(--frame-rail-w) + var(--shell-list-w));
+}
+html[data-frame] .shell-region {
+  --frame-fs: max(12px, calc(13px * var(--text-scale, 1)));
+  --frame-fs-s: max(12px, calc(12px * var(--text-scale, 1)));
+  box-sizing: border-box;
+  font: 450 var(--frame-fs)/1.35 var(--font-ui);
+  color: var(--ivory);
+}
+/* Vibe's own Home has no rail on screen: the list starts at the window's edge there. */
+html[data-frame] body.vibe-active:not(:has(.workspace-page:not([hidden]))) :is(.shell-region, .shell-split) { --frame-rail-w: 0px; }
+
+/* Vibe's own layer starts under the bar; its header keeps the project, new app, update, conversation
+   and settings buttons and drops the mode switch, the pulse and the search the bar carries now. */
+html[data-frame] #vibe-layer { top: var(--shell-y0); }
+/* Build's Home in its sessions layout is a layer of its own, with no local bar, that would start at the window's top (or under the strip
+   alone, builder.css): with the frame it starts under the bar and the strip. */
+html[data-frame][data-home-layout="sessions"][data-shell="rail"] body.workspace-active:not(:has(.workspace-page:not([hidden]))) #workspace-layer { top: var(--shell-y0); }
+html[data-frame] .vibe-top { grid-template-columns: 1fr auto; padding-top: 10px; }
+html[data-frame] .vibe-top > .mode-switch, html[data-frame] .vibe-top #vibe-pulse, html[data-frame] .vibe-top [data-nav="palette"] { display: none; }
+
+/* ---- the buttons in the bars: the global button look is undone, then dressed ---- */
+html[data-frame] .shell-btn {
+  min-height: 0; margin: 0; padding: 0; border: 1px solid transparent; border-radius: 8px;
+  background: transparent; color: var(--muted); box-shadow: none; transform: none;
+  font: inherit; line-height: 1; letter-spacing: 0; gap: 6px; text-align: center;
+}
+html[data-frame] .shell-btn:hover { color: var(--ivory); background: color-mix(in srgb, var(--ivory) 7%, transparent); border-color: transparent; transform: none; box-shadow: none; }
+html[data-frame] .shell-btn:active { transform: none; }
+html[data-frame] .shell-btn:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 1px; }
+html[data-frame] .shell-btn:disabled { opacity: .4; }
+html[data-frame] .shell-btn .glyph { width: 16px; height: 16px; }
+html[data-frame] .shell-region kbd {
+  flex: none; padding: 0 6px; border: 1px solid var(--hairline-strong); border-radius: 6px;
+  background: color-mix(in srgb, var(--ivory) 3%, transparent); color: var(--muted);
+  font: 600 var(--frame-fs-s)/1.5 var(--font-ui); white-space: nowrap;
+}
+
+/* ---- the top bar: where the local navigation's row is ---- */
+html[data-frame] .shell-top {
+  position: fixed; top: 0; left: var(--frame-x0); right: 0; height: var(--frame-top-h); z-index: calc(var(--z-shell) - 1);
+  display: flex; align-items: center; gap: 8px; padding: 0 12px 0 10px;
+  background: var(--bg); border-bottom: 1px solid var(--hairline);
+  container: shell-top / inline-size;
+}
+html[data-frame][data-ui-mode="vibe"] .shell-top { background: var(--studio-menu-fill, var(--bg)); backdrop-filter: var(--studio-menu-blur, none); border-bottom-color: color-mix(in srgb, var(--ivory) 7%, transparent); }
+/* The local navigation keeps its own row, squeezed between the bar's two ends (shell.js measures them). */
+html[data-frame][data-shell="rail"] #app-local-nav { left: calc(var(--shell-x0) + var(--frame-top-l, 0px)); right: var(--frame-top-r, 0px); padding-inline: 8px; border-bottom: 0; background: transparent; backdrop-filter: none; }
+/* In a band too narrow to share, the bar keeps its own controls and the trail; the pages stay in the rail and Search. */
+html[data-frame][data-frame-narrow][data-shell="rail"] #app-local-nav { display: none; }
+html[data-frame] .shell-top-left, html[data-frame] .shell-top-right, html[data-frame] .shell-top-extra { display: flex; align-items: center; gap: 8px; flex: none; min-width: 0; }
+html[data-frame] .shell-top-extra:empty { display: none; }
+html[data-frame] .shell-top-right { margin-left: auto; }
+html[data-frame] .shell-icon-btn { width: 32px; height: 32px; flex: none; justify-content: center; border-color: var(--hairline-strong); border-radius: 10px; }
+html[data-frame] .shell-icon-btn[data-on="true"] { background: var(--tint-gold-3, color-mix(in srgb, var(--gold) 14%, transparent)); color: var(--gold-bright); border-color: color-mix(in srgb, var(--gold) 50%, transparent); }
+
+/* the Vibe | Build switch: the app's mode switch (vibe.css), at the bar's height */
+html[data-frame] .shell-mode { flex: none; padding: 2px; box-shadow: none; backdrop-filter: none; }
+html[data-frame] .shell-mode .mode-thumb { top: 2px; bottom: 2px; left: 2px; width: calc(50% - 2px); }
+html[data-frame] .shell-mode .shell-mode-choice { min-width: 0; height: 28px; padding: 0 12px; gap: 6px; font: 600 var(--frame-fs)/1 var(--font-ui); color: var(--muted); border: 0; border-radius: 999px; background: none; }
+html[data-frame] .shell-mode .shell-mode-choice:hover { color: var(--ivory); background: none; }
+html[data-frame] .shell-mode .shell-mode-choice[aria-checked="true"] { color: var(--ink); }
+html[data-frame] .shell-mode .shell-mode-choice .glyph { width: 14px; height: 14px; }
+
+html[data-frame] .shell-trail { flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 6px; overflow: hidden; white-space: nowrap; padding-left: 4px; font-size: var(--frame-fs); color: var(--dim); }
+html[data-frame] .shell-trail:empty { display: none; }
+html[data-frame] .shell-top[data-local="on"] .shell-trail { display: none; }
+html[data-frame] .shell-crumb { min-width: 0; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; }
+html[data-frame] .shell-crumb:not(.is-current) { flex-shrink: 4; }
+html[data-frame] .shell-crumb.is-current { color: var(--ivory); font-weight: 600; }
+html[data-frame] .shell-sep { flex: none; color: var(--dim); opacity: .7; }
+
+html[data-frame] .shell-search {
+  flex: 0 1 280px; min-width: 132px; height: 32px; padding: 0 10px; justify-content: flex-start;
+  border-color: var(--hairline-strong); border-radius: 10px; color: var(--dim);
+  background: color-mix(in srgb, var(--ivory) 3%, transparent); font-size: var(--frame-fs);
+}
+html[data-frame] .shell-search:hover { color: var(--muted); border-color: var(--gold); background: color-mix(in srgb, var(--ivory) 3%, transparent); }
+html[data-frame] .shell-search kbd { margin-left: auto; }
+html[data-frame] .shell-search-long { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-frame] .shell-search-short { display: none; }
+
+html[data-frame] .shell-pill {
+  flex: none; height: 32px; display: inline-flex; align-items: center; gap: 8px; padding: 0 12px 0 10px; border-radius: 16px;
+  font-size: var(--frame-fs); font-weight: 600; white-space: nowrap; border: 1px solid var(--hairline-strong); color: var(--muted);
+}
+html[data-frame] .shell-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
+html[data-frame] .shell-need[data-tone="need"] { border-color: color-mix(in srgb, var(--warn) 60%, transparent); background: color-mix(in srgb, var(--warn) 10%, transparent); color: var(--warn); }
+html[data-frame] .shell-need[data-tone="need"]:hover { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+html[data-frame] .shell-need[data-tone="need"] .shell-dot { background: var(--warn); }
+html[data-frame] .shell-need[data-tone="clear"] { font-weight: 500; }
+html[data-frame] .shell-need[data-tone="clear"] .shell-dot { background: var(--good); }
+html[data-frame] .shell-svc { padding-right: 4px; font-weight: 500; }
+html[data-frame] .shell-svc[data-tone="working"] .shell-dot { background: var(--live); box-shadow: 0 0 0 3px var(--live-dim, transparent); }
+html[data-frame] .shell-svc[data-tone="paused"] .shell-dot { background: var(--warn); }
+html[data-frame] .shell-svc[data-tone="off"] .shell-dot { background: var(--dim); }
+html[data-frame] .shell-pill-btn { width: 26px; height: 26px; flex: none; justify-content: center; border-color: var(--hairline-strong); border-radius: 13px; color: var(--ivory); margin-left: 2px; }
+html[data-frame] .shell-pill-btn .glyph { width: 13px; height: 13px; }
+html[data-frame] .shell-pill-text { display: inline-flex; align-items: baseline; white-space: pre; }
+html[data-frame] .shell-pill-n { font-weight: 650; }
+html[data-frame] .shell-pill-l { white-space: pre; }
+html[data-frame] .shell-need[data-tone="clear"] .shell-pill-n, html[data-frame] .shell-svc:not([data-tone="working"]) .shell-pill-n { display: none; }
+
+/* The queries below repeat the html[data-frame] prefix: a container query adds no specificity, so a bare
+   class would lose to the base rules above. */
+/* the local navigation shares the row: the bar's own controls shrink to icons and counts first */
+@container shell-top (max-width: 1300px) {
+  html[data-frame] .shell-top[data-local="on"] .shell-search { flex: 0 0 32px; width: 32px; min-width: 32px; padding: 0; justify-content: center; }
+  html[data-frame] .shell-top[data-local="on"] .shell-search-long, html[data-frame] .shell-top[data-local="on"] .shell-search-short, html[data-frame] .shell-top[data-local="on"] .shell-search kbd { display: none; }
+  html[data-frame] .shell-top[data-local="on"] .shell-pill .shell-pill-l { display: none; }
+  html[data-frame] .shell-top[data-local="on"] .shell-pill { padding: 0 10px; }
+  html[data-frame] .shell-top[data-local="on"] .shell-svc { padding-right: 4px; }
+}
+/* a narrow bar gives up its words before its controls */
+@container shell-top (max-width: 780px) {
+  html[data-frame] .shell-search { flex: 0 1 auto; width: auto; min-width: 0; }
+  html[data-frame] .shell-search-long { display: none; }
+  html[data-frame] .shell-search-short { display: inline; }
+}
+@container shell-top (max-width: 720px) { html[data-frame] .shell-search kbd { display: none; } }
+@container shell-top (max-width: 620px) {
+  html[data-frame] .shell-search { flex: 0 0 32px; width: 32px; min-width: 32px; padding: 0; justify-content: center; }
+  html[data-frame] .shell-search-short, html[data-frame] .shell-search kbd { display: none; }
+  html[data-frame] .shell-pill .shell-pill-l { display: none; }
+  html[data-frame] .shell-pill { padding: 0 10px; }
+  html[data-frame] .shell-svc { padding-right: 4px; }
+  html[data-frame] .shell-mode .shell-mode-choice .glyph { display: none; }
+  html[data-frame] .shell-mode .shell-mode-choice { padding: 0 10px; }
+}
+@container shell-top (max-width: 520px) { html[data-frame] .shell-trail { display: none; } }
+/* the smallest bar: the mode switch keeps its two icons, the pills their counts */
+@container shell-top (max-width: 470px) {
+  html[data-frame] .shell-top { gap: 6px; padding: 0 8px; }
+  html[data-frame] .shell-top-left, html[data-frame] .shell-top-right { gap: 6px; }
+  html[data-frame] .shell-mode .shell-mode-choice { padding: 0 9px; }
+  html[data-frame] .shell-mode .shell-mode-choice span { display: none; }
+  html[data-frame] .shell-mode .shell-mode-choice .glyph { display: inline-block; width: 16px; height: 16px; }
+  html[data-frame] .shell-need[data-tone="clear"] { display: none; }
+  html[data-frame] .shell-need .shell-dot, html[data-frame] .shell-svc .shell-dot, html[data-frame] .shell-svc .shell-pill-n { display: none; }
+  html[data-frame] .shell-svc { padding: 0 2px; border-color: transparent; }
+}
+
+/* ---- the columns ---- */
+html[data-frame] .shell-column { position: fixed; top: 0; bottom: var(--shell-y1); z-index: calc(var(--z-shell) - 1); display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--surface-rail); outline: none; }
+html[data-frame] .shell-list { left: var(--frame-rail-w); width: var(--shell-list-w); border-right: 1px solid var(--hairline); }
+html[data-frame] .shell-inspector { right: 0; top: var(--shell-y0); width: var(--shell-inspector-w); border-left: 1px solid var(--hairline); }
+html[data-frame][data-ui-mode="vibe"] .shell-column { background: var(--studio-menu-fill, var(--surface-rail)); backdrop-filter: var(--studio-menu-blur, none); }
+html[data-frame] .shell-stack { flex: 1 1 auto; min-height: 0; min-width: 0; display: flex; flex-direction: column; }
+html[data-frame] .shell-panel { flex: 1 1 auto; min-height: 0; min-width: 0; display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden; }
+html[data-frame] .shell-panel[hidden] { display: none; }
+/* A column with nothing mounted says so, quietly, and only then. */
+/* what other modules mount into the bars' own slots sits in a row, not in a column's stack */
+html[data-frame] .shell-top-extra .shell-panel, html[data-frame] .shell-status-extra .shell-panel { flex: none; flex-direction: row; align-items: center; gap: 6px; overflow: visible; }
+html[data-frame] .shell-empty { display: none; flex-direction: column; gap: 4px; padding: 26px 18px; text-align: center; color: var(--dim); font-size: var(--frame-fs); }
+html[data-frame] .shell-empty b { color: var(--muted); font-weight: 600; }
+html[data-frame] .shell-column[data-empty="true"] .shell-empty { display: flex; }
+/* small windows: a column is a drawer over the page, under the bar and the strip */
+html[data-frame] .shell-column[data-state="drawer"], html[data-frame][data-ui-mode="vibe"] .shell-column[data-state="drawer"] { top: var(--shell-y0); width: var(--frame-drawer-w, 280px); max-width: calc(100vw - 24px); background: var(--panel-solid); backdrop-filter: none; box-shadow: var(--shadow-2); animation: shell-drawer-in var(--motion-base, 200ms) var(--ease-out, ease-out); }
+html[data-frame] .shell-list[data-state="drawer"] { left: var(--frame-rail-w); max-width: calc(100vw - var(--frame-rail-w) - 12px); }
+html[data-frame] .shell-inspector[data-state="drawer"] { right: 0; animation-name: shell-drawer-in-right; }
+html[data-frame] .shell-scrim { position: fixed; top: var(--shell-y0); bottom: var(--shell-y1); left: 0; right: 0; z-index: calc(var(--z-shell) - 1); background: color-mix(in srgb, var(--scrim) 65%, transparent); animation: shell-fade var(--motion-fast, 140ms) linear; }
+@keyframes shell-drawer-in { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: none; } }
+@keyframes shell-drawer-in-right { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: none; } }
+@keyframes shell-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* ---- the tab strip's row and the main area ---- */
+/* The strip (renderer/tabs.js) draws its own hairline and sizes itself from the density token, so the row has none of its own: a second line, or a border taking a pixel from the strip, would leave it a pixel short of the row it asked for. */
+html[data-frame] .shell-tabs { position: fixed; top: var(--frame-top-h); left: var(--frame-x0); right: 0; height: var(--shell-tabs-h); z-index: calc(var(--z-shell) - 1); display: flex; flex-direction: column; min-width: 0; background: var(--bg); overflow: hidden; }
+html[data-frame] .shell-main { position: fixed; top: var(--shell-y0); left: var(--frame-x0); right: var(--shell-x1); bottom: var(--shell-y1); z-index: calc(var(--z-workspace) + 1); display: flex; flex-direction: column; min-width: 0; min-height: 0; background: transparent; pointer-events: none; }
+html[data-frame] .shell-main .shell-panel { pointer-events: auto; }
+
+/* ---- splitters: a 1px line at rest, a wide invisible hit area ---- */
+html[data-frame] .shell-split { position: fixed; bottom: var(--shell-y1); width: 11px; z-index: var(--z-shell); cursor: col-resize; touch-action: none; outline: none; }
+html[data-frame] .shell-split::after { content: ""; position: absolute; top: 0; bottom: 0; left: 5px; width: 1px; background: transparent; transition: background var(--motion-fast, 140ms), width var(--motion-fast, 140ms), left var(--motion-fast, 140ms); }
+html[data-frame] .shell-split:hover::after, html[data-frame] .shell-split.is-drag::after { left: 4px; width: 3px; background: color-mix(in srgb, var(--gold) 75%, transparent); }
+html[data-frame] .shell-split:focus-visible::after { left: 4px; width: 3px; background: var(--gold-bright); }
+html[data-frame] .shell-split:focus-visible::before { content: ""; position: absolute; top: 50%; left: 1px; width: 9px; height: 36px; margin-top: -18px; border-radius: 5px; background: var(--panel-solid); box-shadow: 0 0 0 2px var(--gold-bright); }
+html[data-frame] .shell-split-rail { top: 0; left: calc(var(--frame-rail-w) - 5px); }
+html[data-frame] .shell-split-list { top: 0; left: calc(var(--frame-rail-w) + var(--shell-list-w) - 5px); }
+html[data-frame] .shell-split-inspector { top: var(--shell-y0); right: calc(var(--shell-inspector-w) - 5px); }
+html[data-frame] .shell-frame.is-dragging, html[data-frame] .shell-frame.is-dragging * { cursor: col-resize !important; user-select: none !important; }
+
+/* ---- the status bar ---- */
+html[data-frame] .shell-status { position: fixed; left: 0; right: 0; bottom: 0; height: var(--shell-status-h); z-index: calc(var(--z-shell) + 1); display: flex; align-items: center; gap: 4px; padding: 0 10px; min-width: 0; overflow: hidden; background: var(--surface-rail); border-top: 1px solid var(--hairline); color: var(--muted); font-size: var(--frame-fs-s); }
+html[data-frame] .shell-status-item { height: 22px; padding: 0 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-size: var(--frame-fs-s); font-variant-numeric: tabular-nums; color: var(--muted); flex: none; }
+html[data-frame] .shell-status-item .glyph { width: 13px; height: 13px; }
+html[data-frame] .shell-status-item .shell-dot { width: 7px; height: 7px; }
+html[data-frame] .shell-layout-button[aria-expanded="true"] { background: color-mix(in srgb, var(--ivory) 9%, transparent); color: var(--ivory); }
+html[data-frame] .shell-working[data-tone="working"] .shell-dot { background: var(--live); }
+html[data-frame] .shell-working[data-tone="paused"] .shell-dot { background: var(--warn); }
+html[data-frame] .shell-working[data-tone="idle"] .shell-dot, html[data-frame] .shell-working[data-tone="off"] .shell-dot { background: var(--dim); }
+html[data-frame] .shell-waiting { color: var(--warn); }
+html[data-frame] .shell-sep-v { flex: none; width: 1px; height: 14px; margin: 0 4px; background: var(--hairline-strong); }
+html[data-frame] .shell-spacer { flex: 1 1 0; min-width: 4px; }
+html[data-frame] .shell-usage { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+html[data-frame] .shell-usage[hidden] { display: none; }
+html[data-frame] .shell-meter { display: inline-block; width: 46px; height: 5px; border-radius: 3px; background: color-mix(in srgb, var(--ivory) 14%, transparent); overflow: hidden; flex: none; }
+html[data-frame] .shell-meter i { display: block; height: 100%; border-radius: 3px; background: var(--gold); }
+html[data-frame] .shell-meter-button[data-tone="warn"] .shell-meter i { background: var(--warn); }
+html[data-frame] .shell-player[data-playing="true"] .glyph { color: var(--gold-bright); }
+html[data-frame] .shell-player-title { max-width: 18ch; overflow: hidden; text-overflow: ellipsis; }
+html[data-frame] .shell-status-extra { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+html[data-frame] .shell-status-extra:empty { display: none; }
+@media (max-width: 899.98px) { html[data-frame] .shell-player-title, html[data-frame] .shell-permission .shell-status-word, html[data-frame] .shell-usage { display: none; } }
+@media (max-width: 560px) { html[data-frame] .shell-status-item.shell-layout-button .shell-status-word { display: none; } html[data-frame] .shell-cost { display: none; } }
+
+/* ---- the layout menu ---- */
+html[data-frame] .shell-menu {
+  position: fixed; left: 8px; bottom: calc(var(--shell-status-h) + 6px); z-index: calc(var(--z-transient) + 2);
+  width: min(360px, calc(100vw - 16px)); max-height: calc(100vh - var(--shell-y0) - var(--shell-status-h) - 14px); overflow-y: auto;
+  display: flex; flex-direction: column; gap: 10px; padding: 12px 14px 14px; box-sizing: border-box;
+  background: var(--panel-solid); border: 1px solid var(--hairline-strong); border-radius: var(--r-lg, 10px); box-shadow: var(--shadow-3);
+  color: var(--ivory); font: 450 var(--frame-fs)/1.4 var(--font-ui);
+}
+html[data-frame] .shell-menu-head { display: flex; align-items: center; gap: 8px; }
+html[data-frame] .shell-menu-head b { font-weight: 650; }
+html[data-frame] .shell-menu-mode { margin-left: auto; color: var(--dim); font-size: var(--frame-fs-s); }
+html[data-frame] .shell-menu-rows { display: flex; flex-direction: column; }
+html[data-frame] .shell-menu-row { display: flex; align-items: center; gap: 12px; padding: 7px 0; }
+html[data-frame] .shell-menu-row + .shell-menu-row { border-top: 1px solid color-mix(in srgb, var(--ivory) 7%, transparent); }
+html[data-frame] .shell-menu-words { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+html[data-frame] .shell-menu-words b { font-weight: 600; }
+html[data-frame] .shell-menu-words small { color: var(--dim); font-size: var(--frame-fs-s); }
+html[data-frame] .shell-switch { flex: none; width: 36px; height: 20px; padding: 0; border: 1px solid var(--hairline-strong); border-radius: 10px; background: color-mix(in srgb, var(--ivory) 6%, transparent); position: relative; }
+html[data-frame] .shell-switch i { position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--muted); transition: transform var(--motion-fast, 140ms) var(--ease-out, ease-out), background var(--motion-fast, 140ms); }
+html[data-frame] .shell-switch[aria-checked="true"] { background: color-mix(in srgb, var(--gold) 30%, transparent); border-color: color-mix(in srgb, var(--gold) 55%, transparent); }
+html[data-frame] .shell-switch[aria-checked="true"] i { transform: translateX(16px); background: var(--gold-bright); }
+html[data-frame] .shell-menu-grid { display: grid; grid-template-columns: auto 1fr 1fr; gap: 4px 12px; color: var(--muted); font-size: var(--frame-fs-s); }
+html[data-frame] .shell-menu-grid b { color: var(--ivory); font-weight: 600; }
+html[data-frame] .shell-grid-head { color: var(--dim); font-weight: 650; }
+html[data-frame] .shell-menu-fine { margin: 0; color: var(--dim); font-size: var(--frame-fs-s); }
+html[data-frame] .shell-menu-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+html[data-frame] .shell-action { height: 28px; padding: 0 10px; border-color: var(--hairline-strong); border-radius: 8px; color: var(--ivory); font-size: var(--frame-fs); }
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-frame] .shell-column[data-state="drawer"], html[data-frame] .shell-scrim { animation: none; }
+  html[data-frame] .shell-split::after, html[data-frame] .shell-switch i { transition: none; }
+}
+html[data-motion="off"][data-frame] .shell-column[data-state="drawer"], html[data-motion="off"][data-frame] .shell-scrim { animation: none; }

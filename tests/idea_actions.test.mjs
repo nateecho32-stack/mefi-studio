@@ -92,3 +92,52 @@ test("an inbox remove targets one request by identity and never drops a claimed 
   assert.match(applyRequestAction(rows, { action: "remove", key: { at: 9, prompt: "Promoted meanwhile" } }).error, /no longer in the inbox/);
   assert.equal(applyRequestAction(rows, { action: "rewrite" }).ok, false);
 });
+
+test("an idea the owner typed says so: source owner, already read, and its own ids", () => {
+  const saved = applyIdeaAction([{ id: "old", status: "new" }], { action: "add", source: "owner", title: " Dark mode for the editor ", detail: "Follow the system setting by default.", status: "done", read: false, suggestedBy: "mefi" }, 42);
+  assert.equal(saved.ok, true);
+  assert.equal(saved.added, true);
+  assert.equal(saved.idea.source, "owner");
+  assert.equal(saved.idea.suggestedBy, "owner");
+  assert.equal(saved.idea.status, "new", "a caller cannot pick its status");
+  assert.equal(saved.idea.read, true, "they wrote it, so it is not unread");
+  assert.equal(saved.idea.title, "Dark mode for the editor");
+  assert.match(saved.idea.id, /^idea_owner_[0-9a-f]{24}$/);
+  assert.equal(saved.ideas[0], saved.idea, "it goes to the top of the list");
+  assert.equal(saved.ideas.length, 2);
+  assert.equal(saved.idea.taskId, undefined);
+  assert.equal(saved.idea.buildApproval, undefined);
+  // Only "Work through backlog" turns ideas into tasks unasked, and that mode is the owner's own switch;
+  // a plain save starts nothing (the same as any manual idea).
+  assert.equal(backlogIdeaEligible(saved.idea, { explicit: false }), true);
+  // The same words again are the same idea, and Mefi's suggestion of the same words is a different one.
+  const again = applyIdeaAction(saved.ideas, { action: "add", source: "owner", title: "Dark mode for the editor", detail: "Follow the system setting by default." }, 50);
+  assert.equal(again.added, false);
+  assert.equal(again.idea, saved.idea);
+  const suggested = applyIdeaAction(saved.ideas, { action: "add", title: "Dark mode for the editor", detail: "Follow the system setting by default." }, 50);
+  assert.equal(suggested.added, true);
+  assert.equal(suggested.idea.source, "chat");
+  assert.notEqual(suggested.idea.id, saved.idea.id);
+  // The owner's own rules match the chat ones: a title and text, at most 16,000 characters.
+  assert.equal(applyIdeaAction([], { action: "add", source: "owner", title: "", detail: "x" }).ok, false);
+  assert.equal(applyIdeaAction([], { action: "add", source: "owner", title: "Long", detail: "x".repeat(16001) }).ok, false);
+  // Any other source word is Mefi's suggestion from chat, as before.
+  assert.equal(applyIdeaAction([], { action: "add", source: "manual", title: "T", detail: "d" }).idea.source, "chat");
+});
+
+test("restore puts a kept idea back where it was, and refuses to overwrite one that is there", () => {
+  const rows = [{ id: "a" }, { id: "b" }, { id: "c" }];
+  const kept = { id: "x", title: "Kept idea", detail: "words", status: "keep", read: true, taskId: "task_1", tags: ["one"] };
+  const after = applyIdeaAction(rows, { action: "restore", record: kept, index: 9, afterId: "a" });
+  assert.equal(after.ok, true);
+  assert.deepEqual(after.ideas.map((row) => row.id), ["a", "x", "b", "c"]);
+  assert.deepEqual(after.ideas[1], kept, "the record is put back whole, not rebuilt");
+  assert.deepEqual(rows.map((row) => row.id), ["a", "b", "c"], "the list it was given is not changed");
+  assert.deepEqual(applyIdeaAction(rows, { action: "restore", record: kept, index: 1, afterId: "gone" }).ideas.map((row) => row.id), ["a", "x", "b", "c"]);
+  assert.deepEqual(applyIdeaAction(rows, { action: "restore", record: kept, index: 0 }).ideas.map((row) => row.id), ["x", "a", "b", "c"]);
+  const clash = applyIdeaAction([...rows, { id: "x", title: "Newer" }], { action: "restore", record: kept, index: 0 });
+  assert.equal(clash.ok, false);
+  assert.equal(clash.exists, true);
+  assert.match(clash.error, /“Kept idea” is already in your ideas again, so the deleted copy was not put over it/);
+  for (const record of [null, [], "text", {}, { id: "" }, { id: 4 }]) assert.equal(applyIdeaAction(rows, { action: "restore", record }).ok, false);
+});

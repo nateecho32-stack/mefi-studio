@@ -153,6 +153,7 @@ function workerPrompt({ title, taskId, tasksFile, ref, resumeCheckpoint = null, 
   // Work done outside Studio that touches this card (outside-work.cjs briefLine).
   const outsideFlat = sections.outside ? flat(` ${sections.outside}`, 720) : "";
   const memoryFlat = flat(sections.memory, 480);
+  const recapFlat = sections.recap ? `\n\nRECORDED SEAT RECAP (history only; the current task brief takes precedence):\n${flat(sections.recap, 1500)}\n\n` : "";
   const collabFlat = flat(sections.collab, 960);
   const pathsFlat = flat(sections.paths, 240);
   const brainFlat = flat(sections.brain, 700);
@@ -163,7 +164,7 @@ function workerPrompt({ title, taskId, tasksFile, ref, resumeCheckpoint = null, 
   const instructions = platform === "win32" ? `${INSTRUCTIONS}${WINDOWS_SHELL}` : INSTRUCTIONS;
   const promptBudget = Math.max(
     240,
-    promptMax - tailFlat.length - instructions.length - titleBit.length - failFlat.length - outsideFlat.length - memoryFlat.length - pathsFlat.length - brainFlat.length - collabFlat.length - clusterFlat.length - resumeFlat.length - 8,
+    promptMax - tailFlat.length - instructions.length - titleBit.length - failFlat.length - outsideFlat.length - memoryFlat.length - recapFlat.length - pathsFlat.length - brainFlat.length - collabFlat.length - clusterFlat.length - resumeFlat.length - 8,
   );
   // The durable brief carries prior findings and successful prerequisite
   // outputs into the next worker instead of restarting from a short title.
@@ -172,7 +173,7 @@ function workerPrompt({ title, taskId, tasksFile, ref, resumeCheckpoint = null, 
   const recovery = contextPath ? "" : `Full saved task context: read ${JSON.stringify(tasksFile)}, find task id ${JSON.stringify(taskId)}. Read that record and its members whenever the brief is excerpted or grouped; contextHistory contains earlier requirements and attempts. Do not rewrite Studio's task store from the worker.\n\n`;
   const jobPrompt = recovery + brief(Math.max(1000, promptBudget - recovery.length));
   const body = String(jobPrompt ?? "").slice(0, promptBudget);
-  const head = `${titleBit}${resumeFlat}${body}${outsideFlat}${failFlat}${memoryFlat}${pathsFlat}${brainFlat}${collabFlat}${clusterFlat}${instructions}`;
+  const head = `${titleBit}${resumeFlat}${body}${outsideFlat}${failFlat}${memoryFlat}${recapFlat}${pathsFlat}${brainFlat}${collabFlat}${clusterFlat}${instructions}`;
   return { prompt: `${head}${tailFlat}`, jobPrompt, budget: promptBudget };
 }
 
@@ -420,7 +421,12 @@ function settleAttemptRow(task, outcome, { now, maxHandoffs, startGrace, clip })
       delete row.pin;
       delete row.pinAt;
     }
-    executorResume.appendLog(row, `stopped on request (${run.sawDone ? "run had reported done" : "unfinished"}) — progress saved; ${run.ownerHold && !run.resumeRequested ? "held for you" : "ready to resume"}`, { at: now });
+    // A run that hit its per-task time limit (task-cap.cjs) is stopped the same way and says why.
+    const limited = Number.isFinite(run.capStop?.minutes) ? run.capStop.minutes : null;
+    const held = run.ownerHold && !run.resumeRequested ? "held for you" : "ready to resume";
+    executorResume.appendLog(row, limited === null
+      ? `stopped on request (${run.sawDone ? "run had reported done" : "unfinished"}) — progress saved; ${held}`
+      : `stopped at the time limit (${limited} min) (${run.sawDone ? "run had reported done" : "unfinished"}) — progress saved, nothing failed; ${held}`, { at: now });
   } else if (branch === "start-kill") {
     // No session, no output, killed by the start watchdog: the runner failed,
     // not the brief, so no attempt is charged. Start kills are counted apart,
@@ -547,6 +553,8 @@ function finishLogRecord({ run, job, ok, code, errorMessage = null, userStop = f
     code: code ?? null,
     error: errorMessage ? String(errorMessage).slice(0, 200) : null,
     stopped: userStop || undefined,
+    // Stopped at the per-task time limit: how long the limit was (task-cap.cjs).
+    ...(userStop && Number.isFinite(run.capStop?.minutes) ? { limitMinutes: run.capStop.minutes } : {}),
     sawDone: run.sawDone === true,
     spoke: run.spoke === true,
     startKilled: run.startKilled === true || undefined,
@@ -831,7 +839,8 @@ function readWorkerLine(state, line, { now, startedAt, doneMark, maxDepth, maxHa
   const handoff = parseHandoff(line);
   if (handoff?.kind === "next" && Number(state.depth) >= maxDepth) {
     if ((state.declinedHandoffs ?? []).length < maxHandoffs) read.declined = handoff;
-  } else if (handoff?.kind === "next" && state.handoffs.length < maxHandoffs) read.handoff = handoff;
+  } else if (handoff?.kind === "next" && state.handoffs.length < maxHandoffs
+      && !state.handoffs.some((item) => item.title === handoff.title && item.prompt === handoff.prompt)) read.handoff = handoff;
   if (handoff?.kind === "call") read.call = handoff;
   const perRun = Number(issuesPerRun);
   if (state.issues.length < (Number.isInteger(perRun) && perRun > 0 ? Math.min(perRun, agentIssues.ISSUE_MAX_PER_RUN) : agentIssues.ISSUE_MAX_PER_RUN)) {
