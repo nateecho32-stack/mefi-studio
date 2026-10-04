@@ -39,6 +39,32 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-04 Rust stage 2: five more modules move into Rust
+
+Branch `rust/stage2-ports` in `C:\wt\rust2` (pushed as wip/rust-stage2-ports):
+the Skills page's files (55281f0), a message's pictures (cd8cc2c), attempt
+snapshots (0ff6869), settings + keys + projects (1435ae9), and the Git chip's
+host layer with git-link's describe and chip (c5a1e03), each behind a
+Rust-backed factory in scripts/rust-modules.cjs, each with its parity test
+(rust_parity_skills, rust_parity_images, rust_parity_snapshots: twin repos
+with a fixed clock give the same commit ids; rust_parity_settings: main.cjs's
+own settings code from its text against Rust on twin userData folders;
+rust_parity_git: describe on about 830 sets of facts and 28 host steps on
+two boxes with the fake gh). `mefi-core repo-batch` now answers a
+{ $mefi: "fn" } argument with null and lists its calls.
+
+Full `npm test` on c5a1e03: Node 6899 tests, 6885 pass, 14 skipped, 0 fail;
+Electron lane 75: 70 pass, 1 skipped, 4 fail: layout_contract_render and
+shell_render (viewport 1921x1081, as on clean main on this PC),
+evidence_capture ("UnknownVizError") and task_overview_render ("No fixture
+report"), both while another worktree's full run shared the Electron stage:
+each passes alone (1/1, 1/1). Python 248 OK; path lock ok; `npm run audit` 0
+findings; `npm run check` ok (271 targets). An earlier run on 1435ae9 had the
+same picture apart from attempt_review_host "a shot that is slow" (28/28
+alone). A first run was stopped and its children kept running into a second
+one: overlapping runs failed to start processes (0xC0000142) and wrote one
+log; neither is counted here. `cargo test --lib` 26 pass.
+
 ## 2026-10-04 The Studio Daily lands: DevDay branch merged with main, Since you were away
 
 Branch `land/devday` in `C:\wt\devday-land`: origin/wip/feat/devday-2026 (the
@@ -311,10 +337,6 @@ First frozen inventory aggregate exposed five Node wiring cases that still asser
 ## 2026-10-02 evening - Isolated booklet input consolidation focused validation
 
 One ordered inventory covers current 76 scripts and 28 stylesheets. Preserved old builder and candidate emitted byte-identical booklet and source manifest under identical LF and CRLF inputs; new build reported changed=false over each baseline output. Five build cases and 31 inventory/source-location/auditor cases passed, including 16 new missing/duplicate/order/foreign-root contracts. Build/check/audit passed. Native and full aggregate remain queued while game owns the heavy window. Isolated candidate unqualified and unlanded; verified detail-action candidate preserved. No provider, production, shell-default or release changes.
-
-## 2026-10-02 late afternoon - Isolated detail-action reply ordering focused validation
-
-129 focused Tasks/groups tests passed, including 16 restore/prerequisite ordering and epoch cases. Controlled actual host handler/gateway/coalesced-send plus renderer reproduction: baseline regressed accepted context version 5 to 4 in both actions; candidate preserved version 5. Memory-only adapter, no production/provider actions. Build/check/audit passed. Native IPC fixture prepared, not launched: parent reserves heavy window for game. Full npm test and real Fleet gate pending; candidate remains unqualified and unlanded. Prior Gather candidate and unexplained focus failure preserved.
 
 ## Read Before Any Tests
 
