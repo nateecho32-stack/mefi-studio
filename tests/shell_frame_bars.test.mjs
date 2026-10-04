@@ -371,6 +371,43 @@ test("the pause button is Home's own: it clicks #workspace-pause, and goes to Ho
   assert.deepEqual(bare.calls.go.at(-1), ["workspace"], "without Home's control it takes you there");
 });
 
+test("Search lists what the frame can do, worded for what a press does now, and only while the frame is there", async () => {
+  const page = loadShell({ ids: ["workspace-pause"], snapshot: snap({ status: { running: [{ id: "a" }] } }) });
+  const rows = Object.fromEntries(page.calls.registered.filter((row) => row.id.startsWith("shell-do-")).map((row) => [row.id, row]));
+  assert.deepEqual(Object.keys(rows), ["shell-do-mode", "shell-do-pause", "shell-do-list", "shell-do-inspector", "shell-do-reset"]);
+  for (const row of Object.values(rows)) {
+    assert.equal(row.kind, "action");
+    assert.deepEqual(plain(row.showIn), { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false }, `${row.id}: Search only; the shortcut sheet has the key rows`);
+    assert.equal(row.keyMatch(), false, `${row.id}: the key is shown here and bound by the frame's own listener`);
+    assert.equal(row.hidden(), false);
+  }
+  assert.deepEqual(Object.values(rows).map((row) => [row.label, row.chord ?? null, row.paletteGroup, row.paletteBrowse ?? null]), [
+    ["Switch to Vibe", "Ctrl M", "Actions", 4], ["Pause new work", null, "Actions", 2], ["Hide the list", "Ctrl B", "Layout", null], ["Hide the inspector", "[", "Layout", null], ["Reset layout", null, "Layout", null],
+  ]);
+  // Each runs what the bar's own control runs, and the words follow.
+  rows["shell-do-list"].run();
+  assert.equal(page.window.MefiShell.isOpen("list"), false);
+  assert.equal(rows["shell-do-list"].label, "Show the list");
+  rows["shell-do-reset"].run();
+  assert.equal(page.window.MefiShell.isOpen("list"), true, "Reset layout puts this mode's list back");
+  assert.equal(rows["shell-do-list"].label, "Hide the list");
+  rows["shell-do-mode"].run();
+  assert.deepEqual(page.calls.vibe.at(-1), ["vibe", { go: true }], "from Home to Home, as the switch does");
+  assert.equal(rows["shell-do-mode"].label, "Switch to Build");
+  assert.equal(rows["shell-do-mode"].glyph, "g-wrench");
+  let clicks = 0;
+  page.$("workspace-pause").click = () => { clicks += 1; };
+  rows["shell-do-pause"].run();
+  assert.equal(clicks, 1, "Home's own pause control keeps the rules");
+  page.snapshot = snap({ status: { running: [], execute: false } });
+  refresh(page);
+  assert.equal(rows["shell-do-pause"].label, "Resume new work");
+  page.window.MefiShell.disable();
+  assert.ok(Object.values(rows).every((row) => row.hidden()), "gone with the frame");
+  const v1 = loadShell({ layout: false });
+  assert.deepEqual(v1.calls.registered.filter((row) => row.id.startsWith("shell-do-")), [], "nothing is listed in v1");
+});
+
 test("the feed owns no timer and polls nothing: pushes and events are coalesced into one 60 ms paint", () => {
   const pushes = {};
   const api = {};

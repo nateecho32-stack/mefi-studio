@@ -192,6 +192,7 @@
     liveKey: "",
     wired: false,
     keyRows: false,
+    actionRows: false,
     observers: [],
     timer: 0,
     stale: false,         // a change came while the window was hidden
@@ -1382,6 +1383,30 @@
       try { n.register({ id, label, short: label, desc: label, kind: "action", layer: null, section: "home", group: "command", key, glyph: null, badge: null, showIn: { tabs: false, tools: false, dock: false, palette: false, help: true, footer: false }, hidden: () => !state.on }); } catch { /* the sheet is optional */ }
     }
   }
+  // What Search (Ctrl K) can do with the frame, as the prototype lists it: switch the mode, pause new work (Actions), show or
+  // hide the list and the inspector and reset the layout (Layout). Each runs what the bar's own control runs; the words say
+  // what a press does now. The keys are shown, not bound here (onKey binds them), and the rows are gone with the frame.
+  function registerActions() {
+    const n = nav();
+    if (state.actionRows || !n?.register) return;
+    state.actionRows = true;
+    const base = { kind: "action", layer: null, section: "home", group: "layout", key: null, keyMatch: () => false, badge: null, showIn: { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false }, hidden: () => !state.on };
+    const run = () => (state.live ?? readLive()).run;
+    const rows = [
+      { ...base, id: "shell-do-mode", chord: "Ctrl M", paletteGroup: "Actions", paletteBrowse: 4, searchTerms: "mode vibe build switch calm in depth",
+        get label() { return currentMode() === "vibe" ? "Switch to Build" : "Switch to Vibe"; }, get glyph() { return currentMode() === "vibe" ? "g-wrench" : "g-spark"; },
+        desc: "Vibe is the calm board; Build is the list, the thread and the inspector", run: () => setMode(currentMode() === "vibe" ? "build" : "vibe") },
+      { ...base, id: "shell-do-pause", paletteGroup: "Actions", paletteBrowse: 2, glyph: null, searchTerms: "pause resume hold stop new work agents start",
+        get label() { const now = run(); return now === "paused" ? "Resume new work" : now === "off" ? "Start agents" : "Pause new work"; },
+        desc: "Hold all new work; running jobs finish normally", hidden: () => !state.on || run() === null, run: () => togglePause() },
+      { ...base, id: "shell-do-list", chord: "Ctrl B", paletteGroup: "Layout", glyph: "g-frame", searchTerms: "list sessions column panel sidebar",
+        get label() { return isOpen("list") ? "Hide the list" : "Show the list"; }, desc: "The list column", run: () => toggle("list") },
+      { ...base, id: "shell-do-inspector", chord: "[", paletteGroup: "Layout", glyph: "g-frame", searchTerms: "inspector panel column details",
+        get label() { return isOpen("inspector") ? "Hide the inspector" : "Show the inspector"; }, desc: "The inspector column", hidden: () => !state.on || state.vacant, run: () => toggle("inspector") },
+      { ...base, id: "shell-do-reset", label: "Reset layout", paletteGroup: "Layout", glyph: "g-frame", searchTerms: "layout reset widths panels default", desc: "This mode's list and inspector back to how they start", run: () => resetLayout() },
+    ];
+    for (const row of rows) { try { n.register(row); } catch { /* Search is optional */ } }
+  }
 
   // ---- turning the frame on and off -----------------------------------------------------------------------
   function enable() {
@@ -1396,6 +1421,7 @@
     for (const regionName of REGIONS) place(regionName);
     wire();
     registerKeyRows();
+    registerActions();
     apply();
     state.planKey = planKey(state.plan);
     paintBars();

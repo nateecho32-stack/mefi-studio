@@ -278,10 +278,21 @@
     } finally { S.attaching = false; }
     S.stopWaiting?.();
     wire();
+    registerSearch();
     restore();
     updateShort();
     schedule();
     return true;
+  }
+  // Search (Ctrl K) lists New task with its key, as the prototype does; it runs what the list's own button runs, and goes with the panels.
+  function registerSearch() {
+    try {
+      window.MefiNav?.register?.({
+        id: "sessions-new-task", label: "New task", short: "New task", kind: "action", layer: null, section: "home", group: "layout", key: null, chord: "Ctrl N", keyMatch: () => false,
+        glyph: "g-add", badge: null, paletteGroup: "Actions", paletteBrowse: 1, desc: "Start a new task from the box on Home", searchTerms: "new task start create build add",
+        showIn: { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false }, hidden: () => !S.wired, run: () => newTask(),
+      });
+    } catch { /* Search is optional */ }
   }
   function detach() {
     S.stopWaiting?.();

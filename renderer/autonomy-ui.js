@@ -209,10 +209,33 @@
     const row = [...rows].sort((a, b) => b.p - a.p || b.n - a.n)[0];
     return row ? `Best at fixes here: ${row.model} · ${row.wins} of ${row.n}` : "Model strengths appear as your team finishes work.";
   }
-  window.MefiAutonomy = { mount, refresh, label, history, skills, best, outcome, state: () => current, learning: () => learned, openSettings };
+  // The same choice the mode buttons make (autonomy:set with a level), from anywhere: Search's "Set permission mode" rows. It says
+  // what it did in a toast, since the place it was chosen from has gone by then.
+  async function setLevel(level) {
+    if (!MODES.some(([id]) => id === level) || !api()?.autonomySet) return false;
+    const expected = project(), mine = epoch;
+    try {
+      const result = await api().autonomySet({ level });
+      if (result?.ok !== true) throw new Error(result?.error || "This setting could not be saved.");
+      if (mine !== epoch || expected !== project()) return false;
+      if (result.level) current = result;
+      await refresh();
+      window.MefiToast?.(`Permission mode: ${label()}. ${outcome(result, "")}`.trim(), "good");
+      return true;
+    } catch (error) {
+      window.MefiToast?.(window.MefiUi?.plainError ? window.MefiUi.plainError(error, "This setting could not be saved.") : String(error?.message || error), "bad");
+      return false;
+    }
+  }
+  window.MefiAutonomy = { mount, refresh, label, history, skills, best, outcome, state: () => current, learning: () => learned, openSettings, setLevel };
   window.addEventListener("mefi:project-changed", () => { epoch++; current = null; learned = null; flight = null; void refresh({ learning: true }); });
   api()?.onAssistant?.((payload) => {
     if (payload?.event?.kind === "autonomy") void refresh();
   });
-  window.MefiNav?.register?.({ id: "settings:autonomy", kind: "action", section: "agents", group: "tools", label: "Mefi's permission mode", desc: "Always ask, Accept per task, Auto or Elevated only", showIn: { palette: true }, run: openSettings });
+  const layoutV2 = () => document.documentElement?.dataset?.layout === "v2";
+  window.MefiNav?.register?.({ id: "settings:autonomy", kind: "action", section: "agents", group: "tools", label: "Mefi's permission mode", desc: "Always ask, Accept per task, Auto or Elevated only", paletteGroup: "Permission mode", showIn: { palette: true }, run: openSettings });
+  // In the 0.5 layout Search sets the mode itself, as the prototype's palette does; the one in force says "current".
+  for (const [id, title, description] of MODES) {
+    window.MefiNav?.register?.({ id: `autonomy-set-${id}`, kind: "action", section: "agents", group: "tools", label: `Set permission mode: ${title}`, desc: description, searchTerms: "permission mode autonomy ask accept auto elevated", paletteGroup: "Permission mode", paletteHint: () => (current?.level === id ? "current" : ""), showIn: { palette: true }, hidden: () => !layoutV2(), run: () => void setLevel(id) });
+  }
 })();

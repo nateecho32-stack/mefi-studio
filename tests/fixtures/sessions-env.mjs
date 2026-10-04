@@ -144,12 +144,12 @@ export async function sessionsApp({
   if (layout === "v2") document.documentElement.dataset.layout = "v2";
   if (detail) document.documentElement.dataset.detail = detail;
   if (sessionsOff) storage.set("mefiStudio.sessions", "off");
-  const calls = { go: [], toasts: [], refresh: 0, started: [], selected: [], compose: 0, tabsOpened: [], confirms: [], sidebar: [], preview: [], picked: [] };
+  const calls = { go: [], toasts: [], refresh: 0, started: [], selected: [], compose: 0, tabsOpened: [], confirms: [], sidebar: [], preview: [], picked: [], registered: [] };
   const data = { projectId: "p1", project: { id: "p1", name: "Snake trial", path: "/work/snake" }, projects: [{ id: "p1", name: "Snake trial" }], tasks, ideas, assistant: { messages, questions }, status: { running, parallel: 3, ...status }, backlog, preview, mode: "work", pending: false };
   window.MefiVibe = { mode: () => "build", isActive: () => false };
   const nav = { current: "workspace", topOverlay: null };
   window.MefiNav = {
-    register() {}, go: (...args) => calls.go.push(args), historyState: () => ({}), taskContext: () => null, selectTask: (value) => calls.selected.push(value), saveResume() {}, back() {}, forward() {},
+    register: (record) => { calls.registered.push(record); return record; }, go: (...args) => calls.go.push(args), historyState: () => ({}), taskContext: () => null, selectTask: (value) => calls.selected.push(value), saveResume() {}, back() {}, forward() {},
     current: () => nav.current, top: () => nav.topOverlay,
   };
   window.MefiWorkspace = {

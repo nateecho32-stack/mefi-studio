@@ -19,11 +19,33 @@ async function fixture() {
     autonomyUndo: async (value) => { calls.push(["undo", plain(value)]); config.decisions[0].undoPending = true; return { ok: true, pending: true }; },
     autonomyTodo: async (value) => { calls.push(["todo", plain(value)]); config.todos[0].doneAt = 1; return { ok: true }; },
   };
-  const window = { mefiStudio: api, MefiWorkspace: { activeProjectId: () => "p" }, MefiNav: { register: (value) => calls.push(["register", value.id]) }, addEventListener: (name, fn) => events.set(name, fn), dispatchEvent() {} };
+  const records = [], toasts = [];
+  const window = { mefiStudio: api, MefiWorkspace: { activeProjectId: () => "p" }, MefiNav: { register: (value) => { records.push(value); calls.push(["register", value.id]); } }, MefiToast: (text, tone) => toasts.push([text, tone]), addEventListener: (name, fn) => events.set(name, fn), dispatchEvent() {} };
   vm.runInContext(source, vm.createContext({ window, document, CustomEvent: class { constructor(type, args) { this.type = type; this.detail = args?.detail; } } }));
   await window.MefiAutonomy.refresh({ learning: true });
-  return { window, document, calls, api, config, learning, ui: window.MefiAutonomy };
+  return { window, document, calls, api, config, learning, records, toasts, ui: window.MefiAutonomy };
 }
+
+test("in the 0.5 layout Search sets the permission mode itself, says which one is in force, and says what it did", async () => {
+  const h = await fixture();
+  const rows = h.records.filter((row) => row.id.startsWith("autonomy-set-"));
+  assert.deepEqual(rows.map((row) => [row.id, row.label, row.paletteGroup]), [["autonomy-set-ask", "Set permission mode: Always ask", "Permission mode"], ["autonomy-set-accept", "Set permission mode: Accept per task", "Permission mode"], ["autonomy-set-auto", "Set permission mode: Auto", "Permission mode"], ["autonomy-set-elevated", "Set permission mode: Elevated only", "Permission mode"]]);
+  assert.equal(h.records.find((row) => row.id === "settings:autonomy").paletteGroup, "Permission mode", "the settings opener sits with them");
+  assert.ok(rows.every((row) => row.hidden() === true), "the classic layout's Search is unchanged");
+  h.document.documentElement.dataset.layout = "v2";
+  assert.ok(rows.every((row) => row.hidden() === false));
+  assert.deepEqual(rows.map((row) => row.paletteHint()), ["", "", "current", ""], "the mode in force says current");
+  rows[0].run(); await settle();
+  assert.deepEqual(h.calls.filter((row) => row[0] === "set").at(-1), ["set", { level: "ask" }], "the call the mode buttons make");
+  assert.equal(h.ui.state().level, "ask");
+  assert.deepEqual(rows.map((row) => row.paletteHint()), ["current", "", "", ""]);
+  assert.deepEqual(h.toasts.at(-1), ["Permission mode: Always ask.", "good"], "the place it was chosen from has gone: a toast says it");
+  assert.equal(await h.ui.setLevel("nonsense"), false, "only the four modes");
+  h.api.autonomySet = async () => ({ ok: false, error: "The host refused it." });
+  assert.equal(await h.ui.setLevel("auto"), false);
+  assert.deepEqual(h.toasts.at(-1), ["The host refused it.", "bad"]);
+  assert.equal(h.ui.state().level, "ask", "a refusal changes nothing");
+});
 
 test("permission mode controls share saved state and the palette points at them", async () => {
   const h = await fixture(), a = h.document.createElement("div"), b = h.document.createElement("div");

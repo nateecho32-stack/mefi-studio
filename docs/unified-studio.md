@@ -259,6 +259,26 @@ gets (`onTasks`, `onAssistant`, `onAssistantStatus`, `onProjects`,
 `onMachineStatus`, which repaints only when the rounded load moved), the events
 of the modules it reads and `MefiToday.onChange`.
 
+**Search (Ctrl K)** is the same palette as v1 (renderer/palette.js: the
+registry, the keys, Recent per project and "task …" / "idea …" on Enter),
+read as the prototype has it: over the whole window, centred under the bar,
+640 px; one line per result (its icon, its name, and on the right its state,
+its key or "page" in plain words) under a heading per group, at most twelve
+rows, and a footer that shows the keys. Over the empty box: Recent, the six
+sessions that matter (this project's tasks as the session list orders and
+words them, from the board Home already holds, so no read of its own), the
+rail's places with their keys (Home, Work, Agents, Friends, Settings) and the
+actions a record marks with `paletteBrowse` (New task, Pause new work, Open
+the Inbox, Switch mode). A search reaches every group: Sessions (archived ones
+say so), Backlog (the ideas nobody has made a task of), Places, Actions,
+Layout and Tabs (what the frame and the strip register, `shell-do-*` and
+`tabs-do-*`, each with its key and running what its key runs), Permission mode
+(`autonomy-set-*`, the one in force says "current"; `MefiAutonomy.setLevel`),
+each section's pages, Models and, in Command, the nodes. A record may say its
+group (`paletteGroup`) and its words on the right (`paletteHint`). Close is
+gone (the scrim and Escape close it); the result count is still said, for a
+screen reader.
+
 **Modes.** Vibe and Build are the modes of one shell (`MefiVibe.mode()`). Each
 keeps its own list, inspector and tab strip, and switching applies the other's
 in the same turn (no flash, no shift). Build starts with the list (280 px) and

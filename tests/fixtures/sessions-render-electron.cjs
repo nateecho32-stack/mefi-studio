@@ -464,6 +464,45 @@ app.whenReady().then(async () => {
     assert.equal(await run("return getComputedStyle(document.querySelector('#shell-status .shell-usage')).display;"), "none");
     await size(1920, 1080, 1);
     step("the status bar at 1920x1080 and 600 px");
+    // Search (Ctrl K), the prototype's palette: under the bar and centred, 640 px, the box with its magnifier, one heading per group,
+    // twelve rows (the sessions as the list orders them, the places, an action), each a line with its state or key on the right.
+    const palette = `const sheet = document.querySelector('#palette-overlay .palette-sheet').getBoundingClientRect(); const bar = document.getElementById('shell-top').getBoundingClientRect(); const list = document.getElementById('palette-list').getBoundingClientRect();
+      const rows = [...document.querySelectorAll('#palette-list li.palette-row')].map((li) => ({ group: li.dataset.group, label: li.querySelector('.label').textContent, hint: li.querySelector('.hint')?.textContent || '', cut: li.scrollWidth > li.clientWidth + 1, inside: li.getBoundingClientRect().right <= sheet.right + 0.5 }));
+      return { sheet: [Math.round(sheet.left), Math.round(sheet.top), Math.round(sheet.right), Math.round(sheet.bottom), Math.round(sheet.width)], bar: Math.round(bar.bottom), inner: [innerWidth, innerHeight], rows,
+        heads: [...document.querySelectorAll('#palette-list li.palette-heading')].map((li) => li.textContent), list: [Math.round(list.top), Math.round(list.bottom)],
+        hint: document.getElementById('palette-hint').textContent, close: getComputedStyle(document.getElementById('palette-close')).display, placeholder: document.getElementById('palette-input').placeholder,
+        lens: Boolean(document.querySelector('#palette-overlay .palette-search-glyph')), focused: document.activeElement?.id || '' };`;
+    await press("K", ["control"]);
+    await until("!document.getElementById('palette-overlay').hidden && document.querySelectorAll('#palette-list li.palette-row').length === 12", "Ctrl K opens Search with twelve rows");
+    await sleep(350);
+    const pal = await run(palette);
+    report.palette = pal;
+    assert.deepEqual(pal.heads, ["Sessions", "Places", "Actions"], `the empty box's groups: ${JSON.stringify(pal)}`);
+    assert.deepEqual(pal.rows.map((row) => [row.label, row.hint]), [
+      ["Add an empty state to the notes list", "Needs you"], ["Speed up the first paint on the map", "Needs you"], ["Search notes by tag", "Running"], ["Keyboard shortcut for a new note", "Running"], ["Export notes as Markdown", "Review"], ["Dark mode for the settings page", "Queued"],
+      ["Go to Home", "H"], ["Go to Work", "T"], ["Go to Agents", ""], ["Go to Friends", ""], ["Go to Settings", "Ctrl ,"], ["New task", "Ctrl N"],
+    ], "the sessions as the list orders them, the rail's places with their keys, and New task");
+    assert.equal(pal.sheet[4], 640, "640 px wide, as the prototype");
+    assert.ok(Math.abs((pal.sheet[0] + pal.sheet[2]) / 2 - pal.inner[0] / 2) <= 2, `centred in the window: ${JSON.stringify(pal.sheet)}`);
+    assert.ok(pal.sheet[1] >= pal.bar && pal.sheet[1] <= pal.bar + 40, `just under the top bar: ${JSON.stringify(pal)}`);
+    assert.ok(pal.rows.every((row) => !row.cut && row.inside), "no row is cut off");
+    assert.deepEqual([pal.close, pal.lens, pal.focused, pal.placeholder], ["none", true, "palette-input", "Search, or type “task …” or “idea …” to add one"]);
+    assert.equal(pal.hint, "↑↓ moveEnter openEsc closeAdding a task or idea only happens on Enter");
+    await capture("chrome-palette-1920.png");
+    await readable("#palette-overlay .palette-sheet", "Search");
+    await run("const input = document.getElementById('palette-input'); input.value = 'permission'; input.dispatchEvent(new Event('input', { bubbles: true }));");
+    await until("document.querySelector('#palette-list li.palette-row')", "a search shows its rows");
+    const found = await run(palette);
+    assert.ok(found.heads.includes("Permission mode") && found.rows.some((row) => row.label === "Set permission mode: Auto" && row.hint === "current"), `a search reaches the permission mode, the one in force says current: ${JSON.stringify(found.rows)}`);
+    await capture("chrome-palette-search-1920.png");
+    await size(600, 560, 1);
+    const small = await run(palette);
+    assert.ok(small.sheet[0] >= 0 && small.sheet[2] <= small.inner[0] && small.sheet[3] <= small.inner[1], `600 px: Search fits the window: ${JSON.stringify(small)}`);
+    assert.ok(small.rows.every((row) => !row.cut && row.inside), "600 px: no row is cut off");
+    await size(1920, 1080, 1);
+    await press("Escape");
+    await until("document.getElementById('palette-overlay').hidden", "Escape closes Search");
+    step("Search at 1920x1080 and 600 px");
     await run("window.MefiMusic.status = window.__playerStatus; delete window.__playerStatus; window.dispatchEvent(new CustomEvent('mefi-music-change'));");
     await size(1440, 900, 1);
   }

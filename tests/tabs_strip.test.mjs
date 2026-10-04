@@ -431,6 +431,32 @@ test("Ctrl+T opens the Add menu and Ctrl+T again closes it; Cmd does the same on
   assert.equal(t.key(chord("t", { repeat: true })).defaultPrevented, true);
 });
 
+test("Search lists what the strip does, under Tabs with each key, and each row runs what its key runs", async () => {
+  const t = await tabsEnv();
+  const rows = Object.fromEntries(t.nav.registered.filter((row) => row.paletteGroup === "Tabs").map((row) => [row.id, row]));
+  assert.deepEqual(Object.values(rows).map((row) => [row.id, row.label, row.chord ?? null]), [["tabs-do-add", "Open a tab", "Ctrl T"], ["tabs-do-reopen", "Reopen a closed tab", "Ctrl Shift T"], ["tabs-do-pin", "Pin or unpin this tab", "Ctrl Alt P"], ["tabs-do-close", "Close this tab", "Ctrl W"], ["tabBehaviour", "Tab behaviour", null]]);
+  assert.equal(t.nav.registered.at(-1).id, "tabBehaviour", "Tab behaviour stays the last record the strip registers");
+  for (const id of ["tabs-do-add", "tabs-do-reopen", "tabs-do-pin", "tabs-do-close"]) {
+    assert.equal(rows[id].keyMatch(), false, `${id}: shown, not bound twice`);
+    assert.equal(rows[id].hidden(), false);
+    assert.deepEqual({ ...rows[id].showIn }, { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false });
+  }
+  rows["tabs-do-add"].run();
+  assert.equal(t.popover()?.id, "mefi-tabs-pop-add", "Open a tab is the Add menu");
+  rows["tabs-do-add"].run();
+  page(t, "fleet"); page(t, "plans");
+  await t.settle();
+  rows["tabs-do-pin"].run();
+  assert.equal(t.tabs.list().find((tab) => tab.route.id === "plans").pin, true, "Pin is the tab you are on");
+  rows["tabs-do-pin"].run();
+  rows["tabs-do-close"].run();
+  assert.equal(t.tabs.list().some((tab) => tab.route.id === "plans"), false, "Close is the tab you are on");
+  rows["tabs-do-reopen"].run();
+  assert.equal(t.tabs.list().some((tab) => tab.route.id === "plans"), true, "Reopen brings the newest back");
+  t.tabs.stop();
+  assert.ok(["tabs-do-add", "tabs-do-reopen", "tabs-do-pin", "tabs-do-close"].every((id) => rows[id].hidden()), "gone with the strip");
+});
+
 test("Ctrl+W closes the tab you are on, Home says it stays, and the window's own Ctrl+W is not offered the key", async () => {
   const t = await tabsEnv();
   page(t, "fleet"); page(t, "plans");

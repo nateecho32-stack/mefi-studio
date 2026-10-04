@@ -274,6 +274,33 @@ html[data-frame] .shell-menu-fine { margin: 0; color: var(--dim); font-size: var
 html[data-frame] .shell-menu-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 html[data-frame] .shell-action { height: 28px; padding: 0 10px; border-color: var(--hairline-strong); border-radius: 8px; color: var(--ivory); font-size: var(--frame-fs); }
 
+/* ---- Search (Ctrl K) in the frame: the prototype's palette (renderer/palette.js, "the 0.5 layout") ----
+   Over the whole window (its scrim dims the rail and the bars too), under the top bar and centred, 640 px wide: the box with its glass on a 52 px row, a heading where a
+   group starts, one line per result (icon, name, and its state or key on the right in plain words), at
+   most twelve rows, and a footer that shows the keys as keys. Its colours are the floating glass's
+   (studio-ui.css); only the frame's tokens are used here. */
+html[data-frame] #palette-overlay { left: 0; right: 0; top: 0; bottom: 0; align-items: flex-start; justify-content: center; padding-top: calc(var(--shell-y0) - var(--shell-tabs-h) + 26px); }
+html[data-frame] #palette-overlay .palette-sheet { width: min(640px, calc(100vw - 40px)); border-radius: 16px; }
+html[data-frame] #palette-overlay .palette-search-row { height: 52px; gap: 10px; padding: 0 16px; border-bottom: 1px solid var(--hairline); }
+html[data-frame] #palette-overlay .palette-search-glyph { flex: none; width: 17px; height: 17px; color: var(--muted); }
+html[data-frame] #palette-overlay .palette-search-row input { min-height: 0; height: 100%; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; outline: none; color: var(--ivory); font-size: max(12px, calc(15px * var(--text-scale, 1))); }
+html[data-frame] #palette-overlay .palette-search-row input::placeholder { color: var(--muted); }
+html[data-frame] #palette-overlay #palette-list { max-height: min(400px, calc(100vh - var(--shell-y0) - 160px)); padding: 6px; }
+html[data-frame] #palette-overlay #palette-list li.palette-heading { min-height: 0; padding: 9px 10px 4px; border-radius: 0; color: var(--muted); font-size: max(12px, calc(12px * var(--text-scale, 1))); font-weight: 650; cursor: default; background: none; outline: none; }
+html[data-frame] #palette-overlay #palette-list li.palette-row { min-height: 0; gap: 11px; padding: 8px 10px; border-radius: 10px; font-size: max(12px, calc(14px * var(--text-scale, 1))); }
+html[data-frame] #palette-overlay #palette-list li.palette-row .palette-glyph { flex: none; width: 17px; height: 17px; color: var(--muted); }
+html[data-frame] #palette-overlay #palette-list li.palette-row .hint { flex: none; margin-left: auto; color: var(--muted); font-size: max(12px, calc(13px * var(--text-scale, 1))); white-space: nowrap; }
+html[data-frame] #palette-overlay #palette-list li.palette-row.active { background: color-mix(in srgb, var(--gold) 16%, transparent); outline: 0; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 34%, transparent); }
+html[data-frame] #palette-overlay #palette-list li.palette-row:hover:not(.active) { background: color-mix(in srgb, var(--ivory) 7%, transparent); }
+html[data-frame] #palette-overlay .palette-footer { padding: 8px 14px; flex-wrap: nowrap; font-size: max(12px, calc(12px * var(--text-scale, 1))); color: var(--muted); }
+/* The count is for a screen reader: the prototype's footer shows the keys. */
+html[data-frame] #palette-overlay #palette-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+html[data-frame] #palette-overlay #palette-hint { display: flex; flex: 1 1 auto; align-items: center; gap: 16px; min-width: 0; }
+html[data-frame] #palette-overlay .palette-key { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+html[data-frame] #palette-overlay .palette-note { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-frame] #palette-overlay #palette-hint kbd { padding: 0 5px; border: 1px solid var(--hairline-strong); border-radius: 6px; background: color-mix(in srgb, var(--ivory) 3%, transparent); color: var(--ivory); font: 600 max(12px, calc(12px * var(--text-scale, 1)))/1.5 var(--font-ui); }
+@media (max-width: 560px) { html[data-frame] #palette-overlay .palette-note { display: none; } }
+
 @media (prefers-reduced-motion: reduce) {
   html[data-frame] .shell-column[data-state="drawer"], html[data-frame] .shell-scrim { animation: none; }
   html[data-frame] .shell-split::after, html[data-frame] .shell-switch i { transition: none; }

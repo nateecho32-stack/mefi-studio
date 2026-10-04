@@ -12292,6 +12292,33 @@ html[data-frame] .shell-menu-fine { margin: 0; color: var(--dim); font-size: var
 html[data-frame] .shell-menu-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 html[data-frame] .shell-action { height: 28px; padding: 0 10px; border-color: var(--hairline-strong); border-radius: 8px; color: var(--ivory); font-size: var(--frame-fs); }
 
+/* ---- Search (Ctrl K) in the frame: the prototype's palette (renderer/palette.js, "the 0.5 layout") ----
+   Over the whole window (its scrim dims the rail and the bars too), under the top bar and centred, 640 px wide: the box with its glass on a 52 px row, a heading where a
+   group starts, one line per result (icon, name, and its state or key on the right in plain words), at
+   most twelve rows, and a footer that shows the keys as keys. Its colours are the floating glass's
+   (studio-ui.css); only the frame's tokens are used here. */
+html[data-frame] #palette-overlay { left: 0; right: 0; top: 0; bottom: 0; align-items: flex-start; justify-content: center; padding-top: calc(var(--shell-y0) - var(--shell-tabs-h) + 26px); }
+html[data-frame] #palette-overlay .palette-sheet { width: min(640px, calc(100vw - 40px)); border-radius: 16px; }
+html[data-frame] #palette-overlay .palette-search-row { height: 52px; gap: 10px; padding: 0 16px; border-bottom: 1px solid var(--hairline); }
+html[data-frame] #palette-overlay .palette-search-glyph { flex: none; width: 17px; height: 17px; color: var(--muted); }
+html[data-frame] #palette-overlay .palette-search-row input { min-height: 0; height: 100%; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; outline: none; color: var(--ivory); font-size: max(12px, calc(15px * var(--text-scale, 1))); }
+html[data-frame] #palette-overlay .palette-search-row input::placeholder { color: var(--muted); }
+html[data-frame] #palette-overlay #palette-list { max-height: min(400px, calc(100vh - var(--shell-y0) - 160px)); padding: 6px; }
+html[data-frame] #palette-overlay #palette-list li.palette-heading { min-height: 0; padding: 9px 10px 4px; border-radius: 0; color: var(--muted); font-size: max(12px, calc(12px * var(--text-scale, 1))); font-weight: 650; cursor: default; background: none; outline: none; }
+html[data-frame] #palette-overlay #palette-list li.palette-row { min-height: 0; gap: 11px; padding: 8px 10px; border-radius: 10px; font-size: max(12px, calc(14px * var(--text-scale, 1))); }
+html[data-frame] #palette-overlay #palette-list li.palette-row .palette-glyph { flex: none; width: 17px; height: 17px; color: var(--muted); }
+html[data-frame] #palette-overlay #palette-list li.palette-row .hint { flex: none; margin-left: auto; color: var(--muted); font-size: max(12px, calc(13px * var(--text-scale, 1))); white-space: nowrap; }
+html[data-frame] #palette-overlay #palette-list li.palette-row.active { background: color-mix(in srgb, var(--gold) 16%, transparent); outline: 0; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 34%, transparent); }
+html[data-frame] #palette-overlay #palette-list li.palette-row:hover:not(.active) { background: color-mix(in srgb, var(--ivory) 7%, transparent); }
+html[data-frame] #palette-overlay .palette-footer { padding: 8px 14px; flex-wrap: nowrap; font-size: max(12px, calc(12px * var(--text-scale, 1))); color: var(--muted); }
+/* The count is for a screen reader: the prototype's footer shows the keys. */
+html[data-frame] #palette-overlay #palette-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+html[data-frame] #palette-overlay #palette-hint { display: flex; flex: 1 1 auto; align-items: center; gap: 16px; min-width: 0; }
+html[data-frame] #palette-overlay .palette-key { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+html[data-frame] #palette-overlay .palette-note { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-frame] #palette-overlay #palette-hint kbd { padding: 0 5px; border: 1px solid var(--hairline-strong); border-radius: 6px; background: color-mix(in srgb, var(--ivory) 3%, transparent); color: var(--ivory); font: 600 max(12px, calc(12px * var(--text-scale, 1)))/1.5 var(--font-ui); }
+@media (max-width: 560px) { html[data-frame] #palette-overlay .palette-note { display: none; } }
+
 @media (prefers-reduced-motion: reduce) {
   html[data-frame] .shell-column[data-state="drawer"], html[data-frame] .shell-scrim { animation: none; }
   html[data-frame] .shell-split::after, html[data-frame] .shell-switch i { transition: none; }
@@ -62031,7 +62058,9 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
 // Fuzzy jumps to pages, sheets, settings, actions, tasks, nodes and models,
 // grouped by the same sections as the navigation rail. With the box empty it
 // starts with Recent (what you last opened or ran from here, kept per project),
-// and "task ..." or "idea ..." adds one on Enter.
+// and "task ..." or "idea ..." adds one on Enter. In the 0.5 layout
+// (html[data-layout="v2"]) the same palette reads as the prototype's: see
+// "the 0.5 layout" below.
 (function () {
   "use strict";
 
@@ -62269,7 +62298,102 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
   }
 
   function build() {
-    state.items = [...destinations(), ...tasks(), ...nodes(), ...models()];
+    state.items = v2() ? [...sessionsV2(), ...backlogV2(), ...placesV2(), ...registryV2(), ...nodes().map((item) => ({ ...item, kind: "Nodes", glyph: "g-orbit" })), ...models().map((item) => ({ ...item, kind: "Models", glyph: "g-booklet" }))]
+      : [...destinations(), ...tasks(), ...nodes(), ...models()];
+  }
+
+  // ---- the 0.5 layout: the prototype's Search (docs/prototype/mefi-studio-0.5-v5.html) ----------
+  // With html[data-layout="v2"] it is the same palette, the same keys, Recent and "task ...",
+  // read as the prototype has it: one line per result (its icon, its name and, on the right, its
+  // state, its key or "page"), under the groups Recent, Sessions, Backlog, Places, Actions, Layout,
+  // Tabs, Permission mode and each section's own pages, at most twelve rows. Over the empty box:
+  // Recent, then the sessions that matter now, the places on the rail and the actions marked for it,
+  // twelve rows in all. Sessions are this project's tasks as the session list reads them
+  // (MefiBuilder.reading), from the board Home already holds, so Search makes no read of its own
+  // for them; the backlog is the session list's own (ideas nobody has made a task of). Everything
+  // else is the registry, as in v1: a record says its group (paletteGroup), its words on the right
+  // (paletteHint) and whether the empty box lists it (paletteBrowse, the lower the earlier).
+  const v2 = () => document.documentElement?.dataset?.layout === "v2";
+  const shownMax = () => (v2() ? 12 : 40);
+  const STAGE_WORDS = Object.freeze({ ask: "Needs you", run: "Running", check: "Review", wait: "Queued", ready: "Queued", done: "Done", dropped: "Done" });
+  const STAGE_RANK = Object.freeze({ ask: 0, run: 1, check: 2, wait: 3, ready: 3, done: 4, dropped: 4 });
+  const BROWSE_SESSIONS = 6;
+  const PLACES = Object.freeze([["Home", "workspace"], ["Work", "tasks"], ["Agents", "agents"], ["Friends", "friends"], ["Settings", "studio"]]);
+  const board = () => { const data = window.MefiWorkspace?.snapshot?.(); return data && data.projectId ? data : null; };
+  const stampOf = (value) => { const number = Number(value); return Number.isFinite(number) && number > 0 ? number : Date.parse(value || "") || 0; };
+  const movedAt = (task) => Math.max(stampOf(task.updatedAt), stampOf(task.doneAt), stampOf(task.createdAt), stampOf(task.lastAttempt?.at));
+  function toneOf(task, data) {
+    let tone = null;
+    try { tone = window.MefiBuilder?.reading?.(task, data || undefined)?.tone ?? null; } catch { tone = null; }
+    if (typeof tone === "string" && tone in STAGE_WORDS) return tone;
+    if (["done", "archived", "completed"].includes(task.status)) return task.dropped ? "dropped" : "done";
+    return task.status === "active" ? "run" : task.status === "awaiting_verification" ? "check" : "ready";
+  }
+  function sessionsV2() {
+    const data = board();
+    const projectId = data?.projectId || currentProject();
+    const rows = (data ? data.tasks : state.taskRecords).filter((task) => task?.id);
+    return rows.map((task) => {
+      const archived = task.archived === true || task.status === "archived";
+      return { task, archived, tone: toneOf(task, data), at: movedAt(task) };
+    }).sort((a, b) => Number(a.archived) - Number(b.archived) || STAGE_RANK[a.tone] - STAGE_RANK[b.tone] || b.at - a.at).map(({ task, archived, tone }) => ({
+      key: `task:${task.id}`, kind: "Sessions", label: String(task.title || window.MefiTasks?.shortTitle?.(task) || "Untitled task"),
+      description: task.prompt || task.description || "", hint: archived ? "Archived" : STAGE_WORDS[tone], keyHint: false, count: 0, glyph: "g-tasks",
+      browse: !archived && tone !== "dropped",
+      run: () => { if (!projectId || currentProject() === projectId || board()?.projectId === projectId) window.MefiNav?.go?.("tasks", { taskId: task.id }); },
+    }));
+  }
+  function backlogV2() {
+    const data = board();
+    if (!data) return [];
+    let rows = null;
+    try { rows = window.MefiSessions?.model?.backlog?.(data) ?? null; } catch { rows = null; }
+    if (!Array.isArray(rows)) rows = (Array.isArray(data.ideas) ? data.ideas : []).filter((idea) => idea?.id && idea.status !== "done" && !idea.taskId).map((idea) => ({ id: idea.id, title: idea.title || idea.detail || "Untitled idea" }));
+    const ideas = new Map((Array.isArray(data.ideas) ? data.ideas : []).map((idea) => [idea?.id, idea]));
+    return rows.filter((row) => row && row.kind !== "plan").map((row) => ({
+      key: `idea:${row.id}`, kind: "Backlog", label: String(row.title), description: String(ideas.get(row.id)?.detail || ""), hint: "Idea", keyHint: false, count: 0, glyph: "g-ideas",
+      run: () => window.MefiNav?.go?.("ideas", { ideaId: row.id }),
+    }));
+  }
+  // The rail's places, by the page each opens, with the key that page already has.
+  function placesV2() {
+    const nav = window.MefiNav;
+    return PLACES.map(([label, id]) => [label, nav?.get?.(id)]).filter(([, dest]) => dest && !dest.hidden?.()).map(([label, dest]) => ({
+      key: `place:${dest.id}`, kind: "Places", label: `Go to ${label}`, description: dest.desc || "", searchTerms: `${label} ${dest.label || ""} ${dest.searchTerms || ""}`,
+      hint: dest.chord || dest.key || "", keyHint: Boolean(dest.chord || dest.key), count: 0, glyph: dest.glyph || "g-frame", browse: true,
+      run: () => nav.go(dest.id),
+    }));
+  }
+  function registryV2() {
+    const nav = window.MefiNav;
+    if (!nav?.list) return [];
+    const commandActive = Boolean(window.MefiIdle?.isActive?.());
+    const openSheet = nav.state?.sheet ?? null;
+    const rank = (dest) => nav.sectionRank?.(dest) ?? 0;
+    const words = (value) => { try { return String((typeof value === "function" ? value() : value) || ""); } catch { return ""; } };
+    return nav.list({ showIn: "palette" })
+      .filter((dest) => dest.id !== "palette" && !(dest.id === "command" && commandActive) && dest.id !== openSheet)
+      .sort((a, b) => rank(a) - rank(b))
+      .map((dest) => {
+        const action = dest.kind === "action";
+        const key = dest.key || dest.chord || "";
+        const hint = words(dest.paletteHint) || key || (action ? "" : "page");
+        return {
+          key: `dest:${dest.id}`, kind: dest.paletteGroup || (action ? "Actions" : nav.sectionLabel?.(dest) ?? dest.group), label: dest.label, description: dest.desc || "", searchTerms: dest.searchTerms || "",
+          hint, keyHint: Boolean(key) && hint === key, count: dest.badge ? Number(nav.badges?.[dest.badge]) || 0 : 0, glyph: dest.glyph || (action ? "g-spark" : "g-frame"),
+          browse: Number.isFinite(dest.paletteBrowse) ? dest.paletteBrowse : null,
+          run: () => nav.go(dest.id),
+        };
+      });
+  }
+  // The empty box: Recent, then the sessions that matter now, the places, and the actions marked for it; twelve rows in all.
+  function browseV2(recent) {
+    const shown = new Set(recent.map((item) => item.key));
+    const fresh = (item) => !shown.has(item.key);
+    const sessions = state.items.filter((item) => item.kind === "Sessions" && item.browse && fresh(item)).slice(0, BROWSE_SESSIONS);
+    const places = state.items.filter((item) => item.kind === "Places" && fresh(item));
+    const actions = state.items.filter((item) => item.kind !== "Places" && item.kind !== "Sessions" && Number.isFinite(item.browse) && fresh(item)).sort((a, b) => a.browse - b.browse);
+    return [...recent, ...sessions, ...places, ...actions].slice(0, shownMax());
   }
 
   // ---- Recent: what you last opened or ran from here, per project ----------------------
@@ -62329,6 +62453,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     if (!canCreate(kind)) return null;
     return {
       kind: "Create",
+      glyph: kind === "task" ? "g-add" : "g-ideas",
       label: `Add ${kind}: “${clip(text, 60)}”`,
       description: kind === "task" ? "Adds it to the task board; the assistant picks it up." : "Saves it in your ideas. Nothing is built from it until you say so.",
       hint: "Enter",
@@ -62378,9 +62503,36 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       /* the preferences could not be read: keep what was known */
     }
     if (el.input) {
-      el.input.placeholder = flags.quickCreate && (canCreate("task") || canCreate("idea")) ? "Search · “task …” or “idea …” to add" : plainPlaceholder;
+      dress();
       if (!el.overlay.hidden) filter(true);
     }
+  }
+
+  // What the box, its footer and the Close button say, for the layout that is on: v1 as it always was; the 0.5 layout's
+  // as the prototype words it (the keys as keys, and that adding only happens on Enter), with the result count kept for a
+  // screen reader (it is the status line, read out, not shown). Close goes: the scrim and Escape close it there.
+  let plainHint = null;
+  function dress() {
+    const adds = flags.quickCreate && (canCreate("task") || canCreate("idea"));
+    const fresh = v2();
+    el.input.placeholder = adds ? (fresh ? "Search, or type “task …” or “idea …” to add one" : "Search · “task …” or “idea …” to add") : plainPlaceholder;
+    if (el.close && (fresh || el.close.hidden)) el.close.hidden = fresh;
+    if (el.overlay.dataset) el.overlay.dataset.look = fresh ? "v2" : "v1";
+    // The prototype's magnifier before the box; v1 has none.
+    const row = el.input.parentNode;
+    const lens = row?.querySelector?.(".palette-search-glyph") ?? null;
+    if (fresh && row && !lens) { const icon = glyphNode("g-search"); if (icon) { icon.setAttribute("class", "glyph palette-search-glyph"); row.insertBefore?.(icon, el.input); } }
+    else if (!fresh && lens) lens.remove?.();
+    const hint = el.hint;
+    if (!hint || !hint.dataset) return;
+    if (plainHint === null) plainHint = hint.textContent;
+    if (!fresh) { if (hint.dataset.look === "v2") { hint.textContent = plainHint; delete hint.dataset.look; } return; }
+    const key = (text) => { const node = document.createElement("kbd"); node.textContent = text; return node; };
+    const part = (keys, words) => { const node = document.createElement("span"); node.className = "palette-key"; node.append(...keys.map(key), document.createTextNode(` ${words}`)); return node; };
+    const parts = [part(["↑", "↓"], "move"), part(["Enter"], "open"), part(["Esc"], "close")];
+    if (adds) { const note = document.createElement("span"); note.className = "palette-note"; note.textContent = "Adding a task or idea only happens on Enter"; parts.push(note); }
+    hint.replaceChildren(...parts);
+    hint.dataset.look = "v2";
   }
 
   // Roving aria-activedescendant: focus never leaves the input, so the
@@ -62401,10 +62553,11 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
 
   function render() {
     el.list.textContent = "";
-    const items = state.filtered.slice(0, 40);
+    const most = shownMax();
+    const items = state.filtered.slice(0, most);
     if (el.status) {
       const count = state.filtered.length;
-      const results = count > 40 ? `Showing 40 of ${count} results. Keep typing to narrow them.` : `${count} result${count === 1 ? "" : "s"}.`;
+      const results = count > most ? `Showing ${most} of ${count} results. Keep typing to narrow them.` : `${count} result${count === 1 ? "" : "s"}.`;
       const taskStatus = state.taskStatus === "loading" ? " Loading project tasks…" : state.taskStatus === "error" ? " Tasks couldn't be loaded. Close and reopen Search to retry." : "";
       el.status.textContent = results + (state.filtered[0]?.create ? " Enter adds it; nothing is added until then." : "") + taskStatus;
     }
@@ -62416,6 +62569,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       setActiveOption();
       return;
     }
+    if (v2()) { renderV2(items); return; }
     items.forEach((item, index) => {
       const li = document.createElement("li");
       li.id = `palette-option-${index}`;
@@ -62471,6 +62625,59 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     setActiveOption();
   }
 
+  // The prototype's rows: a heading where a group starts (not an option), then per result its icon, its name, a count when it has
+  // one, and its state, key or "page" on the right in plain words. The option is the same as v1's to the keys and a screen reader.
+  function glyphNode(id) {
+    const svg = document.createElementNS?.("http://www.w3.org/2000/svg", "svg");
+    if (!svg || typeof svg.setAttribute !== "function") return null;
+    svg.setAttribute("class", "glyph palette-glyph"); svg.setAttribute("aria-hidden", "true"); svg.setAttribute("focusable", "false");
+    const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    use.setAttribute("href", `#${id}`); svg.append(use);
+    return svg;
+  }
+  function renderV2(items) {
+    items.forEach((item, index) => {
+      if (index === 0 || items[index - 1].kind !== item.kind) {
+        const head = document.createElement("li");
+        head.className = "palette-heading";
+        head.setAttribute("role", "presentation");
+        head.textContent = item.kind;
+        el.list.append(head);
+      }
+      const li = document.createElement("li");
+      li.id = `palette-option-${index}`;
+      li.className = "palette-row";
+      li.setAttribute("role", "option");
+      li.setAttribute("aria-selected", String(index === state.index));
+      li.setAttribute("aria-posinset", String(index + 1));
+      li.setAttribute("aria-setsize", String(state.filtered.length));
+      li.dataset.group = item.kind;
+      if (index === state.index) li.classList.add("active");
+      const icon = glyphNode(item.glyph || (item.create ? "g-add" : "g-frame"));
+      if (icon) li.append(icon);
+      const label = document.createElement("span");
+      label.className = "label";
+      label.textContent = item.label;
+      li.append(label);
+      if (item.count > 0) {
+        const count = document.createElement("span");
+        count.className = "count";
+        count.textContent = String(item.count);
+        li.append(count);
+      }
+      if (item.hint) {
+        const hint = document.createElement("small");
+        hint.className = "hint";
+        hint.textContent = item.hint;
+        li.append(hint);
+      }
+      li.addEventListener("mouseenter", () => highlight(index, li));
+      li.addEventListener("click", () => run(index));
+      el.list.append(li);
+    });
+    setActiveOption();
+  }
+
   // The pointer moves the highlight in place. Rebuilding every row on each
   // mouseenter was the palette's hover cost; only the two rows that change are
   // touched, and the activedescendant follows.
@@ -62508,7 +62715,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       // Recent leads, and what it holds is not listed again below.
       const recent = recentItems();
       const shown = new Set(recent.map((item) => item.key));
-      state.filtered = [...recent, ...grouped(state.items.filter((item) => !item.key || !shown.has(item.key)))];
+      state.filtered = v2() ? browseV2(recent) : [...recent, ...grouped(state.items.filter((item) => !item.key || !shown.has(item.key)))];
     } else {
       state.filtered = grouped(state.items
         .map((item) => ({ item, score: matchScore(query, item) }))
@@ -62522,7 +62729,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       if (create) state.filtered.splice(String(state.filtered[0]?.label ?? "").toLowerCase() === query.toLowerCase() ? 1 : 0, 0, create);
     }
     const retained = selected ? state.filtered.findIndex((item) => item.kind === selected.kind && item.label === selected.label) : -1;
-    state.index = retained >= 0 && retained < 40 ? retained : 0;
+    state.index = retained >= 0 && retained < shownMax() ? retained : 0;
     render();
   }
 
@@ -62545,13 +62752,15 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     // bookkeeping to do it for us.
     state.opener = document.activeElement;
     window.MefiNav?.claim?.("palette");
+    dress();
     build();
     el.overlay.hidden = false;
     el.input.setAttribute("aria-expanded", "true");
     el.input.value = "";
     filter();
     el.input.focus();
-    loadTasks();
+    // The 0.5 layout's sessions come from the board Home already holds: no read of its own while there is one.
+    if (!v2() || !board()) loadTasks();
     void readFlags();
   }
 
@@ -62587,6 +62796,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     el.list = document.getElementById("palette-list");
     el.close = document.getElementById("palette-close");
     el.status = document.getElementById("palette-status");
+    el.hint = document.getElementById("palette-hint");
     if (!el.overlay) return;
     plainPlaceholder = el.input.placeholder || "";
     void readFlags();
@@ -62622,7 +62832,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
         event.preventDefault();
         // The list is a cycle: Down past the last option lands on the first,
         // Up from the first lands on the last. Wrap within the 40 shown.
-        const span = Math.min(40, state.filtered.length);
+        const span = Math.min(shownMax(), state.filtered.length);
         if (!span) return;
         state.index = event.key === "ArrowDown" ? (state.index + 1) % span : (state.index - 1 + span) % span;
         render();
@@ -62632,7 +62842,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
         // query typed they keep their native caret role in the field, so the
         // jump only applies while browsing the default list.
         if (el.input.value.trim()) return;
-        const span = Math.min(40, state.filtered.length);
+        const span = Math.min(shownMax(), state.filtered.length);
         if (!span) return;
         event.preventDefault();
         state.index = event.key === "Home" ? 0 : span - 1;
@@ -79643,12 +79853,35 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const row = [...rows].sort((a, b) => b.p - a.p || b.n - a.n)[0];
     return row ? `Best at fixes here: ${row.model} · ${row.wins} of ${row.n}` : "Model strengths appear as your team finishes work.";
   }
-  window.MefiAutonomy = { mount, refresh, label, history, skills, best, outcome, state: () => current, learning: () => learned, openSettings };
+  // The same choice the mode buttons make (autonomy:set with a level), from anywhere: Search's "Set permission mode" rows. It says
+  // what it did in a toast, since the place it was chosen from has gone by then.
+  async function setLevel(level) {
+    if (!MODES.some(([id]) => id === level) || !api()?.autonomySet) return false;
+    const expected = project(), mine = epoch;
+    try {
+      const result = await api().autonomySet({ level });
+      if (result?.ok !== true) throw new Error(result?.error || "This setting could not be saved.");
+      if (mine !== epoch || expected !== project()) return false;
+      if (result.level) current = result;
+      await refresh();
+      window.MefiToast?.(`Permission mode: ${label()}. ${outcome(result, "")}`.trim(), "good");
+      return true;
+    } catch (error) {
+      window.MefiToast?.(window.MefiUi?.plainError ? window.MefiUi.plainError(error, "This setting could not be saved.") : String(error?.message || error), "bad");
+      return false;
+    }
+  }
+  window.MefiAutonomy = { mount, refresh, label, history, skills, best, outcome, state: () => current, learning: () => learned, openSettings, setLevel };
   window.addEventListener("mefi:project-changed", () => { epoch++; current = null; learned = null; flight = null; void refresh({ learning: true }); });
   api()?.onAssistant?.((payload) => {
     if (payload?.event?.kind === "autonomy") void refresh();
   });
-  window.MefiNav?.register?.({ id: "settings:autonomy", kind: "action", section: "agents", group: "tools", label: "Mefi's permission mode", desc: "Always ask, Accept per task, Auto or Elevated only", showIn: { palette: true }, run: openSettings });
+  const layoutV2 = () => document.documentElement?.dataset?.layout === "v2";
+  window.MefiNav?.register?.({ id: "settings:autonomy", kind: "action", section: "agents", group: "tools", label: "Mefi's permission mode", desc: "Always ask, Accept per task, Auto or Elevated only", paletteGroup: "Permission mode", showIn: { palette: true }, run: openSettings });
+  // In the 0.5 layout Search sets the mode itself, as the prototype's palette does; the one in force says "current".
+  for (const [id, title, description] of MODES) {
+    window.MefiNav?.register?.({ id: `autonomy-set-${id}`, kind: "action", section: "agents", group: "tools", label: `Set permission mode: ${title}`, desc: description, searchTerms: "permission mode autonomy ask accept auto elevated", paletteGroup: "Permission mode", paletteHint: () => (current?.level === id ? "current" : ""), showIn: { palette: true }, hidden: () => !layoutV2(), run: () => void setLevel(id) });
+  }
 })();
 
 // The companion's presentation: stable live panels, hover ownership and safe
@@ -89893,7 +90126,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     });
     nav.register({
       id: "inbox-open", label: "Open the Inbox", short: "Inbox", kind: "action", layer: null, section: "home", group: "surfaces", key: null, chord: "Ctrl J", glyph: "g-bell", badge: null,
-      desc: "What needs you, answered where you are",
+      paletteGroup: "Actions", paletteBrowse: 3, desc: "What needs you, answered where you are",
       searchTerms: "inbox needs you popover answer decide",
       showIn: showIn({ palette: true, help: true }), keyMatch: () => false,
       run: () => { openInbox(state.anchor); },
@@ -93995,6 +94228,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     liveKey: "",
     wired: false,
     keyRows: false,
+    actionRows: false,
     observers: [],
     timer: 0,
     stale: false,         // a change came while the window was hidden
@@ -95185,6 +95419,30 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       try { n.register({ id, label, short: label, desc: label, kind: "action", layer: null, section: "home", group: "command", key, glyph: null, badge: null, showIn: { tabs: false, tools: false, dock: false, palette: false, help: true, footer: false }, hidden: () => !state.on }); } catch { /* the sheet is optional */ }
     }
   }
+  // What Search (Ctrl K) can do with the frame, as the prototype lists it: switch the mode, pause new work (Actions), show or
+  // hide the list and the inspector and reset the layout (Layout). Each runs what the bar's own control runs; the words say
+  // what a press does now. The keys are shown, not bound here (onKey binds them), and the rows are gone with the frame.
+  function registerActions() {
+    const n = nav();
+    if (state.actionRows || !n?.register) return;
+    state.actionRows = true;
+    const base = { kind: "action", layer: null, section: "home", group: "layout", key: null, keyMatch: () => false, badge: null, showIn: { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false }, hidden: () => !state.on };
+    const run = () => (state.live ?? readLive()).run;
+    const rows = [
+      { ...base, id: "shell-do-mode", chord: "Ctrl M", paletteGroup: "Actions", paletteBrowse: 4, searchTerms: "mode vibe build switch calm in depth",
+        get label() { return currentMode() === "vibe" ? "Switch to Build" : "Switch to Vibe"; }, get glyph() { return currentMode() === "vibe" ? "g-wrench" : "g-spark"; },
+        desc: "Vibe is the calm board; Build is the list, the thread and the inspector", run: () => setMode(currentMode() === "vibe" ? "build" : "vibe") },
+      { ...base, id: "shell-do-pause", paletteGroup: "Actions", paletteBrowse: 2, glyph: null, searchTerms: "pause resume hold stop new work agents start",
+        get label() { const now = run(); return now === "paused" ? "Resume new work" : now === "off" ? "Start agents" : "Pause new work"; },
+        desc: "Hold all new work; running jobs finish normally", hidden: () => !state.on || run() === null, run: () => togglePause() },
+      { ...base, id: "shell-do-list", chord: "Ctrl B", paletteGroup: "Layout", glyph: "g-frame", searchTerms: "list sessions column panel sidebar",
+        get label() { return isOpen("list") ? "Hide the list" : "Show the list"; }, desc: "The list column", run: () => toggle("list") },
+      { ...base, id: "shell-do-inspector", chord: "[", paletteGroup: "Layout", glyph: "g-frame", searchTerms: "inspector panel column details",
+        get label() { return isOpen("inspector") ? "Hide the inspector" : "Show the inspector"; }, desc: "The inspector column", hidden: () => !state.on || state.vacant, run: () => toggle("inspector") },
+      { ...base, id: "shell-do-reset", label: "Reset layout", paletteGroup: "Layout", glyph: "g-frame", searchTerms: "layout reset widths panels default", desc: "This mode's list and inspector back to how they start", run: () => resetLayout() },
+    ];
+    for (const row of rows) { try { n.register(row); } catch { /* Search is optional */ } }
+  }
 
   // ---- turning the frame on and off -----------------------------------------------------------------------
   function enable() {
@@ -95199,6 +95457,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     for (const regionName of REGIONS) place(regionName);
     wire();
     registerKeyRows();
+    registerActions();
     apply();
     state.planKey = planKey(state.plan);
     paintBars();
@@ -96891,10 +97150,20 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       changed("host");
     }).catch(() => {}));
   }
-  // Search and Configuration find the card by its words.
+  // Search and Configuration find the card by its words. Before it, what Search can do with the strip, under Tabs as the prototype lists it:
+  // each row runs what its key runs (the keys are bound in onKey, shown here), and the rows go with the strip.
   function registerSettingsRecord() {
+    const showIn = { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false };
+    const row = (id, label, chord, run, more = {}) => safe(() => window.MefiNav?.register?.({
+      id, label, short: label, kind: "action", layer: null, section: "home", group: "layout", key: null, chord, keyMatch: () => false, glyph: "g-frame", badge: null,
+      paletteGroup: "Tabs", desc: label, searchTerms: `tab tabs ${label.toLowerCase()}`, showIn, hidden: () => !S.running || !S.shown, run, ...more,
+    }));
+    row("tabs-do-add", "Open a tab", "Ctrl T", () => { if (S.running) toggleAdd(); }, { glyph: "g-add" });
+    row("tabs-do-reopen", "Reopen a closed tab", "Ctrl Shift T", () => { if (S.running) { closePop(); restore(0); } });
+    row("tabs-do-pin", "Pin or unpin this tab", "Ctrl Alt P", () => { if (S.running) setPin(S.active, !cur().pin); }, { glyph: "g-pin" });
+    row("tabs-do-close", "Close this tab", "Ctrl W", () => { if (S.running) { closePop(); closeActive(); } }, { glyph: "g-close" });
     safe(() => window.MefiNav?.register?.({
-      id: "tabBehaviour", label: "Tab behaviour", short: "Tab behaviour", kind: "action", layer: null, section: "settings", group: "tools", key: null, glyph: "g-sliders", badge: null,
+      id: "tabBehaviour", label: "Tab behaviour", short: "Tab behaviour", kind: "action", layer: null, section: "settings", group: "tools", key: null, glyph: "g-sliders", badge: null, paletteGroup: "Tabs",
       desc: "Preview tab, what an agent that needs you does, closing finished work, how many tabs stay open, pin suggestions",
       searchTerms: "tabs tab strip pin pinned preview close idle agent needs you recently closed", showIn: { palette: true },
       run: () => { if (S.running && ui.cfg && S.shown && !S.compact) openBehaviour(ui.cfg); else window.MefiConfig?.open?.({ category: "ui" }); },
@@ -97255,10 +97524,21 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     } finally { S.attaching = false; }
     S.stopWaiting?.();
     wire();
+    registerSearch();
     restore();
     updateShort();
     schedule();
     return true;
+  }
+  // Search (Ctrl K) lists New task with its key, as the prototype does; it runs what the list's own button runs, and goes with the panels.
+  function registerSearch() {
+    try {
+      window.MefiNav?.register?.({
+        id: "sessions-new-task", label: "New task", short: "New task", kind: "action", layer: null, section: "home", group: "layout", key: null, chord: "Ctrl N", keyMatch: () => false,
+        glyph: "g-add", badge: null, paletteGroup: "Actions", paletteBrowse: 1, desc: "Start a new task from the box on Home", searchTerms: "new task start create build add",
+        showIn: { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false }, hidden: () => !S.wired, run: () => newTask(),
+      });
+    } catch { /* Search is optional */ }
   }
   function detach() {
     S.stopWaiting?.();

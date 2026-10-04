@@ -1074,7 +1074,7 @@
     });
     nav.register({
       id: "inbox-open", label: "Open the Inbox", short: "Inbox", kind: "action", layer: null, section: "home", group: "surfaces", key: null, chord: "Ctrl J", glyph: "g-bell", badge: null,
-      desc: "What needs you, answered where you are",
+      paletteGroup: "Actions", paletteBrowse: 3, desc: "What needs you, answered where you are",
       searchTerms: "inbox needs you popover answer decide",
       showIn: showIn({ palette: true, help: true }), keyMatch: () => false,
       run: () => { openInbox(state.anchor); },
