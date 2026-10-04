@@ -40,7 +40,7 @@ function host({ packaged = true, flags = {}, files = {}, env = {}, jobs = [], ch
     STUDIO_ROOT: ROOT,
     path: path.win32,
     updateSafety,
-    app: { isPackaged: packaged, getVersion: () => "0.4.6", getPath: () => "C:\\Temp", releaseSingleInstanceLock: () => {}, exit: () => { calls.exited += 1; } },
+    app: { isPackaged: packaged, getVersion: () => "0.4.6", getPath: (name) => (name === "exe" ? `${INSTALL}\\Mefi Studio AI+.exe` : "C:\\Temp"), releaseSingleInstanceLock: () => {}, exit: () => { calls.exited += 1; } },
     process: { env: { LOCALAPPDATA: LOCAL, ComSpec: "cmd.exe", ...env }, platform: "win32", execPath: `${INSTALL}\\Mefi Studio AI+.exe`, pid: 4321 },
     mkdirSync: () => {},
     writeFileSync: (file, text) => calls.writes.push({ file, text }),

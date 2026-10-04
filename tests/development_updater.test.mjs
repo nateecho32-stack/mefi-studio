@@ -98,6 +98,8 @@ test("real nested development archive verifies both hashes, provenance and stage
   const version="0.4.5-dev.100.1", payload=path.join(root,"payload"), bundle=path.join(root,"bundle");
   await mkdir(path.join(payload,"resources","app","renderer"),{recursive:true}); await mkdir(bundle);
   await writeFile(path.join(payload,"Mefi Studio AI+.exe"),"fixture");
+  // A development build is an Electron build: its runtime sits beside the program.
+  await writeFile(path.join(payload,"icudtl.dat"),"fixture");
   for (const file of ["main.cjs","preload.cjs","renderer/booklet.html"]) await writeFile(path.join(payload,"resources","app",file),"fixture");
   await writeFile(path.join(payload,"resources","app","package.json"),JSON.stringify({name:"mefi-studio",productName:"Mefi's Studio AI+",main:"main.cjs",version}));
   const inner=path.join(bundle,releaseAssetName(version)); await zipDirectory(payload,inner,{rootName:"Mefi Studio AI+"});
@@ -106,8 +108,9 @@ test("real nested development archive verifies both hashes, provenance and stage
   const outer=path.join(root,"outer.zip"); await zipDirectory(bundle,outer,{rootName:""}); const sha256=await sha256File(outer);
   const latest={version,commit,runId:12,asset:{digest:`sha256:${sha256}`}};
   const zip=await unpackDevelopment({path:outer,sha256},latest,path.join(root,"unpacked"));
-  assert.equal((await stageUpdate({zipPath:zip,stagingDir:path.join(root,"staging"),installRoot:root,expectedVersion:version})).payloadRoot.endsWith(path.join("resources","app")),true);
-  await assert.rejects(stageUpdate({zipPath:zip,stagingDir:path.join(root,"wrong"),installRoot:root,expectedVersion:"9.0.0"}),/identity or version/);
+  // The payload folder stands in for the install: it holds resources/app/main.cjs.
+  assert.equal((await stageUpdate({zipPath:zip,stagingDir:path.join(root,"staging"),installRoot:payload,expectedVersion:version})).payloadRoot.endsWith(path.join("resources","app")),true);
+  await assert.rejects(stageUpdate({zipPath:zip,stagingDir:path.join(root,"wrong"),installRoot:payload,expectedVersion:"9.0.0"}),/identity or version/);
   await assert.rejects(unpackDevelopment({path:outer,sha256:"a".repeat(64)},latest,path.join(root,"bad")),/GitHub SHA/);
   await assert.rejects(unpackDevelopment({path:outer,sha256},{...latest,commit:"c".repeat(40)},path.join(root,"bad-provenance")),/provenance/);
   assert.ok((await readFile(zip)).length>0);

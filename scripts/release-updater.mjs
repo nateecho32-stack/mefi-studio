@@ -25,6 +25,57 @@ export const DEFAULT_ARCH = "x64";
 export const PORTABLE_NAME = "Mefi Studio AI+";
 export const USER_AGENT = "mefi-studio-release-updater";
 
+// ---- hosts -----------------------------------------------------------------
+// A portable build runs on one of two hosts (docs/rust-migration.md). Both
+// keep the same folder: "Mefi Studio AI+.exe" beside resources/app. The
+// Electron build carries Chromium's runtime files next to the program; the
+// Rust host build carries node.exe instead, which runs main.cjs as its engine.
+export const HOSTS = ["electron", "tauri"];
+export const DEFAULT_HOST = "electron";
+export const HOST_NODE = "node.exe";
+// What Electron puts beside its program (Electron 44, plus the ANGLE DLLs that
+// older installed builds still carry). An update to a host build removes these
+// from the install folder once the new build is copied in, so a Rust-host
+// install holds no Chromium runtime. A name the staged build ships itself is
+// never removed.
+export const ELECTRON_RUNTIME = [
+  "LICENSE",
+  "LICENSES.chromium.html",
+  "chrome_100_percent.pak",
+  "chrome_200_percent.pak",
+  "d3dcompiler_47.dll",
+  "dxcompiler.dll",
+  "dxil.dll",
+  "ffmpeg.dll",
+  "icudtl.dat",
+  "libEGL.dll",
+  "libGLESv2.dll",
+  "locales",
+  "resources.pak",
+  "resources/default_app.asar",
+  "snapshot_blob.bin",
+  "v8_context_snapshot.bin",
+  "version",
+  "vk_swiftshader.dll",
+  "vk_swiftshader_icd.json",
+  "vulkan-1.dll",
+];
+// Files only an Electron runtime has: one of them beside the program means
+// the folder is an Electron build.
+const ELECTRON_MARKERS = ["icudtl.dat", "resources.pak", "v8_context_snapshot.bin"];
+
+export function normalizeHost(value) {
+  const host = String(value ?? "").trim().toLowerCase();
+  return HOSTS.includes(host) ? host : null;
+}
+
+// Which host this engine runs under. main.cjs runs inside Electron, or under
+// plain Node as the Rust host's engine, which the host marks with
+// MEFI_STUDIO_HOST=tauri (main.cjs picks its Electron shim by the same value).
+export function runningHost(env = process.env, versions = process.versions) {
+  return !versions?.electron && env?.MEFI_STUDIO_HOST === "tauri" ? "tauri" : "electron";
+}
+
 // ---- versions --------------------------------------------------------------
 
 export function parseVersion(value) {
@@ -74,26 +125,37 @@ export function isNewer(remote, current) {
 
 // ---- release metadata ------------------------------------------------------
 
-export function releaseAssetName(version, { platform = DEFAULT_PLATFORM, arch = DEFAULT_ARCH } = {}) {
+// The Electron build keeps the name every installed copy already looks for;
+// a Rust-host build adds "-tauri", so one release can carry both and a copy
+// that predates the host builds never downloads one.
+export function releaseAssetName(version, { platform = DEFAULT_PLATFORM, arch = DEFAULT_ARCH, host = DEFAULT_HOST } = {}) {
   const clean = String(version ?? "").trim().replace(/^v/i, "").replace(/[^0-9A-Za-z.-]/g, "-");
-  return `${PORTABLE_NAME.replace(/\s+/g, "-")}-v${clean}-${platform}-${arch}.zip`;
+  const suffix = normalizeHost(host) === "tauri" ? "-tauri" : "";
+  return `${PORTABLE_NAME.replace(/\s+/g, "-")}-v${clean}-${platform}-${arch}${suffix}.zip`;
 }
 
-export function selectAsset(release, { platform = DEFAULT_PLATFORM, arch = DEFAULT_ARCH } = {}) {
+// A copy prefers a build for the host it runs on and takes the other when the
+// release carries only that one: that is how an Electron install moves to the
+// Rust host (and how a host install could return to an Electron release).
+export function selectAsset(release, { platform = DEFAULT_PLATFORM, arch = DEFAULT_ARCH, host = runningHost() } = {}) {
   const assets = (Array.isArray(release?.assets) ? release.assets : []).filter((asset) => typeof asset?.name === "string");
   const zips = assets.filter((asset) => /\.zip$/i.test(asset.name));
-  const wanted = releaseAssetName(release?.tag_name ?? release?.name ?? "", { platform, arch }).toLowerCase();
-  const asset = zips.find((candidate) => candidate.name.toLowerCase() === wanted) ?? null;
-  if (!asset) return { asset: null, checksum: null };
-  const checksum = assets.find((candidate) => candidate.name.toLowerCase() === `${asset.name.toLowerCase()}.sha256`) ?? null;
-  return { asset, checksum };
+  const own = normalizeHost(host) ?? DEFAULT_HOST;
+  for (const candidate of [own, ...HOSTS.filter((other) => other !== own)]) {
+    const wanted = releaseAssetName(release?.tag_name ?? release?.name ?? "", { platform, arch, host: candidate }).toLowerCase();
+    const asset = zips.find((zip) => zip.name.toLowerCase() === wanted);
+    if (!asset) continue;
+    const checksum = assets.find((sibling) => sibling.name.toLowerCase() === `${asset.name.toLowerCase()}.sha256`) ?? null;
+    return { asset, checksum, host: candidate };
+  }
+  return { asset: null, checksum: null };
 }
 
-export function describeRelease(release, { platform = DEFAULT_PLATFORM, arch = DEFAULT_ARCH } = {}) {
+export function describeRelease(release, { platform = DEFAULT_PLATFORM, arch = DEFAULT_ARCH, host = runningHost() } = {}) {
   if (!release || release.draft) return null;
   const parsed = parseVersion(release.tag_name) ?? parseVersion(release.name);
   if (!parsed) return null;
-  const { asset, checksum } = selectAsset(release, { platform, arch });
+  const { asset, checksum, host: assetHost } = selectAsset(release, { platform, arch, host });
   return {
     version: parsed.raw,
     tag: release.tag_name ?? `v${parsed.raw}`,
@@ -110,6 +172,7 @@ export function describeRelease(release, { platform = DEFAULT_PLATFORM, arch = D
           url: asset.url,
           browserDownloadUrl: asset.browser_download_url ?? null,
           digest: typeof asset.digest === "string" ? asset.digest : null,
+          host: assetHost ?? DEFAULT_HOST,
         }
       : null,
     checksum: checksum ? { id: checksum.id ?? null, name: checksum.name, size: Number(checksum.size) || 0, url: checksum.url } : null,
@@ -158,6 +221,7 @@ export async function checkForRelease({
   apiBase = "https://api.github.com",
   timeoutMs = 15000,
   allowStableReturn = false,
+  host = runningHost(),
 } = {}) {
   const checkedAt = Date.now();
   const current = parseVersion(currentVersion);
@@ -190,7 +254,7 @@ export async function checkForRelease({
     if (!response.ok) return { ok: false, error: `GitHub answered ${response.status}`, checkedAt };
     const json = await response.json();
     if (!json.published_at) return { ok: false, error: "stable updates require a published release", checkedAt };
-    const latest = describeRelease(json, { platform, arch });
+    const latest = describeRelease(json, { platform, arch, host });
     if (!latest) return { ok: false, error: "the latest release has no readable version", checkedAt };
     if (latest.prerelease || parseVersion(latest.version)?.pre) return { ok: false, error: "stable updates require a published stable release", checkedAt };
     if (!latest.asset) return { ok: false, error: `release ${latest.tag} has no ${platform} zip asset`, checkedAt };
@@ -541,9 +605,19 @@ async function isFile(file) {
   }
 }
 
+// Which host a portable folder carries: "electron" when Chromium's runtime sits
+// beside the program, "tauri" when node.exe does (and no Chromium runtime), or
+// null when it carries neither.
+export async function portableHost(root) {
+  for (const name of ELECTRON_MARKERS) if (await isFile(path.join(root, name))) return "electron";
+  if (await isFile(path.join(root, HOST_NODE))) return "tauri";
+  return null;
+}
+
 // Finds the portable folder inside an extracted release: the zip carries
-// "Mefi Studio AI+/resources/app/main.cjs" (plus the Electron runtime next to
-// it). Returns null when the archive has an unexpected layout.
+// "Mefi Studio AI+/resources/app/main.cjs" (plus the Electron runtime, or the
+// Rust host's node.exe, next to it). Returns null when the archive has an
+// unexpected layout.
 export async function payloadRoot(stagingDir) {
   const candidates = [stagingDir];
   for (const entry of await readdir(stagingDir, { withFileTypes: true })) {
@@ -565,18 +639,78 @@ export async function stageUpdate({ zipPath, stagingDir, installRoot, expectedVe
   if (!(await isFile(path.join(payload, "main.cjs"))) || !(await isFile(path.join(payload, "preload.cjs")))) {
     throw new Error("the release payload is missing main.cjs or preload.cjs");
   }
+  const host = await portableHost(sourceRoot);
   if (expectedVersion) {
     const pkg = JSON.parse(await readFile(path.join(payload, "package.json"), "utf8"));
     if (pkg.name !== "mefi-studio" || pkg.productName !== "Mefi's Studio AI+" || pkg.version !== expectedVersion || pkg.main !== "main.cjs") throw new Error("the staged build identity or version does not match GitHub");
     if (!(await isFile(path.join(sourceRoot, `${PORTABLE_NAME}.exe`))) || !(await isFile(path.join(payload, "renderer", "booklet.html")))) throw new Error("the staged build is missing its executable or renderer");
+    // A Rust-host build runs main.cjs on the node.exe it ships; one without
+    // either runtime would replace a working install with one that cannot start.
+    if (!host) throw new Error(`the staged build carries no runtime: neither Electron's files nor ${HOST_NODE} beside its executable`);
+    // The install folder comes from the running program's path. Under the Rust
+    // host that is node.exe's folder, which is the install only while node.exe
+    // sits beside the host program; never copy a build anywhere else.
+    if (!(await isFile(path.join(installRoot, "resources", "app", "main.cjs")))) throw new Error(`the install folder ${installRoot} does not hold Studio (resources/app/main.cjs), so the update was not staged`);
   }
-  return { sourceRoot, payloadRoot: payload, exePath: path.join(installRoot, `${PORTABLE_NAME}.exe`) };
+  return { sourceRoot, payloadRoot: payload, exePath: path.join(installRoot, `${PORTABLE_NAME}.exe`), host };
+}
+
+// What an update to a Rust-host build leaves behind of an Electron install:
+// the Chromium runtime names the install has and the staged build does not.
+// Empty for any other update, so an Electron build never loses a file.
+export async function runtimeLeftovers(sourceRoot, installRoot) {
+  if ((await portableHost(sourceRoot)) !== "tauri") return [];
+  const left = [];
+  for (const name of ELECTRON_RUNTIME) {
+    const installed = path.join(installRoot, ...name.split("/"));
+    if ((await stat(installed).then(() => true, () => false)) && !(await stat(path.join(sourceRoot, ...name.split("/"))).then(() => true, () => false))) left.push(name);
+  }
+  return left;
+}
+
+// The program an update or a rollback starts. Under the Rust host the engine's
+// process.execPath is node.exe, never the app: the host program beside it is.
+export function appExecutable(exePath, installRoot) {
+  const exe = String(exePath ?? "");
+  if (exe && path.win32.basename(exe).toLowerCase() !== HOST_NODE) return exe;
+  return path.win32.join(String(installRoot ?? ""), `${PORTABLE_NAME}.exe`);
 }
 
 // ---- apply helper ----------------------------------------------------------
 
 function psQuote(value) {
   return `'${String(value ?? "").replace(/'/g, "''")}'`;
+}
+
+// The variables that tie an engine to the Rust host that started it. The
+// helper inherits the old engine's environment; an Electron build started with
+// MEFI_STUDIO_HOST=tauri would load the host shim and stop at once, and a host
+// build sets its own. ELECTRON_RUN_AS_NODE would turn an Electron build into
+// plain Node. MEFI_STUDIO_ROOT would point a host build at other files and
+// make it an unpackaged run, which never reports healthy.
+const HOST_LINK_VARIABLES = ["MEFI_STUDIO_HOST", "MEFI_HOST_PIPE", "MEFI_HOST_TOKEN", "MEFI_HOST_INFO", "MEFI_STUDIO_ROOT", "ELECTRON_RUN_AS_NODE"];
+
+// Waiting for the pid main.cjs passes is not enough. Under Electron it is the
+// main process, while its helpers (and any ELECTRON_RUN_AS_NODE child) still
+// run from the program for a moment; under the Rust host it is node.exe, and
+// the host program leaves just after its engine. A program that is still
+// running cannot be replaced (robocopy fails on it), and a host started while
+// the old one holds the single-instance lock hands its launch to the old one
+// and exits. So the helper also waits, for at most a minute, for every
+// process started from the install's program or its node.exe.
+function exitLines() {
+  return [
+    `foreach ($name in @(${HOST_LINK_VARIABLES.map(psQuote).join(", ")})) { [Environment]::SetEnvironmentVariable($name, $null, 'Process') }`,
+    "Log 'waiting for Studio to exit'",
+    "try { Wait-Process -Id $pidToWait -Timeout 180 -ErrorAction Stop } catch {}",
+    `$engineExe = Join-Path $target ${psQuote(HOST_NODE)}`,
+    "function InstallProcs { $names = @([System.IO.Path]::GetFileNameWithoutExtension($exe), [System.IO.Path]::GetFileNameWithoutExtension($engineExe)); return @(Get-Process -Name $names -ErrorAction SilentlyContinue | Where-Object { $p = $null; try { $p = $_.Path } catch {}; $p -and (($p -ieq $exe) -or ($p -ieq $engineExe)) }) }",
+    "$until = (Get-Date).AddSeconds(60)",
+    "$left = InstallProcs",
+    "if ($left.Count) { Log ('waiting for ' + $left.Count + ' process(es) still running from the install folder') }",
+    "while ($left.Count -and ((Get-Date) -lt $until)) { Start-Sleep -Milliseconds 500; $left = InstallProcs }",
+    "Start-Sleep -Milliseconds 900",
+  ];
 }
 
 // The PowerShell helper runs detached. It waits for the host pid to disappear
@@ -591,22 +725,26 @@ function psQuote(value) {
 // scripts/update-safety.cjs). A build that exits or never reports is started
 // once more, and then the old build is restored. Without `safety` the script
 // is exactly the plain swap above.
-export function buildApplyScript({ sourceRoot, installRoot, exePath, pid, version = null, cleanupRoot = null, logPath = null, safety = null }) {
+//
+// `prune` names install entries to remove after the copy: the Chromium runtime
+// an Electron install no longer needs once a Rust-host build is copied over
+// it (runtimeLeftovers; writeApplyScript works it out). The saved copy still
+// holds them, so a rollback brings them back.
+export function buildApplyScript({ sourceRoot, installRoot, exePath, pid, version = null, cleanupRoot = null, logPath = null, safety = null, prune = [] }) {
   const cleanup = [
     cleanupRoot ? `Remove-Item -LiteralPath ${psQuote(cleanupRoot)} -Recurse -Force -ErrorAction SilentlyContinue` : "",
     "Remove-Item -LiteralPath $MyInvocation.MyCommand.Path -Force -ErrorAction SilentlyContinue",
   ];
+  const leftovers = (Array.isArray(prune) ? prune : []).map((name) => String(name ?? "").replace(/\//g, "\\")).filter((name) => name && !name.split("\\").includes(".."));
   const lines = [
     "$ErrorActionPreference = 'Continue'",
     `$source = ${psQuote(sourceRoot)}`,
     `$target = ${psQuote(installRoot)}`,
-    `$exe = ${psQuote(exePath)}`,
+    `$exe = ${psQuote(appExecutable(exePath, installRoot))}`,
     `$quiet = ${psQuote(logPath ?? "")}`,
     `$pidToWait = ${Number(pid) || 0}`,
     "function Log([string]$message) { if ($quiet) { Add-Content -LiteralPath $quiet -Value ((Get-Date -Format s) + ' ' + $message) } }",
-    "Log 'waiting for Studio to exit'",
-    "try { Wait-Process -Id $pidToWait -Timeout 180 -ErrorAction Stop } catch {}",
-    "Start-Sleep -Milliseconds 900",
+    ...exitLines(),
     ...(safety?.backupRoot ? safetyBackupLines(safety, version, cleanup) : []),
     "Log ('copying ' + $source + ' -> ' + $target)",
     `$skip = Join-Path $source 'resources\\app\\data'`,
@@ -619,6 +757,12 @@ export function buildApplyScript({ sourceRoot, installRoot, exePath, pid, versio
     `$catalogArgs = @(('"' + $skip + '"'), ('"' + (Join-Path $target 'resources\\app\\data') + '"'), 'curated.json', 'models.json', '/R:5', '/W:2', '/NFL', '/NDL', '/NJH', '/NJS', '/NP')`,
     `$catalog = Start-Process -FilePath (Join-Path $env:SystemRoot 'System32\\robocopy.exe') -ArgumentList $catalogArgs -Wait -PassThru -WindowStyle Hidden`,
     "Log ('catalog robocopy exit ' + $catalog.ExitCode)",
+    ...(leftovers.length
+      ? [
+          `Log 'removing the Electron runtime the new build does not use'`,
+          ...leftovers.map((name) => `Remove-Item -LiteralPath (Join-Path $target ${psQuote(name)}) -Recurse -Force -ErrorAction SilentlyContinue`),
+        ]
+      : []),
     "Start-Sleep -Milliseconds 600",
     ...(safety?.backupRoot && safety.watch
       ? safetyWatchLines(safety, version)
@@ -646,13 +790,11 @@ export function buildRollbackScript({ installRoot, exePath, pid, safety, restore
   const lines = [
     "$ErrorActionPreference = 'Continue'",
     `$target = ${psQuote(installRoot)}`,
-    `$exe = ${psQuote(exePath)}`,
+    `$exe = ${psQuote(appExecutable(exePath, installRoot))}`,
     `$quiet = ${psQuote(logPath ?? "")}`,
     `$pidToWait = ${Number(pid) || 0}`,
     "function Log([string]$message) { if ($quiet) { Add-Content -LiteralPath $quiet -Value ((Get-Date -Format s) + ' ' + $message) } }",
-    "Log 'waiting for Studio to exit'",
-    "try { Wait-Process -Id $pidToWait -Timeout 180 -ErrorAction Stop } catch {}",
-    "Start-Sleep -Milliseconds 900",
+    ...exitLines(),
     ...safetyPrelude({ ...safety, from: restoreVersion, to: replacedVersion }),
     "Log ('restoring ' + $backupInstall + ' -> ' + $target)",
     "$code = Robo @((Q $backupInstall), (Q $target), '/MIR', '/R:5', '/W:2', '/XD', (Q $dataDir), '/NFL', '/NDL', '/NJH', '/NJS', '/NP')",
@@ -786,8 +928,11 @@ export async function stagedBuildWritesHealth(payloadRoot, writesHealth) {
 // Written with a byte order mark: Windows PowerShell 5.1 reads a BOM-less
 // script as the ANSI code page, which turns a non-ASCII folder or user name in
 // the install path into a different folder.
+// The helper is written by the build being replaced, so this is where an
+// Electron install learns what a Rust-host build leaves behind of it.
 export async function writeApplyScript(file, options) {
-  await writeFile(file, `﻿${buildApplyScript(options)}`, "utf8");
+  const prune = options?.prune ?? (await runtimeLeftovers(options?.sourceRoot, options?.installRoot).catch(() => []));
+  await writeFile(file, `﻿${buildApplyScript({ ...options, prune })}`, "utf8");
   return file;
 }
 

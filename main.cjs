@@ -1360,7 +1360,7 @@ async function downloadReleaseBuild() {
     zipPath = await development.unpackDevelopment(downloaded, latest, path.join(root, "artifact"));
   }
   logLine(`[release] downloaded v${version} (${Math.round(downloaded.bytes / (1024 * 1024))} MB${expected ? ", verified" : ", unverified: the release publishes no checksum"})`);
-  const installRoot = path.dirname(process.execPath);
+  const installRoot = path.dirname(app.getPath("exe"));
   const prepared = await module.stageUpdate({ zipPath, stagingDir: path.join(root, "staging"), installRoot, expectedVersion: version });
   const scriptPath = path.join(root, "apply-update.ps1");
   const logPath = path.join(root, "apply-update.log");
@@ -1573,7 +1573,7 @@ async function releaseSafetyBoot() {
 async function releaseScanPrevious() {
   if (!updateSafety || !app.isPackaged || process.platform !== "win32") return;
   const module = await getReleaseUpdater();
-  const installRoot = path.dirname(process.execPath);
+  const installRoot = path.dirname(app.getPath("exe"));
   const folder = module.rollbackFolder(installRoot, process.env, updateSafety.installKey);
   let previous = null;
   if (folder) {
@@ -1601,7 +1601,7 @@ async function releaseRollback() {
   releaseApplyInFlight = true;
   try {
     const module = await getReleaseUpdater();
-    const installRoot = path.dirname(process.execPath);
+    const installRoot = path.dirname(app.getPath("exe"));
     const backupRoot = module.rollbackFolder(installRoot, process.env, updateSafety.installKey);
     if (!backupRoot || !existsSync(path.join(backupRoot, "install"))) throw new Error("the saved version is no longer on disk");
     const root = path.join(app.getPath("temp"), "mefi-studio-update", `rollback-${Date.now()}`);
@@ -1609,7 +1609,7 @@ async function releaseRollback() {
     const scriptPath = path.join(root, "rollback-update.ps1");
     await module.writeRollbackScript(scriptPath, {
       installRoot,
-      exePath: process.execPath,
+      exePath: app.getPath("exe"),
       pid: process.pid,
       restoreVersion: releasePrevious.from,
       replacedVersion: app.getVersion(),

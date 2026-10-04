@@ -5,6 +5,9 @@
 // compiler cannot open a path with an apostrophe ("Mefi's Studio AI+").
 //
 //   node scripts/rust-host.mjs build [--release]
+//   node scripts/rust-host.mjs release-build           the host program a portable build ships
+//                                                      (<target>/release/mefi-studio.exe, which
+//                                                      package-portable.mjs --host tauri takes)
 //   node scripts/rust-host.mjs test
 //   node scripts/rust-host.mjs run [-- studio flags]
 //   node scripts/rust-host.mjs core-build | core-test   the engine crate (crates/mefi-core)
@@ -27,6 +30,11 @@ export function targetDir(env = process.env) {
   return join(base, "MefiStudio", "rust-target");
 }
 
+/** The host program `release-build` writes, which a portable build ships. */
+export function hostBinary(env = process.env, profile = "release") {
+  return join(targetDir(env), profile, process.platform === "win32" ? "mefi-studio.exe" : "mefi-studio");
+}
+
 /** The mefi-core binary the parity tests run (MEFI_CORE_BIN overrides). */
 export function coreBinary(env = process.env) {
   if (env.MEFI_CORE_BIN) return env.MEFI_CORE_BIN;
@@ -47,6 +55,8 @@ function main(argv) {
   const release = own.includes("--release");
   const args = {
     build: ["build", ...(release ? ["--release"] : [])],
+    // custom-protocol: what the Tauri CLI turns on for a release (no dev-server code paths).
+    "release-build": ["build", "--release", "-p", "mefi-studio-host", "--features", "custom-protocol"],
     test: ["test", "--lib"],
     check: ["check"],
     run: ["run", ...(release ? ["--release"] : []), "--", ...passed],
@@ -54,7 +64,7 @@ function main(argv) {
     "core-test": ["test", "--lib"],
   }[command];
   if (!args) {
-    console.error(`usage: node scripts/rust-host.mjs build|test|check|run|core-build|core-test [--release] [-- studio flags]`);
+    console.error(`usage: node scripts/rust-host.mjs build|release-build|test|check|run|core-build|core-test [--release] [-- studio flags]`);
     return 2;
   }
   const env = {
