@@ -261,8 +261,8 @@ of the modules it reads and `MefiToday.onChange`.
 
 **Search (Ctrl K)** is the same palette as v1 (renderer/palette.js: the
 registry, the keys, Recent per project and "task …" / "idea …" on Enter),
-read as the prototype has it: over the whole window, centred under the bar,
-640 px; one line per result (its icon, its name, and on the right its state,
+read as the prototype has it: centred under the bar in the free area (like
+every layer; the prototype's scrim covers the whole window), 640 px; one line per result (its icon, its name, and on the right its state,
 its key or "page" in plain words) under a heading per group, at most twelve
 rows, and a footer that shows the keys. Over the empty box: Recent, the six
 sessions that matter (this project's tasks as the session list orders and

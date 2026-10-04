@@ -476,9 +476,9 @@ app.whenReady().then(async () => {
     step("the status bar at 1920x1080 and 600 px");
     // Search (Ctrl K), the prototype's palette: under the bar and centred, 640 px, the box with its magnifier, one heading per group,
     // twelve rows (the sessions as the list orders them, the places, an action), each a line with its state or key on the right.
-    const palette = `const sheet = document.querySelector('#palette-overlay .palette-sheet').getBoundingClientRect(); const bar = document.getElementById('shell-top').getBoundingClientRect(); const list = document.getElementById('palette-list').getBoundingClientRect();
+    const palette = `const sheet = document.querySelector('#palette-overlay .palette-sheet').getBoundingClientRect(); const bar = document.getElementById('shell-top').getBoundingClientRect(); const list = document.getElementById('palette-list').getBoundingClientRect(); const layer = document.getElementById('palette-overlay').getBoundingClientRect();
       const rows = [...document.querySelectorAll('#palette-list li.palette-row')].map((li) => ({ group: li.dataset.group, label: li.querySelector('.label').textContent, hint: li.querySelector('.hint')?.textContent || '', cut: li.scrollWidth > li.clientWidth + 1, inside: li.getBoundingClientRect().right <= sheet.right + 0.5 }));
-      return { sheet: [Math.round(sheet.left), Math.round(sheet.top), Math.round(sheet.right), Math.round(sheet.bottom), Math.round(sheet.width)], bar: Math.round(bar.bottom), inner: [innerWidth, innerHeight], rows,
+      return { sheet: [Math.round(sheet.left), Math.round(sheet.top), Math.round(sheet.right), Math.round(sheet.bottom), Math.round(sheet.width)], layer: [Math.round(layer.left), Math.round(layer.right)], bar: Math.round(bar.bottom), inner: [innerWidth, innerHeight], rows,
         heads: [...document.querySelectorAll('#palette-list li.palette-heading')].map((li) => li.textContent), list: [Math.round(list.top), Math.round(list.bottom)],
         hint: document.getElementById('palette-hint').textContent, close: getComputedStyle(document.getElementById('palette-close')).display, placeholder: document.getElementById('palette-input').placeholder,
         lens: Boolean(document.querySelector('#palette-overlay .palette-search-glyph')), focused: document.activeElement?.id || '' };`;
@@ -493,7 +493,7 @@ app.whenReady().then(async () => {
       ["Go to Home", "H"], ["Go to Work", "T"], ["Go to Agents", ""], ["Go to Friends", ""], ["Go to Settings", "Ctrl ,"], ["New task", "Ctrl N"],
     ], "the sessions as the list orders them, the rail's places with their keys, and New task");
     assert.equal(pal.sheet[4], 640, "640 px wide, as the prototype");
-    assert.ok(Math.abs((pal.sheet[0] + pal.sheet[2]) / 2 - pal.inner[0] / 2) <= 2, `centred in the window: ${JSON.stringify(pal.sheet)}`);
+    assert.ok(Math.abs((pal.sheet[0] + pal.sheet[2]) / 2 - (pal.layer[0] + pal.layer[1]) / 2) <= 2 && pal.sheet[0] >= pal.layer[0] && pal.sheet[2] <= pal.layer[1], `centred in the free area, which every layer keeps to: ${JSON.stringify(pal)}`);
     assert.ok(pal.sheet[1] >= pal.bar && pal.sheet[1] <= pal.bar + 40, `just under the top bar: ${JSON.stringify(pal)}`);
     assert.ok(pal.rows.every((row) => !row.cut && row.inside), "no row is cut off");
     assert.deepEqual([pal.close, pal.lens, pal.focused, pal.placeholder], ["none", true, "palette-input", "Search, or type “task …” or “idea …” to add one"]);
@@ -507,7 +507,7 @@ app.whenReady().then(async () => {
     await capture("chrome-palette-search-1920.png");
     await size(600, 560, 1);
     const small = await run(palette);
-    assert.ok(small.sheet[0] >= 0 && small.sheet[2] <= small.inner[0] && small.sheet[3] <= small.inner[1], `600 px: Search fits the window: ${JSON.stringify(small)}`);
+    assert.ok(small.sheet[0] >= small.layer[0] && small.sheet[2] <= small.layer[1] && small.sheet[3] <= small.inner[1], `600 px: Search fits its free area: ${JSON.stringify(small)}`);
     assert.ok(small.rows.every((row) => !row.cut && row.inside), "600 px: no row is cut off");
     await size(1920, 1080, 1);
     await press("Escape");
@@ -578,7 +578,6 @@ app.whenReady().then(async () => {
     finish();
     return;
   }
-  await chromeGallery();
 
   // ---- the list ---------------------------------------------------------------------------------------------------------------------------
   const groups = await run("return [...document.querySelectorAll('#sessions-list .sx-gh')].map((node) => [node.dataset.key, node.firstElementChild.textContent, node.querySelector('.sx-count').textContent]);");
@@ -592,6 +591,9 @@ app.whenReady().then(async () => {
   assert.equal(await textOf("#sessions-project .sx-proj-words small"), "main");
   assert.equal(await textOf("#sessions-tab-backlog"), "Backlog · 2");
   step("the list is grouped and worded");
+  // The chrome gallery runs here, after the list's words that count time (it takes a while: every theme, four times), and before
+  // anything changes the board.
+  await chromeGallery();
   // The head as the prototype has it: the Git chip (git-sync.js's, branch then state) and the worktrees chip, then the project menu.
   await until("document.querySelector('#sessions-gitrow .gs-chip') && !document.querySelector('#sessions-gitrow .gs-slot').hidden", "the Git chip sits under the project");
   assert.equal(await textOf("#sessions-gitrow .gs-chip-branch-name"), "main");

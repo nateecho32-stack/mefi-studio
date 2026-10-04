@@ -12307,12 +12307,13 @@ html[data-frame] .shell-menu-actions { display: flex; flex-wrap: wrap; gap: 8px;
 html[data-frame] .shell-action { height: 28px; padding: 0 10px; border-color: var(--hairline-strong); border-radius: 8px; color: var(--ivory); font-size: var(--frame-fs); }
 
 /* ---- Search (Ctrl K) in the frame: the prototype's palette (renderer/palette.js, "the 0.5 layout") ----
-   Over the whole window (its scrim dims the rail and the bars too), under the top bar and centred, 640 px wide: the box with its glass on a 52 px row, a heading where a
+   In the free area like every layer (the layout contract keeps the list, the inspector and the status bar clear; the
+   prototype's scrim covers the whole window), under the top bar and centred, 640 px wide: the box with its glass on a 52 px row, a heading where a
    group starts, one line per result (icon, name, and its state or key on the right in plain words), at
    most twelve rows, and a footer that shows the keys as keys. Its colours are the floating glass's
    (studio-ui.css); only the frame's tokens are used here. */
-html[data-frame] #palette-overlay { left: 0; right: 0; top: 0; bottom: 0; align-items: flex-start; justify-content: center; padding-top: calc(var(--shell-y0) - var(--shell-tabs-h) + 26px); }
-html[data-frame] #palette-overlay .palette-sheet { width: min(640px, calc(100vw - 40px)); border-radius: 16px; }
+html[data-frame] #palette-overlay { align-items: flex-start; justify-content: center; padding-top: calc(var(--shell-y0) - var(--shell-tabs-h) + 26px); }
+html[data-frame] #palette-overlay .palette-sheet { width: min(640px, calc(100vw - var(--shell-x0) - var(--shell-x1) - 32px)); border-radius: 16px; }
 html[data-frame] #palette-overlay .palette-search-row { height: 52px; gap: 10px; padding: 0 16px; border-bottom: 1px solid var(--hairline); }
 html[data-frame] #palette-overlay .palette-search-glyph { flex: none; width: 17px; height: 17px; color: var(--muted); }
 html[data-frame] #palette-overlay .palette-search-row input { min-height: 0; height: 100%; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; outline: none; color: var(--ivory); font-size: max(12px, calc(15px * var(--text-scale, 1))); }
