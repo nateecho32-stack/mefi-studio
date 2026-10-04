@@ -7,6 +7,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- The Publish dialog's "This drive cannot keep a Git project reliably" warning
+  and Set up this PC's exFAT/FAT drive checks work without administrator
+  rights. They asked `fsutil`, which Windows refuses to a normal user, so they
+  never showed; they now ask PowerShell, which takes about 0.2 s.
+
 - Your PCs can explicitly start a coordinator and pair check workers. Queued
   Studio checks use isolated exact-commit checkouts, retain restart journals,
   and hold uncertain assignments for owner recovery. Services stay off after

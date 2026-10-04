@@ -27,10 +27,23 @@ function signedInAccount(output) {
   return match ? match[1] : null;
 }
 
-// fsutil prints "File System Name : exFAT"; anything unreadable is unknown.
+// The command that names the file system of a Windows folder's drive, or null
+// for a folder without a drive letter. fsutil needs an administrator, so this
+// asks .NET's DriveInfo (GetVolumeInformationW) through PowerShell, about
+// 0.2 s; PowerShell locked to constrained language cannot make that type and
+// asks CIM instead. Only the drive letter goes into the script. A drive that
+// is not ready prints nothing.
+function filesystemQuery(folder) {
+  const letter = /^([A-Za-z]):/.exec(String(folder ?? ""))?.[1];
+  if (!letter) return null;
+  const script = `try { [IO.DriveInfo]::new('${letter}:').DriveFormat } catch { (Get-CimInstance Win32_LogicalDisk -Filter 'DeviceID=''${letter}:''').FileSystem }`;
+  return { command: "powershell.exe", args: ["-NoProfile", "-NonInteractive", "-Command", script], timeout: 10000 };
+}
+
+// The query prints the bare name ("NTFS", "exFAT"); anything else is unknown.
 function filesystemOf(output) {
-  const match = /File System Name\s*:\s*([A-Za-z0-9]+)/i.exec(String(output ?? ""));
-  return match ? match[1] : null;
+  const name = String(output ?? "").trim();
+  return /^[A-Za-z0-9]{1,32}$/.test(name) ? name : null;
 }
 
 // Only github.com remotes count, and never with credentials in them.
@@ -75,6 +88,11 @@ function createPcSetup({ execFile, spawn, platform = process.platform, env = () 
   const paths = platform === "win32" ? path.win32 : path.posix;
   const running = new Set();
   let listed = new Set();
+  // Null off Windows, for a folder without a drive letter, and when the drive does not answer.
+  async function filesystemAt(folder) {
+    const query = platform === "win32" ? filesystemQuery(folder) : null;
+    return query ? filesystemOf((await run(query.command, query.args, { timeout: query.timeout })).stdout) : null;
+  }
 
   async function status(root) {
     const tools = [];
@@ -94,10 +112,8 @@ function createPcSetup({ execFile, spawn, platform = process.platform, env = () 
       if (top.ok) project.github = githubRemote((await run("git", ["remote", "get-url", "origin"], { cwd: root })).stdout);
       project.needsInstall = exists(paths.join(root, "package.json")) && !exists(paths.join(root, "node_modules"));
       project.hook = /scripts\/sync\.mjs --hook/.test(String(await readText(paths.join(root, ".claude", "settings.json")) ?? ""));
-      if (platform === "win32" && /^[A-Za-z]:/.test(root)) {
-        project.filesystem = filesystemOf((await run("fsutil", ["fsinfo", "volumeinfo", `${root.slice(0, 2)}\\`])).stdout);
-        project.weakDrive = WEAK_FILESYSTEMS.has(String(project.filesystem ?? "").toUpperCase());
-      }
+      project.filesystem = await filesystemAt(root);
+      project.weakDrive = WEAK_FILESYSTEMS.has(String(project.filesystem ?? "").toUpperCase());
     }
     const steps = [
       ...tools.filter((tool) => !tool.installed).map((tool) => ({ id: `install-${tool.id}`, label: `Install ${tool.name}`, why: tool.id === "node" ? "Projects install their packages with it." : "Studio shares projects between your PCs through GitHub with it." })),
@@ -150,10 +166,8 @@ function createPcSetup({ execFile, spawn, platform = process.platform, env = () 
     if (typeof parent !== "string" || !paths.isAbsolute(parent)) return { ok: false, error: "Choose a folder for the project." };
     const target = paths.join(parent, repo.split("/")[1]);
     if (exists(target)) return { ok: false, error: `${target} already exists. Choose another folder.` };
-    if (platform === "win32" && /^[A-Za-z]:/.test(parent)) {
-      const filesystem = filesystemOf((await run("fsutil", ["fsinfo", "volumeinfo", `${parent.slice(0, 2)}\\`])).stdout);
-      if (WEAK_FILESYSTEMS.has(String(filesystem ?? "").toUpperCase())) return { ok: false, error: `That drive is ${filesystem}. Git cannot keep separate worktrees there; choose a folder on an NTFS drive.` };
-    }
+    const filesystem = await filesystemAt(parent);
+    if (WEAK_FILESYSTEMS.has(String(filesystem ?? "").toUpperCase())) return { ok: false, error: `That drive is ${filesystem}. Git cannot keep separate worktrees there; choose a folder on an NTFS drive.` };
     const answer = await run("gh", ["repo", "clone", repo, target, "--", "--quiet"], { timeout: 15 * 60 * 1000 });
     if (!answer.ok) return { ok: false, error: `Cloning ${repo} did not finish: ${String(answer.stderr).split(/\r?\n/).map((line) => line.trim()).filter(Boolean).pop() ?? "unknown error"}`.replace(/([a-z][a-z0-9+.-]*:\/\/)[^/@\s]+@/gi, "$1") };
     return { ok: true, folder: target };
@@ -162,4 +176,4 @@ function createPcSetup({ execFile, spawn, platform = process.platform, env = () 
   return { status, action, repos, clone, isListed: (repo) => listed.has(repo) };
 }
 
-module.exports = { TOOLS, signedInAccount, filesystemOf, githubRemote, setupScript, createPcSetup };
+module.exports = { TOOLS, signedInAccount, filesystemQuery, filesystemOf, githubRemote, setupScript, createPcSetup };

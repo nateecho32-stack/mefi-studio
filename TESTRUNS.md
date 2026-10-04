@@ -39,6 +39,25 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-03 Weak-drive check without administrator rights
+
+`fsutil fsinfo volumeinfo C:\` refuses a normal user on the owner's PC
+("Error 3", and "Error 5: Access is denied" for `C:`), so the Publish
+dialog's weak-drive warning and Set up this PC's exFAT/FAT checks could never
+show. Both now ask PowerShell for `[IO.DriveInfo]::new('C:').DriveFormat`,
+falling back to CIM `Win32_LogicalDisk` under constrained language mode, with
+the 10 s timeout kept. Timed from Node's execFile (4 runs each): DriveInfo
+194-315 ms, CIM 369-784 ms, Get-Volume 1139-1667 ms; the CIM fallback under
+constrained language 327-362 ms; a missing drive prints nothing (unknown).
+
+`npm run check`, `npm run lint` (no new warnings) and `npm run audit` pass.
+`tests/pc_setup.test.mjs` 8/8, including a live query of the system drive
+without elevation; `tests/git_actions.test.mjs` plus `tests/git_host.test.mjs`
+118/118; `npm run test:fast` 6745 pass, 0 fail, 14 skipped (365 s). Not run
+against a real exFAT drive (none on this PC). The Rust port on
+`wip/rust-host` (`drive_of`, `rules::filesystem_of`, parity cases) still
+runs fsutil and must follow.
+
 ## 2026-10-03 Paired restart boundary review follow-up
 
 All three Windows push/PR and Linux PR checks pass at first milestone commit
@@ -199,16 +218,6 @@ Expanded affected suites: 92 tests passed, zero failures/skips across task_overv
 The Chromium fixture is prepared for desktop and 600x560 captures of current, changed, missing and foreign links, with text size, horizontal bounds, no overflow, original-brief and navigation-availability assertions. Visual, full aggregate and disposable-profile runtime checks remain pending coordinated server release; no heavy launch was made while game native tests owned the window.
 
 Dependency evidence: frozen Health candidate passed build/check/audit, full npm test (6,661 Node passes, zero failures, 16 skips; 248 Python tests OK with one skip; six path-lock checks), 25 Fleet size/view checks and waited real Fleet 10/10 steps. Its 1,012 source hashes remained unchanged and all test processes drained. Platform limitations remain native Close through synthetic Ctrl+W unverified and occlusion capability unavailable. That prior aggregate does not validate this new renderer change.
-
-## 2026-10-02 - Maxwells-PC advisory handoff progress focused verification
-
-Source/provenance: local/fleet-handoff-health-20261002 in the separate mefi-studio-health checkout, based on b3a4f468348a4485112c6741026b565f106e9821 plus the aggregate-verified recap candidate. The frozen recap source, original checkout and prior UI/loop candidate remain untouched. No commit, push, merge or release.
-
-Change: an informational Fleet Health note for at least three distinct handed-off tasks from one builder seat in the last 24 hours without later recorded verification. It counts task identity rather than event volume, clears verified and human-confirmed child evidence, ignores future or expired events, remains project scoped and opens the source seat through the existing Look action. It describes retained evidence and explicitly says waiting for verification can be normal; no attention-count increase, automatic pause or dispatch change.
-
-Focused validation: 30 Node tests passed, zero failures/skips across fleet and fleet_host. Tests use real board/status/report observations and cover duplicate/title-changed events, pending completion reports, verification and human confirmation, persistence, renewed handoffs, expiry, future events, read-only history and cross-project isolation. The extended Chromium fixture is prepared for desktop/narrow note and inspector screenshots, but was not launched while the game held the shared server window. Required full aggregate and real Fleet verification remain pending coordination; no aggregate validation is claimed for this new batch.
-
-Dependency evidence: the unchanged recap candidate passed build, check, audit and full npm test (6,656 Node passes, zero failures, 16 skips; 248 Python tests OK with one skip; six normalized-path lock checks). All 1,012 tracked files matched the source freeze after the gate. Its synchronous disposable-profile real Fleet check passed all ten steps. The PowerShell GUI launch's initial zero-second entry was replaced with the actual waited child exit and report. Platform limitations: synthetic Ctrl+W did not exercise native Close; Electron occlusion events were unavailable. That evidence belongs to the prior recap candidate, not this new Health change.
 
 ## Read Before Any Tests
 
