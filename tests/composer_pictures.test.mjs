@@ -87,6 +87,10 @@ test("what the note says follows what the chat model can do: sees, cannot see, a
   const task = box({ mode: () => "task", bridge: { assistantImage: async (payload) => (payload.probe ? { ok: true } : { ok: true, id: "img_" + "b".repeat(24), name: payload.name, mime: payload.mime, bytes: 10, thumb: null, vision }) } });
   await task.choose(file());
   assert.match(task.note(), /^Saved with the project\. The task's brief names the file so a builder can open it\./, "a task does not ask the chat model anything");
+  // A box whose words carry no picture (the 0.5 session box as a Note) says the pictures wait for an Ask or a Change.
+  const words = box({ mode: () => "words", bridge: { assistantImage: async (payload) => (payload.probe ? { ok: true } : { ok: true, id: "img_" + "c".repeat(24), name: payload.name, mime: payload.mime, bytes: 10, thumb: null, vision }) } });
+  await words.choose(file());
+  assert.equal(words.note(), "A note is words only: these pictures wait here and go with an Ask or a Change.");
 });
 
 test("a picture pasted with no text in the clipboard is attached; text pasted with a picture, and plain text, are left to the box", async () => {

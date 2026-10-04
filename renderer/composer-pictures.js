@@ -65,6 +65,8 @@
       if (state.message) return state.message;
       if (!state.images.length) return "";
       if (options.mode?.() === "task") return "Saved with the project. The task's brief names the file so a builder can open it.";
+      // A box whose words carry no picture (the 0.5 session box as a Note) keeps them for its next Ask or Change.
+      if (options.mode?.() === "words") return "A note is words only: these pictures wait here and go with an Ask or a Change.";
       const vision = state.vision;
       if (vision?.sees === true) return `Sent to ${vision.model || "this model"}, which can read images. A picture is not redacted the way text is, so check it first.`;
       if (vision?.sees === false) return `${vision.model ? `${vision.model} can't` : "This model can't"} see images. The picture is saved with your message, and the reply will say so.`;

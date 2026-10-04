@@ -24,17 +24,18 @@ const counts = (files, more = {}) => ({ files, additions: 10, deletions: 2, runn
 const cards = (a, name) => pane(a, name).querySelectorAll(".sx-icard");
 const card = (a, name, title) => cards(a, name).find((node) => node.querySelector("h4").ownText === title);
 
-test("with no session open the inspector says so and draws no tabs; with one it has the five tabs, one stop in the tab order and each tab names its panel", async () => {
+test("with no session open the inspector is the project's and draws no session tabs; with one it has the six tabs, one stop in the tab order and each tab names its panel", async () => {
   const a = await sessionsApp({ tasks: [task("t1")] });
   await a.settle();
   assert.equal(a.one("inspector", "#sessions-itabs").hidden, true);
-  assert.match(a.text("inspector", ".sx-insp-empty"), /Nothing selected/);
-  assert.equal(a.inspector().dataset.empty, "true");
+  assert.equal(a.one("inspector", "#sessions-project-insp").hidden, false, "Home with no session: the project's inspector");
+  assert.equal(a.inspector().dataset.empty, "false");
   assert.equal(a.reviews.live().length, 0, "nothing is mounted, so nothing is read");
   a.S.select("t1", { route: false }); await a.settle(4);
   assert.equal(a.one("inspector", "#sessions-itabs").hidden, false); assert.equal(a.one("inspector", ".sx-insp-empty").hidden, true);
-  assert.deepEqual(tabs(a).map((node) => node.dataset.tab), ["plan", "changes", "checks", "preview", "agent"]);
-  assert.deepEqual(texts(tabs(a).map((node) => node.querySelector(".sx-itab-l"))), ["Plan", "Changes", "Checks", "Preview", "Agent"]);
+  assert.equal(a.one("inspector", "#sessions-project-insp").hidden, true);
+  assert.deepEqual(tabs(a).map((node) => node.dataset.tab), ["plan", "changes", "checks", "preview", "agent", "wt"]);
+  assert.deepEqual(texts(tabs(a).map((node) => node.querySelector(".sx-itab-l"))), ["Plan", "Changes", "Checks", "Preview", "Agent", "Worktree"]);
   assert.ok(tabs(a).every((node) => node.getAttribute("role") === "tab" && node.getAttribute("aria-controls") === `sessions-pane-${node.dataset.tab}`));
   assert.equal(a.one("inspector", "#sessions-itabs").getAttribute("role"), "tablist");
   assert.equal(tabs(a).filter((node) => node.tabIndex === 0).length, 1, "the tabs are one stop: the arrows move between them");
@@ -93,10 +94,10 @@ test("the arrow keys, Home and End move between the tabs and take the focus with
   await press(tabs(a)[0], "ArrowRight");
   assert.equal(a.S.tab(), "changes"); assert.equal(tabs(a)[1].focused, true, "focus goes with it");
   await press(tabs(a)[1], "ArrowLeft"); assert.equal(a.S.tab(), "plan");
-  await press(tabs(a)[0], "ArrowLeft"); assert.equal(a.S.tab(), "agent", "it wraps round");
-  await press(tabs(a)[4], "ArrowRight"); assert.equal(a.S.tab(), "plan");
-  await press(tabs(a)[0], "End"); assert.equal(a.S.tab(), "agent");
-  await press(tabs(a)[4], "Home"); assert.equal(a.S.tab(), "plan");
+  await press(tabs(a)[0], "ArrowLeft"); assert.equal(a.S.tab(), "wt", "it wraps round");
+  await press(tabs(a)[5], "ArrowRight"); assert.equal(a.S.tab(), "plan");
+  await press(tabs(a)[0], "End"); assert.equal(a.S.tab(), "wt");
+  await press(tabs(a)[5], "Home"); assert.equal(a.S.tab(), "plan");
   await press(tabs(a)[0], "a"); assert.equal(a.S.tab(), "plan", "other keys are left alone");
 });
 
@@ -159,26 +160,126 @@ test("Plan says where the task stands, what it was asked, what it is done when a
   const prompt = "Make the list friendly.\n\nGoal:\nAn empty list says what to do next.\n\nDone when:\n- The list says No notes yet\n- Tests pass\n\nKeep unchanged:\nThe toolbar.";
   const a = await open("t1", { tasks: [task("t1", { prompt, status: "awaiting_verification", acceptance: ["The list says No notes yet", "Tests pass", "It looks right"] })], stages: { t1: "review" } });
   const titles = cards(a, "plan").map((node) => node.querySelector("h4").ownText);
-  assert.deepEqual(titles, ["Where it stands", "Brief", "Done when", "Versions"]);
+  assert.deepEqual(titles, ["Steps", "Brief", "Acceptance checks", "Versions"], "the prototype's Plan: steps, the brief, the acceptance checks");
   assert.equal(cards(a, "plan")[0].querySelector("h4 .r").textContent, "Checking the result", "what the reading says, beside the title");
-  const stands = card(a, "plan", "Where it stands");
-  assert.match(stands.textContent, /Ready for a worker/); assert.match(stands.textContent, /Next: Start this task when you are ready\./); assert.match(stands.textContent, /Checks\s*No completion checks recorded/);
+  const stands = card(a, "plan", "Steps");
+  assert.match(stands.textContent, /No steps yet\. A run's own steps show here while it works\./, "nothing is made up when a run has listed none");
+  assert.match(stands.textContent, /Ready for a worker/); assert.match(stands.textContent, /Next: Start this task when you are ready\./);
   const brief = card(a, "plan", "Brief");
   assert.match(brief.querySelector(".sx-text").textContent, /Make the list friendly\./, "what was said before the outline");
   assert.deepEqual(texts(brief.querySelectorAll(".sx-mini-h")), ["Goal", "Keep unchanged"], "the outline's parts, with their own headings");
   assert.match(brief.textContent, /An empty list says what to do next\./); assert.match(brief.textContent, /The toolbar\./);
   assert.doesNotMatch(brief.textContent, /Done when/, "the done-when lines have a card of their own");
-  assert.deepEqual(texts(card(a, "plan", "Done when").querySelectorAll("li")), ["The list says No notes yet", "Tests pass", "It looks right"], "the task's own acceptance lines win");
+  const checks = card(a, "plan", "Acceptance checks");
+  assert.deepEqual(texts(checks.querySelectorAll(".sx-step-label")), ["The list says No notes yet", "Tests pass", "It looks right"], "the task's own acceptance lines win");
+  assert.deepEqual(texts(checks.querySelectorAll(".sx-step-at")), ["checking", "checking", "checking"], "being checked: each line says so");
+  assert.equal(checks.querySelector("h4 .r").textContent, "0 of 3");
+  assert.match(checks.textContent, /Checks\s*No completion checks recorded/, "what the board says of its checks");
   // The outline's own lines stand in when the task has none.
   const b = await open("t1", { tasks: [task("t1", { prompt })] });
-  assert.deepEqual(texts(card(b, "plan", "Done when").querySelectorAll("li")), ["The list says No notes yet", "Tests pass"]);
+  assert.deepEqual(texts(card(b, "plan", "Acceptance checks").querySelectorAll(".sx-step-label")), ["The list says No notes yet", "Tests pass"]);
+  assert.deepEqual(texts(card(b, "plan", "Acceptance checks").querySelectorAll(".sx-step-at")), ["not checked yet", "not checked yet"]);
   // A brief that is just words is shown as they are; a blocker is said.
   const c = await open("t1", { tasks: [task("t1", { prompt: "Just fix it." })], stages: { t1: { stage: "blocked", blocker: "Waiting for the owner." } } });
   assert.equal(card(c, "plan", "Brief").querySelector(".sx-text").textContent, "Just fix it.");
-  assert.equal(card(c, "plan", "Done when"), undefined, "no lines, no card");
-  assert.match(card(c, "plan", "Where it stands").textContent, /Waiting for the owner\./, "what is in the way is said, in the warning's tone");
-  assert.ok(card(c, "plan", "Where it stands").querySelector(".sx-fine.warn"));
-  assert.equal(card(a, "plan", "Where it stands").querySelector(".sx-fine.warn"), null, "and only when something is");
+  assert.equal(card(c, "plan", "Acceptance checks").querySelectorAll(".sx-step").length, 0, "no lines, no rows");
+  assert.match(card(c, "plan", "Steps").textContent, /Waiting for the owner\./, "what is in the way is said, in the warning's tone");
+  assert.ok(card(c, "plan", "Steps").querySelector(".sx-fine.warn"));
+  assert.equal(card(a, "plan", "Steps").querySelector(".sx-fine.warn"), null, "and only when something is");
+});
+
+test("Plan's Steps are the run's own todo list from its checkpoint, and its acceptance checks follow the task's verdict", async () => {
+  const todos = [{ content: "Read the brief", status: "completed" }, { content: "Write the empty state", status: "in_progress" }, { content: "Run the checks", status: "pending" }, { content: "Old idea", status: "cancelled" }];
+  const a = await open("t1", { tasks: [task("t1", { status: "active", runId: "r", acceptance: ["Says No notes yet"], runProgress: { runId: "r", todos } })], running: [{ taskId: "t1", runId: "r" }], stages: { t1: "running" } });
+  const steps = card(a, "plan", "Steps");
+  assert.deepEqual(texts(steps.querySelectorAll(".sx-step-label")), ["Read the brief", "Write the empty state", "Run the checks", "Old idea"]);
+  assert.deepEqual(steps.querySelectorAll(".sx-step").map((node) => node.className), ["sx-step ok", "sx-step go", "sx-step no", "sx-step skip"]);
+  assert.deepEqual(texts(steps.querySelectorAll(".sx-step-at")), ["done", "now", "", "dropped"]);
+  assert.equal(steps.querySelector("h4 .r").textContent, "1 of 4 · Working");
+  // Verified, the lines are met; failed, not accepted; confirmed by you, confirmed.
+  for (const [verification, word, mark] of [[{ state: "verified" }, "met", "sx-step ok"], [{ state: "failed", reason: "no" }, "not accepted", "sx-step bad"], [{ state: "manual" }, "confirmed", "sx-step ok"]]) {
+    const b = await open("t1", { tasks: [task("t1", { acceptance: ["One file per note"], verification })] });
+    const row = card(b, "plan", "Acceptance checks").querySelector(".sx-step");
+    assert.equal(row.className, mark, word); assert.equal(row.querySelector(".sx-step-at").textContent, word);
+  }
+  const running = await open("t1", { tasks: [task("t1", { status: "active", runId: "r" })], running: [{ taskId: "t1", runId: "r" }], stages: { t1: "running" } });
+  assert.match(card(running, "plan", "Steps").textContent, /Its worker has not listed its steps yet/);
+});
+
+test("the Worktree tab: a run in its own checkout says where, how far ahead, what is uncommitted and pushed in Work › Worktrees' own words; one in the folder says so", async () => {
+  const row = { kind: "run", name: "run_r1", path: "/work/snake/.mefi/worktrees/run_r1", branch: "mefi/tags", state: "unpushed", ahead: 2, dirty: 1, pushed: false, task: { taskId: "t1" } };
+  const worktrees = { state: () => ({ list: { repo: true, rows: [{ kind: "primary", path: "/work/snake", branch: "main", state: "primary" }, row], headline: "2 worktrees." } }), summary: () => ({ repo: true, tasks: ["t1"] }), peek: () => Promise.resolve(), describe: (one) => (one === row ? { label: "Only on this PC", tone: "warn", advice: "2 commits that exist only on this PC.", main: "main", upstream: "origin/main" } : null) };
+  const a = await open("t1", { tasks: [task("t1", { status: "active", runId: "r1" }), task("t2")], running: [{ taskId: "t1", runId: "r1", route: "Claude Code" }], worktrees });
+  await tabs(a)[5].click(); await a.settle(3);
+  const box = card(a, "wt", "Worktree");
+  assert.equal(box.querySelector("h4 .r").textContent, "Only on this PC"); assert.equal(box.dataset.tone, "warn");
+  const values = Object.fromEntries(box.querySelectorAll(".sx-kv").map((node) => [node.children[0].textContent, node.children[1].textContent]));
+  assert.deepEqual(values, { Folder: "run_r1", Branch: "mefi/tags", "Ahead of origin/main": "2 commits", "Not committed": "1 file", "On GitHub": "No" });
+  assert.match(box.textContent, /2 commits that exist only on this PC\./);
+  const [review, all] = box.querySelectorAll("button");
+  await all.click(); assert.deepEqual(clean(a.calls.go.at(-1)), ["worktrees"]);
+  await review.click(); await a.settle(); assert.equal(a.S.tab(), "changes", "Review changes is the Changes tab");
+  // A task that runs in the project's folder.
+  a.S.select("t2", { route: false }); await a.settle(4);
+  a.S.setTab("wt"); await a.settle(3);
+  const plain = card(a, "wt", "Worktree");
+  assert.match(plain.textContent, /works in the project's own folder, on main\./);
+  assert.match(plain.textContent, /New runs\s*In the project's folder/);
+  assert.match(plain.textContent, /The Worktree switch beside the box decides/, "the switch has one home: the box");
+  assert.equal(plain.querySelectorAll("[role=switch]").length, 0);
+});
+
+test("tabs the column has no room for wait behind More, which lists them and opens the one picked; the one on screen is never put away", async () => {
+  const a = await open("t1", { tasks: [task("t1")] });
+  const row = a.one("inspector", "#sessions-itabs");
+  const more = a.one("inspector", "#sessions-itab-more");
+  assert.equal(more.hidden, true, "a row that fits has no More");
+  // The fake page has no layout: the row says it is two tabs too wide until two are put away.
+  let room = 4, width = 360;
+  Object.defineProperty(row, "clientWidth", { get: () => width, configurable: true });
+  Object.defineProperty(row, "scrollWidth", { get: () => width + Math.max(0, tabs(a).filter((node) => !node.hidden).length - room) * 60, configurable: true });
+  a.env.emit("resize"); a.env.emit("mefi:shell-layout"); await a.settle(3);
+  assert.deepEqual(tabs(a).filter((node) => node.hidden).map((node) => node.dataset.tab), ["agent", "wt"], "the last ones go first");
+  assert.equal(more.hidden, false); assert.equal(more.getAttribute("aria-label"), "More tabs: Agent, Worktree");
+  await more.click(); await a.settle();
+  const menu = a.one("inspector", "#sessions-itab-menu");
+  assert.equal(menu.hidden, false); assert.equal(more.getAttribute("aria-expanded"), "true");
+  assert.deepEqual(texts(menu.querySelectorAll("[role=menuitem]")), ["Agent", "Worktree"]);
+  await menu.querySelectorAll("[role=menuitem]")[1].click(); await a.settle(3);
+  assert.equal(a.S.tab(), "wt"); assert.equal(menu.hidden, true);
+  assert.equal(tabs(a).find((node) => node.dataset.tab === "wt").hidden, false, "the tab on screen comes onto the row");
+  assert.deepEqual(tabs(a).filter((node) => node.hidden).map((node) => node.dataset.tab), ["preview", "agent"]);
+  room = 6; width = 520; a.env.emit("resize"); a.env.emit("mefi:shell-layout"); await a.settle(3);
+  assert.equal(more.hidden, true, "a wider column: every tab is back");
+});
+
+test("Home with no session open: the project's inspector says the repository, the team and the latest moves, from what the page holds, and Team and Usage are a press away", async () => {
+  const worktrees = { state: () => ({ list: { repo: true, rows: [{ kind: "primary", state: "primary" }, { kind: "run", state: "merged", branch: "mefi/x" }], headline: "2 worktrees." } }), summary: () => ({ repo: true, tasks: [] }), peek: () => Promise.resolve() };
+  const questions = [{ id: "q1", status: "open", title: "Reuse it?", context: { taskId: "asking" }, options: [] }];
+  const a = await sessionsApp({ tasks: [task("asking", { status: "active", runId: "r1", updatedAt: mins(4), title: "Add the empty state" }), task("working", { status: "active", runId: "r2", updatedAt: mins(1), title: "Search by tag" }), task("old", { status: "done", doneAt: at(2), updatedAt: at(2), verification: { state: "verified" } })], running: [{ taskId: "asking", runId: "r1", route: "OpenCode" }, { taskId: "working", runId: "r2", route: "Claude Code" }], questions, worktrees, stages: { asking: "running", working: "running" } });
+  a.window.MefiGitSync = { model: () => ({ label: "3 changes", repo: "owner/snake" }) };
+  a.env.emit("mefi:workspace-state"); await a.settle(4);
+  const project = a.one("inspector", "#sessions-project-insp");
+  assert.equal(project.hidden, false);
+  const named = (title) => project.querySelectorAll(".sx-icard").find((node) => node.querySelector("h4").ownText === title);
+  const values = (node) => Object.fromEntries(node.querySelectorAll(".sx-kv").map((row) => [row.children[0].textContent, row.children[1].textContent]));
+  assert.deepEqual(values(named("Repository")), { Branch: "main", Uncommitted: "2 files", GitHub: "3 changes", Worktrees: "1" });
+  await named("Repository").querySelector(".sx-link").click(); assert.deepEqual(clean(a.calls.go.at(-1)), ["worktrees"]);
+  assert.equal(named("Team").querySelector("h4 .r").textContent, "2 of 3 busy");
+  assert.deepEqual(values(named("Team")), { "OpenCode · Add the empty state": "waiting on you", "Claude Code · Search by tag": "working" });
+  assert.match(named("Team").textContent, /1 worker free for the next task\./);
+  assert.equal(a.api.of("taskMetrics").length + a.api.of("tasksHistory").length, 0, "nothing of a session's is read for it");
+  const feed = named("Live activity").querySelectorAll(".sx-feedrow");
+  assert.deepEqual(feed.map((node) => node.querySelector("b").textContent), ["Search by tag", "Add the empty state", "Task old"], "newest move first");
+  await feed[0].click(); await a.settle(3);
+  assert.equal(a.S.selected(), "working", "a row opens its session");
+  a.navigate("workspace", {}); await a.settle(4);
+  const buttons = a.one("inspector", ".sx-ptabs").querySelectorAll("button");
+  await buttons[0].click(); assert.deepEqual(clean(a.calls.go.at(-1)), ["agents", { section: "overview" }]);
+  await buttons[1].click(); assert.deepEqual(clean(a.calls.go.at(-1)), ["usage"]);
+  // Another page is not a session: the inspector is hidden there, for the frame to fold away.
+  a.navigate("tasks", {}); await a.settle();
+  assert.equal(a.mounts.find((entry) => entry.region === "inspector").shown, false);
 });
 
 test("the outline reads back the way Home writes it: Goal, Done when, Keep unchanged, in any case, with bullets or without", async () => {

@@ -57,7 +57,7 @@ html[data-frame] .shell-region kbd {
   font: 600 var(--frame-fs-s)/1.5 var(--font-ui); white-space: nowrap;
 }
 
-/* ---- the top bar: where the local navigation's row is ---- */
+/* ---- the top bar: the local navigation's row, with a breadcrumb in its middle ---- */
 html[data-frame] .shell-top {
   position: fixed; top: 0; left: var(--frame-x0); right: 0; height: var(--frame-top-h); z-index: calc(var(--z-shell) - 1);
   display: flex; align-items: center; gap: 8px; padding: 0 12px 0 10px;
@@ -65,10 +65,9 @@ html[data-frame] .shell-top {
   container: shell-top / inline-size;
 }
 html[data-frame][data-ui-mode="vibe"] .shell-top { background: var(--studio-menu-fill, var(--bg)); backdrop-filter: var(--studio-menu-blur, none); border-bottom-color: color-mix(in srgb, var(--ivory) 7%, transparent); }
-/* The local navigation keeps its own row, squeezed between the bar's two ends (shell.js measures them). */
-html[data-frame][data-shell="rail"] #app-local-nav { left: calc(var(--shell-x0) + var(--frame-top-l, 0px)); right: var(--frame-top-r, 0px); padding-inline: 8px; border-bottom: 0; background: transparent; backdrop-filter: none; }
-/* In a band too narrow to share, the bar keeps its own controls and the trail; the pages stay in the rail and Search. */
-html[data-frame][data-frame-narrow][data-shell="rail"] #app-local-nav { display: none; }
+/* The classic local navigation is not drawn in the frame: its pages are the list column's page list, Back and Forward
+   go with them, and the bar's middle is the breadcrumb. */
+html[data-frame][data-shell="rail"] #app-local-nav { display: none !important; }
 html[data-frame] .shell-top-left, html[data-frame] .shell-top-right, html[data-frame] .shell-top-extra { display: flex; align-items: center; gap: 8px; flex: none; min-width: 0; }
 html[data-frame] .shell-top-extra:empty { display: none; }
 html[data-frame] .shell-top-right { margin-left: auto; }
@@ -85,10 +84,12 @@ html[data-frame] .shell-mode .shell-mode-choice .glyph { width: 14px; height: 14
 
 html[data-frame] .shell-trail { flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 6px; overflow: hidden; white-space: nowrap; padding-left: 4px; font-size: var(--frame-fs); color: var(--dim); }
 html[data-frame] .shell-trail:empty { display: none; }
-html[data-frame] .shell-top[data-local="on"] .shell-trail { display: none; }
-html[data-frame] .shell-crumb { min-width: 0; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; }
+html[data-frame] .shell-crumb { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; }
 html[data-frame] .shell-crumb:not(.is-current) { flex-shrink: 4; }
 html[data-frame] .shell-crumb.is-current { color: var(--ivory); font-weight: 600; }
+html[data-frame] .shell-crumb-link { display: block; height: auto; padding: 2px 4px; text-align: left; color: var(--muted); }
+html[data-frame] .shell-crumb-link.is-current { color: var(--ivory); }
+html[data-frame] .shell-crumb-link:hover { text-decoration: underline; text-underline-offset: 2px; }
 html[data-frame] .shell-sep { flex: none; color: var(--dim); opacity: .7; }
 
 html[data-frame] .shell-search {
@@ -124,14 +125,6 @@ html[data-frame] .shell-need[data-tone="clear"] .shell-pill-n, html[data-frame] 
 
 /* The queries below repeat the html[data-frame] prefix: a container query adds no specificity, so a bare
    class would lose to the base rules above. */
-/* the local navigation shares the row: the bar's own controls shrink to icons and counts first */
-@container shell-top (max-width: 1300px) {
-  html[data-frame] .shell-top[data-local="on"] .shell-search { flex: 0 0 32px; width: 32px; min-width: 32px; padding: 0; justify-content: center; }
-  html[data-frame] .shell-top[data-local="on"] .shell-search-long, html[data-frame] .shell-top[data-local="on"] .shell-search-short, html[data-frame] .shell-top[data-local="on"] .shell-search kbd { display: none; }
-  html[data-frame] .shell-top[data-local="on"] .shell-pill .shell-pill-l { display: none; }
-  html[data-frame] .shell-top[data-local="on"] .shell-pill { padding: 0 10px; }
-  html[data-frame] .shell-top[data-local="on"] .shell-svc { padding-right: 4px; }
-}
 /* a narrow bar gives up its words before its controls */
 @container shell-top (max-width: 780px) {
   html[data-frame] .shell-search { flex: 0 1 auto; width: auto; min-width: 0; }
@@ -175,6 +168,28 @@ html[data-frame] .shell-top-extra .shell-panel, html[data-frame] .shell-status-e
 html[data-frame] .shell-empty { display: none; flex-direction: column; gap: 4px; padding: 26px 18px; text-align: center; color: var(--dim); font-size: var(--frame-fs); }
 html[data-frame] .shell-empty b { color: var(--muted); font-weight: 600; }
 html[data-frame] .shell-column[data-empty="true"] .shell-empty { display: flex; }
+/* The page list (the section's pages, where the classic bar listed them): while it shows, the column's panels make way. */
+html[data-frame] .shell-list[data-pages="on"] > :is(.shell-stack, .shell-empty) { display: none !important; }
+html[data-frame] .shell-pages { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 6px; padding: 12px 10px 10px; overflow-y: auto; overflow-x: hidden; }
+html[data-frame] .shell-pages[hidden] { display: none; }
+html[data-frame] .shell-pages-head { display: flex; align-items: center; gap: 8px; padding: 2px 4px 4px 10px; }
+html[data-frame] .shell-pages-title { flex: 1 1 auto; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ivory); font: 650 max(12px, calc(15px * var(--text-scale, 1)))/1.3 var(--font-ui); letter-spacing: 0; text-transform: none; }
+html[data-frame] .shell-pages-history { display: flex; gap: 4px; flex: none; }
+html[data-frame] .shell-pages-history .shell-icon-btn { width: 28px; height: 28px; border-radius: 8px; }
+html[data-frame] .shell-pages-git { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 4px 4px 10px; }
+html[data-frame] .shell-pages-git:empty { display: none; }
+html[data-frame] .shell-pages-list { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+html[data-frame] .shell-page { display: flex; align-items: center; justify-content: flex-start; gap: 10px; width: 100%; min-height: 36px; padding: 0 10px; border-radius: 10px; color: var(--muted); font-size: var(--frame-fs); text-align: left; }
+html[data-frame] .shell-page .glyph { flex: none; width: 17px; height: 17px; }
+html[data-frame] .shell-page-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.3; }
+html[data-frame] .shell-page.is-sub { min-height: 32px; padding-left: 22px; }
+html[data-frame] .shell-page[aria-current="page"] { background: var(--tint-gold-3, color-mix(in srgb, var(--gold) 14%, transparent)); color: var(--ivory); font-weight: 600; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 30%, transparent); }
+html[data-frame] .shell-page[aria-current="page"] .glyph { color: var(--gold-bright); }
+html[data-frame] .shell-page .count { margin-left: auto; min-width: 20px; padding: 0 6px; border-radius: 9px; background: var(--tint-gold-2, color-mix(in srgb, var(--gold) 10%, transparent)); color: var(--ivory); font: 650 var(--frame-fs-s)/18px var(--font-ui); text-align: center; }
+html[data-frame] .shell-page .count.warn { color: var(--warn); }
+html[data-frame] .shell-page .count[hidden] { display: none; }
+html[data-frame] .shell-pages-group { margin: 10px 0 2px; padding: 0 10px; color: var(--muted); font: 650 var(--frame-fs-s)/1.3 var(--font-ui); letter-spacing: 0; text-transform: none; }
+html[data-frame] .shell-pages-group.is-current { color: var(--ivory); }
 /* small windows: a column is a drawer over the page, under the bar and the strip */
 html[data-frame] .shell-column[data-state="drawer"], html[data-frame][data-ui-mode="vibe"] .shell-column[data-state="drawer"] { top: var(--shell-y0); width: var(--frame-drawer-w, 280px); max-width: calc(100vw - 24px); background: var(--panel-solid); backdrop-filter: none; box-shadow: var(--shadow-2); animation: shell-drawer-in var(--motion-base, 200ms) var(--ease-out, ease-out); }
 html[data-frame] .shell-list[data-state="drawer"] { left: var(--frame-rail-w); max-width: calc(100vw - var(--frame-rail-w) - 12px); }

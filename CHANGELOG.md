@@ -7,6 +7,30 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **The 0.5 layout's top bar says where you are.** With the new layout on
+  (`?layout=v2`), the bar's middle is a breadcrumb, as in the 0.5 prototype:
+  the project and the open session (or Today), or the project, section and
+  page; on the Task board its task opens with one press. A section's pages
+  (Work's Task board, Plans, Ideas, Analyzer and Worktrees; Agents' sections
+  and views; Settings) moved from the bar into the left column, with Back,
+  Forward and the Git chip beside them. The classic layout is unchanged.
+- **The 0.5 session list's head.** The project name opens a project menu
+  (switch project, Open a folder, Start a new app, All projects), the Git chip
+  sits under it with the branch and what is waiting, and "N worktrees" opens
+  Work › Worktrees. Backlog lists plan drafts as well as ideas, with Scan the
+  project and Scan chats for ideas at its top.
+- **The 0.5 thread and its box.** A session's head says where it stands, who is
+  on it, its branch, its checks and (once known) its cost. The box spans the
+  thread and has one row: Note, Ask or Change, Attach (now for a Note too:
+  its pictures wait for an Ask or a Change), one run menu ("Auto · OpenCode")
+  that holds the permission mode, the coding worker and its tier and the
+  folder, the Worktree switch and Send.
+- **The 0.5 inspector.** A session's inspector has a Worktree tab (where its
+  run works and whether that work is safe), and tabs that do not fit wait
+  behind More. Plan shows the run's own steps and the acceptance checks.
+  With no session open, Home's inspector shows the project (repository,
+  team, latest activity); on pages that are not a session the inspector
+  folds away instead of saying there is nothing to inspect.
 - **GPT-6.1 Sol.** The lead, desk and overseer seats and the heavy Zen role
   now default to `gpt-6.1-sol` (released at DevDay 2026: near Astra quality
   at a fifth of Astra's price). It appears in the Zen model pickers and keeps

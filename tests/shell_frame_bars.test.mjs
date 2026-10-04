@@ -137,7 +137,45 @@ test("the trail is project / page / item, from what MefiNav and Home already kno
   page.snapshot = snap();
   page.taskContext = { title: "Open in Build" };
   page.window.dispatchEvent({ type: "mefi:nav" });
-  assert.deepEqual(trail.children.filter((node) => node.className.includes("shell-crumb")).map(say), ["Fixture", "Home", "Open in Build"], "Build's task view is an item of Home");
+  assert.deepEqual(trail.children.filter((node) => node.className.includes("shell-crumb")).map(say), ["Fixture", "Open in Build"], "the prototype's breadcrumb: project / session");
+});
+
+test("the breadcrumb is project / session on Home, Today when none is open, and project / section / page elsewhere, the board's task one press from open", async () => {
+  const crumbs = (page) => page.region("top").children[1].children.filter((node) => node.className.includes("shell-crumb"));
+  const page = loadShell({ current: "workspace", registry: { workspace: { id: "workspace", label: "Home" } } });
+  refresh(page);
+  assert.deepEqual(crumbs(page).map(say), ["Fixture", "Home"], "no session open: Home");
+  page.window.MefiToday = { count: () => 0 };
+  refresh(page);
+  assert.deepEqual(crumbs(page).map(say), ["Fixture", "Today"], "the shell's Home is called Today, as its tab is");
+  // A session open in the thread is the item, by its full title.
+  page.snapshot = snap({ tasks: [{ id: "t1", title: "Add an empty state to the notes list" }] });
+  page.window.MefiSessions = { active: () => true, selected: () => "t1" };
+  refresh(page);
+  assert.deepEqual(crumbs(page).map(say), ["Fixture", "Add an empty state to the notes list"]);
+  assert.equal(crumbs(page).at(-1).getAttribute("aria-current"), "page");
+  page.window.MefiSessions = { active: () => false, selected: () => "t1" };
+  refresh(page);
+  assert.deepEqual(crumbs(page).map(say), ["Fixture", "Today"], "panels that are away name nothing");
+  // Elsewhere: the section MefiNav names, then the page, and the Task board's task opens it.
+  page.current = "worktrees";
+  page.nav.sectionLabel = (dest) => (dest?.id === "worktrees" || dest?.id === "tasks" ? "Work" : "Agents");
+  page.nav.get = (id) => ({ worktrees: { id: "worktrees", label: "Worktrees" }, tasks: { id: "tasks", label: "Task board" }, agents: { id: "agents", label: "Agents" } })[id] ?? null;
+  page.window.dispatchEvent({ type: "mefi:nav" });
+  assert.deepEqual(crumbs(page).map(say), ["Fixture", "Work", "Worktrees"]);
+  page.current = "agents";
+  page.window.dispatchEvent({ type: "mefi:nav" });
+  assert.deepEqual(crumbs(page).map(say), ["Fixture", "Agents"], "a page named as its section is said once");
+  page.current = "tasks";
+  page.taskContext = { title: "Fix the login loop", taskId: "t9", projectId: "p1" };
+  page.window.dispatchEvent({ type: "mefi:nav" });
+  assert.deepEqual(crumbs(page).map(say), ["Fixture", "Work", "Task board", "Fix the login loop"]);
+  const open = crumbs(page).at(-1);
+  assert.equal(open.tagName.toLowerCase(), "button", "the classic bar's Current task, as the crumb itself");
+  assert.match(open.getAttribute("title"), /open it/);
+  await open.click();
+  assert.deepEqual(page.calls.go.at(-1), ["tasks", { taskId: "t9", projectId: "p1" }]);
+  assert.ok(crumbs(page).slice(0, -1).every((node) => node.tagName.toLowerCase() === "span"), "the other parts are words");
 });
 
 test("the Search pill opens the existing palette and closes it when it is open", async () => {
@@ -149,34 +187,108 @@ test("the Search pill opens the existing palette and closes it when it is open",
   assert.deepEqual(page.calls.toggle, ["palette"]);
 });
 
-test("the bar says how much room the local navigation has, and whether it is on screen", () => {
+test("the bar measures nothing for the classic local navigation: the frame does not draw it, so the breadcrumb has the middle at every width", () => {
   const page = loadShell({ localNav: true });
   const top = page.region("top");
-  const [left, , extra, right] = top.children;
-  left.getBoundingClientRect = () => ({ width: 170, height: 40 });
-  right.getBoundingClientRect = () => ({ width: 200.4, height: 40 });
-  extra.getBoundingClientRect = () => ({ width: 0, height: 0 });
-  top.getBoundingClientRect = () => ({ width: 900, height: 56 });
-  page.window.MefiShell.sync();
-  assert.equal(page.props["--frame-top-l"], "182px", "the left end and its gap");
-  assert.equal(page.props["--frame-top-r"], "213px", "the right end (rounded up) and its gap");
-  assert.equal(top.dataset.local, "on");
-  assert.equal(page.root.getAttribute("data-frame-narrow"), null, "900 CSS px is wide enough to share");
-  top.getBoundingClientRect = () => ({ width: 560, height: 56 });
-  page.window.MefiShell.sync();
-  assert.equal(page.root.getAttribute("data-frame-narrow"), "", "a band under 640 CSS px is the bar's alone: the local navigation gives way");
-  top.getBoundingClientRect = () => ({ width: 640, height: 56 });
-  page.window.MefiShell.sync();
-  assert.equal(page.root.getAttribute("data-frame-narrow"), null, "640 shares");
-  page.get("app-local-nav").hidden = true;
-  page.window.MefiShell.sync();
-  assert.equal(top.dataset.local, "off", "a page with no local navigation leaves the row to the trail");
-  top.getBoundingClientRect = () => ({ width: 500, height: 56 });
-  page.window.MefiShell.sync();
-  assert.equal(page.root.getAttribute("data-frame-narrow"), "");
-  page.window.MefiShell.disable();
-  assert.equal(page.props["--frame-top-l"], undefined);
-  assert.equal(page.root.getAttribute("data-frame-narrow"), null, "nothing is left on <html>");
+  for (const width of [900, 560, 500]) {
+    top.getBoundingClientRect = () => ({ width, height: 56 });
+    page.window.MefiShell.sync();
+    assert.equal(page.props["--frame-top-l"], undefined, `${width}: no room is kept for it`);
+    assert.equal(page.root.getAttribute("data-frame-narrow"), null);
+    assert.equal(top.dataset.local, undefined);
+  }
+  assert.equal(page.get("app-local-nav").hidden, false, "it stays the classic layout's: nav.js keeps it, the stylesheet leaves it out of the frame");
+});
+
+// A section with pages of its own, as nav.js keeps them (LOCAL_ROUTES), and the history within it.
+const withPages = (options = {}) => {
+  const page = loadShell({ current: "tasks", registry: { workspace: { id: "workspace", label: "Home" }, tasks: { id: "tasks", label: "Task board", short: "Tasks", glyph: "g-tasks", badge: "review" }, plans: { id: "plans", label: "Plans", glyph: "g-plans" }, worktrees: { id: "worktrees", label: "Worktrees" } }, ...options });
+  page.calls.history = [];
+  Object.assign(page.nav, {
+    LOCAL_ROUTES: { home: ["workspace"], work: ["tasks", "plans", "worktrees"], agents: ["agents", "command"] },
+    sectionLabel: (dest) => (["tasks", "plans", "worktrees"].includes(dest?.id) ? "Work" : dest?.id === "agents" || dest?.id === "command" ? "Agents" : "Home"),
+    historyState: () => page.history ?? { canBack: true, canForward: false },
+    back: () => page.calls.history.push("back"), forward: () => page.calls.history.push("forward"),
+    paintBadges: (root) => { page.calls.badges = (page.calls.badges ?? 0) + 1; for (const node of root.querySelectorAll("[data-badge]")) node.hidden = false; },
+  });
+  page.window.MefiGitSync = { mount: (host, options) => { (page.calls.git ??= []).push([host.className, options.variant]); const chip = page.document.createElement("span"); chip.className = "gs-slot"; if (!host.children.length) host.append(chip); return chip; } };
+  page.window.dispatchEvent({ type: "mefi:nav" });
+  return page;
+};
+
+test("the page list: on a page of a section with pages, the list column lists them, with Back and Forward within the section and the Git chip", async () => {
+  const page = withPages();
+  const shell = page.window.MefiShell;
+  const list = page.region("list");
+  const pages = page.$("shell-pages");
+  assert.equal(pages.parentNode, list, "in the list column");
+  assert.ok(list.children.indexOf(pages) < list.children.indexOf(list.children.find((child) => child.className === "shell-stack")), "before the panels it makes way for");
+  assert.equal(pages.hidden, false);
+  assert.equal(list.dataset.pages, "on", "the column's panels make way (the stylesheet hides them)");
+  assert.deepEqual(plain(shell.pages()), { shown: true, section: "work" });
+  assert.equal(pages.querySelector(".shell-pages-title").textContent, "Work");
+  assert.equal(pages.getAttribute("aria-label"), "Work pages");
+  const rows = pages.querySelectorAll(".shell-page");
+  assert.deepEqual(rows.map((node) => node.querySelector(".shell-page-label").textContent), ["Tasks", "Plans", "Worktrees"], "the short names the classic bar showed");
+  assert.deepEqual(rows.map((node) => node.getAttribute("aria-current")), ["page", null, null], "the page you are on is marked");
+  assert.equal(rows[0].querySelector("[data-badge]").dataset.badge, "review", "a page's count rides with it, painted by MefiNav's own badges");
+  assert.ok(page.calls.badges >= 1);
+  await rows[1].click();
+  assert.deepEqual(page.calls.go.at(-1), ["plans"]);
+  const [back, forward] = pages.querySelectorAll(".shell-history");
+  assert.deepEqual([back.disabled, forward.disabled], [false, true], "as far as the section's history goes");
+  assert.equal(back.getAttribute("aria-label"), "Back within this section");
+  await back.click();
+  assert.deepEqual(page.calls.history, ["back"]);
+  assert.deepEqual(page.calls.git.at(-1), ["shell-pages-git", "list"], "the Git chip, in its list-column look; git-sync.js keeps its one popover");
+  assert.ok(page.events.some((event) => event.type === "mefi:shell-layout" && event.detail.what === "pages" && event.detail.shown === true), "the column's panels hear that the page list came");
+  // The arrows walk the pages.
+  rows[0].focus();
+  const keyed = { key: "ArrowDown", preventDefault() { this.prevented = true; } };
+  page.$("shell-pages-list").listeners.keydown[0](keyed);
+  assert.equal(page.document.activeElement, rows[1]);
+  assert.equal(keyed.prevented, true);
+  // Home has no page list: its list is the session list.
+  page.current = "workspace";
+  page.window.dispatchEvent({ type: "mefi:nav" });
+  assert.equal(pages.hidden, true);
+  assert.equal(list.dataset.pages, "off");
+  assert.deepEqual(plain(shell.pages()), { shown: false, section: null });
+  assert.equal(page.events.filter((event) => event.type === "mefi:shell-layout" && event.detail.what === "pages").at(-1).detail.shown, false);
+  // A page no section lists (Help, Friends) has none either.
+  page.current = "help";
+  page.window.dispatchEvent({ type: "mefi:nav" });
+  assert.equal(pages.hidden, true);
+});
+
+test("the page list draws Agents' sections and views, from agents.js, so every pane and tab is still a press away", async () => {
+  const page = withPages({ current: "command" });
+  const ran = [];
+  page.window.MefiAgents = { navModel: (id) => [
+    { id: "overview", label: "Overview", current: false, run: () => ran.push("overview"), views: [] },
+    { id: "live", label: "Live", current: id === "command", run: () => ran.push("live"), views: [{ label: "Command", current: id === "command", run: () => ran.push("command") }, { label: "Fleet", current: false, run: () => ran.push("fleet") }] },
+  ] };
+  page.window.dispatchEvent({ type: "mefi:nav" });
+  const pages = page.$("shell-pages");
+  assert.equal(pages.querySelector(".shell-pages-title").textContent, "Agents");
+  assert.deepEqual(pages.querySelector(".shell-pages-list").children.map((node) => [node.tagName.toLowerCase(), node.textContent]), [["button", "Overview"], ["h3", "Live"], ["button", "Command"], ["button", "Fleet"]], "a section with views is a heading over them");
+  const rows = pages.querySelectorAll(".shell-page");
+  assert.deepEqual(rows.map((node) => node.getAttribute("aria-current")), [null, "page", null]);
+  assert.ok(rows.slice(1).every((node) => node.className.includes("is-sub")));
+  await rows[2].click();
+  assert.deepEqual(ran, ["fleet"], "each goes where the classic bar's menu went");
+  // Without agents.js's model the section's own routes stand in.
+  delete page.window.MefiAgents;
+  page.history = { canBack: false, canForward: true };
+  page.window.dispatchEvent({ type: "mefi:nav" });
+  assert.equal(pages.querySelectorAll(".shell-page").length, 0, "agents and command are not in this registry: nothing to list");
+  assert.equal(pages.hidden, true);
+});
+
+test("with v2 off there is no page list and no breadcrumb: nothing is drawn, and MefiShell.pages() says so", () => {
+  const page = loadShell({ layout: false, current: "tasks" });
+  assert.equal(page.$("shell-pages"), null);
+  assert.deepEqual(plain(page.window.MefiShell.pages()), { shown: false, section: null });
 });
 
 test("N need you: the digest's total, else the open questions, else MefiToday's count; one is a singular", () => {

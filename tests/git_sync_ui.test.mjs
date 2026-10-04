@@ -198,6 +198,30 @@ test("the chip goes at the tail of the bar and back there after the bar is rebui
   assert.equal(cluster.children.length, 4);
 });
 
+test("in the 0.5 frame's list column the chip carries the branch before the state, keeps its words, and opens the same popover", async () => {
+  const h = await ready({ state: "uncommitted" });
+  const head = new h.nav.constructor("div");
+  h.body.append(head);
+  const slot = h.sync.mount(head, { variant: "list" });
+  assert.equal(slot.dataset.variant, "list");
+  assert.equal(h.sync.mount(head, { variant: "list" }), slot, "mounting again keeps the one chip");
+  const chip = slot.querySelector(".gs-chip");
+  const model = kit.sampleModel("uncommitted");
+  assert.equal(chip.querySelector(".gs-chip-branch-name").textContent, model.branch, "the branch the host names");
+  assert.ok(chip.querySelector(".gs-chip-sep"), "a rule between the branch and the state");
+  assert.equal(chip.querySelector(".gs-chip-label").textContent, model.label, "the host's own words for the state");
+  assert.equal(chip.querySelector(".gs-chip-badge").hidden, true, "the words carry the count: no badge as well");
+  assert.equal(chip.getAttribute("aria-label"), `GitHub sync: ${model.branch}, ${model.label}`, "its name holds both visible parts");
+  assert.equal(h.chip().querySelector(".gs-chip-branch"), null, "the bar's chip is as it was");
+  h.fake.push({ ...kit.sampleModel("in-sync"), branch: "" });
+  assert.equal(chip.querySelector(".gs-chip-branch"), null, "no branch named, no branch drawn");
+  await chip.click(); await flush();
+  assert.equal(h.pop().hidden, false, "one popover for every chip");
+  assert.equal(chip.getAttribute("aria-expanded"), "true");
+  assert.match(styles, /\.gs-slot\[data-variant="list"\] \.gs-chip \{[^}]*height: 28px/, "a 28px chip in the list column");
+  assert.match(styles, /\.gs-slot\[data-variant="list"\] \.gs-chip:not\(\.gs-chip-static\) \.gs-chip-label \{ display: inline; \}/, "that keeps its words in a small window");
+});
+
 test("nav.js and vibe.js hand the chip its place, and the stylesheet keeps the chip's rules", () => {
   assert.match(navSource, /window\.MefiGitSync\?\.mount\?\.\(nav, \{ variant: "bar" \}\)/);
   assert.match(vibeSource, /window\.MefiGitSync\?\.mount\?\.\(\$\("new-app"\)\?\.parentNode, \{ after: \$\("new-app"\), variant: "vibe" \}\)/);

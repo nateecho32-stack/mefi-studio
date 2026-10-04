@@ -241,7 +241,7 @@
     if (entry && inPlace(entry, options.after)) return entry.slot;
     layer();
     const fresh = !entry;
-    if (fresh) { entry = makeMount(host, options.variant === "vibe" ? "vibe" : "bar"); mounts.push(entry); }
+    if (fresh) { entry = makeMount(host, ["vibe", "list"].includes(options.variant) ? options.variant : "bar"); mounts.push(entry); }
     place(entry, options);
     if (fresh) paintMount(entry, view());
     return entry.slot;
@@ -251,20 +251,26 @@
     if (entry.slot.hidden !== !on) entry.slot.hidden = !on;
     if (!on) { entry.sig = ""; return; }
     const badge = countOf(model);
-    const sig = `${model.id}|${model.label}|${model.tone}|${model.glyph}|${badge}`;
+    // A session list's head (the 0.5 frame) carries the branch in the chip, before the state: "main | 3 changes".
+    const branch = entry.variant === "list" ? model.branch : "";
+    const sig = `${model.id}|${model.label}|${model.tone}|${model.glyph}|${badge}|${branch}`;
     if (entry.sig === sig) return;
     entry.sig = sig;
     const { chip } = entry;
     chip.dataset.state = model.id;
     chip.dataset.tone = model.tone;
     // The name says what the chip is (its words alone, "2 to push", do not) and still holds the visible label.
-    chip.setAttribute("aria-label", `GitHub sync: ${model.label}`);
-    chip.title = `GitHub sync: ${model.label}`;
+    chip.setAttribute("aria-label", `GitHub sync: ${branch ? `${branch}, ` : ""}${model.label}`);
+    chip.title = `GitHub sync: ${branch ? `${branch} · ` : ""}${model.label}`;
     entry.label.textContent = model.label;
     entry.badge.textContent = String(badge);
-    entry.badge.hidden = !badge;
+    entry.badge.hidden = !badge || entry.variant === "list";
     entry.glyphNode = glyph(glyphFor(model));
-    chip.replaceChildren(entry.glyphNode, entry.label, entry.badge);
+    if (branch) {
+      const name = el("span", "gs-chip-branch");
+      name.append(glyph("other-branch"), el("span", "gs-chip-branch-name", branch));
+      chip.replaceChildren(name, el("i", "gs-chip-sep"), entry.glyphNode, entry.label, entry.badge);
+    } else chip.replaceChildren(entry.glyphNode, entry.label, entry.badge);
   }
   function paintAll() {
     const model = view();

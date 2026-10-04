@@ -2427,10 +2427,20 @@ never disagree. Nothing is drawn unless the layout is on and a shell is there.
   and one line of words each; what a row says follows `html[data-detail]`
   (titles, plus status, everything: the stylesheet decides, the row always
   draws every line). A run in its own worktree wears a branch mark, from the
-  list `MefiWorktrees` already holds. Above it: the project and its branch (the
-  project switcher), **New task** (Ctrl N: Home's own message box in its task
-  purpose), and **Sessions | Backlog** (the backlog lists ideas nobody has made
-  a task of); under it a filter. A row's menu is open in a new tab, pin, rename
+  list `MefiWorktrees` already holds. Above it, as in the 0.5 prototype: the
+  project and its branch, whose **project menu** lists every project (a press
+  switches through Home's own project button, so Save & switch for running
+  agents still asks) with Open a folder (Home's Add project), Start a new app
+  (Vibe's New app panel) and All projects (the project panel); the **Git chip**
+  (git-sync.js's own in its list look, branch | state, one popover for every
+  chip) and **N worktrees** (the project's other checkouts, opens Work ›
+  Worktrees); **New task** (Ctrl N: Home's own message box in its task
+  purpose); and **Sessions | Backlog**. The backlog lists plan drafts first
+  (Plans not yet made into tasks, read with the Plans page's own
+  `planning:list` when the project is taken up, the tab opens or at most every
+  30 s; a draft opens in Plans), then ideas nobody has made a task of, with
+  Scan the project (the Analyzer) and Scan chats for ideas (the palette's own
+  action); under it a filter. A row's menu is open in a new tab, pin, rename
   (`tasks:action rename`), stop and delete (the board's own `tasks:delete` behind
   the styled confirm, with Undo from Recently deleted). Finished work shows twelve
   rows and offers twenty-five more at a time.
@@ -2447,18 +2457,38 @@ never disagree. Nothing is drawn unless the layout is on and a shell is there.
   words, and **Decide later**, which only puts the card away (the task stays in
   Needs you). There is no countdown, because this app's host decides at once
   where the permission mode allows it and keeps the record, and waits otherwise;
-  a countdown would count to nothing. The box takes a Note, an Ask or a Change
-  through `MefiBuilder.sendWords`, with Attach picture and the `@ # /` picker
-  bound to it (a Note cannot carry a picture), and the chips for the branch, the
-  Worktree switch, the permission mode and the coding worker and its tier.
-- **The inspector.** Plan (where the task stands, the brief read back as its
-  outline, what it is done when, the earlier versions of the brief with Restore:
+  a countdown would count to nothing. The head's chips are the prototype's:
+  where it stands, who is on it, the branch it works on (its worktree's, else
+  the project folder's), its checks (the last check run, else its "done when"
+  lines) and, once the Agent tab has read the usage, what it cost (or "Time
+  only" for a builder that reports none), then when it began. The box spans the
+  thread's column and takes a Note, an Ask or a Change through
+  `MefiBuilder.sendWords`, with the `@ # /` picker bound to it. Its one row is
+  Note | Ask | Change, **Attach** (for every purpose: pictures added to a Note
+  wait for an Ask or a Change, and composer-pictures.js says so), the **run
+  menu** ("Auto · OpenCode": one button that opens autonomy.js's own permission
+  control, the coding worker and its tier, and the folder's branch, which opens
+  the folder), the Worktree switch and Send; what the words will do is a line
+  under the box.
+- **The inspector.** Six tabs as in the prototype; those the column has no room
+  for wait behind **More**, and the tab on screen always stays on the row. Plan
+  (**Steps**: the run's own todo list from its checkpoint, `runProgress.todos`,
+  with where the task stands under it; the brief read back as its outline;
+  **Acceptance checks**: what it is done when, each line with the task's verdict;
+  the earlier versions of the brief with Restore:
   `tasks:history`, `tasks:restore`), Changes and Checks (review.js's own panels,
   mounted one at a time with `MefiReview.mount(host, { taskId, projectId, panel })`,
   Changes whenever a session is open so its count is live), Preview (the project
   preview's controls through the workspace's own `previewAction`, and review.js's
-  Before and After; an embedded live preview is not here) and Agent (who is on it,
-  what it is doing, usage and the time limit in tasks.js's own words, Stop). A task
+  Before and After; an embedded live preview is not here), Agent (who is on it,
+  what it is doing, usage and the time limit in tasks.js's own words, Stop) and
+  **Worktree** (the run's own checkout in Work › Worktrees' words through
+  `MefiWorktrees.describe`: folder, branch, ahead, uncommitted, on GitHub, what to
+  do; or that it works in the project's folder). With no session open, Home's
+  inspector is the **project's** (Repository, Team, Live activity, from what the
+  page holds; Team and Usage open their pages). Any other page is not a session:
+  the panel hides and the frame folds the column away (no "Nothing to inspect
+  yet"; with `?sessions=off` nothing is mounted and the frame keeps its note). A task
   opens on its changes once it has any and on its plan before that, settled when
   the list has been read; the tab a person picks is theirs and is remembered.
 - **Selection and memory.** The selected session follows the router:

@@ -11,6 +11,14 @@
 // the list gets the same. A column's width is changed by its splitter (drag,
 // arrow keys, double-click) and only through MefiNav.layout.set.
 //
+// The bar's middle is a breadcrumb, project / session or page, as the 0.5
+// prototype has it: the classic local navigation (Back, Forward and the
+// section's pages) is not drawn in the frame. Its pages are a page list in the
+// list column instead, on every page of a section that has them (Work, Agents,
+// Settings), with Back and Forward within the section and the Git chip; Home
+// keeps its session list there. An inspector whose panels all say they have
+// nothing to show (a page that is not a session) folds away and takes no room.
+//
 // With v2 off nothing here is drawn, listens, polls or stores. The one thing
 // this file always does is the way in: a Search action and a Settings switch
 // that turn the layout on or off and reload the way builder.js's layout switch
@@ -19,10 +27,11 @@
 //
 // window.MefiShell: active, enable, disable, region, mode, setMode, size,
 // resize, info, open, close, toggle, isOpen, mount, onChange, openInbox,
-// resetLayout, layout, status, sync, onInbox (a hook), plan, and the
+// resetLayout, layout, status, sync, pages, onInbox (a hook), plan, and the
 // constants LIMITS, DEFAULTS, REGIONS, MODES and PRESETS. It emits
 // `mefi:shell-layout` on window when a region opens, closes, is resized or
-// becomes a drawer, when the mode changes and when the frame comes or goes.
+// becomes a drawer, when the mode changes, when the page list comes or goes
+// and when the frame comes or goes.
 (function () {
   "use strict";
   const SVG_NS = "http://www.w3.org/2000/svg";
@@ -36,7 +45,6 @@
   const MAIN_MIN = 320;
   const KEY_STEP = 8;
   const KEY_STEP_BIG = 32;
-  const NARROW_BAND = 640; // the top bar's width (CSS px) under which the local navigation gives way to the bar's own controls
   // What each mode starts with, and what Reset layout returns to. Build is the
   // in-depth mode: list and inspector open. Vibe is the calm one: both closed.
   const PRESETS = Object.freeze({
@@ -82,7 +90,9 @@
     layout: [PANEL, "M6.25 3v10", "M2 6.5h12"],
     pause: ["M5.75 3.75v8.5", "M10.25 3.75v8.5"],
     play: ["M5 3.5v9l7.5-4.5z"],
-    shield: ["M8 2.25 3.25 4v3.6c0 2.9 2 5 4.75 6.15 2.75-1.15 4.75-3.25 4.75-6.15V4z"],
+    back: ["M9.75 3.5 5.25 8l4.5 4.5"],
+    forward: ["M6.25 3.5 10.75 8l-4.5 4.5"],
+    shield:["M8 2.25 3.25 4v3.6c0 2.9 2 5 4.75 6.15 2.75-1.15 4.75-3.25 4.75-6.15V4z"],
   });
   function icon(name) {
     const svg = document.createElementNS(SVG_NS, "svg");
@@ -170,6 +180,8 @@
     els: {},
     stacks: {},
     top: null,
+    pages: null,          // the page list's nodes, and what it last drew
+    vacant: false,        // the inspector's panels all say there is nothing to show on this page
     statusParts: null,
     splits: null,
     menu: null,
@@ -248,6 +260,8 @@
       const empty = el("div", "shell-empty");
       empty.append(text("b", "", name === "list" ? "Nothing listed yet" : "Nothing to inspect yet"), text("span", "", name === "list" ? "This fills in when the page you are on has things to list." : "Select something to see its details here."));
       column.append(empty);
+      // The list column also holds the section's page list, before the panels it makes way for.
+      if (name === "list") column.append(buildPages());
       state.stacks[name] = stack(column);
       column.hidden = true;
     }
@@ -267,6 +281,7 @@
   }
   function removeRegions() {
     state.menu = null;
+    state.pages = null;
     state.els.frame?.remove?.();
     state.els = {};
     state.stacks = {};
@@ -335,6 +350,15 @@
     if (!node) return;
     if (isColumn(regionName)) node.dataset.empty = String(!anyShown);
     if (regionName === "main") node.hidden = !anyShown;
+    // An inspector whose panels all say there is nothing to show here (a page that is not a session) folds away: no room, no
+    // "Nothing to inspect yet". With nothing mounted at all the frame cannot know, and keeps the column and its note.
+    if (regionName === "inspector") {
+      const vacant = panels.length > 0 && !anyShown;
+      if (vacant !== state.vacant) {
+        state.vacant = vacant;
+        if (state.on && state.plan && !applying) { apply(); state.planKey = planKey(state.plan); paintBars(); emit({ what: "resize", region: "inspector", reason: vacant ? "vacant" : "filled" }); }
+      }
+    }
   }
 
   // ---- the contract: asking MefiNav.layout for room -----------------------------------------
@@ -352,6 +376,8 @@
       const prefs = state.prefs[state.mode];
       const fold = foldNames();
       const plan = computePlan({ width: viewWidth(), rail: railWidth(), prefs, fold, mainMin: mainMin() });
+      // A vacant inspector takes no room and is no drawer; what the mode asked for is kept and comes back with a panel that shows.
+      if (state.vacant) plan.inspector = { ...plan.inspector, docked: false, drawer: false, width: 0, vacant: true };
       state.plan = plan;
       const folded = new Set(fold);
       const want = { list: plan.list.width, inspector: plan.inspector.width, tabs: prefs.tabs.open ? state.tabsWanted : 0, status: state.statusWanted };
@@ -411,7 +437,6 @@
   function paintBars() {
     paintMode();
     paintLive();
-    measureBar();
   }
 
   // ---- open, close, resize --------------------------------------------------------------------
@@ -435,6 +460,8 @@
     }
     if (!isColumn(name)) return false;
     if (!state.plan) apply();
+    // Nothing to inspect on this page: the saved choice is left as it is for the pages that have something.
+    if (name === "inspector" && state.vacant) return false;
     if (state.plan[name].drawer) {
       if (wanted) return openDrawer(name);
       closeDrawer(true);
@@ -494,6 +521,7 @@
       docked: one ? one.docked : isOpen(name),
       drawer: one ? one.drawer : false,
       drawerOpen: state.drawer === name,
+      vacant: name === "inspector" && state.vacant,
       size: size(name),
       width: isColumn(name) ? prefs[name].w : null,
       min: isColumn(name) ? LIMITS[name][0] : null,
@@ -667,60 +695,192 @@
     if (!parts || !plan) return;
     for (const [name, node, key] of [["list", parts.listToggle, "Ctrl B"], ["inspector", parts.inspectorToggle, "["]]) {
       const on = isOpen(name);
+      const vacant = name === "inspector" && state.vacant;
       node.setAttribute("aria-pressed", String(on));
-      node.setAttribute("title", `${on ? "Hide" : "Show"} the ${name} (${key})${plan[name].drawer ? ". It opens over the page in a window this small" : ""}`);
+      node.setAttribute("title", vacant ? "Nothing to inspect on this page: the inspector comes back on a session" : `${on ? "Hide" : "Show"} the ${name} (${key})${plan[name].drawer ? ". It opens over the page in a window this small" : ""}`);
       node.dataset.on = String(on);
+      node.disabled = vacant;
     }
   }
 
-  // ---- where you are: project / page / item -------------------------------------------------------
+  // ---- where you are: project / session or page ----------------------------------------------------
+  // The prototype's breadcrumb. On Home: the project and the session on screen (Today when none is). Anywhere else: the
+  // project, the section and the page, and on the Task board the task it has selected, which opens it (the classic bar's
+  // "Current task"). Each part is what MefiNav, Home and the session panels already know.
+  const isHomeRoute = (id) => id == null || id === "workspace" || id === "vibe";
+  function sessionTitle(snapshot) {
+    const sessions = window.MefiSessions;
+    if (!sessions?.active?.()) return null;
+    const taskId = sessions.selected?.();
+    const task = taskId && Array.isArray(snapshot?.tasks) ? snapshot.tasks.find((row) => row?.id === taskId) : null;
+    if (!task) return null;
+    return String(task.title || window.MefiTasks?.shortTitle?.(task) || "Untitled task");
+  }
   function trail() {
     const n = nav();
     const parts = [];
-    const project = String(window.MefiWorkspace?.snapshot?.()?.project?.name ?? "").trim();
+    const snapshot = window.MefiWorkspace?.snapshot?.() ?? null;
+    const project = String(snapshot?.project?.name ?? "").trim();
     if (project) parts.push(project);
     const id = n?.current?.();
     const dest = id ? n?.get?.(id) : null;
-    if (dest) parts.push(String(dest.label || dest.short || id));
-    const pageWithTask = id === "tasks" || (id === "workspace" && window.MefiBuilder?.view?.()?.view === "task");
-    const task = pageWithTask ? n?.taskContext?.() : null;
-    if (task?.title) parts.push(String(task.title));
+    if (isHomeRoute(id)) {
+      const session = sessionTitle(snapshot);
+      const built = !session && window.MefiBuilder?.view?.()?.view === "task" ? n?.taskContext?.() : null;
+      if (session || built?.title) parts.push(String(session || built.title));
+      else parts.push(window.MefiToday ? "Today" : String(dest?.label || dest?.short || "Home"));
+      return parts;
+    }
+    let section = null;
+    try { section = dest ? n?.sectionLabel?.(dest) ?? null : null; } catch { section = null; }
+    const page = dest ? String(dest.label || dest.short || id) : null;
+    if (section && section !== page) parts.push(String(section));
+    if (page) parts.push(page);
+    const task = id === "tasks" ? n?.taskContext?.() : null;
+    if (task?.title) parts.push({ label: String(task.title), open: () => n?.go?.("tasks", { taskId: task.taskId, projectId: task.projectId }) });
     return parts;
   }
   function paintTrail(parts) {
     const host = state.top?.trail;
     if (!host) return;
     host.replaceChildren();
-    parts.forEach((label, at) => {
+    parts.forEach((part, at) => {
+      const label = typeof part === "string" ? part : String(part?.label ?? "");
       if (at) host.append(text("span", "shell-sep", "/"));
       const last = at === parts.length - 1;
-      const crumb = text("span", last ? "shell-crumb is-current" : "shell-crumb", label);
+      const className = last ? "shell-crumb is-current" : "shell-crumb";
+      const crumb = typeof part?.open === "function" ? button(`shell-btn ${className} shell-crumb-link`, null, () => part.open()) : el("span", className);
+      crumb.textContent = label;
       if (last) crumb.setAttribute("aria-current", "page");
-      crumb.setAttribute("title", label);
+      crumb.setAttribute("title", typeof part?.open === "function" ? `${label} · open it` : label);
       host.append(crumb);
     });
   }
-  // Whether the local navigation (MefiNav's row of the section's pages) is on screen in the bar's middle.
-  function localShown() {
-    const node = document.getElementById?.("app-local-nav");
-    if (!node || node.hidden) return false;
-    const box = node.getBoundingClientRect?.();
-    return Boolean(box && box.width > 0 && box.height > 0);
+
+  // ---- the page list: the section's pages, in the list column ----------------------------------------
+  // What the classic bar listed between Back and Forward: the routes MefiNav keeps for the section (LOCAL_ROUTES), or for
+  // Agents its sections and their views (MefiAgents.navModel, so a pane or a tab is reachable as before). Home has none:
+  // its list is the session list. While the page list shows, the column's panels make way (html[data-pages] on the column)
+  // and MefiShell.pages() says so, so the session list does not draw for nobody.
+  function sectionOfRoute(n, id) {
+    const routes = n?.LOCAL_ROUTES;
+    if (!routes || typeof routes !== "object") return null;
+    const listed = Object.keys(routes).find((key) => Array.isArray(routes[key]) && routes[key].includes(id));
+    if (listed) return listed;
+    const said = document.body?.dataset?.navSection;
+    return said && Array.isArray(routes[said]) ? said : null;
   }
-  // The local navigation sits between the bar's two ends; they tell the stylesheet how much of the bar they take.
-  // In a band narrower than NARROW_BAND the bar's own controls and the trail have it to themselves
-  // (html[data-frame-narrow]): the decision is the band's width alone, so it cannot flicker.
-  function measureBar() {
-    const parts = state.top, bar = state.els.top;
-    if (!parts || !bar) return;
-    const width = (node) => { const box = node?.getBoundingClientRect?.(); return box && box.width > 0 ? Math.ceil(box.width) : 0; };
-    const band = width(bar);
-    const narrow = band > 0 && band < NARROW_BAND;
-    if (narrow) rootEl().setAttribute?.("data-frame-narrow", ""); else rootEl().removeAttribute?.("data-frame-narrow");
-    const left = width(parts.left), right = width(parts.right) + width(parts.extra);
-    setVar(rootEl(), "--frame-top-l", `${left ? left + 12 : 0}px`);
-    setVar(rootEl(), "--frame-top-r", `${right ? right + 12 : 0}px`);
-    bar.dataset.local = localShown() ? "on" : "off";
+  function pageModel() {
+    const n = nav();
+    const id = n?.current?.() ?? null;
+    if (isHomeRoute(id)) return null;
+    const section = sectionOfRoute(n, id);
+    if (!section || section === "home") return null;
+    const dest = n?.get?.(id);
+    let title = null;
+    try { title = dest ? n?.sectionLabel?.(dest) ?? null : null; } catch { title = null; }
+    title = String(title || section.charAt(0).toUpperCase() + section.slice(1));
+    if (section === "agents" && typeof window.MefiAgents?.navModel === "function") {
+      let groups = null;
+      try { groups = window.MefiAgents.navModel(id); } catch { groups = null; }
+      if (Array.isArray(groups) && groups.length) return { section, title, groups: groups.map((group) => ({ id: String(group.id), label: String(group.label), current: Boolean(group.current), run: group.run, views: (Array.isArray(group.views) ? group.views : []).map((view) => ({ label: String(view.label), current: Boolean(view.current), run: view.run })) })) };
+    }
+    const pages = (n.LOCAL_ROUTES[section] || []).map((route) => n.get?.(route)).filter(Boolean).map((page) => ({
+      id: String(page.id), label: String(page.short || page.label || page.id), glyph: typeof page.glyph === "string" ? page.glyph : null,
+      badge: typeof page.badge === "string" ? page.badge : null, alert: typeof page.alert === "string" ? page.alert : null, current: page.id === id,
+    }));
+    return pages.length ? { section, title, pages } : null;
+  }
+  function buildPages() {
+    const root = el("nav", "shell-pages", { "aria-label": "Pages" });
+    root.id = "shell-pages";
+    root.hidden = true;
+    const head = el("div", "shell-pages-head");
+    const title = text("h2", "shell-pages-title", "");
+    const history = el("div", "shell-pages-history", { role: "group", "aria-label": "Section history" });
+    const back = button("shell-btn shell-icon-btn shell-history", "Back within this section", () => nav()?.back?.(), { "data-history": "back", title: "Back within this section (Alt ←)" });
+    back.append(icon("back"));
+    const forward = button("shell-btn shell-icon-btn shell-history", "Forward within this section", () => nav()?.forward?.(), { "data-history": "forward", title: "Forward within this section (Alt →)" });
+    forward.append(icon("forward"));
+    history.append(back, forward);
+    head.append(title, history);
+    const git = el("div", "shell-pages-git");
+    const list = el("div", "shell-pages-list");
+    list.id = "shell-pages-list";
+    list.addEventListener("keydown", pageKeys);
+    root.append(head, git, list);
+    state.pages = { root, title, back, forward, git, list, key: "", shown: false, section: null };
+    return root;
+  }
+  function pageButton(label, current, run, extra = {}) {
+    const node = button(`shell-btn shell-page${extra.sub ? " is-sub" : ""}`, null, run, { "data-page": extra.key || label });
+    if (extra.glyph) {
+      const svg = document.createElementNS(SVG_NS, "svg");
+      svg.setAttribute("class", "glyph"); svg.setAttribute("aria-hidden", "true"); svg.setAttribute("focusable", "false");
+      const use = document.createElementNS(SVG_NS, "use"); use.setAttribute("href", `#${extra.glyph}`); svg.append(use);
+      node.append(svg);
+    }
+    node.append(text("span", "shell-page-label", label));
+    for (const [key, className] of [[extra.badge, "count"], [extra.alert, "count warn"]]) {
+      if (!key) continue;
+      const badge = el("span", className);
+      badge.dataset.badge = key;
+      badge.hidden = true;
+      node.append(badge);
+    }
+    if (current) node.setAttribute("aria-current", "page");
+    return node;
+  }
+  function paintPages() {
+    const pages = state.pages;
+    if (!pages || !state.on) return;
+    const n = nav();
+    const model = pageModel();
+    let history = {};
+    try { history = n?.historyState?.() || {}; } catch { history = {}; }
+    const key = JSON.stringify([model, Boolean(history.canBack), Boolean(history.canForward)]);
+    if (key !== pages.key) {
+      pages.key = key;
+      const active = document.activeElement;
+      const held = active && pages.list.contains?.(active) ? active.dataset?.page ?? null : null;
+      pages.root.hidden = !model;
+      if (state.els.list) state.els.list.dataset.pages = model ? "on" : "off";
+      pages.back.disabled = !history.canBack;
+      pages.forward.disabled = !history.canForward;
+      const rows = [];
+      if (model) {
+        pages.title.textContent = model.title;
+        pages.root.setAttribute("aria-label", `${model.title} pages`);
+        if (model.groups) {
+          for (const group of model.groups) {
+            if (!group.views.length) { rows.push(pageButton(group.label, group.current, () => group.run?.(), { key: `group:${group.id}` })); continue; }
+            rows.push(text("h3", `shell-pages-group${group.current ? " is-current" : ""}`, group.label));
+            group.views.forEach((view, at) => rows.push(pageButton(view.label, view.current, () => view.run?.(), { key: `${group.id}:${at}`, sub: true })));
+          }
+        } else for (const page of model.pages) rows.push(pageButton(page.label, page.current, () => n?.go?.(page.id), { key: page.id, glyph: page.glyph, badge: page.badge, alert: page.alert }));
+      }
+      pages.list.replaceChildren(...rows);
+      try { n?.paintBadges?.(pages.list); } catch { /* the counts are a courtesy */ }
+      if (held) [...(pages.list.querySelectorAll?.(".shell-page") ?? [])].find((node) => node.dataset?.page === held)?.focus?.({ preventScroll: true });
+    }
+    // The Git chip rides with the page list (renderer/git-sync.js keeps one popover for every chip); mounting again is harmless.
+    if (model) { try { window.MefiGitSync?.mount?.(pages.git, { variant: "list" }); } catch { /* no chip in this build */ } }
+    const shown = Boolean(model);
+    if (pages.shown !== shown || pages.section !== (model?.section ?? null)) {
+      pages.shown = shown;
+      pages.section = model?.section ?? null;
+      emit({ what: "pages", shown, section: pages.section });
+    }
+  }
+  // The arrows move between the pages, Home and End go to the ends; Tab leaves the list.
+  function pageKeys(event) {
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    const items = [...(state.pages?.list?.querySelectorAll?.(".shell-page") ?? [])];
+    const at = items.indexOf(document.activeElement);
+    if (!items.length) return;
+    const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : Math.max(0, Math.min(items.length - 1, at + (event.key === "ArrowDown" ? 1 : -1)));
+    event.preventDefault?.();
+    items[next]?.focus?.({ preventScroll: true });
   }
 
   // ---- the feed: what the bars say -------------------------------------------------------------
@@ -789,9 +949,10 @@
   function paintLive() {
     if (!state.on || !state.top) return;
     watchToday();
+    paintPages();
     const live = readLive();
     const parts = trail();
-    const key = JSON.stringify([live, parts, localShown(), currentMode()]);
+    const key = JSON.stringify([live, parts, currentMode()]);
     state.live = live;
     if (key === state.liveKey) return;
     state.liveKey = key;
@@ -814,7 +975,6 @@
     }
     paintTrail(parts);
     paintStatusItems(live);
-    measureBar();
   }
   // One control for pausing: Home's own (workspace.js keeps the rules for a launch hold, a pause and a resume).
   function togglePause() {
@@ -1005,7 +1165,7 @@
     const folded = foldNames();
     const notes = {
       list: state.plan.list.drawer ? "Opens as a drawer in a small window." : "Ctrl B shows or hides it.",
-      inspector: state.plan.inspector.drawer ? (folded.includes("inspector") ? "Opens as a drawer in a small window." : "Opens as a drawer: this window is too narrow to dock it.") : "The [ key shows or hides it.",
+      inspector: state.vacant ? "Nothing to inspect on this page: it comes back on a session." : state.plan.inspector.drawer ? (folded.includes("inspector") ? "Opens as a drawer in a small window." : "Opens as a drawer: this window is too narrow to dock it.") : "The [ key shows or hides it.",
     };
     for (const name of ["list", "inspector"]) {
       menu.parts[name].words.children[1].textContent = notes[name];
@@ -1215,9 +1375,6 @@
     for (const name of Object.keys(state.requested)) { try { layout?.set?.(name, 0); } catch { /* the contract went with v2 */ } }
     state.requested = {};
     removeRegions();
-    dropVar(rootEl(), "--frame-top-l");
-    dropVar(rootEl(), "--frame-top-r");
-    rootEl().removeAttribute?.("data-frame-narrow");
     delete rootEl().dataset.frame;
     state.top = null; state.statusParts = null; state.splits = null; state.plan = null; state.live = null; state.liveKey = "";
     emit({ what: "disable" });
@@ -1314,6 +1471,8 @@
     mode: currentMode, setMode, size, resize, info, open, close, toggle, isOpen,
     mount, onChange, openInbox, resetLayout, sync,
     status: () => (state.on ? { ...(state.live ?? readLive()) } : null),
+    // Whether the list column shows the section's page list now (the column's panels make way while it does), and for which section.
+    pages: () => (state.on && state.pages ? { shown: state.pages.shown, section: state.pages.section } : { shown: false, section: null }),
     layout: () => clone(state.prefs),
     onInbox: null,
     LIMITS, DEFAULTS, REGIONS, MODES, PRESETS,

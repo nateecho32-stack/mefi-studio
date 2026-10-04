@@ -435,7 +435,8 @@ app.whenReady().then(async () => {
   {
     await run("document.getElementById('shell-list-toggle').focus();");
     const order = [];
-    for (let step = 0; step < 16; step += 1) {
+    // Home's inspector has the project's controls (Team, Usage, its rows) between the strip and the status bar, so the walk is longer.
+    for (let step = 0; step < 28; step += 1) {
       // A separator draws its ring on a pseudo-element (a knob on its line); every other control uses an outline.
       const here = await run(`const node = document.activeElement; if (!node) return null; const style = getComputedStyle(node), knob = getComputedStyle(node, "::before"); return { id: node.id || node.getAttribute("data-ui-mode") || node.tagName, bar: Boolean(node.closest("#shell-top, #shell-status, .shell-split")), ring: style.outlineStyle !== "none" && parseFloat(style.outlineWidth) >= 1, shadow: knob.content !== "none" && knob.boxShadow !== "none" };`);
       if (here) order.push(here);

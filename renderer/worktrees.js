@@ -361,7 +361,14 @@
     });
   }
 
-  window.MefiWorktrees = { open, close, isOpen, refresh: () => read(), peek, summary, state: () => ({ list: state.list, error: state.error }) };
+  // One row in this page's own words (its verdict, how loud it is, what to do about it), for the session inspector's Worktree tab.
+  function describe(row) {
+    const list = state.list;
+    if (!row || !list?.repo) return null;
+    const shown = STATES[row.state] ?? STATES.merged;
+    return { label: shown.label, tone: shown.tone, advice: advice(row, list), main: list.main, upstream: list.upstream };
+  }
+  window.MefiWorktrees = { open, close, isOpen, refresh: () => read(), peek, summary, describe, state: () => ({ list: state.list, error: state.error }) };
   // nav.js holds the record (Work, beside Analyzer) and calls open/close.
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();

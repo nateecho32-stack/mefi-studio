@@ -35,6 +35,24 @@
 .sx-proj-words b { font: 650 var(--x14)/1.25 var(--font-ui); }
 .sx-proj-words small { color: var(--muted); font-size: var(--x12); }
 .sx-proj .glyph { flex: none; width: 14px; height: 14px; color: var(--muted); }
+.sx-proj[aria-expanded="true"] { background: var(--tint-gold-1); }
+/* the Git chip (git-sync.js's, in its list look) and the worktrees, under the project */
+.sx-gitrow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; margin-top: -4px; padding: 0 4px; }
+.sx-gitrow[hidden] { display: none; }
+.sx-git { display: inline-flex; min-width: 0; max-width: 100%; }
+.sx-git:empty { display: none; }
+.sx-trees { min-height: 28px; height: 28px; padding: 0 10px 0 8px; gap: 6px; border-radius: var(--r-pill); background: transparent; color: var(--muted); font-size: var(--x125); }
+.sx-trees:hover { color: var(--ivory); }
+.sx-trees .glyph { width: 14px; height: 14px; }
+.sx-projmenu { left: 10px; right: auto; width: min(300px, calc(100% - 20px)); }
+.sx-projmenu .sx-menu-item { min-height: 40px; gap: 10px; }
+.sx-menu-words { display: flex; flex: 1 1 auto; flex-direction: column; min-width: 0; text-align: left; }
+.sx-menu-words :is(span, small) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sx-menu-words small { color: var(--muted); font-size: var(--x12); }
+.sx-proj-av.small { width: 26px; height: 26px; font-size: var(--x12); }
+.sx-menu-on { flex: none; color: var(--gold-bright); }
+.sx-menu-hr { width: calc(100% - 8px); margin: 4px; border: 0; border-top: 1px solid var(--hairline); }
+.sx-scan { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 2px 4px; }
 .sx-new { justify-content: flex-start; width: 100%; min-height: 36px; }
 .sx-new .glyph { flex: none; width: 16px; height: 16px; }
 .sx-new kbd { margin-left: auto; padding: 3px 6px; border: 1px solid color-mix(in srgb, var(--ink) 22%, transparent); border-radius: var(--r-xs); background: color-mix(in srgb, var(--ink) 14%, transparent); color: inherit; font: 600 var(--x12)/1 var(--font-mono); }
@@ -62,6 +80,7 @@
 .sx-row[data-tone="check"] .sx-dot { background: var(--info); }
 .sx-row[data-tone="done"] .sx-dot { background: var(--good); }
 .sx-row[data-tone="idea"] .sx-dot { background: var(--idea); }
+.sx-row[data-tone="plan"] .sx-dot { background: transparent; box-shadow: inset 0 0 0 2px var(--idea); }
 .sx-row-text { display: flex; flex: 1 1 auto; flex-direction: column; gap: 2px; min-width: 0; }
 .sx-row-top { display: flex; align-items: center; gap: 6px; min-width: 0; font: 600 var(--x14)/1.3 var(--font-ui); }
 .sx-row-title { min-width: 0; overflow: hidden; color: var(--ivory); text-overflow: ellipsis; white-space: nowrap; }
@@ -201,7 +220,7 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
 .sx-cmp-range { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: ew-resize; }
 
 /* a question that waits on you, docked above the box */
-.sx-dock { flex: none; display: grid; gap: 8px; width: min(860px, 100%); max-height: 55%; margin: 0 auto; padding: 0 var(--x-gut) 8px; overflow-y: auto; overscroll-behavior: contain; }
+.sx-dock { flex: none; display: grid; gap: 8px; width: 100%; max-height: 55%; margin: 0 auto; padding: 0 var(--x-gut) 8px; overflow-y: auto; overscroll-behavior: contain; }
 .sx-ask { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--warn) 55%, transparent); border-radius: var(--r-lg); background: color-mix(in srgb, var(--warn) 6%, var(--surface-raised)); }
 .sx-ask-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .sx-ask-k { color: var(--warn); font: 650 var(--x125)/1.2 var(--font-ui); }
@@ -216,21 +235,45 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
 .sx-q1 { flex: 1 1 auto; min-width: 0; overflow: hidden; font-size: var(--x13); text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---- the box ---------------------------------------------------------------------------------------------------------------------------- */
-.sx-compose { display: grid; flex: none; gap: 6px; width: min(860px, calc(100% - 2 * var(--x-gut))); margin: 0 auto 12px; padding: 8px 10px 10px; border: 1px solid var(--hairline-strong); border-radius: var(--r-xl); background: var(--surface-raised); }
-.sx-compose-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; }
+/* As the prototype draws it: the box spans the thread's column, the words first, one row of controls under them (the purpose, Attach,
+   the run menu, the Worktree switch, Send), and a line under the row that says what the words will do. */
+.sx-compose { position: relative; display: grid; flex: none; gap: 6px; width: calc(100% - 2 * var(--x-gut)); margin: 0 auto 12px; padding: 8px 12px 8px; border: 1px solid var(--hairline-strong); border-radius: var(--r-xl); background: var(--surface-raised); }
+.sx-compose:focus-within { border-color: color-mix(in srgb, var(--gold) 55%, var(--hairline-strong)); }
 .sx-modes { display: inline-flex; padding: 2px; border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--tint-gold-1); }
 .sx-modes button { min-height: 26px; padding: 0 10px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--muted); font-size: var(--x125); }
 .sx-modes button.on { background: var(--tint-gold-3); color: var(--ivory); }
-.sx-hint { flex: 1 1 0; min-width: 0; overflow: hidden; color: var(--dim); font-size: var(--x12); text-align: right; text-overflow: ellipsis; white-space: nowrap; }
-#sessions-input { display: block; width: 100%; min-height: 64px; max-height: 240px; padding: 6px 4px; border: 0; outline: 0; background: transparent; color: var(--ivory); font: 400 var(--x14)/1.5 var(--font-ui); resize: vertical; }
+.sx-hint { min-width: 0; margin: 0; padding: 0 4px; overflow: hidden; color: var(--dim); font-size: var(--x12); text-overflow: ellipsis; white-space: nowrap; }
+#sessions-input { display: block; width: 100%; min-height: 56px; max-height: 240px; padding: 6px 4px; border: 0; outline: 0; background: transparent; color: var(--ivory); font: 400 var(--x14)/1.5 var(--font-ui); resize: vertical; }
 #sessions-input::placeholder { color: var(--dim); }
 .sx-compose .composer-attach { display: contents; }
-.sx-compose[data-intent="note"] .composer-attach { display: none; }
 .sx-compose .composer-thumbs, .sx-compose .composer-attach-note { order: -1; flex: 1 1 100%; padding: 0 2px; }
+.sx-compose .composer-attach-button { min-height: 30px; padding: 0 10px; border-color: var(--hairline-strong); border-radius: var(--r-md); background: transparent; color: var(--muted); font-size: var(--x125); }
 .sx-compose .composer-mentions { padding: 0 4px 2px; }
 .sx-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
 .sx-more { display: none; width: 30px; min-width: 30px; padding: 0; }
-.sx-autonomy { position: relative; display: inline-flex; }
+.sx-autonomy { position: relative; display: flex; min-width: 0; }
+/* the run menu: one button, and a panel above the box with the permission mode, the coding worker and the folder */
+.sx-runwrap { position: relative; display: inline-flex; min-width: 0; }
+.sx-run { gap: 6px; max-width: 280px; border-color: var(--hairline-strong); background: transparent; color: var(--muted); }
+.sx-run:hover, .sx-run[aria-expanded="true"] { color: var(--ivory); background: var(--tint-gold-1); }
+.sx-run-words { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sx-run .sx-run-car { width: 12px; height: 12px; }
+.sx-runmenu { position: absolute; z-index: 6; left: 0; bottom: calc(100% + 8px); display: grid; width: min(440px, calc(100vw - 32px)); max-height: min(70vh, 560px); padding: 6px 14px 10px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--hairline-strong); border-radius: var(--r-lg); background: var(--panel-solid); box-shadow: var(--shadow-3); }
+.sx-runrow { display: grid; gap: 6px; padding: 8px 0; }
+.sx-runrow + .sx-runrow { border-top: 1px solid var(--hairline); }
+.sx-runrow-head { display: grid; gap: 1px; }
+.sx-runrow-head b { color: var(--ivory); font: 650 var(--x13)/1.3 var(--font-ui); }
+.sx-runnote { color: var(--muted); font-size: var(--x12); line-height: 1.4; }
+.sx-folder { display: flex; flex-wrap: wrap; gap: 6px; }
+/* autonomy.js's own control, its choices laid out in the panel instead of behind its chip */
+.sx-runmenu .autonomy-chip { display: none; }
+.sx-runmenu .autonomy-control { width: 100%; }
+.sx-runmenu .autonomy-control .autonomy-popover, .sx-runmenu .autonomy-control .autonomy-popover[hidden] { position: static; display: grid !important; gap: 4px; width: auto; padding: 0; border: 0; background: none; box-shadow: none; backdrop-filter: none; opacity: 1; scale: none; translate: none; pointer-events: auto; }
+.sx-runmenu .autonomy-mode { min-height: 0; height: auto; padding: 7px 10px; border: 1px solid transparent; border-radius: var(--r-md); background: transparent; color: var(--ivory); font: 600 var(--x13)/1.3 var(--font-ui); white-space: normal; }
+.sx-runmenu .autonomy-mode[aria-checked="true"] { border-color: color-mix(in srgb, var(--gold) 40%, transparent); background: var(--tint-gold-3); }
+.sx-runmenu .autonomy-mode small { margin-top: 2px; color: var(--muted); font-size: var(--x12); opacity: 1; font-weight: 400; }
+.sx-runmenu .autonomy-popover > .autonomy-button:not(.autonomy-mode) { justify-self: start; min-height: 28px; padding: 0 10px; font-size: var(--x125); }
+.sx-runmenu .autonomy-note:empty { display: none; }
 .sx-chipset, .sx-worker { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
 .sx-chip-btn { min-height: 30px; max-width: 240px; padding: 0 10px; border-radius: var(--r-md); font-size: var(--x125); }
 .sx-chip-btn.quiet { background: transparent; color: var(--muted); }
@@ -258,20 +301,55 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
 .sx-thread[data-short="true"] .sx-tools { display: contents; }
 .sx-thread[data-short="true"] :is(.sx-send, .sx-more) { order: 2; margin: 0 0 3px; }
 .sx-thread[data-short="true"] .sx-more { display: inline-flex; }
-.sx-thread[data-short="true"] .sx-compose-top, .sx-thread[data-short="true"] .composer-mentions { order: 3; flex: 1 1 100%; }
-.sx-thread[data-short="true"] :is(.sx-autonomy, .sx-chipset, .sx-worker, .composer-attach-button) { order: 4; }
-.sx-thread[data-short="true"] .sx-compose[data-open="false"] :is(.sx-compose-top, .sx-autonomy, .sx-chipset, .sx-worker, .composer-attach-button) { display: none; }
+.sx-thread[data-short="true"] .composer-mentions { order: 3; flex: 1 1 100%; }
+.sx-thread[data-short="true"] .sx-modes { order: 3; }
+.sx-thread[data-short="true"] :is(.sx-runwrap, .sx-chipset, .composer-attach-button) { order: 4; }
+.sx-thread[data-short="true"] .sx-hint { display: none; }
+.sx-thread[data-short="true"] .sx-compose[data-open="false"] :is(.sx-modes, .sx-runwrap, .sx-chipset, .composer-attach-button) { display: none; }
 /* a narrow thread (a small window, or one with both columns open) keeps the box to a line of controls too */
 .sx-thread { container: sx-thread / inline-size; }
 @container sx-thread (max-width: 620px) {
   .sx-hint { display: none; }
   .sx-more { display: inline-flex; }
-  .sx-compose[data-open="false"] :is(.sx-chipset, .sx-worker) { display: none; }
+  .sx-compose[data-open="false"] :is(.sx-chipset, .sx-runwrap) { display: none; }
 }
 
 /* ---- the inspector -------------------------------------------------------------------------------------------------------------------- */
 .sx-insp { border-left: 1px solid var(--hairline); }
-.sx-itabs { display: flex; flex: none; flex-wrap: wrap; gap: 0; padding: 0 6px; border-bottom: 1px solid var(--hairline); }
+/* One row of tabs, as in the prototype: what does not fit waits behind More. */
+.sx-itabrow { display: flex; flex: none; align-items: stretch; min-width: 0; padding: 0 6px; border-bottom: 1px solid var(--hairline); }
+.sx-itabrow:has(> .sx-itabs[hidden]) { display: none; }
+.sx-itabs { display: flex; flex: 1 1 auto; flex-wrap: nowrap; gap: 0; min-width: 0; overflow: hidden; }
+.sx-itab-more { flex: none; gap: 4px; min-height: 38px; margin-left: auto; padding: 0 6px; border: 0; border-radius: 0; background: transparent; color: var(--muted); font: 600 var(--x125)/1 var(--font-ui); }
+.sx-itab-more .glyph { width: 12px; height: 12px; }
+.sx-itab-more[aria-expanded="true"] { color: var(--ivory); }
+.sx-itab-menu { top: 44px; right: 8px; min-width: 180px; }
+.sx-itab-menu .sx-chip-count { margin-left: auto; }
+/* The project's inspector (Home with no session open): Project, and Team and Usage a press away. */
+.sx-project { display: flex; flex: 1 1 0; flex-direction: column; min-height: 0; }
+.sx-ptabs { display: flex; flex: none; gap: 2px; padding: 0 6px; border-bottom: 1px solid var(--hairline); }
+.sx-ptab { display: inline-flex; align-items: center; min-height: 38px; padding: 0 8px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font: 600 var(--x125)/1 var(--font-ui); }
+.sx-ptab.on { border-bottom-color: var(--gold); color: var(--ivory); }
+.sx-member { align-items: center; }
+.sx-member-open { min-width: 0; min-height: 0; padding: 0; overflow: hidden; color: var(--ivory); font-size: var(--x13); text-align: left; text-decoration: none; text-overflow: ellipsis; white-space: nowrap; }
+.sx-kv b[data-tone="live"] { color: var(--live); }
+.sx-kv b[data-tone="warn"] { color: var(--warn); }
+.sx-feedrow { display: flex; align-items: flex-start; gap: 8px; width: 100%; min-height: 0; padding: 6px 2px; border: 0; border-radius: var(--r-sm); background: transparent; text-align: left; white-space: normal; }
+.sx-feedrow + .sx-feedrow { border-top: 1px solid color-mix(in srgb, var(--ivory) 7%, transparent); }
+.sx-feedrow .sx-dot { margin-top: 5px; }
+.sx-feedrow[data-tone="ask"] .sx-dot { background: var(--warn); }
+.sx-feedrow[data-tone="run"] .sx-dot { background: var(--live); }
+.sx-feedrow[data-tone="check"] .sx-dot { background: var(--info); }
+.sx-feedrow[data-tone="done"] .sx-dot { background: var(--good); }
+.sx-feedrow-words { display: grid; flex: 1 1 auto; gap: 1px; min-width: 0; font-size: var(--x13); }
+.sx-feedrow-words b { overflow: hidden; color: var(--ivory); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.sx-feedrow-words span { color: var(--muted); font-size: var(--x12); }
+.sx-feedrow time { flex: none; color: var(--dim); font-size: var(--x12); white-space: nowrap; }
+.sx-icard[data-tone="bad"] h4 .r { color: var(--bad); }
+.sx-icard[data-tone="warn"] h4 .r { color: var(--warn); }
+.sx-icard[data-tone="good"] h4 .r { color: var(--good); }
+.sx-icard[data-tone="info"] h4 .r { color: var(--info); }
+.sx-step.skip .sx-step-mark { color: var(--dim); }
 .sx-itab { min-height: 38px; padding: 0 6px; gap: 4px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font: 600 var(--x125)/1 var(--font-ui); }
 .sx-itab.on { border-bottom-color: var(--gold); color: var(--ivory); }
 .sx-itab em { padding: 1px 5px; border-radius: var(--r-pill); background: var(--tint-gold-3); color: var(--gold-bright); font: 600 var(--x12)/1.2 var(--font-ui); }

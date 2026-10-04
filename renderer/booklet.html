@@ -10922,11 +10922,22 @@ button.gs-chip[aria-expanded="true"] { box-shadow: 0 0 0 3px color-mix(in srgb, 
 /* Vibe's project cluster: a 36px glass chip beside New app. */
 .gs-slot[data-variant="vibe"] .gs-chip { min-height: 0; height: 36px; padding: 0 12px 0 10px; gap: 7px; border-radius: 12px; background: color-mix(in srgb, var(--T) 12%, var(--v-glass, transparent)); backdrop-filter: var(--v-blur, none); font-size: 12.5px; }
 .gs-slot[data-variant="vibe"] .gs-chip[data-tone="neutral"] { border-color: var(--v-edge, var(--hairline)); background: var(--v-glass, transparent); }
-/* Under 900px the words go and the glyph stays, with the count as a badge. */
+/* The 0.5 frame's list column (a session list's head, a section's page list): the branch, a rule, then the state, in a
+   28px chip that keeps its words, as the prototype draws it. */
+.gs-slot[data-variant="list"] { min-width: 0; max-width: 100%; }
+.gs-slot[data-variant="list"] .gs-chip { max-width: 100%; min-height: 28px; height: 28px; padding: 0 10px 0 8px; gap: 6px; border-radius: 14px; font-size: max(12px, calc(12.5px * var(--text-scale, 1))); }
+.gs-slot[data-variant="list"] .gs-chip-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.gs-chip-branch { display: inline-flex; align-items: center; gap: 5px; min-width: 0; color: var(--ivory); }
+.gs-chip-branch .gs-glyph { color: var(--muted); }
+.gs-chip-branch-name { min-width: 0; max-width: 16ch; overflow: hidden; text-overflow: ellipsis; }
+.gs-chip-sep { flex: none; width: 1px; height: 12px; background: var(--hairline-strong); }
+/* Under 900px the words go and the glyph stays, with the count as a badge (the list column keeps its words: it has the room). */
 @media (max-width: 899px) {
   .gs-chip:not(.gs-chip-static) { width: 36px; min-width: 36px; height: 36px; min-height: 36px; padding: 0; justify-content: center; border-radius: 12px; }
   .gs-chip:not(.gs-chip-static) .gs-chip-label { display: none; }
   .gs-chip-badge:not([hidden]) { position: absolute; top: -6px; right: -6px; display: inline-flex; }
+  .gs-slot[data-variant="list"] .gs-chip:not(.gs-chip-static) { width: auto; min-width: 0; height: 28px; min-height: 28px; padding: 0 10px 0 8px; justify-content: flex-start; border-radius: 14px; }
+  .gs-slot[data-variant="list"] .gs-chip:not(.gs-chip-static) .gs-chip-label { display: inline; }
 }
 /* Hidden in Zen and in the classic shell, where the section bar is not drawn. */
 body.command-zen .gs-slot, html:not([data-shell="rail"]) .gs-slot { display: none; }
@@ -12064,7 +12075,7 @@ html[data-frame] .shell-region kbd {
   font: 600 var(--frame-fs-s)/1.5 var(--font-ui); white-space: nowrap;
 }
 
-/* ---- the top bar: where the local navigation's row is ---- */
+/* ---- the top bar: the local navigation's row, with a breadcrumb in its middle ---- */
 html[data-frame] .shell-top {
   position: fixed; top: 0; left: var(--frame-x0); right: 0; height: var(--frame-top-h); z-index: calc(var(--z-shell) - 1);
   display: flex; align-items: center; gap: 8px; padding: 0 12px 0 10px;
@@ -12072,10 +12083,9 @@ html[data-frame] .shell-top {
   container: shell-top / inline-size;
 }
 html[data-frame][data-ui-mode="vibe"] .shell-top { background: var(--studio-menu-fill, var(--bg)); backdrop-filter: var(--studio-menu-blur, none); border-bottom-color: color-mix(in srgb, var(--ivory) 7%, transparent); }
-/* The local navigation keeps its own row, squeezed between the bar's two ends (shell.js measures them). */
-html[data-frame][data-shell="rail"] #app-local-nav { left: calc(var(--shell-x0) + var(--frame-top-l, 0px)); right: var(--frame-top-r, 0px); padding-inline: 8px; border-bottom: 0; background: transparent; backdrop-filter: none; }
-/* In a band too narrow to share, the bar keeps its own controls and the trail; the pages stay in the rail and Search. */
-html[data-frame][data-frame-narrow][data-shell="rail"] #app-local-nav { display: none; }
+/* The classic local navigation is not drawn in the frame: its pages are the list column's page list, Back and Forward
+   go with them, and the bar's middle is the breadcrumb. */
+html[data-frame][data-shell="rail"] #app-local-nav { display: none !important; }
 html[data-frame] .shell-top-left, html[data-frame] .shell-top-right, html[data-frame] .shell-top-extra { display: flex; align-items: center; gap: 8px; flex: none; min-width: 0; }
 html[data-frame] .shell-top-extra:empty { display: none; }
 html[data-frame] .shell-top-right { margin-left: auto; }
@@ -12092,10 +12102,12 @@ html[data-frame] .shell-mode .shell-mode-choice .glyph { width: 14px; height: 14
 
 html[data-frame] .shell-trail { flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 6px; overflow: hidden; white-space: nowrap; padding-left: 4px; font-size: var(--frame-fs); color: var(--dim); }
 html[data-frame] .shell-trail:empty { display: none; }
-html[data-frame] .shell-top[data-local="on"] .shell-trail { display: none; }
-html[data-frame] .shell-crumb { min-width: 0; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; }
+html[data-frame] .shell-crumb { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; }
 html[data-frame] .shell-crumb:not(.is-current) { flex-shrink: 4; }
 html[data-frame] .shell-crumb.is-current { color: var(--ivory); font-weight: 600; }
+html[data-frame] .shell-crumb-link { display: block; height: auto; padding: 2px 4px; text-align: left; color: var(--muted); }
+html[data-frame] .shell-crumb-link.is-current { color: var(--ivory); }
+html[data-frame] .shell-crumb-link:hover { text-decoration: underline; text-underline-offset: 2px; }
 html[data-frame] .shell-sep { flex: none; color: var(--dim); opacity: .7; }
 
 html[data-frame] .shell-search {
@@ -12131,14 +12143,6 @@ html[data-frame] .shell-need[data-tone="clear"] .shell-pill-n, html[data-frame] 
 
 /* The queries below repeat the html[data-frame] prefix: a container query adds no specificity, so a bare
    class would lose to the base rules above. */
-/* the local navigation shares the row: the bar's own controls shrink to icons and counts first */
-@container shell-top (max-width: 1300px) {
-  html[data-frame] .shell-top[data-local="on"] .shell-search { flex: 0 0 32px; width: 32px; min-width: 32px; padding: 0; justify-content: center; }
-  html[data-frame] .shell-top[data-local="on"] .shell-search-long, html[data-frame] .shell-top[data-local="on"] .shell-search-short, html[data-frame] .shell-top[data-local="on"] .shell-search kbd { display: none; }
-  html[data-frame] .shell-top[data-local="on"] .shell-pill .shell-pill-l { display: none; }
-  html[data-frame] .shell-top[data-local="on"] .shell-pill { padding: 0 10px; }
-  html[data-frame] .shell-top[data-local="on"] .shell-svc { padding-right: 4px; }
-}
 /* a narrow bar gives up its words before its controls */
 @container shell-top (max-width: 780px) {
   html[data-frame] .shell-search { flex: 0 1 auto; width: auto; min-width: 0; }
@@ -12182,6 +12186,28 @@ html[data-frame] .shell-top-extra .shell-panel, html[data-frame] .shell-status-e
 html[data-frame] .shell-empty { display: none; flex-direction: column; gap: 4px; padding: 26px 18px; text-align: center; color: var(--dim); font-size: var(--frame-fs); }
 html[data-frame] .shell-empty b { color: var(--muted); font-weight: 600; }
 html[data-frame] .shell-column[data-empty="true"] .shell-empty { display: flex; }
+/* The page list (the section's pages, where the classic bar listed them): while it shows, the column's panels make way. */
+html[data-frame] .shell-list[data-pages="on"] > :is(.shell-stack, .shell-empty) { display: none !important; }
+html[data-frame] .shell-pages { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 6px; padding: 12px 10px 10px; overflow-y: auto; overflow-x: hidden; }
+html[data-frame] .shell-pages[hidden] { display: none; }
+html[data-frame] .shell-pages-head { display: flex; align-items: center; gap: 8px; padding: 2px 4px 4px 10px; }
+html[data-frame] .shell-pages-title { flex: 1 1 auto; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ivory); font: 650 max(12px, calc(15px * var(--text-scale, 1)))/1.3 var(--font-ui); letter-spacing: 0; text-transform: none; }
+html[data-frame] .shell-pages-history { display: flex; gap: 4px; flex: none; }
+html[data-frame] .shell-pages-history .shell-icon-btn { width: 28px; height: 28px; border-radius: 8px; }
+html[data-frame] .shell-pages-git { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 4px 4px 10px; }
+html[data-frame] .shell-pages-git:empty { display: none; }
+html[data-frame] .shell-pages-list { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+html[data-frame] .shell-page { display: flex; align-items: center; justify-content: flex-start; gap: 10px; width: 100%; min-height: 36px; padding: 0 10px; border-radius: 10px; color: var(--muted); font-size: var(--frame-fs); text-align: left; }
+html[data-frame] .shell-page .glyph { flex: none; width: 17px; height: 17px; }
+html[data-frame] .shell-page-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.3; }
+html[data-frame] .shell-page.is-sub { min-height: 32px; padding-left: 22px; }
+html[data-frame] .shell-page[aria-current="page"] { background: var(--tint-gold-3, color-mix(in srgb, var(--gold) 14%, transparent)); color: var(--ivory); font-weight: 600; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 30%, transparent); }
+html[data-frame] .shell-page[aria-current="page"] .glyph { color: var(--gold-bright); }
+html[data-frame] .shell-page .count { margin-left: auto; min-width: 20px; padding: 0 6px; border-radius: 9px; background: var(--tint-gold-2, color-mix(in srgb, var(--gold) 10%, transparent)); color: var(--ivory); font: 650 var(--frame-fs-s)/18px var(--font-ui); text-align: center; }
+html[data-frame] .shell-page .count.warn { color: var(--warn); }
+html[data-frame] .shell-page .count[hidden] { display: none; }
+html[data-frame] .shell-pages-group { margin: 10px 0 2px; padding: 0 10px; color: var(--muted); font: 650 var(--frame-fs-s)/1.3 var(--font-ui); letter-spacing: 0; text-transform: none; }
+html[data-frame] .shell-pages-group.is-current { color: var(--ivory); }
 /* small windows: a column is a drawer over the page, under the bar and the strip */
 html[data-frame] .shell-column[data-state="drawer"], html[data-frame][data-ui-mode="vibe"] .shell-column[data-state="drawer"] { top: var(--shell-y0); width: var(--frame-drawer-w, 280px); max-width: calc(100vw - 24px); background: var(--panel-solid); backdrop-filter: none; box-shadow: var(--shadow-2); animation: shell-drawer-in var(--motion-base, 200ms) var(--ease-out, ease-out); }
 html[data-frame] .shell-list[data-state="drawer"] { left: var(--frame-rail-w); max-width: calc(100vw - var(--frame-rail-w) - 12px); }
@@ -12462,6 +12488,24 @@ html[data-motion="off"][data-frame] .shell-column[data-state="drawer"], html[dat
 .sx-proj-words b { font: 650 var(--x14)/1.25 var(--font-ui); }
 .sx-proj-words small { color: var(--muted); font-size: var(--x12); }
 .sx-proj .glyph { flex: none; width: 14px; height: 14px; color: var(--muted); }
+.sx-proj[aria-expanded="true"] { background: var(--tint-gold-1); }
+/* the Git chip (git-sync.js's, in its list look) and the worktrees, under the project */
+.sx-gitrow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; margin-top: -4px; padding: 0 4px; }
+.sx-gitrow[hidden] { display: none; }
+.sx-git { display: inline-flex; min-width: 0; max-width: 100%; }
+.sx-git:empty { display: none; }
+.sx-trees { min-height: 28px; height: 28px; padding: 0 10px 0 8px; gap: 6px; border-radius: var(--r-pill); background: transparent; color: var(--muted); font-size: var(--x125); }
+.sx-trees:hover { color: var(--ivory); }
+.sx-trees .glyph { width: 14px; height: 14px; }
+.sx-projmenu { left: 10px; right: auto; width: min(300px, calc(100% - 20px)); }
+.sx-projmenu .sx-menu-item { min-height: 40px; gap: 10px; }
+.sx-menu-words { display: flex; flex: 1 1 auto; flex-direction: column; min-width: 0; text-align: left; }
+.sx-menu-words :is(span, small) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sx-menu-words small { color: var(--muted); font-size: var(--x12); }
+.sx-proj-av.small { width: 26px; height: 26px; font-size: var(--x12); }
+.sx-menu-on { flex: none; color: var(--gold-bright); }
+.sx-menu-hr { width: calc(100% - 8px); margin: 4px; border: 0; border-top: 1px solid var(--hairline); }
+.sx-scan { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 2px 4px; }
 .sx-new { justify-content: flex-start; width: 100%; min-height: 36px; }
 .sx-new .glyph { flex: none; width: 16px; height: 16px; }
 .sx-new kbd { margin-left: auto; padding: 3px 6px; border: 1px solid color-mix(in srgb, var(--ink) 22%, transparent); border-radius: var(--r-xs); background: color-mix(in srgb, var(--ink) 14%, transparent); color: inherit; font: 600 var(--x12)/1 var(--font-mono); }
@@ -12489,6 +12533,7 @@ html[data-motion="off"][data-frame] .shell-column[data-state="drawer"], html[dat
 .sx-row[data-tone="check"] .sx-dot { background: var(--info); }
 .sx-row[data-tone="done"] .sx-dot { background: var(--good); }
 .sx-row[data-tone="idea"] .sx-dot { background: var(--idea); }
+.sx-row[data-tone="plan"] .sx-dot { background: transparent; box-shadow: inset 0 0 0 2px var(--idea); }
 .sx-row-text { display: flex; flex: 1 1 auto; flex-direction: column; gap: 2px; min-width: 0; }
 .sx-row-top { display: flex; align-items: center; gap: 6px; min-width: 0; font: 600 var(--x14)/1.3 var(--font-ui); }
 .sx-row-title { min-width: 0; overflow: hidden; color: var(--ivory); text-overflow: ellipsis; white-space: nowrap; }
@@ -12628,7 +12673,7 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
 .sx-cmp-range { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: ew-resize; }
 
 /* a question that waits on you, docked above the box */
-.sx-dock { flex: none; display: grid; gap: 8px; width: min(860px, 100%); max-height: 55%; margin: 0 auto; padding: 0 var(--x-gut) 8px; overflow-y: auto; overscroll-behavior: contain; }
+.sx-dock { flex: none; display: grid; gap: 8px; width: 100%; max-height: 55%; margin: 0 auto; padding: 0 var(--x-gut) 8px; overflow-y: auto; overscroll-behavior: contain; }
 .sx-ask { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--warn) 55%, transparent); border-radius: var(--r-lg); background: color-mix(in srgb, var(--warn) 6%, var(--surface-raised)); }
 .sx-ask-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .sx-ask-k { color: var(--warn); font: 650 var(--x125)/1.2 var(--font-ui); }
@@ -12643,21 +12688,45 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
 .sx-q1 { flex: 1 1 auto; min-width: 0; overflow: hidden; font-size: var(--x13); text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---- the box ---------------------------------------------------------------------------------------------------------------------------- */
-.sx-compose { display: grid; flex: none; gap: 6px; width: min(860px, calc(100% - 2 * var(--x-gut))); margin: 0 auto 12px; padding: 8px 10px 10px; border: 1px solid var(--hairline-strong); border-radius: var(--r-xl); background: var(--surface-raised); }
-.sx-compose-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; }
+/* As the prototype draws it: the box spans the thread's column, the words first, one row of controls under them (the purpose, Attach,
+   the run menu, the Worktree switch, Send), and a line under the row that says what the words will do. */
+.sx-compose { position: relative; display: grid; flex: none; gap: 6px; width: calc(100% - 2 * var(--x-gut)); margin: 0 auto 12px; padding: 8px 12px 8px; border: 1px solid var(--hairline-strong); border-radius: var(--r-xl); background: var(--surface-raised); }
+.sx-compose:focus-within { border-color: color-mix(in srgb, var(--gold) 55%, var(--hairline-strong)); }
 .sx-modes { display: inline-flex; padding: 2px; border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--tint-gold-1); }
 .sx-modes button { min-height: 26px; padding: 0 10px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--muted); font-size: var(--x125); }
 .sx-modes button.on { background: var(--tint-gold-3); color: var(--ivory); }
-.sx-hint { flex: 1 1 0; min-width: 0; overflow: hidden; color: var(--dim); font-size: var(--x12); text-align: right; text-overflow: ellipsis; white-space: nowrap; }
-#sessions-input { display: block; width: 100%; min-height: 64px; max-height: 240px; padding: 6px 4px; border: 0; outline: 0; background: transparent; color: var(--ivory); font: 400 var(--x14)/1.5 var(--font-ui); resize: vertical; }
+.sx-hint { min-width: 0; margin: 0; padding: 0 4px; overflow: hidden; color: var(--dim); font-size: var(--x12); text-overflow: ellipsis; white-space: nowrap; }
+#sessions-input { display: block; width: 100%; min-height: 56px; max-height: 240px; padding: 6px 4px; border: 0; outline: 0; background: transparent; color: var(--ivory); font: 400 var(--x14)/1.5 var(--font-ui); resize: vertical; }
 #sessions-input::placeholder { color: var(--dim); }
 .sx-compose .composer-attach { display: contents; }
-.sx-compose[data-intent="note"] .composer-attach { display: none; }
 .sx-compose .composer-thumbs, .sx-compose .composer-attach-note { order: -1; flex: 1 1 100%; padding: 0 2px; }
+.sx-compose .composer-attach-button { min-height: 30px; padding: 0 10px; border-color: var(--hairline-strong); border-radius: var(--r-md); background: transparent; color: var(--muted); font-size: var(--x125); }
 .sx-compose .composer-mentions { padding: 0 4px 2px; }
 .sx-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
 .sx-more { display: none; width: 30px; min-width: 30px; padding: 0; }
-.sx-autonomy { position: relative; display: inline-flex; }
+.sx-autonomy { position: relative; display: flex; min-width: 0; }
+/* the run menu: one button, and a panel above the box with the permission mode, the coding worker and the folder */
+.sx-runwrap { position: relative; display: inline-flex; min-width: 0; }
+.sx-run { gap: 6px; max-width: 280px; border-color: var(--hairline-strong); background: transparent; color: var(--muted); }
+.sx-run:hover, .sx-run[aria-expanded="true"] { color: var(--ivory); background: var(--tint-gold-1); }
+.sx-run-words { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sx-run .sx-run-car { width: 12px; height: 12px; }
+.sx-runmenu { position: absolute; z-index: 6; left: 0; bottom: calc(100% + 8px); display: grid; width: min(440px, calc(100vw - 32px)); max-height: min(70vh, 560px); padding: 6px 14px 10px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--hairline-strong); border-radius: var(--r-lg); background: var(--panel-solid); box-shadow: var(--shadow-3); }
+.sx-runrow { display: grid; gap: 6px; padding: 8px 0; }
+.sx-runrow + .sx-runrow { border-top: 1px solid var(--hairline); }
+.sx-runrow-head { display: grid; gap: 1px; }
+.sx-runrow-head b { color: var(--ivory); font: 650 var(--x13)/1.3 var(--font-ui); }
+.sx-runnote { color: var(--muted); font-size: var(--x12); line-height: 1.4; }
+.sx-folder { display: flex; flex-wrap: wrap; gap: 6px; }
+/* autonomy.js's own control, its choices laid out in the panel instead of behind its chip */
+.sx-runmenu .autonomy-chip { display: none; }
+.sx-runmenu .autonomy-control { width: 100%; }
+.sx-runmenu .autonomy-control .autonomy-popover, .sx-runmenu .autonomy-control .autonomy-popover[hidden] { position: static; display: grid !important; gap: 4px; width: auto; padding: 0; border: 0; background: none; box-shadow: none; backdrop-filter: none; opacity: 1; scale: none; translate: none; pointer-events: auto; }
+.sx-runmenu .autonomy-mode { min-height: 0; height: auto; padding: 7px 10px; border: 1px solid transparent; border-radius: var(--r-md); background: transparent; color: var(--ivory); font: 600 var(--x13)/1.3 var(--font-ui); white-space: normal; }
+.sx-runmenu .autonomy-mode[aria-checked="true"] { border-color: color-mix(in srgb, var(--gold) 40%, transparent); background: var(--tint-gold-3); }
+.sx-runmenu .autonomy-mode small { margin-top: 2px; color: var(--muted); font-size: var(--x12); opacity: 1; font-weight: 400; }
+.sx-runmenu .autonomy-popover > .autonomy-button:not(.autonomy-mode) { justify-self: start; min-height: 28px; padding: 0 10px; font-size: var(--x125); }
+.sx-runmenu .autonomy-note:empty { display: none; }
 .sx-chipset, .sx-worker { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
 .sx-chip-btn { min-height: 30px; max-width: 240px; padding: 0 10px; border-radius: var(--r-md); font-size: var(--x125); }
 .sx-chip-btn.quiet { background: transparent; color: var(--muted); }
@@ -12685,20 +12754,55 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
 .sx-thread[data-short="true"] .sx-tools { display: contents; }
 .sx-thread[data-short="true"] :is(.sx-send, .sx-more) { order: 2; margin: 0 0 3px; }
 .sx-thread[data-short="true"] .sx-more { display: inline-flex; }
-.sx-thread[data-short="true"] .sx-compose-top, .sx-thread[data-short="true"] .composer-mentions { order: 3; flex: 1 1 100%; }
-.sx-thread[data-short="true"] :is(.sx-autonomy, .sx-chipset, .sx-worker, .composer-attach-button) { order: 4; }
-.sx-thread[data-short="true"] .sx-compose[data-open="false"] :is(.sx-compose-top, .sx-autonomy, .sx-chipset, .sx-worker, .composer-attach-button) { display: none; }
+.sx-thread[data-short="true"] .composer-mentions { order: 3; flex: 1 1 100%; }
+.sx-thread[data-short="true"] .sx-modes { order: 3; }
+.sx-thread[data-short="true"] :is(.sx-runwrap, .sx-chipset, .composer-attach-button) { order: 4; }
+.sx-thread[data-short="true"] .sx-hint { display: none; }
+.sx-thread[data-short="true"] .sx-compose[data-open="false"] :is(.sx-modes, .sx-runwrap, .sx-chipset, .composer-attach-button) { display: none; }
 /* a narrow thread (a small window, or one with both columns open) keeps the box to a line of controls too */
 .sx-thread { container: sx-thread / inline-size; }
 @container sx-thread (max-width: 620px) {
   .sx-hint { display: none; }
   .sx-more { display: inline-flex; }
-  .sx-compose[data-open="false"] :is(.sx-chipset, .sx-worker) { display: none; }
+  .sx-compose[data-open="false"] :is(.sx-chipset, .sx-runwrap) { display: none; }
 }
 
 /* ---- the inspector -------------------------------------------------------------------------------------------------------------------- */
 .sx-insp { border-left: 1px solid var(--hairline); }
-.sx-itabs { display: flex; flex: none; flex-wrap: wrap; gap: 0; padding: 0 6px; border-bottom: 1px solid var(--hairline); }
+/* One row of tabs, as in the prototype: what does not fit waits behind More. */
+.sx-itabrow { display: flex; flex: none; align-items: stretch; min-width: 0; padding: 0 6px; border-bottom: 1px solid var(--hairline); }
+.sx-itabrow:has(> .sx-itabs[hidden]) { display: none; }
+.sx-itabs { display: flex; flex: 1 1 auto; flex-wrap: nowrap; gap: 0; min-width: 0; overflow: hidden; }
+.sx-itab-more { flex: none; gap: 4px; min-height: 38px; margin-left: auto; padding: 0 6px; border: 0; border-radius: 0; background: transparent; color: var(--muted); font: 600 var(--x125)/1 var(--font-ui); }
+.sx-itab-more .glyph { width: 12px; height: 12px; }
+.sx-itab-more[aria-expanded="true"] { color: var(--ivory); }
+.sx-itab-menu { top: 44px; right: 8px; min-width: 180px; }
+.sx-itab-menu .sx-chip-count { margin-left: auto; }
+/* The project's inspector (Home with no session open): Project, and Team and Usage a press away. */
+.sx-project { display: flex; flex: 1 1 0; flex-direction: column; min-height: 0; }
+.sx-ptabs { display: flex; flex: none; gap: 2px; padding: 0 6px; border-bottom: 1px solid var(--hairline); }
+.sx-ptab { display: inline-flex; align-items: center; min-height: 38px; padding: 0 8px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font: 600 var(--x125)/1 var(--font-ui); }
+.sx-ptab.on { border-bottom-color: var(--gold); color: var(--ivory); }
+.sx-member { align-items: center; }
+.sx-member-open { min-width: 0; min-height: 0; padding: 0; overflow: hidden; color: var(--ivory); font-size: var(--x13); text-align: left; text-decoration: none; text-overflow: ellipsis; white-space: nowrap; }
+.sx-kv b[data-tone="live"] { color: var(--live); }
+.sx-kv b[data-tone="warn"] { color: var(--warn); }
+.sx-feedrow { display: flex; align-items: flex-start; gap: 8px; width: 100%; min-height: 0; padding: 6px 2px; border: 0; border-radius: var(--r-sm); background: transparent; text-align: left; white-space: normal; }
+.sx-feedrow + .sx-feedrow { border-top: 1px solid color-mix(in srgb, var(--ivory) 7%, transparent); }
+.sx-feedrow .sx-dot { margin-top: 5px; }
+.sx-feedrow[data-tone="ask"] .sx-dot { background: var(--warn); }
+.sx-feedrow[data-tone="run"] .sx-dot { background: var(--live); }
+.sx-feedrow[data-tone="check"] .sx-dot { background: var(--info); }
+.sx-feedrow[data-tone="done"] .sx-dot { background: var(--good); }
+.sx-feedrow-words { display: grid; flex: 1 1 auto; gap: 1px; min-width: 0; font-size: var(--x13); }
+.sx-feedrow-words b { overflow: hidden; color: var(--ivory); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.sx-feedrow-words span { color: var(--muted); font-size: var(--x12); }
+.sx-feedrow time { flex: none; color: var(--dim); font-size: var(--x12); white-space: nowrap; }
+.sx-icard[data-tone="bad"] h4 .r { color: var(--bad); }
+.sx-icard[data-tone="warn"] h4 .r { color: var(--warn); }
+.sx-icard[data-tone="good"] h4 .r { color: var(--good); }
+.sx-icard[data-tone="info"] h4 .r { color: var(--info); }
+.sx-step.skip .sx-step-mark { color: var(--dim); }
 .sx-itab { min-height: 38px; padding: 0 6px; gap: 4px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font: 600 var(--x125)/1 var(--font-ui); }
 .sx-itab.on { border-bottom-color: var(--gold); color: var(--ivory); }
 .sx-itab em { padding: 1px 5px; border-radius: var(--r-pill); background: var(--tint-gold-3); color: var(--gold-bright); font: 600 var(--x12)/1.2 var(--font-ui); }
@@ -50608,7 +50712,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     if (entry && inPlace(entry, options.after)) return entry.slot;
     layer();
     const fresh = !entry;
-    if (fresh) { entry = makeMount(host, options.variant === "vibe" ? "vibe" : "bar"); mounts.push(entry); }
+    if (fresh) { entry = makeMount(host, ["vibe", "list"].includes(options.variant) ? options.variant : "bar"); mounts.push(entry); }
     place(entry, options);
     if (fresh) paintMount(entry, view());
     return entry.slot;
@@ -50618,20 +50722,26 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     if (entry.slot.hidden !== !on) entry.slot.hidden = !on;
     if (!on) { entry.sig = ""; return; }
     const badge = countOf(model);
-    const sig = `${model.id}|${model.label}|${model.tone}|${model.glyph}|${badge}`;
+    // A session list's head (the 0.5 frame) carries the branch in the chip, before the state: "main | 3 changes".
+    const branch = entry.variant === "list" ? model.branch : "";
+    const sig = `${model.id}|${model.label}|${model.tone}|${model.glyph}|${badge}|${branch}`;
     if (entry.sig === sig) return;
     entry.sig = sig;
     const { chip } = entry;
     chip.dataset.state = model.id;
     chip.dataset.tone = model.tone;
     // The name says what the chip is (its words alone, "2 to push", do not) and still holds the visible label.
-    chip.setAttribute("aria-label", `GitHub sync: ${model.label}`);
-    chip.title = `GitHub sync: ${model.label}`;
+    chip.setAttribute("aria-label", `GitHub sync: ${branch ? `${branch}, ` : ""}${model.label}`);
+    chip.title = `GitHub sync: ${branch ? `${branch} · ` : ""}${model.label}`;
     entry.label.textContent = model.label;
     entry.badge.textContent = String(badge);
-    entry.badge.hidden = !badge;
+    entry.badge.hidden = !badge || entry.variant === "list";
     entry.glyphNode = glyph(glyphFor(model));
-    chip.replaceChildren(entry.glyphNode, entry.label, entry.badge);
+    if (branch) {
+      const name = el("span", "gs-chip-branch");
+      name.append(glyph("other-branch"), el("span", "gs-chip-branch-name", branch));
+      chip.replaceChildren(name, el("i", "gs-chip-sep"), entry.glyphNode, entry.label, entry.badge);
+    } else chip.replaceChildren(entry.glyphNode, entry.label, entry.badge);
   }
   function paintAll() {
     const model = view();
@@ -67629,6 +67739,8 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       if (state.message) return state.message;
       if (!state.images.length) return "";
       if (options.mode?.() === "task") return "Saved with the project. The task's brief names the file so a builder can open it.";
+      // A box whose words carry no picture (the 0.5 session box as a Note) keeps them for its next Ask or Change.
+      if (options.mode?.() === "words") return "A note is words only: these pictures wait here and go with an Ask or a Change.";
       const vision = state.vision;
       if (vision?.sees === true) return `Sent to ${vision.model || "this model"}, which can read images. A picture is not redacted the way text is, so check it first.`;
       if (vision?.sees === false) return `${vision.model ? `${vision.model} can't` : "This model can't"} see images. The picture is saved with your message, and the reply will say so.`;
@@ -83114,6 +83226,16 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (id === "skills") return { section: "setup" };
     return { section: "live" };
   }
+  // The same sections and views as data, for the 0.5 frame's page list (renderer/shell.js draws them as a list in its list
+  // column): each with whether it is where the person is, and a way there.
+  function navModel(id, options = {}) {
+    const here = location(id, options);
+    const selected = (route, target) => route === id && (route !== "agents" || target.pane === here.pane) && (route !== "agent-brain" || target.tab === window.MefiAgentBrain?.tab?.()) && (route !== "usage" || target.view === (options.view || window.MefiModelLab?.view?.() || "usage"));
+    return sections.map(([section, label, route, target]) => ({
+      id: section, label, current: section === here.section, run: () => go(route, target),
+      views: (children[section] || []).map(([childLabel, childRoute, childTarget = {}]) => ({ label: childLabel, current: selected(childRoute, childTarget), run: () => go(childRoute, childTarget) })),
+    }));
+  }
   let closeNavMenu = () => {};
   function paintNav(nav, id, options = {}) {
     const here = location(id, options), signature = JSON.stringify([id, here, window.MefiAgentBrain?.tab?.(), options.view || window.MefiModelLab?.view?.()]);
@@ -83905,7 +84027,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     // Canonical settings ownership is established before the first visit.
     mount();
   }
-  window.MefiAgents = { open, close, mount, redirect, paintNav, location, stageRouting, routingView, params: () => ({ ...params }), reload: discard, draft: () => draft() ? clone(draft().configuration) : null };
+  window.MefiAgents = { open, close, mount, redirect, paintNav, navModel, location, stageRouting, routingView, params: () => ({ ...params }), reload: discard, draft: () => draft() ? clone(draft().configuration) : null };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
 })();
 
@@ -92434,7 +92556,14 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     });
   }
 
-  window.MefiWorktrees = { open, close, isOpen, refresh: () => read(), peek, summary, state: () => ({ list: state.list, error: state.error }) };
+  // One row in this page's own words (its verdict, how loud it is, what to do about it), for the session inspector's Worktree tab.
+  function describe(row) {
+    const list = state.list;
+    if (!row || !list?.repo) return null;
+    const shown = STATES[row.state] ?? STATES.merged;
+    return { label: shown.label, tone: shown.tone, advice: advice(row, list), main: list.main, upstream: list.upstream };
+  }
+  window.MefiWorktrees = { open, close, isOpen, refresh: () => read(), peek, summary, describe, state: () => ({ list: state.list, error: state.error }) };
   // nav.js holds the record (Work, beside Analyzer) and calls open/close.
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
@@ -93679,6 +93808,14 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 // the list gets the same. A column's width is changed by its splitter (drag,
 // arrow keys, double-click) and only through MefiNav.layout.set.
 //
+// The bar's middle is a breadcrumb, project / session or page, as the 0.5
+// prototype has it: the classic local navigation (Back, Forward and the
+// section's pages) is not drawn in the frame. Its pages are a page list in the
+// list column instead, on every page of a section that has them (Work, Agents,
+// Settings), with Back and Forward within the section and the Git chip; Home
+// keeps its session list there. An inspector whose panels all say they have
+// nothing to show (a page that is not a session) folds away and takes no room.
+//
 // With v2 off nothing here is drawn, listens, polls or stores. The one thing
 // this file always does is the way in: a Search action and a Settings switch
 // that turn the layout on or off and reload the way builder.js's layout switch
@@ -93687,10 +93824,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 //
 // window.MefiShell: active, enable, disable, region, mode, setMode, size,
 // resize, info, open, close, toggle, isOpen, mount, onChange, openInbox,
-// resetLayout, layout, status, sync, onInbox (a hook), plan, and the
+// resetLayout, layout, status, sync, pages, onInbox (a hook), plan, and the
 // constants LIMITS, DEFAULTS, REGIONS, MODES and PRESETS. It emits
 // `mefi:shell-layout` on window when a region opens, closes, is resized or
-// becomes a drawer, when the mode changes and when the frame comes or goes.
+// becomes a drawer, when the mode changes, when the page list comes or goes
+// and when the frame comes or goes.
 (function () {
   "use strict";
   const SVG_NS = "http://www.w3.org/2000/svg";
@@ -93704,7 +93842,6 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   const MAIN_MIN = 320;
   const KEY_STEP = 8;
   const KEY_STEP_BIG = 32;
-  const NARROW_BAND = 640; // the top bar's width (CSS px) under which the local navigation gives way to the bar's own controls
   // What each mode starts with, and what Reset layout returns to. Build is the
   // in-depth mode: list and inspector open. Vibe is the calm one: both closed.
   const PRESETS = Object.freeze({
@@ -93750,7 +93887,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     layout: [PANEL, "M6.25 3v10", "M2 6.5h12"],
     pause: ["M5.75 3.75v8.5", "M10.25 3.75v8.5"],
     play: ["M5 3.5v9l7.5-4.5z"],
-    shield: ["M8 2.25 3.25 4v3.6c0 2.9 2 5 4.75 6.15 2.75-1.15 4.75-3.25 4.75-6.15V4z"],
+    back: ["M9.75 3.5 5.25 8l4.5 4.5"],
+    forward: ["M6.25 3.5 10.75 8l-4.5 4.5"],
+    shield:["M8 2.25 3.25 4v3.6c0 2.9 2 5 4.75 6.15 2.75-1.15 4.75-3.25 4.75-6.15V4z"],
   });
   function icon(name) {
     const svg = document.createElementNS(SVG_NS, "svg");
@@ -93838,6 +93977,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     els: {},
     stacks: {},
     top: null,
+    pages: null,          // the page list's nodes, and what it last drew
+    vacant: false,        // the inspector's panels all say there is nothing to show on this page
     statusParts: null,
     splits: null,
     menu: null,
@@ -93916,6 +94057,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       const empty = el("div", "shell-empty");
       empty.append(text("b", "", name === "list" ? "Nothing listed yet" : "Nothing to inspect yet"), text("span", "", name === "list" ? "This fills in when the page you are on has things to list." : "Select something to see its details here."));
       column.append(empty);
+      // The list column also holds the section's page list, before the panels it makes way for.
+      if (name === "list") column.append(buildPages());
       state.stacks[name] = stack(column);
       column.hidden = true;
     }
@@ -93935,6 +94078,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
   function removeRegions() {
     state.menu = null;
+    state.pages = null;
     state.els.frame?.remove?.();
     state.els = {};
     state.stacks = {};
@@ -94003,6 +94147,15 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (!node) return;
     if (isColumn(regionName)) node.dataset.empty = String(!anyShown);
     if (regionName === "main") node.hidden = !anyShown;
+    // An inspector whose panels all say there is nothing to show here (a page that is not a session) folds away: no room, no
+    // "Nothing to inspect yet". With nothing mounted at all the frame cannot know, and keeps the column and its note.
+    if (regionName === "inspector") {
+      const vacant = panels.length > 0 && !anyShown;
+      if (vacant !== state.vacant) {
+        state.vacant = vacant;
+        if (state.on && state.plan && !applying) { apply(); state.planKey = planKey(state.plan); paintBars(); emit({ what: "resize", region: "inspector", reason: vacant ? "vacant" : "filled" }); }
+      }
+    }
   }
 
   // ---- the contract: asking MefiNav.layout for room -----------------------------------------
@@ -94020,6 +94173,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       const prefs = state.prefs[state.mode];
       const fold = foldNames();
       const plan = computePlan({ width: viewWidth(), rail: railWidth(), prefs, fold, mainMin: mainMin() });
+      // A vacant inspector takes no room and is no drawer; what the mode asked for is kept and comes back with a panel that shows.
+      if (state.vacant) plan.inspector = { ...plan.inspector, docked: false, drawer: false, width: 0, vacant: true };
       state.plan = plan;
       const folded = new Set(fold);
       const want = { list: plan.list.width, inspector: plan.inspector.width, tabs: prefs.tabs.open ? state.tabsWanted : 0, status: state.statusWanted };
@@ -94079,7 +94234,6 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   function paintBars() {
     paintMode();
     paintLive();
-    measureBar();
   }
 
   // ---- open, close, resize --------------------------------------------------------------------
@@ -94103,6 +94257,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }
     if (!isColumn(name)) return false;
     if (!state.plan) apply();
+    // Nothing to inspect on this page: the saved choice is left as it is for the pages that have something.
+    if (name === "inspector" && state.vacant) return false;
     if (state.plan[name].drawer) {
       if (wanted) return openDrawer(name);
       closeDrawer(true);
@@ -94162,6 +94318,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       docked: one ? one.docked : isOpen(name),
       drawer: one ? one.drawer : false,
       drawerOpen: state.drawer === name,
+      vacant: name === "inspector" && state.vacant,
       size: size(name),
       width: isColumn(name) ? prefs[name].w : null,
       min: isColumn(name) ? LIMITS[name][0] : null,
@@ -94335,60 +94492,192 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (!parts || !plan) return;
     for (const [name, node, key] of [["list", parts.listToggle, "Ctrl B"], ["inspector", parts.inspectorToggle, "["]]) {
       const on = isOpen(name);
+      const vacant = name === "inspector" && state.vacant;
       node.setAttribute("aria-pressed", String(on));
-      node.setAttribute("title", `${on ? "Hide" : "Show"} the ${name} (${key})${plan[name].drawer ? ". It opens over the page in a window this small" : ""}`);
+      node.setAttribute("title", vacant ? "Nothing to inspect on this page: the inspector comes back on a session" : `${on ? "Hide" : "Show"} the ${name} (${key})${plan[name].drawer ? ". It opens over the page in a window this small" : ""}`);
       node.dataset.on = String(on);
+      node.disabled = vacant;
     }
   }
 
-  // ---- where you are: project / page / item -------------------------------------------------------
+  // ---- where you are: project / session or page ----------------------------------------------------
+  // The prototype's breadcrumb. On Home: the project and the session on screen (Today when none is). Anywhere else: the
+  // project, the section and the page, and on the Task board the task it has selected, which opens it (the classic bar's
+  // "Current task"). Each part is what MefiNav, Home and the session panels already know.
+  const isHomeRoute = (id) => id == null || id === "workspace" || id === "vibe";
+  function sessionTitle(snapshot) {
+    const sessions = window.MefiSessions;
+    if (!sessions?.active?.()) return null;
+    const taskId = sessions.selected?.();
+    const task = taskId && Array.isArray(snapshot?.tasks) ? snapshot.tasks.find((row) => row?.id === taskId) : null;
+    if (!task) return null;
+    return String(task.title || window.MefiTasks?.shortTitle?.(task) || "Untitled task");
+  }
   function trail() {
     const n = nav();
     const parts = [];
-    const project = String(window.MefiWorkspace?.snapshot?.()?.project?.name ?? "").trim();
+    const snapshot = window.MefiWorkspace?.snapshot?.() ?? null;
+    const project = String(snapshot?.project?.name ?? "").trim();
     if (project) parts.push(project);
     const id = n?.current?.();
     const dest = id ? n?.get?.(id) : null;
-    if (dest) parts.push(String(dest.label || dest.short || id));
-    const pageWithTask = id === "tasks" || (id === "workspace" && window.MefiBuilder?.view?.()?.view === "task");
-    const task = pageWithTask ? n?.taskContext?.() : null;
-    if (task?.title) parts.push(String(task.title));
+    if (isHomeRoute(id)) {
+      const session = sessionTitle(snapshot);
+      const built = !session && window.MefiBuilder?.view?.()?.view === "task" ? n?.taskContext?.() : null;
+      if (session || built?.title) parts.push(String(session || built.title));
+      else parts.push(window.MefiToday ? "Today" : String(dest?.label || dest?.short || "Home"));
+      return parts;
+    }
+    let section = null;
+    try { section = dest ? n?.sectionLabel?.(dest) ?? null : null; } catch { section = null; }
+    const page = dest ? String(dest.label || dest.short || id) : null;
+    if (section && section !== page) parts.push(String(section));
+    if (page) parts.push(page);
+    const task = id === "tasks" ? n?.taskContext?.() : null;
+    if (task?.title) parts.push({ label: String(task.title), open: () => n?.go?.("tasks", { taskId: task.taskId, projectId: task.projectId }) });
     return parts;
   }
   function paintTrail(parts) {
     const host = state.top?.trail;
     if (!host) return;
     host.replaceChildren();
-    parts.forEach((label, at) => {
+    parts.forEach((part, at) => {
+      const label = typeof part === "string" ? part : String(part?.label ?? "");
       if (at) host.append(text("span", "shell-sep", "/"));
       const last = at === parts.length - 1;
-      const crumb = text("span", last ? "shell-crumb is-current" : "shell-crumb", label);
+      const className = last ? "shell-crumb is-current" : "shell-crumb";
+      const crumb = typeof part?.open === "function" ? button(`shell-btn ${className} shell-crumb-link`, null, () => part.open()) : el("span", className);
+      crumb.textContent = label;
       if (last) crumb.setAttribute("aria-current", "page");
-      crumb.setAttribute("title", label);
+      crumb.setAttribute("title", typeof part?.open === "function" ? `${label} · open it` : label);
       host.append(crumb);
     });
   }
-  // Whether the local navigation (MefiNav's row of the section's pages) is on screen in the bar's middle.
-  function localShown() {
-    const node = document.getElementById?.("app-local-nav");
-    if (!node || node.hidden) return false;
-    const box = node.getBoundingClientRect?.();
-    return Boolean(box && box.width > 0 && box.height > 0);
+
+  // ---- the page list: the section's pages, in the list column ----------------------------------------
+  // What the classic bar listed between Back and Forward: the routes MefiNav keeps for the section (LOCAL_ROUTES), or for
+  // Agents its sections and their views (MefiAgents.navModel, so a pane or a tab is reachable as before). Home has none:
+  // its list is the session list. While the page list shows, the column's panels make way (html[data-pages] on the column)
+  // and MefiShell.pages() says so, so the session list does not draw for nobody.
+  function sectionOfRoute(n, id) {
+    const routes = n?.LOCAL_ROUTES;
+    if (!routes || typeof routes !== "object") return null;
+    const listed = Object.keys(routes).find((key) => Array.isArray(routes[key]) && routes[key].includes(id));
+    if (listed) return listed;
+    const said = document.body?.dataset?.navSection;
+    return said && Array.isArray(routes[said]) ? said : null;
   }
-  // The local navigation sits between the bar's two ends; they tell the stylesheet how much of the bar they take.
-  // In a band narrower than NARROW_BAND the bar's own controls and the trail have it to themselves
-  // (html[data-frame-narrow]): the decision is the band's width alone, so it cannot flicker.
-  function measureBar() {
-    const parts = state.top, bar = state.els.top;
-    if (!parts || !bar) return;
-    const width = (node) => { const box = node?.getBoundingClientRect?.(); return box && box.width > 0 ? Math.ceil(box.width) : 0; };
-    const band = width(bar);
-    const narrow = band > 0 && band < NARROW_BAND;
-    if (narrow) rootEl().setAttribute?.("data-frame-narrow", ""); else rootEl().removeAttribute?.("data-frame-narrow");
-    const left = width(parts.left), right = width(parts.right) + width(parts.extra);
-    setVar(rootEl(), "--frame-top-l", `${left ? left + 12 : 0}px`);
-    setVar(rootEl(), "--frame-top-r", `${right ? right + 12 : 0}px`);
-    bar.dataset.local = localShown() ? "on" : "off";
+  function pageModel() {
+    const n = nav();
+    const id = n?.current?.() ?? null;
+    if (isHomeRoute(id)) return null;
+    const section = sectionOfRoute(n, id);
+    if (!section || section === "home") return null;
+    const dest = n?.get?.(id);
+    let title = null;
+    try { title = dest ? n?.sectionLabel?.(dest) ?? null : null; } catch { title = null; }
+    title = String(title || section.charAt(0).toUpperCase() + section.slice(1));
+    if (section === "agents" && typeof window.MefiAgents?.navModel === "function") {
+      let groups = null;
+      try { groups = window.MefiAgents.navModel(id); } catch { groups = null; }
+      if (Array.isArray(groups) && groups.length) return { section, title, groups: groups.map((group) => ({ id: String(group.id), label: String(group.label), current: Boolean(group.current), run: group.run, views: (Array.isArray(group.views) ? group.views : []).map((view) => ({ label: String(view.label), current: Boolean(view.current), run: view.run })) })) };
+    }
+    const pages = (n.LOCAL_ROUTES[section] || []).map((route) => n.get?.(route)).filter(Boolean).map((page) => ({
+      id: String(page.id), label: String(page.short || page.label || page.id), glyph: typeof page.glyph === "string" ? page.glyph : null,
+      badge: typeof page.badge === "string" ? page.badge : null, alert: typeof page.alert === "string" ? page.alert : null, current: page.id === id,
+    }));
+    return pages.length ? { section, title, pages } : null;
+  }
+  function buildPages() {
+    const root = el("nav", "shell-pages", { "aria-label": "Pages" });
+    root.id = "shell-pages";
+    root.hidden = true;
+    const head = el("div", "shell-pages-head");
+    const title = text("h2", "shell-pages-title", "");
+    const history = el("div", "shell-pages-history", { role: "group", "aria-label": "Section history" });
+    const back = button("shell-btn shell-icon-btn shell-history", "Back within this section", () => nav()?.back?.(), { "data-history": "back", title: "Back within this section (Alt ←)" });
+    back.append(icon("back"));
+    const forward = button("shell-btn shell-icon-btn shell-history", "Forward within this section", () => nav()?.forward?.(), { "data-history": "forward", title: "Forward within this section (Alt →)" });
+    forward.append(icon("forward"));
+    history.append(back, forward);
+    head.append(title, history);
+    const git = el("div", "shell-pages-git");
+    const list = el("div", "shell-pages-list");
+    list.id = "shell-pages-list";
+    list.addEventListener("keydown", pageKeys);
+    root.append(head, git, list);
+    state.pages = { root, title, back, forward, git, list, key: "", shown: false, section: null };
+    return root;
+  }
+  function pageButton(label, current, run, extra = {}) {
+    const node = button(`shell-btn shell-page${extra.sub ? " is-sub" : ""}`, null, run, { "data-page": extra.key || label });
+    if (extra.glyph) {
+      const svg = document.createElementNS(SVG_NS, "svg");
+      svg.setAttribute("class", "glyph"); svg.setAttribute("aria-hidden", "true"); svg.setAttribute("focusable", "false");
+      const use = document.createElementNS(SVG_NS, "use"); use.setAttribute("href", `#${extra.glyph}`); svg.append(use);
+      node.append(svg);
+    }
+    node.append(text("span", "shell-page-label", label));
+    for (const [key, className] of [[extra.badge, "count"], [extra.alert, "count warn"]]) {
+      if (!key) continue;
+      const badge = el("span", className);
+      badge.dataset.badge = key;
+      badge.hidden = true;
+      node.append(badge);
+    }
+    if (current) node.setAttribute("aria-current", "page");
+    return node;
+  }
+  function paintPages() {
+    const pages = state.pages;
+    if (!pages || !state.on) return;
+    const n = nav();
+    const model = pageModel();
+    let history = {};
+    try { history = n?.historyState?.() || {}; } catch { history = {}; }
+    const key = JSON.stringify([model, Boolean(history.canBack), Boolean(history.canForward)]);
+    if (key !== pages.key) {
+      pages.key = key;
+      const active = document.activeElement;
+      const held = active && pages.list.contains?.(active) ? active.dataset?.page ?? null : null;
+      pages.root.hidden = !model;
+      if (state.els.list) state.els.list.dataset.pages = model ? "on" : "off";
+      pages.back.disabled = !history.canBack;
+      pages.forward.disabled = !history.canForward;
+      const rows = [];
+      if (model) {
+        pages.title.textContent = model.title;
+        pages.root.setAttribute("aria-label", `${model.title} pages`);
+        if (model.groups) {
+          for (const group of model.groups) {
+            if (!group.views.length) { rows.push(pageButton(group.label, group.current, () => group.run?.(), { key: `group:${group.id}` })); continue; }
+            rows.push(text("h3", `shell-pages-group${group.current ? " is-current" : ""}`, group.label));
+            group.views.forEach((view, at) => rows.push(pageButton(view.label, view.current, () => view.run?.(), { key: `${group.id}:${at}`, sub: true })));
+          }
+        } else for (const page of model.pages) rows.push(pageButton(page.label, page.current, () => n?.go?.(page.id), { key: page.id, glyph: page.glyph, badge: page.badge, alert: page.alert }));
+      }
+      pages.list.replaceChildren(...rows);
+      try { n?.paintBadges?.(pages.list); } catch { /* the counts are a courtesy */ }
+      if (held) [...(pages.list.querySelectorAll?.(".shell-page") ?? [])].find((node) => node.dataset?.page === held)?.focus?.({ preventScroll: true });
+    }
+    // The Git chip rides with the page list (renderer/git-sync.js keeps one popover for every chip); mounting again is harmless.
+    if (model) { try { window.MefiGitSync?.mount?.(pages.git, { variant: "list" }); } catch { /* no chip in this build */ } }
+    const shown = Boolean(model);
+    if (pages.shown !== shown || pages.section !== (model?.section ?? null)) {
+      pages.shown = shown;
+      pages.section = model?.section ?? null;
+      emit({ what: "pages", shown, section: pages.section });
+    }
+  }
+  // The arrows move between the pages, Home and End go to the ends; Tab leaves the list.
+  function pageKeys(event) {
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    const items = [...(state.pages?.list?.querySelectorAll?.(".shell-page") ?? [])];
+    const at = items.indexOf(document.activeElement);
+    if (!items.length) return;
+    const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : Math.max(0, Math.min(items.length - 1, at + (event.key === "ArrowDown" ? 1 : -1)));
+    event.preventDefault?.();
+    items[next]?.focus?.({ preventScroll: true });
   }
 
   // ---- the feed: what the bars say -------------------------------------------------------------
@@ -94457,9 +94746,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   function paintLive() {
     if (!state.on || !state.top) return;
     watchToday();
+    paintPages();
     const live = readLive();
     const parts = trail();
-    const key = JSON.stringify([live, parts, localShown(), currentMode()]);
+    const key = JSON.stringify([live, parts, currentMode()]);
     state.live = live;
     if (key === state.liveKey) return;
     state.liveKey = key;
@@ -94482,7 +94772,6 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }
     paintTrail(parts);
     paintStatusItems(live);
-    measureBar();
   }
   // One control for pausing: Home's own (workspace.js keeps the rules for a launch hold, a pause and a resume).
   function togglePause() {
@@ -94673,7 +94962,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const folded = foldNames();
     const notes = {
       list: state.plan.list.drawer ? "Opens as a drawer in a small window." : "Ctrl B shows or hides it.",
-      inspector: state.plan.inspector.drawer ? (folded.includes("inspector") ? "Opens as a drawer in a small window." : "Opens as a drawer: this window is too narrow to dock it.") : "The [ key shows or hides it.",
+      inspector: state.vacant ? "Nothing to inspect on this page: it comes back on a session." : state.plan.inspector.drawer ? (folded.includes("inspector") ? "Opens as a drawer in a small window." : "Opens as a drawer: this window is too narrow to dock it.") : "The [ key shows or hides it.",
     };
     for (const name of ["list", "inspector"]) {
       menu.parts[name].words.children[1].textContent = notes[name];
@@ -94883,9 +95172,6 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     for (const name of Object.keys(state.requested)) { try { layout?.set?.(name, 0); } catch { /* the contract went with v2 */ } }
     state.requested = {};
     removeRegions();
-    dropVar(rootEl(), "--frame-top-l");
-    dropVar(rootEl(), "--frame-top-r");
-    rootEl().removeAttribute?.("data-frame-narrow");
     delete rootEl().dataset.frame;
     state.top = null; state.statusParts = null; state.splits = null; state.plan = null; state.live = null; state.liveKey = "";
     emit({ what: "disable" });
@@ -94982,6 +95268,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     mode: currentMode, setMode, size, resize, info, open, close, toggle, isOpen,
     mount, onChange, openInbox, resetLayout, sync,
     status: () => (state.on ? { ...(state.live ?? readLive()) } : null),
+    // Whether the list column shows the section's page list now (the column's panels make way while it does), and for which section.
+    pages: () => (state.on && state.pages ? { shown: state.pages.shown, section: state.pages.section } : { shown: false, section: null }),
     layout: () => clone(state.prefs),
     onInbox: null,
     LIMITS, DEFAULTS, REGIONS, MODES, PRESETS,
@@ -96654,7 +96942,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 // Everything a task means comes from builder.js's kit (readings, groups, what a task offers, how a note, an Ask, a
 // Change and a question go through, what "Done when" says) and from review.js, tasks.js, worktrees.js and the two
 // composer modules, so the sessions layout of Build's Home and this one can never disagree. This file draws and
-// keeps the selection; it adds two host calls of its own (a picture read back and a rename) and nothing else.
+// keeps the selection; it adds three host calls of its own (a picture read back, a rename, and the Plans page's own
+// planning:list for the backlog's plan drafts) and nothing else. The list's head is the prototype's: the project with
+// its menu (each project, Open a folder, Start a new app, All projects: Home's, Vibe's and the project panel's own
+// controls), the Git chip (git-sync.js's, one popover for every chip) and the worktrees, which opens Work › Worktrees.
 //
 // Dark by default: nothing here exists unless html[data-layout="v2"] is on and the shell is there. With v2 off the
 // module registers nothing, listens to nothing, stores nothing and calls the host for nothing; MefiSessions.attach()
@@ -96670,7 +96961,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   const PICTURES_SHOWN = 4;
   const TICK_MS = 60000;
   const SHORT_BELOW = 520;
-  const TABS = [["plan", "Plan"], ["changes", "Changes"], ["checks", "Checks"], ["preview", "Preview"], ["agent", "Agent"]];
+  const TABS = [["plan", "Plan"], ["changes", "Changes"], ["checks", "Checks"], ["preview", "Preview"], ["agent", "Agent"], ["wt", "Worktree"]];
   const PHASES = { unavailable: "No preview available", stopped: "Stopped", starting: "Starting preview", ready: "Preview ready", stopping: "Stopping preview", failed: "Preview failed" };
 
   const api = () => window.mefiStudio;
@@ -96719,10 +97010,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   const S = {
     wired: false, shell: null, handles: {}, panels: {}, offs: [], listening: false, waiting: false,
     projectId: null, open: null, tab: "sessions", closed: {}, doneMore: 0, query: "", short: false, home: false,
-    itab: new Map(), itabChosen: new Set(), openedAt: 0,
+    itab: new Map(), itabChosen: new Set(), openedAt: 0, itabHidden: [], itabWidth: -1,
     menu: null, renaming: null, focus: null, painted: new Map(), revision: 0, queued: false, tickTimer: 0,
     pictures: new Map(), picturesLoading: 0, evidence: new Map(), metrics: new Map(), later: new Set(), dockOpen: new Set(), dockFold: new Set(),
-    wt: { rows: new Map(), at: 0, key: "" }, lightbox: null, intent: new Map(), drafts: new Map(), sending: false, insp: null,
+    wt: { rows: new Map(), at: 0, key: "" }, plans: { projectId: null, rows: [], at: 0, loading: false }, projMenu: false, projMenuFocus: false, lightbox: null, intent: new Map(), drafts: new Map(), sending: false, insp: null,
     versions: new Map(), itabAuto: new Map(), compare: new Map(), restoring: null, previewBusy: null, pictureQueue: [], shownState: null, visible: false,
     restoredAt: 0, stuckFor: null, menuFocus: false, stopWaiting: null, helpers: false, attaching: false, compose: null, covered: new Set(),
   };
@@ -96769,9 +97060,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const id = snap().projectId;
     if (id && id !== S.projectId) onProject({ detail: { projectId: id } });
     syncVisibility();
-    paintList();
-    if (S.visible) { paintThread(); paintInspector(); } else unmountInspector();
+    // The frame's page list (a section's pages, renderer/shell.js) covers the column on other sections' pages: nothing is drawn for nobody.
+    if (!listCovered()) paintList();
+    if (S.visible) { paintThread(); paintInspector(); }
+    else { unmountInspector(); if (S.home) paintProjectInspector(); }
   }
+  const listCovered = () => { try { return Boolean(S.shell?.pages?.()?.shown); } catch { return false; } };
   // Nothing is drawn for a panel nobody can see: a hidden window, a thread that is not on screen.
   function syncVisibility() {
     const home = onHome();
@@ -96781,7 +97075,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     cover(shown);
     setShown("main", shown);
     setShown("list", true);
-    setShown("inspector", shown);
+    // On Home the inspector is the session's, or the project's (Repository, Team, Live activity) when none is open; any other page
+    // is not a session, so it is hidden there and the frame folds the column away instead of saying there is nothing to inspect.
+    setShown("inspector", home);
   }
   // Home is covered while a session shows, not gone: it leaves the tab order and the accessibility tree, and MefiScroll stops drawing the
   // scroll fades of panes nobody can see over the thread. Only what this put there is taken back.
@@ -96822,7 +97118,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (!task) return false;
     const changed = S.open !== taskId;
     S.open = taskId;
-    if (changed) { S.openedAt = Date.now(); S.itabChosen.delete(taskId); S.menu = null; S.renaming = null; S.focus = null; S.painted.delete("thread"); dropPainted("inspector"); }
+    if (changed) { S.openedAt = Date.now(); S.itabChosen.delete(taskId); S.menu = null; S.renaming = null; S.focus = null; S.painted.delete("thread"); dropPainted("inspector"); closeRunMenu(false); }
     if (tab) pickTab(taskId, tab);
     remember({ open: taskId, itab: Object.fromEntries([...S.itab].slice(-40)) });
     try { window.MefiNav?.selectTask?.({ taskId, projectId: S.projectId, title: window.MefiTasks?.shortTitle?.(task) || task.title }); } catch { /* the selection is shared, not required */ }
@@ -96926,7 +97222,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     cover(false);
     S.insp?.unmount?.();
     discardPanels();
-    Object.assign(S, { shell: null, handles: {}, panels: {}, open: null, menu: null, renaming: null, painted: new Map(), shownState: null, visible: false, insp: null, queued: false, compose: null, helpers: false, sending: false });
+    Object.assign(S, { shell: null, handles: {}, panels: {}, open: null, menu: null, projMenu: false, plans: { projectId: null, rows: [], at: 0, loading: false }, renaming: null, painted: new Map(), shownState: null, visible: false, insp: null, queued: false, compose: null, helpers: false, sending: false });
     S.pictures.clear(); S.evidence.clear(); S.metrics.clear(); S.versions.clear();
     return true;
   }
@@ -97002,8 +97298,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     S.projectId = event?.detail?.projectId ?? snap().projectId;
     builder()?.resetProject?.();
     S.pictures.clear(); S.evidence.clear(); S.metrics.clear(); S.versions.clear(); S.later.clear(); S.dockOpen.clear(); S.dockFold.clear(); S.itabChosen.clear(); S.itabAuto.clear();
-    S.query = ""; S.doneMore = 0; S.menu = null; S.renaming = null; S.focus = null;
+    S.query = ""; S.doneMore = 0; S.menu = null; S.renaming = null; S.focus = null; S.projMenu = false;
     S.wt = { rows: new Map(), at: 0, key: "" };
+    S.plans = { projectId: null, rows: [], at: 0, loading: false };
     S.painted.clear();
     restore();
     schedule();
@@ -97067,13 +97364,45 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }
     return { groups, total: tasks.length, all: all.length, query: needle };
   }
-  // The backlog: ideas nobody has made a task of yet, newest first.
-  function backlogModel(data, { query = "", now = Date.now() } = {}) {
+  // The backlog, as the prototype has it: plan drafts first (Plans that have not made their tasks yet), then the ideas nobody has
+  // made a task of, each newest first. A plan says how far it got in the Plans page's own words.
+  const PLAN_WORDS = { planning: "Plan draft", ready: "Plan approved, tasks not made yet", converting: "Making its tasks" };
+  function backlogModel(data, { query = "", now = Date.now(), plans = [] } = {}) {
     const needle = String(query).trim().toLowerCase();
+    const drafts = (Array.isArray(plans) ? plans : []).filter((plan) => plan?.id && plan.archivedAt == null && plan.status !== "converted" && (!plan.projectId || !data.projectId || plan.projectId === data.projectId))
+      .filter((plan) => !needle || `${plan.title || ""} ${plan.destination || ""}`.toLowerCase().includes(needle))
+      .sort((a, b) => stampOf(b.updatedAt || b.createdAt) - stampOf(a.updatedAt || a.createdAt))
+      .map((plan) => {
+        const open = Array.isArray(plan.questions) ? plan.questions.filter((question) => question?.status === "open").length : 0;
+        const when = stampOf(plan.updatedAt || plan.createdAt);
+        return { id: plan.id, kind: "plan", title: clip(plan.title || plan.destination || "Untitled plan", 90), meta: [PLAN_WORDS[plan.status] || "Plan draft", open ? plural(open, "open question") : "", when ? builder().ago(when, now) : ""].filter(Boolean).join(" · ") };
+      });
     const ideas = (Array.isArray(data.ideas) ? data.ideas : []).filter((idea) => idea?.id && idea.status !== "done" && !idea.taskId)
       .filter((idea) => !needle || `${idea.title || ""} ${idea.detail || ""}`.toLowerCase().includes(needle))
-      .sort((a, b) => stampOf(b.at) - stampOf(a.at));
-    return ideas.map((idea) => ({ id: idea.id, title: clip(idea.title || idea.detail || "Untitled idea", 90), meta: [idea.source ? `From ${idea.source}` : "", stampOf(idea.at) ? builder().ago(stampOf(idea.at), now) : ""].filter(Boolean).join(" · ") || "An idea" }));
+      .sort((a, b) => stampOf(b.at) - stampOf(a.at))
+      .map((idea) => ({ id: idea.id, title: clip(idea.title || idea.detail || "Untitled idea", 90), meta: [idea.source ? `From ${idea.source}` : "", stampOf(idea.at) ? builder().ago(stampOf(idea.at), now) : ""].filter(Boolean).join(" · ") || "An idea" }));
+    return [...drafts, ...ideas];
+  }
+  // The plans the backlog lists: read from the host (planning:list, what the Plans page reads) when the project is taken up, when the
+  // Backlog tab is opened, and again at most every 30 s while the list is drawn. Plans have no push of their own.
+  function readPlans({ force = false } = {}) {
+    const projectId = S.projectId;
+    if (!projectId || typeof api()?.planningList !== "function") return;
+    const held = S.plans;
+    if (held.loading || (!force && held.projectId === projectId && Date.now() - held.at < 30000)) return;
+    S.plans = { ...held, projectId, at: Date.now(), loading: true, rows: held.projectId === projectId ? held.rows : [] };
+    const mine = S.plans;
+    Promise.resolve(api().planningList({ projectId })).then((result) => {
+      if (S.plans !== mine || !result?.ok || !Array.isArray(result.plans) || (result.projectId && result.projectId !== projectId)) return;
+      mine.rows = result.plans;
+    }).catch(() => { /* no plans is the quiet answer */ })
+      .finally(() => { mine.loading = false; if (S.wired && S.plans === mine) { S.painted.delete("list"); schedule(); } });
+  }
+  // How many worktrees the project has besides its own folder (renderer/worktrees.js's list), and its own words for them.
+  function worktreeCount() {
+    const list = window.MefiWorktrees?.state?.()?.list;
+    if (!list?.repo || !Array.isArray(list.rows)) return { count: 0, headline: "" };
+    return { count: list.rows.filter((row) => row && row.kind !== "primary").length, headline: String(list.headline || "") };
   }
   const changed = (key, value) => { const now = JSON.stringify(value); if (S.painted.get(key) === now) return false; S.painted.set(key, now); return true; };
   // Forget what was drawn under a key and every key beneath it ("inspector" also forgets "inspector:plan").
@@ -97082,13 +97411,19 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 
   function buildList() {
     const root = el("aside", "sx-panel sx-list"); root.id = "sessions-list"; root.setAttribute("aria-label", "Sessions"); root.dataset.short = "false";
-    const project = button("", "sx-proj", () => window.MefiSidebar?.open?.({ focus: true, projectFocus: true }), { title: "Switch project" });
-    project.id = "sessions-project"; project.setAttribute("aria-haspopup", "menu");
+    const project = button("", "sx-proj", () => openProjectMenu(false), { title: "Switch project" });
+    project.id = "sessions-project"; project.setAttribute("aria-haspopup", "menu"); project.setAttribute("aria-expanded", "false");
+    project.addEventListener("keydown", (event) => { if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") { event.preventDefault(); openProjectMenu(true); } });
+    // The Git chip (renderer/git-sync.js's own, with its one popover) and how many worktrees the project has, under the project.
+    const gitRow = el("div", "sx-gitrow"); gitRow.id = "sessions-gitrow";
+    const git = el("span", "sx-git");
+    const trees = button("", "sx-chip-btn sx-trees", () => window.MefiNav?.go?.("worktrees"), { icon: "g-worktree" }); trees.id = "sessions-worktrees"; trees.hidden = true;
+    gitRow.append(git, trees);
     const fresh = button("New task", "sx-new primary", () => newTask(), { title: "Start a new task (Ctrl N)", icon: "g-add" });
     fresh.id = "sessions-new"; fresh.append(el("kbd", "", "Ctrl N"));
     const tabs = el("div", "sx-switch"); tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "What to list");
     for (const [id, label] of [["sessions", "Sessions"], ["backlog", "Backlog"]]) {
-      const tab = button(label, "", () => { S.tab = id; remember({ tab: id }); S.painted.delete("list"); paintList(); byId(`sessions-tab-${id}`)?.focus?.(); }); tab.id = `sessions-tab-${id}`; tab.setAttribute("role", "tab"); tab.setAttribute("aria-controls", "sessions-list-scroll"); tab.dataset.tab = id;
+      const tab = button(label, "", () => { S.tab = id; remember({ tab: id }); if (id === "backlog") readPlans({ force: true }); S.painted.delete("list"); paintList(); byId(`sessions-tab-${id}`)?.focus?.(); }); tab.id = `sessions-tab-${id}`; tab.setAttribute("role", "tab"); tab.setAttribute("aria-controls", "sessions-list-scroll"); tab.dataset.tab = id;
       tabs.append(tab);
     }
     const find = el("div", "sx-find");
@@ -97102,8 +97437,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const groups = el("div", "sx-groups"); groups.id = "sessions-list-scroll"; groups.setAttribute("role", "tabpanel"); groups.setAttribute("aria-labelledby", "sessions-tab-sessions");
     groups.addEventListener("keydown", onListKey);
     const foot = el("div", "sx-foot"); foot.id = "sessions-foot";
-    root.append(project, fresh, tabs, find, groups, foot);
-    S.panels.list = { root, project, fresh, tabs, input, groups, foot };
+    root.append(project, gitRow, fresh, tabs, find, groups, foot);
+    S.panels.list = { root, project, gitRow, git, trees, fresh, tabs, input, groups, foot };
   }
   function paintList() {
     const panel = S.panels.list;
@@ -97115,15 +97450,26 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const pinned = builderKit.pins();
     const minute = Math.floor(Date.now() / 60000);
     const where = builderKit.chips.state.where;
+    readPlans();
+    const plans = S.plans.projectId === S.projectId ? S.plans.rows : [];
     const model = S.tab === "backlog" ? null : listModel(data, { query: S.query, closed: S.closed, doneMore: S.doneMore, now: Date.now(), pinned, open: S.open, worktrees: S.wt.rows, counts: reviewCounts });
-    const backlog = S.tab === "backlog" ? backlogModel(data, { query: S.query, now: Date.now() }) : null;
-    const ideasCount = backlogModel(data).length;
+    const backlog = S.tab === "backlog" ? backlogModel(data, { query: S.query, now: Date.now(), plans }) : null;
+    const ideasCount = backlogModel(data, { plans }).length;
     const name = data.project?.name || "Open a project";
-    const signature = [S.tab, model, backlog, ideasCount, name, where?.branch ?? null, S.open, S.query, minute, S.menu, S.renaming?.id ?? null, Boolean(data.projectId), (data.status?.running || []).length, data.status?.parallel ?? null, window.MefiAutonomy?.label?.() ?? null];
+    const trees = worktreeCount();
+    const projects = (Array.isArray(data.projects) ? data.projects : []).map((row) => [row?.id, row?.name, row?.path]);
+    const signature = [S.tab, model, backlog, ideasCount, name, where?.branch ?? null, S.open, S.query, minute, S.menu, S.renaming?.id ?? null, Boolean(data.projectId), (data.status?.running || []).length, data.status?.parallel ?? null, window.MefiAutonomy?.label?.() ?? null, trees, S.projMenu, projects];
+    // The Git chip is git-sync.js's: it paints itself, and a mount again only puts it back where it goes.
+    if (data.projectId) { try { window.MefiGitSync?.mount?.(panel.git, { variant: "list" }); } catch { /* no chip in this build */ } }
     if (!changed("list", signature)) return;
-    // Head: the project, its branch, and the two tabs.
+    // Head: the project and its branch (its menu switches and opens projects), the Git chip and the worktrees, and the two tabs.
     panel.project.replaceChildren(el("span", "sx-proj-av", (name.trim()[0] || "P").toUpperCase()), (() => { const words = el("span", "sx-proj-words"); words.append(el("b", "", name), el("small", "", where?.branch || where?.head && `detached ${where.head}` || "main")); return words; })(), glyph("g-chev"));
     panel.project.title = data.project?.path ? `${data.project.path} · switch project` : "Switch project";
+    panel.project.setAttribute("aria-expanded", String(S.projMenu));
+    panel.trees.hidden = !trees.count;
+    panel.trees.replaceChildren(glyph("g-worktree"), el("span", "", plural(trees.count, "worktree")));
+    panel.trees.title = `${trees.headline || plural(trees.count, "worktree")} Open Work › Worktrees.`;
+    panel.gitRow.hidden = !data.projectId;
     for (const tab of panel.tabs.querySelectorAll("[data-tab]")) {
       const on = tab.dataset.tab === S.tab;
       tab.setAttribute("aria-selected", String(on)); tab.classList.toggle("on", on);
@@ -97138,7 +97484,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const body = [];
     if (!data.projectId) body.push(emptyNote("Open a project folder to see its sessions.", "Open a folder", () => window.MefiSidebar?.open?.({ focus: true, projectFocus: true })));
     else if (S.tab === "backlog") {
-      if (!backlog.length) body.push(emptyNote(S.query ? "No idea matches that filter." : "The backlog is clear", null, null, S.query ? "" : "Ideas from chats and Mefi's suggestions land here."));
+      body.push(scanRow());
+      if (!backlog.length) body.push(emptyNote(S.query ? "Nothing in the backlog matches that filter." : "The backlog is clear", null, null, S.query ? "" : "Plan drafts, ideas from chats and Mefi's suggestions land here."));
       for (const idea of backlog) body.push(ideaRow(idea));
     } else if (!model.all) body.push(emptyNote("Tasks you start show up here, like sessions.", "New task", () => newTask()));
     else if (!model.total) body.push(emptyNote("No session matches that filter."));
@@ -97153,6 +97500,81 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const mode = window.MefiAutonomy?.label?.();
     panel.foot.replaceChildren(el("span", "", [mode ? `${mode} mode` : "", workers ? `${busy} of ${workers} workers busy` : busy ? `${busy} working` : "Nothing running"].filter(Boolean).join(" · ")));
     paintMenu(panel, data);
+    paintProjectMenu(panel, data);
+  }
+  // The backlog's two ways to find more: the Analyzer reads the project, and Scan chats for ideas is the palette's own action.
+  function scanRow() {
+    const row = el("div", "sx-scan");
+    row.append(button("Scan the project", "sx-chip-btn quiet", () => window.MefiNav?.go?.("analyzer"), { icon: "g-analyzer", title: "Open the Analyzer: it reads the project's plans and evidence and finds starting points" }));
+    const scan = window.MefiNav?.get?.("scanIdeas");
+    if (typeof scan?.run === "function") row.append(button("Scan chats for ideas", "sx-chip-btn quiet", () => scan.run(), { icon: "g-spark", title: scan.desc || "Read recent chats and capture new feature ideas" }));
+    return row;
+  }
+
+  // ---- the project menu ------------------------------------------------------------------------------------------------------------
+  // The prototype's project menu on the head: each project (a press switches, through Home's own project buttons, so the
+  // save-and-switch question for running agents is the one it always was), Open a folder (Home's Add project), Start a new app
+  // (Vibe's New app panel) and All projects (the project panel the rest of the app opens).
+  function openProjectMenu(fromKeyboard) {
+    S.projMenu = !S.projMenu;
+    S.projMenuFocus = S.projMenu;
+    if (S.projMenu) S.menu = null;
+    void fromKeyboard;
+    S.painted.delete("list");
+    paintList();
+  }
+  function closeProjectMenu(restore) {
+    if (!S.projMenu) return;
+    S.projMenu = false; S.painted.delete("list");
+    paintList();
+    if (restore) S.panels.list?.project?.focus?.({ preventScroll: true });
+  }
+  function projectAction(run) { closeProjectMenu(false); try { run(); } catch { /* the control went away */ } }
+  function paintProjectMenu(panel, data) {
+    // A redraw while the menu is open keeps the keyboard on the same item.
+    const old = panel.root.querySelector?.(".sx-projmenu");
+    const ITEMS = "[role=menuitem], [role=menuitemradio]";
+    const held = old && old.contains?.(document.activeElement) ? [...old.querySelectorAll(ITEMS)].indexOf(document.activeElement) : -1;
+    old?.remove?.();
+    if (!S.projMenu) return;
+    const menu = el("div", "sx-menu sx-projmenu"); menu.id = "sessions-project-menu"; menu.setAttribute("role", "menu"); menu.setAttribute("aria-label", "Projects");
+    const item = (label, run, { icon = null, small = "", radio = false, on = false, avatar = "" } = {}) => {
+      const node = button("", "sx-menu-item", () => projectAction(run)); node.setAttribute("role", radio ? "menuitemradio" : "menuitem"); node.tabIndex = -1;
+      if (radio) node.setAttribute("aria-checked", String(on));
+      if (avatar) node.append(el("span", "sx-proj-av small", avatar)); else if (icon) node.append(glyph(icon));
+      const words = el("span", "sx-menu-words"); words.append(el("span", "", label)); if (small) words.append(el("small", "", small));
+      node.append(words);
+      if (on) { const mark = el("span", "sx-menu-on", "✓"); mark.setAttribute("aria-hidden", "true"); node.append(mark); }
+      menu.append(node);
+      return node;
+    };
+    const switchTo = (id) => {
+      const own = document.querySelector?.(`#workspace-projects [data-project-id="${String(id).replace(/["\\]/g, "")}"]`);
+      if (own && !own.disabled) own.click(); else window.MefiSidebar?.open?.({ focus: true, projectFocus: true });
+    };
+    for (const project of (Array.isArray(data.projects) ? data.projects : []).slice(0, 12)) {
+      if (!project?.id) continue;
+      const name = String(project.name || "Project");
+      item(name, () => { if (project.id !== data.projectId) switchTo(project.id); }, { avatar: (name.trim()[0] || "P").toUpperCase(), small: String(project.path || ""), radio: true, on: project.id === data.projectId });
+    }
+    if (menu.childElementCount || menu.children?.length) menu.append(el("hr", "sx-menu-hr"));
+    const add = document.getElementById?.("workspace-add-project");
+    if (add) item("Open a folder…", () => add.click(), { icon: "g-add" });
+    if (typeof window.MefiVibe?.openPanel === "function") item("Start a new app…", () => window.MefiVibe.openPanel("newapp"), { icon: "g-spark" });
+    item("All projects…", () => window.MefiSidebar?.open?.({ focus: true, projectFocus: true }), { icon: "g-tasks" });
+    menu.addEventListener("keydown", (event) => {
+      const items = [...menu.querySelectorAll("[role=menuitem], [role=menuitemradio]")];
+      const at = items.indexOf(document.activeElement);
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); items[(at + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus?.({ preventScroll: true }); }
+      else if (event.key === "Home" || event.key === "End") { event.preventDefault(); items[event.key === "Home" ? 0 : items.length - 1]?.focus?.({ preventScroll: true }); }
+      else if (event.key === "Escape" || event.key === "Tab") { event.preventDefault(); event.stopPropagation(); closeProjectMenu(true); }
+    });
+    // Under the head, inside the panel, so the list's own clipping never cuts it.
+    const place = panel.project.getBoundingClientRect?.(), frame = panel.root.getBoundingClientRect?.();
+    if (place && frame && menu.style) { menu.style.top = `${Math.max(8, Math.round(place.bottom - frame.top + 4))}px`; menu.style.left = "10px"; }
+    panel.root.append(menu);
+    if (S.projMenuFocus) { S.projMenuFocus = false; (menu.querySelector("[aria-checked=true]") || menu.querySelector(ITEMS))?.focus?.({ preventScroll: true }); }
+    else if (held >= 0) [...menu.querySelectorAll(ITEMS)][held]?.focus?.({ preventScroll: true });
   }
   function emptyNote(title, action, run, more = "") {
     const box = el("div", "sx-empty");
@@ -97203,16 +97625,18 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     box.append(main, more);
     return box;
   }
+  // A backlog row: a plan draft opens in Plans, an idea in Ideas (their own pages).
   function ideaRow(idea) {
-    const box = el("div", "sx-row"); box.dataset.key = `idea:${idea.id}`; box.dataset.tone = "idea";
+    const plan = idea.kind === "plan";
+    const box = el("div", "sx-row"); box.dataset.key = `${plan ? "plan" : "idea"}:${idea.id}`; box.dataset.tone = plan ? "plan" : "idea";
     const main = el("button", "sx-row-main"); main.type = "button"; main.dataset.nav = "row"; main.dataset.part = "main"; main.tabIndex = -1;
     main.title = `${idea.title} · ${idea.meta}`;
-    main.setAttribute("aria-label", `Idea: ${idea.title}. ${idea.meta}`);
+    main.setAttribute("aria-label", `${plan ? "Plan" : "Idea"}: ${idea.title}. ${idea.meta}`);
     const text = el("span", "sx-row-text");
     text.append(el("span", "sx-row-top", idea.title));
     text.append(el("span", "sx-row-meta", idea.meta));
     main.append(el("i", "sx-dot"), text);
-    main.addEventListener("click", () => window.MefiNav?.go?.("ideas", { ideaId: idea.id }));
+    main.addEventListener("click", () => (plan ? window.MefiNav?.go?.("plans", { planId: idea.id }) : window.MefiNav?.go?.("ideas", { ideaId: idea.id })));
     box.append(main);
     return box;
   }
@@ -97292,6 +97716,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     paintList();
   }
   function onPointerDown(event) {
+    if (S.projMenu && !event.target?.closest?.(".sx-projmenu, #sessions-project")) closeProjectMenu(false);
+    if (S.compose?.runMenu && !S.compose.runMenu.hidden && !event.target?.closest?.(".sx-runwrap")) closeRunMenu(false);
+    if (S.panels.inspector?.moreMenu && !S.panels.inspector.moreMenu.hidden && !event.target?.closest?.(".sx-itab-menu, #sessions-itab-more")) closeTabMenu(false);
     if (!S.menu) return;
     if (event.target?.closest?.(".sx-menu, .sx-row-menu")) return;
     closeMenu(false);
@@ -97526,7 +97953,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const branch = S.wt.rows.get(task.id) ?? null;
     const counts = reviewCounts(task.id);
     const minute = Math.floor(Date.now() / 60000);
-    const signature = [counts, task, reading.tone, reading.label, reading.summary, run, record?.attempts, record?.loading, record?.error, questions, folded.map((q) => q.id), decided, items.map((item) => [item.kind, item.at, item.text, item.ask?.reply, item.ask?.pending, item.ask?.error]), pictures, evidence?.shots?.map((shot) => [shot.phase, shot.dataUrl.length]), evidence?.loading ?? null, B.busy(), S.sending, B.pins().has(task.id), branch?.branch ?? null, [...S.dockOpen], [...S.dockFold], S.short, minute, data.preview?.phase ?? null, window.MefiAutonomy?.state?.()?.level ?? null];
+    const signature = [counts, task, reading.tone, reading.label, reading.summary, run, record?.attempts, record?.loading, record?.error, questions, folded.map((q) => q.id), decided, items.map((item) => [item.kind, item.at, item.text, item.ask?.reply, item.ask?.pending, item.ask?.error]), pictures, evidence?.shots?.map((shot) => [shot.phase, shot.dataUrl.length]), evidence?.loading ?? null, B.busy(), S.sending, B.pins().has(task.id), branch?.branch ?? null, B.chips.state.where?.branch ?? null, costWords(task)?.text ?? null, [...S.dockOpen], [...S.dockFold], S.short, minute, data.preview?.phase ?? null, window.MefiAutonomy?.state?.()?.level ?? null];
     if (changed("thread", signature)) {
       const stick = panel.scroll.scrollTop + panel.scroll.clientHeight >= panel.scroll.scrollHeight - 40 || S.stuckFor !== task.id;
       S.stuckFor = task.id;
@@ -97600,6 +98027,27 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (pressed !== null) node.setAttribute("aria-pressed", String(pressed));
     return node;
   }
+  // How many of its checks a task has passed: the last check run's results when there was one, else its "done when" lines (all of them
+  // once it is verified or you confirmed it, none before).
+  function checksCount(task) {
+    const results = Array.isArray(task.verificationRun?.results) ? task.verificationRun.results : [];
+    if (results.length) return { passed: results.filter((result) => result.ok === true).length, total: results.length, results: true };
+    const lines = builder().acceptanceOf(task).map((line) => String(line).trim()).filter(Boolean);
+    if (!lines.length) return null;
+    const met = ["verified", "manual"].includes(task.verification?.state);
+    return { passed: met ? lines.length : 0, total: lines.length, results: false };
+  }
+  // What the task cost, when that is known: the usage the Agent tab already read (tasks.js's words), never a read of its own. A
+  // builder that reports no cost (Claude Code, Codex) is said to be timed only.
+  function costWords(task) {
+    const report = S.metrics.get(task.id)?.report;
+    const usage = window.MefiTasks?.usage;
+    const cost = report?.task?.cost?.state ? report.task.cost : report?.attempt?.cost;
+    if (!cost || !usage) return null;
+    if (cost.state === "reported") return { text: usage.usageCost(cost), title: "What its runs cost, from the usage ledger" };
+    if (cost.state === "not-reported") return { text: "Time only", title: `${report?.attempt?.route?.label || "This builder"} does not report tokens or cost to Studio. Time is measured here.` };
+    return null;
+  }
   function headNodes(task, reading, run, data, branch) {
     const B = builder();
     const top = el("div", "sx-head-top");
@@ -97612,13 +98060,19 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const drop = B.dropSpec(task, run, data);
     if (drop) actions.append(specButton({ ...drop, label: "Drop" }, task));
     top.append(title, actions);
+    // The prototype's chips: where it stands, who is on it, the branch it works on, its checks and what it cost (when that is known),
+    // then when it began and how urgent it is.
     const chips = el("div", "sx-chips");
     chips.append(chip(reading.label, { tone: reading.tone, dot: true }));
     const worker = run?.route || task.lastAttempt?.route || task.lastAttempt?.via;
-    if (worker) chips.append(chip(String(worker)));
+    if (worker) chips.append(chip(String(worker), { title: "Who is on it" }));
+    const where = B.chips.state.where;
     if (branch) chips.append(chip(String(branch.branch || "own worktree"), { icon: "g-worktree", title: "Runs in its own worktree" }));
-    const results = Array.isArray(task.verificationRun?.results) ? task.verificationRun.results : [];
-    if (results.length) chips.append(chip(`Checks ${results.filter((result) => result.ok === true).length} of ${results.length}`, { title: "Its completion checks" }));
+    else if (where?.repo && where.branch && (where.projectId == null || where.projectId === S.projectId)) chips.append(chip(String(where.branch), { icon: "g-route", title: `Works on ${where.branch}, in the project's own folder` }));
+    const checks = checksCount(task);
+    if (checks) chips.append(chip(`Checks ${checks.passed} of ${checks.total}`, { title: checks.results ? "Its completion checks: the last run's results" : "What it is done when; nothing has checked it yet" }));
+    const cost = costWords(task);
+    if (cost) chips.append(chip(cost.text, { title: cost.title }));
     const since = B.stampOf(task.createdAt);
     if (since) chips.append(chip(`Started ${B.ago(since)}`));
     if (task.priority && task.priority !== "normal") chips.append(chip(`${task.priority} priority`));
@@ -97924,15 +98378,15 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const B = builder();
     const form = el("form", "sx-compose"); form.id = "sessions-compose"; form.hidden = true; form.dataset.intent = "note"; form.noValidate = true;
     form.setAttribute("aria-label", "Write to this session");
-    const top = el("div", "sx-compose-top");
+    // As the prototype has it: the words first, then one row of controls (the purpose, Attach, the run menu, the Worktree
+    // switch and Send), and a line under the box that says what the words will do.
     const modes = el("div", "sx-modes"); modes.setAttribute("role", "group"); modes.setAttribute("aria-label", "What to do with your words");
     for (const id of INTENT_IDS) {
       const choice = button(B.INTENTS[id].label, "", () => { const task = taskById(S.open); if (task) setIntent(task, id, true); }, { title: B.INTENTS[id].hint });
       choice.id = `sessions-intent-${id}`; choice.dataset.intent = id; choice.setAttribute("aria-pressed", "false");
       modes.append(choice);
     }
-    const hint = el("span", "sx-hint"); hint.id = "sessions-hint";
-    top.append(modes, hint);
+    const hint = el("p", "sx-hint"); hint.id = "sessions-hint";
     const input = el("textarea"); input.id = "sessions-input"; input.rows = 2; input.setAttribute("aria-label", "Your words about this session"); input.dataset.typeHere = "";
     input.addEventListener("input", () => { if (input.dataset.key) S.drafts.set(input.dataset.key, input.value); });
     input.addEventListener("keydown", (event) => {
@@ -97941,36 +98395,92 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       if (typeof form.requestSubmit === "function") form.requestSubmit(); else void submit();
     });
     const tools = el("div", "sx-tools"); tools.id = "sessions-tools";
+    // The run menu: one button that says how the next run goes ("Auto · OpenCode"), and opens what decides it: the permission mode
+    // (autonomy.js's own control), the coding worker and its tier (builder.js's saves) and the folder it works in.
+    const runWrap = el("span", "sx-runwrap");
+    const runButton = button("", "sx-chip-btn sx-run", () => toggleRunMenu(), { title: "Permissions, the coding worker and the folder the next run works in" });
+    runButton.id = "sessions-run"; runButton.setAttribute("aria-haspopup", "dialog"); runButton.setAttribute("aria-expanded", "false"); runButton.setAttribute("aria-controls", "sessions-run-menu");
+    const runMenu = el("div", "sx-runmenu"); runMenu.id = "sessions-run-menu"; runMenu.setAttribute("role", "dialog"); runMenu.setAttribute("aria-label", "How the next run goes"); runMenu.hidden = true;
+    const section = (title, note) => { const box = el("section", "sx-runrow"); const head = el("div", "sx-runrow-head"); head.append(el("b", "", title)); if (note) head.append(note); box.append(head); runMenu.append(box); return box; };
     const autonomy = el("span", "sx-autonomy"); autonomy.id = "sessions-autonomy";
-    const chips = el("span", "sx-chipset"); chips.id = "sessions-chips"; chips.setAttribute("role", "group"); chips.setAttribute("aria-label", "Where this runs");
+    section("Permissions", el("small", "sx-runnote", "How much Mefi decides for you.")).append(autonomy);
     const worker = el("span", "sx-worker");
     const cli = el("select", "sx-select"); cli.id = "sessions-worker-cli"; cli.setAttribute("aria-label", "Coding worker"); cli.title = "The coding worker that builds your tasks"; cli.hidden = true;
     const tier = el("select", "sx-select"); tier.id = "sessions-worker-tier"; tier.setAttribute("aria-label", "Worker tier"); tier.title = "Which of the worker's models runs a task"; tier.hidden = true;
     cli.addEventListener("change", () => void B.chips.saveRouting({ executorCli: cli.value }, `${B.chips.CLI_NAMES[cli.value] || cli.value} builds your tasks now.`));
     tier.addEventListener("change", () => void B.chips.saveRouting({ executorTier: tier.value }, `${(B.chips.TIERS.find(([id]) => id === tier.value) || ["", tier.value])[1]} saved.`));
     worker.append(cli, tier);
-    // In a short or narrow window the controls past Attach, the permission chip and Send sit behind this button.
-    const more = button("", "sx-chip-btn quiet sx-more", () => { const open = form.dataset.open !== "true"; form.dataset.open = String(open); more.setAttribute("aria-expanded", String(open)); }, { icon: "g-more", title: "More: what to do with your words, and where this runs", aria: "More" });
+    section("Coding worker", el("small", "sx-runnote", "Builds this project's tasks. Agents › Setup has the rest.")).append(worker);
+    const folder = el("span", "sx-folder"); folder.id = "sessions-folder";
+    const folderRow = section("Folder", el("small", "sx-runnote", "Where the next run works."));
+    folderRow.append(folder); folderRow.id = "sessions-run-folder";
+    // Escape closes it from its button or from anything inside it (autonomy.js's own Escape only folds its chip, not shown here).
+    runWrap.addEventListener("keydown", (event) => { if (event.key === "Escape" && !runMenu.hidden) { event.preventDefault(); event.stopPropagation(); closeRunMenu(true); } });
+    runWrap.append(runButton, runMenu);
+    // The Worktree switch keeps its own chip on the row, as the prototype's "Worktree off" does.
+    const chips = el("span", "sx-chipset"); chips.id = "sessions-chips"; chips.setAttribute("role", "group"); chips.setAttribute("aria-label", "Where this runs");
+    // In a short or narrow window the run menu and the Worktree switch (and in a short one the purpose) sit behind this button.
+    const more = button("", "sx-chip-btn quiet sx-more", () => { const open = form.dataset.open !== "true"; form.dataset.open = String(open); more.setAttribute("aria-expanded", String(open)); }, { icon: "g-more", title: "More: what to do with your words, and how the next run goes", aria: "More" });
     more.setAttribute("aria-expanded", "false"); form.dataset.open = "false";
     const send = button("Save note", "primary sx-send", null, { type: "submit" }); send.id = "sessions-send";
-    tools.append(autonomy, more, chips, worker, send);
-    form.append(top, input, tools);
+    tools.append(modes, runWrap, chips, more, send);
+    form.append(input, tools, hint);
     form.addEventListener("submit", (event) => { event.preventDefault(); void submit(); });
     window.MefiAutonomy?.mount?.(autonomy, { id: "sessions-autonomy-control" });
-    S.compose = { form, top, modes, hint, input, tools, autonomy, chips, cli, tier, send };
+    S.compose = { form, modes, hint, input, tools, autonomy, chips, cli, tier, send, runWrap, runButton, runMenu, folder, folderRow, more };
     return form;
   }
+  // ---- the run menu ------------------------------------------------------------------------------------------------------------
+  function toggleRunMenu() { if (S.compose?.runMenu?.hidden === false) closeRunMenu(true); else openRunMenu(); }
+  function openRunMenu() {
+    const box = S.compose;
+    if (!box) return;
+    box.runMenu.hidden = false;
+    box.runButton.setAttribute("aria-expanded", "true");
+    paintRunButton();
+    // It opens upward inside the thread, never past the thread's own top (a short window has little room above the box).
+    const above = box.runButton.getBoundingClientRect?.(), panel = S.panels.main?.root?.getBoundingClientRect?.();
+    if (above && panel && box.runMenu.style) box.runMenu.style.maxHeight = `${Math.max(80, Math.round(above.top - panel.top - 16))}px`;
+    // Focus goes to the first control inside (the permission mode), so the keys carry on from the button.
+    (box.runMenu.querySelector(".autonomy-mode[aria-checked=true]") || box.runMenu.querySelector(".autonomy-mode, .sx-runrow select, .sx-runrow .sx-chip-btn"))?.focus?.({ preventScroll: true });
+  }
+  function closeRunMenu(restore) {
+    const box = S.compose;
+    if (!box || box.runMenu.hidden) return;
+    box.runMenu.hidden = true;
+    box.runButton.setAttribute("aria-expanded", "false");
+    if (restore) box.runButton.focus?.({ preventScroll: true });
+  }
+  // The button's words: the permission mode and the coding worker, and its tier when it is not Auto ("Auto · OpenCode · Fast").
+  function paintRunButton() {
+    const box = S.compose;
+    if (!box) return;
+    const B = builder();
+    const routing = B.chips.state.routing;
+    const mode = window.MefiAutonomy?.label?.() || "Permissions";
+    const current = String(routing?.executorCli || "");
+    const worker = current ? B.chips.CLI_NAMES[current] || current : "";
+    const tier = routing?.executorTier && routing.executorTier !== "auto" ? (B.chips.TIERS.find(([id]) => id === routing.executorTier)?.[1] || "").replace(/ tier$/, "") : "";
+    const words = [mode, worker, tier].filter(Boolean).join(" · ");
+    if (box.runButton.dataset.words !== words) {
+      box.runButton.dataset.words = words;
+      box.runButton.replaceChildren(glyph("g-sliders"), el("span", "sx-run-words", words), glyph("g-chev", "sx-run-car"));
+      box.runButton.setAttribute("aria-label", `How the next run goes: ${words}`);
+    }
+  }
   // The two helpers every message box gets, bound the first time the box is shown (the picture button asks the host once whether
-  // pictures are on at all, and the picker reads the skills): a Note has no way to carry a picture, so its row is not drawn.
+  // pictures are on at all, and the picker reads the skills). Attach is on the row for every purpose, as in the prototype; a Note is
+  // words only, so pictures added while the box is a Note wait for an Ask or a Change, and the line under the box says so.
   function bindHelpers(input) {
     if (S.helpers) return;
     S.helpers = true;
     const scope = () => S.projectId ?? "";
     const blocked = () => S.sending || Boolean(builder().busy());
-    window.MefiComposerPictures?.bind?.(input, { scope, blocked, mode: () => (openIntent() === "change" ? "task" : "chat") });
-    // Its row (the button, the thumbnails, the note) sits with the other controls instead of on a line of its own.
+    window.MefiComposerPictures?.bind?.(input, { scope, blocked, mode: () => (openIntent() === "change" ? "task" : openIntent() === "note" ? "words" : "chat") });
+    // Its row (the button, the thumbnails, the note) sits with the other controls, after the purpose, instead of on a line of its own.
     const row = input.parentNode?.querySelector?.(".composer-attach");
-    if (row && S.compose?.tools) S.compose.tools.prepend(row);
+    if (row && S.compose?.modes?.parentNode === S.compose?.tools && typeof S.compose.modes.after === "function") S.compose.modes.after(row);
+    else if (row && S.compose?.tools) S.compose.tools.prepend(row);
     const picker = window.MefiComposerPicker?.bind?.(input, {
       scope, blocked, mode: () => (openIntent() === "ask" ? "chat" : "task"),
       tasks: () => tasksOf(snap()).map((task) => ({ id: task.id, title: task.title || "", status: task.status || "" })),
@@ -98042,25 +98552,29 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     schedule();
     return sent;
   }
-  // The chips: the folder's branch and how much is uncommitted, the Worktree switch, the permission mode (autonomy.js's own chip)
-  // and the coding worker with its tier. Every read and save is builder.js's (work:where, getAiRouting, setAiRouting, work:worktrees).
+  // The run's controls: the folder's branch and how much is uncommitted (in the run menu: it opens the folder), the Worktree switch (on
+  // the row), the permission mode (autonomy.js's own control) and the coding worker with its tier (both in the run menu). Every read
+  // and save is builder.js's (work:where, getAiRouting, setAiRouting, work:worktrees).
   function paintTools(data) {
     const box = S.compose;
     if (!box) return;
     const B = builder();
     B.chips.loadWhere(data);
     B.chips.loadRouting();
+    paintRunButton();
     const cs = B.chips.state;
     const where = cs.where, routing = cs.routing;
     const signature = [data.project?.path ?? null, where, cs.saving, routing ? [routing.executorCli, routing.executorModel, routing.executorModels, routing.executorTier, routing.executorTierModels, routing.executorTierDefaults] : null, Array.isArray(cs.clis) ? cs.clis.map((row) => [row?.id, row?.installed]) : null];
     if (!changed("tools", signature)) return;
     const nodes = [];
+    box.folder.replaceChildren();
     if (where?.repo) {
       const named = where.branch || (where.head ? `detached ${where.head}` : "no commits yet");
       const tip = `${where.branch ? `On branch ${where.branch}` : "No branch checked out"}${where.dirty ? ` · ${where.dirty} uncommitted path${where.dirty === 1 ? "" : "s"}` : " · nothing uncommitted"}. Opens the folder.`;
       const branch = button(named, "sx-chip-btn quiet", () => api()?.shellReveal?.(data.project?.path), { icon: "g-route", title: tip });
+      branch.id = "sessions-branch";
       if (where.dirty) branch.append(el("small", "sx-chip-count", `+${where.dirty}`));
-      nodes.push(branch);
+      box.folder.append(branch);
       const worktrees = where.worktrees || {};
       const on = "On: each run works in its own git worktree from HEAD and merges back when it settles. Uncommitted work in your folder stays out of a run until it lands.";
       const off = "Off: runs work in your folder. On gives each run its own git worktree from HEAD, merged back when it settles.";
@@ -98072,6 +98586,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }
     box.chips.replaceChildren(...nodes);
     box.chips.hidden = !nodes.length;
+    box.folderRow.hidden = !box.folder.childElementCount && !box.folder.children?.length;
     if (routing) {
       const current = String(routing.executorCli || "opencode");
       const installed = Array.isArray(cs.clis) ? cs.clis.filter((row) => row?.installed).map((row) => String(row.id)) : [];
@@ -98089,9 +98604,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
 
   // ---- the inspector -------------------------------------------------------------------------------------------------------------------------
-  // Five tabs for the selected session. Plan and Agent are drawn here; Changes is review.js's panel (real diffs, Accept, Revert and its
-  // Undo) and is mounted whenever a session is open, so its count is live; Checks and Preview hold what this page knows (what the task
-  // must pass, the project preview's controls) with review.js's advisory checks and Before / After under them.
+  // Six tabs for the selected session, as the prototype has them. Plan, Agent and Worktree are drawn here; Changes is review.js's panel
+  // (real diffs, Accept, Revert and its Undo) and is mounted whenever a session is open, so its count is live; Checks and Preview hold
+  // what this page knows (what the task must pass, the project preview's controls) with review.js's advisory checks and Before / After
+  // under them. Tabs that do not fit the column's width wait behind More. With no session open, Home's inspector is the project's.
   const card = (title, aside) => { const box = el("section", "sx-icard"); const head = el("h4", "", title); if (aside) head.append(el("span", "r", aside)); box.append(head); return box; };
   const kv = (label, value, tone) => { const row = el("div", "sx-kv"); const strong = el("b", "", value); if (tone) strong.dataset.tone = tone; row.append(el("span", "", label), strong); return row; };
   const fine = (text) => el("p", "sx-fine", text);
@@ -98107,6 +98623,20 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       tab.addEventListener("keydown", onTabKey);
       tabs.append(tab); buttons[id] = tab;
     }
+    // More: the tabs the column has no room for, as a menu (the prototype's "More ⌄").
+    const more = button("More", "sx-itab-more", () => toggleTabMenu(), { title: "The inspector's other tabs" });
+    more.id = "sessions-itab-more"; more.hidden = true; more.setAttribute("aria-haspopup", "menu"); more.setAttribute("aria-expanded", "false");
+    more.append(glyph("g-chev"));
+    const moreMenu = el("div", "sx-menu sx-itab-menu"); moreMenu.id = "sessions-itab-menu"; moreMenu.setAttribute("role", "menu"); moreMenu.setAttribute("aria-label", "More inspector tabs"); moreMenu.hidden = true;
+    moreMenu.addEventListener("keydown", (event) => {
+      const items = [...moreMenu.querySelectorAll("[role=menuitem]")];
+      const at = items.indexOf(document.activeElement);
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); items[(at + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus?.({ preventScroll: true }); }
+      else if (event.key === "Escape" || event.key === "Tab") { event.preventDefault(); event.stopPropagation(); closeTabMenu(true); }
+    });
+    // The tabs and More share a row; More is not a tab of the list.
+    const tabRow = el("div", "sx-itabrow");
+    tabRow.append(tabs, more);
     const body = el("div", "sx-ibody"); body.id = "sessions-inspector-scroll"; body.hidden = true;
     const panes = {}, own = {}, hosts = {};
     for (const [id] of TABS) {
@@ -98116,13 +98646,74 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }
     own.plan = el("div", "sx-own"); panes.plan.append(own.plan);
     own.agent = el("div", "sx-own"); panes.agent.append(own.agent);
+    own.wt = el("div", "sx-own"); panes.wt.append(own.wt);
     own.checks = el("div", "sx-own"); hosts.checks = el("div", "sx-review-host"); panes.checks.append(own.checks, hosts.checks);
     own.preview = el("div", "sx-own"); hosts.preview = el("div", "sx-review-host"); panes.preview.append(own.preview, hosts.preview);
     hosts.changes = panes.changes;
     const empty = el("div", "sx-empty sx-insp-empty");
-    empty.append(el("b", "", "Nothing selected"), el("span", "", "Pick a session to see its plan, changes, checks, preview and agent."));
-    root.append(tabs, empty, body);
-    S.panels.inspector = { root, tabs, buttons, body, panes, own, hosts, empty };
+    empty.append(el("b", "", "No project open"), el("span", "", "Open a project folder to see its repository, its team and what it is doing."));
+    // The project's inspector (the prototype's Project | Team | Usage): Team and Usage are the pages of their own, a press away.
+    const project = el("section", "sx-project"); project.id = "sessions-project-insp"; project.hidden = true; project.setAttribute("aria-label", "Project");
+    const projectTabs = el("div", "sx-ptabs");
+    const here = el("span", "sx-ptab on", "Project"); here.setAttribute("aria-current", "true");
+    projectTabs.append(here,
+      button("Team", "sx-ptab", () => window.MefiNav?.go?.("agents", { section: "overview" }), { title: "Open Agents: the team, its seats and models" }),
+      button("Usage", "sx-ptab", () => window.MefiNav?.go?.("usage"), { title: "Open Usage: recorded calls and provider accounts" }));
+    const projectBody = el("div", "sx-ibody"); projectBody.id = "sessions-project-scroll";
+    const projectOwn = el("div", "sx-own");
+    projectBody.append(projectOwn);
+    project.append(projectTabs, projectBody);
+    root.append(tabRow, moreMenu, empty, body, project);
+    S.panels.inspector = { root, tabRow, tabs, buttons, more, moreMenu, body, panes, own, hosts, empty, project, projectOwn };
+  }
+  // ---- More: the tabs the column has no room for -------------------------------------------------------------------------------------
+  // Every tab is shown, then the last ones that are not the one on screen are put away until the row fits; More lists them.
+  function fitTabs() {
+    const panel = S.panels.inspector;
+    const box = panel?.tabs;
+    if (!box || box.hidden) return;
+    for (const [id] of TABS) panel.buttons[id].hidden = false;
+    panel.more.hidden = true;
+    const over = () => Number(box.scrollWidth) > Number(box.clientWidth) + 1;
+    const hidden = [];
+    if (over()) {
+      panel.more.hidden = false;
+      for (let at = TABS.length - 1; at >= 0 && over(); at -= 1) {
+        const [id] = TABS[at];
+        if (panel.buttons[id].getAttribute("aria-selected") === "true") continue;
+        panel.buttons[id].hidden = true; hidden.unshift(id);
+      }
+    }
+    S.itabHidden = hidden;
+    panel.more.hidden = !hidden.length;
+    panel.more.setAttribute("aria-label", hidden.length ? `More tabs: ${hidden.map((id) => TABS.find(([key]) => key === id)[1]).join(", ")}` : "More tabs");
+    if (!hidden.length) closeTabMenu(false);
+  }
+  function toggleTabMenu() { if (S.panels.inspector?.moreMenu?.hidden === false) closeTabMenu(true); else openTabMenu(); }
+  function openTabMenu() {
+    const panel = S.panels.inspector;
+    if (!panel || !(S.itabHidden || []).length) return;
+    const task = taskById(S.open);
+    panel.moreMenu.replaceChildren(...S.itabHidden.map((id) => {
+      const label = TABS.find(([key]) => key === id)?.[1] || id;
+      const item = button(label, "sx-menu-item", () => { closeTabMenu(false); if (task) setTab(task, id); });
+      item.setAttribute("role", "menuitem"); item.tabIndex = -1; item.dataset.tab = id;
+      const count = panel.buttons[id].querySelector("em");
+      if (count && !count.hidden && count.textContent) item.append(el("small", "sx-chip-count", count.textContent));
+      return item;
+    }));
+    const place = panel.more.getBoundingClientRect?.(), frame = panel.root.getBoundingClientRect?.();
+    if (place && frame && panel.moreMenu.style) { panel.moreMenu.style.top = `${Math.round(place.bottom - frame.top + 4)}px`; panel.moreMenu.style.right = "8px"; }
+    panel.moreMenu.hidden = false;
+    panel.more.setAttribute("aria-expanded", "true");
+    panel.moreMenu.querySelector("[role=menuitem]")?.focus?.({ preventScroll: true });
+  }
+  function closeTabMenu(restore) {
+    const panel = S.panels.inspector;
+    if (!panel || panel.moreMenu.hidden) return;
+    panel.moreMenu.hidden = true;
+    panel.more.setAttribute("aria-expanded", "false");
+    if (restore) panel.more.focus?.({ preventScroll: true });
   }
   function onTabKey(event) {
     const ids = TABS.map(([id]) => id);
@@ -98137,6 +98728,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const task = taskById(S.open);
     if (!task) return;
     setTab(task, ids[next], { reveal: false });
+    // A tab that waited behind More comes onto the row once it is the one on screen.
+    fitTabs();
     byId(`sessions-itab-${ids[next]}`)?.focus?.({ preventScroll: true });
   }
   // The tab the person picked, else the one the task suggests: its changes once it has any, its plan before that. The suggestion is
@@ -98200,7 +98793,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const task = taskById(S.open, data);
     if (!task) {
       unmountInspector();
-      if (changed("inspector:none", [true])) { panel.tabs.hidden = true; panel.body.hidden = true; panel.empty.hidden = false; panel.root.dataset.empty = "true"; }
+      paintProjectInspector(data);
       return;
     }
     const B = builder();
@@ -98211,9 +98804,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const counts = reviewCounts(task.id);
     const results = Array.isArray(task.verificationRun?.results) ? task.verificationRun.results : [];
     const passed = results.filter((result) => result.ok === true).length;
+    let refit = false;
     if (changed("inspector:tabs", [task.id, tab, counts?.files ?? null, counts?.running ?? null, passed, results.length, typeof window.MefiReview?.mount])) {
-      S.painted.delete("inspector:none");
-      panel.tabs.hidden = false; panel.body.hidden = false; panel.empty.hidden = true; panel.root.dataset.empty = "false";
+      dropPainted("inspector:project"); refit = true;
+      panel.tabs.hidden = false; panel.body.hidden = false; panel.empty.hidden = true; panel.project.hidden = true; panel.root.dataset.empty = "false";
       for (const [id, label] of TABS) {
         const node = panel.buttons[id], on = id === tab;
         node.setAttribute("aria-selected", String(on)); node.tabIndex = on ? 0 : -1; node.classList.toggle("on", on);
@@ -98224,11 +98818,127 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         panel.panes[id].hidden = !on;
       }
     }
-    if (tab === "plan") paintPlan(task, data, reading);
+    // The row is fitted again when its tabs changed or the column's width did (a drag, a window resize, a drawer).
+    const width = Number(panel.tabs.clientWidth) || 0;
+    if (refit || width !== S.itabWidth) { S.itabWidth = width; fitTabs(); }
+    if (tab === "plan") paintPlan(task, data, reading, run);
     else if (tab === "checks") paintChecksPane(task, data);
     else if (tab === "preview") paintPreviewPane(task, data);
     else if (tab === "agent") paintAgent(task, data, reading, run);
+    else if (tab === "wt") paintWorktree(task, data, run);
     else if (typeof window.MefiReview?.mount !== "function" && changed("inspector:changes", [task.id])) panel.panes.changes.replaceChildren(fine("The changed files are part of the desktop app."));
+  }
+
+  // ---- Worktree: where the session's run works, as Work › Worktrees says it ------------------------------------------------------------
+  function paintWorktree(task, data, run) {
+    const own = S.panels.inspector.own.wt;
+    const B = builder();
+    lookForWorktrees();
+    const list = window.MefiWorktrees?.state?.()?.list;
+    const row = list?.repo && Array.isArray(list.rows) ? list.rows.find((item) => item?.task?.taskId === task.id && item.kind !== "primary") ?? null : null;
+    const marked = S.wt.rows.get(task.id) ?? null;
+    const words = row ? window.MefiWorktrees?.describe?.(row) ?? null : null;
+    const where = B.chips.state.where;
+    const worker = run?.route || task.lastAttempt?.route || task.lastAttempt?.via || "";
+    if (!changed("inspector:wt", [task.id, row, marked, words, where?.branch ?? null, where?.worktrees?.on ?? null, worker])) return;
+    const out = [];
+    const all = button("All worktrees", "sx-btn ghost mini", () => window.MefiNav?.go?.("worktrees"), { title: "Open Work › Worktrees: every checkout of this project and what to do about each" });
+    if (!row && !marked) {
+      const box = card("Worktree", "the project's folder");
+      box.append(fine(`${worker || "Its worker"} works in the project's own folder${where?.branch ? `, on ${where.branch}` : ""}.`));
+      box.append(kv("New runs", where?.worktrees?.on ? "Each in its own worktree" : "In the project's folder"));
+      box.append(fine("The Worktree switch beside the box decides for the next run: its own checkout keeps builders working side by side from colliding."));
+      const acts = el("div", "sx-acts"); acts.append(all); box.append(acts);
+      out.push(box);
+    } else {
+      const box = card("Worktree", words?.label || "its own checkout");
+      if (words?.tone) box.dataset.tone = words.tone;
+      const name = row?.name || String(row?.path || marked?.path || "").split(/[\\/]/).filter(Boolean).pop() || "";
+      if (name) box.append(kv("Folder", name));
+      const branch = row?.branch || marked?.branch;
+      if (branch) box.append(kv("Branch", branch));
+      if (row && row.state !== "missing") {
+        box.append(kv(`Ahead of ${words?.upstream || words?.main || "main"}`, plural(Number(row.ahead) || 0, "commit")));
+        box.append(kv("Not committed", plural(Number(row.dirty) || 0, "file")));
+        box.append(kv("On GitHub", row.state === "merged" ? "In main" : row.pushed === true ? "Yes" : row.pushed === false ? "No" : "Unknown"));
+      }
+      if (words?.advice) box.append(fine(words.advice));
+      else if (!row) box.append(fine("Work › Worktrees has its full state once it has looked."));
+      const acts = el("div", "sx-acts");
+      acts.append(button("Review changes", "sx-btn ghost mini", () => setTab(task, "changes"), { title: "Open the Changes tab" }), all);
+      box.append(acts);
+      out.push(box);
+    }
+    own.replaceChildren(...out);
+  }
+
+  // ---- the project's inspector: Home with no session open ---------------------------------------------------------------------------
+  // The prototype's Project | Team | Usage: the repository (the branch and what is uncommitted, from work:where; GitHub, from the Git
+  // chip's model; the worktrees), the team (what each running worker is on, and what is free) and the latest moves on the board. It
+  // reads only what the page already holds; Team and Usage open their own pages.
+  function paintProjectInspector(data = snap()) {
+    const panel = S.panels.inspector;
+    if (!panel) return;
+    const B = builder();
+    closeTabMenu(false);
+    if (!data.projectId) {
+      if (changed("inspector:project", ["none"])) { S.painted.delete("inspector:tabs"); panel.tabs.hidden = true; panel.body.hidden = true; panel.project.hidden = true; panel.empty.hidden = false; panel.root.dataset.empty = "true"; }
+      return;
+    }
+    B.chips.loadWhere(data);
+    const where = B.chips.state.where;
+    let git = null;
+    try { git = window.MefiGitSync?.model?.() ?? null; } catch { git = null; }
+    const trees = worktreeCount();
+    const jobs = (data.status?.running || []).filter((job) => job && job.taskId);
+    const workers = Number(data.status?.parallel) || 0;
+    const now = Date.now();
+    const recent = tasksOf(data).filter((task) => task?.id && !task.archived && task.status !== "archived")
+      .map((task) => ({ task, at: B.lastMoved(task) })).filter((row) => row.at).sort((a, b) => b.at - a.at).slice(0, 5)
+      .map(({ task, at }) => ({ id: task.id, title: window.MefiTasks?.shortTitle?.(task) || task.title || "Untitled task", reading: B.reading(task, data), at }));
+    const team = jobs.map((job) => { const task = taskById(job.taskId, data); return { id: job.taskId, worker: String(job.route || "A worker"), title: task ? (window.MefiTasks?.shortTitle?.(task) || task.title || "") : String(job.title || ""), waiting: questionsFor(task, data).length > 0 }; });
+    const signature = [data.projectId, where?.branch ?? null, where?.dirty ?? null, where?.repo ?? null, git?.label ?? null, git?.repo ?? null, trees.count, team, workers, recent.map((row) => [row.id, row.title, row.reading.label, row.reading.tone, Math.floor((now - row.at) / 60000)])];
+    if (!changed("inspector:project", signature)) return;
+    S.painted.delete("inspector:tabs");
+    panel.tabs.hidden = true; panel.body.hidden = true; panel.empty.hidden = true; panel.project.hidden = false; panel.root.dataset.empty = "false";
+    const out = [];
+    const repo = card("Repository");
+    if (where?.repo) {
+      repo.append(kv("Branch", where.branch || (where.head ? `detached ${where.head}` : "no commits yet")));
+      repo.append(kv("Uncommitted", where.dirty ? plural(where.dirty, "file") : "None"));
+    } else if (where) repo.append(fine("This folder is not a Git repository."));
+    if (git?.label) repo.append(kv("GitHub", git.label));
+    if (trees.count) {
+      const row = el("div", "sx-kv"); row.append(el("span", "", "Worktrees"));
+      row.append(button(String(trees.count), "sx-link", () => window.MefiNav?.go?.("worktrees"), { title: `${trees.headline || plural(trees.count, "worktree")} Open Work › Worktrees.` }));
+      repo.append(row);
+    }
+    if (!repo.children?.length || repo.children.length === 1) repo.append(fine("Reading the folder…"));
+    out.push(repo);
+    const busy = team.length;
+    const crew = card("Team", workers ? `${busy} of ${workers} busy` : busy ? `${busy} working` : "");
+    if (!team.length) crew.append(fine("Nothing is running."));
+    for (const member of team) {
+      const row = el("div", "sx-kv sx-member");
+      row.append(button(`${member.worker} · ${clip(member.title, 34)}`, "sx-link sx-member-open", () => select(member.id), { title: `Open ${member.title}` }));
+      const state = el("b", "", member.waiting ? "waiting on you" : "working");
+      state.dataset.tone = member.waiting ? "warn" : "live";
+      row.append(state);
+      crew.append(row);
+    }
+    if (workers > busy) crew.append(fine(`${plural(workers - busy, "worker")} free for the next task.`));
+    out.push(crew);
+    const feed = card("Live activity");
+    if (!recent.length) feed.append(fine("Tasks you start show what they do here."));
+    for (const row of recent) {
+      const line = button("", "sx-feedrow", () => select(row.id), { title: `Open ${row.title}` });
+      line.dataset.tone = row.reading.tone;
+      const words = el("span", "sx-feedrow-words"); words.append(el("b", "", clip(row.title, 48)), el("span", "", row.reading.label));
+      line.append(el("i", "sx-dot"), words, el("time", "", builder().ago(row.at, now)));
+      feed.append(line);
+    }
+    out.push(feed);
+    panel.projectOwn.replaceChildren(...out);
   }
 
   // ---- Plan: the brief, what it is done when, where it stands, and the earlier versions of the brief --------------------------------------
@@ -98274,7 +98984,31 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     } catch (error) { toast(plain(error, "The earlier brief could not be restored."), "bad"); }
     finally { S.restoring = null; dropPainted("inspector:plan"); schedule(); }
   }
-  function paintPlan(task, data, reading) {
+  // The steps a run is taking: its worker's own todo list, as the run checkpoint keeps it on the task (runProgress.todos), in the marks
+  // the thread's run cards use. Nothing is made up when there is none.
+  const STEP_STATE = { completed: "ok", in_progress: "go", pending: "no", cancelled: "skip" };
+  const STEP_MARK = { ok: "✓", go: "●", no: "○", skip: "–", bad: "✕", warn: "!" };
+  function planSteps(task) {
+    const todos = Array.isArray(task.runProgress?.todos) ? task.runProgress.todos : [];
+    return todos.filter((todo) => todo && String(todo.content ?? "").trim()).slice(0, 40).map((todo) => ({ label: clip(todo.content, 160), state: STEP_STATE[todo.status] || "no", word: todo.status === "completed" ? "done" : todo.status === "in_progress" ? "now" : todo.status === "cancelled" ? "dropped" : "" }));
+  }
+  // What the task is done when (its acceptance lines, else its outline's), each with how the last check of the whole task went: the
+  // checks pass or fail the task, not a line, so every line says the same verdict.
+  function acceptanceRows(task, reading, doneWhen) {
+    const state = task.verification?.state;
+    const verdict = ["verified", "manual"].includes(state) ? ["ok", state === "manual" ? "confirmed" : "met"] : state === "failed" ? ["bad", "not accepted"] : reading.tone === "check" ? ["go", "checking"] : ["no", "not checked yet"];
+    return doneWhen.map((line) => ({ label: line, state: verdict[0], word: verdict[1] }));
+  }
+  function stepList(rows) {
+    const list = el("ol", "sx-steps sx-plan-steps");
+    for (const row of rows) {
+      const item = el("li", `sx-step ${row.state}`);
+      item.append(el("span", "sx-step-mark", STEP_MARK[row.state] || "○"), el("span", "sx-step-label", row.label), el("span", "sx-step-at", row.word));
+      list.append(item);
+    }
+    return list;
+  }
+  function paintPlan(task, data, reading, run = null) {
     const own = S.panels.inspector.own.plan;
     const B = builder();
     const summary = reading.summary || {};
@@ -98282,16 +99016,20 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const outline = outlineOf(brief);
     const acceptance = B.acceptanceOf(task).map((line) => String(line).trim()).filter(Boolean);
     const doneWhen = acceptance.length ? acceptance : outline?.parts.find((part) => part.key === "done when")?.lines ?? [];
+    const steps = planSteps(task);
     const versions = versionsFor(task);
     const locked = Boolean(task.runId || task.absorbedInto) || ["active", "running", "verifying", "awaiting_verification"].includes(task.status);
-    if (!changed("inspector:plan", [task.id, task.title, brief, acceptance, reading.label, summary.action, summary.nextAction, summary.blocker, summary.checks, versions.entries.map((entry) => entry.id), versions.loading, versions.error, versions.unavailable, locked, S.restoring, Math.floor(Date.now() / 60000)])) return;
+    if (!changed("inspector:plan", [task.id, task.title, brief, acceptance, steps, task.verification?.state ?? null, reading.label, reading.tone, summary.action, summary.nextAction, summary.blocker, summary.checks, Boolean(run), versions.entries.map((entry) => entry.id), versions.loading, versions.error, versions.unavailable, locked, S.restoring, Math.floor(Date.now() / 60000)])) return;
     const out = [];
-    const stands = card("Where it stands", reading.label);
-    if (summary.action) stands.append(fine(summary.action));
-    if (summary.blocker) stands.append(el("p", "sx-fine warn", summary.blocker));
-    if (summary.nextAction) stands.append(fine(`Next: ${summary.nextAction}`));
-    if (summary.checks) stands.append(kv("Checks", summary.checks));
-    out.push(stands);
+    // Steps: the run's own list, with where the task stands under it (what it is doing, what is in the way, what is next).
+    const done = steps.filter((step) => step.state === "ok").length;
+    const stepsCard = card("Steps", steps.length ? `${done} of ${steps.length} · ${reading.label}` : reading.label);
+    if (steps.length) stepsCard.append(stepList(steps));
+    else stepsCard.append(fine(run ? "Its worker has not listed its steps yet. They show here as it works." : "No steps yet. A run's own steps show here while it works."));
+    if (summary.action) stepsCard.append(fine(summary.action));
+    if (summary.blocker) stepsCard.append(el("p", "sx-fine warn", summary.blocker));
+    if (summary.nextAction) stepsCard.append(fine(`Next: ${summary.nextAction}`));
+    out.push(stepsCard);
     const box = card("Brief");
     if (outline) {
       if (outline.intro) box.append(el("p", "sx-text", outline.intro));
@@ -98302,12 +99040,14 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       }
     } else box.append(el("p", "sx-text", brief || "This task has no brief text."));
     out.push(box);
-    if (doneWhen.length) {
-      const done = card("Done when");
-      const list = el("ul", "sx-list-plain");
-      for (const line of doneWhen) list.append(el("li", "", line));
-      done.append(list);
-      out.push(done);
+    // Acceptance checks: what it is done when, and how far the checks got (the Checks tab has each check run's own results).
+    const rows = acceptanceRows(task, reading, doneWhen);
+    if (rows.length || summary.checks) {
+      const met = rows.filter((row) => row.state === "ok").length;
+      const checks = card("Acceptance checks", rows.length ? `${met} of ${rows.length}` : "");
+      if (rows.length) checks.append(stepList(rows));
+      if (summary.checks) checks.append(kv("Checks", summary.checks));
+      out.push(checks);
     }
     const history = card("Versions", versions.entries.length ? `${versions.entries.length}${versions.hasMore ? "+" : ""}` : "");
     history.append(fine("Every saved change to the brief is kept. Restoring one does not touch files, status or checks."));

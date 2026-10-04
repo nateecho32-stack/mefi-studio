@@ -173,6 +173,8 @@ function bridge(seedData) {
     projectPreviewOpen: () => ({ ok: true, projectId: pid, phase: "ready", available: true, canStop: true, owned: true, url: "http://localhost:5173/" }),
     projectPreviewStop: () => ({ ok: true, projectId: pid, phase: "stopped", available: true, canStop: false, owned: true }),
     workWhere: () => ({ ok: true, projectId: pid, repo: true, branch: "main", head: "996db71", dirty: 3, worktrees: { on: false, forced: false } }),
+    // The Git chip's model, as scripts/git-link.cjs words it: three changed files on main.
+    gitState: () => ({ ok: true, model: { id: "uncommitted", label: "3 changes", short: "3", tone: "info", glyph: "uncommitted", sentence: "3 files have changed since your last commit.", projectId: pid, details: [], branch: "main", repo: "owner/notes", checkedAt: Date.now() - 120000, counts: { ahead: 0, behind: 0, dirty: 3 }, primary: { id: "save-and-push", label: "Save and push 3" }, secondary: { id: "save", label: "Save only" } } }),
     workWorktrees: (on) => ({ ok: true, worktrees: { on: Boolean(on), forced: false } }),
     worktreesList: () => data.worktrees,
     getAiRouting: () => ({ ok: true, provider: "auto", executorCli: "opencode", executorTier: "auto", executorTierDefaults: {}, executorModels: { opencode: "zai/glm-5.3" }, autoProviders: ["zai", "opencode"], hasZen: true }),
@@ -367,6 +369,28 @@ app.whenReady().then(async () => {
   assert.equal(await textOf("#sessions-project .sx-proj-words small"), "main");
   assert.equal(await textOf("#sessions-tab-backlog"), "Backlog · 2");
   step("the list is grouped and worded");
+  // The head as the prototype has it: the Git chip (git-sync.js's, branch then state) and the worktrees chip, then the project menu.
+  await until("document.querySelector('#sessions-gitrow .gs-chip') && !document.querySelector('#sessions-gitrow .gs-slot').hidden", "the Git chip sits under the project");
+  assert.equal(await textOf("#sessions-gitrow .gs-chip-branch-name"), "main");
+  assert.equal(await textOf("#sessions-gitrow .gs-chip-label"), "3 changes");
+  await until("document.getElementById('sessions-worktrees') && !document.getElementById('sessions-worktrees').hidden", "the worktrees chip counts the project's other checkouts");
+  assert.equal((await textOf("#sessions-worktrees")).trim(), "1 worktree");
+  await click("#sessions-gitrow .gs-chip");
+  await until("document.querySelector('.gs-pop') && !document.querySelector('.gs-pop').hidden", "the chip opens the one Git popover");
+  await press("Escape");
+  await until("!document.querySelector('.gs-pop') || document.querySelector('.gs-pop').hidden", "Escape closes it");
+  await click("#sessions-project");
+  await until("document.getElementById('sessions-project-menu')", "the project menu opens on the head");
+  const menuItems = await run("return [...document.querySelectorAll('#sessions-project-menu .sx-menu-words > span')].map((node) => node.textContent);");
+  assert.equal(menuItems[0], "Notes app"); assert.ok(menuItems.includes("Open a folder…") && menuItems.includes("All projects…"), JSON.stringify(menuItems));
+  assert.equal(await run("return document.activeElement?.closest('#sessions-project-menu') !== null && document.activeElement?.getAttribute('aria-checked') === 'true';"), true, "the keyboard starts on the open project");
+  const menuBox = await run("const m = document.getElementById('sessions-project-menu').getBoundingClientRect(), l = document.getElementById('sessions-list').getBoundingClientRect(); return { inside: m.left >= l.left - 1 && m.right <= l.right + 1, w: m.width };");
+  assert.ok(menuBox.inside && menuBox.w > 180, `the menu sits inside the list: ${JSON.stringify(menuBox)}`);
+  await capture("sessions-project-menu-1440.png");
+  await press("Escape");
+  await until("!document.getElementById('sessions-project-menu')", "Escape closes the project menu");
+  assert.equal(await run("return document.activeElement?.id;"), "sessions-project", "and gives the head its focus back");
+  step("the head has the project menu, the Git chip and the worktrees");
 
   // What a row says follows html[data-detail]: titles, then status (the default), then everything.
   const level = async (value) => {
@@ -480,7 +504,7 @@ app.whenReady().then(async () => {
   assert.deepEqual([first.send, first.attachShown, first.picker, first.pictures], ["Ask", true, true, true], "the picture button and the @ # / picker are bound to this box");
   await click("#sessions-intent-note");
   const note = await box();
-  assert.deepEqual([note.intent, note.pressed, note.send, note.attachShown], ["note", ["note"], "Save note", false], "a Note has no way to carry a picture, so its button is not drawn");
+  assert.deepEqual([note.intent, note.pressed, note.send, note.attachShown], ["note", ["note"], "Save note", true], "Attach is on the row for every purpose, as in the prototype (a Note's pictures wait for an Ask or a Change)");
   await forget();
   await run("const input = document.getElementById('sessions-input'); input.value = 'Prefer rounded corners'; input.dispatchEvent(new Event('input', { bubbles: true }));");
   await click("#sessions-send");
@@ -531,7 +555,7 @@ app.whenReady().then(async () => {
   // Tab keys.
   await focusOn("#sessions-itab-changes");
   await press("Right"); assert.equal(await run("return document.activeElement.id;"), "sessions-itab-checks"); assert.equal(await run("return document.getElementById('sessions-pane-checks').hidden;"), false);
-  await press("End"); assert.equal(await run("return document.activeElement.id;"), "sessions-itab-agent");
+  await press("End"); assert.equal(await run("return document.activeElement.id;"), "sessions-itab-wt");
   await press("Home"); assert.equal(await run("return document.activeElement.id;"), "sessions-itab-plan");
   await click("#sessions-itab-changes");
   assert.equal(await run("return [...document.querySelectorAll('#sessions-inspector .sx-pane')].filter((node) => !node.hidden).map((node) => node.id);").then((value) => value.join()), "sessions-pane-changes", "only the tab that is chosen shows");
@@ -580,8 +604,26 @@ app.whenReady().then(async () => {
   await until("window.sessionsFixture.calls().some((call) => call.name === 'tasksCap')", "the limit goes to the host");
   assert.equal((await callsOf(["tasksCap"]))[0].args[0].minutes, 30);
   await click("#sessions-itab-plan");
-  assert.match(await textOf("#sessions-pane-plan"), /Where it stands/); assert.match(await textOf("#sessions-pane-plan"), /One \.md file per note/);
+  assert.match(await textOf("#sessions-pane-plan"), /Steps/); assert.match(await textOf("#sessions-pane-plan"), /Acceptance checks/); assert.match(await textOf("#sessions-pane-plan"), /One \.md file per note/);
   step("Plan, Checks, Preview and Agent show the task's facts");
+  // The Worktree tab: a run in its own checkout, in Work › Worktrees' words.
+  await open("task_run", "tag");
+  await click("#sessions-itab-wt");
+  await until("/Only on this PC/.test(document.getElementById('sessions-pane-wt')?.textContent || '')", "the Worktree tab says where the run works and whether its work is safe");
+  assert.match(await textOf("#sessions-pane-wt"), /mefi\/tag-search/); assert.match(await textOf("#sessions-pane-wt"), /2 commits/);
+  assert.equal(await run("return document.getElementById('sessions-itab-wt').hidden;"), false, "the tab on screen is on the row, whatever the width");
+  await capture("sessions-worktree-1440.png");
+  await click("#sessions-itab-plan");
+  // Home with no session: the project's inspector. A page that is not a session: no inspector at all.
+  await run("window.MefiNav.go('workspace');");
+  await until("window.MefiSessions.selected() === null && !document.getElementById('sessions-project-insp').hidden && /Repository/.test(document.getElementById('sessions-project-insp').textContent) && /Live activity/.test(document.getElementById('sessions-project-insp').textContent)", "Home with no session shows the project's inspector");
+  assert.match(await textOf("#sessions-project-insp"), /3 of 3 busy/);
+  await capture("sessions-project-1440.png");
+  await run("window.MefiNav.go('tasks');");
+  await until("window.MefiShell.info('inspector').vacant === true && document.getElementById('shell-inspector').hidden && window.MefiNav.layout.used('inspector') === 0", "a page that is not a session folds the inspector away");
+  await run("window.MefiNav.go('workspace');");
+  await until("!document.getElementById('shell-inspector').hidden && window.MefiNav.layout.used('inspector') > 0", "and Home brings it back");
+  step("the Worktree tab, the project's inspector, and no inspector on other pages");
 
   // ---- media in the thread ------------------------------------------------------------------------------------------------------------------
   await open("task_review", "Markdown");
@@ -732,20 +774,33 @@ app.whenReady().then(async () => {
       }
       // A short window (under 520 CSS px) or a narrow thread (up to 620) folds the box: the words and Send, the rest behind More.
       const boxState = `const form = document.getElementById('sessions-compose'); const shown = (selector) => { const node = form.querySelector(selector); if (!node) return null; const r = node.getBoundingClientRect(); return getComputedStyle(node).display !== 'none' && r.width > 0 && r.height > 0; };
-        return { open: form.dataset.open, hint: shown('.sx-hint'), more: shown('.sx-more'), chips: shown('#sessions-chips'), worker: shown('.sx-worker'), top: shown('.sx-compose-top'), autonomy: shown('#sessions-autonomy'), attach: shown('.composer-attach-button') };`;
+        return { open: form.dataset.open, hint: shown('.sx-hint'), more: shown('.sx-more'), chips: shown('#sessions-chips'), run: shown('#sessions-run'), modes: shown('.sx-modes'), autonomy: shown('#sessions-autonomy'), attach: shown('.composer-attach-button') };`;
       const short = m.inner.h < 520, narrow = m.thread.w <= 620, folds = short || narrow;
       const before = await run(boxState);
       assert.equal(before.more, folds, `${label}: More shows exactly when the box is folded: ${JSON.stringify(before)}`);
-      assert.equal(before.chips, !folds, `${label}: the branch and Worktree chips are folded away with it: ${JSON.stringify(before)}`);
-      assert.equal(before.worker, !folds, `${label}: and the coding worker: ${JSON.stringify(before)}`);
+      assert.equal(before.chips, !folds, `${label}: the Worktree switch is folded away with it: ${JSON.stringify(before)}`);
+      assert.equal(before.run, !folds, `${label}: and the run menu's button: ${JSON.stringify(before)}`);
+      assert.equal(before.autonomy, false, `${label}: the permission mode waits in the run menu: ${JSON.stringify(before)}`);
       assert.equal(before.hint, !folds, `${label}: and the line that says what the words will do: ${JSON.stringify(before)}`);
-      if (short) assert.equal(before.top, false, `${label}: a short window hides the Note | Ask | Change row too: ${JSON.stringify(before)}`);
+      if (short) assert.equal(before.modes, false, `${label}: a short window hides the Note | Ask | Change switch too: ${JSON.stringify(before)}`);
+      if (!folds && id === "task_ask") {
+        await click("#sessions-run");
+        await until("!document.getElementById('sessions-run-menu').hidden", `${label}: the run menu opens`);
+        const r = await run("const m = document.getElementById('sessions-run-menu').getBoundingClientRect(), t = document.getElementById('sessions-thread').getBoundingClientRect(); const shown = (id) => { const n = document.getElementById(id); return Boolean(n) && n.getClientRects().length > 0 && getComputedStyle(n).display !== 'none'; }; return { inside: m.top >= t.top - 1 && m.bottom <= t.bottom + 1 && m.left >= t.left - 1 && m.right <= innerWidth + 1, box: [Math.round(m.left), Math.round(m.top), Math.round(m.right), Math.round(m.bottom)], thread: [Math.round(t.top), Math.round(t.bottom)], modes: document.querySelectorAll('#sessions-run-menu .autonomy-mode').length, cli: shown('sessions-worker-cli'), tier: shown('sessions-worker-tier'), folder: shown('sessions-branch') };");
+        assert.ok(r.inside, `${label}: the run menu stays inside the thread: ${JSON.stringify(r)}`);
+        assert.ok(r.modes >= 1 && r.cli && r.tier && r.folder, `${label}: it holds the permission mode, the worker, its tier and the folder: ${JSON.stringify(r)}`);
+        const inMenu = await run(measure);
+        assert.deepEqual(inMenu.small, [], `${label}: no text under 12 px in the run menu: ${JSON.stringify(inMenu.small)}`);
+        if (width === 1920) await capture("sessions-runmenu-1920.png");
+        await press("Escape");
+        await until("document.getElementById('sessions-run-menu').hidden", `${label}: Escape closes the run menu`);
+      }
       if (folds) {
         await run("const input=document.getElementById('sessions-input');input.value='Keep this draft while session controls are open.';input.dispatchEvent(new Event('input', { bubbles: true }));");
         await click("#sessions-compose .sx-more");
         const opened = await run(boxState);
-        assert.equal(opened.open, "true"); assert.equal(opened.chips, true, `${label}: More brings the chips back: ${JSON.stringify(opened)}`); assert.equal(opened.worker, true);
-        assert.equal(opened.top, true, `${label}: and the row of purposes: ${JSON.stringify(opened)}`);
+        assert.equal(opened.open, "true"); assert.equal(opened.chips, true, `${label}: More brings the chips back: ${JSON.stringify(opened)}`); assert.equal(opened.run, true);
+        assert.equal(opened.modes, true, `${label}: and the purposes: ${JSON.stringify(opened)}`);
         await capture(`sessions-more-${id === "task_ask" ? "ask" : "review"}-${width}${height < 520 ? "-short" : ""}${zoom === 1 ? "" : "-zoom"}.png`);
         const inside = await run("const form = document.getElementById('sessions-compose').getBoundingClientRect(); const send = document.getElementById('sessions-send').getBoundingClientRect(); const bar = document.querySelector('.shell-status')?.getBoundingClientRect(); const free = bar ? bar.top : innerHeight; return { ok: form.bottom <= free + 1 && send.bottom <= free + 1 && form.top >= 0, form: [Math.round(form.top), Math.round(form.bottom)], send: [Math.round(send.top), Math.round(send.bottom)], free, inner: innerHeight };");
         assert.equal(inside.ok, true, `${label}: opened, the whole box is still on screen and clear of the status bar: ${JSON.stringify(inside)}`);
@@ -775,6 +830,23 @@ app.whenReady().then(async () => {
   }
   assert.equal(report.layouts.length, 12, "two sessions at six sizes");
   step("every panel fits six window sizes");
+  // ---- the Work view at 1920x1080, beside the prototype's shots (docs/prototype/) ------------------------------------------------------------
+  await size(1920, 1080, 1);
+  await run("for (const name of ['list', 'inspector']) window.MefiShell.open(name);");
+  const gallery = async (name, setup, ready) => { await run(setup); await until(ready, name); await sleep(450); await capture(name); };
+  await gallery("work-1920-plan.png", "window.MefiSessions.select('task_ask'); window.MefiSessions.setTab('plan');", "document.querySelector('#sessions-head .sx-title')?.textContent.includes('empty state') && !document.getElementById('sessions-pane-plan').hidden");
+  await gallery("work-1920-worktree.png", "window.MefiSessions.select('task_run'); window.MefiSessions.setTab('wt');", "/Only on this PC/.test(document.getElementById('sessions-pane-wt')?.textContent || '')");
+  await gallery("work-1920-agent.png", "window.MefiSessions.setTab('agent');", "document.querySelector('#sessions-pane-agent .sx-icard') && !document.getElementById('sessions-pane-agent').hidden");
+  await run("window.MefiSessions.setTab('plan');");
+  await gallery("work-1920-project.png", "window.MefiNav.go('workspace');", "window.MefiSessions.selected() === null && !document.getElementById('sessions-project-insp').hidden");
+  await gallery("work-1920-backlog.png", "document.getElementById('sessions-tab-backlog').click();", "document.querySelector('#sessions-list .sx-scan')");
+  await run("document.getElementById('sessions-tab-sessions').click();");
+  await gallery("work-1920-project-menu.png", "document.getElementById('sessions-project').click();", "document.getElementById('sessions-project-menu')");
+  await press("Escape");
+  await gallery("work-1920-worktrees-page.png", "window.MefiNav.go('worktrees');", "!document.getElementById('shell-pages').hidden && document.getElementById('shell-inspector').hidden");
+  await run("window.MefiNav.go('workspace');");
+  await until("!document.getElementById('shell-inspector').hidden", "back on Home");
+  step("the Work view at 1920x1080");
   await size(1440, 900, 1);
 
   // ---- switching it off, and on again ---------------------------------------------------------------------------------------------------------

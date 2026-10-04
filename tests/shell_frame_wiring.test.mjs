@@ -194,7 +194,7 @@ test("the source keeps its promises: one storage key behind try/catch, no write 
 test("what MefiShell exposes is what the docs and the other slices rely on", () => {
   const page = loadShell({});
   const names = Object.keys(page.window.MefiShell).sort();
-  assert.deepEqual(names, ["DEFAULTS", "LIMITS", "MODES", "PRESETS", "REGIONS", "active", "close", "disable", "enable", "info", "isOpen", "layout", "mode", "mount", "onChange", "onInbox", "open", "openInbox", "plan", "region", "resetLayout", "resize", "setMode", "size", "status", "sync", "toggle"]);
+  assert.deepEqual(names, ["DEFAULTS", "LIMITS", "MODES", "PRESETS", "REGIONS", "active", "close", "disable", "enable", "info", "isOpen", "layout", "mode", "mount", "onChange", "onInbox", "open", "openInbox", "pages", "plan", "region", "resetLayout", "resize", "setMode", "size", "status", "sync", "toggle"]);
   assert.equal(page.window.MefiShell.onInbox, null, "a hook, empty until the inbox module sets it");
   assert.deepEqual(plain(page.window.MefiShell.MODES), ["vibe", "build"]);
 });

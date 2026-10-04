@@ -39,6 +39,38 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-04 The v2 Work view closer to the 0.5 prototype: breadcrumb, list head, run menu, inspector
+
+Branch `wip/ui-work-view` (worktree off main 39d98e3, node_modules junctioned),
+five commits: af36359 top bar (the prototype's breadcrumb; a section's pages
+as a page list in the list column with Back, Forward and the Git chip's new
+"list" look), 7cba1f0 session list head (project menu, Git chip, N worktrees,
+plan drafts in Backlog), 30076fc thread and box (head chips, one run menu,
+Attach for every purpose), 8520670 inspector (Worktree tab, More, Steps from
+runProgress.todos and Acceptance checks, the project's inspector on Home, a
+vacant inspector folds away), a4ecc88 a 1920x1080 gallery in sessions_render.
+
+`npm run check` ok (271 targets), lint 0 errors (42 warnings, all
+pre-existing), `npm run audit` 0 findings. `npm run test:fast` 6899 tests:
+6883 pass, 14 skipped, attempt_review_host "a shot that is slow" and
+run_node_tests_fast "--list ... slow reader" (timeout) failed under load and
+pass alone (28/28, 2/2). Electron fixtures one by one: sessions_render pass
+(project menu, Git chip, run menu at 1920/1440/1100 with nothing under
+12 px, Worktree tab, project inspector, the column folding on Work pages),
+composer_render pass, today_render pass, worktrees_render pass;
+shell_render passes every size config, the walk and the Tab walk (now 28
+steps: Home's inspector has the project's controls) and stops at the known
+1 px check at 1100 px ("373 !== 372", same as clean main here).
+
+Full `npm test` at a4ecc88: Node 6899 tests, 6882 pass, 14 skipped, 3 fail
+(advisory_checks EPERM removing its temp folder, attempt_review_host,
+update_rehearsal "Roll back restores...": 26/26, 28/28 and 7/7 alone);
+Electron lane 75: 72 pass, 1 skipped, 2 fail: layout_contract_render
+(viewport 1921x1081) and shell_render (the 1 px check), both failing the
+same way on clean main on this PC; command_render and planning_render pass;
+Python 248 OK (1 skipped); path lock ok. Captures at 1920x1080 in
+`C:\wt\gap\after-work\` with prototype-left side-by-sides in
+`C:\wt\gap\after-work\compare\`.
 ## 2026-10-04 Rust stage 2: five more modules move into Rust
 
 Branch `rust/stage2-ports` in `C:\wt\rust2` (pushed as wip/rust-stage2-ports):
@@ -333,10 +365,6 @@ Exact production claim() source under controlled frame scheduling demonstrates u
 ## 2026-10-02 late evening - Booklet inventory contract adaptation after aggregate discovery
 
 First frozen inventory aggregate exposed five Node wiring cases that still asserted individual builder reads and parallel codeParts lists. Updated those five files plus two Python contract files to read the declared inventory while retaining source membership, startup prefix, module dependency ordering, stylesheet adjacency, fixture coverage and CLI/export contracts. Updated Node suites: 125 passed. Focused Python: 3 passed. Builder/auditor/renderer bytes match the first inventory candidate; original LF/CRLF equivalence evidence remains applicable and preserved. Build/check/audit passed. Full repeated aggregate queued after first frozen run completes; prior failure/source retained, candidate unqualified and unlanded. No runtime, shell-default, production/provider or publication changes.
-
-## 2026-10-02 evening - Isolated booklet input consolidation focused validation
-
-One ordered inventory covers current 76 scripts and 28 stylesheets. Preserved old builder and candidate emitted byte-identical booklet and source manifest under identical LF and CRLF inputs; new build reported changed=false over each baseline output. Five build cases and 31 inventory/source-location/auditor cases passed, including 16 new missing/duplicate/order/foreign-root contracts. Build/check/audit passed. Native and full aggregate remain queued while game owns the heavy window. Isolated candidate unqualified and unlanded; verified detail-action candidate preserved. No provider, production, shell-default or release changes.
 
 ## Read Before Any Tests
 
