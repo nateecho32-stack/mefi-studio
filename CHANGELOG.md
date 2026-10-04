@@ -61,6 +61,12 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   the same folder as the Electron build, with Node beside the program. The
   updater in this version can install either kind of build and roll back
   from either, so the next releases can move to the Rust host.
+- More of the engine runs in Rust on the Rust host: the Skills page's files, a
+  message's pictures, the before and after pictures behind Changed files and
+  Revert, settings.json and auth.json (with the same care for a broken
+  settings file: it is copied aside and never rewritten from nothing), and
+  the Git chip's own state and queue. Each gives the same answers as the
+  JavaScript it replaces, held equal by a test that runs both.
 
 - The Publish dialog's "This drive cannot keep a Git project reliably" warning
   and Set up this PC's exFAT/FAT drive checks work without administrator
