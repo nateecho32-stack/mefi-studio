@@ -131,6 +131,34 @@ test("the regions follow v2 off, the shell's loss and its return", () => {
   assert.equal(shell.enable(), true, "unless something asks for them");
 });
 
+test("an inspector whose panels all have nothing to show here folds away: no room, no note, a toggle that says why; with nothing mounted the frame keeps it", () => {
+  const page = loadShell({});
+  const shell = page.window.MefiShell;
+  assert.equal(asked(page).inspector, 388);
+  assert.equal(shell.info("inspector").vacant, false, "nothing mounted: the frame cannot know, and keeps the column and its note");
+  const handle = shell.mount("inspector", "session", page.document.createElement("div"));
+  handle.hide();
+  assert.equal(asked(page).inspector, 0, "a page that is not a session: no room is asked for it");
+  assert.equal(shell.isOpen("inspector"), false); assert.equal(shell.info("inspector").vacant, true);
+  assert.equal(page.region("inspector").hidden, true, "no 'Nothing to inspect yet' column");
+  assert.equal(page.$("shell-split-inspector").hidden, true, "and no splitter");
+  const toggle = page.$("shell-inspector-toggle");
+  assert.equal(toggle.disabled, true); assert.match(toggle.getAttribute("title"), /^Nothing to inspect on this page/);
+  assert.equal(shell.open("inspector"), false); assert.equal(shell.toggle("inspector"), false);
+  page.key({ key: "[" });
+  assert.equal(plain(shell.layout()).build.inspector.open, true, "the saved choice stays for the pages that have something");
+  assert.ok(page.events.some((event) => event.type === "mefi:shell-layout" && event.detail.reason === "vacant"), "the window hears it");
+  handle.show();
+  assert.equal(asked(page).inspector, 388, "a panel that shows brings it back as it was");
+  assert.equal(shell.isOpen("inspector"), true); assert.equal(toggle.disabled, false);
+  // A small window: a vacant inspector is no drawer either.
+  const small = loadShell({ width: 700, height: 600 });
+  const one = small.window.MefiShell.mount("inspector", "session", small.document.createElement("div"));
+  one.hide();
+  assert.equal(small.window.MefiShell.info("inspector").drawer, false);
+  assert.equal(small.window.MefiShell.open("inspector"), false, "nothing opens over the page");
+});
+
 test("the presets: Build opens the list and the inspector, Vibe closes both, and both keep the tab strip", () => {
   const build = loadShell({});
   assert.deepEqual(plain(build.window.MefiShell.PRESETS), { build: { list: { open: true, w: 280 }, inspector: { open: true, w: 388 }, tabs: { open: true } }, vibe: { list: { open: false, w: 280 }, inspector: { open: false, w: 388 }, tabs: { open: true } } });

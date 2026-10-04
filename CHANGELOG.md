@@ -25,6 +25,12 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   its pictures wait for an Ask or a Change), one run menu ("Auto · OpenCode")
   that holds the permission mode, the coding worker and its tier and the
   folder, the Worktree switch and Send.
+- **The 0.5 inspector.** A session's inspector has a Worktree tab (where its
+  run works and whether that work is safe), and tabs that do not fit wait
+  behind More. Plan shows the run's own steps and the acceptance checks.
+  With no session open, Home's inspector shows the project (repository,
+  team, latest activity); on pages that are not a session the inspector
+  folds away instead of saying there is nothing to inspect.
 - **GPT-6.1 Sol.** The lead, desk and overseer seats and the heavy Zen role
   now default to `gpt-6.1-sol` (released at DevDay 2026: near Astra quality
   at a fifth of Astra's price). It appears in the Zen model pickers and keeps

@@ -181,6 +181,7 @@
     stacks: {},
     top: null,
     pages: null,          // the page list's nodes, and what it last drew
+    vacant: false,        // the inspector's panels all say there is nothing to show on this page
     statusParts: null,
     splits: null,
     menu: null,
@@ -349,6 +350,15 @@
     if (!node) return;
     if (isColumn(regionName)) node.dataset.empty = String(!anyShown);
     if (regionName === "main") node.hidden = !anyShown;
+    // An inspector whose panels all say there is nothing to show here (a page that is not a session) folds away: no room, no
+    // "Nothing to inspect yet". With nothing mounted at all the frame cannot know, and keeps the column and its note.
+    if (regionName === "inspector") {
+      const vacant = panels.length > 0 && !anyShown;
+      if (vacant !== state.vacant) {
+        state.vacant = vacant;
+        if (state.on && state.plan && !applying) { apply(); state.planKey = planKey(state.plan); paintBars(); emit({ what: "resize", region: "inspector", reason: vacant ? "vacant" : "filled" }); }
+      }
+    }
   }
 
   // ---- the contract: asking MefiNav.layout for room -----------------------------------------
@@ -366,6 +376,8 @@
       const prefs = state.prefs[state.mode];
       const fold = foldNames();
       const plan = computePlan({ width: viewWidth(), rail: railWidth(), prefs, fold, mainMin: mainMin() });
+      // A vacant inspector takes no room and is no drawer; what the mode asked for is kept and comes back with a panel that shows.
+      if (state.vacant) plan.inspector = { ...plan.inspector, docked: false, drawer: false, width: 0, vacant: true };
       state.plan = plan;
       const folded = new Set(fold);
       const want = { list: plan.list.width, inspector: plan.inspector.width, tabs: prefs.tabs.open ? state.tabsWanted : 0, status: state.statusWanted };
@@ -448,6 +460,8 @@
     }
     if (!isColumn(name)) return false;
     if (!state.plan) apply();
+    // Nothing to inspect on this page: the saved choice is left as it is for the pages that have something.
+    if (name === "inspector" && state.vacant) return false;
     if (state.plan[name].drawer) {
       if (wanted) return openDrawer(name);
       closeDrawer(true);
@@ -507,6 +521,7 @@
       docked: one ? one.docked : isOpen(name),
       drawer: one ? one.drawer : false,
       drawerOpen: state.drawer === name,
+      vacant: name === "inspector" && state.vacant,
       size: size(name),
       width: isColumn(name) ? prefs[name].w : null,
       min: isColumn(name) ? LIMITS[name][0] : null,
@@ -680,9 +695,11 @@
     if (!parts || !plan) return;
     for (const [name, node, key] of [["list", parts.listToggle, "Ctrl B"], ["inspector", parts.inspectorToggle, "["]]) {
       const on = isOpen(name);
+      const vacant = name === "inspector" && state.vacant;
       node.setAttribute("aria-pressed", String(on));
-      node.setAttribute("title", `${on ? "Hide" : "Show"} the ${name} (${key})${plan[name].drawer ? ". It opens over the page in a window this small" : ""}`);
+      node.setAttribute("title", vacant ? "Nothing to inspect on this page: the inspector comes back on a session" : `${on ? "Hide" : "Show"} the ${name} (${key})${plan[name].drawer ? ". It opens over the page in a window this small" : ""}`);
       node.dataset.on = String(on);
+      node.disabled = vacant;
     }
   }
 
@@ -1148,7 +1165,7 @@
     const folded = foldNames();
     const notes = {
       list: state.plan.list.drawer ? "Opens as a drawer in a small window." : "Ctrl B shows or hides it.",
-      inspector: state.plan.inspector.drawer ? (folded.includes("inspector") ? "Opens as a drawer in a small window." : "Opens as a drawer: this window is too narrow to dock it.") : "The [ key shows or hides it.",
+      inspector: state.vacant ? "Nothing to inspect on this page: it comes back on a session." : state.plan.inspector.drawer ? (folded.includes("inspector") ? "Opens as a drawer in a small window." : "Opens as a drawer: this window is too narrow to dock it.") : "The [ key shows or hides it.",
     };
     for (const name of ["list", "inspector"]) {
       menu.parts[name].words.children[1].textContent = notes[name];

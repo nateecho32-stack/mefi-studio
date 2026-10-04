@@ -32,7 +32,7 @@
   const PICTURES_SHOWN = 4;
   const TICK_MS = 60000;
   const SHORT_BELOW = 520;
-  const TABS = [["plan", "Plan"], ["changes", "Changes"], ["checks", "Checks"], ["preview", "Preview"], ["agent", "Agent"]];
+  const TABS = [["plan", "Plan"], ["changes", "Changes"], ["checks", "Checks"], ["preview", "Preview"], ["agent", "Agent"], ["wt", "Worktree"]];
   const PHASES = { unavailable: "No preview available", stopped: "Stopped", starting: "Starting preview", ready: "Preview ready", stopping: "Stopping preview", failed: "Preview failed" };
 
   const api = () => window.mefiStudio;
@@ -81,7 +81,7 @@
   const S = {
     wired: false, shell: null, handles: {}, panels: {}, offs: [], listening: false, waiting: false,
     projectId: null, open: null, tab: "sessions", closed: {}, doneMore: 0, query: "", short: false, home: false,
-    itab: new Map(), itabChosen: new Set(), openedAt: 0,
+    itab: new Map(), itabChosen: new Set(), openedAt: 0, itabHidden: [], itabWidth: -1,
     menu: null, renaming: null, focus: null, painted: new Map(), revision: 0, queued: false, tickTimer: 0,
     pictures: new Map(), picturesLoading: 0, evidence: new Map(), metrics: new Map(), later: new Set(), dockOpen: new Set(), dockFold: new Set(),
     wt: { rows: new Map(), at: 0, key: "" }, plans: { projectId: null, rows: [], at: 0, loading: false }, projMenu: false, projMenuFocus: false, lightbox: null, intent: new Map(), drafts: new Map(), sending: false, insp: null,
@@ -133,7 +133,8 @@
     syncVisibility();
     // The frame's page list (a section's pages, renderer/shell.js) covers the column on other sections' pages: nothing is drawn for nobody.
     if (!listCovered()) paintList();
-    if (S.visible) { paintThread(); paintInspector(); } else unmountInspector();
+    if (S.visible) { paintThread(); paintInspector(); }
+    else { unmountInspector(); if (S.home) paintProjectInspector(); }
   }
   const listCovered = () => { try { return Boolean(S.shell?.pages?.()?.shown); } catch { return false; } };
   // Nothing is drawn for a panel nobody can see: a hidden window, a thread that is not on screen.
@@ -145,7 +146,9 @@
     cover(shown);
     setShown("main", shown);
     setShown("list", true);
-    setShown("inspector", shown);
+    // On Home the inspector is the session's, or the project's (Repository, Team, Live activity) when none is open; any other page
+    // is not a session, so it is hidden there and the frame folds the column away instead of saying there is nothing to inspect.
+    setShown("inspector", home);
   }
   // Home is covered while a session shows, not gone: it leaves the tab order and the accessibility tree, and MefiScroll stops drawing the
   // scroll fades of panes nobody can see over the thread. Only what this put there is taken back.
@@ -786,6 +789,7 @@
   function onPointerDown(event) {
     if (S.projMenu && !event.target?.closest?.(".sx-projmenu, #sessions-project")) closeProjectMenu(false);
     if (S.compose?.runMenu && !S.compose.runMenu.hidden && !event.target?.closest?.(".sx-runwrap")) closeRunMenu(false);
+    if (S.panels.inspector?.moreMenu && !S.panels.inspector.moreMenu.hidden && !event.target?.closest?.(".sx-itab-menu, #sessions-itab-more")) closeTabMenu(false);
     if (!S.menu) return;
     if (event.target?.closest?.(".sx-menu, .sx-row-menu")) return;
     closeMenu(false);
@@ -1671,9 +1675,10 @@
   }
 
   // ---- the inspector -------------------------------------------------------------------------------------------------------------------------
-  // Five tabs for the selected session. Plan and Agent are drawn here; Changes is review.js's panel (real diffs, Accept, Revert and its
-  // Undo) and is mounted whenever a session is open, so its count is live; Checks and Preview hold what this page knows (what the task
-  // must pass, the project preview's controls) with review.js's advisory checks and Before / After under them.
+  // Six tabs for the selected session, as the prototype has them. Plan, Agent and Worktree are drawn here; Changes is review.js's panel
+  // (real diffs, Accept, Revert and its Undo) and is mounted whenever a session is open, so its count is live; Checks and Preview hold
+  // what this page knows (what the task must pass, the project preview's controls) with review.js's advisory checks and Before / After
+  // under them. Tabs that do not fit the column's width wait behind More. With no session open, Home's inspector is the project's.
   const card = (title, aside) => { const box = el("section", "sx-icard"); const head = el("h4", "", title); if (aside) head.append(el("span", "r", aside)); box.append(head); return box; };
   const kv = (label, value, tone) => { const row = el("div", "sx-kv"); const strong = el("b", "", value); if (tone) strong.dataset.tone = tone; row.append(el("span", "", label), strong); return row; };
   const fine = (text) => el("p", "sx-fine", text);
@@ -1689,6 +1694,20 @@
       tab.addEventListener("keydown", onTabKey);
       tabs.append(tab); buttons[id] = tab;
     }
+    // More: the tabs the column has no room for, as a menu (the prototype's "More ⌄").
+    const more = button("More", "sx-itab-more", () => toggleTabMenu(), { title: "The inspector's other tabs" });
+    more.id = "sessions-itab-more"; more.hidden = true; more.setAttribute("aria-haspopup", "menu"); more.setAttribute("aria-expanded", "false");
+    more.append(glyph("g-chev"));
+    const moreMenu = el("div", "sx-menu sx-itab-menu"); moreMenu.id = "sessions-itab-menu"; moreMenu.setAttribute("role", "menu"); moreMenu.setAttribute("aria-label", "More inspector tabs"); moreMenu.hidden = true;
+    moreMenu.addEventListener("keydown", (event) => {
+      const items = [...moreMenu.querySelectorAll("[role=menuitem]")];
+      const at = items.indexOf(document.activeElement);
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); items[(at + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus?.({ preventScroll: true }); }
+      else if (event.key === "Escape" || event.key === "Tab") { event.preventDefault(); event.stopPropagation(); closeTabMenu(true); }
+    });
+    // The tabs and More share a row; More is not a tab of the list.
+    const tabRow = el("div", "sx-itabrow");
+    tabRow.append(tabs, more);
     const body = el("div", "sx-ibody"); body.id = "sessions-inspector-scroll"; body.hidden = true;
     const panes = {}, own = {}, hosts = {};
     for (const [id] of TABS) {
@@ -1698,13 +1717,74 @@
     }
     own.plan = el("div", "sx-own"); panes.plan.append(own.plan);
     own.agent = el("div", "sx-own"); panes.agent.append(own.agent);
+    own.wt = el("div", "sx-own"); panes.wt.append(own.wt);
     own.checks = el("div", "sx-own"); hosts.checks = el("div", "sx-review-host"); panes.checks.append(own.checks, hosts.checks);
     own.preview = el("div", "sx-own"); hosts.preview = el("div", "sx-review-host"); panes.preview.append(own.preview, hosts.preview);
     hosts.changes = panes.changes;
     const empty = el("div", "sx-empty sx-insp-empty");
-    empty.append(el("b", "", "Nothing selected"), el("span", "", "Pick a session to see its plan, changes, checks, preview and agent."));
-    root.append(tabs, empty, body);
-    S.panels.inspector = { root, tabs, buttons, body, panes, own, hosts, empty };
+    empty.append(el("b", "", "No project open"), el("span", "", "Open a project folder to see its repository, its team and what it is doing."));
+    // The project's inspector (the prototype's Project | Team | Usage): Team and Usage are the pages of their own, a press away.
+    const project = el("section", "sx-project"); project.id = "sessions-project-insp"; project.hidden = true; project.setAttribute("aria-label", "Project");
+    const projectTabs = el("div", "sx-ptabs");
+    const here = el("span", "sx-ptab on", "Project"); here.setAttribute("aria-current", "true");
+    projectTabs.append(here,
+      button("Team", "sx-ptab", () => window.MefiNav?.go?.("agents", { section: "overview" }), { title: "Open Agents: the team, its seats and models" }),
+      button("Usage", "sx-ptab", () => window.MefiNav?.go?.("usage"), { title: "Open Usage: recorded calls and provider accounts" }));
+    const projectBody = el("div", "sx-ibody"); projectBody.id = "sessions-project-scroll";
+    const projectOwn = el("div", "sx-own");
+    projectBody.append(projectOwn);
+    project.append(projectTabs, projectBody);
+    root.append(tabRow, moreMenu, empty, body, project);
+    S.panels.inspector = { root, tabRow, tabs, buttons, more, moreMenu, body, panes, own, hosts, empty, project, projectOwn };
+  }
+  // ---- More: the tabs the column has no room for -------------------------------------------------------------------------------------
+  // Every tab is shown, then the last ones that are not the one on screen are put away until the row fits; More lists them.
+  function fitTabs() {
+    const panel = S.panels.inspector;
+    const box = panel?.tabs;
+    if (!box || box.hidden) return;
+    for (const [id] of TABS) panel.buttons[id].hidden = false;
+    panel.more.hidden = true;
+    const over = () => Number(box.scrollWidth) > Number(box.clientWidth) + 1;
+    const hidden = [];
+    if (over()) {
+      panel.more.hidden = false;
+      for (let at = TABS.length - 1; at >= 0 && over(); at -= 1) {
+        const [id] = TABS[at];
+        if (panel.buttons[id].getAttribute("aria-selected") === "true") continue;
+        panel.buttons[id].hidden = true; hidden.unshift(id);
+      }
+    }
+    S.itabHidden = hidden;
+    panel.more.hidden = !hidden.length;
+    panel.more.setAttribute("aria-label", hidden.length ? `More tabs: ${hidden.map((id) => TABS.find(([key]) => key === id)[1]).join(", ")}` : "More tabs");
+    if (!hidden.length) closeTabMenu(false);
+  }
+  function toggleTabMenu() { if (S.panels.inspector?.moreMenu?.hidden === false) closeTabMenu(true); else openTabMenu(); }
+  function openTabMenu() {
+    const panel = S.panels.inspector;
+    if (!panel || !(S.itabHidden || []).length) return;
+    const task = taskById(S.open);
+    panel.moreMenu.replaceChildren(...S.itabHidden.map((id) => {
+      const label = TABS.find(([key]) => key === id)?.[1] || id;
+      const item = button(label, "sx-menu-item", () => { closeTabMenu(false); if (task) setTab(task, id); });
+      item.setAttribute("role", "menuitem"); item.tabIndex = -1; item.dataset.tab = id;
+      const count = panel.buttons[id].querySelector("em");
+      if (count && !count.hidden && count.textContent) item.append(el("small", "sx-chip-count", count.textContent));
+      return item;
+    }));
+    const place = panel.more.getBoundingClientRect?.(), frame = panel.root.getBoundingClientRect?.();
+    if (place && frame && panel.moreMenu.style) { panel.moreMenu.style.top = `${Math.round(place.bottom - frame.top + 4)}px`; panel.moreMenu.style.right = "8px"; }
+    panel.moreMenu.hidden = false;
+    panel.more.setAttribute("aria-expanded", "true");
+    panel.moreMenu.querySelector("[role=menuitem]")?.focus?.({ preventScroll: true });
+  }
+  function closeTabMenu(restore) {
+    const panel = S.panels.inspector;
+    if (!panel || panel.moreMenu.hidden) return;
+    panel.moreMenu.hidden = true;
+    panel.more.setAttribute("aria-expanded", "false");
+    if (restore) panel.more.focus?.({ preventScroll: true });
   }
   function onTabKey(event) {
     const ids = TABS.map(([id]) => id);
@@ -1719,6 +1799,8 @@
     const task = taskById(S.open);
     if (!task) return;
     setTab(task, ids[next], { reveal: false });
+    // A tab that waited behind More comes onto the row once it is the one on screen.
+    fitTabs();
     byId(`sessions-itab-${ids[next]}`)?.focus?.({ preventScroll: true });
   }
   // The tab the person picked, else the one the task suggests: its changes once it has any, its plan before that. The suggestion is
@@ -1782,7 +1864,7 @@
     const task = taskById(S.open, data);
     if (!task) {
       unmountInspector();
-      if (changed("inspector:none", [true])) { panel.tabs.hidden = true; panel.body.hidden = true; panel.empty.hidden = false; panel.root.dataset.empty = "true"; }
+      paintProjectInspector(data);
       return;
     }
     const B = builder();
@@ -1793,9 +1875,10 @@
     const counts = reviewCounts(task.id);
     const results = Array.isArray(task.verificationRun?.results) ? task.verificationRun.results : [];
     const passed = results.filter((result) => result.ok === true).length;
+    let refit = false;
     if (changed("inspector:tabs", [task.id, tab, counts?.files ?? null, counts?.running ?? null, passed, results.length, typeof window.MefiReview?.mount])) {
-      S.painted.delete("inspector:none");
-      panel.tabs.hidden = false; panel.body.hidden = false; panel.empty.hidden = true; panel.root.dataset.empty = "false";
+      dropPainted("inspector:project"); refit = true;
+      panel.tabs.hidden = false; panel.body.hidden = false; panel.empty.hidden = true; panel.project.hidden = true; panel.root.dataset.empty = "false";
       for (const [id, label] of TABS) {
         const node = panel.buttons[id], on = id === tab;
         node.setAttribute("aria-selected", String(on)); node.tabIndex = on ? 0 : -1; node.classList.toggle("on", on);
@@ -1806,11 +1889,127 @@
         panel.panes[id].hidden = !on;
       }
     }
-    if (tab === "plan") paintPlan(task, data, reading);
+    // The row is fitted again when its tabs changed or the column's width did (a drag, a window resize, a drawer).
+    const width = Number(panel.tabs.clientWidth) || 0;
+    if (refit || width !== S.itabWidth) { S.itabWidth = width; fitTabs(); }
+    if (tab === "plan") paintPlan(task, data, reading, run);
     else if (tab === "checks") paintChecksPane(task, data);
     else if (tab === "preview") paintPreviewPane(task, data);
     else if (tab === "agent") paintAgent(task, data, reading, run);
+    else if (tab === "wt") paintWorktree(task, data, run);
     else if (typeof window.MefiReview?.mount !== "function" && changed("inspector:changes", [task.id])) panel.panes.changes.replaceChildren(fine("The changed files are part of the desktop app."));
+  }
+
+  // ---- Worktree: where the session's run works, as Work › Worktrees says it ------------------------------------------------------------
+  function paintWorktree(task, data, run) {
+    const own = S.panels.inspector.own.wt;
+    const B = builder();
+    lookForWorktrees();
+    const list = window.MefiWorktrees?.state?.()?.list;
+    const row = list?.repo && Array.isArray(list.rows) ? list.rows.find((item) => item?.task?.taskId === task.id && item.kind !== "primary") ?? null : null;
+    const marked = S.wt.rows.get(task.id) ?? null;
+    const words = row ? window.MefiWorktrees?.describe?.(row) ?? null : null;
+    const where = B.chips.state.where;
+    const worker = run?.route || task.lastAttempt?.route || task.lastAttempt?.via || "";
+    if (!changed("inspector:wt", [task.id, row, marked, words, where?.branch ?? null, where?.worktrees?.on ?? null, worker])) return;
+    const out = [];
+    const all = button("All worktrees", "sx-btn ghost mini", () => window.MefiNav?.go?.("worktrees"), { title: "Open Work › Worktrees: every checkout of this project and what to do about each" });
+    if (!row && !marked) {
+      const box = card("Worktree", "the project's folder");
+      box.append(fine(`${worker || "Its worker"} works in the project's own folder${where?.branch ? `, on ${where.branch}` : ""}.`));
+      box.append(kv("New runs", where?.worktrees?.on ? "Each in its own worktree" : "In the project's folder"));
+      box.append(fine("The Worktree switch beside the box decides for the next run: its own checkout keeps builders working side by side from colliding."));
+      const acts = el("div", "sx-acts"); acts.append(all); box.append(acts);
+      out.push(box);
+    } else {
+      const box = card("Worktree", words?.label || "its own checkout");
+      if (words?.tone) box.dataset.tone = words.tone;
+      const name = row?.name || String(row?.path || marked?.path || "").split(/[\\/]/).filter(Boolean).pop() || "";
+      if (name) box.append(kv("Folder", name));
+      const branch = row?.branch || marked?.branch;
+      if (branch) box.append(kv("Branch", branch));
+      if (row && row.state !== "missing") {
+        box.append(kv(`Ahead of ${words?.upstream || words?.main || "main"}`, plural(Number(row.ahead) || 0, "commit")));
+        box.append(kv("Not committed", plural(Number(row.dirty) || 0, "file")));
+        box.append(kv("On GitHub", row.state === "merged" ? "In main" : row.pushed === true ? "Yes" : row.pushed === false ? "No" : "Unknown"));
+      }
+      if (words?.advice) box.append(fine(words.advice));
+      else if (!row) box.append(fine("Work › Worktrees has its full state once it has looked."));
+      const acts = el("div", "sx-acts");
+      acts.append(button("Review changes", "sx-btn ghost mini", () => setTab(task, "changes"), { title: "Open the Changes tab" }), all);
+      box.append(acts);
+      out.push(box);
+    }
+    own.replaceChildren(...out);
+  }
+
+  // ---- the project's inspector: Home with no session open ---------------------------------------------------------------------------
+  // The prototype's Project | Team | Usage: the repository (the branch and what is uncommitted, from work:where; GitHub, from the Git
+  // chip's model; the worktrees), the team (what each running worker is on, and what is free) and the latest moves on the board. It
+  // reads only what the page already holds; Team and Usage open their own pages.
+  function paintProjectInspector(data = snap()) {
+    const panel = S.panels.inspector;
+    if (!panel) return;
+    const B = builder();
+    closeTabMenu(false);
+    if (!data.projectId) {
+      if (changed("inspector:project", ["none"])) { S.painted.delete("inspector:tabs"); panel.tabs.hidden = true; panel.body.hidden = true; panel.project.hidden = true; panel.empty.hidden = false; panel.root.dataset.empty = "true"; }
+      return;
+    }
+    B.chips.loadWhere(data);
+    const where = B.chips.state.where;
+    let git = null;
+    try { git = window.MefiGitSync?.model?.() ?? null; } catch { git = null; }
+    const trees = worktreeCount();
+    const jobs = (data.status?.running || []).filter((job) => job && job.taskId);
+    const workers = Number(data.status?.parallel) || 0;
+    const now = Date.now();
+    const recent = tasksOf(data).filter((task) => task?.id && !task.archived && task.status !== "archived")
+      .map((task) => ({ task, at: B.lastMoved(task) })).filter((row) => row.at).sort((a, b) => b.at - a.at).slice(0, 5)
+      .map(({ task, at }) => ({ id: task.id, title: window.MefiTasks?.shortTitle?.(task) || task.title || "Untitled task", reading: B.reading(task, data), at }));
+    const team = jobs.map((job) => { const task = taskById(job.taskId, data); return { id: job.taskId, worker: String(job.route || "A worker"), title: task ? (window.MefiTasks?.shortTitle?.(task) || task.title || "") : String(job.title || ""), waiting: questionsFor(task, data).length > 0 }; });
+    const signature = [data.projectId, where?.branch ?? null, where?.dirty ?? null, where?.repo ?? null, git?.label ?? null, git?.repo ?? null, trees.count, team, workers, recent.map((row) => [row.id, row.title, row.reading.label, row.reading.tone, Math.floor((now - row.at) / 60000)])];
+    if (!changed("inspector:project", signature)) return;
+    S.painted.delete("inspector:tabs");
+    panel.tabs.hidden = true; panel.body.hidden = true; panel.empty.hidden = true; panel.project.hidden = false; panel.root.dataset.empty = "false";
+    const out = [];
+    const repo = card("Repository");
+    if (where?.repo) {
+      repo.append(kv("Branch", where.branch || (where.head ? `detached ${where.head}` : "no commits yet")));
+      repo.append(kv("Uncommitted", where.dirty ? plural(where.dirty, "file") : "None"));
+    } else if (where) repo.append(fine("This folder is not a Git repository."));
+    if (git?.label) repo.append(kv("GitHub", git.label));
+    if (trees.count) {
+      const row = el("div", "sx-kv"); row.append(el("span", "", "Worktrees"));
+      row.append(button(String(trees.count), "sx-link", () => window.MefiNav?.go?.("worktrees"), { title: `${trees.headline || plural(trees.count, "worktree")} Open Work › Worktrees.` }));
+      repo.append(row);
+    }
+    if (!repo.children?.length || repo.children.length === 1) repo.append(fine("Reading the folder…"));
+    out.push(repo);
+    const busy = team.length;
+    const crew = card("Team", workers ? `${busy} of ${workers} busy` : busy ? `${busy} working` : "");
+    if (!team.length) crew.append(fine("Nothing is running."));
+    for (const member of team) {
+      const row = el("div", "sx-kv sx-member");
+      row.append(button(`${member.worker} · ${clip(member.title, 34)}`, "sx-link sx-member-open", () => select(member.id), { title: `Open ${member.title}` }));
+      const state = el("b", "", member.waiting ? "waiting on you" : "working");
+      state.dataset.tone = member.waiting ? "warn" : "live";
+      row.append(state);
+      crew.append(row);
+    }
+    if (workers > busy) crew.append(fine(`${plural(workers - busy, "worker")} free for the next task.`));
+    out.push(crew);
+    const feed = card("Live activity");
+    if (!recent.length) feed.append(fine("Tasks you start show what they do here."));
+    for (const row of recent) {
+      const line = button("", "sx-feedrow", () => select(row.id), { title: `Open ${row.title}` });
+      line.dataset.tone = row.reading.tone;
+      const words = el("span", "sx-feedrow-words"); words.append(el("b", "", clip(row.title, 48)), el("span", "", row.reading.label));
+      line.append(el("i", "sx-dot"), words, el("time", "", builder().ago(row.at, now)));
+      feed.append(line);
+    }
+    out.push(feed);
+    panel.projectOwn.replaceChildren(...out);
   }
 
   // ---- Plan: the brief, what it is done when, where it stands, and the earlier versions of the brief --------------------------------------
@@ -1856,7 +2055,31 @@
     } catch (error) { toast(plain(error, "The earlier brief could not be restored."), "bad"); }
     finally { S.restoring = null; dropPainted("inspector:plan"); schedule(); }
   }
-  function paintPlan(task, data, reading) {
+  // The steps a run is taking: its worker's own todo list, as the run checkpoint keeps it on the task (runProgress.todos), in the marks
+  // the thread's run cards use. Nothing is made up when there is none.
+  const STEP_STATE = { completed: "ok", in_progress: "go", pending: "no", cancelled: "skip" };
+  const STEP_MARK = { ok: "✓", go: "●", no: "○", skip: "–", bad: "✕", warn: "!" };
+  function planSteps(task) {
+    const todos = Array.isArray(task.runProgress?.todos) ? task.runProgress.todos : [];
+    return todos.filter((todo) => todo && String(todo.content ?? "").trim()).slice(0, 40).map((todo) => ({ label: clip(todo.content, 160), state: STEP_STATE[todo.status] || "no", word: todo.status === "completed" ? "done" : todo.status === "in_progress" ? "now" : todo.status === "cancelled" ? "dropped" : "" }));
+  }
+  // What the task is done when (its acceptance lines, else its outline's), each with how the last check of the whole task went: the
+  // checks pass or fail the task, not a line, so every line says the same verdict.
+  function acceptanceRows(task, reading, doneWhen) {
+    const state = task.verification?.state;
+    const verdict = ["verified", "manual"].includes(state) ? ["ok", state === "manual" ? "confirmed" : "met"] : state === "failed" ? ["bad", "not accepted"] : reading.tone === "check" ? ["go", "checking"] : ["no", "not checked yet"];
+    return doneWhen.map((line) => ({ label: line, state: verdict[0], word: verdict[1] }));
+  }
+  function stepList(rows) {
+    const list = el("ol", "sx-steps sx-plan-steps");
+    for (const row of rows) {
+      const item = el("li", `sx-step ${row.state}`);
+      item.append(el("span", "sx-step-mark", STEP_MARK[row.state] || "○"), el("span", "sx-step-label", row.label), el("span", "sx-step-at", row.word));
+      list.append(item);
+    }
+    return list;
+  }
+  function paintPlan(task, data, reading, run = null) {
     const own = S.panels.inspector.own.plan;
     const B = builder();
     const summary = reading.summary || {};
@@ -1864,16 +2087,20 @@
     const outline = outlineOf(brief);
     const acceptance = B.acceptanceOf(task).map((line) => String(line).trim()).filter(Boolean);
     const doneWhen = acceptance.length ? acceptance : outline?.parts.find((part) => part.key === "done when")?.lines ?? [];
+    const steps = planSteps(task);
     const versions = versionsFor(task);
     const locked = Boolean(task.runId || task.absorbedInto) || ["active", "running", "verifying", "awaiting_verification"].includes(task.status);
-    if (!changed("inspector:plan", [task.id, task.title, brief, acceptance, reading.label, summary.action, summary.nextAction, summary.blocker, summary.checks, versions.entries.map((entry) => entry.id), versions.loading, versions.error, versions.unavailable, locked, S.restoring, Math.floor(Date.now() / 60000)])) return;
+    if (!changed("inspector:plan", [task.id, task.title, brief, acceptance, steps, task.verification?.state ?? null, reading.label, reading.tone, summary.action, summary.nextAction, summary.blocker, summary.checks, Boolean(run), versions.entries.map((entry) => entry.id), versions.loading, versions.error, versions.unavailable, locked, S.restoring, Math.floor(Date.now() / 60000)])) return;
     const out = [];
-    const stands = card("Where it stands", reading.label);
-    if (summary.action) stands.append(fine(summary.action));
-    if (summary.blocker) stands.append(el("p", "sx-fine warn", summary.blocker));
-    if (summary.nextAction) stands.append(fine(`Next: ${summary.nextAction}`));
-    if (summary.checks) stands.append(kv("Checks", summary.checks));
-    out.push(stands);
+    // Steps: the run's own list, with where the task stands under it (what it is doing, what is in the way, what is next).
+    const done = steps.filter((step) => step.state === "ok").length;
+    const stepsCard = card("Steps", steps.length ? `${done} of ${steps.length} · ${reading.label}` : reading.label);
+    if (steps.length) stepsCard.append(stepList(steps));
+    else stepsCard.append(fine(run ? "Its worker has not listed its steps yet. They show here as it works." : "No steps yet. A run's own steps show here while it works."));
+    if (summary.action) stepsCard.append(fine(summary.action));
+    if (summary.blocker) stepsCard.append(el("p", "sx-fine warn", summary.blocker));
+    if (summary.nextAction) stepsCard.append(fine(`Next: ${summary.nextAction}`));
+    out.push(stepsCard);
     const box = card("Brief");
     if (outline) {
       if (outline.intro) box.append(el("p", "sx-text", outline.intro));
@@ -1884,12 +2111,14 @@
       }
     } else box.append(el("p", "sx-text", brief || "This task has no brief text."));
     out.push(box);
-    if (doneWhen.length) {
-      const done = card("Done when");
-      const list = el("ul", "sx-list-plain");
-      for (const line of doneWhen) list.append(el("li", "", line));
-      done.append(list);
-      out.push(done);
+    // Acceptance checks: what it is done when, and how far the checks got (the Checks tab has each check run's own results).
+    const rows = acceptanceRows(task, reading, doneWhen);
+    if (rows.length || summary.checks) {
+      const met = rows.filter((row) => row.state === "ok").length;
+      const checks = card("Acceptance checks", rows.length ? `${met} of ${rows.length}` : "");
+      if (rows.length) checks.append(stepList(rows));
+      if (summary.checks) checks.append(kv("Checks", summary.checks));
+      out.push(checks);
     }
     const history = card("Versions", versions.entries.length ? `${versions.entries.length}${versions.hasMore ? "+" : ""}` : "");
     history.append(fine("Every saved change to the brief is kept. Restoring one does not touch files, status or checks."));

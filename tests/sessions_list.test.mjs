@@ -767,7 +767,7 @@ test("the thread is shown only while a session is open and Home is the page; the
   const shell = (region) => a.mounts.find((entry) => entry.region === region);
   assert.equal(shell("list").shown, true, "the list is always there");
   assert.equal(shell("main").shown, false, "no session, no thread: Home shows");
-  assert.equal(shell("inspector").shown, false, "and no inspector");
+  assert.equal(shell("inspector").shown, true, "and the project's inspector");
   a.S.select("working", { route: false }); await a.settle();
   assert.equal(shell("main").shown, true); assert.equal(shell("inspector").shown, true);
   assert.equal(a.document.getElementById("workspace-layer").hasAttribute("inert"), true);

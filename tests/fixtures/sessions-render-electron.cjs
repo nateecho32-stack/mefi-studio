@@ -555,7 +555,7 @@ app.whenReady().then(async () => {
   // Tab keys.
   await focusOn("#sessions-itab-changes");
   await press("Right"); assert.equal(await run("return document.activeElement.id;"), "sessions-itab-checks"); assert.equal(await run("return document.getElementById('sessions-pane-checks').hidden;"), false);
-  await press("End"); assert.equal(await run("return document.activeElement.id;"), "sessions-itab-agent");
+  await press("End"); assert.equal(await run("return document.activeElement.id;"), "sessions-itab-wt");
   await press("Home"); assert.equal(await run("return document.activeElement.id;"), "sessions-itab-plan");
   await click("#sessions-itab-changes");
   assert.equal(await run("return [...document.querySelectorAll('#sessions-inspector .sx-pane')].filter((node) => !node.hidden).map((node) => node.id);").then((value) => value.join()), "sessions-pane-changes", "only the tab that is chosen shows");
@@ -604,8 +604,26 @@ app.whenReady().then(async () => {
   await until("window.sessionsFixture.calls().some((call) => call.name === 'tasksCap')", "the limit goes to the host");
   assert.equal((await callsOf(["tasksCap"]))[0].args[0].minutes, 30);
   await click("#sessions-itab-plan");
-  assert.match(await textOf("#sessions-pane-plan"), /Where it stands/); assert.match(await textOf("#sessions-pane-plan"), /One \.md file per note/);
+  assert.match(await textOf("#sessions-pane-plan"), /Steps/); assert.match(await textOf("#sessions-pane-plan"), /Acceptance checks/); assert.match(await textOf("#sessions-pane-plan"), /One \.md file per note/);
   step("Plan, Checks, Preview and Agent show the task's facts");
+  // The Worktree tab: a run in its own checkout, in Work › Worktrees' words.
+  await open("task_run", "tag");
+  await click("#sessions-itab-wt");
+  await until("/Only on this PC/.test(document.getElementById('sessions-pane-wt')?.textContent || '')", "the Worktree tab says where the run works and whether its work is safe");
+  assert.match(await textOf("#sessions-pane-wt"), /mefi\/tag-search/); assert.match(await textOf("#sessions-pane-wt"), /2 commits/);
+  assert.equal(await run("return document.getElementById('sessions-itab-wt').hidden;"), false, "the tab on screen is on the row, whatever the width");
+  await capture("sessions-worktree-1440.png");
+  await click("#sessions-itab-plan");
+  // Home with no session: the project's inspector. A page that is not a session: no inspector at all.
+  await run("window.MefiNav.go('workspace');");
+  await until("window.MefiSessions.selected() === null && !document.getElementById('sessions-project-insp').hidden && /Repository/.test(document.getElementById('sessions-project-insp').textContent) && /Live activity/.test(document.getElementById('sessions-project-insp').textContent)", "Home with no session shows the project's inspector");
+  assert.match(await textOf("#sessions-project-insp"), /3 of 3 busy/);
+  await capture("sessions-project-1440.png");
+  await run("window.MefiNav.go('tasks');");
+  await until("window.MefiShell.info('inspector').vacant === true && document.getElementById('shell-inspector').hidden && window.MefiNav.layout.used('inspector') === 0", "a page that is not a session folds the inspector away");
+  await run("window.MefiNav.go('workspace');");
+  await until("!document.getElementById('shell-inspector').hidden && window.MefiNav.layout.used('inspector') > 0", "and Home brings it back");
+  step("the Worktree tab, the project's inspector, and no inspector on other pages");
 
   // ---- media in the thread ------------------------------------------------------------------------------------------------------------------
   await open("task_review", "Markdown");

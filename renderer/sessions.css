@@ -316,7 +316,40 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
 
 /* ---- the inspector -------------------------------------------------------------------------------------------------------------------- */
 .sx-insp { border-left: 1px solid var(--hairline); }
-.sx-itabs { display: flex; flex: none; flex-wrap: wrap; gap: 0; padding: 0 6px; border-bottom: 1px solid var(--hairline); }
+/* One row of tabs, as in the prototype: what does not fit waits behind More. */
+.sx-itabrow { display: flex; flex: none; align-items: stretch; min-width: 0; padding: 0 6px; border-bottom: 1px solid var(--hairline); }
+.sx-itabrow:has(> .sx-itabs[hidden]) { display: none; }
+.sx-itabs { display: flex; flex: 1 1 auto; flex-wrap: nowrap; gap: 0; min-width: 0; overflow: hidden; }
+.sx-itab-more { flex: none; gap: 4px; min-height: 38px; margin-left: auto; padding: 0 6px; border: 0; border-radius: 0; background: transparent; color: var(--muted); font: 600 var(--x125)/1 var(--font-ui); }
+.sx-itab-more .glyph { width: 12px; height: 12px; }
+.sx-itab-more[aria-expanded="true"] { color: var(--ivory); }
+.sx-itab-menu { top: 44px; right: 8px; min-width: 180px; }
+.sx-itab-menu .sx-chip-count { margin-left: auto; }
+/* The project's inspector (Home with no session open): Project, and Team and Usage a press away. */
+.sx-project { display: flex; flex: 1 1 0; flex-direction: column; min-height: 0; }
+.sx-ptabs { display: flex; flex: none; gap: 2px; padding: 0 6px; border-bottom: 1px solid var(--hairline); }
+.sx-ptab { display: inline-flex; align-items: center; min-height: 38px; padding: 0 8px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font: 600 var(--x125)/1 var(--font-ui); }
+.sx-ptab.on { border-bottom-color: var(--gold); color: var(--ivory); }
+.sx-member { align-items: center; }
+.sx-member-open { min-width: 0; min-height: 0; padding: 0; overflow: hidden; color: var(--ivory); font-size: var(--x13); text-align: left; text-decoration: none; text-overflow: ellipsis; white-space: nowrap; }
+.sx-kv b[data-tone="live"] { color: var(--live); }
+.sx-kv b[data-tone="warn"] { color: var(--warn); }
+.sx-feedrow { display: flex; align-items: flex-start; gap: 8px; width: 100%; min-height: 0; padding: 6px 2px; border: 0; border-radius: var(--r-sm); background: transparent; text-align: left; white-space: normal; }
+.sx-feedrow + .sx-feedrow { border-top: 1px solid color-mix(in srgb, var(--ivory) 7%, transparent); }
+.sx-feedrow .sx-dot { margin-top: 5px; }
+.sx-feedrow[data-tone="ask"] .sx-dot { background: var(--warn); }
+.sx-feedrow[data-tone="run"] .sx-dot { background: var(--live); }
+.sx-feedrow[data-tone="check"] .sx-dot { background: var(--info); }
+.sx-feedrow[data-tone="done"] .sx-dot { background: var(--good); }
+.sx-feedrow-words { display: grid; flex: 1 1 auto; gap: 1px; min-width: 0; font-size: var(--x13); }
+.sx-feedrow-words b { overflow: hidden; color: var(--ivory); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.sx-feedrow-words span { color: var(--muted); font-size: var(--x12); }
+.sx-feedrow time { flex: none; color: var(--dim); font-size: var(--x12); white-space: nowrap; }
+.sx-icard[data-tone="bad"] h4 .r { color: var(--bad); }
+.sx-icard[data-tone="warn"] h4 .r { color: var(--warn); }
+.sx-icard[data-tone="good"] h4 .r { color: var(--good); }
+.sx-icard[data-tone="info"] h4 .r { color: var(--info); }
+.sx-step.skip .sx-step-mark { color: var(--dim); }
 .sx-itab { min-height: 38px; padding: 0 6px; gap: 4px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font: 600 var(--x125)/1 var(--font-ui); }
 .sx-itab.on { border-bottom-color: var(--gold); color: var(--ivory); }
 .sx-itab em { padding: 1px 5px; border-radius: var(--r-pill); background: var(--tint-gold-3); color: var(--gold-bright); font: 600 var(--x12)/1.2 var(--font-ui); }

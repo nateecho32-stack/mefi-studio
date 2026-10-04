@@ -291,8 +291,11 @@ the frame is built, and `onChange` hears `enable` when it is);
 `MefiShell.mount(region, key, elementOrFactory, { title, order })` puts
 content in a region and answers `{ show, hide, unmount, shown, element }` (a
 factory runs once, the first time the region exists; a list or inspector with
-nothing shown says "Nothing listed yet" or "Nothing to inspect yet", never
-sample data; a mount into `top` or `status` lands in that bar's own slot, between
+nothing mounted says "Nothing listed yet" or "Nothing to inspect yet", never
+sample data, and an inspector whose mounted panels are all hidden (a page that
+is not a session) folds away: no room, no drawer, its toggle disabled with the
+reason, `info("inspector").vacant`, and the saved choice kept for the pages that
+have something; a mount into `top` or `status` lands in that bar's own slot, between
 the trail and the search, or before the player); `MefiShell.resize("tabs", px)`
 is how the tab strip says how tall it is; `MefiShell.onInbox = fn(anchor)` is how the Inbox opens from the pill;
 `MefiShell.open`, `close`, `toggle`, `isOpen`, `size`, `info`, `setMode`,
