@@ -283,3 +283,220 @@ test("the page's bridge builds window.mefiStudio from the real preload", async (
 
   assert.equal(context.__mefiHost.fileUrl("C:\\shots\\a #1.png"), "http://mefi.localhost/__file/C%3A%2Fshots%2Fa%20%231.png");
 });
+
+// ---- the Media browser's view (src-tauri/src/views.rs) through the shim ----
+
+const MEDIA_SCENARIO = `
+const electron = require(${JSON.stringify(path.join(root, "scripts", "tauri-electron.cjs"))});
+const { app, BrowserWindow, ipcMain } = electron;
+let win = null;
+const mediaBrowser = require(${JSON.stringify(path.join(root, "scripts", "media-browser.cjs"))}).createMediaBrowser({ electron, getWindow: () => win });
+ipcMain.handle("media-browser:open", mediaBrowser.open);
+ipcMain.handle("media-browser:command", mediaBrowser.command);
+app.on("window-all-closed", () => app.quit());
+app.whenReady().then(() => {
+  win = new BrowserWindow({ width: 1000, height: 700, show: false });
+  win.webContents.send("ready", true);
+});
+`;
+
+test("the Media browser runs on a host view: load, guards, layout, history, mute, close", { timeout: 60000 }, async () => {
+  const id = `${process.pid}-${Date.now()}-media`;
+  const pipe = process.platform === "win32" ? `\\\\.\\pipe\\mefi-shim-test-${id}` : path.join(os.tmpdir(), `mefi-shim-test-${id}.sock`);
+  const token = "test-token-" + id;
+  const host = fakeHost(pipe, token);
+  await host.listen();
+  const child = spawn(process.execPath, ["-e", MEDIA_SCENARIO], {
+    env: { ...process.env, MEFI_STUDIO_HOST: "tauri", MEFI_HOST_PIPE: pipe, MEFI_HOST_TOKEN: token, MEFI_HOST_INFO: JSON.stringify({ paths: { userData: os.tmpdir() } }) },
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+  });
+  let output = "";
+  child.stdout.on("data", (chunk) => (output += chunk));
+  child.stderr.on("data", (chunk) => (output += chunk));
+  let next = 10;
+  const invoke = async (ch, ...body) => {
+    const n = next++;
+    host.send({ t: "invoke", id: n, ch, body });
+    const result = await host.next((f) => f.t === "result" && f.id === n, `${ch}'s result`);
+    assert.equal(result.ok, true, `${ch}: ${result.error}`);
+    return result.body;
+  };
+  const cast = (api) => host.next((f) => f.t === "cast" && f.api === api, api);
+  // The state pushes up to (and including) the first that matches.
+  const until = async (match, label) => {
+    for (;;) {
+      const seen = (await host.next((f) => f.t === "push" && f.ch === "media-browser:state", label)).body[0];
+      if (match(seen)) return seen;
+    }
+  };
+  try {
+    await host.next((f) => f.t === "push" && f.ch === "ready", "ready");
+    host.send({ t: "event", ch: "window:state", body: { contentBounds: { x: 0, y: 0, width: 1000, height: 700 } } });
+
+    const opened = invoke("media-browser:open", "example.com/watch");
+    const created = await cast("view.create");
+    assert.deepEqual(created.body[0], { id: 1, partition: "persist:mefi-media-browser" }, "its own persistent profile, like Electron's partition");
+    const load = await cast("view.load");
+    assert.deepEqual(load.body[0], { id: 1, url: "https://example.com/watch" });
+    assert.equal((await opened).ok, true);
+
+    await until((seen) => seen.loading === true, "loading from the start");
+    host.send({ t: "event", ch: "view:did-start-loading", body: { id: 1, url: "https://example.com/watch" } });
+    host.send({ t: "event", ch: "view:page-title-updated", body: { id: 1, title: "Watch" } });
+    await until((seen) => seen.title === "Watch", "the title");
+    host.send({ t: "event", ch: "view:navigation", body: { id: 1, ok: true, url: "https://example.com/watch", title: "Watch", back: false, forward: false, muted: false } });
+    const seen = await until((state) => !state.loading, "loaded");
+    assert.equal(seen.title, "Watch");
+    assert.equal(seen.url, "https://example.com/watch");
+
+    // Layout: page pixels times the zoom, clipped to the window's content.
+    await invoke("media-browser:command", { action: "layout", visible: true, bounds: { x: 100, y: 50, width: 2000, height: 300 } });
+    assert.deepEqual((await cast("view.bounds")).body[0], { id: 1, x: 100, y: 50, width: 900, height: 300 });
+    const shown = await host.next((f) => f.t === "cast" && f.api === "view.visible" && f.body[0].on === true, "the view shown");
+    assert.equal(shown.body[0].id, 1);
+
+    // A pop-up becomes a navigation in the view; a link to another app is refused with a reason.
+    host.send({ t: "event", ch: "view:new-window", body: { id: 1, url: "https://example.com/popup" } });
+    assert.equal((await cast("view.load")).body[0].url, "https://example.com/popup");
+    host.send({ t: "event", ch: "view:will-navigate", body: { id: 1, url: "zoommtg://join", isMainFrame: true } });
+    await until((state) => /needs another app/.test(state.error), "the other-app reason");
+    host.send({ t: "event", ch: "view:will-download", body: { id: 1 } });
+    await until((state) => /download this file/.test(state.error), "the download reason");
+    host.send({ t: "event", ch: "view:navigation", body: { id: 1, ok: false, code: -105, description: "ERR_NAME_NOT_RESOLVED", url: "https://nowhere.invalid/" } });
+    await until((state) => /could not load/.test(state.error), "the failed load");
+
+    // History and mute follow the host's state.
+    host.send({ t: "event", ch: "view:state", body: { id: 1, back: true, forward: false } });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const back = invoke("media-browser:command", { action: "back" });
+    await cast("view.back");
+    assert.equal((await back).state.back, true);
+    const muted = await invoke("media-browser:command", { action: "mute" });
+    assert.deepEqual((await cast("view.mute")).body[0], { id: 1, on: true });
+    assert.equal(muted.state.muted, true);
+    assert.equal((await invoke("media-browser:command", { action: "navigate", url: "mailto:a@b.c" })).ok, false);
+
+    // Ctrl+L in the view hands focus to Studio's address field.
+    host.send({ t: "event", ch: "view:before-input-event", body: { id: 1, key: "l", control: true } });
+    await host.next((f) => f.t === "push" && f.ch === "media-browser:focus-address", "the address focus push");
+
+    assert.equal((await invoke("media-browser:command", { action: "close" })).ok, true);
+    assert.deepEqual((await cast("view.close")).body[0], { id: 1 });
+    assert.equal((await invoke("media-browser:command", { action: "state" })).ok, false, "closed");
+
+    // A committed navigation of Studio's own page ends a reopened browser.
+    await invoke("media-browser:open", "https://example.com/again");
+    assert.deepEqual((await cast("view.create")).body[0].id, 2);
+    host.send({ t: "event", ch: "webContents:did-finish-load", body: { url: "http://mefi.localhost/renderer/booklet.html" } });
+    assert.deepEqual((await cast("view.close")).body[0], { id: 2 });
+  } finally {
+    child.kill();
+    await host.close();
+  }
+  assert.ok(!/TypeError|ReferenceError/.test(output), output.slice(-800));
+});
+
+// ---- the page's half: dropped files' paths and the Electron build's localStorage ----
+
+function pageWith({ imported = null, hostname = "mefi.localhost", storage = new Map() } = {}) {
+  const init = readFileSync(path.join(root, "src-tauri", "src", "init.js"), "utf8");
+  assert.ok(init.includes("/*__MEFI_LOCAL_STORAGE__*/null"), "init.js keeps the localStorage marker the host replaces");
+  const preload = readFileSync(path.join(root, "preload.cjs"), "utf8");
+  const listeners = {};
+  const posted = [];
+  class FakeDataTransfer {
+    constructor() { this.files = []; this.data = new Map(); this.items = { add: (file) => this.files.push(file) }; }
+    setData(type, value) { this.data.set(type, value); }
+    getData(type) { return this.data.get(type) ?? ""; }
+  }
+  class FakeDragEvent {
+    constructor(type, init) { this.type = type; Object.assign(this, init); this.isTrusted = false; }
+  }
+  const context = {
+    console: { log() {}, warn() {}, error() {} },
+    TextEncoder, TextDecoder, btoa, atob, Promise, Uint8Array, ArrayBuffer, JSON, Date, Number, String, Object, Array, Map, WeakMap, Error,
+    setTimeout, clearTimeout,
+    location: { origin: `http://${hostname}`, hostname },
+    document: { addEventListener() {}, body: null },
+    addEventListener(type, listener) { (listeners[type] ??= []).push(listener); },
+    localStorage: {
+      getItem: (key) => (storage.has(key) ? storage.get(key) : null),
+      setItem: (key, value) => storage.set(key, String(value)),
+      get length() { return storage.size; },
+    },
+    DataTransfer: FakeDataTransfer,
+    DragEvent: FakeDragEvent,
+    chrome: { webview: { postMessageWithAdditionalObjects: (message, objects) => posted.push({ message, objects: [...objects] }) } },
+    reportError(error) { throw error; },
+    __TAURI__: { core: { Channel: class {}, invoke: async () => null } },
+  };
+  context.window = context;
+  context.globalThis = context;
+  vm.createContext(context);
+  const source = init.replace("/*__MEFI_LOCAL_STORAGE__*/null", JSON.stringify(imported)).replace("/*__MEFI_PRELOAD__*/", preload);
+  vm.runInContext(source, context, { filename: "init.js" });
+  return { context, listeners, posted, storage };
+}
+
+test("a dropped file's path comes from the host before the page sees the drop", async () => {
+  const { context, listeners, posted } = pageWith();
+  assert.equal(listeners.drop?.length, 1, "init.js looks at every drop first");
+  const first = { name: "notes.txt" };
+  const second = { name: "photo.png" };
+  const delivered = [];
+  const target = { isConnected: true, dispatchEvent: (event) => delivered.push(event) };
+  let prevented = false;
+  let stopped = false;
+  const types = ["Files", "text/uri-list"];
+  listeners.drop[0]({
+    isTrusted: true, target, clientX: 10, clientY: 20, ctrlKey: false, shiftKey: true, altKey: false, metaKey: false,
+    dataTransfer: { files: [first, second], types, getData: (type) => (type === "text/uri-list" ? "file:///x" : ""), dropEffect: "copy", effectAllowed: "all" },
+    preventDefault() { prevented = true; },
+    stopImmediatePropagation() { stopped = true; },
+  });
+  assert.equal(prevented && stopped, true, "the page's handlers wait for the paths");
+  assert.equal(posted.length, 1);
+  assert.equal(posted[0].message, "mefi-drop:1", "a string: Tauri's handler, first in line, stops on anything else");
+  assert.deepEqual(posted[0].objects, [first, second], "the File objects go to the host");
+  assert.equal(delivered.length, 0);
+
+  context.__mefiHost.dropReply(1, ["C:\\Users\\me\\notes.txt", null]);
+  assert.equal(delivered.length, 1, "then the same drop reaches its target");
+  const again = delivered[0];
+  assert.equal(again.type, "drop");
+  assert.deepEqual(again.dataTransfer.files, [first, second]);
+  assert.equal(again.dataTransfer.getData("text/uri-list"), "file:///x");
+  assert.equal(again.clientX, 10);
+  assert.equal(again.shiftKey, true);
+  assert.equal(context.mefiStudio.pathForFile(first), "C:\\Users\\me\\notes.txt");
+  assert.equal(context.mefiStudio.pathForFile(second), null, "a file the host had no path for");
+  assert.equal(context.mefiStudio.pathForFile({ name: "notes.txt" }), null, "a different File with the same name is not matched");
+
+  // A late answer does nothing; a drop without an answer still arrives.
+  context.__mefiHost.dropReply(1, ["C:\\late.txt"]);
+  assert.equal(delivered.length, 1);
+  listeners.drop[0]({ isTrusted: true, target, dataTransfer: { files: [{ name: "slow.txt" }], types: ["Files"], getData: () => "" }, preventDefault() {}, stopImmediatePropagation() {} });
+  await new Promise((resolve) => setTimeout(resolve, 1600));
+  assert.equal(delivered.length, 2, "released after 1.5 s without paths");
+
+  // The replayed drop and drops without files pass straight through.
+  listeners.drop[0]({ ...delivered[1], isTrusted: false, preventDefault() { throw new Error("held"); } });
+  listeners.drop[0]({ isTrusted: true, target, dataTransfer: { files: [], types: ["text/plain"] }, preventDefault() { throw new Error("held"); } });
+  assert.equal(posted.length, 2);
+});
+
+test("the Electron build's localStorage fills only the keys the page has not written", () => {
+  const storage = new Map([["mefiStudio.size", "rust-host value"]]);
+  pageWith({ imported: { "mefiStudio.size": "electron value", "mefiStudio.workspace.person": "Ada", "mefiStudio.planning.drafts.v1": "{\"a\":1}" }, storage });
+  assert.equal(storage.get("mefiStudio.size"), "rust-host value", "the page's own value wins");
+  assert.equal(storage.get("mefiStudio.workspace.person"), "Ada");
+  assert.equal(storage.get("mefiStudio.planning.drafts.v1"), "{\"a\":1}");
+  // Only on Studio's page, and nothing at all once the host stopped handing it over.
+  const other = new Map();
+  pageWith({ imported: { a: "1" }, hostname: "tauri.localhost", storage: other });
+  assert.equal(other.size, 0);
+  const none = new Map();
+  pageWith({ imported: null, storage: none });
+  assert.equal(none.size, 0);
+});

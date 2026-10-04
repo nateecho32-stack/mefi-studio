@@ -21745,7 +21745,8 @@ const attemptEvidenceHost = () => (reviewHosts.evidence ??= require("./scripts/a
   // The project's own data folder (never the repository): attempt-evidence/<task>/<n>/ goes inside it.
   root: () => path.dirname(projectDataPath(TASKS_PATH)),
   capture: (url, options) => (window && !window.isDestroyed()
-    ? (reviewHosts.window ??= require("./scripts/evidence-window.cjs").createEvidenceWindow({ electron, log: (line) => logLine(line) })).capture(url, options)
+    // Under the Rust host the host takes the shot (scripts/rust-modules.cjs factory).
+    ? (reviewHosts.window ??= (typeof rustModules !== "undefined" && rustModules?.factory("evidence-window", { log: (line) => logLine(line) })) || require("./scripts/evidence-window.cjs").createEvidenceWindow({ electron, log: (line) => logLine(line) })).capture(url, options)
     : Promise.resolve({ ok: false, error: "no window" })),
   log: (line) => logLine(line),
 }));

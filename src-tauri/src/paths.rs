@@ -12,7 +12,8 @@ pub struct Studio {
     /// The folder holding main.cjs, preload.cjs, renderer/ and scripts/.
     pub root: PathBuf,
     /// True only when Studio's files ship beside this program (the portable
-    /// build: <exe dir> or <exe dir>/app). A source run, found through
+    /// build: <exe dir>/resources/app, where the Electron build keeps them
+    /// too, or <exe dir> or <exe dir>/app). A source run, found through
     /// MEFI_STUDIO_ROOT or above the build folder, is what Electron's
     /// app.isPackaged called false for `npm start`.
     pub packaged: bool,
@@ -33,13 +34,13 @@ impl Studio {
             None => exe
                 .ancestors()
                 .skip(1)
-                .flat_map(|dir| [dir.to_path_buf(), dir.join("app")])
+                .flat_map(|dir| [dir.join("resources").join("app"), dir.to_path_buf(), dir.join("app")])
                 .find(|dir| holds_studio(dir))
                 .ok_or_else(|| format!("no Studio files (main.cjs, preload.cjs, renderer/) above {}", exe.display()))?,
         };
         let root = dunce(root);
         let exe_dir = exe.parent().map(|dir| dunce(dir.to_path_buf())).unwrap_or_default();
-        let packaged = std::env::var_os("MEFI_STUDIO_ROOT").is_none() && (root == exe_dir || root == exe_dir.join("app"));
+        let packaged = std::env::var_os("MEFI_STUDIO_ROOT").is_none() && [exe_dir.join("resources").join("app"), exe_dir.clone(), exe_dir.join("app")].contains(&root);
         let package: Value = std::fs::read(root.join("package.json"))
             .ok()
             .and_then(|bytes| serde_json::from_slice(strip_bom(&bytes)).ok())

@@ -63,6 +63,17 @@
     return value;
   };
   const bodyOf = (frame) => (frame.tagged ? revive(frame.body) : frame.body);
+
+  // The Electron build's localStorage, on the Rust host's first launch
+  // (src/local_storage.rs): only keys this page has not written itself.
+  const imported = /*__MEFI_LOCAL_STORAGE__*/null;
+  if (imported && typeof imported === "object" && location.hostname === "mefi.localhost") {
+    try {
+      for (const [key, value] of Object.entries(imported)) if (localStorage.getItem(key) === null) localStorage.setItem(key, String(value));
+    } catch (error) {
+      console.warn("[mefi-host] the Electron build's localStorage was not carried over", error);
+    }
+  }
   const request = (command, channel, args) => {
     const { json, tagged } = encode(args);
     return core().invoke(command, encoder.encode(json), { headers: { "mefi-ch": channel, "mefi-tagged": tagged ? "1" : "0" } });
@@ -123,10 +134,54 @@
     },
   };
 
-  // A dropped file's path: WebView2 keeps it off File objects, so the window's
-  // native drop handler reports the paths and they are matched by name here.
-  const dropped = new Map();
-  const webUtils = { getPathForFile: (file) => (file && dropped.get(file.name)) || null };
+  // A dropped file's path (webUtils.getPathForFile): WebView2 keeps it off
+  // File objects. The first look at a drop, before any page handler, holds it
+  // back and hands its files to the host (postMessageWithAdditionalObjects),
+  // which answers with their paths (src/webview2.rs, dropReply below); then
+  // the same drop goes on to its target with the same File objects.
+  const filePaths = new WeakMap();
+  const webUtils = { getPathForFile: (file) => (file && filePaths.get(file)) || null };
+  const heldDrops = new Map();
+  let nextDrop = 1;
+  let tauriQuietUntil = 0;
+  window.addEventListener("drop", (event) => {
+    const transferIn = event.dataTransfer;
+    const files = event.isTrusted && transferIn ? [...transferIn.files] : [];
+    if (!files.length || typeof window.chrome?.webview?.postMessageWithAdditionalObjects !== "function") return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const transfer = new DataTransfer();
+    for (const file of files) transfer.items.add(file);
+    for (const type of transferIn.types) {
+      if (type !== "Files") {
+        try { transfer.setData(type, transferIn.getData(type)); } catch { /* a type the page cannot read */ }
+      }
+    }
+    transfer.dropEffect = transferIn.dropEffect;
+    transfer.effectAllowed = transferIn.effectAllowed;
+    const init = {
+      bubbles: true, cancelable: true, composed: true, dataTransfer: transfer,
+      clientX: event.clientX, clientY: event.clientY, screenX: event.screenX, screenY: event.screenY,
+      ctrlKey: event.ctrlKey, shiftKey: event.shiftKey, altKey: event.altKey, metaKey: event.metaKey,
+    };
+    const target = event.target;
+    const id = nextDrop++;
+    const release = () => {
+      if (!heldDrops.delete(id)) return;
+      (target?.isConnected ? target : document.body ?? document).dispatchEvent(new DragEvent("drop", init));
+    };
+    heldDrops.set(id, { files, release });
+    // Without an answer the drop still arrives, only without paths.
+    setTimeout(release, 1500);
+    try {
+      // A string message: Tauri's handler sees it first, cannot parse it as
+      // an invoke and says so on the console (kept out of Trace below).
+      tauriQuietUntil = Date.now() + 2000;
+      window.chrome.webview.postMessageWithAdditionalObjects(`mefi-drop:${id}`, transferIn.files);
+    } catch {
+      release();
+    }
+  }, true);
 
   // Local images (evidence shots, pictures) through the host's file route.
   const fileUrl = (path) => `${location.origin}/__file/${encodeURIComponent(String(path).replace(/\\/g, "/"))}`;
@@ -173,6 +228,8 @@
     const original = console[method].bind(console);
     console[method] = (...values) => {
       original(...values);
+      // Tauri's answer to a drop's message is not the page's error.
+      if (Date.now() < tauriQuietUntil && typeof values[0] === "string" && /^(expected value|expected ident|invalid type|missing field|trailing characters|EOF while parsing)/.test(values[0])) return;
       if (window.__TAURI__?.core) forward(level, values);
     };
   }
@@ -187,9 +244,14 @@
     setAccelerators(list) {
       accelerators = Array.isArray(list) ? list.filter((entry) => entry && typeof entry.accelerator === "string") : [];
     },
-    dropped(paths) {
-      dropped.clear();
-      for (const path of Array.isArray(paths) ? paths : []) dropped.set(String(path).split(/[\\/]/).pop(), String(path));
+    // The host's answer to a held drop (src/webview2.rs): one path per file, in order.
+    dropReply(id, list) {
+      const entry = heldDrops.get(id);
+      if (!entry) return;
+      entry.files.forEach((file, index) => {
+        if (typeof list?.[index] === "string" && list[index]) filePaths.set(file, list[index]);
+      });
+      entry.release();
     },
     // webContents.executeJavaScript: the host evaluates CODE and gets the value back.
     evaluate(id, code) {

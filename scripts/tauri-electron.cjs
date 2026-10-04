@@ -253,10 +253,11 @@ const screen = Object.assign(new EventEmitter(), {
 const windows = [];
 let mainWindow = null;
 
-function sessionStub() {
+function sessionStub(partition = "") {
   const emitter = new EventEmitter();
   return Object.assign(emitter, {
-    // The host owns these policies in Rust (docs/rust-migration.md, "Stage 1 gaps").
+    _partition: String(partition),
+    // The host owns these policies in Rust (src-tauri/src/views.rs, docs/rust-migration.md parity table).
     webRequest: { onBeforeSendHeaders() {}, onBeforeRequest() {}, onHeadersReceived() {} },
     setDisplayMediaRequestHandler() {},
     setPermissionRequestHandler() {},
@@ -371,7 +372,7 @@ class BrowserWindow extends EventEmitter {
   constructor(options = {}) {
     super();
     if (mainWindow && !mainWindow._destroyed) {
-      throw new Error("The Rust host has one window so far; a second window (evidence shots) is not ported yet (docs/rust-migration.md).");
+      throw new Error("The Rust host has one window; evidence shots take their hidden window through evidence.capture (scripts/rust-modules.cjs), and the Media browser is a child view.");
     }
     this.id = 1;
     this._destroyed = false;
@@ -382,11 +383,20 @@ class BrowserWindow extends EventEmitter {
       bounds: { x: Number.isFinite(options.x) ? options.x : 0, y: Number.isFinite(options.y) ? options.y : 0, width, height },
     };
     this.webContents = new WebContents(this);
+    // Child views are webviews the host lays over the page (src-tauri/src/views.rs).
     this.contentView = {
-      addChildView() {
-        throw new Error("Embedded website views are not ported to the Rust host yet (docs/rust-migration.md).");
+      children: [],
+      addChildView: (view) => {
+        if (!(view instanceof WebContentsView) || this.contentView.children.includes(view)) return;
+        this.contentView.children.push(view);
+        view._attach();
       },
-      removeChildView() {},
+      removeChildView: (view) => {
+        const at = this.contentView.children.indexOf(view);
+        if (at < 0) return;
+        this.contentView.children.splice(at, 1);
+        view.setVisible(false);
+      },
     };
     mainWindow = this;
     windows.push(this);
@@ -867,15 +877,170 @@ class Notification extends EventEmitter {
 
 const desktopCapturer = { getSources: async () => [] };
 
-class WebContentsView {
-  constructor() {
-    throw new Error("Embedded website views are not ported to the Rust host yet (docs/rust-migration.md).");
+// Electron's WebContentsView (the Media browser, scripts/media-browser.cjs): a
+// child webview of Studio's window with its own WebView2 profile per
+// partition. The host enforces what the view may load, opens no pop-ups and
+// takes no downloads; it reports each of those so the engine's handlers run.
+const views = new Map();
+let nextView = 1;
+class ViewContents extends EventEmitter {
+  constructor(id, viewSession) {
+    super();
+    this.id = 1000 + id;
+    this._view = id;
+    this._destroyed = false;
+    this._state = { url: "", title: "", loading: false, back: false, forward: false, muted: false, audible: false };
+    this._openHandler = null;
+    this.session = viewSession;
+    this.navigationHistory = {
+      canGoBack: () => this._state.back,
+      canGoForward: () => this._state.forward,
+      goBack: () => link.cast("view.back", { id: this._view }),
+      goForward: () => link.cast("view.forward", { id: this._view }),
+    };
   }
+  _apply(body) {
+    for (const key of ["url", "title", "back", "forward", "muted", "audible"]) if (body && key in body) this._state[key] = body[key];
+  }
+  isDestroyed() {
+    return this._destroyed;
+  }
+  isLoading() {
+    return this._state.loading;
+  }
+  isCrashed() {
+    return false;
+  }
+  getURL() {
+    return this._state.url;
+  }
+  getTitle() {
+    return this._state.title;
+  }
+  isAudioMuted() {
+    return this._state.muted;
+  }
+  isCurrentlyAudible() {
+    return this._state.audible;
+  }
+  setAudioMuted(flag) {
+    this._state.muted = Boolean(flag);
+    link.cast("view.mute", { id: this._view, on: Boolean(flag) });
+  }
+  setWindowOpenHandler(handler) {
+    this._openHandler = typeof handler === "function" ? handler : null;
+  }
+  // Resolves when the page finishes and rejects like Electron's (code, errno)
+  // when it fails; a later navigation in the meantime aborts it (-3).
+  loadURL(url) {
+    if (this._destroyed) return Promise.reject(new Error("the view is closed"));
+    const target = String(url);
+    return new Promise((resolve, reject) => {
+      const done = () => {
+        this.removeListener("did-fail-load", failed);
+        resolve();
+      };
+      const failed = (_event, code, description) => {
+        this.removeListener("did-finish-load", done);
+        reject(Object.assign(new Error(`${description} (${code}) loading '${target}'`), { code: description, errno: code, url: target }));
+      };
+      this.once("did-finish-load", done);
+      this.once("did-fail-load", failed);
+      // Electron reports a load as started the moment loadURL is called.
+      this._state.loading = true;
+      link.cast("view.load", { id: this._view, url: target });
+    });
+  }
+  reload() {
+    link.cast("view.reload", { id: this._view });
+  }
+  stop() {
+    link.cast("view.stop", { id: this._view });
+  }
+  focus() {
+    link.cast("view.focus", { id: this._view });
+  }
+  close() {
+    if (this._destroyed) return;
+    this._destroyed = true;
+    views.delete(this._view);
+    link.cast("view.close", { id: this._view });
+    this.emit("destroyed");
+  }
+  setFrameRate() {}
+}
+class WebContentsView {
+  constructor(options = {}) {
+    const prefs = options.webPreferences ?? {};
+    this._id = nextView++;
+    this._created = false;
+    this._session = prefs.session ?? defaultSession;
+    this.webContents = new ViewContents(this._id, this._session);
+    views.set(this._id, this);
+  }
+  _attach() {
+    if (this._created || this.webContents.isDestroyed()) return;
+    this._created = true;
+    link.cast("view.create", { id: this._id, partition: this._session._partition || "persist:mefi-media-browser" });
+  }
+  setVisible(flag) {
+    if (this._created && !this.webContents.isDestroyed()) link.cast("view.visible", { id: this._id, on: Boolean(flag) });
+  }
+  setBounds(bounds = {}) {
+    if (!this._created || this.webContents.isDestroyed()) return;
+    link.cast("view.bounds", { id: this._id, x: Number(bounds.x) || 0, y: Number(bounds.y) || 0, width: Number(bounds.width) || 0, height: Number(bounds.height) || 0 });
+  }
+  setBackgroundColor() {}
 }
 
+const partitions = new Map();
 const session = {
   defaultSession,
-  fromPartition: () => sessionStub(),
+  fromPartition: (partition) => {
+    const name = String(partition ?? "");
+    if (!name.startsWith("persist:")) return sessionStub(name);
+    if (!partitions.has(name)) partitions.set(name, sessionStub(name));
+    return partitions.get(name);
+  },
+};
+
+// The view's events from the host: { id, url, title, back, forward, muted, audible, ... }.
+const viewEvents = {
+  "did-start-loading": (contents) => {
+    contents._state.loading = true;
+    contents.emit("did-start-loading");
+  },
+  navigation: (contents, body) => {
+    contents._state.loading = false;
+    if (body.ok) {
+      contents.emit("did-navigate", {}, contents._state.url, 200, "OK");
+      contents.emit("dom-ready", {});
+      contents.emit("did-finish-load", {});
+    } else {
+      contents.emit("did-fail-load", {}, Number(body.code ?? -2), String(body.description ?? "ERR_FAILED"), String(body.url ?? contents._state.url), true);
+    }
+    contents.emit("did-stop-loading");
+  },
+  "did-navigate-in-page": (contents) => contents.emit("did-navigate-in-page", {}, contents._state.url, true),
+  "page-title-updated": (contents, body) => {
+    contents._state.title = String(body.title ?? "");
+    contents.emit("page-title-updated", preventable(), contents._state.title, false);
+  },
+  "audio-state-changed": (contents) => contents.emit("audio-state-changed", { audible: contents._state.audible }),
+  state: (contents) => contents.emit("did-change-state"),
+  "render-process-gone": (contents, body) => contents.emit("render-process-gone", {}, { reason: String(body.reason ?? "crashed"), exitCode: 0 }),
+  unresponsive: (contents) => contents.emit("unresponsive"),
+  // Refused in Rust already; told so the engine's guard says why.
+  "will-navigate": (contents, body) => contents.emit("will-navigate", preventable({ url: String(body.url ?? ""), isMainFrame: body.isMainFrame !== false }), String(body.url ?? "")),
+  "new-window": (contents, body) => {
+    try {
+      contents._openHandler?.({ url: String(body.url ?? ""), frameName: "", features: "", disposition: "new-window" });
+    } catch (error) {
+      console.error(`[tauri-host] window open handler failed: ${error?.message ?? error}`);
+    }
+  },
+  "will-download": (contents) => contents.session?.emit?.("will-download", preventable(), {}, contents),
+  "before-input-event": (contents, body) => contents.emit("before-input-event", preventable(), { type: "keyDown", key: String(body.key ?? ""), control: body.control === true, meta: false, shift: false, alt: false }),
 };
 
 // ---- what the host sends ----
@@ -942,6 +1107,7 @@ const contentsEvents = {
   "did-finish-load": (contents, body) => {
     contents._loading = false;
     if (body?.url) contents._url = String(body.url);
+    contents.emit("did-navigate", {}, contents._url, 200, "OK");
     contents.emit("dom-ready", {});
     contents.emit("did-finish-load", {});
   },
@@ -978,6 +1144,12 @@ link.handlers.event = (frame) => {
         if (name === "close" || name === "failed") notifications.delete(entry._id);
         if (name === "failed") entry.emit("failed", {}, String(body?.error ?? "failed"));
         else entry.emit(name, {});
+      }
+    } else if (target === "view") {
+      const view = views.get(Number(body?.id));
+      if (view && !view.webContents.isDestroyed()) {
+        view.webContents._apply(body);
+        viewEvents[name]?.(view.webContents, body ?? {});
       }
     } else if (target === "power") powerMonitor.emit(name);
     else if (target === "screen" && name === "displays" && Array.isArray(body)) displays = body;

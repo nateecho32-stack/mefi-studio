@@ -17,6 +17,15 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   @ picker's file search run in Rust there too, and so does the Git chip's
   work: its look at each project, Save and push, Publish and Link, with the
   same checks for keys, big files and folders that must stay out.
+- On the Rust host the Media browser, before and after screenshots, dropped
+  files and the Recycle Bin now work as they do on Electron, a page that fails
+  to load is reported, and the first launch brings over what the Electron
+  build kept in the page (panel sizes, names, plan drafts). Zen's desktop
+  audio asks which screen to share; tick "share system audio" there.
+- A portable build can now ship on the Rust host (`npm run package:host`):
+  the same folder as the Electron build, with Node beside the program. The
+  updater in this version can install either kind of build and roll back
+  from either, so the next releases can move to the Rust host.
 
 - The Publish dialog's "This drive cannot keep a Git project reliably" warning
   and Set up this PC's exFAT/FAT drive checks work without administrator

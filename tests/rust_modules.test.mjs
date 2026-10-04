@@ -83,3 +83,48 @@ test("MEFI_STUDIO_RUST_OFF keeps a port on its JavaScript", () => {
   });
   withEnv(undefined, () => assert.ok(factory("git-actions", {}, host)));
 });
+
+test("the evidence-window factory asks the host for a shot and answers like createEvidenceWindow", async () => {
+  assert.ok(FACTORIES["evidence-window"]);
+  const calls = [];
+  let release = null;
+  const host = {
+    callWithFunctions: async () => { throw new Error("not used"); },
+    call: (api, ...args) => {
+      calls.push({ api, args });
+      if (args[0].includes(":5174")) return new Promise((resolve) => { release = () => resolve({ ok: true, png: new Uint8Array([1, 2, 3]) }); });
+      if (args[0].includes(":5175")) return Promise.reject(new Error("the host closed at http://localhost:5175/secret"));
+      if (args[0].includes(":5176")) return Promise.resolve({ ok: false, error: "timed out" });
+      return Promise.resolve({ ok: true, png: new Uint8Array([137, 80, 78, 71]) });
+    },
+  };
+  const lines = [];
+  const window = withEnv(undefined, () => factory("evidence-window", { log: (line) => lines.push(line) }, host));
+  const shot = await window.capture("http://localhost:5173/", { allow: { host: "localhost:5173", secure: false } });
+  assert.equal(shot.ok, true);
+  assert.ok(Buffer.isBuffer(shot.png), "the PNG comes back as a Buffer, as Electron's toPNG gave");
+  assert.deepEqual([...shot.png], [137, 80, 78, 71]);
+  assert.deepEqual(calls[0], { api: "evidence.capture", args: ["http://localhost:5173/", { width: 1280, height: 800, timeoutMs: 15000, settleMs: 800, allow: { host: "localhost:5173", secure: false } }] });
+
+  // The same refusals as the JavaScript, before the host is asked.
+  assert.deepEqual(await window.capture("https://example.com/", { allow: { host: "example.com" } }), { ok: false, error: "not a local address" });
+  assert.deepEqual(await window.capture("http://localhost:5173/", { allow: { host: "localhost:9999" } }), { ok: false, error: "not a local address" });
+  assert.deepEqual(await window.capture("http://localhost:5173/", {}), { ok: false, error: "not a local address" });
+  assert.equal(calls.length, 1);
+
+  // One shot at a time: the second waits for the first.
+  const first = window.capture("http://localhost:5174/", { allow: { host: "localhost:5174" } });
+  const second = window.capture("http://localhost:5173/", { allow: { host: "localhost:5173" } });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(calls.length, 2, "the second shot has not started");
+  release();
+  assert.equal((await first).ok, true);
+  assert.equal((await second).ok, true);
+  assert.equal(calls.length, 3);
+
+  // Failures answer, never throw, carry no address, and are logged like the JavaScript's.
+  assert.deepEqual(await window.capture("http://localhost:5175/", { allow: { host: "localhost:5175" } }), { ok: false, error: "the host closed at <address>" });
+  assert.deepEqual(await window.capture("http://localhost:5176/", { allow: { host: "localhost:5176" } }), { ok: false, error: "timed out" });
+  assert.deepEqual(lines.slice(-2), ["[review] shot not taken (the host closed at <address>)", "[review] shot not taken (timed out)"]);
+  withEnv("evidence-window", () => assert.equal(factory("evidence-window", {}, host), null));
+});

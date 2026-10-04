@@ -83,6 +83,36 @@ const FACTORIES = Object.freeze({
       identity: guarded("identity"),
     });
   },
+  // Before and after shots (scripts/evidence-window.cjs createEvidenceWindow):
+  // the host opens its own hidden window (src-tauri/src/views.rs
+  // evidence.capture) and keeps the same request rule in Rust. Like the
+  // JavaScript: one shot at a time, a failure is logged, and nothing throws.
+  "evidence-window": (collaborators, host) => {
+    const rules = require("./attempt-evidence.cjs");
+    const log = typeof collaborators?.log === "function" ? collaborators.log : () => {};
+    let tail = Promise.resolve();
+    const one = async (url, { width = rules.LIMITS.width, height = rules.LIMITS.height, timeoutMs = rules.LIMITS.timeoutMs, settleMs = rules.LIMITS.settleMs, allow = null } = {}) => {
+      const address = rules.loopback(url);
+      if (!address || !allow?.host || allow.host !== address.host) return { ok: false, error: "not a local address" };
+      try {
+        const answer = await host.call("evidence.capture", address.url, { width, height, timeoutMs, settleMs, allow: { host: String(allow.host), secure: allow.secure === true } });
+        if (answer?.ok && answer.png?.length) return { ok: true, png: Buffer.from(answer.png) };
+        return { ok: false, error: String(answer?.error ?? "no picture").slice(0, 120) };
+      } catch (error) {
+        return { ok: false, error: String(error?.message ?? error).replace(/https?:\/\/\S+/g, "<address>").slice(0, 120) };
+      }
+    };
+    return Object.freeze({
+      capture(url, options = {}) {
+        const next = tail.then(() => one(url, options), () => one(url, options));
+        tail = next.then(() => {}, () => {});
+        return next.then((result) => {
+          if (!result.ok) log(`[review] shot not taken (${String(result.error ?? "unknown").slice(0, 60)})`);
+          return result;
+        });
+      },
+    });
+  },
 });
 
 // The Rust-backed object for a host factory, or null to use the JavaScript one.

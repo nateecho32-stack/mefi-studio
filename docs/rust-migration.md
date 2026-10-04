@@ -133,7 +133,13 @@ It passed on 3 October (45 cards, models present, assistant tick 1, exit 0).
 `MEFI_HOST_SELFTEST=<folder>` makes the host, once the page is up, save a
 capture of it (`capture.png`) and what crossed the bridge (`selftest.json`:
 invokes, channels listened to, pushes received); with
-`MEFI_HOST_SELFTEST_TOAST=1` it also shows one notification. On 3 October it
+`MEFI_HOST_SELFTEST_TOAST=1` it also shows one notification. With
+`MEFI_HOST_SELFTEST_WEB=<a local test page>` it also drives the Media
+browser through that page and a second one (titles, back and forward, mute,
+a refused `mailto:`, close), takes an evidence shot of it (`evidence.png`),
+reads two `localStorage` keys a seeded Electron profile left, and drops a real
+file on the page through the DevTools protocol (the page must get its path);
+`MEFI_HOST_SELFTEST_DISPLAY=1` adds a clicked `getDisplayMedia` request. On 3 October it
 recorded a 1825×1175 capture of the launch screen, 40 invokes, 29 channels
 listened to, pushes on five of them, and a toast Windows accepted.
 
@@ -286,14 +292,49 @@ live board is the JSON files and `main.cjs`'s board gateway.
 | Windows notifications (alerts) | done | WinRT toasts (`src-tauri/src/toast.rs`) under `MefiStudio.StudioAIPlus`, whose display name and icon the host registers in `HKCU\Software\Classes\AppUserModelId` |
 | `powerMonitor` suspend/resume/lock/unlock events | done, not yet seen live | power callback + message-only window (`src-tauri/src/power.rs`) |
 | YouTube embeds' Referer (Error 153) | done, not yet seen live | WebView2 `WebResourceRequested` adds the same Referer Electron's session did |
-| Media browser (`WebContentsView`) | todo | Tauri child webview; opening it reports "not ported" |
-| Evidence shots (offscreen second window) | todo | reports "shot not taken" meanwhile |
-| Dropped files' paths (`webUtils.getPathForFile`) | todo | WebView2 `postMessageWithAdditionalObjects` |
-| Zen's desktop audio without a picker | todo | WebView2 shows its own picker meanwhile |
-| Page `localStorage` from the Electron build | todo | read Electron's leveldb once, hand it to the page |
-| Renderer crash and hang (`render-process-gone`, `unresponsive`) | done, not yet seen live | WebView2 `ProcessFailed`; `did-fail-load` is still todo |
+| Media browser (`WebContentsView`) | done | A child webview of Studio's window with its own WebView2 profile (`src-tauri/src/views.rs`, Tauri's `unstable` feature for `Window::add_child`); the shim's `WebContentsView` drives it. Only http(s) pages, no pop-ups (they become navigations), downloads, permissions or other apps' links; Ctrl+L goes to Studio's address field |
+| Evidence shots (offscreen second window) | done | `evidence.capture` in the host: an in-private window off every screen with occlusion tracking off, the attempt-evidence request rule in Rust (`views::allow_request`), 1280x800 PNG; `main.cjs` takes it through the `evidence-window` factory |
+| Dropped files' paths (`webUtils.getPathForFile`) | done | init.js holds each drop, posts its files as `"mefi-drop:<id>"` with `postMessageWithAdditionalObjects` (a string: Tauri's message handler runs first and stops WebView2's chain on anything else), the host answers with the paths, and the same drop goes on |
+| Zen's desktop audio without a picker | accepted difference | WebView2 shows its own picker: choose a screen and tick "share system audio". Chromium's `--auto-select-desktop-capture-source` skips the picker but gives no audio track (tried 4 October), which is worse |
+| Page `localStorage` from the Electron build | done | `src-tauri/src/local_storage.rs` reads a copy of Electron's LevelDB (`rusty-leveldb`), hands the `file://` page's items to init.js, which writes the keys the page does not have; a marker file in `userData/WebView2` ends the hand-over |
+| Shell `trashItem` | done | `SHFileOperationW` with undo (the Recycle Bin), no UI |
+| Page load failures (`did-fail-load`) | done | WebView2 `NavigationCompleted`: a failed navigation is reported with Chromium's net error (-3 aborted, -105 name not resolved, ...); an HTTP error page still finishes, as in Electron |
+| Renderer crash and hang (`render-process-gone`, `unresponsive`) | done, not yet seen live | WebView2 `ProcessFailed` |
 | DevTools protocol (`debugger.sendCommand`) | done | WebView2 `CallDevToolsProtocolMethod` |
-| Portable package with Node, release workflow, updater, rollback | todo | stage 1's last row |
+| Portable package with Node, release workflow, updater, rollback | done, not yet released | `npm run package:host` (see "The portable host build" below); `release.yml` builds it for `workflow_dispatch` with `host: tauri`, while tags stay Electron until the bridge release is out |
+
+## The portable host build
+
+`npm run host:build:release` builds the host program (`--features
+custom-protocol`, as the Tauri CLI would), and `npm run package:host` (or
+`package:host:release`) lays it out exactly like the Electron build:
+
+```
+Mefi Studio AI+/
+  Mefi Studio AI+.exe     the Rust host, stamped with Studio's name, version and icon
+  node.exe                the Node the packager ran on (24 or newer; MEFI_STUDIO_NODE overrides)
+  resources/app/          the same payload as the Electron build, with its data/ rules
+```
+
+The host finds Studio's files in `resources/app` (and counts that as
+packaged, which boot-health and rollback need), and runs the engine under the
+`node.exe` beside it. WebView2's loader is linked statically, so no DLL ships.
+The zip is named `...-win32-x64-tauri.zip`; the Electron zip keeps its name.
+
+**The bridge release.** An installed copy's updater installs the next build,
+so the first host build can only reach copies whose updater knows it. From
+this change on, `scripts/release-updater.mjs` prefers the zip for its own host
+and falls back to the other, refuses a staged build without its runtime,
+waits for the install's exe and `node.exe` to let go, clears the host's
+environment (`MEFI_STUDIO_HOST`, `MEFI_HOST_*`, `MEFI_STUDIO_ROOT`,
+`ELECTRON_RUN_AS_NODE`) before starting a build, removes the Chromium runtime a
+host build no longer needs (a rollback puts it back and removes `node.exe`),
+and starts `Mefi Studio AI+.exe`, never `node.exe`. `main.cjs` reads the
+install folder from `app.getPath("exe")`, which is the host program under the
+Rust host. So: publish one more Electron release with this updater (the
+bridge release), then flip `TAG_HOST` in `release.yml` to `tauri`. The
+development channel stays Electron until `development-updater.mjs` learns the
+host zip.
 
 ## Rules for this work
 

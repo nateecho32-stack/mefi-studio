@@ -97,7 +97,8 @@ pub async fn call(engine: &Arc<Engine>, api: &str, args: Value) -> Result<Value,
                 Err(error) => error.to_string(),
             }))
         }
-        "shell.trashItem" => Err("moving files to the Recycle Bin is not ported to the Rust host yet".into()),
+        "shell.trashItem" => platform::trash_item(text(&first, "path").unwrap_or_default()).map(|_| Value::Null),
+        "evidence.capture" => Ok(crate::views::capture(engine, first.as_str().unwrap_or_default(), arg(&args, 1)).await),
         "notification.show" => {
             let id = first.get("id").and_then(Value::as_u64).unwrap_or(0);
             let silent = first.get("silent").and_then(Value::as_bool).unwrap_or(false);
@@ -109,7 +110,7 @@ pub async fn call(engine: &Arc<Engine>, api: &str, args: Value) -> Result<Value,
         "webContents.devtoolsCommand" => {
             let window = main_window(app).ok_or("Studio's window is not open")?;
             let method = text(&first, "method").unwrap_or_default().to_string();
-            crate::webview2::devtools_command(&window, method, first.get("params").cloned().unwrap_or(json!({}))).await
+            crate::webview2::devtools_command(window.as_ref(), method, first.get("params").cloned().unwrap_or(json!({}))).await
         }
         "clipboard.readText" => Ok(json!(platform::clipboard_read_text().unwrap_or_default())),
         "screen.cursor" => {
@@ -214,6 +215,8 @@ pub fn cast(engine: &Arc<Engine>, api: &str, args: Value) {
                 crate::toast::close(body.get("id").and_then(Value::as_u64).unwrap_or(0));
                 Ok(())
             }
+            "view.create" => crate::views::create(engine, &body),
+            _ if api.starts_with("view.") => crate::views::command(engine, api, &body),
             _ if api.starts_with("window.") => window_cast(engine, api, &body),
             other => Err(format!("the Rust host has no '{other}' yet")),
         }
@@ -247,11 +250,20 @@ fn init_script(engine: &Engine) -> String {
     let preload = std::fs::read_to_string(engine.studio.root.join("preload.cjs")).unwrap_or_else(|error| {
         format!("console.error({});", wire_string(&format!("[mefi-host] preload.cjs could not be read: {error}")))
     });
-    include_str!("init.js").replace("/*__MEFI_PRELOAD__*/", &preload)
+    // The Electron build's localStorage rides along until the page has had it once.
+    let imported = crate::local_storage::pending(&engine.studio.user_data(&engine.app)).map(|items| Value::Object(items).to_string());
+    include_str!("init.js")
+        .replace("/*__MEFI_LOCAL_STORAGE__*/null", imported.as_deref().unwrap_or("null"))
+        .replace("/*__MEFI_PRELOAD__*/", &preload)
 }
 
 fn wire_string(text: &str) -> String {
     crate::wire::json_string(text)
+}
+
+/// Studio's page's browser switches.
+fn browser_args(_app: &AppHandle) -> String {
+    "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required".into()
 }
 
 fn create_window(engine: &Arc<Engine>, options: &Value) -> Result<(), String> {
@@ -268,7 +280,7 @@ fn create_window(engine: &Arc<Engine>, options: &Value) -> Result<(), String> {
         .initialization_script(init_script(engine))
         // HTML drop events reach the page (Tauri's own handler would take them).
         .disable_drag_drop_handler()
-        .additional_browser_args("--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required");
+        .additional_browser_args(&browser_args(&app));
     if let (Some(min_w), Some(min_h)) = (options.get("minWidth").and_then(Value::as_f64), options.get("minHeight").and_then(Value::as_f64)) {
         builder = builder.min_inner_size(min_w, min_h);
     }
@@ -310,9 +322,11 @@ fn create_window(engine: &Arc<Engine>, options: &Value) -> Result<(), String> {
                 load_engine.clear_push_channel();
                 load_engine.event("webContents:did-start-navigation", json!({ "url": url }));
             }
+            // did-finish-load or did-fail-load comes from how the navigation
+            // ended (webview2::install, "webContents:navigation" below).
             PageLoadEvent::Finished => {
                 push_accelerators(window.app_handle());
-                load_engine.event("webContents:did-finish-load", json!({ "url": url }));
+                crate::local_storage::done(&load_engine.studio.user_data(&load_engine.app));
                 if let Some(dir) = std::env::var_os("MEFI_HOST_SELFTEST").map(PathBuf::from) {
                     self_test(load_engine.clone(), dir);
                 }
@@ -321,7 +335,23 @@ fn create_window(engine: &Arc<Engine>, options: &Value) -> Result<(), String> {
     });
     let window = builder.build().map_err(|error| format!("could not open Studio's window: {error}"))?;
     let failure_engine = engine.clone();
-    crate::webview2::install(&window, move |name, body| failure_engine.event(name, body));
+    crate::webview2::install(
+        window.as_ref(),
+        Arc::new(move |name, body| {
+            if name != "webContents:navigation" {
+                return failure_engine.event(name, body);
+            }
+            let page = body.get("url").and_then(Value::as_str).and_then(|url| Url::parse(url).ok()).is_some_and(|url| is_page_url(&url));
+            if !page {
+                return;
+            }
+            if body.get("ok").and_then(Value::as_bool).unwrap_or(false) {
+                failure_engine.event("webContents:did-finish-load", json!({ "url": body["url"] }));
+            } else {
+                failure_engine.event("webContents:did-fail-load", body);
+            }
+        }),
+    );
     let events_engine = engine.clone();
     let watched = window.clone();
     window.on_window_event(move |event| window_event(&events_engine, &watched, event));
@@ -482,6 +512,7 @@ fn window_cast(engine: &Arc<Engine>, api: &str, body: &Value) -> Result<(), Stri
         "window.skipTaskbar" => done(window.set_skip_taskbar(on))?,
         "window.alwaysOnTop" => done(window.set_always_on_top(on))?,
         "window.destroy" => {
+            crate::views::close_all();
             done(window.destroy())?;
         }
         "window.setZoom" => {
@@ -519,7 +550,7 @@ fn self_test(engine: Arc<Engine>, dir: PathBuf) {
         let Some(window) = main_window(&engine.app) else { return };
         let mut report = json!({ "at": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0) });
         #[cfg(windows)]
-        match crate::webview2::capture_png(&window).await {
+        match crate::webview2::capture_png(window.as_ref()).await {
             Ok(png) => {
                 report["capture"] = json!({ "bytes": png.len() });
                 let _ = std::fs::write(dir.join("capture.png"), &png);
@@ -556,6 +587,56 @@ fn self_test(engine: Arc<Engine>, dir: PathBuf) {
         if std::env::var("MEFI_HOST_SELFTEST_TOAST").as_deref() == Ok("1") {
             report["toast"] = json!(crate::toast::show(&engine, 9_000_000, "Mefi's Studio AI+", "Rust host self-test: notifications work.", true).err());
         }
+        // MEFI_HOST_SELFTEST_WEB=<a local test page's address>: the Media
+        // browser's view and an evidence shot of that page, the localStorage
+        // carried over, and the drop bridge's presence. Sizes and states only.
+        if let Ok(web) = std::env::var("MEFI_HOST_SELFTEST_WEB") {
+            let second = format!("{}?second", web.trim_end_matches('/'));
+            let script = format!(
+                "(async () => {{ const wait = (ms) => new Promise((r) => setTimeout(r, ms)); const states = []; window.mefiStudio.onMediaBrowserState((s) => states.push(s)); const b = (p) => window.mefiStudio.mediaBrowserCommand(p); const opened = await window.mefiStudio.mediaBrowserOpen({first}); await b({{ action: 'layout', visible: true, bounds: {{ x: 80, y: 80, width: 640, height: 400 }} }}); await wait(2500); const first = (await b({{ action: 'state' }})).state; await b({{ action: 'navigate', url: {second} }}); await wait(2500); const second = (await b({{ action: 'state' }})).state; await b({{ action: 'back' }}); await wait(2000); const back = (await b({{ action: 'state' }})).state; await b({{ action: 'mute' }}); await wait(300); const muted = (await b({{ action: 'state' }})).state; const refused = await b({{ action: 'navigate', url: 'mailto:someone@example.com' }}); const closed = await b({{ action: 'close' }}); const after = await b({{ action: 'state' }}); return {{ opened: opened.ok, first: {{ title: first.title, loading: first.loading, error: first.error }}, second: {{ title: second.title, back: second.back }}, back: {{ title: back.title, forward: back.forward }}, muted: muted.muted, refused: refused.ok === false, closed: closed.ok, afterClose: after.ok, pushes: states.length }}; }})()",
+                first = wire_string(&web),
+                second = wire_string(&second),
+            );
+            report["mediaBrowser"] = execute_javascript(&engine, &script).await.unwrap_or_else(|error| json!({ "error": error }));
+            let host = Url::parse(&web).ok().map(|url| match url.port() { Some(port) => format!("{}:{port}", url.host_str().unwrap_or_default()), None => url.host_str().unwrap_or_default().to_string() }).unwrap_or_default();
+            let evidence_url = format!("{}?evidence", web.trim_end_matches('/'));
+            let shot = crate::views::capture(&engine, &evidence_url, &json!({ "width": 1280, "height": 800, "timeoutMs": 15000, "settleMs": 800, "allow": { "host": host, "secure": false } })).await;
+            if let Some(png) = shot.get("png").and_then(bytes_arg) {
+                let _ = std::fs::write(dir.join("evidence.png"), &png);
+                report["evidence"] = json!({ "ok": shot["ok"], "bytes": png.len() });
+            } else {
+                report["evidence"] = shot;
+            }
+            report["evidenceRefused"] = crate::views::capture(&engine, "http://localhost:1/", &json!({ "allow": { "host": host } })).await;
+            report["localStorage"] = execute_javascript(&engine, "({ carried: localStorage.getItem('mefiStudio.selftest.carried'), unicode: localStorage.getItem('mefiStudio.selftest.unicode'), keys: localStorage.length })").await.unwrap_or_else(|error| json!({ "error": error }));
+            if std::env::var("MEFI_HOST_SELFTEST_DISPLAY").as_deref() == Ok("1") {
+                let armed = execute_javascript(&engine, "(() => { window.__probeDisplay = 'waiting'; document.addEventListener('click', () => { navigator.mediaDevices.getDisplayMedia({ video: true, audio: true }).then((stream) => { window.__probeDisplay = { video: stream.getVideoTracks().length, audio: stream.getAudioTracks().length, label: stream.getVideoTracks()[0]?.label ?? '' }; stream.getTracks().forEach((track) => track.stop()); }, (error) => { window.__probeDisplay = 'error: ' + error.name + ' ' + error.message; }); }, { once: true, capture: true }); return true; })()").await;
+                if let Some(window) = main_window(&engine.app) {
+                    for kind in ["mousePressed", "mouseReleased"] {
+                        let _ = crate::webview2::devtools_command(window.as_ref(), "Input.dispatchMouseEvent".into(), json!({ "type": kind, "x": 3, "y": 300, "button": "left", "clickCount": 1 })).await;
+                    }
+                }
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                report["displayMedia"] = json!({ "armed": armed.is_ok(), "result": execute_javascript(&engine, "window.__probeDisplay").await.unwrap_or_else(|error| json!({ "error": error })) });
+            }
+            // A real file dropped on the page (a trusted drop from the DevTools
+            // protocol); the page must learn its path from the host.
+            let dropped = dir.join("dropped probe.txt");
+            let _ = std::fs::write(&dropped, b"drop probe");
+            let armed = execute_javascript(&engine, "(() => { window.__probeDrop = null; const accept = (event) => event.preventDefault(); document.addEventListener('dragover', accept, true); document.addEventListener('dragenter', accept, true); document.addEventListener('drop', (event) => { const file = event.dataTransfer?.files?.[0]; window.__probeDrop = { trusted: event.isTrusted, name: file?.name ?? null, path: file ? window.mefiStudio.pathForFile(file) : null }; event.preventDefault(); }, true); return true; })()").await;
+            if let Some(window) = main_window(&engine.app) {
+                let data = json!({ "items": [], "files": [dropped.to_string_lossy()], "dragOperationsMask": 1 });
+                for kind in ["dragEnter", "dragOver", "drop"] {
+                    let _ = crate::webview2::devtools_command(window.as_ref(), "Input.dispatchDragEvent".into(), json!({ "type": kind, "x": 400, "y": 300, "data": data })).await;
+                }
+            }
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            report["drop"] = json!({
+                "armed": armed.is_ok(),
+                "expected": dropped.to_string_lossy(),
+                "seen": execute_javascript(&engine, "window.__probeDrop").await.unwrap_or_else(|error| json!({ "error": error })),
+            });
+        }
         report["rustCalls"] = json!(crate::engine::rust_calls().lock().map(|calls| calls.clone()).unwrap_or_default());
         let _ = std::fs::write(dir.join("selftest.json"), report.to_string());
     });
@@ -564,7 +645,7 @@ fn self_test(engine: Arc<Engine>, dir: PathBuf) {
 /// Electron's capturePage([rect]): the rect is in DIPs, the capture in pixels.
 async fn capture_page(app: &AppHandle, rect: &Value) -> Result<Value, String> {
     let window = main_window(app).ok_or("Studio's window is not open")?;
-    let png = crate::webview2::capture_png(&window).await?;
+    let png = crate::webview2::capture_png(window.as_ref()).await?;
     let Some(rect) = rect.as_object() else {
         return Ok(bytes_value(&png));
     };
@@ -866,6 +947,15 @@ fn image_op(api: &str, bytes: &Value, options: &Value) -> Result<Value, String> 
     }
 }
 
+/// A PNG resized to exactly width x height ("best" quality), as PNG.
+pub fn resize_png(png: &[u8], width: u32, height: u32) -> Result<Vec<u8>, String> {
+    let picture = image::load_from_memory(png).map_err(|error| format!("unreadable image: {error}"))?;
+    let out = picture.resize_exact(width.max(1), height.max(1), image::imageops::FilterType::Lanczos3);
+    let mut bytes = Vec::new();
+    out.write_to(&mut Cursor::new(&mut bytes), image::ImageFormat::Png).map_err(|error| error.to_string())?;
+    Ok(bytes)
+}
+
 // ---- displays (Electron's screen module, in DIPs) ----
 
 pub fn displays(app: &AppHandle) -> Value {
@@ -939,6 +1029,36 @@ mod win {
 
     fn wide(text: &str) -> Vec<u16> {
         text.encode_utf16().chain(std::iter::once(0)).collect()
+    }
+
+    /// shell.trashItem: to the Recycle Bin, never a permanent delete, no UI.
+    pub fn trash_item(path: &str) -> Result<(), String> {
+        use windows_sys::Win32::UI::Shell::{SHFileOperationW, FOF_ALLOWUNDO, FOF_NOCONFIRMATION, FOF_NOERRORUI, FOF_SILENT, FO_DELETE, SHFILEOPSTRUCTW};
+        if path.is_empty() || !std::path::Path::new(path).is_absolute() {
+            return Err(format!("Failed to move item {path} to trash"));
+        }
+        if !std::path::Path::new(path).exists() {
+            return Err(format!("Failed to move item {path} to trash: it does not exist"));
+        }
+        // pFrom is a list: each name ends in a NUL, and the list in another.
+        let mut from: Vec<u16> = path.replace('/', "\\").encode_utf16().collect();
+        from.extend([0, 0]);
+        let mut operation = SHFILEOPSTRUCTW {
+            hwnd: std::ptr::null_mut(),
+            wFunc: FO_DELETE,
+            pFrom: from.as_ptr(),
+            pTo: std::ptr::null(),
+            fFlags: (FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT) as u16,
+            fAnyOperationsAborted: 0,
+            hNameMappings: std::ptr::null_mut(),
+            lpszProgressTitle: std::ptr::null(),
+        };
+        // SAFETY: the struct and its buffer live across the call.
+        let code = unsafe { SHFileOperationW(&mut operation) };
+        if code != 0 || operation.fAnyOperationsAborted != 0 {
+            return Err(format!("Failed to move item {path} to trash (code {code})"));
+        }
+        Ok(())
     }
 
     pub fn set_app_user_model_id(id: &str) {

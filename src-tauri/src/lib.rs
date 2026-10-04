@@ -5,6 +5,7 @@
 
 mod bridge;
 pub mod engine;
+mod local_storage;
 mod native;
 mod oscrypt;
 mod paths;
@@ -12,6 +13,7 @@ mod power;
 mod protocol;
 #[cfg(windows)]
 mod toast;
+mod views;
 #[cfg(windows)]
 mod webview2;
 mod wire;

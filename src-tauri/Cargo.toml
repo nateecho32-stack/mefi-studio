@@ -24,7 +24,8 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 # The engine's Rust half (docs/rust-migration.md, stage 2).
 mefi-core = { path = "../crates/mefi-core" }
-tauri = { version = "2", features = ["tray-icon", "image-png", "image-ico", "devtools"] }
+# "unstable" gives Window::add_child: the Media browser is a child webview.
+tauri = { version = "2", features = ["tray-icon", "image-png", "image-ico", "devtools", "unstable"] }
 tauri-plugin-single-instance = "2"
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
@@ -34,6 +35,8 @@ base64 = "0.22"
 getrandom = "0.3"
 rfd = { version = "0.15", default-features = false, features = ["common-controls-v6"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "ico"] }
+# Reads the Electron build's page localStorage (Chromium keeps it in LevelDB), once.
+rusty-leveldb = "4"
 
 [target.'cfg(windows)'.dependencies]
 # Tauri's own WebView2 bindings (keep both versions in step with tauri's wry).
@@ -63,6 +66,7 @@ windows-sys = { version = "0.59", features = [
   "Win32_System_SystemInformation",
   "Win32_System_Threading",
   "Win32_UI_Input_KeyboardAndMouse",
+  "Win32_UI_Shell",
   "Win32_UI_WindowsAndMessaging",
 ] }
 
