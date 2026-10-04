@@ -55,7 +55,10 @@ WebView2 page (renderer/booklet.html)          Rust host (src-tauri)            
   present. The page's CSP gains Tauri's IPC endpoint on the way out.
 - **userData stays Electron's**: `%APPDATA%\Mefi's Studio AI+`, so
   `settings.json`, `auth.json` and the vault are read where they always were.
-  `MEFI_STUDIO_USER_DATA` points a test run at a scratch folder.
+  The page's WebView2 profile is `userData\WebView2\main` (the Media
+  browser's and the evidence window's sit beside it), as Electron kept its
+  Chromium data in userData. `MEFI_STUDIO_USER_DATA` points a test run, profile
+  included, at a scratch folder.
 
 ### The wire
 

@@ -278,6 +278,10 @@ fn create_window(engine: &Arc<Engine>, options: &Value) -> Result<(), String> {
         .inner_size(width, height)
         .visible(options.get("show").and_then(Value::as_bool).unwrap_or(true))
         .initialization_script(init_script(engine))
+        // The page's WebView2 profile lives with Studio's userData, where
+        // Electron kept its Chromium data, beside the localStorage hand-over's
+        // marker; a MEFI_STUDIO_USER_DATA test run gets its own.
+        .data_directory(engine.studio.user_data(&app).join("WebView2").join("main"))
         // HTML drop events reach the page (Tauri's own handler would take them).
         .disable_drag_drop_handler()
         .additional_browser_args(&browser_args(&app));
