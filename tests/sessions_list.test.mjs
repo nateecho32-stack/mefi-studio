@@ -141,20 +141,129 @@ test("a project that is not a git folder has no marks, and nothing asks for work
 
 // ---- the head, New task, Backlog and the filter -------------------------------------------------------------------------------------
 
-test("the head names the project and its branch and opens the project switcher; New task is Home's own box and puts the thread away", async () => {
+test("the head names the project and its branch and opens the project menu; New task is Home's own box and puts the thread away", async () => {
   const a = await open();
   await a.settle();
   assert.equal(a.text("list", ".sx-proj-words b"), "Snake trial");
   assert.equal(a.text("list", ".sx-proj-words small"), "main", "the branch comes from work:where");
   assert.ok(a.api.of("workWhere").length >= 1 && a.api.of("workWhere").length <= 2);
-  await a.one("list", "#sessions-project").click();
-  assert.deepEqual(clean(a.calls.sidebar), [{ focus: true, projectFocus: true }], "the switcher is the one the rest of the app opens");
+  await a.one("list", "#sessions-project").click(); await a.settle();
+  assert.ok(a.one("list", "#sessions-project-menu"), "the project menu opens on the head");
+  await a.all("list", "#sessions-project-menu .sx-menu-item").find((node) => node.textContent.includes("All projects"))?.click();
+  assert.deepEqual(clean(a.calls.sidebar), [{ focus: true, projectFocus: true }], "All projects is the panel the rest of the app opens");
+  assert.equal(a.one("list", "#sessions-project-menu"), null, "and the menu goes");
   a.S.select("working"); await a.settle();
   assert.equal(a.S.selected(), "working");
   await a.one("list", "#sessions-new").click(); await a.settle();
   assert.equal(a.calls.compose, 1, "New task is Home's own message box in its task purpose: pictures, @ # / and chips are all there");
   assert.equal(a.S.selected(), null, "and the thread makes way for it");
   assert.match(a.one("list", "#sessions-new").textContent, /Ctrl N/);
+});
+
+test("the project menu lists every project with the open one checked, switches through Home's own project buttons, and opens a folder, a new app or all projects", async () => {
+  const a = await open({ focus: true });
+  a.data.projects = [{ id: "p1", name: "Snake trial", path: "/work/snake" }, { id: "p2", name: "Notes app", path: "/work/notes" }];
+  // Home's own controls, which the menu presses (their rules, such as Save & switch for running agents, stay theirs).
+  const pressed = [];
+  const own = (id, attrs = {}) => { const node = a.document.createElement("button"); node.id = id; Object.assign(node.dataset, attrs); node.addEventListener("click", () => pressed.push(id || attrs.projectId)); return node; };
+  const projects = a.document.createElement("div"); projects.id = "workspace-projects"; projects.append(own("", { projectId: "p1" }), own("", { projectId: "p2" }));
+  a.document.body.append(projects, own("workspace-add-project"));
+  a.window.MefiVibe.openPanel = (kind) => pressed.push(`vibe:${kind}`);
+  a.env.emit("mefi:workspace-state"); await a.settle();
+  const head = a.one("list", "#sessions-project");
+  assert.equal(head.getAttribute("aria-haspopup"), "menu"); assert.equal(head.getAttribute("aria-expanded"), "false");
+  await head.click(); await a.settle();
+  const menu = a.one("list", "#sessions-project-menu");
+  assert.equal(menu.getAttribute("role"), "menu"); assert.equal(head.getAttribute("aria-expanded"), "true");
+  const items = () => a.all("list", "#sessions-project-menu .sx-menu-item");
+  assert.deepEqual(items().map((node) => node.querySelector(".sx-menu-words span").textContent), ["Snake trial", "Notes app", "Open a folder…", "Start a new app…", "All projects…"]);
+  assert.deepEqual(items().slice(0, 2).map((node) => [node.getAttribute("role"), node.getAttribute("aria-checked")]), [["menuitemradio", "true"], ["menuitemradio", "false"]], "the open project is the checked one");
+  assert.equal(items()[1].querySelector("small").textContent, "/work/notes", "each says where it is");
+  assert.equal(a.document.activeElement, items()[0], "the keyboard starts on the open project");
+  await items()[0].trigger("keydown", { key: "ArrowDown" });
+  assert.equal(a.document.activeElement, items()[1], "the arrows move through it");
+  await items()[1].trigger("keydown", { key: "End" });
+  assert.equal(a.document.activeElement, items()[4]);
+  await items()[1].click(); await a.settle();
+  assert.deepEqual(pressed, ["p2"], "a project switches through Home's own button for it");
+  assert.equal(a.one("list", "#sessions-project-menu"), null);
+  for (const [label, expected] of [["Snake trial", []], ["Open a folder…", ["workspace-add-project"]], ["Start a new app…", ["vibe:newapp"]]]) {
+    pressed.length = 0;
+    await head.click(); await a.settle();
+    await items().find((node) => node.textContent.includes(label)).click(); await a.settle();
+    assert.deepEqual(pressed, expected, label);
+  }
+  // Escape closes it and gives the head the focus back; a press elsewhere closes it too.
+  await head.click(); await a.settle();
+  await items()[0].trigger("keydown", { key: "Escape" }); await a.settle();
+  assert.equal(a.one("list", "#sessions-project-menu"), null); assert.equal(a.document.activeElement, a.one("list", "#sessions-project"));
+  await a.one("list", "#sessions-project").click(); await a.settle();
+  await a.document.body.trigger("pointerdown", { target: a.document.body }); await a.settle();
+  assert.equal(a.one("list", "#sessions-project-menu"), null);
+  // A switch with no button of Home's own for it falls back to the project panel.
+  projects.remove();
+  await a.one("list", "#sessions-project").click(); await a.settle();
+  await items()[1].click(); await a.settle();
+  assert.deepEqual(clean(a.calls.sidebar), [{ focus: true, projectFocus: true }]);
+});
+
+test("under the project: the Git chip is git-sync.js's own, in its list look, and the worktrees chip counts the project's other checkouts and opens Work › Worktrees", async () => {
+  const mounted = [];
+  const rows = [{ kind: "primary", path: "/work/snake", branch: "main", state: "primary" }, { kind: "run", path: "/work/snake/.mefi/worktrees/r1", branch: "mefi/r1", state: "unpushed", task: { taskId: "working" } }, { kind: "dev", path: "/work/snake-docs", branch: "docs", state: "merged" }];
+  const worktrees = { state: () => ({ list: { repo: true, rows, headline: "3 worktrees: 1 holds work that exists only on this PC." } }), summary: () => ({ repo: true, tasks: ["working"] }), peek: () => Promise.resolve() };
+  const a = await open({ worktrees });
+  a.window.MefiGitSync = { mount: (host, options) => { mounted.push([host.className, options.variant]); if (!host.children.length) { const slot = a.document.createElement("span"); slot.className = "gs-slot"; host.append(slot); } return host.children[0]; } };
+  a.env.emit("mefi:workspace-state"); await a.settle();
+  assert.deepEqual(mounted.at(-1), ["sx-git", "list"], "the one chip, with the branch before the state; its popover is the only one");
+  assert.equal(a.one("list", "#sessions-gitrow .sx-git").children.length, 1, "mounting again on a redraw adds nothing");
+  const trees = a.one("list", "#sessions-worktrees");
+  assert.equal(trees.hidden, false); assert.equal(trees.textContent, "2 worktrees", "the main checkout is the project itself, not one of them");
+  assert.match(trees.title, /1 holds work that exists only on this PC\. Open Work › Worktrees\./);
+  await trees.click();
+  assert.deepEqual(clean(a.calls.go.at(-1)), ["worktrees"]);
+  rows.splice(1); a.env.emit("mefi:worktrees"); a.env.emit("mefi:workspace-state"); await a.settle();
+  assert.equal(a.one("list", "#sessions-worktrees").hidden, true, "no other checkout: no chip");
+  const order = a.list().children.map((node) => node.id || node.className);
+  assert.ok(order.indexOf("sessions-project") < order.indexOf("sessions-gitrow") && order.indexOf("sessions-gitrow") < order.indexOf("sessions-new"), "project, then Git and worktrees, then New task");
+});
+
+test("Backlog lists plan drafts first and then ideas, the plans read from the Plans page's own call; a plan opens in Plans, and the two scans are a press away", async () => {
+  const api = bridge();
+  const plans = [
+    { id: "plan_1", projectId: "p1", title: "Sync notes between devices", status: "planning", questions: [{ status: "open" }, { status: "resolved" }, { status: "open" }], updatedAt: at(1) },
+    { id: "plan_2", projectId: "p1", title: "Tags", status: "converted", updatedAt: at(1) },
+    { id: "plan_3", projectId: "p1", title: "Offline mode", status: "ready", questions: [], updatedAt: at(3) },
+    { id: "plan_4", projectId: "p1", title: "Shelved", status: "planning", archivedAt: at(2), updatedAt: at(2) },
+    { id: "plan_5", projectId: "other", title: "Another project's", status: "planning", updatedAt: at(1) },
+  ];
+  api.planningList = async (payload) => { api.calls.push(["planningList", payload]); return { ok: true, projectId: "p1", plans }; };
+  const ideas = [{ id: "i1", title: "Share a note", source: "Mefi", at: at(1), status: "open" }];
+  const a = await open({ api, ideas });
+  await a.settle();
+  assert.deepEqual(clean(api.of("planningList")[0]), ["planningList", { projectId: "p1" }], "read for this project");
+  assert.equal(a.one("list", "#sessions-tab-backlog").textContent, "Backlog · 3", "the drafts count with the ideas");
+  const scans = [];
+  a.window.MefiNav.get = (id) => (id === "scanIdeas" ? { id, desc: "Read recent chats", run: () => scans.push("chats") } : null);
+  await a.one("list", "#sessions-tab-backlog").click(); await a.settle();
+  assert.equal(api.of("planningList").length, 2, "opening the tab reads them again");
+  assert.deepEqual(a.rowKeys(), ["plan:plan_1", "plan:plan_3", "idea:i1"], "drafts that have not made their tasks, newest first, then the ideas");
+  assert.equal(a.row("plan:plan_1").dataset.tone, "plan");
+  assert.equal(a.row("plan:plan_1").querySelector(".sx-row-meta").textContent, "Plan draft · 2 open questions · 1d ago");
+  assert.equal(a.row("plan:plan_3").querySelector(".sx-row-meta").textContent, "Plan approved, tasks not made yet · 3d ago");
+  assert.match(a.row("plan:plan_1").querySelector(".sx-row-main").getAttribute("aria-label"), /^Plan: Sync notes between devices\./);
+  await a.row("plan:plan_1").querySelector(".sx-row-main").click();
+  assert.deepEqual(clean(a.calls.go.at(-1)), ["plans", { planId: "plan_1" }], "a draft opens in Plans");
+  const buttons = a.all("list", ".sx-scan button");
+  assert.deepEqual(buttons.map((node) => node.textContent), ["Scan the project", "Scan chats for ideas"]);
+  await buttons[0].click(); assert.deepEqual(clean(a.calls.go.at(-1)), ["analyzer"], "the Analyzer reads the project");
+  await buttons[1].click(); assert.deepEqual(scans, ["chats"], "the palette's own Scan chats for ideas");
+  const input = a.one("list", "#sessions-find");
+  input.value = "offline"; await input.trigger("input"); await a.settle();
+  assert.deepEqual(a.rowKeys(), ["plan:plan_3"], "the filter narrows the drafts too");
+  // A host without the call has ideas only.
+  const plain = await open({ ideas });
+  await plain.one("list", "#sessions-tab-backlog").click(); await plain.settle();
+  assert.deepEqual(plain.rowKeys(), ["idea:i1"]);
 });
 
 test("Ctrl N starts a task from anywhere in Build, and does nothing in Vibe, under an overlay, or when something already took the key", async () => {
@@ -187,7 +296,7 @@ test("Sessions | Backlog: the backlog lists the ideas nobody made a task of, new
   input.value = "tag"; await input.trigger("input"); await a.settle();
   assert.deepEqual(a.rowKeys(), ["idea:i2"]);
   input.value = "zzz"; await input.trigger("input"); await a.settle();
-  assert.match(a.text("list", ".sx-empty"), /No idea matches that filter/);
+  assert.match(a.text("list", ".sx-empty"), /Nothing in the backlog matches that filter/);
   await input.trigger("keydown", { key: "Escape" }); await a.settle();
   assert.equal(input.value, "", "Escape clears the filter"); assert.equal(a.rowKeys().length, 2);
   await a.one("list", "#sessions-tab-sessions").click(); await a.settle();

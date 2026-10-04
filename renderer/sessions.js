@@ -13,7 +13,10 @@
 // Everything a task means comes from builder.js's kit (readings, groups, what a task offers, how a note, an Ask, a
 // Change and a question go through, what "Done when" says) and from review.js, tasks.js, worktrees.js and the two
 // composer modules, so the sessions layout of Build's Home and this one can never disagree. This file draws and
-// keeps the selection; it adds two host calls of its own (a picture read back and a rename) and nothing else.
+// keeps the selection; it adds three host calls of its own (a picture read back, a rename, and the Plans page's own
+// planning:list for the backlog's plan drafts) and nothing else. The list's head is the prototype's: the project with
+// its menu (each project, Open a folder, Start a new app, All projects: Home's, Vibe's and the project panel's own
+// controls), the Git chip (git-sync.js's, one popover for every chip) and the worktrees, which opens Work › Worktrees.
 //
 // Dark by default: nothing here exists unless html[data-layout="v2"] is on and the shell is there. With v2 off the
 // module registers nothing, listens to nothing, stores nothing and calls the host for nothing; MefiSessions.attach()
@@ -81,7 +84,7 @@
     itab: new Map(), itabChosen: new Set(), openedAt: 0,
     menu: null, renaming: null, focus: null, painted: new Map(), revision: 0, queued: false, tickTimer: 0,
     pictures: new Map(), picturesLoading: 0, evidence: new Map(), metrics: new Map(), later: new Set(), dockOpen: new Set(), dockFold: new Set(),
-    wt: { rows: new Map(), at: 0, key: "" }, lightbox: null, intent: new Map(), drafts: new Map(), sending: false, insp: null,
+    wt: { rows: new Map(), at: 0, key: "" }, plans: { projectId: null, rows: [], at: 0, loading: false }, projMenu: false, projMenuFocus: false, lightbox: null, intent: new Map(), drafts: new Map(), sending: false, insp: null,
     versions: new Map(), itabAuto: new Map(), compare: new Map(), restoring: null, previewBusy: null, pictureQueue: [], shownState: null, visible: false,
     restoredAt: 0, stuckFor: null, menuFocus: false, stopWaiting: null, helpers: false, attaching: false, compose: null, covered: new Set(),
   };
@@ -287,7 +290,7 @@
     cover(false);
     S.insp?.unmount?.();
     discardPanels();
-    Object.assign(S, { shell: null, handles: {}, panels: {}, open: null, menu: null, renaming: null, painted: new Map(), shownState: null, visible: false, insp: null, queued: false, compose: null, helpers: false, sending: false });
+    Object.assign(S, { shell: null, handles: {}, panels: {}, open: null, menu: null, projMenu: false, plans: { projectId: null, rows: [], at: 0, loading: false }, renaming: null, painted: new Map(), shownState: null, visible: false, insp: null, queued: false, compose: null, helpers: false, sending: false });
     S.pictures.clear(); S.evidence.clear(); S.metrics.clear(); S.versions.clear();
     return true;
   }
@@ -363,8 +366,9 @@
     S.projectId = event?.detail?.projectId ?? snap().projectId;
     builder()?.resetProject?.();
     S.pictures.clear(); S.evidence.clear(); S.metrics.clear(); S.versions.clear(); S.later.clear(); S.dockOpen.clear(); S.dockFold.clear(); S.itabChosen.clear(); S.itabAuto.clear();
-    S.query = ""; S.doneMore = 0; S.menu = null; S.renaming = null; S.focus = null;
+    S.query = ""; S.doneMore = 0; S.menu = null; S.renaming = null; S.focus = null; S.projMenu = false;
     S.wt = { rows: new Map(), at: 0, key: "" };
+    S.plans = { projectId: null, rows: [], at: 0, loading: false };
     S.painted.clear();
     restore();
     schedule();
@@ -428,13 +432,45 @@
     }
     return { groups, total: tasks.length, all: all.length, query: needle };
   }
-  // The backlog: ideas nobody has made a task of yet, newest first.
-  function backlogModel(data, { query = "", now = Date.now() } = {}) {
+  // The backlog, as the prototype has it: plan drafts first (Plans that have not made their tasks yet), then the ideas nobody has
+  // made a task of, each newest first. A plan says how far it got in the Plans page's own words.
+  const PLAN_WORDS = { planning: "Plan draft", ready: "Plan approved, tasks not made yet", converting: "Making its tasks" };
+  function backlogModel(data, { query = "", now = Date.now(), plans = [] } = {}) {
     const needle = String(query).trim().toLowerCase();
+    const drafts = (Array.isArray(plans) ? plans : []).filter((plan) => plan?.id && plan.archivedAt == null && plan.status !== "converted" && (!plan.projectId || !data.projectId || plan.projectId === data.projectId))
+      .filter((plan) => !needle || `${plan.title || ""} ${plan.destination || ""}`.toLowerCase().includes(needle))
+      .sort((a, b) => stampOf(b.updatedAt || b.createdAt) - stampOf(a.updatedAt || a.createdAt))
+      .map((plan) => {
+        const open = Array.isArray(plan.questions) ? plan.questions.filter((question) => question?.status === "open").length : 0;
+        const when = stampOf(plan.updatedAt || plan.createdAt);
+        return { id: plan.id, kind: "plan", title: clip(plan.title || plan.destination || "Untitled plan", 90), meta: [PLAN_WORDS[plan.status] || "Plan draft", open ? plural(open, "open question") : "", when ? builder().ago(when, now) : ""].filter(Boolean).join(" · ") };
+      });
     const ideas = (Array.isArray(data.ideas) ? data.ideas : []).filter((idea) => idea?.id && idea.status !== "done" && !idea.taskId)
       .filter((idea) => !needle || `${idea.title || ""} ${idea.detail || ""}`.toLowerCase().includes(needle))
-      .sort((a, b) => stampOf(b.at) - stampOf(a.at));
-    return ideas.map((idea) => ({ id: idea.id, title: clip(idea.title || idea.detail || "Untitled idea", 90), meta: [idea.source ? `From ${idea.source}` : "", stampOf(idea.at) ? builder().ago(stampOf(idea.at), now) : ""].filter(Boolean).join(" · ") || "An idea" }));
+      .sort((a, b) => stampOf(b.at) - stampOf(a.at))
+      .map((idea) => ({ id: idea.id, title: clip(idea.title || idea.detail || "Untitled idea", 90), meta: [idea.source ? `From ${idea.source}` : "", stampOf(idea.at) ? builder().ago(stampOf(idea.at), now) : ""].filter(Boolean).join(" · ") || "An idea" }));
+    return [...drafts, ...ideas];
+  }
+  // The plans the backlog lists: read from the host (planning:list, what the Plans page reads) when the project is taken up, when the
+  // Backlog tab is opened, and again at most every 30 s while the list is drawn. Plans have no push of their own.
+  function readPlans({ force = false } = {}) {
+    const projectId = S.projectId;
+    if (!projectId || typeof api()?.planningList !== "function") return;
+    const held = S.plans;
+    if (held.loading || (!force && held.projectId === projectId && Date.now() - held.at < 30000)) return;
+    S.plans = { ...held, projectId, at: Date.now(), loading: true, rows: held.projectId === projectId ? held.rows : [] };
+    const mine = S.plans;
+    Promise.resolve(api().planningList({ projectId })).then((result) => {
+      if (S.plans !== mine || !result?.ok || !Array.isArray(result.plans) || (result.projectId && result.projectId !== projectId)) return;
+      mine.rows = result.plans;
+    }).catch(() => { /* no plans is the quiet answer */ })
+      .finally(() => { mine.loading = false; if (S.wired && S.plans === mine) { S.painted.delete("list"); schedule(); } });
+  }
+  // How many worktrees the project has besides its own folder (renderer/worktrees.js's list), and its own words for them.
+  function worktreeCount() {
+    const list = window.MefiWorktrees?.state?.()?.list;
+    if (!list?.repo || !Array.isArray(list.rows)) return { count: 0, headline: "" };
+    return { count: list.rows.filter((row) => row && row.kind !== "primary").length, headline: String(list.headline || "") };
   }
   const changed = (key, value) => { const now = JSON.stringify(value); if (S.painted.get(key) === now) return false; S.painted.set(key, now); return true; };
   // Forget what was drawn under a key and every key beneath it ("inspector" also forgets "inspector:plan").
@@ -443,13 +479,19 @@
 
   function buildList() {
     const root = el("aside", "sx-panel sx-list"); root.id = "sessions-list"; root.setAttribute("aria-label", "Sessions"); root.dataset.short = "false";
-    const project = button("", "sx-proj", () => window.MefiSidebar?.open?.({ focus: true, projectFocus: true }), { title: "Switch project" });
-    project.id = "sessions-project"; project.setAttribute("aria-haspopup", "menu");
+    const project = button("", "sx-proj", () => openProjectMenu(false), { title: "Switch project" });
+    project.id = "sessions-project"; project.setAttribute("aria-haspopup", "menu"); project.setAttribute("aria-expanded", "false");
+    project.addEventListener("keydown", (event) => { if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") { event.preventDefault(); openProjectMenu(true); } });
+    // The Git chip (renderer/git-sync.js's own, with its one popover) and how many worktrees the project has, under the project.
+    const gitRow = el("div", "sx-gitrow"); gitRow.id = "sessions-gitrow";
+    const git = el("span", "sx-git");
+    const trees = button("", "sx-chip-btn sx-trees", () => window.MefiNav?.go?.("worktrees"), { icon: "g-worktree" }); trees.id = "sessions-worktrees"; trees.hidden = true;
+    gitRow.append(git, trees);
     const fresh = button("New task", "sx-new primary", () => newTask(), { title: "Start a new task (Ctrl N)", icon: "g-add" });
     fresh.id = "sessions-new"; fresh.append(el("kbd", "", "Ctrl N"));
     const tabs = el("div", "sx-switch"); tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "What to list");
     for (const [id, label] of [["sessions", "Sessions"], ["backlog", "Backlog"]]) {
-      const tab = button(label, "", () => { S.tab = id; remember({ tab: id }); S.painted.delete("list"); paintList(); byId(`sessions-tab-${id}`)?.focus?.(); }); tab.id = `sessions-tab-${id}`; tab.setAttribute("role", "tab"); tab.setAttribute("aria-controls", "sessions-list-scroll"); tab.dataset.tab = id;
+      const tab = button(label, "", () => { S.tab = id; remember({ tab: id }); if (id === "backlog") readPlans({ force: true }); S.painted.delete("list"); paintList(); byId(`sessions-tab-${id}`)?.focus?.(); }); tab.id = `sessions-tab-${id}`; tab.setAttribute("role", "tab"); tab.setAttribute("aria-controls", "sessions-list-scroll"); tab.dataset.tab = id;
       tabs.append(tab);
     }
     const find = el("div", "sx-find");
@@ -463,8 +505,8 @@
     const groups = el("div", "sx-groups"); groups.id = "sessions-list-scroll"; groups.setAttribute("role", "tabpanel"); groups.setAttribute("aria-labelledby", "sessions-tab-sessions");
     groups.addEventListener("keydown", onListKey);
     const foot = el("div", "sx-foot"); foot.id = "sessions-foot";
-    root.append(project, fresh, tabs, find, groups, foot);
-    S.panels.list = { root, project, fresh, tabs, input, groups, foot };
+    root.append(project, gitRow, fresh, tabs, find, groups, foot);
+    S.panels.list = { root, project, gitRow, git, trees, fresh, tabs, input, groups, foot };
   }
   function paintList() {
     const panel = S.panels.list;
@@ -476,15 +518,26 @@
     const pinned = builderKit.pins();
     const minute = Math.floor(Date.now() / 60000);
     const where = builderKit.chips.state.where;
+    readPlans();
+    const plans = S.plans.projectId === S.projectId ? S.plans.rows : [];
     const model = S.tab === "backlog" ? null : listModel(data, { query: S.query, closed: S.closed, doneMore: S.doneMore, now: Date.now(), pinned, open: S.open, worktrees: S.wt.rows, counts: reviewCounts });
-    const backlog = S.tab === "backlog" ? backlogModel(data, { query: S.query, now: Date.now() }) : null;
-    const ideasCount = backlogModel(data).length;
+    const backlog = S.tab === "backlog" ? backlogModel(data, { query: S.query, now: Date.now(), plans }) : null;
+    const ideasCount = backlogModel(data, { plans }).length;
     const name = data.project?.name || "Open a project";
-    const signature = [S.tab, model, backlog, ideasCount, name, where?.branch ?? null, S.open, S.query, minute, S.menu, S.renaming?.id ?? null, Boolean(data.projectId), (data.status?.running || []).length, data.status?.parallel ?? null, window.MefiAutonomy?.label?.() ?? null];
+    const trees = worktreeCount();
+    const projects = (Array.isArray(data.projects) ? data.projects : []).map((row) => [row?.id, row?.name, row?.path]);
+    const signature = [S.tab, model, backlog, ideasCount, name, where?.branch ?? null, S.open, S.query, minute, S.menu, S.renaming?.id ?? null, Boolean(data.projectId), (data.status?.running || []).length, data.status?.parallel ?? null, window.MefiAutonomy?.label?.() ?? null, trees, S.projMenu, projects];
+    // The Git chip is git-sync.js's: it paints itself, and a mount again only puts it back where it goes.
+    if (data.projectId) { try { window.MefiGitSync?.mount?.(panel.git, { variant: "list" }); } catch { /* no chip in this build */ } }
     if (!changed("list", signature)) return;
-    // Head: the project, its branch, and the two tabs.
+    // Head: the project and its branch (its menu switches and opens projects), the Git chip and the worktrees, and the two tabs.
     panel.project.replaceChildren(el("span", "sx-proj-av", (name.trim()[0] || "P").toUpperCase()), (() => { const words = el("span", "sx-proj-words"); words.append(el("b", "", name), el("small", "", where?.branch || where?.head && `detached ${where.head}` || "main")); return words; })(), glyph("g-chev"));
     panel.project.title = data.project?.path ? `${data.project.path} · switch project` : "Switch project";
+    panel.project.setAttribute("aria-expanded", String(S.projMenu));
+    panel.trees.hidden = !trees.count;
+    panel.trees.replaceChildren(glyph("g-worktree"), el("span", "", plural(trees.count, "worktree")));
+    panel.trees.title = `${trees.headline || plural(trees.count, "worktree")} Open Work › Worktrees.`;
+    panel.gitRow.hidden = !data.projectId;
     for (const tab of panel.tabs.querySelectorAll("[data-tab]")) {
       const on = tab.dataset.tab === S.tab;
       tab.setAttribute("aria-selected", String(on)); tab.classList.toggle("on", on);
@@ -499,7 +552,8 @@
     const body = [];
     if (!data.projectId) body.push(emptyNote("Open a project folder to see its sessions.", "Open a folder", () => window.MefiSidebar?.open?.({ focus: true, projectFocus: true })));
     else if (S.tab === "backlog") {
-      if (!backlog.length) body.push(emptyNote(S.query ? "No idea matches that filter." : "The backlog is clear", null, null, S.query ? "" : "Ideas from chats and Mefi's suggestions land here."));
+      body.push(scanRow());
+      if (!backlog.length) body.push(emptyNote(S.query ? "Nothing in the backlog matches that filter." : "The backlog is clear", null, null, S.query ? "" : "Plan drafts, ideas from chats and Mefi's suggestions land here."));
       for (const idea of backlog) body.push(ideaRow(idea));
     } else if (!model.all) body.push(emptyNote("Tasks you start show up here, like sessions.", "New task", () => newTask()));
     else if (!model.total) body.push(emptyNote("No session matches that filter."));
@@ -514,6 +568,81 @@
     const mode = window.MefiAutonomy?.label?.();
     panel.foot.replaceChildren(el("span", "", [mode ? `${mode} mode` : "", workers ? `${busy} of ${workers} workers busy` : busy ? `${busy} working` : "Nothing running"].filter(Boolean).join(" · ")));
     paintMenu(panel, data);
+    paintProjectMenu(panel, data);
+  }
+  // The backlog's two ways to find more: the Analyzer reads the project, and Scan chats for ideas is the palette's own action.
+  function scanRow() {
+    const row = el("div", "sx-scan");
+    row.append(button("Scan the project", "sx-chip-btn quiet", () => window.MefiNav?.go?.("analyzer"), { icon: "g-analyzer", title: "Open the Analyzer: it reads the project's plans and evidence and finds starting points" }));
+    const scan = window.MefiNav?.get?.("scanIdeas");
+    if (typeof scan?.run === "function") row.append(button("Scan chats for ideas", "sx-chip-btn quiet", () => scan.run(), { icon: "g-spark", title: scan.desc || "Read recent chats and capture new feature ideas" }));
+    return row;
+  }
+
+  // ---- the project menu ------------------------------------------------------------------------------------------------------------
+  // The prototype's project menu on the head: each project (a press switches, through Home's own project buttons, so the
+  // save-and-switch question for running agents is the one it always was), Open a folder (Home's Add project), Start a new app
+  // (Vibe's New app panel) and All projects (the project panel the rest of the app opens).
+  function openProjectMenu(fromKeyboard) {
+    S.projMenu = !S.projMenu;
+    S.projMenuFocus = S.projMenu;
+    if (S.projMenu) S.menu = null;
+    void fromKeyboard;
+    S.painted.delete("list");
+    paintList();
+  }
+  function closeProjectMenu(restore) {
+    if (!S.projMenu) return;
+    S.projMenu = false; S.painted.delete("list");
+    paintList();
+    if (restore) S.panels.list?.project?.focus?.({ preventScroll: true });
+  }
+  function projectAction(run) { closeProjectMenu(false); try { run(); } catch { /* the control went away */ } }
+  function paintProjectMenu(panel, data) {
+    // A redraw while the menu is open keeps the keyboard on the same item.
+    const old = panel.root.querySelector?.(".sx-projmenu");
+    const ITEMS = "[role=menuitem], [role=menuitemradio]";
+    const held = old && old.contains?.(document.activeElement) ? [...old.querySelectorAll(ITEMS)].indexOf(document.activeElement) : -1;
+    old?.remove?.();
+    if (!S.projMenu) return;
+    const menu = el("div", "sx-menu sx-projmenu"); menu.id = "sessions-project-menu"; menu.setAttribute("role", "menu"); menu.setAttribute("aria-label", "Projects");
+    const item = (label, run, { icon = null, small = "", radio = false, on = false, avatar = "" } = {}) => {
+      const node = button("", "sx-menu-item", () => projectAction(run)); node.setAttribute("role", radio ? "menuitemradio" : "menuitem"); node.tabIndex = -1;
+      if (radio) node.setAttribute("aria-checked", String(on));
+      if (avatar) node.append(el("span", "sx-proj-av small", avatar)); else if (icon) node.append(glyph(icon));
+      const words = el("span", "sx-menu-words"); words.append(el("span", "", label)); if (small) words.append(el("small", "", small));
+      node.append(words);
+      if (on) { const mark = el("span", "sx-menu-on", "✓"); mark.setAttribute("aria-hidden", "true"); node.append(mark); }
+      menu.append(node);
+      return node;
+    };
+    const switchTo = (id) => {
+      const own = document.querySelector?.(`#workspace-projects [data-project-id="${String(id).replace(/["\\]/g, "")}"]`);
+      if (own && !own.disabled) own.click(); else window.MefiSidebar?.open?.({ focus: true, projectFocus: true });
+    };
+    for (const project of (Array.isArray(data.projects) ? data.projects : []).slice(0, 12)) {
+      if (!project?.id) continue;
+      const name = String(project.name || "Project");
+      item(name, () => { if (project.id !== data.projectId) switchTo(project.id); }, { avatar: (name.trim()[0] || "P").toUpperCase(), small: String(project.path || ""), radio: true, on: project.id === data.projectId });
+    }
+    if (menu.childElementCount || menu.children?.length) menu.append(el("hr", "sx-menu-hr"));
+    const add = document.getElementById?.("workspace-add-project");
+    if (add) item("Open a folder…", () => add.click(), { icon: "g-add" });
+    if (typeof window.MefiVibe?.openPanel === "function") item("Start a new app…", () => window.MefiVibe.openPanel("newapp"), { icon: "g-spark" });
+    item("All projects…", () => window.MefiSidebar?.open?.({ focus: true, projectFocus: true }), { icon: "g-tasks" });
+    menu.addEventListener("keydown", (event) => {
+      const items = [...menu.querySelectorAll("[role=menuitem], [role=menuitemradio]")];
+      const at = items.indexOf(document.activeElement);
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); items[(at + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus?.({ preventScroll: true }); }
+      else if (event.key === "Home" || event.key === "End") { event.preventDefault(); items[event.key === "Home" ? 0 : items.length - 1]?.focus?.({ preventScroll: true }); }
+      else if (event.key === "Escape" || event.key === "Tab") { event.preventDefault(); event.stopPropagation(); closeProjectMenu(true); }
+    });
+    // Under the head, inside the panel, so the list's own clipping never cuts it.
+    const place = panel.project.getBoundingClientRect?.(), frame = panel.root.getBoundingClientRect?.();
+    if (place && frame && menu.style) { menu.style.top = `${Math.max(8, Math.round(place.bottom - frame.top + 4))}px`; menu.style.left = "10px"; }
+    panel.root.append(menu);
+    if (S.projMenuFocus) { S.projMenuFocus = false; (menu.querySelector("[aria-checked=true]") || menu.querySelector(ITEMS))?.focus?.({ preventScroll: true }); }
+    else if (held >= 0) [...menu.querySelectorAll(ITEMS)][held]?.focus?.({ preventScroll: true });
   }
   function emptyNote(title, action, run, more = "") {
     const box = el("div", "sx-empty");
@@ -564,16 +693,18 @@
     box.append(main, more);
     return box;
   }
+  // A backlog row: a plan draft opens in Plans, an idea in Ideas (their own pages).
   function ideaRow(idea) {
-    const box = el("div", "sx-row"); box.dataset.key = `idea:${idea.id}`; box.dataset.tone = "idea";
+    const plan = idea.kind === "plan";
+    const box = el("div", "sx-row"); box.dataset.key = `${plan ? "plan" : "idea"}:${idea.id}`; box.dataset.tone = plan ? "plan" : "idea";
     const main = el("button", "sx-row-main"); main.type = "button"; main.dataset.nav = "row"; main.dataset.part = "main"; main.tabIndex = -1;
     main.title = `${idea.title} · ${idea.meta}`;
-    main.setAttribute("aria-label", `Idea: ${idea.title}. ${idea.meta}`);
+    main.setAttribute("aria-label", `${plan ? "Plan" : "Idea"}: ${idea.title}. ${idea.meta}`);
     const text = el("span", "sx-row-text");
     text.append(el("span", "sx-row-top", idea.title));
     text.append(el("span", "sx-row-meta", idea.meta));
     main.append(el("i", "sx-dot"), text);
-    main.addEventListener("click", () => window.MefiNav?.go?.("ideas", { ideaId: idea.id }));
+    main.addEventListener("click", () => (plan ? window.MefiNav?.go?.("plans", { planId: idea.id }) : window.MefiNav?.go?.("ideas", { ideaId: idea.id })));
     box.append(main);
     return box;
   }
@@ -653,6 +784,7 @@
     paintList();
   }
   function onPointerDown(event) {
+    if (S.projMenu && !event.target?.closest?.(".sx-projmenu, #sessions-project")) closeProjectMenu(false);
     if (!S.menu) return;
     if (event.target?.closest?.(".sx-menu, .sx-row-menu")) return;
     closeMenu(false);

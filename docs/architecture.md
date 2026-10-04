@@ -2427,10 +2427,20 @@ never disagree. Nothing is drawn unless the layout is on and a shell is there.
   and one line of words each; what a row says follows `html[data-detail]`
   (titles, plus status, everything: the stylesheet decides, the row always
   draws every line). A run in its own worktree wears a branch mark, from the
-  list `MefiWorktrees` already holds. Above it: the project and its branch (the
-  project switcher), **New task** (Ctrl N: Home's own message box in its task
-  purpose), and **Sessions | Backlog** (the backlog lists ideas nobody has made
-  a task of); under it a filter. A row's menu is open in a new tab, pin, rename
+  list `MefiWorktrees` already holds. Above it, as in the 0.5 prototype: the
+  project and its branch, whose **project menu** lists every project (a press
+  switches through Home's own project button, so Save & switch for running
+  agents still asks) with Open a folder (Home's Add project), Start a new app
+  (Vibe's New app panel) and All projects (the project panel); the **Git chip**
+  (git-sync.js's own in its list look, branch | state, one popover for every
+  chip) and **N worktrees** (the project's other checkouts, opens Work ›
+  Worktrees); **New task** (Ctrl N: Home's own message box in its task
+  purpose); and **Sessions | Backlog**. The backlog lists plan drafts first
+  (Plans not yet made into tasks, read with the Plans page's own
+  `planning:list` when the project is taken up, the tab opens or at most every
+  30 s; a draft opens in Plans), then ideas nobody has made a task of, with
+  Scan the project (the Analyzer) and Scan chats for ideas (the palette's own
+  action); under it a filter. A row's menu is open in a new tab, pin, rename
   (`tasks:action rename`), stop and delete (the board's own `tasks:delete` behind
   the styled confirm, with Undo from Recently deleted). Finished work shows twelve
   rows and offers twenty-five more at a time.

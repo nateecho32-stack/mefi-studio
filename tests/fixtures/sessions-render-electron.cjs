@@ -173,6 +173,8 @@ function bridge(seedData) {
     projectPreviewOpen: () => ({ ok: true, projectId: pid, phase: "ready", available: true, canStop: true, owned: true, url: "http://localhost:5173/" }),
     projectPreviewStop: () => ({ ok: true, projectId: pid, phase: "stopped", available: true, canStop: false, owned: true }),
     workWhere: () => ({ ok: true, projectId: pid, repo: true, branch: "main", head: "996db71", dirty: 3, worktrees: { on: false, forced: false } }),
+    // The Git chip's model, as scripts/git-link.cjs words it: three changed files on main.
+    gitState: () => ({ ok: true, model: { id: "uncommitted", label: "3 changes", short: "3", tone: "info", glyph: "uncommitted", sentence: "3 files have changed since your last commit.", projectId: pid, details: [], branch: "main", repo: "owner/notes", checkedAt: Date.now() - 120000, counts: { ahead: 0, behind: 0, dirty: 3 }, primary: { id: "save-and-push", label: "Save and push 3" }, secondary: { id: "save", label: "Save only" } } }),
     workWorktrees: (on) => ({ ok: true, worktrees: { on: Boolean(on), forced: false } }),
     worktreesList: () => data.worktrees,
     getAiRouting: () => ({ ok: true, provider: "auto", executorCli: "opencode", executorTier: "auto", executorTierDefaults: {}, executorModels: { opencode: "zai/glm-5.3" }, autoProviders: ["zai", "opencode"], hasZen: true }),
@@ -367,6 +369,28 @@ app.whenReady().then(async () => {
   assert.equal(await textOf("#sessions-project .sx-proj-words small"), "main");
   assert.equal(await textOf("#sessions-tab-backlog"), "Backlog · 2");
   step("the list is grouped and worded");
+  // The head as the prototype has it: the Git chip (git-sync.js's, branch then state) and the worktrees chip, then the project menu.
+  await until("document.querySelector('#sessions-gitrow .gs-chip') && !document.querySelector('#sessions-gitrow .gs-slot').hidden", "the Git chip sits under the project");
+  assert.equal(await textOf("#sessions-gitrow .gs-chip-branch-name"), "main");
+  assert.equal(await textOf("#sessions-gitrow .gs-chip-label"), "3 changes");
+  await until("document.getElementById('sessions-worktrees') && !document.getElementById('sessions-worktrees').hidden", "the worktrees chip counts the project's other checkouts");
+  assert.equal((await textOf("#sessions-worktrees")).trim(), "1 worktree");
+  await click("#sessions-gitrow .gs-chip");
+  await until("document.querySelector('.gs-pop') && !document.querySelector('.gs-pop').hidden", "the chip opens the one Git popover");
+  await press("Escape");
+  await until("!document.querySelector('.gs-pop') || document.querySelector('.gs-pop').hidden", "Escape closes it");
+  await click("#sessions-project");
+  await until("document.getElementById('sessions-project-menu')", "the project menu opens on the head");
+  const menuItems = await run("return [...document.querySelectorAll('#sessions-project-menu .sx-menu-words > span')].map((node) => node.textContent);");
+  assert.equal(menuItems[0], "Notes app"); assert.ok(menuItems.includes("Open a folder…") && menuItems.includes("All projects…"), JSON.stringify(menuItems));
+  assert.equal(await run("return document.activeElement?.closest('#sessions-project-menu') !== null && document.activeElement?.getAttribute('aria-checked') === 'true';"), true, "the keyboard starts on the open project");
+  const menuBox = await run("const m = document.getElementById('sessions-project-menu').getBoundingClientRect(), l = document.getElementById('sessions-list').getBoundingClientRect(); return { inside: m.left >= l.left - 1 && m.right <= l.right + 1, w: m.width };");
+  assert.ok(menuBox.inside && menuBox.w > 180, `the menu sits inside the list: ${JSON.stringify(menuBox)}`);
+  await capture("sessions-project-menu-1440.png");
+  await press("Escape");
+  await until("!document.getElementById('sessions-project-menu')", "Escape closes the project menu");
+  assert.equal(await run("return document.activeElement?.id;"), "sessions-project", "and gives the head its focus back");
+  step("the head has the project menu, the Git chip and the worktrees");
 
   // What a row says follows html[data-detail]: titles, then status (the default), then everything.
   const level = async (value) => {

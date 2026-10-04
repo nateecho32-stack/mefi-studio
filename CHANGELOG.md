@@ -14,6 +14,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   (Work's Task board, Plans, Ideas, Analyzer and Worktrees; Agents' sections
   and views; Settings) moved from the bar into the left column, with Back,
   Forward and the Git chip beside them. The classic layout is unchanged.
+- **The 0.5 session list's head.** The project name opens a project menu
+  (switch project, Open a folder, Start a new app, All projects), the Git chip
+  sits under it with the branch and what is waiting, and "N worktrees" opens
+  Work › Worktrees. Backlog lists plan drafts as well as ideas, with Scan the
+  project and Scan chats for ideas at its top.
 - **GPT-6.1 Sol.** The lead, desk and overseer seats and the heavy Zen role
   now default to `gpt-6.1-sol` (released at DevDay 2026: near Astra quality
   at a fifth of Astra's price). It appears in the Zen model pickers and keeps
