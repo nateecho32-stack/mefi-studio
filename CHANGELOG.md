@@ -7,6 +7,13 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **The 0.5 layout's top bar says where you are.** With the new layout on
+  (`?layout=v2`), the bar's middle is a breadcrumb, as in the 0.5 prototype:
+  the project and the open session (or Today), or the project, section and
+  page; on the Task board its task opens with one press. A section's pages
+  (Work's Task board, Plans, Ideas, Analyzer and Worktrees; Agents' sections
+  and views; Settings) moved from the bar into the left column, with Back,
+  Forward and the Git chip beside them. The classic layout is unchanged.
 - **GPT-6.1 Sol.** The lead, desk and overseer seats and the heavy Zen role
   now default to `gpt-6.1-sol` (released at DevDay 2026: near Astra quality
   at a fifth of Astra's price). It appears in the Zen model pickers and keeps

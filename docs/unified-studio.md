@@ -220,11 +220,19 @@ folded is left to the contract, which remembers what was asked.
 two. Left: the list toggle and the Vibe | Build switch, a radiogroup (Ctrl M)
 that calls `MefiVibe.setMode` and adds no `uiMode` value; from a mode's Home it
 goes to the other mode's Home, from any other page the page stays. Middle: the
-local navigation (Back, Forward, the section's pages), which the script fits
-between the bar's two ends, or, when there is none or the band is narrower than
-640 CSS px (`html[data-frame-narrow]`), the trail project / page / item read
-from `MefiNav`, `MefiWorkspace` and Build's task view (while there is room for
-it). Right: the Search pill (opens the palette, shows Ctrl K), "N need you" and
+0.5 prototype's breadcrumb. On Home it is the project and the session open in
+the thread (`MefiSessions.selected()`), or Today when none is; anywhere else
+the project, the section (`MefiNav.sectionLabel`) and the page, and on the Task
+board the task it has selected, as a button that opens it (the classic bar's
+"Current task"). The classic local navigation (Back, Forward, the section's
+pages, the Git chip) is not drawn in the frame: the section's pages are the
+**page list** in the list column, on every page of a section that has pages of
+its own (`MefiNav.LOCAL_ROUTES`: Work, Agents, Settings; for Agents the
+sections and views of `MefiAgents.navModel()`, so every pane and tab is still a
+press away), with Back and Forward within the section (Alt ← and Alt → as
+before) and the Git chip. While it shows, the column's panels make way
+(`.shell-list[data-pages="on"]`) and `MefiShell.pages()` says so, so the
+session list does not draw; Home keeps its session list. Right: the Search pill (opens the palette, shows Ctrl K), "N need you" and
 "N working" with its pause or resume button, and the inspector toggle. Below
 about 470 CSS px the bar keeps icons and counts. The pills read what the app
 already holds: the
@@ -288,10 +296,11 @@ sample data; a mount into `top` or `status` lands in that bar's own slot, betwee
 the trail and the search, or before the player); `MefiShell.resize("tabs", px)`
 is how the tab strip says how tall it is; `MefiShell.onInbox = fn(anchor)` is how the Inbox opens from the pill;
 `MefiShell.open`, `close`, `toggle`, `isOpen`, `size`, `info`, `setMode`,
-`mode`, `status`, `sync`, `layout`, `resetLayout`, `onChange` and the
+`mode`, `status`, `sync`, `pages`, `layout`, `resetLayout`, `onChange` and the
 constants `LIMITS`, `DEFAULTS`, `PRESETS`, `REGIONS` and `MODES` complete it.
 The window hears `mefi:shell-layout` when a region opens, closes or resizes,
-when a drawer opens, when the mode changes and when the frame comes or goes.
+when a drawer opens, when the mode changes, when the page list comes or goes
+(`what: "pages"`) and when the frame comes or goes.
 Tests: `tests/shell_frame_*.test.mjs` (fake DOM, the contract as a stand-in and
 as the real `nav.js`), `tests/shell_render.test.mjs` (a real window at five
 sizes).

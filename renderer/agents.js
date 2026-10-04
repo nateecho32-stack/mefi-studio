@@ -103,6 +103,16 @@
     if (id === "skills") return { section: "setup" };
     return { section: "live" };
   }
+  // The same sections and views as data, for the 0.5 frame's page list (renderer/shell.js draws them as a list in its list
+  // column): each with whether it is where the person is, and a way there.
+  function navModel(id, options = {}) {
+    const here = location(id, options);
+    const selected = (route, target) => route === id && (route !== "agents" || target.pane === here.pane) && (route !== "agent-brain" || target.tab === window.MefiAgentBrain?.tab?.()) && (route !== "usage" || target.view === (options.view || window.MefiModelLab?.view?.() || "usage"));
+    return sections.map(([section, label, route, target]) => ({
+      id: section, label, current: section === here.section, run: () => go(route, target),
+      views: (children[section] || []).map(([childLabel, childRoute, childTarget = {}]) => ({ label: childLabel, current: selected(childRoute, childTarget), run: () => go(childRoute, childTarget) })),
+    }));
+  }
   let closeNavMenu = () => {};
   function paintNav(nav, id, options = {}) {
     const here = location(id, options), signature = JSON.stringify([id, here, window.MefiAgentBrain?.tab?.(), options.view || window.MefiModelLab?.view?.()]);
@@ -894,6 +904,6 @@
     // Canonical settings ownership is established before the first visit.
     mount();
   }
-  window.MefiAgents = { open, close, mount, redirect, paintNav, location, stageRouting, routingView, params: () => ({ ...params }), reload: discard, draft: () => draft() ? clone(draft().configuration) : null };
+  window.MefiAgents = { open, close, mount, redirect, paintNav, navModel, location, stageRouting, routingView, params: () => ({ ...params }), reload: discard, draft: () => draft() ? clone(draft().configuration) : null };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
 })();

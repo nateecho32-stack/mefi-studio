@@ -128,9 +128,11 @@
     const id = snap().projectId;
     if (id && id !== S.projectId) onProject({ detail: { projectId: id } });
     syncVisibility();
-    paintList();
+    // The frame's page list (a section's pages, renderer/shell.js) covers the column on other sections' pages: nothing is drawn for nobody.
+    if (!listCovered()) paintList();
     if (S.visible) { paintThread(); paintInspector(); } else unmountInspector();
   }
+  const listCovered = () => { try { return Boolean(S.shell?.pages?.()?.shown); } catch { return false; } };
   // Nothing is drawn for a panel nobody can see: a hidden window, a thread that is not on screen.
   function syncVisibility() {
     const home = onHome();

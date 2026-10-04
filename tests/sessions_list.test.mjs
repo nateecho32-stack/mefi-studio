@@ -636,6 +636,22 @@ test("putting the panels away removes everything: the shell's handles, the liste
   void frames; void NOW; void bridge;
 });
 
+test("while the frame's page list covers the column (another section's page), the list is not drawn; it is drawn, current, once it is uncovered", async () => {
+  const a = await open();
+  await a.settle();
+  let covered = true;
+  a.shell.pages = () => ({ shown: covered, section: covered ? "work" : null });
+  a.navigate("tasks", {}); await a.settle();
+  const before = a.rowKeys();
+  a.data.tasks = [task("fresh", { updatedAt: mins(1) }), ...a.data.tasks];
+  a.env.emit("mefi:workspace-state"); await a.settle();
+  assert.deepEqual(a.rowKeys(), before, "nothing is drawn under the page list");
+  assert.equal(a.mounts.find((entry) => entry.region === "list").shown, true, "the panel stays the shell's to show: only its drawing waits");
+  covered = false;
+  a.navigate("workspace", {}); a.env.emit("mefi:shell-layout", { what: "pages", shown: false }); await a.settle();
+  assert.ok(a.rowKeys().includes("fresh"), "back on Home the list is the board as it is now");
+});
+
 test("the thread is shown only while a session is open and Home is the page; the list and the inspector follow; Home is covered only while the thread is", async () => {
   const a = await open();
   await a.settle();

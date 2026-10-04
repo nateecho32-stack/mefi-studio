@@ -37,11 +37,22 @@ button.gs-chip[aria-expanded="true"] { box-shadow: 0 0 0 3px color-mix(in srgb, 
 /* Vibe's project cluster: a 36px glass chip beside New app. */
 .gs-slot[data-variant="vibe"] .gs-chip { min-height: 0; height: 36px; padding: 0 12px 0 10px; gap: 7px; border-radius: 12px; background: color-mix(in srgb, var(--T) 12%, var(--v-glass, transparent)); backdrop-filter: var(--v-blur, none); font-size: 12.5px; }
 .gs-slot[data-variant="vibe"] .gs-chip[data-tone="neutral"] { border-color: var(--v-edge, var(--hairline)); background: var(--v-glass, transparent); }
-/* Under 900px the words go and the glyph stays, with the count as a badge. */
+/* The 0.5 frame's list column (a session list's head, a section's page list): the branch, a rule, then the state, in a
+   28px chip that keeps its words, as the prototype draws it. */
+.gs-slot[data-variant="list"] { min-width: 0; max-width: 100%; }
+.gs-slot[data-variant="list"] .gs-chip { max-width: 100%; min-height: 28px; height: 28px; padding: 0 10px 0 8px; gap: 6px; border-radius: 14px; font-size: max(12px, calc(12.5px * var(--text-scale, 1))); }
+.gs-slot[data-variant="list"] .gs-chip-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.gs-chip-branch { display: inline-flex; align-items: center; gap: 5px; min-width: 0; color: var(--ivory); }
+.gs-chip-branch .gs-glyph { color: var(--muted); }
+.gs-chip-branch-name { min-width: 0; max-width: 16ch; overflow: hidden; text-overflow: ellipsis; }
+.gs-chip-sep { flex: none; width: 1px; height: 12px; background: var(--hairline-strong); }
+/* Under 900px the words go and the glyph stays, with the count as a badge (the list column keeps its words: it has the room). */
 @media (max-width: 899px) {
   .gs-chip:not(.gs-chip-static) { width: 36px; min-width: 36px; height: 36px; min-height: 36px; padding: 0; justify-content: center; border-radius: 12px; }
   .gs-chip:not(.gs-chip-static) .gs-chip-label { display: none; }
   .gs-chip-badge:not([hidden]) { position: absolute; top: -6px; right: -6px; display: inline-flex; }
+  .gs-slot[data-variant="list"] .gs-chip:not(.gs-chip-static) { width: auto; min-width: 0; height: 28px; min-height: 28px; padding: 0 10px 0 8px; justify-content: flex-start; border-radius: 14px; }
+  .gs-slot[data-variant="list"] .gs-chip:not(.gs-chip-static) .gs-chip-label { display: inline; }
 }
 /* Hidden in Zen and in the classic shell, where the section bar is not drawn. */
 body.command-zen .gs-slot, html:not([data-shell="rail"]) .gs-slot { display: none; }

@@ -2,7 +2,8 @@
 // would have to show is tests/shell_render.test.mjs. The rules pinned here are the
 // ones the brief states outright and a refactor could drop without a test noticing:
 // the splitters' 1 px line and wide hit area, opaque drawers, no text under 12 px,
-// no native scroller, theme tokens, reduced motion, and the narrow-band rule.
+// no native scroller, theme tokens, reduced motion, and the classic local
+// navigation left out of the frame (its pages are the list column's page list).
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -120,13 +121,15 @@ test("geometry comes from the contract's derived edges only, and the layers are 
   assert.equal(decl("html[data-frame] #vibe-layer", "top"), "var(--shell-y0)", "Vibe's layer starts under the bar");
 });
 
-test("the local navigation shares the bar's row, and gives way in a narrow band", () => {
-  const squeeze = 'html[data-frame][data-shell="rail"] #app-local-nav';
-  assert.equal(decl(squeeze, "left"), "calc(var(--shell-x0) + var(--frame-top-l, 0px))");
-  assert.equal(decl(squeeze, "right"), "var(--frame-top-r, 0px)");
-  assert.equal(decl("html[data-frame][data-frame-narrow][data-shell=\"rail\"] #app-local-nav", "display"), "none");
-  assert.match(js, /const NARROW_BAND = 640;/);
-  assert.match(js, /setAttribute\?\.\("data-frame-narrow", ""\)/);
+test("the classic local navigation is not drawn in the frame: the bar's middle is the breadcrumb, and the page list is the list column's", () => {
+  assert.equal(decl('html[data-frame][data-shell="rail"] #app-local-nav', "display"), "none !important");
+  absent(css, /--frame-top-[lr]|data-frame-narrow|data-local/, "nothing is measured or squeezed for it any more");
+  absent(js, /NARROW_BAND|data-frame-narrow|--frame-top-[lr]|dataset\.local/, "and the script measures nothing for it");
+  // The page list: while it shows, the column's own panels make way; its rows are buttons, the one you are on is marked.
+  assert.equal(decl('html[data-frame] .shell-list[data-pages="on"] > :is(.shell-stack, .shell-empty)', "display"), "none !important");
+  assert.equal(decl("html[data-frame] .shell-pages", "overflow-y"), "auto", "a long list scrolls inside the column");
+  assert.match(decl('html[data-frame] .shell-page[aria-current="page"]', "background"), /var\(--tint-gold-3/);
+  assert.equal(decl("html[data-frame] .shell-page", "font-size"), "var(--frame-fs)", "at least 12 px, with the text size");
 });
 
 test("a rule in a container query repeats the html[data-frame] prefix, since a query adds no specificity", () => {
