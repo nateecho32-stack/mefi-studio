@@ -713,7 +713,7 @@ body.command-active .home-tab {
    The toolbar's last row is the table's column header and shares the rows'
    column template (--catalog-cols), so names, numbers and bars line up down
    the page. Numbers are right-aligned in tabular figures. */
-#tab-booklet { --catalog-cols: minmax(0, 1fr) 180px 108px 108px 72px 16px; --catalog-gap: var(--s4); --catalog-pad: var(--s4); }
+#tab-booklet { container: catalog / inline-size; --catalog-cols: minmax(0, 1fr) 180px 108px 108px 72px 16px; --catalog-gap: var(--s4); --catalog-pad: var(--s4); }
 
 .catalog-picks { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s3); margin: 0 0 var(--s5); }
 #tab-booklet .catalog-pick {
@@ -786,12 +786,15 @@ body.command-active .home-tab {
 @media (prefers-reduced-motion: no-preference) {
   body:not(.no-motion) #cards > .catalog-row.is-revealed > .catalog-model > .catalog-summary { animation: catalog-reveal 1.4s var(--ease-out); }
 }
-/* Wide windows name the columns once, in the header; the cells keep their
-   labels for screen readers. Narrow windows and print show them in place. */
-@media screen and (min-width: 1001px) {
+/* A wide page names the columns once, in the header; the cells keep their
+   labels for screen readers. A narrow page and print show them in place.
+   "Wide" is the page's own width (the catalog container), not the window's:
+   with the 0.5 layout's list and inspector, a 1100px window leaves the
+   catalog about 520px, where the six columns would push past the window. */
+@container catalog (min-width: 801px) {
   .catalog-cell > small { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
-@media (max-width: 1000px) {
+@container catalog (max-width: 800px) {
   .catalog-picks { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .catalog-head { display: none; }
   #tab-booklet .catalog-toolbar { padding-bottom: 12px; }
