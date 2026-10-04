@@ -19,6 +19,9 @@
 //!   of image-attach.cjs), behind a Rust-backed factory.
 //! - `skills`: the Skills page's files (scripts/skills.cjs and
 //!   skill-format.cjs), behind a Rust-backed factory.
+//! - `settings`: settings.json and auth.json (main.cjs readSettings and
+//!   writeSettings with auth-store.cjs), the credential rules of
+//!   credentials.cjs and the project identity rules of projects.cjs.
 //! - `snapshots`: attempt snapshots, Changed files and Revert
 //!   (scripts/attempt-snapshots-host.cjs and attempt-snapshots.cjs), behind a
 //!   Rust-backed factory.
@@ -34,6 +37,7 @@ pub mod js;
 pub mod jsre;
 pub mod paths;
 pub mod repo;
+pub mod settings;
 pub mod skills;
 pub mod snapshots;
 
@@ -45,6 +49,7 @@ pub fn dispatch(function: &str, args: &[serde_json::Value], callbacks: &dyn call
         Some(("skills", name)) => skills::call(name, args, callbacks),
         Some(("images", name)) => images::call(name, args, callbacks),
         Some(("snapshots", name)) => snapshots::call(name, args, callbacks),
+        Some(("settings", name)) => settings::call(name, args, callbacks),
         _ => repo::call(function, args, callbacks),
     }
 }

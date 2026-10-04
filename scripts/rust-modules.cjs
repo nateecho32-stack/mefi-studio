@@ -137,6 +137,31 @@ const FACTORIES = Object.freeze({
       folder: () => path.resolve(String(collaborators.dir())),
     });
   },
+  // settings.json and auth.json (main.cjs readSettings / writeSettings with
+  // scripts/auth-store.cjs): Rust reads and writes both and keeps the file's
+  // health (the last good copy, saves held while nothing good was ever read,
+  // the bytes last copied aside), seeded from the engine's startup read until
+  // a call has gone through. The project list goes with each call, as
+  // projects.saved() answers it then; the log line is called back.
+  "settings-store": (collaborators, host) => {
+    let seeded = false;
+    const call = async (name, ...args) => {
+      const context = {
+        settingsPath: collaborators.settingsPath,
+        authPath: collaborators.authPath,
+        projects: typeof collaborators.saved === "function" ? collaborators.saved() ?? null : null,
+        ...(!seeded && typeof collaborators.seed === "function" ? { seed: collaborators.seed() } : {}),
+        ...(typeof collaborators.log === "function" ? { log: collaborators.log } : {}),
+      };
+      const answer = await host.callWithFunctions(`core.settings.${name}`, [context, ...args]);
+      seeded = true;
+      return answer;
+    };
+    return Object.freeze({
+      read: () => call("read"),
+      write: async (next) => { await call("write", next ?? {}); },
+    });
+  },
   // Changed files, Accept and Revert (scripts/attempt-snapshots-host.cjs
   // createAttemptSnapshots): Rust runs git, makes the before and after
   // pictures and puts files back, with attempt-snapshots.cjs's rules. The

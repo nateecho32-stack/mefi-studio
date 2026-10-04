@@ -212,3 +212,27 @@ test("the attempt-snapshots factory sends the engine's environment with each cal
   assert.equal((await throwing.diff({})).reason, "unreadable", "a host that throws at once still answers");
   withEnv("attempt-snapshots", () => assert.equal(factory("attempt-snapshots", collaborators, host), null));
 });
+
+test("the settings-store factory sends the two files, the project list as it is now, and the startup health until a call goes through", async () => {
+  assert.ok(FACTORIES["settings-store"]);
+  const calls = [];
+  let fail = true;
+  const host = { callWithFunctions: async (api, args) => { calls.push({ api, args }); if (fail) throw new Error("not yet"); return api === "core.settings.read" ? { theme: "dark" } : null; } };
+  let listed = { activeId: "a", items: [] };
+  const log = () => {};
+  const collaborators = { settingsPath: "C:\\u\\settings.json", authPath: "C:\\u\\auth.json", saved: () => listed, seed: () => ({ good: "{}", unreadable: false }), log };
+  const store = withEnv(undefined, () => factory("settings-store", collaborators, host));
+  await assert.rejects(store.read(), /not yet/, "a failed call rejects, as a failed file read does");
+  fail = false;
+  assert.deepEqual(await store.read(), { theme: "dark" });
+  listed = { activeId: "b", items: [] };
+  assert.equal(await store.write({ theme: "light" }), undefined);
+  await store.read();
+  assert.deepEqual(calls.map((call) => call.api), ["core.settings.read", "core.settings.read", "core.settings.write", "core.settings.read"]);
+  assert.deepEqual(calls.map((call) => Boolean(call.args[0].seed)), [true, true, false, false], "the startup health goes until a call has gone through");
+  assert.deepEqual(calls[2].args[0].projects, { activeId: "b", items: [] }, "the project list is read at call time");
+  assert.deepEqual(calls[2].args[1], { theme: "light" });
+  assert.equal(calls[0].args[0].settingsPath, "C:\\u\\settings.json");
+  assert.equal(calls[0].args[0].log, log);
+  withEnv("settings-store", () => assert.equal(factory("settings-store", collaborators, host), null));
+});

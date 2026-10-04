@@ -284,6 +284,94 @@ pub fn slice(text: &str, start: isize, end: Option<isize>) -> String {
     String::from_utf16_lossy(&units[from..to])
 }
 
+// ---- JSON.stringify ----
+
+/// An object key JavaScript lists first, in number order: an array index.
+fn is_array_index(key: &str) -> bool {
+    !key.is_empty() && key.bytes().all(|byte| byte.is_ascii_digit()) && (key == "0" || !key.starts_with('0')) && key.parse::<u64>().is_ok_and(|n| n < 4_294_967_295)
+}
+
+fn quote(text: &str, out: &mut String) {
+    out.push('"');
+    for c in text.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\u{8}' => out.push_str("\\b"),
+            '\u{c}' => out.push_str("\\f"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+}
+
+fn write_json(value: &Value, indent: &str, depth: usize, out: &mut String) {
+    let pad = |out: &mut String, depth: usize| {
+        if !indent.is_empty() {
+            out.push('\n');
+            for _ in 0..depth {
+                out.push_str(indent);
+            }
+        }
+    };
+    match value {
+        Value::Null => out.push_str("null"),
+        Value::Bool(flag) => out.push_str(if *flag { "true" } else { "false" }),
+        Value::Number(n) => match (n.as_i64(), n.as_u64()) {
+            (Some(int), _) => out.push_str(&int.to_string()),
+            (_, Some(int)) => out.push_str(&int.to_string()),
+            _ => out.push_str(&n.as_f64().filter(|f| f.is_finite()).map_or("null".into(), number_string)),
+        },
+        Value::String(text) => quote(text, out),
+        Value::Array(items) if items.is_empty() => out.push_str("[]"),
+        Value::Array(items) => {
+            out.push('[');
+            for (index, item) in items.iter().enumerate() {
+                if index > 0 {
+                    out.push(',');
+                }
+                pad(out, depth + 1);
+                write_json(item, indent, depth + 1, out);
+            }
+            pad(out, depth);
+            out.push(']');
+        }
+        Value::Object(map) if map.is_empty() => out.push_str("{}"),
+        Value::Object(map) => {
+            let mut indexes: Vec<(u64, &String, &Value)> = map.iter().filter(|(key, _)| is_array_index(key)).map(|(key, item)| (key.parse().unwrap_or(0), key, item)).collect();
+            indexes.sort_by_key(|(n, _, _)| *n);
+            let ordered = indexes.into_iter().map(|(_, key, item)| (key, item)).chain(map.iter().filter(|(key, _)| !is_array_index(key)));
+            out.push('{');
+            for (index, (key, item)) in ordered.enumerate() {
+                if index > 0 {
+                    out.push(',');
+                }
+                pad(out, depth + 1);
+                quote(key, out);
+                out.push(':');
+                if !indent.is_empty() {
+                    out.push(' ');
+                }
+                write_json(item, indent, depth + 1, out);
+            }
+            pad(out, depth);
+            out.push('}');
+        }
+    }
+}
+
+/// `JSON.stringify(value, null, indent)`: JavaScript's escapes, number forms
+/// and key order (array-index keys first, as a JavaScript object holds them).
+pub fn stringify(value: &Value, indent: &str) -> String {
+    let mut out = String::new();
+    write_json(value, indent, 0, &mut out);
+    out
+}
+
 // ---- localeCompare ----
 //
 // V8 compares with ICU's root collation. For the ASCII text the engine sorts

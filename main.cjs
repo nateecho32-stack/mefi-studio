@@ -20588,7 +20588,26 @@ function rememberAutonomySettings(settings) {
   return settings;
 }
 
+// Under the Rust host settings.json and auth.json are Rust's (core.settings,
+// docs/rust-migration.md): one keeper of the file's health for the engine and
+// for the Rust modules that read it, seeded once from the startup read. The
+// code below is the same rules for the Electron build.
+function rustSettings() {
+  if (settingsDisk.rust === undefined) {
+    settingsDisk.rust = (typeof rustModules !== "undefined" && rustModules?.factory("settings-store", {
+      settingsPath: SETTINGS_PATH,
+      authPath: AUTH_PATH,
+      saved: () => projects.saved(),
+      seed: () => ({ good: settingsDisk.good, held: settingsDisk.held, broken: settingsDisk.broken, copy: settingsDisk.copy, unreadable: settingsDisk.unreadable }),
+      log: (line) => logLine(line),
+    })) || false;
+  }
+  return settingsDisk.rust;
+}
+
 async function readSettings() {
+  const rust = rustSettings();
+  if (rust) return rememberAutonomySettings(await rust.read());
   let bytes = null, failure = null;
   try {
     bytes = await readFile(SETTINGS_PATH);
@@ -20611,6 +20630,12 @@ async function readSettings() {
 // slice replaces the store so a deleted key leaves disk too. A fresh install
 // with no keys anywhere writes no auth file at all.
 async function writeSettings(next) {
+  const rust = rustSettings();
+  if (rust) {
+    await rust.write(next);
+    rememberAutonomySettings(next);
+    return;
+  }
   const { auth, plain } = authStore.splitAuthFields(next);
   const saved = { ...plain, projects: projects.saved() };
   if (settingsDisk.unreadable && settingsDisk.good === null) {

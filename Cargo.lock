@@ -2122,6 +2122,7 @@ dependencies = [
  "regex",
  "rusqlite",
  "serde_json",
+ "sha2",
  "unicode-normalization",
  "windows-sys 0.59.0",
 ]

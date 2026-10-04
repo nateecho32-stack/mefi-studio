@@ -58,7 +58,9 @@ fn main() {
         }
         Some("repo-batch") => {
             // [{ "function": "sync.inspect", "args": [...] }, ...]; function
-            // arguments must be constant handles ({ "$mefi": "const", "value" }).
+            // arguments are constant handles ({ "$mefi": "const", "value" }),
+            // or { "$mefi": "fn", "id" }: answered null, and each call listed
+            // in the answer's `called` (a log line, in the order made).
             let mut text = String::new();
             let _ = std::io::stdin().read_to_string(&mut text);
             let calls: Vec<Value> = serde_json::from_str(&text).unwrap_or_default();
@@ -67,10 +69,16 @@ fn main() {
                 .map(|entry| {
                     let function = entry.get("function").and_then(Value::as_str).unwrap_or_default();
                     let input = entry.get("args").and_then(Value::as_array).cloned().unwrap_or_default();
-                    match mefi_core::dispatch(function, &input, &mefi_core::callbacks::NoCallbacks) {
+                    let recorder = Recorder(std::sync::Mutex::new(Vec::new()));
+                    let mut answer = match mefi_core::dispatch(function, &input, &recorder) {
                         Ok(value) => json!({ "ok": true, "value": value }),
                         Err(error) => json!({ "ok": false, "error": error }),
+                    };
+                    let called = recorder.0.into_inner().unwrap_or_default();
+                    if !called.is_empty() {
+                        answer["called"] = Value::Array(called);
                     }
+                    answer
                 })
                 .collect();
             println!("{}", Value::Array(answers));
@@ -101,4 +109,16 @@ fn main() {
         }
     };
     std::process::exit(code);
+}
+
+/// The batch's engine: a function argument answers null and is written down.
+struct Recorder(std::sync::Mutex<Vec<Value>>);
+
+impl mefi_core::callbacks::Callbacks for Recorder {
+    fn call(&self, handle: &Value, args: Vec<Value>) -> Result<Value, String> {
+        if let Ok(mut called) = self.0.lock() {
+            called.push(json!({ "fn": handle.get("id").cloned().unwrap_or(Value::Null), "args": args }));
+        }
+        Ok(Value::Null)
+    }
 }

@@ -188,6 +188,7 @@ the Electron build until stage 3.
 | The Skills page's files: list, read, save, create, delete, import, export | `scripts/skills.cjs` with `skill-format.cjs` | `crates/mefi-core/src/skills/` | `main.cjs`'s `skillsHost()` takes a Rust-backed `skills` factory; the project root, the switch, the safety folder and the inventory are called back, and the zip writer too (the factory adds the SKILL.md-only filter, since a function cannot cross); `enabled` and `OFF` stay the engine's | `tests/rust_parity_skills.test.mjs` |
 | A message's pictures: save, resolve, load, read, remove, prune, and the checks every picture meets (sniff, dimensions, name, size, ids) | `scripts/image-store.cjs` with `image-attach.cjs`'s checks (its request shapes and vision index stay JavaScript: requests are built with them on the spot) | `crates/mefi-core/src/images/` | `main.cjs`'s `imageStore()` takes a Rust-backed `image-store` factory; the folder, the ids still named (a Set, sent as an array) and the preview maker (handed a Buffer) are called back; `folder()` stays the engine's | `tests/rust_parity_images.test.mjs` |
 | Attempt review: the before and after pictures, Changed files, one file's diff, Revert and its undo, pruning and dropping | `scripts/attempt-snapshots-host.cjs` with all of `attempt-snapshots.cjs`'s rules (ref names, the commit message, what a snapshot leaves out, git's raw, numstat and diff output, the revert plan) | `crates/mefi-core/src/snapshots/` | `main.cjs`'s `attemptSnapshotsHost()` takes a Rust-backed `attempt-snapshots` factory; git runs from Rust on the engine's environment (sent with each call), the kill switch and the log line are called back, and a revert's or an undo's `busy(root)` crosses with its request. One writer per folder and three folder reads at once, as in the JavaScript | `tests/rust_parity_snapshots.test.mjs` (the same attempt on twin repositories with a fixed clock gives the same commits) |
+| Settings, keys and projects: settings.json and auth.json (the merged view, the legacy keys' move to auth.json, a broken file copied aside once, the last good copy, saves held while nothing good was ever read), the credential fields and their environment variables, and a project's identity and the saved project list | `main.cjs` `readSettings`, `writeSettings` and `settingsFromDisk` with `scripts/auth-store.cjs`; `scripts/credentials.cjs`; `scripts/projects.cjs`'s `projectFromPath`, list, add, select, remove, `saved()` and `dataPath` | `crates/mefi-core/src/settings/` (`keys.rs`, `projects.rs`); `js::stringify` writes JSON as JavaScript spells it | `main.cjs`'s `readSettings()` and `writeSettings()` take a Rust-backed `settings-store` factory: each call names the two files and carries `projects.saved()`, the startup read's health goes as a seed until a call has gone through, and the log line is called back. `updateSettings`' queue and the startup read stay the engine's. The engine's live project registry stays JavaScript (every caller reads it synchronously, and `current()` follows the operation's async context); Rust modules build the same list from the saved block | `tests/rust_parity_settings.test.mjs` (main.cjs's own settings code, run from its text, against Rust on twin userData folders: views, both files' bytes, broken copies and log lines) |
 
 ### Two seams
 
@@ -266,17 +267,18 @@ It moves with its callers and the board state, as one subsystem.
 
 1. Read the JavaScript whole; port it into `crates/mefi-core/src/<module>/`
    with the helpers in `js.rs` and `paths.rs`.
-2. Add `mefi-core <module>-batch` and a `tests/rust_parity_<module>.test.mjs`
-   that covers every branch, including missing and malformed input.
+2. Add a `tests/rust_parity_<module>.test.mjs` that covers every branch,
+   including missing and malformed input, through `mefi-core repo-batch`. A
+   function argument goes as `{ $mefi: "const", value }`, or as
+   `{ $mefi: "fn", id }`, which answers null and is listed in the answer's
+   `called` (how a test reads the log lines a port writes).
 3. Route the engine's calls: a `<module>.*` call in `src-tauri/src/engine.rs`,
    and the JavaScript caller choosing the host under `MEFI_STUDIO_HOST=tauri`.
 4. Check with the self-test's `rustCalls`, then the gates.
 
-Suggested order: the factory-shaped modules are done (skills, the image store and attempt
-snapshots moved on 4 October); next settings, keys and projects together (writes
-inject `projects.saved()`, `auth.json` is split off, 59 `updateSettings`
-sites), with `scripts/git-host.cjs` and git-link's `describe` once the
-settings and sync they read are in Rust, then the pure logic modules
+Suggested order: the factory-shaped modules, settings, keys and projects are done (4
+October); next `scripts/git-host.cjs` with git-link's `describe` and `chip`,
+now that the settings and sync it reads are in Rust, then the pure logic modules
 (`assistant.mjs`, `executor-core`, `task-*`, planning), then the services
 (the assistant loop, the executor that starts the builder CLIs, the
 watchers), and last the 302 page channels themselves. The board store (the
