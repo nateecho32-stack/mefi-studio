@@ -56,6 +56,10 @@ html[data-frame] .shell-region kbd {
   background: color-mix(in srgb, var(--ivory) 3%, transparent); color: var(--muted);
   font: 600 var(--frame-fs-s)/1.5 var(--font-ui); white-space: nowrap;
 }
+/* Inside a filled button the key is read on the fill: it takes the button's own ink. */
+html[data-frame] .shell-region .primary kbd {
+  color: inherit; border-color: color-mix(in srgb, currentColor 32%, transparent); background: color-mix(in srgb, currentColor 10%, transparent);
+}
 
 /* ---- the top bar: the local navigation's row, with a breadcrumb in its middle ---- */
 html[data-frame] .shell-top {

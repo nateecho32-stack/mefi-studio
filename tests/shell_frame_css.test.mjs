@@ -86,6 +86,13 @@ test("no text under 12 px, and every size scales with the interface scale", () =
   absent(css, /font(?:-size)?\s*:[^;]*\b(?:[0-9]|1[01])(?:\.\d+)?px(?![^;]*max)/, "a literal small size with no floor");
 });
 
+test("a key hint inside a filled button takes the button's ink, so it reads on the fill", () => {
+  // The frame's key style is muted ink on the chrome; on a primary button (New task's "Ctrl N") that was pale on teal.
+  assert.match(decl("html[data-frame] .shell-region kbd", "color"), /var\(--muted\)/);
+  assert.equal(decl("html[data-frame] .shell-region .primary kbd", "color"), "inherit");
+  assert.match(decl("html[data-frame] .shell-region .primary kbd", "background"), /currentColor/);
+});
+
 test("no native scroller, no reserved gutter and only the app's tokens for colour, layer and shadow", () => {
   absent(css, /scrollbar-gutter|::-webkit-scrollbar|scrollbar-width|overflow(?:-[xy])?\s*:\s*scroll\b/, "panels use overflow auto, which the app's own scroller takes over");
   absent(css, /#[0-9a-fA-F]{3,8}\b/, "no hex colour");
