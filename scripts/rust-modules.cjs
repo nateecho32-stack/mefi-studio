@@ -137,6 +137,60 @@ const FACTORIES = Object.freeze({
       folder: () => path.resolve(String(collaborators.dir())),
     });
   },
+  // The Git chip's host layer (scripts/git-host.cjs createGitHost) with the
+  // actions under it: Rust keeps the chip's memory (each project's last sync,
+  // the refusal still standing, the last action's outcome, the account as last
+  // asked), runs the writers one at a time and the Git actions in-process, and
+  // words the chip with git-link's describe. The engine's context, project
+  // list, syncProject, send and pcSetup are called back. A project check is a
+  // function, which cannot cross back: it is asked for (projectCheck) and run
+  // (runCheck) on this side. The "Done" state's expiry stays a timer here: a
+  // writer's answer names the outcome (__settle), and `later` asks Rust to draw
+  // the chip again after it. Like the JavaScript, every method answers.
+  "git-host": (collaborators, host) => {
+    const OUTCOME_MS = 6000;
+    const { actions, pcSetup, send, syncProject, context, listProjects, projectCheck, later, now } = collaborators ?? {};
+    let last = null;
+    const scrub = (value) => String(value?.message ?? value ?? "").replace(/(:\/\/)[^/@\s]+@/g, "$1").slice(0, 300);
+    const call = async (name, payload = null) => {
+      let held = null;
+      const sent = {
+        actions: actions ?? {},
+        ...(typeof context === "function" ? { context } : {}),
+        ...(typeof listProjects === "function" ? { listProjects } : {}),
+        ...(typeof syncProject === "function" ? { syncProject } : {}),
+        ...(typeof projectCheck === "function" ? {
+          projectCheck: async (root) => { held = await projectCheck(root); return { present: typeof held === "function" }; },
+          runCheck: async () => (typeof held === "function" ? held() : null),
+        } : {}),
+        ...(typeof pcSetup?.repos === "function" ? { pcRepos: () => pcSetup.repos() } : {}),
+        ...(typeof pcSetup?.isListed === "function" ? { isListed: pcSetup.isListed } : {}),
+        send: (channel, model) => { if (channel === "git:state") last = model; return typeof send === "function" ? send(channel, model) : undefined; },
+        ...(typeof now === "function" ? { now } : {}),
+      };
+      const answer = await host.callWithFunctions(`core.git.host.${name}`, [sent, payload]);
+      if (answer && typeof answer === "object" && !Array.isArray(answer) && answer.__settle) {
+        const token = answer.__settle;
+        delete answer.__settle;
+        if (typeof later === "function") later(OUTCOME_MS + 250, () => { call("settle", token).catch(() => {}); });
+      }
+      if (name === "state" && answer?.ok && answer.model) last = answer.model;
+      return answer;
+    };
+    const failed = (error) => ({ ok: false, error: scrub(error) || "Sync could not run." });
+    const method = (name) => (payload = {}) => call(name, payload && typeof payload === "object" ? payload : {}).catch(failed);
+    return Object.freeze({
+      state: method("state"), check: method("check"), pull: method("pull"), push: method("push"), rebase: method("rebase"),
+      savePreview: method("savePreview"), save: method("save"), publishPreview: method("publishPreview"), publish: method("publish"), link: method("link"),
+      owners: () => call("owners").catch(failed),
+      linkRepos: () => call("linkRepos").catch(failed),
+      account: () => call("account").catch((error) => ({ ok: false, account: null, ghInstalled: false, gitInstalled: false, error: scrub(error) })),
+      glance: (ids) => call("glance", Array.isArray(ids) ? ids : null).catch((error) => ({ ok: false, items: [], error: scrub(error) })),
+      onSyncEvent: (result) => { call("onSyncEvent", result ?? null).catch(() => {}); },
+      onProjectChanged: () => { last = null; call("onProjectChanged").catch(() => {}); },
+      model: () => last,
+    });
+  },
   // settings.json and auth.json (main.cjs readSettings / writeSettings with
   // scripts/auth-store.cjs): Rust reads and writes both and keeps the file's
   // health (the last good copy, saves held while nothing good was ever read,

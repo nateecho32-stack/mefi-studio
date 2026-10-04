@@ -899,7 +899,10 @@ test("main.cjs stamps every opening for the launch list and hands the host its e
   // A launch that reopened the folder on its own (resume, started with Windows) never asks the launch screen.
   assert.match(source, /if \(startupResumed\) \{\n\s+startupChosen = true;\n\s+\/\/[^\n]*\n\s+if \(typeof stampProjectOpened === "function"\) void stampProjectOpened\(startupResumed\.projectId\);/);
   // The chip's "Done" ends by an unref'd timer main.cjs hands over, and the factory declares it.
-  assert.match(source, /later: \(ms, run\) => \{ const timer = setTimeout\(run, ms\); timer\.unref\?\.\(\); \},/);
+  assert.match(source, /const later = \(ms, run\) => \{ const timer = setTimeout\(run, ms\); timer\.unref\?\.\(\); \};/);
+  // Both hosts get it: the Rust one (scripts/rust-modules.cjs git-host) and the JavaScript one.
+  assert.match(source, /rustModules\?\.factory\("git-host", \{[^}]*\blater\b/);
+  assert.match(source, /gitHostInstance = createGitHost\(\{[^}]*\n\s+later,\n/);
   assert.match(require("node:fs").readFileSync(new URL("../scripts/git-host.cjs", import.meta.url), "utf8"), /function createGitHost\(\{[^}]*\blater\b/);
 });
 

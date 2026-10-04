@@ -8,6 +8,8 @@
 //! test can hold each one to its JavaScript.
 
 mod actions;
+mod describe;
+mod host;
 pub(crate) mod rules;
 pub(crate) mod run;
 
@@ -55,6 +57,10 @@ pub fn call(function: &str, args: &[Value], callbacks: &dyn Callbacks) -> Result
     let ctx = || actions::Ctx::new(&options, callbacks);
     let root = root_of(args);
     let root = root.as_str();
+    // The chip's host layer (scripts/git-host.cjs), and git-link's describe and chip under it.
+    if let Some(name) = function.strip_prefix("host.") {
+        return Ok(host::call(name, args, callbacks));
+    }
     Ok(match function {
         "glance" => {
             let budget = js::get(&arg(2), "budgetMs").and_then(js::finite).filter(|ms| *ms > 0.0).map_or(0, |ms| ms as u64);

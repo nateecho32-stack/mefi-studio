@@ -24618,21 +24618,31 @@ function registerIpc() {
     const { createGitActions } = require("./scripts/git-actions.cjs");
     const { createGitHost } = require("./scripts/git-host.cjs");
     const collaborators = { execFile: require("node:child_process").execFile, exists: existsSync, readText: (file) => readFile(file, "utf8").catch(() => null), env: () => process.env };
-    // Under the Rust host the actions run in Rust (scripts/rust-modules.cjs factory); the engine's env is called back.
-    const actions = (typeof rustModules !== "undefined" && rustModules?.factory("git-actions", collaborators)) || createGitActions(collaborators);
     // `later` lets the chip's "Done" end by itself (git-host settle): an unref'd timer, so it never keeps Studio alive.
+    const later = (ms, run) => { const timer = setTimeout(run, ms); timer.unref?.(); };
+    const context = () => {
+      const open = projects.open();
+      return { root: open ? projectRoot() : null, projectId: open ? projects.active().id : null, builders: typeof autopilot !== "undefined" && (autopilot.jobs ?? []).some((job) => job && !job.finished) };
+    };
+    const listProjects = () => projects.list().projects ?? [];
+    const projectCheck = async (root) => (await loadModule("scripts/sync.mjs")).projectCheck(root);
+    const now = () => Date.now();
+    // Under the Rust host the chip's host layer and the actions under it run in Rust (scripts/rust-modules.cjs factory).
+    const inRust = typeof rustModules !== "undefined" && rustModules?.factory("git-host", { actions: collaborators, pcSetup, send, syncProject, later, context, listProjects, projectCheck, now });
+    if (inRust) {
+      gitHostInstance = inRust;
+      return gitHostInstance;
+    }
+    const actions = createGitActions(collaborators);
     // (No comments inside the object: tests/git_link_host.test.mjs reads its keys.)
     gitHostInstance = createGitHost({
       actions, link, pcSetup, send, syncProject,
       exists: existsSync,
-      now: () => Date.now(),
-      later: (ms, run) => { const timer = setTimeout(run, ms); timer.unref?.(); },
-      context: () => {
-        const open = projects.open();
-        return { root: open ? projectRoot() : null, projectId: open ? projects.active().id : null, builders: typeof autopilot !== "undefined" && (autopilot.jobs ?? []).some((job) => job && !job.finished) };
-      },
-      listProjects: () => projects.list().projects ?? [],
-      projectCheck: async (root) => (await loadModule("scripts/sync.mjs")).projectCheck(root),
+      now,
+      later,
+      context,
+      listProjects,
+      projectCheck,
     });
     return gitHostInstance;
   };

@@ -13,7 +13,8 @@
 //! - `files`: the @ picker's project file search (scripts/project-files.cjs
 //!   with gitignore-lite.cjs), behind a Rust-backed factory.
 //! - `git`: the Git chip's host actions (scripts/git-actions.cjs and the
-//!   git-link.cjs rules they read), behind a Rust-backed factory.
+//!   git-link.cjs rules they read) and its host layer (scripts/git-host.cjs
+//!   with git-link's describe and chip), behind Rust-backed factories.
 //!
 //! - `images`: a message's pictures (scripts/image-store.cjs and the checks
 //!   of image-attach.cjs), behind a Rust-backed factory.

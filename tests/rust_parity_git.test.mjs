@@ -571,3 +571,202 @@ test("the actions answer like the JavaScript on real folders", { skip, timeout: 
     assert.equal(boxes.rust.git(boxes.rust.p(folder), "log", "--format=%H %s", "--all"), boxes.js.git(boxes.js.p(folder), "log", "--format=%H %s", "--all"), `${folder}'s history`);
   }
 });
+
+// ---- the chip's host layer (scripts/git-host.cjs) and git-link's describe ----
+
+const { createGitHost } = require("../scripts/git-host.cjs");
+
+// Facts for describe: every field it reads, in the shapes the host and sync hand it.
+function describeInputs() {
+  const glances = [
+    undefined, null, { isRepo: false }, { isRepo: true, unborn: true }, { isRepo: true, available: false },
+    { isRepo: true, branch: "main", main: "main", onDefault: true, upstream: "origin/main", remote: "octo-cat/app", ahead: 0, behind: 0, dirty: 0 },
+    { isRepo: true, branch: "main", main: "main", onDefault: true, upstream: "origin/main", remote: "octo-cat/app", ahead: 2, behind: 0, dirty: 3 },
+    { isRepo: true, branch: "main", onDefault: true, upstream: "origin/main", remote: true, ahead: 0, behind: 4, dirty: 0 },
+    { isRepo: true, branch: "main", main: "main", onDefault: true, upstream: "origin/main", remote: "octo-cat/app", ahead: 1, behind: 1, dirty: 1 },
+    { isRepo: true, branch: "main", main: "main", onDefault: true, upstream: "origin/main", remote: "octo-cat/app", ahead: 1, behind: 1, dirty: 0 },
+    { isRepo: true, branch: "feature", main: "main", onDefault: false, upstream: null, remote: "octo-cat/app", ahead: 0, dirty: 2 },
+    { isRepo: true, branch: "feature", main: "main", onDefault: false, upstream: "origin/feature", remote: "octo-cat/app", ahead: 0 },
+    { isRepo: true, branch: "feature", upstream: "origin/feature", remote: "octo-cat/app", ahead: "3" },
+    { isRepo: true, branch: "HEAD", remote: "octo-cat/app" }, { isRepo: true, detached: true, branch: null, remote: "octo-cat/app", dirty: 1 },
+    { isRepo: true, branch: "main", remote: "https://gitlab.com/x/y" }, { isRepo: true, branch: "main", remote: null }, { isRepo: true, branch: "main", remote: "other" },
+    { isRepo: true, branch: "main", main: "main", onDefault: true, upstream: null, remote: "octo-cat/app", dirty: 1 },
+    { isRepo: "yes" }, [1, 2],
+  ];
+  const syncs = [
+    undefined, null,
+    { state: { repo: true, branch: "main", main: "main", hasUpstream: true, upstream: "origin/main", remote: "o", ahead: 0, behind: 2, dirty: 0 }, checkedAt: 5 },
+    { state: { repo: true, branch: "HEAD", main: "main", dirty: 1 } },
+    { state: { repo: false } },
+    { problems: [{ kind: "offline", detail: "Could not resolve host: github.com" }], pending: [{ kind: "stash", text: "1 stash on this PC" }, { kind: "other", text: "x" }, null] },
+    { problems: [{ kind: "fetch-failed", detail: "auth https://u:p@github.com" }] },
+    { problems: [{ kind: "rebase-conflict", files: ["a.txt", "b.txt", 5, "c.txt", "d.txt"] }] },
+    { problems: [{ kind: "lost-work", findings: [{ merge: "abcdef123456", subject: "Merge x", lines: 210, count: 5, files: [{ path: "a" }, { path: "b" }, { path: "c" }, { path: "d" }] }, { merge: "1234567890", lines: 1, files: [{ path: "z" }] }] }] },
+    { problems: [{ kind: "lost-work", detail: "Already worded." }] },
+    { problems: [{ kind: "check-failed", detail: "lint" }, { kind: "offline" }] },
+    { problems: [{ kind: "pull-refused", detail: "local edits" }] },
+    { problems: [{ kind: "push-refused", stderr: " ! [rejected] main -> main (fetch first)\nerror: failed to push some refs" }] },
+    { problems: [{ kind: "push-refused", detail: "remote: Permission to o/r.git denied to x." }] },
+    { problems: [{ kind: "push-refused", detail: "something odd" }] },
+    { problems: [{ kind: "push-refused", stderr: "remote: error: GH013: Repository rule violations found\nremote: - Push cannot contain secrets\nremote:   —— GitHub Personal Access Token ——\nremote:    path: src/a.js:2" }] },
+    { problems: [{ kind: "push-refused", stderr: "remote: error: File big.bin is 120.50 MB; this exceeds GitHub's file size limit of 100.00 MB" }] },
+    { problems: [{ kind: "error", detail: "fallback" }], headline: "Sync could not run: git is missing" },
+    { problems: [{ kind: "error" }] },
+    { problems: "junk" }, { pending: Array.from({ length: 15 }, (_, i) => ({ kind: "worktree", text: `worktree ${i}` })) },
+  ];
+  const others = [
+    {}, { account: null }, { account: "octo-cat" }, { account: { ok: false } }, { account: { account: null, ghInstalled: false } }, { account: { account: "me" } },
+    { busy: "pushing" }, { busy: "checking" }, { busy: "nope" }, { agentsBuilding: true },
+    { outcome: { kind: "pushed", commits: 2 } }, { outcome: { kind: "saved", files: 1 } }, { outcome: { kind: "published", repo: "octo-cat/new", visibility: "public" } }, { outcome: { kind: "bogus" } },
+    { refusal: { kind: "non-fast-forward", text: "GitHub has newer commits.", fix: "pull" } }, { refusal: { kind: "timeout", text: "slow" } }, { refusal: { kind: "detached", text: "No branch." } },
+    { refusal: { kind: "secret", text: "Stopped: a token.", file: "a.js", label: "GitHub token" } }, { refusal: { kind: "auth", text: "Sign in again.", fix: "sign-in" } },
+    { project: { needsGitHub: true }, account: null }, { project: { weakDrive: true } }, { project: { repo: "octo-cat/named" } }, { checkedAt: 1234 },
+  ];
+  const inputs = [];
+  for (const glance of glances) for (const sync of syncs) inputs.push({ ...(glance === undefined ? {} : { glance }), ...(sync === undefined ? {} : { sync }) });
+  for (const glance of glances.slice(5, 12)) for (const other of others) inputs.push({ glance, ...other });
+  for (const sync of syncs.slice(5, 18)) for (const other of others.slice(0, 12)) inputs.push({ glance: glances[6], sync, ...other });
+  inputs.push(undefined, null, "text", 5, [], { glance: glances[6], account: "octo-cat", busy: "saving" });
+  return inputs;
+}
+
+test("describe and chip answer like git-link on every kind of fact", { skip }, () => {
+  const inputs = describeInputs();
+  const calls = inputs.flatMap((input) => [
+    { function: "git.host.describe", args: [{}, input ?? null] },
+  ]);
+  const answers = batch(calls);
+  inputs.forEach((input, index) => {
+    const want = rules.describe(input);
+    assert.deepEqual(answers[index].value, JSON.parse(JSON.stringify(want)), `describe ${JSON.stringify(input)?.slice(0, 200)}`);
+  });
+  const models = inputs.map((input) => rules.describe(input));
+  const chips = batch(models.map((model) => ({ function: "git.host.chip", args: [{}, model] })));
+  models.forEach((model, index) => assert.deepEqual(chips[index].value, JSON.parse(JSON.stringify(rules.chip(model))), `chip ${model.id}`));
+  assert.deepEqual(batch([{ function: "git.host.chip", args: [{}, null] }])[0].value, null);
+});
+
+// The host on two boxes: the same project, the same steps, the same answers, models sent and commits.
+function buildHost(box) {
+  const { git, p, put, route, repo } = box;
+  route("octo-cat/chip");
+  repo("chip", { "README.md": "# chip\n" });
+  git(p("chip"), "remote", "add", "origin", "https://github.com/octo-cat/chip.git");
+  git(p("chip"), "push", "-q", "-u", "origin", "main");
+  put("chip/two.txt");
+  git(p("chip"), "add", "two.txt");
+  git(p("chip"), "commit", "-q", "-m", "two");
+  put("chip/dirty.txt");
+  git(box.root, "clone", "-q", "https://github.com/octo-cat/chip.git", p("branchy"));
+  git(p("branchy"), "checkout", "-q", "-b", "feature");
+  put("branchy/f.txt");
+  git(p("branchy"), "add", "f.txt");
+  git(p("branchy"), "commit", "-q", "-m", "feature work");
+}
+
+// What sync answered, as the engine's syncProject hands it over.
+const syncAnswer = (root, more = {}) => ({ ok: true, problems: [], actions: [], checkedAt: NOW - 1000, state: { root, repo: true, branch: "main", main: "main", hasUpstream: true, upstream: "origin/main", remote: "origin", ahead: 1, behind: 0, dirty: 1 }, ...more });
+
+const HOST_STEPS = [
+  { fn: "state", payload: {} },
+  { fn: "state", payload: { projectId: "nope" } },
+  { fn: "account" },
+  { fn: "check", payload: {}, sync: (root) => syncAnswer(root, { pending: [{ kind: "stash", text: "1 stash on this PC" }] }) },
+  { fn: "savePreview", payload: {} },
+  { fn: "save", payload: { paths: ["dirty.txt", 7, ""], message: "Save the dirty file" } },
+  { fn: "push", payload: {}, sync: (root) => syncAnswer(root, { actions: [{ kind: "pushed", commits: 2 }] }) },
+  { fn: "state", payload: {} },
+  { fn: "pull", payload: {}, builders: true },
+  { fn: "pull", payload: { anyway: true }, builders: true, sync: (root) => syncAnswer(root, { ok: false, headline: "Could not fast-forward main", problems: [{ kind: "pull-refused", detail: "local edits" }] }) },
+  { fn: "rebase", payload: {}, sync: (root) => syncAnswer(root, { ok: false, problems: [{ kind: "error", detail: "boom" }] }) },
+  { fn: "rebase", payload: { projectId: "p_chip" }, sync: () => "not an object" },
+  { fn: "check", payload: {}, sync: (root) => syncAnswer(root, { ok: false, problems: [{ kind: "push-refused", stderr: " ! [rejected] main -> main (fetch first)" }] }) },
+  { fn: "glance", payload: ["p_chip", "p_branch", "p_gone", 5] },
+  { fn: "glance", payload: null },
+  { fn: "onSyncEvent", payload: (root) => syncAnswer(root, { problems: [{ kind: "offline", detail: "no network" }] }) },
+  { fn: "onSyncEvent", payload: () => syncAnswer("C:\\elsewhere") },
+  { fn: "owners" },
+  { fn: "publishPreview", payload: { owner: "octo-cat", name: "chip" } },
+  { fn: "link", payload: { repo: "not a repo" } },
+  { fn: "linkRepos" },
+  { fn: "onProjectChanged", project: "branchy" },
+  { fn: "state", payload: {}, project: "branchy" },
+  { fn: "push", payload: {}, project: "branchy" },
+  { fn: "state", payload: { projectId: "p_branchy" }, project: "branchy" },
+  { fn: "save", payload: { paths: ["missing.txt"], push: true }, project: "branchy" },
+  { fn: "model", project: "branchy" },
+  { fn: "state", payload: {}, project: null },
+];
+
+test("the chip's host answers like git-host.cjs on two boxes", { skip, timeout: 600000 }, async (t) => {
+  const gh = fakeGhBin(t);
+  const boxes = { js: makeBox(t, "hjs", gh), rust: makeBox(t, "hrs", gh) };
+  buildHost(boxes.js);
+  buildHost(boxes.rust);
+  const projectOf = (box, name) => (name === null ? null : { root: box.p(name ?? "chip"), projectId: `p_${name ?? "chip"}` });
+  const listOf = (box) => [{ id: "p_chip", path: box.p("chip") }, { id: "p_branchy", path: box.p("branchy") }, { id: "p_gone", path: box.p("gone") }, { id: 5, path: "x" }, null];
+  const repos = { ok: true, repos: ["octo-cat/chip", "octo-cat/other"], account: "octo-cat" };
+
+  // JavaScript: one host, the steps in order.
+  const sent = [];
+  let step = HOST_STEPS[0];
+  const box = boxes.js;
+  const host = createGitHost({
+    actions: createGitActions({ env: () => box.env, homes: () => box.homes, now: () => NOW }),
+    link: rules,
+    context: () => { const open = projectOf(box, step.project); return open ? { ...open, builders: step.builders === true } : { root: null, projectId: null, builders: false }; },
+    listProjects: () => listOf(box),
+    syncProject: async () => (step.sync ? step.sync(box.p(step.project ?? "chip")) : syncAnswer(box.p("chip"))),
+    projectCheck: async () => null,
+    pcSetup: { repos: async () => repos, isListed: async () => true },
+    send: (channel, model) => sent.push([channel, model]),
+    exists: existsSync,
+    now: () => NOW,
+  });
+  const expected = [];
+  for (step of HOST_STEPS) {
+    const payload = typeof step.payload === "function" ? step.payload(box.p(step.project ?? "chip")) : step.payload;
+    const before = sent.length;
+    const answer = typeof host[step.fn] === "function" ? await host[step.fn](payload) : null;
+    expected.push({ answer: JSON.parse(JSON.stringify(answer ?? null)), sent: JSON.parse(JSON.stringify(sent.slice(before))) });
+  }
+
+  // Rust: one batch, so the host's memory carries from step to step.
+  const rbox = boxes.rust;
+  const calls = [{ function: "git.host.reset", args: [{}, null] }];
+  for (const one of HOST_STEPS) {
+    const open = projectOf(rbox, one.project);
+    const collaborators = {
+      actions: { env: CONST(rbox.env), homes: CONST(rbox.homes), now: CONST(NOW) },
+      context: CONST(open ? { ...open, builders: one.builders === true } : { root: null, projectId: null, builders: false }),
+      listProjects: CONST(listOf(rbox)),
+      syncProject: CONST(one.sync ? one.sync(rbox.p(one.project ?? "chip")) : syncAnswer(rbox.p("chip"))),
+      projectCheck: CONST({ present: false }),
+      pcRepos: CONST(repos),
+      isListed: CONST(true),
+      send: { $mefi: "fn", id: 1 },
+      now: CONST(NOW),
+    };
+    const payload = typeof one.payload === "function" ? one.payload(rbox.p(one.project ?? "chip")) : one.payload;
+    calls.push({ function: `git.host.${one.fn}`, args: [collaborators, payload ?? null] });
+  }
+  const answers = batch(calls).slice(1);
+  const strip = (answer) => { if (answer && typeof answer === "object") delete answer.__settle; return answer; };
+  HOST_STEPS.forEach((one, index) => {
+    const got = { answer: strip(answers[index].ok ? answers[index].value : { rustError: answers[index].error }), sent: (answers[index].called ?? []).map((call) => call.args) };
+    // onSyncEvent and onProjectChanged answer nothing in the JavaScript.
+    if (["onSyncEvent", "onProjectChanged"].includes(one.fn)) got.answer = null;
+    assert.deepEqual(mask(got, rbox.root), mask(expected[index], box.root), `${index}: ${one.fn}(${JSON.stringify(one.payload ?? null)?.slice(0, 80)})`);
+  });
+  // Equal is not enough: the flows that should have worked did.
+  const said = (index) => expected[index].answer;
+  assert.equal(said(2).account, "octo-cat");
+  assert.equal(said(5).ok, true, JSON.stringify(said(5)));
+  assert.equal(said(6).ok, true, JSON.stringify(said(6)));
+  assert.equal(said(7).model.id, "success");
+  assert.equal(said(8).needsConfirm, "builders");
+  assert.equal(said(23).ok, true, JSON.stringify(said(23)));
+  for (const folder of ["chip", "branchy"]) {
+    assert.equal(rbox.git(rbox.p(folder), "log", "--format=%H %s", "--all"), box.git(box.p(folder), "log", "--format=%H %s", "--all"), `${folder}'s history`);
+  }
+});

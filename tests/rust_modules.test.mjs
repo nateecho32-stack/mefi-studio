@@ -236,3 +236,46 @@ test("the settings-store factory sends the two files, the project list as it is 
   assert.equal(calls[0].args[0].log, log);
   withEnv("settings-store", () => assert.equal(factory("settings-store", collaborators, host), null));
 });
+
+test("the git-host factory asks for the project check here, schedules the Done expiry, and never throws", async () => {
+  assert.ok(FACTORIES["git-host"]);
+  const calls = [];
+  const timers = [];
+  const sent = [];
+  let answer = { ok: true, model: { id: "success" }, __settle: { epoch: 0, key: "c:\\p", projectId: "p", seq: 1 } };
+  const host = { callWithFunctions: async (api, args) => { calls.push({ api, args }); return api === "core.git.host.push" ? answer : api === "core.git.host.state" ? { ok: true, model: { id: "in-sync" } } : null; } };
+  let ran = 0;
+  const collaborators = {
+    actions: { env: () => ({ PATH: "x" }) }, pcSetup: { repos: async () => ({ ok: true }), isListed: () => true }, send: (channel, model) => sent.push([channel, model]),
+    syncProject: async () => ({ ok: true }), context: () => ({ root: "C:\\p", projectId: "p" }), listProjects: () => [],
+    projectCheck: async () => () => { ran += 1; return { ok: true }; }, later: (ms, run) => timers.push({ ms, run }), now: () => 5,
+  };
+  const git = withEnv(undefined, () => factory("git-host", collaborators, host));
+  const pushed = await git.push({});
+  assert.equal(pushed.__settle, undefined, "the expiry token stays between Rust and the timer");
+  assert.equal(timers.length, 1);
+  assert.equal(timers[0].ms, 6250);
+  await timers[0].run();
+  assert.equal(calls.at(-1).api, "core.git.host.settle");
+  assert.deepEqual(calls.at(-1).args[1], { epoch: 0, key: "c:\\p", projectId: "p", seq: 1 });
+  const passed = calls[0].args[0];
+  assert.deepEqual(Object.keys(passed).sort(), ["actions", "context", "isListed", "listProjects", "now", "pcRepos", "projectCheck", "runCheck", "send", "syncProject"]);
+  assert.deepEqual(await passed.projectCheck("C:\\p"), { present: true }, "a check function cannot cross back: Rust learns there is one");
+  assert.deepEqual(await passed.runCheck(), { ok: true });
+  assert.equal(ran, 1, "and asks for it to run");
+  passed.send("git:state", { id: "ahead" });
+  assert.deepEqual(sent, [["git:state", { id: "ahead" }]]);
+  assert.deepEqual(git.model(), { id: "ahead" }, "the last model sent is the engine's to read at once");
+  await git.state({});
+  assert.deepEqual(git.model(), { id: "in-sync" });
+  git.onProjectChanged();
+  assert.equal(git.model(), null);
+  await git.glance(["a", 5]);
+  assert.deepEqual(calls.at(-1).args[1], ["a", 5]);
+  const failing = factory("git-host", collaborators, { callWithFunctions: async () => { throw new Error("pipe https://u:p@x.io closed"); } });
+  assert.deepEqual(await failing.push({}), { ok: false, error: "pipe https://x.io closed" });
+  assert.deepEqual(await failing.glance(), { ok: false, items: [], error: "pipe https://x.io closed" });
+  assert.equal((await failing.account()).gitInstalled, false);
+  assert.equal(failing.onSyncEvent({}), undefined, "events never throw");
+  withEnv("git-host", () => assert.equal(factory("git-host", collaborators, host), null));
+});
