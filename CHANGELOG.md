@@ -19,6 +19,12 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   sits under it with the branch and what is waiting, and "N worktrees" opens
   Work › Worktrees. Backlog lists plan drafts as well as ideas, with Scan the
   project and Scan chats for ideas at its top.
+- **The 0.5 thread and its box.** A session's head says where it stands, who is
+  on it, its branch, its checks and (once known) its cost. The box spans the
+  thread and has one row: Note, Ask or Change, Attach (now for a Note too:
+  its pictures wait for an Ask or a Change), one run menu ("Auto · OpenCode")
+  that holds the permission mode, the coding worker and its tier and the
+  folder, the Worktree switch and Send.
 - **GPT-6.1 Sol.** The lead, desk and overseer seats and the heavy Zen role
   now default to `gpt-6.1-sol` (released at DevDay 2026: near Astra quality
   at a fifth of Astra's price). It appears in the Zen model pickers and keeps

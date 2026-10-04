@@ -37,6 +37,28 @@ test("the head has the title, where the task stands, who is on it, where it runs
   assert.equal(chips[2].title, "Runs in its own worktree");
 });
 
+test("the head's chips as the prototype has them: the folder's branch when it has no worktree, its done-when lines as checks, and its cost once the usage is known", async () => {
+  const row = task("t1", { title: "Export as Markdown", acceptance: ["One file per note", "Tags in front matter"], createdAt: mins(20) });
+  const metrics = { ok: true, attempt: { live: false, seconds: 600, route: { label: "OpenCode" }, tokens: { state: "reported", input: 1000, output: 200 }, cost: { state: "reported", usd: 0.31 } }, task: { attempts: 1, seconds: 600, tokens: { state: "reported" }, cost: { state: "reported", usd: 0.31 } }, cap: null, coverage: { reasons: [] } };
+  const a = await open("t1", { tasks: [row], api: bridge({ metrics }) });
+  await a.settle(4);
+  const chips = () => texts(a.all("main", "#sessions-head .sx-chip"));
+  assert.deepEqual(chips(), ["Ready to start", "main", "Checks 0 of 2", "Started 20m ago"], "the branch of the project's folder, and what it is done when, none checked yet");
+  assert.match(a.all("main", "#sessions-head .sx-chip")[1].title, /in the project's own folder/);
+  assert.equal(a.api.of("taskMetrics").length, 0, "the head reads no usage of its own");
+  // The usage, once the Agent tab has read it, gives the head its cost.
+  a.S.setTab("agent"); await a.settle(4);
+  assert.deepEqual(chips(), ["Ready to start", "main", "Checks 0 of 2", "$0.31", "Started 20m ago"]);
+  // A builder that does not report cost is timed only.
+  const timed = await open("t1", { tasks: [row], api: bridge({ metrics: { ...metrics, attempt: { ...metrics.attempt, route: { label: "Claude Code" }, cost: { state: "not-reported" } }, task: { ...metrics.task, cost: { state: "not-reported" } } } }) });
+  timed.S.setTab("agent"); await timed.settle(4);
+  const chip = timed.all("main", "#sessions-head .sx-chip").find((node) => node.textContent === "Time only");
+  assert.ok(chip, "Time only"); assert.match(chip.title, /Claude Code does not report tokens or cost/);
+  // Verified, its done-when lines all count.
+  const done = await open("t1", { tasks: [task("t1", { acceptance: ["a", "b"], status: "done", doneAt: at(1), verification: { state: "verified" } })] });
+  assert.ok(texts(done.all("main", "#sessions-head .sx-chip")).includes("Checks 2 of 2"));
+});
+
 test("the head offers what builder.js offers for the task, a pin, the task board and Drop, all as the list and the other layout do", async () => {
   const a = await open("ready", { tasks: [task("ready", { title: "Ready one" }), task("ask"), task("done", { status: "done", doneAt: at(1) }), task("work", { status: "active", runId: "r" })], running: [{ taskId: "work", runId: "r" }], preview: { phase: "ready" } });
   const labels = () => texts(a.all("main", "#sessions-head .sx-actions button"));
@@ -632,14 +654,16 @@ test("pictures go with an Ask and a Change and are cleared once they went; a Not
 test("the chips: the folder's branch and what is uncommitted, the Worktree switch, and the coding worker, each through builder.js's own calls", async () => {
   const a = await open("t1", { tasks: [task("t1")], api: bridge({ routing: { ok: true, executorCli: "opencode", executorTier: "auto", executorModels: { opencode: "zai/glm-5.3" } } }) });
   await a.settle(4);
-  const chips = a.all("main", "#sessions-chips button");
-  assert.equal(chips.length, 2);
-  assert.match(chips[0].textContent, /main/); assert.equal(chips[0].querySelector(".sx-chip-count").textContent, "+2");
-  assert.match(chips[0].title, /On branch main · 2 uncommitted paths/);
-  await chips[0].click();
+  const branch = a.one("main", "#sessions-branch");
+  assert.equal(branch.parentNode.id, "sessions-folder", "the branch is the run menu's Folder");
+  assert.match(branch.textContent, /main/); assert.equal(branch.querySelector(".sx-chip-count").textContent, "+2");
+  assert.match(branch.title, /On branch main · 2 uncommitted paths/);
+  await branch.click();
   assert.deepEqual(clean(a.api.of("shellReveal")), [["shellReveal", "/work/snake"]], "the branch opens the folder");
-  assert.equal(chips[1].getAttribute("role"), "switch"); assert.equal(chips[1].getAttribute("aria-checked"), "false");
-  await chips[1].click(); await a.settle(4);
+  const chips = a.all("main", "#sessions-chips button");
+  assert.equal(chips.length, 1, "the row keeps the Worktree switch, as the prototype's Worktree chip");
+  assert.equal(chips[0].getAttribute("role"), "switch"); assert.equal(chips[0].getAttribute("aria-checked"), "false");
+  await chips[0].click(); await a.settle(4);
   assert.deepEqual(clean(a.api.of("workWorktrees")), [["workWorktrees", true]]);
   assert.match(a.calls.toasts.at(-1).message, /Each run now gets its own worktree/);
   const cli = a.one("main", "#sessions-worker-cli"), tier = a.one("main", "#sessions-worker-tier");
@@ -656,6 +680,59 @@ test("the chips: the folder's branch and what is uncommitted, the Worktree switc
   await plain.settle(4);
   assert.equal(plain.all("main", "#sessions-chips button").length, 0);
   assert.equal(plain.one("main", "#sessions-chips").hidden, true);
+  assert.equal(plain.one("main", "#sessions-run-folder").hidden, true, "and the run menu has no Folder row");
+});
+
+test("one run menu: the button says the permission mode and the worker, and opens autonomy.js's control, the worker and its tier, and the folder", async () => {
+  const a = await open("t1", { tasks: [task("t1")], api: bridge({ routing: { ok: true, executorCli: "opencode", executorTier: "auto" } }), focus: true });
+  await a.settle(4);
+  const run = a.one("main", "#sessions-run"), menu = a.one("main", "#sessions-run-menu");
+  assert.equal(run.textContent, "Auto · OpenCode", "the prototype's Auto · OpenCode");
+  assert.equal(run.getAttribute("aria-label"), "How the next run goes: Auto · OpenCode");
+  assert.deepEqual([run.getAttribute("aria-haspopup"), run.getAttribute("aria-expanded"), run.getAttribute("aria-controls")], ["dialog", "false", "sessions-run-menu"]);
+  assert.equal(menu.hidden, true);
+  // What it holds is each control's own home: no second copy of any of them is on the row.
+  for (const id of ["sessions-autonomy", "sessions-worker-cli", "sessions-worker-tier", "sessions-branch"]) assert.ok(menu.querySelector(`#${id}`), `${id} is in the menu`);
+  assert.equal(a.all("main", "#sessions-tools #sessions-autonomy").length, 1, "the permission control is mounted once");
+  assert.deepEqual(menu.querySelectorAll(".sx-runrow-head b").map((node) => node.textContent), ["Permissions", "Coding worker", "Folder"]);
+  await run.click();
+  assert.equal(menu.hidden, false); assert.equal(run.getAttribute("aria-expanded"), "true");
+  await menu.trigger("keydown", { key: "Escape" });
+  assert.equal(menu.hidden, true, "Escape closes it"); assert.equal(a.document.activeElement, run, "and the focus is back on its button");
+  await run.click();
+  await a.document.body.trigger("pointerdown", { target: a.document.body });
+  assert.equal(menu.hidden, true, "a press elsewhere closes it");
+  await run.click();
+  await menu.trigger("pointerdown", { target: menu });
+  assert.equal(menu.hidden, false, "a press inside does not");
+  // The words follow the tier and the mode.
+  a.api.state.routing = { ok: true, executorCli: "claude", executorTier: "fast" };
+  a.B.chips.loadRouting(true); await a.settle(4);
+  a.env.emit("mefi:workspace-state"); await a.settle(3);
+  assert.equal(a.one("main", "#sessions-run").textContent, "Auto · Claude Code · Fast");
+  // Opening another session puts it away.
+  a.data.tasks.push(task("t2")); a.S.select("t2", { route: false }); await a.settle(4);
+  assert.equal(a.one("main", "#sessions-run-menu").hidden, true);
+});
+
+test("the row is the prototype's: Note | Ask | Change, Attach, the run menu, the Worktree switch and Send, with what the words will do on a line under the box", async () => {
+  const a = await open("t1", { tasks: [task("t1")] });
+  await a.settle(4);
+  const tools = a.one("main", "#sessions-tools");
+  const order = tools.children.map((node) => node.id || node.className);
+  assert.deepEqual(order, ["sx-modes", "composer-attach", "sx-runwrap", "sessions-chips", "sx-chip-btn quiet sx-more", "sessions-send"], "in that order");
+  const form = a.one("main", "#sessions-compose");
+  assert.deepEqual(form.children.map((node) => node.id || node.className), ["sessions-input", "sessions-tools", "sessions-hint"], "the words, the row, the line under it");
+  assert.equal(a.one("main", ".sx-compose-top"), null, "no row of its own for the purpose any more");
+  // Attach is there for every purpose; pictures added to a Note wait for an Ask or a Change, and composer-pictures says so.
+  const pictures = a.window.MefiComposerPictures.box;
+  await a.one("main", "#sessions-intent-note").click();
+  assert.equal(pictures.options.mode(), "words", "a Note is words only");
+  await a.one("main", "#sessions-intent-ask").click();
+  assert.equal(pictures.options.mode(), "chat");
+  const css = (await import("node:fs")).readFileSync(new URL("../renderer/sessions.css", import.meta.url), "utf8");
+  assert.doesNotMatch(css, /\[data-intent="note"\] \.composer-attach \{ display: none/, "the stylesheet no longer hides Attach for a Note");
+  assert.match(css, /\.sx-compose \{[^}]*width: calc\(100% - 2 \* var\(--x-gut\)\)/, "the box spans the thread's column");
 });
 
 test("More folds the controls past Attach, the permission chip and Send behind one button for a short or narrow box", async () => {

@@ -186,7 +186,7 @@
     if (!task) return false;
     const changed = S.open !== taskId;
     S.open = taskId;
-    if (changed) { S.openedAt = Date.now(); S.itabChosen.delete(taskId); S.menu = null; S.renaming = null; S.focus = null; S.painted.delete("thread"); dropPainted("inspector"); }
+    if (changed) { S.openedAt = Date.now(); S.itabChosen.delete(taskId); S.menu = null; S.renaming = null; S.focus = null; S.painted.delete("thread"); dropPainted("inspector"); closeRunMenu(false); }
     if (tab) pickTab(taskId, tab);
     remember({ open: taskId, itab: Object.fromEntries([...S.itab].slice(-40)) });
     try { window.MefiNav?.selectTask?.({ taskId, projectId: S.projectId, title: window.MefiTasks?.shortTitle?.(task) || task.title }); } catch { /* the selection is shared, not required */ }
@@ -785,6 +785,7 @@
   }
   function onPointerDown(event) {
     if (S.projMenu && !event.target?.closest?.(".sx-projmenu, #sessions-project")) closeProjectMenu(false);
+    if (S.compose?.runMenu && !S.compose.runMenu.hidden && !event.target?.closest?.(".sx-runwrap")) closeRunMenu(false);
     if (!S.menu) return;
     if (event.target?.closest?.(".sx-menu, .sx-row-menu")) return;
     closeMenu(false);
@@ -1019,7 +1020,7 @@
     const branch = S.wt.rows.get(task.id) ?? null;
     const counts = reviewCounts(task.id);
     const minute = Math.floor(Date.now() / 60000);
-    const signature = [counts, task, reading.tone, reading.label, reading.summary, run, record?.attempts, record?.loading, record?.error, questions, folded.map((q) => q.id), decided, items.map((item) => [item.kind, item.at, item.text, item.ask?.reply, item.ask?.pending, item.ask?.error]), pictures, evidence?.shots?.map((shot) => [shot.phase, shot.dataUrl.length]), evidence?.loading ?? null, B.busy(), S.sending, B.pins().has(task.id), branch?.branch ?? null, [...S.dockOpen], [...S.dockFold], S.short, minute, data.preview?.phase ?? null, window.MefiAutonomy?.state?.()?.level ?? null];
+    const signature = [counts, task, reading.tone, reading.label, reading.summary, run, record?.attempts, record?.loading, record?.error, questions, folded.map((q) => q.id), decided, items.map((item) => [item.kind, item.at, item.text, item.ask?.reply, item.ask?.pending, item.ask?.error]), pictures, evidence?.shots?.map((shot) => [shot.phase, shot.dataUrl.length]), evidence?.loading ?? null, B.busy(), S.sending, B.pins().has(task.id), branch?.branch ?? null, B.chips.state.where?.branch ?? null, costWords(task)?.text ?? null, [...S.dockOpen], [...S.dockFold], S.short, minute, data.preview?.phase ?? null, window.MefiAutonomy?.state?.()?.level ?? null];
     if (changed("thread", signature)) {
       const stick = panel.scroll.scrollTop + panel.scroll.clientHeight >= panel.scroll.scrollHeight - 40 || S.stuckFor !== task.id;
       S.stuckFor = task.id;
@@ -1093,6 +1094,27 @@
     if (pressed !== null) node.setAttribute("aria-pressed", String(pressed));
     return node;
   }
+  // How many of its checks a task has passed: the last check run's results when there was one, else its "done when" lines (all of them
+  // once it is verified or you confirmed it, none before).
+  function checksCount(task) {
+    const results = Array.isArray(task.verificationRun?.results) ? task.verificationRun.results : [];
+    if (results.length) return { passed: results.filter((result) => result.ok === true).length, total: results.length, results: true };
+    const lines = builder().acceptanceOf(task).map((line) => String(line).trim()).filter(Boolean);
+    if (!lines.length) return null;
+    const met = ["verified", "manual"].includes(task.verification?.state);
+    return { passed: met ? lines.length : 0, total: lines.length, results: false };
+  }
+  // What the task cost, when that is known: the usage the Agent tab already read (tasks.js's words), never a read of its own. A
+  // builder that reports no cost (Claude Code, Codex) is said to be timed only.
+  function costWords(task) {
+    const report = S.metrics.get(task.id)?.report;
+    const usage = window.MefiTasks?.usage;
+    const cost = report?.task?.cost?.state ? report.task.cost : report?.attempt?.cost;
+    if (!cost || !usage) return null;
+    if (cost.state === "reported") return { text: usage.usageCost(cost), title: "What its runs cost, from the usage ledger" };
+    if (cost.state === "not-reported") return { text: "Time only", title: `${report?.attempt?.route?.label || "This builder"} does not report tokens or cost to Studio. Time is measured here.` };
+    return null;
+  }
   function headNodes(task, reading, run, data, branch) {
     const B = builder();
     const top = el("div", "sx-head-top");
@@ -1105,13 +1127,19 @@
     const drop = B.dropSpec(task, run, data);
     if (drop) actions.append(specButton({ ...drop, label: "Drop" }, task));
     top.append(title, actions);
+    // The prototype's chips: where it stands, who is on it, the branch it works on, its checks and what it cost (when that is known),
+    // then when it began and how urgent it is.
     const chips = el("div", "sx-chips");
     chips.append(chip(reading.label, { tone: reading.tone, dot: true }));
     const worker = run?.route || task.lastAttempt?.route || task.lastAttempt?.via;
-    if (worker) chips.append(chip(String(worker)));
+    if (worker) chips.append(chip(String(worker), { title: "Who is on it" }));
+    const where = B.chips.state.where;
     if (branch) chips.append(chip(String(branch.branch || "own worktree"), { icon: "g-worktree", title: "Runs in its own worktree" }));
-    const results = Array.isArray(task.verificationRun?.results) ? task.verificationRun.results : [];
-    if (results.length) chips.append(chip(`Checks ${results.filter((result) => result.ok === true).length} of ${results.length}`, { title: "Its completion checks" }));
+    else if (where?.repo && where.branch && (where.projectId == null || where.projectId === S.projectId)) chips.append(chip(String(where.branch), { icon: "g-route", title: `Works on ${where.branch}, in the project's own folder` }));
+    const checks = checksCount(task);
+    if (checks) chips.append(chip(`Checks ${checks.passed} of ${checks.total}`, { title: checks.results ? "Its completion checks: the last run's results" : "What it is done when; nothing has checked it yet" }));
+    const cost = costWords(task);
+    if (cost) chips.append(chip(cost.text, { title: cost.title }));
     const since = B.stampOf(task.createdAt);
     if (since) chips.append(chip(`Started ${B.ago(since)}`));
     if (task.priority && task.priority !== "normal") chips.append(chip(`${task.priority} priority`));
@@ -1417,15 +1445,15 @@
     const B = builder();
     const form = el("form", "sx-compose"); form.id = "sessions-compose"; form.hidden = true; form.dataset.intent = "note"; form.noValidate = true;
     form.setAttribute("aria-label", "Write to this session");
-    const top = el("div", "sx-compose-top");
+    // As the prototype has it: the words first, then one row of controls (the purpose, Attach, the run menu, the Worktree
+    // switch and Send), and a line under the box that says what the words will do.
     const modes = el("div", "sx-modes"); modes.setAttribute("role", "group"); modes.setAttribute("aria-label", "What to do with your words");
     for (const id of INTENT_IDS) {
       const choice = button(B.INTENTS[id].label, "", () => { const task = taskById(S.open); if (task) setIntent(task, id, true); }, { title: B.INTENTS[id].hint });
       choice.id = `sessions-intent-${id}`; choice.dataset.intent = id; choice.setAttribute("aria-pressed", "false");
       modes.append(choice);
     }
-    const hint = el("span", "sx-hint"); hint.id = "sessions-hint";
-    top.append(modes, hint);
+    const hint = el("p", "sx-hint"); hint.id = "sessions-hint";
     const input = el("textarea"); input.id = "sessions-input"; input.rows = 2; input.setAttribute("aria-label", "Your words about this session"); input.dataset.typeHere = "";
     input.addEventListener("input", () => { if (input.dataset.key) S.drafts.set(input.dataset.key, input.value); });
     input.addEventListener("keydown", (event) => {
@@ -1434,36 +1462,92 @@
       if (typeof form.requestSubmit === "function") form.requestSubmit(); else void submit();
     });
     const tools = el("div", "sx-tools"); tools.id = "sessions-tools";
+    // The run menu: one button that says how the next run goes ("Auto · OpenCode"), and opens what decides it: the permission mode
+    // (autonomy.js's own control), the coding worker and its tier (builder.js's saves) and the folder it works in.
+    const runWrap = el("span", "sx-runwrap");
+    const runButton = button("", "sx-chip-btn sx-run", () => toggleRunMenu(), { title: "Permissions, the coding worker and the folder the next run works in" });
+    runButton.id = "sessions-run"; runButton.setAttribute("aria-haspopup", "dialog"); runButton.setAttribute("aria-expanded", "false"); runButton.setAttribute("aria-controls", "sessions-run-menu");
+    const runMenu = el("div", "sx-runmenu"); runMenu.id = "sessions-run-menu"; runMenu.setAttribute("role", "dialog"); runMenu.setAttribute("aria-label", "How the next run goes"); runMenu.hidden = true;
+    const section = (title, note) => { const box = el("section", "sx-runrow"); const head = el("div", "sx-runrow-head"); head.append(el("b", "", title)); if (note) head.append(note); box.append(head); runMenu.append(box); return box; };
     const autonomy = el("span", "sx-autonomy"); autonomy.id = "sessions-autonomy";
-    const chips = el("span", "sx-chipset"); chips.id = "sessions-chips"; chips.setAttribute("role", "group"); chips.setAttribute("aria-label", "Where this runs");
+    section("Permissions", el("small", "sx-runnote", "How much Mefi decides for you.")).append(autonomy);
     const worker = el("span", "sx-worker");
     const cli = el("select", "sx-select"); cli.id = "sessions-worker-cli"; cli.setAttribute("aria-label", "Coding worker"); cli.title = "The coding worker that builds your tasks"; cli.hidden = true;
     const tier = el("select", "sx-select"); tier.id = "sessions-worker-tier"; tier.setAttribute("aria-label", "Worker tier"); tier.title = "Which of the worker's models runs a task"; tier.hidden = true;
     cli.addEventListener("change", () => void B.chips.saveRouting({ executorCli: cli.value }, `${B.chips.CLI_NAMES[cli.value] || cli.value} builds your tasks now.`));
     tier.addEventListener("change", () => void B.chips.saveRouting({ executorTier: tier.value }, `${(B.chips.TIERS.find(([id]) => id === tier.value) || ["", tier.value])[1]} saved.`));
     worker.append(cli, tier);
-    // In a short or narrow window the controls past Attach, the permission chip and Send sit behind this button.
-    const more = button("", "sx-chip-btn quiet sx-more", () => { const open = form.dataset.open !== "true"; form.dataset.open = String(open); more.setAttribute("aria-expanded", String(open)); }, { icon: "g-more", title: "More: what to do with your words, and where this runs", aria: "More" });
+    section("Coding worker", el("small", "sx-runnote", "Builds this project's tasks. Agents › Setup has the rest.")).append(worker);
+    const folder = el("span", "sx-folder"); folder.id = "sessions-folder";
+    const folderRow = section("Folder", el("small", "sx-runnote", "Where the next run works."));
+    folderRow.append(folder); folderRow.id = "sessions-run-folder";
+    // Escape closes it from its button or from anything inside it (autonomy.js's own Escape only folds its chip, not shown here).
+    runWrap.addEventListener("keydown", (event) => { if (event.key === "Escape" && !runMenu.hidden) { event.preventDefault(); event.stopPropagation(); closeRunMenu(true); } });
+    runWrap.append(runButton, runMenu);
+    // The Worktree switch keeps its own chip on the row, as the prototype's "Worktree off" does.
+    const chips = el("span", "sx-chipset"); chips.id = "sessions-chips"; chips.setAttribute("role", "group"); chips.setAttribute("aria-label", "Where this runs");
+    // In a short or narrow window the run menu and the Worktree switch (and in a short one the purpose) sit behind this button.
+    const more = button("", "sx-chip-btn quiet sx-more", () => { const open = form.dataset.open !== "true"; form.dataset.open = String(open); more.setAttribute("aria-expanded", String(open)); }, { icon: "g-more", title: "More: what to do with your words, and how the next run goes", aria: "More" });
     more.setAttribute("aria-expanded", "false"); form.dataset.open = "false";
     const send = button("Save note", "primary sx-send", null, { type: "submit" }); send.id = "sessions-send";
-    tools.append(autonomy, more, chips, worker, send);
-    form.append(top, input, tools);
+    tools.append(modes, runWrap, chips, more, send);
+    form.append(input, tools, hint);
     form.addEventListener("submit", (event) => { event.preventDefault(); void submit(); });
     window.MefiAutonomy?.mount?.(autonomy, { id: "sessions-autonomy-control" });
-    S.compose = { form, top, modes, hint, input, tools, autonomy, chips, cli, tier, send };
+    S.compose = { form, modes, hint, input, tools, autonomy, chips, cli, tier, send, runWrap, runButton, runMenu, folder, folderRow, more };
     return form;
   }
+  // ---- the run menu ------------------------------------------------------------------------------------------------------------
+  function toggleRunMenu() { if (S.compose?.runMenu?.hidden === false) closeRunMenu(true); else openRunMenu(); }
+  function openRunMenu() {
+    const box = S.compose;
+    if (!box) return;
+    box.runMenu.hidden = false;
+    box.runButton.setAttribute("aria-expanded", "true");
+    paintRunButton();
+    // It opens upward inside the thread, never past the thread's own top (a short window has little room above the box).
+    const above = box.runButton.getBoundingClientRect?.(), panel = S.panels.main?.root?.getBoundingClientRect?.();
+    if (above && panel && box.runMenu.style) box.runMenu.style.maxHeight = `${Math.max(80, Math.round(above.top - panel.top - 16))}px`;
+    // Focus goes to the first control inside (the permission mode), so the keys carry on from the button.
+    (box.runMenu.querySelector(".autonomy-mode[aria-checked=true]") || box.runMenu.querySelector(".autonomy-mode, .sx-runrow select, .sx-runrow .sx-chip-btn"))?.focus?.({ preventScroll: true });
+  }
+  function closeRunMenu(restore) {
+    const box = S.compose;
+    if (!box || box.runMenu.hidden) return;
+    box.runMenu.hidden = true;
+    box.runButton.setAttribute("aria-expanded", "false");
+    if (restore) box.runButton.focus?.({ preventScroll: true });
+  }
+  // The button's words: the permission mode and the coding worker, and its tier when it is not Auto ("Auto · OpenCode · Fast").
+  function paintRunButton() {
+    const box = S.compose;
+    if (!box) return;
+    const B = builder();
+    const routing = B.chips.state.routing;
+    const mode = window.MefiAutonomy?.label?.() || "Permissions";
+    const current = String(routing?.executorCli || "");
+    const worker = current ? B.chips.CLI_NAMES[current] || current : "";
+    const tier = routing?.executorTier && routing.executorTier !== "auto" ? (B.chips.TIERS.find(([id]) => id === routing.executorTier)?.[1] || "").replace(/ tier$/, "") : "";
+    const words = [mode, worker, tier].filter(Boolean).join(" · ");
+    if (box.runButton.dataset.words !== words) {
+      box.runButton.dataset.words = words;
+      box.runButton.replaceChildren(glyph("g-sliders"), el("span", "sx-run-words", words), glyph("g-chev", "sx-run-car"));
+      box.runButton.setAttribute("aria-label", `How the next run goes: ${words}`);
+    }
+  }
   // The two helpers every message box gets, bound the first time the box is shown (the picture button asks the host once whether
-  // pictures are on at all, and the picker reads the skills): a Note has no way to carry a picture, so its row is not drawn.
+  // pictures are on at all, and the picker reads the skills). Attach is on the row for every purpose, as in the prototype; a Note is
+  // words only, so pictures added while the box is a Note wait for an Ask or a Change, and the line under the box says so.
   function bindHelpers(input) {
     if (S.helpers) return;
     S.helpers = true;
     const scope = () => S.projectId ?? "";
     const blocked = () => S.sending || Boolean(builder().busy());
-    window.MefiComposerPictures?.bind?.(input, { scope, blocked, mode: () => (openIntent() === "change" ? "task" : "chat") });
-    // Its row (the button, the thumbnails, the note) sits with the other controls instead of on a line of its own.
+    window.MefiComposerPictures?.bind?.(input, { scope, blocked, mode: () => (openIntent() === "change" ? "task" : openIntent() === "note" ? "words" : "chat") });
+    // Its row (the button, the thumbnails, the note) sits with the other controls, after the purpose, instead of on a line of its own.
     const row = input.parentNode?.querySelector?.(".composer-attach");
-    if (row && S.compose?.tools) S.compose.tools.prepend(row);
+    if (row && S.compose?.modes?.parentNode === S.compose?.tools && typeof S.compose.modes.after === "function") S.compose.modes.after(row);
+    else if (row && S.compose?.tools) S.compose.tools.prepend(row);
     const picker = window.MefiComposerPicker?.bind?.(input, {
       scope, blocked, mode: () => (openIntent() === "ask" ? "chat" : "task"),
       tasks: () => tasksOf(snap()).map((task) => ({ id: task.id, title: task.title || "", status: task.status || "" })),
@@ -1535,25 +1619,29 @@
     schedule();
     return sent;
   }
-  // The chips: the folder's branch and how much is uncommitted, the Worktree switch, the permission mode (autonomy.js's own chip)
-  // and the coding worker with its tier. Every read and save is builder.js's (work:where, getAiRouting, setAiRouting, work:worktrees).
+  // The run's controls: the folder's branch and how much is uncommitted (in the run menu: it opens the folder), the Worktree switch (on
+  // the row), the permission mode (autonomy.js's own control) and the coding worker with its tier (both in the run menu). Every read
+  // and save is builder.js's (work:where, getAiRouting, setAiRouting, work:worktrees).
   function paintTools(data) {
     const box = S.compose;
     if (!box) return;
     const B = builder();
     B.chips.loadWhere(data);
     B.chips.loadRouting();
+    paintRunButton();
     const cs = B.chips.state;
     const where = cs.where, routing = cs.routing;
     const signature = [data.project?.path ?? null, where, cs.saving, routing ? [routing.executorCli, routing.executorModel, routing.executorModels, routing.executorTier, routing.executorTierModels, routing.executorTierDefaults] : null, Array.isArray(cs.clis) ? cs.clis.map((row) => [row?.id, row?.installed]) : null];
     if (!changed("tools", signature)) return;
     const nodes = [];
+    box.folder.replaceChildren();
     if (where?.repo) {
       const named = where.branch || (where.head ? `detached ${where.head}` : "no commits yet");
       const tip = `${where.branch ? `On branch ${where.branch}` : "No branch checked out"}${where.dirty ? ` · ${where.dirty} uncommitted path${where.dirty === 1 ? "" : "s"}` : " · nothing uncommitted"}. Opens the folder.`;
       const branch = button(named, "sx-chip-btn quiet", () => api()?.shellReveal?.(data.project?.path), { icon: "g-route", title: tip });
+      branch.id = "sessions-branch";
       if (where.dirty) branch.append(el("small", "sx-chip-count", `+${where.dirty}`));
-      nodes.push(branch);
+      box.folder.append(branch);
       const worktrees = where.worktrees || {};
       const on = "On: each run works in its own git worktree from HEAD and merges back when it settles. Uncommitted work in your folder stays out of a run until it lands.";
       const off = "Off: runs work in your folder. On gives each run its own git worktree from HEAD, merged back when it settles.";
@@ -1565,6 +1653,7 @@
     }
     box.chips.replaceChildren(...nodes);
     box.chips.hidden = !nodes.length;
+    box.folderRow.hidden = !box.folder.childElementCount && !box.folder.children?.length;
     if (routing) {
       const current = String(routing.executorCli || "opencode");
       const installed = Array.isArray(cs.clis) ? cs.clis.filter((row) => row?.installed).map((row) => String(row.id)) : [];

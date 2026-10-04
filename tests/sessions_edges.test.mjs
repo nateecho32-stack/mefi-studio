@@ -296,16 +296,16 @@ test("the chips tell a folder that is not on a branch: detached, no commits yet,
   api.cliStatus = async () => [];
   const a = await thread("t1", { tasks: [task("t1")], api });
   await a.settle(4);
-  const chips = a.all("main", "#sessions-chips button");
-  assert.equal(chips[0].textContent, "detached abc1234");
-  assert.match(chips[0].title, /No branch checked out · nothing uncommitted/);
-  assert.equal(chips[1].disabled, true, "the environment decides");
-  assert.match(chips[1].title, /MEFI_STUDIO_WORKTREE_RUNS=1/); assert.equal(chips[1].getAttribute("aria-checked"), "true");
+  const branch = a.one("main", "#sessions-branch"), toggle = a.all("main", "#sessions-chips button")[0];
+  assert.equal(branch.textContent, "detached abc1234", "the run menu's Folder names the commit");
+  assert.match(branch.title, /No branch checked out · nothing uncommitted/);
+  assert.equal(toggle.disabled, true, "the environment decides");
+  assert.match(toggle.title, /MEFI_STUDIO_WORKTREE_RUNS=1/); assert.equal(toggle.getAttribute("aria-checked"), "true");
   assert.deepEqual(a.all("main", "#sessions-worker-cli option").map((option) => option.value), ["opencode", "claude", "codex", "grok", "antigravity"], "without a list of what is installed, the known workers");
   const fresh = await thread("t1", { tasks: [task("t1")], api: bridge({ where: { ok: true, projectId: "p1", repo: true, branch: "", head: "", dirty: 1, worktrees: { on: false, forced: false } } }) });
   await fresh.settle(4);
-  assert.equal(fresh.all("main", "#sessions-chips button")[0].textContent, "no commits yet+1");
-  assert.match(fresh.all("main", "#sessions-chips button")[0].title, /1 uncommitted path\./);
+  assert.equal(fresh.one("main", "#sessions-branch").textContent, "no commits yet+1");
+  assert.match(fresh.one("main", "#sessions-branch").title, /1 uncommitted path\./);
 });
 
 test("a brief that names a picture by its id alone shows it, and a picture the host cannot read says so", async () => {

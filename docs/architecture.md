@@ -2457,10 +2457,19 @@ never disagree. Nothing is drawn unless the layout is on and a shell is there.
   words, and **Decide later**, which only puts the card away (the task stays in
   Needs you). There is no countdown, because this app's host decides at once
   where the permission mode allows it and keeps the record, and waits otherwise;
-  a countdown would count to nothing. The box takes a Note, an Ask or a Change
-  through `MefiBuilder.sendWords`, with Attach picture and the `@ # /` picker
-  bound to it (a Note cannot carry a picture), and the chips for the branch, the
-  Worktree switch, the permission mode and the coding worker and its tier.
+  a countdown would count to nothing. The head's chips are the prototype's:
+  where it stands, who is on it, the branch it works on (its worktree's, else
+  the project folder's), its checks (the last check run, else its "done when"
+  lines) and, once the Agent tab has read the usage, what it cost (or "Time
+  only" for a builder that reports none), then when it began. The box spans the
+  thread's column and takes a Note, an Ask or a Change through
+  `MefiBuilder.sendWords`, with the `@ # /` picker bound to it. Its one row is
+  Note | Ask | Change, **Attach** (for every purpose: pictures added to a Note
+  wait for an Ask or a Change, and composer-pictures.js says so), the **run
+  menu** ("Auto · OpenCode": one button that opens autonomy.js's own permission
+  control, the coding worker and its tier, and the folder's branch, which opens
+  the folder), the Worktree switch and Send; what the words will do is a line
+  under the box.
 - **The inspector.** Plan (where the task stands, the brief read back as its
   outline, what it is done when, the earlier versions of the brief with Restore:
   `tasks:history`, `tasks:restore`), Changes and Checks (review.js's own panels,

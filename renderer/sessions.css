@@ -220,7 +220,7 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
 .sx-cmp-range { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: ew-resize; }
 
 /* a question that waits on you, docked above the box */
-.sx-dock { flex: none; display: grid; gap: 8px; width: min(860px, 100%); max-height: 55%; margin: 0 auto; padding: 0 var(--x-gut) 8px; overflow-y: auto; overscroll-behavior: contain; }
+.sx-dock { flex: none; display: grid; gap: 8px; width: 100%; max-height: 55%; margin: 0 auto; padding: 0 var(--x-gut) 8px; overflow-y: auto; overscroll-behavior: contain; }
 .sx-ask { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--warn) 55%, transparent); border-radius: var(--r-lg); background: color-mix(in srgb, var(--warn) 6%, var(--surface-raised)); }
 .sx-ask-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .sx-ask-k { color: var(--warn); font: 650 var(--x125)/1.2 var(--font-ui); }
@@ -235,21 +235,45 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
 .sx-q1 { flex: 1 1 auto; min-width: 0; overflow: hidden; font-size: var(--x13); text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---- the box ---------------------------------------------------------------------------------------------------------------------------- */
-.sx-compose { display: grid; flex: none; gap: 6px; width: min(860px, calc(100% - 2 * var(--x-gut))); margin: 0 auto 12px; padding: 8px 10px 10px; border: 1px solid var(--hairline-strong); border-radius: var(--r-xl); background: var(--surface-raised); }
-.sx-compose-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; }
+/* As the prototype draws it: the box spans the thread's column, the words first, one row of controls under them (the purpose, Attach,
+   the run menu, the Worktree switch, Send), and a line under the row that says what the words will do. */
+.sx-compose { position: relative; display: grid; flex: none; gap: 6px; width: calc(100% - 2 * var(--x-gut)); margin: 0 auto 12px; padding: 8px 12px 8px; border: 1px solid var(--hairline-strong); border-radius: var(--r-xl); background: var(--surface-raised); }
+.sx-compose:focus-within { border-color: color-mix(in srgb, var(--gold) 55%, var(--hairline-strong)); }
 .sx-modes { display: inline-flex; padding: 2px; border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--tint-gold-1); }
 .sx-modes button { min-height: 26px; padding: 0 10px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--muted); font-size: var(--x125); }
 .sx-modes button.on { background: var(--tint-gold-3); color: var(--ivory); }
-.sx-hint { flex: 1 1 0; min-width: 0; overflow: hidden; color: var(--dim); font-size: var(--x12); text-align: right; text-overflow: ellipsis; white-space: nowrap; }
-#sessions-input { display: block; width: 100%; min-height: 64px; max-height: 240px; padding: 6px 4px; border: 0; outline: 0; background: transparent; color: var(--ivory); font: 400 var(--x14)/1.5 var(--font-ui); resize: vertical; }
+.sx-hint { min-width: 0; margin: 0; padding: 0 4px; overflow: hidden; color: var(--dim); font-size: var(--x12); text-overflow: ellipsis; white-space: nowrap; }
+#sessions-input { display: block; width: 100%; min-height: 56px; max-height: 240px; padding: 6px 4px; border: 0; outline: 0; background: transparent; color: var(--ivory); font: 400 var(--x14)/1.5 var(--font-ui); resize: vertical; }
 #sessions-input::placeholder { color: var(--dim); }
 .sx-compose .composer-attach { display: contents; }
-.sx-compose[data-intent="note"] .composer-attach { display: none; }
 .sx-compose .composer-thumbs, .sx-compose .composer-attach-note { order: -1; flex: 1 1 100%; padding: 0 2px; }
+.sx-compose .composer-attach-button { min-height: 30px; padding: 0 10px; border-color: var(--hairline-strong); border-radius: var(--r-md); background: transparent; color: var(--muted); font-size: var(--x125); }
 .sx-compose .composer-mentions { padding: 0 4px 2px; }
 .sx-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
 .sx-more { display: none; width: 30px; min-width: 30px; padding: 0; }
-.sx-autonomy { position: relative; display: inline-flex; }
+.sx-autonomy { position: relative; display: flex; min-width: 0; }
+/* the run menu: one button, and a panel above the box with the permission mode, the coding worker and the folder */
+.sx-runwrap { position: relative; display: inline-flex; min-width: 0; }
+.sx-run { gap: 6px; max-width: 280px; border-color: var(--hairline-strong); background: transparent; color: var(--muted); }
+.sx-run:hover, .sx-run[aria-expanded="true"] { color: var(--ivory); background: var(--tint-gold-1); }
+.sx-run-words { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sx-run .sx-run-car { width: 12px; height: 12px; }
+.sx-runmenu { position: absolute; z-index: 6; left: 0; bottom: calc(100% + 8px); display: grid; width: min(440px, calc(100vw - 32px)); max-height: min(70vh, 560px); padding: 6px 14px 10px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--hairline-strong); border-radius: var(--r-lg); background: var(--panel-solid); box-shadow: var(--shadow-3); }
+.sx-runrow { display: grid; gap: 6px; padding: 8px 0; }
+.sx-runrow + .sx-runrow { border-top: 1px solid var(--hairline); }
+.sx-runrow-head { display: grid; gap: 1px; }
+.sx-runrow-head b { color: var(--ivory); font: 650 var(--x13)/1.3 var(--font-ui); }
+.sx-runnote { color: var(--muted); font-size: var(--x12); line-height: 1.4; }
+.sx-folder { display: flex; flex-wrap: wrap; gap: 6px; }
+/* autonomy.js's own control, its choices laid out in the panel instead of behind its chip */
+.sx-runmenu .autonomy-chip { display: none; }
+.sx-runmenu .autonomy-control { width: 100%; }
+.sx-runmenu .autonomy-control .autonomy-popover, .sx-runmenu .autonomy-control .autonomy-popover[hidden] { position: static; display: grid !important; gap: 4px; width: auto; padding: 0; border: 0; background: none; box-shadow: none; backdrop-filter: none; opacity: 1; scale: none; translate: none; pointer-events: auto; }
+.sx-runmenu .autonomy-mode { min-height: 0; height: auto; padding: 7px 10px; border: 1px solid transparent; border-radius: var(--r-md); background: transparent; color: var(--ivory); font: 600 var(--x13)/1.3 var(--font-ui); white-space: normal; }
+.sx-runmenu .autonomy-mode[aria-checked="true"] { border-color: color-mix(in srgb, var(--gold) 40%, transparent); background: var(--tint-gold-3); }
+.sx-runmenu .autonomy-mode small { margin-top: 2px; color: var(--muted); font-size: var(--x12); opacity: 1; font-weight: 400; }
+.sx-runmenu .autonomy-popover > .autonomy-button:not(.autonomy-mode) { justify-self: start; min-height: 28px; padding: 0 10px; font-size: var(--x125); }
+.sx-runmenu .autonomy-note:empty { display: none; }
 .sx-chipset, .sx-worker { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
 .sx-chip-btn { min-height: 30px; max-width: 240px; padding: 0 10px; border-radius: var(--r-md); font-size: var(--x125); }
 .sx-chip-btn.quiet { background: transparent; color: var(--muted); }
@@ -277,15 +301,17 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
 .sx-thread[data-short="true"] .sx-tools { display: contents; }
 .sx-thread[data-short="true"] :is(.sx-send, .sx-more) { order: 2; margin: 0 0 3px; }
 .sx-thread[data-short="true"] .sx-more { display: inline-flex; }
-.sx-thread[data-short="true"] .sx-compose-top, .sx-thread[data-short="true"] .composer-mentions { order: 3; flex: 1 1 100%; }
-.sx-thread[data-short="true"] :is(.sx-autonomy, .sx-chipset, .sx-worker, .composer-attach-button) { order: 4; }
-.sx-thread[data-short="true"] .sx-compose[data-open="false"] :is(.sx-compose-top, .sx-autonomy, .sx-chipset, .sx-worker, .composer-attach-button) { display: none; }
+.sx-thread[data-short="true"] .composer-mentions { order: 3; flex: 1 1 100%; }
+.sx-thread[data-short="true"] .sx-modes { order: 3; }
+.sx-thread[data-short="true"] :is(.sx-runwrap, .sx-chipset, .composer-attach-button) { order: 4; }
+.sx-thread[data-short="true"] .sx-hint { display: none; }
+.sx-thread[data-short="true"] .sx-compose[data-open="false"] :is(.sx-modes, .sx-runwrap, .sx-chipset, .composer-attach-button) { display: none; }
 /* a narrow thread (a small window, or one with both columns open) keeps the box to a line of controls too */
 .sx-thread { container: sx-thread / inline-size; }
 @container sx-thread (max-width: 620px) {
   .sx-hint { display: none; }
   .sx-more { display: inline-flex; }
-  .sx-compose[data-open="false"] :is(.sx-chipset, .sx-worker) { display: none; }
+  .sx-compose[data-open="false"] :is(.sx-chipset, .sx-runwrap) { display: none; }
 }
 
 /* ---- the inspector -------------------------------------------------------------------------------------------------------------------- */

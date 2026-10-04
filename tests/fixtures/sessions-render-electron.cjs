@@ -504,7 +504,7 @@ app.whenReady().then(async () => {
   assert.deepEqual([first.send, first.attachShown, first.picker, first.pictures], ["Ask", true, true, true], "the picture button and the @ # / picker are bound to this box");
   await click("#sessions-intent-note");
   const note = await box();
-  assert.deepEqual([note.intent, note.pressed, note.send, note.attachShown], ["note", ["note"], "Save note", false], "a Note has no way to carry a picture, so its button is not drawn");
+  assert.deepEqual([note.intent, note.pressed, note.send, note.attachShown], ["note", ["note"], "Save note", true], "Attach is on the row for every purpose, as in the prototype (a Note's pictures wait for an Ask or a Change)");
   await forget();
   await run("const input = document.getElementById('sessions-input'); input.value = 'Prefer rounded corners'; input.dispatchEvent(new Event('input', { bubbles: true }));");
   await click("#sessions-send");
@@ -756,20 +756,33 @@ app.whenReady().then(async () => {
       }
       // A short window (under 520 CSS px) or a narrow thread (up to 620) folds the box: the words and Send, the rest behind More.
       const boxState = `const form = document.getElementById('sessions-compose'); const shown = (selector) => { const node = form.querySelector(selector); if (!node) return null; const r = node.getBoundingClientRect(); return getComputedStyle(node).display !== 'none' && r.width > 0 && r.height > 0; };
-        return { open: form.dataset.open, hint: shown('.sx-hint'), more: shown('.sx-more'), chips: shown('#sessions-chips'), worker: shown('.sx-worker'), top: shown('.sx-compose-top'), autonomy: shown('#sessions-autonomy'), attach: shown('.composer-attach-button') };`;
+        return { open: form.dataset.open, hint: shown('.sx-hint'), more: shown('.sx-more'), chips: shown('#sessions-chips'), run: shown('#sessions-run'), modes: shown('.sx-modes'), autonomy: shown('#sessions-autonomy'), attach: shown('.composer-attach-button') };`;
       const short = m.inner.h < 520, narrow = m.thread.w <= 620, folds = short || narrow;
       const before = await run(boxState);
       assert.equal(before.more, folds, `${label}: More shows exactly when the box is folded: ${JSON.stringify(before)}`);
-      assert.equal(before.chips, !folds, `${label}: the branch and Worktree chips are folded away with it: ${JSON.stringify(before)}`);
-      assert.equal(before.worker, !folds, `${label}: and the coding worker: ${JSON.stringify(before)}`);
+      assert.equal(before.chips, !folds, `${label}: the Worktree switch is folded away with it: ${JSON.stringify(before)}`);
+      assert.equal(before.run, !folds, `${label}: and the run menu's button: ${JSON.stringify(before)}`);
+      assert.equal(before.autonomy, false, `${label}: the permission mode waits in the run menu: ${JSON.stringify(before)}`);
       assert.equal(before.hint, !folds, `${label}: and the line that says what the words will do: ${JSON.stringify(before)}`);
-      if (short) assert.equal(before.top, false, `${label}: a short window hides the Note | Ask | Change row too: ${JSON.stringify(before)}`);
+      if (short) assert.equal(before.modes, false, `${label}: a short window hides the Note | Ask | Change switch too: ${JSON.stringify(before)}`);
+      if (!folds && id === "task_ask") {
+        await click("#sessions-run");
+        await until("!document.getElementById('sessions-run-menu').hidden", `${label}: the run menu opens`);
+        const r = await run("const m = document.getElementById('sessions-run-menu').getBoundingClientRect(), t = document.getElementById('sessions-thread').getBoundingClientRect(); const shown = (id) => { const n = document.getElementById(id); return Boolean(n) && n.getClientRects().length > 0 && getComputedStyle(n).display !== 'none'; }; return { inside: m.top >= t.top - 1 && m.bottom <= t.bottom + 1 && m.left >= t.left - 1 && m.right <= innerWidth + 1, box: [Math.round(m.left), Math.round(m.top), Math.round(m.right), Math.round(m.bottom)], thread: [Math.round(t.top), Math.round(t.bottom)], modes: document.querySelectorAll('#sessions-run-menu .autonomy-mode').length, cli: shown('sessions-worker-cli'), tier: shown('sessions-worker-tier'), folder: shown('sessions-branch') };");
+        assert.ok(r.inside, `${label}: the run menu stays inside the thread: ${JSON.stringify(r)}`);
+        assert.ok(r.modes >= 1 && r.cli && r.tier && r.folder, `${label}: it holds the permission mode, the worker, its tier and the folder: ${JSON.stringify(r)}`);
+        const inMenu = await run(measure);
+        assert.deepEqual(inMenu.small, [], `${label}: no text under 12 px in the run menu: ${JSON.stringify(inMenu.small)}`);
+        if (width === 1920) await capture("sessions-runmenu-1920.png");
+        await press("Escape");
+        await until("document.getElementById('sessions-run-menu').hidden", `${label}: Escape closes the run menu`);
+      }
       if (folds) {
         await run("const input=document.getElementById('sessions-input');input.value='Keep this draft while session controls are open.';input.dispatchEvent(new Event('input', { bubbles: true }));");
         await click("#sessions-compose .sx-more");
         const opened = await run(boxState);
-        assert.equal(opened.open, "true"); assert.equal(opened.chips, true, `${label}: More brings the chips back: ${JSON.stringify(opened)}`); assert.equal(opened.worker, true);
-        assert.equal(opened.top, true, `${label}: and the row of purposes: ${JSON.stringify(opened)}`);
+        assert.equal(opened.open, "true"); assert.equal(opened.chips, true, `${label}: More brings the chips back: ${JSON.stringify(opened)}`); assert.equal(opened.run, true);
+        assert.equal(opened.modes, true, `${label}: and the purposes: ${JSON.stringify(opened)}`);
         await capture(`sessions-more-${id === "task_ask" ? "ask" : "review"}-${width}${height < 520 ? "-short" : ""}${zoom === 1 ? "" : "-zoom"}.png`);
         const inside = await run("const form = document.getElementById('sessions-compose').getBoundingClientRect(); const send = document.getElementById('sessions-send').getBoundingClientRect(); const bar = document.querySelector('.shell-status')?.getBoundingClientRect(); const free = bar ? bar.top : innerHeight; return { ok: form.bottom <= free + 1 && send.bottom <= free + 1 && form.top >= 0, form: [Math.round(form.top), Math.round(form.bottom)], send: [Math.round(send.top), Math.round(send.bottom)], free, inner: innerHeight };");
         assert.equal(inside.ok, true, `${label}: opened, the whole box is still on screen and clear of the status bar: ${JSON.stringify(inside)}`);
