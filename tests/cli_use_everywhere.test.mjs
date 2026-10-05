@@ -26,13 +26,15 @@ const GAME_RULES = { text: "Never touch the save files under saves/.", agents: t
 function studio() {
   return {
     aiProvider: "zen", aiRoleProviders: { routine: "zen", heavy: "zai" }, aiAutoProviders: ["zen", "zai"], aiAutoFallback: true, executorCli: "opencode",
+    // Per-kind-of-job routes (a newer team field) to another tool.
+    agentKinds: { "coding-explore": { cli: "codex", model: "gpt-6-luna" } },
     agentRules: { text: "Studio-wide rule." },
     zenApiKeyEncrypted: "saved-key-stays",
     agentTeams: {
       version: 1, revision: 4,
       presets: [{ id: "preset_a", name: "Saved preset", configuration: { aiProvider: "zai" } }],
       projects: {
-        project_game: { name: "Game team", configuration: { aiProvider: "openrouter", aiRoleProviders: { routine: "openrouter", heavy: "zen" }, aiAutoProviders: ["openrouter", "zen"], aiAutoFallback: true, executorCli: "codex", agentSeats: { lead: { provider: "zen", model: "gpt-6.1-sol", effort: "medium", fast: false } }, agentRules: GAME_RULES } },
+        project_game: { name: "Game team", configuration: { aiProvider: "openrouter", aiRoleProviders: { routine: "openrouter", heavy: "zen" }, aiAutoProviders: ["openrouter", "zen"], aiAutoFallback: true, executorCli: "codex", agentSeats: { lead: { provider: "zen", model: "gpt-6.1-sol", effort: "medium", fast: false } }, agentKinds: { "coding-explore": { cli: "grok", model: "grok-5" } }, agentRules: GAME_RULES } },
         project_site: { name: "Project team", configuration: { aiProvider: "zai", executorCli: "grok", aiModelsByProvider: { claude: { routine: "claude-haiku-5", heavy: "claude-opus-5" } } } },
         project_none: { name: "Stray", configuration: { aiProvider: "zai" } },
       },
@@ -46,6 +48,7 @@ function assertOneProvider(configuration, provider, label) {
   assert.deepEqual(plain(configuration.aiAutoProviders), [provider], label);
   assert.equal(configuration.aiAutoFallback, false, `${label}: nothing else answers`);
   assert.equal(configuration.executorCli, provider, label);
+  assert.equal("agentKinds" in configuration, false, `${label}: no kind of job is routed to another tool`);
   assert.deepEqual(Object.keys(configuration.agentSeats).sort(), [...SEATS].sort(), label);
   assert.ok(SEATS.every((seat) => configuration.agentSeats[seat].provider === provider), `${label}: every seat`);
   assert.equal(profiles.validate(profiles.extract(plain(configuration))), null, `${label}: still a valid team`);

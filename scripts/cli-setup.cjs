@@ -29,6 +29,8 @@ function singleProvider(settings, provider) {
     provider, model: settings.aiModelsByProvider?.[provider]?.[seat === "companion" || seat === "scout" ? "routine" : "heavy"] || "", effort: "", fast: false,
   }]));
   settings.agentSubtasks = { cli: "auto", model: "" };
+  // Per-kind-of-job routes to other tools would break "only this provider".
+  delete settings.agentKinds;
   return settings;
 }
 
