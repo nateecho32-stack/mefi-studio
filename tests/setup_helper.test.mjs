@@ -56,9 +56,11 @@ function bridge({ team = {}, inherited = true, stale = 0 } = {}) {
   return { api, calls };
 }
 
-function load({ store = {}, search = "", options = {} } = {}) {
+function load({ store = {}, search = "", options = {}, layout = null } = {}) {
   const { api, calls } = bridge(options);
   const { document } = createDom();
+  // The 0.5 layout (renderer/nav.js writes html[data-layout]).
+  if (layout) document.documentElement.dataset.layout = layout;
   const registered = [];
   const events = [];
   const controls = { rows: [], push(row) { this.rows.push(JSON.parse(JSON.stringify(row))); }, at(index) { return this.rows.at(index); } };
@@ -89,7 +91,8 @@ function load({ store = {}, search = "", options = {} } = {}) {
   const content = () => overlay()?.querySelector("#setup-helper-content");
   const byText = (root, text, selector = "button") => root.querySelectorAll(selector).find((node) => node.textContent.includes(text));
   const toggleNamed = (text) => content().querySelectorAll(".setup-helper-toggle").find((row) => row.textContent.includes(text))?.querySelector("input");
-  return { window, helper, calls, events, registered, controls, saved, overlay, content, byText, toggleNamed };
+  const welcome = () => document.body.children.find((node) => node.id === "setup-welcome");
+  return { window, document, helper, calls, events, registered, controls, saved, overlay, content, byText, toggleNamed, welcome };
 }
 
 test("the helper registers one sheet destination and a Search entry per section, named by concept", () => {
@@ -464,4 +467,148 @@ test("habits save per agent through the team, with the chosen variant and mode",
   await settle();
   const saved = calls.filter((row) => row[0] === "agentsSave").at(-1)[1];
   assert.deepEqual(saved.configuration.agentHabits, { routine: { "test-changes": { variant: "touched", mode: "brief" } } });
+});
+
+// ---- the first run in the 0.5 layout: the three-step welcome ----
+const welcomeBridge = (env, { clis = null, projects = null } = {}) => {
+  const api = env.window.mefiStudio;
+  if (clis) api.cliSetupStatus = async () => ({ ok: true, selected: "auto", clis });
+  api.cliSetupAction = async (payload) => { env.calls.push(["cliSetupAction", payload]); return { ok: true, message: "Finish it in the window." }; };
+  api.projectsList = async () => projects ?? { ok: true, activeId: P, projects: [{ id: P, name: "Notes app", path: "C:/work/notes" }, { id: "p2", name: "Game", path: "C:/work/game" }] };
+  api.tasksCreate = async (payload) => { env.calls.push(["tasksCreate", payload]); return { ok: true, task: { id: "task_first", projectId: P, title: payload.title, prompt: payload.prompt } }; };
+};
+const welcomeText = (env) => ({ title: env.welcome().querySelector("#setup-welcome-title").textContent, lead: env.welcome().querySelector("#setup-welcome-lead").textContent, rows: env.welcome().querySelectorAll(".setup-welcome-opt").map((row) => row.querySelector("b").textContent), next: env.welcome().querySelector("#setup-welcome-next").textContent });
+const BRIEF = ["Add an empty state to the notes list", "Show a friendly line when there are no notes."].join(String.fromCharCode(10));
+
+test("with the 0.5 layout a fresh profile meets the three-step welcome instead of the sheet", async () => {
+  const env = load({ layout: "v2" });
+  welcomeBridge(env);
+  assert.equal(env.helper.startup({ then: () => {} }), true);
+  await settle();
+  assert.equal(env.helper.welcomeOpen(), true);
+  assert.equal(env.helper.isOpen(), false, "the sheet waits");
+  assert.equal(env.overlay(), undefined, "the sheet is not even built");
+  assert.equal(env.welcome().hidden, false);
+  const first = welcomeText(env);
+  assert.equal(first.title, "Connect the AI you already use");
+  assert.equal(first.lead, "Studio found one coding tool on this PC. One sign-in can serve chat, planning and building.");
+  assert.deepEqual(first.rows, ["Codex"], "only the tools found on this PC");
+  assert.equal(first.next, "Continue");
+  assert.equal(env.welcome().querySelector("#setup-welcome-back").hidden, true, "no Back on the first step");
+  assert.ok(env.welcome().querySelector("#setup-welcome-more"), "the sheet's other ways to connect are one press away");
+});
+
+test("each tool says where it stands, and Sign in or Install is the tool's own", async () => {
+  const env = load({ layout: "v2" });
+  welcomeBridge(env, { clis: [{ id: "claude", name: "Claude Code", installed: true, signedIn: true, subscription: true }, { id: "codex", name: "Codex", installed: true, signedIn: false, subscription: true }, { id: "opencode", name: "OpenCode", installed: true, signedIn: null, subscription: false }, { id: "grok", name: "Grok", installed: false, signedIn: null, subscription: true }] });
+  env.helper.welcome();
+  await settle();
+  const rows = env.welcome().querySelectorAll(".setup-welcome-opt");
+  assert.deepEqual(rows.map((row) => [row.querySelector("b").textContent, row.querySelector("small").textContent, row.querySelector(".setup-welcome-chip, button")?.textContent]), [
+    ["Claude Code", "Signed in · subscription detected", "✓ Ready"],
+    ["Codex", "Installed · not signed in", "Sign in"],
+    ["OpenCode", "Installed · uses your keys or free models", "Optional"],
+  ]);
+  assert.equal(welcomeText(env).lead, "Studio found three coding tools on this PC. One sign-in can serve chat, planning and building.");
+  await rows[1].querySelector("button").click();
+  await settle();
+  assert.deepEqual(env.calls.filter((row) => row[0] === "cliSetupAction"), [["cliSetupAction", { id: "codex", action: "login" }]]);
+  // Nothing installed: the subscriptions are offered to install, each through its own setup.
+  const empty = load({ layout: "v2" });
+  welcomeBridge(empty, { clis: [{ id: "claude", name: "Claude Code", installed: false, subscription: true }, { id: "opencode", name: "OpenCode", installed: false, subscription: false }] });
+  empty.helper.welcome();
+  await settle();
+  assert.deepEqual(welcomeText(empty).rows, ["Claude Code"]);
+  await empty.welcome().querySelector(".setup-welcome-opt button").click();
+  await settle();
+  assert.deepEqual(empty.calls.filter((row) => row[0] === "cliSetupAction"), [["cliSetupAction", { id: "claude", action: "install" }]]);
+});
+
+test("Continue walks to the project and the first task; Start the task adds it through tasks:create and starts it as the workspace does", async () => {
+  const env = load({ layout: "v2" });
+  welcomeBridge(env);
+  const handed = [], selected = [], started = [];
+  env.window.MefiSessions = { select: (id) => selected.push(id) };
+  env.window.MefiWorkspace = { activeProjectId: () => P, startTask: async (task) => { started.push(task.id); } };
+  env.helper.startup({ then: (detail) => handed.push(JSON.parse(JSON.stringify(detail))) });
+  await settle();
+  await env.welcome().querySelector("#setup-welcome-next").click();
+  await settle();
+  const second = welcomeText(env);
+  assert.equal(second.title, "Choose a project");
+  assert.deepEqual(second.rows, ["Notes app", "Game"]);
+  assert.equal(env.welcome().querySelector('[data-option="project:p1"]').classList.contains("is-on"), true, "the open project is ticked");
+  assert.equal(env.welcome().querySelector("#setup-welcome-back").hidden, false);
+  await env.welcome().querySelector("#setup-welcome-back").click();
+  await settle();
+  assert.equal(welcomeText(env).title, "Connect the AI you already use");
+  await env.welcome().querySelector("#setup-welcome-next").click(); await settle();
+  await env.welcome().querySelector("#setup-welcome-next").click(); await settle();
+  assert.equal(welcomeText(env).title, "Give it a first task");
+  const next = env.welcome().querySelector("#setup-welcome-next");
+  assert.equal(next.textContent, "Start the task");
+  assert.equal(next.disabled, true, "nothing to start yet");
+  const input = env.welcome().querySelector("#setup-welcome-task");
+  input.value = BRIEF;
+  await input.trigger("input");
+  assert.equal(next.disabled, false);
+  await next.click();
+  await settle();
+  assert.deepEqual(env.calls.filter((row) => row[0] === "tasksCreate"), [["tasksCreate", { title: "Add an empty state to the notes list", prompt: BRIEF, projectId: P }]]);
+  assert.equal(env.helper.welcomeOpen(), false);
+  assert.deepEqual(selected, ["task_first"], "the new session opens");
+  assert.deepEqual(started, ["task_first"], "and starts the way the workspace's Start does");
+  assert.equal(env.saved.get("mefiStudio.setupHelper.seen"), env.helper.REVISION);
+  assert.deepEqual(handed, [{ tour: false }], "the hand-off runs once, as the sheet's close runs it");
+  assert.equal(env.helper.startup(), false, "a seen revision never opens again by itself");
+});
+
+test("Skip and Escape close the welcome, mark the revision seen and hand on", async () => {
+  for (const how of ["skip", "escape"]) {
+    const env = load({ layout: "v2" });
+    welcomeBridge(env);
+    const handed = [];
+    env.helper.startup({ then: (detail) => handed.push(JSON.parse(JSON.stringify(detail))) });
+    await settle();
+    if (how === "skip") await env.welcome().querySelector("#setup-welcome-skip").click();
+    else for (const fn of env.welcome().querySelector("#setup-welcome-card").listeners.keydown ?? []) fn({ key: "Escape", preventDefault() {}, stopPropagation() {} });
+    assert.equal(env.helper.welcomeOpen(), false, how);
+    assert.equal(env.welcome().hidden, true, how);
+    assert.equal(env.saved.get("mefiStudio.setupHelper.seen"), env.helper.REVISION, how);
+    assert.deepEqual(handed, [{ tour: false }], how);
+    assert.deepEqual(env.calls.filter((row) => row[0] === "tasksCreate"), [], `${how} adds nothing`);
+  }
+});
+
+test("Other ways to connect opens the sheet at Connect an AI, and the hand-off waits for the sheet to close", async () => {
+  const env = load({ layout: "v2" });
+  welcomeBridge(env);
+  const handed = [];
+  env.helper.startup({ then: (detail) => handed.push(JSON.parse(JSON.stringify(detail))) });
+  await settle();
+  await env.welcome().querySelector("#setup-welcome-more").click();
+  await settle();
+  assert.equal(env.helper.welcomeOpen(), false);
+  assert.equal(env.helper.isOpen(), true);
+  assert.equal(env.helper.section(), "providers");
+  assert.deepEqual(handed, []);
+  env.helper.close();
+  assert.deepEqual(handed, [{ tour: false }]);
+  assert.equal(env.saved.get("mefiStudio.setupHelper.seen"), env.helper.REVISION);
+});
+
+test("an update still brings the sheet in the 0.5 layout, and the classic layout keeps the sheet for a first run", async () => {
+  const returning = load({ layout: "v2", store: { "mefiStudio.commandHome": "1" } });
+  assert.equal(returning.helper.startup(), true);
+  await settle();
+  assert.equal(returning.helper.isOpen(), true);
+  assert.equal(returning.helper.welcomeOpen(), false);
+  const classic = load();
+  assert.equal(classic.helper.startup(), true);
+  await settle();
+  assert.equal(classic.helper.isOpen(), true);
+  assert.equal(classic.welcome(), undefined, "the classic layout never builds the welcome");
+  const capture = load({ layout: "v2", search: "?capture=1" });
+  assert.equal(capture.helper.startup(), false, "a diagnostic launch opens neither");
+  assert.equal(capture.welcome(), undefined);
 });

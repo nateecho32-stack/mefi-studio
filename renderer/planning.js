@@ -13,7 +13,7 @@
   // `index` is the project read Plans warms on open (files Studio can see);
   // `systems` and `places` come from the Project map, so a plan knows which
   // part of the project it lives in before its spec and tasks need it.
-  const state = { projectId: null, projectName: "Your project", plans: [], selected: "new", busy: false, pending: null, tasks: null, workError: null, epoch: 0, opened: false, readId: 0, workReadId: 0, existing: null, existingOpen: false, showArchived: false, index: null, preparing: false, systems: null, places: null, loaded: false };
+  const state = { view: "full", projectId: null, projectName: "Your project", plans: [], selected: "new", busy: false, pending: null, tasks: null, workError: null, epoch: 0, opened: false, readId: 0, workReadId: 0, existing: null, existingOpen: false, showArchived: false, index: null, preparing: false, systems: null, places: null, loaded: false };
   // Mefi carries the conversation: it asks as soon as a plan exists and again
   // after each decision you record. One switch, remembered on this PC.
   const autoAskKey = "mefiStudio.planning.autoAsk.v1";
@@ -60,6 +60,8 @@
   const draftKey = () => JSON.stringify([state.projectId, state.selected]);
   const draft = () => drafts[draftKey()] ||= {};
   const plan = () => state.plans.find((item) => item.id === state.selected);
+  // The plan draft page shows while the 0.5 layout is on, a saved plan is open and the page was asked for (open({ view: "draft" })).
+  const draftView = () => state.view === "draft" && Boolean(plan()) && document.documentElement?.dataset?.layout === "v2";
   // On the board: its tasks exist, so its view follows their progress.
   // Frozen: read-only, which also covers a plan you archived.
   const onBoard = (item) => ["converted", "converting"].includes(item?.status);
@@ -509,6 +511,7 @@
     chip.title = index?.structure?.length ? `Top level: ${index.structure.join("  ")}\nClick to read the folder again.` : "Read the project's files so Mefi can point at real code.";
   }
   function renderWorkflow(item) {
+    if (draftView()) return;
     let area = $("workflow");
     const entering = !area;
     if (!area) { area = node("section", "planning-workflow", undefined, $("detail")); area.id = "plans-workflow"; area.setAttribute("aria-label", "From idea to verified work"); }
@@ -1053,6 +1056,9 @@
   // confirm what we understand and approve the specification again before any task.
   // The newest twenty are listed; Show older versions pages back through the rest.
   const VERSIONS_SHOWN = 20;
+  // What a version did, and who made it, in words (the Versions card and the plan draft page).
+  const VERSION_LABELS = { create: "Plan created", update: "Destination saved", "add-unknown": "Unknown added", "remove-unknown": "Unknown set aside", "add-question": "Question added", "edit-question": "Question edited", resolve: "Decision recorded", reopen: "Decision reopened", "add-note": "Interview line saved", "confirm-understanding": "Understanding confirmed", "draft-spec": "Specification drafted", "approve-spec": "Specification approved", "begin-conversion": "Task creation started", "mark-converted": "Tasks created", archive: "Plan archived", restore: "Plan restored", "restore-version": "Version restored", migrated: "First version kept" };
+  const VERSION_AUTHORS = { user: "You", assistant: "Mefi", host: "Studio" };
   function history(item) {
     if (!item.history?.length) return;
     const local = draft(); const area = node("details", "planning-card", undefined, $("editor") || $("detail")); area.id = "plans-history";
@@ -1060,8 +1066,7 @@
     area.addEventListener("toggle", () => { local.historyOpen = Boolean(area.open); });
     node("summary", "", `Versions · ${countLabel(item.history.length, "saved version")} · every edit is kept`, area);
     node("p", "planning-subtle", "Earlier decisions and specifications stay available here after you change the plan. Open a version to read it, then restore it if you want it back: its wording returns as a new version and nothing is lost. You can also copy any text into a new edit.", area);
-    const labels = { create: "Plan created", update: "Destination saved", "add-unknown": "Unknown added", "remove-unknown": "Unknown set aside", "add-question": "Question added", "edit-question": "Question edited", resolve: "Decision recorded", reopen: "Decision reopened", "add-note": "Interview line saved", "confirm-understanding": "Understanding confirmed", "draft-spec": "Specification drafted", "approve-spec": "Specification approved", "begin-conversion": "Task creation started", "mark-converted": "Tasks created", archive: "Plan archived", restore: "Plan restored", "restore-version": "Version restored", migrated: "First version kept" };
-    const authors = { user: "You", assistant: "Mefi", host: "Studio" };
+    const labels = VERSION_LABELS, authors = VERSION_AUTHORS;
     const limit = local.historyLimit || VERSIONS_SHOWN;
     const newest = item.history.at(-1)?.version;
     for (const entry of [...item.history].reverse().slice(0, limit)) {
@@ -1190,6 +1195,75 @@
       if (!(tooling.agents?.length || tooling.skills?.length || tooling.commands?.length)) node("p", "planning-subtle", "No project or user agents, skills or commands were found (.claude/, .opencode/, ~/.claude, ~/.config/opencode).", box);
     }
   }
+  // ---- a plan draft as a page (the 0.5 layout) --------------------------------
+  // With html[data-layout="v2"] a plan opened from Work's Backlog
+  // (renderer/sessions.js) opens as the 0.5 prototype's plan draft page
+  // (docs/prototype/mefi-studio-0.5-v5.html, backlogView): its name, where it
+  // stands and how many decisions are left, its outcome, what to do next, and
+  // its versions with Restore. Nothing here is new to the plan: the next step is
+  // the workflow's own (the host still asks for your decisions, your review and
+  // your approval before any task is made, so "Build it" is offered only once the
+  // specification is approved), Talk it over is the interview, Archive sets the
+  // plan aside as the workflow's Archive plan does (restoring brings it back),
+  // and Restore this version is the Versions card's own. The full plan, with
+  // every step, is one press away and is what Plans opens anywhere else.
+  const DRAFT_VERSIONS = 5;
+  const PLAN_WORDS = { planning: "Plan draft", ready: "Plan approved", converting: "Making its tasks", converted: "On the task board" };
+  const NEXT_WORDS = { idea: "Describe your idea", explore: "Talk it over", decisions: "Record your decisions", review: "Read it back", spec: "Draft the build plan", approval: "Approve the plan", build: "Build it", verify: "Check the results" };
+  function fullPlanAt(step) {
+    state.view = "full"; render(); note();
+    // The step it is waiting on is the one shown; pressing its stage also brings its section into view.
+    if (step && plan()) { selectStep(step); $(`stage-${step}`)?.click?.(); }
+  }
+  function renderDraftPage(item) {
+    const flow = workflowState(item);
+    const page = node("article", "planning-page", undefined, $("detail")); page.id = "plans-page";
+    page.setAttribute("aria-labelledby", "plans-page-title");
+    const head = node("header", "planning-page-head", undefined, page);
+    const title = node("h2", "", item.title, head); title.id = "plans-page-title"; title.tabIndex = -1;
+    const chips = node("div", "planning-page-chips", undefined, head);
+    const open = flow.questions.length - flow.resolved.length;
+    node("span", "planning-page-chip is-plan", archived(item) ? "Archived" : PLAN_WORDS[item.status] || "Plan draft", chips);
+    if (!frozen(item)) node("span", "planning-page-chip", open ? `${countLabel(open, "decision")} left` : flow.questions.length ? "Decisions recorded" : "No decisions yet", chips);
+    if (item.unknowns?.length && !frozen(item)) node("span", "planning-page-chip", countLabel(item.unknowns.length, "unknown"), chips);
+    const bubble = node("div", "planning-page-note", item.destination, page); bubble.id = "plans-page-note";
+    if (item.outOfScope) node("p", "planning-page-out", `Outside this plan: ${item.outOfScope}`, page);
+    const actions = node("div", "planning-page-actions", undefined, page);
+    if (archived(item)) button("Restore plan", actions, () => act("restore", {}, null, "Plan restored. It is back in your list."), "page-restore", true);
+    else if (item.status === "ready") button("Build it", actions, () => act("convert", {}, null, "Approved tasks are in your project's queue."), "page-build", true);
+    else if (item.status === "converting") button("Finish creating tasks", actions, () => act("convert", {}, null, "Approved tasks are in your project's queue."), "page-build", true);
+    else if (item.status === "converted") navigation("Follow the tasks", actions, () => fullPlanAt("build"), "page-next", "primary");
+    else if (flow.current === "explore") navigation("Talk it over", actions, () => fullPlanAt("explore"), "page-talk", "primary");
+    else navigation(NEXT_WORDS[flow.current] || "Continue the plan", actions, () => fullPlanAt(flow.current), "page-next", "primary");
+    // Talk it over is the interview: Mefi asks, you answer, and nothing is decided for you.
+    if (!frozen(item) && flow.current !== "explore") navigation("Talk it over", actions, () => fullPlanAt("explore"), "page-talk", "ghost");
+    if (!archived(item) && item.status !== "converting") button("Archive", actions, () => act("archive", {}, null, "Plan archived. Restore brings it back as it was."), "page-archive");
+    if (!frozen(item) && item.status !== "ready") node("p", "planning-page-fine", "Nothing is built until you approve its specification. The next step opens the plan where it is waiting on you.", page);
+    // Versions: every edit is kept; the newest few here, the rest in the full plan.
+    const history = Array.isArray(item.history) ? [...item.history].reverse() : [];
+    if (history.length) {
+      const card = node("section", "planning-page-versions", undefined, page); card.id = "plans-page-versions"; card.setAttribute("aria-labelledby", "plans-page-versions-title");
+      const top = node("div", "planning-page-versions-head", undefined, card);
+      node("h3", "", "Versions", top).id = "plans-page-versions-title";
+      node("span", "", "every edit is kept", top);
+      const newest = history[0]?.version;
+      for (const entry of history.slice(0, DRAFT_VERSIONS)) {
+        const current = entry.version === newest;
+        const row = node("div", "planning-page-version", undefined, card); row.dataset.version = String(entry.version);
+        node("span", `planning-page-mark${current ? " is-current" : ""}`, current ? "✓" : "", row).setAttribute("aria-hidden", "true");
+        const words = node("div", "planning-page-version-words", undefined, row);
+        node("b", "", `Version ${entry.version} · ${entry.note || VERSION_LABELS[entry.action] || "Plan updated"}`, words);
+        node("small", "", [VERSION_AUTHORS[entry.by] || "", dateOf(entry.at)].filter(Boolean).join(" · "), words);
+        if (current) node("span", "planning-page-current", "current", row);
+        else if (!frozen(item) && entry.snapshot && !["converting", "converted"].includes(entry.snapshot.status)) button("Restore this version", row, () => {
+          if (unsavedPlan(plan())) { note("Save or clear your unsaved changes before restoring a version.", true); return; }
+          void act("restore-version", { toVersion: entry.version }, null, `Restored version ${entry.version} as version ${(plan()?.version ?? item.version) + 1}. Nothing was lost.`);
+        }, `page-restore-${entry.version}`).classList.add("mini");
+      }
+      if (history.length > DRAFT_VERSIONS) navigation(`All ${history.length} versions`, card, () => { draft().historyOpen = true; persist(); fullPlanAt(null); $("history")?.scrollIntoView?.({ block: "start" }); }, "page-all-versions", "ghost mini");
+    }
+    navigation("Open the full plan", page, () => fullPlanAt(null), "page-full", "ghost mini planning-page-full");
+  }
   function render() {
     rememberSelection();
     if (composeKey !== draftKey()) { stopExploration(); composeKey = draftKey(); focusedField = "destination"; copilot = { status: "idle", result: null, signature: null, error: "" }; suggestionUndo = null; }
@@ -1201,6 +1275,10 @@
       controls(); return;
     }
     const item = plan();
+    // The 0.5 layout's plan draft page: the plan as a page, until you open the full plan.
+    const page = draftView();
+    $("sheet").dataset.view = page ? "draft" : "full";
+    if (page) { renderDraftPage(item); controls(); return; }
     renderWorkflow(item);
     const canvas = node("div", "planning-canvas", undefined, $("detail"));
     const editor = node("div", "planning-editor", undefined, canvas); editor.id = "plans-editor";
@@ -1308,6 +1386,9 @@
   async function open(options = {}) {
     init(); priorFocus = document.activeElement; state.opened = true; $("overlay").hidden = false;
     window.MefiNav?.claim?.("plans");
+    // A plan opened from Work's Backlog opens as its draft page (0.5 layout); Plans opened anywhere else shows every step.
+    state.view = !options.create && options.planId && options.view === "draft" ? "draft" : "full";
+    if (state.view === "draft" && state.loaded && state.plans.some((item) => item.id === options.planId)) state.selected = options.planId;
     // Plans read before paint at once; the fresh list replaces them a moment later.
     if (state.loaded && state.projectId) render(); else note("Opening this project's plans…");
     await refresh({ refreshTasks: false });
@@ -1316,7 +1397,7 @@
     else if (options.planId) state.selected = options.planId;
     render(); if (state.projectId && api()?.planningList && $("notice").dataset.error !== "true") note();
     startWorkPoll();
-    (options.create ? $("title") : $("new"))?.focus();
+    (options.create ? $("title") : draftView() ? $("page-title") : $("new"))?.focus();
   }
   function close() { if (!$("overlay") || $("overlay").hidden) return; persist(); state.opened = false; stopExploration(); copilot.status = "idle"; stopWorkPoll(); $("overlay").hidden = true; window.MefiNav?.release?.("plans"); if (!window.MefiNav?.release) priorFocus?.focus?.(); }
   function init() {

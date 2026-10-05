@@ -5,6 +5,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs"), path = require("node:path");
 const { fileURLToPath } = require("node:url");
 const { applyPlanningAction } = require("../../scripts/planning.cjs");
+const { textProbe } = require("./text-probe.cjs");
 const root = process.env.MEFI_PLANNING_RENDER_FIXTURE;
 if (!root || !path.isAbsolute(root)) throw new Error("An isolated planning fixture directory is required");
 const report = { errors: [], networkAttempts: [], layouts: [] };
@@ -220,5 +221,51 @@ app.whenReady().then(async () => {
   assert.ok(await run("return getComputedStyle(document.getElementById('idle-hud')).visibility==='visible';"), "closing Plans restores the underlying controls");
   await until("Number(getComputedStyle(document.getElementById('idle-layer')).opacity)===1");
   assert.deepEqual(report.errors, []); assert.deepEqual(report.networkAttempts, []);
+  // ---- the 0.5 layout: a Backlog plan opens as its own page (renderer/sessions.js asks for { view: "draft" }) ----------------
+  // The page is measured at 1920x1080 and at 600x560 zoomed 150%: it fits, nothing leaves it, no text under 12 px, every line
+  // at 4.5:1; its parts are the plan's own (name, where it stands, outcome, next step, versions); Open the full plan brings
+  // the eight steps back.
+  report.draft = [];
+  await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1", layout: "v2" } });
+  await until("window.MefiPlanning && window.MefiNav && window.MefiShell && window.MefiShell.active() && !window.MefiBoot?.isActive?.()");
+  await run("window.MefiVibe?.setMode?.('build', { go: false });");
+  const draftPlan = await run("return window.planningFixture.useSavedPlan();");
+  for (const [width, height, zoom] of [[1920, 1080, 1], [600, 560, 1.5]]) {
+    window.setContentSize(width, height);
+    contents.enableDeviceEmulation({ screenPosition: "desktop", screenSize: { width, height }, viewPosition: { x: 0, y: 0 }, viewSize: { width, height }, deviceScaleFactor: 1, scale: 1 });
+    contents.setZoomFactor(zoom); await sleep(300);
+    await run(`window.MefiNav.go('plans', { planId: ${JSON.stringify(draftPlan)}, view: 'draft' });`);
+    await until("document.getElementById('plans-page') && document.getElementById('plans-page-versions')");
+    await sleep(400);
+    const page = await run(`const sheet = document.getElementById('plans-sheet'), detail = document.getElementById('plans-detail'), box = document.getElementById('plans-page').getBoundingClientRect();
+      const probe = await (async () => { ${textProbe("#plans-page")} })();
+      return { size: '${width}x${height}@${zoom}', view: sheet.dataset.view, workflow: Boolean(document.getElementById('plans-workflow')), sidebar: getComputedStyle(document.querySelector('.planning-sidebar')).display,
+        title: document.getElementById('plans-page-title').textContent, chips: [...document.querySelectorAll('.planning-page-chip')].map((node) => node.textContent), note: document.getElementById('plans-page-note').textContent,
+        actions: [...document.querySelectorAll('.planning-page-actions button')].map((node) => node.textContent), versions: [...document.querySelectorAll('.planning-page-version')].map((row) => row.dataset.version),
+        chipsBelow: document.querySelector('.planning-page-chips').getBoundingClientRect().top >= document.getElementById('plans-page-title').getBoundingClientRect().bottom - 1, primary: getComputedStyle(document.querySelector('.planning-page-actions .primary')).backgroundImage.includes('gradient'),fits: box.left >= -1 && box.right <= innerWidth + 1, pageOverflow: document.documentElement.scrollWidth > innerWidth + 1, sideways: detail.scrollWidth > detail.clientWidth + 1, gutter: detail.offsetWidth - detail.clientWidth, ...probe };`);
+    report.draft.push(page);
+    await capture(`plan-draft-${width}x${height}@${zoom}.png`);
+    assert.equal(page.view, "draft"); assert.equal(page.workflow, false, "the eight steps wait"); assert.equal(page.sidebar, "none", "the plan library steps aside");
+    assert.equal(page.title, "A warmer first welcome");
+    assert.ok(page.chipsBelow && page.primary, "the chips sit under the name, and the next step is the studio's primary");
+    assert.deepEqual(page.chips, ["Plan draft", "3 decisions left"]);
+    assert.equal(page.note, "Help a new user create their first note.");
+    assert.deepEqual(page.actions, ["Talk it over", "Archive"], "the interview is the next step, with Archive beside it");
+    assert.deepEqual(page.versions, ["4", "3", "2", "1"], "every version, newest first");
+    assert.ok(page.fits && !page.pageOverflow && !page.sideways, `the page fits at ${page.size}: ${JSON.stringify(page)}`);
+    assert.ok(page.gutter <= 0.5, `the page reserves no width for a bar at ${page.size}`);
+    assert.deepEqual(page.small, [], `no text under 12 px at ${page.size}`);
+    assert.deepEqual(page.low, [], `every line reads at 4.5:1 at ${page.size}`);
+    assert.ok(page.count >= 10, "the words were measured");
+  }
+  contents.setZoomFactor(1);
+  window.setContentSize(1920, 1080);
+  contents.enableDeviceEmulation({ screenPosition: "desktop", screenSize: { width: 1920, height: 1080 }, viewPosition: { x: 0, y: 0 }, viewSize: { width: 1920, height: 1080 }, deviceScaleFactor: 1, scale: 1 });
+  await run("document.getElementById('plans-page-full').click();");
+  await until("document.getElementById('plans-workflow') && !document.getElementById('plans-page')");
+  report.draftFull = await run("return { view: document.getElementById('plans-sheet').dataset.view, sidebar: getComputedStyle(document.querySelector('.planning-sidebar')).display };");
+  assert.deepEqual(report.draftFull, { view: "full", sidebar: "block" }, "Open the full plan brings the steps and the library back");
+  await capture("plan-draft-full-plan-1920x1080.png");
+  assert.deepEqual(report.errors, []);
   finish();
 }).catch(finish);

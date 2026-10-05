@@ -1,6 +1,6 @@
-// The setup helper in a real renderer: a copied booklet and a synthetic bridge
-// (tests/fixtures/setup-helper-render-electron.cjs). Set
-// MEFI_SETUP_HELPER_CAPTURE_DIR to an absolute folder to keep the screenshots.
+// Settings in the 0.5 layout, in a real renderer: a copied booklet launched with ?layout=v2 and a synthetic bridge
+// (tests/fixtures/settings-render-electron.cjs). Set MEFI_SETTINGS_CAPTURE_DIR to an absolute folder to keep the
+// screenshots.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
@@ -15,16 +15,16 @@ const studio = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const executable = path.join(studio, "node_modules", "electron", "dist", process.platform === "win32" ? "electron.exe" : process.platform === "darwin" ? "Electron.app/Contents/MacOS/Electron" : "electron");
 const canRun = existsSync(executable) && (process.platform !== "linux" || Boolean(process.env.DISPLAY || process.env.WAYLAND_DISPLAY));
 
-test("every setup helper section fits desktop and narrow windows, traps focus, saves through the bridge and closes on Escape; the 0.5 layout's three-step first run fits two window sizes and adds its task", { skip: !canRun, timeout: 240000 }, async (t) => {
-  const fixture = await mkdtemp(path.join(tmpdir(), "mefi-setup-helper-render-"));
+test("Settings in the 0.5 layout: the prototype's places in its order, one page at a time with Find a setting beside its title, panels that fit four window sizes with no text under 12 px and 4.5:1 in every theme, deep links and Search on the new places, and the classic layout untouched", { skip: !canRun, timeout: 360000 }, async (t) => {
+  const fixture = await mkdtemp(path.join(tmpdir(), "mefi-settings-render-"));
   try {
     await mkdir(path.join(fixture, "renderer")); await mkdir(path.join(fixture, "data"));
     const sources = (await readdir(path.join(studio, "renderer"))).filter((name) => /\.(?:js|css)$/.test(name) || name === "booklet.template.html");
     await Promise.all(sources.map((name) => copyFile(path.join(studio, "renderer", name), path.join(fixture, "renderer", name))));
     await copyFile(path.join(studio, "data", "models.json"), path.join(fixture, "data", "models.json"));
     await build({ root: fixture });
-    const env = { ...process.env, MEFI_SETUP_HELPER_FIXTURE: fixture }; delete env.ELECTRON_RUN_AS_NODE;
-    const child = spawn(executable, [path.join(studio, "tests", "fixtures", "setup-helper-render-electron.cjs")], { cwd: studio, env, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+    const env = { ...process.env, MEFI_SETTINGS_FIXTURE: fixture }; delete env.ELECTRON_RUN_AS_NODE;
+    const child = spawn(executable, [path.join(studio, "tests", "fixtures", "settings-render-electron.cjs")], { cwd: studio, env, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
     let output = "";
     for (const stream of [child.stdout, child.stderr]) stream.on("data", (chunk) => { output = (output + chunk).slice(-18000); });
     const timer = setTimeout(() => {
@@ -32,32 +32,25 @@ test("every setup helper section fits desktop and narrow windows, traps focus, s
         const killer = spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
         killer.once("error", () => child.kill());
       } else child.kill();
-    }, 220000);
+    }, 340000);
     const code = await new Promise((resolve, reject) => { child.once("error", reject); child.once("close", resolve); }).finally(() => clearTimeout(timer));
     let report;
     try { report = JSON.parse(await readFile(path.join(fixture, "report.json"), "utf8")); } catch {}
-    const artifacts = process.env.MEFI_SETUP_HELPER_CAPTURE_DIR;
+    const artifacts = process.env.MEFI_SETTINGS_CAPTURE_DIR;
     if (artifacts && path.isAbsolute(artifacts)) {
       await mkdir(artifacts, { recursive: true });
       const files = (await readdir(fixture)).filter((name) => name === "report.json" || name.endsWith(".png"));
       await Promise.all(files.map((name) => copyFile(path.join(fixture, name), path.join(artifacts, name))));
-      t.diagnostic(`Setup helper screenshots: ${artifacts}`);
+      t.diagnostic(`Settings screenshots: ${artifacts}`);
     }
     assert.equal(code, 0, `${report?.failure || "No renderer report"}\n${output}`);
     assert.deepEqual(report.errors, []); assert.deepEqual(report.networkAttempts, []); assert.deepEqual(report.processAttempts, []);
-    assert.equal(report.autoOpened, false, "a capture launch never opens the helper by itself");
-    assert.equal(report.layouts.length, 20, "ten sections at two widths");
-    assert.ok(report.focusTrapped, "Tab stays inside the dialog");
-    assert.ok(report.calls.some((call) => call.name === "assistantPrefs" && call.args[0].compactHistory === false));
-    const team = report.calls.find((call) => call.name === "agentsSave");
-    assert.equal(team.args[0].scope, "defaults");
-    assert.equal(team.args[0].configuration.agentBrain.deskTool, true);
-    assert.equal(report.welcome.length, 6, "the welcome's three steps at two window sizes");
-    assert.equal(report.welcomeTask.length, 1, "Start the task adds one task");
-    assert.ok(report.closedByEscape && report.complete);
+    assert.equal(report.places.length, 8, "every page was opened from its row");
+    assert.ok(report.shots.length >= 12, `the screenshots were taken (${report.shots.length})`);
+    assert.ok(report.complete, "the fixture ran to its end");
   } finally {
     assert.equal(path.dirname(fixture), path.resolve(tmpdir()));
-    assert.ok(path.basename(fixture).startsWith("mefi-setup-helper-render-"));
+    assert.ok(path.basename(fixture).startsWith("mefi-settings-render-"));
     await rm(fixture, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
   }
 });

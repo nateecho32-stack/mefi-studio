@@ -1331,6 +1331,217 @@
     void show(path[target].id);
   }
 
+  // ---- the first run in the 0.5 layout: a three-step welcome ----------------
+  // With html[data-layout="v2"] a fresh profile meets the 0.5 prototype's first
+  // run (docs/prototype/mefi-studio-0.5-v5.html, welcomeView) instead of this
+  // whole sheet: connect the AI you already use, choose a project, give it a
+  // first task. Every step reads and acts through what already exists: the
+  // coding tools from setup:cli-status and their own Sign in or install
+  // (setup:cli-action); the projects from projects:list, switched through the
+  // workspace's own project buttons (which ask before stopping busy agents),
+  // with Open a folder… and Start a new app… through their usual flows; the
+  // task through tasks:create, then the workspace's own start. Skip, Escape and
+  // Start the task mark this revision seen and hand on exactly as closing the
+  // sheet does. The sheet stays one step away: Other ways to connect opens it
+  // at Connect an AI (keys and local models live there), and Search, Help and
+  // Configuration reach it as before. A returning profile after an update still
+  // gets the sheet. The prototype's "Write a check first" has no counterpart in
+  // the engine yet, so it is not offered.
+  const WELCOME_STEPS = 3;
+  const MARKS = { claude: "CC", codex: "CX", opencode: "OC", grok: "GK", antigravity: "AG" };
+  const COUNT = ["no", "one", "two", "three", "four", "five", "six"];
+  const welcome = { open: false, step: 0, els: null, clis: null, projects: null, text: "", busy: false, then: null, previous: null, serial: 0 };
+  const layoutV2 = () => document.documentElement?.dataset?.layout === "v2";
+  function buildWelcome() {
+    if (welcome.els) return welcome.els;
+    const overlay = node("div", "setup-welcome"); overlay.id = "setup-welcome"; overlay.hidden = true;
+    const card = node("section", "setup-welcome-card"); card.id = "setup-welcome-card"; card.tabIndex = -1;
+    card.setAttribute("role", "dialog"); card.setAttribute("aria-modal", "true"); card.setAttribute("aria-labelledby", "setup-welcome-title"); card.setAttribute("aria-describedby", "setup-welcome-lead");
+    const steps = node("div", "setup-welcome-steps"); steps.setAttribute("role", "progressbar"); steps.setAttribute("aria-label", "First run"); steps.setAttribute("aria-valuemin", "1"); steps.setAttribute("aria-valuemax", String(WELCOME_STEPS));
+    for (let index = 0; index < WELCOME_STEPS; index += 1) steps.append(node("i"));
+    const title = node("h2", "setup-welcome-title"); title.id = "setup-welcome-title"; title.tabIndex = -1;
+    const lead = node("p", "setup-welcome-lead"); lead.id = "setup-welcome-lead";
+    const body = node("div", "setup-welcome-body"); body.id = "setup-welcome-body";
+    const status = node("p", "setup-welcome-status"); status.id = "setup-welcome-status"; status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite");
+    const foot = node("footer", "setup-welcome-foot");
+    const back = button("Back", () => void showWelcome(welcome.step - 1), "ghost"); back.id = "setup-welcome-back";
+    const skip = button("Skip", () => closeWelcome(), "ghost"); skip.id = "setup-welcome-skip";
+    skip.title = "Close the welcome. The setup helper waits in Help and Search (Esc)";
+    const next = button("Continue", () => void welcomeNext(), "primary"); next.id = "setup-welcome-next";
+    foot.append(back, node("span", "setup-welcome-gap"), skip, next);
+    card.append(steps, title, lead, body, status, foot);
+    overlay.append(card);
+    // A modal: Escape skips, and Tab stays inside the card.
+    card.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") { event.preventDefault?.(); event.stopPropagation?.(); closeWelcome(); return; }
+      if (event.key !== "Tab") return;
+      const stops = [...card.querySelectorAll("button, input, select, textarea")].filter((item) => !item.disabled && !item.hidden && item.getClientRects?.().length !== 0);
+      if (!stops.length) return;
+      const first = stops[0], last = stops.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault?.(); last.focus?.(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault?.(); first.focus?.(); }
+    });
+    document.body.append(overlay);
+    welcome.els = { overlay, card, steps, title, lead, body, status, back, skip, next };
+    return welcome.els;
+  }
+  const welcomeSay = (text, bad = false) => { const line = welcome.els?.status; if (!line) return; line.textContent = text || ""; line.classList.toggle("bad-text", Boolean(bad)); };
+  function welcomeRow({ mark, name, small, end, on = false, onClick = null, key = "" }) {
+    const row = node(onClick ? "button" : "div", `setup-welcome-opt${on ? " is-on" : ""}`);
+    if (onClick) { row.type = "button"; row.addEventListener("click", onClick); row.setAttribute("aria-pressed", String(on)); }
+    if (key) row.dataset.option = key;
+    const av = node("span", "setup-welcome-av", typeof mark === "string" ? mark : "");
+    av.setAttribute("aria-hidden", "true");
+    const words = node("span", "setup-welcome-words");
+    words.append(node("b", "", name));
+    if (small) words.append(node("small", "", small));
+    row.append(av, words);
+    if (end) row.append(end);
+    return row;
+  }
+  const chip = (text, ready = false) => node("span", `setup-welcome-chip${ready ? " is-ready" : ""}`, ready ? `✓ ${text}` : text);
+  // Step 1: the coding tools on this PC, with their own sign-in.
+  async function paintConnect(serial) {
+    const { title, lead, body } = welcome.els;
+    title.textContent = "Connect the AI you already use";
+    if (!welcome.clis) { try { welcome.clis = await api()?.cliSetupStatus?.() ?? null; } catch { welcome.clis = null; } }
+    if (serial !== welcome.serial) return;
+    const clis = welcome.clis?.ok ? (welcome.clis.clis || []) : [];
+    const found = clis.filter((cli) => cli.installed);
+    lead.textContent = found.length
+      ? `Studio found ${COUNT[found.length] ?? found.length} coding tool${found.length === 1 ? "" : "s"} on this PC. One sign-in can serve chat, planning and building.`
+      : welcome.clis?.ok ? "Studio found no coding tool on this PC yet. Install one and sign in with your own account, or use a key or a model on this PC."
+        : "Studio looks for your coding tools in the desktop app.";
+    const act = (cli, action) => async (event) => {
+      const control = event?.currentTarget;
+      if (control) control.disabled = true;
+      welcomeSay(action === "login" ? `Opening ${cli.name}'s sign-in…` : `Opening ${cli.name}'s setup…`);
+      try {
+        const result = await need("cliSetupAction")({ id: cli.id, action });
+        if (result?.ok === false) throw new Error(result.error || "That did not open.");
+        welcomeSay(result?.message || "Finish it in the window that opened, then come back here.");
+        setTimeout(async () => { try { welcome.clis = await api()?.cliSetupStatus?.() ?? welcome.clis; } catch { /* keep the last read */ } if (welcome.open && welcome.step === 0) void showWelcome(0, { focus: false }); }, 1500);
+      } catch (error) { welcomeSay(plain(error, "That did not open."), true); if (control) control.disabled = false; }
+    };
+    const rows = [];
+    for (const cli of found.length ? found : clis.filter((item) => item.subscription)) {
+      let small, end;
+      if (!cli.installed) { small = "Not installed"; end = button("Install and sign in", act(cli, "install"), "ghost mini"); }
+      else if (!cli.subscription) { small = "Installed · uses your keys or free models"; end = chip("Optional"); }
+      else if (cli.signedIn === true) { small = "Signed in · subscription detected"; end = chip("Ready", true); }
+      else { small = cli.signedIn === false ? "Installed · not signed in" : "Installed"; end = button("Sign in", act(cli, "login"), "ghost mini"); }
+      rows.push(welcomeRow({ mark: MARKS[cli.id] || cli.name.slice(0, 2).toUpperCase(), name: cli.name, small, end, on: cli.installed && cli.signedIn === true, key: cli.id }));
+    }
+    const more = button("Other ways to connect", () => {
+      // Keys, local models and the ChatGPT plan live in the sheet; it hands on when it closes, as the welcome would have.
+      const then = welcome.then; welcome.then = null;
+      hideWelcome();
+      state.then = then;
+      open("providers", { reason: "first-run" });
+    }, "ghost mini setup-welcome-more");
+    more.id = "setup-welcome-more";
+    body.replaceChildren(...rows, more);
+  }
+  // Step 2: the project, as the workspace has it.
+  async function paintProjects(serial) {
+    const { title, lead, body } = welcome.els;
+    title.textContent = "Choose a project";
+    lead.textContent = "Studio reads the folder on this PC. Tasks, plans and conversations stay with the project.";
+    try { welcome.projects = await api()?.projectsList?.() ?? null; } catch { welcome.projects = null; }
+    if (serial !== welcome.serial) return;
+    const list = Array.isArray(welcome.projects?.projects) ? welcome.projects.projects : [];
+    const active = welcome.projects?.activeId ?? null;
+    const rows = list.slice(0, 8).map((project) => {
+      const name = String(project.name || "Project");
+      const on = project.id === active;
+      return welcomeRow({ mark: (name.trim()[0] || "P").toUpperCase(), name, small: String(project.path || ""), on, key: `project:${project.id}`, end: on ? chip("Open", true) : null, onClick: on ? () => {} : () => {
+        // The workspace's own project button: it asks before stopping agents that are still working.
+        const own = document.querySelector?.(`#workspace-projects [data-project-id="${String(project.id).replace(/["\\]/g, "")}"]`);
+        if (own && !own.disabled) { own.click(); welcomeSay(`Opening ${name}…`); }
+        else welcomeSay("Choose it from the project list once this closes.", true);
+      } });
+    });
+    const add = document.getElementById?.("workspace-add-project");
+    if (add || typeof api()?.projectsAdd === "function") rows.push(welcomeRow({ mark: "+", name: "Open a folder…", small: "Any folder with code in it", key: "open-folder", onClick: () => { if (add && !add.disabled) add.click(); else void api().projectsAdd?.(); } }));
+    if (typeof window.MefiVibe?.openPanel === "function") rows.push(welcomeRow({ mark: "✦", name: "Start a new app…", small: "A new folder, with its first build", key: "new-app", onClick: () => { closeWelcome(); window.MefiVibe.openPanel("newapp"); } }));
+    if (!list.length) lead.textContent = "Studio works in a folder on this PC. Open one with code in it, or start a new app.";
+    body.replaceChildren(...rows);
+  }
+  // Step 3: the first task.
+  function paintTask() {
+    const { title, lead, body } = welcome.els;
+    title.textContent = "Give it a first task";
+    lead.textContent = "Describe something small. Studio plans it, builds it, and checks it before it says done.";
+    const input = node("input", "setup-welcome-input"); input.id = "setup-welcome-task"; input.type = "text"; input.maxLength = 4000;
+    input.placeholder = "Describe something small"; input.value = welcome.text; input.setAttribute("aria-label", "First task"); input.autocomplete = "off";
+    input.addEventListener("input", () => { welcome.text = input.value; welcome.els.next.disabled = welcome.busy || !input.value.trim(); });
+    input.addEventListener("keydown", (event) => { if (event.key === "Enter" && input.value.trim()) { event.preventDefault?.(); void welcomeNext(); } });
+    body.replaceChildren(input);
+  }
+  async function showWelcome(step, { focus = true } = {}) {
+    const els = buildWelcome();
+    welcome.step = Math.max(0, Math.min(WELCOME_STEPS - 1, step));
+    const serial = ++welcome.serial;
+    els.card.dataset.step = String(welcome.step);
+    [...els.steps.children].forEach((bar, index) => bar.classList.toggle("on", index <= welcome.step));
+    els.steps.setAttribute("aria-valuenow", String(welcome.step + 1));
+    els.steps.setAttribute("aria-valuetext", `Step ${welcome.step + 1} of ${WELCOME_STEPS}`);
+    els.back.hidden = welcome.step === 0;
+    els.next.textContent = welcome.step === WELCOME_STEPS - 1 ? "Start the task" : "Continue";
+    els.next.disabled = welcome.busy || (welcome.step === WELCOME_STEPS - 1 && !welcome.text.trim());
+    welcomeSay("");
+    if (welcome.step === 0) await paintConnect(serial);
+    else if (welcome.step === 1) await paintProjects(serial);
+    else paintTask();
+    if (serial !== welcome.serial || !welcome.open) return;
+    if (focus) (welcome.step === WELCOME_STEPS - 1 ? els.body.querySelector?.("input") : els.title)?.focus?.({ preventScroll: true });
+  }
+  async function welcomeNext() {
+    if (welcome.step < WELCOME_STEPS - 1) { await showWelcome(welcome.step + 1); return; }
+    const text = welcome.text.trim();
+    if (!text || welcome.busy) return;
+    welcome.busy = true; welcome.els.next.disabled = true;
+    welcomeSay("Adding your first task…");
+    try {
+      const projectId = welcome.projects?.activeId ?? window.MefiWorkspace?.activeProjectId?.() ?? null;
+      if (typeof api()?.tasksCreate !== "function") throw new Error("Tasks are added in the desktop app.");
+      const result = await api().tasksCreate({ title: text.split("\n")[0].slice(0, 180), prompt: text, ...(projectId ? { projectId } : {}) });
+      if (!result || result.ok === false) throw new Error(result?.error || "The task was not added.");
+      welcome.text = "";
+      closeWelcome();
+      const task = result.task;
+      if (task?.id) {
+        window.MefiSessions?.select?.(task.id);
+        // Start is the workspace's own: it asks for a worker the way the Start button does.
+        if (typeof window.MefiWorkspace?.startTask === "function") void Promise.resolve(window.MefiWorkspace.startTask(task)).catch(() => {});
+      }
+    } catch (error) { welcomeSay(plain(error, "The task was not added."), true); }
+    finally { welcome.busy = false; if (welcome.open && welcome.els) welcome.els.next.disabled = !welcome.text.trim(); }
+  }
+  function openWelcome({ then = null } = {}) {
+    const els = buildWelcome();
+    if (!welcome.open) { welcome.open = true; welcome.previous = document.activeElement; welcome.then = then; els.overlay.hidden = false; }
+    void showWelcome(0);
+    window.dispatchEvent(new CustomEvent("mefi-setup-helper", { detail: { open: true, section: "first-run" } }));
+    return true;
+  }
+  function hideWelcome() {
+    if (!welcome.open) return false;
+    welcome.open = false; welcome.serial += 1;
+    if (welcome.els) welcome.els.overlay.hidden = true;
+    const back = welcome.previous; welcome.previous = null;
+    if (back && document.contains?.(back)) back.focus?.({ preventScroll: true });
+    return true;
+  }
+  // Skip, Escape and Start the task: this revision is seen, and the hand-off runs as the sheet's close runs it.
+  function closeWelcome() {
+    if (!hideWelcome()) return;
+    write(SEEN_KEY, REVISION);
+    window.dispatchEvent(new CustomEvent("mefi-setup-helper", { detail: { open: false, section: "first-run" } }));
+    const then = welcome.then; welcome.then = null;
+    if (typeof then === "function") { try { then({ tour: false }); } catch { /* the next prompt is a nicety */ } }
+  }
+
   // ---- open, close and the first launch -------------------------------------
   function open(id, options = {}) {
     build();
@@ -1366,6 +1577,8 @@
   // Diagnostic launches never open it.
   function startup({ then = null } = {}) {
     if (headless || seen()) return false;
+    // The 0.5 layout's first run is the three-step welcome; an update still brings this sheet.
+    if (!returning && layoutV2()) return openWelcome({ then });
     state.then = then;
     open("welcome", { reason: returning ? "update" : "first-run" });
     return true;
@@ -1391,6 +1604,8 @@
 
   window.MefiSetupHelper = {
     open: (id, options) => open(id, options), close, isOpen, startup, seen,
+    // The 0.5 layout's first run: open it (as startup does on a fresh profile), whether it shows, and Skip.
+    welcome: (options) => openWelcome(options), welcomeOpen: () => welcome.open, closeWelcome,
     section: () => (state.open ? state.section : null),
     // Whether the last connections read found a working route (null before
     // any read), so the walkthrough can skip its own "link an AI" stop.

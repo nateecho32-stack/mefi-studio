@@ -39,6 +39,34 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-04 The v2 Settings, first run and plan draft page closer to the 0.5 prototype
+
+Branch `wip/ui-settings` (worktree `C:\wt\ui-settings` off main c01604e,
+node_modules junctioned), three commits: 70bc565 Settings filed into the
+prototype's places (booklet.js, styles.css, template wrappers, report.js),
+4ac04f8 the three-step first run (setup-helper.js/.css), 7d268b0 a Backlog
+plan opens as its own draft page (planning.js/.css, one line of sessions.js).
+New Electron fixture `settings_render` (MEFI_SETTINGS_CAPTURE_DIR); the
+setup_helper_render and planning_render fixtures gained a v2 phase each; new
+shared `tests/fixtures/text-probe.cjs` (no text under 12 px, 4.5:1 against
+what is painted behind it).
+
+`npm run check` ok (271 targets), `npm run audit` 0 findings, lint: no
+warning in a changed file. `npm run test:fast` before each commit: 6923/6909
+pass/0 fail; 6929/6913 pass/2 fail (attempt_review_host and
+attempt_snapshots_host under load: 55 tests, 52 pass, 0 fail alone); 6933/6919
+pass/0 fail (14 skipped each). Full `npm test` on 7d268b0: Node 6933 tests,
+6917 pass, 14 skipped, 2 fail under load (update_host_bridge 8/8 and
+rust_parity_snapshots 3/3 alone); Electron lane 76: 72 pass, 1 skipped, 3
+fail: layout_contract_render (viewport 1921x1081) and shell_render (as on
+clean main on this PC), tree_dynamics_render (fails alone, and on c01604e
+too); command_render 1/1; eyes_toggle_electron 0/1 (fails on c01604e too);
+occlusion_probe 2/2; Python 248 OK (1 skipped); path lock ok.
+settings_render, setup_helper_render and planning_render pass in the run.
+Captures in `C:\wt\gap\after-settings\v2\` (settings, first-run,
+plan-draft); prototype captures in `C:\wt\gap\after-settings\proto\`; the
+prototype beside v2 in `C:\wt\gap\after-settings\compare\`.
+
 ## 2026-10-04 The v2 status bar, Search and one Inbox land on main
 
 Branch `land/ui-chrome` in `C:\wt\land-ui`: origin/main c01604e with
@@ -412,10 +440,6 @@ Stable remains the default; development requires explicit warning/consent. Devel
 ## 2026-10-03 - Echo GitHub update channels - unfinished review checkpoint
 
 35 focused updater/channel tests pass, including native-consent cancellation, saved channel, stale responses, stable downgrade eligibility, platform/provenance/hash checks, nested artifacts, interrupted downloads and jobs starting during download. The isolated desktop renderer exercise passed after correcting the fixture's desktop capability and checking actual visibility; screenshots are local evidence. Check and application audit pass. Lint: zero errors, the existing 42 warnings. The full Windows npm test gate is still running and has reported failures in attempt_review_host and attempt_snapshots_host; these are untriaged, so this work is not merge-qualified. The initial restricted-account renderer launch failed; the same fixture ran on the real desktop. Official v0.4.4 was downloaded and verified against GitHub's SHA-256 into a separate folder. Original local state and PR3 were not changed. No release/tag published and no live development opt-in. Remaining: finish/triage full gate, final UI capture, CI and review, then integrate the prerequisite ahead of PR3.
-
-## 2026-10-02 late evening - bounded review and tree harness completion
-
-**Result:** complete affected suites passed (29/29). Paired predecessor/candidate probes demonstrated that fixed sleeps can precede async metadata writes and animation callbacks. The isolated harness waits for durable end-shot metadata and the unchanged >1px movement plus radius-growth criterion, with five-second bounds. Controlled delayed completion and permanent-frame-absence checks are recorded in external evidence. Earlier red aggregate remains preserved; full supervised aggregate qualification pending. Application execution, logging, retention and exports are unchanged from the frozen log-diagnostics candidate.
 
 ## Read Before Any Tests
 

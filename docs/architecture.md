@@ -234,7 +234,7 @@ settings and per-model work-kind summaries for the shared controls.
 | **Booklet** | Historically the single-file model catalog; today `renderer/booklet.html` is the whole app bundled into one file by `npm run build-booklet`. The **Model catalog** tab (`1`) is the part that kept the name. |
 | **Model Lab** | The previous name for Models' **Performance**, **Usage** and **Context** views. Shortcut `2` opens Performance. Usage keeps recorded calls separate from provider account readings. Catalog insights contains published benchmark charts. |
 | **Activity & evidence** (A-Eyes) | Tab `3`: a read-only view of the OpenCode session store: change feed, diffs, screenshots with pins, log tail. The "eyes worker" is the thread that reads that store. |
-| **Settings** | `4` or `Ctrl ,`: four single-pane categories, **General**, **Appearance**, **Audio** and **System**. Providers, routing and run behavior moved to **Agents › Setup** (Team & models, Providers, Routing & fallback, Run behavior); the old Connections, Models and Automation links redirect there. Search finds individual controls and opens their category and containing disclosures. `MefiNav.go("studio", { category: "appearance" })` opens a category; legacy section links such as `settings-updates` still work. |
+| **Settings** | `4` or `Ctrl ,`: four single-pane categories, **General**, **Appearance**, **Audio** and **System**. Providers, routing and run behavior moved to **Agents › Setup** (Team & models, Providers, Routing & fallback, Run behavior); the old Connections, Models and Automation links redirect there. Search finds individual controls and opens their category and containing disclosures. `MefiNav.go("studio", { category: "appearance" })` opens a category; legacy section links such as `settings-updates` still work. In the 0.5 layout (`html[data-layout="v2"]`) `renderer/booklet.js` files the same cards into the 0.5 prototype's places: **General**, **Notifications**, **Appearance** with **Size and density** under it, **Map look**, **Sound and music**; *Updates and help*: **Updates**, **Report a problem**; *Advanced*: **System**. Notifications, Updates and Report a problem become pages of their own (the card is the page, its groups are panels), Map look is the Appearance pane at its Nodes and Layout sections, and Size and density opens its own page. Nothing is copied, so deep links and Search land on the place that holds a control now; `MefiBooklet.settingsPlaces()` lists the places for a list drawn elsewhere. |
 | **Preferences** | General holds names and startup. Appearance holds themes, motion, blur, node styles and canvas effects; Audio links to the music dropdown and holds sound effects. Older Preferences and Your Studio links resolve to General. |
 | **Size and density** | The 0.5 layout's four size settings on one page, with a live miniature of the window beside the controls: **interface scale** (the window's zoom), **text size**, **density** (Compact, Comfortable, Spacious) and **detail** (Titles, Titles and status, Everything). Only in `html[data-layout="v2"]`; components size themselves with `--text-scale`, `--d-*` and `--dt-*`, and `window.MefiSize` is the model. See "Size and density (layout v2)" under Workspace and work. |
 | **Diagnostics** | Settings › System: speed probe, profiler, auditor, machine tools, connection log and Report a problem. Auditor and machine links reveal Sessions' Diagnostics panel. |
@@ -636,6 +636,16 @@ settings and per-model work-kind summaries for the shared controls.
   close leaves it waiting as the Start here card (`MefiOnboarding.invite()`)
   with one toast to start it. When the helper has connected an AI, the
   walkthrough starts at Your workspace instead of its scan stop.
+- **The first run in the 0.5 layout** (`html[data-layout="v2"]`) is the 0.5
+  prototype's three-step welcome instead of the sheet: **Connect the AI you
+  already use** (the coding tools `setup:cli-status` finds, each with its own
+  Sign in or install, and **Other ways to connect**, which opens the sheet at
+  Connect an AI), **Choose a project** (the projects, switched through the
+  workspace's own buttons, then Open a folder… and Start a new app…) and **Give
+  it a first task** (`tasks:create`, then the workspace's own start). Skip,
+  Escape and Start the task mark the revision seen and hand on exactly as the
+  sheet's close does. An update still brings the sheet, and the classic layout
+  keeps it for a first run. `MefiSetupHelper.welcome()` opens it.
 - The menu stays open by default at widths of 1100px or more, with the page
   beside it. **Keep menu open** saves your choice across launches. When unpinned
   or narrower than 1100px, it opens over the page on hover or keyboard focus;
@@ -2453,7 +2463,13 @@ never disagree. Nothing is drawn unless the layout is on and a shell is there.
   purpose); and **Sessions | Backlog**. The backlog lists plan drafts first
   (Plans not yet made into tasks, read with the Plans page's own
   `planning:list` when the project is taken up, the tab opens or at most every
-  30 s; a draft opens in Plans), then ideas nobody has made a task of, with
+  30 s; a draft opens in Plans as its own page, the 0.5 prototype's plan draft
+  page: its name, where it stands and the decisions left, its outcome, the
+  workflow's next step (Build it once the specification is approved, which
+  creates the tasks), Talk it over (the interview), Archive, its newest five
+  versions with Restore this version, and Open the full plan for every step;
+  `MefiPlanning.open({ planId, view: "draft" })`), then ideas nobody has made
+  a task of, with
   Scan the project (the Analyzer) and Scan chats for ideas (the palette's own
   action); under it a filter. A row's menu is open in a new tab, pin, rename
   (`tasks:action rename`), stop and delete (the board's own `tasks:delete` behind

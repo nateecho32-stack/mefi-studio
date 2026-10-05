@@ -20,6 +20,30 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   and which task they come from, a finished result offers Approve and finish,
   Review changes and Send it back, and the Inbox page now lives under Work
   (Work › Inbox). The classic layout is unchanged.
+- **A plan draft opens as its own page in the 0.5 layout.** A plan picked from
+  Work's Backlog now shows as one page, as in the 0.5 prototype: its name, where
+  it stands and how many decisions are left, its outcome, the next step (Build
+  it once its specification is approved, Talk it over before that), Archive, and
+  its versions with Restore this version. Open the full plan shows every step
+  as before, and Plans opened anywhere else is unchanged.
+- **A three-step first run in the 0.5 layout.** With the new layout on, a
+  fresh profile meets the 0.5 prototype's welcome instead of the whole setup
+  helper: connect the AI you already use (each coding tool found on this PC,
+  Ready or Sign in), choose a project (or open a folder, or start a new app),
+  and give it a first task, which Studio adds and starts. Skip leaves the setup
+  helper waiting in Help and Search as before, and Other ways to connect opens
+  it at Connect an AI. An update still shows the helper; the classic layout is
+  unchanged.
+- **Settings in the 0.5 layout, as the 0.5 prototype files it.** With the new
+  layout on (`?layout=v2`), Settings lists General, Notifications, Appearance
+  (with Size and density under it), Map look and Sound and music, then Updates
+  and Report a problem under "Updates and help" and System under "Advanced".
+  Notifications, Updates and Report a problem are now pages of their own, laid
+  out as panels side by side; Map look is the Nodes and Layout half of
+  Appearance; Find a setting sits beside the page title; rows put the words on
+  the left and the switch on the right, and no text is under 12 px. Every
+  setting, deep link and Search result still reaches the same control. The
+  classic layout is unchanged.
 - **The 0.5 layout's top bar says where you are.** With the new layout on
   (`?layout=v2`), the bar's middle is a breadcrumb, as in the 0.5 prototype:
   the project and the open session (or Today), or the project, section and

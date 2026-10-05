@@ -190,8 +190,11 @@
     });
     // The report is built when the card is opened, not at launch.
     const card = $("settings-diagnostics");
-    card?.addEventListener("toggle", () => { if (card.open && !state.view) void load(); });
-    if (card?.open) void load();
+    // In the 0.5 layout Report a problem is a Settings place of its own (renderer/booklet.js), which builds it when it shows:
+    // Diagnostics then no longer holds it, and opening Diagnostics builds nothing.
+    const holds = () => Boolean(card?.contains?.($(REPORT_SECTION)));
+    card?.addEventListener("toggle", () => { if (card.open && !state.view && holds()) void load(); });
+    if (card?.open && holds()) void load();
     api().onReportCrashed?.(() => whenVisible(() => whenBooted(crashed)));
     window.MefiNav?.register?.({
       id: "settings:report", label: "Settings › System › Report a problem", short: "Report a problem", kind: "action", layer: null, section: "settings", group: "system",

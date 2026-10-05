@@ -36,7 +36,7 @@ function savedPlan() {
   return result.plan;
 }
 
-async function environment(item = savedPlan(), storage = new Map(), { activeId = "project-a", openOptions } = {}) {
+async function environment(item = savedPlan(), storage = new Map(), { activeId = "project-a", openOptions, layout = null } = {}) {
   const root = new Element(); const fixed = new Map(); const events = {}; const calls = []; const planningReads = []; const sidebarOpens = []; const polls = new Map(); const navigation = []; const documentEvents = {}; const emitted = [];
   for (const id of ["overlay", "sheet", "notice", "new", "refresh", "close", "project", "list", "detail"]) { const element = new Element(["new", "refresh", "close"].includes(id) ? "button" : "div"); element.id = `plans-${id}`; fixed.set(element.id, element); root.append(element); }
   const find = (id, node = root) => node.id === id ? node : node.children.map((child) => find(id, child)).find(Boolean);
@@ -52,7 +52,7 @@ async function environment(item = savedPlan(), storage = new Map(), { activeId =
     planningAssist: async (payload) => { calls.push(structuredClone(payload)); return { ok: false, error: "Connection unavailable" }; },
     tasksList: async () => ({ ok: true, projectId: projects.activeId, tasks: structuredClone(tasks[projects.activeId]) }),
   };
-  const document = { readyState: "complete", hidden: false, activeElement: null, createElement: (tag) => new Element(tag), createElementNS: (_namespace, tag) => new Element(tag), getElementById: find, addEventListener: (name, callback) => { documentEvents[name] = callback; } };
+  const document = { readyState: "complete", hidden: false, activeElement: null, documentElement: { dataset: layout ? { layout } : {} }, createElement: (tag) => new Element(tag), createElementNS: (_namespace, tag) => new Element(tag), getElementById: find, addEventListener: (name, callback) => { documentEvents[name] = callback; } };
   const context = vm.createContext({ window: { mefiStudio: bridge, addEventListener: (name, callback) => { events[name] = callback; }, dispatchEvent: (event) => { emitted.push(event); return true; }, MefiNav: { claim() {}, release() {}, go: (...args) => navigation.push(args) }, MefiSidebar: { open: (options) => sidebarOpens.push(structuredClone(options)) }, MefiBoot: { pollStart: (key, fn) => polls.set(key, fn), pollStop: (key) => polls.delete(key) } }, CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options?.detail; } }, document, localStorage: { getItem: (key) => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value) }, console });
   const timers = new Map(); let timerId = 0;
   context.setTimeout = (fn) => { const id = ++timerId; timers.set(id, fn); return id; };
@@ -930,4 +930,83 @@ test("versions saved before authors and notes existed still list, by what they d
   assert.match(summaries[0], /^Version 3 · current · Destination saved · /);
   assert.doesNotMatch(summaries[0], /You|Mefi|Studio/);
   assert.match(summaries[2], /^Version 1 · Plan created · /);
+});
+
+// ---- the plan draft page (the 0.5 layout): a Backlog plan opened as its own page ----
+const approvedPlan = () => {
+  const item = savedPlan();
+  const result = planning.applyPlanningAction([item], { action: "approve-spec", planId: item.id, version: item.version }, { project: { id: "project-a" } });
+  assert.equal(result.ok, true);
+  return result.plan;
+};
+const texts = (node) => node ? node.children.map((child) => child.textContent) : [];
+
+test("with the 0.5 layout a plan opened from the Backlog is its own page: name, where it stands, outcome, next step and versions", async () => {
+  const item = savedPlan();
+  const env = await environment(item, new Map(), { layout: "v2", openOptions: { planId: item.id, view: "draft" } });
+  assert.equal(env.el("sheet").dataset.view, "draft");
+  assert.ok(env.el("page"), "the draft page is drawn");
+  assert.equal(env.el("workflow"), undefined, "the eight steps wait for Open the full plan");
+  assert.equal(env.el("page-title").textContent, "Saved idea");
+  assert.equal(env.el("page-note").textContent, "Saved outcome");
+  const chips = env.el("page").children[0].children[1];
+  assert.deepEqual(texts(chips), ["Plan draft", "No decisions yet"]);
+  assert.equal(env.el("page-next").textContent, "Approve the plan", "the workflow's own next step, in its words");
+  assert.equal(env.el("page-build"), undefined, "nothing is built before the specification is approved");
+  assert.equal(env.el("page-talk").textContent, "Talk it over");
+  assert.equal(env.el("page-archive").textContent, "Archive");
+  const versions = env.el("page-versions");
+  const rows = versions.children.filter((child) => child.dataset.version);
+  assert.deepEqual(rows.map((row) => row.dataset.version), ["3", "2", "1"], "newest first");
+  assert.match(rows[0].textContent, /^✓Version 3 · .*current$/);
+  assert.ok(env.el("page-restore-2") && env.el("page-restore-1"), "an older version can be restored");
+  // The next step opens the full plan where it is waiting.
+  await env.el("page-next").trigger("click"); await flush();
+  assert.equal(env.el("sheet").dataset.view, "full");
+  assert.ok(env.el("workflow"), "every step is back");
+  assert.equal(env.el("workflow").dataset.viewedStep, "approval");
+});
+
+test("Build it is the approved plan's Create tasks; Talk it over is the interview; Open the full plan shows every step", async () => {
+  const item = approvedPlan();
+  const env = await environment(item, new Map(), { layout: "v2", openOptions: { planId: item.id, view: "draft" } });
+  assert.deepEqual(texts(env.el("page").children[0].children[1]), ["Plan approved", "No decisions yet"]);
+  assert.equal(env.el("page-build").textContent, "Build it");
+  await env.el("page-build").trigger("click"); await flush();
+  assert.equal(env.calls.at(-1).action, "convert", "Build it asks the host to create the approved tasks");
+  const draft = savedPlan();
+  const talk = await environment(draft, new Map(), { layout: "v2", openOptions: { planId: draft.id, view: "draft" } });
+  await talk.el("page-talk").trigger("click"); await flush();
+  assert.equal(talk.el("workflow").dataset.viewedStep, "explore");
+  const full = await environment(draft, new Map(), { layout: "v2", openOptions: { planId: draft.id, view: "draft" } });
+  await full.el("page-full").trigger("click"); await flush();
+  assert.equal(full.el("sheet").dataset.view, "full");
+  assert.equal(full.el("page"), undefined);
+});
+
+test("Archive sets the plan aside as Archive plan does, and Restore plan brings it back; Restore this version is the Versions card's", async () => {
+  const item = savedPlan();
+  const env = await environment(item, new Map(), { layout: "v2", openOptions: { planId: item.id, view: "draft" } });
+  await env.el("page-archive").trigger("click"); await flush();
+  assert.equal(env.calls.at(-1).action, "archive");
+  assert.equal(env.el("sheet").dataset.view, "draft", "the page stays");
+  assert.deepEqual(texts(env.el("page").children[0].children[1]), ["Archived"]);
+  assert.ok(env.el("page-restore"), "Restore plan");
+  assert.equal(env.el("page-archive"), undefined);
+  await env.el("page-restore").trigger("click"); await flush();
+  assert.equal(env.calls.at(-1).action, "restore");
+  await env.el("page-restore-1").trigger("click"); await flush();
+  assert.deepEqual([env.calls.at(-1).action, env.calls.at(-1).toVersion], ["restore-version", 1]);
+});
+
+test("the classic layout opens every step, whatever the Backlog asks for", async () => {
+  const item = savedPlan();
+  const env = await environment(item, new Map(), { openOptions: { planId: item.id, view: "draft" } });
+  assert.equal(env.el("sheet").dataset.view, "full");
+  assert.equal(env.el("page"), undefined);
+  assert.ok(env.el("workflow"));
+  // Plans opened anywhere else in the 0.5 layout shows every step too.
+  const elsewhere = await environment(item, new Map(), { layout: "v2", openOptions: { planId: item.id } });
+  assert.equal(elsewhere.el("page"), undefined);
+  assert.ok(elsewhere.el("workflow"));
 });

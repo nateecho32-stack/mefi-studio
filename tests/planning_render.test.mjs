@@ -11,7 +11,7 @@ import { build } from "../scripts/build-booklet.mjs";
 const studio = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const executable = path.join(studio, "node_modules", "electron", "dist", process.platform === "win32" ? "electron.exe" : process.platform === "darwin" ? "Electron.app/Contents/MacOS/Electron" : "electron");
 const canRun = existsSync(executable) && (process.platform !== "linux" || Boolean(process.env.DISPLAY || process.env.WAYLAND_DISPLAY));
-test("Plans renders a responsive live writing partner and preserves native Enter focus and reduced motion", { skip: !canRun, timeout: 95000 }, async (t) => {
+test("Plans renders a responsive live writing partner and preserves native Enter focus and reduced motion; in the 0.5 layout a Backlog plan opens as its own page that fits two window sizes", { skip: !canRun, timeout: 150000 }, async (t) => {
   const fixture = await mkdtemp(path.join(tmpdir(), "mefi-planning-render-"));
   try {
     await mkdir(path.join(fixture, "renderer")); await mkdir(path.join(fixture, "data"));
@@ -24,7 +24,7 @@ test("Plans renders a responsive live writing partner and preserves native Enter
     const timer = setTimeout(() => {
       if (process.platform === "win32" && child.pid) { const killer = spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" }); killer.once("error", () => child.kill()); }
       else child.kill();
-    }, 65000);
+    }, 120000);
     const code = await new Promise((resolve, reject) => { child.once("error", reject); child.once("close", resolve); }).finally(() => clearTimeout(timer));
     let report; try { report = JSON.parse(await readFile(path.join(fixture, "report.json"), "utf8")); } catch {}
     const artifacts = process.env.MEFI_PLANNING_CAPTURE_DIR;
@@ -35,6 +35,7 @@ test("Plans renders a responsive live writing partner and preserves native Enter
     }
     assert.equal(code, 0, `${report?.failure || "No renderer report"}\n${output}`);
     assert.equal(report.layouts.length, 3); assert.ok(report.reducedMotion);
+    assert.equal(report.draft.length, 2, "the plan draft page at two window sizes"); assert.equal(report.draftFull.view, "full");
   } finally {
     assert.equal(path.dirname(fixture), path.resolve(tmpdir())); assert.ok(path.basename(fixture).startsWith("mefi-planning-render-"));
     await rm(fixture, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });

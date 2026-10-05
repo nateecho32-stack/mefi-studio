@@ -4544,6 +4544,139 @@ html[data-shell="rail"] .settings-card { scroll-margin-top: calc(var(--shell-y0)
   .settings-nav-item { padding: 6px 8px; font-size: 11px; min-width: 0; }
   .settings-nav-item .glyph { display: none; }
 }
+/* ---- Settings in the 0.5 layout --------------------------------------------------
+   renderer/booklet.js files Settings into the 0.5 prototype's places when
+   html[data-layout="v2"] is on and marks #tab-studio[data-places="v2"]; nothing
+   here matches anything otherwise. The places are a list beside one page at a
+   time; the page has its title with Find a setting at its right, and each card
+   is a panel of rows: the words on the left, the control on the right (the
+   prototype's .setrow). Sizes come from the 0.5 type ladder (renderer/size.css,
+   never under 12 px) and density's settings row padding (--d-set); the size
+   tokens the cards already use are re-pointed at that ladder here, so a card
+   written for the classic layout reads at least 12 px too. */
+.settings-place-only { display: none; }
+#tab-studio[data-places="v2"] {
+  --fs-2xs: var(--f12, 12px); --fs-xs: var(--f12, 12px); --fs-sm: var(--f125, 12.5px); --fs-md: var(--f135, 13.5px); --fs-base: var(--f14, 14px);
+  --place-card: color-mix(in srgb, var(--panel-solid) 72%, transparent);
+  --place-edge: color-mix(in srgb, var(--ivory) 10%, transparent);
+  --place-rule: color-mix(in srgb, var(--ivory) 7%, transparent);
+}
+#tab-studio[data-places="v2"] .settings-place-only { display: block; }
+#tab-studio[data-places="v2"] .settings-layout { grid-template-columns: 236px minmax(0, 1fr); gap: 32px; }
+/* the list of places */
+html #tab-studio[data-places="v2"] .settings-nav { gap: 6px; padding: 4px; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
+#tab-studio[data-places="v2"] .settings-nav-list { gap: 12px; }
+#tab-studio[data-places="v2"] .settings-nav-group { gap: 2px; }
+#tab-studio[data-places="v2"] .settings-nav-heading { padding: 2px 12px 4px; color: var(--muted); font: 600 var(--f125, 12.5px)/1.3 var(--font-ui); letter-spacing: 0; text-transform: none; }
+#tab-studio[data-places="v2"] .settings-nav-item { min-height: 38px; padding: 0 12px; gap: 11px; border-radius: 10px; color: var(--muted); font-size: var(--f14, 14px); font-weight: 500; }
+#tab-studio[data-places="v2"] .settings-nav-item.is-sub { min-height: 32px; padding-left: 30px; font-size: var(--f13, 13px); }
+#tab-studio[data-places="v2"] .settings-nav-item .glyph { width: 16px; height: 16px; flex: none; color: var(--muted); opacity: 1; }
+#tab-studio[data-places="v2"] .settings-nav-item.is-sub .glyph { width: 14px; height: 14px; }
+#tab-studio[data-places="v2"] .settings-nav-item:hover { color: var(--ivory); background: var(--tint-gold-1); border-color: transparent; }
+#tab-studio[data-places="v2"] .settings-nav-item[aria-current="true"] { color: var(--ivory); font-weight: 600; background: var(--tint-gold-3); border-color: color-mix(in srgb, var(--gold) 34%, transparent); box-shadow: none; }
+#tab-studio[data-places="v2"] .settings-nav-item[aria-current="true"] .glyph { color: var(--gold-bright); }
+#tab-studio[data-places="v2"] .settings-config-open { justify-self: start; min-height: 32px; margin-top: 8px; padding: 0 12px; border-color: transparent; background: transparent; color: var(--muted); font-size: var(--f125, 12.5px); }
+#tab-studio[data-places="v2"] .settings-config-open:hover { color: var(--ivory); background: var(--tint-gold-1); }
+/* the page: its title, and Find a setting at its right */
+#tab-studio[data-places="v2"] .settings-sections { position: relative; gap: 14px; width: 100%; max-width: 860px; }
+#tab-studio[data-places="v2"]:is([data-settings-place="notifications"], [data-settings-place="problem"]) .settings-sections { max-width: 980px; }
+#tab-studio[data-places="v2"] .settings-sections > .settings-find { position: absolute; top: 0; right: 0; z-index: 1; width: min(280px, 38%); min-height: 38px; padding: 0 12px; border-radius: 10px; }
+#tab-studio[data-places="v2"] .settings-sections > .settings-find input { min-height: 36px; font-size: var(--f135, 13.5px); }
+#tab-studio[data-places="v2"] .settings-category-head { display: block; min-height: 40px; padding: 0 calc(min(280px, 38%) + 20px) 0 0; border-bottom: 0; text-align: left; }
+#tab-studio[data-places="v2"] .settings-category-head h2 { font: 650 var(--f22, 22px)/1.3 var(--font-display); letter-spacing: -.01em; }
+#tab-studio[data-places="v2"] .settings-category-head p { margin-top: 4px; color: var(--muted); font-size: var(--f135, 13.5px); line-height: 1.5; max-width: 70ch; }
+#tab-studio[data-places="v2"] :is(.settings-search-results, .settings-find-empty) { margin-top: 56px; }
+#tab-studio[data-places="v2"] .settings-result-path { font-size: var(--f12, 12px); }
+#tab-studio[data-places="v2"] .settings-search-result { justify-items: start; text-align: left; }
+#tab-studio[data-places="v2"] .settings-search-result strong { font-size: var(--f14, 14px); font-weight: 600; }
+/* the appearance sidebar keeps its own head: Find sits above it, not over it */
+body.appearance-settings-active #tab-studio[data-places="v2"] .settings-sections > .settings-find { position: static; width: auto; margin: 0 0 4px; }
+body.appearance-settings-active #tab-studio[data-places="v2"] .settings-category-head { padding-right: 0; }
+body.appearance-settings-active #tab-studio[data-places="v2"] :is(.settings-search-results, .settings-find-empty) { margin-top: 0; }
+/* Where the list is a strip of chips over the page (a narrow page, or the Appearance sidebar), every place is a chip that wraps; the headings step aside. */
+body.appearance-settings-active #tab-studio[data-places="v2"] .settings-nav-list { display: flex; flex-wrap: wrap; gap: 4px; overflow: visible; }
+body.appearance-settings-active #tab-studio[data-places="v2"] .settings-nav-group { display: contents; }
+body.appearance-settings-active #tab-studio[data-places="v2"] .settings-nav-heading { display: none; }
+body.appearance-settings-active #tab-studio[data-places="v2"] .settings-nav-item { flex: 0 1 auto; min-height: 32px; padding: 0 10px; font-size: var(--f12, 12px); }
+@container settings (max-width: 720px) {
+  #tab-studio[data-places="v2"] .settings-layout { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  #tab-studio[data-places="v2"] .settings-nav-list { display: flex; flex-wrap: wrap; gap: 4px; overflow: visible; }
+  #tab-studio[data-places="v2"] .settings-nav-group { display: contents; }
+  #tab-studio[data-places="v2"] .settings-nav-heading { display: none; }
+  #tab-studio[data-places="v2"] .settings-nav-item, #tab-studio[data-places="v2"] .settings-nav-item.is-sub { flex: 0 1 auto; min-height: 32px; padding: 0 10px; font-size: var(--f12, 12px); }
+  #tab-studio[data-places="v2"] .settings-sections > .settings-find { position: static; width: auto; }
+  #tab-studio[data-places="v2"] .settings-category-head { padding-right: 0; }
+  #tab-studio[data-places="v2"] :is(.settings-search-results, .settings-find-empty) { margin-top: 0; }
+  #tab-studio[data-places="v2"] :is(.settings-you-fields, #settings-studio) > .field { grid-template-columns: minmax(0, 1fr); }
+  #tab-studio[data-places="v2"] :is(.settings-you-fields, #settings-studio) > .field > :is(input, select) { grid-column: 1; grid-row: auto; }
+  /* the strip sticks over the page as it scrolls, so it is solid */
+  html #tab-studio[data-places="v2"] .settings-nav { padding: 8px 12px; background: var(--panel-solid); box-shadow: var(--shadow-1); }
+}
+/* Sound and music: the sound effects first, then music and video, its words beside its button. */
+#tab-studio[data-places="v2"] #settings-category-audio > .settings-category-head { order: -2; }
+#tab-studio[data-places="v2"] #settings-audio-effects { order: -1; }
+#tab-studio[data-places="v2"] #settings-audio-media { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 20px; }
+#tab-studio[data-places="v2"] #settings-audio-media > * { grid-column: 1 / -1; }
+#tab-studio[data-places="v2"] #settings-audio-media > h3:first-child { margin: 0 0 4px; font: 650 var(--f14, 14px)/1.35 var(--font-ui); }
+#tab-studio[data-places="v2"] #settings-audio-media > p:nth-child(2) { grid-column: 1; margin: 0; font-size: var(--f13, 13px); }
+#tab-studio[data-places="v2"] #settings-audio-media > button:nth-child(3) { grid-column: 2; grid-row: 2; }
+/* The Appearance sidebar's own small print reads at 12 px or more too. */
+#tab-studio[data-places="v2"] :is(.music-fineprint, .music-node-label, .music-node-choice strong, .music-node-choice small, .music-effect-copy small, .studio-style-choice strong, .music-void-theme-label) { font-size: var(--f12, 12px); }
+#tab-studio[data-places="v2"] .settings-media .music-theme { font-size: var(--f12, 12px); }
+/* Appearance and Map look are one pane: each shows its own sections */
+#tab-studio[data-places="v2"][data-settings-place="appearance"] :is([data-appearance-section="nodes"], [data-appearance-section="layout"]),
+#tab-studio[data-places="v2"][data-settings-place="looks"] :is([data-appearance-section="themes"], [data-appearance-section="interface"]) { display: none; }
+/* cards are panels */
+#tab-studio[data-places="v2"] .settings-card { padding: 16px 18px; border: 1px solid var(--place-edge); border-radius: 14px; background: var(--place-card); }
+#tab-studio[data-places="v2"] .settings-optional > summary { gap: 10px; font-size: var(--f14, 14px); }
+#tab-studio[data-places="v2"] .settings-summary-text { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 16px; }
+#tab-studio[data-places="v2"] .settings-summary-text > b { font: 650 var(--f14, 14px)/1.35 var(--font-ui); }
+#tab-studio[data-places="v2"] .settings-summary-text > span { color: var(--muted); font-size: var(--f13, 13px); }
+#tab-studio[data-places="v2"] .settings-optional[open] > summary { padding-bottom: 6px; margin-bottom: 4px; border-bottom: 0; }
+#tab-studio[data-places="v2"] .settings-advanced > summary { font-size: var(--f14, 14px); font-weight: 650; }
+#tab-studio[data-places="v2"] .settings-advanced[open] > summary { padding-bottom: 6px; margin-bottom: 4px; border-bottom: 0; }
+#tab-studio[data-places="v2"] :is(.settings-optional, .settings-card) > p { font-size: var(--f13, 13px); line-height: 1.55; }
+#tab-studio[data-places="v2"] .settings-eyebrow { margin: 4px 0 8px; color: var(--ivory); font: 650 var(--f14, 14px)/1.35 var(--font-ui); letter-spacing: 0; text-transform: none; }
+#tab-studio[data-places="v2"] .settings-eyebrow .muted { margin-left: 8px; font-weight: 400; font-size: var(--f13, 13px); }
+/* rows: the words on the left, the control on the right */
+#tab-studio[data-places="v2"] .settings-control { padding: calc(var(--d-set, 10px) + 2px) 0; }
+#tab-studio[data-places="v2"] .settings-control + .settings-control { border-top-color: var(--place-rule); }
+#tab-studio[data-places="v2"] .settings-control b { font-size: var(--f14, 14px); font-weight: 600; color: var(--ivory); }
+#tab-studio[data-places="v2"] .settings-control small { font-size: var(--f13, 13px); }
+#tab-studio[data-places="v2"] :is(.settings-you-switches, #settings-appearance-controls, #settings-tree-controls, #settings-audio-controls, #settings-behavior-controls) { display: grid; gap: 0; margin-top: 0; }
+#tab-studio[data-places="v2"] :is(.settings-you-switches, #settings-appearance-controls, #settings-tree-controls, #settings-audio-controls) > label.switch { display: flex; flex-direction: row; justify-content: space-between; align-items: center; gap: 16px; padding: calc(var(--d-set, 10px) + 2px) 0; color: var(--ivory); font-size: var(--f14, 14px); font-weight: 600; }
+#tab-studio[data-places="v2"] :is(.settings-you-switches, #settings-appearance-controls, #settings-tree-controls, #settings-audio-controls) > label + label { border-top: 1px solid var(--place-rule); }
+#tab-studio[data-places="v2"] :is(.settings-you-switches, #settings-appearance-controls, #settings-tree-controls, #settings-audio-controls) > label.switch > .track { flex: none; order: 2; margin-left: auto; }
+#tab-studio[data-places="v2"] :is(#settings-tree-controls, #settings-audio-controls) > label { color: var(--ivory); font-size: var(--f14, 14px); font-weight: 600; }
+#tab-studio[data-places="v2"] .settings-you-fields { gap: 0; grid-template-columns: 1fr; }
+#tab-studio[data-places="v2"] .settings-you-fields > .field, #tab-studio[data-places="v2"] #settings-studio > .field { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, 260px); align-items: center; gap: 4px 20px; padding: calc(var(--d-set, 10px) + 2px) 0; }
+#tab-studio[data-places="v2"] #settings-studio > .field { border-top: 1px solid var(--place-rule); }
+#tab-studio[data-places="v2"] :is(.settings-you-fields, #settings-studio) > .field > .field-label { grid-column: 1; color: var(--ivory); font-size: var(--f14, 14px); font-weight: 600; letter-spacing: 0; }
+#tab-studio[data-places="v2"] :is(.settings-you-fields, #settings-studio) > .field > :is(input, select) { grid-column: 2; grid-row: 1 / span 2; }
+#tab-studio[data-places="v2"] :is(.settings-you-fields, #settings-studio) > .field > .field-hint { grid-column: 1; color: var(--muted); font-size: var(--f13, 13px); }
+#tab-studio[data-places="v2"] #settings-studio > :is(.settings-you-switches, .settings-mode-row) { border-top: 1px solid var(--place-rule); }
+#tab-studio[data-places="v2"] :is(#idle-home-hint, #open-at-login-hint) { margin: 0 0 8px; font-size: var(--f13, 13px); }
+#tab-studio[data-places="v2"] .settings-mode-row { padding-top: calc(var(--d-set, 10px) + 2px); }
+/* A place that is one card (Notifications, Updates, Report a problem): the card
+   is the page, so its own title steps aside and its groups are the panels. */
+#tab-studio[data-places="v2"] [data-settings-place-card] { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+#tab-studio[data-places="v2"] details[data-settings-place-card] > summary { display: none; }
+#tab-studio[data-places="v2"] [data-settings-place-card] .settings-place-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 14px; align-items: start; }
+#tab-studio[data-places="v2"] [data-settings-place-card] .settings-place-col { display: grid; gap: 14px; min-width: 0; }
+#tab-studio[data-places="v2"] [data-settings-place-card] .settings-place-group { margin: 0; padding: 16px 18px; border: 1px solid var(--place-edge); border-radius: 14px; background: var(--place-card); }
+#tab-studio[data-places="v2"] [data-settings-place-card] .settings-place-group[hidden] { display: none; }
+#tab-studio[data-places="v2"] [data-settings-place-card] .update-block { display: grid; gap: 14px; margin: 0; padding: 0; border: 0; }
+#tab-studio[data-places="v2"] [data-settings-place-card] .settings-place-group > .settings-eyebrow:first-child { margin-top: 0; }
+#tab-studio[data-places="v2"] .alerts-lead { margin: 0 0 4px; font-size: var(--f13, 13px); }
+#tab-studio[data-places="v2"] .alerts-sample { max-width: none; padding: 12px 14px; }
+#tab-studio[data-places="v2"] .alerts-titles { max-width: 280px; }
+/* Report a problem: what would be in the zip and its preview on the left, what never is and what happens next on the right */
+#tab-studio[data-places="v2"] .settings-report { margin: 0; padding: 0; border: 0; }
+#tab-studio[data-places="v2"] .settings-report > :is(.settings-eyebrow, .report-title) { display: none; }
+#tab-studio[data-places="v2"] .settings-report > p.muted { margin: 0 0 14px; font-size: var(--f135, 13.5px); }
+#tab-studio[data-places="v2"] [data-settings-place-card] .report-preview.settings-place-group { margin: 0; padding: 0; overflow: hidden; }
+#tab-studio[data-places="v2"] .report-actions { margin: 0; }
+#tab-studio[data-places="v2"] .report-file-name { font-size: var(--f13, 13px); }
 .ws-compose-bottom { flex-wrap: wrap; }
 .ws-compose-bottom > span { flex: 1 1 120px; }
 .ws-feedback-row { flex-wrap: wrap; }
@@ -6865,6 +6998,51 @@ html[data-no-blur] #plans-overlay { --planning-blur: none; --planning-page-blur:
 .planning-ready:hover { border-color: var(--hairline-strong); color: var(--ivory); }
 @media (prefers-reduced-motion: reduce) { .planning-ready::before, .planning-flow-stage[data-celebrate="true"] .planning-step-icon, .planning-flow-stage[data-celebrate="true"]::before { animation: none !important; } }
 :is(.no-motion, .ws-still, html[data-motion="off"]) .planning-ready::before, :is(.no-motion, .ws-still, html[data-motion="off"]) .planning-flow-stage[data-celebrate="true"] .planning-step-icon, :is(.no-motion, .ws-still, html[data-motion="off"]) .planning-flow-stage[data-celebrate="true"]::before { animation: none !important; }
+
+/* ---- The plan draft page (the 0.5 layout; renderer/planning.js, renderDraftPage) ----
+   A plan opened from Work's Backlog reads as the 0.5 prototype's page: its name,
+   where it stands, its outcome, what to do next and its versions. The plan
+   library and the sheet's own head step aside; Open the full plan brings every
+   step back. Text is at least 12 px and follows the 0.5 text size. */
+#plans-sheet[data-view="draft"] :is(.planning-sidebar, .planning-head) { display: none; }
+#plans-sheet[data-view="draft"] .planning-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+#plans-sheet[data-view="draft"] .planning-detail { min-height: 0; padding: 28px 24px 40px; overflow-y: auto; overflow-x: hidden; }
+.planning-page { display: grid; gap: 14px; width: min(780px, 100%); margin: 0 auto; }
+/* the page's own head: the plan's name with its chips under it, not a sheet bar */
+#plans-sheet .planning-page-head { position: static; display: block; min-height: 0; margin: 0; padding: 0; border: 0; background: none; box-shadow: none; }
+.planning-page-head h2 { margin: 0 0 8px; color: var(--ivory); font: 650 max(12px, calc(22px * var(--text-scale, 1)))/1.3 var(--font-display); letter-spacing: -.01em; overflow-wrap: anywhere; }
+.planning-page-head h2::after { display: none; }
+.planning-page-head h2:focus { outline: none; }
+.planning-page-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.planning-page-chip { display: inline-flex; align-items: center; min-height: 26px; padding: 0 11px; border: 1px solid var(--planning-edge); border-radius: var(--r-pill, 999px); color: var(--ivory); font-size: max(12px, calc(12.5px * var(--text-scale, 1))); white-space: nowrap; }
+.planning-page-chip.is-plan { border-color: color-mix(in srgb, var(--idea) 55%, transparent); color: var(--idea); }
+.planning-page-note { padding: 14px 16px; border: 1px solid var(--planning-edge); border-radius: 12px; background: var(--planning-panel); color: var(--ivory); font-size: max(12px, calc(14px * var(--text-scale, 1))); line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.planning-page-out { margin: -4px 0 0; color: var(--muted); font-size: max(12px, calc(13px * var(--text-scale, 1))); line-height: 1.5; overflow-wrap: anywhere; }
+.planning-page-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+/* the next step is the studio's own primary, as in the prototype; Plans keeps its quieter one elsewhere */
+#plans-sheet .planning-page-actions > button.primary { background: linear-gradient(120deg, var(--studio-action-end, var(--gold-bright)), var(--gold)); border-color: transparent; color: var(--ink); box-shadow: inset 0 1px rgb(255 255 255 / .2); font-weight: 600; }
+#plans-sheet .planning-page-actions > button.primary:not(:disabled):hover { background: linear-gradient(120deg, var(--studio-action-end, var(--gold-bright)), var(--gold)); box-shadow: 0 4px 16px color-mix(in srgb, var(--gold) 18%, transparent); }
+.planning-page-actions > button { min-height: 36px; font-size: max(12px, calc(13.5px * var(--text-scale, 1))); }
+.planning-page-fine { margin: -4px 0 0; color: var(--muted); font-size: max(12px, calc(13px * var(--text-scale, 1))); line-height: 1.5; }
+.planning-page-versions { margin-top: 4px; overflow: hidden; border: 1px solid var(--planning-edge); border-radius: 12px; background: var(--planning-panel); }
+.planning-page-versions-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--planning-edge); }
+.planning-page-versions-head h3 { margin: 0; color: var(--ivory); font: 650 max(12px, calc(14px * var(--text-scale, 1)))/1.3 var(--font-ui); }
+.planning-page-versions-head span { color: var(--muted); font-size: max(12px, calc(13px * var(--text-scale, 1))); }
+.planning-page-version { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
+.planning-page-version + .planning-page-version { border-top: 1px solid color-mix(in srgb, var(--ivory) 7%, transparent); }
+.planning-page-mark { display: grid; flex: none; place-items: center; width: 20px; height: 20px; border: 1.5px dashed color-mix(in srgb, var(--muted) 70%, transparent); border-radius: 50%; color: var(--gold-bright); font-size: max(12px, calc(12px * var(--text-scale, 1))); }
+.planning-page-mark.is-current { border: 0; background: color-mix(in srgb, var(--gold) 22%, transparent); }
+.planning-page-version-words { display: grid; flex: 1 1 auto; gap: 2px; min-width: 0; }
+.planning-page-version-words b { color: var(--ivory); font-size: max(12px, calc(14px * var(--text-scale, 1))); font-weight: 600; overflow-wrap: anywhere; }
+.planning-page-version-words small { color: var(--muted); font-size: max(12px, calc(12.5px * var(--text-scale, 1))); }
+.planning-page-current { flex: none; color: var(--muted); font-size: max(12px, calc(12.5px * var(--text-scale, 1))); }
+.planning-page-version > button { flex: none; font-size: max(12px, calc(12.5px * var(--text-scale, 1))); }
+.planning-page-versions > button { margin: 4px 16px 12px; font-size: max(12px, calc(12.5px * var(--text-scale, 1))); }
+.planning-page-full { justify-self: start; font-size: max(12px, calc(12.5px * var(--text-scale, 1))); }
+@media (max-width: 640px) {
+  #plans-sheet[data-view="draft"] .planning-detail { padding: 18px 14px 28px; }
+  .planning-page-version { flex-wrap: wrap; }
+}
 
 /* Brain maps — the pipeline editor: parts rail, wiring canvas, inspector. */
 .brains-overlay { position: fixed; inset: 0; z-index: var(--z-sheet); padding: 22px; display: grid; place-items: center; background: rgba(0,0,0,.78); backdrop-filter: blur(14px); }
@@ -10897,6 +11075,52 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   .setup-helper-step { width: auto; white-space: nowrap; }
 }
 
+/* ---- The first run in the 0.5 layout (setupHelper's welcome, html[data-layout="v2"]) ----
+   The 0.5 prototype's welcome: one card over the whole window, three steps
+   (connect, project, first task), Back / Skip / Continue. Theme tokens only;
+   no text under 12 px; the card scrolls inside itself on a short window and
+   reserves no width for a bar. */
+.setup-welcome { position: fixed; inset: 0; z-index: calc(var(--z-toast, 95) - 1); display: grid; place-items: center; padding: 24px; overflow: auto; background: radial-gradient(90% 80% at 50% 30%, color-mix(in srgb, var(--panel-solid) 96%, var(--gold) 4%) 0%, var(--bg) 70%); animation: setup-welcome-in var(--motion-base, 200ms) var(--ease-out, ease-out); }
+.setup-welcome[hidden] { display: none; }
+@keyframes setup-welcome-in { from { opacity: 0; } to { opacity: 1; } }
+.setup-welcome-card { width: min(640px, 100%); max-height: calc(100vh - 48px); padding: 28px 28px 0; overflow: auto; scrollbar-width: none; border: 1px solid color-mix(in srgb, var(--ivory) 12%, transparent); border-radius: 18px; background: var(--panel-solid); box-shadow: 0 30px 80px -30px rgba(0, 0, 0, .8); outline: none; }
+.setup-welcome-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 0 22px; }
+.setup-welcome-steps > i { height: 3px; border-radius: var(--r-pill, 999px); background: color-mix(in srgb, var(--ivory) 14%, transparent); transition: background var(--motion-base, 200ms) var(--ease-out, ease-out); }
+.setup-welcome-steps > i.on { background: var(--gold); }
+.setup-welcome-title { margin: 0 0 8px; color: var(--ivory); font: 650 max(12px, calc(22px * var(--text-scale, 1)))/1.25 var(--font-display); letter-spacing: -.01em; }
+.setup-welcome-title:focus { outline: none; }
+.setup-welcome-lead { max-width: 54ch; margin: 0 0 16px; color: var(--muted); font-size: max(12px, calc(14px * var(--text-scale, 1))); line-height: 1.55; }
+.setup-welcome-body { display: grid; gap: 8px; }
+.setup-welcome-opt { display: flex; align-items: center; justify-content: flex-start; gap: 12px; width: 100%; min-height: 62px; margin: 0; padding: 10px 14px; border: 1px solid color-mix(in srgb, var(--ivory) 10%, transparent); border-radius: 12px; background: color-mix(in srgb, var(--bg) 45%, transparent); color: var(--ivory); text-align: left; white-space: normal; box-shadow: none; }
+button.setup-welcome-opt { cursor: pointer; }
+button.setup-welcome-opt:hover { border-color: color-mix(in srgb, var(--gold) 40%, transparent); background: var(--tint-gold-1); transform: none; }
+.setup-welcome-opt.is-on { border-color: color-mix(in srgb, var(--gold) 62%, transparent); background: color-mix(in srgb, var(--gold) 6%, color-mix(in srgb, var(--bg) 45%, transparent)); }
+.setup-welcome-av { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: var(--tint-gold-3); color: var(--gold-bright); font: 700 max(12px, calc(12px * var(--text-scale, 1)))/1 var(--font-ui); }
+.setup-welcome-words { display: grid; flex: 1 1 auto; gap: 2px; min-width: 0; }
+.setup-welcome-words b { overflow: hidden; color: var(--ivory); font-size: max(12px, calc(14px * var(--text-scale, 1))); font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.setup-welcome-words small { overflow: hidden; color: var(--muted); font-size: max(12px, calc(13px * var(--text-scale, 1))); line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+.setup-welcome-chip { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 11px; border: 1px solid var(--hairline-strong); border-radius: var(--r-pill, 999px); color: var(--ivory); font-size: max(12px, calc(12.5px * var(--text-scale, 1))); white-space: nowrap; }
+.setup-welcome-chip.is-ready { border-color: color-mix(in srgb, var(--good) 55%, transparent); color: var(--ivory); }
+.setup-welcome-opt > button { flex: none; }
+.setup-welcome-more { justify-self: start; margin-top: 4px; font-size: max(12px, calc(13px * var(--text-scale, 1))); }
+.setup-welcome-input { width: 100%; min-height: 46px; padding: 0 14px; border: 1px solid var(--hairline-strong); border-radius: 12px; background: color-mix(in srgb, var(--bg) 55%, transparent); color: var(--ivory); font-size: max(12px, calc(15px * var(--text-scale, 1))); }
+.setup-welcome-input:focus { border-color: var(--gold-dim); box-shadow: var(--ring); outline: none; }
+.setup-welcome-status { min-height: 1.4em; margin: 12px 0 0; color: var(--muted); font-size: max(12px, calc(13px * var(--text-scale, 1))); line-height: 1.45; }
+.setup-welcome-status.bad-text { color: var(--bad); }
+.setup-welcome-status:empty { min-height: 0; margin: 0; }
+/* The foot stays in reach while a short window scrolls the card under it. */
+.setup-welcome-foot { position: sticky; bottom: 0; z-index: 1; display: flex; align-items: center; gap: 10px; margin-top: 4px; padding: 14px 0 22px; background: var(--panel-solid); }
+.setup-welcome-gap { flex: 1 1 auto; }
+.setup-welcome-foot > button { min-height: 38px; padding: 0 16px; font-size: max(12px, calc(14px * var(--text-scale, 1))); }
+.setup-welcome-foot > button[hidden] { display: none; }
+@media (max-width: 520px) {
+  .setup-welcome { padding: 12px; }
+  .setup-welcome-card { padding: 20px 16px 0; max-height: calc(100vh - 24px); }
+  .setup-welcome-foot { padding-bottom: 16px; }
+  .setup-welcome-opt { flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) { .setup-welcome { animation: none; } }
+
 /* Git sync (renderer/git-sync.js): the Push and Pull chip, its popover, and the
    Save and push, Publish, Link and Sign in dialogs. Every colour reads the
    theme's tokens (--ivory, --muted, --gold, --good, --info, --warn, --bad), so
@@ -13800,6 +14024,11 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
         </details>
 <details class="settings-optional settings-card" id="settings-notifications" data-desktop-only><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-bell"/></svg></span><span class="settings-summary-text"><b>Notifications</b><span>Windows alerts, taskbar flash and count, quiet hours</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
           <!-- Notifications (renderer/alerts.js, main.cjs "Notifications"): Studio tells Windows when something waits on you, only while Studio is not the window you are looking at. -->
+          <!-- Four groups in two columns: the 0.5 layout shows each as a panel, side by side (styles.css, "Settings in the 0.5 layout"). -->
+          <div class="settings-place-cols">
+          <div class="settings-place-col">
+          <div class="settings-place-group" id="alerts-group-background">
+          <p class="settings-eyebrow settings-place-only">When Studio is in the background</p>
           <p class="muted alerts-lead">Studio tells Windows when something waits on you, and only while Studio isn't the window you are looking at.</p>
           <p class="settings-status alerts-note" id="alerts-note" role="status" hidden></p>
           <div class="settings-control-list alerts-rows" id="alerts-rows">
@@ -13811,18 +14040,29 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
             <label class="settings-control"><span><b>Show a count on the taskbar icon</b><small>The number of things waiting on you.</small></span><input id="alerts-badge" type="checkbox" role="switch" data-alerts="badge"></label>
             <label class="settings-control"><span><b>Play a sound</b><small>Windows' own notification sound, for anything that needs you.</small></span><input id="alerts-sound" type="checkbox" role="switch" data-alerts="sound"></label>
           </div>
+          </div>
+          <div class="settings-place-group" id="alerts-group-quiet">
           <p class="settings-eyebrow">Quiet hours <span class="muted">shared with the Discord remote</span></p>
           <div class="settings-control-list">
             <label class="settings-control"><span><b>Stay quiet at night</b><small>No notifications inside this window. The inbox still fills, and the count still shows.</small></span><input id="alerts-quiet" type="checkbox" role="switch"></label>
             <div class="settings-control alerts-times" id="alerts-quiet-times" hidden><span><b>Quiet between</b><small id="alerts-quiet-note">The Discord remote keeps the same hours.</small></span><span class="alerts-time-pair"><select id="alerts-quiet-from" aria-label="Quiet hours start"><option value="00:00">12:00 AM</option><option value="01:00">1:00 AM</option><option value="02:00">2:00 AM</option><option value="03:00">3:00 AM</option><option value="04:00">4:00 AM</option><option value="05:00">5:00 AM</option><option value="06:00">6:00 AM</option><option value="07:00">7:00 AM</option><option value="08:00">8:00 AM</option><option value="09:00">9:00 AM</option><option value="10:00">10:00 AM</option><option value="11:00">11:00 AM</option><option value="12:00">12:00 PM</option><option value="13:00">1:00 PM</option><option value="14:00">2:00 PM</option><option value="15:00">3:00 PM</option><option value="16:00">4:00 PM</option><option value="17:00">5:00 PM</option><option value="18:00">6:00 PM</option><option value="19:00">7:00 PM</option><option value="20:00">8:00 PM</option><option value="21:00">9:00 PM</option><option value="22:00">10:00 PM</option><option value="23:00">11:00 PM</option></select><span class="muted">until</span><select id="alerts-quiet-to" aria-label="Quiet hours end"><option value="00:00">12:00 AM</option><option value="01:00">1:00 AM</option><option value="02:00">2:00 AM</option><option value="03:00">3:00 AM</option><option value="04:00">4:00 AM</option><option value="05:00">5:00 AM</option><option value="06:00">6:00 AM</option><option value="07:00">7:00 AM</option><option value="08:00">8:00 AM</option><option value="09:00">9:00 AM</option><option value="10:00">10:00 AM</option><option value="11:00">11:00 AM</option><option value="12:00">12:00 PM</option><option value="13:00">1:00 PM</option><option value="14:00">2:00 PM</option><option value="15:00">3:00 PM</option><option value="16:00">4:00 PM</option><option value="17:00">5:00 PM</option><option value="18:00">6:00 PM</option><option value="19:00">7:00 PM</option><option value="20:00">8:00 PM</option><option value="21:00">9:00 PM</option><option value="22:00">10:00 PM</option><option value="23:00">11:00 PM</option></select></span></div>
           </div>
+          </div>
+          </div>
+          <div class="settings-place-col">
+          <div class="settings-place-group" id="alerts-group-words">
           <p class="settings-eyebrow">What a notification says</p>
           <div class="segmented alerts-titles" id="alerts-titles" role="group" aria-label="What a notification says"><button type="button" data-value="generic" aria-pressed="true">Generic</button><button type="button" data-value="titles" aria-pressed="false">Task titles</button></div>
           <p class="muted" id="alerts-titles-note">Windows keeps notification text in its history and can show it on the lock screen, so Studio says only that something needs you.</p>
           <div class="alerts-sample" aria-hidden="true"><span class="alerts-sample-from">Mefi Studio · now</span><b id="alerts-sample-title">Something needs you</b><span id="alerts-sample-body">A task is waiting for your answer.</span></div>
+          </div>
+          <div class="settings-place-group" id="alerts-group-try">
           <p class="settings-eyebrow">Try it</p>
           <p class="muted">Studio never sends a notification while you are looking at it. Send the test, then switch to another window: it arrives as you do, and waits up to a minute for that.</p>
           <div class="row tight alerts-actions"><button id="alerts-test" class="primary" type="button">Send me a test notification</button><span class="settings-status" id="alerts-status" role="status"></span></div>
+          </div>
+          </div>
+          </div>
         </details>
 <details class="settings-optional settings-card" id="settings-community"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-community"/></svg></span><span class="settings-summary-text"><b>Community</b><span>Your link to the Void Engine Discord</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
           
@@ -14123,7 +14363,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
 <section class="settings-category" id="settings-category-system" data-settings-category-pane="system" aria-labelledby="settings-category-system-heading" hidden><header class="settings-category-head"><h2 id="settings-category-system-heading" tabindex="-1">System</h2><p>Updates, diagnostics and integrations</p></header>
 <details class="settings-optional settings-card" id="settings-updates" data-desktop-only><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-update"/></svg></span><span class="settings-summary-text"><b>Updates</b><span>Live update and published builds</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
         <div class="update-block" data-update-block>
-          <div id="source-updates">
+          <div id="source-updates" class="settings-place-group">
           <p class="settings-eyebrow">Live update</p>
           <p class="muted">In development, Studio watches its source files and applies local changes. Reloads wait for active builders and result saves.</p>
           <div class="row tight update-row">
@@ -14132,6 +14372,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
             <span class="eyes-status" id="update-status" role="status">not watching</span>
           </div>
           </div>
+          <div class="settings-place-group" id="update-group-channel">
           <p class="settings-eyebrow">GitHub update channel</p>
           <p class="muted">Stable (default) offers published release builds only. GitHub is checked every 20 minutes. A source checkout reports builds; installation requires the portable Windows app.</p>
           <label class="switch"><input type="checkbox" id="release-development" aria-describedby="release-channel-warning"><span class="track"></span><span>Development / beta: receive built updates automatically</span></label>
@@ -14150,11 +14391,14 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
             <input type="password" id="release-token" placeholder="Existing GitHub token (Actions read for development)" autocomplete="off" aria-label="GitHub update token">
             <button id="release-token-save" class="ghost mini">Save token</button>
           </div>
+          </div>
+          <div class="settings-place-group" id="update-group-news">
           <p class="settings-eyebrow">What's new</p>
           <!-- renderer/whats-new.js: the versions up to this one, in plain words (assets/whats-new.json). -->
           <div id="whats-new-list" class="whats-new-list" role="list" aria-label="What's new, version by version"><p class="muted whats-new-empty">Reading this build's notes…</p></div>
           <label class="switch" title="After an update installs, Studio shows one toast with What's new. It never opens a window by itself."><input type="checkbox" id="whats-new-on" checked><span class="track"></span><span>Tell me what's new after an update</span></label>
           <p class="muted" id="whats-new-note" role="status" hidden></p>
+          </div>
         </div>
         </details>
 <details class="settings-optional settings-card" id="settings-diagnostics"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-gauge"/></svg></span><span class="settings-summary-text"><b>Diagnostics</b><span>Performance, checks, machine status and Report a problem</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
@@ -14175,6 +14419,11 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
             <h3 class="report-title">Read it, then save it</h3>
             <p class="muted">Studio builds a small bundle on this PC. Read every file first, then save it as a zip. Nothing is uploaded: you attach it to a message yourself.</p>
             <p class="settings-status report-crash" id="report-crash" role="status" hidden></p>
+            <!-- Two columns of panels in the 0.5 layout (styles.css, "Settings in the 0.5 layout"); one column, in this order, otherwise. -->
+            <div class="settings-place-cols">
+            <div class="settings-place-col">
+            <div class="settings-place-group" id="report-group-zip">
+            <p class="settings-eyebrow settings-place-only">What would be in the zip</p>
             <div class="report-files" id="report-files" role="list" aria-label="What would be in the zip"><p class="muted report-empty">Building the report…</p></div>
             <p class="muted report-total" id="report-total"></p>
             <div class="settings-you-switches report-switches">
@@ -14183,7 +14432,8 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
               <label class="switch" title="After a crash or a hang, the next start says so once and offers this report."><input type="checkbox" id="report-prompt" checked><span class="track"></span><span>Tell me when Studio closes unexpectedly</span></label>
             </div>
             <p class="muted" id="report-prompt-note" role="status" hidden></p>
-            <div class="report-preview">
+            </div>
+            <div class="report-preview settings-place-group" id="report-group-preview">
               <p class="report-preview-head"><b class="report-file-name" id="report-preview-name">manifest.json</b><span class="muted"> · read-only preview</span></p>
               <pre class="log report-pre" id="report-pre" tabindex="0" aria-label="Preview of the selected file"></pre>
             </div>
@@ -14192,8 +14442,13 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
               <button id="report-refresh" class="ghost" type="button" title="Build the report again from what Studio knows now">Read it again</button>
               <span class="settings-status" id="report-status" role="status"></span>
             </div>
+            </div>
+            <div class="settings-place-col">
+            <div class="settings-place-group" id="report-group-never">
             <p class="settings-eyebrow">Never included</p>
             <ul class="report-never" id="report-never" aria-label="What a report never holds"></ul>
+            </div>
+            <div class="settings-place-group" id="report-group-next">
             <p class="settings-eyebrow">What happens next</p>
             <ol class="report-next">
               <li><b>Studio saves the zip where you choose.</b> A Save dialog, because Documents may live in OneDrive.</li>
@@ -14201,6 +14456,9 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
               <li><b>You attach it to a message yourself.</b> The Void Engine Discord is one place. Studio never sends it.</li>
             </ol>
             <button id="report-discord" class="ghost mini" type="button">Open the Discord invite <span aria-hidden="true">↗</span></button>
+            </div>
+            </div>
+            </div>
           </div>
         </details>
 <details class="settings-optional settings-card" id="settings-integrations"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-plug"/></svg></span><span class="settings-summary-text"><b>Integrations</b><span>Optional: Ruins Runner and Love2D</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary><p class="muted">Requires a separate game project and its LÖVE runtime. This integration is optional for Studio.</p><div class="row studio-actions" id="studio-actions"><button data-action="launch">Launch Love2D studio</button><button data-action="smoke">Run smoke</button><button data-action="game">Launch Ruins Runner</button><button data-action="stop">Stop game</button></div><p class="muted" id="studio-hint"></p></details>
@@ -75235,8 +75493,11 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     });
     // The report is built when the card is opened, not at launch.
     const card = $("settings-diagnostics");
-    card?.addEventListener("toggle", () => { if (card.open && !state.view) void load(); });
-    if (card?.open) void load();
+    // In the 0.5 layout Report a problem is a Settings place of its own (renderer/booklet.js), which builds it when it shows:
+    // Diagnostics then no longer holds it, and opening Diagnostics builds nothing.
+    const holds = () => Boolean(card?.contains?.($(REPORT_SECTION)));
+    card?.addEventListener("toggle", () => { if (card.open && !state.view && holds()) void load(); });
+    if (card?.open && holds()) void load();
     api().onReportCrashed?.(() => whenVisible(() => whenBooted(crashed)));
     window.MefiNav?.register?.({
       id: "settings:report", label: "Settings › System › Report a problem", short: "Report a problem", kind: "action", layer: null, section: "settings", group: "system",
@@ -76327,7 +76588,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
   // `index` is the project read Plans warms on open (files Studio can see);
   // `systems` and `places` come from the Project map, so a plan knows which
   // part of the project it lives in before its spec and tasks need it.
-  const state = { projectId: null, projectName: "Your project", plans: [], selected: "new", busy: false, pending: null, tasks: null, workError: null, epoch: 0, opened: false, readId: 0, workReadId: 0, existing: null, existingOpen: false, showArchived: false, index: null, preparing: false, systems: null, places: null, loaded: false };
+  const state = { view: "full", projectId: null, projectName: "Your project", plans: [], selected: "new", busy: false, pending: null, tasks: null, workError: null, epoch: 0, opened: false, readId: 0, workReadId: 0, existing: null, existingOpen: false, showArchived: false, index: null, preparing: false, systems: null, places: null, loaded: false };
   // Mefi carries the conversation: it asks as soon as a plan exists and again
   // after each decision you record. One switch, remembered on this PC.
   const autoAskKey = "mefiStudio.planning.autoAsk.v1";
@@ -76374,6 +76635,8 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
   const draftKey = () => JSON.stringify([state.projectId, state.selected]);
   const draft = () => drafts[draftKey()] ||= {};
   const plan = () => state.plans.find((item) => item.id === state.selected);
+  // The plan draft page shows while the 0.5 layout is on, a saved plan is open and the page was asked for (open({ view: "draft" })).
+  const draftView = () => state.view === "draft" && Boolean(plan()) && document.documentElement?.dataset?.layout === "v2";
   // On the board: its tasks exist, so its view follows their progress.
   // Frozen: read-only, which also covers a plan you archived.
   const onBoard = (item) => ["converted", "converting"].includes(item?.status);
@@ -76823,6 +77086,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     chip.title = index?.structure?.length ? `Top level: ${index.structure.join("  ")}\nClick to read the folder again.` : "Read the project's files so Mefi can point at real code.";
   }
   function renderWorkflow(item) {
+    if (draftView()) return;
     let area = $("workflow");
     const entering = !area;
     if (!area) { area = node("section", "planning-workflow", undefined, $("detail")); area.id = "plans-workflow"; area.setAttribute("aria-label", "From idea to verified work"); }
@@ -77367,6 +77631,9 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
   // confirm what we understand and approve the specification again before any task.
   // The newest twenty are listed; Show older versions pages back through the rest.
   const VERSIONS_SHOWN = 20;
+  // What a version did, and who made it, in words (the Versions card and the plan draft page).
+  const VERSION_LABELS = { create: "Plan created", update: "Destination saved", "add-unknown": "Unknown added", "remove-unknown": "Unknown set aside", "add-question": "Question added", "edit-question": "Question edited", resolve: "Decision recorded", reopen: "Decision reopened", "add-note": "Interview line saved", "confirm-understanding": "Understanding confirmed", "draft-spec": "Specification drafted", "approve-spec": "Specification approved", "begin-conversion": "Task creation started", "mark-converted": "Tasks created", archive: "Plan archived", restore: "Plan restored", "restore-version": "Version restored", migrated: "First version kept" };
+  const VERSION_AUTHORS = { user: "You", assistant: "Mefi", host: "Studio" };
   function history(item) {
     if (!item.history?.length) return;
     const local = draft(); const area = node("details", "planning-card", undefined, $("editor") || $("detail")); area.id = "plans-history";
@@ -77374,8 +77641,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     area.addEventListener("toggle", () => { local.historyOpen = Boolean(area.open); });
     node("summary", "", `Versions · ${countLabel(item.history.length, "saved version")} · every edit is kept`, area);
     node("p", "planning-subtle", "Earlier decisions and specifications stay available here after you change the plan. Open a version to read it, then restore it if you want it back: its wording returns as a new version and nothing is lost. You can also copy any text into a new edit.", area);
-    const labels = { create: "Plan created", update: "Destination saved", "add-unknown": "Unknown added", "remove-unknown": "Unknown set aside", "add-question": "Question added", "edit-question": "Question edited", resolve: "Decision recorded", reopen: "Decision reopened", "add-note": "Interview line saved", "confirm-understanding": "Understanding confirmed", "draft-spec": "Specification drafted", "approve-spec": "Specification approved", "begin-conversion": "Task creation started", "mark-converted": "Tasks created", archive: "Plan archived", restore: "Plan restored", "restore-version": "Version restored", migrated: "First version kept" };
-    const authors = { user: "You", assistant: "Mefi", host: "Studio" };
+    const labels = VERSION_LABELS, authors = VERSION_AUTHORS;
     const limit = local.historyLimit || VERSIONS_SHOWN;
     const newest = item.history.at(-1)?.version;
     for (const entry of [...item.history].reverse().slice(0, limit)) {
@@ -77504,6 +77770,75 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       if (!(tooling.agents?.length || tooling.skills?.length || tooling.commands?.length)) node("p", "planning-subtle", "No project or user agents, skills or commands were found (.claude/, .opencode/, ~/.claude, ~/.config/opencode).", box);
     }
   }
+  // ---- a plan draft as a page (the 0.5 layout) --------------------------------
+  // With html[data-layout="v2"] a plan opened from Work's Backlog
+  // (renderer/sessions.js) opens as the 0.5 prototype's plan draft page
+  // (docs/prototype/mefi-studio-0.5-v5.html, backlogView): its name, where it
+  // stands and how many decisions are left, its outcome, what to do next, and
+  // its versions with Restore. Nothing here is new to the plan: the next step is
+  // the workflow's own (the host still asks for your decisions, your review and
+  // your approval before any task is made, so "Build it" is offered only once the
+  // specification is approved), Talk it over is the interview, Archive sets the
+  // plan aside as the workflow's Archive plan does (restoring brings it back),
+  // and Restore this version is the Versions card's own. The full plan, with
+  // every step, is one press away and is what Plans opens anywhere else.
+  const DRAFT_VERSIONS = 5;
+  const PLAN_WORDS = { planning: "Plan draft", ready: "Plan approved", converting: "Making its tasks", converted: "On the task board" };
+  const NEXT_WORDS = { idea: "Describe your idea", explore: "Talk it over", decisions: "Record your decisions", review: "Read it back", spec: "Draft the build plan", approval: "Approve the plan", build: "Build it", verify: "Check the results" };
+  function fullPlanAt(step) {
+    state.view = "full"; render(); note();
+    // The step it is waiting on is the one shown; pressing its stage also brings its section into view.
+    if (step && plan()) { selectStep(step); $(`stage-${step}`)?.click?.(); }
+  }
+  function renderDraftPage(item) {
+    const flow = workflowState(item);
+    const page = node("article", "planning-page", undefined, $("detail")); page.id = "plans-page";
+    page.setAttribute("aria-labelledby", "plans-page-title");
+    const head = node("header", "planning-page-head", undefined, page);
+    const title = node("h2", "", item.title, head); title.id = "plans-page-title"; title.tabIndex = -1;
+    const chips = node("div", "planning-page-chips", undefined, head);
+    const open = flow.questions.length - flow.resolved.length;
+    node("span", "planning-page-chip is-plan", archived(item) ? "Archived" : PLAN_WORDS[item.status] || "Plan draft", chips);
+    if (!frozen(item)) node("span", "planning-page-chip", open ? `${countLabel(open, "decision")} left` : flow.questions.length ? "Decisions recorded" : "No decisions yet", chips);
+    if (item.unknowns?.length && !frozen(item)) node("span", "planning-page-chip", countLabel(item.unknowns.length, "unknown"), chips);
+    const bubble = node("div", "planning-page-note", item.destination, page); bubble.id = "plans-page-note";
+    if (item.outOfScope) node("p", "planning-page-out", `Outside this plan: ${item.outOfScope}`, page);
+    const actions = node("div", "planning-page-actions", undefined, page);
+    if (archived(item)) button("Restore plan", actions, () => act("restore", {}, null, "Plan restored. It is back in your list."), "page-restore", true);
+    else if (item.status === "ready") button("Build it", actions, () => act("convert", {}, null, "Approved tasks are in your project's queue."), "page-build", true);
+    else if (item.status === "converting") button("Finish creating tasks", actions, () => act("convert", {}, null, "Approved tasks are in your project's queue."), "page-build", true);
+    else if (item.status === "converted") navigation("Follow the tasks", actions, () => fullPlanAt("build"), "page-next", "primary");
+    else if (flow.current === "explore") navigation("Talk it over", actions, () => fullPlanAt("explore"), "page-talk", "primary");
+    else navigation(NEXT_WORDS[flow.current] || "Continue the plan", actions, () => fullPlanAt(flow.current), "page-next", "primary");
+    // Talk it over is the interview: Mefi asks, you answer, and nothing is decided for you.
+    if (!frozen(item) && flow.current !== "explore") navigation("Talk it over", actions, () => fullPlanAt("explore"), "page-talk", "ghost");
+    if (!archived(item) && item.status !== "converting") button("Archive", actions, () => act("archive", {}, null, "Plan archived. Restore brings it back as it was."), "page-archive");
+    if (!frozen(item) && item.status !== "ready") node("p", "planning-page-fine", "Nothing is built until you approve its specification. The next step opens the plan where it is waiting on you.", page);
+    // Versions: every edit is kept; the newest few here, the rest in the full plan.
+    const history = Array.isArray(item.history) ? [...item.history].reverse() : [];
+    if (history.length) {
+      const card = node("section", "planning-page-versions", undefined, page); card.id = "plans-page-versions"; card.setAttribute("aria-labelledby", "plans-page-versions-title");
+      const top = node("div", "planning-page-versions-head", undefined, card);
+      node("h3", "", "Versions", top).id = "plans-page-versions-title";
+      node("span", "", "every edit is kept", top);
+      const newest = history[0]?.version;
+      for (const entry of history.slice(0, DRAFT_VERSIONS)) {
+        const current = entry.version === newest;
+        const row = node("div", "planning-page-version", undefined, card); row.dataset.version = String(entry.version);
+        node("span", `planning-page-mark${current ? " is-current" : ""}`, current ? "✓" : "", row).setAttribute("aria-hidden", "true");
+        const words = node("div", "planning-page-version-words", undefined, row);
+        node("b", "", `Version ${entry.version} · ${entry.note || VERSION_LABELS[entry.action] || "Plan updated"}`, words);
+        node("small", "", [VERSION_AUTHORS[entry.by] || "", dateOf(entry.at)].filter(Boolean).join(" · "), words);
+        if (current) node("span", "planning-page-current", "current", row);
+        else if (!frozen(item) && entry.snapshot && !["converting", "converted"].includes(entry.snapshot.status)) button("Restore this version", row, () => {
+          if (unsavedPlan(plan())) { note("Save or clear your unsaved changes before restoring a version.", true); return; }
+          void act("restore-version", { toVersion: entry.version }, null, `Restored version ${entry.version} as version ${(plan()?.version ?? item.version) + 1}. Nothing was lost.`);
+        }, `page-restore-${entry.version}`).classList.add("mini");
+      }
+      if (history.length > DRAFT_VERSIONS) navigation(`All ${history.length} versions`, card, () => { draft().historyOpen = true; persist(); fullPlanAt(null); $("history")?.scrollIntoView?.({ block: "start" }); }, "page-all-versions", "ghost mini");
+    }
+    navigation("Open the full plan", page, () => fullPlanAt(null), "page-full", "ghost mini planning-page-full");
+  }
   function render() {
     rememberSelection();
     if (composeKey !== draftKey()) { stopExploration(); composeKey = draftKey(); focusedField = "destination"; copilot = { status: "idle", result: null, signature: null, error: "" }; suggestionUndo = null; }
@@ -77515,6 +77850,10 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       controls(); return;
     }
     const item = plan();
+    // The 0.5 layout's plan draft page: the plan as a page, until you open the full plan.
+    const page = draftView();
+    $("sheet").dataset.view = page ? "draft" : "full";
+    if (page) { renderDraftPage(item); controls(); return; }
     renderWorkflow(item);
     const canvas = node("div", "planning-canvas", undefined, $("detail"));
     const editor = node("div", "planning-editor", undefined, canvas); editor.id = "plans-editor";
@@ -77622,6 +77961,9 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
   async function open(options = {}) {
     init(); priorFocus = document.activeElement; state.opened = true; $("overlay").hidden = false;
     window.MefiNav?.claim?.("plans");
+    // A plan opened from Work's Backlog opens as its draft page (0.5 layout); Plans opened anywhere else shows every step.
+    state.view = !options.create && options.planId && options.view === "draft" ? "draft" : "full";
+    if (state.view === "draft" && state.loaded && state.plans.some((item) => item.id === options.planId)) state.selected = options.planId;
     // Plans read before paint at once; the fresh list replaces them a moment later.
     if (state.loaded && state.projectId) render(); else note("Opening this project's plans…");
     await refresh({ refreshTasks: false });
@@ -77630,7 +77972,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     else if (options.planId) state.selected = options.planId;
     render(); if (state.projectId && api()?.planningList && $("notice").dataset.error !== "true") note();
     startWorkPoll();
-    (options.create ? $("title") : $("new"))?.focus();
+    (options.create ? $("title") : draftView() ? $("page-title") : $("new"))?.focus();
   }
   function close() { if (!$("overlay") || $("overlay").hidden) return; persist(); state.opened = false; stopExploration(); copilot.status = "idle"; stopWorkPoll(); $("overlay").hidden = true; window.MefiNav?.release?.("plans"); if (!window.MefiNav?.release) priorFocus?.focus?.(); }
   function init() {
@@ -85632,6 +85974,217 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     void show(path[target].id);
   }
 
+  // ---- the first run in the 0.5 layout: a three-step welcome ----------------
+  // With html[data-layout="v2"] a fresh profile meets the 0.5 prototype's first
+  // run (docs/prototype/mefi-studio-0.5-v5.html, welcomeView) instead of this
+  // whole sheet: connect the AI you already use, choose a project, give it a
+  // first task. Every step reads and acts through what already exists: the
+  // coding tools from setup:cli-status and their own Sign in or install
+  // (setup:cli-action); the projects from projects:list, switched through the
+  // workspace's own project buttons (which ask before stopping busy agents),
+  // with Open a folder… and Start a new app… through their usual flows; the
+  // task through tasks:create, then the workspace's own start. Skip, Escape and
+  // Start the task mark this revision seen and hand on exactly as closing the
+  // sheet does. The sheet stays one step away: Other ways to connect opens it
+  // at Connect an AI (keys and local models live there), and Search, Help and
+  // Configuration reach it as before. A returning profile after an update still
+  // gets the sheet. The prototype's "Write a check first" has no counterpart in
+  // the engine yet, so it is not offered.
+  const WELCOME_STEPS = 3;
+  const MARKS = { claude: "CC", codex: "CX", opencode: "OC", grok: "GK", antigravity: "AG" };
+  const COUNT = ["no", "one", "two", "three", "four", "five", "six"];
+  const welcome = { open: false, step: 0, els: null, clis: null, projects: null, text: "", busy: false, then: null, previous: null, serial: 0 };
+  const layoutV2 = () => document.documentElement?.dataset?.layout === "v2";
+  function buildWelcome() {
+    if (welcome.els) return welcome.els;
+    const overlay = node("div", "setup-welcome"); overlay.id = "setup-welcome"; overlay.hidden = true;
+    const card = node("section", "setup-welcome-card"); card.id = "setup-welcome-card"; card.tabIndex = -1;
+    card.setAttribute("role", "dialog"); card.setAttribute("aria-modal", "true"); card.setAttribute("aria-labelledby", "setup-welcome-title"); card.setAttribute("aria-describedby", "setup-welcome-lead");
+    const steps = node("div", "setup-welcome-steps"); steps.setAttribute("role", "progressbar"); steps.setAttribute("aria-label", "First run"); steps.setAttribute("aria-valuemin", "1"); steps.setAttribute("aria-valuemax", String(WELCOME_STEPS));
+    for (let index = 0; index < WELCOME_STEPS; index += 1) steps.append(node("i"));
+    const title = node("h2", "setup-welcome-title"); title.id = "setup-welcome-title"; title.tabIndex = -1;
+    const lead = node("p", "setup-welcome-lead"); lead.id = "setup-welcome-lead";
+    const body = node("div", "setup-welcome-body"); body.id = "setup-welcome-body";
+    const status = node("p", "setup-welcome-status"); status.id = "setup-welcome-status"; status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite");
+    const foot = node("footer", "setup-welcome-foot");
+    const back = button("Back", () => void showWelcome(welcome.step - 1), "ghost"); back.id = "setup-welcome-back";
+    const skip = button("Skip", () => closeWelcome(), "ghost"); skip.id = "setup-welcome-skip";
+    skip.title = "Close the welcome. The setup helper waits in Help and Search (Esc)";
+    const next = button("Continue", () => void welcomeNext(), "primary"); next.id = "setup-welcome-next";
+    foot.append(back, node("span", "setup-welcome-gap"), skip, next);
+    card.append(steps, title, lead, body, status, foot);
+    overlay.append(card);
+    // A modal: Escape skips, and Tab stays inside the card.
+    card.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") { event.preventDefault?.(); event.stopPropagation?.(); closeWelcome(); return; }
+      if (event.key !== "Tab") return;
+      const stops = [...card.querySelectorAll("button, input, select, textarea")].filter((item) => !item.disabled && !item.hidden && item.getClientRects?.().length !== 0);
+      if (!stops.length) return;
+      const first = stops[0], last = stops.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault?.(); last.focus?.(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault?.(); first.focus?.(); }
+    });
+    document.body.append(overlay);
+    welcome.els = { overlay, card, steps, title, lead, body, status, back, skip, next };
+    return welcome.els;
+  }
+  const welcomeSay = (text, bad = false) => { const line = welcome.els?.status; if (!line) return; line.textContent = text || ""; line.classList.toggle("bad-text", Boolean(bad)); };
+  function welcomeRow({ mark, name, small, end, on = false, onClick = null, key = "" }) {
+    const row = node(onClick ? "button" : "div", `setup-welcome-opt${on ? " is-on" : ""}`);
+    if (onClick) { row.type = "button"; row.addEventListener("click", onClick); row.setAttribute("aria-pressed", String(on)); }
+    if (key) row.dataset.option = key;
+    const av = node("span", "setup-welcome-av", typeof mark === "string" ? mark : "");
+    av.setAttribute("aria-hidden", "true");
+    const words = node("span", "setup-welcome-words");
+    words.append(node("b", "", name));
+    if (small) words.append(node("small", "", small));
+    row.append(av, words);
+    if (end) row.append(end);
+    return row;
+  }
+  const chip = (text, ready = false) => node("span", `setup-welcome-chip${ready ? " is-ready" : ""}`, ready ? `✓ ${text}` : text);
+  // Step 1: the coding tools on this PC, with their own sign-in.
+  async function paintConnect(serial) {
+    const { title, lead, body } = welcome.els;
+    title.textContent = "Connect the AI you already use";
+    if (!welcome.clis) { try { welcome.clis = await api()?.cliSetupStatus?.() ?? null; } catch { welcome.clis = null; } }
+    if (serial !== welcome.serial) return;
+    const clis = welcome.clis?.ok ? (welcome.clis.clis || []) : [];
+    const found = clis.filter((cli) => cli.installed);
+    lead.textContent = found.length
+      ? `Studio found ${COUNT[found.length] ?? found.length} coding tool${found.length === 1 ? "" : "s"} on this PC. One sign-in can serve chat, planning and building.`
+      : welcome.clis?.ok ? "Studio found no coding tool on this PC yet. Install one and sign in with your own account, or use a key or a model on this PC."
+        : "Studio looks for your coding tools in the desktop app.";
+    const act = (cli, action) => async (event) => {
+      const control = event?.currentTarget;
+      if (control) control.disabled = true;
+      welcomeSay(action === "login" ? `Opening ${cli.name}'s sign-in…` : `Opening ${cli.name}'s setup…`);
+      try {
+        const result = await need("cliSetupAction")({ id: cli.id, action });
+        if (result?.ok === false) throw new Error(result.error || "That did not open.");
+        welcomeSay(result?.message || "Finish it in the window that opened, then come back here.");
+        setTimeout(async () => { try { welcome.clis = await api()?.cliSetupStatus?.() ?? welcome.clis; } catch { /* keep the last read */ } if (welcome.open && welcome.step === 0) void showWelcome(0, { focus: false }); }, 1500);
+      } catch (error) { welcomeSay(plain(error, "That did not open."), true); if (control) control.disabled = false; }
+    };
+    const rows = [];
+    for (const cli of found.length ? found : clis.filter((item) => item.subscription)) {
+      let small, end;
+      if (!cli.installed) { small = "Not installed"; end = button("Install and sign in", act(cli, "install"), "ghost mini"); }
+      else if (!cli.subscription) { small = "Installed · uses your keys or free models"; end = chip("Optional"); }
+      else if (cli.signedIn === true) { small = "Signed in · subscription detected"; end = chip("Ready", true); }
+      else { small = cli.signedIn === false ? "Installed · not signed in" : "Installed"; end = button("Sign in", act(cli, "login"), "ghost mini"); }
+      rows.push(welcomeRow({ mark: MARKS[cli.id] || cli.name.slice(0, 2).toUpperCase(), name: cli.name, small, end, on: cli.installed && cli.signedIn === true, key: cli.id }));
+    }
+    const more = button("Other ways to connect", () => {
+      // Keys, local models and the ChatGPT plan live in the sheet; it hands on when it closes, as the welcome would have.
+      const then = welcome.then; welcome.then = null;
+      hideWelcome();
+      state.then = then;
+      open("providers", { reason: "first-run" });
+    }, "ghost mini setup-welcome-more");
+    more.id = "setup-welcome-more";
+    body.replaceChildren(...rows, more);
+  }
+  // Step 2: the project, as the workspace has it.
+  async function paintProjects(serial) {
+    const { title, lead, body } = welcome.els;
+    title.textContent = "Choose a project";
+    lead.textContent = "Studio reads the folder on this PC. Tasks, plans and conversations stay with the project.";
+    try { welcome.projects = await api()?.projectsList?.() ?? null; } catch { welcome.projects = null; }
+    if (serial !== welcome.serial) return;
+    const list = Array.isArray(welcome.projects?.projects) ? welcome.projects.projects : [];
+    const active = welcome.projects?.activeId ?? null;
+    const rows = list.slice(0, 8).map((project) => {
+      const name = String(project.name || "Project");
+      const on = project.id === active;
+      return welcomeRow({ mark: (name.trim()[0] || "P").toUpperCase(), name, small: String(project.path || ""), on, key: `project:${project.id}`, end: on ? chip("Open", true) : null, onClick: on ? () => {} : () => {
+        // The workspace's own project button: it asks before stopping agents that are still working.
+        const own = document.querySelector?.(`#workspace-projects [data-project-id="${String(project.id).replace(/["\\]/g, "")}"]`);
+        if (own && !own.disabled) { own.click(); welcomeSay(`Opening ${name}…`); }
+        else welcomeSay("Choose it from the project list once this closes.", true);
+      } });
+    });
+    const add = document.getElementById?.("workspace-add-project");
+    if (add || typeof api()?.projectsAdd === "function") rows.push(welcomeRow({ mark: "+", name: "Open a folder…", small: "Any folder with code in it", key: "open-folder", onClick: () => { if (add && !add.disabled) add.click(); else void api().projectsAdd?.(); } }));
+    if (typeof window.MefiVibe?.openPanel === "function") rows.push(welcomeRow({ mark: "✦", name: "Start a new app…", small: "A new folder, with its first build", key: "new-app", onClick: () => { closeWelcome(); window.MefiVibe.openPanel("newapp"); } }));
+    if (!list.length) lead.textContent = "Studio works in a folder on this PC. Open one with code in it, or start a new app.";
+    body.replaceChildren(...rows);
+  }
+  // Step 3: the first task.
+  function paintTask() {
+    const { title, lead, body } = welcome.els;
+    title.textContent = "Give it a first task";
+    lead.textContent = "Describe something small. Studio plans it, builds it, and checks it before it says done.";
+    const input = node("input", "setup-welcome-input"); input.id = "setup-welcome-task"; input.type = "text"; input.maxLength = 4000;
+    input.placeholder = "Describe something small"; input.value = welcome.text; input.setAttribute("aria-label", "First task"); input.autocomplete = "off";
+    input.addEventListener("input", () => { welcome.text = input.value; welcome.els.next.disabled = welcome.busy || !input.value.trim(); });
+    input.addEventListener("keydown", (event) => { if (event.key === "Enter" && input.value.trim()) { event.preventDefault?.(); void welcomeNext(); } });
+    body.replaceChildren(input);
+  }
+  async function showWelcome(step, { focus = true } = {}) {
+    const els = buildWelcome();
+    welcome.step = Math.max(0, Math.min(WELCOME_STEPS - 1, step));
+    const serial = ++welcome.serial;
+    els.card.dataset.step = String(welcome.step);
+    [...els.steps.children].forEach((bar, index) => bar.classList.toggle("on", index <= welcome.step));
+    els.steps.setAttribute("aria-valuenow", String(welcome.step + 1));
+    els.steps.setAttribute("aria-valuetext", `Step ${welcome.step + 1} of ${WELCOME_STEPS}`);
+    els.back.hidden = welcome.step === 0;
+    els.next.textContent = welcome.step === WELCOME_STEPS - 1 ? "Start the task" : "Continue";
+    els.next.disabled = welcome.busy || (welcome.step === WELCOME_STEPS - 1 && !welcome.text.trim());
+    welcomeSay("");
+    if (welcome.step === 0) await paintConnect(serial);
+    else if (welcome.step === 1) await paintProjects(serial);
+    else paintTask();
+    if (serial !== welcome.serial || !welcome.open) return;
+    if (focus) (welcome.step === WELCOME_STEPS - 1 ? els.body.querySelector?.("input") : els.title)?.focus?.({ preventScroll: true });
+  }
+  async function welcomeNext() {
+    if (welcome.step < WELCOME_STEPS - 1) { await showWelcome(welcome.step + 1); return; }
+    const text = welcome.text.trim();
+    if (!text || welcome.busy) return;
+    welcome.busy = true; welcome.els.next.disabled = true;
+    welcomeSay("Adding your first task…");
+    try {
+      const projectId = welcome.projects?.activeId ?? window.MefiWorkspace?.activeProjectId?.() ?? null;
+      if (typeof api()?.tasksCreate !== "function") throw new Error("Tasks are added in the desktop app.");
+      const result = await api().tasksCreate({ title: text.split("\n")[0].slice(0, 180), prompt: text, ...(projectId ? { projectId } : {}) });
+      if (!result || result.ok === false) throw new Error(result?.error || "The task was not added.");
+      welcome.text = "";
+      closeWelcome();
+      const task = result.task;
+      if (task?.id) {
+        window.MefiSessions?.select?.(task.id);
+        // Start is the workspace's own: it asks for a worker the way the Start button does.
+        if (typeof window.MefiWorkspace?.startTask === "function") void Promise.resolve(window.MefiWorkspace.startTask(task)).catch(() => {});
+      }
+    } catch (error) { welcomeSay(plain(error, "The task was not added."), true); }
+    finally { welcome.busy = false; if (welcome.open && welcome.els) welcome.els.next.disabled = !welcome.text.trim(); }
+  }
+  function openWelcome({ then = null } = {}) {
+    const els = buildWelcome();
+    if (!welcome.open) { welcome.open = true; welcome.previous = document.activeElement; welcome.then = then; els.overlay.hidden = false; }
+    void showWelcome(0);
+    window.dispatchEvent(new CustomEvent("mefi-setup-helper", { detail: { open: true, section: "first-run" } }));
+    return true;
+  }
+  function hideWelcome() {
+    if (!welcome.open) return false;
+    welcome.open = false; welcome.serial += 1;
+    if (welcome.els) welcome.els.overlay.hidden = true;
+    const back = welcome.previous; welcome.previous = null;
+    if (back && document.contains?.(back)) back.focus?.({ preventScroll: true });
+    return true;
+  }
+  // Skip, Escape and Start the task: this revision is seen, and the hand-off runs as the sheet's close runs it.
+  function closeWelcome() {
+    if (!hideWelcome()) return;
+    write(SEEN_KEY, REVISION);
+    window.dispatchEvent(new CustomEvent("mefi-setup-helper", { detail: { open: false, section: "first-run" } }));
+    const then = welcome.then; welcome.then = null;
+    if (typeof then === "function") { try { then({ tour: false }); } catch { /* the next prompt is a nicety */ } }
+  }
+
   // ---- open, close and the first launch -------------------------------------
   function open(id, options = {}) {
     build();
@@ -85667,6 +86220,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // Diagnostic launches never open it.
   function startup({ then = null } = {}) {
     if (headless || seen()) return false;
+    // The 0.5 layout's first run is the three-step welcome; an update still brings this sheet.
+    if (!returning && layoutV2()) return openWelcome({ then });
     state.then = then;
     open("welcome", { reason: returning ? "update" : "first-run" });
     return true;
@@ -85692,6 +86247,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 
   window.MefiSetupHelper = {
     open: (id, options) => open(id, options), close, isOpen, startup, seen,
+    // The 0.5 layout's first run: open it (as startup does on a fresh profile), whether it shows, and Skip.
+    welcome: (options) => openWelcome(options), welcomeOpen: () => welcome.open, closeWelcome,
     section: () => (state.open ? state.section : null),
     // Whether the last connections read found a working route (null before
     // any read), so the walkthrough can skip its own "link an AI" stop.
@@ -98060,7 +98617,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     box.append(main, more);
     return box;
   }
-  // A backlog row: a plan draft opens in Plans, an idea in Ideas (their own pages).
+  // A backlog row: a plan draft opens as its own page in Plans (renderer/planning.js, the draft page), an idea in Ideas.
   function ideaRow(idea) {
     const plan = idea.kind === "plan";
     const box = el("div", "sx-row"); box.dataset.key = `${plan ? "plan" : "idea"}:${idea.id}`; box.dataset.tone = plan ? "plan" : "idea";
@@ -98071,7 +98628,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     text.append(el("span", "sx-row-top", idea.title));
     text.append(el("span", "sx-row-meta", idea.meta));
     main.append(el("i", "sx-dot"), text);
-    main.addEventListener("click", () => (plan ? window.MefiNav?.go?.("plans", { planId: idea.id }) : window.MefiNav?.go?.("ideas", { ideaId: idea.id })));
+    main.addEventListener("click", () => (plan ? window.MefiNav?.go?.("plans", { planId: idea.id, view: "draft" }) : window.MefiNav?.go?.("ideas", { ideaId: idea.id })));
     box.append(main);
     return box;
   }
@@ -100352,6 +100909,165 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     "agents-queue": "settings-automation",
   };
   let settingsCategory = SETTINGS_CATEGORIES[readStore("mefiStudio.settingsCategory")] ? readStore("mefiStudio.settingsCategory") : "general";
+
+  // ---- Settings in the 0.5 layout: the prototype's places ----
+  // With html[data-layout="v2"] Settings is filed the way the 0.5 prototype
+  // files it (docs/prototype/mefi-studio-0.5-v5.html, SET_SUBS): General,
+  // Notifications, Appearance with Size and density under it, Map look and
+  // Sound and music; then Updates and help (Updates, Report a problem) and
+  // Advanced (System). Nothing is copied. A place is a category pane, and the
+  // cards that become places of their own move into theirs with their ids,
+  // controls and host calls, so a deep link, a Search entry or the walkthrough
+  // still lands on the same control. Map look is the Appearance pane at its
+  // Nodes and Layout sections; Size and density is its own page
+  // (renderer/size.js), so its row goes there. A category these places do not
+  // name (Connections, Models and Automation, until renderer/agents.js takes
+  // them to Agents › Setup) keeps its row at the end. The layout is chosen at
+  // launch, so the filing runs once a page, and never with the layout off.
+  // The prototype's Design system sheet has no counterpart in the app yet.
+  const SETTINGS_PLACES = Object.freeze([
+    { id: "general", label: "General", glyph: "g-studio", about: "Names, startup and community" },
+    { id: "notifications", label: "Notifications", glyph: "g-bell", about: "Windows notifications while Studio is in the background, and quiet hours", cards: ["settings-notifications"] },
+    { id: "appearance", label: "Appearance", glyph: "g-style", looks: ["themes", "interface"] },
+    { id: "size", label: "Size and density", glyph: "g-textsize", route: "size", sub: true },
+    { id: "looks", label: "Map look", glyph: "g-target", pane: "appearance", looks: ["nodes", "layout"] },
+    { id: "audio", label: "Sound and music", glyph: "g-audio", about: "Sound effects, and the music and video the Map reacts to" },
+    { id: "updates", label: "Updates", glyph: "g-update", group: "Updates and help", about: "Update, and go back to the build before if the new one misbehaves", cards: ["settings-updates"] },
+    { id: "problem", label: "Report a problem", glyph: "g-flag", group: "Updates and help", cards: ["settings-report"] },
+    { id: "system", label: "System", glyph: "g-gauge", group: "Advanced", about: "Diagnostics, and the optional projects Studio can start for you" },
+  ]);
+  let settingsFiled = false;
+  const settingsLayoutV2 = () => document.documentElement?.dataset?.layout === "v2";
+  const settingsPlace = (key) => (settingsFiled ? SETTINGS_PLACES.find((place) => place.id === key && !place.route) ?? null : null);
+  // The pane a category shows: Map look is the Appearance pane.
+  const settingsPane = (category) => settingsPlace(category)?.pane ?? category;
+  function settingsGlyph(id) {
+    const svg = document.createElementNS?.("http://www.w3.org/2000/svg", "svg") ?? document.createElement("svg");
+    svg.setAttribute("class", "glyph"); svg.setAttribute("aria-hidden", "true"); svg.setAttribute("focusable", "false");
+    const use = document.createElementNS?.("http://www.w3.org/2000/svg", "use") ?? document.createElement("use");
+    use.setAttribute("href", `#${id}`); svg.append(use);
+    return svg;
+  }
+  function settingsPlaceRow(place) {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = `settings-nav-item${place.sub ? " is-sub" : ""}`;
+    if (place.route) { row.dataset.nav = place.route; row.title = `${place.label}: a live preview beside the controls`; }
+    else { row.dataset.settingsCategory = place.id; row.setAttribute("aria-current", "false"); }
+    const label = document.createElement("span"); label.className = "label"; label.textContent = place.label;
+    row.append(settingsGlyph(place.glyph), label);
+    return row;
+  }
+  function fileSettingsV2() {
+    const sections = document.getElementById("settings-sections");
+    const list = document.getElementById("settings-nav-list");
+    if (settingsFiled || !settingsLayoutV2() || !sections || !list || typeof document.querySelector !== "function") return false;
+    settingsFiled = true;
+    for (const place of SETTINGS_PLACES) if (!place.route) SETTINGS_CATEGORIES[place.id] = place.label;
+    // The panes: a place with cards of its own gets a pane, after the pane before it.
+    let previous = document.getElementById("settings-category-general");
+    for (const place of SETTINGS_PLACES) {
+      if (place.route || place.pane) continue;
+      let pane = document.getElementById(`settings-category-${place.id}`);
+      if (!pane && place.cards) {
+        pane = document.createElement("section");
+        pane.className = "settings-category"; pane.id = `settings-category-${place.id}`; pane.hidden = true;
+        pane.dataset.settingsCategoryPane = place.id;
+        pane.setAttribute("aria-labelledby", `${pane.id}-heading`);
+        const head = document.createElement("header"); head.className = "settings-category-head";
+        const title = document.createElement("h2"); title.id = `${pane.id}-heading`; title.tabIndex = -1; title.textContent = place.label;
+        head.append(title);
+        pane.append(head);
+        if (previous?.nextSibling) sections.insertBefore(pane, previous.nextSibling); else sections.append(pane);
+      }
+      if (!pane) continue;
+      for (const id of place.cards ?? []) {
+        const card = document.getElementById(id);
+        if (!card || card.closest?.("[data-settings-category-pane]") === pane) continue;
+        card.remove?.(); pane.append(card);
+        // The card is the page: its own title is the page's (styles.css hides its summary).
+        card.dataset.settingsPlaceCard = place.id;
+      }
+      const about = pane.querySelector(".settings-category-head p") ?? pane.querySelector(".settings-category-head")?.appendChild(document.createElement("p"));
+      if (about && place.about) about.textContent = place.about;
+      const heading = pane.querySelector(".settings-category-head h2");
+      if (heading && heading.textContent !== place.label && !heading.firstElementChild) heading.textContent = place.label;
+      previous = pane;
+    }
+    // Diagnostics no longer holds Report a problem.
+    const diagnostics = document.querySelector("#settings-diagnostics .settings-summary-text > span");
+    if (diagnostics) diagnostics.textContent = "Performance, checks and machine status";
+    // The list: the places in order, under their group headings, then any category they do not name.
+    const kept = [...list.querySelectorAll("[data-settings-category]")].filter((row) => !SETTINGS_PLACES.some((place) => place.id === row.dataset.settingsCategory));
+    const groups = [];
+    for (const place of SETTINGS_PLACES) {
+      let group = groups.at(-1);
+      if (!group || group.name !== (place.group ?? null)) {
+        const node = document.createElement("div"); node.className = "settings-nav-group";
+        if (place.group) {
+          const heading = document.createElement("p"); heading.className = "settings-nav-heading";
+          heading.id = `settings-nav-group-${groups.length}`; heading.textContent = place.group;
+          node.setAttribute("role", "group"); node.setAttribute("aria-labelledby", heading.id);
+          node.append(heading);
+        }
+        group = { name: place.group ?? null, node };
+        groups.push(group);
+      }
+      group.node.append(settingsPlaceRow(place));
+    }
+    if (kept.length) { const node = document.createElement("div"); node.className = "settings-nav-group"; node.append(...kept); groups.push({ node }); }
+    list.replaceChildren(...groups.map((group) => group.node));
+    list.dataset.places = "v2";
+    // Find a setting sits at the top of the page, beside its title.
+    const find = document.querySelector("#settings-nav .settings-find");
+    if (find) { find.remove?.(); sections.prepend(find); }
+    document.getElementById("tab-studio")?.setAttribute("data-places", "v2");
+    // The place you were on last time, now that the places exist.
+    const stored = readStore("mefiStudio.settingsCategory");
+    if (SETTINGS_CATEGORIES[stored] && document.querySelector(`[data-settings-category-pane="${settingsPane(stored)}"]`)) settingsCategory = stored;
+    // Search names each control by its new place.
+    settingsSearchRegistered.clear();
+    registerSettingsSearch();
+    return true;
+  }
+  // The place a jump lands on: a control under Nodes or Layout is Map look's.
+  function settingsPlaceFor(pane, target, section) {
+    const key = pane.dataset.settingsCategoryPane;
+    if (!settingsFiled || key !== "appearance") return key;
+    const asked = String(section ?? "").trim().toLowerCase().replace(/[\s_]+/g, "-").replace(/^settings-/, "");
+    if (asked === "looks" || asked === "map-look") return "looks";
+    if (asked === "appearance" || asked === "category-appearance") return "appearance";
+    const panel = target?.closest?.("[data-appearance-panel]")?.dataset?.appearancePanel;
+    return panel === "nodes" || panel === "layout" ? "looks" : "appearance";
+  }
+  // Appearance and Map look share a pane: each opens at its own first section.
+  function showSettingsLook(category) {
+    const looks = settingsPlace(category)?.looks;
+    if (!looks) return;
+    const sections = document.getElementById("appearance-sections");
+    const current = sections?.querySelector?.('[aria-pressed="true"]')?.dataset?.appearanceSection;
+    if (looks.includes(current)) return;
+    sections?.querySelector?.(`[data-appearance-section="${looks[0]}"]`)?.click?.();
+  }
+  // A place's own cards are the page: open while it shows. The prototype's pages
+  // show their panels open, so a place's folded cards open the first time it
+  // shows in a launch and stay as you leave them after that. A card read when it
+  // opens (Notifications, Report a problem, Community) reads then, not at launch.
+  const settingsPlacesShown = new Set();
+  function openSettingsPlace(category) {
+    const place = settingsPlace(category);
+    if (!place) return;
+    const pane = document.querySelector(`[data-settings-category-pane="${settingsPane(category)}"]`);
+    if (pane && !settingsPlacesShown.has(category)) {
+      settingsPlacesShown.add(category);
+      for (const card of pane.querySelectorAll?.("details.settings-card") ?? []) if ((card.parentElement ?? card.parentNode) === pane && !card.open) card.open = true;
+    }
+    for (const id of place.cards ?? []) {
+      const card = document.getElementById(id);
+      if (card && card.tagName === "DETAILS" && !card.open) card.open = true;
+    }
+    if (category === "problem" && window.MefiReport && !window.MefiReport.state?.view && !window.MefiReport.state?.loading) void window.MefiReport.load?.();
+  }
   let settingsMatches = [];
   let settingsSearchRegistered = new Set();
   let settingsControlSerial = 0;
@@ -100364,7 +101080,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const raw = String(section ?? "").trim();
     if (document.getElementById(raw)?.closest?.("#settings-sections")) return raw;
     const key = raw.toLowerCase().replace(/[\s_]+/g, "-").replace(/^settings-/, "");
-    const id = SETTINGS_CATEGORIES[key] ? `settings-category-${key}` : SETTINGS_ALIASES[key] ?? `settings-${key}`;
+    const id = SETTINGS_CATEGORIES[key] ? `settings-category-${settingsPane(key)}` : SETTINGS_ALIASES[key] ?? `settings-${key}`;
     return document.getElementById(id) ? id : null;
   }
   // A choice button's textContent runs its parts together ("Fullevery
@@ -100416,6 +101132,15 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
   function syncSettingsNav() {
     for (const row of document.querySelectorAll("#settings-nav [data-settings-category]")) row.setAttribute("aria-current", String(row.dataset.settingsCategory === settingsCategory));
+    // Appearance and Map look show their own sections of the shared pane (styles.css), under their own title.
+    if (!settingsFiled) return;
+    document.getElementById("tab-studio")?.setAttribute("data-settings-place", settingsQuery() ? "search" : settingsCategory);
+    const looks = settingsCategory === "looks";
+    const heading = document.getElementById("settings-category-appearance-heading");
+    if (heading && heading.textContent !== (looks ? "Map look" : "Appearance")) heading.textContent = looks ? "Map look" : "Appearance";
+    const about = heading?.parentElement?.querySelector?.("p");
+    const words = looks ? "How the Map draws your work. Changes show on the Map straight away." : "Themes, colours and how the interface moves.";
+    if (about && about.textContent !== words) about.textContent = words;
   }
   function syncSettingsAutomation() {
     const current = window.MefiIdle?.queueSettings?.();
@@ -100444,6 +101169,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   function mountSettingsControls() {
     // Catalog-only embeds expose the facade without mounting Settings markup.
     if (typeof document.querySelector !== "function") return;
+    fileSettingsV2();
     const move = (node, host) => { if (node && host && (node.parentElement ?? node.parentNode) !== host) { node.remove?.(); host.appendChild(node); } };
     const appearance = document.getElementById("settings-appearance-controls");
     for (const selector of [".settings-you-theme", ".settings-you-motion", "#settings-companion-motion"]) move(document.querySelector(selector), appearance);
@@ -100479,7 +101205,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
   function paintSettingsRows() {
     mountSettingsControls();
-    if (document.querySelector && !document.querySelector(`[data-settings-category-pane="${settingsCategory}"]`)) settingsCategory = "general";
+    if (document.querySelector && !document.querySelector(`[data-settings-category-pane="${settingsPane(settingsCategory)}"]`)) settingsCategory = "general";
     const query = settingsQuery();
     const words = query.split(/\s+/).filter(Boolean);
     settingsMatches = words.length ? settingsEntries().filter((item) => words.every((word) => `${SETTINGS_CATEGORIES[item.category]} ${item.terms}`.toLowerCase().includes(word))) : [];
@@ -100495,10 +101221,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         row.append(path, name); results.appendChild(row);
       }
     }
-    for (const pane of document.querySelectorAll("[data-settings-category-pane]")) pane.hidden = Boolean(query) || pane.dataset.settingsCategoryPane !== settingsCategory;
+    for (const pane of document.querySelectorAll("[data-settings-category-pane]")) pane.hidden = Boolean(query) || pane.dataset.settingsCategoryPane !== settingsPane(settingsCategory);
     if (document.getElementById("tab-studio")?.hidden === false) {
-      window.MefiMusic?.activateSettings?.(query ? null : settingsCategory);
+      window.MefiMusic?.activateSettings?.(query ? null : settingsPane(settingsCategory));
       if (settingsCategory === "automation") void loadSettingsAutomation();
+      if (!query) openSettingsPlace(settingsCategory);
     }
     const empty = document.getElementById("settings-find-empty"); if (empty) empty.hidden = !query || settingsMatches.length > 0;
     const status = document.getElementById("settings-find-status"); if (status) status.textContent = !query ? "" : settingsMatches.length ? `${settingsMatches.length} setting${settingsMatches.length === 1 ? "" : "s"}` : "No settings match";
@@ -100518,10 +101245,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (!target) return false;
     const pane = target.closest?.("[data-settings-category-pane]");
     if (!pane) return false;
-    settingsCategory = pane.dataset.settingsCategoryPane;
+    settingsCategory = settingsPlaceFor(pane, target, section);
     writeStore("mefiStudio.settingsCategory", settingsCategory);
     clearSettingsFind();
     if (!settingsAvailable(target)) return false;
+    if (target === pane) showSettingsLook(settingsCategory);
     window.MefiMusic?.revealSettingsTarget?.(target);
     let parent = target;
     while (parent && parent !== pane) { if (parent.tagName === "DETAILS") parent.open = true; parent = parent.parentElement ?? parent.parentNode; }
@@ -101768,6 +102496,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   });
   wireSettingsNav();
   registerSettingsSearch();
+  // renderer/nav.js sets the 0.5 layout once the page has loaded: Settings is
+  // filed into its places then (or at the first Settings paint after it).
+  const fileSettingsOnce = () => { if (fileSettingsV2()) paintSettingsRows(); };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fileSettingsOnce, { once: true });
+  else fileSettingsOnce();
   document.getElementById("refresh-btn").addEventListener("click", () => refresh("manual"));
   document.getElementById("print-btn").addEventListener("click", () => window.print());
 
@@ -101850,7 +102583,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 
   // The one facade nav.js drives: tabs (with a Settings card to land on),
   // catalog refresh, the shortcut sheet, and the Settings jump itself.
-  window.MefiBooklet = { showTab, refresh, toggleHelp, jumpToSettings, initStudio };
+  // settingsPlaces: the 0.5 layout's Settings places in order (null in the classic layout), for a list drawn elsewhere.
+  const settingsPlaces = () => (settingsFiled ? SETTINGS_PLACES.map((place) => ({ id: place.id, label: place.label, glyph: place.glyph, group: place.group ?? null, sub: Boolean(place.sub), route: place.route ?? null, current: !place.route && place.id === settingsCategory })) : null);
+  window.MefiBooklet = { showTab, refresh, toggleHelp, jumpToSettings, initStudio, settingsPlaces };
 
   const headless = new URLSearchParams(window.location.search);
   const capture = headless.get("capture") === "1";

@@ -252,7 +252,7 @@ test("Backlog lists plan drafts first and then ideas, the plans read from the Pl
   assert.equal(a.row("plan:plan_3").querySelector(".sx-row-meta").textContent, "Plan approved, tasks not made yet · 3d ago");
   assert.match(a.row("plan:plan_1").querySelector(".sx-row-main").getAttribute("aria-label"), /^Plan: Sync notes between devices\./);
   await a.row("plan:plan_1").querySelector(".sx-row-main").click();
-  assert.deepEqual(clean(a.calls.go.at(-1)), ["plans", { planId: "plan_1" }], "a draft opens in Plans");
+  assert.deepEqual(clean(a.calls.go.at(-1)), ["plans", { planId: "plan_1", view: "draft" }], "a draft opens as its own page in Plans");
   const buttons = a.all("list", ".sx-scan button");
   assert.deepEqual(buttons.map((node) => node.textContent), ["Scan the project", "Scan chats for ideas"]);
   await buttons[0].click(); assert.deepEqual(clean(a.calls.go.at(-1)), ["analyzer"], "the Analyzer reads the project");
