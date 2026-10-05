@@ -83,7 +83,7 @@ The [public roadmap](https://nateecho32-stack.github.io/mefi-studio/roadmap.html
   </tr>
 </table>
 
-Also in 0.5: **Chrome**, a new matte black and brushed-metal theme that new installs open in (a theme you already picked stays), tabs you add and pin, Work › Worktrees, Windows notifications and quiet hours, Report a problem, What's new after an update, pictures on a message, the `@ # /` picker, Skills and rules for agents, and The Studio Daily. The [0.5 scope](docs/release-scope-0.5.0.md) has the full list and what moves to 0.5.x.
+Also in 0.5: **Chrome**, a new matte black and brushed-metal theme with an iridescent finish (silver, ice blue, lilac and aqua on its edges and highlights) that new installs open in (a theme you already picked stays), tabs you add and pin, Work › Worktrees, Windows notifications and quiet hours, Report a problem, What's new after an update, pictures on a message, the `@ # /` picker, Skills and rules for agents, and The Studio Daily. The [0.5 scope](docs/release-scope-0.5.0.md) has the full list and what moves to 0.5.x.
 
 ## Moving to Rust
 

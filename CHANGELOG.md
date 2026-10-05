@@ -78,6 +78,18 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 - **Vibe's board lists a waiting task once.** A queued task that has asked
   you something (a permission, a question) is under Needs you only, not also
   "up next" under Running.
+- **Chrome catches the light.** The Chrome theme keeps its matte black and
+  brushed metal and gains a cool iridescent finish, like anodised chrome, in
+  silver, ice blue, lilac and pale aqua, used sparingly: a faint tint in the
+  background and in Vibe's sky, a soft sheen on panels and cards, an
+  iridescent stripe along the edge of the place, session, page or search
+  result you are on, an iridescent line under the open tab and the chosen tab
+  or theme, faint iridescent lines between the bars and along the top of
+  menus, and an iridescent usage meter, switches and Vibe's project mark. Main
+  buttons are a touch cooler and glow softly under the pointer, and Vibe's
+  greeting takes the same tint. Nothing moves, animates or changes size, the
+  colours that mean something (working, needs you, errors, review) are
+  unchanged, and the colours are the same ones the website uses.
 - **A new Chrome theme, now the look a new install opens in.** Chrome is a
   matte black with smooth metal: flat dark panels with a fine light edge,
   primary buttons and the chosen side of a switch (Vibe | Build, Sessions |

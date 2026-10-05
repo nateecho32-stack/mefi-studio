@@ -39,6 +39,73 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-05 The 0.5 rail, Team, Friends and the owner's design follow-ups land on main
+
+Branch `ui/friends` in `C:\wt\ui-friends`: ui/ia (the v2 rail, the list column's places, Team's twelve places, the
+up-next fix) + the Friends place and the owner's follow-ups (2cd76b2, 9487621) + main 3752b7e merged (1c338d0;
+CHANGELOG keeps both sides' entries, booklet.html regenerated).
+
+ui/ia's own gate on fb46061: Node 6982/6961, 7 fail (tabs_strip x2 pinned the Add menu's Home group, fixed in d3779b3,
+66/66; the rest pass alone); Electron 77/73, 3 fail (layout_contract_render and shell_render as on clean main,
+today_render's known lane flake, passes alone).
+
+Full `npm test` on 9487621 (free memory fell to 12 MB during it): Node 6991 tests, 6954 pass, 22 fail, all git-heavy
+suites whose git could not start, all pass alone: attempt_review_host 28/28, attempt_snapshots_host 25/25 + 3 skipped,
+git_actions 65/65, pc_vault_turns 9/9, rust_parity_repo 3/3, rust_parity_snapshots 3/3, sync 22/22, sync_changes 5/5,
+sync_lineage 5/5, worktree_actions 17/17, worktrees 8/8, worktrees_host 10/10. Electron lane 78: 73 pass, 1 skipped, 4
+fail: layout_contract_render and shell_render (as on clean main), task_overview_render (1/1 alone) and
+unified_studio_render (1/1 alone, 148 s). Run alone before the gate on this tree: friends_render (new), team_render,
+companion_hub_render, today_render, tabs_render, sessions_render, settings_render, unified_studio_render,
+agent_setup_render. Python 104 s OK; path lock ok; `npm run audit` 0 findings.
+
+main moved during the gate (c630b4d, 52a3d16: Chrome's iridescent finish, chrome.css with its test, docs and
+screenshots; no file this branch changed but CHANGELOG). Merged as d39878e (CHANGELOG keeps both sides, booklet.html
+regenerated) and re-checked rather than re-gated: `npm run check`; chrome_theme 9/9, tabs_strip 66/66,
+shell_frame_bars 34/34, today_inbox 38/38, builder_kit 21/21; settings_render (every theme at 4.5:1), friends_render,
+team_render and today_render 1/1 each.
+
+## 2026-10-05 Chrome's iridescent finish: holo edges, hairlines and a tinted ground
+
+Branch `paint/chrome-gradients` in a cloud worktree (Linux, Node 24.21.0,
+Electron fixtures as tester under xvfb, two at a time, on snapshots of the
+tree), off origin/main 3752b7e. renderer/chrome.css takes the website's
+--chrome-holo tokens word for word and uses them sparingly: 2-5% ice, lilac and
+aqua washes in the scene and Vibe's aurora, a tinted sheen, the 2px holo bar on
+the straight run of the rail's current place, the selected session row, the
+frame's current page and the palette's active row (plain chrome round the
+corners), a 2px holo line under the open tab, the inspector's tabs, the local
+navigation and a chosen theme, the holo line at a quarter strength in the
+hairlines under the top bar and tab strip, over the status bar and along the
+floating menus' tops, a cooler metal that glows under the pointer, holo
+meter, switches and project mark, and a holo-tinted greeting. The edges and
+lines are border images (no room taken, never a layer behind words, which the
+readability probes would read as the colour under every word). Static
+gradients, no hot path touched, nothing to measure.
+
+`npm run check` ok (271 targets, 30 stylesheets used), `npm run audit` 0
+findings, `npm run lint` 0 errors and the same 44 warnings as clean main.
+`npm run test:fast`: 6981 tests, 6922 pass, 58 skipped, 1 fail: rust_modules
+"the image-store factory ... keeps folder the engine's", as on clean
+origin/main here (a Windows path resolved on Linux). tests/chrome_theme.test.mjs
+9/9 (new: Chrome is static; the holo layer is the website's tokens, each used,
+edges and lights only, the ground and the sky faint); 15 hand mutations of
+chrome.css (a bar as a background layer, 3px, an outset, a border width, an
+animation, a loud ground, a changed token...) each fail it. Python contracts
+258 OK (3 skipped).
+
+Electron on the final tree: today_render (63 s), shell_render (152 s),
+sessions_render (122 s; the every-theme 4.5:1 probes on the status bar, Search,
+the Inbox and both Todays), tabs_render (150 s), layout_contract_render
+(349 s), size_render (47 s), review_render (12 s), command_render (83 s) and
+unified_studio_render (169 s) pass. settings_render fails exactly as on clean
+main (600x560 at 1.5: the same four Report a problem rows, 391 > 384); with that
+size left out in a throwaway copy its every-theme contrast pass is green for
+Chrome and the other twelve palettes, on this tree and on clean main.
+unified_studio_render failed once on clean main ("at the end of the pane the
+thumb rests on its bottom edge", 39 s) and passed on the rerun (138 s). A
+throwaway copy of today_render also opened v1's Vibe front door in Chrome for
+the greeting and Build it under the pointer.
+
 ## 2026-10-05 The Chrome theme, now the default, and a finish pass for every theme
 
 Branch `paint/chrome` in a cloud worktree (Linux, Node 24.21.0, Electron
@@ -489,36 +556,6 @@ Final follow-up review and exact-head CI outcomes are reported separately.
 Desktop limitations: compositor occlusion unavailable and synthetic native
 Ctrl+W unverified. LAN/cross-network, AI editing and terminal-job retries remain
 outside this first check-worker profile; no live owner grants were activated.
-
-## 2026-10-03 Paired worker recovery and bounded history qualification
-
-Corrected candidate: 22 focused coordinator/worker/desktop/UI tests pass. Real
-temporary HTTP loopback runs all six Studio checks at exact merged commit
-ae5f26c, without changing source or creating a production pairing. Persisted
-start grants fence late-success reconciliation; pre-start expired jobs cannot
-claim success. Failure injection proves archive append retries are idempotent,
-command deadlines settle and hold recovery, and shutdown/restart admission is
-bounded. Progress retains only 20 displayed lines with previous/next navigation.
-Check and audit pass; offline lint retains 42 baseline warnings and zero errors.
-The preserved first candidate passed the full Node/Electron, 248 Python and
-six normalized-lock checks; the corrected aggregate run is reported separately.
-CodeRabbit completed three reviews (6, 2 and 3 issues). Valid issues were fixed
-and tested; history uses bounded pages rather than unbounded append, and late
-success requires a persisted grant instead of rejecting every expired reply.
-Native UI captures are bridge simulations; LAN/cross-network operation and
-distributed AI execution remain unqualified. No live network or owner grants.
-
-## 2026-10-03 Paired repository checks first vertical slice
-
-Isolated opt-in coordinator and worker qualification: 15/15 focused tests pass
-with durable queue/registry restart, persisted single start grants, lost reply
-reconciliation, stale lease/fence refusal, disconnect abort, bounded transport,
-encrypted pairing adapter, and real Git/Node exact-commit checks preserving dirty
-source. Real Chromium setup/recovery fixture passes 1/1 at desktop and 600px;
-bridge is simulated, zero external network/process attempts. Status stays local
-until disclosure; no service or owner grant activates on startup. Detail folds
-survive status refresh. No live LAN/cross-network or AI delegation qualification.
-Full repository gates are reported separately with their actual outcomes.
 
 ## Read Before Any Tests
 
