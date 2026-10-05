@@ -6,6 +6,24 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-03 Paired worker recovery and bounded history qualification
+
+Corrected candidate: 22 focused coordinator/worker/desktop/UI tests pass. Real
+temporary HTTP loopback runs all six Studio checks at exact merged commit
+ae5f26c, without changing source or creating a production pairing. Persisted
+start grants fence late-success reconciliation; pre-start expired jobs cannot
+claim success. Failure injection proves archive append retries are idempotent,
+command deadlines settle and hold recovery, and shutdown/restart admission is
+bounded. Progress retains only 20 displayed lines with previous/next navigation.
+Check and audit pass; offline lint retains 42 baseline warnings and zero errors.
+The preserved first candidate passed the full Node/Electron, 248 Python and
+six normalized-lock checks; the corrected aggregate run is reported separately.
+CodeRabbit completed three reviews (6, 2 and 3 issues). Valid issues were fixed
+and tested; history uses bounded pages rather than unbounded append, and late
+success requires a persisted grant instead of rejecting every expired reply.
+Native UI captures are bridge simulations; LAN/cross-network operation and
+distributed AI execution remain unqualified. No live network or owner grants.
+
 ## 2026-10-03 Paired repository checks first vertical slice
 
 Isolated opt-in coordinator and worker qualification: 15/15 focused tests pass
