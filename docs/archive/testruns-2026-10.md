@@ -6,6 +6,31 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-03 Paired workers review milestone - aggregate and baseline comparison
+
+Corrected slice: 22 focused tests pass; real HTTP loopback and Git/Node run the
+six fixed Studio checks at exact commit ae5f26c in a fresh checkout. Check,
+audit and build pass; lint has 42 baseline warnings and no errors. Real Chromium
+pairing/recovery UI passes at desktop and 600px with a simulated bridge.
+
+Corrected npm test exits 1: 6,824 Node tests, 6,807 pass, one Command musical-
+movement fixture failure, 16 skips. Python runs 248 tests OK with one skip;
+all six normalized-path lock checks pass. The same unchanged candidate's
+isolated Command fixture then passes 1/1. Clean main ae5f26c also fails that
+fixture's musical-geometry checks, establishing a baseline instability on this
+desktop. The prior preserved candidate's complete aggregate passed 6,801/6,817
+Node tests with 16 skips plus Python and locks. Red logs remain preserved;
+neither the fixture nor unrelated music runtime was changed or disabled.
+
+CodeRabbit completed reviews of 11 tracked files and then all 24 staged files
+twice, raising 6, 2 and 3 issues. Valid issues are addressed with focused tests;
+bounded Previous/Older progress pages and persisted-grant late-result
+reconciliation resolve suggestions without unbounded lists or repeated jobs.
+Final follow-up review and exact-head CI outcomes are reported separately.
+Desktop limitations: compositor occlusion unavailable and synthetic native
+Ctrl+W unverified. LAN/cross-network, AI editing and terminal-job retries remain
+outside this first check-worker profile; no live owner grants were activated.
+
 ## 2026-10-03 Paired worker recovery and bounded history qualification
 
 Corrected candidate: 22 focused coordinator/worker/desktop/UI tests pass. Real

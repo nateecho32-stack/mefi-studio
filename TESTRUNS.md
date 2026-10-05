@@ -39,6 +39,29 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-05 The Map, the 0.5 layout as the default and Chrome's buttons land on main
+
+Branch `ui/map2` in `C:\wt\ui-map2` over main c7a4d26: the Map place (WIP 404a0c5 finished: the session list stays in
+the list column on Map pages, Map | Fleet | Pipelines as a switch in the Map bar and in Fleet's and the Agent brain's
+heads, Running only, View ▾ with music.js's five node layouts), the 0.5 layout as the default (13a7034; ?smoke/?capture
+launches and a saved classic choice keep v1), one page at a time over the Map and Chrome's metal without the dark
+line through button labels (7b3b867), and companion_hub_render asking for the classic layout it walks (649d229).
+
+`npm run check` 0, `npm run audit` 0, lint 0 errors (45 warnings, none new). Full `npm test` on 7b3b867 here: Node
+6993 tests, 6965 pass, 13 fail + 1 cancelled, all slow git/process suites starved while other sessions' agents and
+tests held the memory (attempt_review_host, attempt_snapshots_host, git_actions, rust_parity_repo, sync,
+sync_changes x2, sync_lineage x2, update_rehearsal, worktree_actions, worktrees x2); hosted CI on the same commit
+(run 37377470163, Windows) passed the whole chain: Node 6993/6959/0 fail (34 skipped), Electron lane 88/45/0 fail
+(43 real-window suites skipped there), Python and audit green. The local Electron lane was cut off by the runner's
+2-hour limit after project_map_render with one failure, companion_hub_render (the 0.5 default sent its Friends
+click to the Friends page; fixed in 649d229, 1/1); layout_contract_render failed as on clean main here (viewport
+1921x1081). The remaining 23 Electron suites then ran one at a time on 649d229 and passed, except shell_render
+(as on clean main on this PC): release_channel_render, renderer_recovery, review_render, rust_host_bridge,
+sessions_render, settings_render, setup_helper_render, size_render, skills_render, stamp_exe, startup_render,
+tabs_render, task_overview_render, team_render, today_render, tree_dynamics_render, unified_studio_render,
+workflow_render, worktrees_render, command_render (57 s), eyes_toggle_electron, occlusion_probe. map_render (new)
+passed in the lane.
+
 ## 2026-10-05 The 0.5 rail, Team, Friends and the owner's design follow-ups land on main
 
 Branch `ui/friends` in `C:\wt\ui-friends`: ui/ia (the v2 rail, the list column's places, Team's twelve places, the
@@ -531,31 +554,6 @@ ordering and failure injection. Earlier aggregate and clean-main audio fixture
 failures remain recorded; the unchanged candidate retry and exact-head CI pass.
 Follow-up check/audit/lint and review/CI outcomes are reported separately.
 No renderer, provider runtime, workflow, main merge or release changes.
-
-## 2026-10-03 Paired workers review milestone - aggregate and baseline comparison
-
-Corrected slice: 22 focused tests pass; real HTTP loopback and Git/Node run the
-six fixed Studio checks at exact commit ae5f26c in a fresh checkout. Check,
-audit and build pass; lint has 42 baseline warnings and no errors. Real Chromium
-pairing/recovery UI passes at desktop and 600px with a simulated bridge.
-
-Corrected npm test exits 1: 6,824 Node tests, 6,807 pass, one Command musical-
-movement fixture failure, 16 skips. Python runs 248 tests OK with one skip;
-all six normalized-path lock checks pass. The same unchanged candidate's
-isolated Command fixture then passes 1/1. Clean main ae5f26c also fails that
-fixture's musical-geometry checks, establishing a baseline instability on this
-desktop. The prior preserved candidate's complete aggregate passed 6,801/6,817
-Node tests with 16 skips plus Python and locks. Red logs remain preserved;
-neither the fixture nor unrelated music runtime was changed or disabled.
-
-CodeRabbit completed reviews of 11 tracked files and then all 24 staged files
-twice, raising 6, 2 and 3 issues. Valid issues are addressed with focused tests;
-bounded Previous/Older progress pages and persisted-grant late-result
-reconciliation resolve suggestions without unbounded lists or repeated jobs.
-Final follow-up review and exact-head CI outcomes are reported separately.
-Desktop limitations: compositor occlusion unavailable and synthetic native
-Ctrl+W unverified. LAN/cross-network, AI editing and terminal-job retries remain
-outside this first check-worker profile; no live owner grants were activated.
 
 ## Read Before Any Tests
 
