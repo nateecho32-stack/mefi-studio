@@ -39,6 +39,26 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-04 The v2 Settings, first run and plan draft page land on main
+
+Branch `land/ui-settings` in `C:\wt\land-ui`: origin/main 349802a with
+wip/ui-settings cd17a4f merged file by file (CHANGELOG keeps both sides'
+entries; TESTRUNS keeps every row of both, checked heading by heading, with a
+row main had rotated left in the October archive only; booklet.html
+regenerated).
+
+Full `npm test` on d2d5ae4 (a Today agent's fixture ran beside it for its
+first minutes): Node 6950 tests, 6934 pass, 14 skipped, 2 fail, both pass
+alone: rust_parity_snapshots (3/3; under load one side's 10 s `rev-parse HEAD`
+timed out and made its start picture without a parent: same tree, other
+commit id) and sync_changes (5/5; a push to a local bare repo failed under
+memory pressure). Electron lane 76: 72 pass, 1 skipped, 3 fail:
+layout_contract_render and shell_render (as on clean main on this PC) and
+tree_dynamics_render, which fails now and then on this PC (failed once alone
+here, then passed 3 times alone; the branch's own run saw it fail on c01604e
+too). Python 248 OK; path lock ok; `npm run audit` 0 findings; `npm run
+check` ok. Side-by-sides: `C:\wt\gap\after-settings\compare\`.
+
 ## 2026-10-04 The v2 Settings, first run and plan draft page closer to the 0.5 prototype
 
 Branch `wip/ui-settings` (worktree `C:\wt\ui-settings` off main c01604e,
@@ -436,10 +456,6 @@ The two application branches are integrated without workflow changes. Both chang
 Focused updater/boot-health suites: 44 passed. Build, check, audit and lint pass; lint retains 42 baseline warnings. The first full run completed: 6,796 Node tests, 6,779 passed, one failed, 16 skipped; 248 Python contracts OK with one skip and six normalized-path lock checks passed. Its sole failure was the CSS CLI Git subprocess refusing checkout ownership, not an application assertion; the unchanged CSS suite passes 14/14 with narrowly scoped Git trust. This failed aggregate is preserved as failed. Corrected full verification and exact-head CI/review are pending before main integration.
 
 Stable remains the default; development requires explicit warning/consent. Development artifact publishing is deferred, so no supported development artifact is promised by this application-only change. No release, provider action, UI-default activation or workflow publication is performed.
-
-## 2026-10-03 - Echo GitHub update channels - unfinished review checkpoint
-
-35 focused updater/channel tests pass, including native-consent cancellation, saved channel, stale responses, stable downgrade eligibility, platform/provenance/hash checks, nested artifacts, interrupted downloads and jobs starting during download. The isolated desktop renderer exercise passed after correcting the fixture's desktop capability and checking actual visibility; screenshots are local evidence. Check and application audit pass. Lint: zero errors, the existing 42 warnings. The full Windows npm test gate is still running and has reported failures in attempt_review_host and attempt_snapshots_host; these are untriaged, so this work is not merge-qualified. The initial restricted-account renderer launch failed; the same fixture ran on the real desktop. Official v0.4.4 was downloaded and verified against GitHub's SHA-256 into a separate folder. Original local state and PR3 were not changed. No release/tag published and no live development opt-in. Remaining: finish/triage full gate, final UI capture, CI and review, then integrate the prerequisite ahead of PR3.
 
 ## Read Before Any Tests
 
