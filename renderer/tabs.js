@@ -124,7 +124,11 @@
       if (params.view === "task" && params.taskId) return { id, params: { view: "task", taskId: params.taskId, ...(params.projectId ? { projectId: params.projectId } : {}) } };
       return { id, params: params.view === "chat" ? { view: "chat" } : {} };
     }
-    if (id === "agents" && v2() && teamPlaceOf(params.place)) return { id, params: params.place === "overview" ? {} : { place: params.place } };
+    if (id === "agents" && v2()) {
+      // One tab per Team place: an old { section, pane } is the place that holds that pane now (MefiAgents.teamPlace).
+      const at = teamPlaceOf(params.place) ? params.place : safe(() => window.MefiAgents?.teamPlace?.("agents", params)?.id ?? null, null);
+      if (teamPlaceOf(at)) return { id, params: at === "overview" ? {} : { place: at } };
+    }
     if (id === "agents") return { id, params: params.section === "setup" ? { section: "setup", pane: AGENT_PANES[params.pane] ? params.pane : "team" } : {} };
     return { id, params };
   }
@@ -1235,7 +1239,11 @@
     const ctx = context();
     const closed = q.length ? [] : validClosed().slice(0, 4).map((item) => { const info = describe({ route: item.route, title: item.title }, ctx); return { group: "Recently closed", route: item.route, title: item.title || info.title, glyph: info.glyph, tone: info.tone, closed: item, hint: "Reopen" }; });
     const home = { group: "Home", route: { id: "workspace", params: {} }, title: homeTitle(), glyph: "g-home", terms: "home today vibe front door" };
-    const rows = [...closed, ...[home, ...sessionRows(query), ...destinations()].filter(match)];
+    // In the 0.5 layout Today is Work's first page (nav.js placeOf), so it leads Work's rows instead of a group of its own.
+    const pages = destinations();
+    const lead = v2() ? [{ ...home, group: "Work" }, ...pages.filter((row) => row.group === "Work")] : [home];
+    const rest = v2() ? pages.filter((row) => row.group !== "Work") : pages;
+    const rows = [...closed, ...[...lead, ...sessionRows(query), ...rest].filter(match)];
     const have = new Map(order().map((rec) => [keyOf(rec.route), rec]));
     for (const row of rows) { const rec = have.get(keyOf(row.route)); if (!row.hint) row.hint = rec ? (rec.pin ? "Pinned" : "Open") : ""; }
     return rows;

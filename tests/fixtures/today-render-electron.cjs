@@ -392,7 +392,8 @@ app.whenReady().then(async () => {
   report.board = await run("return window.MefiToday.snapshot().groups;");
   assert.deepEqual(report.board, {
     needs: ["need:question:q_failure", "need:question:q_permission", "need:question:q_decision", "need:family:t_family", "need:approval:t_approve", "need:blocked:t_stuck"],
-    running: ["run:t_run", "next:t_next"], review: ["need:review:t_review", "check:t_check", "plan:plan_1"], done: ["done:t_done1", "done:t_done2", "done:t_done3"],
+    // t_next asked for a permission (q_permission), so it waits under Needs you and is not also up next under Running.
+    running: ["run:t_run"], review: ["need:review:t_review", "check:t_check", "plan:plan_1"], done: ["done:t_done1", "done:t_done2", "done:t_done3"],
   });
   const view = async (label, zoom) => {
     const at = `${label}@${zoom}`;

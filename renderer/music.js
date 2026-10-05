@@ -2718,6 +2718,8 @@
     // Vibe's rail is how Vibe mode moves between pages: its clicks navigate
     // (go() leaves the preview) instead of dismissing into Command.
     if (event.target?.closest?.("#vibe-rail") || event.target?.closest?.("#media-window")) return;
+    // So are the 0.5 layout's rail and its list column (Settings' places, Map look among them): a row there navigates.
+    if (document.documentElement?.dataset?.layout === "v2" && event.target?.closest?.("#shell-pages, #app-rail")) return;
     const consume = () => { event.preventDefault(); event.stopImmediatePropagation(); };
     const canDismiss = () => {
       const transient = window.MefiNav?.state?.transient;

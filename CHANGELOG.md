@@ -7,6 +7,32 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **The 0.5 layout's rail and Team, as in the prototype.** With the new layout
+  on (`?layout=v2`), the rail has four places, Work, Map, Team and Friends,
+  with Search, Settings and Help at its foot. Each place remembers where you
+  were in it. The Command view is called the Map, and Help lists Start here,
+  Setup guide, Shortcuts, What's new, Report a problem and the Void Engine
+  Discord. Agents is now **Team**, filed into the prototype's twelve places in
+  the list beside the page: Overview, Providers, Seats and models,
+  Permissions, then Rules, Skills, Connectors, Related folders and Workflows
+  ("Context for agents"), then Health and usage, Models and Inspect
+  ("Monitor"). What moved where: Settings' Connections is Team › Providers,
+  its Models are Team › Seats and models, its Automation is in Team ›
+  Overview, and Mefi's permission mode (which Build opened as a dialog) is
+  Team › Permissions. The Rules card has its own place. Connectors lists the
+  servers in `~/.mefi-studio/mcp.json` with their tools. Related folders says
+  plainly that Studio cannot add them yet. The model catalog, Performance,
+  Usage, Brain maps, the Playbook, Project map, Context, the Session explorer,
+  Activity and evidence, Trace, Overhead and the profiler open from their Team
+  place with that place open in the list. Old links, Search and Settings' Find
+  a setting all land on the place that holds a control now; a plain button
+  such as Run auto setup is named by its own words in Search, so it no longer
+  shows as "Settings › Connections". Settings lists its places in the same
+  column. Team's pages read at 12 px or more and fit a narrow window without
+  scrolling sideways. The classic layout is unchanged.
+- **Vibe's board lists a waiting task once.** A queued task that has asked
+  you something (a permission, a question) is under Needs you only, not also
+  "up next" under Running.
 - **Today, in both modes, as in the 0.5 prototype.** With the new layout on
   (`?layout=v2`), Build's Home with no session open is now Today: a greeting
   and "What's next for your project?", the message box with Add files or an

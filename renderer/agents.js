@@ -328,7 +328,9 @@
     $("agents-connections").prepend(node("p", "agents-scope-note", "Device-wide connections · Keys stay encrypted on this machine. Teams reference these connections."));
     // All routes into these controls resolve here, including older saved tours.
     for (const pane of body.querySelectorAll("[data-agents-pane]")) for (const el of pane.querySelectorAll("input[id], select[id], button[id], details[id]")) {
-      const label = el.getAttribute("aria-label") || el.closest("label")?.querySelector(".field-label, b")?.textContent || (el.querySelector("summary b, summary strong") || el.querySelector("summary"))?.textContent || el.title;
+      // A plain button (Run auto setup, Save) is named by its own words, so Search does not keep the name Settings gave
+      // it before the card moved here.
+      const label = el.getAttribute("aria-label") || el.closest("label")?.querySelector(".field-label, b")?.textContent || (el.querySelector("summary b, summary strong") || el.querySelector("summary"))?.textContent || el.title || (el.tagName === "BUTTON" ? el.textContent.replace(/\s+/g, " ").trim() : "");
       const help = (el.closest("label")?.querySelector("small") || el.querySelector("summary small, summary .settings-summary-text > span"))?.textContent?.trim() || "";
       // In the 0.5 layout Search names the control by the Team place that holds it now (read when Search reads it).
       const words = label?.trim().slice(0, 100);
@@ -1022,7 +1024,8 @@
     params = { section: place.id === "overview" ? "overview" : "setup", pane, place: place.id };
     window.MefiNav?.claim("agents"); $("agents-overlay").hidden = false; paintOverview();
     $("agents-overlay").dataset.teamPlace = place.id;
-    $("agents-title").textContent = place.label;
+    // The prototype titles the Overview page Team; the breadcrumb still says Team / Overview.
+    $("agents-title").textContent = place.id === "overview" ? "Team" : place.label;
     const about = $("agents-title")?.nextElementSibling;
     if (about) about.textContent = place.about || "";
     for (const node of $("agents-body").children) if (node.classList.contains("agents-pane")) node.hidden = !place.panes.includes(node.dataset.agentsPane);
