@@ -248,6 +248,15 @@
   .pm-navigation .ab-map-breadcrumb { order: 1; flex-basis: 100%; }
   .pm-navigation .ab-crumb { max-width: 200px; }
 }
+/* A short window under the 0.5 frame's bars (600x560 at 150% leaves the page about 250 px): the head keeps its views and gives
+   up its title (the tab strip names the page), and the map's trail gives up its row (the scene heading names the place and
+   the up arrow climbs), so the map keeps a viewport of its own instead of none. */
+@media (max-height: 480px) {
+  html[data-frame] .agent-brain-head .sheet-title { display: none; }
+  html[data-frame] .pm-navigation .ab-map-breadcrumb { display: none; }
+  html[data-frame] #agent-brain-map { padding-block: 8px; }
+  html[data-frame] .agent-brain-map-tools { gap: 4px; margin-bottom: 4px; }
+}
 
 /* Ideas keep their provenance and real workflow states in a separate tree. */
 .agent-brain-pane[data-map-mode="ideas"] .agent-brain-map-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "map"; }

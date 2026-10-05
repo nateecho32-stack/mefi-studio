@@ -269,6 +269,9 @@
     }, { passive: true });
     const endDrag = () => { if (!dragging) return; dragging = null; if (dragged) preference({ pinned: true, anchor: anchor() }); };
     orb.addEventListener("pointerup", endDrag); orb.addEventListener("pointercancel", endDrag); orb.addEventListener("lostpointercapture", endDrag);
+    // Dragging the orb out of the rail's dock (the 0.5 frame) moves it to the page, which drops its pointer capture: the release
+    // is heard on the document too, or the orb would stay on the pointer and its new place would never be saved.
+    document.addEventListener("pointerup", endDrag, true); document.addEventListener("pointercancel", endDrag, true);
     panel.addEventListener("keydown", () => { keyboard = true; });
     document.addEventListener("keydown", (event) => { if (event.key === "Escape" && !panel.hidden && !window.MefiCompanionHub?.isOpen()) { event.preventDefault(); event.stopImmediatePropagation(); host.toggle(false); orb.focus({ preventScroll: true }); } }, true);
     panel.addEventListener("pointerdown", () => { keyboard = false; });

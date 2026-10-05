@@ -4486,6 +4486,11 @@ body.appearance-settings-active #tab-studio[data-places="v2"] .settings-nav-item
   /* the strip sticks over the page as it scrolls, so it is solid */
   html #tab-studio[data-places="v2"] .settings-nav { padding: 8px 12px; background: var(--panel-solid); box-shadow: var(--shadow-1); }
 }
+/* A short window (600x560 at 150% leaves the page about 250 px under the frame's bars): stuck, the wrapped strip would cover
+   most of the page, Find a setting included, so there it scrolls away with the page. */
+@media (max-height: 480px) {
+  html[data-shell="rail"] #tab-studio[data-places="v2"] .settings-nav { position: static; }
+}
 /* Sound and music: the sound effects first, then music and video, its words beside its button. */
 #tab-studio[data-places="v2"] #settings-category-audio > .settings-category-head { order: -2; }
 #tab-studio[data-places="v2"] #settings-audio-effects { order: -1; }
@@ -8283,6 +8288,15 @@ button.fleet-tnode:focus-visible { outline: 2px solid var(--gold-bright); outlin
   .pm-modes { margin-right: auto; }
   .pm-navigation .ab-map-breadcrumb { order: 1; flex-basis: 100%; }
   .pm-navigation .ab-crumb { max-width: 200px; }
+}
+/* A short window under the 0.5 frame's bars (600x560 at 150% leaves the page about 250 px): the head keeps its views and gives
+   up its title (the tab strip names the page), and the map's trail gives up its row (the scene heading names the place and
+   the up arrow climbs), so the map keeps a viewport of its own instead of none. */
+@media (max-height: 480px) {
+  html[data-frame] .agent-brain-head .sheet-title { display: none; }
+  html[data-frame] .pm-navigation .ab-map-breadcrumb { display: none; }
+  html[data-frame] #agent-brain-map { padding-block: 8px; }
+  html[data-frame] .agent-brain-map-tools { gap: 4px; margin-bottom: 4px; }
 }
 
 /* Ideas keep their provenance and real workflow states in a separate tree. */
@@ -12628,6 +12642,11 @@ html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:
 }
 html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-head { min-height: 54px; border-radius: 10px; }
 html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-foot-item { min-height: 50px; border-radius: 10px; }
+/* The smallest window at 150% zoom is about 373 CSS px tall: a tile keeps its icon and its word but not the tall minimum, so
+   Work, Map, Team and Friends all stay in view (studio-ui.css's short-window rail, which the two rules above out-rank). */
+@media (max-height: 440px) {
+  html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-head { min-height: 32px; }
+}
 html[data-frame] #app-rail .app-rail-search { margin-bottom: 0; }
 html[data-frame] #app-rail .app-rail-section.current > .app-rail-head,
 html[data-frame] #app-rail .app-rail-foot-item[aria-current="page"] { background: var(--tint-gold-3, color-mix(in srgb, var(--gold) 14%, transparent)); color: var(--ivory); }
@@ -80959,6 +80978,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }, { passive: true });
     const endDrag = () => { if (!dragging) return; dragging = null; if (dragged) preference({ pinned: true, anchor: anchor() }); };
     orb.addEventListener("pointerup", endDrag); orb.addEventListener("pointercancel", endDrag); orb.addEventListener("lostpointercapture", endDrag);
+    // Dragging the orb out of the rail's dock (the 0.5 frame) moves it to the page, which drops its pointer capture: the release
+    // is heard on the document too, or the orb would stay on the pointer and its new place would never be saved.
+    document.addEventListener("pointerup", endDrag, true); document.addEventListener("pointercancel", endDrag, true);
     panel.addEventListener("keydown", () => { keyboard = true; });
     document.addEventListener("keydown", (event) => { if (event.key === "Escape" && !panel.hidden && !window.MefiCompanionHub?.isOpen()) { event.preventDefault(); event.stopImmediatePropagation(); host.toggle(false); orb.focus({ preventScroll: true }); } }, true);
     panel.addEventListener("pointerdown", () => { keyboard = false; });

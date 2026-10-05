@@ -4476,6 +4476,11 @@ body.appearance-settings-active #tab-studio[data-places="v2"] .settings-nav-item
   /* the strip sticks over the page as it scrolls, so it is solid */
   html #tab-studio[data-places="v2"] .settings-nav { padding: 8px 12px; background: var(--panel-solid); box-shadow: var(--shadow-1); }
 }
+/* A short window (600x560 at 150% leaves the page about 250 px under the frame's bars): stuck, the wrapped strip would cover
+   most of the page, Find a setting included, so there it scrolls away with the page. */
+@media (max-height: 480px) {
+  html[data-shell="rail"] #tab-studio[data-places="v2"] .settings-nav { position: static; }
+}
 /* Sound and music: the sound effects first, then music and video, its words beside its button. */
 #tab-studio[data-places="v2"] #settings-category-audio > .settings-category-head { order: -2; }
 #tab-studio[data-places="v2"] #settings-audio-effects { order: -1; }
