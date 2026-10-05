@@ -697,8 +697,7 @@ html[data-ui-mode="vibe"] #palette-list { padding: 10px; }
 html[data-ui-mode="vibe"] #palette-list li { border-radius: 14px; transition: background var(--motion-fast) var(--ease-out); }
 html[data-ui-mode="vibe"] #palette-list li:hover { background: color-mix(in srgb, var(--ivory) 6%, transparent); }
 html[data-ui-mode="vibe"] #palette-list li.active { background: var(--v-menu-pick); outline-color: color-mix(in srgb, var(--gold) 30%, transparent); }
-html[data-ui-mode="vibe"] #palette-list li.palette-group-start .kind { color: var(--gold-bright); font-weight: 600; }
-html[data-ui-mode="vibe"] :is(#palette-list, #help-overlay, #vibe-ask) .key { border-radius: 8px; border-color: color-mix(in srgb, var(--gold) 30%, transparent); background: color-mix(in srgb, var(--gold) 10%, transparent); color: var(--ivory); }
+html[data-ui-mode="vibe"] :is(#help-overlay, #vibe-ask) .key { border-radius: 8px; border-color: color-mix(in srgb, var(--gold) 30%, transparent); background: color-mix(in srgb, var(--gold) 10%, transparent); color: var(--ivory); }
 html[data-ui-mode="vibe"] .palette-footer { border-top-color: color-mix(in srgb, var(--ivory) 8%, transparent); }
 
 /* Shortcuts, Start here and the other small sheets */
