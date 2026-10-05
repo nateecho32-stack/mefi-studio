@@ -152,7 +152,6 @@
 html[data-density=compact] .agents-model-row { padding-block: 6px; }
 html[data-density=compact] .agents-model-settings .studio-field { padding-block: 0; }
 body[data-nav-section=agents] { --shell-local-h: 60px; }
-body[data-nav-section=agents] #app-local-nav { height: var(--shell-local-h); overflow: visible; gap: 16px; }
 body[data-nav-section=agents] #app-task-context { display: none; }
 @media (max-width: 1100px) { .agents-overview-grid { grid-template-columns: 1fr; } .agents-role-grid { grid-template-columns: 1fr; } }
 @media (max-width: 760px) {
@@ -166,7 +165,6 @@ body[data-nav-section=agents] #app-task-context { display: none; }
   .agents-head .muted { display: none; }
   .agents-eyebrow { display: none; }
   .agents-team-toolbar { margin-bottom: 8px; }
-  body[data-nav-section=agents] #app-local-nav { padding-inline: 8px; gap: 8px; }
 }
 @media (prefers-reduced-motion: reduce) { .agents-model-row { transition: none; } }
 html[data-motion=off] .agents-model-row { transition: none; }

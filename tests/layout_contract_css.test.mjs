@@ -198,13 +198,11 @@ const RAW = [
   ["styles.css", "width: var(--shell-rail-w); box-sizing: border-box;", "the rail's own width"],
   ["styles.css", "{ width: var(--shell-rail-open); box-shadow: var(--shadow-2); }", "the rail's own width when hovered or focused: it opens over the page"],
   ["styles.css", "{ width: var(--shell-rail-open); }", "the same, for the strip that blocks the pointer across the open rail"],
-  ["styles.css", "height: var(--shell-local-h);", "the local navigation's own height"],
   ["styles.css", '[data-nav-section="agents"]) { padding-top: var(--shell-local-h); }', "a tab page in Work or Agents starts under the bar, at its own height (layout v2 adds the strip for in-flow pages only, below)"],
   ["styles.css", "#workspace-sidebar-panel { left: var(--shell-rail-w);", "the project panel slides out of the rail's edge, over whatever is beside the rail (and stops above the status bar, as the rail does)"],
   ["styles.css", "clip-path: inset(0 0 0 var(--shell-rail-open))", "the open rail covers the floats layer's left strip"],
   ["styles.css", "max(var(--shell-rail-open), var(--shell-x0))", "toasts step aside to the open rail's edge, or past the list when that is further"],
   ["agents.css", "body[data-nav-section=agents] { --shell-local-h: 60px; }", "the agents section's bar is taller: an input"],
-  ["agents.css", "#app-local-nav { height: var(--shell-local-h);", "the local navigation's own height"],
   ["builder.css", "--shell-rail-open: 272px;", "Build's sessions layout opens the rail wider: an input"],
   ["vibe.css", "{ --shell-rail-w: 72px; }", "Vibe's rail is 72px: an input"],
   ["vibe.css", "width: var(--shell-rail-w, 72px);", "Vibe's own rail's width"],
@@ -255,7 +253,6 @@ test("the full-window layers take all four edges from the free area", () => {
   has(styles, /html\[data-shell="rail"\] \.workspace-page \{ top: var\(--shell-y0\); right: var\(--shell-x1\); bottom: var\(--shell-y1\); left: var\(--shell-x0\);/, "pages");
   has(styles, /html\[data-shell="rail"\] \.music-overlay \{ left: var\(--shell-x0\); right: var\(--shell-x1\); bottom: var\(--shell-y1\); \}/, "sheets");
   has(styles, /html\[data-shell="rail"\] #idle-hud \{ top: var\(--shell-y0\); \}/, "Command's HUD");
-  has(styles, /#app-local-nav \{ position: fixed; top: 0; right: 0; left: var\(--shell-x0\);/, "the local navigation");
   has(styles, /#app-rail \{\s*position: fixed; top: 0; bottom: var\(--shell-y1\); left: 0;/, "the rail stops above the status bar");
   has(css["agents.css"], /\.agents-overlay \{ position: fixed; inset: var\(--shell-y0, 72px\) var\(--shell-x1, 0px\) var\(--shell-y1, 0px\) var\(--shell-x0, 80px\);/, "the agents page");
   has(css["vibe.css"], /inset: var\(--shell-tabs-h\) var\(--shell-x1\) var\(--shell-y1\) var\(--shell-list-w\);/, "Vibe's own home has no rail or local navigation, so it claims only what can sit beside it");

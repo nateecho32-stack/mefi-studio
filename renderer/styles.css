@@ -2819,8 +2819,6 @@ body.workspace-active > header, body.workspace-active > main, body.workspace-act
 .task-workflow-next-label { margin-right: 6px; font-size: 9px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
 .task-workflow-actions { margin-top: 10px; }
 .task-brief { margin: 0 0 12px; white-space: pre-wrap; font-size: 13px; line-height: 1.6; color: var(--muted); max-width: 80ch; }
-.app-task-context { display: flex; flex: none; flex-wrap: nowrap; align-items: center; gap: 6px; min-width: 0; font-size: 11px; border-right: 1px solid var(--hairline); padding-right: 8px; }
-.app-task-context button { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @container ws-main (max-width: 760px) { .ws-workflow { grid-template-columns: minmax(0, 1fr); }.ws-focus-heading select { max-width: 65%; } }
 .ws-companion-bar { display: flex; align-items: center; gap: 12px; padding: 8px 0 12px; flex-shrink: 0; border-bottom: 1px solid var(--hairline); min-height: 64px; }
 .ws-companion-track { display: none; width: 150px; height: 74px; flex-shrink: 0; position: relative; }
@@ -2989,17 +2987,6 @@ body.workspace-active > header, body.workspace-active > main, body.workspace-act
 /* "More tools": one menu face everywhere it appears (tabs row, sheet headers, the
    Command dock). The summary is a quiet capsule with a glyph and a chevron that
    turns while open; the list is a glass card of grouped, glyph-led rows. */
-.studio-more { position: relative; }
-.studio-more > summary { display: inline-flex; align-items: center; gap: 7px; min-height: var(--ctl-h-hud); padding: 0 11px; cursor: pointer; list-style: none; font-size: var(--fs-sm); color: var(--muted); border: 1px solid var(--hairline); border-radius: var(--r-sm); background: transparent; transition: color var(--dur-1) var(--ease), background var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease); }
-.studio-more > summary::marker, .studio-more > summary::-webkit-details-marker { display: none; content: ""; }
-.studio-more > summary > .glyph { color: var(--gold); }
-.studio-more > summary > .chev { color: var(--muted); transition: transform var(--dur-2) var(--ease); }
-.studio-more > summary:hover, .studio-more[open] > summary { color: var(--ivory); background: var(--tint-gold-2); border-color: var(--hairline-strong); }
-.studio-more[open] > summary > .chev { transform: rotate(180deg); }
-.studio-more-links { position: absolute; z-index: 95; top: calc(100% + 6px); right: 0; display: grid; min-width: 236px; padding: 8px; border: 1px solid var(--hairline-strong); border-radius: var(--r-md); background: var(--glass-hard); backdrop-filter: var(--blur); box-shadow: var(--shadow-2), var(--inset-hi); }
-.studio-more:not([open]) .studio-more-links { display: none; }
-.studio-more-links .dock-item { justify-content: flex-start; width: 100%; }
-.sheet-links:has(.studio-more) { border: none; background: transparent; overflow: visible; padding: 0; }
 @keyframes ws-float { 0%,100% { transform: translateY(1px) rotate(-3deg); } 50% { transform: translateY(-3px) rotate(3deg); } }
 @keyframes ws-blink { 0%,42%,46%,100% { transform: scaleY(1); } 44% { transform: scaleY(.1); } }
 @keyframes ws-spark { 50% { opacity: .3; transform: rotate(60deg); } }
@@ -3542,15 +3529,6 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 #idle-hud .dock-item .count.warn { color: var(--warn); }
 #idle-hud .dock-item .count.bad { color: var(--bad); }
 #idle-hud .dock-item .tone-dot { position: static; transform: none; width: 5px; height: 5px; }
-#idle-hud .cmd-more-tools { position: relative; }
-#idle-hud .cmd-more-tools > summary { cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 6px; }
-#idle-hud .cmd-more-tools > summary::marker, #idle-hud .cmd-more-tools > summary::-webkit-details-marker { display: none; content: ""; }
-#idle-hud .cmd-more-tools > summary > .chev { color: var(--muted); transition: transform var(--dur-2) var(--ease); }
-#idle-hud .cmd-more-tools[open] > summary { color: var(--gold-bright); background: var(--tint-gold-3); }
-#idle-hud .cmd-more-tools[open] > summary > .chev { transform: rotate(180deg); }
-#idle-hud .cmd-more-links { position: absolute; bottom: calc(100% + 15px); right: 0; width: 290px; padding: 8px; background: var(--glass-hard); backdrop-filter: var(--blur); border: 1px solid var(--hairline-strong); border-radius: 12px; box-shadow: var(--shadow-2), var(--inset-hi); }
-#idle-hud .cmd-more-links .dock-item { justify-content: flex-start; }
-#idle-hud .cmd-more-links .key { display: inline; margin-left: auto; }
 #idle-hud .cmd-follow-status { position: absolute; top: var(--command-panel-top); left: calc(48px + var(--command-feed-width)); right: 348px; padding: 9px 13px; border: 1px solid var(--hairline); border-left: 2px solid var(--gold); border-radius: 7px; background: var(--cmd-surface); color: var(--gold-bright); font-size: 12px; line-height: 1.5; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #idle-hud .cmd-follow-status[hidden] { display: none; }
 /* the corner: Legend pill at the floor, the Usage pill above it, both lists opening upward */
@@ -3620,7 +3598,6 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
   #idle-hud .dock-item { padding-inline: 7px; font-size: 11px; }
   #idle-hud .dock-item .glyph { display: none; }
   #idle-hud .cmd-dock { max-width: calc(100vw - 20px); gap: 1px; padding: 6px; }
-  #idle-hud .cmd-more-links .glyph { display: inline; }
 }
 @media (prefers-reduced-motion: reduce) { #idle-hud .cmd-music-level i { transition: none; } }
 /* --- Command toolbar clusters (menu regroup) ---------------------------------
@@ -3943,8 +3920,7 @@ body > main > section:not([hidden]),
 .model-lab > [role="tabpanel"]:not([hidden]) {
   animation: studio-content-enter var(--motion-content) var(--ease-enter);
 }
-.ws-tools[open] > #workspace-tool-links,
-.cmd-more-tools[open] > .cmd-more-links {
+.ws-tools[open] > #workspace-tool-links {
   animation: studio-menu-enter var(--motion-menu) var(--ease-enter);
 }
 :is(.ws-activity, .feed-section, .lab-disclosure, .lab-context-source, .lab-catalog, .task-reference-drawer)[open] > :not(summary) {
@@ -3959,7 +3935,7 @@ button, .button, .workspace button, .music-overlay button, .model-lab button {
 :is(button, .button):not(:disabled):active {
   transform: translateY(0) scale(.985);
 }
-:is(.studio-more, .ws-tools, .ws-activity, .cmd-more-tools, .feed-section, .lab-disclosure, .lab-context-source, .lab-catalog, .task-reference-drawer) > summary {
+:is(.ws-tools, .ws-activity, .feed-section, .lab-disclosure, .lab-context-source, .lab-catalog, .task-reference-drawer) > summary {
   transition: color var(--motion-press) var(--ease), background-color var(--motion-press) var(--ease),
     border-color var(--motion-press) var(--ease);
 }
@@ -4000,11 +3976,6 @@ html[data-motion="off"]::view-transition-new(*) { animation: none !important; }
 }
 
                                                     
-.studio-more-links { max-height: min(65vh, 540px); overflow: auto; }
-.studio-more-links .dock-item { gap: 9px; min-height: 34px; padding: 6px 10px; border-radius: 8px; }
-.studio-more-links .key { margin-left: auto; }
-#idle-hud .cmd-more-links { display: block; width: 290px; max-height: min(65vh, 540px); overflow: auto; }
-#idle-hud .cmd-more-links .dock-item { width: 100%; min-height: 34px; padding: 6px 10px; border-radius: 8px; }
 .walkthrough-invitation { flex: none; display: flex; align-items: center; gap: 20px; justify-content: space-between; margin: 0 0 16px; padding: 12px 15px; border: 1px solid var(--hairline-strong); border-radius: 12px; background: color-mix(in srgb, var(--gold) 6%, var(--panel)); }
 .walkthrough-invitation strong { font-size: 13px; color: var(--ivory); }
 .walkthrough-invitation p { margin: 5px 0 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
@@ -5197,7 +5168,6 @@ html[data-rail-pinned] #app-rail .app-rail-head .count { position: static; margi
 #app-rail .app-rail-section.current > .app-rail-head { color: var(--ivory); font-weight: 600; }
 #app-rail .app-rail-section.current > .app-rail-head .glyph { color: var(--ivory); }
 #app-rail [aria-current="page"] { color: var(--ivory); background: color-mix(in srgb, var(--ivory) 9%, transparent); border-color: transparent; }
-#app-rail .app-rail-compose { margin-bottom: 2px; background: color-mix(in srgb, var(--ivory) 7%, transparent); color: var(--ivory); font-weight: 550; }
 #app-rail .app-rail-search { margin-bottom: 16px; }
 #app-rail .app-rail-heading { padding: 0 12px; color: var(--dim); font: 500 11px/1.5 var(--font-ui); }
 #app-rail .app-rail-friends { display: flex; flex-direction: column; gap: 1px; }
@@ -5221,7 +5191,7 @@ html[data-rail-pinned] #app-rail .app-rail-head .count { position: static; margi
 
 /* At rest the one-line buttons (brand, foot, pin) are icon only: their words,
    keycaps and counts wait for the rail to open instead of peeking out clipped. */
-html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) :is(.app-rail-brand, .app-rail-foot-item, .app-rail-pin, .app-rail-compose, .app-rail-search) :is(.label, .key, .app-rail-text, .count) { display: none; }
+html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) :is(.app-rail-brand, .app-rail-foot-item, .app-rail-pin, .app-rail-search) :is(.label, .key, .app-rail-text, .count) { display: none; }
 html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-friends { display: none; }
 /* ...except the foot's Settings and Help and the update dot: at rest they keep
    a word under the icon, as the sections above do, instead of bare glyphs. */
@@ -5239,16 +5209,6 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 #app-help-menu { position: absolute; left: calc(100% + 12px); bottom: 0; width: 204px; padding: 8px; border: 1px solid var(--hairline-strong); border-radius: var(--r-md); background: var(--panel-solid); box-shadow: var(--shadow-2); }
 #app-help-menu[hidden] { display: none; }
 html[data-shell="rail"] :is(.profiler-overlay, .music-overlay) { z-index: var(--z-transient); }
-#app-local-nav { position: fixed; top: 0; right: 0; left: var(--shell-x0); height: var(--shell-local-h); z-index: calc(var(--z-shell) - 1); display: flex; align-items: center; gap: 8px; overflow-x: auto; overflow-y: hidden; padding: 6px 22px; background: var(--bg); border-bottom: 1px solid var(--hairline); }
-#app-local-nav[hidden] { display: none; }
-#app-local-nav .app-local-link { flex: none; display: inline-flex; align-items: center; gap: 8px; min-height: 42px; padding: 8px 11px; background: transparent; color: var(--muted); border: 0; border-bottom: 2px solid transparent; border-radius: 0; box-shadow: none; font-size: 14px; transform: none; }
-#app-local-nav .app-local-link:hover { color: var(--ivory); background: color-mix(in srgb, var(--ivory) 4%, transparent); }
-#app-local-nav .app-local-link[aria-current="page"] { color: var(--ivory); background: transparent; border-bottom-color: var(--gold); font-weight: 600; }
-#app-local-nav .app-local-link:focus-visible { outline: 2px solid var(--gold); outline-offset: -3px; }
-#app-local-nav .glyph { width: 18px; height: 18px; }
-#app-local-nav .app-task-context { padding-right: 14px; margin-right: 4px; gap: 4px; }
-#app-local-nav .app-task-context button { min-height: 32px; padding: 5px 8px; color: var(--muted); border-color: transparent; font-size: 12px; }
-#app-local-nav .app-task-context button:hover { color: var(--ivory); background: color-mix(in srgb, var(--ivory) 6%, transparent); }
 /* Short windows: the open rail lists every destination, so its rows tighten
    and the foot folds into one row of icons (each keeps its name as a tooltip
    and accessible name), which gives back about 150px at 720px tall. At rest
@@ -5350,11 +5310,8 @@ html[data-shell="rail"] #idle-hud .cmd-dock { display: none; }
 html[data-shell="rail"] #idle-hud .cmd-brand .monogram { display: none; }
 
 /* Zen fades the rail with the rest of the HUD. */
-body.command-zen :is(#app-rail, #app-local-nav) { opacity: 0; pointer-events: none; }
+body.command-zen :is(#app-rail) { opacity: 0; pointer-events: none; }
 @media (max-width: 900px) {
-  #app-local-nav { padding: 8px; }
-  #app-local-nav .app-local-link { padding-inline: 8px; }
-  #app-local-nav .app-local-link .glyph { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -5501,7 +5458,7 @@ html[data-shell="rail"] body:has(#workspace-layer:not([hidden])):not(:has(.works
 /* Primary actions are styled in studio-ui.css, which loads after this sheet
    with the same selectors (the ivory fills that stood here never applied). */
 @media print {
-  #app-rail, #app-local-nav { display: none; }
+  #app-rail { display: none; }
   html[data-shell="rail"] body { padding-left: 0; padding-top: 0; }
 }
 .openrouter-browser { display: grid; gap: .55rem; margin-top: 1rem; }

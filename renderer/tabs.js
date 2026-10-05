@@ -1347,7 +1347,7 @@
   function onInput(event) {
     const target = event.target;
     if (event.isTrusted === false) return; // the app replaying a draft into a field is not you typing
-    if (!target || !isTyping(target) || target.closest?.(".ts-pop, .ts-strip, #palette-overlay, #config-overlay, #help-overlay, #walkthrough-overlay, #app-rail, #app-local-nav")) return;
+    if (!target || !isTyping(target) || target.closest?.(".ts-pop, .ts-strip, #palette-overlay, #config-overlay, #help-overlay, #walkthrough-overlay, #app-rail")) return;
     if (cur().prev) keep(S.active);
   }
   function onDouble(event) {

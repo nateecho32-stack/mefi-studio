@@ -1878,15 +1878,15 @@
       const rect = document.getElementById?.(id)?.getBoundingClientRect?.();
       return rect && rect.width > 0 && rect.height > 0 ? rect : null;
     };
-    const rail = box("app-rail"), bar = box("app-local-nav");
-    let left = rail ? rail.right : 0, top = bar ? bar.bottom : 0, right = w, bottom = h;
+    const rail = box("app-rail");
+    let left = rail ? rail.right : 0, top = 0, right = w, bottom = h;
     if (layoutOn()) {
       paintLayout();
       const length = (name, from) => cssLength(name, from) ?? 0;
       left = Math.max(left, railRest() + (cssLength("--shell-list-w") ?? layoutApplied.list));
-      // The strip sits under the local navigation, or at the window's top where there is none (Vibe's own Home);
-      // the 0.5 shell's top bar (renderer/shell.js) is that row on every page, so with it the strip sits under it.
-      top = Math.max(top, (bar || box("shell-top") ? length("--shell-local-h", document.body || document.documentElement) : 0) + (cssLength("--shell-tabs-h") ?? layoutApplied.tabs));
+      // The strip sits under the frame's top bar (renderer/shell.js), or at the window's top where there is none
+      // (Vibe's own Home).
+      top = Math.max(top, (box("shell-top") ? length("--shell-local-h", document.body || document.documentElement) : 0) + (cssLength("--shell-tabs-h") ?? layoutApplied.tabs));
       right = w - (cssLength("--shell-inspector-w") ?? layoutApplied.inspector);
       bottom = h - (cssLength("--shell-status-h") ?? layoutApplied.status);
     }
@@ -2188,9 +2188,8 @@
       window.MefiSidebar.close({ restoreFocus: true });
       return;
     }
-    // Command's own More tools menu is the fallback only while Command is on
-    // top; a sheet above it must not have Esc (and focus) pulled out from under it.
-    const more = document.activeElement?.closest?.(".surface-tools[open]") ?? Array.from(document.querySelectorAll?.(".surface-tools[open]") ?? []).find(visibleNavTarget) ?? (top() === "command" ? document.getElementById("cmd-more-tools") : null);
+    // An open tools menu (the one focus is in, else the first one on screen) closes first.
+    const more = document.activeElement?.closest?.(".surface-tools[open]") ?? Array.from(document.querySelectorAll?.(".surface-tools[open]") ?? []).find(visibleNavTarget);
     if (event.key === "Escape" && more?.open) {
       event.preventDefault();
       more.open = false;

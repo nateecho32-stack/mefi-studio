@@ -14,12 +14,12 @@ import { createDom } from "./fixtures/renderer-dom.mjs";
 // The sources are read with LF line ends whatever the checkout made of them (Windows may give CRLF), since some checks look at lines.
 const lf = (text) => text.replace(/\r\n/g, "\n");
 const source = lf(await readFile(new URL("../renderer/nav.js", import.meta.url), "utf8"));
-const RAIL_IDS = ["app-rail", "app-rail-brand", "app-rail-sections", "app-rail-foot", "app-rail-pin", "app-local-nav", "vibe-rail", "workspace-sidebar", "workspace-layer"];
+const RAIL_IDS = ["app-rail", "app-rail-brand", "app-rail-sections", "app-rail-foot", "app-rail-pin", "shell-top", "vibe-rail", "workspace-sidebar", "workspace-layer"];
 const REGION_VARIABLES = { list: "--shell-list-w", inspector: "--shell-inspector-w", tabs: "--shell-tabs-h", status: "--shell-status-h" };
 
 // A window of `width` x `height` CSS px with the rail shell on: the rail's real
-// box, the local navigation's, and a computed style for the root and the body.
-function load({ search = "", stored = {}, width = 1440, height = 900, matchMedia = true, rail = 64, localH = 56, railBox, navBox, vibeBox, layoutSearch } = {}) {
+// box, the frame's top bar's, and a computed style for the root and the body.
+function load({ search = "", stored = {}, width = 1440, height = 900, matchMedia = true, rail = 64, localH = 56, railBox, topBox, vibeBox, layoutSearch } = {}) {
   const { document, get } = createDom({ ids: RAIL_IDS });
   const lookupId = document.getElementById;
   document.getElementById = (id) => lookupId(id) ?? document.querySelector(`#${id}`);
@@ -33,7 +33,7 @@ function load({ search = "", stored = {}, width = 1440, height = 900, matchMedia
   const box = (left, top, right, bottom) => (right - left > 0 && bottom - top > 0 ? { left, top, right, bottom, width: right - left, height: bottom - top } : { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 });
   const boxes = {
     "app-rail": () => railBox ?? box(0, 0, rail, window.innerHeight),
-    "app-local-nav": () => navBox ?? box(rail, 0, window.innerWidth, localH),
+    "shell-top": () => topBox ?? box(rail, 0, window.innerWidth, localH),
     "vibe-rail": () => vibeBox ?? box(0, 0, 0, 0),
   };
   for (const [id, measure] of Object.entries(boxes)) get(id).getBoundingClientRect = measure;
@@ -164,7 +164,7 @@ test("v2 with no region built leaves no trace either: zeros in the stylesheet, n
   assert.deepEqual(page.props, {});
   assert.equal(page.root.dataset.layoutFold, undefined, "a wide window folds nothing");
   assert.deepEqual(plain(page.nav.layout.used()), { list: 0, inspector: 0, tabs: 0, status: 0 });
-  assert.deepEqual(plain(page.nav.usable()), plain(load({}).nav.usable()), "with the regions at 0 the free area is v1's");
+  assert.deepEqual(plain(page.nav.usable()), { left: 64, top: 56, right: 1440, bottom: 900, width: 1376, height: 844 }, "with the regions at 0 the free area is right of the rail and under the top bar");
   assert.equal(page.events.filter((type) => type === "resize").length, 0, "nothing resized");
 });
 
@@ -289,14 +289,14 @@ test("the fold rule in styles.css is the one in nav.js, and the variables and ed
 });
 
 test("usable(): in v1 exactly what the rail readers measured, in v2 clear of the regions", () => {
-  // v1: the right of the rail's box, below the local navigation's, to the window's other edges.
+  // The layout off (only a suite does that): the right of the rail's box to the window's other edges.
   const build = load({ width: 1440, height: 900 });
-  assert.deepEqual(JSON.parse(JSON.stringify(build.nav.usable())), { left: 64, top: 56, right: 1440, bottom: 900, width: 1376, height: 844 });
+  assert.deepEqual(JSON.parse(JSON.stringify(build.nav.usable())), { left: 64, top: 0, right: 1440, bottom: 900, width: 1376, height: 900 });
   // The open rail covers the page, and its real box is what the readers used.
   const open = load({ width: 1440, height: 900, railBox: { left: 0, top: 0, right: 256, bottom: 900, width: 256, height: 900 } });
   assert.equal(open.nav.usable().left, 256);
   // No rail on screen (Vibe's own page, the classic shell): the window.
-  const bare = load({ width: 1440, height: 900, railBox: { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 }, navBox: { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 } });
+  const bare = load({ width: 1440, height: 900, railBox: { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 }, topBox: { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 } });
   assert.deepEqual(JSON.parse(JSON.stringify(bare.nav.usable())), { left: 0, top: 0, right: 1440, bottom: 900, width: 1440, height: 900 });
   // Nothing in the document at all (a page before its markup): still an answer.
   const empty = vm.createContext({ window: { innerWidth: 500, innerHeight: 400, addEventListener() {} }, document: { documentElement: { dataset: {} }, readyState: "loading", addEventListener() {}, getElementById: () => null }, console });
@@ -319,7 +319,7 @@ test("usable(): in v1 exactly what the rail readers measured, in v2 clear of the
   const pinned = v2({ width: 1440, height: 900, rail: 256 });
   pinned.nav.layout.set("list", 280);
   assert.equal(pinned.nav.usable().left, 536);
-  // The local navigation's own height follows the section (agents is 60px).
+  // The top bar's height is the variable's (--shell-local-h).
   const agents = v2({ width: 1440, height: 900, localH: 60 });
   agents.nav.layout.set("tabs", 36);
   assert.equal(agents.nav.usable().top, 96);
@@ -330,11 +330,11 @@ test("usable(): in v1 exactly what the rail readers measured, in v2 clear of the
   const vibeHome = v2({ width: 1440, height: 900, rail: 72, railBox: { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 } });
   vibeHome.nav.layout.set("list", 280);
   assert.equal(vibeHome.nav.usable().left, 280, "with no rail on screen only the list is chrome");
-  // Nor is there a local navigation there: the tab strip starts at the window's top, and the free area under it.
+  // Nor is there a top bar there: the tab strip starts at the window's top, and the free area under it.
   const none = { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
-  const vibeStrip = v2({ width: 1440, height: 900, rail: 72, railBox: none, navBox: none });
+  const vibeStrip = v2({ width: 1440, height: 900, rail: 72, railBox: none, topBox: none });
   vibeStrip.nav.layout.set("tabs", 36);
-  assert.equal(vibeStrip.nav.usable().top, 36, "with no local navigation on screen the strip is all there is above");
+  assert.equal(vibeStrip.nav.usable().top, 36, "with no top bar on screen the strip is all there is above");
 });
 
 test("usable() reads the variables the layers read, so a value in the root's style is what it reports", () => {

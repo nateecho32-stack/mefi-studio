@@ -72,7 +72,6 @@ html[data-frame] .shell-top {
 html[data-frame][data-ui-mode="vibe"] .shell-top { background: var(--studio-menu-fill, var(--bg)); backdrop-filter: var(--studio-menu-blur, none); border-bottom-color: color-mix(in srgb, var(--ivory) 7%, transparent); }
 /* The classic local navigation is not drawn in the frame: its pages are the list column's page list, Back and Forward
    go with them, and the bar's middle is the breadcrumb. */
-html[data-frame][data-shell="rail"] #app-local-nav { display: none !important; }
 html[data-frame] .shell-top-left, html[data-frame] .shell-top-right, html[data-frame] .shell-top-extra { display: flex; align-items: center; gap: 8px; flex: none; min-width: 0; }
 html[data-frame] .shell-top-extra:empty { display: none; }
 html[data-frame] .shell-top-right { margin-left: auto; }

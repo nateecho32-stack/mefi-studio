@@ -2829,8 +2829,6 @@ body.workspace-active > header, body.workspace-active > main, body.workspace-act
 .task-workflow-next-label { margin-right: 6px; font-size: 9px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
 .task-workflow-actions { margin-top: 10px; }
 .task-brief { margin: 0 0 12px; white-space: pre-wrap; font-size: 13px; line-height: 1.6; color: var(--muted); max-width: 80ch; }
-.app-task-context { display: flex; flex: none; flex-wrap: nowrap; align-items: center; gap: 6px; min-width: 0; font-size: 11px; border-right: 1px solid var(--hairline); padding-right: 8px; }
-.app-task-context button { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @container ws-main (max-width: 760px) { .ws-workflow { grid-template-columns: minmax(0, 1fr); }.ws-focus-heading select { max-width: 65%; } }
 .ws-companion-bar { display: flex; align-items: center; gap: 12px; padding: 8px 0 12px; flex-shrink: 0; border-bottom: 1px solid var(--hairline); min-height: 64px; }
 .ws-companion-track { display: none; width: 150px; height: 74px; flex-shrink: 0; position: relative; }
@@ -2999,17 +2997,6 @@ body.workspace-active > header, body.workspace-active > main, body.workspace-act
 /* "More tools": one menu face everywhere it appears (tabs row, sheet headers, the
    Command dock). The summary is a quiet capsule with a glyph and a chevron that
    turns while open; the list is a glass card of grouped, glyph-led rows. */
-.studio-more { position: relative; }
-.studio-more > summary { display: inline-flex; align-items: center; gap: 7px; min-height: var(--ctl-h-hud); padding: 0 11px; cursor: pointer; list-style: none; font-size: var(--fs-sm); color: var(--muted); border: 1px solid var(--hairline); border-radius: var(--r-sm); background: transparent; transition: color var(--dur-1) var(--ease), background var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease); }
-.studio-more > summary::marker, .studio-more > summary::-webkit-details-marker { display: none; content: ""; }
-.studio-more > summary > .glyph { color: var(--gold); }
-.studio-more > summary > .chev { color: var(--muted); transition: transform var(--dur-2) var(--ease); }
-.studio-more > summary:hover, .studio-more[open] > summary { color: var(--ivory); background: var(--tint-gold-2); border-color: var(--hairline-strong); }
-.studio-more[open] > summary > .chev { transform: rotate(180deg); }
-.studio-more-links { position: absolute; z-index: 95; top: calc(100% + 6px); right: 0; display: grid; min-width: 236px; padding: 8px; border: 1px solid var(--hairline-strong); border-radius: var(--r-md); background: var(--glass-hard); backdrop-filter: var(--blur); box-shadow: var(--shadow-2), var(--inset-hi); }
-.studio-more:not([open]) .studio-more-links { display: none; }
-.studio-more-links .dock-item { justify-content: flex-start; width: 100%; }
-.sheet-links:has(.studio-more) { border: none; background: transparent; overflow: visible; padding: 0; }
 @keyframes ws-float { 0%,100% { transform: translateY(1px) rotate(-3deg); } 50% { transform: translateY(-3px) rotate(3deg); } }
 @keyframes ws-blink { 0%,42%,46%,100% { transform: scaleY(1); } 44% { transform: scaleY(.1); } }
 @keyframes ws-spark { 50% { opacity: .3; transform: rotate(60deg); } }
@@ -3552,15 +3539,6 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 #idle-hud .dock-item .count.warn { color: var(--warn); }
 #idle-hud .dock-item .count.bad { color: var(--bad); }
 #idle-hud .dock-item .tone-dot { position: static; transform: none; width: 5px; height: 5px; }
-#idle-hud .cmd-more-tools { position: relative; }
-#idle-hud .cmd-more-tools > summary { cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 6px; }
-#idle-hud .cmd-more-tools > summary::marker, #idle-hud .cmd-more-tools > summary::-webkit-details-marker { display: none; content: ""; }
-#idle-hud .cmd-more-tools > summary > .chev { color: var(--muted); transition: transform var(--dur-2) var(--ease); }
-#idle-hud .cmd-more-tools[open] > summary { color: var(--gold-bright); background: var(--tint-gold-3); }
-#idle-hud .cmd-more-tools[open] > summary > .chev { transform: rotate(180deg); }
-#idle-hud .cmd-more-links { position: absolute; bottom: calc(100% + 15px); right: 0; width: 290px; padding: 8px; background: var(--glass-hard); backdrop-filter: var(--blur); border: 1px solid var(--hairline-strong); border-radius: 12px; box-shadow: var(--shadow-2), var(--inset-hi); }
-#idle-hud .cmd-more-links .dock-item { justify-content: flex-start; }
-#idle-hud .cmd-more-links .key { display: inline; margin-left: auto; }
 #idle-hud .cmd-follow-status { position: absolute; top: var(--command-panel-top); left: calc(48px + var(--command-feed-width)); right: 348px; padding: 9px 13px; border: 1px solid var(--hairline); border-left: 2px solid var(--gold); border-radius: 7px; background: var(--cmd-surface); color: var(--gold-bright); font-size: 12px; line-height: 1.5; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #idle-hud .cmd-follow-status[hidden] { display: none; }
 /* the corner: Legend pill at the floor, the Usage pill above it, both lists opening upward */
@@ -3630,7 +3608,6 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
   #idle-hud .dock-item { padding-inline: 7px; font-size: 11px; }
   #idle-hud .dock-item .glyph { display: none; }
   #idle-hud .cmd-dock { max-width: calc(100vw - 20px); gap: 1px; padding: 6px; }
-  #idle-hud .cmd-more-links .glyph { display: inline; }
 }
 @media (prefers-reduced-motion: reduce) { #idle-hud .cmd-music-level i { transition: none; } }
 /* --- Command toolbar clusters (menu regroup) ---------------------------------
@@ -3953,8 +3930,7 @@ body > main > section:not([hidden]),
 .model-lab > [role="tabpanel"]:not([hidden]) {
   animation: studio-content-enter var(--motion-content) var(--ease-enter);
 }
-.ws-tools[open] > #workspace-tool-links,
-.cmd-more-tools[open] > .cmd-more-links {
+.ws-tools[open] > #workspace-tool-links {
   animation: studio-menu-enter var(--motion-menu) var(--ease-enter);
 }
 :is(.ws-activity, .feed-section, .lab-disclosure, .lab-context-source, .lab-catalog, .task-reference-drawer)[open] > :not(summary) {
@@ -3969,7 +3945,7 @@ button, .button, .workspace button, .music-overlay button, .model-lab button {
 :is(button, .button):not(:disabled):active {
   transform: translateY(0) scale(.985);
 }
-:is(.studio-more, .ws-tools, .ws-activity, .cmd-more-tools, .feed-section, .lab-disclosure, .lab-context-source, .lab-catalog, .task-reference-drawer) > summary {
+:is(.ws-tools, .ws-activity, .feed-section, .lab-disclosure, .lab-context-source, .lab-catalog, .task-reference-drawer) > summary {
   transition: color var(--motion-press) var(--ease), background-color var(--motion-press) var(--ease),
     border-color var(--motion-press) var(--ease);
 }
@@ -4010,11 +3986,6 @@ html[data-motion="off"]::view-transition-new(*) { animation: none !important; }
 }
 
                                                     
-.studio-more-links { max-height: min(65vh, 540px); overflow: auto; }
-.studio-more-links .dock-item { gap: 9px; min-height: 34px; padding: 6px 10px; border-radius: 8px; }
-.studio-more-links .key { margin-left: auto; }
-#idle-hud .cmd-more-links { display: block; width: 290px; max-height: min(65vh, 540px); overflow: auto; }
-#idle-hud .cmd-more-links .dock-item { width: 100%; min-height: 34px; padding: 6px 10px; border-radius: 8px; }
 .walkthrough-invitation { flex: none; display: flex; align-items: center; gap: 20px; justify-content: space-between; margin: 0 0 16px; padding: 12px 15px; border: 1px solid var(--hairline-strong); border-radius: 12px; background: color-mix(in srgb, var(--gold) 6%, var(--panel)); }
 .walkthrough-invitation strong { font-size: 13px; color: var(--ivory); }
 .walkthrough-invitation p { margin: 5px 0 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
@@ -5207,7 +5178,6 @@ html[data-rail-pinned] #app-rail .app-rail-head .count { position: static; margi
 #app-rail .app-rail-section.current > .app-rail-head { color: var(--ivory); font-weight: 600; }
 #app-rail .app-rail-section.current > .app-rail-head .glyph { color: var(--ivory); }
 #app-rail [aria-current="page"] { color: var(--ivory); background: color-mix(in srgb, var(--ivory) 9%, transparent); border-color: transparent; }
-#app-rail .app-rail-compose { margin-bottom: 2px; background: color-mix(in srgb, var(--ivory) 7%, transparent); color: var(--ivory); font-weight: 550; }
 #app-rail .app-rail-search { margin-bottom: 16px; }
 #app-rail .app-rail-heading { padding: 0 12px; color: var(--dim); font: 500 11px/1.5 var(--font-ui); }
 #app-rail .app-rail-friends { display: flex; flex-direction: column; gap: 1px; }
@@ -5231,7 +5201,7 @@ html[data-rail-pinned] #app-rail .app-rail-head .count { position: static; margi
 
 /* At rest the one-line buttons (brand, foot, pin) are icon only: their words,
    keycaps and counts wait for the rail to open instead of peeking out clipped. */
-html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) :is(.app-rail-brand, .app-rail-foot-item, .app-rail-pin, .app-rail-compose, .app-rail-search) :is(.label, .key, .app-rail-text, .count) { display: none; }
+html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) :is(.app-rail-brand, .app-rail-foot-item, .app-rail-pin, .app-rail-search) :is(.label, .key, .app-rail-text, .count) { display: none; }
 html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-friends { display: none; }
 /* ...except the foot's Settings and Help and the update dot: at rest they keep
    a word under the icon, as the sections above do, instead of bare glyphs. */
@@ -5249,16 +5219,6 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 #app-help-menu { position: absolute; left: calc(100% + 12px); bottom: 0; width: 204px; padding: 8px; border: 1px solid var(--hairline-strong); border-radius: var(--r-md); background: var(--panel-solid); box-shadow: var(--shadow-2); }
 #app-help-menu[hidden] { display: none; }
 html[data-shell="rail"] :is(.profiler-overlay, .music-overlay) { z-index: var(--z-transient); }
-#app-local-nav { position: fixed; top: 0; right: 0; left: var(--shell-x0); height: var(--shell-local-h); z-index: calc(var(--z-shell) - 1); display: flex; align-items: center; gap: 8px; overflow-x: auto; overflow-y: hidden; padding: 6px 22px; background: var(--bg); border-bottom: 1px solid var(--hairline); }
-#app-local-nav[hidden] { display: none; }
-#app-local-nav .app-local-link { flex: none; display: inline-flex; align-items: center; gap: 8px; min-height: 42px; padding: 8px 11px; background: transparent; color: var(--muted); border: 0; border-bottom: 2px solid transparent; border-radius: 0; box-shadow: none; font-size: 14px; transform: none; }
-#app-local-nav .app-local-link:hover { color: var(--ivory); background: color-mix(in srgb, var(--ivory) 4%, transparent); }
-#app-local-nav .app-local-link[aria-current="page"] { color: var(--ivory); background: transparent; border-bottom-color: var(--gold); font-weight: 600; }
-#app-local-nav .app-local-link:focus-visible { outline: 2px solid var(--gold); outline-offset: -3px; }
-#app-local-nav .glyph { width: 18px; height: 18px; }
-#app-local-nav .app-task-context { padding-right: 14px; margin-right: 4px; gap: 4px; }
-#app-local-nav .app-task-context button { min-height: 32px; padding: 5px 8px; color: var(--muted); border-color: transparent; font-size: 12px; }
-#app-local-nav .app-task-context button:hover { color: var(--ivory); background: color-mix(in srgb, var(--ivory) 6%, transparent); }
 /* Short windows: the open rail lists every destination, so its rows tighten
    and the foot folds into one row of icons (each keeps its name as a tooltip
    and accessible name), which gives back about 150px at 720px tall. At rest
@@ -5360,11 +5320,8 @@ html[data-shell="rail"] #idle-hud .cmd-dock { display: none; }
 html[data-shell="rail"] #idle-hud .cmd-brand .monogram { display: none; }
 
 /* Zen fades the rail with the rest of the HUD. */
-body.command-zen :is(#app-rail, #app-local-nav) { opacity: 0; pointer-events: none; }
+body.command-zen :is(#app-rail) { opacity: 0; pointer-events: none; }
 @media (max-width: 900px) {
-  #app-local-nav { padding: 8px; }
-  #app-local-nav .app-local-link { padding-inline: 8px; }
-  #app-local-nav .app-local-link .glyph { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -5511,7 +5468,7 @@ html[data-shell="rail"] body:has(#workspace-layer:not([hidden])):not(:has(.works
 /* Primary actions are styled in studio-ui.css, which loads after this sheet
    with the same selectors (the ivory fills that stood here never applied). */
 @media print {
-  #app-rail, #app-local-nav { display: none; }
+  #app-rail { display: none; }
   html[data-shell="rail"] body { padding-left: 0; padding-top: 0; }
 }
 .openrouter-browser { display: grid; gap: .55rem; margin-top: 1rem; }
@@ -8549,7 +8506,6 @@ html[data-motion="off"] .companion-orb, html[data-motion="off"] .companion-orb .
 html[data-density=compact] .agents-model-row { padding-block: 6px; }
 html[data-density=compact] .agents-model-settings .studio-field { padding-block: 0; }
 body[data-nav-section=agents] { --shell-local-h: 60px; }
-body[data-nav-section=agents] #app-local-nav { height: var(--shell-local-h); overflow: visible; gap: 16px; }
 body[data-nav-section=agents] #app-task-context { display: none; }
 @media (max-width: 1100px) { .agents-overview-grid { grid-template-columns: 1fr; } .agents-role-grid { grid-template-columns: 1fr; } }
 @media (max-width: 760px) {
@@ -8563,7 +8519,6 @@ body[data-nav-section=agents] #app-task-context { display: none; }
   .agents-head .muted { display: none; }
   .agents-eyebrow { display: none; }
   .agents-team-toolbar { margin-bottom: 8px; }
-  body[data-nav-section=agents] #app-local-nav { padding-inline: 8px; gap: 8px; }
 }
 @media (prefers-reduced-motion: reduce) { .agents-model-row { transition: none; } }
 html[data-motion=off] .agents-model-row { transition: none; }
@@ -8730,8 +8685,6 @@ span.catalog-expand { width: 16px; height: 16px; }
 .studio-choice-option[aria-selected=true] { color: var(--gold-bright); background: var(--tint-gold-3); }
 .studio-choice-search { width: 100%; flex-shrink: 0; }
 .studio-field { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(120px, 1fr); align-items: center; gap: 16px; padding: 8px 0; }
-.studio-history { display: flex; align-items: center; gap: 4px; padding-right: 10px; border-right: 1px solid var(--hairline); flex-shrink: 0; }
-.studio-history button { min-width: 32px; font-size: 18px; }
 /* Keep the primary destinations in view at increased display scaling. */
 @media (max-height: 600px) {
   #app-rail { padding-block: 3px; gap: 2px; }
@@ -8740,8 +8693,7 @@ span.catalog-expand { width: 16px; height: 16px; }
   #app-rail .app-rail-sections { gap: 0; }
   #app-rail .app-rail-section { flex-shrink: 0; }
   #app-rail .app-rail-head { min-height: 36px; padding-block: 2px; gap: 1px; }
-  #app-rail :is(.app-rail-compose, .app-rail-search, .app-rail-vibe) { min-height: 28px; height: 28px; }
-  #app-rail .app-rail-vibe { margin-bottom: 0; }
+  #app-rail :is(.app-rail-search) { min-height: 28px; height: 28px; }
   #app-rail .app-rail-search { margin-bottom: 2px; }
   #app-rail .app-rail-foot { padding-top: 4px; gap: 2px; }
   #app-rail .app-rail-foot :is(.app-rail-item, .update-pill) { min-height: 28px; height: 28px; padding-block: 2px; }
@@ -8763,7 +8715,7 @@ span.catalog-expand { width: 16px; height: 16px; }
   #app-rail .app-rail-head .app-rail-text { line-height: 1; }
   html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-head .app-rail-text { line-height: 1; }
   #app-rail .app-rail-friends .app-rail-item { min-height: 28px; }
-  #app-rail :is(.app-rail-compose, .app-rail-search) { margin-bottom: 0; }
+  #app-rail :is(.app-rail-search) { margin-bottom: 0; }
 }
 .studio-style-controls { width: 100%; }
 .studio-style-choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 10px 0; }
@@ -8895,7 +8847,7 @@ html[data-studio-style] .sheet-head.plain { background: transparent; backdrop-fi
 html[data-studio-style] table#table th { background: var(--studio-menu-fill); backdrop-filter: var(--studio-menu-blur); }
 
 /* Floating menus are readable over both the scene and another page of text. */
-html[data-studio-style] :is(.pop, .palette-sheet, .studio-choice-popup, .surface-tools-menu, .studio-more-links, .brains-menu, .brains-search-panel, .brains-dialog-panel, .brains-shortcuts-panel, .music-dropdown, .companion-panel, .companion-bubble, .tree-tip, .tip, .profiler-hud, .toast, .legend-list, .feed-drop, .autonomy-popover),
+html[data-studio-style] :is(.pop, .palette-sheet, .studio-choice-popup, .surface-tools-menu, .brains-menu, .brains-search-panel, .brains-dialog-panel, .brains-shortcuts-panel, .music-dropdown, .companion-panel, .companion-bubble, .tree-tip, .tip, .profiler-hud, .toast, .legend-list, .feed-drop, .autonomy-popover),
 #app-help-menu, .workspace .ws-project-actions > div {
   background: var(--studio-wash), var(--studio-sheen), var(--studio-float-fill);
   border-color: var(--studio-glass-edge); backdrop-filter: var(--studio-float-blur);
@@ -8909,7 +8861,7 @@ html[data-studio-style] :is(.pop, .palette-sheet, .studio-choice-popup, .surface
 .studio-choice-search { background: var(--studio-field-bg); }
 
 /* The shell is continuous with the page; selection supplies its colour. */
-#app-rail, #app-local-nav {
+#app-rail {
   background: var(--studio-wash), var(--studio-shell-fill);
   border-color: var(--studio-glass-edge); backdrop-filter: var(--studio-float-blur);
 }
@@ -8919,12 +8871,11 @@ html:not([data-rail-pinned]) #app-rail:is(:hover, :has(:focus-visible)), html[da
 html[data-studio-style] #workspace-sidebar-panel.ws-sidebar {
   background: var(--studio-wash), var(--studio-sheen), var(--studio-menu-fill);
 }
-#app-rail [aria-current=page], #app-rail .app-rail-compose {
+#app-rail [aria-current=page] {
   background: var(--studio-selection); color: var(--ivory);
   box-shadow: inset 2px 0 var(--gold); border-color: var(--studio-glass-edge);
 }
 #app-rail .app-rail-brand .monogram { background: var(--studio-selection); border-color: var(--studio-edge-active); color: var(--gold-bright); border-radius: 10px; }
-#app-local-nav .app-local-link[aria-current=page] { background: linear-gradient(0deg, var(--tint-gold-3), transparent); color: var(--gold-bright); }
 
 /* Fields keep their own boundary. Transparent colour controls and range tracks
    retain the specialised previews defined by the Appearance sheet. */
@@ -9072,7 +9023,7 @@ html[data-studio-style] :is(.brains-viewbar, .brains-minimap, .brains-rail-toggl
 #idle-hud .feed-queue-rank { font-size: 10px; color: var(--muted); }
 #idle-hud .feed-section { margin-top: 4px; padding-top: 10px; }
 #idle-hud .feed-meta { margin-top: 10px; padding: 10px 3px 0; border-top: 1px solid var(--studio-glass-edge); }
-#idle-hud :is(.cmd-view-pop, .cmd-agents-pop, .cmd-more-links, .pop) { background: var(--studio-wash), var(--studio-float-fill); border-color: var(--studio-glass-edge); backdrop-filter: var(--studio-float-blur); box-shadow: var(--studio-float-shadow); }
+#idle-hud :is(.cmd-view-pop, .cmd-agents-pop, .pop) { background: var(--studio-wash), var(--studio-float-fill); border-color: var(--studio-glass-edge); backdrop-filter: var(--studio-float-blur); box-shadow: var(--studio-float-shadow); }
 #idle-hud .studio-select { background: var(--studio-field-bg); border-color: var(--studio-glass-edge); }
 @media (max-width: 1100px), (max-height: 740px) {
   #idle-hud .cmd-rail { padding: 10px; }
@@ -9164,38 +9115,38 @@ html[data-studio-theme-tone=light] {
    "presence" section of styles.css). A hover child menu keeps its top edge
    still while it grows, so the gap the pointer crosses from its tab never
    moves. */
-:is(#app-help-menu, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div, .brains-menu) {
+:is(#app-help-menu, .surface-tools-menu, .workspace .ws-project-actions > div, .brains-menu) {
   animation: none;
   transform-origin: var(--menu-from, top left);
   transition: opacity var(--motion-base) var(--ease-out), scale var(--motion-spring) var(--ease-spring),
     translate var(--motion-spring) var(--ease-spring), display var(--motion-base) allow-discrete;
 }
-:is(#app-help-menu, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div, .brains-menu)[hidden] {
+:is(#app-help-menu, .surface-tools-menu, .workspace .ws-project-actions > div, .brains-menu)[hidden] {
   opacity: 0; scale: .96; translate: var(--menu-shift, 0 0); pointer-events: none;
   transition: opacity var(--motion-exit) var(--ease-in), scale var(--motion-exit) var(--ease-in),
     translate var(--motion-exit) var(--ease-in), display var(--motion-exit) allow-discrete;
 }
 @starting-style {
-  :is(#app-help-menu, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div, .brains-menu):not([hidden]) { opacity: 0; scale: .96; translate: var(--menu-shift, 0 0); }
+  :is(#app-help-menu, .surface-tools-menu, .workspace .ws-project-actions > div, .brains-menu):not([hidden]) { opacity: 0; scale: .96; translate: var(--menu-shift, 0 0); }
 }
 #app-help-menu { --menu-from: bottom left; --menu-shift: -6px 0; }
 .studio-choice-popup { transform-origin: top center; animation-duration: var(--motion-slow); animation-timing-function: var(--ease-spring); }
 /* The rows arrive one after another (an animation, so each row's own hover
    transitions stay its own). */
 @keyframes studio-item-in { from { opacity: 0; translate: 0 3px; } }
-:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > * { animation: studio-item-in var(--motion-slow) var(--ease-out) backwards; animation-delay: calc(var(--item-i, 0) * 16ms + 24ms); }
-:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(2) { --item-i: 1; }
-:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(3) { --item-i: 2; }
-:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(4) { --item-i: 3; }
-:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(5) { --item-i: 4; }
-:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(6) { --item-i: 5; }
-:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(n+7) { --item-i: 6; }
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .workspace .ws-project-actions > div) > * { animation: studio-item-in var(--motion-slow) var(--ease-out) backwards; animation-delay: calc(var(--item-i, 0) * 16ms + 24ms); }
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .workspace .ws-project-actions > div) > :nth-child(2) { --item-i: 1; }
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .workspace .ws-project-actions > div) > :nth-child(3) { --item-i: 2; }
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .workspace .ws-project-actions > div) > :nth-child(4) { --item-i: 3; }
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .workspace .ws-project-actions > div) > :nth-child(5) { --item-i: 4; }
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .workspace .ws-project-actions > div) > :nth-child(6) { --item-i: 5; }
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .workspace .ws-project-actions > div) > :nth-child(n+7) { --item-i: 6; }
 /* One highlight glides to the row under the pointer (or the keyboard's focus)
    instead of each row lighting up on its own. It is the host's ::after, placed
    by studio-ui.js (glideTo) through --glide-*; rows that carry their own state
    (current page, selected option, pressed toggle, an open tab) keep it. */
-:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail)[data-glide] { isolation: isolate; }
-:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail)[data-glide]::after {
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-choice-list, .workspace .ws-project-actions > div, #app-rail)[data-glide] { isolation: isolate; }
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-choice-list, .workspace .ws-project-actions > div, #app-rail)[data-glide]::after {
   content: ""; position: absolute; top: 0; left: 0; z-index: -1; pointer-events: none;
   width: var(--glide-w, 0px); height: var(--glide-h, 0px);
   transform: translate(var(--glide-x, 0px), var(--glide-y, 0px));
@@ -9207,20 +9158,20 @@ html[data-studio-theme-tone=light] {
     width calc(var(--motion-base) * 1.5) var(--ease-spring), height calc(var(--motion-base) * 1.5) var(--ease-spring),
     border-radius var(--motion-fast) var(--ease-out);
 }
-:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail):is([data-glide=on], [data-glide=jump])::after { opacity: 1; }
-:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail)[data-glide=jump]::after { transition: opacity var(--motion-fast) var(--ease-out); }
-:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail):is([data-glide=on], [data-glide=jump]) :is(button, a[href], [role=menuitem], [role=option], .studio-choice-option):hover:not([aria-current=page], [aria-selected=true], [aria-pressed=true], [aria-expanded=true], .primary, .app-rail-compose, :disabled) { background-color: transparent !important; }
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-choice-list, .workspace .ws-project-actions > div, #app-rail):is([data-glide=on], [data-glide=jump])::after { opacity: 1; }
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-choice-list, .workspace .ws-project-actions > div, #app-rail)[data-glide=jump]::after { transition: opacity var(--motion-fast) var(--ease-out); }
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-choice-list, .workspace .ws-project-actions > div, #app-rail):is([data-glide=on], [data-glide=jump]) :is(button, a[href], [role=menuitem], [role=option], .studio-choice-option):hover:not([aria-current=page], [aria-selected=true], [aria-pressed=true], [aria-expanded=true], .primary, :disabled) { background-color: transparent !important; }
 /* The rail's words ease in as it opens instead of appearing at full width. */
-#app-rail :is(.label, .key, .app-rail-text, .app-rail-recent, .app-rail-heading) {
+#app-rail :is(.label, .key, .app-rail-text, .app-rail-heading) {
   transition: opacity var(--motion-base) var(--ease-out) 40ms, translate var(--motion-base) var(--ease-out) 40ms;
 }
-@starting-style { #app-rail :is(.label, .key, .app-rail-text, .app-rail-recent, .app-rail-heading) { opacity: 0; translate: -3px 0; } }
+@starting-style { #app-rail :is(.label, .key, .app-rail-text, .app-rail-heading) { opacity: 0; translate: -3px 0; } }
 @media (prefers-reduced-motion: reduce) {
-  :is(#app-help-menu, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div, .brains-menu), #app-rail :is(.label, .key, .app-rail-text, .app-rail-recent, .app-rail-heading) { transition: none; }
-  :is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > * { animation: none; }
-  :is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail)[data-glide]::after { transition: opacity var(--motion-fast) linear; }
+  :is(#app-help-menu, .surface-tools-menu, .workspace .ws-project-actions > div, .brains-menu), #app-rail :is(.label, .key, .app-rail-text, .app-rail-heading) { transition: none; }
+  :is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .workspace .ws-project-actions > div) > * { animation: none; }
+  :is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-choice-list, .workspace .ws-project-actions > div, #app-rail)[data-glide]::after { transition: opacity var(--motion-fast) linear; }
 }
-html[data-motion=off] :is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > * { animation: none; }
+html[data-motion=off] :is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .workspace .ws-project-actions > div) > * { animation: none; }
 @media print { :root, body { background: #fff; } }
 /* ---- Refinement pass ---------------------------------------------------------
    One calm system across the pages. The Command nebula stays on Command, every
@@ -9248,7 +9199,6 @@ html[data-shell=rail] .planning-head p { margin-top: 2px; }
 
 /* The task shortcuts (Home, Current task) sit at the far end of the page bar,
    so the arrows and tabs start in the same place on every page. */
-#app-local-nav .app-task-context { order: 99; margin-left: auto; margin-right: 0; padding: 0 0 0 12px; border-right: 0; border-left: 1px solid var(--studio-glass-edge); }
 
 /* Quieter edges: panels, fields and cards keep a boundary without outlining
    every box on the page. Light palettes keep their stronger edge. */
@@ -9785,7 +9735,6 @@ html[data-studio-material="solid"] #vibe-layer { --v-glass: var(--studio-panel-b
    Home's section bar (Back, Forward, Home) is Build's too, and it sat over
    Vibe's own top bar, where it swallowed the Search and Settings buttons. */
 body.vibe-active :is(#app-rail, #workspace-sidebar-toggle, body > header.page-head, #tree-rail) { visibility: hidden; }
-body.vibe-active:not(:has(.workspace-page:not([hidden]))) #app-local-nav { display: none; }
 /* The page under Vibe does not scroll (or offer its scroll arrows) through it. */
 body.vibe-active { overflow: hidden; }
 /* A page opened from Vibe (Tasks, Plans, Ideas...) covers it the way it
@@ -10352,7 +10301,6 @@ button.vibe-ask-chip:hover { border-color: var(--v-edge-hi); color: var(--v-ink)
 html[data-ui-mode="vibe"][data-shell="rail"],
 html[data-ui-mode="vibe"][data-shell="rail"][data-rail-pinned] { --shell-rail-w: 72px; }
 html[data-ui-mode="vibe"] :is(#app-rail, #workspace-sidebar-toggle) { display: none !important; }
-html[data-ui-mode="vibe"] #app-local-nav { background: var(--studio-menu-fill); backdrop-filter: var(--studio-menu-blur); }
 
 .vibe-rail {
   position: fixed; top: 0; bottom: var(--shell-y1); left: 0; z-index: var(--z-shell);
@@ -10458,15 +10406,9 @@ html[data-ui-mode="vibe"] #workspace-sidebar-panel .ws-project-icon { border-rad
 html[data-ui-mode="vibe"] #workspace-sidebar-panel :is(button.primary, .primary) { border-radius: 14px; }
 
 /* The section bar over Work, Agents and Settings: pills, not underlines. */
-html[data-ui-mode="vibe"] #app-local-nav { gap: 6px; padding: 8px 18px; border-bottom-color: color-mix(in srgb, var(--ivory) 7%, transparent); }
-html[data-ui-mode="vibe"] #app-local-nav .app-local-link { min-height: 38px; padding: 7px 14px; border: 0; border-radius: 999px; }
-html[data-ui-mode="vibe"] #app-local-nav .app-local-link:hover { background: color-mix(in srgb, var(--ivory) 7%, transparent); }
-html[data-ui-mode="vibe"] #app-local-nav .app-local-link[aria-current="page"] { background: var(--v-menu-pick); color: var(--ivory); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 32%, transparent); }
-html[data-ui-mode="vibe"] #app-local-nav .studio-history { border-right-color: color-mix(in srgb, var(--ivory) 8%, transparent); }
-html[data-ui-mode="vibe"] #app-local-nav :is(.studio-history, .app-task-context) button { border-radius: 12px; }
 
 /* Command's pop-overs (View, Agents, More) and the shared dropdowns */
-html[data-ui-mode="vibe"] #idle-hud :is(.cmd-view-pop, .cmd-agents-pop, .cmd-more-links, .pop) { border-color: var(--v-menu-edge); border-radius: 20px; }
+html[data-ui-mode="vibe"] #idle-hud :is(.cmd-view-pop, .cmd-agents-pop, .pop) { border-color: var(--v-menu-edge); border-radius: 20px; }
 html[data-ui-mode="vibe"] .studio-choice-popup { border: 1px solid var(--v-menu-edge); border-radius: 18px; }
 html[data-ui-mode="vibe"] .studio-choice-option { border-radius: 12px; }
 html[data-ui-mode="vibe"] .studio-choice-option[aria-selected="true"] { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 30%, transparent); }
@@ -10483,9 +10425,6 @@ html[data-ui-mode="vibe"] .settings-nav :is(button, a) { border-radius: 12px; }
 .settings-mode-row .mode-switch button { min-width: 96px; height: 34px; font-size: 13px; }
 
 /* ---- the Build rail's way back ------------------------------------------- */
-#app-rail .app-rail-vibe { margin-bottom: 6px; background: linear-gradient(135deg, color-mix(in srgb, var(--gold) 20%, transparent), color-mix(in srgb, var(--gold) 6%, transparent)); color: var(--gold-bright); font-weight: 600; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 26%, transparent); }
-#app-rail .app-rail-vibe:hover { background: linear-gradient(135deg, color-mix(in srgb, var(--gold) 30%, transparent), color-mix(in srgb, var(--gold) 10%, transparent)); color: var(--ivory); }
-html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-vibe .label { display: none; }
 
 /* ---- what's new ------------------------------------------------------------ */
 .vibe-notes { position: fixed; inset: 0; z-index: calc(var(--z-toast) - 2); display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--bg-deep) 52%, transparent); backdrop-filter: blur(6px); opacity: 1; transition: opacity var(--motion-slow) var(--ease-out), display var(--motion-slow) allow-discrete; }
@@ -11571,7 +11510,6 @@ html[data-motion="off"] :is(.gs-chip, .gs-pop, .gs-pop[hidden]) { transition: no
 
 /* ---- the menu: mode switch, work list, you ------------------------------- */
 html[data-rail-sessions][data-shell="rail"]:not([data-ui-mode="vibe"]) { --shell-rail-open: 272px; }
-html[data-rail-sessions]:not([data-ui-mode="vibe"]) #app-rail :is(#app-rail-vibe, .app-rail-recent) { display: none; }
 #app-rail .builder-mode-switch {
   display: grid; grid-template-columns: 1fr 1fr; gap: 2px; min-width: 0; margin: 0 0 10px; padding: 3px;
   border-radius: 10px; background: color-mix(in srgb, var(--ivory) 5%, transparent);
@@ -11637,7 +11575,6 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 html[data-home-layout="sessions"] #workspace-layer .ws-main { padding: 0; overflow: hidden; }
 /* Home's local bar holds only "Home": the page's own title bar has the history. With no local bar the page starts at the window's top, or under the
    tab strip (layout v2) when there is one: --shell-tabs-h is 0px in v1, so nothing moves there. */
-html[data-home-layout="sessions"][data-shell="rail"] body.workspace-active:not(:has(.workspace-page:not([hidden]))) #app-local-nav { display: none; }
 html[data-home-layout="sessions"][data-shell="rail"] body.workspace-active:not(:has(.workspace-page:not([hidden]))) #workspace-layer { top: var(--shell-tabs-h, 0px); }
 html[data-home-layout="sessions"] #workspace-layer .ws-conversation { background: none; border-color: transparent; box-shadow: none; backdrop-filter: none; }
 html[data-home-layout="sessions"] #workspace-layer .ws-topbar { height: 52px; padding: 0 16px 0 22px; border-bottom: 0; gap: 16px; }
@@ -12513,7 +12450,6 @@ html[data-frame] .shell-top {
 html[data-frame][data-ui-mode="vibe"] .shell-top { background: var(--studio-menu-fill, var(--bg)); backdrop-filter: var(--studio-menu-blur, none); border-bottom-color: color-mix(in srgb, var(--ivory) 7%, transparent); }
 /* The classic local navigation is not drawn in the frame: its pages are the list column's page list, Back and Forward
    go with them, and the bar's middle is the breadcrumb. */
-html[data-frame][data-shell="rail"] #app-local-nav { display: none !important; }
 html[data-frame] .shell-top-left, html[data-frame] .shell-top-right, html[data-frame] .shell-top-extra { display: flex; align-items: center; gap: 8px; flex: none; min-width: 0; }
 html[data-frame] .shell-top-extra:empty { display: none; }
 html[data-frame] .shell-top-right { margin-left: auto; }
@@ -13704,7 +13640,6 @@ html[data-studio-theme="chrome"] :is(.sx-switch button:not(.on), .sx-modes butto
    1px and the border's own colour is the other: that border is drawn only if the image cannot be.
    The rail's current place (Build's rail; Vibe's keeps its chrome rim). */
 html[data-studio-theme="chrome"] #app-rail [aria-current="page"] { background: rgb(255 255 255 / .045); box-shadow: inset 2px 0 0 var(--chrome-edge), var(--chrome-top); border-image: var(--chrome-holo-bar) 0 0 0 1 / 7px 0 7px 2px; }
-html[data-studio-theme="chrome"] #app-rail .app-rail-compose { background: rgb(255 255 255 / .04); box-shadow: inset 0 0 0 1px var(--chrome-rim), var(--chrome-top); }
 html[data-studio-theme="chrome"] .vibe-rail button[aria-current="page"] { background: rgb(255 255 255 / .045); box-shadow: inset 0 0 0 1px var(--chrome-rim-hi), var(--chrome-top); }
 html[data-studio-theme="chrome"] .vibe-rail button[aria-current="page"] .glyph { color: var(--chrome-edge); }
 html[data-studio-theme="chrome"] #app-rail .app-rail-brand .monogram { background: var(--chrome-metal); color: var(--chrome-ink); border-color: transparent; box-shadow: inset 0 1px 0 rgb(255 255 255 / .8), inset 0 -1px 0 rgb(0 0 0 / .25), 0 1px 3px rgb(0 0 0 / .5); }
@@ -13718,11 +13653,9 @@ html[data-studio-theme="chrome"] .studio-choice-option[aria-selected="true"] { b
 html[data-studio-theme="chrome"] .studio-choice-popup[data-layout="tiles"] .studio-choice-option[aria-selected="true"] { border-color: transparent; border-left-color: var(--chrome-edge); box-shadow: inset 1px 0 0 var(--chrome-edge), inset 0 0 0 1px var(--studio-edge-active); }
 /* The underline tabs: the holo on the 2px edge they draw (border-image <holo> 0 0 1 0 / 0 0 2px 0), its plain chrome colour under it. */
 html[data-studio-theme="chrome"] :is(.sx-ptab.on, .sx-itab.on) { border-bottom-color: var(--chrome-edge); border-image: var(--chrome-holo) 0 0 1 0 / 0 0 2px 0; }
-html[data-studio-theme="chrome"] #app-local-nav .app-local-link[aria-current="page"] { background: transparent; border-bottom-color: var(--chrome-edge); color: var(--ivory); border-image: var(--chrome-holo) 0 0 1 0 / 0 0 2px 0; }
 /* Vibe rounds these further (vibe.css): the same edges, kept clear of its corners; the local navigation's pill keeps
    its own rim and takes the line along its straight foot. */
 html[data-studio-theme="chrome"][data-ui-mode="vibe"] .studio-choice-option[aria-selected="true"] { border-image: var(--chrome-holo-bar) 0 0 0 1 / 12px 0 12px 2px; }
-html[data-studio-theme="chrome"][data-ui-mode="vibe"] #app-local-nav .app-local-link[aria-current="page"] { border-image: var(--chrome-holo) 0 0 1 0 / 0 19px 2px 19px; }
 /* The open tab: its plain chrome foot round the corners, the holo along the straight run, inside its ring. */
 html[data-studio-theme="chrome"] .ts-item[data-active] { background: rgb(255 255 255 / .05); box-shadow: inset 0 0 0 1px var(--studio-glass-edge), inset 0 -2px 0 var(--chrome-edge), inset 0 2px var(--studio-glass-highlight); border-image: var(--chrome-holo) 0 0 1 0 / 0 9px 2px 9px; }
 html[data-studio-theme="chrome"] .ts-item[data-active] .ts-ico { color: var(--chrome-edge); }
@@ -13748,7 +13681,6 @@ html[data-studio-theme="chrome"] .vibe-aurora.three { background: radial-gradien
 html[data-studio-theme="chrome"][data-frame] :is(.shell-top, .shell-tabs) { background: var(--bg); }
 html[data-studio-theme="chrome"][data-frame] .shell-top { border-image: var(--chrome-holo-hairline) 0 0 1 0 / 0 0 1px 0; }
 html[data-studio-theme="chrome"] .ts-strip { border-image: var(--chrome-holo-hairline) 0 0 1 0 / 0 0 1px 0; }
-html[data-studio-theme="chrome"] #app-local-nav { border-image: var(--chrome-holo-hairline) 0 0 1 0 / 0 0 1px 0; }
 html[data-studio-theme="chrome"][data-frame] .shell-column:not([data-state="drawer"]) { background: color-mix(in srgb, #0d0d10 94%, transparent); }
 html[data-studio-theme="chrome"][data-frame] .shell-status { background: #0d0d10; box-shadow: inset 0 1px 0 rgb(255 255 255 / .03); border-image: var(--chrome-holo-hairline) 1 0 0 0 / 1px 0 0 0; }
 html[data-studio-theme="chrome"][data-frame] :is(.shell-search, .shell-icon-btn, .shell-pill:not([data-tone="need"])) { border-color: rgb(255 255 255 / .1); box-shadow: var(--chrome-top); }
@@ -13762,7 +13694,7 @@ html[data-studio-theme="chrome"][data-frame] :is(.shell-split:hover, .shell-spli
 /* Floating menus: the holo hairline along the top edge, kept clear of the corners; the rim the border drew is an inset
    ring. Vibe's own menu rim (a wider radius and a ring of its own in the float shadow) and menus whose header paints
    over their edge, like the media menu's, keep their plain rim. */
-html[data-studio-theme="chrome"]:not([data-ui-mode="vibe"])[data-studio-style] :is(.palette-sheet, .studio-choice-popup, .surface-tools-menu, .studio-more-links) { box-shadow: inset 0 0 0 1px var(--studio-glass-edge), var(--studio-float-shadow); border-image: var(--chrome-holo-hairline) 1 0 0 0 / 1px 18px 0 18px; }
+html[data-studio-theme="chrome"]:not([data-ui-mode="vibe"])[data-studio-style] :is(.palette-sheet, .studio-choice-popup, .surface-tools-menu) { box-shadow: inset 0 0 0 1px var(--studio-glass-edge), var(--studio-float-shadow); border-image: var(--chrome-holo-hairline) 1 0 0 0 / 1px 18px 0 18px; }
 html[data-studio-theme="chrome"]:not([data-ui-mode="vibe"]) .ts-pop { box-shadow: inset 0 0 0 1px var(--studio-glass-edge), var(--studio-float-shadow); border-image: var(--chrome-holo-hairline) 1 0 0 0 / 1px 18px 0 18px; }
 html[data-studio-theme="chrome"] .today-inbox { box-shadow: inset 0 0 0 1px var(--t-edge), var(--shadow-3); border-image: var(--chrome-holo-hairline) 1 0 0 0 / 1px 18px 0 18px; }
 html[data-studio-theme="chrome"] :is(.sx-menu, .sx-runmenu) { box-shadow: inset 0 0 0 1px var(--hairline-strong), inset 0 1px var(--studio-glass-highlight), var(--shadow-3); border-image: var(--chrome-holo-hairline) 1 0 0 0 / 1px 18px 0 18px; }
@@ -22798,7 +22730,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // instead of each row lighting up on its own. It is the host's ::after
   // (studio-ui.css "menus in motion"), placed through --glide-* properties, so
   // no element is ever added to a menu that code or tests count.
-  const GLIDE_HOSTS = "#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail";
+  const GLIDE_HOSTS = "#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-choice-list, .workspace .ws-project-actions > div, #app-rail";
   const GLIDE_ITEMS = "button, a[href], [role=menuitem], [role=option], .studio-choice-option";
   let glideHost = null, glideItem = null, glideFrame = 0;
   function glideRest() {
@@ -25184,15 +25116,15 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       const rect = document.getElementById?.(id)?.getBoundingClientRect?.();
       return rect && rect.width > 0 && rect.height > 0 ? rect : null;
     };
-    const rail = box("app-rail"), bar = box("app-local-nav");
-    let left = rail ? rail.right : 0, top = bar ? bar.bottom : 0, right = w, bottom = h;
+    const rail = box("app-rail");
+    let left = rail ? rail.right : 0, top = 0, right = w, bottom = h;
     if (layoutOn()) {
       paintLayout();
       const length = (name, from) => cssLength(name, from) ?? 0;
       left = Math.max(left, railRest() + (cssLength("--shell-list-w") ?? layoutApplied.list));
-      // The strip sits under the local navigation, or at the window's top where there is none (Vibe's own Home);
-      // the 0.5 shell's top bar (renderer/shell.js) is that row on every page, so with it the strip sits under it.
-      top = Math.max(top, (bar || box("shell-top") ? length("--shell-local-h", document.body || document.documentElement) : 0) + (cssLength("--shell-tabs-h") ?? layoutApplied.tabs));
+      // The strip sits under the frame's top bar (renderer/shell.js), or at the window's top where there is none
+      // (Vibe's own Home).
+      top = Math.max(top, (box("shell-top") ? length("--shell-local-h", document.body || document.documentElement) : 0) + (cssLength("--shell-tabs-h") ?? layoutApplied.tabs));
       right = w - (cssLength("--shell-inspector-w") ?? layoutApplied.inspector);
       bottom = h - (cssLength("--shell-status-h") ?? layoutApplied.status);
     }
@@ -25494,9 +25426,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       window.MefiSidebar.close({ restoreFocus: true });
       return;
     }
-    // Command's own More tools menu is the fallback only while Command is on
-    // top; a sheet above it must not have Esc (and focus) pulled out from under it.
-    const more = document.activeElement?.closest?.(".surface-tools[open]") ?? Array.from(document.querySelectorAll?.(".surface-tools[open]") ?? []).find(visibleNavTarget) ?? (top() === "command" ? document.getElementById("cmd-more-tools") : null);
+    // An open tools menu (the one focus is in, else the first one on screen) closes first.
+    const more = document.activeElement?.closest?.(".surface-tools[open]") ?? Array.from(document.querySelectorAll?.(".surface-tools[open]") ?? []).find(visibleNavTarget);
     if (event.key === "Escape" && more?.open) {
       event.preventDefault();
       more.open = false;
@@ -70621,11 +70552,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         const left = clamp(area.left, 0, Math.max(0, window.innerWidth - 320));
         return { left: left + GAP, top: Math.max(GAP, area.top + GAP), right: area.right - GAP, bottom: area.bottom - GAP };
       }
-      // Keep the menu and local navigation reachable even at the 600px app minimum.
+      // Keep the menu reachable even at the 600px app minimum.
       const rail = document.getElementById("app-rail")?.getBoundingClientRect();
-      const nav = document.getElementById("app-local-nav")?.getBoundingClientRect();
       const left = rail?.width > 0 ? clamp(rail.right, 0, Math.max(0, window.innerWidth - 320)) : 0;
-      return { left: left + GAP, top: Math.max(GAP, (nav?.height > 0 ? nav.bottom : 0) + GAP), right: window.innerWidth - GAP, bottom: window.innerHeight - GAP };
+      return { left: left + GAP, top: GAP, right: window.innerWidth - GAP, bottom: window.innerHeight - GAP };
     }
     function limits() {
       const area = bounds();
@@ -70895,7 +70825,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     }
     function deepMenu() {
       const route = window.MefiNav?.top?.() || window.MefiNav?.current?.();
-      return route && !["command", "workspace"].includes(route) || document.getElementById("music-dropdown")?.hidden === false || Boolean(document.querySelector(".surface-tools[open], .studio-more[open], .cmd-more-tools[open]"));
+      return route && !["command", "workspace"].includes(route) || document.getElementById("music-dropdown")?.hidden === false || Boolean(document.querySelector(".surface-tools[open]"));
     }
     function pointer(event) {
       if (gesture) {
@@ -98757,7 +98687,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   function onInput(event) {
     const target = event.target;
     if (event.isTrusted === false) return; // the app replaying a draft into a field is not you typing
-    if (!target || !isTyping(target) || target.closest?.(".ts-pop, .ts-strip, #palette-overlay, #config-overlay, #help-overlay, #walkthrough-overlay, #app-rail, #app-local-nav")) return;
+    if (!target || !isTyping(target) || target.closest?.(".ts-pop, .ts-strip, #palette-overlay, #config-overlay, #help-overlay, #walkthrough-overlay, #app-rail")) return;
     if (cur().prev) keep(S.active);
   }
   function onDouble(event) {
