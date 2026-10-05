@@ -29,6 +29,22 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   a day. Ranks run Spark, Ember, Flame, Comet, Star, Nova, Void, and your
   Discord roles show as special ranks. Your balance is yours alone; others see
   your rank.
+- **Meeting people is simple: the Lobby, invite codes and Who's online.**
+  Everyone signed in is in the Lobby, a room that opens by itself the first
+  time you open Rooms, so there is always someone to say hi to. Every other
+  room has a short invite code (like `7K3Q-M2XR`): **Copy invite** puts it in
+  a message you can paste anywhere, and a friend types it into **Join with a
+  code** to come straight in, no approval needed. The owner can make a new
+  code, and the old one stops working. Rooms' **Online** tab lists who is in
+  Studio right now, with **Invite to** your rooms and **Start a room
+  together**; untick **Show me as online** to hide.
+- **Friends is one roomy page in both layouts.** The classic layout's Friends
+  now opens the same full page as the 0.5 layout instead of a small bubble
+  card, with tabs for Rooms, Your PCs, Playground and Project hub and a Close
+  button. The Project hub is in the rail's Friends menu and in Search. Your
+  PCs sums up a long report in a few lines ("3 other worktrees have
+  uncommitted work", "2 branches on GitHub not merged into main") with
+  **Show all** for the full list.
 
 - **Friends is a place of its own in the 0.5 layout.** With the new layout on
   (`?layout=v2`), the rail's Friends opens a page instead of the companion's
@@ -38,8 +54,7 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   playdates and what your companion may share); Playground also keeps
   "Friends & listening rooms" and "Connect with Discord". Search's Rooms,
   Your PCs and Playground, and the companion's own Friends bubble, open the
-  page at that place, and each place can be a tab. The classic layout keeps
-  the Friends bubble as it was.
+  page at that place, and each place can be a tab.
 - **A task that will fix itself no longer looks like a problem.** In the 0.5
   layout, a task whose checks failed and that tries again by itself is listed
   with the running work as "Fixing itself", and its page says so calmly

@@ -379,11 +379,12 @@ app.whenReady().then(async () => {
   // Friends child even when the expanded section list has to scroll.
   const friendsMotionWasOff=await run("const off=document.body.classList.contains('no-motion');document.body.classList.add('no-motion');return off;");
   report.friendsNavigation=[];
-  for (const [id, heading] of [['rooms','rooms-title'],['your-pcs','pc-sync-title'],['playground','friends-title']]) {
+  // Each opens the Friends page at its place (one home in both layouts), the page's title focused.
+  for (const [id, place] of [['rooms','rooms'],['your-pcs','pcs'],['playground','playground'],['project-hub','hub']]) {
     const keyboard = await run(`
       const rail=document.getElementById('app-rail'),head=rail.querySelector('.app-rail-head[data-section=friends]');
       document.documentElement.dataset.railDrawer='';head.focus();
-      for(const child of ['rooms','your-pcs','playground']) {
+      for(const child of ['rooms','your-pcs','playground','project-hub']) {
         document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));
         if(child===${JSON.stringify(id)}) break;
       }
@@ -392,10 +393,10 @@ app.whenReady().then(async () => {
     `);
     assert.equal(keyboard.id,id);assert.ok(keyboard.height>=28&&keyboard.top>=0&&keyboard.bottom<=keyboard.viewport+1&&keyboard.hit,'Friends keyboard target is reachable: '+JSON.stringify(keyboard));
     await run("document.activeElement.click();");
-    await until(`window.MefiCompanionHub.isOpen()&&document.activeElement.id===${JSON.stringify(heading)}`,`Friends opens ${id}`);
-    assert.ok(await reachable('#'+heading),'Friends card is visible: '+id);
+    await until(`document.getElementById('friends-overlay')?.hidden===false&&document.getElementById('friends-overlay').dataset.place===${JSON.stringify(place)}`,`Friends opens ${id}`);
+    assert.ok(await reachable('#friends-place-title'),'the Friends page shows: '+id);
     report.friendsNavigation.push(id);
-    await run("window.MefiCompanionHub.close({immediate:true});await window.MefiNav.go('agents',{section:'setup',pane:'team'});");
+    await run("window.MefiNav.closeAll();await window.MefiNav.go('agents',{section:'setup',pane:'team'});");
   }
   if(!friendsMotionWasOff) await run("document.body.classList.remove('no-motion');");
   await require('./studio-background-checks.cjs')({ session, window, contents, run, until, capture, reachable, report });

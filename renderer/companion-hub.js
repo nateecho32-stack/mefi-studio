@@ -217,7 +217,7 @@
     ["friends", "Friends", "g-orbit", "Playdates, sharing, rooms and your PCs"],
     ["settings", "Personality", "g-ambience", "How I behave, and settings"],
   ];
-  const FRIENDS_ROUTES = new Set(["friends", "rooms", "your-pcs", "playground"]);
+  const FRIENDS_ROUTES = new Set(["friends", "rooms", "your-pcs", "playground", "project-hub"]);
   const FRIENDS_TARGETS = { rooms: "rooms-title", pcs: "pc-sync-title", playground: "friends-title" };
   function icon(glyph) { const span = node("span", "agent-hub-icon"); span.innerHTML = `<svg class="glyph" aria-hidden="true"><use href="#${glyph}"/></svg>`; return span; }
   function attach(value) {
@@ -554,7 +554,7 @@
     // renderer/project-hub.js: members' shared projects, credits and ranks on the Mefi Studio relay.
     { id: "hub", label: "Project hub", glyph: "g-orbit", about: "Share what you make and play what friends make. Playing someone else's project for two minutes earns you both credits." },
   ]);
-  // The hub's targets (FRIENDS_TARGETS) name the same three places.
+  // A Friends target names one of these places (rooms, pcs, playground, hub).
   const friendsPlaceOfTarget = (target) => (FRIENDS_PLACES.some((place) => place.id === target) ? target : null);
   const friendsPage = { place: null, root: null, body: null, title: null, about: null };
   const friendsPlaceById = (id) => FRIENDS_PLACES.find((place) => place.id === id) ?? null;

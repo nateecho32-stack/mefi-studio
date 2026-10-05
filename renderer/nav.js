@@ -155,7 +155,7 @@
   // A rail place for a record whose kind alone would keep it out of the rail:
   // community.js registers "community" as a palette action at DOMContentLoaded,
   // and the foot (Help & community) is its home.
-  const RAIL_SLOTS = Object.freeze({ community: "foot", friends: "friends", rooms: "friends", "your-pcs": "friends", playground: "friends" });
+  const RAIL_SLOTS = Object.freeze({ community: "foot", friends: "friends", rooms: "friends", "your-pcs": "friends", playground: "friends", "project-hub": "friends" });
   // Sections for records other modules register without one. The assistant's
   // commands and Command view's key rows name theirs in `group`.
   const ACTION_SECTIONS = Object.freeze({ community: "community" });
@@ -234,6 +234,7 @@
       ["rooms", "Rooms", "g-orbit", "Room chat, invitations and requests to join", "rooms"],
       ["your-pcs", "Your PCs", "g-explorer", "Connect your PCs and sync work through GitHub", "pcs"],
       ["playground", "Playground", "g-ambience", "Companion playdates, sharing rules and practice with Pip", "playground"],
+      ["project-hub", "Project hub", "g-orbit", "Share and play members' projects, credits and ranks", "hub"],
     ].map(([id, label, glyph, desc, target]) => ({
       id, label, short: label, glyph, desc, kind: "action", layer: null, section: "friends", group: "tools", key: null,
       searchTerms: `friends ${label} ${desc}`,
@@ -1170,7 +1171,7 @@
     // In the 0.5 layout Friends is a place of three pages (renderer/companion-hub.js openPlace): Friends and its three ways
     // in open that page at their place, where the classic layout opens the companion's Friends bubble.
     // (Spelled out here, not shared: suites run go() on its own.)
-    const friendsPages = { friends: null, rooms: "rooms", "your-pcs": "pcs", playground: "playground" };
+    const friendsPages = { friends: null, rooms: "rooms", "your-pcs": "pcs", playground: "playground", "project-hub": "hub" };
     if (globalThis.document?.documentElement?.dataset?.layout === "v2" && Object.hasOwn(friendsPages, id)) {
       params = { place: friendsPages[id] || params.place || params.target || "rooms" };
       id = "friends-page";
@@ -1677,7 +1678,7 @@
         const children = document.createElement("div");
         children.className = "app-rail-children app-rail-friends";
         children.setAttribute("role", "group"); children.setAttribute("aria-label", "Friends tools");
-        for (const id of ["rooms", "your-pcs", "playground"]) children.append(navButton(get(id), "app-rail-item", { key: false }));
+        for (const id of ["rooms", "your-pcs", "playground", "project-hub"]) children.append(navButton(get(id), "app-rail-item", { key: false }));
         group.append(children);
       }
       sections.append(group);
@@ -1771,7 +1772,7 @@
         const children = document.createElement("div");
         children.className = "app-rail-children app-rail-friends";
         children.setAttribute("role", "group"); children.setAttribute("aria-label", "Friends tools");
-        for (const id of ["rooms", "your-pcs", "playground"]) children.append(navButton(get(id), "app-rail-item", { key: false }));
+        for (const id of ["rooms", "your-pcs", "playground", "project-hub"]) children.append(navButton(get(id), "app-rail-item", { key: false }));
         group.append(children);
       }
       sections.append(group);
