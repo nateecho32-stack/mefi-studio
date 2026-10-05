@@ -4142,6 +4142,23 @@ async function chargeJevCall(result, purpose, route = null) {
   await flushJevCharges().catch((error) => logLine(`[jev] accounting pending: ${error.message}`));
 }
 
+// "Use for the whole studio" (cli-setup.cjs singleProvider) holds a team to
+// one subscription CLI with nothing to fall back to: the test executorRunEnv
+// makes for the builders (singleAccount). Jev's intake and work shaping then
+// ask the assistant stand-in, which rides that subscription, and never a Jev
+// route: a key in the environment (AI_GATEWAY_API_KEY, TYPESAFE_API_KEY,
+// OPENCODE_ZEN_API_KEY, OPENROUTER_API_KEY) must not send the owner's work to
+// a provider they did not pick. A Jev key saved in Settings waits too: Studio
+// does not record when a Jev route was picked, so it cannot tell one chosen
+// after this setup from a key saved long before it, and the subscription the
+// owner chose for the whole studio wins until the team allows fallbacks or
+// moves to another provider. That provider, or null.
+async function jevSubscriptionOnly() {
+  const team = await (typeof readAgentSettings === "function" ? readAgentSettings() : readSettings());
+  const only = team?.aiAutoFallback === false && Array.isArray(team.aiAutoProviders) && team.aiAutoProviders.length === 1 ? team.aiAutoProviders[0] : null;
+  return only && only === team.executorCli && ["claude", "codex", "grok", "antigravity"].includes(only) ? only : null;
+}
+
 async function runJevIntake(additions) {
   const settings = await readSettings();
   if (settings.jevShadow === false) return { ok: true, defer: true, reason: "disabled" };
@@ -4150,12 +4167,14 @@ async function runJevIntake(additions) {
     loadModule("scripts/work-classification.mjs"), getEyes(),
   ]);
   const route = client.resolveJevRoute(settings);
-  const resolved = client.resolveApiKey({ settings, decrypt: decryptKey, route });
+  // One subscription for the whole studio: its stand-in, never a Jev key.
+  const only = typeof jevSubscriptionOnly === "function" ? await jevSubscriptionOnly() : null;
+  const resolved = only ? null : client.resolveApiKey({ settings, decrypt: decryptKey, route });
   // No Jev key: the stand-in judge chosen at first run (the assistant model,
   // or a free OpenCode model through the CLI) answers the same questions and
   // its proposals are recorded the same way. Its calls are not Jev calls, so
   // the Jev ledger is left alone.
-  const standIn = !resolved && typeof standInJudge === "function" ? await standInJudge(settings, "intake") : null;
+  const standIn = !resolved && typeof standInJudge === "function" ? await standInJudge(settings, "intake", { provider: only }) : null;
   if (!resolved && !standIn) return { ok: true, defer: true, reason: "no-key" };
   if (!standIn) {
     try { await flushJevCharges(); }
@@ -4303,8 +4322,10 @@ async function classifyPendingWork() {
   if (!pending.length) return { ok: true, attempted: false, shaped: 0 };
 
   const route = client.resolveJevRoute(settings);
-  const resolved = client.resolveApiKey({ settings, decrypt: decryptKey, route });
-  const standIn = !resolved && typeof standInJudge === "function" ? await standInJudge(settings, "intake") : null;
+  // One subscription for the whole studio: its stand-in, never a Jev key (jevSubscriptionOnly).
+  const only = typeof jevSubscriptionOnly === "function" ? await jevSubscriptionOnly() : null;
+  const resolved = only ? null : client.resolveApiKey({ settings, decrypt: decryptKey, route });
+  const standIn = !resolved && typeof standInJudge === "function" ? await standInJudge(settings, "intake", { provider: only }) : null;
   if (!resolved && !standIn) return { ok: true, defer: true, reason: "no-key" };
   if (!standIn) {
     try { await flushJevCharges(); }
@@ -5394,8 +5415,11 @@ function routingSettingsKey(settings) {
 // serves batch intake only; per-task routing keeps Jev's 4 s budget and
 // therefore accepts the assistant kind alone. Answers are revalidated by the
 // same code that checks Jev's, and none of this touches a Jev key.
-async function standInJudge(settings, purpose = "routing") {
-  const saved = settings?.firstRun?.judge ?? null;
+// `provider` names the one subscription a team is held to
+// (jevSubscriptionOnly): the assistant answers on it whatever judge the first
+// scan saved, since a free OpenCode model would be another provider.
+async function standInJudge(settings, purpose = "routing", { provider = null } = {}) {
+  const saved = provider ? { kind: "assistant" } : settings?.firstRun?.judge ?? null;
   if (!saved || !["assistant", "opencode-free"].includes(saved.kind)) return null;
   if (saved.kind === "opencode-free" && purpose !== "intake") return null;
   const judge = await loadModule("scripts/choice-judge.mjs");

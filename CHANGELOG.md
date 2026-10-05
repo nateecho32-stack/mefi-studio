@@ -26,6 +26,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   answer after 8 s; now it makes no call, the task keeps its local code
   matches, and the log says so once. Scouts on Zen and other keyed routes
   are unchanged.
+- **Jev stays on your subscription after "Use for the whole studio".** Sorting
+  new work against the board and sizing cards could still go to the Vercel AI
+  Gateway, TypeSafe, Zen or OpenRouter when a Jev key sat in Settings or in
+  your environment; while the team is held to one subscription, the assistant
+  on that subscription answers those questions instead.
 - **Chrome's buttons no longer look struck through.** The metal on main
   buttons and chosen tabs had a hard dark line at half height, right behind
   the words. Its horizon is now a soft band below them, and the darkest part

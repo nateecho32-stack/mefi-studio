@@ -187,7 +187,10 @@ custom, or a CLI provider) for routing, intake and triage; else a free
 OpenCode model through `opencode run` for intake and triage only; else fixed
 defaults. An invalid answer is a failure, never a guess; every attempt
 reports `modelCalls: 1` so the improvement budget is charged exactly as for
-Jev.
+Jev. A team held to one subscription CLI by **Use for the whole studio**
+(`jevSubscriptionOnly` in main.cjs: fallback off, that CLI alone in the auto
+order and as the builder) always gets the assistant kind on it for intake and
+work shaping, and no Jev key, saved or exported, is used for them.
 
 ## 5. Landed in this change
 

@@ -29,7 +29,9 @@ sends a new user back through the walkthrough.
    conflicting routine/heavy and seat choices,
    makes subtasks follow the builder, sets Auto coding tier and provider model
    defaults, and turns cross-provider fallback off. Saved per-provider models
-   and keys remain.
+   and keys remain. While a team stays on that one subscription, Jev's intake
+   and work shaping ask it too (the assistant stand-in), and Jev keys, saved
+   or in the environment, are set aside for them.
    This choice starts a map if a project is selected, or waits for a folder.
    The scan's **Use this setup** and Settings' **Auto setup** save to the
    defaults and the open project's own team, so folders added later inherit
