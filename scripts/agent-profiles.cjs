@@ -6,11 +6,12 @@ const addons = require("./agent-addons.cjs");
 const tools = require("./agent-tools.cjs");
 const habits = require("./habits.cjs");
 const agentRules = require("./agent-rules.cjs");
+const modelLadder = require("./model-ladder.cjs");
 // Loaded on first use: the picture rules are not needed at startup.
 let imagesLoaded = null;
 const images = () => (imagesLoaded ??= require("./image-attach.cjs"));
 const runtime = new AsyncLocalStorage();
-const FIELDS = Object.freeze(["aiProvider", "aiRoleProviders", "aiModels", "aiModelsByProvider", "aiAutoProviders", "aiAutoFallback", "aiFallbackOpenCode", "aiSubscriptionFirst", "modelSelection", "executorCli", "executorModel", "executorModels", "executorTier", "executorTierModels", "codexHarness", "agentSeats", "agentSubtasks", "agentSkills", "agentHabits", "agentRules", "agentTools", "agentBrain", "agentEfforts", "agentMode", "agentReporting"]);
+const FIELDS = Object.freeze(["aiProvider", "aiRoleProviders", "aiModels", "aiModelsByProvider", "aiAutoProviders", "aiAutoFallback", "aiFallbackOpenCode", "aiSubscriptionFirst", "modelSelection", "executorCli", "executorModel", "executorModels", "executorTier", "executorTierModels", "codexHarness", "agentSeats", "agentSubtasks", "agentSkills", "agentHabits", "agentRules", "agentTools", "agentBrain", "agentEfforts", "agentThinking", "agentMode", "agentReporting"]);
 const PROVIDERS = Object.freeze(["auto", "zai", "opencode", "zen", "openrouter", "grok", "claude", "codex", "chatgpt", "antigravity", "lmstudio", "custom"]);
 const CLIS = Object.freeze(["opencode", "grok", "claude", "codex", "antigravity"]);
 const EFFORTS = Object.freeze(["minimal", "low", "medium", "high", "xhigh", "max"]);
@@ -43,7 +44,12 @@ function capabilities(provider, model = "") {
   const extended = /^gpt-6(?:\.\d+)?-/.test(id);
   // Zen and the ChatGPT plan both reach OpenAI's Responses API, which takes an effort.
   const reasoning = (provider === "zen" || provider === "chatgpt" || provider === "openrouter" && /^openai\//i.test(model)) && (extended || /^(gpt-5(?:[.-]|$)|o[134](?:-|$))/.test(id));
-  return { efforts: reasoning ? extended ? [...EFFORTS] : ["low", "medium", "high"] : [], fast: provider === "zen" && extended, vision: images().sees(visionIndex, provider, model), note: reasoning ? "Reasoning is sent to the selected model." : "Effort is managed by this provider or CLI." };
+  // Claude Code takes --effort and Codex model_reasoning_effort on their text
+  // calls too (scripts/cli-text.cjs), so a seat or role on either can think
+  // lighter or harder like an HTTP route.
+  const cli = provider === "claude" || provider === "codex" ? modelLadder.cliEfforts(provider, model) : [];
+  const efforts = reasoning ? extended ? [...EFFORTS] : ["low", "medium", "high"] : cli;
+  return { efforts, fast: provider === "zen" && extended, vision: images().sees(visionIndex, provider, model), note: reasoning ? "Reasoning is sent to the selected model." : cli.length ? "Thinking is sent to the CLI." : "Effort is managed by this provider or CLI." };
 }
 function validate(configuration) {
   if (!record(configuration)) return "A team configuration is required.";
@@ -59,8 +65,12 @@ function validate(configuration) {
   for (const field of ["aiAutoFallback", "aiFallbackOpenCode", "aiSubscriptionFirst"]) if (configuration[field] !== undefined && typeof configuration[field] !== "boolean") return `${field} must be on or off.`;
   for (const field of ["aiRoleProviders", "aiModels", "aiModelsByProvider", "executorModels", "executorTierModels", "agentSeats", "agentBrain", "agentEfforts"]) if (configuration[field] !== undefined && !record(configuration[field])) return `Invalid ${field}.`;
   for (const [role, provider] of Object.entries(configuration.aiRoleProviders || {})) if (!["routine", "heavy"].includes(role) || provider && !PROVIDERS.includes(provider)) return "Unknown role provider.";
+  if (configuration.agentThinking !== undefined) { const error = modelLadder.validate(configuration.agentThinking); if (error) return error; }
   for (const [role, effort] of Object.entries(configuration.agentEfforts || {})) {
-    if (!["routine", "heavy"].includes(role) || effort && !EFFORTS.includes(effort)) return "Unknown reasoning effort.";
+    if (!["routine", "heavy", "builder"].includes(role) || effort && !EFFORTS.includes(effort)) return "Unknown reasoning effort.";
+    // The coding worker's start: the attempt fits it to what its model takes
+    // (model-ladder fitEffort), so any word on the scale is fine here.
+    if (role === "builder") continue;
     const provider = configuration.aiRoleProviders?.[role] || configuration.aiProvider || "auto";
     const model = configuration.aiModelsByProvider?.[provider]?.[role] || configuration.aiModels?.[role] || "";
     if (effort && !capabilities(provider, model).efforts.includes(effort)) return `Reasoning effort is not supported by the ${role} route.`;

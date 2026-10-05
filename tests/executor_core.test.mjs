@@ -596,6 +596,22 @@ test("each builder CLI gets its headless command line, and the brief never rides
   }
 });
 
+// How hard an attempt thinks (scripts/model-ladder.cjs) rides each CLI's own
+// flag: Claude Code's --effort, Codex's model_reasoning_effort override and
+// OpenCode's --variant. Grok and Antigravity take none.
+test("each builder CLI gets the attempt's thinking as its own flag", () => {
+  const modelArg = (value) => /^[A-Za-z0-9._:/-]{1,80}$/.test(String(value ?? "")) ? String(value) : "";
+  const run = (route, cli, extra = {}) => core.cliInvocation(route, cli, "PROMPT", { modelArg, agyModelArg: (value) => value, promptFile: "C:\\p.txt", ...extra });
+  assert.equal(run({ model: "opus", effort: "high" }, "claude").args[3], "\"claude -p --output-format text --dangerously-skip-permissions --model opus --effort high\"");
+  assert.match(run({ model: "opus", effort: "low" }, "claude", { desk: { claude: "C:\\x.json" } }).args[3], /--effort low --mcp-config/, "--mcp-config stays last");
+  assert.match(run({ effort: "medium" }, "codex").args[3], /--color never -c "?model_reasoning_effort=medium"? -"$/);
+  assert.equal(run({ modelArgs: " --model opencode-go/deepseek-v4.1-flash", effort: "high", env: {} }, null).args[3], "opencode run --auto --model opencode-go/deepseek-v4.1-flash --variant high");
+  assert.equal(run({ modelArgs: " --model opencode-go/deepseek-v4.1-flash", env: {} }, null).args[3], "opencode run --auto --model opencode-go/deepseek-v4.1-flash", "no effort, no variant");
+  assert.ok(!run({ model: "grok-4", effort: "high", env: {} }, "grok").args.some((word) => /effort|variant/.test(word)));
+  assert.ok(!run({ model: "Gemini 3.1 Pro (High)", effort: "high" }, "antigravity").args.some((word) => /effort|variant/.test(word)));
+  assert.equal(run({ model: "opus", effort: "high && calc" }, "claude").args[3].includes("--effort"), false, "only the ladder's fixed words reach cmd.exe");
+});
+
 // The guided installer puts grok on PATH as npm's grok.cmd, which Node cannot
 // spawn without a shell: every Grok run failed ENOENT while where.exe said the
 // CLI was installed. A shim goes through cmd.exe; a real binary still spawns

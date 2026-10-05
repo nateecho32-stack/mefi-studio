@@ -90,6 +90,7 @@ const agentModels = require("./scripts/agent-models.cjs");
 const cliSetup = require("./scripts/cli-setup.cjs");
 const cliText = require("./scripts/cli-text.cjs");
 const cliAccounts = require("./scripts/cli-accounts.cjs");
+const modelLadder = require("./scripts/model-ladder.cjs");
 const agentIssues = require("./scripts/agent-issues.cjs");
 const brains = require("./scripts/brains.cjs");
 const taskDelegation = require("./scripts/task-delegation.cjs");
@@ -5527,6 +5528,24 @@ async function applyModelRouting(route, { role = "routine", taskType = role, wei
 // id so the verifier's verdict can settle it later.
 function recordWorkerAttempt(entry, route, { ok = false, durationMs = null, outcome = null, cancelled = false, tokenUsage = null } = {}) {
   if (SMOKE || CAPTURE || !entry?.id) return;
+  const { provider, model } = workerLedgerIdentity(route);
+  // How hard the attempt thought (route.thinking, the builder step) and
+  // whether it was a step up after a miss, so the ledger can say which level
+  // worked for which kind of job (model-ladder learnedStart).
+  const thinking = route?.thinking && typeof route.thinking === "object" ? route.thinking : null;
+  const stepped = Boolean(thinking && thinking.misses > 0 && (thinking.stronger || thinking.reason === "thinks-harder"));
+  recordModelCall({ id: entry.id, projectId: entry.projectId ?? projects.current().id, provider, model, taskType: entry.workKind ?? "coding", role: "worker", source: "worker",
+    // A run the owner or the host stopped is a cancellation, not the model's
+    // error: the ledger's error rate (the judge's reliability evidence and
+    // Model Lab's score) leaves it out.
+    at: entry.startedAt, status: ok ? "ok" : cancelled ? "cancelled" : "error", errorKind: ok || cancelled ? null : "worker", elapsedMs: durationMs, runId: entry.id,
+    ...(thinking?.effort ? { requestedEffort: thinking.effort, appliedEffort: thinking.effort } : {}),
+    ...(stepped ? { escalationReason: "validation", ...(typeof thinking.after === "string" && thinking.after ? { escalationOf: thinking.after } : {}) } : {}),
+    ...(outcome ? { outcome } : {}), ...(tokenUsage ? { tokenUsage } : {}) }).catch(() => {});
+}
+
+// The provider and model a builder route is filed under in the ledger.
+function workerLedgerIdentity(route) {
   const cli = ["grok", "claude", "codex", "antigravity"].includes(route?.cli) ? route.cli : "opencode";
   // A z.ai coding-plan run names its model "mefi-zai/<id>" and, on the
   // Fast/Heavy tier or a pinned builder, carries no modelProvider. It is
@@ -5545,14 +5564,8 @@ function recordWorkerAttempt(entry, route, { ok = false, durationMs = null, outc
   // providers (Zen's opencode/<id>, say) keep their full id.
   const bare = String(named || `${provider}-default`).replace(/^mefi-zai\//, "");
   const model = (provider === "opencode" ? bare.replace(/^opencode-go\//, "") : bare).slice(0, 160);
-  recordModelCall({ id: entry.id, projectId: entry.projectId ?? projects.current().id, provider, model, taskType: entry.workKind ?? "coding", role: "worker", source: "worker",
-    // A run the owner or the host stopped is a cancellation, not the model's
-    // error: the ledger's error rate (the judge's reliability evidence and
-    // Model Lab's score) leaves it out.
-    at: entry.startedAt, status: ok ? "ok" : cancelled ? "cancelled" : "error", errorKind: ok || cancelled ? null : "worker", elapsedMs: durationMs, runId: entry.id,
-    ...(outcome ? { outcome } : {}), ...(tokenUsage ? { tokenUsage } : {}) }).catch(() => {});
+  return { provider, model };
 }
-
 // The verifier's verdict on an attempt, settled onto its ledger row.
 async function settleModelOutcome(observationId, outcome) {
   if (SMOKE || CAPTURE || typeof observationId !== "string" || !observationId) return;
@@ -6513,8 +6526,8 @@ function cliModelArg(value) {
 // line, and --tools= keeps a reply request from touching the repo. The npm
 // install is a .cmd shim, so the CLI is reached through cmd.exe like opencode
 // run is. Auth is the CLI's own login, so no key is stored or read.
-async function claudeCompletion(system, user, model, { timeoutMs = 180000, onSpawn, env = null } = {}) {
-  const result = await cliText.run({ provider: "claude", system, user, model: model || "", timeoutMs, onSpawn, env });
+async function claudeCompletion(system, user, model, { timeoutMs = 180000, onSpawn, env = null, effort = "" } = {}) {
+  const result = await cliText.run({ provider: "claude", system, user, model: model || "", effort: effort || "", timeoutMs, onSpawn, env });
   if (result.error) return { ok: false, error: result.error };
   return cliReply("claude", parseClaudeCliResult(result.stdout), result.stdout, { code: result.code, err: result.stderr, model });
 }
@@ -6527,8 +6540,8 @@ async function claudeCompletion(system, user, model, { timeoutMs = 180000, onSpa
 // reads: the agent message plus the turn's token usage. The npm install is a
 // .cmd shim, so the CLI is reached through cmd.exe like claude is. Auth is
 // the CLI's own login, so no key is stored or read.
-async function codexCompletion(system, user, model, { timeoutMs = 180000, onSpawn, env = null } = {}) {
-  const result = await cliText.run({ provider: "codex", system, user, model: model || "", timeoutMs, onSpawn, env });
+async function codexCompletion(system, user, model, { timeoutMs = 180000, onSpawn, env = null, effort = "" } = {}) {
+  const result = await cliText.run({ provider: "codex", system, user, model: model || "", effort: effort || "", timeoutMs, onSpawn, env });
   if (result.error) return { ok: false, error: result.error };
   return cliReply("codex", parseCodexCliResult(result.stdout), result.stdout, { code: result.code, err: result.stderr, model });
 }
@@ -6976,14 +6989,32 @@ async function assistantFetch(system, user, maxTokens = 6000, { role = "routine"
 // (planning, brain drafts, the analyzer read) that may ride Claude Code.
 // `fallback: false` keeps a failed CLI call failed instead of retrying on
 // another model (a probe measures one model, never whichever answered).
-async function cliAssistantCall(route, system, user, maxTokens, { role = "routine", taskType = role, source = "request", fallback = true } = {}) {
+// How hard a text call on Claude Code or Codex thinks: the caller's own word (a
+// seat's saved effort), else the role's saved effort, else the team's thinking
+// (scripts/model-ladder.cjs: Auto starts light), fitted to what the CLI takes
+// for that model. Null for a CLI that takes none, which sends no flag.
+async function textCallEffort(route, role, effort = null) {
+  if (typeof agentProfiles === "undefined" || typeof modelLadder === "undefined") return null;
+  const supported = agentProfiles.capabilities(route?.provider, route?.model || "").efforts;
+  if (!supported.length) return null;
+  // A CLI too old for the flag gets none (cliTakesThinking, the builder block).
+  if (typeof cliTakesThinking === "function" && !(await cliTakesThinking(route.provider))) return null;
+  if (effort) return modelLadder.fitEffort(supported, effort);
+  const settings = await (typeof readAgentSettings === "function" ? readAgentSettings() : readSettings());
+  const own = settings.agentEfforts?.[role];
+  const { mode } = modelLadder.thinking(settings);
+  const start = modelLadder.startLevel({ mode, explicit: supported.includes(own) ? own : null });
+  return modelLadder.fitEffort(supported, modelLadder.effortOf(start.level));
+}
+async function cliAssistantCall(route, system, user, maxTokens, { role = "routine", taskType = role, source = "request", fallback = true, effort = null } = {}) {
   if (typeof agentTools !== "undefined" && !agentTools.active.getStore() && taskType !== "ai-probe") {
     const settings = await readAgentSettings();
     if (typeof agentAddons !== "undefined") system += scrubOutbound(await agentAddons.instructions(projectRoot(), settings, role));
     return agentTools.run({ system, user, root: projectRoot(), settings, role, scrub: scrubOutbound,
       onTool: (tool) => logLine(`[tools:${role}] ${tool.name}: ${tool.ok ? "completed" : "failed"}`),
-      call: (prompt, input) => cliAssistantCall(route, prompt, scrubOutbound(input), maxTokens, { role, taskType, source }) });
+      call: (prompt, input) => cliAssistantCall(route, prompt, scrubOutbound(input), maxTokens, { role, taskType, source, effort }) });
   }
+  const thinkingEffort = typeof textCallEffort === "function" ? await textCallEffort(route, role, effort).catch(() => null) : null;
   // A paused CLI is not spawned at all — its failures tend to run to the
   // full 180 s timeout — so the turn goes straight to the fallback below.
   const gate = providerBreaker.enter(route.provider);
@@ -6999,8 +7030,8 @@ async function cliAssistantCall(route, system, user, maxTokens, { role = "routin
     const said = typeof imageCliText === "function" ? imageCliText(user) : user;
     try {
       cli = await turn(route.provider, (login) => route.provider === "grok" ? grokCompletion(system, said, route.model)
-        : route.provider === "claude" ? claudeCompletion(system, said, route.model, login)
-          : route.provider === "codex" ? codexCompletion(system, said, route.model, login)
+        : route.provider === "claude" ? claudeCompletion(system, said, route.model, { ...login, effort: thinkingEffort })
+          : route.provider === "codex" ? codexCompletion(system, said, route.model, { ...login, effort: thinkingEffort })
             : antigravityCompletion(system, said, route.model));
     } finally {
       settleProvider(route.provider, gate, cli);
@@ -7009,7 +7040,8 @@ async function cliAssistantCall(route, system, user, maxTokens, { role = "routin
     if (!cli.toppedOut) {
       const observationId = crypto.randomUUID();
       await recordModelCall({ id: observationId, model: cli.model || route.model || `${route.provider}-default`, provider: route.provider, taskType, source,
-        at: startedAt, elapsedMs: Date.now() - startedAt, status: cli.ok ? "ok" : "error", errorKind: cli.ok ? null : "cli", tokenUsage: cli.tokenUsage ?? {}, costUsd: cli.costUsd ?? null });
+        at: startedAt, elapsedMs: Date.now() - startedAt, status: cli.ok ? "ok" : "error", errorKind: cli.ok ? null : "cli", tokenUsage: cli.tokenUsage ?? {}, costUsd: cli.costUsd ?? null,
+        ...(thinkingEffort ? { requestedEffort: thinkingEffort, appliedEffort: thinkingEffort } : {}) });
       cli.observationId = observationId;
     }
     if (cli.ok) {
@@ -7043,7 +7075,13 @@ async function httpAssistantCall(route, system, user, maxTokens, { taskType = "r
   if (!effort && !pinned && typeof readAgentSettings === "function" && typeof agentProfiles !== "undefined") {
     const settings = await readAgentSettings();
     const chosen = settings.agentEfforts?.[role];
-    if (agentProfiles.capabilities(route.provider, route.model).efforts.includes(chosen)) effort = chosen;
+    const supported = agentProfiles.capabilities(route.provider, route.model).efforts;
+    if (supported.includes(chosen)) effort = chosen;
+    // No effort of the role's own: the team's thinking (Auto starts light),
+    // fitted to what this model takes. Zen and OpenCode sent "low" with no
+    // effort already; the ChatGPT plan and OpenRouter's OpenAI models now
+    // start light too instead of at their provider's default.
+    else if (typeof modelLadder !== "undefined" && supported.length) effort = modelLadder.fitEffort(supported, modelLadder.effortOf(modelLadder.startLevel({ mode: modelLadder.thinking(settings).mode }).level));
   }
   // The wire shape belongs to the route that answers: glm-5.3 reasons on every
   // request and caps effort at low|high|max — "low" keeps the heavy passes
@@ -15111,7 +15149,8 @@ async function seatFetch(seat, system, user, maxTokens = 2400, { fallback = null
       const route = await resolveAiRoute("heavy", { allowCli: DATA_ONLY_CLIS });
       if (!route.ok) return route;
       const options = { role: "heavy", taskType: `seat-${seat}`, source: `seat:${seat}`, pinned: true };
-      if (route.cli) return cliAssistantCall(route, system, scrubOutbound(user), maxTokens, options);
+      // A seat on Claude Code or Codex thinks at its own saved effort too.
+      if (route.cli) return cliAssistantCall(route, system, scrubOutbound(user), maxTokens, { ...options, effort: chosen.effort || null });
       const support = agentProfiles.capabilities(route.provider, route.model);
       return httpAssistantCall(route, system, scrubOutbound(user), maxTokens, { ...options, effort: support.efforts.includes(chosen.effort) ? chosen.effort : null, timeoutMs });
     });
@@ -17228,12 +17267,20 @@ async function heavyRetryRoute(runRoute) {
   const cli = ["grok", "claude", "codex", "antigravity"].includes(runRoute.cli) ? runRoute.cli : "opencode";
   const model = heavyRetryModel(settings, cli);
   if (!model || model === runRoute.model) return null;
+  if (!(await useBuilderModel(runRoute, cli, model, "heavier retry"))) return null;
+  logLine(`[autopilot] heavier retry: this attempt runs ${model} on ${cli}`);
+  return model;
+}
+// Puts another model on this attempt's route in place: the model, its
+// command-line words and the label the card shows. False when the model
+// cannot run here (a z.ai model with no z.ai key saved).
+async function useBuilderModel(runRoute, cli, model, note) {
   if (cli === "opencode") {
     // A z.ai heavy model needs the managed provider's config and key beside
     // the run, which an OpenCode route on another account does not carry.
     const managed = model.startsWith("mefi-zai/");
     const zaiEnv = managed ? await zaiOpencodeEnv() : null;
-    if (managed && !zaiEnv) return null;
+    if (managed && !zaiEnv) return false;
     runRoute.env = executorOpencodeEnv(managed ? zaiEnv : undefined);
     runRoute.modelArgs = ` --model ${model}`;
     runRoute.free = false;
@@ -17241,9 +17288,130 @@ async function heavyRetryRoute(runRoute) {
   }
   runRoute.model = model;
   runRoute.modelProvider = null;
-  runRoute.via = `${cli === "opencode" ? model : `${cli} cli · ${model}`} · heavier retry`;
-  logLine(`[autopilot] heavier retry: this attempt runs ${model} on ${cli}`);
-  return model;
+  runRoute.via = `${cli === "opencode" ? model : `${cli} cli · ${model}`} · ${note}`;
+  return true;
+}
+
+// ---- How hard a coding attempt thinks (scripts/model-ladder.cjs) ----
+// Every attempt starts at the team's thinking (Auto: light, or what worked
+// before for this kind of job on this model). A card that keeps missing its
+// check thinks one step harder per miss, and after two misses a stronger model
+// takes it: the builder's Heavy tier, else the next model up in the same
+// family. The owner's own picks (a heavier retry they asked for, a subtask
+// override) keep their model; only the thinking steps. Max thinking waits for
+// the owner unless they turned that ask off.
+const BUILDER_CLIS = ["grok", "claude", "codex", "antigravity"];
+// OpenCode's variants per model ("provider/model" -> words) and Codex's
+// effort levels per model, read once and kept (each answer is a few kilobytes).
+const thinkingCatalogs = { opencode: new Map(), opencodeAt: new Map(), opencodeReads: new Map(), codex: null, codexAt: 0, flags: new Map() };
+const THINKING_CATALOG_MS = 6 * 3600 * 1000;
+// Whether a CLI on this PC takes the thinking flag Studio would send. An older
+// Claude Code without --effort, or an OpenCode without --variant, would fail
+// every run on the unknown flag, so each one's own --help is read once and the
+// flag is sent only when it is listed there. Codex takes it as a config
+// override (-c), which it has always accepted. MEFI_STUDIO_THINKING_OFF=1 is
+// the kill switch: no thinking flag reaches any CLI.
+function cliTakesThinking(cli) {
+  if (process.env.MEFI_STUDIO_THINKING_OFF === "1") return Promise.resolve(false);
+  if (cli === "codex") return Promise.resolve(true);
+  if (cli !== "claude" && cli !== "opencode") return Promise.resolve(false);
+  if (!thinkingCatalogs.flags.has(cli)) {
+    thinkingCatalogs.flags.set(cli, (async () => {
+      try {
+        const scanner = await loadModule("scripts/first-scan.mjs");
+        const [args, flag] = cli === "claude" ? [["--help"], "--effort"] : [["run", "--help"], "--variant"];
+        const result = await scanner.spawnExec(cli, args, { timeoutMs: 20000, env: { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0" } });
+        const takes = !result.error && !result.timedOut && `${result.stdout ?? ""}\n${result.stderr ?? ""}`.includes(flag);
+        if (!takes) logLine(`[thinking] ${cli} does not list ${flag}; its runs use the CLI's own thinking`);
+        return takes;
+      } catch { return false; }
+    })());
+  }
+  return thinkingCatalogs.flags.get(cli);
+}
+// The variants `opencode models <provider> --verbose` lists for one provider,
+// read in the background: the attempt that asks first runs without a variant
+// rather than waiting on the CLI, and the next one has them.
+function opencodeVariantsFor(model) {
+  const provider = String(model ?? "").split("/")[0];
+  if (!provider || provider === "mefi-zai" || !/^[a-z0-9][a-z0-9._-]{0,40}$/.test(provider)) return null;
+  const at = thinkingCatalogs.opencodeAt.get(provider) ?? 0;
+  if (Date.now() - at > THINKING_CATALOG_MS && !thinkingCatalogs.opencodeReads.has(provider)) {
+    const read = (async () => {
+      try {
+        const scanner = await loadModule("scripts/first-scan.mjs");
+        const result = await scanner.spawnExec("opencode", ["models", provider, "--verbose"], { timeoutMs: 30000, env: { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0" } });
+        if (!result.error && !result.timedOut && result.code === 0) {
+          for (const [id, words] of Object.entries(modelLadder.parseOpencodeModels(result.stdout))) thinkingCatalogs.opencode.set(id, words);
+          thinkingCatalogs.opencodeAt.set(provider, Date.now());
+        } else thinkingCatalogs.opencodeAt.set(provider, Date.now() - THINKING_CATALOG_MS + 10 * 60000);
+      } catch {
+        thinkingCatalogs.opencodeAt.set(provider, Date.now() - THINKING_CATALOG_MS + 10 * 60000);
+      } finally { thinkingCatalogs.opencodeReads.delete(provider); }
+    })();
+    thinkingCatalogs.opencodeReads.set(provider, read);
+  }
+  return thinkingCatalogs.opencode.has(model) ? thinkingCatalogs.opencode.get(model) : null;
+}
+// Codex's own model cache (CODEX_HOME/models_cache.json) lists each model's
+// effort levels; a missing or unreadable cache leaves Codex's usual four.
+async function codexEffortLevels() {
+  if (thinkingCatalogs.codex && Date.now() - thinkingCatalogs.codexAt < THINKING_CATALOG_MS) return thinkingCatalogs.codex;
+  thinkingCatalogs.codexAt = Date.now();
+  try {
+    const home = process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
+    thinkingCatalogs.codex = modelLadder.codexLevelsFrom(JSON.parse(await readFile(path.join(home, "models_cache.json"), "utf8")));
+  } catch { thinkingCatalogs.codex = {}; }
+  return thinkingCatalogs.codex;
+}
+// The model id a builder route runs, as the CLI names it: a routed OpenCode Go
+// pick is a bare roster id that runs as opencode-go/<id>.
+function builderModelId(runRoute) {
+  const model = String(runRoute?.model ?? "");
+  return runRoute?.modelProvider === "opencode" && model && !model.includes("/") ? `opencode-go/${model}` : runRoute?.modelProvider === "zai" && model && !model.includes("/") ? `mefi-zai/${model}` : model;
+}
+// What the attempt can step up to, or null: the Heavy tier's model when it is
+// another model, else the next model up in the same family.
+function strongerBuilderModel(settings, cli, runRoute) {
+  const current = builderModelId(runRoute);
+  const heavy = typeof heavyRetryModel === "function" ? heavyRetryModel(settings, cli) : null;
+  if (heavy && heavy !== current && heavy !== runRoute.model) return heavy;
+  const sibling = modelLadder.strongerSibling(current);
+  return sibling && sibling !== current ? sibling : null;
+}
+// What worked before for this kind of job on this model, from the ledger.
+async function learnedBuilderLevel(runRoute, workKind) {
+  if (typeof modelPerformanceStore !== "function" || typeof workerLedgerIdentity !== "function") return null;
+  try {
+    const state = await modelPerformanceStore().read();
+    return modelLadder.learnedStart(state?.observations ?? [], { ...workerLedgerIdentity(runRoute), taskType: workKind });
+  } catch { return null; }
+}
+async function builderThinking(runRoute, job, { workKind = "coding", ownerPick = null } = {}) {
+  const settings = await (typeof readAgentSettings === "function" ? readAgentSettings() : readSettings());
+  const choice = modelLadder.thinking(settings);
+  const cli = BUILDER_CLIS.includes(runRoute.cli) ? runRoute.cli : "opencode";
+  // Charged run failures and failed checks: what "missed" means for a card.
+  // A reopen by the owner clears both (backlog.cjs), so it starts fresh.
+  const misses = (Number(job?.ref?.runFailures) || 0) + (Number(job?.ref?.verifyAttempts) || 0);
+  const stronger = ownerPick || !choice.climb ? null : strongerBuilderModel(settings, cli, runRoute);
+  const learned = choice.mode === "auto" ? await learnedBuilderLevel(runRoute, workKind) : null;
+  const start = modelLadder.startLevel({ mode: choice.mode, explicit: settings.agentEfforts?.builder || null, learned });
+  const step = modelLadder.builderStep({ ...choice, misses, start: start.level, hasStronger: Boolean(stronger) });
+  let movedTo = null;
+  if (step.stronger && stronger && await useBuilderModel(runRoute, cli, stronger, `stronger model after ${misses} misses`)) movedTo = stronger;
+  const model = builderModelId(runRoute);
+  const flagged = await cliTakesThinking(cli);
+  const supported = !flagged ? [] : cli === "opencode" ? opencodeVariantsFor(model) ?? [] : modelLadder.cliEfforts(cli, model, { codexLevels: cli === "codex" ? await codexEffortLevels() : null });
+  const effort = modelLadder.fitEffort(supported, modelLadder.effortOf(step.level));
+  if (effort) runRoute.effort = effort;
+  // `after`: the attempt this one steps up from, which the ledger row names.
+  const after = typeof job?.ref?.lastAttempt?.runId === "string" ? job.ref.lastAttempt.runId : null;
+  runRoute.thinking = { level: step.level, effort: effort ?? null, source: start.source, misses, stronger: movedTo, held: step.held, reason: step.reason, after };
+  if (misses > 0 && (movedTo || step.reason === "thinks-harder")) {
+    logLine(`[autopilot] "${assistantClip(job?.title ?? "", 60)}" missed ${misses} time${misses === 1 ? "" : "s"}: this attempt runs ${movedTo ? `${movedTo} with ` : ""}${modelLadder.wordsFor(step.level)}${step.held ? " (Max thinking waits for you)" : ""}`);
+  }
+  return runRoute.thinking;
 }
 // Whether "Try again with a heavier model" can change anything for the
 // builders as they are set up: their Heavy-tier model is another model, or
@@ -17756,10 +17924,24 @@ async function spawnNextJob(options) {
     if (typeof heavyRetryRoute === "function" && await heavyRetryRoute(runRoute)) routeDecision = null;
     ownerPick = "its heavier retry asked for that model";
   }
+  // How hard this attempt thinks, and a stronger model for a card that keeps
+  // missing (builderThinking). After routing and the owner's own picks, whose
+  // model it keeps; a parked stronger model falls back below like a routed one.
+  // typeof: spawnNextJob is sliced into test hosts without the ladder.
+  const steppedFrom = runRoute.model;
+  if (typeof builderThinking === "function") {
+    try { if ((await builderThinking(runRoute, job, { workKind, ownerPick }))?.stronger && runRoute.model !== steppedFrom) routeDecision = null; }
+    catch (error) { logLine(`[autopilot] thinking level not set: ${String(error?.message ?? error).slice(0, 120)}`); }
+  }
   let park = routePark();
   if (park?.kind === "plan" && runRoute.model !== unrouted.model && !ownerPick) {
     const parked = park;
     Object.assign(runRoute, unrouted);
+    // The thinking was fitted to the model just dropped: fit it again.
+    if (runRoute.thinking) {
+      delete runRoute.effort; delete runRoute.thinking;
+      if (typeof builderThinking === "function") await builderThinking(runRoute, job, { workKind, ownerPick: "that model is parked" }).catch(() => null);
+    }
     routeDecision = null;
     park = routePark();
     if (!park) logLine(`[autopilot] ${parked.short} · "${assistantClip(job.title, 60)}" runs on the default ${unrouted.model} instead`);
@@ -19146,6 +19328,8 @@ async function spawnNextJob(options) {
     task: job.kind === "task" ? job.ref?.id ?? null : null,
     title: String(job.title ?? "").slice(0, 160),
     via: String((fellBack ? fallbackRoute : runRoute).via ?? "").slice(0, 80),
+    // How hard it thought (builderThinking), for the attempt list.
+    ...(!fellBack && runRoute.thinking?.level ? { thinking: runRoute.thinking.level } : {}),
     pid: entry.pid,
   }).catch(() => {});
   if (typeof agentBrain !== "undefined" && agentBrain && job.kind === "task") {

@@ -7,6 +7,20 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Claude Code, Codex and OpenCode now think lightly first and harder when
+  stuck.** Studio never told the coding CLIs how hard to think, so every run
+  used the CLI's default. Every job now starts with light thinking
+  (`--effort` for Claude Code, `model_reasoning_effort` for Codex, `--variant`
+  for OpenCode models that list one). A coding job that fails its check
+  retries one step harder; after two misses a stronger model takes it (the
+  Heavy tier, else Flash to Pro on OpenCode Go and Sonnet to Opus on Claude
+  Code); Max thinking waits for you. Seats and the chat on Claude Code or
+  Codex take a thinking level too. Each attempt's level is written to the
+  model record and the attempt list, and when a harder level keeps working
+  for one kind of job, that kind of job starts there. Team settings:
+  `agentThinking` (mode, step up, ask before Max, try other models). A CLI
+  whose own help does not list the flag gets none, and
+  `MEFI_STUDIO_THINKING_OFF=1` turns the flags off.
 - **Chrome's buttons no longer look struck through.** The metal on main
   buttons and chosen tabs had a hard dark line at half height, right behind
   the words. Its horizon is now a soft band below them, and the darkest part

@@ -56,6 +56,8 @@ function attemptsFromLedger(ledger, { taskId = null, sessionId = null, limit = 2
     if (row.event === "start") {
       attempt.startedAt = at;
       attempt.via = text(row.via, 80);
+      // How hard the attempt thought (main.cjs builderThinking); older rows have none.
+      if (text(row.thinking, 20)) attempt.thinking = text(row.thinking, 20);
       attempt.pid = number(row.pid);
     } else if (row.event === "fallback") {
       attempt.fallbacks.push({ at, reason: text(row.reason, 120) });

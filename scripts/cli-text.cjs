@@ -4,16 +4,21 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawn } = require("./platform.cjs");
 const { buildWindowsCmdArgs } = require("./windows-command-line.cjs");
+const { effortArgs } = require("./model-ladder.cjs");
 
 const PROVIDERS = ["claude", "codex", "grok", "antigravity"];
-function argumentsFor(provider, model = "") {
+// How hard the model thinks (scripts/model-ladder.cjs effortArgs): Claude
+// Code's --effort and Codex's model_reasoning_effort. Grok and Antigravity take
+// none, and an effort a CLI does not take is left off rather than refused.
+function argumentsFor(provider, model = "", effort = "") {
   if (!PROVIDERS.includes(provider)) throw new Error("Unknown text CLI.");
   if (model && !/^[A-Za-z0-9 ._()/:-]{1,120}$/.test(model)) throw new Error("Invalid CLI model.");
   const selected = model ? ["--model", model] : [];
-  if (provider === "claude") return ["-p", "--output-format", "json", "--strict-mcp-config", "--tools=", "--permission-mode", "dontAsk", "--no-session-persistence", ...selected];
+  const thinking = effort ? effortArgs(provider, effort) : [];
+  if (provider === "claude") return ["-p", "--output-format", "json", "--strict-mcp-config", "--tools=", "--permission-mode", "dontAsk", "--no-session-persistence", ...selected, ...thinking];
   if (provider === "codex") return ["exec", "--json", "--ephemeral", "--ignore-user-config", "--ignore-rules", "--skip-git-repo-check", "--color", "never", "-s", "read-only",
     "-c", "approval_policy=never", "-c", "web_search=disabled", "-c", "mcp_servers={}", "-c", "apps._default.enabled=false",
-    ...["shell_tool", "unified_exec", "multi_agent", "hooks", "apps", "js_repl", "apply_patch_freeform", "image_generation", "computer_use"].flatMap((key) => ["-c", `features.${key}=false`]), ...selected, "-"];
+    ...["shell_tool", "unified_exec", "multi_agent", "hooks", "apps", "js_repl", "apply_patch_freeform", "image_generation", "computer_use"].flatMap((key) => ["-c", `features.${key}=false`]), ...thinking, ...selected, "-"];
   if (provider === "grok") return ["--output-format", "json", "--tools=", "--deny", "MCPTool", "--permission-mode", "dontAsk", "--no-subagents", "--disable-web-search", "--no-memory", "--no-plan", "--max-turns", "1", ...selected];
   return ["--agent", "mefi-text", "--input-format", "stream-json", "--output-format", "stream-json", ...selected];
 }
@@ -23,10 +28,10 @@ function argumentsFor(provider, model = "") {
 // A CLI too old for these controls fails visibly; never retry without them.
 // `env` adds to the inherited environment: the folder of a second Claude
 // Code or Codex login (scripts/cli-accounts.cjs).
-async function run({ provider, system, user, model = "", timeoutMs = 180000, onSpawn, spawnImpl = spawn, tempRoot = os.tmpdir(), platform = process.platform, env = null }) {
+async function run({ provider, system, user, model = "", effort = "", timeoutMs = 180000, onSpawn, spawnImpl = spawn, tempRoot = os.tmpdir(), platform = process.platform, env = null }) {
   let root;
   try {
-    const args = argumentsFor(provider, model);
+    const args = argumentsFor(provider, model, effort);
     root = await mkdtemp(path.join(tempRoot, "mefi-text-"));
     if (provider === "grok") {
       const prompt = path.join(root, "prompt.txt");
