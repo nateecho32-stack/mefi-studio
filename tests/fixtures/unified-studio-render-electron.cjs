@@ -380,11 +380,11 @@ app.whenReady().then(async () => {
   const friendsMotionWasOff=await run("const off=document.body.classList.contains('no-motion');document.body.classList.add('no-motion');return off;");
   report.friendsNavigation=[];
   // Each opens the Friends page at its place (one home in both layouts), the page's title focused.
-  for (const [id, place] of [['rooms','rooms'],['your-pcs','pcs'],['playground','playground'],['project-hub','hub']]) {
+  for (const [id, place] of [['the-lobby','lobby'],['rooms','rooms'],['your-pcs','pcs'],['playground','playground'],['project-hub','hub']]) {
     const keyboard = await run(`
       const rail=document.getElementById('app-rail'),head=rail.querySelector('.app-rail-head[data-section=friends]');
       document.documentElement.dataset.railDrawer='';head.focus();
-      for(const child of ['rooms','your-pcs','playground','project-hub']) {
+      for(const child of ['the-lobby','rooms','your-pcs','playground','project-hub']) {
         document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));
         if(child===${JSON.stringify(id)}) break;
       }
@@ -394,7 +394,8 @@ app.whenReady().then(async () => {
     assert.equal(keyboard.id,id);assert.ok(keyboard.height>=28&&keyboard.top>=0&&keyboard.bottom<=keyboard.viewport+1&&keyboard.hit,'Friends keyboard target is reachable: '+JSON.stringify(keyboard));
     await run("document.activeElement.click();");
     await until(`document.getElementById('friends-overlay')?.hidden===false&&document.getElementById('friends-overlay').dataset.place===${JSON.stringify(place)}`,`Friends opens ${id}`);
-    assert.ok(await reachable('#friends-place-title'),'the Friends page shows: '+id);
+    // The Lobby's own masthead is its title (the page heading steps aside there): its body shows instead.
+    assert.ok(await reachable(place==='lobby'?'#friends-place-body':'#friends-place-title'),'the Friends page shows: '+id);
     report.friendsNavigation.push(id);
     await run("window.MefiNav.closeAll();await window.MefiNav.go('agents',{section:'setup',pane:'team'});");
   }

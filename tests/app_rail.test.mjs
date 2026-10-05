@@ -169,8 +169,8 @@ test("Friends menu and Search open the existing hub's precise cards after closin
   loaded.nav.go("rooms");
   assert.deepEqual(calls, [["close-search"], ["close-tasks"], ["hub", { section: "friends", target: "rooms" }]]);
   const children = loaded.rail().querySelector('.app-rail-section[data-section="friends"] .app-rail-children');
-  assert.deepEqual(children.querySelectorAll("[data-nav]").map((button) => button.dataset.nav), ["rooms", "your-pcs", "playground", "project-hub"]);
-  for (const [id, target] of [["rooms", "rooms"], ["your-pcs", "pcs"], ["playground", "playground"], ["project-hub", "hub"]]) {
+  assert.deepEqual(children.querySelectorAll("[data-nav]").map((button) => button.dataset.nav), ["the-lobby", "rooms", "your-pcs", "playground", "project-hub"]);
+  for (const [id, target] of [["the-lobby", "lobby"], ["rooms", "rooms"], ["your-pcs", "pcs"], ["playground", "playground"], ["project-hub", "hub"]]) {
     await loaded.document.body.trigger("click", { target: children.querySelector(`[data-nav="${id}"]`) });
     assert.deepEqual(calls.at(-1), ["hub", { section: "friends", target }]);
     assert.ok(loaded.nav.list({ showIn: "palette" }).some((entry) => entry.id === id), `${id} stays searchable in both modes`);
@@ -355,7 +355,7 @@ test("sectionLabel names every record's section, the palette's result kinds", ()
   assert.equal(nav.sectionLabel({ id: "assistantTidy", kind: "action", group: "assistant" }), "Assistant");
   assert.equal(nav.sectionLabel({ id: "settings:settings-updates", kind: "action", group: "settings" }), "Settings", "the Settings cards booklet.js files");
   assert.equal(nav.sectionLabel(null), null);
-  assert.deepEqual({ ...nav.RAIL_SLOTS }, { community: "foot", friends: "friends", rooms: "friends", "your-pcs": "friends", playground: "friends", "project-hub": "friends" });
+  assert.deepEqual({ ...nav.RAIL_SLOTS }, { community: "foot", friends: "friends", "the-lobby": "friends", rooms: "friends", "your-pcs": "friends", playground: "friends", "project-hub": "friends" });
   assert.ok(Object.isFrozen(nav.RAIL_SLOTS), "only nav places destinations in the rail");
   const ranks = ["workspace", "tasks", "command", "booklet", "studio", "help"].map((id) => nav.sectionRank(nav.get(id)));
   assert.deepEqual(ranks, [...ranks].sort((a, b) => a - b), "ranks follow the rail from top to bottom");
@@ -408,7 +408,7 @@ test("the rail arrows reach every Friends child as one roving tab stop", async (
   const loaded = load({ init: true });
   const rail = loaded.rail();
   let current = rail.querySelector('.app-rail-head[data-section="friends"]');
-  for (const id of ["rooms", "your-pcs", "playground", "project-hub"]) {
+  for (const id of ["the-lobby", "rooms", "your-pcs", "playground", "project-hub"]) {
     await rail.trigger("keydown", { key: "ArrowDown", target: current });
     current = rail.querySelector(`.app-rail-friends [data-nav="${id}"]`);
     assert.equal(current.focused, true);
@@ -704,7 +704,7 @@ test("in the 0.5 layout the rail is the prototype's: Work, Map, Team and Friends
   assert.equal(document.getElementById("app-rail-compose"), null, "New task is the session list's (Ctrl N), not the rail's");
   assert.equal(document.getElementById("app-rail-recent-list"), null, "the session list holds the tasks");
   assert.equal(rail().querySelector(".app-rail-vibe"), null, "the mode switch is the top bar's (Ctrl M)");
-  assert.deepEqual(rail().querySelectorAll('.app-rail-section[data-section="friends"] .app-rail-children [data-nav]').map((button) => button.dataset.nav), ["rooms", "your-pcs", "playground", "project-hub"], "Friends keeps its three pages and the Project hub");
+  assert.deepEqual(rail().querySelectorAll('.app-rail-section[data-section="friends"] .app-rail-children [data-nav]').map((button) => button.dataset.nav), ["the-lobby", "rooms", "your-pcs", "playground", "project-hub"], "Friends keeps The Lobby, its three pages and the Project hub");
   // The Help menu: the prototype's six, each the record it always was, in its order; a late arrival redraws the foot.
   nav.register(COMMUNITY); nav.register(SETUP_HELPER); nav.register(RELEASE_NOTES); nav.register(REPORT);
   await settle();

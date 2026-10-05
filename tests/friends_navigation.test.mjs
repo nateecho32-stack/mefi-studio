@@ -23,6 +23,7 @@ function load({ delayed = false } = {}) {
   const origin = document.createElement("button"); origin.id = "friends-menu-origin";
   const orb = document.createElement("button"), panel = document.createElement("div");
   document.body.append(origin, orb, panel); document.activeElement = origin;
+  const asked = [];
   const card = (kind, id) => {
     made.push(kind);
     const root = document.createElement("section"), heading = document.createElement("h4");
@@ -40,10 +41,11 @@ function load({ delayed = false } = {}) {
     dispatchEvent: () => true,
     MefiCompanionUI: { freeze() {} },
     MefiMotion: { swap: (_owner, paint) => delayed ? paints.push(paint) : paint() },
-    MefiRooms: { panel: () => card("rooms", "rooms-title"), subscribe() {}, pending: () => 0 },
+    MefiRooms: { panel: (options) => { asked.push(options?.room ?? null); return card("rooms", "rooms-title"); }, subscribe() {}, pending: () => 0 },
     MefiPcSync: { card: () => card("pcs", "pc-sync-title"), subscribe() {}, badge: () => 0 },
     MefiCompanionFriends: { card: () => card("playground", "friends-title") },
     MefiProjectHub: { card: () => card("hub", "project-hub-title") },
+    MefiFriendsFront: { card: () => card("lobby", "friends-front-title") },
   };
   const context = vm.createContext({
     window, document, console,
@@ -57,7 +59,7 @@ function load({ delayed = false } = {}) {
   vm.runInContext(source, context);
   window.MefiCompanionHub.attach({ orb, panel, toggle() {}, refresh() {} });
   return {
-    hub: window.MefiCompanionHub, document, window, origin, made, disposed, goes,
+    hub: window.MefiCompanionHub, document, window, origin, made, disposed, goes, asked,
     page: () => document.querySelector("#friends-overlay"),
     layer: () => document.querySelector("#agent-hub"),
     flush: () => { for (const paint of paints.splice(0)) paint(); for (const frame of frames.splice(0)) frame(); },
@@ -68,7 +70,7 @@ function load({ delayed = false } = {}) {
 // Friends is one page in both layouts (renderer/companion-hub.js openPlace):
 // the companion's Friends bubble and its targets open that page at a place,
 // one card at a time, with the places as tabs and a Close of its own.
-for (const [target, title, kind] of [["rooms", "Rooms", "rooms"], ["pcs", "Your PCs", "pcs"], ["playground", "Playground", "playground"], ["hub", "Project hub", "hub"]]) {
+for (const [target, title, kind] of [["lobby", "The Lobby", "lobby"], ["rooms", "Rooms", "rooms"], ["pcs", "Your PCs", "pcs"], ["playground", "Playground", "playground"], ["hub", "Project hub", "hub"]]) {
   test(`Friends ${target} opens the Friends page at that place, not the bubbles`, () => {
     const loaded = load();
     assert.equal(loaded.hub.open({ section: "friends", target }), true);
@@ -80,7 +82,7 @@ for (const [target, title, kind] of [["rooms", "Rooms", "rooms"], ["pcs", "Your 
     assert.equal(loaded.document.querySelector("#friends-place-title").textContent, title);
     assert.deepEqual(loaded.made, [kind], "only the place's own card is built");
     const tabs = [...loaded.document.querySelector("#friends-place-tabs").children];
-    assert.deepEqual(tabs.map((tab) => tab.textContent), ["Rooms", "Your PCs", "Playground", "Project hub"]);
+    assert.deepEqual(tabs.map((tab) => tab.textContent), ["The Lobby", "Rooms", "Your PCs", "Playground", "Project hub"]);
     assert.deepEqual(tabs.filter((tab) => tab.getAttribute("aria-current") === "page").map((tab) => tab.dataset.place), [target]);
   });
 }
@@ -105,5 +107,15 @@ test("the companion's menu still opens its bubbles; an open menu gives way to th
   loaded.hub.open("friends");
   assert.equal(loaded.hub.isOpen(), false, "the menu closes for the page");
   assert.equal(loaded.page().hidden, false);
-  assert.equal(loaded.page().dataset.place, "rooms", "Friends without a target opens Rooms");
+  assert.equal(loaded.page().dataset.place, "lobby", "Friends without a target opens The Lobby, its front page");
+});
+
+test("a room asked for by name opens in Rooms, even when Rooms is already up; the other places never get one", () => {
+  const loaded = load();
+  loaded.window.MefiNav.go("friends-page", { place: "rooms", room: "abc123" });
+  loaded.window.MefiNav.go("friends-page", { place: "rooms", room: "lobby" });
+  loaded.window.MefiNav.go("friends-page", { place: "pcs", room: "abc123" });
+  loaded.window.MefiNav.go("friends-page", { place: "rooms" });
+  assert.deepEqual(loaded.asked, ["abc123", "lobby", null], "Rooms painted again for each named room, and without one on coming back");
+  assert.deepEqual(loaded.made, ["rooms", "rooms", "pcs", "rooms"]);
 });

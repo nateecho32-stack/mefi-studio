@@ -29,11 +29,15 @@ that comes back has to match what was actually said.
 | A room's shared player: link, label, position | listen together survives the relay sleeping | while it plays; ends after 30 min paused or 6 h idle |
 | Cowork claims: paths, branch, title | agents on different PCs do not edit the same files | 7 days after release |
 | Deleted message ids | a peer's copy cannot bring a deleted message back | 7 days |
+| Whether you chose not to show in Who's online | the "Show me as online" switch | until you change it, or forget me |
 | Reports: the reason, plus the reported message only when its relay signature checks out | moderation | 30 days |
 | Moderator actions (ids only) | accountability | 90 days |
 
 Forget me (`POST /v1/me/forget`) deletes every row about you and closes the
-rooms you own. Observability is off in `wrangler.toml`.
+rooms you own. Observability is off in `wrangler.toml`. Who's online and The
+Lobby's front page (`GET /v1/front`) are read from the live connections when a
+member asks; nothing about who was online, or when, is written. An unlisted
+room's name never appears on anyone else's front page.
 
 ## Layout
 
@@ -88,5 +92,8 @@ node scripts/smoke.mjs http://127.0.0.1:8787 --fake-discord 8799
 100,000 requests a day for the Worker and for the Durable Object; incoming
 WebSocket messages count 20 to 1, and the keepalive ping is free. One awake
 Hub object uses at most 10,800 of the 13,000 GB-seconds a day. Chat, presence
-and pings write no rows. That fits a community of several hundred people a
-day; past that, the $5 Workers Paid plan lifts every limit.
+and pings write no rows. A signed-in Studio stays connected while it is open:
+its keepalive is free and renewing its session is about 100 requests a day,
+and The Lobby reads once a minute only while it is on screen. That fits a
+community of several hundred people a day; past that, the $5 Workers Paid plan
+lifts every limit.

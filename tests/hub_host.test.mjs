@@ -35,7 +35,7 @@ function host({ link = { userId: "42" }, tokens = null, clientId = "1234567890",
       createHubClient: (options) => { created = options; return { status: () => ({ configured: true, state: "off", error: null, user: null, readOnly: false, paused: false, rooms: [] }), ...client }; },
     }),
   });
-  vm.runInContext(`${block}\nthis.api = { hubAccessToken, hubStatus, hubInstance, hubSubscribe };`, context);
+  vm.runInContext(`${block}\nthis.api = { hubAccessToken, hubStatus, hubInstance, hubSubscribe, hubConnect, hubDisconnect, hubPresenceLook, startHubPresence };`, context);
   return { api: context.api, context, sent, checks, created: () => created };
 }
 
@@ -53,6 +53,41 @@ test("the renderer holds rooms as Rooms or Listen together, never as the cowork 
     "a renderer that names the cowork hold releases only its own default hold");
   assert.match(preload, /hubSubscribe: \(roomId, on = true, holder = null\) => ipcRenderer\.invoke\("hub:subscribe", \{[^}]*holder: typeof holder === "string" \? holder : null \}\)/);
   assert.match(main, /ipcMain\.handle\("hub:subscribe", async \(_event, payload\) => hubSubscribe\(payload\?\.roomId, payload\?\.on !== false, payload\?\.holder\)\);/);
+});
+
+test("a member signed in on this PC connects for Friends at launch; the switch, a Disconnect or no link keep it off", async () => {
+  let settings = {}, state = "off";
+  const connects = [];
+  const make = (link) => {
+    const h = host({ link, client: {
+      status: () => ({ configured: true, state, error: null, user: null, readOnly: false, paused: false, rooms: [] }),
+      connect: async () => { connects.push(1); state = "ready"; return { state }; },
+      disconnect: async () => { state = "off"; },
+    } });
+    h.context.readSettings = async () => settings;
+    return h;
+  };
+  const h = make({ userId: "42" });
+  assert.equal(await h.api.hubPresenceLook(), true, "signed in and not connected: it connects");
+  assert.equal(await h.api.hubPresenceLook(), false, "already connected: nothing to do");
+  await h.api.hubDisconnect();
+  assert.equal(await h.api.hubPresenceLook(), false, "a Disconnect in Studio holds it off");
+  await h.api.hubConnect();
+  assert.equal(connects.length, 2, "until the next Connect");
+  state = "off";
+  settings = { friends: { connectAtLaunch: false } };
+  assert.equal(await h.api.hubPresenceLook(), false, "the kill switch");
+  settings = {};
+  assert.equal(await make(null).api.hubPresenceLook(), false, "nobody signed in: no connection");
+  assert.equal(connects.length, 2);
+
+  const timers = [];
+  h.context.setTimeout = (_fn, ms) => { timers.push(["once", ms]); return { unref() {} }; };
+  h.context.setInterval = (_fn, ms) => { timers.push(["every", ms]); return { unref() {} }; };
+  h.api.startHubPresence();
+  h.api.startHubPresence();
+  assert.deepEqual(timers, [["once", 12_000], ["every", 600_000]], "a first look 12 s in, then every ten minutes, started once");
+  assert.match(main, /if \(!SMOKE && !CAPTURE && !CLI_MODE && typeof startHubPresence === "function"\) startHubPresence\(\);/);
 });
 
 test("a live Discord access token is handed over as is", async () => {

@@ -9954,6 +9954,85 @@ html[data-layout="v2"] #friends-overlay .friends-place-head { padding-right: 0; 
 .project-hub-field input, .project-hub-field select { font: inherit; }
 @media (prefers-reduced-motion: reduce) { .project-hub-meter-fill { transition: none; } }
 
+/* Friends' front door (renderer/friends-front.js): the sign-in card, and The
+   Lobby, Friends' front page in The Studio Daily's voice (daily-paper.css):
+   a masthead, the people online, a lead story, three columns and a foot.
+   Colours are the theme's tokens; the serif is the Daily's. */
+.friends-gate, .friends-front { --front-serif: "Iowan Old Style", "Charter", "Georgia", serif; }
+
+/* ---- signed out: one card ---- */
+.friends-gate { display: grid; justify-items: center; gap: 14px; max-width: 520px; margin: clamp(24px, 6vh, 56px) auto; text-align: center; }
+.friends-gate-title { margin: 0; font: 700 30px/1.15 var(--front-serif); color: var(--ivory); }
+.friends-gate-lead { margin: 0; max-width: 46ch; color: var(--muted); }
+.friends-gate-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.friends-gate-signin { min-height: 42px; padding: 0 20px; border: 0; border-radius: var(--r-lg); background: var(--gold); color: var(--bg); font-weight: 600; font-size: 14.5px; cursor: pointer; }
+.friends-gate-signin:hover { filter: brightness(1.08); }
+.friends-gate-signin:disabled { opacity: 0.6; cursor: default; }
+.friends-gate-status { min-height: 1.4em; margin: 0; color: var(--muted); font-size: 13px; }
+.friends-gate-status:empty { display: none; }
+.friends-gate-fine { margin: 0; max-width: 52ch; color: var(--dim); font-size: 12.5px; }
+.friends-gate-points { display: grid; gap: 6px; margin: 6px 0 0; padding: 0; list-style: none; text-align: left; color: var(--muted); font-size: 13.5px; }
+.friends-gate-points b { color: var(--ivory); }
+
+/* ---- The Lobby ---- */
+.friends-front { display: grid; gap: 0; min-width: 0; color: var(--ivory); }
+.friends-front-status { margin: 0 0 8px; color: var(--muted); font-size: 13px; }
+.friends-front-status:empty { display: none; }
+.friends-front-body { display: grid; gap: 18px; min-width: 0; }
+.front-mast { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: end; gap: 12px; padding-bottom: 12px; border-bottom: 3px double var(--line-strong); }
+.front-ear { display: grid; justify-items: start; gap: 4px; min-width: 0; font-size: 12.5px; color: var(--muted); }
+.front-ear p { margin: 0; }
+.front-ear-end { justify-items: end; text-align: right; }
+.front-date { color: var(--ivory); font-weight: 600; }
+.front-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--live); vertical-align: 1px; }
+.front-plate { display: grid; justify-items: center; gap: 6px; text-align: center; }
+.front-nameplate { margin: 0; font: 700 clamp(30px, 3.4vw, 52px)/1 var(--front-serif); letter-spacing: -0.015em; color: var(--ivory); white-space: nowrap; }
+.front-motto { margin: 0; font: 600 12px/1.2 var(--font-ui); letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
+.front-link { padding: 0; border: 0; background: none; color: var(--gold); font: inherit; text-align: left; cursor: pointer; text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); text-underline-offset: 0.2em; }
+.front-link:focus-visible, .front-who-go:focus-visible, .front-item:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+.front-people { display: flex; flex-wrap: wrap; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.front-who { display: flex; align-items: center; gap: 9px; padding: 6px 12px 6px 6px; border: 1px solid var(--line); border-radius: 22px; background: color-mix(in srgb, var(--ivory) 2%, transparent); }
+.front-who-go { display: flex; align-items: center; justify-content: flex-start; gap: 9px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: 18px; }
+.front-avatar { position: relative; display: grid; flex: none; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: hsl(var(--who-hue, 160) 45% 72%); color: var(--bg); font-size: 12px; font-weight: 700; }
+.front-avatar::after { content: ""; position: absolute; right: -1px; bottom: -1px; width: 10px; height: 10px; border: 2px solid var(--panel); border-radius: 50%; background: var(--live); }
+.front-who-text { display: grid; min-width: 0; line-height: 1.2; }
+.front-who-text b { font-size: 13px; font-weight: 600; color: var(--ivory); }
+.front-who-text small { font-size: 12px; color: var(--muted); }
+.front-empty { margin: 6px 0; color: var(--muted); font-size: 13px; }
+
+.front-kicker { margin: 0 0 6px; font: 650 12px/1.2 var(--font-ui); letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); }
+.front-lead-title { margin: 0; max-width: 24ch; font: 700 clamp(26px, 2.5vw, 40px)/1.08 var(--front-serif); letter-spacing: -0.015em; text-wrap: balance; }
+.front-dek { margin: 10px 0 0; max-width: 62ch; font: 400 16px/1.5 var(--front-serif); color: var(--muted); }
+.front-byline { margin: 8px 0 10px; font-size: 12.5px; color: var(--dim); }
+
+.front-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; padding-top: 14px; border-top: 1px solid var(--line); }
+.front-col { display: grid; align-content: start; min-width: 0; }
+.front-col-title { margin: 0 0 6px; padding-bottom: 7px; border-bottom: 1px solid var(--line-strong); font: 650 12px/1.2 var(--font-ui); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ivory); }
+.front-item { display: grid; justify-content: start; justify-items: start; gap: 2px; width: 100%; padding: 9px 0; border: 0; border-bottom: 1px solid var(--line); background: none; color: inherit; font: inherit; text-align: left; }
+button.front-item { cursor: pointer; }
+button.front-item:hover b { text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 0.2em; }
+.front-item b { font: 600 16px/1.3 var(--front-serif); color: var(--ivory); }
+.front-item small { font-size: 12.5px; color: var(--muted); }
+.front-you { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 4px 14px; padding: 8px 0; }
+.front-big { font: 700 34px/1 var(--front-serif); color: var(--ivory); font-variant-numeric: tabular-nums; }
+.front-you-words { display: grid; color: var(--muted); }
+.front-you-words small { color: var(--dim); }
+
+.front-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 18px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.front-visible { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.front-invite { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.front-code { font-family: var(--font-mono); letter-spacing: 0.08em; color: var(--ivory); }
+
+@media (max-width: 760px) {
+  .front-mast { grid-template-columns: minmax(0, 1fr); }
+  .front-ear-end { justify-items: start; text-align: left; }
+  .front-cols { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* The Lobby's masthead is its title: the Friends page's own heading and line step aside (still read aloud, still focused). */
+#friends-overlay[data-place="lobby"] :is(#friends-place-title, .friends-place-about) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
 /* Vibe: the calm front door (renderer/vibe.js), the Vibe / Build switch and
    the one-time "what's new" card. Inlined last, so it wins ties. Every colour
    comes from the active theme's tokens (--gold is the accent, --ivory the
@@ -23711,7 +23790,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // A rail place for a record whose kind alone would keep it out of the rail:
   // community.js registers "community" as a palette action at DOMContentLoaded,
   // and the foot (Help & community) is its home.
-  const RAIL_SLOTS = Object.freeze({ community: "foot", friends: "friends", rooms: "friends", "your-pcs": "friends", playground: "friends", "project-hub": "friends" });
+  const RAIL_SLOTS = Object.freeze({ community: "foot", friends: "friends", "the-lobby": "friends", rooms: "friends", "your-pcs": "friends", playground: "friends", "project-hub": "friends" });
   // Sections for records other modules register without one. The assistant's
   // commands and Command view's key rows name theirs in `group`.
   const ACTION_SECTIONS = Object.freeze({ community: "community" });
@@ -23787,6 +23866,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   const registry = [
     ...[
       ["friends", "Friends", "g-orbit", "Rooms, your PCs and companion playdates", null],
+      ["the-lobby", "The Lobby", "g-community", "Who's online, rooms open now and what friends are making", "lobby"],
       ["rooms", "Rooms", "g-orbit", "Room chat, invitations and requests to join", "rooms"],
       ["your-pcs", "Your PCs", "g-explorer", "Connect your PCs and sync work through GitHub", "pcs"],
       ["playground", "Playground", "g-ambience", "Companion playdates, sharing rules and practice with Pip", "playground"],
@@ -23804,8 +23884,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       open: (params) => window.MefiAgents?.open?.(params), close: () => window.MefiAgents?.close?.(), isOpen: () => overlayOpen("agents-overlay"),
     },
     {
-      // The 0.5 layout's Friends place (renderer/companion-hub.js openPlace): Rooms, Your PCs or Playground, one at a time.
-      // go("friends") and its three ways in land here while the layout is on (FRIENDS_PAGES); Search lists those four.
+      // The 0.5 layout's Friends place (renderer/companion-hub.js openPlace): The Lobby, Rooms, Your PCs, Playground or the Project hub, one at a time.
+      // go("friends") and its five ways in land here while the layout is on (friendsPages in go()); Search lists them.
       id: "friends-page", label: "Friends", short: "Friends", kind: "overlay", layer: "sheet", section: "friends", group: "tools",
       glyph: "g-orbit", badge: null, desc: "Rooms, your PCs and companion playdates", searchTerms: "friends rooms pcs playground",
       showIn: showIn({}), hidden: () => !v2Places(), element: "friends-overlay", focus: "#friends-place-title",
@@ -24724,12 +24804,12 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     // The prototype's names for routes that already exist: go("team") is the Agents page, go("map") the Command view.
     if (id === "team") id = "agents";
     else if (id === "map") id = "command";
-    // In the 0.5 layout Friends is a place of three pages (renderer/companion-hub.js openPlace): Friends and its three ways
-    // in open that page at their place, where the classic layout opens the companion's Friends bubble.
+    // In the 0.5 layout Friends is one page of five places (renderer/companion-hub.js openPlace): Friends opens it at The
+    // Lobby and each way in at its own place; the classic layout gets there through the companion hub's open().
     // (Spelled out here, not shared: suites run go() on its own.)
-    const friendsPages = { friends: null, rooms: "rooms", "your-pcs": "pcs", playground: "playground", "project-hub": "hub" };
+    const friendsPages = { friends: null, "the-lobby": "lobby", rooms: "rooms", "your-pcs": "pcs", playground: "playground", "project-hub": "hub" };
     if (globalThis.document?.documentElement?.dataset?.layout === "v2" && Object.hasOwn(friendsPages, id)) {
-      params = { place: friendsPages[id] || params.place || params.target || "rooms" };
+      params = { place: friendsPages[id] || params.place || params.target || "lobby" };
       id = "friends-page";
     }
     const redirected = window.MefiAgents?.redirect?.(id, params);
@@ -25234,7 +25314,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         const children = document.createElement("div");
         children.className = "app-rail-children app-rail-friends";
         children.setAttribute("role", "group"); children.setAttribute("aria-label", "Friends tools");
-        for (const id of ["rooms", "your-pcs", "playground", "project-hub"]) children.append(navButton(get(id), "app-rail-item", { key: false }));
+        for (const id of ["the-lobby", "rooms", "your-pcs", "playground", "project-hub"]) children.append(navButton(get(id), "app-rail-item", { key: false }));
         group.append(children);
       }
       sections.append(group);
@@ -25328,7 +25408,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         const children = document.createElement("div");
         children.className = "app-rail-children app-rail-friends";
         children.setAttribute("role", "group"); children.setAttribute("aria-label", "Friends tools");
-        for (const id of ["rooms", "your-pcs", "playground", "project-hub"]) children.append(navButton(get(id), "app-rail-item", { key: false }));
+        for (const id of ["the-lobby", "rooms", "your-pcs", "playground", "project-hub"]) children.append(navButton(get(id), "app-rail-item", { key: false }));
         group.append(children);
       }
       sections.append(group);
@@ -77373,7 +77453,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     return String(message.text ?? "").replace(/<@!?(\d{17,20})>/g, (raw, id) => (names.get(id) ? `@${names.get(id)}` : raw));
   }
 
-  function panel() {
+  // options.room: a room to open once the list is in (The Lobby's rooms and people).
+  function panel(options = {}) {
     const root = node("section", "rooms");
     root.id = "rooms";
     root.setAttribute("aria-labelledby", "rooms-title");
@@ -77396,6 +77477,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     // What the room service carries (hub-client status): the Lobby, join codes, Who's online.
     let flags = { lobby: false, joinCodes: false, online: false };
     let lobbyOpened = false, people = null, showOnline = true, onlineTimer = null;
+    let wanted = typeof options?.room === "string" && options.room ? options.room : null;
     const codes = new Map(); // room id -> { code, link }
     let rooms = [], requests = [], invites = [], messages = [], more = false;
     // Fields keyed by what they hold. A repaint gives each its text back, and
@@ -77925,9 +78007,11 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         return false;
       }
       if (!hub.linked) {
-        status.textContent = "Link your Discord account to use rooms. Discord asks once in your browser.";
         root.dataset.state = "not-linked";
-        body.replaceChildren(button("Link Discord", () => { void linkHere(); }, "rooms-link"));
+        // Friends' one sign-in card (renderer/friends-front.js) when it is in this build.
+        const gate = window.MefiFriendsFront?.gate?.({ onSignedIn: () => { autoConnected = true; void load(); } });
+        status.textContent = gate ? "" : "Link your Discord account to use rooms. Discord asks once in your browser.";
+        body.replaceChildren(gate ?? button("Link Discord", () => { void linkHere(); }, "rooms-link"));
         return false;
       }
       if (hub.error === "not-member") { notMember(); return false; }
@@ -77959,7 +78043,11 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       if (!explain(hub)) return;
       status.textContent = hub.paused ? "The room service is paused right now; you can read but not post." : `Signed in as ${me?.name || "you"}.`;
       await refresh();
-      // Open Friends and you are with everyone: the Lobby opens by itself, once.
+      // A room asked for by name opens; otherwise you are with everyone: the Lobby opens by itself, once.
+      const asked = wanted && !openRoom ? rooms.find((room) => room.id === wanted && ["member", "owner"].includes(room.you)) : null;
+      if (wanted && !openRoom && !asked) status.textContent = "That room isn't one of yours yet. Ask to join it from the list.";
+      wanted = null;
+      if (asked) { lobbyOpened = true; await open(asked); return; }
       const lobby = flags.lobby && !lobbyOpened && !openRoom ? rooms.find((room) => room.id === "lobby" && ["member", "owner"].includes(room.you)) : null;
       if (lobby) { lobbyOpened = true; await open(lobby); }
     }
@@ -78021,7 +78109,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     return root;
   }
 
-  window.MefiRooms = { panel, pending, subscribe, readable };
+  // recount(): Friends' front page asks for the invites and requests waiting, with Rooms itself closed.
+  window.MefiRooms = { panel, pending, subscribe, readable, recount: () => recountQuietly(bridge()) };
 })();
 
 // Friends › Project hub: members' shared projects on the Mefi Studio relay,
@@ -78419,9 +78508,11 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     function explain(hub) {
       if (!hub?.configured) { status.textContent = "The project hub needs the room service, which this copy of Studio has no address for."; root.dataset.state = "not-configured"; body.replaceChildren(); return false; }
       if (!hub.linked) {
-        status.textContent = "Link your Discord account to share and play projects. Discord asks once in your browser.";
         root.dataset.state = "not-linked";
-        body.replaceChildren(button("Link Discord", () => { void linkHere(); }, "project-hub-link"));
+        // Friends' one sign-in card (renderer/friends-front.js) when it is in this build.
+        const gate = window.MefiFriendsFront?.gate?.({ onSignedIn: () => { autoConnected = true; void load(); } });
+        status.textContent = gate ? "" : "Link your Discord account to share and play projects. Discord asks once in your browser.";
+        body.replaceChildren(gate ?? button("Link Discord", () => { void linkHere(); }, "project-hub-link"));
         return false;
       }
       if (hub.error === "not-member") { notMember(); return false; }
@@ -78476,6 +78567,368 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   }
 
   window.MefiProjectHub = { card, spot };
+})();
+
+// Friends' front door: the sign-in card and The Lobby (window.MefiFriendsFront).
+//
+// gate({ onSignedIn }) is what Friends shows a member who has not signed in:
+// one "Sign in with Discord" card. Discord asks once in the browser
+// (MefiCommunity.link), the room service connects, and onSignedIn() lets the
+// place paint itself again. Rooms, the Project hub and The Lobby use it; Your
+// PCs and the Playground never need it.
+//
+// card() is The Lobby, Friends' front page in The Studio Daily's voice. It is
+// read from the relay in one call (main's hub:room "front", the relay's
+// GET /v1/front): who is online and where, the week's top project, the rooms
+// open now, what was shared this week, rank-ups and the member's own week,
+// with "Show me as online" and an invite code at the foot. It reads again
+// every minute while it is on screen and the window can be seen, and stops
+// when Friends lets it go (dispose). Everything is text: names and titles go
+// in with textContent, and nothing from the relay becomes a link.
+(function () {
+  "use strict";
+  const node = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = text; return el; };
+  const button = (text, run, cls = "ghost", id = null) => { const el = node("button", cls, text); el.type = "button"; if (id) el.id = id; el.addEventListener("click", run); return el; };
+  const bridge = () => window.mefiStudio;
+  const REFRESH_MS = 60_000;
+  const RANKS = { spark: "Spark", ember: "Ember", flame: "Flame", comet: "Comet", star: "Star", nova: "Nova", void: "Void" };
+  const KINDS = { game: "game", app: "app", tool: "tool", art: "art", music: "music", other: "project" };
+  const rankName = (key) => RANKS[key] ?? (typeof key === "string" && key ? key[0].toUpperCase() + key.slice(1) : "Spark");
+  const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+  const initials = (name) => String(name || "?").trim().split(/\s+/).slice(0, 2).map((part) => part[0] ?? "").join("").toUpperCase() || "?";
+  // A steady colour per member, from their id.
+  const hue = (id) => [...String(id)].reduce((sum, ch) => (sum * 31 + ch.charCodeAt(0)) % 360, 7);
+  const goPlace = (place, extra = {}) => window.MefiNav?.go?.("friends-page", { place, ...extra });
+  const when = (ms) => {
+    if (!Number.isFinite(ms)) return "";
+    const days = Math.floor((Date.now() - ms) / 86_400_000);
+    return days <= 0 ? "today" : days === 1 ? "yesterday" : new Date(ms).toLocaleDateString([], { weekday: "long" });
+  };
+
+  // ---- the sign-in card -------------------------------------------------------
+  function gate({ onSignedIn } = {}) {
+    const root = node("section", "friends-gate");
+    root.id = "friends-gate";
+    root.setAttribute("aria-labelledby", "friends-gate-title");
+    const title = node("h2", "friends-gate-title", "Friends");
+    title.id = "friends-gate-title";
+    const lead = node("p", "friends-gate-lead", "See who's online, join a room, and share what you make with people who build with Studio.");
+    const actions = node("div", "friends-gate-actions");
+    const status = node("p", "friends-gate-status");
+    status.id = "friends-gate-status";
+    status.setAttribute("role", "status");
+    const fine = node("p", "friends-gate-fine", "Studio asks Discord for your name and your Void Engine server roles. Nothing you type in a room is stored on the server.");
+    const points = node("ul", "friends-gate-points");
+    for (const [strong, rest] of [["You show as online", " while Studio is open. Turn it off any time."], ["Your PCs and Studio Daily", " keep working without signing in."]]) {
+      const item = node("li");
+      item.append(node("b", "", strong), document.createTextNode(rest));
+      points.append(item);
+    }
+    let busy = false;
+    const signIn = button("Sign in with Discord", () => { void start(); }, "friends-gate-signin", "friends-gate-signin");
+    actions.append(signIn);
+    root.append(title, lead, actions, status, fine, points);
+
+    async function connected() {
+      status.textContent = "Signed in. Connecting…";
+      try { await bridge()?.hubConnect?.(); } catch { /* the place says what it sees next */ }
+      onSignedIn?.();
+    }
+    function notMember() {
+      root.dataset.state = "not-member";
+      status.textContent = "Your Discord account isn't in the Void Engine server yet. Join it, then check again.";
+      actions.replaceChildren(
+        button("Join the Discord", () => { void window.MefiCommunity?.join?.(); }, "friends-gate-signin", "friends-gate-join"),
+        button("I've joined, check again", () => { void recheck(); }, "ghost", "friends-gate-recheck"),
+      );
+    }
+    async function recheck() {
+      if (busy) return;
+      busy = true;
+      status.textContent = "Checking…";
+      const checked = await window.MefiCommunity?.check?.();
+      busy = false;
+      if (checked?.ok === false && checked.error === "not-member") { notMember(); return; }
+      await connected();
+    }
+    async function start() {
+      const community = window.MefiCommunity;
+      if (typeof community?.link !== "function") { window.MefiNav?.go?.("community"); return; }
+      if (busy) return;
+      busy = true;
+      signIn.disabled = true;
+      status.textContent = "Discord is asking in your browser. Press Authorize there, then come back.";
+      const linked = await community.link();
+      busy = false;
+      signIn.disabled = false;
+      if (linked?.ok) { await connected(); return; }
+      if (linked?.error === "not-member") { notMember(); return; }
+      status.textContent = linked?.error === "canceled" ? "Signing in was cancelled. Press Sign in with Discord to try again." : "Signing in didn't finish. Press Sign in with Discord to try again.";
+    }
+    root.notMember = notMember;
+    return root;
+  }
+
+  // ---- The Lobby: the front page ------------------------------------------------
+  let current = null; // the card on screen: { hear }
+  let hearing = false;
+  function listen(api) {
+    if (hearing || typeof api?.onHubEvent !== "function") return;
+    hearing = true;
+    api.onHubEvent((event) => { current?.hear(event); });
+  }
+
+  function card() {
+    const root = node("section", "friends-front");
+    root.id = "friends-front";
+    root.setAttribute("aria-labelledby", "friends-front-title");
+    const status = node("p", "friends-front-status");
+    status.id = "friends-front-status";
+    status.setAttribute("role", "status");
+    const body = node("div", "friends-front-body");
+    root.append(status, body);
+    const api = bridge();
+    if (typeof api?.hubRoom !== "function" || typeof api?.hubStatus !== "function") {
+      status.textContent = "The Lobby works in the desktop app.";
+      root.dataset.state = "unavailable";
+      return root;
+    }
+    listen(api);
+    let timer = null, seq = 0, tried = false, gone = false;
+    let page = null; // the last front page read
+    let code = null; // { roomId, code, link } for the member's own room
+
+    const schedule = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        if (gone || root.isConnected === false) { dispose(); return; }
+        if (typeof document !== "undefined" && document.visibilityState === "hidden") { schedule(); return; }
+        void load();
+      }, REFRESH_MS);
+    };
+
+    async function load() {
+      const mine = ++seq;
+      // What waits in Rooms (invites, requests to decide) reaches the Friends badge, and the masthead once it is up.
+      void Promise.resolve(window.MefiRooms?.recount?.()).then(() => { if (!gone && mine === seq && page) paint(); }).catch(() => {});
+      let hub;
+      try { hub = (await api.hubStatus())?.status; } catch { hub = null; }
+      if (gone || mine !== seq) return;
+      if (!hub?.linked) {
+        root.dataset.state = "signed-out";
+        status.textContent = "";
+        body.replaceChildren(gate({ onSignedIn: () => { tried = false; void load(); } }));
+        return;
+      }
+      if (hub.error === "not-member") {
+        root.dataset.state = "not-member";
+        status.textContent = "";
+        const card = gate({ onSignedIn: () => { tried = false; void load(); } });
+        card.notMember();
+        body.replaceChildren(card);
+        return;
+      }
+      if (hub.state !== "ready") {
+        // Signed in and simply not connected yet: opening The Lobby is the ask.
+        if (hub.state === "off" && !hub.error && !tried) {
+          tried = true;
+          root.dataset.state = "connecting";
+          status.textContent = "Connecting to the room service…";
+          try { await api.hubConnect(); } catch { /* the next look says why */ }
+          if (!gone && mine === seq) void load();
+          return;
+        }
+        root.dataset.state = hub.state || "off";
+        status.textContent = hub.state === "connecting" ? "Connecting to the room service…" : "Not connected to the room service.";
+        body.replaceChildren(button("Connect", () => { tried = false; void Promise.resolve(api.hubConnect()).finally(() => load()); }, "ghost", "friends-front-connect"));
+        return;
+      }
+      if (!hub.front) {
+        root.dataset.state = "unsupported";
+        status.textContent = "This room service has no front page yet. Rooms and the Project hub still work.";
+        body.replaceChildren();
+        return;
+      }
+      let answer;
+      try { answer = await api.hubRoom("front"); } catch { answer = null; }
+      if (gone || mine !== seq) return;
+      if (!answer?.ok) {
+        status.textContent = page ? "The Lobby could not be read just now. It tries again in a minute." : "The Lobby could not be read. It tries again in a minute.";
+        schedule();
+        return;
+      }
+      page = answer;
+      root.dataset.state = "ready";
+      status.textContent = "";
+      if (page.ownRoom && code?.roomId !== page.ownRoom.id) {
+        code = { roomId: page.ownRoom.id, code: null, link: null };
+        void Promise.resolve(api.hubRoom("roomCode", page.ownRoom.id)).then((held) => {
+          if (held?.ok && code?.roomId === page?.ownRoom?.id) { code = { roomId: page.ownRoom.id, code: held.code, link: held.link ?? null }; if (!gone) paint(); }
+        }).catch(() => {});
+      }
+      if (!page.ownRoom) code = null;
+      paint();
+      schedule();
+    }
+
+    function mast() {
+      const head = node("header", "front-mast");
+      const left = node("div", "front-ear");
+      left.append(node("p", "front-date", new Date().toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" })));
+      const hi = button(page.lobby.here ? `Say hi in the Lobby · ${page.lobby.here} there` : "Say hi in the Lobby", () => goPlace("rooms", { room: "lobby" }), "front-link", "friends-front-lobby");
+      left.append(hi);
+      const waiting = Number(window.MefiRooms?.pending?.() ?? 0);
+      if (waiting > 0) left.append(button(`${waiting} waiting for you in Rooms`, () => goPlace("rooms"), "front-link front-waiting", "friends-front-waiting"));
+      const plate = node("div", "front-plate");
+      const name = node("h2", "front-nameplate", "The Lobby");
+      name.id = "friends-front-title";
+      plate.append(name, node("p", "front-motto", "What your friends are making"));
+      const right = node("div", "front-ear front-ear-end");
+      const online = node("p", "front-online-count");
+      online.append(node("span", "front-dot"), document.createTextNode(` ${page.online.count} online now`));
+      const you = page.you;
+      right.append(online, node("p", "", `You: ${rankName(you.rank?.key)} · ${plural(you.balance, "credit")}`));
+      head.append(left, plate, right);
+      return head;
+    }
+
+    function onlineRow() {
+      const list = node("ul", "front-people");
+      list.setAttribute("aria-label", "Online now");
+      for (const person of page.online.people) {
+        const item = node("li", "front-who");
+        item.dataset.person = person.id;
+        const face = node("span", "front-avatar", initials(person.name));
+        face.style.setProperty("--who-hue", String(hue(person.id)));
+        face.setAttribute("aria-hidden", "true");
+        const text = node("span", "front-who-text");
+        text.append(node("b", "", person.name), node("small", "", person.where ? `${rankName(person.rank)} · In ${person.where.id === "lobby" ? "the Lobby" : person.where.name}` : `${rankName(person.rank)} · In Studio`));
+        if (person.where) {
+          const go = button("", () => goPlace("rooms", { room: person.where.id }), "front-who-go");
+          go.setAttribute("aria-label", `${person.name}, in ${person.where.name}. Open the room.`);
+          go.append(face, text);
+          item.append(go);
+        } else item.append(face, text);
+        list.append(item);
+      }
+      if (!page.online.people.length) list.append(node("li", "front-empty", "Nobody else is in Studio right now. Share your invite code below to bring friends in."));
+      return list;
+    }
+
+    function lead() {
+      const story = node("article", "front-lead");
+      const top = page.top;
+      if (!top) {
+        story.append(node("p", "front-kicker", "Project hub"), node("h3", "front-lead-title", "Nothing shared yet"),
+          node("p", "front-dek", "Share what you make. When a friend plays it for two minutes, you both earn credits."),
+          button("Share a project", () => goPlace("hub"), "ghost", "friends-front-share"));
+        return story;
+      }
+      story.append(node("p", "front-kicker", top.week ? "Top project this week" : "Top project"));
+      story.append(node("h3", "front-lead-title", top.title));
+      story.append(node("p", "front-dek", top.blurb || `${top.owner.name}'s ${KINDS[top.kind] ?? "project"} on ${top.host}.`));
+      const by = node("p", "front-byline");
+      const facts = [`${top.owner.name} · ${rankName(top.owner.rank)}`, `Shared ${when(top.createdAt)}`, KINDS[top.kind] ?? "project", top.week ? `${plural(top.weekPlays, "play")} this week` : plural(top.plays, "play"), plural(top.stars, "star")];
+      by.textContent = facts.join(" · ");
+      const play = button("Play", () => {
+        void Promise.resolve(window.mefiStudio?.hubProjects?.("playProject", top.id)).then((answer) => {
+          status.textContent = answer?.ok ? "Opened in your browser. After two minutes you both earn credits." : "That project could not be opened.";
+        }).catch(() => { status.textContent = "That project could not be opened."; });
+      }, "ghost front-play", "friends-front-play");
+      story.append(by, play);
+      return story;
+    }
+
+    function column(title, items, empty) {
+      const col = node("section", "front-col");
+      col.append(node("h3", "front-col-title", title));
+      if (!items.length) col.append(node("p", "front-empty", empty));
+      for (const item of items) col.append(item);
+      return col;
+    }
+    function entry(title, meta, run = null) {
+      const item = run ? button("", run, "front-item") : node("div", "front-item");
+      item.append(node("b", "", title), node("small", "", meta));
+      return item;
+    }
+
+    function columns() {
+      const row = node("div", "front-cols");
+      const rooms = page.rooms.map((room) => entry(room.name, [room.kind === "cowork" ? "Cowork" : "Hangout", plural(room.memberCount, "person", "people"), room.here ? `${room.here} here now` : null, room.you === "owner" ? "yours" : room.listed ? null : "private"].filter(Boolean).join(" · "), () => goPlace("rooms", { room: room.id })));
+      row.append(column("Rooms open now", rooms, "No rooms open right now. Make one in Rooms."));
+      const fresh = page.fresh.map((project) => entry(project.title, `${project.owner.name} · ${KINDS[project.kind] ?? "project"} · ${plural(project.plays, "play")}`, () => goPlace("hub")));
+      if (page.rankUps.length) fresh.push(entry("Rank ups", page.rankUps.map((item) => `${item.name} reached ${item.rank.name}`).join(" · ")));
+      row.append(column("New this week", fresh, "Nothing new this week yet."));
+      const you = page.you;
+      const mine = node("div", "front-you");
+      mine.append(node("span", "front-big", String(you.balance)));
+      const words = node("span", "front-you-words", `credits · rank ${rankName(you.rank?.key)}`);
+      if (you.rank?.next) words.append(node("small", "", `${Math.max(0, you.rank.next.at - you.lifetime)} more to ${you.rank.next.name}`));
+      mine.append(words);
+      const week = [];
+      if (you.week.plays) week.push(entry(`Your projects got ${plural(you.week.plays, "play")}`, `+${you.week.earned} credits this week`, () => goPlace("hub")));
+      else if (you.week.earned) week.push(entry(`+${you.week.earned} credits this week`, "From playing friends' projects", () => goPlace("hub")));
+      if (you.week.stars) week.push(entry(plural(you.week.stars, "new star"), "On your projects this week", () => goPlace("hub")));
+      if (!week.length) week.push(entry("Share a project to start earning", "Plays and stars earn you credits", () => goPlace("hub")));
+      row.append(column("Your week", [mine, ...week], ""));
+      return row;
+    }
+
+    function foot() {
+      const bar = node("footer", "front-foot");
+      const toggle = node("label", "front-visible");
+      const tick = node("input");
+      tick.type = "checkbox";
+      tick.id = "friends-front-visible";
+      tick.checked = page.visible !== false;
+      tick.addEventListener("change", () => {
+        void Promise.resolve(api.hubRoom("setOnlineVisible", tick.checked)).then((answer) => {
+          if (answer?.ok) { page.visible = answer.visible; status.textContent = answer.visible ? "Friends can see you're online." : "You're hidden from Who's online."; }
+          else { tick.checked = !tick.checked; status.textContent = "That didn't save. Try again."; }
+        }).catch(() => { tick.checked = !tick.checked; });
+      });
+      toggle.append(tick, node("span", "", "Show me as online"));
+      bar.append(toggle);
+      const invite = node("span", "front-invite");
+      if (code?.code) {
+        invite.append(document.createTextNode("Invite code "), node("b", "front-code", code.code));
+        invite.append(button("Copy invite", () => {
+          const text = `Join me in Mefi Studio: open Friends › Rooms, choose Join with a code, and enter ${code.code}.${code.link ? ` ${code.link}` : ""}`;
+          void Promise.resolve(globalThis.navigator?.clipboard?.writeText?.(text)).then(() => { status.textContent = "Invite copied. Paste it anywhere: Discord, a text, an email."; }, () => { status.textContent = `Your code is ${code.code}.`; });
+        }, "ghost", "friends-front-copy"));
+      } else if (page.ownRoom) invite.append(node("span", "", "Getting your invite code…"));
+      else invite.append(button("Make a room to invite friends", () => goPlace("rooms"), "ghost", "friends-front-make"));
+      bar.append(invite);
+      return bar;
+    }
+
+    function paint() {
+      if (!page) return;
+      body.replaceChildren(mast(), onlineRow(), lead(), columns(), foot());
+      window.MefiScroll?.scan?.(root);
+    }
+
+    // The connection or the member's credits changed: read again (not more than a frame's worth).
+    function hear(event) {
+      if (gone || root.isConnected === false) { dispose(); return; }
+      if (event?.type === "status" || event?.type === "credits" || event?.type === "played") void load();
+    }
+    function dispose() {
+      gone = true;
+      seq += 1;
+      clearTimeout(timer);
+      timer = null;
+      if (current === handle) current = null;
+    }
+    const handle = { hear, dispose };
+    current = handle;
+    root.dispose = dispose;
+    void load();
+    return root;
+  }
+
+  window.MefiFriendsFront = { gate, card };
 })();
 
 // Project-local decisions and reviewed task handoffs. Mefi interviews you here
@@ -82884,7 +83337,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     // Friends is a page of its own in both layouts (openPlace below): asked for, it opens there instead of a bubble.
     if (section === "friends" && !window.MefiBoot?.isActive?.()) {
       if (hub.open) close({ immediate: true, restore: false });
-      window.MefiNav?.go?.("friends-page", { place: friendsPlaceOfTarget(target) ?? "rooms" });
+      window.MefiNav?.go?.("friends-page", { place: friendsPlaceOfTarget(target) ?? "lobby" });
       return true;
     }
     if (!host || window.MefiBoot?.isActive?.() || otherDialog()) return false;
@@ -82941,7 +83394,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
   function select(section, target = null) {
     // The Friends bubble goes to the Friends page (openPlace), in both layouts.
-    if (section === "friends") { navigate(() => window.MefiNav?.go?.("friends-page", { place: friendsPlaceOfTarget(target) ?? "rooms" })); return; }
+    if (section === "friends") { navigate(() => window.MefiNav?.go?.("friends-page", { place: friendsPlaceOfTarget(target) ?? "lobby" })); return; }
     const previous = hub.section; hub.section = section;
     hub.friendTarget = section === "friends" && Object.hasOwn(FRIENDS_TARGETS, target) ? target : null;
     if (host.panel.parentElement === el.detail) {
@@ -83135,15 +83588,17 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // Without the layout none of this is built and the hub's Friends bubble is as it was.
   const friendsLayout = () => document.documentElement?.dataset?.layout === "v2";
   const FRIENDS_PLACES = Object.freeze([
+    // renderer/friends-front.js: Friends' front page, and the sign-in card for anyone not signed in yet.
+    { id: "lobby", label: "The Lobby", glyph: "g-community", about: "Who's online, the rooms open now and what your friends are making." },
     { id: "rooms", label: "Rooms", glyph: "g-orbit", about: "Hang out, cowork, listen together, or share what you are making. Rooms are optional and never see your projects unless you share them." },
     { id: "pcs", label: "Your PCs", glyph: "g-explorer", about: "Keep work in step across machines through GitHub. Studio only looks until you press Sync." },
     { id: "playground", label: "Playground", glyph: "g-ambience", about: "Practice with your companion, and set what it may share." },
     // renderer/project-hub.js: members' shared projects, credits and ranks on the Mefi Studio relay.
     { id: "hub", label: "Project hub", glyph: "g-orbit", about: "Share what you make and play what friends make. Playing someone else's project for two minutes earns you both credits." },
   ]);
-  // A Friends target names one of these places (rooms, pcs, playground, hub).
+  // A Friends target names one of these places (lobby, rooms, pcs, playground, hub).
   const friendsPlaceOfTarget = (target) => (FRIENDS_PLACES.some((place) => place.id === target) ? target : null);
-  const friendsPage = { place: null, root: null, body: null, title: null, about: null };
+  const friendsPage = { place: null, root: null, body: null, title: null, about: null, room: null };
   const friendsPlaceById = (id) => FRIENDS_PLACES.find((place) => place.id === id) ?? null;
   const friendsOpen = () => Boolean(friendsPage.root && friendsPage.root.hidden === false);
   function mountFriendsPage() {
@@ -83171,7 +83626,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   function paintFriendsPlace(place) {
     for (const child of [...friendsPage.body.children]) child.dispose?.();
     let card = null;
-    if (place.id === "rooms") card = window.MefiRooms?.panel?.();
+    if (place.id === "lobby") card = window.MefiFriendsFront?.card?.();
+    else if (place.id === "rooms") card = window.MefiRooms?.panel?.({ room: friendsPage.room });
     else if (place.id === "hub") card = window.MefiProjectHub?.card?.();
     else if (place.id === "pcs") card = window.MefiPcSync?.card?.();
     else card = window.MefiCompanionFriends?.card?.({ name: name(), face: (look) => lookFace(look) });
@@ -83191,6 +83647,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const place = friendsPlaceById(params.place) ?? friendsPlaceById(friendsPlaceOfTarget(params.target)) ?? friendsPlaceById(friendsPage.place) ?? FRIENDS_PLACES[0];
     window.MefiNav?.claim?.("friends-page");
     const moved = friendsPage.place !== place.id;
+    // A room asked for by name (The Lobby's rooms and people) opens in Rooms, even when Rooms is already up.
+    friendsPage.room = place.id === "rooms" && typeof params.room === "string" ? params.room : null;
     friendsPage.root.hidden = false;
     friendsPage.root.dataset.place = place.id;
     friendsPage.title.textContent = place.label;
@@ -83200,7 +83658,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       tab.setAttribute("aria-current", here ? "page" : "false");
       tab.classList.toggle("active", here);
     }
-    if (moved || !friendsPage.body.childElementCount) { paintFriendsPlace(place); friendsPage.body.scrollTop = 0; }
+    if (moved || !friendsPage.body.childElementCount || friendsPage.room) { paintFriendsPlace(place); friendsPage.body.scrollTop = 0; }
     friendsPage.place = place.id;
     if (moved) window.dispatchEvent(new CustomEvent("mefi:friends-place", { detail: { place: place.id } }));
     window.MefiNav?.paintCurrent?.();

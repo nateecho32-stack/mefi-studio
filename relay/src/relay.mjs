@@ -21,7 +21,7 @@
 // it to: rate buckets refill, pending peer-history asks just lapse.
 
 import { createChat, idTime } from './chat.mjs';
-import { createCredits } from './credits.mjs';
+import { FRONT, createCredits } from './credits.mjs';
 import { createLeases } from './leases.mjs';
 import { createListen } from './listen.mjs';
 import { createOembed, publicLink } from './media.mjs';
@@ -205,7 +205,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
   const onlineHidden = (uid) => store.get('SELECT online_hidden FROM members WHERE user_id = ?', uid)?.online_hidden === 1;
 
   const paused = () => config.paused || store.meta('paused') === 'true';
-  const features = () => [FEATURES.companion, FEATURES.companionDirect, FEATURES.historyPeer, FEATURES.keepalive, FEATURES.messagesSigned, FEATURES.lobby, FEATURES.joinCodes, FEATURES.online, FEATURES.credits, FEATURES.projects];
+  const features = () => [FEATURES.companion, FEATURES.companionDirect, FEATURES.historyPeer, FEATURES.keepalive, FEATURES.messagesSigned, FEATURES.lobby, FEATURES.joinCodes, FEATURES.online, FEATURES.credits, FEATURES.projects, FEATURES.front];
 
   // ---- rooms in the store --------------------------------------------------------
 
@@ -1123,6 +1123,54 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     publishPresence(LOBBY.id);
     return reply(200, { ok: true, visible: body.visible });
   }, { body: 'onlineVisible', readOnlyOk: true });
+
+  // The Lobby front page in one read: who is online and where (a listed room's
+  // name, the Lobby, or just "in Studio"; an unlisted room is never named),
+  // the rooms open now with how many are in each, the Lobby's crowd, the
+  // member's own room for an invite code, and the hub's week (credits.front).
+  route('GET', '/v1/front', ({ actor }) => {
+    joinLobby(actor.uid);
+    const ready = readySockets();
+    const listed = new Map(store.all(`SELECT id, name, kind FROM rooms WHERE status = 'active' AND listed = 1`).map((row) => [row.id, row]));
+    const here = new Map(); // room id -> uids with a socket in it
+    const rooms = new Map(); // uid -> room ids their sockets hold
+    for (const { a } of ready) {
+      if (!rooms.has(a.uid)) rooms.set(a.uid, new Set());
+      for (const roomId of a.rooms ?? []) {
+        rooms.get(a.uid).add(roomId);
+        if (!here.has(roomId)) here.set(roomId, new Set());
+        here.get(roomId).add(a.uid);
+      }
+    }
+    const visible = [...rooms.keys()].filter((uid) => uid !== actor.uid && !onlineHidden(uid));
+    const people = visible.slice(0, FRONT.people).map((uid) => {
+      const card = credits.card(uid);
+      if (!card) return null;
+      const held = [...rooms.get(uid)];
+      const named = held.map((roomId) => listed.get(roomId)).find((room) => room && room.id !== LOBBY.id);
+      const where = named ? { id: named.id, name: named.name, kind: named.kind } : held.includes(LOBBY.id) ? { id: LOBBY.id, name: LOBBY.name, kind: 'hangout' } : null;
+      return { id: uid, name: card.name, rank: card.rank.key, specialRanks: card.specialRanks, where };
+    }).filter(Boolean);
+    people.sort((x, y) => Number(Boolean(y.where)) - Number(Boolean(x.where)) || x.name.localeCompare(y.name));
+    const crowd = (roomId) => [...(here.get(roomId) ?? [])].filter((uid) => isMember(roomId, uid) && (roomId !== LOBBY.id || !onlineHidden(uid))).length;
+    const open = store.all(
+      `SELECT r.* FROM rooms r LEFT JOIN room_members m ON m.room_id = r.id AND m.user_id = ?
+        WHERE r.status = 'active' AND r.id <> ? AND (r.listed = 1 OR m.user_id IS NOT NULL) LIMIT 100`,
+      actor.uid,
+      LOBBY.id,
+    ).map((row) => ({ ...summary(row, actor.uid), here: crowd(row.id) }));
+    open.sort((x, y) => y.here - x.here || y.memberCount - x.memberCount || y.createdAt - x.createdAt);
+    const own = store.get(`SELECT id, name FROM rooms WHERE owner_id = ? AND status = 'active' AND id <> ? ORDER BY created_at DESC LIMIT 1`, actor.uid, LOBBY.id);
+    return reply(200, {
+      ok: true,
+      online: { count: visible.length, people },
+      lobby: { here: crowd(LOBBY.id) },
+      rooms: open.slice(0, FRONT.rooms),
+      ownRoom: own ? { id: own.id, name: own.name } : null,
+      visible: !onlineHidden(actor.uid),
+      ...credits.front(actor.uid),
+    });
+  });
 
   route('GET', '/v1/members/search', ({ actor, query }) => {
     const checked = validateQuery('membersSearch', query);

@@ -64,6 +64,9 @@ export const PROJECT_LIMITS = Object.freeze({
 
 export const PROJECT_KINDS = Object.freeze(['game', 'app', 'tool', 'art', 'music', 'other']);
 
+/** The Lobby front page (GET /v1/front): a week back, and how many of each list. */
+export const FRONT = Object.freeze({ weekMs: 7 * DAY_MS, fresh: 5, rankUps: 6, people: 24, rooms: 6 });
+
 const dayOf = (ms) => Math.floor(ms / DAY_MS);
 const SHORT_LINKS = /^(?:bit\.ly|tinyurl\.com|t\.co|goo\.gl|is\.gd|t\.me|dsc\.gg|discord\.gg)$/i;
 
@@ -93,7 +96,7 @@ export function projectLink(url) {
 /**
  * createCredits({ store, now, key, sendToUser, member })
  *   key: an HMAC key for play tokens; sendToUser(uid, type, fields); member(uid) -> describeMember()
- * -> { routes(route), forget(uid), upkeep(), me(uid), card(uid) }
+ * -> { routes(route), forget(uid), upkeep(), me(uid), card(uid), account(uid), front(uid) }
  */
 export function createCredits({ store, now, key, sendToUser, member }) {
   const accountRow = (uid) => store.get('SELECT * FROM accounts WHERE user_id = ?', uid);
@@ -205,6 +208,51 @@ export function createCredits({ store, now, key, sendToUser, member }) {
       specialRanks: specialRanks(who.roleKeys, who.isMod),
       projects: store.all('SELECT * FROM projects WHERE owner_id = ? ORDER BY plays DESC, created_at DESC LIMIT 5', uid).map((row) => projectView(row)),
     };
+  }
+
+  /**
+   * The Lobby front page's side of the hub, read in one go: the week's top
+   * project (plays and stars in the last 7 days; the all-time top when the
+   * week is quiet), what was shared this week, who moved up a rank, and the
+   * member's own week. Ranks are public; a balance only ever goes to its owner.
+   */
+  function front(uid) {
+    const at = now();
+    const since = at - FRONT.weekMs;
+    const score = new Map();
+    const bump = (id, field, n) => { const was = score.get(id) ?? { plays: 0, stars: 0 }; was[field] += n; score.set(id, was); };
+    for (const row of store.all(`SELECT ref, COUNT(*) AS n FROM credit_events WHERE kind = 'played' AND at > ? AND ref IS NOT NULL GROUP BY ref`, since)) bump(row.ref, 'plays', Number(row.n));
+    for (const row of store.all('SELECT project_id, COUNT(*) AS n FROM stars WHERE at > ? GROUP BY project_id', since)) bump(row.project_id, 'stars', Number(row.n));
+    let top = null;
+    for (const [id, week] of score) {
+      const row = projectRow(id);
+      if (!row) continue;
+      const points = week.plays + 2 * week.stars;
+      if (!top || points > top.points || (points === top.points && row.created_at > top.row.created_at)) top = { row, week, points };
+    }
+    let topView = top ? { ...projectView(top.row, uid), week: true, weekPlays: top.week.plays, weekStars: top.week.stars } : null;
+    if (!topView) {
+      const row = store.get('SELECT * FROM projects WHERE plays + stars > 0 ORDER BY plays + 2 * stars DESC, created_at DESC LIMIT 1');
+      topView = row ? { ...projectView(row, uid), week: false, weekPlays: 0, weekStars: 0 } : null;
+    }
+    const fresh = store.all('SELECT * FROM projects WHERE created_at > ? ORDER BY created_at DESC LIMIT ?', since, FRONT.fresh).map((row) => projectView(row, uid));
+    // A rank-up: the member's rank now differs from their rank before this week's credits.
+    const rankUps = [];
+    for (const row of store.all('SELECT target_id, SUM(amount) AS recent, MAX(at) AS last FROM credit_events WHERE at > ? AND amount > 0 GROUP BY target_id ORDER BY last DESC LIMIT 200', since)) {
+      const lifetime = accountRow(row.target_id)?.lifetime ?? 0;
+      const after = rankFor(lifetime);
+      if (rankFor(Math.max(0, lifetime - Number(row.recent))).key === after.key) continue;
+      const name = store.get('SELECT name FROM members WHERE user_id = ?', row.target_id)?.name;
+      if (name) rankUps.push({ id: row.target_id, name, rank: { key: after.key, name: after.name }, at: row.last });
+      if (rankUps.length >= FRONT.rankUps) break;
+    }
+    const money = account(uid);
+    const week = {
+      earned: Number(store.get('SELECT COALESCE(SUM(amount), 0) AS n FROM credit_events WHERE target_id = ? AND at > ?', uid, since)?.n ?? 0),
+      plays: Number(store.get(`SELECT COUNT(*) AS n FROM credit_events WHERE target_id = ? AND kind = 'played' AND at > ?`, uid, since)?.n ?? 0),
+      stars: Number(store.get('SELECT COUNT(*) AS n FROM stars s JOIN projects p ON p.id = s.project_id WHERE p.owner_id = ? AND s.at > ?', uid, since)?.n ?? 0),
+    };
+    return { top: topView, fresh, rankUps, you: { balance: money.balance, lifetime: money.lifetime, rank: rankFor(money.lifetime), week } };
   }
 
   function routes(route) {
@@ -423,5 +471,5 @@ export function createCredits({ store, now, key, sendToUser, member }) {
     store.run('DELETE FROM features WHERE ends_at < ?', at - PROJECT_LIMITS.eventKeepMs);
   }
 
-  return Object.freeze({ routes, forget, upkeep, me, card, account });
+  return Object.freeze({ routes, forget, upkeep, me, card, account, front });
 }

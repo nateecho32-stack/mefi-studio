@@ -393,9 +393,11 @@
     function explain(hub) {
       if (!hub?.configured) { status.textContent = "The project hub needs the room service, which this copy of Studio has no address for."; root.dataset.state = "not-configured"; body.replaceChildren(); return false; }
       if (!hub.linked) {
-        status.textContent = "Link your Discord account to share and play projects. Discord asks once in your browser.";
         root.dataset.state = "not-linked";
-        body.replaceChildren(button("Link Discord", () => { void linkHere(); }, "project-hub-link"));
+        // Friends' one sign-in card (renderer/friends-front.js) when it is in this build.
+        const gate = window.MefiFriendsFront?.gate?.({ onSignedIn: () => { autoConnected = true; void load(); } });
+        status.textContent = gate ? "" : "Link your Discord account to share and play projects. Discord asks once in your browser.";
+        body.replaceChildren(gate ?? button("Link Discord", () => { void linkHere(); }, "project-hub-link"));
         return false;
       }
       if (hub.error === "not-member") { notMember(); return false; }

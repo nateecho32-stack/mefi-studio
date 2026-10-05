@@ -136,7 +136,7 @@ app.whenReady().then(async () => {
   await capture("07b-friends-badge");
   // The Friends bubble opens the Friends page (one home in both layouts); its places are tabs.
   await click('[data-hub-section="friends"]');
-  await until("document.getElementById('friends-overlay')?.hidden===false && document.getElementById('friends-overlay').dataset.place==='rooms'", "the Friends bubble opens the Friends page");
+  await until("document.getElementById('friends-overlay')?.hidden===false && document.getElementById('friends-overlay').dataset.place==='lobby'", "the Friends bubble opens the Friends page at The Lobby");
   assert.equal(await run("return window.MefiCompanionHub.isOpen();"), false, "the bubbles step aside for the page");
   await click("#friends-place-tab-pcs");
   await until("document.querySelector('#friends-overlay .pc-sync')?.dataset.state==='pending'", "Friends › Your PCs looks");

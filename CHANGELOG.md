@@ -7,6 +7,17 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Friends has a front page, a sign-in and shows you online.** Friends now
+  opens on **The Lobby**, a front page in the style of The Studio Daily: who
+  is online right now and which room they are in, the week's top project
+  with a Play button, the rooms open now, what was shared this week, who
+  moved up a rank, and your own credits and week. At its foot are **Show me
+  as online** and your room's invite code with **Copy invite**. Until you
+  sign in, The Lobby, Rooms and the Project hub show one **Sign in with
+  Discord** card; Your PCs and the Playground work without it. Once signed
+  in, Studio connects by itself a few seconds after it opens, so friends see
+  you online without you opening Friends (untick Show me as online to hide).
+  The Lobby is also in the rail's Friends menu and in Search.
 - **Chrome's buttons no longer look struck through.** The metal on main
   buttons and chosen tabs had a hard dark line at half height, right behind
   the words. Its horizon is now a soft band below them, and the darkest part
