@@ -7,6 +7,14 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **A three-step first run in the 0.5 layout.** With the new layout on, a
+  fresh profile meets the 0.5 prototype's welcome instead of the whole setup
+  helper: connect the AI you already use (each coding tool found on this PC,
+  Ready or Sign in), choose a project (or open a folder, or start a new app),
+  and give it a first task, which Studio adds and starts. Skip leaves the setup
+  helper waiting in Help and Search as before, and Other ways to connect opens
+  it at Connect an AI. An update still shows the helper; the classic layout is
+  unchanged.
 - **Settings in the 0.5 layout, as the 0.5 prototype files it.** With the new
   layout on (`?layout=v2`), Settings lists General, Notifications, Appearance
   (with Size and density under it), Map look and Sound and music, then Updates

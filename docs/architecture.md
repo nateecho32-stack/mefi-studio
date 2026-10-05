@@ -621,6 +621,16 @@ settings and per-model work-kind summaries for the shared controls.
   close leaves it waiting as the Start here card (`MefiOnboarding.invite()`)
   with one toast to start it. When the helper has connected an AI, the
   walkthrough starts at Your workspace instead of its scan stop.
+- **The first run in the 0.5 layout** (`html[data-layout="v2"]`) is the 0.5
+  prototype's three-step welcome instead of the sheet: **Connect the AI you
+  already use** (the coding tools `setup:cli-status` finds, each with its own
+  Sign in or install, and **Other ways to connect**, which opens the sheet at
+  Connect an AI), **Choose a project** (the projects, switched through the
+  workspace's own buttons, then Open a folder… and Start a new app…) and **Give
+  it a first task** (`tasks:create`, then the workspace's own start). Skip,
+  Escape and Start the task mark the revision seen and hand on exactly as the
+  sheet's close does. An update still brings the sheet, and the classic layout
+  keeps it for a first run. `MefiSetupHelper.welcome()` opens it.
 - The menu stays open by default at widths of 1100px or more, with the page
   beside it. **Keep menu open** saves your choice across launches. When unpinned
   or narrower than 1100px, it opens over the page on hover or keyboard focus;

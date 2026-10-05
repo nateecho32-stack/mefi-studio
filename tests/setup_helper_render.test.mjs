@@ -15,7 +15,7 @@ const studio = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const executable = path.join(studio, "node_modules", "electron", "dist", process.platform === "win32" ? "electron.exe" : process.platform === "darwin" ? "Electron.app/Contents/MacOS/Electron" : "electron");
 const canRun = existsSync(executable) && (process.platform !== "linux" || Boolean(process.env.DISPLAY || process.env.WAYLAND_DISPLAY));
 
-test("every setup helper section fits desktop and narrow windows, traps focus, saves through the bridge and closes on Escape", { skip: !canRun, timeout: 180000 }, async (t) => {
+test("every setup helper section fits desktop and narrow windows, traps focus, saves through the bridge and closes on Escape; the 0.5 layout's three-step first run fits two window sizes and adds its task", { skip: !canRun, timeout: 240000 }, async (t) => {
   const fixture = await mkdtemp(path.join(tmpdir(), "mefi-setup-helper-render-"));
   try {
     await mkdir(path.join(fixture, "renderer")); await mkdir(path.join(fixture, "data"));
@@ -32,7 +32,7 @@ test("every setup helper section fits desktop and narrow windows, traps focus, s
         const killer = spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
         killer.once("error", () => child.kill());
       } else child.kill();
-    }, 150000);
+    }, 220000);
     const code = await new Promise((resolve, reject) => { child.once("error", reject); child.once("close", resolve); }).finally(() => clearTimeout(timer));
     let report;
     try { report = JSON.parse(await readFile(path.join(fixture, "report.json"), "utf8")); } catch {}
@@ -52,6 +52,8 @@ test("every setup helper section fits desktop and narrow windows, traps focus, s
     const team = report.calls.find((call) => call.name === "agentsSave");
     assert.equal(team.args[0].scope, "defaults");
     assert.equal(team.args[0].configuration.agentBrain.deskTool, true);
+    assert.equal(report.welcome.length, 6, "the welcome's three steps at two window sizes");
+    assert.equal(report.welcomeTask.length, 1, "Start the task adds one task");
     assert.ok(report.closedByEscape && report.complete);
   } finally {
     assert.equal(path.dirname(fixture), path.resolve(tmpdir()));

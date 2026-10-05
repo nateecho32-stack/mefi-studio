@@ -4,10 +4,12 @@
 // at a desktop and a phone-narrow width, keeps Tab inside the dialog, saves
 // through the bridge and closes on Escape. No application main process or
 // live state is loaded; network, permissions and child processes are blocked.
+// With ?layout=v2 it also walks the first run's three-step welcome at 1920x1080 and at 600x560 zoomed 150%.
 const { app, BrowserWindow, session } = require("electron");
 const assert = require("node:assert/strict");
 const fs = require("node:fs"), path = require("node:path");
 const { fileURLToPath } = require("node:url");
+const { textProbe } = require("./text-probe.cjs");
 const root = process.env.MEFI_SETUP_HELPER_FIXTURE;
 if (!root || !path.isAbsolute(root)) throw new Error("An isolated setup helper fixture directory is required");
 const report = { errors: [], networkAttempts: [], processAttempts: [], layouts: [], calls: [] };
@@ -83,8 +85,9 @@ app.whenReady().then(async () => {
     bridge.autonomySet=record('autonomySet',patch=>({...responses.autonomyState,...patch,ok:true}));bridge.learningSet=record('learningSet',{ok:true});
     bridge.chatgptPlanSignIn=record('chatgptPlanSignIn',{ok:false,errorKind:'canceled',error:'Sign-in canceled.'});bridge.chatgptPlanSignOut=record('chatgptPlanSignOut',{ok:true});
     for(const name of ['onTasks','onProjects','onAssistantStatus','onAssistant','onProjectPreview','onSettingsChanged','onStudioLog','onAutoSetup'])bridge[name]=()=>()=>{};
+    bridge.tasksCreate=record('tasksCreate',payload=>({ok:true,task:{id:'task_first',projectId:'setup-project',title:payload.title,prompt:payload.prompt,status:'open'}}));
     contextBridge.exposeInMainWorld('mefiStudio',bridge);
-    contextBridge.exposeInMainWorld('setupFixture',{calls:()=>calls});
+    contextBridge.exposeInMainWorld('setupFixture',{calls:()=>calls,set:(key,value)=>{responses[key]=value;}});
     localStorage.setItem('mefiStudio.commandHome','0');localStorage.setItem('mefiStudio.zen','0');localStorage.setItem('mefiStudio.zenReactive','0');localStorage.setItem('mefiStudio.keyHint.v1','1');localStorage.setItem('mefiStudio.walkthrough.v1',JSON.stringify({version:1,step:0,status:'complete'}));
   `);
   const window = new BrowserWindow({ show: false, width: 1440, height: 900, frame: false, webPreferences: { preload, contextIsolation: true, nodeIntegration: false, sandbox: true, offscreen: true, backgroundThrottling: false } });
@@ -144,6 +147,67 @@ app.whenReady().then(async () => {
   await key("Escape");
   await until("!window.MefiSetupHelper.isOpen()", "Escape closes the helper");
   report.closedByEscape = true;
+  // ---- the 0.5 layout's first run: the three-step welcome (renderer/setup-helper.js) ----------------------------------------
+  // A capture launch never opens it by itself, so it is opened the way startup opens it on a fresh profile. Each step is measured
+  // at 1920x1080 and at 600x560 zoomed 150% (the card fits the window, no text under 12 px, every line at 4.5:1 in the theme)
+  // and walked with real pointer presses and real typing; Start the task adds the task through tasks:create.
+  report.welcome = [];
+  await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1", layout: "v2" } });
+  await until("window.MefiSetupHelper && window.MefiShell?.active?.() && !window.MefiBoot?.isActive?.()", "studio ready (v2)");
+  await run(`window.setupFixture.set('cliSetupStatus', { ok: true, selected: 'auto', clis: [{ id: 'claude', name: 'Claude Code', installed: true, signedIn: true, subscription: true }, { id: 'codex', name: 'Codex', installed: true, signedIn: false, subscription: true }, { id: 'opencode', name: 'OpenCode', installed: true, signedIn: null, subscription: false }, { id: 'grok', name: 'Grok', installed: false, signedIn: null, subscription: true }] });`);
+  const pointer = async (selector) => {
+    const box = await run(`const node = document.querySelector(${JSON.stringify(selector)}); if (!node) return null; const r = node.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return { x: r.left + r.width / 2, y: r.top + r.height / 2, reached: Boolean(hit) && (hit === node || node.contains(hit)) };`);
+    assert.ok(box?.reached, `a pointer reaches ${selector}`);
+    const zoom = contents.getZoomFactor(), point = { x: Math.round(box.x * zoom), y: Math.round(box.y * zoom) };
+    contents.sendInputEvent({ type: "mouseMove", ...point }); contents.sendInputEvent({ type: "mouseDown", button: "left", clickCount: 1, ...point }); contents.sendInputEvent({ type: "mouseUp", button: "left", clickCount: 1, ...point });
+    await sleep(200);
+  };
+  for (const [width, height, zoom] of [[1920, 1080, 1], [600, 560, 1.5]]) {
+    window.setContentSize(width, height); contents.setZoomFactor(zoom); await sleep(400);
+    await run("window.MefiSetupHelper.welcome();");
+    const titles = ["Connect the AI you already use", "Choose a project", "Give it a first task"];
+    for (const [step, title] of titles.entries()) {
+      await until(`document.getElementById('setup-welcome-title')?.textContent === ${JSON.stringify(title)} && document.querySelectorAll('#setup-welcome-body > *').length > 0`, `${title} at ${width}x${height}@${zoom}`);
+      await sleep(300);
+      const layout = await run(`const card = document.getElementById('setup-welcome-card').getBoundingClientRect(), body = document.getElementById('setup-welcome-body');
+        const probe = await (async () => { ${textProbe("#setup-welcome")} })();
+        return { step: ${step}, size: '${width}x${height}@${zoom}', fits: card.left >= -1 && card.top >= -1 && card.right <= innerWidth + 1 && card.bottom <= innerHeight + 1, pageOverflow: document.documentElement.scrollWidth > innerWidth + 1,
+          wide: [...body.querySelectorAll('*')].filter((node) => node.getBoundingClientRect().right > body.getBoundingClientRect().right + 1).slice(0, 4).map((node) => node.className + ' ' + Math.round(node.getBoundingClientRect().right)),
+          gutter: document.getElementById('setup-welcome-card').offsetWidth - document.getElementById('setup-welcome-card').clientWidth - 2,
+          rows: [...body.querySelectorAll('.setup-welcome-opt b')].map((node) => node.textContent), bars: [...document.querySelectorAll('.setup-welcome-steps i.on')].length,
+          next: document.getElementById('setup-welcome-next').textContent, back: !document.getElementById('setup-welcome-back').hidden, ...probe };`);
+      report.welcome.push(layout);
+      assert.equal(layout.fits, true, `${title} fits the window at ${layout.size}`);
+      assert.equal(layout.pageOverflow, false, `${title}: the page does not overflow at ${layout.size}`);
+      assert.deepEqual(layout.wide, [], `${title}: nothing leaves the card at ${layout.size}`);
+      assert.ok(layout.gutter <= 0.5, `${title}: the card reserves no width for a bar at ${layout.size}`);
+      assert.deepEqual(layout.small, [], `${title}: no text under 12 px at ${layout.size}`);
+      assert.deepEqual(layout.low, [], `${title}: every line reads at 4.5:1 at ${layout.size}`);
+      assert.ok(layout.count >= 4, `${title}: the words were measured`);
+      assert.equal(layout.bars, step + 1, `${title}: the progress shows step ${step + 1} of 3`);
+      assert.equal(layout.back, step > 0, `${title}: Back from the second step on`);
+      if (step === 0) assert.deepEqual(layout.rows, ["Claude Code", "Codex", "OpenCode"], "the tools found on this PC");
+      if (step === 1) assert.deepEqual(layout.rows, ["Setup trial", "Open a folder…", "Start a new app…"], "the projects, then the ways to add one");
+      if (width === 1920) await capture(`first-run-${step + 1}-1920x1080.png`);
+      else if (step === 0) await capture("first-run-1-600x560@1.5.png");
+      if (step < 2) await pointer("#setup-welcome-next");
+    }
+    if (width === 1920) {
+      // Real typing, then Start the task.
+      await run("document.getElementById('setup-welcome-task').focus();");
+      contents.insertText("Add an empty state to the notes list"); await sleep(250);
+      assert.equal(await run("return document.getElementById('setup-welcome-next').disabled;"), false, "typed words enable Start the task");
+      await capture("first-run-3-typed-1920x1080.png");
+      await pointer("#setup-welcome-next");
+      await until("!window.MefiSetupHelper.welcomeOpen()", "Start the task closes the welcome");
+      report.welcomeTask = await run("return window.setupFixture.calls().filter((call) => call.name === 'tasksCreate').map((call) => call.args[0]);");
+      assert.deepEqual(report.welcomeTask, [{ title: "Add an empty state to the notes list", prompt: "Add an empty state to the notes list", projectId: "setup-project" }], "the task is added through tasks:create in the open project");
+    } else {
+      await key("Escape");
+      await until("!window.MefiSetupHelper.welcomeOpen()", "Escape skips the welcome");
+    }
+  }
+  window.setContentSize(1440, 900); contents.setZoomFactor(1); await sleep(200);
   report.complete = true;
   finish();
 }).catch(finish);
