@@ -5401,8 +5401,10 @@ async function standInJudge(settings, purpose = "routing") {
   const judge = await loadModule("scripts/choice-judge.mjs");
   const timeoutMs = purpose === "intake" ? 15000 : 4000;
   if (saved.kind === "assistant") {
-    const transport = async ({ system, user }) => {
-      const call = await assistantFetch(system, user, 600, { role: "routine", taskType: "judge" });
+    // judgeClassify stops waiting at `timeoutMs`; a CLI route is stopped then
+    // too (cliAssistantCall's deadline) rather than answering nobody.
+    const transport = async ({ system, user, timeoutMs }) => {
+      const call = await assistantFetch(system, user, 600, { role: "routine", taskType: "judge", timeoutMs });
       return call?.ok ? { ok: true, text: call.text, model: call.model ?? null, usage: call.tokenUsage ?? null } : { ok: false, error: call?.error ?? "assistant unavailable" };
     };
     return { kind: "assistant", model: null, timeoutMs,
@@ -6938,16 +6940,21 @@ async function executorRunEnv({ cliOverride = null } = {}) {
   return opencodeRoute();
 }
 
-async function assistantFetch(system, user, maxTokens = 6000, { role = "routine", taskType = role, allowCli = true, skillRole = role } = {}) {
+// `timeoutMs` is how long a caller that gives up (the Jev stand-in, the chat)
+// waits when the route is a coding CLI: one deadline across the tool loop's
+// turns, after which cliAssistantCall stops the CLI. HTTP keeps its own abort.
+async function assistantFetch(system, user, maxTokens = 6000, { role = "routine", taskType = role, allowCli = true, skillRole = role, timeoutMs = null } = {}) {
+  const until = Number(timeoutMs) > 0 ? Date.now() + Number(timeoutMs) : null;
+  const left = () => (until === null ? null : Math.max(1, until - Date.now()));
   if (typeof agentProfiles !== "undefined" && !agentProfiles.current()) {
     const snapshot = agentProfiles.capture(await readSettings(), projects.current().id);
-    return agentProfiles.run(snapshot, () => assistantFetch(system, user, maxTokens, { role, taskType, allowCli, skillRole }));
+    return agentProfiles.run(snapshot, () => assistantFetch(system, user, maxTokens, { role, taskType, allowCli, skillRole, timeoutMs: left() }));
   }
   if (typeof agentAddons !== "undefined" && skillRole) system += scrubOutbound(await agentAddons.instructions(projectRoot(), await readAgentSettings(), skillRole));
   if (typeof agentTools !== "undefined" && !agentTools.active.getStore() && taskType !== "ai-probe") {
     return agentTools.run({ system, user, root: projectRoot(), settings: await readAgentSettings(), role: skillRole || role, scrub: scrubOutbound,
       onTool: (tool) => logLine(`[tools:${skillRole || role}] ${tool.name}: ${tool.ok ? "completed" : "failed"}`),
-      call: (prompt, input) => assistantFetch(prompt, input, maxTokens, { role, taskType, allowCli: allowCli === false ? false : DATA_ONLY_CLIS, skillRole: null }) });
+      call: (prompt, input) => assistantFetch(prompt, input, maxTokens, { role, taskType, allowCli: allowCli === false ? false : DATA_ONLY_CLIS, skillRole: null, timeoutMs: left() }) });
   }
   // The transmission gate. Every assistant call — chat, the cadence passes,
   // the overseer, ideas, the analyzer, setup assist, the judge and the probe —
@@ -6967,7 +6974,7 @@ async function assistantFetch(system, user, maxTokens = 6000, { role = "routine"
   // a missing binary, a timeout or an empty reply falls back once to the
   // keyed HTTP routes — the rest of the auto order, never back to a CLI.
   if (route.cli === true || route.provider === "grok" || route.provider === "claude" || route.provider === "codex" || route.provider === "antigravity") {
-    return cliAssistantCall(route, system, user, maxTokens, { role, taskType });
+    return cliAssistantCall(route, system, user, maxTokens, { role, taskType, timeoutMs: left() });
   }
   return httpAssistantCall(route, system, user, maxTokens, { taskType, role });
 }
@@ -6976,13 +6983,22 @@ async function assistantFetch(system, user, maxTokens = 6000, { role = "routine"
 // (planning, brain drafts, the analyzer read) that may ride Claude Code.
 // `fallback: false` keeps a failed CLI call failed instead of retrying on
 // another model (a probe measures one model, never whichever answered).
-async function cliAssistantCall(route, system, user, maxTokens, { role = "routine", taskType = role, source = "request", fallback = true } = {}) {
+// `timeoutMs` is the caller's deadline. A caller that stops waiting before
+// cli-text's own 180 s (the Jev stand-in's 15 s, the Daily editor's 60 s, the
+// chat's budget) passes it, so the CLI's process tree is killed then instead
+// of running on, on the owner's subscription, for an answer nobody reads. A
+// call stopped that way is `abandoned`: the breaker leaves the route's record
+// alone and the ledger keeps the row as cancelled, not as a failure.
+// `onSpawn` hears each CLI child (the first map cancels through it).
+async function cliAssistantCall(route, system, user, maxTokens, { role = "routine", taskType = role, source = "request", fallback = true, timeoutMs = null, onSpawn = null } = {}) {
+  const until = Number(timeoutMs) > 0 ? Date.now() + Number(timeoutMs) : null;
+  const left = () => (until === null ? null : until - Date.now());
   if (typeof agentTools !== "undefined" && !agentTools.active.getStore() && taskType !== "ai-probe") {
     const settings = await readAgentSettings();
     if (typeof agentAddons !== "undefined") system += scrubOutbound(await agentAddons.instructions(projectRoot(), settings, role));
     return agentTools.run({ system, user, root: projectRoot(), settings, role, scrub: scrubOutbound,
       onTool: (tool) => logLine(`[tools:${role}] ${tool.name}: ${tool.ok ? "completed" : "failed"}`),
-      call: (prompt, input) => cliAssistantCall(route, prompt, scrubOutbound(input), maxTokens, { role, taskType, source }) });
+      call: (prompt, input) => cliAssistantCall(route, prompt, scrubOutbound(input), maxTokens, { role, taskType, source, timeoutMs: until === null ? null : Math.max(1, left()), onSpawn }) });
   }
   // A paused CLI is not spawned at all — its failures tend to run to the
   // full 180 s timeout — so the turn goes straight to the fallback below.
@@ -6998,10 +7014,22 @@ async function cliAssistantCall(route, system, user, maxTokens, { role = "routin
     // A picture on the message is only named to a CLI, in one plain line (the "Picture attachments" block).
     const said = typeof imageCliText === "function" ? imageCliText(user) : user;
     try {
-      cli = await turn(route.provider, (login) => route.provider === "grok" ? grokCompletion(system, said, route.model)
-        : route.provider === "claude" ? claudeCompletion(system, said, route.model, login)
-          : route.provider === "codex" ? codexCompletion(system, said, route.model, login)
-            : antigravityCompletion(system, said, route.model));
+      cli = await turn(route.provider, async (login) => {
+        // Each login gets what is left of the deadline. With under a second
+        // left no CLI could start and answer before its caller is gone, so
+        // none is started.
+        if (until !== null && left() < 1000) return { ok: false, abandoned: true, error: `${route.provider} was not started: its caller had stopped waiting` };
+        const options = { ...login, ...(until === null ? {} : { timeoutMs: left() }), ...(onSpawn ? { onSpawn } : {}) };
+        const reply = await (route.provider === "grok" ? grokCompletion(system, said, route.model, options)
+          : route.provider === "claude" ? claudeCompletion(system, said, route.model, options)
+            : route.provider === "codex" ? codexCompletion(system, said, route.model, options)
+              : antigravityCompletion(system, said, route.model, options));
+        // A failure at the deadline is cli-text stopping the CLI there (its
+        // timer and this clock may differ by a few milliseconds).
+        return until !== null && !reply?.ok && left() < 250
+          ? { ...reply, abandoned: true, error: `${route.provider} timed out after ${Math.round(Number(timeoutMs) / 1000)} s, when its caller stopped waiting` }
+          : reply;
+      });
     } finally {
       settleProvider(route.provider, gate, cli);
     }
@@ -7009,7 +7037,7 @@ async function cliAssistantCall(route, system, user, maxTokens, { role = "routin
     if (!cli.toppedOut) {
       const observationId = crypto.randomUUID();
       await recordModelCall({ id: observationId, model: cli.model || route.model || `${route.provider}-default`, provider: route.provider, taskType, source,
-        at: startedAt, elapsedMs: Date.now() - startedAt, status: cli.ok ? "ok" : "error", errorKind: cli.ok ? null : "cli", tokenUsage: cli.tokenUsage ?? {}, costUsd: cli.costUsd ?? null });
+        at: startedAt, elapsedMs: Date.now() - startedAt, status: cli.ok ? "ok" : cli.abandoned ? "cancelled" : "error", errorKind: cli.ok || cli.abandoned ? null : "cli", tokenUsage: cli.tokenUsage ?? {}, costUsd: cli.costUsd ?? null });
       cli.observationId = observationId;
     }
     if (cli.ok) {
@@ -7019,6 +7047,8 @@ async function cliAssistantCall(route, system, user, maxTokens, { role = "routin
   }
   const settings = await (typeof readAgentSettings === "function" ? readAgentSettings() : readSettings());
   if (!fallback || !autoFallbackEnabled(settings)) return cli;
+  // Past the caller's deadline a keyed retry would answer no one.
+  if (until !== null && left() < 1000) return cli;
   const http = await resolveAiRoute(role, { allowCli: false });
   if (!http.ok) return cli;
   const retried = await httpAssistantCall(http, system, user, maxTokens, { taskType, source, role });
@@ -7133,6 +7163,10 @@ const providerLastFailure = new Map();
 const providerName = (provider) => AUTO_PROVIDER_NAMES[provider] ?? provider;
 
 function settleProvider(provider, gate, result) {
+  // A CLI call stopped because its caller stopped waiting (cliAssistantCall's
+  // deadline) says nothing about the route: a slow answer is not an outage,
+  // so it neither counts toward a pause nor clears one.
+  if (result?.abandoned === true) { gate.settle(null); return; }
   // Every login known to be topped out started no call and broke nothing:
   // pausing the provider for it would outlast the reset.
   const failed = !result || (!result.ok && result.errorKind !== "validation" && result.toppedOut !== true);
@@ -11162,8 +11196,9 @@ async function outsideWorkCheck(project, reason = "") {
   if (asked.length && await assistantKeyPresent() && !(Number(assistantState?.ai?.backoffUntil) > Date.now())) {
     const prompt = outsideWork.relevancePrompt({ report: rep, cards: asked, root });
     let timer = null;
+    // The same limit stops a CLI route when the check stops waiting.
     const call = await Promise.race([
-      assistantFetch(prompt.system, prompt.user, 1500, { taskType: "relevance", allowCli: DATA_ONLY_CLIS, skillRole: null }).catch((error) => ({ ok: false, error: error?.message ?? String(error) })),
+      assistantFetch(prompt.system, prompt.user, 1500, { taskType: "relevance", allowCli: DATA_ONLY_CLIS, skillRole: null, timeoutMs: OUTSIDE_CHECK_TIMEOUT_MS }).catch((error) => ({ ok: false, error: error?.message ?? String(error) })),
       new Promise((resolve) => { timer = setTimeout(() => resolve({ ok: false, timedOut: true }), OUTSIDE_CHECK_TIMEOUT_MS); }),
     ]);
     clearTimeout(timer);
@@ -12360,10 +12395,12 @@ async function assistantOverseerTurn({ user, text, intent, facts, did, slot, foc
   // (model, ordering wait, actions) must fit the pool's 150 s job deadline.
   const budgetMs = route.cli ? 90000 : 45000;
   let timer = null;
+  // A reply abandoned at the budget stops a CLI too (cliTimeoutMs/timeoutMs:
+  // cliAssistantCall's deadline); an HTTP reply keeps its own abort.
   const ask = () => Promise.race([
     typeof seatFetch === "function"
-      ? seatFetch("companion", chatSystem, body, 1500, { fallback: (system = chatSystem) => assistantFetch(system, body, 1500, { taskType: "conversation", allowCli: DATA_ONLY_CLIS, skillRole: null }) })
-      : assistantFetch(chatSystem, body, 1500, { taskType: "conversation", allowCli: DATA_ONLY_CLIS }),
+      ? seatFetch("companion", chatSystem, body, 1500, { fallback: (system = chatSystem) => assistantFetch(system, body, 1500, { taskType: "conversation", allowCli: DATA_ONLY_CLIS, skillRole: null, timeoutMs: budgetMs }), cliTimeoutMs: budgetMs })
+      : assistantFetch(chatSystem, body, 1500, { taskType: "conversation", allowCli: DATA_ONLY_CLIS, timeoutMs: budgetMs }),
     new Promise((resolve) => (timer = setTimeout(() => resolve({ ok: false, timedOut: true, error: `no reply within ${Math.round(budgetMs / 1000)} s` }), budgetMs))),
   ]);
   // A picture on the message rides a scope around the call, so every request it makes can carry it.
@@ -15078,8 +15115,13 @@ function seatChoice(settings, seat) {
   return { provider, model, effort, fast };
 }
 // `onTool` also hears each tool turn (Vibe shows the lead's while it sizes).
-async function seatFetch(seat, system, user, maxTokens = 2400, { fallback = null, timeoutMs = 120000, onTool = null } = {}) {
-  if (typeof agentProfiles !== "undefined" && !agentProfiles.current()) return agentProfiles.run(agentProfiles.capture(await readSettings(), projects.current().id), () => seatFetch(seat, system, user, maxTokens, { fallback, timeoutMs, onTool }));
+// `timeoutMs` bounds each HTTP call. `cliTimeoutMs` is how long a caller that
+// gives up (the chat) waits for a seat on a coding CLI: one deadline across
+// the tool loop's turns, after which the CLI is stopped (cliAssistantCall).
+async function seatFetch(seat, system, user, maxTokens = 2400, { fallback = null, timeoutMs = 120000, onTool = null, cliTimeoutMs = null } = {}) {
+  const until = Number(cliTimeoutMs) > 0 ? Date.now() + Number(cliTimeoutMs) : null;
+  const cliLeft = () => (until === null ? null : Math.max(1, until - Date.now()));
+  if (typeof agentProfiles !== "undefined" && !agentProfiles.current()) return agentProfiles.run(agentProfiles.capture(await readSettings(), projects.current().id), () => seatFetch(seat, system, user, maxTokens, { fallback, timeoutMs, onTool, cliTimeoutMs: cliLeft() }));
   const settings = await (typeof readAgentSettings === "function" ? readAgentSettings() : readSettings());
   const chosen = seatChoice(settings, seat);
   if (typeof agentAddons !== "undefined" && (typeof agentTools === "undefined" || !agentTools.active.getStore())) system += scrubOutbound(await agentAddons.instructions(projectRoot(), settings, seat));
@@ -15089,7 +15131,7 @@ async function seatFetch(seat, system, user, maxTokens = 2400, { fallback = null
         logLine(`[tools:${seat}] ${tool.name}: ${tool.ok ? "completed" : "failed"}`);
         try { onTool?.(tool); } catch { /* a listener never breaks the call */ }
       },
-      call: (prompt, input) => seatFetch(seat, prompt, input, maxTokens, { fallback, timeoutMs }) });
+      call: (prompt, input) => seatFetch(seat, prompt, input, maxTokens, { fallback, timeoutMs, cliTimeoutMs: cliLeft() }) });
   }
   if (chosen.provider === "zen") {
     const zenKey = decryptKey(settings, "zenApiKeyEncrypted");
@@ -15111,14 +15153,14 @@ async function seatFetch(seat, system, user, maxTokens = 2400, { fallback = null
       const route = await resolveAiRoute("heavy", { allowCli: DATA_ONLY_CLIS });
       if (!route.ok) return route;
       const options = { role: "heavy", taskType: `seat-${seat}`, source: `seat:${seat}`, pinned: true };
-      if (route.cli) return cliAssistantCall(route, system, scrubOutbound(user), maxTokens, options);
+      if (route.cli) return cliAssistantCall(route, system, scrubOutbound(user), maxTokens, { ...options, timeoutMs: cliLeft() });
       const support = agentProfiles.capabilities(route.provider, route.model);
       return httpAssistantCall(route, system, scrubOutbound(user), maxTokens, { ...options, effort: support.efforts.includes(chosen.effort) ? chosen.effort : null, timeoutMs });
     });
   }
   // A caller with its own route keeps it when the seat's provider is out.
   if (typeof fallback === "function") return fallback(system, true);
-  return assistantFetch(system, user, maxTokens, { role: "heavy", taskType: `seat-${seat}`, skillRole: null });
+  return assistantFetch(system, user, maxTokens, { role: "heavy", taskType: `seat-${seat}`, skillRole: null, timeoutMs: cliLeft() });
 }
 
 // ---- the Policy Lab's observation-only recorder (build brief PR1) ---------------
@@ -24082,13 +24124,17 @@ function registerIpc() {
     fetch: globalThis.fetch, readFile, writeFile, mkdir,
     dir: path.join(app.getPath("userData"), "news"), log: logLine, version: app.getVersion(),
     enabled: async () => !SMOKE && !CAPTURE && (await readSettings().catch(() => ({})))?.ui?.dailyNews !== false,
-    edit: async (system, user) => {
+    edit: async (system, user, { timeoutMs = null } = {}) => {
+      const until = Number(timeoutMs) > 0 ? Date.now() + Number(timeoutMs) : null;
       const route = await resolveAiRoute("routine", { allowCli: DATA_ONLY_CLIS });
       if (!route?.ok) return null;
       // Headlines are untrusted text: the editor runs with no Studio tools
       // (an active tool store makes agentTools.run a plain call) and a
       // data-only CLI, so a feed can never drive a search or an MCP action.
-      const call = () => (route.cli ? cliAssistantCall : httpAssistantCall)(route, system, user, 1800, { role: "routine", taskType: "daily-news", source: "daily-news" });
+      // The paper stops waiting after timeoutMs; a CLI editor is stopped then
+      // too (cliAssistantCall's deadline), an HTTP one keeps its own abort.
+      const deadline = route.cli && until !== null ? { timeoutMs: Math.max(1, until - Date.now()) } : {};
+      const call = () => (route.cli ? cliAssistantCall : httpAssistantCall)(route, system, user, 1800, { role: "routine", taskType: "daily-news", source: "daily-news", ...deadline });
       const reply = typeof agentTools !== "undefined" ? await agentTools.active.run(true, call) : await call();
       return reply?.ok ? reply.text : null;
     },

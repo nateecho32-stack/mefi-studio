@@ -11,6 +11,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   saved its own team kept its old providers; now each one moves to the chosen
   subscription too (its rules stay), and the message says how many project
   teams were switched.
+- **A coding CLI is stopped when Studio stops waiting for it.** The Jev
+  stand-in (15 s), the Daily editor (60 s), the chat and the outside-work
+  check gave up on a slow Claude Code or Codex answer while the CLI ran on for
+  up to three minutes on your subscription; now it is stopped then, and that
+  does not count as the tool failing.
 - **Chrome's buttons no longer look struck through.** The metal on main
   buttons and chosen tabs had a hard dark line at half height, right behind
   the words. Its horizon is now a soft band below them, and the darkest part

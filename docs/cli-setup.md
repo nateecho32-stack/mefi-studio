@@ -102,6 +102,11 @@ and rules for the turn, and disables execution, hooks, MCP and app tools.
 Antigravity uses a no-tools custom main agent and receives no prompt until its
 initial event confirms that agent and an empty tool roster. Incompatible CLI
 versions fail the connection check; Studio never retries with fewer controls.
+A text call whose caller stops waiting (the Jev stand-in after 15 s, the
+Daily editor after 60 s, the chat at its budget, the outside-work check)
+stops the CLI's process tree at that moment instead of letting it run on to
+its own three-minute limit; a call stopped that way is not counted toward
+pausing the tool, and the usage ledger keeps it as cancelled.
 Studio's configured research tools remain available through its host tool loop.
 Coding workers retain their existing execution paths and project permissions.
 

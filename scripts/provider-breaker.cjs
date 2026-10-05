@@ -30,7 +30,9 @@
 // What this does NOT do: decide what counts as a failure. That is the caller's
 // judgement; main.cjs counts auth, quota, transport, timeout and CLI failures,
 // and treats a validation failure (the provider answered, the model's reply was
-// unusable) as proof the route is alive. Watch for a provider that reports an
+// unusable) as proof the route is alive. `settle(null)` records nothing at
+// all: main.cjs uses it for a CLI call stopped because its caller stopped
+// waiting, which says nothing about the provider either way. Watch for a provider that reports an
 // error inside a 200: z.ai does that on its quota endpoint (HTTP 200 carrying
 // `{"code":401}` for a refused key) but not on its chat endpoint, which answers
 // a refused key with a real 401 — checked against both on 22 September 2026.
@@ -126,6 +128,9 @@ function createBreaker(options = {}) {
         // Admitted under a generation that has since been superseded: the
         // outcome describes a circuit that no longer exists.
         if (generation !== entry.generation) return;
+        // No outcome: the count stands, and a probe's turn passes to the next
+        // call instead of holding a half-open circuit shut.
+        if (succeeded === null) return;
 
         if (succeeded) {
           entry.state = CLOSED;
