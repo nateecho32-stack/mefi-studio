@@ -7,11 +7,12 @@ const tools = require("./agent-tools.cjs");
 const habits = require("./habits.cjs");
 const agentRules = require("./agent-rules.cjs");
 const modelLadder = require("./model-ladder.cjs");
+const modelKinds = require("./model-kinds.cjs");
 // Loaded on first use: the picture rules are not needed at startup.
 let imagesLoaded = null;
 const images = () => (imagesLoaded ??= require("./image-attach.cjs"));
 const runtime = new AsyncLocalStorage();
-const FIELDS = Object.freeze(["aiProvider", "aiRoleProviders", "aiModels", "aiModelsByProvider", "aiAutoProviders", "aiAutoFallback", "aiFallbackOpenCode", "aiSubscriptionFirst", "modelSelection", "executorCli", "executorModel", "executorModels", "executorTier", "executorTierModels", "codexHarness", "agentSeats", "agentSubtasks", "agentSkills", "agentHabits", "agentRules", "agentTools", "agentBrain", "agentEfforts", "agentThinking", "agentMode", "agentReporting"]);
+const FIELDS = Object.freeze(["aiProvider", "aiRoleProviders", "aiModels", "aiModelsByProvider", "aiAutoProviders", "aiAutoFallback", "aiFallbackOpenCode", "aiSubscriptionFirst", "modelSelection", "executorCli", "executorModel", "executorModels", "executorTier", "executorTierModels", "codexHarness", "agentSeats", "agentSubtasks", "agentSkills", "agentHabits", "agentRules", "agentTools", "agentBrain", "agentEfforts", "agentThinking", "agentKinds", "agentMode", "agentReporting"]);
 const PROVIDERS = Object.freeze(["auto", "zai", "opencode", "zen", "openrouter", "grok", "claude", "codex", "chatgpt", "antigravity", "lmstudio", "custom"]);
 const CLIS = Object.freeze(["opencode", "grok", "claude", "codex", "antigravity"]);
 const EFFORTS = Object.freeze(["minimal", "low", "medium", "high", "xhigh", "max"]);
@@ -66,6 +67,7 @@ function validate(configuration) {
   for (const field of ["aiRoleProviders", "aiModels", "aiModelsByProvider", "executorModels", "executorTierModels", "agentSeats", "agentBrain", "agentEfforts"]) if (configuration[field] !== undefined && !record(configuration[field])) return `Invalid ${field}.`;
   for (const [role, provider] of Object.entries(configuration.aiRoleProviders || {})) if (!["routine", "heavy"].includes(role) || provider && !PROVIDERS.includes(provider)) return "Unknown role provider.";
   if (configuration.agentThinking !== undefined) { const error = modelLadder.validate(configuration.agentThinking); if (error) return error; }
+  if (configuration.agentKinds !== undefined) { const error = modelKinds.validate(configuration.agentKinds); if (error) return error; }
   for (const [role, effort] of Object.entries(configuration.agentEfforts || {})) {
     if (!["routine", "heavy", "builder"].includes(role) || effort && !EFFORTS.includes(effort)) return "Unknown reasoning effort.";
     // The coding worker's start: the attempt fits it to what its model takes
@@ -106,7 +108,9 @@ function validate(configuration) {
     if (record(value)) return Object.keys(value).length <= 40 && Object.entries(value).every(([key, item]) => !["__proto__", "prototype", "constructor"].includes(key) && inspect(item, depth + 1));
     return typeof value === "boolean" || value === null;
   };
-  const bounded = { ...configuration }; delete bounded.agentRules;
+  // The kind routes carry their trial's numbers and have their own bounds
+  // (model-kinds validate), like the rules.
+  const bounded = { ...configuration }; delete bounded.agentRules; delete bounded.agentKinds;
   return inspect(bounded) ? null : "Invalid team configuration.";
 }
 function view(settings, projectId) {

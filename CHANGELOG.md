@@ -21,6 +21,15 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   `agentThinking` (mode, step up, ask before Max, try other models). A CLI
   whose own help does not list the flag gets none, and
   `MEFI_STUDIO_THINKING_OFF=1` turns the flags off.
+- **A report card, and each kind of coding job on the model that does it
+  best.** Team › Seats and models reads every checked coding task on this PC
+  and says what each model is good and bad at (building features, exploring a
+  codebase, analysing code...). A kind of job the usual model keeps failing
+  gets a suggestion; "Try it" sends the next 5 jobs of that kind to that model,
+  and Studio keeps it for that kind only if it did clearly better. With "Try
+  other models now and then" on and models picked automatically, Studio starts
+  such a trial itself (one at a time, Sonnet on your Claude login first) and
+  says so in the feed. Team setting: `agentKinds`.
 - **Chrome's buttons no longer look struck through.** The metal on main
   buttons and chosen tabs had a hard dark line at half height, right behind
   the words. Its horizon is now a soft band below them, and the darkest part

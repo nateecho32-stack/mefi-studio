@@ -67,6 +67,10 @@ const api = {
   agentModels: (provider) => ipcRenderer.invoke("agents:models", { provider }),
   agentsSave: (payload) => ipcRenderer.invoke("agents:save", payload),
   agentsPreset: (payload) => ipcRenderer.invoke("agents:preset", payload),
+  // The report card (what each model is good and bad at, on this PC) and the
+  // per-kind routes it suggests (main.cjs "Which model does which kind of job").
+  teamReport: (payload = {}) => ipcRenderer.invoke("team:report", { projectId: payload.projectId }),
+  teamKindRoute: (payload = {}) => ipcRenderer.invoke("team:kind-route", { projectId: payload.projectId, taskType: String(payload.taskType ?? "").slice(0, 40), cli: String(payload.cli ?? "").slice(0, 20), model: String(payload.model ?? "").slice(0, 120), trial: payload.trial !== false, clear: payload.clear === true }),
   skillsList: () => ipcRenderer.invoke("skills:list"),
   skillsRead: (name) => ipcRenderer.invoke("skills:read", { name: typeof name === "string" ? name.slice(0, 100) : "" }),
   skillsSave: (draft) => ipcRenderer.invoke("skills:save", { name: typeof draft?.name === "string" ? draft.name.slice(0, 100) : "", description: typeof draft?.description === "string" ? draft.description : "", body: typeof draft?.body === "string" ? draft.body : "" }),

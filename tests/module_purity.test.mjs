@@ -60,6 +60,8 @@ const PROMISES = [
   { file: "scripts/cli-accounts.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (time is", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   // How hard a model thinks and when a stuck job steps up; main.cjs's "How hard a coding attempt thinks" block owns the reads.
   { file: "scripts/model-ladder.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  // Which model does which kind of job; main.cjs's block of that name reads the ledgers and writes the routes.
+  { file: "scripts/model-kinds.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   // The fleet's seats and wires (docs/fleet-overhaul-plan.md); fleet-host.cjs owns its I/O.
   { file: "scripts/fleet.cjs", says: "Pure module: no Electron, no filesystem, no network, no processes, no", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   // The GitHub link's vocabulary and rules (chip states, repository names, failure sentences, the publish plan); git-actions.cjs owns its I/O.

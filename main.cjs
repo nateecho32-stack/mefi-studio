@@ -91,6 +91,7 @@ const cliSetup = require("./scripts/cli-setup.cjs");
 const cliText = require("./scripts/cli-text.cjs");
 const cliAccounts = require("./scripts/cli-accounts.cjs");
 const modelLadder = require("./scripts/model-ladder.cjs");
+const modelKinds = require("./scripts/model-kinds.cjs");
 const agentIssues = require("./scripts/agent-issues.cjs");
 const brains = require("./scripts/brains.cjs");
 const taskDelegation = require("./scripts/task-delegation.cjs");
@@ -17433,6 +17434,149 @@ async function heavierRetryOnOffer() {
   }
 }
 
+// ---- Which model does which kind of job (scripts/model-kinds.cjs) ----
+// The report card reads every model ledger on this PC; a kind of coding job
+// the usual model keeps failing gets a suggestion, and a route the owner (or,
+// with "Try other models now and then" on, Studio) starts sends the next few
+// jobs of that kind to another model. When those are checked, the route is
+// kept only if that model did clearly better; otherwise the kind goes back to
+// the usual model. Routes are a team field (settings.agentKinds).
+// Every row in every model ledger on this PC: the open project's, each saved
+// project's and the legacy shared one. Each store keeps its own cache.
+async function allModelRows() {
+  if (typeof modelPerformanceStore !== "function") return [];
+  const source = path.join(STUDIO_ROOT, "data", "model-performance.json");
+  const files = new Set([source, projectDataPath(source)]);
+  try { for (const saved of projects.list().projects) files.add(projects.dataPath(source, saved)); } catch { /* the open project's ledger still counts */ }
+  const states = await Promise.all([...files].map((filePath) => {
+    if (!modelPerformanceStores.has(filePath)) modelPerformanceStores.set(filePath, createModelPerformanceStore({ filePath }));
+    return modelPerformanceStores.get(filePath).read().catch(() => null);
+  }));
+  return states.flatMap((state) => Array.isArray(state?.observations) ? state.observations : []);
+}
+// Whether a command is on PATH, asked once per five minutes per command.
+const cliPathProbes = new Map();
+function cliOnPath(command) {
+  const known = cliPathProbes.get(command);
+  if (known && Date.now() - known.at < 5 * 60000) return Promise.resolve(known.ok);
+  return new Promise((resolve) => {
+    const done = (ok) => { cliPathProbes.set(command, { at: Date.now(), ok }); resolve(ok); };
+    try {
+      const child = spawn(process.platform === "win32" ? "where.exe" : "which", [command], { windowsHide: true });
+      child.on("error", () => done(false));
+      child.on("close", (code) => done(code === 0));
+    } catch { done(false); }
+  });
+}
+// What the coding worker runs as it is set up, without probing a login: the
+// tier's model, the pinned model, or the OpenCode default Studio would route.
+function builderPreview(settings) {
+  const cli = BUILDER_CLIS.includes(settings.executorCli) ? settings.executorCli : "opencode";
+  const tier = normalizeExecutorTier(settings.executorTier);
+  let model = tier === "auto" ? executorModelOverride(settings, cli) : executorTierDefaults(settings, cli, { zai: cli === "opencode" && executorTierZai(settings) })[tier].model;
+  if (!model && cli === "opencode") model = executorTierZai(settings) && settings.aiProvider === "zai" ? `mefi-zai/${ZAI_MODEL_ROUTINE}` : `opencode-go/${ASSISTANT_MODEL}`;
+  return { cli, model: String(model ?? "") };
+}
+// Models a kind of coding job could move to, cheapest step first: Sonnet on a
+// signed-in Claude login (a subscription, so trying it costs no money), the
+// worker's own stronger model, Opus on that Claude login, then Codex on a
+// signed-in ChatGPT login.
+async function kindCandidates(settings) {
+  const out = [];
+  const add = (cli, model) => {
+    if (out.some((item) => item.cli === cli && item.model === model)) return;
+    const identity = workerLedgerIdentity({ cli, model, via: "" });
+    out.push({ cli, model, provider: identity.provider, ledgerModel: identity.model });
+  };
+  const claude = cliSignedIn("claude") !== false && await cliOnPath("claude");
+  if (claude) add("claude", "sonnet");
+  const preview = builderPreview(settings);
+  const stronger = strongerBuilderModel(settings, preview.cli, { cli: preview.cli, model: preview.model });
+  if (stronger) add(preview.cli, stronger);
+  if (claude) add("claude", "opus");
+  if (cliSignedIn("codex") === true && await cliOnPath("codex")) add("codex", "");
+  return out;
+}
+// A kind's saved route with its trial judged, and Studio's own trial started
+// when the record calls for one. Returns the route this job takes, or null for
+// the usual model. A judged trial is written back (kept or dropped) and said
+// once in the feed.
+async function kindRouteFor(workKind) {
+  if (typeof modelKinds === "undefined") return null;
+  const settings = await (typeof readAgentSettings === "function" ? readAgentSettings() : readSettings());
+  const routes = settings.agentKinds && typeof settings.agentKinds === "object" ? settings.agentKinds : {};
+  let route = modelKinds.routeOf(routes[workKind]);
+  if (route?.trial) {
+    const rows = await allModelRows();
+    const state = modelKinds.trialState(route, rows, { taskType: workKind, ...workerLedgerIdentity({ cli: route.cli, model: route.model, via: "" }) });
+    if (state?.done) {
+      const name = modelKinds.modelName(route.model, route.cli), label = modelKinds.kindLabel(workKind).toLowerCase();
+      const kept = state.keep ? { ...route, trial: null, kept: { at: Date.now(), wins: state.wins, losses: state.losses } } : null;
+      await saveKindRoute(workKind, kept);
+      const said = kept ? `Kept ${name} for ${label} jobs: it passed ${state.wins} of ${state.size}.` : `${name} passed ${state.wins} of ${state.size} ${label} jobs, not clearly better, so those jobs go back to the usual model.`;
+      logLine(`[kinds] ${said}`);
+      if (typeof pushAutopilotHistory === "function") pushAutopilotHistory("info", said);
+      route = kept;
+    }
+  }
+  if (route) return route;
+  const choice = modelLadder.thinking(settings);
+  if (!choice.explore || settings.modelSelection === "fixed") return null;
+  const preview = builderPreview(settings);
+  const builder = workerLedgerIdentity({ cli: preview.cli, model: preview.model, via: "" });
+  const card = modelKinds.reportCard(await allModelRows());
+  const start = modelKinds.autoTrialFor({ kind: workKind, card, builder, routes, explore: choice.explore, selection: settings.modelSelection, available: await kindCandidates(settings) });
+  if (!start) return null;
+  const record = card.models.find((entry) => entry.provider === builder.provider && entry.model === builder.model)?.kinds.find((kind) => kind.taskType === workKind);
+  const trial = { cli: start.to.cli, model: start.to.model, by: "studio", trial: { size: modelKinds.TRIAL_SIZE, from: Date.now(), baseline: { wins: record?.wins ?? 0, losses: record?.losses ?? 0 } }, kept: null };
+  await saveKindRoute(workKind, trial);
+  const said = `Trying ${start.to.name} on the next ${modelKinds.TRIAL_SIZE} ${modelKinds.kindLabel(workKind).toLowerCase()} jobs: ${start.detail.split(". ")[0]}.`;
+  logLine(`[kinds] ${said}`);
+  if (typeof pushAutopilotHistory === "function") pushAutopilotHistory("info", said);
+  return modelKinds.routeOf(trial);
+}
+// Writes one kind's route (null removes it) into the Studio defaults and the
+// open project's own team, the way the setup flows write a team field.
+async function saveKindRoute(workKind, route) {
+  const projectId = projects.current().id;
+  const mutate = (next) => {
+    const routes = { ...(next.agentKinds && typeof next.agentKinds === "object" ? next.agentKinds : {}) };
+    if (route) routes[workKind] = route; else delete routes[workKind];
+    if (Object.keys(routes).length) next.agentKinds = routes; else delete next.agentKinds;
+  };
+  await updateSettings((raw) => {
+    mutate(raw);
+    if (projectId === "project_none" || agentProfiles.view(raw, projectId).inherited) return;
+    return agentProfiles.update(raw, projectId, mutate);
+  });
+}
+// The report card for the Team page: the record, the worker as it is set up,
+// what Studio could move a kind of job to, the routes and how their trials
+// stand, and the suggestions.
+async function teamReport(settings) {
+  const rows = await allModelRows();
+  const card = modelKinds.reportCard(rows);
+  const preview = builderPreview(settings);
+  const builder = workerLedgerIdentity({ cli: preview.cli, model: preview.model, via: "" });
+  const available = await kindCandidates(settings);
+  const saved = settings.agentKinds && typeof settings.agentKinds === "object" ? settings.agentKinds : {};
+  const kinds = {};
+  for (const [kind, value] of Object.entries(saved)) {
+    const route = modelKinds.routeOf(value);
+    if (!route) continue;
+    const trial = route.trial ? modelKinds.trialState(route, rows, { taskType: kind, ...workerLedgerIdentity({ cli: route.cli, model: route.model, via: "" }) }) : null;
+    kinds[kind] = { cli: route.cli, model: route.model, name: modelKinds.modelName(route.model, route.cli), label: modelKinds.kindLabel(kind), by: route.by, trial: trial ? { size: trial.size, left: trial.left, wins: trial.wins, losses: trial.losses } : null, kept: route.kept };
+  }
+  const known = new Set(card.models.map((entry) => `${entry.provider}::${entry.model}`));
+  return {
+    ok: true, thinking: modelLadder.thinking(settings), selection: settings.modelSelection === "fixed" ? "fixed" : "jev",
+    builder: { cli: preview.cli, model: preview.model, name: modelKinds.modelName(preview.model, preview.cli) },
+    checked: card.checked, from: card.from, to: card.to, models: card.models,
+    untried: available.filter((item) => !known.has(`${item.provider}::${item.ledgerModel}`)).map((item) => ({ cli: item.cli, model: item.model, name: modelKinds.modelName(item.ledgerModel || item.model, item.cli) })),
+    kinds, suggestions: modelKinds.suggestions(card, { builder, available, routes: saved }),
+  };
+}
+
 // A route its provider refuses: a run that ended on "no active subscription",
 // a plan that leaves the model out or an HTTP 402 (executorCore.refusedRoute)
 // is the route's problem, not the card's. finish() requeues the card
@@ -17823,7 +17967,24 @@ async function spawnNextJob(options) {
   let subtaskSettings = null;
   try { if (job.ref?.delegatedFrom && typeof readAgentSettings === "function") subtaskSettings = (await readAgentSettings()).agentSubtasks ?? null; } catch {}
   const subtaskCli = subtaskSettings?.cli && subtaskSettings.cli !== "auto" ? subtaskSettings.cli : null;
-  const runRoute = await executorRunEnv({ cliOverride: subtaskCli }).catch((error) => ({ error: error.message }));
+  // A kind of job with its own route (a trial or a kept move, kindRouteFor)
+  // starts on that route's CLI. The kind is read here as the evaluator files
+  // it (coding-explore…; workKind below is the same). A subtask override or a
+  // heavier retry the owner asked for wins over it. typeof: sliced test hosts.
+  let kindRoute = null;
+  if (job.kind === "task" && !subtaskCli && !String(subtaskSettings?.model ?? "").trim() && typeof kindRouteFor === "function" && !executorCore.heavyRetryPending(job.ref)) {
+    const shape = typeof workShapeFor === "function" ? workShapeFor(job.ref?.id) : null;
+    const kind = typeof shape?.intent === "string" && /^[a-z]+$/.test(shape.intent) ? `coding-${shape.intent}` : "coding";
+    try { kindRoute = await kindRouteFor(kind); if (kindRoute) kindRoute.kind = kind; }
+    catch (error) { logLine(`[kinds] route not read: ${String(error?.message ?? error).slice(0, 120)}`); }
+  }
+  let runRoute = await executorRunEnv({ cliOverride: subtaskCli ?? kindRoute?.cli ?? null }).catch((error) => ({ error: error.message }));
+  if (kindRoute && (!runRoute || runRoute.error)) {
+    // That CLI cannot run here now: this job takes the usual route.
+    logLine(`[kinds] ${modelKinds.kindLabel(kindRoute.kind)} jobs go to ${kindRoute.cli}, which cannot run now (${String(runRoute?.error ?? "no route").slice(0, 100)}); this one takes the usual route`);
+    kindRoute = null;
+    runRoute = await executorRunEnv({ cliOverride: subtaskCli }).catch((error) => ({ error: error.message }));
+  }
   if (!runRoute || runRoute.error) {
     const reason = runRoute?.error || "executor route unavailable";
     autopilot.lastError = reason;
@@ -17915,6 +18076,17 @@ async function spawnNextJob(options) {
     runRoute.via = `${runRoute.cli} / ${subtaskModel} · subtask override`;
     routeDecision = null;
     ownerPick = "its subtask override names that model";
+  }
+  // This kind of job's own model (kindRouteFor), on its trial or kept. It is
+  // the model being measured, so the thinking may step but the model stays.
+  if (kindRoute && runRoute.cli === kindRoute.cli && !ownerPick) {
+    const note = `${modelKinds.kindLabel(kindRoute.kind).toLowerCase()} jobs${kindRoute.trial ? ", trying it" : ""}`;
+    const fits = !kindRoute.model || (runRoute.cli === "opencode" ? OPENCODE_MODEL_ID.test(kindRoute.model) : runRoute.cli === "antigravity" ? Boolean(agyModelArg(kindRoute.model)) : Boolean(cliModelArg(kindRoute.model)));
+    if (fits && (!kindRoute.model || await useBuilderModel(runRoute, runRoute.cli === "opencode" ? "opencode" : runRoute.cli, kindRoute.model, note))) {
+      if (!kindRoute.model) runRoute.via = `${runRoute.via} · ${note}`;
+      routeDecision = null;
+      ownerPick = kindRoute.trial ? "its kind of job is on a trial with that model" : "its kind of job is sent to that model";
+    }
   }
   // "Try again with a heavier model": this one attempt runs the builder's
   // Heavy-tier model whatever its tier or model selection (heavyRetryRoute).
@@ -23539,11 +23711,20 @@ function registerIpc() {
         choices[seat] = { ok: route.ok, provider: route.provider || chosen.provider, model: route.model || "Provider default", inherited: false, reason: route.error || (route.provider !== chosen.provider ? "Using an enabled fallback" : "Selected seat route"), ...agentProfiles.capabilities(route.provider, route.model) };
       }
     }
+    // The coding worker as it is set up, beside the roles and seats (the
+    // Team page's "Who does what"), without probing a login.
+    if (typeof builderPreview === "function") {
+      const preview = builderPreview(effective);
+      choices.builder = { ok: true, provider: preview.cli, model: preview.model || "Tool default", inherited: false, reason: normalizeExecutorTier(effective.executorTier) === "auto" ? "Coding worker" : `${TIER_LABELS[normalizeExecutorTier(effective.executorTier)]} tier`,
+        // Every attempt fits these to what its model takes (builderThinking).
+        efforts: ["low", "medium", "high", "max"] };
+    }
     const habits = habitsLibrary.library().map((habit) => ({ ...habit, costs: Object.fromEntries(habit.variants.map((variant) => [variant.id, habitsLibrary.cost(habit.id, variant.id)])) }));
     // The Rules card: the limits, both project files as they are now (the Studio
     // defaults have no one folder), each section's cost and who reads what.
     const rulesInfo = await agentAddons.rulesState(projectRoot(), { files: scope !== "defaults" }).catch(() => null);
     return { ...state, name: scope === "defaults" ? "Studio defaults" : state.name, scope, configuration: agentProfiles.extract(effective), routing, seats, choices, skills, mcpTools, habits, rulesInfo,
+      thinking: modelLadder.thinking(effective),
       capabilities: Object.fromEntries(["routine", "heavy"].map((role) => {
         const provider = roleProvider(effective, role);
         const model = assistantModelOverride(effective, role, provider);
@@ -23563,6 +23744,38 @@ function registerIpc() {
     const endpoint = provider === "zen" ? ZEN_ENDPOINT : provider === "opencode" ? ASSISTANT_ENDPOINT : provider === "zai" ? ZAI_ENDPOINT : provider === "lmstudio" ? normalizeLmStudioEndpoint(settings.lmStudioEndpoint) : provider === "custom" ? normalizeCompatEndpoint(settings.customEndpoint) : "";
     const field = { zen: "zenApiKeyEncrypted", opencode: "apiKeyEncrypted", zai: "zaiApiKeyEncrypted", custom: "customApiKeyEncrypted" }[provider];
     return agentModels.list({ endpoint, apiKey: field ? decryptKey(settings, field) : null });
+  });
+  // The report card on Team › Seats and models, and "Try it" / "Stop" for a
+  // kind of job's own route ("Which model does which kind of job").
+  ipcMain.handle("team:report", async (_event, payload = {}) => {
+    const projectId = projects.active().id;
+    if (payload.projectId && payload.projectId !== projectId) return { ok: false, stale: true, error: "The active project changed." };
+    try { return await teamReport(agentProfiles.effective(await readSettings(), projectId)); }
+    catch (error) { return { ok: false, error: `The report card could not be read: ${String(error?.message ?? error).slice(0, 160)}` }; }
+  });
+  ipcMain.handle("team:kind-route", async (_event, payload = {}) => {
+    const projectId = projects.active().id;
+    if (payload.projectId && payload.projectId !== projectId) return { ok: false, stale: true, error: "The active project changed." };
+    const kind = String(payload.taskType ?? "");
+    if (!/^coding(?:-[a-z]{1,24})?$/.test(kind)) return { ok: false, error: "Choose a kind of coding job." };
+    const settings = agentProfiles.effective(await readSettings(), projectId);
+    if (payload.clear === true) {
+      await saveKindRoute(kind, null);
+      logLine(`[kinds] ${modelKinds.kindLabel(kind)} jobs go back to the usual model (owner)`);
+    } else {
+      const route = modelKinds.routeOf({ cli: payload.cli, model: payload.model, by: "owner" });
+      if (!route) return { ok: false, error: "That model cannot take a kind of job." };
+      const preview = builderPreview(settings);
+      const builder = workerLedgerIdentity({ cli: preview.cli, model: preview.model, via: "" });
+      const record = modelKinds.reportCard(await allModelRows()).models.find((entry) => entry.provider === builder.provider && entry.model === builder.model)?.kinds.find((item) => item.taskType === kind);
+      const saved = payload.trial === false ? { ...route, trial: null, kept: { at: Date.now(), wins: 0, losses: 0 } }
+        : { ...route, trial: { size: modelKinds.TRIAL_SIZE, from: Date.now(), baseline: { wins: record?.wins ?? 0, losses: record?.losses ?? 0 } }, kept: null };
+      await saveKindRoute(kind, saved);
+      logLine(`[kinds] ${modelKinds.kindLabel(kind)} jobs go to ${route.cli}${route.model ? ` ${route.model}` : ""}${saved.trial ? ` for the next ${modelKinds.TRIAL_SIZE}` : ""} (owner)`);
+    }
+    send("settings:changed", { source: "kind-route" });
+    try { return await teamReport(agentProfiles.effective(await readSettings(), projectId)); }
+    catch (error) { return { ok: true, error: String(error?.message ?? error).slice(0, 160) }; }
   });
   async function saveAgentTeam(payload, preset = false) {
     const projectId = projects.active().id;
