@@ -16,10 +16,10 @@
 /* The height the strip asks its row for, measured (renderer/tabs.js stripHeight): as tall as the token, whatever the row allows. */
 .ts-strip .ts-probe { position: absolute; left: 0; top: 0; width: 0; height: var(--ts-h); visibility: hidden; pointer-events: none; }
 .ts-list { position: relative; display: flex; align-items: center; gap: 3px; flex: 0 1 auto; min-width: 0; height: 100%; padding: 0 2px; overflow: hidden; }
-.ts-item { position: relative; display: flex; align-items: center; flex: 0 1 auto; min-width: 132px; max-width: 290px; height: calc(var(--ts-h) - 10px); border-radius: 9px; touch-action: none; color: var(--muted); transition: background var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out); }
+.ts-item { position: relative; display: flex; align-items: center; flex: 0 1 auto; min-width: 132px; max-width: 290px; height: calc(var(--ts-h) - 10px); border-radius: 9px; touch-action: none; color: var(--muted); transition: background var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out), box-shadow var(--motion-fast) var(--ease-out); }
 .ts-item[hidden] { display: none; }
 .ts-item:hover { background: color-mix(in srgb, var(--ivory) 6%, transparent); color: var(--ivory); }
-.ts-item[data-active] { background: var(--surface-raised); color: var(--ivory); box-shadow: inset 0 0 0 1px var(--hairline-strong); }
+.ts-item[data-active] { background: var(--surface-raised); color: var(--ivory); box-shadow: inset 0 0 0 1px var(--hairline-strong), inset 0 2px var(--studio-glass-highlight, transparent); }
 .ts-item[data-pinned] { flex: none; min-width: 0; }
 .ts-item[data-attn] { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn) 55%, transparent); }
 .ts-item[data-fresh] { animation: ts-arrive var(--motion-slow) var(--ease-out) 2; }
@@ -53,7 +53,7 @@
 :is(.ts-strip, .ts-pop) .ts-close .glyph { width: 12px; height: 12px; }
 .ts-drop { position: absolute; top: 4px; bottom: 4px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--gold-bright); pointer-events: none; }
 
-.ts-strip :is(.ts-add, .ts-cfg, .ts-more, .ts-menu) { flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 0; height: 28px; margin: 0; padding: 0; border: 0; border-radius: 9px; background: transparent; box-shadow: none; transform: none; color: var(--muted); font: inherit; font-size: var(--ts-fs-small); white-space: nowrap; cursor: pointer; }
+.ts-strip :is(.ts-add, .ts-cfg, .ts-more, .ts-menu) { flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 0; height: 28px; margin: 0; padding: 0; border: 0; border-radius: 9px; background: transparent; box-shadow: none; transform: none; color: var(--muted); font: inherit; font-size: var(--ts-fs-small); white-space: nowrap; cursor: pointer; transition: background-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out); }
 .ts-strip :is(.ts-add, .ts-cfg) { width: 28px; }
 .ts-strip :is(.ts-add, .ts-cfg) .glyph { width: 16px; height: 16px; }
 .ts-strip :is(.ts-add, .ts-cfg, .ts-more, .ts-menu):hover { background: color-mix(in srgb, var(--ivory) 7%, transparent); color: var(--ivory); border: 0; }
@@ -80,7 +80,7 @@
 }
 
 /* ---- menus: the Add menu, a tab's menu, the overflow list, the small-window menu ---- */
-.ts-pop { position: fixed; z-index: calc(var(--z-transient, 90) - 2); display: flex; flex-direction: column; box-sizing: border-box; min-width: 200px; max-width: calc(100vw - 16px); padding: 6px; border: 1px solid var(--studio-glass-edge, var(--hairline)); border-radius: var(--r-xl, 12px); background: var(--studio-float-fill, var(--panel-solid)); box-shadow: var(--studio-float-shadow, var(--shadow-2)); color: var(--ivory); font: 450 var(--ts-fs)/1.3 var(--font-ui); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
+.ts-pop { position: fixed; z-index: calc(var(--z-transient, 90) - 2); display: flex; flex-direction: column; box-sizing: border-box; min-width: 200px; max-width: calc(100vw - 16px); padding: 6px; border: 1px solid var(--studio-glass-edge, var(--hairline)); border-radius: var(--r-lg, 12px); background: var(--studio-float-fill, var(--panel-solid)); box-shadow: var(--studio-float-shadow, var(--shadow-2)); color: var(--ivory); font: 450 var(--ts-fs)/1.3 var(--font-ui); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
 .ts-pop-tab { width: 304px; }
 .ts-pop-more { width: 290px; }
 .ts-pop-menu { width: min(320px, calc(100vw - 16px)); }

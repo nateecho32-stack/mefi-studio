@@ -1589,7 +1589,10 @@ failed process stays an error and cannot produce briefing requests.
   into its host and its brief stays readable on that card under
   **Absorbed work**.
 - **Appearance** (`U`) groups colour themes, the Void collection, node style,
-  layout and effects. **Preview canvas** opens the live view and returns to
+  layout and effects. **Chrome** is listed first and is what a new install
+  opens in: matte black panels, brushed-metal primary buttons and chosen
+  segments, and a thin chrome edge on what is selected (`renderer/chrome.css`);
+  a theme already chosen is kept. **Preview canvas** opens the live view and returns to
   the same category. Music and video are managed from the **audio dropdown**,
   outside Appearance. It groups local files, radio, Links, the audio
   link and recommendations. Links plays a pasted or dropped YouTube, Spotify,

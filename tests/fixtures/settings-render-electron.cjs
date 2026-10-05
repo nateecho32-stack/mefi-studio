@@ -43,7 +43,7 @@ const PLACES = [
   ["Updates and help", "Updates"], ["Updates and help", "Report a problem"], ["Advanced", "System"],
 ];
 const PAGES = [["general", "General"], ["notifications", "Notifications"], ["appearance", "Appearance"], ["looks", "Map look"], ["audio", "Sound and music"], ["updates", "Updates"], ["problem", "Report a problem"], ["system", "System"]];
-const THEMES = ["aurora", "gold", "midnight", "forest", "violet", "ember", "rose", "void", "eclipse", "abyss", "dusk", "custom"];
+const THEMES = ["chrome", "aurora", "gold", "midnight", "forest", "violet", "ember", "rose", "void", "eclipse", "abyss", "dusk", "custom"];
 
 async function bridgeNames() {
   const source = fs.readFileSync(path.join(studio, "preload.cjs"), "utf8");
@@ -298,7 +298,7 @@ app.whenReady().then(async () => {
     }
   }
   assert.deepEqual(report.contrast, [], "every theme keeps every line of Settings at 4.5:1 or more");
-  await run("window.MefiMusic.applyTheme('aurora', false);");
+  await run("window.MefiMusic.applyTheme('chrome', false);");
   report.complete = true;
   finish();
 }).catch(finish);

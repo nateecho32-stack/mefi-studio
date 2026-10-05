@@ -19,6 +19,9 @@
   let linkWatchTimer = null, linkPlayback = null;
   let youtubeResults = [], youtubeSearching = false;
   const THEMES = {
+    // Chrome, the default: matte black panels and brushed-metal controls
+    // (renderer/chrome.css), the same palette as the public website.
+    chrome: { name: "Chrome", accent: "#c3c8d0", bright: "#eef1f5", rgb: "195,200,208", bg: "#0a0a0c", panel: "#141418", muted: "#a4a9b2", text: "#edeff2" },
     gold: { name: "Studio gold", accent: "#c9a86a", bright: "#e6c98d", rgb: "201,168,106", bg: "#050507", panel: "#0d0e12", muted: "#aaa18f" },
     midnight: { name: "Midnight", accent: "#82a8e6", bright: "#bbd5ff", rgb: "130,168,230", bg: "#050913", panel: "#0d1524", muted: "#a2b2ca" },
     forest: { name: "Forest", accent: "#85bca3", bright: "#b4e1c9", rgb: "133,188,163", bg: "#050d0b", panel: "#0d1915", muted: "#a2b8ae" },
@@ -34,7 +37,9 @@
     abyss: { name: "Abyss", accent: "#2fd6c3", bright: "#8ff5e8", accent2: "#7b5cff", rgb: "47,214,195", bg: "#01080b", panel: "#06151a", muted: "#9dbfc0", text: "#e2f7f4", collection: "void" },
     dusk: { name: "Neon Dusk", accent: "#ff5fa2", bright: "#ffa3cb", accent2: "#3fd0ff", rgb: "255,95,162", bg: "#0a0512", panel: "#170c24", muted: "#c4a9c9", text: "#fbe9f3", collection: "void" },
   };
-  const DEFAULT_THEME = "aurora";
+  // A new install opens in Chrome; a saved choice (Aurora, the default until
+  // the Chrome look, among them) is kept as it is.
+  const DEFAULT_THEME = "chrome";
   const NODE_STYLES = {
     orbs: { name: "Classic orbs", detail: "Luminous circles" },
     glass: { name: "Soft glass", detail: "Translucent surfaces" },

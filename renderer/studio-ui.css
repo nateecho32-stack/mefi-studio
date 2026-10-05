@@ -691,3 +691,24 @@ html[data-studio-style] .catalog-model { border-radius: var(--r-lg); }
 .key-tip :is(button):focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 1px; }
 html[data-motion="off"] .key-tip { transition: none; }
 @media (max-width: 720px) { .key-tip { display: none; } }
+
+/* ---- Finish (every theme) ----------------------------------------------------
+   Timing, light and press only, from tokens, so every palette, Studio style and
+   density follows; nothing changes size, gap, place or scrolling.
+   - Hover settles in --motion-fast (140 ms) and a press lands in
+     --motion-instant (90 ms); Motion off and the OS's reduced motion make both
+     0 (styles.css, "The motion tokens").
+   - A filled button darkens a touch while pressed; the shared choice controls
+     catch a 1px top highlight (--studio-glass-highlight: white on a light
+     palette, the ink's on a dark one) and their edge brightens under the
+     pointer. Focus keeps the one 2px ring of section 4 in styles.css. */
+button, .button { transition-duration: var(--motion-fast); }
+:is(button, .button):active { transition-duration: var(--motion-instant); }
+.primary:not(#idle-hud *, .danger):not(:disabled, [aria-disabled=true]):active,
+#workspace-layer .primary:not(:disabled, [aria-disabled=true]):active { filter: brightness(.93); }
+.studio-select, .studio-choice-option, .studio-style-choice, .autonomy-button {
+  transition: background-color var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out), box-shadow var(--motion-fast) var(--ease-out);
+}
+.studio-select:not(:disabled):hover { border-color: var(--studio-edge-active); }
+html[data-studio-style] :is(.studio-style-choice, .autonomy-button):not(:disabled) { box-shadow: inset 0 1px var(--studio-glass-highlight); }
+.autonomy-button:not(:disabled):active { box-shadow: inset 0 1px 2px rgb(0 0 0 / .2); }

@@ -1,7 +1,7 @@
 /* Today and the Inbox (renderer/today.js), layout v2 only: nothing here matches
    until the script draws it, and the two rules that change Vibe's front door
    wait for #vibe-layer[data-today="on"], which only that script sets.
-   Every colour is a theme token, so the eleven themes, the custom palette and
+   Every colour is a theme token, so the twelve themes, the custom palette and
    the light ones keep their own; text is never under 12px, at any text size
    (--text-scale, the Size and density page's); spacing follows the density
    tokens where they exist (--d-gap, --d-pad). Nothing reserves scrollbar

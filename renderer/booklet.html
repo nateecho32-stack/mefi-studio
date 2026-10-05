@@ -9381,6 +9381,27 @@ html[data-studio-style] .catalog-model { border-radius: var(--r-lg); }
 html[data-motion="off"] .key-tip { transition: none; }
 @media (max-width: 720px) { .key-tip { display: none; } }
 
+/* ---- Finish (every theme) ----------------------------------------------------
+   Timing, light and press only, from tokens, so every palette, Studio style and
+   density follows; nothing changes size, gap, place or scrolling.
+   - Hover settles in --motion-fast (140 ms) and a press lands in
+     --motion-instant (90 ms); Motion off and the OS's reduced motion make both
+     0 (styles.css, "The motion tokens").
+   - A filled button darkens a touch while pressed; the shared choice controls
+     catch a 1px top highlight (--studio-glass-highlight: white on a light
+     palette, the ink's on a dark one) and their edge brightens under the
+     pointer. Focus keeps the one 2px ring of section 4 in styles.css. */
+button, .button { transition-duration: var(--motion-fast); }
+:is(button, .button):active { transition-duration: var(--motion-instant); }
+.primary:not(#idle-hud *, .danger):not(:disabled, [aria-disabled=true]):active,
+#workspace-layer .primary:not(:disabled, [aria-disabled=true]):active { filter: brightness(.93); }
+.studio-select, .studio-choice-option, .studio-style-choice, .autonomy-button {
+  transition: background-color var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out), box-shadow var(--motion-fast) var(--ease-out);
+}
+.studio-select:not(:disabled):hover { border-color: var(--studio-edge-active); }
+html[data-studio-style] :is(.studio-style-choice, .autonomy-button):not(:disabled) { box-shadow: inset 0 1px var(--studio-glass-highlight); }
+.autonomy-button:not(:disabled):active { box-shadow: inset 0 1px 2px rgb(0 0 0 / .2); }
+
 /* A little light, a trailing wisp, and expressions made of floating text. */
 .agent-creature { display: block; width: 100%; height: 100%; overflow: visible; color: var(--gold-bright); pointer-events: none; }
 .agent-body { transform-origin: 40px 44px; animation: agent-float 5.6s ease-in-out infinite; translate: var(--agent-look-x, 0px) var(--agent-look-y, 0px); transition: translate var(--motion-slow) var(--ease-out), opacity var(--motion-ambient) var(--ease-out), scale var(--motion-ambient) var(--ease-emphasized); }
@@ -10645,7 +10666,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 /* Today and the Inbox (renderer/today.js), layout v2 only: nothing here matches
    until the script draws it, and the two rules that change Vibe's front door
    wait for #vibe-layer[data-today="on"], which only that script sets.
-   Every colour is a theme token, so the eleven themes, the custom palette and
+   Every colour is a theme token, so the twelve themes, the custom palette and
    the light ones keep their own; text is never under 12px, at any text size
    (--text-scale, the Size and density page's); spacing follows the density
    tokens where they exist (--d-gap, --d-pad). Nothing reserves scrollbar
@@ -12460,6 +12481,7 @@ html[data-frame] .shell-btn {
   min-height: 0; margin: 0; padding: 0; border: 1px solid transparent; border-radius: 8px;
   background: transparent; color: var(--muted); box-shadow: none; transform: none;
   font: inherit; line-height: 1; letter-spacing: 0; gap: 6px; text-align: center;
+  transition: background-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out), box-shadow var(--motion-fast) var(--ease-out);
 }
 html[data-frame] .shell-btn:hover { color: var(--ivory); background: color-mix(in srgb, var(--ivory) 7%, transparent); border-color: transparent; transform: none; box-shadow: none; }
 html[data-frame] .shell-btn:active { transform: none; }
@@ -12492,6 +12514,10 @@ html[data-frame] .shell-top-extra:empty { display: none; }
 html[data-frame] .shell-top-right { margin-left: auto; }
 html[data-frame] .shell-icon-btn { width: 32px; height: 32px; flex: none; justify-content: center; border-color: var(--hairline-strong); border-radius: 10px; }
 html[data-frame] .shell-icon-btn[data-on="true"] { background: var(--tint-gold-3, color-mix(in srgb, var(--gold) 14%, transparent)); color: var(--gold-bright); border-color: color-mix(in srgb, var(--gold) 50%, transparent); }
+/* The bar's raised controls catch the light on their top edge, and a bordered one keeps its edge under the pointer
+   (the shared hover above clears it) instead of flickering. */
+html[data-frame] :is(.shell-icon-btn, .shell-search, .shell-pill, .shell-action), html[data-frame] :is(.shell-icon-btn, .shell-search, .shell-pill, .shell-action):hover { box-shadow: inset 0 1px var(--studio-glass-highlight, transparent); }
+html[data-frame] .shell-icon-btn:not([data-on="true"]):hover, html[data-frame] .shell-pill-btn:hover, html[data-frame] .shell-action:hover, html[data-frame] .shell-pill:not([data-tone="need"]):hover { border-color: var(--hairline-strong); }
 
 /* the Vibe | Build switch: the app's mode switch (vibe.css), at the bar's height */
 html[data-frame] .shell-mode { flex: none; padding: 2px; box-shadow: none; backdrop-filter: none; }
@@ -12598,7 +12624,7 @@ html[data-frame] .shell-pages-history .shell-icon-btn { width: 28px; height: 28p
 html[data-frame] .shell-pages-git { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 4px 4px 10px; }
 html[data-frame] .shell-pages-git:empty { display: none; }
 html[data-frame] .shell-pages-list { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-html[data-frame] .shell-page { display: flex; align-items: center; justify-content: flex-start; gap: 10px; width: 100%; min-height: 36px; padding: 0 10px; border-radius: 10px; color: var(--muted); font-size: var(--frame-fs); text-align: left; }
+html[data-frame] .shell-page { display: flex; align-items: center; justify-content: flex-start; gap: 10px; width: 100%; min-height: 36px; padding: 0 10px; border-radius: 10px; color: var(--muted); font-size: var(--frame-fs); text-align: left; transition: background-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out), box-shadow var(--motion-fast) var(--ease-out); }
 html[data-frame] .shell-page .glyph { flex: none; width: 17px; height: 17px; }
 html[data-frame] .shell-page-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.3; }
 html[data-frame] .shell-page.is-sub { min-height: 32px; padding-left: 22px; }
@@ -12666,7 +12692,7 @@ html[data-frame] .shell-menu {
   position: fixed; left: 8px; bottom: calc(var(--shell-status-h) + 6px); z-index: calc(var(--z-transient) + 2);
   width: min(360px, calc(100vw - 16px)); max-height: calc(100vh - var(--shell-y0) - var(--shell-status-h) - 14px); overflow-y: auto;
   display: flex; flex-direction: column; gap: 10px; padding: 12px 14px 14px; box-sizing: border-box;
-  background: var(--panel-solid); border: 1px solid var(--hairline-strong); border-radius: var(--r-lg, 10px); box-shadow: var(--shadow-3);
+  background: var(--panel-solid); border: 1px solid var(--hairline-strong); border-radius: var(--r-lg, 10px); box-shadow: inset 0 1px var(--studio-glass-highlight, transparent), var(--shadow-3);
   color: var(--ivory); font: 450 var(--frame-fs)/1.4 var(--font-ui);
 }
 html[data-frame] .shell-menu-head { display: flex; align-items: center; gap: 8px; }
@@ -12741,10 +12767,10 @@ html[data-motion="off"][data-frame] .shell-column[data-state="drawer"], html[dat
 /* The height the strip asks its row for, measured (renderer/tabs.js stripHeight): as tall as the token, whatever the row allows. */
 .ts-strip .ts-probe { position: absolute; left: 0; top: 0; width: 0; height: var(--ts-h); visibility: hidden; pointer-events: none; }
 .ts-list { position: relative; display: flex; align-items: center; gap: 3px; flex: 0 1 auto; min-width: 0; height: 100%; padding: 0 2px; overflow: hidden; }
-.ts-item { position: relative; display: flex; align-items: center; flex: 0 1 auto; min-width: 132px; max-width: 290px; height: calc(var(--ts-h) - 10px); border-radius: 9px; touch-action: none; color: var(--muted); transition: background var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out); }
+.ts-item { position: relative; display: flex; align-items: center; flex: 0 1 auto; min-width: 132px; max-width: 290px; height: calc(var(--ts-h) - 10px); border-radius: 9px; touch-action: none; color: var(--muted); transition: background var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out), box-shadow var(--motion-fast) var(--ease-out); }
 .ts-item[hidden] { display: none; }
 .ts-item:hover { background: color-mix(in srgb, var(--ivory) 6%, transparent); color: var(--ivory); }
-.ts-item[data-active] { background: var(--surface-raised); color: var(--ivory); box-shadow: inset 0 0 0 1px var(--hairline-strong); }
+.ts-item[data-active] { background: var(--surface-raised); color: var(--ivory); box-shadow: inset 0 0 0 1px var(--hairline-strong), inset 0 2px var(--studio-glass-highlight, transparent); }
 .ts-item[data-pinned] { flex: none; min-width: 0; }
 .ts-item[data-attn] { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn) 55%, transparent); }
 .ts-item[data-fresh] { animation: ts-arrive var(--motion-slow) var(--ease-out) 2; }
@@ -12778,7 +12804,7 @@ html[data-motion="off"][data-frame] .shell-column[data-state="drawer"], html[dat
 :is(.ts-strip, .ts-pop) .ts-close .glyph { width: 12px; height: 12px; }
 .ts-drop { position: absolute; top: 4px; bottom: 4px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--gold-bright); pointer-events: none; }
 
-.ts-strip :is(.ts-add, .ts-cfg, .ts-more, .ts-menu) { flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 0; height: 28px; margin: 0; padding: 0; border: 0; border-radius: 9px; background: transparent; box-shadow: none; transform: none; color: var(--muted); font: inherit; font-size: var(--ts-fs-small); white-space: nowrap; cursor: pointer; }
+.ts-strip :is(.ts-add, .ts-cfg, .ts-more, .ts-menu) { flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 0; height: 28px; margin: 0; padding: 0; border: 0; border-radius: 9px; background: transparent; box-shadow: none; transform: none; color: var(--muted); font: inherit; font-size: var(--ts-fs-small); white-space: nowrap; cursor: pointer; transition: background-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out); }
 .ts-strip :is(.ts-add, .ts-cfg) { width: 28px; }
 .ts-strip :is(.ts-add, .ts-cfg) .glyph { width: 16px; height: 16px; }
 .ts-strip :is(.ts-add, .ts-cfg, .ts-more, .ts-menu):hover { background: color-mix(in srgb, var(--ivory) 7%, transparent); color: var(--ivory); border: 0; }
@@ -12805,7 +12831,7 @@ html[data-motion="off"][data-frame] .shell-column[data-state="drawer"], html[dat
 }
 
 /* ---- menus: the Add menu, a tab's menu, the overflow list, the small-window menu ---- */
-.ts-pop { position: fixed; z-index: calc(var(--z-transient, 90) - 2); display: flex; flex-direction: column; box-sizing: border-box; min-width: 200px; max-width: calc(100vw - 16px); padding: 6px; border: 1px solid var(--studio-glass-edge, var(--hairline)); border-radius: var(--r-xl, 12px); background: var(--studio-float-fill, var(--panel-solid)); box-shadow: var(--studio-float-shadow, var(--shadow-2)); color: var(--ivory); font: 450 var(--ts-fs)/1.3 var(--font-ui); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
+.ts-pop { position: fixed; z-index: calc(var(--z-transient, 90) - 2); display: flex; flex-direction: column; box-sizing: border-box; min-width: 200px; max-width: calc(100vw - 16px); padding: 6px; border: 1px solid var(--studio-glass-edge, var(--hairline)); border-radius: var(--r-lg, 12px); background: var(--studio-float-fill, var(--panel-solid)); box-shadow: var(--studio-float-shadow, var(--shadow-2)); color: var(--ivory); font: 450 var(--ts-fs)/1.3 var(--font-ui); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
 .ts-pop-tab { width: 304px; }
 .ts-pop-more { width: 290px; }
 .ts-pop-menu { width: min(320px, calc(100vw - 16px)); }
@@ -12942,7 +12968,7 @@ html[data-motion="off"][data-frame] .shell-column[data-state="drawer"], html[dat
 .sx-new kbd { margin-left: auto; padding: 3px 6px; border: 1px solid color-mix(in srgb, var(--ink) 22%, transparent); border-radius: var(--r-xs); background: color-mix(in srgb, var(--ink) 14%, transparent); color: inherit; font: 600 var(--x12)/1 var(--font-mono); }
 .sx-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; padding: 3px; border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--tint-gold-1); }
 .sx-switch button { min-height: 28px; padding: 0 8px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--muted); font-weight: 600; }
-.sx-switch button.on { background: var(--tint-gold-3); color: var(--ivory); }
+.sx-switch button.on { background: var(--tint-gold-3); color: var(--ivory); box-shadow: inset 0 1px var(--studio-glass-highlight, transparent); }
 .sx-find input { width: 100%; min-height: 32px; padding: 0 10px; border: 1px solid var(--hairline); border-radius: var(--r-md); background: transparent; color: var(--ivory); font-size: var(--x13); }
 .sx-find input::placeholder { color: var(--dim); }
 .sx-groups { flex: 1 1 0; min-height: 0; margin: 0 -10px; padding: 0 10px 8px; overflow-y: auto; overscroll-behavior: contain; }
@@ -12952,10 +12978,12 @@ html[data-motion="off"][data-frame] .shell-column[data-state="drawer"], html[dat
 .sx-count { min-width: 20px; padding: 2px 6px; border-radius: var(--r-pill); background: var(--tint-gold-2); color: var(--muted); font-size: var(--x12); text-align: center; }
 .sx-car { flex: none; width: 14px; height: 14px; margin-left: auto; }
 @media (prefers-reduced-motion: no-preference) { html:not([data-motion="off"]) .sx-car { transition: rotate var(--motion-fast) var(--ease-out); } }
+/* Hover and selection settle instead of snapping, with the same opt-in as the rest of the motion here. */
+@media (prefers-reduced-motion: no-preference) { html:not([data-motion="off"]) :is(.sx-row, .sx-switch button, .sx-modes button, .sx-ptab, .sx-itab, .sx-gh, .sx-proj, .sx-trees) { transition: background-color var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out), box-shadow var(--motion-fast) var(--ease-out); } }
 .sx-gh.closed .sx-car { rotate: -90deg; }
 .sx-row { display: flex; align-items: stretch; border: 1px solid transparent; border-radius: var(--r-md); }
 .sx-row:hover, .sx-row:focus-within { background: var(--tint-gold-1); }
-.sx-row[data-selected] { border-color: var(--hairline-strong); background: var(--tint-gold-3); }
+.sx-row[data-selected] { border-color: var(--hairline-strong); background: var(--tint-gold-3); box-shadow: inset 0 1px var(--studio-glass-highlight, transparent); }
 .sx-row-main { display: flex; flex: 1 1 auto; align-items: flex-start; justify-content: flex-start; gap: 10px; min-width: 0; min-height: 0; padding: var(--x-row) 8px; border: 0; border-radius: var(--r-md); background: transparent; text-align: left; white-space: normal; }
 .sx-row-main:hover { background: transparent; }
 .sx-dot { flex: none; width: 9px; height: 9px; margin-top: 6px; border-radius: 50%; background: var(--dim); }
@@ -12986,7 +13014,7 @@ html[data-detail="all"] .sx-row-more { display: block; }
 .sx-empty b { color: var(--ivory); font: 650 var(--x14)/1.3 var(--font-ui); }
 .sx-empty button { justify-self: start; }
 .sx-foot { flex: none; padding: 8px 6px 10px; border-top: 1px solid var(--hairline); color: var(--dim); font-size: var(--x12); }
-.sx-menu { position: absolute; z-index: 5; right: 10px; display: flex; flex-direction: column; gap: 2px; min-width: 200px; max-width: calc(100% - 20px); padding: 6px; border: 1px solid var(--hairline-strong); border-radius: var(--r-lg); background: var(--panel-solid); box-shadow: var(--shadow-3); }
+.sx-menu { position: absolute; z-index: 5; right: 10px; display: flex; flex-direction: column; gap: 2px; min-width: 200px; max-width: calc(100% - 20px); padding: 6px; border: 1px solid var(--hairline-strong); border-radius: var(--r-lg); background: var(--panel-solid); box-shadow: inset 0 1px var(--studio-glass-highlight, transparent), var(--shadow-3); }
 .sx-menu-item { justify-content: flex-start; width: 100%; min-height: 32px; padding: 0 10px; border: 0; border-radius: var(--r-sm); background: transparent; font-size: var(--x13); text-align: left; }
 .sx-menu-item .glyph { flex: none; width: 14px; height: 14px; color: var(--muted); }
 .sx-menu-item.danger, .sx-menu-item.danger .glyph { color: var(--bad); }
@@ -13125,7 +13153,7 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
 .sx-compose:focus-within { border-color: color-mix(in srgb, var(--gold) 55%, var(--hairline-strong)); }
 .sx-modes { display: inline-flex; padding: 2px; border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--tint-gold-1); }
 .sx-modes button { min-height: 26px; padding: 0 10px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--muted); font-size: var(--x125); }
-.sx-modes button.on { background: var(--tint-gold-3); color: var(--ivory); }
+.sx-modes button.on { background: var(--tint-gold-3); color: var(--ivory); box-shadow: inset 0 1px var(--studio-glass-highlight, transparent); }
 .sx-hint { min-width: 0; margin: 0; padding: 0 4px; overflow: hidden; color: var(--dim); font-size: var(--x12); text-overflow: ellipsis; white-space: nowrap; }
 #sessions-input { display: block; width: 100%; min-height: 56px; max-height: 240px; padding: 6px 4px; border: 0; outline: 0; background: transparent; color: var(--ivory); font: 400 var(--x14)/1.5 var(--font-ui); resize: vertical; }
 #sessions-input::placeholder { color: var(--dim); }
@@ -13142,7 +13170,7 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
 .sx-run:hover, .sx-run[aria-expanded="true"] { color: var(--ivory); background: var(--tint-gold-1); }
 .sx-run-words { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sx-run .sx-run-car { width: 12px; height: 12px; }
-.sx-runmenu { position: absolute; z-index: 6; left: 0; bottom: calc(100% + 8px); display: grid; width: min(440px, calc(100vw - 32px)); max-height: min(70vh, 560px); padding: 6px 14px 10px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--hairline-strong); border-radius: var(--r-lg); background: var(--panel-solid); box-shadow: var(--shadow-3); }
+.sx-runmenu { position: absolute; z-index: 6; left: 0; bottom: calc(100% + 8px); display: grid; width: min(440px, calc(100vw - 32px)); max-height: min(70vh, 560px); padding: 6px 14px 10px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--hairline-strong); border-radius: var(--r-lg); background: var(--panel-solid); box-shadow: inset 0 1px var(--studio-glass-highlight, transparent), var(--shadow-3); }
 .sx-runrow { display: grid; gap: 6px; padding: 8px 0; }
 .sx-runrow + .sx-runrow { border-top: 1px solid var(--hairline); }
 .sx-runrow-head { display: grid; gap: 1px; }
@@ -13448,6 +13476,194 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
 .paper-away-empty, .paper-away-note { margin: 0; font: 12.5px/1.5 var(--font-ui); color: var(--muted); text-wrap: pretty; }
 .paper-away-note { margin-top: 8px; }
 @media (max-width: 900px) { .paper-away-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* Chrome: matte black surfaces and brushed-metal controls (renderer/music.js
+   THEMES.chrome, the default theme since the Chrome look; the public website
+   wears the same palette). Every rule is under html[data-studio-theme="chrome"],
+   which paintTheme sets, so no other theme changes; inlined after the other
+   stylesheets, so it wins a tie.
+
+   - Surfaces are flat and opaque enough to read as matte: the panel colour
+     (#141418) on the page (#0a0a0c), a 1px top inner highlight, quiet
+     hairlines and soft deep shadows. The Glass setting still varies them, and
+     Blur off, zero glass, reduced transparency and a video background keep
+     their own, stronger fills (their selectors outrank these tokens).
+   - Coloured glows become a neutral soft light.
+   - The metal is for what matters: primary buttons and the chosen segment of a
+     segmented control (the Vibe | Build switch, Sessions | Backlog, the tab
+     switches) are brushed metal with dark ink, a bright top edge and a dark
+     bottom edge; hover brightens, a press darkens. Selected rows, the open tab
+     and the rail's current place get a thin chrome edge instead of a fill.
+   - Focus is the shared 2px ring (styles.css section 4) in the theme's bright
+     accent, a clear silver (#eef1f5), 2px out from a metal button's edge.
+   - Status colours (working, needs you, error, review) are left alone.
+   - The ink on the metal is #0a0a0c: 5.4:1 on the darkest stop of the pressed
+     metal and more everywhere else. The one chrome title, Vibe's greeting,
+     has its darkest stop at 9:1 on the panel. */
+
+html[data-studio-theme="chrome"] {
+  --chrome-ink: #0a0a0c;
+  --chrome-metal: linear-gradient(180deg, #fbfcfd 0%, #dfe3e8 20%, #b3b9c2 48%, #8e959e 52%, #cfd4da 60%, #f1f3f6 100%);
+  --chrome-metal-hover: linear-gradient(180deg, #ffffff 0%, #e8ebef 20%, #bec4cc 48%, #9aa1aa 52%, #d9dde2 60%, #f7f8fa 100%);
+  --chrome-metal-press: linear-gradient(180deg, #e3e6ea 0%, #c6cbd2 22%, #a0a6af 48%, #80868f 52%, #b7bcc3 62%, #d9dce0 100%);
+  /* the edges of a metal part: a bright top lip, a dark bottom lip, a contact shadow */
+  --chrome-bevel: inset 0 1px 0 rgb(255 255 255 / .9), inset 0 -1px 0 rgb(0 0 0 / .28), 0 1px 2px rgb(0 0 0 / .55), 0 4px 12px -6px rgb(0 0 0 / .7);
+  --chrome-bevel-press: inset 0 1px 0 rgb(255 255 255 / .55), inset 0 -1px 0 rgb(0 0 0 / .3), inset 0 1px 3px rgb(0 0 0 / .25), 0 1px 1px rgb(0 0 0 / .5);
+  /* a chrome hairline (secondary buttons) and the thin chrome edge of a selection */
+  --chrome-rim: rgb(214 219 226 / .3);
+  --chrome-rim-hi: rgb(232 236 241 / .55);
+  --chrome-edge: #dfe3e8;
+  --chrome-top: inset 0 1px 0 rgb(255 255 255 / .05);
+  --chrome-text: linear-gradient(180deg, #ffffff 0%, #eef0f3 40%, #b9bec6 58%, #dde0e5 100%);
+
+  /* The shared recipes (studio-ui.css), matte and neutral. */
+  --studio-secondary: #8e959e;
+  --studio-gradient-angle: 180deg;
+  --studio-title-tracking: -.02em;
+  --font-display: "Bahnschrift", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --studio-panel-bg: color-mix(in srgb, var(--theme-panel-solid) calc(97% - var(--studio-glass) * 14%), transparent);
+  --studio-menu-fill: color-mix(in srgb, var(--theme-panel-solid) calc(99% - var(--studio-glass) * 3%), transparent);
+  --studio-float-fill: color-mix(in srgb, var(--theme-panel-solid) calc(99% - var(--studio-glass) * 3%), transparent);
+  --studio-shell-fill: color-mix(in srgb, var(--studio-reading-bg) calc(96% - var(--studio-glass) * 12%), transparent);
+  --studio-inset-bg: color-mix(in srgb, #ffffff 2.5%, transparent);
+  --studio-glass-blur: blur(calc(14px + var(--studio-glass) * 18px));
+  --studio-float-blur: blur(calc(16px + var(--studio-glass) * 16px)) brightness(.9);
+  --studio-glass-edge: rgb(255 255 255 / .075);
+  --studio-glass-rim: rgb(255 255 255 / .11);
+  --studio-glass-highlight: rgb(255 255 255 / .05);
+  --studio-edge-active: rgb(223 227 232 / .5);
+  --studio-glide: rgb(255 255 255 / .06);
+  --studio-wash: linear-gradient(transparent, transparent);
+  --studio-sheen: linear-gradient(180deg, rgb(255 255 255 / .018), transparent 40%);
+  --studio-selection: linear-gradient(180deg, rgb(255 255 255 / .07), rgb(255 255 255 / .045));
+  --studio-inset-shadow: inset 0 1px 0 rgb(255 255 255 / .04), 0 1px 2px rgb(0 0 0 / .35);
+  --studio-glass-shadow: inset 0 1px 0 rgb(255 255 255 / .05), inset 0 -1px 0 rgb(0 0 0 / .25), 0 1px 2px rgb(0 0 0 / .4), 0 14px 36px -14px rgb(0 0 0 / .7), 0 0 calc(var(--studio-glow) * 40px) rgb(255 255 255 / calc(var(--studio-glow) * .025));
+  --studio-float-shadow: inset 0 1px 0 rgb(255 255 255 / .06), inset 0 -1px 0 rgb(0 0 0 / .3), 0 22px 48px -16px rgb(0 0 0 / .8), 0 2px 8px rgb(0 0 0 / .45);
+  --studio-scene: radial-gradient(ellipse 90% 55% at 50% -12%, rgb(255 255 255 / calc(.02 + var(--studio-glow) * .035)), transparent 70%), var(--studio-reading-bg);
+  /* elevation: soft and deep, no colour */
+  --shadow-1: 0 1px 2px rgb(0 0 0 / .45), 0 8px 20px -8px rgb(0 0 0 / .65);
+  --shadow-2: 0 2px 4px rgb(0 0 0 / .4), 0 18px 40px -12px rgb(0 0 0 / .75);
+  --shadow-3: 0 2px 6px rgb(0 0 0 / .45), 0 36px 80px -20px rgb(0 0 0 / .85);
+  --inset-hi: inset 0 1px 0 rgb(255 255 255 / .05);
+  --line: rgb(255 255 255 / .07);
+  --line-strong: rgb(255 255 255 / .16);
+  --frost-tint: color-mix(in srgb, var(--panel-solid) 82%, transparent);
+  --frost-tint-strong: color-mix(in srgb, var(--panel-solid) 90%, transparent);
+  --frost-tint-hover: color-mix(in srgb, color-mix(in srgb, #ffffff 4%, var(--panel-solid)) 92%, transparent);
+  --frost-lift: 0 18px 44px -24px rgb(0 0 0 / .85), inset 0 1px 0 rgb(255 255 255 / .05);
+}
+/* Focus keeps the shared recipes' flat sheen. */
+html[data-studio-theme="chrome"][data-studio-style="focus"] { --studio-sheen: linear-gradient(transparent, transparent); }
+
+/* ---- the metal: primary buttons ---------------------------------------- */
+html[data-studio-theme="chrome"] :is(.primary, .today-option.is-first, .vibe-rail .vibe-rail-home, #workspace-layer .today-b .today-b-send):not(.danger) {
+  border-color: transparent; background: var(--chrome-metal); color: var(--chrome-ink);
+  box-shadow: var(--chrome-bevel); filter: none; text-shadow: 0 1px 0 rgb(255 255 255 / .35);
+  transition: background var(--motion-fast) var(--ease-out), box-shadow var(--motion-fast) var(--ease-out), transform var(--motion-instant) var(--ease-out), filter var(--motion-fast) var(--ease-out);
+}
+html[data-studio-theme="chrome"] :is(.primary, .today-option.is-first, .vibe-rail .vibe-rail-home, #workspace-layer .today-b .today-b-send):not(.danger, :disabled, [aria-disabled="true"]):is(:hover, :focus-visible) {
+  border-color: transparent; background: var(--chrome-metal-hover); color: var(--chrome-ink); filter: none;
+  box-shadow: var(--chrome-bevel), 0 0 0 1px rgb(255 255 255 / .12), 0 6px 18px -8px rgb(255 255 255 / .16);
+}
+html[data-studio-theme="chrome"] :is(.primary, .today-option.is-first, .vibe-rail .vibe-rail-home, #workspace-layer .today-b .today-b-send):not(.danger, :disabled, [aria-disabled="true"]):active {
+  background: var(--chrome-metal-press); box-shadow: var(--chrome-bevel-press); transform: translateY(.5px);
+}
+html[data-studio-theme="chrome"] :is(.primary, .today-option.is-first, .vibe-rail .vibe-rail-home, #workspace-layer .today-b .today-b-send):not(.danger):is(:disabled, [aria-disabled="true"]) { box-shadow: none; text-shadow: none; }
+/* What a primary carries reads on the metal: keys, counts and glyphs take its ink. */
+html[data-studio-theme="chrome"] :is(.primary, .today-option.is-first, .vibe-rail .vibe-rail-home, #workspace-layer .today-b .today-b-send):not(.danger) :is(kbd, .key, .count) {
+  opacity: 1; color: var(--chrome-ink); background: rgb(10 10 12 / .07); border-color: rgb(10 10 12 / .3); box-shadow: inset 0 1px 0 rgb(255 255 255 / .4);
+}
+html[data-studio-theme="chrome"] :is(.primary, .today-option.is-first, .vibe-rail .vibe-rail-home, #workspace-layer .today-b .today-b-send):not(.danger) :is(.glyph, svg) { color: var(--chrome-ink); }
+/* Small metal marks: Vibe's project tile, Mefi's avatar. */
+html[data-studio-theme="chrome"][data-ui-mode="vibe"] #workspace-sidebar-panel .ws-project-icon,
+html[data-studio-theme="chrome"] :is(.vibe-project-mark, .sx-av.m, .vibe-ask-rec, .sm-rail i.sm-logo) { background: var(--chrome-metal); color: var(--chrome-ink); box-shadow: inset 0 1px 0 rgb(255 255 255 / .8), inset 0 -1px 0 rgb(0 0 0 / .25); }
+
+/* ---- secondary buttons: matte, with a chrome hairline ------------------- */
+html[data-studio-theme="chrome"] :is(button, .button):is(.ghost, .vibe-btn, .today-btn):not(.primary, .danger) { border-color: var(--chrome-rim); box-shadow: var(--chrome-top); }
+html[data-studio-theme="chrome"] :is(button, .button):is(.ghost, .vibe-btn, .today-btn):not(.primary, .danger, :disabled):hover { border-color: var(--chrome-rim-hi); background-color: rgb(255 255 255 / .05); }
+html[data-studio-theme="chrome"] :is(button, .button):is(.ghost, .vibe-btn, .today-btn):not(.primary, .danger, :disabled):active { background-color: rgb(0 0 0 / .25); box-shadow: inset 0 1px 2px rgb(0 0 0 / .4); }
+
+/* ---- the metal: the chosen segment of a segmented control --------------- */
+/* The Vibe | Build switch (the frame's and Vibe's own): a metal thumb that slides. */
+html[data-studio-theme="chrome"] .mode-switch { background: color-mix(in srgb, var(--bg) 88%, transparent); border-color: var(--chrome-rim); box-shadow: inset 0 1px 2px rgb(0 0 0 / .5), 0 1px 0 rgb(255 255 255 / .04); }
+html[data-studio-theme="chrome"] .mode-thumb { background: var(--chrome-metal); box-shadow: var(--chrome-bevel); }
+html[data-studio-theme="chrome"] .mode-switch button[aria-checked="true"] { color: var(--chrome-ink); text-shadow: 0 1px 0 rgb(255 255 255 / .35); }
+/* Sessions | Backlog, Note | Ask | Change, the classic rail's mode switch, the task board's stage chips, the size, review, sync and tab-behaviour switches, Command's rail tabs, Appearance's sections. */
+html[data-studio-theme="chrome"] :is(.sx-switch, .sx-modes, #task-filters, .size-seg, .ts-choices, .sx-lb-tabs, .music-tabs, .appearance-sections, #idle-hud .rail-tabs, .companion-tabs, #workspace-layer .ws-modes, .model-lab .lab-segmented) {
+  border-color: var(--chrome-rim); background: color-mix(in srgb, var(--bg) 80%, transparent); box-shadow: inset 0 1px 2px rgb(0 0 0 / .45), 0 1px 0 rgb(255 255 255 / .035);
+}
+html[data-studio-theme="chrome"] :is(.sx-switch button.on, .sx-modes button.on, #app-rail .builder-mode-switch button[aria-checked="true"], #workspace-layer .builder-seg button:is([aria-selected="true"], [aria-pressed="true"]), #task-filters .chip.on, .size-seg > button[aria-checked="true"], .ts-card .ts-choice[aria-checked="true"], .sx-lb-tabs button.on, .music-tab[aria-selected="true"], .appearance-sections button[aria-pressed="true"], #idle-hud .rail-tab[aria-selected="true"], .companion-tabs button[aria-selected="true"], #workspace-layer .ws-modes button[aria-pressed="true"], .segmented > button[aria-pressed="true"], .review-tab[aria-selected="true"], button.gs-seg-item[aria-checked="true"]:not(.gs-seg-stack *), .model-lab .lab-segmented > button[aria-pressed="true"], .music-dropdown .music-tab[aria-selected="true"], .music-section-tab[aria-selected="true"], .vibe-task-views button[aria-pressed="true"]) {
+  border-color: transparent; background: var(--chrome-metal); color: var(--chrome-ink); box-shadow: var(--chrome-bevel); text-shadow: 0 1px 0 rgb(255 255 255 / .35);
+}
+html[data-studio-theme="chrome"] :is(.sx-switch button.on, #task-filters .chip.on, .segmented > button[aria-pressed="true"], #idle-hud .rail-tab[aria-selected="true"], .music-tab[aria-selected="true"], .review-tab[aria-selected="true"]) :is(small, .count, em, .glyph) { color: var(--chrome-ink); }
+html[data-studio-theme="chrome"] #idle-hud .rail-tab[aria-selected="true"] .count { background: rgb(10 10 12 / .1); }
+html[data-studio-theme="chrome"] :is(.sx-switch button:not(.on), .sx-modes button:not(.on), #task-filters .chip:not(.on), .size-seg > button:not([aria-checked="true"]), .sx-lb-tabs button:not(.on), .appearance-sections button:not([aria-pressed="true"]), .segmented > button:not([aria-pressed="true"])):hover { background: rgb(255 255 255 / .05); color: var(--ivory); }
+
+/* ---- selection: a thin chrome edge or underline, not a fill ------------- */
+/* The rail's current place (Build's rail and Vibe's). */
+html[data-studio-theme="chrome"] #app-rail [aria-current="page"] { background: rgb(255 255 255 / .045); box-shadow: inset 2px 0 0 var(--chrome-edge), var(--chrome-top); }
+html[data-studio-theme="chrome"] #app-rail .app-rail-compose { background: rgb(255 255 255 / .04); box-shadow: inset 0 0 0 1px var(--chrome-rim), var(--chrome-top); }
+html[data-studio-theme="chrome"] .vibe-rail button[aria-current="page"] { background: rgb(255 255 255 / .045); box-shadow: inset 0 0 0 1px var(--chrome-rim-hi), var(--chrome-top); }
+html[data-studio-theme="chrome"] .vibe-rail button[aria-current="page"] .glyph { color: var(--chrome-edge); }
+html[data-studio-theme="chrome"] #app-rail .app-rail-brand .monogram { background: var(--chrome-metal); color: var(--chrome-ink); border-color: transparent; box-shadow: inset 0 1px 0 rgb(255 255 255 / .8), inset 0 -1px 0 rgb(0 0 0 / .25), 0 1px 3px rgb(0 0 0 / .5); }
+/* The frame's page list, the session list's rows, the open tab. */
+html[data-studio-theme="chrome"][data-frame] .shell-page[aria-current="page"] { background: rgb(255 255 255 / .045); box-shadow: inset 2px 0 0 var(--chrome-edge), inset 0 0 0 1px var(--studio-glass-edge); }
+html[data-studio-theme="chrome"][data-frame] .shell-page[aria-current="page"] .glyph { color: var(--chrome-edge); }
+html[data-studio-theme="chrome"] .sx-row[data-selected] { border-color: var(--studio-glass-edge); background: rgb(255 255 255 / .045); box-shadow: inset 2px 0 0 var(--chrome-edge); }
+html[data-studio-theme="chrome"] :is(.sx-row:hover, .sx-row:focus-within):not([data-selected]) { background: rgb(255 255 255 / .03); }
+html[data-studio-theme="chrome"] .ts-item[data-active] { background: rgb(255 255 255 / .05); box-shadow: inset 0 0 0 1px var(--studio-glass-edge), inset 0 -2px 0 var(--chrome-edge), inset 0 2px var(--studio-glass-highlight); }
+html[data-studio-theme="chrome"] .ts-item[data-active] .ts-ico { color: var(--chrome-edge); }
+html[data-studio-theme="chrome"] :is(.sx-ptab.on, .sx-itab.on) { border-bottom-color: var(--chrome-edge); }
+html[data-studio-theme="chrome"] #app-local-nav .app-local-link[aria-current="page"] { background: transparent; border-bottom-color: var(--chrome-edge); color: var(--ivory); }
+html[data-studio-theme="chrome"] :is(.studio-choice-option[aria-selected="true"], #app-local-nav .agents-nav-subsections .app-local-link[aria-current="page"]) { background: rgb(255 255 255 / .05); box-shadow: inset 2px 0 0 var(--chrome-edge); color: var(--ivory); }
+html[data-studio-theme="chrome"][data-frame] #palette-overlay #palette-list li.palette-row.active { background: rgb(255 255 255 / .06); box-shadow: inset 2px 0 0 var(--chrome-edge), inset 0 0 0 1px var(--studio-glass-edge); }
+/* Theme and node choices: a chrome edge under the chosen one. */
+html[data-studio-theme="chrome"] :is(.music-theme, .music-node-choice, .setup-helper-swatch)[aria-pressed="true"],
+html[data-studio-theme="chrome"] .setup-helper-swatch[aria-checked="true"],
+html[data-studio-theme="chrome"] body.appearance-settings-active .settings-media .music-theme[aria-pressed="true"] { border-color: var(--chrome-rim-hi); background: rgb(255 255 255 / .05); box-shadow: inset 0 -2px 0 var(--chrome-edge), var(--chrome-top); color: var(--ivory); }
+html[data-studio-theme="chrome"] .music-node-choice[aria-pressed="true"] { color: var(--ivory); }
+
+/* ---- surfaces: matte panels, a top highlight, quiet hairlines ----------- */
+html[data-studio-theme="chrome"] #vibe-layer {
+  --v-glass: var(--studio-panel-bg); --v-glass-hi: color-mix(in srgb, color-mix(in srgb, #ffffff 3%, var(--theme-panel-solid)) 94%, transparent);
+  --v-edge: rgb(255 255 255 / .08); --v-edge-hi: var(--chrome-rim-hi);
+  --v-lift: 0 1px 2px rgb(0 0 0 / .45), 0 26px 56px -30px rgb(0 0 0 / .9), inset 0 1px 0 rgb(255 255 255 / .05);
+}
+html[data-studio-theme="chrome"] :is(.today, .today-inbox, .today-sheet, .inbox-sheet) { --t-card: var(--studio-panel-bg); --t-edge: rgb(255 255 255 / .08); --t-edge-hi: var(--chrome-rim-hi); --t-well: color-mix(in srgb, var(--bg-deep) 70%, transparent); }
+/* Vibe's sky: one neutral light instead of three coloured washes. */
+html[data-studio-theme="chrome"] .vibe-aurora { opacity: .12; mix-blend-mode: screen; }
+html[data-studio-theme="chrome"] .vibe-aurora.two { background: radial-gradient(circle, rgb(255 255 255 / .35), transparent 70%); }
+/* The frame's bars and columns: the page's black, a hairline between. */
+html[data-studio-theme="chrome"][data-frame] :is(.shell-top, .shell-tabs) { background: var(--bg); }
+html[data-studio-theme="chrome"][data-frame] .shell-column:not([data-state="drawer"]) { background: color-mix(in srgb, #0d0d10 94%, transparent); }
+html[data-studio-theme="chrome"][data-frame] .shell-status { background: #0d0d10; box-shadow: inset 0 1px 0 rgb(255 255 255 / .03); }
+html[data-studio-theme="chrome"][data-frame] :is(.shell-search, .shell-icon-btn, .shell-pill:not([data-tone="need"])) { border-color: rgb(255 255 255 / .1); box-shadow: var(--chrome-top); }
+html[data-studio-theme="chrome"][data-frame] :is(.shell-search, .shell-icon-btn:not([data-on="true"]), .shell-pill:not([data-tone="need"])):hover { border-color: var(--chrome-rim-hi); }
+html[data-studio-theme="chrome"][data-frame] .shell-icon-btn[data-on="true"] { background: rgb(255 255 255 / .06); color: var(--ivory); border-color: var(--chrome-rim-hi); }
+html[data-studio-theme="chrome"][data-frame] .shell-switch[aria-checked="true"] { background: var(--chrome-metal); border-color: transparent; box-shadow: inset 0 1px 0 rgb(255 255 255 / .8), inset 0 -1px 0 rgb(0 0 0 / .25); }
+html[data-studio-theme="chrome"][data-frame] .shell-switch[aria-checked="true"] i { background: var(--chrome-ink); }
+html[data-studio-theme="chrome"][data-frame] .shell-meter i { background: linear-gradient(180deg, #eef1f5, #a9afb8); }
+html[data-studio-theme="chrome"][data-frame] :is(.shell-split:hover, .shell-split.is-drag)::after { background: rgb(223 227 232 / .6); }
+/* Fields are wells: a little darker than the page, with a top shadow. */
+html[data-studio-theme="chrome"][data-studio-style] :is(input[type=text], input[type=search], input[type=password], input[type=number], input:not([type]), textarea, select, .studio-select) { box-shadow: inset 0 1px 2px rgb(0 0 0 / .35); }
+html[data-studio-theme="chrome"] :is(input, textarea, select):focus:not(:focus-visible) { border-color: var(--chrome-rim-hi); box-shadow: inset 0 1px 2px rgb(0 0 0 / .35), 0 0 0 3px rgb(223 227 232 / .1); }
+/* Switches: a metal track when on. */
+html[data-studio-theme="chrome"] .switch input:checked + .track { background: var(--chrome-metal); border-color: transparent; box-shadow: inset 0 1px 0 rgb(255 255 255 / .8), inset 0 -1px 0 rgb(0 0 0 / .25); }
+html[data-studio-theme="chrome"] .switch input:checked + .track::after { background: var(--chrome-ink); }
+
+/* ---- type: a chrome title, readable at 4.5:1 on its darkest stop -------- */
+/* Vibe's greeting already paints its words with a gradient in every theme; under
+   Chrome it is the metal's. Other titles keep plain ink, since the render
+   suites' contrast checks count a gradient on the text's own box as what is
+   behind it. Today's greeting stays plain too (today.css takes its gradient off). */
+html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text); -webkit-background-clip: text; background-clip: text; }
+
+/* The Chrome swatch looks like the metal in every theme's picker. */
+.music-theme[data-theme="chrome"]::before { background: linear-gradient(180deg, #fbfcfd 0%, #dfe3e8 22%, #9aa1aa 50%, #cfd4da 62%, #f1f3f6 100%); box-shadow: 0 0 0 1px rgb(0 0 0 / .35), inset 0 1px 0 rgb(255 255 255 / .9); }
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-studio-theme="chrome"] :is(.primary, .today-option.is-first, .vibe-rail .vibe-rail-home, #workspace-layer .today-b .today-b-send) { transition: none; }
+}
 </style>
 <div id="boot-layer" role="dialog" aria-modal="true" aria-labelledby="boot-title" aria-describedby="boot-detail" tabindex="-1">
   <!-- The Studio Daily (renderer/daily-paper.js): the launch question as a front page; the card below stays the chooser. -->
@@ -14143,7 +14359,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
           <div class="settings-you-fields">
             <label class="field"><span class="field-label">Your name</span><input id="workspace-person-name" type="text" maxlength="40" placeholder="What should I call you?" autocomplete="off"></label>
             <label class="field"><span class="field-label">Companion name</span><input id="workspace-agent-name" type="text" maxlength="30" placeholder="Mefi" autocomplete="off"></label>
-            <div class="field settings-you-theme"><label class="field-label" for="workspace-accent">Studio theme</label><div class="settings-you-row"><select id="workspace-accent"><option value="aurora">Aurora</option><option value="gold">Studio gold</option><option value="midnight">Midnight</option><option value="sage">Forest</option><option value="violet">Violet</option><option value="ember">Ember</option><option value="rose">Rose</option><option value="custom">Custom colors</option><optgroup label="Void collection"><option value="void">Void</option><option value="eclipse">Eclipse</option><option value="abyss">Abyss</option><option value="dusk">Neon Dusk</option></optgroup></select><button type="button" class="ghost mini" data-settings-nav="music" title="Themes, custom colors and node styles in Appearance">Appearance settings <span aria-hidden="true">↗</span></button></div></div>
+            <div class="field settings-you-theme"><label class="field-label" for="workspace-accent">Studio theme</label><div class="settings-you-row"><select id="workspace-accent"><option value="chrome">Chrome</option><option value="aurora">Aurora</option><option value="gold">Studio gold</option><option value="midnight">Midnight</option><option value="sage">Forest</option><option value="violet">Violet</option><option value="ember">Ember</option><option value="rose">Rose</option><option value="custom">Custom colors</option><optgroup label="Void collection"><option value="void">Void</option><option value="eclipse">Eclipse</option><option value="abyss">Abyss</option><option value="dusk">Neon Dusk</option></optgroup></select><button type="button" class="ghost mini" data-settings-nav="music" title="Themes, custom colors and node styles in Appearance">Appearance settings <span aria-hidden="true">↗</span></button></div></div>
           </div>
           <div class="field settings-you-motion">
             <span class="field-label" id="settings-motion-label">Motion</span>
@@ -36941,7 +37157,8 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     minimal: "Minimal",
   };
   const BACKDROP_ORDER = ["follow", "aurora", "deepspace", "nebula", "embers", "fireflies", "bokeh", "dust", "grid", "minimal"];
-  const THEME_BACKDROP = { gold: "dust", midnight: "deepspace", forest: "fireflies", violet: "nebula", ember: "embers", aurora: "aurora", rose: "bokeh", custom: "dust",
+  // Chrome's sky is deep space: silver stars over matte black.
+  const THEME_BACKDROP = { chrome: "deepspace", gold: "dust", midnight: "deepspace", forest: "fireflies", violet: "nebula", ember: "embers", aurora: "aurora", rose: "bokeh", custom: "dust",
     // The Void collection's two-tone themes.
     void: "deepspace", eclipse: "dust", abyss: "fireflies", dusk: "grid" };
   // Speech bubbles: what an agent says while it works, drawn beside its orb.
@@ -68961,7 +69178,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     try { window.MefiToday?.composerChanged?.(); } catch { /* Today is optional */ }
   }
   const accentForTheme = (theme) => theme === "forest" ? "sage" : theme;
-  function personalize(accentChoice = accentForTheme(window.MefiMusic?.status?.()?.theme) || storage.get("accent", "aurora")) {
+  function personalize(accentChoice = accentForTheme(window.MefiMusic?.status?.()?.theme) || storage.get("accent", "chrome")) {
     const hour = new Date().getHours();
     $("greeting").textContent = `GOOD ${hour < 12 ? "MORNING" : hour < 18 ? "AFTERNOON" : "EVENING"}${person() ? `, ${person()}` : ""}`;
     $("layer").dataset.accent = accentChoice;
@@ -70162,7 +70379,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
         } catch (error) { feedback(error.message, true); }
       });
     }
-    for (const [id, key, fallback] of [["person-name", "person", ""], ["agent-name", "companion", "Mefi"], ["accent", "accent", "aurora"]]) {
+    for (const [id, key, fallback] of [["person-name", "person", ""], ["agent-name", "companion", "Mefi"], ["accent", "accent", "chrome"]]) {
       $(id).value = storage.get(key, fallback);
       $(id).addEventListener("input", () => {
         // Music announces the actual theme (and whether this is a temporary
@@ -70184,7 +70401,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       const options = $("accent").options ? [...$("accent").options] : null;
       if (options && !options.some((option) => option.value === choice)) return;
       $("accent").value = choice;
-      if (event?.detail?.preview !== true && storage.get("accent", "aurora") !== choice) storage.set("accent", choice);
+      if (event?.detail?.preview !== true && storage.get("accent", "chrome") !== choice) storage.set("accent", choice);
       personalize(choice);
     };
     window.addEventListener("mefi-theme-change", syncThemeChoice);
@@ -70913,6 +71130,9 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
   let linkWatchTimer = null, linkPlayback = null;
   let youtubeResults = [], youtubeSearching = false;
   const THEMES = {
+    // Chrome, the default: matte black panels and brushed-metal controls
+    // (renderer/chrome.css), the same palette as the public website.
+    chrome: { name: "Chrome", accent: "#c3c8d0", bright: "#eef1f5", rgb: "195,200,208", bg: "#0a0a0c", panel: "#141418", muted: "#a4a9b2", text: "#edeff2" },
     gold: { name: "Studio gold", accent: "#c9a86a", bright: "#e6c98d", rgb: "201,168,106", bg: "#050507", panel: "#0d0e12", muted: "#aaa18f" },
     midnight: { name: "Midnight", accent: "#82a8e6", bright: "#bbd5ff", rgb: "130,168,230", bg: "#050913", panel: "#0d1524", muted: "#a2b2ca" },
     forest: { name: "Forest", accent: "#85bca3", bright: "#b4e1c9", rgb: "133,188,163", bg: "#050d0b", panel: "#0d1915", muted: "#a2b8ae" },
@@ -70928,7 +71148,9 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     abyss: { name: "Abyss", accent: "#2fd6c3", bright: "#8ff5e8", accent2: "#7b5cff", rgb: "47,214,195", bg: "#01080b", panel: "#06151a", muted: "#9dbfc0", text: "#e2f7f4", collection: "void" },
     dusk: { name: "Neon Dusk", accent: "#ff5fa2", bright: "#ffa3cb", accent2: "#3fd0ff", rgb: "255,95,162", bg: "#0a0512", panel: "#170c24", muted: "#c4a9c9", text: "#fbe9f3", collection: "void" },
   };
-  const DEFAULT_THEME = "aurora";
+  // A new install opens in Chrome; a saved choice (Aurora, the default until
+  // the Chrome look, among them) is kept as it is.
+  const DEFAULT_THEME = "chrome";
   const NODE_STYLES = {
     orbs: { name: "Classic orbs", detail: "Luminous circles" },
     glass: { name: "Soft glass", detail: "Translucent surfaces" },

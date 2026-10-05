@@ -428,8 +428,8 @@ app.whenReady().then(async () => {
 
   // ---- the chrome at 1920x1080, beside the prototype's shots (docs/prototype/): the status bar, Search and the Inbox ----------------------
   // Everything a person reads there is checked in every theme (12 px and 4.5:1, readableProbe). It runs on the board as it starts (the
-  // question still open), on Build's Home with no session open, and leaves it as it found it: Aurora on, the player's own status back.
-  const THEMES = ["aurora", "gold", "midnight", "forest", "violet", "ember", "rose", "void", "eclipse", "abyss", "dusk"];
+  // question still open), on Build's Home with no session open, and leaves it as it found it: Chrome (the default) on, the player's own status back.
+  const THEMES = ["chrome", "aurora", "gold", "midnight", "forest", "violet", "ember", "rose", "void", "eclipse", "abyss", "dusk"];
   const readable = async (rootSelector, label) => {
     const misses = [];
     for (const theme of THEMES) {
@@ -439,7 +439,7 @@ app.whenReady().then(async () => {
       assert.deepEqual(seen.small, [], `${label} (${theme}): no text under 12 px`);
       for (const miss of seen.failures) misses.push({ theme, ...miss });
     }
-    await run("window.MefiMusic.applyTheme('aurora', false);");
+    await run("window.MefiMusic.applyTheme('chrome', false);");
     assert.deepEqual(misses, [], `${label}: every text reads at 4.5:1 or better in every theme`);
     (report.readable ||= {})[label] = THEMES.length;
   };

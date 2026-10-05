@@ -45,6 +45,7 @@ html[data-frame] .shell-btn {
   min-height: 0; margin: 0; padding: 0; border: 1px solid transparent; border-radius: 8px;
   background: transparent; color: var(--muted); box-shadow: none; transform: none;
   font: inherit; line-height: 1; letter-spacing: 0; gap: 6px; text-align: center;
+  transition: background-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out), box-shadow var(--motion-fast) var(--ease-out);
 }
 html[data-frame] .shell-btn:hover { color: var(--ivory); background: color-mix(in srgb, var(--ivory) 7%, transparent); border-color: transparent; transform: none; box-shadow: none; }
 html[data-frame] .shell-btn:active { transform: none; }
@@ -77,6 +78,10 @@ html[data-frame] .shell-top-extra:empty { display: none; }
 html[data-frame] .shell-top-right { margin-left: auto; }
 html[data-frame] .shell-icon-btn { width: 32px; height: 32px; flex: none; justify-content: center; border-color: var(--hairline-strong); border-radius: 10px; }
 html[data-frame] .shell-icon-btn[data-on="true"] { background: var(--tint-gold-3, color-mix(in srgb, var(--gold) 14%, transparent)); color: var(--gold-bright); border-color: color-mix(in srgb, var(--gold) 50%, transparent); }
+/* The bar's raised controls catch the light on their top edge, and a bordered one keeps its edge under the pointer
+   (the shared hover above clears it) instead of flickering. */
+html[data-frame] :is(.shell-icon-btn, .shell-search, .shell-pill, .shell-action), html[data-frame] :is(.shell-icon-btn, .shell-search, .shell-pill, .shell-action):hover { box-shadow: inset 0 1px var(--studio-glass-highlight, transparent); }
+html[data-frame] .shell-icon-btn:not([data-on="true"]):hover, html[data-frame] .shell-pill-btn:hover, html[data-frame] .shell-action:hover, html[data-frame] .shell-pill:not([data-tone="need"]):hover { border-color: var(--hairline-strong); }
 
 /* the Vibe | Build switch: the app's mode switch (vibe.css), at the bar's height */
 html[data-frame] .shell-mode { flex: none; padding: 2px; box-shadow: none; backdrop-filter: none; }
@@ -183,7 +188,7 @@ html[data-frame] .shell-pages-history .shell-icon-btn { width: 28px; height: 28p
 html[data-frame] .shell-pages-git { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 4px 4px 10px; }
 html[data-frame] .shell-pages-git:empty { display: none; }
 html[data-frame] .shell-pages-list { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-html[data-frame] .shell-page { display: flex; align-items: center; justify-content: flex-start; gap: 10px; width: 100%; min-height: 36px; padding: 0 10px; border-radius: 10px; color: var(--muted); font-size: var(--frame-fs); text-align: left; }
+html[data-frame] .shell-page { display: flex; align-items: center; justify-content: flex-start; gap: 10px; width: 100%; min-height: 36px; padding: 0 10px; border-radius: 10px; color: var(--muted); font-size: var(--frame-fs); text-align: left; transition: background-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out), box-shadow var(--motion-fast) var(--ease-out); }
 html[data-frame] .shell-page .glyph { flex: none; width: 17px; height: 17px; }
 html[data-frame] .shell-page-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.3; }
 html[data-frame] .shell-page.is-sub { min-height: 32px; padding-left: 22px; }
@@ -251,7 +256,7 @@ html[data-frame] .shell-menu {
   position: fixed; left: 8px; bottom: calc(var(--shell-status-h) + 6px); z-index: calc(var(--z-transient) + 2);
   width: min(360px, calc(100vw - 16px)); max-height: calc(100vh - var(--shell-y0) - var(--shell-status-h) - 14px); overflow-y: auto;
   display: flex; flex-direction: column; gap: 10px; padding: 12px 14px 14px; box-sizing: border-box;
-  background: var(--panel-solid); border: 1px solid var(--hairline-strong); border-radius: var(--r-lg, 10px); box-shadow: var(--shadow-3);
+  background: var(--panel-solid); border: 1px solid var(--hairline-strong); border-radius: var(--r-lg, 10px); box-shadow: inset 0 1px var(--studio-glass-highlight, transparent), var(--shadow-3);
   color: var(--ivory); font: 450 var(--frame-fs)/1.4 var(--font-ui);
 }
 html[data-frame] .shell-menu-head { display: flex; align-items: center; gap: 8px; }

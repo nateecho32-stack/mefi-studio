@@ -178,7 +178,8 @@
     minimal: "Minimal",
   };
   const BACKDROP_ORDER = ["follow", "aurora", "deepspace", "nebula", "embers", "fireflies", "bokeh", "dust", "grid", "minimal"];
-  const THEME_BACKDROP = { gold: "dust", midnight: "deepspace", forest: "fireflies", violet: "nebula", ember: "embers", aurora: "aurora", rose: "bokeh", custom: "dust",
+  // Chrome's sky is deep space: silver stars over matte black.
+  const THEME_BACKDROP = { chrome: "deepspace", gold: "dust", midnight: "deepspace", forest: "fireflies", violet: "nebula", ember: "embers", aurora: "aurora", rose: "bokeh", custom: "dust",
     // The Void collection's two-tone themes.
     void: "deepspace", eclipse: "dust", abyss: "fireflies", dusk: "grid" };
   // Speech bubbles: what an agent says while it works, drawn beside its orb.

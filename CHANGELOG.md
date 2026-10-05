@@ -7,6 +7,23 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **A new Chrome theme, now the look a new install opens in.** Chrome is a
+  matte black with smooth metal: flat dark panels with a fine light edge,
+  primary buttons and the chosen side of a switch (Vibe | Build, Sessions |
+  Backlog, tabs) in brushed chrome with dark lettering, quiet secondary
+  buttons with a chrome outline, a thin chrome edge on the place, row or tab
+  you are on, a silver focus ring, and silver nodes and links over a dark
+  starry sky in the Command view. It is the same palette as the website. It
+  is listed first in Settings › Appearance, Settings › You, Vibe's settings
+  and the setup helper's Look step. If you already chose a theme (Aurora,
+  the old default, included) you keep it; every other theme is still there.
+  The colours that mean something (working, needs you, errors, review) are
+  unchanged.
+- **A finer finish in every theme.** Buttons and list rows ease into hover and
+  press instead of snapping (and stay still with motion off), raised controls
+  and menus catch a fine top highlight, a pressed main button darkens a touch,
+  and the tab menus share the other menus' corners. Nothing moves or changes
+  size.
 - **A shorter README that says where Studio is now.** It opens with the 0.5
   layout and says what is current: the download is 0.4.4, 0.5 is being built,
   and Studio is moving to Rust (with the three stages). It has new screenshots

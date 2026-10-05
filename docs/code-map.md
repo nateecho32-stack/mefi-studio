@@ -315,7 +315,7 @@ imports. See [Unified Studio](unified-studio.md) for the interfaces and fixture 
 | `card-layout.js` | | Shared measured card spans for Tasks and Ideas; coalesces resize updates, respects reduced motion, and stops observers and animations when the view closes. |
 | `explorer.js` | 1,696 | Sessions: session list/detail with Assistant, Activity and Diagnostics tabs. |
 | `booklet.js` | 2,100 | The expandable model catalog and its read-only Also tracked tables (`providerModels`), filters, seven-category Settings navigation and control search, the studio launcher and the boot sequence. |
-| `music.js` | | Appearance controls in Settings and the optional canvas preview; the hover/click audio dropdown (`openAudio` / `toggleAudio`) owns local music, radio, Links, connection setup, reactions and recommendations. Includes saved URL visibility and copied-link offers through the focused-main-frame-only `scripts/media-clipboard.cjs` helper. Also owns colour themes, node styles and layouts (the two-tone Void collection among them, free like the rest; a choice left in the retired `mefiStudio.music.premium.v1` store is migrated at load) and media parsing (`MefiMusic.playLink` / `linkInfo` for other modules). The media menu is a mini player that unfolds: one card and one transport for the source on show (radio and buffering follow the card; its ideas, hints and Up next drags stay current), with Next following a YouTube playlist. A remembered video link asks YouTube for no picture until the menu is opened. |
+| `music.js` | | Appearance controls in Settings and the optional canvas preview; the hover/click audio dropdown (`openAudio` / `toggleAudio`) owns local music, radio, Links, connection setup, reactions and recommendations. Includes saved URL visibility and copied-link offers through the focused-main-frame-only `scripts/media-clipboard.cjs` helper. Also owns colour themes (Chrome first, the default for a new install; a saved theme is kept), node styles and layouts (the two-tone Void collection among them, free like the rest; a choice left in the retired `mefiStudio.music.premium.v1` store is migrated at load) and media parsing (`MefiMusic.playLink` / `linkInfo` for other modules). The media menu is a mini player that unfolds: one card and one transport for the source on show (radio and buffering follow the card; its ideas, hints and Up next drags stay current), with Next following a YouTube playlist. A remembered video link asks YouTube for no picture until the menu is opened. |
 | `tree-dynamics.js` | | Shared saved tree modes and controls, bounded live shape transforms, count-aware sizing, music deformation and stable dark/bright video-region selection. Loaded before `idle.js`; transforms painted positions before wires, labels and hit targets. Also owns independent node/line brightness paint passes, enable switches and optional contrasting node outlines. Controls synchronize across Appearance, Audio reactions and the media window's brightness section. |
 | `media-window.js` | | The Links player's persistent floating surface: pointer and keyboard move/resize, viewport bounds, a local window toolbar and visible minimized restore bar, background/transparency settings in the media menu, stable dark-area tree placement, task-completion fades and notifications, saved geometry, and opt-in pointer avoidance. Docked drags preserve the visible starting geometry. The player is carried into and out of the media menu with `moveBefore` where the browser has it (no reload), and in a narrow window the bar keeps Close and the other buttons inside its edge. Bundled before `music.js`; styling lives in `music.css`. Host helpers `scripts/media-scene.cjs` return brightness scores only; `scripts/youtube-explorer.cjs` (below) provides the explorer in `music.js` with bounded public YouTube results, which also records recent playback position. |
 | `workspace.js` | | The home screen: project context, bottom composer, compact current-task summary, Activity panel, scoped start/resume, app preview controls and durable results. Task presentation comes from the shared helpers in `tasks.js`; selected task identity comes from `nav.js`. |
@@ -372,8 +372,9 @@ Its bounds follow the visible viewport as the panel scrolls, keeping website
 controls inside the panel without reloading the page.
 The main preload exposes controls only to Studio; websites have no preload.
 
-Seventeen stylesheets are inlined, in this order, so a later one wins a tie
-with an earlier one:
+Thirty stylesheets are inlined, in the order of `BOOKLET_INPUTS.styles` in
+`scripts/build-booklet.mjs`, so a later one wins a tie with an earlier one.
+The main ones, in that order:
 
 | File | Lines | Purpose |
 | --- | ---: | --- |
@@ -388,8 +389,9 @@ with an earlier one:
 | `companion-hub.css` · `vibe.css` · `setup-helper.css` | 313 · 732 · 161 | The companion bubble and its menu, Vibe, and the setup helper. |
 | `git-sync.css` | 246 | The Git chip, its popover and dialogs. |
 | `daily-paper.css` | 139 | The launch screen's front page, only while the gate asks for a project with the paper on. |
+| `chrome.css` | 187 | The Chrome theme (the default for a new install): matte surfaces, brushed-metal primary buttons and chosen segments, a thin chrome edge on what is selected. Every rule under `html[data-studio-theme="chrome"]` (only the Chrome swatch in the pickers looks like metal everywhere), paint only, last so it wins a tie; `tests/chrome_theme.test.mjs` holds it to that. |
 
-`npm run check` runs `check-css.mjs --unused` over all seventeen, and `--merge`
+`npm run check` runs `check-css.mjs --unused` over all of them, and `--merge`
 over `styles.css` while a merge is in progress (see
 [CONTRIBUTING.md](../CONTRIBUTING.md)).
 

@@ -102,8 +102,8 @@ Short windows compact the rail's utility controls to keep Home, Work and
 Agents visible even at increased display scaling.
 
 The colour theme supplies a display face and a pair of gradient colours. Gold,
-Forest, Ember, Rose and Eclipse use serif headings; Aurora, Midnight, Violet
-and the other Void themes use sans-serif headings. Body text stays in the
+Forest, Ember, Rose and Eclipse use serif headings; Chrome, Aurora, Midnight,
+Violet and the other Void themes use sans-serif headings. Body text stays in the
 system UI family and technical labels use a local monospace font. All fonts
 have offline fallbacks. Pages reveal a shared backdrop; cards, fields, sticky
 headers and popovers use progressively stronger glass fills. Inactive Home
@@ -111,6 +111,22 @@ and Command controls are hidden behind workspace pages so text does not bleed
 through. Blur off retains a translucent tint with greater opacity; OS reduced
 transparency uses solid surfaces. Custom palettes retain their chosen colours,
 with a safe reading background when canvas and panel tones differ.
+
+**Chrome** is the theme a new install opens in (one already saved, Aurora
+included, is kept) and the public website's palette. `renderer/chrome.css`,
+inlined last and scoped to `html[data-studio-theme="chrome"]`, gives it matte
+surfaces: the panel colour on the page's black with a 1px top highlight,
+quiet hairlines and deep neutral shadows, and no coloured glow. Primary buttons
+and the chosen segment of a segmented control (the Vibe | Build switch,
+Sessions | Backlog, Command's rail tabs) are brushed metal with dark ink, which
+reads at 5.4:1 or better on the darkest stop of the pressed metal; secondary
+buttons are matte with a chrome hairline; the current place in the rail, a
+selected row and the open tab get a thin chrome edge instead of a fill. The
+status colours keep their meaning, and the stylesheet changes paint only, never
+size, place or scrolling (`tests/chrome_theme.test.mjs`). Every theme shares the
+finish in `studio-ui.css` and the frame's stylesheets: hover settles in 140 ms
+and a press in 90 ms (0 with motion off), raised controls and floating menus
+catch a 1px top highlight.
 
 ## Layout contract
 
