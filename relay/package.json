@@ -1,0 +1,21 @@
+{
+  "name": "mefi-relay",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The Mefi Studio relay: rooms, chat, listen together, companions and cowork claims between Studios, on Cloudflare Workers and Durable Objects. Chat is passed along and never stored.",
+  "license": "MIT",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "check": "wrangler deploy --dry-run --outdir .wrangler/dry-run",
+    "smoke": "node scripts/smoke.mjs",
+    "test": "node --test ../tests/relay_*.test.mjs"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "devDependencies": {
+    "wrangler": "4.147.0"
+  }
+}

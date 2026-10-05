@@ -21,6 +21,7 @@
   const REASONS = {
     "room-host-role": "Creating rooms needs the Room Host role in the Void Engine server.",
     "new-member": "New members can do this after their first day in the server.",
+    "week-member": "Making your own rooms opens after a week in the server. Ask a Room Host to make one meanwhile.",
     "owned-rooms": "You already own 3 open rooms. Close one first.",
     "daily-creates": "You have made 5 rooms today. Try again tomorrow.",
     "hub-full": "The room service is full right now.",
@@ -479,7 +480,7 @@
           if (answer?.ok && openRoom?.id === room.id) openRoom = merged(openRoom, answer.room);
           status.textContent = answer?.ok ? (answer.room.status === "locked" ? "Locked: no new posts or requests." : "Unlocked.") : why(answer, "That did not go through.");
           paint();
-        })), confirmed("Close room", "Close it for everyone?", `Close ${room.name}? Its history stays in Discord, but nobody can post or join.`, () => {
+        })), confirmed("Close room", "Close it for everyone?", `Close ${room.name}? Nobody can post or join after this. Each member's Studio keeps its own copy of the chat for a week.`, () => {
           void guard("Closing…", async () => {
             const answer = await call("close", room.id);
             status.textContent = answer?.ok ? `${room.name} is closed.` : why(answer, "The room could not be closed.");
@@ -580,6 +581,17 @@
       if (event.type === "message" && !messages.some((item) => item.id === event.message.id)) { messages = [...messages, event.message].slice(-500); showMessages(); }
       else if (event.type === "messageUpdate") { messages = messages.map((item) => (item.id === event.message.id ? event.message : item)); showMessages(); }
       else if (event.type === "messageDelete") { messages = messages.filter((item) => item.id !== event.messageId); showMessages(); }
+      // Another member's Studio filled a gap in this PC's copy (the relay keeps no chat): read the page again.
+      else if (event.type === "historyFill") {
+        const room = openRoom;
+        void Promise.resolve(call("messages", room.id)).then((page) => {
+          if (!page?.ok || openRoom !== room) return;
+          const byId = new Map(messages.map((item) => [item.id, item]));
+          for (const item of page.messages) byId.set(item.id, item);
+          messages = [...byId.values()].sort((a, b) => a.id.length - b.id.length || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).slice(-500);
+          showMessages();
+        }).catch(() => {});
+      }
     }
     // Lets go of the open room's hold and stops hearing frames. Safe to call twice.
     function dispose() {

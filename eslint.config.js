@@ -56,13 +56,15 @@ export default [
   {
     ignores: [
       "node_modules/**", "dist/**", "renderer/booklet.html", "tools/logs/**", ".local-migration/**", "website/**",
-      "data/**", ".claude/**", ".codex-remote-attachments/**",
+      "data/**", ".claude/**", ".codex-remote-attachments/**", "relay/.wrangler/**",
     ],
   },
   { files: ["**/*.mjs"], languageOptions: { ecmaVersion: 2024, sourceType: "module", globals: node }, rules },
   { files: ["**/*.cjs"], languageOptions: { ecmaVersion: 2024, sourceType: "commonjs", globals: node }, rules },
   { files: ["renderer/**/*.js"], languageOptions: { ecmaVersion: 2024, sourceType: "script", globals: browser }, rules },
   { files: ["tests/**/*.mjs", "tests/**/*.cjs"], languageOptions: { globals: { ...node, ...browser } } },
+  // The relay runs in a Cloudflare Worker: Web globals plus the Workers WebSocket pairs, and no Node.
+  { files: ["relay/src/**/*.mjs"], languageOptions: { globals: { ...shared, WebSocketPair: "readonly", WebSocketRequestResponsePair: "readonly" } } },
   // The promo stages are ES modules loaded by their .html pages in a browser.
   { files: ["tools/promo/*.mjs"], languageOptions: { globals: browser } },
   // The Electron fixtures ship page-side code as strings evaluated inside a

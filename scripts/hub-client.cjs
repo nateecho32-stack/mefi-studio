@@ -23,6 +23,15 @@
 //     hands it `remote` commands from the member's own DMs, and
 //     `remoteReply` / `remoteNotice` answer them and send alerts. What a
 //     command may do is scripts/remote.cjs and main's "Discord remote" block.
+//   - The Mefi Studio relay (relay/ in this repository) speaks the same
+//     protocol and stores no chat. When its `ready` lists them: "keepalive"
+//     (a {"type":"ping"} every 30 s, which Cloudflare answers without waking
+//     the relay), "messages.signed" (each message carries the relay's `sig`,
+//     kept here so the copy stays checkable) and "history.peer" (historyAsk
+//     asks the room for older messages; a `historyRequest` from the relay asks
+//     this Studio to answer from its own copy with historyReply). `hello`
+//     names what this Studio can do (CLIENT_FEATURES); a hub that does not
+//     know the field drops it.
 //
 // Like scripts/discord-oauth.cjs this is a network module, and everything it
 // reaches for is injected: fetch, the WebSocket class, the clock and the
@@ -44,6 +53,15 @@ const PROTOCOL_VERSION = 1;
 const HUB_URL = "";
 const SESSION_MARGIN_MS = 60_000;
 const PRESENCE_EVERY_MS = 30_000;
+// The relay's keepalive: this exact frame, byte for byte, is answered by
+// Cloudflare without waking the relay (relay/src/hub-object.mjs).
+const KEEPALIVE_EVERY_MS = 30_000;
+const KEEPALIVE_FRAME = Object.freeze({ type: "ping" });
+// What this Studio tells the hub it can do (hello.features).
+const CLIENT_FEATURES = Object.freeze(["history.peer", "keepalive"]);
+// A historyReply must fit the hub's 16 KB frame limit.
+const HISTORY_REPLY_BYTES = 15 * 1024;
+const HISTORY_REPLY_MESSAGES = 100;
 const ACK_TIMEOUT_MS = 10_000;
 const REQUEST_TIMEOUT_MS = 15_000;
 const BACKOFF_MS = Object.freeze([1_000, 2_000, 5_000, 10_000, 30_000, 60_000]);
@@ -150,6 +168,27 @@ function roomMessage(value) {
     mentions: Array.isArray(value.mentions?.users) ? value.mentions.users.map((item) => (object(item) && SNOWFLAKE.test(String(item.id)) ? { id: String(item.id), name: text(item.name, 100) } : null)).filter(Boolean).slice(0, 50) : [],
     attachments: Array.isArray(value.attachments) ? value.attachments.filter(object).slice(0, 10).map((item) => ({ name: text(item.name, 200) || "file", size: count(item.size, 1e12) ?? 0 })) : [],
     replyTo: SNOWFLAKE.test(String(value.replyTo)) ? String(value.replyTo) : null,
+    // The relay's signature (feature "messages.signed"), kept so this copy can
+    // later fill another member's gap or back a report.
+    ...(OPAQUE_ID.test(String(value.sig ?? "")) ? { sig: value.sig } : {}),
+  };
+}
+
+// A kept message back in the hub's wire shape, for historyReply and reports.
+function wireMessage(value) {
+  const message = roomMessage(value);
+  if (!message) return null;
+  return {
+    id: message.id,
+    author: { id: message.author.id, name: message.author.name.replace(/[\x00-\x1f\x7f]/g, " "), viaStudio: message.author.viaStudio },
+    text: message.text,
+    ...(message.truncated ? { truncated: true } : {}),
+    createdAt: message.createdAt,
+    editedAt: message.editedAt,
+    mentions: { users: message.mentions.map((item) => ({ id: item.id, name: item.name.replace(/[\x00-\x1f\x7f]/g, " ") })), roles: [], everyone: false },
+    attachments: message.attachments.map((item) => ({ name: item.name.replace(/[\x00-\x1f\x7f]/g, " ") || "file", size: item.size })),
+    replyTo: message.replyTo,
+    ...(message.sig ? { sig: message.sig } : {}),
   };
 }
 
@@ -245,6 +284,7 @@ function createHubClient(options = {}) {
   let retryTimer = null;
   let renewTimer = null;
   let presenceTimer = null;
+  let keepaliveTimer = null;
   let paused = false;
   let nonceSeq = 0;
   let nowPlaying = null;
@@ -270,6 +310,7 @@ function createHubClient(options = {}) {
       rooms: [...rooms.keys()],
       companions: features.includes("companion"), companionDirect: features.includes("companion") && features.includes("companion.direct"),
       remote: features.includes("remote"), remoteOn: Boolean(remote?.on) && features.includes("remote"), remotePcs: remoteList,
+      history: features.includes("history.peer"),
     };
   }
   function setState(next, nextError = null) {
@@ -351,6 +392,7 @@ function createHubClient(options = {}) {
     retryTimer = clearTimer(retryTimer);
     renewTimer = clearTimer(renewTimer);
     if (presenceTimer) { stopEvery(presenceTimer); presenceTimer = null; }
+    if (keepaliveTimer) { stopEvery(keepaliveTimer); keepaliveTimer = null; }
     settleAll("offline");
     const closing = socket;
     socket = null;
@@ -387,7 +429,7 @@ function createHubClient(options = {}) {
       let ws;
       try { ws = new SocketImpl(address.ws); } catch { setState("offline", "network"); retry(); return; }
       socket = ws;
-      ws.onopen = () => { if (socket === ws) send({ type: "hello", session: session.token, protocol: PROTOCOL_VERSION }); };
+      ws.onopen = () => { if (socket === ws) send({ type: "hello", session: session.token, protocol: PROTOCOL_VERSION, features: [...CLIENT_FEATURES] }); };
       ws.onmessage = (event) => { if (socket === ws) receive(event?.data); };
       ws.onerror = () => {};
       ws.onclose = (event) => { if (socket === ws) closed(Number(event?.code) || 1006); };
@@ -398,6 +440,7 @@ function createHubClient(options = {}) {
   function closed(code) {
     socket = null;
     if (presenceTimer) { stopEvery(presenceTimer); presenceTimer = null; }
+    if (keepaliveTimer) { stopEvery(keepaliveTimer); keepaliveTimer = null; }
     renewTimer = clearTimer(renewTimer);
     settleAll("offline");
     if (!wanted) { setState("off"); return; }
@@ -430,6 +473,10 @@ function createHubClient(options = {}) {
         if (remote && features.includes("remote")) sendRemoteHello();
         if (presenceTimer) stopEvery(presenceTimer);
         presenceTimer = every(() => { for (const roomId of rooms.keys()) send({ type: "presence", roomId }); }, PRESENCE_EVERY_MS);
+        // The relay's keepalive keeps a socket with no rooms open (the remote,
+        // presence) from looking idle, at no cost to the relay.
+        if (keepaliveTimer) { stopEvery(keepaliveTimer); keepaliveTimer = null; }
+        if (features.includes("keepalive")) keepaliveTimer = every(() => send(KEEPALIVE_FRAME), KEEPALIVE_EVERY_MS);
         scheduleRenew();
         return;
       }
@@ -465,6 +512,19 @@ function createHubClient(options = {}) {
       }
       case "messageDelete":
         if (OPAQUE_ID.test(String(frame.roomId)) && SNOWFLAKE.test(String(frame.messageId))) emit({ type: "messageDelete", roomId: frame.roomId, messageId: String(frame.messageId) });
+        return;
+      // Peer history (feature "history.peer"): the relay asks this Studio for
+      // what it holds of a room before `before`; main answers with historyReply.
+      case "historyRequest":
+        if (features.includes("history.peer") && OPAQUE_ID.test(String(frame.roomId)) && OPAQUE_ID.test(String(frame.requestId)) && rooms.has(frame.roomId)) {
+          emit({ type: "historyRequest", roomId: frame.roomId, requestId: frame.requestId, before: SNOWFLAKE.test(String(frame.before ?? "")) ? String(frame.before) : null });
+        }
+        return;
+      // Another member's copy of a room's messages, each checked by the relay.
+      case "history":
+        if (OPAQUE_ID.test(String(frame.roomId)) && Array.isArray(frame.messages)) {
+          emit({ type: "history", roomId: frame.roomId, messages: frame.messages.slice(0, HISTORY_REPLY_MESSAGES).map(roomMessage).filter(Boolean), hasMore: frame.hasMore === true });
+        }
         return;
       case "joinRequest": {
         const request = joinRequest(frame.request);
@@ -646,10 +706,13 @@ function createHubClient(options = {}) {
       if (!answer.ok) return refused(answer);
       return { ok: true, messages: Array.isArray(answer.data.messages) ? answer.data.messages.map(roomMessage).filter(Boolean) : [], hasMore: answer.data.hasMore === true };
     },
-    report(roomId, messageId, reason) {
+    // `message` (optional) is this Studio's own copy; the relay keeps its text
+    // as evidence only when the relay's signature on it checks out.
+    report(roomId, messageId, reason, message = null) {
       const why = typeof reason === "string" ? reason.trim() : "";
       if (!id(roomId) || !SNOWFLAKE.test(String(messageId ?? "")) || !why || why.length > 500) return bad();
-      return simple("POST", "/v1/reports", { roomId, messageId: String(messageId), reason: text(why, 500) });
+      const copy = message && String(message.id) === String(messageId) ? wireMessage(message) : null;
+      return simple("POST", "/v1/reports", { roomId, messageId: String(messageId), reason: text(why, 500), ...(copy?.sig ? { message: copy } : {}) });
     },
     // Room chat over the socket: an ack (with the Discord message id) or a
     // nack with the hub's reason, or "timeout" after 10 s. Nothing retries
@@ -667,6 +730,26 @@ function createHubClient(options = {}) {
     deleteMessage(roomId, messageId) {
       if (!id(roomId) || !SNOWFLAKE.test(String(messageId ?? ""))) return Promise.resolve({ ok: false, reason: "bad-request" });
       return withAck({ type: "delete", roomId, messageId: String(messageId) });
+    },
+    // ---- Peer history (feature "history.peer") -------------------------------
+    // Ask the room for messages older than `before` (or the latest): the relay
+    // forwards the ask to another member's Studio and sends back a `history`
+    // event with what it held. Answers the ack, or { ok: false, reason }
+    // ("no-peer" when nobody else in the room can answer).
+    historyAsk(roomId, before = null) {
+      if (!features.includes("history.peer")) return Promise.resolve({ ok: false, reason: "unsupported" });
+      if (!id(roomId) || !rooms.has(roomId) || (before != null && !SNOWFLAKE.test(String(before)))) return Promise.resolve({ ok: false, reason: "bad-request" });
+      return withAck({ type: "historyRequest", roomId, ...(before != null ? { before: String(before) } : {}) });
+    },
+    // Answer a `historyRequest` from this Studio's own copy: newest last, as
+    // many as fit one frame (the oldest are left out first). False when not sent.
+    historyReply(requestId, messages, hasMore = false) {
+      if (!features.includes("history.peer") || !id(requestId) || !Array.isArray(messages)) return false;
+      const wire = messages.map(wireMessage).filter(Boolean).slice(-HISTORY_REPLY_MESSAGES);
+      let more = hasMore === true;
+      const size = (list) => Buffer.byteLength(JSON.stringify({ type: "historyReply", requestId, messages: list, hasMore: more }));
+      while (wire.length && size(wire) > HISTORY_REPLY_BYTES) { wire.shift(); more = true; }
+      return send({ type: "historyReply", requestId, messages: wire, hasMore: more });
     },
     // ---- File claims in a cowork room (main.cjs "Cowork claims") -------------
     // Claim before editing, renew every minute, release when done. A conflict
@@ -797,4 +880,5 @@ module.exports = {
   PROTOCOL_VERSION, HUB_URL, LISTEN_PROVIDERS, NOW_PLAYING_PROVIDERS, LISTEN_ACTIONS, HOLDERS, BACKOFF_MS, PRESENCE_EVERY_MS, SESSION_MARGIN_MS,
   hubAddress, configuredUrl, listenSession, nowPlayingTrack, roomSummary, roomMessage, joinRequest, roomInvite, postText, createHubClient,
   remoteText, remoteButtons, remoteCommand, remotePcs,
+  KEEPALIVE_FRAME, KEEPALIVE_EVERY_MS, CLIENT_FEATURES, wireMessage,
 };

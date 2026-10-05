@@ -1,0 +1,36 @@
+# The Mefi Studio relay on Cloudflare's free plan: one Worker that routes,
+# one Durable Object (Hub) that holds every socket and a small SQLite database.
+# Deploy steps and what is stored: README.md in this folder.
+
+name = "mefi-relay"
+main = "src/worker.mjs"
+compatibility_date = "2026-10-01"
+workers_dev = true
+preview_urls = false
+send_metrics = false
+
+# No request logs, no traces: the relay keeps nothing it does not need.
+[observability]
+enabled = false
+
+[[durable_objects.bindings]]
+name = "HUB"
+class_name = "Hub"
+
+# The free plan offers SQLite-backed Durable Objects only.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Hub"]
+
+[vars]
+# The "Mefi Studio Link" Discord application (public client) whose tokens Studio sends.
+STUDIO_APP_ID = ""
+# The Void Engine Discord server.
+GUILD_ID = "1345380333302059129"
+# Discord role ids: moderators, and the roles rooms and ranks read (JSON object of key -> role id).
+MOD_ROLE_IDS = ""
+ROLE_IDS_JSON = "{}"
+# Discord user ids that are always moderators.
+OWNER_IDS = ""
+# "true" refuses every write (maintenance).
+PAUSED = "false"
