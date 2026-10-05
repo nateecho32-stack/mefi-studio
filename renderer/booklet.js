@@ -857,12 +857,23 @@
     // Appearance and Map look show their own sections of the shared pane (styles.css), under their own title.
     if (!settingsFiled) return;
     document.getElementById("tab-studio")?.setAttribute("data-settings-place", settingsQuery() ? "search" : settingsCategory);
+    announceSettingsPlace();
     const looks = settingsCategory === "looks";
     const heading = document.getElementById("settings-category-appearance-heading");
     if (heading && heading.textContent !== (looks ? "Map look" : "Appearance")) heading.textContent = looks ? "Map look" : "Appearance";
     const about = heading?.parentElement?.querySelector?.("p");
     const words = looks ? "How the Map draws your work. Changes show on the Map straight away." : "Themes, colours and how the interface moves.";
     if (about && about.textContent !== words) about.textContent = words;
+  }
+  // mefi:settings-place: Settings changed place (or Find a setting started or stopped showing results), so a list or a
+  // breadcrumb drawn elsewhere follows (renderer/shell.js). Said once per change, never for a repaint that moved nothing.
+  let settingsPlaceSaid = "";
+  function announceSettingsPlace() {
+    const search = Boolean(settingsQuery());
+    const signature = `${settingsCategory}|${search}`;
+    if (signature === settingsPlaceSaid) return;
+    settingsPlaceSaid = signature;
+    try { window.dispatchEvent?.(new CustomEvent("mefi:settings-place", { detail: { place: settingsCategory, search } })); } catch { /* nobody listens without events */ }
   }
   function syncSettingsAutomation() {
     const current = window.MefiIdle?.queueSettings?.();
@@ -2305,9 +2316,15 @@
 
   // The one facade nav.js drives: tabs (with a Settings card to land on),
   // catalog refresh, the shortcut sheet, and the Settings jump itself.
-  // settingsPlaces: the 0.5 layout's Settings places in order (null in the classic layout), for a list drawn elsewhere.
-  const settingsPlaces = () => (settingsFiled ? SETTINGS_PLACES.map((place) => ({ id: place.id, label: place.label, glyph: place.glyph, group: place.group ?? null, sub: Boolean(place.sub), route: place.route ?? null, current: !place.route && place.id === settingsCategory })) : null);
-  window.MefiBooklet = { showTab, refresh, toggleHelp, jumpToSettings, initStudio, settingsPlaces };
+  // settingsPlaces: the 0.5 layout's Settings places in order (null in the classic layout), for a list drawn elsewhere
+  // (renderer/shell.js draws them in the list column). Asking files Settings into its places if nothing has yet.
+  const settingsPlaces = () => {
+    if (!settingsFiled) fileSettingsV2();
+    return settingsFiled ? SETTINGS_PLACES.map((place) => ({ id: place.id, label: place.label, glyph: place.glyph, group: place.group ?? null, sub: Boolean(place.sub), route: place.route ?? null, current: !place.route && place.id === settingsCategory })) : null;
+  };
+  // settingsLocation: the place Settings shows, and whether Find a setting is showing results instead (null in the classic layout).
+  const settingsLocation = () => (settingsFiled ? { id: settingsCategory, label: SETTINGS_CATEGORIES[settingsCategory] ?? settingsCategory, search: Boolean(settingsQuery()) } : null);
+  window.MefiBooklet = { showTab, refresh, toggleHelp, jumpToSettings, initStudio, settingsPlaces, settingsLocation };
 
   const headless = new URLSearchParams(window.location.search);
   const capture = headless.get("capture") === "1";

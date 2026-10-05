@@ -432,6 +432,7 @@
     els.scrim.hidden = !state.drawer;
     els.frame.dataset.drawer = state.drawer || "";
     rootEl().dataset.frame = "on";
+    paintPagesFlag();
     paintSplitters();
     paintToggles();
     paintMenu();
@@ -736,6 +737,8 @@
       else parts.push(window.MefiToday ? (chat ? "Chat" : rootEl().dataset.uiMode === "vibe" ? "Today, the board" : "Today") : String(dest?.label || dest?.short || "Home"));
       return parts;
     }
+    const place = placeTrail(n, id, dest);
+    if (place) return [...parts, ...place];
     let section = null;
     try { section = dest ? n?.sectionLabel?.(dest) ?? null : null; } catch { section = null; }
     const page = dest ? String(dest.label || dest.short || id) : null;
@@ -775,10 +778,91 @@
     const said = document.body?.dataset?.navSection;
     return said && Array.isArray(routes[said]) ? said : null;
   }
+  // ---- the 0.5 layout's places: Settings, Team and the Map, in the list column and the breadcrumb --------------------------
+  // The prototype's subnav (docs/prototype/mefi-studio-0.5-v5.html): Settings and Team list their own places, a row each,
+  // under the headings the prototype gives a group ("Updates and help", "Advanced"; "Context for agents", "Monitor"). Each
+  // row runs what the place's own list runs: MefiBooklet.jumpToSettings, or MefiNav.go for a place that is a page of its own
+  // (Size and density), and for Team what MefiAgents.teamPlaces says, with the pages a place holds (Models: Catalog and
+  // Performance) under it while you are in it. The Map lists its three pages. booklet.js and agents.js say when the place
+  // changes (mefi:settings-place, mefi:team-place), and the breadcrumb reads Settings / <place> and Team / <place>.
+  const placeOfRoute = (n, id) => { try { return layoutOn() && typeof n?.placeOf === "function" ? n.placeOf(id) ?? null : null; } catch { return null; } };
+  const MAP_PAGES = [["command", "Map", "g-command", {}], ["fleet", "Fleet", "g-fleet", {}], ["agent-brain", "Pipelines", "g-route", { tab: "live" }]];
+  function settingsModel(n, id) {
+    let places = null;
+    try { places = window.MefiBooklet?.settingsPlaces?.() ?? null; } catch { places = null; }
+    if (!Array.isArray(places) || !places.length) return null;
+    const rows = [];
+    let group = null;
+    for (const place of places) {
+      if ((place.group ?? null) !== group) { group = place.group ?? null; if (group) rows.push({ kind: "heading", label: String(group) }); }
+      const route = typeof place.route === "string" ? place.route : null;
+      rows.push({
+        kind: "row", key: `settings:${place.id}`, label: String(place.label), glyph: typeof place.glyph === "string" ? place.glyph : null, sub: Boolean(place.sub),
+        current: route ? id === route : id === "studio" && Boolean(place.current),
+        run: (event) => {
+          if (route) { n?.go?.(route); return; }
+          if (id === "studio" && typeof window.MefiBooklet?.jumpToSettings === "function") window.MefiBooklet.jumpToSettings(place.id, { focus: event?.detail === 0 });
+          else n?.go?.("studio", { section: place.id });
+        },
+      });
+    }
+    // Settings' own list closes while this one shows, and with it its way to every setting in one tree: it comes here.
+    if (n?.get?.("config")) rows.push({ kind: "row", key: "settings:config", label: "All settings in one place", glyph: null, quiet: true, current: false, run: () => n.go("config") });
+    return { section: "settings", title: "Settings", rows };
+  }
+  function teamModel(n, id) {
+    let places = null;
+    try { places = window.MefiAgents?.teamPlaces?.(id) ?? null; } catch { places = null; }
+    if (!Array.isArray(places) || !places.length) return null;
+    const rows = [];
+    let group = null;
+    for (const place of places) {
+      if ((place.group ?? null) !== group) { group = place.group ?? null; if (group) rows.push({ kind: "heading", label: String(group) }); }
+      // While one of a place's pages is the current row, the place itself reads as open rather than current.
+      const inView = Array.isArray(place.views) && place.views.length > 1 && place.views.some((view) => view.current);
+      rows.push({ kind: "row", key: `team:${place.id}`, label: String(place.label), glyph: typeof place.glyph === "string" ? place.glyph : null, current: Boolean(place.current) && !inView, open: Boolean(place.current) && inView, run: place.run });
+      if (place.current && Array.isArray(place.views) && place.views.length > 1) {
+        place.views.forEach((view, at) => rows.push({ kind: "row", key: `team:${place.id}:${at}`, label: String(view.label), glyph: null, sub: true, current: Boolean(view.current), run: view.run }));
+      }
+    }
+    return { section: "team", title: "Team", rows };
+  }
+  function mapModel(n, id) {
+    const tab = (() => { try { return window.MefiAgentBrain?.tab?.() ?? null; } catch { return null; } })();
+    const rows = MAP_PAGES.filter(([route]) => n?.get?.(route)).map(([route, label, glyph, params]) => ({
+      kind: "row", key: `map:${route}`, label, glyph, current: id === route && (route !== "agent-brain" || tab === "live" || tab == null), run: () => n.go(route, params),
+    }));
+    return rows.length ? { section: "map", title: "Map", rows } : null;
+  }
+  // Where you are, past the project, in a place that has places of its own; null leaves it to the section and the page.
+  function placeTrail(n, id, dest) {
+    const place = placeOfRoute(n, id);
+    if (place === "settings") {
+      if (id === "size") return ["Settings", "Appearance", String(dest?.label || "Size and density")];
+      let here = null;
+      try { here = window.MefiBooklet?.settingsLocation?.() ?? null; } catch { here = null; }
+      return id === "studio" && here ? ["Settings", here.search ? "Search" : String(here.label)] : null;
+    }
+    if (place === "team") {
+      let here = null;
+      try { here = window.MefiAgents?.teamPlace?.(id) ?? null; } catch { here = null; }
+      return here?.label ? ["Team", String(here.label)] : null;
+    }
+    if (place === "map") {
+      const page = MAP_PAGES.find(([route]) => route === id);
+      return page ? (page[0] === "command" ? ["Map"] : ["Map", page[1]]) : null;
+    }
+    return null;
+  }
   function pageModel() {
     const n = nav();
     const id = n?.current?.() ?? null;
     if (isHomeRoute(id)) return null;
+    const place = placeOfRoute(n, id);
+    if (place === "settings" || place === "team" || place === "map") {
+      const model = place === "settings" ? settingsModel(n, id) : place === "team" ? teamModel(n, id) : mapModel(n, id);
+      if (model) return model;
+    }
     const section = sectionOfRoute(n, id);
     if (!section || section === "home") return null;
     const dest = n?.get?.(id);
@@ -818,7 +902,7 @@
     return root;
   }
   function pageButton(label, current, run, extra = {}) {
-    const node = button(`shell-btn shell-page${extra.sub ? " is-sub" : ""}`, null, run, { "data-page": extra.key || label });
+    const node = button(`shell-btn shell-page${extra.sub ? " is-sub" : ""}${extra.open ? " is-open" : ""}${extra.quiet ? " is-quiet" : ""}`, null, run, { "data-page": extra.key || label });
     if (extra.glyph) {
       const svg = document.createElementNS(SVG_NS, "svg");
       svg.setAttribute("class", "glyph"); svg.setAttribute("aria-hidden", "true"); svg.setAttribute("focusable", "false");
@@ -856,7 +940,13 @@
       if (model) {
         pages.title.textContent = model.title;
         pages.root.setAttribute("aria-label", `${model.title} pages`);
-        if (model.groups) {
+        if (model.rows) {
+          // A place's list (settingsModel, teamModel, mapModel): headings over groups, rows with the place's glyph.
+          for (const row of model.rows) {
+            if (row.kind === "heading") rows.push(text("h3", "shell-pages-group", row.label));
+            else rows.push(pageButton(row.label, row.current, (event) => row.run?.(event), { key: row.key, glyph: row.glyph, sub: row.sub, open: row.open, quiet: row.quiet }));
+          }
+        } else if (model.groups) {
           for (const group of model.groups) {
             if (!group.views.length) { rows.push(pageButton(group.label, group.current, () => group.run?.(), { key: `group:${group.id}` })); continue; }
             rows.push(text("h3", `shell-pages-group${group.current ? " is-current" : ""}`, group.label));
@@ -876,6 +966,16 @@
       pages.section = model?.section ?? null;
       emit({ what: "pages", shown, section: pages.section });
     }
+    paintPagesFlag();
+  }
+  // html[data-frame-pages]: the place whose list the column shows as a column (not a closed drawer). Settings' own list of
+  // places steps aside while it does (shell.css), and comes back when the column closes or folds into a drawer.
+  function paintPagesFlag() {
+    const root = rootEl();
+    if (!root?.dataset) return;
+    const section = state.on && state.pages?.shown && state.els.list?.dataset?.state === "docked" ? state.pages.section : null;
+    if ((root.dataset.framePages ?? null) === section) return;
+    if (section) root.dataset.framePages = section; else delete root.dataset.framePages;
   }
   // The arrows move between the pages, Home and End go to the ends; Tab leaves the list.
   function pageKeys(event) {
@@ -1445,6 +1545,7 @@
     state.requested = {};
     removeRegions();
     delete rootEl().dataset.frame;
+    delete rootEl().dataset.framePages;
     state.top = null; state.statusParts = null; state.splits = null; state.plan = null; state.live = null; state.liveKey = "";
     emit({ what: "disable" });
     return true;
@@ -1480,6 +1581,8 @@
       sync("nav");
     });
     for (const name of ["mefi:workspace-state", "mefi:usage-report", "mefi:nav-badges", "mefi:autonomy-changed", "mefi:project-changed", "mefi:task-context", "mefi-music-change", "mefi:companion-state"]) window.addEventListener(name, () => scheduleLive());
+    // A place changed inside Settings or Team without a route of its own: the list column and the breadcrumb follow at once.
+    for (const name of ["mefi:settings-place", "mefi:team-place"]) window.addEventListener(name, () => { if (state.on) paintLive(); });
     window.addEventListener("keydown", onKey, true);
     document.addEventListener("visibilitychange", () => { if (state.on && state.stale && !document.hidden) { state.stale = false; scheduleLive(); } });
     document.addEventListener("pointerdown", (event) => { if (!state.on) return; outsideMenu(event); outsideDrawer(event); }, true);

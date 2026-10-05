@@ -384,7 +384,8 @@ app.whenReady().then(async () => {
     assert.deepEqual(menu.missing, []);
     assert.equal(menu.scrollbarWidth, "none", `${label}: native scrollbars stay hidden`);
     assert.equal(menu.role, "dialog");
-    assert.ok(menu.groups.includes("Home") && menu.groups.includes("Sessions") && menu.groups.includes("Work"), `${label}: ${menu.groups}`);
+    // The 0.5 layout's places name the groups (renderer/nav.js placeOf): Today is Work's, Agents is Team, the Command view the Map.
+    assert.ok(["Work", "Sessions", "Map", "Team"].every((group) => menu.groups.includes(group)) && !menu.groups.includes("Home") && !menu.groups.includes("Agents"), `${label}: ${menu.groups}`);
     assert.equal(await run("return document.activeElement && document.activeElement.id;"), "mefi-tabs-search", `${label}: the search box has the keyboard`);
     assert.deepEqual(await run("const node = document.getElementById('mefi-tabs-search'); const style = getComputedStyle(node); return { outline: style.outlineStyle, shadow: style.boxShadow, ring: getComputedStyle(node.parentElement).borderColor !== getComputedStyle(node.parentElement).getPropertyValue('--nothing') };"), { outline: "none", shadow: "none", ring: true }, `${label}: the search row shows the focus ring, not the input inside it`);
     if (["1440x900@1", "600x560@1.5"].includes(label)) await capture(`tabs-add-${label.replace(/[@.]/g, "_")}.png`);
