@@ -7,6 +7,13 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **A shorter README that says where Studio is now.** It opens with the 0.5
+  layout and says what is current: the download is 0.4.4, 0.5 is being built,
+  and Studio is moving to Rust (with the three stages). It has new screenshots
+  of the 0.5 layout (`docs/images/0.5/`), the manual steps for updating from
+  0.4.4, and the 0.4.4 tour in a fold. The full "Working from several PCs"
+  text moved to `docs/your-pcs.md`, and the optional integrations sit in a
+  fold at the end.
 - **Today, in both modes, as in the 0.5 prototype.** With the new layout on
   (`?layout=v2`), Build's Home with no session open is now Today: a greeting
   and "What's next for your project?", the message box with Add files or an
