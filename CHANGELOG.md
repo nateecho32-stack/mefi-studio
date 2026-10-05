@@ -16,6 +16,10 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   check gave up on a slow Claude Code or Codex answer while the CLI ran on for
   up to three minutes on your subscription; now it is stopped then, and that
   does not count as the tool failing.
+- **The first project map moves to your next login too.** On Claude Code or
+  Codex it ran on the main login only; now a login at its usage limit hands
+  the map to the next one, like every other call, a paused tool is not
+  started for it, and the map's call is counted in Usage.
 - **Chrome's buttons no longer look struck through.** The metal on main
   buttons and chosen tabs had a hard dark line at half height, right behind
   the words. Its horizon is now a soft band below them, and the darkest part

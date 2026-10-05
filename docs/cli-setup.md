@@ -47,8 +47,9 @@ first. **Check** sends the same small prompt as Check connection on that login,
 **Sign in** reopens its window, and **Remove** forgets it and deletes its folder
 with the sign-in in it.
 
-- Every Claude Code or Codex call (chat, planning, seats, coding workers and
-  the usage read) runs on the first login that is not topped out.
+- Every Claude Code or Codex call (chat, planning, seats, the first project
+  map, coding workers and the usage read) runs on the first login that is not
+  topped out.
 - A login that reports its usage limit ("5-hour limit reached ∙ resets 3pm",
   "You've hit your limit", Codex's "try again in 4 days 3 hours") is set
   aside until the reset it names, or for half an hour while a usage reading

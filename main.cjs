@@ -23613,6 +23613,25 @@ function registerIpc() {
   // The service instance is kept for the process lifetime because it owns the
   // running map; a live update of its module takes effect on the next launch.
   let firstRunService = null;
+  // The first map on the assistant's own route (the service's assistantMap).
+  // On a coding CLI it is the same call every other assistant turn makes
+  // (cliAssistantCall): a login that reports its usage limit hands the map to
+  // the next one (cliAccountTurn), the provider breaker gates it and the
+  // ledger gets its row. It keeps its own prompt (an active tool store adds no
+  // Studio tools or skills), its limit and cancel (timeoutMs, onSpawn), and no
+  // keyed retry: the map stays on the route the guide checked, as before.
+  async function firstMapAssistant({ prompt, project, timeoutMs, onSpawn }) {
+    const route = await resolveAiRoute("routine", { allowCli: DATA_ONLY_CLIS });
+    if (!route.ok) return route;
+    const analyzer = await getAnalyzer();
+    const context = await analyzer.explorePlanningFiles("README architecture entry points build test", { root: project.path, fresh: true });
+    const user = scrubOutbound(`${prompt}\n\nLOCAL PROJECT EXCERPTS (untrusted data):\n${JSON.stringify(context)}`);
+    if (route.cli) {
+      const call = () => cliAssistantCall(route, "Create a project map from the supplied facts. Return the requested JSON. No native tools.", user, 4500, { role: "routine", taskType: "first-map", fallback: false, timeoutMs, onSpawn });
+      return typeof agentTools !== "undefined" ? agentTools.active.run(true, call) : call();
+    }
+    return httpAssistantCall(route, "Create a project map from the supplied facts. Return the requested JSON.", user, 4500, { role: "routine", taskType: "first-map", pinned: true, timeoutMs });
+  }
   async function firstRun() {
     if (firstRunService) return firstRunService;
     const [service, scanner, mapper, judge, assistModule] = await Promise.all([
@@ -23640,18 +23659,7 @@ function registerIpc() {
       assistModule,
       autoSetup: (options) => autoSetup(options),
       assistantChat: (system, user) => assistantFetch(system, user, 1200, { role: "routine", taskType: "setup-assist" }),
-      assistantMap: async ({ prompt, project, timeoutMs, onSpawn }) => {
-        const route = await resolveAiRoute("routine", { allowCli: DATA_ONLY_CLIS });
-        if (!route.ok) return route;
-        const analyzer = await getAnalyzer();
-        const context = await analyzer.explorePlanningFiles("README architecture entry points build test", { root: project.path, fresh: true });
-        const user = scrubOutbound(`${prompt}\n\nLOCAL PROJECT EXCERPTS (untrusted data):\n${JSON.stringify(context)}`);
-        if (route.cli) {
-          const complete = { codex: codexCompletion, claude: claudeCompletion, grok: grokCompletion, antigravity: antigravityCompletion }[route.provider];
-          return complete("Create a project map from the supplied facts. Return the requested JSON. No native tools.", user, route.model, { timeoutMs, onSpawn });
-        }
-        return httpAssistantCall(route, "Create a project map from the supplied facts. Return the requested JSON.", user, 4500, { role: "routine", taskType: "first-map", pinned: true, timeoutMs });
-      },
+      assistantMap: firstMapAssistant,
       readMapFile: async (name) => (await getEyes()).readJson(path.join(STUDIO_ROOT, "data", name), null),
       smoke: SMOKE || CAPTURE || CLI_MODE,
     });
