@@ -39,6 +39,22 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-04 The v2 status bar, Search and one Inbox land on main
+
+Branch `land/ui-chrome` in `C:\wt\land-ui`: origin/main c01604e with
+wip/ui-chrome f9e758c merged (only TESTRUNS.md conflicted: both rows kept,
+newest first, one more older row rotated). The branch's own run was at
+05b5c63; cd4444a fixed what it found (Search's layer kept to the free area,
+the Python palette contract), so the whole tree was gated again here.
+
+Full `npm test` on 74bf360: Node 6934 tests, 6920 pass, 14 skipped, 0 fail;
+Electron lane 75: 72 pass, 1 skipped, 2 fail: layout_contract_render
+(viewport 1921x1081) and shell_render (stops at "it shrinks to leave the main
+area its 320: 373 !== 372" at 1100 px), both as on clean main on this PC;
+Python 248 OK; path lock ok; `npm run audit` 0 findings; `npm run check` ok
+(271 targets); booklet rebuilt with no drift. Side-by-sides with the
+prototype: `C:\wt\gap\after-chrome\compare\`.
+
 ## 2026-10-04 The v2 chrome closer to the 0.5 prototype: status bar, Search, one Inbox
 
 Branch `ui/chrome` in `C:\wt\ui-chrome` (off land/ui-work-view fe59dd3,
@@ -400,10 +416,6 @@ Stable remains the default; development requires explicit warning/consent. Devel
 ## 2026-10-02 late evening - bounded review and tree harness completion
 
 **Result:** complete affected suites passed (29/29). Paired predecessor/candidate probes demonstrated that fixed sleeps can precede async metadata writes and animation callbacks. The isolated harness waits for durable end-shot metadata and the unchanged >1px movement plus radius-growth criterion, with five-second bounds. Controlled delayed completion and permanent-frame-absence checks are recorded in external evidence. Earlier red aggregate remains preserved; full supervised aggregate qualification pending. Application execution, logging, retention and exports are unchanged from the frozen log-diagnostics candidate.
-
-## 2026-10-02 late evening - memory-only durable-log write health
-
-**Result:** focused Node tests passed (40/40). Executor/work-event append failures remain nonthrowing; later writes recover; fixed channels, saturated counts, detached snapshots, broken clock and Trace success/read-failure metadata covered. Full aggregate and native Trace checks queued until the parent releases the game window. No retention, redaction, export or persistent-log changes.
 
 ## Read Before Any Tests
 

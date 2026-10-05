@@ -6,6 +6,10 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-02 late evening - memory-only durable-log write health
+
+**Result:** focused Node tests passed (40/40). Executor/work-event append failures remain nonthrowing; later writes recover; fixed channels, saturated counts, detached snapshots, broken clock and Trace success/read-failure metadata covered. Full aggregate and native Trace checks queued until the parent releases the game window. No retention, redaction, export or persistent-log changes.
+
 ## 2026-10-02 late evening - Deferred navigation focus source diagnosis and proposed guard
 
 Booklet v3 full aggregate completed with 6760 Node tests: 6743 passed, one Tasks retained-focus assertion failed, 16 skipped. Python 248 OK (one skip), locks six passed, real provider-free Fleet ten steps passed; build/check/audit passed. Active task-new, connected retained summary, unchanged card identity/expansion and changed-card checks match the preserved prior symptom. Booklet remains frozen, unqualified and unlanded. Original inventory run (obsolete wiring/partial packaging fixture plus Plans/tree native timeouts), stopped v2, and all prior failures remain reachable in local evidence. Unchanged tree passed controlled repeat and v3 aggregate; no cause claimed for native timeouts.
