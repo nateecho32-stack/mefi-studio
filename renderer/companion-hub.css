@@ -115,7 +115,8 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 .pc-sync[data-state=problem] { border-left-color: var(--bad); }
 .pc-sync[data-state=offline] { border-left-color: var(--muted); }
 .pc-sync-title { margin: 0; font-size: 13px; font-weight: 600; }
-.pc-sync-list { margin: 0; padding-left: 18px; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.pc-sync-list, .pc-sync-brief { margin: 0; padding-left: 18px; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.pc-sync-toggle { justify-self: start; }
 .pc-sync-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .pc-sync-actions[hidden] { display: none; }
 .pc-sync-run { white-space: normal; text-align: left; }
@@ -343,3 +344,13 @@ body:has(#friends-overlay:not([hidden])) > :is(header, main, #tabs, #tree-rail),
    Playground's names, its "never shared" list and the session line. */
 #friends-overlay .friends-place-body :is(h5, h6, li, .friends-name, .friends-subhead, .friends-session, .friends-lines, .friends-say) { font-size: var(--f12, 12px); }
 #friends-overlay .friends-place-more { display: flex; flex-wrap: wrap; gap: 8px; }
+/* The places as tabs, and a Close button, where the 0.5 layout's list column does not list them (the classic layout). */
+#friends-overlay .friends-place-head { position: relative; padding-right: 96px; }
+#friends-overlay .friends-place-close { position: absolute; top: 0; right: 0; }
+#friends-overlay .friends-place-tabs { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 12px; border-bottom: 1px solid var(--hairline); }
+#friends-overlay .friends-place-tab { min-height: 34px; padding: 6px 14px; border-radius: 999px; font-size: var(--f135, 13.5px); }
+#friends-overlay .friends-place-tab.active { border-color: var(--gold); color: var(--gold-bright); background: color-mix(in srgb, var(--gold) 12%, transparent); }
+html[data-layout="v2"] #friends-overlay :is(.friends-place-tabs, .friends-place-close) { display: none; }
+html[data-layout="v2"] #friends-overlay .friends-place-head { padding-right: 0; }
+html:not([data-layout="v2"]) #friends-overlay { inset: 0; }
+html:not([data-layout="v2"]) #friends-overlay .friends-place-sheet { padding-top: 28px; }

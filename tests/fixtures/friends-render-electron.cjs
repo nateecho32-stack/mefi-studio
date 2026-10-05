@@ -166,14 +166,23 @@ app.whenReady().then(async () => {
   const go = (id, params) => run(`window.MefiNav.go(${JSON.stringify(id)}${params ? `, ${JSON.stringify(params)}` : ""});`);
   const placeIs = (place) => `document.getElementById('friends-overlay')?.hidden === false && document.getElementById('friends-overlay').dataset.place === ${JSON.stringify(place)} && window.MefiNav.current() === 'friends-page'`;
 
-  // ---- v1: the companion's Friends bubble, as it was -------------------------------------------------
+  // ---- v1: the same Friends page, with its places as tabs and a Close of its own ---------------------
   await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1" } });
   await until("window.MefiNav && window.MefiCompanionHub && !window.MefiBoot?.isActive?.()", "studio ready (v1)");
+  await resize(1920, 1080);
   await go("friends");
-  await until("document.getElementById('agent-hub')?.hidden === false && document.getElementById('agent-hub').dataset.section === 'friends'", "Friends opens the companion's Friends bubble (v1)");
-  report.v1 = await run("return { page: Boolean(document.getElementById('friends-overlay')), places: window.MefiCompanionHub.friendsPlaces(), route: window.MefiNav.get('friends-page')?.hidden?.() };");
-  assert.deepEqual(report.v1, { page: false, places: null, route: true }, "with the layout off there is no Friends page and the bubble is as it was");
-  report.steps.push("v1 is untouched");
+  await until("document.getElementById('friends-overlay')?.hidden === false && document.getElementById('friends-overlay').dataset.place === 'rooms'", "Friends opens the Friends page in the classic layout too");
+  report.v1 = await run(`const shown = (el) => Boolean(el && el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden');
+    return { bubble: document.getElementById('agent-hub')?.hidden === false, places: window.MefiCompanionHub.friendsPlaces(), route: window.MefiNav.get('friends-page')?.hidden?.(),
+      tabs: [...document.querySelectorAll('#friends-place-tabs .friends-place-tab')].filter(shown).map((tab) => tab.textContent + (tab.getAttribute('aria-current') === 'page' ? ' *' : '')),
+      close: shown(document.getElementById('friends-place-close')) };`);
+  assert.deepEqual(report.v1, { bubble: false, places: null, route: true, tabs: ["Rooms *", "Your PCs", "Playground", "Project hub"], close: true }, "with the layout off, Friends is the same page: tabs for its places and a Close, no bubble");
+  await click("#friends-place-tab-hub");
+  await until("document.getElementById('friends-overlay').dataset.place === 'hub' && document.getElementById('project-hub')", "the Project hub tab");
+  await capture("friends-v1-hub-1920x1080.png");
+  await click("#friends-place-close");
+  await until("document.getElementById('friends-overlay').hidden === true", "Close leaves the page");
+  report.steps.push("v1 opens the page");
 
   // ---- v2 ------------------------------------------------------------------------------------------
   await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1", layout: "v2" } });

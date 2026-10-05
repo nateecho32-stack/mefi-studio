@@ -14,7 +14,7 @@ const studio = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const executable = path.join(studio, "node_modules", "electron", "dist", process.platform === "win32" ? "electron.exe" : process.platform === "darwin" ? "Electron.app/Contents/MacOS/Electron" : "electron");
 const canRun = existsSync(executable) && (process.platform !== "linux" || Boolean(process.env.DISPLAY || process.env.WAYLAND_DISPLAY));
 
-test("Friends in the 0.5 layout: the prototype's three places in the list column, one page at a time with its title and its card, the rail, Search and the companion's bubble land there, a tab per place, four window sizes fit with no text under 12 px, and the classic Friends bubble untouched", { skip: !canRun, timeout: 360000 }, async (t) => {
+test("Friends in the 0.5 layout: the prototype's three places in the list column, one page at a time with its title and its card, the rail, Search and the companion's bubble land there, a tab per place, four window sizes fit with no text under 12 px, and the classic layout opening the same page with its places as tabs", { skip: !canRun, timeout: 360000 }, async (t) => {
   const fixture = await mkdtemp(path.join(tmpdir(), "mefi-friends-render-"));
   try {
     await mkdir(path.join(fixture, "renderer")); await mkdir(path.join(fixture, "data"));

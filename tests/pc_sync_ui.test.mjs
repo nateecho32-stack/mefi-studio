@@ -298,3 +298,37 @@ test("Keep this PC up to date reads and sets the switch; Linking this PC lists w
   rows[2].children.find((child) => child.tagName === "BUTTON").click();
   assert.deepEqual(routes, ["community"], "Open Settings goes to Settings › Community");
 });
+
+test("a long report reads as a few grouped lines, with the whole list one press away", async () => {
+  const lines = [
+    "Some work on this PC is not on GitHub yet.",
+    "1 uncommitted file in this checkout.",
+    "Worktree relay (wip/relay): 49 uncommitted files.",
+    "Branch land/consolidate on this PC: 1 commit not on main.",
+    "Branch ui/map on this PC: 2 commits not on main.",
+    "Branch wip/agent-link on GitHub: 1 commit not on main.",
+    "Branch wip/relay on GitHub: 2 commits not on main.",
+    "Branch wip/ui-map on GitHub: 1 commit not on main.",
+  ];
+  const fake = bridge({ syncStatus: answer({ headline: lines[0], lines, pending: [{}], risk: 1 }) });
+  const card = environment(fake.api).sync.card();
+  fake.answer(0);
+  await flush();
+  const brief = card.byClass("pc-sync-brief");
+  const full = card.byClass("pc-sync-list");
+  assert.equal(brief.hidden, false);
+  assert.deepEqual(brief.children.map((item) => item.textContent), [
+    "1 uncommitted file in this checkout.",
+    "1 other worktree has uncommitted work",
+    "2 branches on this PC with commits not on main",
+    "3 branches on GitHub not merged into main",
+  ]);
+  assert.equal(full.hidden, true);
+  const toggle = card.find("pc-sync-toggle");
+  assert.equal(toggle.textContent, "Show all 7");
+  toggle.click();
+  assert.equal(full.hidden, false);
+  assert.equal(brief.hidden, true);
+  assert.equal(full.children.length, 7);
+  assert.equal(toggle.textContent, "Show less");
+});
