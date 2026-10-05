@@ -31,6 +31,6 @@ GUILD_ID = "1345380333302059129"
 MOD_ROLE_IDS = ""
 ROLE_IDS_JSON = "{}"
 # Discord user ids that are always moderators.
-OWNER_IDS = ""
+OWNER_IDS = "1502092064492617749"
 # "true" refuses every write (maintenance).
 PAUSED = "false"
