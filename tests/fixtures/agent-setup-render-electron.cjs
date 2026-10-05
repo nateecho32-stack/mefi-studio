@@ -164,6 +164,8 @@ app.whenReady().then(async () => {
   assert.deepEqual(await run("return window.MefiAgents.draft().agentTools.companion;"), { webSearch: false, projectRead: true, mcpTools: ["docs/search"] });
   // Project rules: typed in the real text box, counted, refused past 4,000 characters
   // without cutting anything, saved on their own and kept through a whole-team Apply.
+  // In the 0.5 layout the Rules card is Team's Rules place, beside Seats and models.
+  await run("await window.MefiNav.go('agents',{place:'rules'});");
   await until("document.getElementById('agents-rules-text')", 'Rules card');
   assert.ok(await reachable('#agents-rules-text')); assert.ok(await reachable('#agents-rules-agents'));
   assert.equal(await run("return document.getElementById('agents-rules-save').disabled;"), true, 'nothing to save yet');
@@ -200,8 +202,12 @@ app.whenReady().then(async () => {
   await run("const i=document.querySelector('[aria-label=\"Subtask model ID\"]');i.value='fixture/model';i.dispatchEvent(new Event('change',{bubbles:true}));");
   await click('#agents-rules-text'); contents.insertText(' UNSAVED');
   await until("document.getElementById('agents-rules-state').textContent==='Unsaved changes'", 'a new rules edit');
+  // Apply sits with the places that edit the team (Seats and models); the rules box keeps its edit meanwhile.
+  await run("await window.MefiNav.go('agents',{place:'seats'});");
+  assert.ok(await reachable('#agents-save-bar .primary'), 'Apply is reachable in Seats and models');
   await run("document.querySelector('#agents-save-bar .primary').click();");
   await until("document.getElementById('agents-save-status').textContent.startsWith('Saved')",'apply after rules');
+  await run("await window.MefiNav.go('agents',{place:'rules'});");
   const applied = await run("return window.unifiedFixture.calls().filter(c=>c.name==='agentsSave'&&c.value.action==='save').map(c=>c.value).at(-1);");
   assert.deepEqual(applied.configuration.agentRules, { text: 'Use LÖVE 11.5.\nRun npm run check first.', agents: true, claude: false }, 'Apply sends the saved rules, never a half-typed edit');
   assert.equal(await run("return document.getElementById('agents-rules-text').value;"), 'Use LÖVE 11.5.\nRun npm run check first. UNSAVED', 'the typed edit is still in the box after the Apply');
@@ -213,6 +219,7 @@ app.whenReady().then(async () => {
   report.rulesCard = true;
   // Switching a provider cannot carry the previous provider's model; switching
   // back restores it even after saving and reloading the project team.
+  await run("await window.MefiNav.go('agents',{place:'seats'});");
   await click('#agent-companion-provider'); await click('#agent-companion-providers [data-provider=zen]');
   assert.equal(await run("return document.getElementById('agent-companion-model').value;"),'gpt-6-luna');
   await click('#agent-companion-provider'); await click('#agent-companion-providers [data-provider=openrouter]');
@@ -241,8 +248,13 @@ app.whenReady().then(async () => {
     const layout=await run("const body=document.getElementById('agents-body');return {width:innerWidth,overflow:body.scrollWidth>body.clientWidth+1||document.documentElement.scrollWidth>innerWidth+1,wide:[...body.querySelectorAll('*')].filter(e=>e.getClientRects().length && e.getBoundingClientRect().right>body.getBoundingClientRect().right+1).slice(0,12).map(e=>({id:e.id,cls:e.className,width:e.getBoundingClientRect().width}))};");
     report.layouts.push({width,height,zoom,...layout}); if(layout.overflow) await capture('agent-overflow.png'); assert.equal(layout.overflow,false,JSON.stringify(report.layouts.at(-1)));
     assert.ok(await reachable('#agent-companion-provider')); assert.ok(await reachable('#agent-companion-add'));
+    if(zoom===1) { await run("document.getElementById('agents-body').scrollTop=0;"); await capture('agent-team-'+width+'.png'); }
+    // The Rules place fits the same window.
+    await run("await window.MefiNav.go('agents',{place:'rules'});document.getElementById('agents-body').scrollTop=0;");
+    const rulesLayout=await run("const body=document.getElementById('agents-body');return {place:'rules',overflow:body.scrollWidth>body.clientWidth+1||document.documentElement.scrollWidth>innerWidth+1};");
+    assert.equal(rulesLayout.overflow,false,JSON.stringify({width,height,zoom,...rulesLayout}));
     assert.ok(await reachable('#agents-rules-text')); assert.ok(await reachable('#agents-rules-agents'));
-    if(zoom===1) { await run("document.getElementById('agents-body').scrollTop=0;"); await capture('agent-team-'+width+'.png'); await run("document.getElementById('agents-rules').scrollIntoView({block:'start'});"); await capture('agent-rules-'+width+'.png'); }
+    if(zoom===1) { await run("document.getElementById('agents-rules').scrollIntoView({block:'start'});"); await capture('agent-rules-'+width+'.png'); }
   }
   window.setContentSize(1100,720); contents.setZoomFactor(1);
   await run("document.getElementById('settings-guided-cli').click();");
