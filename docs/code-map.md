@@ -389,7 +389,7 @@ The main ones, in that order:
 | `companion-hub.css` · `vibe.css` · `setup-helper.css` | 313 · 732 · 161 | The companion bubble and its menu, Vibe, and the setup helper. |
 | `git-sync.css` | 246 | The Git chip, its popover and dialogs. |
 | `daily-paper.css` | 139 | The launch screen's front page, only while the gate asks for a project with the paper on. |
-| `chrome.css` | 187 | The Chrome theme (the default for a new install): matte surfaces, brushed-metal primary buttons and chosen segments, a thin chrome edge on what is selected. Every rule under `html[data-studio-theme="chrome"]` (only the Chrome swatch in the pickers looks like metal everywhere), paint only, last so it wins a tie; `tests/chrome_theme.test.mjs` holds it to that. |
+| `chrome.css` | 266 | The Chrome theme (the default for a new install): matte surfaces, brushed-metal primary buttons and chosen segments, a thin chrome edge on what is selected, and the iridescent layer over them in the website's `--chrome-holo` tokens (a faint tinted ground and sheen, 2px holo bars and lines on the selection edges, holo hairlines between the bars, a holo meter, switch and project mark), drawn as border images so nothing moves. Every rule under `html[data-studio-theme="chrome"]` (only the Chrome swatch in the pickers looks like metal everywhere), paint only and static, last so it wins a tie; `tests/chrome_theme.test.mjs` holds it to that. |
 
 `npm run check` runs `check-css.mjs --unused` over all of them, and `--merge`
 over `styles.css` while a merge is in progress (see

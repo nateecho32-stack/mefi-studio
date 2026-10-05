@@ -6,6 +6,18 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-03 Paired repository checks first vertical slice
+
+Isolated opt-in coordinator and worker qualification: 15/15 focused tests pass
+with durable queue/registry restart, persisted single start grants, lost reply
+reconciliation, stale lease/fence refusal, disconnect abort, bounded transport,
+encrypted pairing adapter, and real Git/Node exact-commit checks preserving dirty
+source. Real Chromium setup/recovery fixture passes 1/1 at desktop and 600px;
+bridge is simulated, zero external network/process attempts. Status stays local
+until disclosure; no service or owner grant activates on startup. Detail folds
+survive status refresh. No live LAN/cross-network or AI delegation qualification.
+Full repository gates are reported separately with their actual outcomes.
+
 ## 2026-10-03 - Completed updater review and final channel cleanup
 
 CodeRabbit completed the combined updater delta at 85bc4e6: 21 files reviewed, two minor issues. The channel-toggle cleanup now keeps the switch disabled during checking, downloading, installing or rollback, and the changelog makes deferred artifact publishing explicit. The original three partial review issues were fixed in 85bc4e6. Native screenshot evidence uses an isolated bridge; live update channels, credentials and provider state are untouched.

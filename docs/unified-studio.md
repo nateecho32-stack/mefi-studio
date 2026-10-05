@@ -121,12 +121,34 @@ and the chosen segment of a segmented control (the Vibe | Build switch,
 Sessions | Backlog, Command's rail tabs) are brushed metal with dark ink, which
 reads at 5.4:1 or better on the darkest stop of the pressed metal; secondary
 buttons are matte with a chrome hairline; the current place in the rail, a
-selected row and the open tab get a thin chrome edge instead of a fill. The
-status colours keep their meaning, and the stylesheet changes paint only, never
-size, place or scrolling (`tests/chrome_theme.test.mjs`). Every theme shares the
-finish in `studio-ui.css` and the frame's stylesheets: hover settles in 140 ms
-and a press in 90 ms (0 with motion off), raised controls and floating menus
-catch a 1px top highlight.
+selected row and the open tab get a thin chrome edge instead of a fill.
+
+Over that sits an iridescent layer, used sparingly so the black stays dominant:
+silver-white, ice blue, lilac and pale aqua, from the website's own tokens
+(`--chrome-holo`, `-line`, `-bar`, `-edge` and `-glow`, the same names and
+values on both). The window's ground and Vibe's sky carry a 2-5% wash of the
+three tints, raised surfaces a sheen that fades from silver to a whisper of ice
+and lilac by half their height, and the metal's light stops a touch of cool.
+The selection edges are iridescent where they run straight: the rail's current
+place, the selected session row, the frame's current page and the palette's
+active row keep their plain chrome edge round the corners and wear a 2px holo
+bar between them, and the underline tabs (the open tab, the inspector's tabs,
+the local navigation, a chosen theme) a 2px holo line. The hairlines under the
+frame's top bar and tab strip, over its status bar and along the top of the
+floating menus are the holo line at a quarter of its strength in a plain
+hairline. The usage meter, a switch that is on and Vibe's project mark are
+filled with the holo, a primary button under the pointer catches its sheen and
+a soft ice glow, and Vibe's greeting is chrome lettering with a holo tint, its
+darkest stop at 10:1 on the panel. The edges and lines are border images, drawn
+over a border the part already has or over a width of their own, so nothing
+moves, and never a background layer of something with words in it (the
+readability probes read a gradient on a text's own box as what is behind every
+word). Everything is a static gradient: nothing animates. The status colours
+keep their meaning, and the stylesheet changes paint only, never size, place or
+scrolling (`tests/chrome_theme.test.mjs`). Every theme shares the finish in
+`studio-ui.css` and the frame's stylesheets: hover settles in 140 ms and a
+press in 90 ms (0 with motion off), raised controls and floating menus catch a
+1px top highlight.
 
 ## Layout contract
 
