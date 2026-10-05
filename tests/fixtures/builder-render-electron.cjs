@@ -6,12 +6,15 @@
 // answers with a board of tasks in every stage and a worktree list that names
 // two of them. It checks what the DOM tests cannot: the menu's task rows are on
 // screen and fit, a task whose run has its own worktree wears the branch mark
-// where a person can see it, the greeting card and the composer fit five window
-// sizes without a page scrollbar, the composer's bottom row stays on one line
-// at desktop widths, no scroller reserves width for a bar, nothing is under
-// 12 px, and opening a task shows its session. Screenshots are kept when the
-// test is given a capture folder. No application main process or live state is
-// loaded; network, permissions and child processes are blocked.
+// where a person can see it (in the menu and in the 0.5 frame's session list),
+// Home's greeting and the composer fit five window sizes without a page
+// scrollbar (in the 0.5 layout Home is Today, renderer/today.js: the greeting,
+// Home's own box and Today's row of controls, never Home's classic row), the
+// composer's row of controls stays on one line at desktop widths, no scroller
+// reserves width for a bar, nothing is under 12 px, and opening a task shows its
+// session (the frame's thread, renderer/sessions.js). Screenshots are kept when
+// the test is given a capture folder. No application main process or live state
+// is loaded; network, permissions and child processes are blocked.
 const { app, BrowserWindow, session } = require("electron");
 const assert = require("node:assert/strict");
 const fs = require("node:fs"), path = require("node:path");
@@ -123,12 +126,17 @@ app.whenReady().then(async () => {
     const list = document.getElementById('app-rail-sessions');
     const rows = list ? [...list.querySelectorAll('.builder-session')] : [];
     const composer = document.getElementById('workspace-form');
-    const bottom = composer && composer.querySelector('.ws-compose-bottom');
-    const bottomKids = bottom ? [...bottom.children].filter((node) => !node.hidden && getComputedStyle(node).display !== 'none' && getComputedStyle(node).position !== 'absolute' && node.getBoundingClientRect().height > 0) : [];
-    const bottomTops = bottomKids.map((node) => Math.round(node.getBoundingClientRect().top));
-    const bottomItems = bottom ? [...bottom.children].map((node) => ({ id: node.id, cls: String(node.className).slice(0, 40), hidden: node.hidden, display: getComputedStyle(node).display, position: getComputedStyle(node).position, top: Math.round(node.getBoundingClientRect().top), h: Math.round(node.getBoundingClientRect().height) })) : [];
-    // The builder's own text (the classic cards it adopts, such as the walkthrough's checklist, keep the sizes they always had).
-    const small = [...document.querySelectorAll('#app-rail-sessions *, #builder-home [class*="builder-"], #builder-chips [class*="builder-"], #builder-task [class*="builder-"], #builder-task .pane-badge, .pane-badge')].filter((node) => node.children.length === 0 && node.textContent.trim() && getComputedStyle(node).display !== 'none' && parseFloat(getComputedStyle(node).fontSize) < 12).map((node) => node.className + ':' + getComputedStyle(node).fontSize);
+    const shown = (node) => Boolean(node) && !node.hidden && getComputedStyle(node).display !== 'none' && node.getBoundingClientRect().height > 0;
+    // Home is Today in the 0.5 layout: its greeting, Home's own box borrowed into it, and Today's one row of controls under the words.
+    const today = document.getElementById('today-build');
+    const tools = document.getElementById('today-build-tools');
+    const toolKids = tools ? [...tools.children].filter((node) => shown(node) && getComputedStyle(node).position !== 'absolute') : [];
+    const toolMiddles = toolKids.map((node) => { const r = node.getBoundingClientRect(); return Math.round(r.top + r.height / 2); });
+    const toolItems = toolKids.map((node) => ({ id: node.id, cls: String(node.className).slice(0, 40), top: Math.round(node.getBoundingClientRect().top), h: Math.round(node.getBoundingClientRect().height), w: Math.round(node.getBoundingClientRect().width) }));
+    // Home's classic rows (the purpose switch, Send, the worker pickers) belong to the chat view, never to Today's box.
+    const classic = composer ? [...composer.querySelectorAll('.ws-compose-top, .ws-compose-bottom')].filter(shown).map((node) => String(node.className)) : [];
+    // The builder's own text and Today's (the classic cards it adopts, such as the walkthrough's checklist, keep the sizes they always had).
+    const small = [...document.querySelectorAll('#app-rail-sessions *, #builder-chips [class*="builder-"], #today-build [class*="today-b"], #sessions-thread .sx-head *, .pane-badge')].filter((node) => node.children.length === 0 && node.textContent.trim() && node.getClientRects().length > 0 && getComputedStyle(node).display !== 'none' && parseFloat(getComputedStyle(node).fontSize) < 12).map((node) => node.className + ':' + getComputedStyle(node).fontSize);
     return {
       inner: { w: innerWidth, h: innerHeight },
       pageOverflow: document.documentElement.scrollWidth > innerWidth + 1 || document.body.scrollWidth > innerWidth + 1,
@@ -136,8 +144,10 @@ app.whenReady().then(async () => {
       layout: document.documentElement.dataset.homeLayout || null, pinned: 'railPinned' in document.documentElement.dataset,
       rail: box(document.getElementById('app-rail')),
       list: box(list), rows: rows.map((node) => ({ key: node.dataset.key, ...box(node), mark: box(node.querySelector('.builder-worktree')), markCss: node.querySelector('.builder-worktree') ? { display: getComputedStyle(node.querySelector('.builder-worktree')).display, opacity: getComputedStyle(node.querySelector('.builder-worktree')).opacity } : null, label: box(node.querySelector('.label')) })),
-      home: box(document.getElementById('builder-home')), chips: box(document.getElementById('builder-chips')), composer: box(composer),
-      bottomTops, bottomItems, oneLine: bottomTops.length > 0 && new Set(bottomTops).size === 1,
+      today: shown(today), home: box(today && today.querySelector('.today-b-hero')), greeting: today?.querySelector('.today-b-title')?.textContent || '',
+      chips: box(document.getElementById('builder-chips')), composer: box(composer), insideToday: Boolean(today && composer && today.contains(composer)),
+      tools: box(tools), toolItems, oneLine: toolMiddles.length >= 3 && Math.max(...toolMiddles) - Math.min(...toolMiddles) <= 4, classic,
+      sessionRows: [...document.querySelectorAll('#sessions-list .sx-row')].map((node) => ({ key: node.dataset.key, mark: Boolean(node.querySelector('.sx-branch')), current: node.querySelector('.sx-row-main')?.getAttribute('aria-current') === 'true' })),
       small,
     };`;
   await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1" } });
@@ -164,37 +174,53 @@ app.whenReady().then(async () => {
   assert.ok(marked.mark.x >= marked.x - 1 && marked.mark.r <= marked.r + 1 && marked.mark.y >= marked.y - 1 && marked.mark.b <= marked.b + 1, "the mark sits inside its row");
   assert.ok(marked.label.r <= marked.mark.x + 1, "the long title is cut before the mark, not under it");
   assert.notEqual(marked.markCss.display, "none"); assert.ok(Number(marked.markCss.opacity) > 0.3, "the mark is not faded out");
+  // The 0.5 frame's session list wears the same mark on the same two tasks.
+  await until("document.querySelectorAll('#sessions-list .sx-row .sx-branch').length >= 2", "the session list marks the tasks with a worktree");
+  const listed = (await run(measure)).sessionRows;
+  assert.deepEqual(listed.filter((row) => row.mark).map((row) => row.key).sort(), ["task_1", "task_6"], `the session list marks the two tasks the worktree list names: ${JSON.stringify(listed)}`);
   await capture("builder-menu-open.png");
 
   for (const [width, height, zoom] of [[1920, 1080, 1], [1440, 900, 1], [1100, 720, 1], [600, 560, 1], [600, 560, 1.5]]) {
     window.setContentSize(width, height); contents.setZoomFactor(zoom); await sleep(350);
     await run("window.MefiBuilder.setView('home');");
-    await until("!document.getElementById('builder-home').hidden", `Home is showing at ${width}x${height}@${zoom}`);
+    await until("!document.getElementById('builder-home').hidden && document.getElementById('today-build') && !document.getElementById('today-build').hidden", `Home (Today) is showing at ${width}x${height}@${zoom}`);
     await sleep(200);
     const label = `${width}x${height}@${zoom}`;
     const m = await run(measure);
     if (zoom !== 1) await capture(`builder-home-${width}-zoom.png`);
-    report.layouts.push({ label, layout: m.layout, pageOverflow: m.pageOverflow, oneLine: m.oneLine, rows: m.rows.length, rail: m.rail, composer: m.composer });
+    report.layouts.push({ label, layout: m.layout, pageOverflow: m.pageOverflow, oneLine: m.oneLine, rows: m.rows.length, rail: m.rail, home: m.home, composer: m.composer, tools: m.tools, toolItems: m.toolItems });
     assert.equal(m.layout, "sessions", `${label}: the layout stays on`);
     assert.equal(m.pageOverflow, false, `the page overflows at ${label}`);
     assert.equal(m.scrollbarWidth, "none", `native bars stay hidden at ${label}`);
     assert.deepEqual(m.small, [], `no text under 12 px at ${label}: ${JSON.stringify(m.small)}`);
-    assert.ok(m.home && m.home.w > 200 && m.home.h > 100, `the greeting card has a size at ${label}: ${JSON.stringify(m.home)}`);
+    assert.ok(m.home && m.home.w > 200 && m.home.h > 100, `the greeting has a size at ${label}: ${JSON.stringify(m.home)}`);
+    assert.equal(m.greeting, "What's next for Builder fixture?", `the greeting asks about this project at ${label}`);
+    assert.ok(m.insideToday, `Home's own box is the one in Today at ${label}`);
+    assert.deepEqual(m.classic, [], `Home's classic row of controls is not laid out inside Today's box at ${label}`);
+    // Today is one scrolling column under the greeting: at 150% zoom in the smallest window (about 400x373 CSS px) the box is
+    // below the greeting, and Today's own column (not the page) scrolls it into view, where the words box takes a click.
+    if (zoom !== 1) {
+      m.composer = await run("const form = document.getElementById('workspace-form'); form.scrollIntoView({ block: 'end', behavior: 'instant' }); await new Promise((resolve) => requestAnimationFrame(resolve)); const r = form.getBoundingClientRect(), input = document.getElementById('workspace-input').getBoundingClientRect(), hit = document.elementFromPoint(input.x + input.width / 2, input.y + input.height / 2); return { x: r.left, y: r.top, r: r.right, b: r.bottom, w: r.width, h: r.height, words: hit?.id === 'workspace-input', page: document.scrollingElement.scrollTop };");
+      assert.ok(m.composer.words && m.composer.page === 0, `Today's column brings the box into view at ${label}, and the page itself does not scroll: ${JSON.stringify(m.composer)}`);
+      await capture(`builder-home-${width}-zoom-box.png`);
+    }
     assert.ok(m.composer && m.composer.w > 200 && m.composer.b <= m.inner.h + 1 && m.composer.r <= m.inner.w + 1, `the composer is on screen at ${label}: ${JSON.stringify(m.composer)}`);
-    if (width >= 1440 && zoom === 1) assert.ok(m.oneLine, `the composer's bottom row stays on one line at ${label}: ${JSON.stringify(m.bottomItems)}`);
+    if (width >= 1440 && zoom === 1) assert.ok(m.oneLine, `the composer's row of controls stays on one line at ${label}: ${JSON.stringify(m.toolItems)}`);
     // A pinned menu shows every row; a folded one (a narrow window) shows none of the labels, and takes only its own slim width.
     if (m.pinned) for (const item of m.rows) assert.ok(item.w > 30 && item.h > 20 && item.r <= m.inner.w + 1, `${item.key} has a size and stays in the window at ${label}: ${JSON.stringify(item)}`);
     else assert.ok(m.rail.w <= 90, `a folded menu stays slim at ${label}: ${JSON.stringify(m.rail)}`);
     if (zoom === 1 && [1920, 1100, 600].includes(width)) await capture(`builder-home-${width}.png`);
   }
 
-  // A task opens as a session: its brief, its runs, a composer that talks about it.
+  // A task opens as a session: its brief, its runs, a composer that talks about it (the 0.5 frame's thread, over Home).
   window.setContentSize(1440, 900); contents.setZoomFactor(1); await sleep(350);
   await run("window.MefiBuilder.openTask('task_2');");
-  await until("document.getElementById('builder-task') && !document.getElementById('builder-task').hidden && document.getElementById('builder-task').textContent.includes('Fix the login redirect loop')", "the task opens as a session");
-  report.session = await run("return { view: window.MefiBuilder.view(), current: document.querySelector('#app-rail-sessions .builder-session[aria-current=page]')?.dataset.key || null, text: document.getElementById('builder-task').textContent.slice(0, 160) };");
+  await until("document.getElementById('sessions-thread') && !document.getElementById('sessions-thread').hidden && document.getElementById('sessions-thread').textContent.includes('Fix the login redirect loop')", "the task opens as a session");
+  report.session = await run("const thread = document.getElementById('sessions-thread'), r = thread.getBoundingClientRect(); return { view: window.MefiBuilder.view(), current: document.querySelector('#app-rail-sessions .builder-session[aria-current=page]')?.dataset.key || null, listed: document.querySelector('#sessions-list .sx-row-main[aria-current=true]')?.closest('.sx-row')?.dataset.key || null, thread: { w: r.width, h: r.height }, compose: Boolean(document.getElementById('sessions-input')?.getClientRects().length), text: thread.textContent.slice(0, 160) };");
   assert.deepEqual(report.session.view, { view: "task", taskId: "task_2" });
   assert.equal(report.session.current, "task_2", "the menu marks the session on screen");
+  assert.equal(report.session.listed, "task_2", "and so does the session list");
+  assert.ok(report.session.thread.w > 300 && report.session.thread.h > 300 && report.session.compose, `the thread has a size and a box that talks about the task: ${JSON.stringify(report.session)}`);
   await capture("builder-session-1440.png");
   const opened = await run(measure);
   assert.equal(opened.pageOverflow, false, "a session does not overflow the page");
