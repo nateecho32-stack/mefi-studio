@@ -52,6 +52,9 @@ function createAttemptSnapshots({
   disabled = () => process.env.MEFI_STUDIO_NO_ATTEMPT_SNAPSHOTS === "1",
   log = () => {},
   random = () => require("node:crypto").randomBytes(6).toString("hex"),
+  // Every git time limit times this (at least 1): a test on a loaded machine gives both
+  // implementations room, so a slow `rev-parse` cannot make one side's picture differ.
+  timeoutScale = 1,
 } = {}) {
   const fsp = fs.promises;
   const paths = platform === "win32" ? path.win32 : path.posix;
@@ -59,10 +62,12 @@ function createAttemptSnapshots({
   const off = () => { try { return disabled() === true; } catch { return false; } };
   const clock = () => (typeof now === "function" ? now() : Date.now());
   const envOf = () => (typeof env === "function" ? env() : env) ?? process.env;
+  const scale = Number.isFinite(timeoutScale) && timeoutScale > 1 ? timeoutScale : 1;
 
   // ---- running git ------------------------------------------------------------------
   // No shell, prompts off, credentials withheld, a hard limit. A read never takes the index lock.
-  function git(cwd, args, { input = null, timeout = 30000, extra = {}, buffer = false, maxBuffer = 16 * MIB, reads = false } = {}) {
+  function git(cwd, args, { input = null, timeout: limit = 30000, extra = {}, buffer = false, maxBuffer = 16 * MIB, reads = false } = {}) {
+    const timeout = limit * scale;
     return new Promise((resolve) => {
       const set = { GIT_TERMINAL_PROMPT: "0", GCM_INTERACTIVE: "never", LC_ALL: "C", ...(reads ? { GIT_OPTIONAL_LOCKS: "0" } : {}), ...extra };
       const upper = new Set(Object.keys(set).map((name) => name.toUpperCase()));

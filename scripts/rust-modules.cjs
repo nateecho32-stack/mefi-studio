@@ -229,6 +229,7 @@ const FACTORIES = Object.freeze({
       ...(typeof collaborators?.disabled === "function" ? { disabled: collaborators.disabled } : {}),
       ...(typeof collaborators?.log === "function" ? { log: collaborators.log } : {}),
       ...(typeof collaborators?.now === "function" ? { now: collaborators.now } : {}),
+      ...(Number.isFinite(collaborators?.timeoutScale) ? { timeoutScale: collaborators.timeoutScale } : {}),
     };
     const failed = () => ({ ok: false, reason: "unreadable", error: rules.unavailable("unreadable") });
     const call = (name, request) => Promise.resolve()

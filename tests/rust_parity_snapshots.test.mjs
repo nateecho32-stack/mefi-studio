@@ -161,6 +161,7 @@ test("snapshot rules: the same answers on the same inputs", { skip }, () => {
 // ---- the host on two identical repositories ----
 
 const NOW = Date.UTC(2026, 9, 4, 12, 0, 0, 123);
+const SCALE = 6;
 const TASK = "task_0123456789abcdef";
 
 function isolated(base) {
@@ -262,7 +263,9 @@ test("snapshot host: the same attempt on two identical repositories gives the sa
   ];
 
   const logs = [];
-  const host = createAttemptSnapshots({ env: () => js.env, now: () => NOW, log: (line) => logs.push(line) });
+  // Generous git time limits on both sides: on a loaded machine a 10 s `rev-parse HEAD` that times out on one
+  // side only makes its start picture without a parent (same tree, another commit id).
+  const host = createAttemptSnapshots({ env: () => js.env, now: () => NOW, log: (line) => logs.push(line), timeoutScale: SCALE });
   const expected = [];
   for (const [label, method, request, before] of steps) {
     before?.(js);
@@ -288,7 +291,7 @@ test("snapshot host: the same attempt on two identical repositories gives the sa
   assert.equal(said["second begin"].n, 4);
   assert.equal(said["drop it"].dropped, true);
 
-  const collaborators = { env: rs.env, now: CONST(NOW), disabled: CONST(false), log: CONST(null) };
+  const collaborators = { env: rs.env, now: CONST(NOW), disabled: CONST(false), log: CONST(null), timeoutScale: SCALE };
   let batch = [];
   const answers = [];
   const flush = () => { if (batch.length) answers.push(...rust(batch)); batch = []; };

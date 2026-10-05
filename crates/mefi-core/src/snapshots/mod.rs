@@ -15,7 +15,7 @@
 //! what the attempt left, and only after a safety picture of the folder.
 //!
 //! The engine's collaborators come first in every call: `disabled()` (the
-//! kill switch), `log(line)`, and for tests `env` and `now`. A revert's and an
+//! kill switch), `log(line)`, and for tests `env`, `now` and `timeoutScale`. A revert's and an
 //! undo's `busy(root)` comes with the request. Every method answers.
 
 pub mod rules;
@@ -247,6 +247,8 @@ fn reads(timeout: u64) -> Git {
 struct Runner {
     env: Value,
     config: Vec<String>,
+    /// Every git time limit times this (`timeoutScale`, at least 1), as in the JavaScript.
+    scale: f64,
 }
 
 impl Runner {
@@ -254,7 +256,7 @@ impl Runner {
     fn git(&self, cwd: &str, args: &[&str], options: Git) -> Raw {
         let mut all = self.config.clone();
         all.extend(args.iter().map(|arg| arg.to_string()));
-        let run = Options { cwd: Some(cwd), timeout_ms: options.timeout, reads: options.reads, input: options.input, max_buffer: options.max_buffer };
+        let run = Options { cwd: Some(cwd), timeout_ms: (options.timeout as f64 * self.scale) as u64, reads: options.reads, input: options.input, max_buffer: options.max_buffer };
         run_raw("git", &all, &run, &self.env, &options.extra, KILL_GRACE_MS, &clean)
     }
 
@@ -303,7 +305,8 @@ impl<'a> Host<'a> {
         .unwrap_or_else(|| Value::Object(std::env::vars().map(|(key, value)| (key, Value::String(value))).collect()));
         let nowhere = paths::join(&tmpdir(), "mefi-no-hooks");
         let config = ["-c", "core.quotepath=false", "-c", "core.safecrlf=false", "-c", "core.fsmonitor=false", "-c", &format!("core.hooksPath={nowhere}"), "-c", "gc.auto=0"].iter().map(|part| part.to_string()).collect();
-        Host { collaborators, callbacks, runner: Runner { env, config } }
+        let scale = js::get(collaborators, "timeoutScale").and_then(js::finite).filter(|scale| *scale > 1.0).unwrap_or(1.0);
+        Host { collaborators, callbacks, runner: Runner { env, config, scale } }
     }
 
     fn git(&self, cwd: &str, args: &[&str], options: Git) -> Raw {

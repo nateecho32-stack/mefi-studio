@@ -657,3 +657,12 @@ test("nothing in Studio pushes with a mirror, --all, --tags or a refs/ refspec",
   assert.ok(pushes.length >= 4, "the search finds Studio's pushes");
   for (const [file, argv] of pushes) assert.doesNotMatch(argv, /--mirror|--all\b|--tags|--prune|refs\/|"\+|\*/, `${file}: ${argv}`);
 });
+
+test("timeoutScale stretches every git time limit, and nothing under 1 shortens them", async () => {
+  const seen = [];
+  const answer = (_command, _args, options, done) => { seen.push(options.timeout); done(Object.assign(new Error("spawn git ENOENT"), { code: "ENOENT" }), "", ""); return {}; };
+  for (const timeoutScale of [undefined, 3, 0.5, Number.NaN]) {
+    await createAttemptSnapshots({ execFile: answer, timeoutScale }).probe("C:\\project");
+  }
+  assert.deepEqual(seen, [10000, 30000, 10000, 10000], "the probe's 10 s limit, tripled only by a scale above 1");
+});
