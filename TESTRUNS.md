@@ -39,6 +39,28 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-05 Today in both modes and the snapshot time limits land on main
+
+Branch `land/ui-today` in `C:\wt\land-ui`: origin/main 3daf9d8 with
+rust/snapshot-timeouts 1a1c1f4 (attempt snapshots take a `timeoutScale` for
+every git time limit, in JavaScript and in Rust; the snapshot parity test uses
+6 on both sides) and ui/today merged (3780663), then 577bf4e: the today_render
+and sessions_render fixtures expect a run that waits on you under Needs you
+only. Both fixtures failed alone on 3780663 (they pinned the old picture) and
+pass alone on 577bf4e (72 s and 117 s).
+
+Full `npm test` on 577bf4e (quiet machine apart from a cleanup session doing
+git work): Node 6970 tests, 6953 pass, 14 skipped, 3 fail, all pass alone:
+advisory_checks (26/26; EPERM removing its temp folder), attempt_review_host
+(28/28; "a claim cancelled before its worker started", known under load) and
+update_continuity (9/9; read a helper mid-write under load). Electron lane 76:
+72 pass, 1 skipped, 3 fail: layout_contract_render and shell_render (as on
+clean main on this PC) and sessions_render ("the keyboard starts on the open
+project", passes alone again, 122 s). rust_parity_snapshots ran inside the
+gate and passed (3/3; the twin-repository test took 127 s under load, the
+case the time-limit scale is for). Python 248 OK; path lock ok; `npm run audit` 0 findings; `npm run check`
+ok.
+
 ## 2026-10-04 Today in both modes closer to the 0.5 prototype: Build's Home and Vibe's board
 
 Branch `ui/today` in `C:\wt\ui-today` (off land/ui-chrome 74bf360,
@@ -470,14 +492,6 @@ Full repository gates are reported separately with their actual outcomes.
 CodeRabbit completed the combined updater delta at 85bc4e6: 21 files reviewed, two minor issues. The channel-toggle cleanup now keeps the switch disabled during checking, downloading, installing or rollback, and the changelog makes deferred artifact publishing explicit. The original three partial review issues were fixed in 85bc4e6. Native screenshot evidence uses an isolated bridge; live update channels, credentials and provider state are untouched.
 
 Final focused tests, generated booklet, checks, audit, lint, exact-head CI and the follow-up review qualify this final small change before landing. The full b481ec0 integration gate and earlier red aggregate remain separately recorded, with their original outcomes and native capability limits.
-
-## 2026-10-03 - Combined updater gate and review follow-up
-
-The combined application head b481ec0 passed the corrected full Windows gate with process-scoped Git trust: 6,796 Node tests, 6,780 passed, zero failed, 16 skipped; 248 Python contracts OK with one skip; six lock checks passed. Its three exact-head GitHub runs passed on Windows and Linux. The earlier failed aggregate remains recorded separately.
-
-CodeRabbit's updater-delta review timed out after 18.5 minutes with three minor partial findings and no completion event. Follow-up fixes add per-version automatic retry backoff, a useful channel-failure message and fallback past unusable package metadata without hiding access failures. Focused updater/boot-health tests pass 48/48; the isolated real-Chromium channel fixture passes, including cancelled consent, missing artifacts and narrow geometry. Final follow-up checks, exact-head CI and a completed review remain required before landing.
-
-Native compositor occlusion is unavailable in this Windows session and synthetic Ctrl+W is not acted on by the native window; those established limitations remain. Screenshots use an isolated bridge and do not change live settings or prove a merge. No workflow, release, credential or provider action is included.
 
 ## Read Before Any Tests
 

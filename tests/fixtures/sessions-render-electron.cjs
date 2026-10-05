@@ -623,7 +623,7 @@ app.whenReady().then(async () => {
     assert.equal(wide.autonomy, "Auto", "the permission mode reads as the prototype's");
     assert.deepEqual(wide.starts, ["Modify", "Experiment", "Fix", "Improve", "Suggest a next step"]);
     assert.deepEqual(wide.need, { key: "question:q_1", head: "Add an empty state to the notes list", words: "Should the empty state also appear when a search has no matches?", buttons: ["Yes, reuse it", "Only when there are no notes", "Open task"] }, "the open question, as the prototype's Needs you card");
-    assert.deepEqual(wide.running.map((row) => row[0]), ["Search notes by tag", "Keyboard shortcut for a new note", "Add an empty state to the notes list"]);
+    assert.deepEqual(wide.running.map((row) => row[0]), ["Search notes by tag", "Keyboard shortcut for a new note"], "the run waiting on you is under Needs you only, as the prototype draws it");
     assert.equal(wide.running[0][1], "Claude Code · Writing parseTags()");
     assert.ok(wide.finished.length >= 1 && wide.finished.length <= 3, `what finished, three at most: ${JSON.stringify(wide.finished)}`);
     assert.ok(Math.abs((wide.col.x + wide.col.r) / 2 - (wide.main.x + wide.main.r) / 2) <= 2 && wide.col.w <= 830, `the column is centred in the free area and no wider than the prototype's: ${JSON.stringify([wide.col, wide.main])}`);
