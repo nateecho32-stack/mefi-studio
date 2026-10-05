@@ -79,8 +79,7 @@ app.whenReady().then(async () => {
     wc.sendInputEvent({ type: "mouseMove", ...pt }); wc.sendInputEvent({ type: "mouseDown", button: "left", clickCount: 1, ...pt }); wc.sendInputEvent({ type: "mouseUp", button: "left", clickCount: 1, ...pt }); await sleep(100);
   };
   const escape = () => run("document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));");
-  // The companion's own Friends section is the classic layout's (in the 0.5 layout Friends is a page: friends_render).
-  await win.loadFile(path.join(root, "renderer/booklet.html"), { query: { layout: "v1" } });
+  await win.loadFile(path.join(root, "renderer/booklet.html"));
   await run("Object.defineProperty(document,'hidden',{value:false,configurable:true});document.dispatchEvent(new Event('visibilitychange'));");
   await until("window.MefiBoot?.state().phase==='choose' && document.getElementById('boot-agent')", "wake-up chooser");
   assert.equal(await run("return document.getElementById('boot-agent').dataset.mood;"), "happy", "waiting for a choice is not active thinking");
