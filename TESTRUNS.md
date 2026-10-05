@@ -39,6 +39,39 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-05 The Chrome theme, now the default, and a finish pass for every theme
+
+Branch `paint/chrome` in a cloud worktree (Linux, Node 24.21.0, Electron
+fixtures under xvfb), off origin/main 1df1651. Chrome joins THEMES first with
+the website's palette and is DEFAULT_THEME (a saved theme, Aurora included,
+is kept); renderer/chrome.css, bundled last and scoped to
+html[data-studio-theme="chrome"], paints the matte surfaces, the brushed
+metal on primary buttons and chosen segments and the thin chrome edge on
+selections; studio-ui.css, shell.css, tabs.css and sessions.css get the shared
+finish (140 ms hover, 90 ms press, 1px top highlights). Paint only: no hot path
+touched, resolvePalette's memo unchanged, so nothing to measure.
+
+`npm run check` ok (271 targets, 30 stylesheets used), `npm run audit` 0
+findings, `npm run lint` 0 errors and the same 44 warnings as clean main.
+`npm run test:fast`: 6979 tests, 6920 pass, 58 skipped, 1 fail:
+rust_modules "the image-store factory ... keeps folder the engine's", which
+fails the same way on clean origin/main here (a Windows path resolved on
+Linux). New: tests/chrome_theme.test.mjs (7/7) and two music.test.mjs tests
+(the default and the palette; 4.5:1 for text, muted, dim and bright, the
+canvas and the ink on the accent in all twelve themes and the custom palette).
+Python contracts 258 OK (3 skipped).
+
+Electron, as tester under xvfb, on snapshots of the tree: today_render,
+shell_render, sessions_render (every-theme 4.5:1 probes, Chrome included),
+tabs_render, layout_contract_render (353 s), size_render, builder_render,
+review_render, command_render, media_window_render and unified_studio_render
+pass. unified_studio_render failed once ("holding an arrow continues
+scrolling", 37 s, two fixtures racing) and passed on the rerun (135 s), as on
+clean main (393 s). settings_render fails exactly as on clean main (600x560 at
+1.5: the Report a problem rows 7 px past the page's edge); with that one size
+left out in a throwaway copy, its every-theme contrast pass is green for
+Chrome and the other twelve palettes, on this tree and on clean main.
+
 ## 2026-10-05 Today in both modes and the snapshot time limits land on main
 
 Branch `land/ui-today` in `C:\wt\land-ui`: origin/main 3daf9d8 with
@@ -486,12 +519,6 @@ bridge is simulated, zero external network/process attempts. Status stays local
 until disclosure; no service or owner grant activates on startup. Detail folds
 survive status refresh. No live LAN/cross-network or AI delegation qualification.
 Full repository gates are reported separately with their actual outcomes.
-
-## 2026-10-03 - Completed updater review and final channel cleanup
-
-CodeRabbit completed the combined updater delta at 85bc4e6: 21 files reviewed, two minor issues. The channel-toggle cleanup now keeps the switch disabled during checking, downloading, installing or rollback, and the changelog makes deferred artifact publishing explicit. The original three partial review issues were fixed in 85bc4e6. Native screenshot evidence uses an isolated bridge; live update channels, credentials and provider state are untouched.
-
-Final focused tests, generated booklet, checks, audit, lint, exact-head CI and the follow-up review qualify this final small change before landing. The full b481ec0 integration gate and earlier red aggregate remain separately recorded, with their original outcomes and native capability limits.
 
 ## Read Before Any Tests
 

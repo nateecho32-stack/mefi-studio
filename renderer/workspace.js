@@ -129,7 +129,7 @@
     try { window.MefiToday?.composerChanged?.(); } catch { /* Today is optional */ }
   }
   const accentForTheme = (theme) => theme === "forest" ? "sage" : theme;
-  function personalize(accentChoice = accentForTheme(window.MefiMusic?.status?.()?.theme) || storage.get("accent", "aurora")) {
+  function personalize(accentChoice = accentForTheme(window.MefiMusic?.status?.()?.theme) || storage.get("accent", "chrome")) {
     const hour = new Date().getHours();
     $("greeting").textContent = `GOOD ${hour < 12 ? "MORNING" : hour < 18 ? "AFTERNOON" : "EVENING"}${person() ? `, ${person()}` : ""}`;
     $("layer").dataset.accent = accentChoice;
@@ -1330,7 +1330,7 @@
         } catch (error) { feedback(error.message, true); }
       });
     }
-    for (const [id, key, fallback] of [["person-name", "person", ""], ["agent-name", "companion", "Mefi"], ["accent", "accent", "aurora"]]) {
+    for (const [id, key, fallback] of [["person-name", "person", ""], ["agent-name", "companion", "Mefi"], ["accent", "accent", "chrome"]]) {
       $(id).value = storage.get(key, fallback);
       $(id).addEventListener("input", () => {
         // Music announces the actual theme (and whether this is a temporary
@@ -1352,7 +1352,7 @@
       const options = $("accent").options ? [...$("accent").options] : null;
       if (options && !options.some((option) => option.value === choice)) return;
       $("accent").value = choice;
-      if (event?.detail?.preview !== true && storage.get("accent", "aurora") !== choice) storage.set("accent", choice);
+      if (event?.detail?.preview !== true && storage.get("accent", "chrome") !== choice) storage.set("accent", choice);
       personalize(choice);
     };
     window.addEventListener("mefi-theme-change", syncThemeChoice);

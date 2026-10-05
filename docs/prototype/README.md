@@ -22,7 +22,7 @@ It is reference material: it is not part of the application, is not built into
   and shows an overlay thumb only while a pane overflows. It has no tabs, no
   resizable panels and no size and density settings yet; those are in
   `docs/plans/0.5.0-plan.md` and are drawn in revision 5 (below) before they are built.
-- **Palette:** it uses the application's Aurora theme values, so the eleven themes
+- **Palette:** it uses the application's Aurora theme values, so every theme (twelve with Chrome)
   and the custom palette apply to whatever is built from it.
 
 The plan for building it into the application is `docs/plans/0.5.0-plan.md`.

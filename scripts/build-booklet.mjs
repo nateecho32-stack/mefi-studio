@@ -137,7 +137,8 @@ export const BOOKLET_INPUTS = {
     "shell.css",
     "tabs.css",
     "sessions.css",
-    "daily-paper.css"
+    "daily-paper.css",
+    "chrome.css"
   ]
 };
 Object.freeze(BOOKLET_INPUTS.scripts);

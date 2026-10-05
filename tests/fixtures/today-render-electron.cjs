@@ -574,7 +574,7 @@ app.whenReady().then(async () => {
   await capture("inbox-light-1440x900.png");
   await run("document.getElementById('today-inbox').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));");
   await until("document.getElementById('today-inbox').hidden", "closed again");
-  await run("window.MefiMusic.applyTheme('aurora', false);");
+  await run("window.MefiMusic.applyTheme('chrome', false);");
   await sleep(600);
   check("a light palette: the page and the popover read, with no text under 12 px");
 

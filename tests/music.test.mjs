@@ -5,7 +5,7 @@ import vm from "node:vm";
 
 const source = await readFile(new URL("../renderer/music.js", import.meta.url), "utf8");
 const pure = vm.createContext({ URL });
-vm.runInContext(`${source.slice(source.indexOf("  const THEMES"), source.indexOf("  let stored;"))}\nthis.api = {spotifyLink, mediaLink, playableLink, startSeconds, safePreferences, audioFile, nextIndex, timeLabel, hexColor, resolvePalette, contrast};`, pure);
+vm.runInContext(`${source.slice(source.indexOf("  const THEMES"), source.indexOf("  let stored;"))}\nthis.api = {spotifyLink, mediaLink, playableLink, startSeconds, safePreferences, audioFile, nextIndex, timeLabel, hexColor, resolvePalette, contrast, THEMES, DEFAULT_THEME, isVoidTheme};`, pure);
 const helpers = pure.api;
 const flush = async () => { for (let index = 0; index < 15; index += 1) await Promise.resolve(); };
 
@@ -198,7 +198,7 @@ test("Spotify links are canonical and reject foreign, credentialed or malformed 
 test("Saved music preferences are bounded and never contain local files or transient Blob URLs", () => {
   const link = "https://open.spotify.com/playlist/37i9dQZF1DX7zqr9q1MPG7";
   const value = helpers.safePreferences({ theme: "untrusted", volume: 8, spotify: [link, link, "blob:private", "https://evil.test"], tracks: ["C:/private.mp3"], selected: "blob:private" });
-  assert.equal(value.theme, "aurora"); assert.equal(value.volume, 1);
+  assert.equal(value.theme, "chrome", "an unknown theme falls back to the default, Chrome"); assert.equal(value.volume, 1);
   assert.deepEqual(Array.from(value.links), [link], "the list saved before the Links tab is read into links");
   assert.deepEqual(Object.keys(value).sort(), ["customColors", "extraGlow", "links", "nodeLayout", "nodeStyle", "orbitTrails", "radioOn", "source", "station", "theme", "volume"]);
   assert.equal(helpers.safePreferences({ source: "spotify" }).source, "link", "the old Spotify tab comes back as Links");
@@ -272,6 +272,49 @@ test("Theme selection updates global tokens, emits graph palette changes and sur
   const restored = environment({ saved: JSON.parse(env.storage.get("mefiStudio.music.v1")) });
   assert.equal(restored.music.status().theme, "violet");
   assert.equal(restored.music.status().queueLength, 0);
+});
+
+// Chrome (renderer/chrome.css) is listed first and is what a new install
+// opens in, with the website's exact palette; a theme already saved, Aurora
+// (the default before it) among them, is kept, and every other theme stays.
+test("Chrome is the first theme and a new install's default, and a saved theme still wins", () => {
+  const themes = JSON.parse(JSON.stringify(helpers.THEMES));
+  assert.equal(Object.keys(themes)[0], "chrome", "listed first");
+  assert.deepEqual(themes.chrome, { name: "Chrome", accent: "#c3c8d0", bright: "#eef1f5", rgb: "195,200,208", bg: "#0a0a0c", panel: "#141418", muted: "#a4a9b2", text: "#edeff2" }, "the website's palette, solo, outside the Void collection");
+  assert.equal(helpers.isVoidTheme("chrome"), false);
+  assert.deepEqual(Object.keys(themes), ["chrome", "gold", "midnight", "forest", "violet", "ember", "aurora", "rose", "void", "eclipse", "abyss", "dusk"], "twelve themes");
+  assert.equal(helpers.DEFAULT_THEME, "chrome");
+  assert.equal(helpers.safePreferences(null).theme, "chrome");
+  const fresh = environment();
+  assert.equal(fresh.music.status().theme, "chrome", "nothing saved: Chrome");
+  assert.equal(fresh.document.documentElement.dataset.studioTheme, "chrome");
+  assert.equal(fresh.document.documentElement.dataset.studioThemeTier, "solo");
+  assert.equal(fresh.document.documentElement.dataset.studioThemeTone, "dark");
+  assert.equal(fresh.styles.get("--gold"), "#c3c8d0");
+  assert.equal(fresh.styles.get("--bg"), "#0a0a0c");
+  assert.equal(fresh.styles.get("--panel-solid"), "#141418");
+  assert.deepEqual(Array.from(fresh.music.themes(), (theme) => theme.key), Object.keys(themes), "the pickers list every theme, Chrome first");
+  for (const key of ["aurora", "gold", "dusk", "custom"]) {
+    const kept = environment({ saved: { theme: key } });
+    assert.equal(kept.music.status().theme, key, `a saved ${key} is kept`);
+    assert.equal(kept.document.documentElement.dataset.studioTheme, key);
+  }
+  fresh.music.applyTheme("aurora");
+  assert.equal(environment({ saved: JSON.parse(fresh.storage.get("mefiStudio.music.v1")) }).music.status().theme, "aurora", "Aurora stays selectable");
+});
+
+test("every theme and the custom palette read at 4.5:1: text, muted, dim and bright on panels, the canvas, and the ink on the accent", () => {
+  const palettes = [...Object.keys(helpers.THEMES).map((key) => [key, helpers.resolvePalette(key, {})]), ["custom", helpers.resolvePalette("custom", {})]];
+  assert.equal(palettes.length, 13, "twelve themes and the custom palette");
+  for (const [key, palette] of palettes) {
+    for (const ink of ["text", "muted", "dim", "bright"]) assert.ok(helpers.contrast(palette[ink], palette.surface) >= 4.5, `${key}: ${ink} on the panel`);
+    for (const ink of ["text", "muted"]) assert.ok(helpers.contrast(palette[ink], palette.readingBackground) >= 4.5, `${key}: ${ink} on the page`);
+    assert.ok(helpers.contrast(palette.border, palette.surface) >= 3, `${key}: the strong hairline`);
+    for (const ink of ["text", "muted"]) assert.ok(helpers.contrast(palette.canvas[ink], palette.canvas.background) >= 4.5, `${key}: canvas ${ink}`);
+    for (const fill of ["accent", "actionEnd"]) assert.ok(helpers.contrast(palette.onAccent, palette[fill]) >= 4.5, `${key}: the ink on ${fill}`);
+  }
+  const chrome = helpers.resolvePalette("chrome", {});
+  assert.deepEqual([chrome.text, chrome.muted, chrome.background, chrome.surface, chrome.onAccent], ["#edeff2", "#a4a9b2", "#0a0a0c", "#141418", "#000000"], "Chrome's own colours need no correction");
 });
 
 test("Node preferences default to classic orbs and constellation and reject unsupported saved values", () => {

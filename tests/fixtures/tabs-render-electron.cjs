@@ -729,7 +729,7 @@ app.whenReady().then(async () => {
   await until("document.querySelector('.ts-pop-add')", "the Add menu on a light palette");
   await capture("tabs-light-add.png");
   await key("Escape");
-  await run("window.MefiMusic.applyTheme('aurora', false);");
+  await run("window.MefiMusic.applyTheme('chrome', false);");
   await sleep(300);
 
   // ===================================================================================================================================
