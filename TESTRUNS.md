@@ -39,6 +39,36 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-04 Today in both modes closer to the 0.5 prototype: Build's Home and Vibe's board
+
+Branch `ui/today` in `C:\wt\ui-today` (off land/ui-chrome 74bf360,
+node_modules junctioned), pushed as wip/ui-today: 0b52d4c Build's Today
+(Home with no session open: the greeting and "What's next for <project>?",
+Home's own box borrowed with Add files or an image, the permission mode,
+Talk it over and Build it, the starters and Suggest a next step, Needs you,
+Running now, Finished while you were away; the classic Home is the route's
+"chat" view), 75b3dfa Vibe's Today (the prototype's board: four columns that
+say when they are empty, a waiting card as its session, results under
+Review, Build it with its key, "Today, the board").
+
+`npm run check` ok (271 targets), lint 0 errors (no warning in the touched
+files), `npm run audit` 0 findings. `npm run test:fast` at 0b52d4c's tree
+under heavy load: 6950 tests, 6926 pass, 14 skipped, 8 fail, 2 cancelled,
+all in six host suites that took 700-860 s each (attempt_review_host,
+attempt_snapshots_host, git_actions, pc_vault, rust_parity_git,
+rust_parity_repo): 137 tests, 134 pass, 3 skipped, 0 fail alone.
+
+Full `npm test` at 75b3dfa: Node 6952 tests, 6934 pass, 14 skipped, 4 fail
+(attempt_review_host 2, attempt_snapshots_host, rust_parity_snapshots,
+sync_changes: 63 tests, 60 pass, 3 skipped, 0 fail alone); Electron lane 75:
+72 pass, 1 skipped, 2 fail, layout_contract_render (viewport 1921x1081) and
+shell_render ("373 !== 372" at 1100 px), both as on clean main on this PC;
+sessions_render (with its new Today gallery: Build's Today at 1920x1080 and
+1100x720, 600x560 at 1 and 1.5, Vibe's board, every text 12 px or more and
+4.5:1 in all eleven themes for both) and today_render pass; Python 248 OK
+(1 skipped); path lock ok.
+Captures (1920x1080) in `C:\wt\gap\after-today\final\`, prototype-left
+side-by-sides in `C:\wt\gap\after-today\compare\`.
 ## 2026-10-04 The v2 Settings, first run and plan draft page land on main
 
 Branch `land/ui-settings` in `C:\wt\land-ui`: origin/main 349802a with
@@ -448,14 +478,6 @@ The combined application head b481ec0 passed the corrected full Windows gate wit
 CodeRabbit's updater-delta review timed out after 18.5 minutes with three minor partial findings and no completion event. Follow-up fixes add per-version automatic retry backoff, a useful channel-failure message and fallback past unusable package metadata without hiding access failures. Focused updater/boot-health tests pass 48/48; the isolated real-Chromium channel fixture passes, including cancelled consent, missing artifacts and narrow geometry. Final follow-up checks, exact-head CI and a completed review remain required before landing.
 
 Native compositor occlusion is unavailable in this Windows session and synthetic Ctrl+W is not acted on by the native window; those established limitations remain. Screenshots use an isolated bridge and do not change live settings or prove a merge. No workflow, release, credential or provider action is included.
-
-## 2026-10-03 - Combined task-context and update-channel integration
-
-The two application branches are integrated without workflow changes. Both changelog entries and every unique test-history row are retained, and the booklet is regenerated from the combined sources. The rollback VM fixture now supplies the production project-switch state and pins refusal before any rollback side effect.
-
-Focused updater/boot-health suites: 44 passed. Build, check, audit and lint pass; lint retains 42 baseline warnings. The first full run completed: 6,796 Node tests, 6,779 passed, one failed, 16 skipped; 248 Python contracts OK with one skip and six normalized-path lock checks passed. Its sole failure was the CSS CLI Git subprocess refusing checkout ownership, not an application assertion; the unchanged CSS suite passes 14/14 with narrowly scoped Git trust. This failed aggregate is preserved as failed. Corrected full verification and exact-head CI/review are pending before main integration.
-
-Stable remains the default; development requires explicit warning/consent. Development artifact publishing is deferred, so no supported development artifact is promised by this application-only change. No release, provider action, UI-default activation or workflow publication is performed.
 
 ## Read Before Any Tests
 

@@ -184,6 +184,49 @@ test("New task opens the authoring mode with its saved draft and never submits i
   assert.deepEqual(sent, []);
 });
 
+test("Build's Today (layout v2) sends the box's words as a chat or a task without switching its purpose or its drafts", async () => {
+  const created = [], said = [];
+  const env = await environment({ bridgeOverrides: {
+    tasksCreate: async (value) => { created.push(value); return { ok: true, task: { id: "made" } }; },
+    assistantMessage: async (...args) => { said.push(args); return { ok: true, state: { projectId: "project-a", messages: [] } }; },
+  } });
+  env.storage.set("mefiStudio.workspace.draft.project-a.work", "A task draft kept for the Create task purpose");
+  env.el("input").value = "Add keyboard navigation to the tag chips";
+  await env.el("input").trigger("input");
+  await env.workspace.send("work");
+  assert.equal(created.length, 1, "Build it is a new task");
+  assert.equal(created[0].prompt, "Add keyboard navigation to the tag chips");
+  assert.equal(env.el("mode-chat").getAttribute("aria-pressed"), "true", "the purpose the box was left on is unchanged");
+  assert.equal(env.el("input").value, "", "the words went, as a send always takes them");
+  assert.equal(env.storage.get("mefiStudio.workspace.draft.project-a.work"), "A task draft kept for the Create task purpose", "the other purpose's draft is untouched");
+  assert.match(env.el("feedback").textContent, /^Task added/);
+  env.el("input").value = "Should tags be case-insensitive?";
+  await env.workspace.send("chat");
+  assert.equal(said.length, 1, "Talk it over is a message to the assistant");
+  assert.equal(said[0][0], "Should tags be case-insensitive?");
+  assert.equal(said[0][2].view, "Home");
+  await env.workspace.send("chat");
+  assert.equal(said.length, 1, "an empty box sends nothing");
+});
+
+test("Home tells Build's Today when it comes and goes and when its box sends, and New task leaves Today's words alone", async () => {
+  const told = [];
+  let hosts = false;
+  const env = await environment({ autoEnter: false, windowOverrides: { MefiToday: { syncHome: () => told.push("sync"), composerChanged: () => told.push("composer"), hostsComposer: () => hosts } } });
+  env.workspace.enter(); await flush();
+  assert.equal(told.includes("sync"), true, "enter() asks Today whether it takes the page");
+  assert.equal(told.includes("composer"), true, "the box's controls changing is passed on, for Today's own buttons");
+  told.length = 0;
+  env.workspace.exit();
+  assert.deepEqual(told.filter((what) => what === "sync"), ["sync"], "and exit() asks again");
+  env.workspace.enter(); await flush();
+  hosts = true;
+  env.el("input").value = "Words typed on Today";
+  env.workspace.composeTask();
+  assert.equal(env.el("input").value, "Words typed on Today", "New task focuses the box on Today without swapping in another purpose's draft");
+  assert.equal(env.el("mode-chat").getAttribute("aria-pressed"), "true");
+});
+
 test("a region header and churn hint alone never create a work task", async () => {
   const env = await environment(); let calls = 0;
   env.bridge.tasksCreate = async () => { calls += 1; return { ok: true }; };

@@ -334,7 +334,7 @@ app.whenReady().then(async () => {
   const size = async (width, height, zoom = 1) => { window.setContentSize(width, height); contents.setZoomFactor(zoom); await sleep(350); };
   const step = (label) => report.steps.push(label);
   report.shots = [];
-  // The phases are named so a failing one can be run alone while debugging: MEFI_SESSIONS_PHASE=v1|shots (default: all).
+  // The phases are named so a failing one can be run alone while debugging: MEFI_SESSIONS_PHASE=v1|shots|chrome|today (default: all).
   const only = process.env.MEFI_SESSIONS_PHASE || "all";
 
   // ---- v1: the layout is off, and nothing of this module exists ------------------------------------------------------------------------
@@ -579,6 +579,105 @@ app.whenReady().then(async () => {
     return;
   }
 
+  // ---- Today at 1920x1080, beside the prototype's shots (docs/prototype/): Build's Home with no session open, and Vibe's board ----------
+  // Build's Home is Today (renderer/today.js mountHome): the greeting and the question, Home's own box with the prototype's row of
+  // controls, the ways to start, the first thing that needs you, Running now and Finished while you were away. Everything on it is
+  // read in every theme (12 px and 4.5:1). Vibe's Today is captured on the same board. It leaves Build's Home as it found it.
+  const todayFacts = `
+    const box = (node) => { if (!node) return null; const r = node.getBoundingClientRect(); return { x: Math.round(r.left), y: Math.round(r.top), r: Math.round(r.right), b: Math.round(r.bottom), w: Math.round(r.width), h: Math.round(r.height) }; };
+    const page = document.getElementById('today-build');
+    const shown = (node) => { const r = node.getBoundingClientRect(); const s = getComputedStyle(node); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
+    const texts = [...page.querySelectorAll('*')].filter((node) => shown(node) && [...node.childNodes].some((child) => child.nodeType === 3 && child.textContent.trim()));
+    const area = window.MefiNav.usable(); const main = { left: area.left, right: area.right, top: area.top, bottom: area.bottom };
+    return {
+      classic: getComputedStyle(document.querySelector('#workspace-layer .ws-main')).display,
+      kicker: document.getElementById('today-build-kicker').textContent, title: document.getElementById('today-build-title').textContent,
+      boxed: document.getElementById('workspace-form').parentNode.id, placeholder: document.getElementById('workspace-input').placeholder,
+      tools: [...document.querySelectorAll('#today-build-tools > :not([hidden])')].filter(shown).map((node) => node.id), autonomy: document.querySelector('#today-build-autonomy .autonomy-chip')?.textContent ?? null,
+      starts: [...document.querySelectorAll('#today-build-starts button')].map((node) => node.textContent.trim()),
+      need: { key: document.querySelector('#today-build-need > *')?.dataset.key ?? null, head: document.querySelector('#today-build-need .today-b-ask-k b')?.textContent ?? null, words: document.querySelector('#today-build-need .today-b-ask-q')?.textContent ?? null, buttons: [...document.querySelectorAll('#today-build-need .today-b-opts button')].map((node) => node.textContent) },
+      running: [...document.querySelectorAll('#today-build-running .today-b-row')].map((node) => [node.querySelector('.today-b-row-title').textContent, node.querySelector('.today-b-row-meta').textContent]),
+      finished: [...document.querySelectorAll('#today-build-finished .today-b-row')].map((node) => [node.querySelector('.today-b-row-title').textContent, node.querySelector('.today-b-row-meta').textContent]),
+      col: box(page.querySelector('.today-b-col')), form: box(document.getElementById('workspace-form')), talk: box(document.getElementById('today-build-talk')), build: box(document.getElementById('today-build-build')), two: [...page.querySelectorAll('.today-b-half')].map(box),
+      main: { x: Math.round(main.left), r: Math.round(main.right), y: Math.round(main.top), b: Math.round(main.bottom) },
+      small: texts.filter((node) => parseFloat(getComputedStyle(node).fontSize) < 12).map((node) => (node.id || node.className) + ':' + getComputedStyle(node).fontSize),
+      outside: [...page.querySelectorAll('*')].filter(shown).filter((node) => { const r = node.getBoundingClientRect(); return r.right > innerWidth + 1 || r.left < -1; }).map((node) => node.id || node.className),
+      gutters: [...page.querySelectorAll('*')].filter((node) => shown(node) && /(auto|scroll)/.test(getComputedStyle(node).overflowY)).map((node) => node.offsetWidth - node.clientWidth),
+      pageOverflow: document.documentElement.scrollWidth > innerWidth + 1,
+      trail: [...document.querySelectorAll('#shell-top .shell-crumb')].map((node) => node.textContent),
+    };`;
+  async function todayGallery() {
+    await size(1920, 1080, 1);
+    await run("for (const name of ['list', 'inspector']) window.MefiShell.open(name);");
+    await run("window.MefiNav.go('workspace');");
+    await until("window.MefiSessions.selected() === null && window.MefiToday.hostsComposer() && !document.getElementById('today-build').hidden && document.querySelector('#today-build-need > *') && document.querySelectorAll('#today-build-running .today-b-row').length >= 1", "Build's Home is Today");
+    await sleep(700);
+    const wide = await run(todayFacts);
+    report.todayBuild = wide;
+    assert.equal(wide.classic, "none", "the classic page steps aside");
+    assert.equal(wide.title, "What's next for Notes app?");
+    assert.match(wide.kicker, /^(Up late|Good morning|Good afternoon|Good evening)$/);
+    assert.equal(wide.boxed, "today-build-box", "Home's own box is Today's");
+    assert.equal(wide.placeholder, "Describe an idea, a fix or a question…");
+    assert.deepEqual(wide.tools, ["today-build-attach", "today-build-autonomy", "today-build-talk", "today-build-build"], "Add files or an image, the mode, Talk it over, Build it");
+    assert.equal(wide.autonomy, "Auto", "the permission mode reads as the prototype's");
+    assert.deepEqual(wide.starts, ["Modify", "Experiment", "Fix", "Improve", "Suggest a next step"]);
+    assert.deepEqual(wide.need, { key: "question:q_1", head: "Add an empty state to the notes list", words: "Should the empty state also appear when a search has no matches?", buttons: ["Yes, reuse it", "Only when there are no notes", "Open task"] }, "the open question, as the prototype's Needs you card");
+    assert.deepEqual(wide.running.map((row) => row[0]), ["Search notes by tag", "Keyboard shortcut for a new note", "Add an empty state to the notes list"]);
+    assert.equal(wide.running[0][1], "Claude Code · Writing parseTags()");
+    assert.ok(wide.finished.length >= 1 && wide.finished.length <= 3, `what finished, three at most: ${JSON.stringify(wide.finished)}`);
+    assert.ok(Math.abs((wide.col.x + wide.col.r) / 2 - (wide.main.x + wide.main.r) / 2) <= 2 && wide.col.w <= 830, `the column is centred in the free area and no wider than the prototype's: ${JSON.stringify([wide.col, wide.main])}`);
+    assert.ok(wide.form.w <= 780 && wide.talk.y === wide.build.y && wide.talk.r < wide.build.x, `the box is the prototype's width, Talk it over beside Build it: ${JSON.stringify([wide.form, wide.talk, wide.build])}`);
+    assert.equal(wide.two.length, 2);
+    assert.ok(wide.two[0].y === wide.two[1].y && wide.two[0].r < wide.two[1].x, `Running now and Finished side by side: ${JSON.stringify(wide.two)}`);
+    assert.deepEqual([wide.small, wide.outside, wide.pageOverflow], [[], [], false], "no text under 12 px, nothing outside the window");
+    assert.ok(wide.gutters.every((gutter) => gutter === 0), `no scroller reserves width: ${wide.gutters}`);
+    assert.deepEqual(wide.trail, ["Notes app", "Today"]);
+    await capture("today-build-1920.png");
+    await readable("#today-build", "Build's Today");
+    // Open the conversation: the classic Home, under its own tab, named Chat; Today comes back on Today.
+    await run("window.MefiToday.openChat();");
+    await until("!window.MefiToday.hostsComposer() && getComputedStyle(document.querySelector('#workspace-layer .ws-main')).display !== 'none' && document.getElementById('workspace-form').closest('.ws-conversation')", "the conversation is the classic Home");
+    await sleep(300);
+    assert.deepEqual(await run("return [...document.querySelectorAll('#shell-top .shell-crumb')].map((node) => node.textContent);"), ["Notes app", "Chat"]);
+    await capture("today-build-chat-1920.png");
+    await run("window.MefiNav.go('workspace');");
+    await until("window.MefiToday.hostsComposer() && !document.getElementById('today-build').hidden", "Today again");
+    // A small window: one column, nothing outside, nothing under 12 px.
+    for (const [width, height, zoom] of [[1100, 720, 1], [600, 560, 1], [600, 560, 1.5]]) {
+      await size(width, height, zoom);
+      await sleep(300);
+      const small = await run(todayFacts);
+      assert.deepEqual([small.small, small.outside, small.pageOverflow], [[], [], false], `${width}x${height}@${zoom}: ${JSON.stringify([small.small, small.outside])}`);
+      await capture(`today-build-${width}x${height}@${zoom}.png`);
+    }
+    await size(1920, 1080, 1);
+    // Vibe's Today on the same board.
+    await run("await window.MefiVibe.setMode('vibe'); window.MefiNav.setRailPinned(false, { save: false });");
+    await until("document.getElementById('vibe-layer').dataset.today === 'on' && !document.getElementById('vibe-layer').hidden && document.querySelector('#today-board .today-group')", "Vibe's Today");
+    await sleep(900);
+    await capture("today-vibe-1920.png");
+    report.todayVibe = await run("return { trail: [...document.querySelectorAll('#shell-top .shell-crumb')].map((node) => node.textContent), groups: [...document.querySelectorAll('#today-board .today-group')].map((node) => [node.dataset.group, node.querySelector('h3').firstChild.textContent, node.querySelectorAll('.today-card, .today-need').length, node.querySelector('.today-col-empty').hidden ? null : node.querySelector('.today-col-empty').textContent]), need: { title: document.querySelector('#today-board [data-group=needs] .today-card-title')?.textContent ?? null, meta: document.querySelector('#today-board [data-group=needs] .today-card-meta')?.textContent ?? null, q: document.querySelector('#today-board [data-group=needs] .today-card-q')?.textContent ?? null }, kicker: getComputedStyle(document.querySelector('#today-page .vibe-kicker'), '::after').content, build: document.querySelector('#vibe-build .today-key')?.textContent ?? null };");
+    assert.deepEqual(report.todayVibe.trail, ["Notes app", "Today, the board"], "the prototype's breadcrumb for Vibe's Today");
+    assert.deepEqual(report.todayVibe.groups.map((group) => group[1]), ["Needs you", "Running", "Review", "Done"], "the prototype's four columns, all four drawn");
+    assert.deepEqual(report.todayVibe.groups.find((group) => group[0] === "done").slice(2), [0, "Nothing finished yet today."], "an empty column says so");
+    assert.deepEqual({ ...report.todayVibe.need, meta: report.todayVibe.need.meta?.replace(/\d+ min$/, "N min") }, { title: "Add an empty state to the notes list", meta: "Asking a question · N min", q: "Should the empty state also appear when a search has no matches?" }, "a card that waits on you is its session: the task, what it asks and for how long, the question in its box");
+    assert.equal(report.todayVibe.kicker, '" · Vibe"');
+    assert.equal(report.todayVibe.build, "Ctrl Enter");
+    await readable("#today-page", "Vibe's Today");
+    await run("await window.MefiVibe.setMode('build', { go: false }); window.MefiNav.applyShell(true); window.MefiNav.setRailPinned(false, { save: false }); window.MefiNav.go('workspace');");
+    await until("window.MefiToday.hostsComposer() && !document.getElementById('today-build').hidden", "Build's Today again");
+    await size(1440, 900, 1);
+    step("Today at 1920x1080 and three small windows, Build's and Vibe's");
+  }
+  if (only === "today") {
+    await todayGallery();
+    assert.deepEqual(report.errors, [], "no console errors");
+    report.complete = true;
+    finish();
+    return;
+  }
+
   // ---- the list ---------------------------------------------------------------------------------------------------------------------------
   const groups = await run("return [...document.querySelectorAll('#sessions-list .sx-gh')].map((node) => [node.dataset.key, node.firstElementChild.textContent, node.querySelector('.sx-count').textContent]);");
   assert.deepEqual(groups, [["group:needs", "Needs you", "2"], ["group:running", "Running", "2"], ["group:review", "Review", "1"], ["group:queued", "Queued", "2"], ["group:done", "Done", "3"]], "the board is grouped by where each task stands");
@@ -594,6 +693,7 @@ app.whenReady().then(async () => {
   // The chrome gallery runs here, after the list's words that count time (it takes a while: every theme, four times), and before
   // anything changes the board.
   await chromeGallery();
+  await todayGallery();
   // The head as the prototype has it: the Git chip (git-sync.js's, branch then state) and the worktrees chip, then the project menu.
   await until("document.querySelector('#sessions-gitrow .gs-chip') && !document.querySelector('#sessions-gitrow .gs-slot').hidden", "the Git chip sits under the project");
   assert.equal(await textOf("#sessions-gitrow .gs-chip-branch-name"), "main");

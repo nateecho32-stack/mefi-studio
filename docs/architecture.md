@@ -223,7 +223,7 @@ settings and per-model work-kind summaries for the shared controls.
 | --- | --- |
 | **Menu** (the rail) | New task and Search sit above **Home**, **Work**, **Agents** and **Friends**, with one local row for the current group's views. Friends and its Rooms, Your PCs and Playground links open the existing companion menu at the matching card; Search finds them too. Recent tasks belong to the current project; Settings and Help stay at the foot. Help contains Start here, Shortcuts and Community. The project selector at the top opens the project panel. The registry in `renderer/nav.js` preserves existing shortcuts and destination IDs. |
 | **Layout contract** | The room the shell keeps for a session list, an inspector, a tab strip and a status bar that are not built yet: four `--shell-*` sizes (all 0), four derived edges the pages read, `html[data-layout="v2"]` to turn them on, one setter (`MefiNav.layout.set`) and one free-area rectangle (`MefiNav.usable()`). See `docs/unified-studio.md`. |
-| **Today** | Vibe's Home in the 0.5 layout (`html[data-layout="v2"]`, `renderer/today.js`): the greeting and the box that builds or talks, then one line per session in four groups, **Needs you**, **Running**, **Review** and **Done today**. In Build the same board is a page, reached from its pinned tab. See Getting around. |
+| **Today** | Home in the 0.5 layout (`html[data-layout="v2"]`, `renderer/today.js`), in both modes. In Vibe ("Today, the board"): the greeting and the box that builds or talks, then the prototype's board, four columns that each say when they are empty: **Needs you**, **Running**, **Review** and **Done** (what finished today). In Build, with no session open: the greeting and "What's next for <project>?", Home's own box with **Add files or an image**, the permission mode, **Talk it over** and **Build it** (Ctrl Enter), the four ways to start and **Suggest a next step**, the first thing that **Needs you**, **Running now** and **Finished while you were away**. Build's earlier Home (the conversation, the queue, Activity and the preview) is the **Chat** page of the same route. See Getting around. |
 | **Inbox** | Everything that waits on the owner in one list (`MefiToday.openInbox`): open questions and permissions, approvals, finished work to check and tasks that stopped. "N need you" is the digest the app already keeps (`assistantState.needsYou`, the list the taskbar count is read from), never a second counter: the pill, the status bar, Home's chip, the tabs and the session list's Needs you all read it. It opens as a popover under the top bar's pill (Ctrl J) or stays open as a page, **Work › Inbox**. See Getting around. |
 | **Frame (layout v2)** | What `renderer/shell.js` (`window.MefiShell`) draws in the contract's room when the 0.5 layout is on: a top bar (list toggle, Vibe and Build switch, where you are, Search, "N need you", "N working", inspector toggle), the list and inspector columns with splitters and, in a small window, drawers, the tab strip's row, `main` for other modules' pages, and a status bar with the Layout menu. Vibe and Build each keep their own widths. Turned on in Settings ("Try the 0.5 layout"), in Search ("Switch layout"), by `?layout=v2` or by `MEFI_STUDIO_LAYOUT=v2`. See `docs/unified-studio.md`. |
 | **Tab strip** (layout v2) | The row of tabs in the shell's tab region: Home pinned at the left, the pages and sessions you add, pins that stay, one italic preview tab, and Studio closing what you finished with (Undo, Recently closed, Ctrl+Shift+T). A tab is a remembered place, not a live page. Switches in Configuration › UI & Surfaces › Tab behaviour; see "Tabs you add and pin". |
@@ -413,14 +413,47 @@ settings and per-model work-kind summaries for the shared controls.
   door, its panels and the board never disagree. In Vibe it moves the front
   door's own greeting, box, starting points and notices into its page (they
   are put back when it stops, so Build it, Suggest a next step and the drafts
-  keep going through Vibe's code) and draws under them one line per session:
-  **Needs you** (the digest), **Running**, **Review** (work being checked and
-  plans waiting on you) and **Done today**, each line as much as
-  `html[data-detail]` says (titles, plus status, everything). A line opens its
-  session (`MefiTabs.open` when there is a tab strip, else `MefiNav.go`); a
-  question answers on its line with its first two options. The live node tree
-  stays behind it. In Build the same board is the **Today** page (registry
+  keep going through Vibe's code) and draws under them the prototype's board,
+  four columns that stay drawn while a project is open and say when they are
+  empty: **Needs you** (the Inbox's decisions), **Running**, **Review**
+  (results ready to review, which stay in the Inbox and its count, then work
+  being checked and plans waiting on you) and **Done** (what finished today),
+  each card as much as `html[data-detail]` says (titles, plus status,
+  everything). A card opens its session (`MefiTabs.open` when there is a tab
+  strip, else `MefiNav.go`; a result to review on its Changes tab). A card that
+  waits on you is its session: the task as the title, "Asking a question · 4
+  min", the question (or what holds it) in a box of its own, then its first two
+  options or the app's first two actions for it (its go-ahead, Try again, It's
+  done) and **More**, which opens it in the Inbox. A running card says who is
+  on it, for how long and what it is doing. The greeting says "· Vibe", the
+  question is in plain ink, the line that says the box's keys sits under it and
+  **Build it** carries its key. The live node tree stays behind it. In Build the same board is the **Today** page (registry
   route `today`, hidden in Vibe where it is the front door).
+  In Build, Home with no session open is Today as the prototype draws it
+  (`mountHome`): the greeting and "What's next for <project>?" (Vibe's own
+  words, from `data()`), then Home's own box, `workspace.js`'s form, borrowed
+  while Today shows and put back when it goes, so its drafts, pictures, `@ # /`
+  picker and host calls stay Home's. Under the words one row: **Add files or an
+  image** (a picture goes to the box's pictures, any other file into the words,
+  as a drop does), the permission mode (`MefiAutonomy`'s own control), **Talk
+  it over** (the words go as a chat, `assistant:message`, and the conversation
+  opens) and **Build it** (the words become a task, `tasks:create`; Home's own
+  "Task added" line and View task stay under the box). Enter talks it over,
+  Ctrl Enter builds it, Shift Enter is a new line (`MefiWorkspace.send(purpose)`
+  sends without switching the box's purpose or its drafts). **Modify**,
+  **Experiment**, **Fix** and **Improve** start the words with Vibe's own
+  starters (`MefiVibe.intents()`), and **Suggest a next step** asks the same
+  look Vibe's box asks for (`planning:explore`, suggestions only) and offers up
+  to three, each with **Add to the draft**. Then **Needs you**, the first thing
+  that waits on you (a result to review is under Finished) answered in place
+  with its first two options or the app's first two actions, and **Open task**;
+  then **Running now** (each run's worker and what it is doing, with its
+  progress) and **Finished while you were away** (results to review, then what
+  is being checked, then what finished today, three at most), one line each
+  that opens its session. The earlier Home (the conversation, the queue,
+  Activity, the preview and More) is the same route's `chat` view: Talk it over
+  and Search's **Open the conversation** open it as a tab the strip and the
+  breadcrumb call **Chat**, and the Today tab brings Today back.
   The **Inbox** lists each thing as the 0.5 prototype draws it: what it is,
   with its own mark, and who asked (the worker on the task now, else the one
   that ran it last), how long it has waited, the question, then the task it

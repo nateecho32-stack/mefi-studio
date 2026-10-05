@@ -553,7 +553,7 @@
       tasks: scoped(state.tasks), needs: data.needs, running: data.running, checking: data.checking, next: data.next,
       backlog: state.backlog && belongs(state.backlog) ? state.backlog : null, status: state.status || {}, assistant: state.assistant || {},
       ideas: scoped(state.ideas), plans: data.plans, families: data.families, gate: data.gate ? { key: data.gate.key, title: data.gate.title, text: data.gate.text, label: data.gate.action?.label ?? null } : null,
-      companion: companion(), person: person(),
+      companion: companion(), person: person(), greeting: greeting(), headline: headline(),
     };
   }
   function sharePanels(data) { if (window.MefiVibePanels?.isOpen?.()) window.MefiVibePanels.update(shared(data)); }
@@ -660,8 +660,12 @@
     const decisions = (decisionState.decisions || []).filter((row) => !row.undone && !row.failed && !row.pending);
     const todos = (decisionState.todos || []).filter((row) => !row.doneAt);
     if ($("decisions")) { $("decisions").hidden = !decisions.length && !todos.length; $("decisions").textContent = `Decided for you (${decisions.length}) · For you (${todos.length})`; }
+    $("title").textContent = headline(project);
+  }
+  // The greeting's question, in one place: the front door says it, and so does Build's Today (renderer/today.js, through data()).
+  function headline(project = state.projects.find((item) => item.id === projectId())) {
     const hasWork = scoped(state.tasks).some((task) => !done(task));
-    $("title").textContent = !project ? "Pick a project to begin" : hasWork ? `What's next for ${project.name}?` : `What should we make in ${project.name}?`;
+    return !project ? "Pick a project to begin" : hasWork ? `What's next for ${project.name}?` : `What should we make in ${project.name}?`;
   }
   function render() {
     if (!active()) return;
@@ -1851,5 +1855,7 @@
     void refresh().then(() => { const late = needs().find((item) => item.kind === (wanted.kind || "question") && item.id === wanted.id); if (late) openNeed(late); });
     return false;
   }
-  window.MefiVibe = { enter, exit, isActive: active, refresh, mode, setMode, landing, startup, showNotes, closeNotes, snapshot, openPanel, closeDrawers, composeEvolution, suggestEvolution, openNeed: openNeedById, requestChange, paintDock: () => renderDock(lanes()), promoteIdea: (idea) => promoteIdea(idea), feedback: (text, tone) => feedback(text, tone), ready: () => refreshFlight ?? Promise.resolve(), data: readModel, watch };
+  window.MefiVibe = { enter, exit, isActive: active, refresh, mode, setMode, landing, startup, showNotes, closeNotes, snapshot, openPanel, closeDrawers, composeEvolution, suggestEvolution, openNeed: openNeedById, requestChange, paintDock: () => renderDock(lanes()), promoteIdea: (idea) => promoteIdea(idea), feedback: (text, tone) => feedback(text, tone), ready: () => refreshFlight ?? Promise.resolve(), data: readModel, watch,
+    // The four ways to start (Modify, Experiment, Fix, Improve), as copies: Build's Today (renderer/today.js) offers the same starters in its own box.
+    intents: () => Object.fromEntries(Object.entries(INTENTS).map(([id, entry]) => [id, { ...entry }])) };
 })();

@@ -58,7 +58,9 @@ test("Today is drawn inside Vibe's own layer, after its sky, with the pieces in 
   assert.deepEqual(t.front.order(t.front.top), ["vibe-top-left", "mode-switch", "vibe-top-actions"], "and is left exactly as it was");
   assert.equal(byId(t, "vibe-chat-toggle").parentNode.className.includes("vibe-top-actions"), true);
   assert.deepEqual(page.querySelector(".today-top").children.map((child) => child.id || child.className.split(" ")[0]), ["vibe-hero", "today-summary"], "the greeting, and the chips beside it");
-  assert.deepEqual(page.querySelector(".today-box").children.map((child) => child.id || child.className.split(" ")[0]).filter((id) => id.startsWith("vibe-")), ["vibe-compose", "vibe-flow", "vibe-feedback", "vibe-sparks", "vibe-decisions", "vibe-gate", "vibe-last"], "the box that builds or talks, its wait, its answer, the starting points, what decided, what holds the agents back");
+  assert.deepEqual(page.querySelector(".today-box").children.map((child) => child.id || child.className.split(" ")[0]).filter((id) => id.startsWith("vibe-")), ["vibe-compose", "vibe-hint", "vibe-flow", "vibe-feedback", "vibe-sparks", "vibe-decisions", "vibe-gate", "vibe-last"], "the box that builds or talks, the line that says its keys (under it, as the prototype's), its wait, its answer, the starting points, what decided, what holds the agents back");
+  assert.equal(byId(t, "vibe-build").querySelector(".today-key").textContent, "Ctrl Enter", "Build it carries its key, as the prototype's");
+  assert.equal(byId(t, "vibe-build").getAttribute("aria-keyshortcuts"), "Control+Enter");
   // The box is still Vibe's own element: Build it, Suggest a next step and the drafts keep working through vibe.js.
   assert.equal(byId(t, "vibe-compose").parentNode, page.querySelector(".today-box"));
   // The layer that is left behind holds what v1 had in it, minus what moved.
@@ -82,7 +84,7 @@ test("hide() keeps the page for next time, show() does not build a second one, a
 
 test("the summary says what is going on, and its need chip is the popover's anchor, the same node from one push to the next", async () => {
   const t = await up();
-  assert.deepEqual(chips(t), ["4 need you", "1 running", "2 to review"], "the digest's count (plans are not in it), what is live, what is ready or being checked");
+  assert.deepEqual(chips(t), ["4 need you", "1 running", "3 to review"], "the digest's count (plans are not in it), what is live, what is under Review (a result, what is being checked, a plan)");
   const need = byId(t, "today-summary").querySelector('[data-chip="need"]');
   assert.equal(need.tagName, "button");
   assert.equal(need.getAttribute("aria-haspopup"), "dialog");
@@ -99,16 +101,16 @@ test("the summary says what is going on, and its need chip is the popover's anch
   assert.deepEqual(chips(t), ["All clear"], "nothing waits, nothing runs: one calm chip");
 });
 
-test("four groups, one line each, in their order: Needs you, Running, Review, Done today", async () => {
+test("four groups, one line each, in their order: Needs you, Running, Review, Done", async () => {
   const t = await up();
   const shown = byId(t, "today-board").querySelector(".today-groups").children.map((node) => node.dataset.group);
   assert.deepEqual(shown, ["needs", "running", "review", "done"]);
-  assert.deepEqual(byId(t, "today-board").querySelector(".today-groups").children.map((node) => node.getAttribute("aria-label")), ["Needs you", "Running", "Review", "Done today"]);
-  assert.deepEqual(keysOf(t, "needs"), ["need:question:q1", "need:approval:t5", "need:blocked:t6", "need:review:t7"]);
+  assert.deepEqual(byId(t, "today-board").querySelector(".today-groups").children.map((node) => node.getAttribute("aria-label")), ["Needs you", "Running", "Review", "Done"], "the prototype's four columns (Done holds what finished today)");
+  assert.deepEqual(keysOf(t, "needs"), ["need:question:q1", "need:approval:t5", "need:blocked:t6"]);
   assert.deepEqual(keysOf(t, "running"), ["run:t3", "next:t9"]);
-  assert.deepEqual(keysOf(t, "review"), ["check:t8", "plan:pl1"]);
+  assert.deepEqual(keysOf(t, "review"), ["need:review:t7", "check:t8", "plan:pl1"], "a result ready to review first, then what is being checked, then the plan");
   assert.deepEqual(keysOf(t, "done"), ["done:t20", "done:t21"]);
-  assert.deepEqual(group(t, "needs").querySelectorAll("h3 .today-count").map((node) => node.textContent), ["4"], "each group says how many");
+  assert.deepEqual(group(t, "needs").querySelectorAll("h3 .today-count").map((node) => node.textContent), ["3"], "each group says how many");
   assert.deepEqual(group(t, "done").querySelectorAll("h3 .today-count").map((node) => node.textContent), ["2"]);
   assert.equal(group(t, "done").querySelector(".today-more"), null, "no 'more' while everything fits");
   // The feed is what the assistant already noticed.
@@ -117,17 +119,22 @@ test("four groups, one line each, in their order: Needs you, Running, Review, Do
   assert.deepEqual(latest.querySelectorAll(".today-latest-row").map((row) => row.textContent), ["Finished the typo fix and checked it.10 min ago"]);
 });
 
-test("a group with nothing in it is not drawn, and a calm board says so in words", async () => {
+test("all four columns show while a project is open, each saying when it is empty, as the prototype's board; no project says what to do", async () => {
   const t = await up({ data: board({ running: [job()] }) });
-  assert.deepEqual(byId(t, "today-board").querySelector(".today-groups").children.map((node) => node.dataset.group), ["running"]);
-  assert.equal(byId(t, "today-quiet").hidden, true);
+  const columns = () => byId(t, "today-board").querySelector(".today-groups").children;
+  const empty = () => Object.fromEntries(columns().map((node) => [node.dataset.group, node.querySelector(".today-col-empty").hidden ? null : node.querySelector(".today-col-empty").textContent]));
+  assert.deepEqual(columns().map((node) => node.dataset.group), ["needs", "running", "review", "done"]);
+  assert.deepEqual(empty(), { needs: "Nothing is waiting on you.", running: null, review: "Nothing to review.", done: "Nothing finished yet today." });
+  assert.equal(byId(t, "today-quiet").hidden, true, "the columns say it; no second line");
+  const before = columns();
   await t.push(board());
-  assert.deepEqual(byId(t, "today-board").querySelector(".today-groups").children.length, 0);
-  assert.equal(byId(t, "today-quiet").hidden, false);
-  assert.match(byId(t, "today-quiet").textContent, /^All quiet\. Nothing is waiting on you and nothing is running\./);
+  assert.deepEqual(columns().map((node, index) => node === before[index]), [true, true, true, true], "the columns stay put");
+  assert.deepEqual(empty(), { needs: "Nothing is waiting on you.", running: "Nothing is running.", review: "Nothing to review.", done: "Nothing finished yet today." });
+  assert.equal(byId(t, "today-quiet").hidden, true);
   assert.equal(byId(t, "today-quiet").getAttribute("role"), "status");
   await t.push(board({ projectId: null, projectName: "" }));
-  assert.match(byId(t, "today-quiet").textContent, /^Pick a project to begin/, "no project is its own empty state, not 'all quiet'");
+  assert.equal(columns().length, 0, "no project, no columns");
+  assert.match(byId(t, "today-quiet").textContent, /^Pick a project to begin/, "no project is its own empty state");
   assert.equal(byId(t, "today-quiet").hidden, false);
 });
 
@@ -142,7 +149,7 @@ test("detail follows html[data-detail]: titles only, plus status, or everything"
   // + status (the default)
   t.documentElement.dataset.detail = "status";
   t.window.dispatchEvent({ type: "mefi:appearance" }); await t.settle();
-  assert.match(running().querySelector(".today-card-meta").textContent, /building · started 2 min ago/);
+  assert.equal(running().querySelector(".today-card-meta").textContent, "2 min · building");
   assert.equal(running().querySelector(".today-bar i").style.width, "40%", "a bar for a job that reports its progress");
   assert.deepEqual(question().querySelectorAll(".today-card-quick [data-option]").map((node) => node.dataset.option), ["yes", "no"], "the first two options that are an answer by themselves");
   assert.equal(question().querySelector(".today-card-more"), null);
@@ -184,15 +191,46 @@ test("a need answers in place with its first two options, or opens the Inbox on 
   assert.equal(decided.className.includes("is-decided"), true, "the card becomes its Decided line, in the same place");
   assert.match(decided.textContent, /^Decided · Answered: Yes, ignore case/);
   assert.equal(byId(t, "today-summary").querySelector('[data-chip="need"]').querySelector(".today-chip-text").textContent, "3 need you", "and the count moved at once");
-  assert.deepEqual(group(t, "needs").querySelectorAll("h3 .today-count").map((node) => node.textContent), ["3"]);
-  // "More" opens the Inbox on that card; a thing with no quick answer has one button that does the same.
+  assert.deepEqual(group(t, "needs").querySelectorAll("h3 .today-count").map((node) => node.textContent), ["2"]);
+  // A thing with no options of its own offers the app's first two actions for it, as the prototype's card offers its answers; More opens the Inbox on it.
   const approval = cardsOf(t, "needs").find((node) => node.dataset.key === "need:approval:t5");
-  assert.equal(approval.querySelector(".today-card-quick"), null);
-  await approval.querySelector(".today-btn").click(); await t.settle();
+  assert.deepEqual(approval.querySelectorAll(".today-card-quick button").map((node) => node.textContent), ["Approve build", "Drop it", "More"]);
+  assert.equal(approval.querySelector(".today-card-q").textContent, "Your permission settings require approval of this brief before it can start.", "what holds it, in the card's own box");
+  await approval.querySelector('[data-action="approve"]').click(); await t.settle();
+  assert.deepEqual(t.callsOf("backlogControl"), [{ action: "approve", taskId: "t5", projectId: "p1", expectedScope: "scope-5" }], "the same call the Inbox makes");
+  const blocked = cardsOf(t, "needs").find((node) => node.dataset.key === "need:blocked:t6");
+  assert.deepEqual(blocked.querySelectorAll(".today-card-quick button").map((node) => node.textContent), ["Try again", "It's done", "More"]);
+  assert.equal(blocked.querySelector(".today-card-open").textContent, "Fix the login redirect loop");
+  assert.equal(blocked.querySelector(".today-card-meta").textContent, "Same failure repeating · 6 min");
+  await blocked.querySelectorAll(".today-card-quick button").at(-1).click(); await t.settle();
   assert.equal(t.inbox().hidden, false);
-  assert.equal(t.inbox().querySelector(".is-current").dataset.key, "approval:t5");
-  assert.equal(approval.querySelector(".today-btn").textContent, "Review");
-  assert.equal(cardsOf(t, "needs").find((node) => node.dataset.key === "need:blocked:t6").querySelector(".today-btn").textContent, "Decide");
+  assert.equal(t.inbox().querySelector(".is-current").dataset.key, "blocked:t6");
+});
+
+test("a card that waits on you is its session, as the prototype's board: the task, what it asks and how long, the question in its own box", async () => {
+  const t = await up();
+  const card = cardsOf(t, "needs")[0];
+  assert.equal(card.querySelector(".today-card-open").textContent, "Search notes by tag", "the task it comes from is the title");
+  assert.equal(card.querySelector(".today-card-meta").textContent, "Asking a question · 4 min");
+  assert.equal(card.querySelector(".today-card-q").textContent, "Should #Work and #work count as the same tag?");
+  assert.deepEqual(card.querySelectorAll(".today-card-quick button").map((node) => [node.textContent, node.className.includes("primary")]), [["Yes, ignore case", true], ["Keep them separate", false], ["More", false]], "the first answer is the filled one");
+  // titles: the title alone.
+  t.documentElement.dataset.detail = "titles"; t.window.dispatchEvent({ type: "mefi:appearance" }); await t.settle();
+  assert.equal(cardsOf(t, "needs")[0].querySelector(".today-card-q"), null);
+});
+
+test("a result to review is a card under Review that opens on what it changed; one still being checked opens its session", async () => {
+  const sessions = [];
+  const t = await up({ extras: { MefiSessions: { active: () => true, open: (...args) => { sessions.push(plain(args)); return true; } } }, data: everything({ needs: [needReview(), needReview({ id: "t11", title: "Still being checked", checking: true })] }) });
+  const [ready, checking] = cardsOf(t, "review");
+  assert.equal(ready.dataset.key, "need:review:t7");
+  assert.equal(ready.querySelector(".today-card-meta").textContent, "Ready to review · 6 min");
+  assert.equal(ready.querySelector(".today-card-quick"), null, "Review's cards are lines to open, as the prototype's");
+  await ready.querySelector(".today-card-open").click();
+  assert.equal(checking.querySelector(".today-card-meta").textContent, "Checking its work · 6 min");
+  await checking.querySelector(".today-card-open").click();
+  assert.deepEqual(sessions, [["t7", { preview: true, tab: "changes" }], ["t11", { preview: true }]]);
+  assert.deepEqual(group(t, "review").querySelectorAll("h3 .today-count").map((node) => node.textContent), ["3"], "the two results and the one being checked");
 });
 
 test("the quick answers are the first two options that answer by themselves; More opens the Inbox on the card", async () => {
@@ -263,8 +301,8 @@ test("the Build host: the same board as a page a pinned tab or Search opens", as
   await t.settle();
   assert.deepEqual(t.nav.claimed, ["today"]);
   assert.equal(byId(t, "today-overlay").hidden, false);
-  assert.deepEqual(chips(t, "today-overlay-summary"), ["4 need you", "1 running", "2 to review"]);
-  assert.deepEqual(keysOf(t, "needs", "today-overlay-board"), ["need:question:q1", "need:approval:t5", "need:blocked:t6", "need:review:t7"]);
+  assert.deepEqual(chips(t, "today-overlay-summary"), ["4 need you", "1 running", "3 to review"]);
+  assert.deepEqual(keysOf(t, "needs", "today-overlay-board"), ["need:question:q1", "need:approval:t5", "need:blocked:t6"]);
   assert.equal(record.isOpen(), true);
   assert.equal(t.timers.filter((timer) => timer.every && !timer.cancelled).length, 1, "one slow clock, for the page that is showing");
   // The same answer, the same call.

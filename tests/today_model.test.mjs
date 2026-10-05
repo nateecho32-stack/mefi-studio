@@ -22,9 +22,10 @@ test("the count is the digest's list, one per entry, and a plan waiting on its o
   const picture = build(data);
   assert.equal(picture.count, 5, "five entries in the digest; the plan is not one of them");
   assert.deepEqual(picture.items.map((item) => item.key), ["question:q1", "approval:t5", "blocked:t6", "review:t7", "family:t10"]);
-  assert.deepEqual(picture.board.needs.map((card) => card.key), ["need:question:q1", "need:approval:t5", "need:blocked:t6", "need:review:t7", "need:family:t10"], "Needs you is exactly the Inbox");
-  assert.deepEqual(picture.board.review.map((card) => card.key), ["plan:pl1"], "the plan waits under Review");
-  assert.match(picture.board.review[0].meta, /^Plan · its specification waits for your approval$/);
+  assert.deepEqual(picture.board.needs.map((card) => card.key), ["need:question:q1", "need:approval:t5", "need:blocked:t6", "need:family:t10"], "Needs you is the Inbox's decisions, as the prototype's column");
+  assert.deepEqual(picture.board.review.map((card) => card.key), ["need:review:t7", "plan:pl1"], "a result to review is under Review, as the prototype's board has it (still in the Inbox and the count), and the plan waits there too");
+  assert.equal(picture.board.review[0].meta, "Ready to review · 6 min");
+  assert.match(picture.board.review[1].meta, /^Plan · its specification waits for your approval$/);
   assert.equal(build(board()).count, 0);
   assert.equal(build(null).count, 0, "no picture at all is nothing waiting");
 });
@@ -100,14 +101,14 @@ test("the four groups: running, what is being checked, what finished today, and 
   assert.deepEqual(groups.running.map((card) => [card.key, card.tone]), [["run:t2", "live"], ["run:t3", "live"], ["next:t4", "next"], ["next:t5", "next"]], "running jobs, then the next two in line");
   assert.equal(groups.running[0].progress, 0.4);
   assert.equal(groups.running[1].progress, null, "no progress known is a bar that only flows");
-  assert.match(groups.running[0].meta, /^building · started 5 min ago$/);
+  assert.equal(groups.running[0].meta, "5 min · building", "for how long, and what it is doing (the prototype's \"builder-2 · 40 min · step 4/5\"; this run names no worker)");
   assert.equal(groups.running[2].meta, "up next · waits for a free worker");
   assert.equal(groups.running[3].meta, "waiting for what it depends on");
   assert.deepEqual(groups.review.map((card) => card.key), ["check:t7"]);
-  assert.equal(groups.review[0].meta, "checking its work");
+  assert.equal(groups.review[0].meta, "Checking its work");
   assert.deepEqual(groups.done.map((card) => card.key), ["done:d1", "done:d2"], "since midnight or the last twelve hours, newest first; a drop is not finished work");
-  assert.match(groups.done[0].meta, /^verified · /);
-  assert.match(groups.done[1].meta, /^done · /);
+  assert.match(groups.done[0].meta, /^Verified · /);
+  assert.match(groups.done[1].meta, /^Done · /);
   assert.equal(groups.done[0].more[0], "All checks passed");
   assert.equal(groups.needs.length, 1);
   // A night owl: at 01:00 the morning's work is "today" for the twelve hours before it, not only since midnight.
@@ -116,11 +117,14 @@ test("the four groups: running, what is being checked, what finished today, and 
   assert.deepEqual(owl.board.done.map((card) => card.key), ["done:e1"], "eight hours ago is still today's work; thirteen is not");
 });
 
-test("a task being checked that also waits on you (a long check) is listed once, under Needs you", () => {
+test("a task being checked that also waits on you (a long check) is listed once, under Review, and says it is still checking", () => {
   const data = board({ needs: [needReview({ id: "t7", checking: true })], checking: [{ id: "t7", title: "Rename the settings tab", status: "awaiting_verification" }, { id: "t8", title: "Another one", status: "verifying" }] });
   const { board: groups, count } = build(data);
-  assert.equal(count, 1);
-  assert.deepEqual(groups.review.map((card) => card.key), ["check:t8"]);
+  assert.equal(count, 1, "it is still in the Inbox's count");
+  assert.deepEqual(groups.needs.map((card) => card.key), []);
+  assert.deepEqual(groups.review.map((card) => card.key), ["need:review:t7", "check:t8"]);
+  assert.match(groups.review[0].meta, /^Checking its work/);
+  assert.equal(groups.review[0].checking, true, "so it opens its session, not its changes");
 });
 
 test("more than six finished today show six and say how many more", () => {
@@ -151,8 +155,8 @@ test("the detail level decides what a card carries: titles only, plus status, or
   assert.deepEqual(status.needs[0].quick.map((option) => option.id), ["yes", "no"], "status: the first two options that answer at once");
   assert.deepEqual(status.needs[0].more, [], "status: one line, not the detail");
   assert.deepEqual(all.needs[0].more, ["Mefi suggests: Yes, ignore case, because it is what people expect", "1 failing"], "everything: what Mefi suggests and the last line the agent printed");
-  assert.equal(status.running[0].meta, "OpenCode · building · started 1 min ago", "the tool that works on it is on the line");
-  assert.deepEqual(status.running[0].more, ["editing src/tags.ts"], "the live step is there, for the level that draws it");
+  assert.equal(status.running[0].meta, "OpenCode · 1 min · editing src/tags.ts", "the worker on it, for how long, and its live step, as the prototype's line");
+  assert.deepEqual(status.running[0].more, [], "the step is on the line itself, so nothing repeats it");
 });
 
 test("what was handled a moment ago is out of the count, and its decided line keeps its place until it has been seen", () => {
@@ -176,7 +180,7 @@ test("what was handled a moment ago is out of the count, and its decided line ke
   assert.deepEqual(hidden.items.map((item) => item.key), ["question:q1", "blocked:t6"]);
 });
 
-test("nothing at all is a calm board, not four empty columns", () => {
+test("nothing at all is a calm board in the model (the page draws the four columns, each saying it is empty)", () => {
   const picture = build(board());
   assert.equal(picture.quiet, true);
   assert.deepEqual(Object.values(picture.board).slice(0, 4).map((cards) => cards.length), [0, 0, 0, 0]);
@@ -223,9 +227,9 @@ test("a layout other than v2 is also off", async () => {
 test("started in v2 it registers its routes, asks Vibe for its data once, and listens for what it needs", async () => {
   const t = await loadToday({ data: board({ needs: [needQuestion()] }) });
   assert.equal(t.today.isOn(), true);
-  assert.deepEqual(t.nav.registered.map((record) => [record.id, record.kind, record.layer ?? null, record.section]), [["today", "overlay", "sheet", "home"], ["inbox", "overlay", "sheet", "work"], ["inbox-open", "action", null, "home"]]);
+  assert.deepEqual(t.nav.registered.map((record) => [record.id, record.kind, record.layer ?? null, record.section]), [["today", "overlay", "sheet", "home"], ["inbox", "overlay", "sheet", "work"], ["home-chat", "action", null, "home"], ["inbox-open", "action", null, "home"]]);
   assert.equal(t.vibe.watchers.size, 1, "one watcher on Vibe's data");
-  assert.deepEqual(Object.keys(t.events).sort(), ["keydown", "mefi:appearance", "mefi:layout", "mefi:project-changed"]);
+  assert.deepEqual(Object.keys(t.events).sort(), ["keydown", "mefi:appearance", "mefi:layout", "mefi:nav", "mefi:project-changed"], "the navigation says which view of Home is up (Build's Today or the conversation)");
   assert.equal(t.today.count(), 1);
   assert.equal(t.today.start(), false, "starting again changes nothing");
   assert.equal(t.vibe.watchers.size, 1);
@@ -233,4 +237,13 @@ test("started in v2 it registers its routes, asks Vibe for its data once, and li
   assert.equal(today.hidden(), true, "Vibe's Home is Today already, so Search lists it once");
   const build = await loadToday({ mode: "build" });
   assert.equal(build.nav.registered.find((record) => record.id === "today").hidden(), false, "in Build it is the pinned tab's page");
+});
+
+test("a run that waits on you is under Needs you only, not under Running too", () => {
+  const picture = build(board({
+    needs: [needQuestion({ id: "q9", title: "Should the empty state also appear for a search?", context: { taskId: "t2", taskTitle: "Add an empty state" } })],
+    running: [{ taskId: "t2", title: "Add an empty state", phase: "building", startedAt: NOW - 60000 }, { taskId: "t3", title: "Search notes by tag", phase: "building", startedAt: NOW - 60000 }],
+  }));
+  assert.ok(picture.board.needs.some((card) => card.taskId === "t2"), "the question's task waits under Needs you");
+  assert.deepEqual(picture.board.running.filter((card) => card.tone === "live").map((card) => card.taskId), ["t3"], "and only the other run is Running");
 });

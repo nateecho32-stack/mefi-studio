@@ -11,7 +11,11 @@
   --t-f12: max(12px, calc(12px * var(--text-scale, 1)));
   --t-f13: max(12px, calc(13px * var(--text-scale, 1)));
   --t-f14: max(12px, calc(14px * var(--text-scale, 1)));
+  --t-f125: max(12px, calc(12.5px * var(--text-scale, 1)));
+  --t-f135: max(12px, calc(13.5px * var(--text-scale, 1)));
+  --t-f145: max(12px, calc(14.5px * var(--text-scale, 1)));
   --t-f15: max(12px, calc(15px * var(--text-scale, 1)));
+  --t-f16: max(12px, calc(16px * var(--text-scale, 1)));
   --t-f24: max(12px, calc(24px * var(--text-scale, 1)));
   --t-ink: var(--ivory);
   --t-soft: var(--muted);
@@ -96,6 +100,32 @@
 .today :is(.vibe-evolution-note, .vibe-evolution-why, .vibe-evolution-stale, .vibe-evolution-facts, .vibe-evolution-num, .vibe-evolution-file, .vibe-evolution-suggestion > p, .vibe-evolution-suggestion h3, .vibe-evolution-actions .vibe-btn, .vibe-inline-error, .vibe-ask-link) { font-size: var(--t-f12); }
 .today .vibe-evolution-suggestion h3, .today .vibe-evolution-suggestion > p { font-size: var(--t-f13); }
 .today :is(.autonomy-chip, .autonomy-note) { font-size: var(--t-f12); }
+
+/* ---- Vibe's Today as the 0.5 prototype draws it ------------------------------------------------------------------------------------------
+   The greeting says which mode it is; the box is the words with one row of controls under them (Add files, the permission mode, then Talk
+   it over and Build it with its key), the keys' line under the box; each card that waits on you is its session, with the question in a box
+   of its own and the first two answers; every column says when it is empty. */
+#vibe-layer[data-today="on"] .today .vibe-kicker::after { content: " · Vibe"; }
+/* The question in plain ink, as the prototype's (the front door's gradient lettering stays the front door's own, in v1). */
+#vibe-layer[data-today="on"] .today .vibe-hero h1 { background: none; -webkit-background-clip: border-box; background-clip: border-box; color: var(--t-ink); }
+#vibe-layer[data-today="on"] .today .vibe-compose { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 8px; row-gap: 6px; padding: 14px 16px 12px; }
+#vibe-layer[data-today="on"] .today .vibe-compose > textarea { grid-column: 1 / -1; grid-row: 1; min-height: 56px; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+#vibe-layer[data-today="on"] .today .vibe-compose > .file-input-tools { display: contents; }
+#vibe-layer[data-today="on"] .today .vibe-compose > .file-input-tools > [role="status"] { grid-column: 1 / -1; grid-row: 2; min-width: 0; color: var(--t-soft); font-size: var(--t-f12); }
+#vibe-layer[data-today="on"] .today .vibe-compose > .file-input-tools > button,
+#vibe-layer[data-today="on"] .today .vibe-compose .autonomy-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; height: 28px; padding: 0 9px; border: 1px solid var(--hairline-strong); border-radius: 9px; background: transparent; color: var(--t-soft); font: 500 var(--t-f125)/1 var(--font-ui); white-space: nowrap; }
+#vibe-layer[data-today="on"] .today .vibe-compose > .file-input-tools > button { grid-column: 1; grid-row: 3; justify-self: start; }
+#vibe-layer[data-today="on"] .today .vibe-compose > .vibe-compose-foot { grid-column: 2; grid-row: 3; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; margin: 0; }
+#vibe-layer[data-today="on"] .today .vibe-compose #vibe-talk { margin-left: auto; }
+#vibe-layer[data-today="on"] .today .vibe-compose :is(#vibe-talk, #vibe-build) { min-height: 32px; height: 32px; padding: 0 13px; border-radius: 10px; font-size: var(--t-f13); }
+#vibe-layer[data-today="on"] .today #vibe-build .today-key { min-width: 17px; height: 20px; padding: 0 5px; border: 1px solid color-mix(in srgb, currentColor 55%, transparent); border-radius: 6px; background: transparent; color: inherit; font: 600 var(--t-f12)/1 var(--font-ui); }
+#vibe-layer[data-today="on"] .today-box > .vibe-hint { display: block; margin: -2px 2px 0; color: var(--t-soft); font-size: var(--t-f125); line-height: 1.6; }
+#vibe-layer[data-today="on"] .today-box > .vibe-hint .key { min-width: 0; height: auto; padding: 0; border: 0; background: none; box-shadow: none; color: inherit; font: inherit; }
+/* A card that waits on you: the question in its own warm box (the prototype's .bq), the answers under it. */
+.today-card-q { margin: 0; padding: 7px 9px; border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent); border-radius: 9px; background: color-mix(in srgb, var(--warn) 7%, transparent); color: var(--t-ink); font-size: var(--t-f13); line-height: 1.45; overflow-wrap: anywhere; }
+.today-card[data-tone="bad"] .today-card-q { border-color: color-mix(in srgb, var(--bad) 35%, transparent); background: color-mix(in srgb, var(--bad) 7%, transparent); }
+.today-col-empty { margin: 0; padding: 6px 6px 8px; color: var(--t-soft); font-size: var(--t-f125); }
+.today-col-empty[hidden] { display: none; }
 
 /* ---- the board: one line per session, in four groups ------------------------------------------------------------ */
 .today-quiet { margin: 6px 0 0; padding: 0; color: var(--t-faint); font-size: var(--t-f14); line-height: 1.5; }
@@ -261,4 +291,133 @@
   .today-scroll { padding-inline: 14px; }
   .today .vibe-evolution-links { margin-left: 0; }
   .today-inbox-keys { display: none; }
+}
+
+/* ---- Build's Home in v2: Today as the 0.5 prototype draws it (renderer/today.js mountHome) --------------------------------------------
+   The greeting over the question, centred; Home's own box (workspace.js's form, borrowed) with one row of controls under the words;
+   the line that says the keys; the four ways to start and Suggest a next step; the first thing that needs you; then Running now and
+   Finished while you were away side by side. The classic page steps aside while it shows (it is the "chat" view of the same route).
+   Every selector starts at #workspace-layer or .today-b, so Home's own `.workspace button`, `.workspace kbd` and `.ws-*` rules never win here. */
+#workspace-layer[data-today="on"] > .ws-main { display: none; }
+#workspace-layer > .today-b { grid-area: 1 / 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; color: var(--t-ink); font-family: var(--font-ui);
+  background: radial-gradient(ellipse at 65% 0, var(--tint-gold-2), transparent 54%), linear-gradient(180deg, color-mix(in srgb, var(--bg) 46%, transparent), var(--frost-veil) 260px); }
+#workspace-layer > .today-b[hidden] { display: none; }
+#workspace-layer .today-b .today-b-scroll { padding: clamp(10px, 2.4vh, 26px) clamp(14px, 3vw, 28px) 32px; }
+.today-b-col { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; width: min(830px, 100%); margin: 0 auto; }
+.today-b-hero { display: grid; justify-items: center; padding-top: 22px; text-align: center; }
+.today-b-orb { display: block; width: 54px; height: 54px; margin: 0 0 12px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--ivory) 0 7%, var(--gold-bright) 24%, var(--gold) 56%, color-mix(in srgb, var(--gold) 12%, transparent) 74%);
+  box-shadow: 0 0 34px color-mix(in srgb, var(--gold) 40%, transparent); }
+.today-b-kicker { margin: 0; color: var(--t-soft); font-size: var(--t-f135); line-height: 1.4; }
+.today-b-title { max-width: 100%; margin: 2px 0 0; color: var(--t-ink); font: 650 max(20px, calc(30px * var(--text-scale, 1)))/1.2 var(--font-ui); letter-spacing: -.02em; text-wrap: balance; overflow-wrap: anywhere; }
+
+/* The box: the words first, then one row of controls, as the prototype's .big and .ctools. */
+.today-b-box { width: min(780px, 100%); margin: 20px auto 0; }
+#workspace-layer .today-b .ws-composer { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; margin: 0; padding: 14px 16px 12px; border: 1px solid var(--hairline-strong); border-radius: 18px; background: var(--surface-raised); box-shadow: none; overflow: visible; transition: border-color var(--motion-fast, 140ms), box-shadow var(--motion-fast, 140ms); }
+#workspace-layer .today-b .ws-composer:focus-within { border-color: var(--gold-bright); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold-bright) 12%, transparent); }
+#workspace-layer .today-b .ws-composer :is(.ws-compose-top, .ws-compose-bottom) { display: none; }
+#workspace-layer .today-b .ws-composer textarea { display: block; width: 100%; min-height: 56px; max-height: 40vh; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; outline: none; color: var(--t-ink); font: 400 var(--t-f16)/1.5 var(--font-ui); resize: none; }
+#workspace-layer .today-b .ws-composer textarea::placeholder { color: var(--t-soft); }
+/* Home's own Attach picture and Add files buttons are this row's one "Add files or an image"; their thumbnails and what they say stay under the words. */
+#workspace-layer .today-b .ws-composer :is(.composer-attach-button, .file-input-tools > button) { display: none; }
+#workspace-layer .today-b .ws-composer .composer-attach { padding: 0; font-size: var(--t-f12); }
+#workspace-layer .today-b .ws-composer .composer-attach:not(:has(.composer-thumb)):not(:has(.composer-attach-note:not(:empty))) { display: none; }
+#workspace-layer .today-b .ws-composer .file-input-tools { margin: 0; color: var(--t-soft); font-size: var(--t-f12); }
+.today-b-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px; min-width: 0; }
+#workspace-layer .today-b :is(.today-b-cc, .today-b-autonomy .autonomy-chip) { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; height: 28px; padding: 0 9px; border: 1px solid var(--hairline-strong); border-radius: 9px; background: transparent; color: var(--t-soft); font: 500 var(--t-f125)/1 var(--font-ui); white-space: nowrap; }
+#workspace-layer .today-b :is(.today-b-cc, .today-b-autonomy .autonomy-chip):hover:not(:disabled) { background: color-mix(in srgb, var(--ivory) 6%, transparent); color: var(--t-ink); }
+#workspace-layer .today-b .today-b-cc .glyph { width: 14px; height: 14px; }
+.today-b-autonomy { position: relative; display: inline-flex; align-items: center; min-width: 0; }
+#workspace-layer .today-b .today-b-autonomy .autonomy-note:empty { display: none; }
+#workspace-layer .today-b .today-b-autonomy :is(.autonomy-note, .autonomy-popover, .autonomy-popover button) { font-size: var(--t-f12); }
+#workspace-layer .today-b .today-b-talk { display: inline-flex; align-items: center; gap: 7px; min-height: 32px; height: 32px; margin-left: auto; padding: 0 13px; border: 1px solid var(--hairline-strong); border-radius: 10px; background: color-mix(in srgb, var(--ivory) 3%, transparent); color: var(--t-ink); font: 600 var(--t-f13)/1 var(--font-ui); white-space: nowrap; }
+#workspace-layer .today-b .today-b-talk:hover:not(:disabled) { background: color-mix(in srgb, var(--ivory) 8%, transparent); }
+#workspace-layer .today-b .today-b-talk .glyph { width: 15px; height: 15px; }
+#workspace-layer .today-b .today-b-send { display: inline-flex; align-items: center; gap: 7px; min-height: 32px; height: 32px; padding: 0 13px; border: 1px solid transparent; border-radius: 10px; background: linear-gradient(135deg, var(--gold-bright), var(--gold)); color: var(--ink); font: 650 var(--t-f13)/1 var(--font-ui); white-space: nowrap; }
+#workspace-layer .today-b .today-b-send:hover:not(:disabled) { filter: brightness(1.08); }
+#workspace-layer .today-b .today-key { display: inline-grid; place-items: center; min-width: 17px; height: 20px; padding: 0 5px; border: 1px solid color-mix(in srgb, var(--ivory) 22%, transparent); border-radius: 6px; background: color-mix(in srgb, var(--ivory) 4%, transparent); color: var(--t-soft); font: 600 var(--t-f12)/1 var(--font-ui); }
+/* The key inside the filled button takes the button's ink, as everywhere in the frame. */
+#workspace-layer .today-b .today-b-send .today-key { border-color: color-mix(in srgb, currentColor 55%, transparent); background: transparent; color: inherit; }
+#workspace-layer .today-b :is(.today-b-talk, .today-b-send, .today-b-cc):disabled { opacity: .5; cursor: not-allowed; }
+.today-b-hint { margin: 10px 0 0; color: var(--t-soft); font-size: var(--t-f125); line-height: 1.6; text-align: center; }
+.today-b-note { margin: 8px 0 0; color: var(--t-warn); font-size: var(--t-f13); text-align: center; }
+.today-b-note[hidden] { display: none; }
+/* How a send went (Home's own line and its View task), under the box. */
+#workspace-layer .today-b .ws-feedback-row { justify-content: center; gap: 4px 10px; margin-top: 6px; }
+#workspace-layer .today-b .ws-feedback-row:not(:has(.ws-feedback:not(:empty))):not(:has(button:not([hidden]))) { display: none; }
+#workspace-layer .today-b .ws-feedback { min-height: 0; margin: 0; color: var(--t-soft); font-size: var(--t-f13); text-align: center; }
+#workspace-layer .today-b .ws-feedback.error { color: var(--t-bad); }
+#workspace-layer .today-b .ws-feedback-row button { min-height: 28px; margin: 0; padding: 0 10px; font-size: var(--t-f12); }
+
+/* The four ways to start and Suggest a next step, centred under the box. */
+.today-b-starts { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 14px; }
+#workspace-layer .today-b .today-b-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; height: 30px; padding: 0 13px; border: 1px solid var(--hairline-strong); border-radius: 999px; background: transparent; color: var(--t-soft); font: 500 var(--t-f13)/1 var(--font-ui); white-space: nowrap; }
+#workspace-layer .today-b .today-b-chip:hover:not(:disabled), #workspace-layer .today-b .today-b-chip[aria-pressed="true"] { border-color: var(--gold); color: var(--gold-bright); }
+#workspace-layer .today-b .today-b-chip[aria-pressed="true"] { background: color-mix(in srgb, var(--gold) 12%, transparent); }
+#workspace-layer .today-b .today-b-chip.is-suggest { border-color: color-mix(in srgb, var(--gold) 55%, transparent); color: var(--gold-bright); }
+#workspace-layer .today-b .today-b-chip .glyph { width: 14px; height: 14px; }
+.today-b-sugs { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin-top: 12px; padding: 12px 14px; border: 1px solid var(--hairline); border-radius: 14px; background: var(--surface-raised); }
+.today-b-sugs[hidden] { display: none; }
+.today-b-sugs-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--t-ink); font-size: var(--t-f13); }
+.today-b-sugs-note { margin: 0; color: var(--t-soft); font-size: var(--t-f13); }
+.today-b-sugs-note.is-bad { color: var(--t-bad); }
+.today-b-sug { display: grid; gap: 4px; padding-top: 8px; border-top: 1px solid var(--hairline); }
+.today-b-sug h4 { margin: 0; color: var(--t-ink); font: 650 var(--t-f13)/1.35 var(--font-ui); }
+.today-b-sug p { margin: 0; color: var(--t-soft); font-size: var(--t-f13); line-height: 1.5; overflow-wrap: anywhere; }
+.today-b-sug .today-btn { justify-self: start; }
+.today-b-sug.is-used { opacity: .72; }
+
+/* Needs you: the first thing that waits on you, the prototype's .ask card. */
+.today-b-sect { margin-top: 20px; min-width: 0; }
+.today-b-h { margin: 0 2px 8px; color: var(--t-soft); font: 650 var(--t-f125)/1.3 var(--font-ui); }
+.today-b-h.is-need { color: var(--t-warn); }
+.today-b-ask { display: grid; grid-template-columns: minmax(0, 1fr); padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--warn) 55%, transparent); border-radius: 13px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--warn) 9%, var(--surface-raised)), color-mix(in srgb, var(--warn) 4%, var(--surface-raised))); }
+.today-b-ask[data-tone="bad"] { border-color: color-mix(in srgb, var(--bad) 55%, transparent); background: linear-gradient(180deg, color-mix(in srgb, var(--bad) 9%, var(--surface-raised)), color-mix(in srgb, var(--bad) 4%, var(--surface-raised))); }
+.today-b-ask.is-busy { opacity: .75; }
+.today-b-ask-k { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--t-warn); font: 650 var(--t-f125)/1.35 var(--font-ui); }
+.today-b-ask[data-tone="bad"] .today-b-ask-k { color: var(--t-bad); }
+.today-b-ask-k > b { min-width: 0; overflow-wrap: anywhere; font-weight: 650; }
+.today-b-ask-k .today-need-glyph { width: 16px; height: 16px; color: currentColor; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.today-b-ask-q { margin: 6px 0 10px; color: var(--t-ink); font-size: var(--t-f145); line-height: 1.5; overflow-wrap: anywhere; }
+.today-b-opts { display: flex; flex-wrap: wrap; gap: 8px; }
+#workspace-layer .today-b .today-b-opts .today-btn { min-height: 28px; padding: 4px 10px; border-radius: 9px; font-size: var(--t-f125); white-space: normal; text-align: left; }
+#workspace-layer .today-b .today-btn.primary { border-color: transparent; background: linear-gradient(135deg, var(--gold-bright), var(--gold)); color: var(--ink); }
+.today-b-need > .today-need.is-decided { padding: 12px 14px; }
+.today-b-clear { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 1px solid var(--hairline); border-radius: 14px; background: var(--surface-raised); color: var(--t-soft); font-size: var(--t-f135); line-height: 1.5; }
+.today-b-clear b { color: var(--t-ink); font-weight: 600; }
+
+/* Running now and Finished while you were away: two cards of one-line rows. */
+.today-b-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 14px; margin-top: 20px; min-width: 0; }
+.today-b-half { min-width: 0; }
+.today-b-card { display: grid; grid-template-columns: minmax(0, 1fr); border: 1px solid var(--hairline); border-radius: 13px; background: var(--surface-raised); overflow: hidden; }
+#workspace-layer .today-b .today-b-row { display: flex; align-items: center; gap: 11px; width: 100%; min-height: 0; height: auto; padding: 10px 13px; border: 0; border-radius: 0; background: transparent; color: var(--t-ink); text-align: left; white-space: normal; }
+#workspace-layer .today-b .today-b-row:hover:not(:disabled) { background: color-mix(in srgb, var(--ivory) 4%, transparent); }
+#workspace-layer .today-b .today-b-row:disabled { opacity: 1; cursor: default; }
+#workspace-layer .today-b .today-b-row + .today-b-row { border-top: 1px solid color-mix(in srgb, var(--ivory) 6%, transparent); }
+.today-b-row-words { display: grid; flex: 1 1 auto; gap: 1px; min-width: 0; }
+.today-b-row-title { overflow: hidden; color: var(--t-ink); font: 600 var(--t-f135)/1.35 var(--font-ui); text-overflow: ellipsis; white-space: nowrap; }
+.today-b-row-meta { overflow: hidden; color: var(--t-soft); font-size: var(--t-f12); line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+.today-b-dot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--t-faint); }
+.today-b-row.is-run .today-b-dot { background: var(--live); box-shadow: 0 0 0 3px color-mix(in srgb, var(--live) 18%, transparent); }
+.today-b-row.is-rev .today-b-dot { background: var(--info); box-shadow: 0 0 0 3px color-mix(in srgb, var(--info) 16%, transparent); }
+.today-b-row.is-done .today-b-dot { background: transparent; border: 2px solid var(--good); }
+.today-b-bar { position: relative; flex: none; width: 70px; height: 5px; border-radius: 3px; background: color-mix(in srgb, var(--ivory) 8%, transparent); overflow: hidden; }
+.today-b-bar > i { position: absolute; inset: 0 auto 0 0; width: 34%; border-radius: inherit; background: var(--live); }
+@media (prefers-reduced-motion: no-preference) {
+  .today-b-bar > i { transition: width var(--motion-slow, 280ms) var(--ease-out, ease-out); }
+  .today-b-bar.is-flowing > i { animation: today-flow 1.8s var(--ease-in-out, ease-in-out) infinite; }
+}
+.today-b-end { flex: none; color: var(--t-soft); font-size: var(--t-f12); }
+.today-b-end.is-review { display: inline-flex; align-items: center; height: 28px; padding: 0 10px; border: 1px solid var(--hairline-strong); border-radius: 9px; color: var(--t-ink); font: 600 var(--t-f125)/1 var(--font-ui); }
+.today-b-empty { margin: 0; padding: 26px 16px; color: var(--t-soft); font-size: var(--t-f13); text-align: center; }
+#workspace-layer .today-b :is(.today-b-chip, .today-b-cc, .today-b-talk, .today-b-send, .today-b-row, .today-btn, .today-link):focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
+@media (max-height: 640px) {
+  .today-b-hero { padding-top: 4px; }
+  .today-b-orb { width: 40px; height: 40px; margin-bottom: 8px; }
+  .today-b-box { margin-top: 12px; }
+}
+@media (max-width: 680px) {
+  #workspace-layer .today-b .today-b-talk { margin-left: 0; }
+  .today-b-hint { text-align: left; }
 }
