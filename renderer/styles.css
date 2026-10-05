@@ -2147,7 +2147,6 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
 .dock-item .count { position: absolute; top: -9px; right: -2px; box-shadow: 0 0 0 2px var(--bg-deep); }
 .dock-item .dot { position: absolute; top: -1px; right: 0; }
 .dock-item .tone-dot { top: auto; bottom: -1px; box-shadow: 0 0 0 2px var(--bg-deep); }   /* the Explorer item: machine count above, assistant tone below */
-.dock-sep { width: 1px; height: 20px; background: var(--hairline); margin: 0 2px; flex: none; }
 
 /* small variant: the four cross-links in every sheet header */
 .dock-item.small { min-height: var(--ctl-h-sm); padding: 0 9px; gap: 6px; font-size: var(--fs-sm); border-radius: var(--r-pill); }
@@ -5142,12 +5141,9 @@ html[data-no-blur] #idle-hud .cmd-agents-pop { background: var(--panel-solid); b
 
   /* The dock folds to its More tools pill; hovering or tabbing into it
      brings every destination back. */
-  body.command-focus #idle-hud .cmd-dock > .dock-item,
-  body.command-focus #idle-hud .cmd-dock > .dock-sep { display: none; }
+  body.command-focus #idle-hud .cmd-dock > .dock-item { display: none; }
   body.command-focus #idle-hud .cmd-dock:hover > .dock-item,
-  body.command-focus #idle-hud .cmd-dock:focus-within > .dock-item,
-  body.command-focus #idle-hud .cmd-dock:hover > .dock-sep,
-  body.command-focus #idle-hud .cmd-dock:focus-within > .dock-sep { display: revert; }
+  body.command-focus #idle-hud .cmd-dock:focus-within > .dock-item { display: revert; }
 
   /* Legend and Usage keep their glyphs and drop their words. */
   body.command-focus #idle-hud .cmd-legend .pill .label,
@@ -5328,14 +5324,9 @@ html[data-rail-pinned] #app-rail .app-rail-head .count { position: static; margi
 #app-rail [aria-current="page"] { color: var(--ivory); background: color-mix(in srgb, var(--ivory) 9%, transparent); border-color: transparent; }
 #app-rail .app-rail-compose { margin-bottom: 2px; background: color-mix(in srgb, var(--ivory) 7%, transparent); color: var(--ivory); font-weight: 550; }
 #app-rail .app-rail-search { margin-bottom: 16px; }
-#app-rail .app-rail-recent { display: flex; flex-direction: column; margin-top: 26px; gap: 8px; }
 #app-rail .app-rail-heading { padding: 0 12px; color: var(--dim); font: 500 11px/1.5 var(--font-ui); }
 #app-rail .app-rail-friends { display: flex; flex-direction: column; gap: 1px; }
 #app-rail .app-rail-friends .app-rail-item { min-height: 34px; padding-left: 20px; font-size: 13px; }
-#app-rail-recent-list { display: flex; flex-direction: column; gap: 1px; }
-#app-rail .app-rail-recent-task { min-height: 36px; font-size: 13px; font-weight: 400; }
-#app-rail .app-rail-recent-task[aria-pressed="true"] { color: var(--ivory); background: color-mix(in srgb, var(--ivory) 6%, transparent); }
-#app-rail-recent-empty { padding: 0 12px; color: var(--dim); font-size: 12px; line-height: 1.5; white-space: normal; }
 
 /* A list taller than the window says so: its scrolled-off edges fade out. The
    fade depths follow the scroll position (a scroll-driven animation), so a
@@ -5356,7 +5347,6 @@ html[data-rail-pinned] #app-rail .app-rail-head .count { position: static; margi
 /* At rest the one-line buttons (brand, foot, pin) are icon only: their words,
    keycaps and counts wait for the rail to open instead of peeking out clipped. */
 html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) :is(.app-rail-brand, .app-rail-foot-item, .app-rail-pin, .app-rail-compose, .app-rail-search) :is(.label, .key, .app-rail-text, .count) { display: none; }
-html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-recent { display: none; }
 html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-friends { display: none; }
 /* ...except the foot's Settings and Help and the update dot: at rest they keep
    a word under the icon, as the sections above do, instead of bare glyphs. */

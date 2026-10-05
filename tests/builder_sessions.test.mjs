@@ -235,7 +235,7 @@ test("the workspace only hands New task, a task and a change request to the buil
   assert.match(source, /if \(window\.MefiBuilder\?\.active\?\.\(\)\) return window\.MefiBuilder\.requestChange\(task\);/);
   // And the rail hooks in nav.js: the menu decorates only when the builder owns it.
   const nav = await readFile(new URL("../renderer/nav.js", import.meta.url), "utf8");
-  assert.match(nav, /if \(window\.MefiBuilder\?\.paintRail\?\.\(\)\) return;\s*\n\s*const list = document\.getElementById\("app-rail-recent-list"\);/, "paintRecentTasks defers to the builder's list, and only when it painted one");
+  assert.match(nav, /function paintRecentTasks\(\) \{\s*\n(?:\s*\/\/[^\n]*\n)*\s*window\.MefiBuilder\?\.paintRail\?\.\(\);\s*\n\s*\}/, "paintRecentTasks is the builder's list and nothing else: the classic Recent tasks list is gone");
   assert.match(nav, /window\.MefiBuilder\?\.decorateRail\?\.\(\{ sections, foot \}\);\s*\n\s*paintBadges\(/, "renderRail hands the builder the sections and the foot");
 });
 

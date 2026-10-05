@@ -4,7 +4,6 @@ import vm from "node:vm";
 import { readFile } from "node:fs/promises";
 
 const source = await readFile(new URL("../renderer/onboarding.js", import.meta.url), "utf8");
-const navSource = await readFile(new URL("../renderer/nav.js", import.meta.url), "utf8");
 const KEY = "mefiStudio.walkthrough.v2";
 const LEGACY_KEY = "mefiStudio.walkthrough.v1";
 // Stop order: Scan, Your workspace, First map, Connections, Create, Monitor, Review.
@@ -730,24 +729,6 @@ test("a failed map still lets the assistant be asked by hand, and the panels sta
   await env.settle();
   assert.equal(env.el("assist-status").textContent, "The assistant did not answer.");
   assert.equal(env.el("activity").hidden, true);
-});
-
-test("workspace tool menu groups destinations and excludes duplicated sidebar links", () => {
-  const env = environment(); vm.runInContext(navSource, env.context);
-  const target = env.get("workspace-tool-links");
-  env.context.window.MefiNav.renderWorkspaceTools(target);
-  // The same sections as the rail: Analyzer sits with the Work tools and the
-  // Profiler with Settings, its diagnostics.
-  assert.deepEqual(target.children.map((group) => group.attrs["aria-label"]), ["Work", "Agents", "Settings"]);
-  const buttons = target.querySelectorAll("button");
-  const destinations = buttons.map((button) => button.dataset.nav);
-  for (const id of ["ideas", "explorer", "eyes", "overhead", "analyzer", "profiler", "booklet", "graph"]) assert.ok(destinations.includes(id));
-  const groupOf = (id) => target.children.find((group) => group.querySelectorAll("button").some((button) => button.dataset.nav === id))?.attrs["aria-label"];
-  assert.equal(groupOf("analyzer"), "Work");
-  assert.equal(groupOf("profiler"), "Settings");
-  // pinned at the top of the sidebar or in its bottom row, so never repeated in the grid
-  for (const id of ["workspace", "command", "tasks", "plans", "brains", "studio", "music", "onboarding"]) assert.ok(!destinations.includes(id));
-  assert.equal(new Set(destinations).size, destinations.length);
 });
 
 test("a machine without OpenCode is still configured: the scan shows auto setup's route and Use this setup stays available", async () => {
