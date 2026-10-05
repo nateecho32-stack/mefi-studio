@@ -289,11 +289,13 @@ test("every route that can report usage does: CLI JSON replies and Jev charges r
   assert.match(builderLine("codex"), /^"codex exec --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check --color never/);
 });
 
-test("both surfaces exist in the template and are driven by the tracker module", () => {
-  for (const id of ["model-lab-tab-tracker", "model-lab-tracker", "model-lab-tracker-body", "model-lab-tracker-refresh", "cmd-usage-pop", "cmd-usage-body", "cmd-usage-toggle", "cmd-usage-brief", "cmd-usage-dot", "cmd-usage-refresh", "cmd-usage-open"]) {
+test("the Model Lab tracker is in the template and is driven by the tracker module; Command's corner pill is gone", () => {
+  for (const id of ["model-lab-tab-tracker", "model-lab-tracker", "model-lab-tracker-body", "model-lab-tracker-refresh"]) {
     assert.match(template, new RegExp(`id="${id}"`), `missing #${id}`);
   }
-  assert.match(template, /aria-label="Usage across connected providers"/);
+  // The 0.5 status bar carries the reading (shell.js reads brief()); the Usage pill and its breakdown went with the classic HUD.
+  assert.doesNotMatch(template, /id="cmd-usage-/);
+  assert.doesNotMatch(trackerSource, /cmd-usage-|setOpen/);
   assert.match(trackerSource, /window\.MefiUsageTracker = \{ refresh, tick, open, openTab, init(?:, [^}]*)? \}/);
   assert.match(trackerSource, /bridge\.usageTracker\(\)/);
   assert.match(trackerSource, /bridge\.opencodeCredits/);

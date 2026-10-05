@@ -134,9 +134,9 @@ app.whenReady().then(async () => {
   assert.equal(map.pagesList, false, "no page list over the Map: the column keeps the sessions");
   assert.deepEqual(await switchOf("#idle-hud"), ["Map *", "Fleet", "Pipelines"], "the Map's own switch, Map current");
   report.bar = await run(`const box = (id) => { const r = document.getElementById(id).getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)]; };
-    return { bar: box('map-bar'), zoom: box('map-zoom'), legend: [...document.querySelectorAll('#map-legend .map-legend-row')].map((row) => row.textContent.trim()), classicTop: Boolean(document.querySelector('#idle-hud .cmd-top')?.getClientRects().length) };`);
+    return { bar: box('map-bar'), zoom: box('map-zoom'), legend: [...document.querySelectorAll('#map-legend .map-legend-row')].map((row) => row.textContent.trim()), classicTop: Boolean(document.querySelector('#idle-hud .cmd-top, #idle-hud .cmd-hint, #cmd-dock')) };`);
   assert.deepEqual(report.bar.legend, ["Running", "Needs you", "Review", "Done"], "the colours of the four states, as the prototype names them");
-  assert.equal(report.bar.classicTop, false, "the classic top bar folds away");
+  assert.equal(report.bar.classicTop, false, "the classic top bar, hint line and dock are gone");
   assert.ok(report.bar.bar[2] > 200 && report.bar.zoom[2] > 60, `the bar and Fit and zoom are drawn: ${JSON.stringify(report.bar)}`);
   await capture("map-1920x1080.png");
   // Running only dims, and says so; again shows it all.

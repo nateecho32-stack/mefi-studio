@@ -906,7 +906,6 @@ body.appearance-settings-active[data-appearance-dock="right"] #toast-host { left
 .music-dropdown .music-ai { margin: 0; padding: 0; border: 0; }
 .music-dropdown :is(input[type="text"], input[type="password"], textarea, select) { background: var(--bg-deep); color: var(--ivory); }
 .music-dropdown .music-find input[type="text"], .music-dropdown .music-find input[type="password"] { background: transparent; }
-.music-dropdown-chevron { width: 12px; height: 12px; opacity: .7; }
 .media-window[data-shape="browser"] { grid-template-rows: minmax(0, 1fr); padding: 8px; background: var(--panel-solid); border-radius: 14px; box-shadow: 0 16px 60px #0006; }
 .media-window[data-shape="browser"]:not([data-minimized="true"]) > .media-window-toolbar { display: none; }
 .media-window .music-browser { height: 100%; min-height: 0; display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); background: var(--bg-deep); color: var(--ivory); border-radius: 10px; overflow: hidden; font: 12px/1.4 var(--font-ui); }
@@ -926,7 +925,6 @@ body.appearance-settings-active[data-appearance-dock="right"] #toast-host { left
 .music-browser-welcome h3 { margin: 8px 0; font-size: 19px; }
 .music-browser-welcome p { color: var(--muted); margin: 6px 0 18px; }
 .music-browser-sites { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
-[aria-expanded="true"] > .music-dropdown-chevron { rotate: 180deg; }
 @media (prefers-reduced-motion: no-preference) {
   .music-dropdown { transition: opacity var(--motion-menu) var(--ease), translate var(--motion-menu) var(--ease), display var(--motion-menu) allow-discrete; }
   /* Presence: closing fades it where it was (the running transition out-ranks
@@ -935,7 +933,6 @@ body.appearance-settings-active[data-appearance-dock="right"] #toast-host { left
   @starting-style { .music-dropdown:not([hidden]) { opacity: 0; translate: 0 -6px; } }
   .music-link-queue-item, .music-youtube-result { animation: music-queue-rise var(--motion-base) var(--ease-out) both; animation-delay: calc(var(--i, 0) * var(--motion-step, 26ms)); }
   .music-link-queue-item[data-kept] { animation: none; }
-  .music-dropdown-chevron { transition: rotate var(--motion-fast) var(--ease-out); }
   /* An opened section arrives from the side the deck unfolds from. */
   .music-deck > :not([hidden]) { animation: music-deck-in var(--motion-slow) var(--ease-emphasized) both; }
   .music-now-card[data-playing="true"] .music-record { animation: music-spin 9s linear infinite; }

@@ -725,8 +725,8 @@ html[data-ui-mode="vibe"] #app-local-nav .app-local-link[aria-current="page"] { 
 html[data-ui-mode="vibe"] #app-local-nav .studio-history { border-right-color: color-mix(in srgb, var(--ivory) 8%, transparent); }
 html[data-ui-mode="vibe"] #app-local-nav :is(.studio-history, .app-task-context) button { border-radius: 12px; }
 
-/* Command's pop-overs (View, Agents, More) and the shared dropdowns */
-html[data-ui-mode="vibe"] #idle-hud :is(.cmd-view-pop, .cmd-agents-pop, .cmd-more-links, .pop) { border-color: var(--v-menu-edge); border-radius: 20px; }
+/* Command's View ▾ pop-over and the shared dropdowns */
+html[data-ui-mode="vibe"] #idle-hud .pop { border-color: var(--v-menu-edge); border-radius: 20px; }
 html[data-ui-mode="vibe"] .studio-choice-popup { border: 1px solid var(--v-menu-edge); border-radius: 18px; }
 html[data-ui-mode="vibe"] .studio-choice-option { border-radius: 12px; }
 html[data-ui-mode="vibe"] .studio-choice-option[aria-selected="true"] { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 30%, transparent); }

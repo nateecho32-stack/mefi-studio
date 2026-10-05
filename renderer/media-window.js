@@ -427,7 +427,7 @@
     }
     function deepMenu() {
       const route = window.MefiNav?.top?.() || window.MefiNav?.current?.();
-      return route && !["command", "workspace"].includes(route) || document.getElementById("music-dropdown")?.hidden === false || Boolean(document.querySelector(".surface-tools[open], .studio-more[open], .cmd-more-tools[open]"));
+      return route && !["command", "workspace"].includes(route) || document.getElementById("music-dropdown")?.hidden === false || Boolean(document.querySelector(".surface-tools[open], .studio-more[open]"));
     }
     function pointer(event) {
       if (gesture) {

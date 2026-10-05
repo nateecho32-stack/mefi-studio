@@ -12,7 +12,7 @@
   const FOLLOW_MS = 3000;
   const FOLLOW_QUICK = 20;
   const FOLLOW_LIMIT = 40;
-  // A live reading older than this no longer speaks for the pill.
+  // A live reading older than this no longer leads the status bar's reading.
   const LEAD_FRESH_MS = 30 * 60 * 1000;
   const WINDOW_LABELS = [["rolling", "5-hour window", "5h"], ["weekly", "Weekly window", "Wk"], ["monthly", "Monthly window", "Mo"]];
   // Plans draw in this order whatever order the host read them in, so the
@@ -23,7 +23,7 @@
   // Not failures: a key that was never saved, a CLI plan nobody has looked
   // at yet, and one being read right now.
   const NEUTRAL_CODES = new Set(["no-key", "idle", "pending"]);
-  const state = { initialized: false, open: false, closingLegend: false, read: 0, at: 0, looked: 0, report: null, pending: null, pendingLook: false, follow: null, follows: 0 };
+  const state = { initialized: false, read: 0, at: 0, looked: 0, report: null, pending: null, pendingLook: false, follow: null, follows: 0 };
   const $ = (id) => document.getElementById(id);
   const api = () => window.mefiStudio;
   const rows = (value) => Array.isArray(value) ? value : [];
@@ -54,22 +54,12 @@
     const date = new Date(value);
     return Number.isFinite(date.getTime()) ? date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) : "unknown time";
   };
-  // A reset moment for the compact panel: the time when it is within a day,
-  // the date otherwise.
+  // A moment close by: the time when it is within a day, the date otherwise.
   const soon = (value) => {
     if (value == null || value === "") return "";
     const date = new Date(value);
     if (!Number.isFinite(date.getTime())) return "";
     return Math.abs(date.getTime() - Date.now()) < 86400000 ? clock(date) : date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  };
-  // A window's reset worth printing: not one already past, and not an empty
-  // window's (an idle rolling window reports a reset that moves on every
-  // read, because it only starts counting at the next call).
-  const resetOf = (window) => {
-    if (!window || window.reset) return "";
-    const at = Date.parse(window.resetsAt ?? "");
-    if (!Number.isFinite(at) || at <= Date.now() || !(window.percent > 0)) return "";
-    return soon(window.resetsAt);
   };
   function element(tag, className = "", text = "") {
     const node = document.createElement(tag);
@@ -144,8 +134,8 @@
   // "$a of $b", just "$a" when the whole was not reported, "" when the part was not.
   const moneyOf = (part, whole, digits = 2) => !finite(part) ? "" : finite(whole) ? `${money(part, digits)} of ${money(whole, digits)}` : money(part, digits);
 
-  // One gauge row: label, bar, value and, with `reset`, the reset moment.
-  function windowBar(label, record, { resets = false, reset = false } = {}) {
+  // One gauge row: label, bar and value; with `resets`, the reset moment in its tooltip.
+  function windowBar(label, record, { resets = false } = {}) {
     const wrap = element("div", "tracker-window");
     wrap.append(element("span", "tracker-window-label", label));
     const bar = element("span", "tracker-bar");
@@ -157,7 +147,6 @@
     bar.append(fill);
     wrap.append(bar);
     wrap.append(element("b", "tracker-window-value", record && finite(record.percent) ? percent(record.percent) : "—"));
-    if (reset) wrap.append(element("small", "tracker-window-reset", record?.reset ? "reset" : resetOf(record)));
     const detail = [record?.label && record.label !== label ? record.label : "", record?.detail ?? "", record?.reset ? "reset since the reading" : resets && record?.resetsAt ? `resets ${when(record.resetsAt)}` : ""].filter(Boolean);
     if (detail.length) wrap.title = detail.join(" · ");
     return wrap;
@@ -323,9 +312,9 @@
     const rank = (provider) => { const index = PLAN_ORDER.indexOf(provider); return index < 0 ? PLAN_ORDER.length : index; };
     return accounts.filter((account) => PLAN_READS.has(account.read)).slice().sort((a, b) => rank(a.provider) - rank(b.provider)).map(planOf);
   }
-  // The account the pill speaks for: the first plan in PLAN_ORDER with a
-  // fresh live reading. A Codex rollout or a reading from half an hour ago
-  // is shown in its card, but it does not lead.
+  // The account the status bar speaks for (brief()): the first plan in
+  // PLAN_ORDER with a fresh live reading. A Codex rollout or a reading from
+  // half an hour ago is shown in its card, but it does not lead.
   function leadPlan(plans) {
     return plans.find((plan) => {
       const { account } = plan;
@@ -334,14 +323,6 @@
       const limits = account.limits ?? {};
       return limits.source !== "rollout" && finite(limits.asOf) && Date.now() - limits.asOf < LEAD_FRESH_MS;
     }) ?? null;
-  }
-  // The pill shows the lead plan's first window and the fullest of the rest,
-  // so a spent weekly or monthly window is never hidden behind an empty 5h.
-  function leadWindows(plan) {
-    if (!plan) return [];
-    const [first, ...rest] = plan.windows;
-    const fullest = rest.reduce((best, window) => (finite(window.percent) && (!best || window.percent > best.percent) ? window : best), null) ?? rest[0];
-    return [first, fullest].filter(Boolean).map((window) => `${window.short.toLowerCase()} ${finite(window.percent) ? percent(window.percent) : "—"}`);
   }
   function providerToday(local, provider) {
     const row = rows(local?.providers).find((entry) => entry.provider === provider);
@@ -501,109 +482,7 @@
     target.append(element("p", "muted tracker-footnote", `${local.coverage || "Only recorded calls are included."}${storeLine(local)}${retired}`));
   }
 
-  // ---- the compact Command panel ----------------------------------------------------
-  // Three short sections: every plan with its windows as bars, the balances
-  // of the metered accounts, and today's recorded calls per provider. A plan
-  // nobody has read yet, or one being read, says so in its own card; a failed
-  // read says why, briefly, with the whole reason on hover.
-  function row(label, value, tone = "", title = "") {
-    const item = element("li", "tracker-row");
-    if (tone) item.setAttribute("data-tone", tone);
-    if (title) item.title = title;
-    item.append(element("span", "tracker-row-label", label), element("span", "tracker-row-value", value));
-    return item;
-  }
-  function kicker(text) {
-    return element("p", "tracker-kicker", text);
-  }
-  function planCard(plan) {
-    const card = element("div", "tracker-plan");
-    if (plan.tone) card.setAttribute("data-tone", plan.tone);
-    const head = element("div", "tracker-plan-head");
-    head.append(element("span", "tracker-plan-name", plan.label));
-    if (plan.meta) head.append(element("small", "tracker-plan-meta", plan.meta));
-    card.append(head);
-    if (plan.windows.length) {
-      const bars = element("div", "tracker-windows");
-      for (const window of plan.windows) bars.append(windowBar(window.short, window, { resets: true, reset: true }));
-      card.append(bars);
-    }
-    if (plan.line) {
-      const line = element("p", plan.line.tone === "warn" ? "tracker-line tracker-line-warn" : plan.line.tone === "idle" ? "tracker-line tracker-line-idle" : "tracker-line", plan.line.text);
-      if (plan.failed) line.title = plan.line.text;
-      card.append(line);
-    }
-    return card;
-  }
-  function balanceRow(balance) {
-    const item = row(balance.label, balance.value, balance.tone, balance.title);
-    if (balance.bar && finite(balance.bar.percent)) {
-      const bar = element("span", "tracker-bar tracker-row-bar");
-      const fill = element("i");
-      fill.style.width = `${Math.max(0, Math.min(100, balance.bar.percent))}%`;
-      if (balance.bar.percent >= 90) fill.className = "warn";
-      bar.append(fill);
-      item.append(bar);
-    }
-    return item;
-  }
-  function todayValue(bucket) {
-    const tokens = bucket?.usage?.totalTokens?.known;
-    const cost = bucket?.usage?.costUsd;
-    const parts = [calls(bucket?.calls ?? 0)];
-    if (bucket?.errors) parts.push(`${number(bucket.errors)} failed`);
-    // Tokens a provider never reported are left out, not printed as "?".
-    if (finite(tokens) && tokens > 0) parts.push(`${compact(tokens)} tok`);
-    if (cost?.knownRecords > 0) parts.push(money(cost.known));
-    return parts.join(" · ");
-  }
-  function todaySection(target, local, accounts, plans) {
-    const list = element("ul", "tracker-rows");
-    const active = rows(local.providers).filter((entry) => entry.today?.calls > 0).slice().sort((a, b) => b.today.calls - a.today.calls || String(a.label).localeCompare(String(b.label)));
-    for (const entry of active) list.append(row(entry.label || entry.provider, todayValue(entry.today), entry.today.errors > 0 && entry.today.errors === entry.today.calls ? "warn" : ""));
-    list.append(row(active.length ? "All providers" : "Recorded today", todayValue(local.today)));
-    // The Go estimate is a floor built from recorded costs; once the live Go
-    // windows are in, it only repeats them less accurately.
-    const liveGo = plans.some((plan) => plan.provider === "opencode-go" && plan.account.ok);
-    const estimate = local.credits;
-    if (estimate && !liveGo && rows(accounts).some((account) => account.provider === "opencode-go")) {
-      list.append(row("Go estimate (local)", `5h ${localCost(estimate.rolling)}/${money(estimate.rolling.limitUsd, 0)} · wk ${localCost(estimate.weekly)}/${money(estimate.weekly.limitUsd, 0)} · mo ${localCost(estimate.monthly)}/${money(estimate.monthly.limitUsd, 0)}`, "", "Recorded Go spend against the plan's dollar caps: a floor, since Go weighs models differently and unpriced calls are left out."));
-    }
-    target.append(kicker("Today"), list);
-    const quiet = accounts.filter((account) => account.read === "none" && !active.some((entry) => entry.provider === account.provider)).map((account) => account.label);
-    if (quiet.length) target.append(element("p", "tracker-line tracker-line-idle", `Also connected: ${quiet.join(", ")} · no calls today`));
-    if (local.store?.ok === false) target.append(element("p", "tracker-line tracker-line-warn", `Coding sessions unavailable: ${local.store.error || "the OpenCode store could not be read."}`));
-    else if (local.store?.note && !local.store.rows) target.append(element("p", "tracker-line tracker-line-warn", `Coding sessions: none read. ${local.store.note}`));
-  }
-  function renderCompact(target, report) {
-    target.replaceChildren();
-    const local = report.local?.ok === false ? null : report.local;
-    // The older credits bridge stands in for a Go account even when no Go key
-    // is saved; that placeholder is a hint for the Model Lab view, not a
-    // connected provider, so the compact panel leaves it out.
-    const accounts = accountsOf(report).filter((account) => !(account.provider === "opencode-go" && !account.ok && account.code === "no-key"));
-    const plans = plansOf(accounts);
-    const balances = accounts.filter((account) => BALANCE_READS.has(account.read)).map(balanceOf).filter(Boolean);
-    if (plans.length) {
-      const wrap = element("div", "tracker-plans");
-      for (const plan of plans) wrap.append(planCard(plan));
-      target.append(kicker("Plan limits"), wrap);
-    }
-    if (balances.length) {
-      const list = element("ul", "tracker-rows");
-      for (const balance of balances) list.append(balanceRow(balance));
-      target.append(kicker("Balances"), list);
-    }
-    if (!plans.length && !balances.length) {
-      const credits = report.credits ?? {};
-      const failed = accounts.find(failedRead);
-      target.append(element("p", "tracker-line tracker-line-warn", failed ? `${failed.label} · ${failed.error || "account read unavailable"}` : report.accounts?.ok === false ? report.accounts.error || "Account readings are unavailable." : credits.ok === false && credits.error && credits.code !== "no-key" ? credits.error : "No live account reading yet · save a plan key or sign in to a coding CLI in Settings."));
-    }
-    if (report.local?.ok === false) target.append(element("p", "tracker-line tracker-line-warn", report.local.error || "Local usage could not be read."));
-    if (local) todaySection(target, local, accounts, plans);
-  }
-
-  // ---- status, pill and dot ------------------------------------------------------------
+  // ---- status ----------------------------------------------------------------------
   // A missing OpenCode Go key is not a failed read once the accounts read is
   // authoritative: the older credits bridge simply has nothing to say. A read
   // that did fail is named, so the note says which account to look at.
@@ -622,44 +501,15 @@
     const reading = accountsOf(report).filter((account) => account.refreshing || account.code === "pending").map((account) => account.label);
     return reading.length ? ` · reading ${reading.join(", ")}…` : "";
   }
-  // The pill itself carries one short reading: the lead plan's first two
-  // windows, or today's recorded calls when no plan has a fresh reading.
-  function briefOf(report) {
-    if (!report) return "";
-    const lead = leadPlan(plansOf(accountsOf(report)));
-    if (lead) return leadWindows(lead).join(" · ");
-    const local = report.local?.ok === false ? null : report.local;
-    return local ? `today ${calls(local.today.calls)}` : "no reading";
-  }
-  // The dot lights when a read failed, a plan is spent or nearly so, or a
-  // balance has run out.
-  function toneOf(report) {
-    if (!report) return "";
-    if (readNote(report)) return "warn";
-    const accounts = accountsOf(report);
-    if (plansOf(accounts).some((plan) => plan.tone === "warn")) return "warn";
-    return accounts.filter((account) => BALANCE_READS.has(account.read)).map(balanceOf).some((balance) => balance?.tone === "warn" || balance?.tone === "error") ? "warn" : "";
-  }
   function statusOf(report) {
     if (!report) return "Waiting for a reading…";
     const stamp = report.accounts?.at ?? report.credits?.fetchedAt ?? report.at;
     return `Updated ${clock(stamp)}${pendingNote(report)}${readNote(report)}`;
   }
-  // The pill's tooltip still says the one thing worth knowing: the lead
-  // plan's windows, or today's recorded calls when nothing live leads.
-  function compactStatus(report) {
-    if (!report) return "Waiting for a reading…";
-    const lead = leadPlan(plansOf(accountsOf(report)));
-    const local = report.local?.ok === false ? null : report.local;
-    const summary = lead ? ` · ${lead.label} ${leadWindows(lead).join(" · ")}` : local ? ` · today ${calls(local.today.calls)}` : "";
-    return `${statusOf(report)}${summary}`;
-  }
-  // Whether someone can see a view right now. Its own hidden flag says too
-  // little: a Model Lab tab stays unhidden after the page is left, and the
-  // popover would keep its state if Command were left by keyboard.
+  // Whether someone can see the Model Lab tracker right now. Its own hidden
+  // flag says too little: a Model Lab tab stays unhidden after the page is left.
   const visible = (node) => Boolean(node) && node.hidden !== true && (typeof node.checkVisibility === "function" ? node.checkVisibility() : true);
   const trackerShown = () => visible($("model-lab-tracker"));
-  const popShown = () => state.open && visible($("cmd-usage-pop"));
   function render() {
     const report = state.report;
     if (!report) return;
@@ -667,27 +517,13 @@
     if (typeof CustomEvent === "function") window.dispatchEvent?.(new CustomEvent("mefi:usage-report", { detail: report }));
     const full = $("model-lab-tracker-body");
     if (full) renderFull(full, report);
-    const compactBody = $("cmd-usage-body");
-    if (compactBody) renderCompact(compactBody, report);
     const fullStatus = $("model-lab-tracker-status");
     if (fullStatus) fullStatus.textContent = statusOf(report);
-    const compactState = $("cmd-usage-state");
-    if (compactState) compactState.textContent = statusOf(report);
-    const brief = $("cmd-usage-brief");
-    if (brief) brief.textContent = briefOf(report);
-    const dot = $("cmd-usage-dot");
-    if (dot) { const tone = toneOf(report); dot.hidden = !tone; dot.setAttribute("data-tone", tone || "ok"); }
-    const toggle = $("cmd-usage-toggle");
-    if (toggle) toggle.title = `${compactStatus(report)} · click for the breakdown`;
     follow(report);
   }
   function setStatus(text) {
     const fullStatus = $("model-lab-tracker-status");
     if (fullStatus) fullStatus.textContent = text;
-    const compactState = $("cmd-usage-state");
-    if (compactState) compactState.textContent = text;
-    const brief = $("cmd-usage-brief");
-    if (brief && !state.report) brief.textContent = text === "Reading usage…" ? "reading…" : "";
   }
   // A CLI plan being read answers a few seconds later; while someone is
   // looking, ask again until it has (the host never starts a second probe
@@ -700,7 +536,7 @@
     stopFollow();
     const waiting = rows(report?.accounts?.pending).length > 0;
     if (!waiting) { state.follows = 0; return; }
-    if (!(popShown() || trackerShown()) || state.follows >= FOLLOW_LIMIT || typeof setTimeout !== "function") return;
+    if (!trackerShown() || state.follows >= FOLLOW_LIMIT || typeof setTimeout !== "function") return;
     state.follows += 1;
     // Quick at first, then slower: four probes two at a time, each allowed a
     // cold start, can take a couple of minutes to all answer.
@@ -711,11 +547,11 @@
   }
 
   // `probe` says someone is looking: only then may the host start a coding
-  // CLI to read its plan. Left out, it follows whether the panel or the Model
-  // Lab tracker is showing.
+  // CLI to read its plan. Left out, it follows whether the Model Lab tracker
+  // is showing.
   function refresh({ force = false, probe } = {}) {
     if (!force && state.report && Date.now() - state.at < STALE_MS) return Promise.resolve(state.report);
-    const look = probe ?? (popShown() || trackerShown());
+    const look = probe ?? trackerShown();
     // A read already under way that could not ask the CLIs is followed by
     // one that can, rather than standing in for it.
     if (state.pending) return look && !state.pendingLook ? state.pending.then(() => refresh({ force: true, probe: true })) : state.pending;
@@ -752,35 +588,7 @@
     if (!document.body?.classList?.contains?.("command-active")) return;
     if (Date.now() - state.at >= REFRESH_MS) refresh({ probe: false });
   }
-  // The Usage pill at the bottom-left opens the breakdown above it; opening
-  // also asks for a reading when the last one is older than a few seconds,
-  // and lets the host read the coding CLIs' plans. The Legend shares the
-  // corner, so the two never stand open together.
-  function setOpen(open) {
-    state.open = Boolean(open);
-    const pop = $("cmd-usage-pop");
-    if (pop) pop.hidden = !state.open;
-    const body = $("cmd-usage-body");
-    if (body) body.hidden = !state.open;
-    const toggle = $("cmd-usage-toggle");
-    if (toggle) toggle.setAttribute("aria-expanded", String(state.open));
-    if (state.open) {
-      const legend = $("cmd-legend-list");
-      if (legend && legend.hidden === false) {
-        // Closed through its own toggle so idle.js keeps its state; the
-        // guard stops that click from closing this breakdown in turn.
-        state.closingLegend = true;
-        try { $("idle-legend-toggle")?.click?.(); } finally { state.closingLegend = false; }
-      }
-      state.follows = 0;
-      // A reading taken while nobody was looking never asked the CLIs.
-      refresh({ probe: true, force: Date.now() - state.looked >= STALE_MS });
-    } else if (!trackerShown()) {
-      stopFollow();
-    }
-  }
   function openTab() {
-    setOpen(false);
     // Through the registry so the "Back to Command" return state is recorded.
     if (window.MefiNav?.go) window.MefiNav.go("graph");
     else { window.MefiIdle?.exit?.(); window.MefiBooklet?.showTab?.("graph"); }
@@ -794,35 +602,6 @@
     if (state.initialized) return;
     state.initialized = true;
     $("model-lab-tracker-refresh")?.addEventListener("click", () => refresh({ force: true, probe: true }));
-    $("cmd-usage-refresh")?.addEventListener("click", () => refresh({ force: true, probe: true }));
-    $("cmd-usage-open")?.addEventListener("click", openTab);
-    $("cmd-usage-toggle")?.addEventListener("click", () => setOpen(!state.open));
-    // Opening the Legend closes the breakdown (idle.js owns the Legend).
-    $("idle-legend-toggle")?.addEventListener("click", () => { if (state.open && !state.closingLegend) setOpen(false); });
-    // A click anywhere outside the corner closes the breakdown.
-    document.addEventListener?.("pointerdown", (event) => {
-      if (state.open && !event.target?.closest?.("#cmd-legend")) setOpen(false);
-    });
-    // Escape closes the breakdown first, before the app's own Escape (which
-    // would leave Command) sees the key - unless the key belongs to a field
-    // or a dialog standing over it, which close themselves.
-    window.addEventListener("keydown", (event) => {
-      if (event.key !== "Escape" || !popShown()) return;
-      const owner = event.target?.closest?.("input, textarea, select, [contenteditable], dialog, [role=dialog]");
-      if (owner && !owner.closest?.("#cmd-usage-pop")) return;
-      event.preventDefault?.();
-      event.stopPropagation?.();
-      setOpen(false);
-      $("cmd-usage-toggle")?.focus?.();
-    }, true);
-    // Leaving Command by any route closes the breakdown, so it neither holds a
-    // later Escape nor keeps the CLIs probing out of sight.
-    if (typeof MutationObserver === "function" && document.body) {
-      new MutationObserver(() => {
-        if (state.open && !document.body.classList.contains("command-active")) setOpen(false);
-      }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
-    }
-    setOpen(false);
     window.addEventListener("mefi:project-changed", () => {
       state.read += 1;
       state.at = 0;
@@ -850,6 +629,6 @@
       today: local?.today ? { calls: local.today.calls ?? 0, costUsd: cost?.knownRecords > 0 && finite(cost.known) ? cost.known : null } : null,
     };
   }
-  window.MefiUsageTracker = { refresh, tick, open, openTab, init, setOpen, report: () => state.report, brief };
+  window.MefiUsageTracker = { refresh, tick, open, openTab, init, report: () => state.report, brief };
   init();
 })();

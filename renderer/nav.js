@@ -2188,9 +2188,7 @@
       window.MefiSidebar.close({ restoreFocus: true });
       return;
     }
-    // Command's own More tools menu is the fallback only while Command is on
-    // top; a sheet above it must not have Esc (and focus) pulled out from under it.
-    const more = document.activeElement?.closest?.(".surface-tools[open]") ?? Array.from(document.querySelectorAll?.(".surface-tools[open]") ?? []).find(visibleNavTarget) ?? (top() === "command" ? document.getElementById("cmd-more-tools") : null);
+    const more = document.activeElement?.closest?.(".surface-tools[open]") ?? Array.from(document.querySelectorAll?.(".surface-tools[open]") ?? []).find(visibleNavTarget);
     if (event.key === "Escape" && more?.open) {
       event.preventDefault();
       more.open = false;
@@ -2218,8 +2216,7 @@
         close("palette");
         return;
       }
-      if (event.target?.matches?.("#idle-search")) window.MefiIdle?.clearSearch?.();
-      else field.blur?.();
+      field.blur?.();
       // An open layer covers the constellation, so keep focus inside that dialog
       // instead of parking it on the canvas underneath (the guard from E15).
       const covering = state.transient ?? state.sheet;

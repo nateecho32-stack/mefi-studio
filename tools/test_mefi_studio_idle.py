@@ -82,7 +82,7 @@ class MefiStudioIdleTests(unittest.TestCase):
     def test_wiring_snapshot_bundle_template_autoplay(self):
         self.assertRegex(self.tree, r"snapshot:\s*\(\)\s*=>\s*\(?\s*\{")
         self.assertIn("idle.js", self.booklet_inputs["scripts"])
-        for element_id in ("idle-layer", "idle-hud", "idle-profile", "idle-zen", "idle-reactive", "idle-exit", "idle-open"):
+        for element_id in ("idle-layer", "idle-hud", "idle-profile", "idle-zen", "idle-open"):
             with self.subTest(element_id=element_id):
                 self.assertIn(f'id="{element_id}"', self.template)
         self.assertIn('idle-open', self.template)
@@ -92,7 +92,8 @@ class MefiStudioIdleTests(unittest.TestCase):
         self.assertIn("debugNodes", self.idle)
 
     def test_command_view_is_interactive(self):
-        for element_id in ("idle-task-input", "idle-task-add", "idle-info", "idle-telemetry", "idle-home"):
+        # New tasks start from the frame's New task (N); the classic composer and pills went with the top bar.
+        for element_id in ("idle-info", "idle-home"):
             with self.subTest(element_id=element_id):
                 self.assertIn(f'id="{element_id}"', self.template)
         for marker in (
@@ -101,7 +102,7 @@ class MefiStudioIdleTests(unittest.TestCase):
             "nodeAt(",
             "state.panning",
             "state.zoom",
-            "MefiTasks?.addTask",
+            "mapNewTask",
             "commandHome",
             "renderInfo",
         ):
@@ -110,9 +111,10 @@ class MefiStudioIdleTests(unittest.TestCase):
         self.assertIn("prefsSet?.({ commandHome: el.home.checked })", self.idle)
 
     def test_command_hub_wiring(self):
-        for element_id in ("cmd-dock", "cmd-hint", "cmd-legend", "cmd-empty", "cmd-tip",
-                           "idle-search", "idle-fit", "idle-orbit", "idle-labels",
-                           "idle-ambience-pop", "nav-command", "nav-tools", "help-grid", "footer-keys"):
+        # The Map's bar, View ▾ and zoom hold the camera, labels and fit; the classic top bar, hint line,
+        # dock and Ambience popover are gone, as are the classic tab row's nav-command, nav-tools and footer-keys.
+        for element_id in ("cmd-legend", "cmd-empty", "cmd-tip", "map-bar", "map-view-pop", "map-fit",
+                           "settings-tree-controls", "settings-audio-controls", "help-grid"):
             with self.subTest(element_id=element_id):
                 self.assertIn(f'id="{element_id}"', self.template)
         self.assertIn("nav.js", self.booklet_inputs["scripts"])
@@ -146,10 +148,11 @@ class MefiStudioIdleTests(unittest.TestCase):
         self.assertIn("setDisplayMediaRequestHandler", self.main)
         self.assertIn('"loopback"', self.main)
         self.assertIn("desktopCapturer", self.main)
-        self.assertIn('id="idle-source"', self.template)
-        self.assertIn('value="auto"', self.template)
-        self.assertIn('value="local"', self.template)
-        self.assertIn('value="mic"', self.template)
+        # "Listen to" is the music dropdown's Tree reactions select; it drives setAudioSource.
+        music = (STUDIO / "renderer" / "music.js").read_text(encoding="utf-8")
+        self.assertIn('els.audioSource.id = "music-audio-source"', music)
+        self.assertIn('[["auto", "Auto · local or desktop"], ["local", "Local player"], ["desktop", "Desktop audio / Spotify"], ["mic", "Microphone"]]', music)
+        self.assertIn("window.MefiIdle?.setAudioSource?.(els.audioSource.value)", music)
 
     def test_chat_log_panel_does_not_fail_work_on_it(self):
         # The right-side #cmd-chat panel is the always-on thread. A live-update
@@ -208,7 +211,7 @@ class MefiStudioIdleTests(unittest.TestCase):
     def test_empty_overlay_hides_when_the_board_has_work(self):
         # Zero OpenCode sessions used to drop "No recent sessions" over a live
         # constellation of tasks, plans and builders.
-        empty = self.idle[self.idle.index("function constellationHasWork()") : self.idle.index("function renderHint()")]
+        empty = self.idle[self.idle.index("function constellationHasWork()") : self.idle.index("function feedVisible()")]
         self.assertIn('node.kind === "task"', empty)
         self.assertIn("node.builder", empty)
         self.assertIn("autopilotJobs", empty)

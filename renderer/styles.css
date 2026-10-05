@@ -241,8 +241,6 @@ a.link .glyph { opacity: 0.75; }
 .cmd-feed,
 .cmd-chat,
 .cmd-empty,
-.cmd-composer,
-.cmd-search,
 .pop,
 .legend-list,
 .feed-drop,
@@ -251,14 +249,6 @@ a.link .glyph { opacity: 0.75; }
   backdrop-filter: var(--blur-hard);
   border: 1px solid var(--hairline-strong);
   box-shadow: var(--shadow-3), var(--inset-hi);
-}
-
-.cmd-dock,
-.cmd-tools {
-  background: var(--glass-soft);
-  backdrop-filter: var(--blur);
-  border: 1px solid var(--hairline);
-  box-shadow: var(--shadow-2), var(--inset-hi);
 }
 
 /* ============================================================
@@ -284,8 +274,6 @@ summary:focus-visible,
 #idle-layer:focus, #idle-layer:focus-visible { outline: none; }
 
 /* 2. inputs inside a capsule: the capsule shows the ring (section 12) */
-.cmd-composer input:focus-visible,
-.cmd-search input:focus-visible,
 .palette-sheet input:focus-visible { outline: none; }
 
 /* 3. dialog roots focused programmatically by MefiNav.claim(): an inset hairline, not a 1400px outline */
@@ -1619,91 +1607,15 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
 
 /* only these regions catch the pointer; everything else lets clicks reach the canvas.
    Never write "#idle-hud > * { pointer-events: auto }": the id beats a later class rule. */
-#idle-hud .cmd-brand,
-#idle-hud .cmd-center,
-#idle-hud .cmd-tools,
 #idle-hud .pop,
 #idle-hud .cmd-card,
 #idle-hud .cmd-feed,
 #idle-hud .cmd-chat,
 #idle-hud .cmd-legend,
-#idle-hud .cmd-empty,
-#idle-hud .cmd-dock { pointer-events: auto; }
-#idle-hud .cmd-top,
-#idle-hud .cmd-bottom,
-#idle-hud .cmd-hint,
+#idle-hud .cmd-empty { pointer-events: auto; }
 #idle-hud .cmd-tip { pointer-events: none; }
-/* .cmd-brand fills its 1fr column and .cmd-center is stretched at <= 1250px, so the
-   containers themselves would swallow drags across empty canvas. Only their children
-   (logo, brand text, composer, search) catch the pointer. Equal specificity to the two
-   lists above, so these must stay after them. */
-#idle-hud .cmd-brand,
-#idle-hud .cmd-center { pointer-events: none; }
-#idle-hud .cmd-brand > *,
-#idle-hud .cmd-center > * { pointer-events: auto; }
 
-/* --- top bar: brand + telemetry · composer + search · view controls --- */
-.cmd-top {
-  position: absolute; top: var(--s4); left: var(--hud-inset); right: var(--hud-inset);
-  display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: start; gap: var(--s3);
-}
-.cmd-brand { display: flex; align-items: center; gap: var(--s3); min-width: 0; }
-.cmd-brand-text { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
-.cmd-tele { display: flex; flex-wrap: wrap; gap: 5px; }
-.cmd-tele .pill { min-height: 26px; }
-
-.cmd-center { justify-self: center; display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; justify-content: center; }
-.cmd-composer, .cmd-search {
-  display: flex; align-items: center; gap: var(--s2);
-  min-height: 38px; padding: 0 6px 0 var(--s3);
-  border-radius: var(--r-pill);
-  box-shadow: var(--shadow-1), var(--inset-hi);
-  transition: border-color var(--dur-2) var(--ease), box-shadow var(--dur-2) var(--ease);
-}
-.cmd-composer:focus-within, .cmd-search:focus-within { border-color: var(--gold); box-shadow: var(--ring), var(--shadow-1); }
-.cmd-composer .glyph, .cmd-search .glyph { color: var(--gold); }
-.cmd-composer input, .cmd-search input {
-  border: none; background: transparent; box-shadow: none;
-  padding: 0; min-height: 0; min-width: 0;
-  font-size: var(--fs-md); color: var(--ivory);
-}
-.cmd-composer input:focus, .cmd-search input:focus { border-color: transparent; box-shadow: none; }
-.cmd-composer input { width: 200px; }
-.cmd-composer .primary.mini { border-radius: var(--r-pill); padding: 0 var(--s3); }
-/* the tools strip is ~520px wide, so at 1460px the search capsule's tail slid
-   under its first icons — keep the resting cluster inside the gap and let
-   focus widen the field only as far as the space allows */
-.cmd-search input { width: 170px; transition: width var(--dur-2) var(--ease); }
-.cmd-search:focus-within input { width: 208px; }
-.cmd-search .hint { font-size: var(--fs-2xs); color: var(--dim); white-space: nowrap; padding-right: 6px; font-variant-numeric: tabular-nums; }
-.cmd-search .hint:empty { display: none; }
-
-.cmd-tools {
-  justify-self: end;
-  display: flex; align-items: center; gap: var(--s1);
-  padding: var(--s1); border-radius: var(--r-pill);
-  box-shadow: var(--shadow-1), var(--inset-hi);
-}
-.cmd-tools .ghost { min-height: var(--ctl-h-hud); border-color: transparent; color: var(--muted); padding: 0 10px; }
-.cmd-tools .ghost:hover { color: var(--ivory); background: var(--tint-gold-2); border-color: var(--hairline); transform: none; box-shadow: none; }
-.cmd-tools .icon { width: var(--ctl-h-hud); min-width: var(--ctl-h-hud); padding: 0; }
-.cmd-tools .glyph { color: var(--gold); }
-.cmd-tools [aria-pressed="true"] { color: var(--gold-bright); background: var(--tint-gold-3); border-color: var(--gold-dim); }
-/* the quick agent-mode switch on the toolbar; the rail's Agents tab holds the full control */
-#idle-hud .cmd-agent-mode { display: flex; align-items: center; flex: none; gap: 6px; margin: 0 5px; font-size: 11px; color: var(--muted); white-space: nowrap; }
-#idle-hud .cmd-agent-mode select { width: 94px; min-height: 34px; padding: 4px 8px; font-size: 12px; background: var(--cmd-surface); border-color: var(--hairline-strong); border-radius: 6px; }
-.cmd-tools [aria-pressed="true"] .glyph { color: var(--gold-bright); }
-.tools-sep { width: 1px; height: 18px; background: var(--hairline); margin: 0 3px; flex: none; }
-#idle-labels .label { font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--gold); }
-#idle-labels[data-labels="none"] .label { color: var(--dim); }
-#idle-labels[data-labels="none"] .glyph { opacity: 0.55; }
-#idle-view .label { font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--gold); }
-#idle-view[data-view="2d"] { color: var(--gold-bright); background: var(--tint-gold-3); border-color: var(--gold-dim); }
-#idle-view[data-view="2d"] .glyph { color: var(--gold-bright); }
-#idle-exit:hover { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 30%, transparent); background: color-mix(in srgb, var(--bad) 7%, transparent); }
-
-/* --- ambience popover (.pop-row after .switch so display:grid wins) --- */
+/* --- the Map's View ▾ popover, and the rows Settings borrows from it (.pop-row after .switch so display:grid wins) --- */
 .pop {
   position: absolute; top: 64px; right: var(--hud-inset);
   width: 280px; padding: var(--s3);
@@ -1724,7 +1636,6 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
   cursor: pointer;
 }
 .pop-row select { min-height: var(--ctl-h-sm); padding: var(--s1) var(--s2); font-size: var(--fs-sm); }
-.pop-sep { border: none; border-top: 1px solid var(--hairline); margin: 2px 0; }
 @keyframes pop-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
 
 /* --- selection card #idle-info.cmd-card --- */
@@ -2015,30 +1926,7 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
 .cmd-tip .tip-title { display: block; color: var(--ivory); font-size: var(--fs-sm); font-weight: 600; }
 .tip-meta { display: block; color: var(--muted); font-size: var(--fs-2xs); margin-top: 2px; }
 
-/* --- bottom strip: contextual hint above the dock --- */
-.cmd-bottom {
-  position: absolute; left: 0; right: 0; bottom: var(--s4);
-  padding: 0 var(--hud-inset);
-  display: flex; flex-direction: column; align-items: center; gap: var(--s2);
-}
-.cmd-hint {
-  margin: 0; font-size: var(--fs-xs); color: var(--dim); letter-spacing: 0.05em; text-align: center;
-  text-shadow: 0 1px 8px rgba(3, 3, 4, 0.9);   /* legible over the starfield */
-}
-
-/* --- the dock --- */
-.cmd-dock {
-  display: flex; align-items: center; justify-content: center;
-  flex-wrap: wrap; gap: 2px; row-gap: var(--s1);
-  padding: 6px;
-  border-radius: var(--r-xl);
-  /* the dock shrink-wraps its content; the cap only decides when it wraps.
-     11 items + 2 separators measure 1208px with labels and keycaps, which keeps
-     the centred dock clear of the legend pill at bottom-left (right edge 99px)
-     in the 1460px frame. The keycaps drop out below 1430px (§19) so the dock
-     stays clear of the legend at every width down to 900. */
-  max-width: min(1280px, calc(100vw - 2 * var(--hud-inset)));
-}
+/* --- dock items (the sheet links) --- */
 .dock-item {
   position: relative;
   display: inline-flex; align-items: center; gap: 6px;
@@ -2066,8 +1954,8 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
 
 /* evidence popups: idle.js writes --x / --y / --tilt, never left/top.
    They share the canvas layer (and follow it in the DOM), so they float over the
-   constellation but under the whole HUD: the selection card, the top bar and the
-   dock are never covered by an ambient image. */
+   constellation but under the whole HUD: the selection card and the Map's bar
+   are never covered by an ambient image. */
 .idle-pop {
   position: fixed;
   left: var(--x); top: var(--y);
@@ -2090,13 +1978,10 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
    13. HUD dim — ambient vs menu mode (.dim is added only in ambient mode;
        #idle-hud.forced is cosmetic and deliberately has no rule)
    ============================================================ */
-.cmd-top, .cmd-legend, .cmd-hint, .cmd-dock {
+.cmd-legend {
   transition: opacity var(--dur-hud) var(--ease);
 }
-#idle-hud.dim .cmd-top,
-#idle-hud.dim .cmd-legend,
-#idle-hud.dim .cmd-hint { opacity: 0.28; }
-#idle-hud.dim .cmd-dock { opacity: 0.55; }        /* floor: the menu must never disappear */
+#idle-hud.dim .cmd-legend { opacity: 0.28; }
 #idle-hud.dim .cmd-card,
 #idle-hud.dim .cmd-feed,
 #idle-hud.dim .cmd-chat,
@@ -2104,14 +1989,8 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
 #idle-hud.dim .cmd-tip { opacity: 1; }            /* a selection (or the live feed) never fades */
 
 /* any pointer over the HUD, or any focused control inside it, brings everything back at once */
-#idle-hud:hover .cmd-top,
 #idle-hud:hover .cmd-legend,
-#idle-hud:hover .cmd-hint,
-#idle-hud:hover .cmd-dock,
-#idle-hud:focus-within .cmd-top,
-#idle-hud:focus-within .cmd-legend,
-#idle-hud:focus-within .cmd-hint,
-#idle-hud:focus-within .cmd-dock { opacity: 1; }
+#idle-hud:focus-within .cmd-legend { opacity: 1; }
 
 /* ============================================================
    14. Key commands (palette sheet)
@@ -2340,25 +2219,7 @@ footer {
    19. Responsive
    ============================================================ */
 @media (max-width: 1649px) {
-  /* One row holds brand · composer + search · view controls only while .cmd-tools
-     fits its half of the row: the side columns are minmax(0, 1fr), so each gets
-     (frame − centre) / 2 and the ~520px tools strip needs a frame of at least
-     centre + 2 × tools ≈ 620 + 1038 — below ~1650px the tools would slide back
-     over the search capsule (justify-self: end pulls it left), so the centre
-     gets its own row. */
-  .cmd-top { grid-template-columns: minmax(0, 1fr) auto; row-gap: var(--s2); }
-  .cmd-center { grid-column: 1 / -1; order: 3; justify-self: stretch; }
-  /* .cmd-top now runs to ~107px: at the one-row offset the card would land on the
-     composer/search capsule and swallow clicks meant for #idle-search. */
   .cmd-card { top: 120px; max-height: calc(100vh - 236px); }
-}
-
-@media (max-width: 1430px) {
-  /* The dock is centred on the viewport while the legend pill is pinned to the
-     bottom-left, so the dock must stay narrower than the space between them.
-     With keycaps it measures 1208px and only clears the pill from ~1430px up —
-     below that the caps go first (the same rule the 1250 block used to own). */
-  .cmd-dock .key { display: none; }
 }
 
 @media (max-width: 1400px) {
@@ -2375,8 +2236,6 @@ footer {
   .sheet-links .dock-item.small .label { display: none; }
   /* the tabs row fits without wrapping down to ~1170px (see below); from here
      .tools-cluster.compact has nothing left to hide, so wrap is the backstop */
-  /* .cmd-dock .key is already hidden by the 1430px block above */
-  .cmd-dock .dock-item { padding: 0 9px; }
 }
 
 @media (max-width: 1180px) {
@@ -2394,13 +2253,8 @@ footer {
 }
 
 @media (max-width: 1100px) {
-  .cmd-dock .dock-item .label { display: none; }   /* glyph + title only; the dock stays one row */
-  .cmd-dock .dock-item { padding: 0 10px; }
   .cmd-card { width: 292px; }                      /* top/max-height stay at the two-row values above */
   .cmd-feed { width: 240px; }
-  .cmd-search input { width: 170px; }
-  .cmd-search:focus-within input { width: 210px; }
-  .cmd-composer input { width: 190px; }
 }
 
 @media (max-width: 900px) {
@@ -2408,31 +2262,24 @@ footer {
   #tree-rail { display: none; }
   /* the tabs row already wraps and dropped its keycaps in the blocks above */
   .stat-grid { grid-template-columns: repeat(2, 1fr); }
-  .cmd-top { left: var(--s3); right: var(--s3); }
   .cmd-card { width: min(320px, calc(100vw - 24px)); right: var(--s3); }
-  .cmd-legend, .cmd-hint, .cmd-feed { display: none; }
+  .cmd-legend, .cmd-feed { display: none; }
   /* nothing to clear once the legend is hidden, whatever the toggle still reports */
   body.command-active:has(#idle-legend-toggle[aria-expanded="true"]) #toast-host { bottom: calc(64px + var(--shell-y1)); }
-  .cmd-bottom { padding: 0 var(--s3); }
-  .cmd-dock { max-width: calc(100vw - 24px); }     /* wraps to two rows; row-gap is already 4px */
   /* Settings answers to its own width, not the window's: see its container queries */
 }
 
 @media (max-width: 719px) {
-  /* The composer (291px) and the focused search with a match count (389px) stop
-     sharing a line below 712px, so .cmd-top grows a third row (~153px) and the
-     card has to step down again to stay off #idle-search. */
   .cmd-card { top: 166px; max-height: calc(100vh - 282px); }
 }
 
 @media (max-height: 760px) {
   .legend-list { max-height: 40vh; }
-  .cmd-bottom { bottom: var(--s3); }
   .pop { top: 58px; }
 }
 
-/* A short window may raise the card, but only while .cmd-top is still one row —
-   below 1460px the two-row offset above has to win, whatever the height. */
+/* A short, wide window raises the card; below 1460px the offset above has to
+   win, whatever the height. */
 @media (max-height: 760px) and (min-width: 1460px) {
   .cmd-card { top: 72px; max-height: calc(100vh - 150px); }
 }
@@ -2657,7 +2504,7 @@ body.no-motion :is(.boot-spinner, .boot-chip-skeleton), body.no-motion #boot-ope
   .sub, .muted, .stat .k, .stat .s, .why, .vendor, footer { color: #555; }
   .eyebrow, details summary, a { color: #6b5626; }
   .toolbar, #tree-rail, #tab-graph, #tab-studio, #tab-eyes, footer, .overlay { display: none !important; }
-  #idle-layer, #idle-hud, #cmd-dock, #cmd-legend, #cmd-empty, #cmd-chat, #cmd-tip,
+  #idle-layer, #idle-hud, #cmd-legend, #cmd-empty, #cmd-chat, #cmd-tip,
   #toast-host, .glyph-sprite, .update-pill,
   .count, .dot, kbd, .key { display: none !important; }
   .card { border: 1px solid #bbb; background: #fff; break-inside: avoid; backdrop-filter: none; }
@@ -3355,40 +3202,6 @@ html[data-no-blur] {
    sitting on one, sets backdrop-filter: none: behind an opaque fill the
    glass recipe's blur only re-ran under the panel on every Command frame. */
 #idle-hud { --command-panel-top: 158px; --command-panel-bottom: 100px; --command-feed-width: 328px; --cmd-surface: var(--panel-solid); --cmd-raised: color-mix(in srgb, var(--ivory) 5%, var(--panel-solid)); --cmd-hover: color-mix(in srgb, var(--ivory) 8%, var(--panel-solid)); --cmd-edge: color-mix(in srgb, var(--ivory) 15%, var(--panel-solid)); --cmd-shadow: 0 10px 28px #0002, inset 0 1px color-mix(in srgb, var(--ivory) 5%, transparent); }
-#idle-hud .cmd-top { top: 20px; left: 24px; right: 24px; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 24px; align-items: start; }
-#idle-hud .cmd-brand { gap: 14px; min-width: 0; align-items: flex-start; }
-#idle-hud .cmd-brand .monogram { margin-top: 4px; border-color: var(--cmd-edge); border-radius: var(--r-sm); background: linear-gradient(145deg, var(--cmd-raised), var(--cmd-surface)); box-shadow: inset 0 1px var(--tint-gold-2); }
-#idle-hud .cmd-brand-text { min-width: 0; gap: 0; }
-#idle-hud .cmd-brand .eyebrow { font-size: 9px; letter-spacing: .18em; color: var(--muted); }
-#idle-hud .cmd-heading { font: 600 22px/1.25 var(--font-display); letter-spacing: var(--studio-title-tracking, -.035em); margin: 0 0 4px; color: var(--ivory); }
-#idle-hud .cmd-tele { flex-wrap: nowrap; gap: 0; overflow: hidden; }
-#idle-hud .cmd-tele .pill { font-size: 11px; min-height: 23px; padding: 1px 9px; flex: none; border: 0; border-radius: 3px; background: transparent; box-shadow: none; color: var(--muted); }
-#idle-hud .cmd-tele .pill:first-child { padding-left: 0; }
-#idle-hud .cmd-tele .pill + .pill { border-left: 1px solid var(--hairline-strong); }
-#idle-hud .cmd-tele .pill:hover { color: var(--ivory); background: var(--tint-gold-1); }
-#idle-hud .cmd-tele .num { color: var(--ivory); font-weight: 600; font-variant-numeric: tabular-nums; }
-#idle-hud .cmd-tele .pill.warn { color: var(--warn); }
-#idle-hud .cmd-tele .pill.bad { color: var(--bad); }
-#idle-hud .cmd-tele .pill:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-#idle-hud .cmd-center { grid-column: 1 / -1; grid-row: 2; justify-self: start; display: flex; flex-wrap: nowrap; gap: 0; width: min(720px, calc(100% - 48px)); max-width: 100%; margin: 0 0 0 48px; padding: 4px; border: 1px solid var(--cmd-edge); border-radius: 14px; background: var(--cmd-surface); box-shadow: var(--cmd-shadow); }
-#idle-hud .cmd-composer, #idle-hud .cmd-search { min-width: 0; background: transparent; border: 1px solid transparent; border-radius: 9px; box-shadow: none; min-height: 34px; backdrop-filter: none; }
-#idle-hud .cmd-composer:focus-within, #idle-hud .cmd-search:focus-within { border-color: var(--gold); box-shadow: none; background: var(--cmd-raised); }
-#idle-hud .cmd-composer .glyph, #idle-hud .cmd-search .glyph { color: var(--muted); }
-#idle-hud .cmd-composer .primary.mini { border-radius: 7px; padding-inline: 14px; min-height: 28px; background: var(--gold); color: var(--ink); border-color: transparent; box-shadow: inset 0 1px #ffffff20; }
-#idle-hud .cmd-composer { width: 54%; flex: 1 1 54%; padding: 2px 5px 2px 8px; }
-#idle-hud .cmd-search { width: 46%; flex: 1 1 46%; margin-left: 6px; padding-left: 12px; border-left-color: var(--cmd-edge); border-radius: 0 9px 9px 0; }
-#idle-hud .cmd-composer input { width: 100%; min-width: 0; font-size: 13px; }
-#idle-hud .cmd-search input { width: 100%; min-width: 0; font-size: 13px; }
-#idle-hud .cmd-tools { grid-column: 2; grid-row: 1; justify-self: end; padding: 5px; gap: 2px; border-radius: 14px; border-color: var(--cmd-edge); background: var(--cmd-surface); box-shadow: var(--cmd-shadow); backdrop-filter: none; }
-#idle-hud .cmd-tools button { min-height: 34px; padding: 5px 9px; border-radius: 6px; }
-#idle-hud .cmd-tools .glyph, #idle-hud #idle-labels .label, #idle-hud #idle-view .label { color: inherit; }
-#idle-hud .cmd-tools .ghost:hover { background: var(--cmd-hover); border-color: transparent; }
-#idle-hud .cmd-tools [aria-pressed="true"], #idle-hud #idle-view[data-view="2d"] { color: var(--ivory); background: var(--tint-gold-2); border-color: transparent; box-shadow: inset 0 -2px var(--gold); }
-#idle-hud .cmd-tools .label { font-size: 12px; }
-#idle-hud .cmd-music-level { height: 17px; width: 19px; display: flex; gap: 3px; align-items: center; }
-#idle-hud .cmd-music-level i { display: block; width: 3px; height: calc(4px + var(--band-level, 0) * 13px); border-radius: 2px; background: currentColor; transition: height 80ms linear; }
-#idle-hud #idle-music-toggle[data-state="listening"] { color: var(--live); background: var(--live-dim); }
-#idle-hud #idle-music-toggle[data-state="error"] { color: var(--warn); }
 #idle-hud .pop { top: 70px; right: 24px; }
 #idle-hud .cmd-feed { display: flex; left: 24px; top: var(--command-panel-top); bottom: var(--command-panel-bottom); width: var(--command-feed-width); padding: 16px; border-radius: 16px; background: var(--cmd-surface); border-color: var(--cmd-edge); font-size: 13px; box-shadow: var(--cmd-shadow); backdrop-filter: none; }
 #idle-hud .feed-head { flex: none; flex-wrap: nowrap; }
@@ -3524,13 +3337,6 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 #idle-hud .cmd-chat.collapsed .feed-state { margin-left: 6px; font-size: 10px; max-width: 12em; }
 #idle-hud .cmd-card { top: calc(var(--command-panel-top) + 66px); right: 24px; width: 300px; max-height: calc(100vh - var(--command-panel-top) - 170px); background: var(--cmd-surface); border-color: var(--hairline-strong); border-radius: 12px; box-shadow: 0 12px 32px #0005; backdrop-filter: none; }
 #idle-hud.chat-log-open .cmd-card { right: 340px; }
-/* the bottom bar sits left, right after the Legend / Usage corner, instead of centred:
-   the corner column is --command-corner-width wide, the bar starts one gap past it,
-   and it may run no further than the right inset (or, at desktop widths, the rail). */
-#idle-hud { --command-corner-width: 172px; --command-corner-gap: 14px; --command-dock-max: calc(100vw - 24px - var(--command-corner-width) - var(--command-corner-gap) - 24px); }
-#idle-hud .cmd-bottom { left: calc(24px + var(--command-corner-width) + var(--command-corner-gap)); right: auto; bottom: 22px; padding: 0; align-items: flex-start; gap: 9px; max-width: var(--command-dock-max); }
-#idle-hud .cmd-hint { font-size: 10px; color: var(--muted); opacity: .7; letter-spacing: .02em; text-align: left; padding-left: 10px; }
-#idle-hud .cmd-dock { display: flex; flex-wrap: nowrap; align-items: center; gap: 3px; padding: 6px 8px; border-radius: 16px; max-width: var(--command-dock-max); min-height: 48px; background: var(--cmd-surface); border-color: var(--cmd-edge); box-shadow: var(--cmd-shadow); backdrop-filter: none; }
 #idle-hud .dock-item { min-width: 0; min-height: 35px; padding: 6px 11px; gap: 7px; border-radius: 9px; font-size: 12px; color: var(--muted); }
 #idle-hud .dock-item .glyph { color: inherit; }
 #idle-hud .dock-item .label { display: inline; }
@@ -3542,130 +3348,46 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 #idle-hud .dock-item .count.warn { color: var(--warn); }
 #idle-hud .dock-item .count.bad { color: var(--bad); }
 #idle-hud .dock-item .tone-dot { position: static; transform: none; width: 5px; height: 5px; }
-#idle-hud .cmd-more-tools { position: relative; }
-#idle-hud .cmd-more-tools > summary { cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 6px; }
-#idle-hud .cmd-more-tools > summary::marker, #idle-hud .cmd-more-tools > summary::-webkit-details-marker { display: none; content: ""; }
-#idle-hud .cmd-more-tools > summary > .chev { color: var(--muted); transition: transform var(--dur-2) var(--ease); }
-#idle-hud .cmd-more-tools[open] > summary { color: var(--gold-bright); background: var(--tint-gold-3); }
-#idle-hud .cmd-more-tools[open] > summary > .chev { transform: rotate(180deg); }
-#idle-hud .cmd-more-links { position: absolute; bottom: calc(100% + 15px); right: 0; width: 290px; padding: 8px; background: var(--glass-hard); backdrop-filter: var(--blur); border: 1px solid var(--hairline-strong); border-radius: 12px; box-shadow: var(--shadow-2), var(--inset-hi); }
-#idle-hud .cmd-more-links .dock-item { justify-content: flex-start; }
-#idle-hud .cmd-more-links .key { display: inline; margin-left: auto; }
 #idle-hud .cmd-follow-status { position: absolute; top: var(--command-panel-top); left: calc(48px + var(--command-feed-width)); right: 348px; padding: 9px 13px; border: 1px solid var(--hairline); border-left: 2px solid var(--gold); border-radius: 7px; background: var(--cmd-surface); color: var(--gold-bright); font-size: 12px; line-height: 1.5; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #idle-hud .cmd-follow-status[hidden] { display: none; }
-/* the corner: Legend pill at the floor, the Usage pill above it, both lists opening upward */
+/* the corner: the Map's state colours and the Legend pill at the floor; the Legend's list opens upward */
 #idle-hud .cmd-legend { display: flex; bottom: 30px; left: 24px; gap: 6px; max-width: 320px; }
 #idle-hud .cmd-legend .pill { background: var(--cmd-surface); border-color: var(--cmd-edge); color: var(--ivory); }
 #idle-hud .cmd-legend .pill .glyph { color: inherit; }
 #idle-hud .cmd-legend .pill:hover, #idle-hud .cmd-legend .pill[aria-expanded="true"] { background: var(--cmd-raised); border-color: var(--gold); }
-#idle-hud .usage-brief { color: var(--muted); font-variant-numeric: tabular-nums; }
-#idle-hud .usage-brief:empty { display: none; }
-#idle-hud .usage-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--warn); box-shadow: 0 0 6px var(--warn); }
-#idle-hud .usage-dot[hidden] { display: none; }
 #idle-hud .legend-list { background: var(--cmd-surface); border-color: var(--cmd-edge); backdrop-filter: none; }
-/* an open corner list reaches over the hint line; the hint steps out of the way until it closes */
-#idle-hud .cmd-legend:has(.legend-list:not([hidden]), .usage-pop:not([hidden])) ~ .cmd-bottom .cmd-hint { opacity: 0; }
 @media (max-width: 1440px) {
   #idle-hud { --command-feed-width: 304px; }
-  #idle-hud .cmd-tools button { padding-inline: 7px; }
-  #idle-hud .cmd-tools #idle-cam-follow .label, #idle-hud .cmd-tools #idle-cam-orbit .label { display: none; }
-  #idle-hud .cmd-tele .pill { font-size: 10px; padding-inline: 7px; }
   #idle-hud .dock-item { padding-inline: 9px; gap: 6px; font-size: 11.5px; }
 }
 @media (max-width: 1100px) {
   #idle-hud { --command-feed-width: 272px; --command-panel-top: 158px; }
-  #idle-hud .cmd-top { left: 18px; right: 18px; gap: 13px 12px; }
-  #idle-hud .cmd-brand .monogram { display: none; }
-  #idle-hud .cmd-center { margin-left: 0; width: min(720px, 100%); }
-  #idle-hud .cmd-tools button { padding-inline: 6px; }
-  #idle-hud .cmd-tools .tools-sep { margin-inline: 1px; }
-  #idle-hud .cmd-tools #idle-music-toggle .label { display: none; }
-  #idle-hud .cmd-tele { max-width: 410px; }
-  #idle-hud .cmd-tele .pill:last-child { display: none; }
   #idle-hud .cmd-feed { left: 18px; padding: 14px; }
   #idle-hud .cmd-chat, #idle-hud .cmd-card { right: 18px; width: 260px; }
   #idle-hud .cmd-chat.collapsed { width: max-content; max-width: 235px; }
   #idle-hud .cmd-follow-status { right: 296px; left: calc(36px + var(--command-feed-width)); font-size: 11px; padding-inline: 7px; }
   #idle-hud.chat-log-open .cmd-card { right: 18px; }
-  /* no corner here: the bar returns to the centre */
-  #idle-hud .cmd-legend, #idle-hud .cmd-hint { display: none; }
-  #idle-hud .cmd-bottom { left: 0; right: 0; max-width: none; padding: 0 12px; align-items: center; }
-  #idle-hud .cmd-dock { max-width: calc(100vw - 36px); }
+  /* no corner here */
+  #idle-hud .cmd-legend { display: none; }
   #idle-hud .dock-item { padding-inline: 9px; }
 }
 @media (max-height: 780px) {
   #idle-hud { --command-panel-top: 149px; --command-panel-bottom: 85px; }
-  #idle-hud .cmd-top { top: 14px; gap: 10px 16px; }
-  #idle-hud .cmd-heading { font-size: 22px; margin-bottom: 7px; }
   #idle-hud .cmd-feed { padding: 14px; }
   #idle-hud .feed-head { padding-bottom: 9px; margin-bottom: 10px; }
   #idle-hud .feed-metrics { margin-bottom: 8px; }
   #idle-hud .feed-current { margin-bottom: 10px; }
-  #idle-hud .cmd-bottom { bottom: 15px; }
-  #idle-hud .cmd-hint { display: none; }
 }
 @media (max-width: 760px) {
   #idle-hud { --command-panel-top: 196px; --command-feed-width: 245px; }
-  #idle-hud .cmd-top { display: flex; flex-wrap: wrap; gap: 9px; left: 12px; right: 12px; }
-  #idle-hud .cmd-brand { flex: 1; }
-  #idle-hud .cmd-heading { font-size: 20px; margin-bottom: 4px; }
-  #idle-hud .cmd-tools { order: 2; flex: 1 1 100%; justify-content: center; flex-wrap: wrap; max-width: 100%; }
-  #idle-hud .cmd-center { order: 1; margin: 0; width: 100%; }
-  #idle-hud .cmd-composer { width: 55%; }
-  #idle-hud .cmd-search { width: 45%; }
-  #idle-hud .cmd-search input { width: 100%; min-width: 0; }
   #idle-hud .cmd-feed { left: 12px; }
   #idle-hud .cmd-chat.collapsed { right: 12px; width: auto; }
   #idle-hud .cmd-follow-status { right: 12px; left: 12px; top: auto; bottom: 77px; }
   #idle-hud .dock-item { padding-inline: 7px; font-size: 11px; }
   #idle-hud .dock-item .glyph { display: none; }
-  #idle-hud .cmd-dock { max-width: calc(100vw - 20px); gap: 1px; padding: 6px; }
-  #idle-hud .cmd-more-links .glyph { display: inline; }
 }
-@media (prefers-reduced-motion: reduce) { #idle-hud .cmd-music-level i { transition: none; } }
-/* --- Command toolbar clusters (menu regroup) ---------------------------------
-   Four labelled groups and Leave: Agents | Camera (Fit · Overview/Follow ·
-   Spin) | View ▾ | Sound (Music · Ambience) | Leave. 2D/3D, labels and zoom
-   fold into the View menu. Both popovers hang from their buttons: idle.js
-   placePop writes their top/right inline over the fixed .pop offsets, so a
-   two- or three-row top bar never sits under them. */
-#idle-hud .cmd-tools-group { display: flex; align-items: center; flex: none; gap: 2px; }
-/* Overview and Follow are one switch: a shared hairline, squared inner edges */
-#idle-hud .cmd-seg { display: flex; flex: none; border-radius: 6px; box-shadow: inset 0 0 0 1px var(--hairline); }
-#idle-hud .cmd-seg > button:first-child { border-start-end-radius: 0; border-end-end-radius: 0; }
-#idle-hud .cmd-seg > button:last-child { border-start-start-radius: 0; border-end-start-radius: 0; }
-#idle-hud #idle-view-menu .chev { width: 12px; height: 12px; margin-inline-start: -2px; opacity: .7; transition: rotate var(--motion-fast) var(--ease-out); }
-/* View ▾ and Ambience stay lit while their popover is open */
-#idle-hud .cmd-tools [aria-expanded="true"] { color: var(--ivory); background: var(--cmd-hover); }
-#idle-hud #idle-view-menu[aria-expanded="true"] .chev { rotate: 180deg; }
-/* View pairs map and label modes above a small zoom strip. */
-#idle-hud .cmd-view-pop { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 260px; max-width: calc(100vw - 32px); padding: 7px; gap: 5px; border-radius: 12px; background: var(--cmd-surface); border-color: var(--cmd-edge); box-shadow: var(--cmd-shadow); backdrop-filter: none; }
-#idle-hud .cmd-view-pop > button, #idle-hud .cmd-view-zoom { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 34px; padding: 0 8px 0 10px; border: 1px solid transparent; border-radius: 7px; font-size: 12.5px; color: var(--ivory); }
-#idle-hud .cmd-view-pop > button { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; gap: 3px 6px; min-width: 0; min-height: 57px; padding: 8px; background: var(--tint-gold-1); border-color: var(--hairline); }
-#idle-hud .cmd-view-pop > button .cmd-view-name { font-size: 11px; color: var(--muted); }
-#idle-hud .cmd-view-pop > button .label { grid-column: 2; grid-row: 2; text-align: left; color: var(--gold-bright); font-size: 13px; font-weight: 600; }
-#idle-hud .cmd-view-pop > button .key { grid-column: 3; grid-row: 1 / 3; margin: 0; }
-#idle-hud .cmd-view-pop button:hover { background: var(--cmd-hover); border-color: transparent; transform: none; box-shadow: none; }
-#idle-hud .cmd-view-pop .glyph { color: var(--gold); }
-#idle-hud .cmd-view-name { flex: 1; min-width: 0; text-align: start; }
-#idle-hud .cmd-view-pop .key { margin-inline-start: 4px; }
-#idle-hud .cmd-view-pop #idle-view[data-view="2d"] { box-shadow: none; }
-#idle-hud .cmd-view-zoom { grid-column: 1 / -1; color: var(--muted); padding-inline-end: 4px; }
-#idle-hud .cmd-view-zoom .cmd-view-name { padding-inline-start: 0; }
-#idle-hud .cmd-view-zoom button { width: 30px; min-width: 30px; min-height: 28px; padding: 0; border-color: transparent; border-radius: 6px; background: transparent; }
-/* Ambience reads Look → Sound → Calm, then a way on to Style & sound */
-#idle-hud .pop-group { display: flex; flex-direction: column; gap: var(--s2); }
-#idle-hud .pop-link { justify-content: flex-start; width: 100%; min-height: var(--ctl-h-sm); padding: 0 var(--s2); border-color: transparent; color: var(--muted); font-size: var(--fs-sm); white-space: normal; text-align: start; }
-#idle-hud .pop-link:hover { color: var(--ivory); background: var(--cmd-hover); border-color: transparent; transform: none; box-shadow: none; }
-#idle-hud #idle-ambience-pop { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 296px; max-width: calc(100vw - 32px); padding: 9px; gap: 7px; }
-#idle-ambience-pop .pop-group, #idle-ambience-pop .pop-sep { grid-column: 1 / -1; min-width: 0; }
-#idle-hud #idle-ambience-pop .pop-link { align-items: center; min-height: 40px; padding: 7px 9px; border-color: var(--hairline); background: var(--tint-gold-1); color: var(--ivory); }
-#idle-ambience-pop .studio-select { max-width: 190px; font-size: 12px; }
 /* opened from the keyboard the dialog holds focus: an inset hairline, as the sheets do */
 #idle-hud .pop:focus-visible { outline: none; box-shadow: var(--shadow-3), var(--inset-hi), inset 0 0 0 1px var(--gold-dim); }
-@media (max-width: 1100px) { #idle-hud .cmd-tools #idle-view-menu .label { display: none; } }
-/* the strip wraps below 760px: whole groups wrap and the separators go */
-@media (max-width: 760px) { #idle-hud .cmd-tools .tools-sep { display: none; } }
 
                                                                                 
 .model-lab { border: 0; border-radius: 0; padding: 0; background: transparent; margin-bottom: 16px; }
@@ -3897,7 +3619,7 @@ html[data-no-blur] :is(.overlay, .planning-overlay, .brains-overlay, .profiler-o
     opacity: 0; translate: var(--presence-from, 0 6px); scale: .985;
   }
 }
-#idle-hud .pop { --presence-from: 0 -6px; transform-origin: top right; }     /* drops from the toolbar */
+#idle-hud .pop { --presence-from: 0 -6px; transform-origin: top right; }     /* drops from the Map's bar */
 #idle-hud .legend-list { transform-origin: bottom left; }                      /* rises from its pill */
 #idle-info { --presence-from: 8px 0; }                                         /* slides in from the rail side */
 /* the tip follows the pointer through its transform, so it only fades */
@@ -3934,17 +3656,16 @@ body.command-zen #idle-hud { transition-duration: var(--motion-ambient); }
    (interpolate-size is on at :root) and content-visibility flips at the end
    of a close. The pop-out menus (.studio-more, .ws-tools) are not folds and
    are left out, since clipping would cut their menus off. */
-:is(.settings-optional, .settings-help, .feed-help, .feed-section, .lab-catalog, .lab-disclosure, .lab-context-source, .task-reference-drawer, .ws-activity, .card-cps, .feed-absorbed)::details-content {
+:is(.settings-optional, .settings-help, .feed-section, .lab-catalog, .lab-disclosure, .lab-context-source, .task-reference-drawer, .ws-activity, .card-cps, .feed-absorbed)::details-content {
   block-size: 0; overflow: clip;
   transition: block-size var(--motion-base) var(--ease-out), content-visibility var(--motion-base) allow-discrete;
 }
-:is(.settings-optional, .settings-help, .feed-help, .feed-section, .lab-catalog, .lab-disclosure, .lab-context-source, .task-reference-drawer, .ws-activity, .card-cps, .feed-absorbed)[open]::details-content { block-size: auto; }
+:is(.settings-optional, .settings-help, .feed-section, .lab-catalog, .lab-disclosure, .lab-context-source, .task-reference-drawer, .ws-activity, .card-cps, .feed-absorbed)[open]::details-content { block-size: auto; }
 body > main > section:not([hidden]),
 .model-lab > [role="tabpanel"]:not([hidden]) {
   animation: studio-content-enter var(--motion-content) var(--ease-enter);
 }
-.ws-tools[open] > #workspace-tool-links,
-.cmd-more-tools[open] > .cmd-more-links {
+.ws-tools[open] > #workspace-tool-links {
   animation: studio-menu-enter var(--motion-menu) var(--ease-enter);
 }
 :is(.ws-activity, .feed-section, .lab-disclosure, .lab-context-source, .lab-catalog, .task-reference-drawer)[open] > :not(summary) {
@@ -3959,7 +3680,7 @@ button, .button, .workspace button, .music-overlay button, .model-lab button {
 :is(button, .button):not(:disabled):active {
   transform: translateY(0) scale(.985);
 }
-:is(.studio-more, .ws-tools, .ws-activity, .cmd-more-tools, .feed-section, .lab-disclosure, .lab-context-source, .lab-catalog, .task-reference-drawer) > summary {
+:is(.studio-more, .ws-tools, .ws-activity, .feed-section, .lab-disclosure, .lab-context-source, .lab-catalog, .task-reference-drawer) > summary {
   transition: color var(--motion-press) var(--ease), background-color var(--motion-press) var(--ease),
     border-color var(--motion-press) var(--ease);
 }
@@ -4003,8 +3724,6 @@ html[data-motion="off"]::view-transition-new(*) { animation: none !important; }
 .studio-more-links { max-height: min(65vh, 540px); overflow: auto; }
 .studio-more-links .dock-item { gap: 9px; min-height: 34px; padding: 6px 10px; border-radius: 8px; }
 .studio-more-links .key { margin-left: auto; }
-#idle-hud .cmd-more-links { display: block; width: 290px; max-height: min(65vh, 540px); overflow: auto; }
-#idle-hud .cmd-more-links .dock-item { width: 100%; min-height: 34px; padding: 6px 10px; border-radius: 8px; }
 .walkthrough-invitation { flex: none; display: flex; align-items: center; gap: 20px; justify-content: space-between; margin: 0 0 16px; padding: 12px 15px; border: 1px solid var(--hairline-strong); border-radius: 12px; background: color-mix(in srgb, var(--gold) 6%, var(--panel)); }
 .walkthrough-invitation strong { font-size: 13px; color: var(--ivory); }
 .walkthrough-invitation p { margin: 5px 0 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
@@ -4568,7 +4287,6 @@ body.appearance-settings-active #tab-studio[data-places="v2"] .settings-nav-item
   .walkthrough-footer > div { width: 100%; justify-content: flex-end; }
   .segmented { grid-auto-flow: row; grid-auto-columns: auto; }
 }
-@media (prefers-reduced-motion: reduce) { #idle-hud .cmd-music-level i { transition: none; } }
 
 /* ============================================================
    The right rail: Work · Agents · Assistant · Runs · Ask
@@ -4700,47 +4418,6 @@ html[data-no-blur] #idle-hud .cmd-rail { background: var(--panel-solid); backdro
 #idle-hud .rail-filter-btn[data-done-filter="failed"][aria-pressed="true"] b { color: var(--bad); }
 #idle-hud .rail-filter-btn[data-done-filter="ok"][aria-pressed="true"] b { color: var(--live); }
 
-/* The toolbar's Agents dropdown: a glance strip, then a settings list (label · control ·
-   hint) in two groups, Queue and Safety, with the long explanations folded
-   underneath */
-#idle-hud .cmd-agents-pop { display: flex; flex-direction: column; width: min(400px, calc(100% - 24px)); padding: 14px; overflow: hidden; z-index: 8; background: color-mix(in srgb, var(--panel-solid) 88%, transparent); backdrop-filter: var(--blur-hard); }
-#idle-hud .cmd-agents-pop[hidden] { display: none; }
-html[data-no-blur] #idle-hud .cmd-agents-pop { background: var(--panel-solid); backdrop-filter: none; }
-@media (prefers-reduced-transparency: reduce) {
-  #idle-hud .cmd-agents-pop { background: var(--panel-solid); backdrop-filter: none; }
-}
-#idle-hud .cmd-agents-pop .setting-row > .studio-select { grid-column: 3; grid-row: 1; justify-self: end; width: 150px; min-height: 30px; font-size: 11.5px; }
-#idle-hud .cmd-settings .settings-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior-y: contain; padding: 0 2px 4px; }
-#idle-hud .agents-glance { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 0 0 12px; }
-#idle-hud .agents-chip { display: grid; gap: 3px; min-width: 0; padding: 8px 9px; border: 1px solid var(--cmd-edge); border-radius: 9px; background: var(--cmd-raised); transition: border-color var(--dur-2) var(--ease), background var(--dur-2) var(--ease); }
-#idle-hud .agents-chip-k { font: 650 9px/1.3 var(--font-ui); letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
-#idle-hud .agents-chip b { font: 600 12px/1.3 var(--font-ui); color: var(--ivory); overflow-wrap: anywhere; }
-#idle-hud .agents-chip[data-tone="ok"] { border-color: var(--gold-dim); background: var(--tint-gold-2); }
-#idle-hud .agents-chip[data-tone="ok"] b { color: var(--gold-bright); }
-#idle-hud .agents-chip[data-tone="off"] b { color: var(--muted); }
-#idle-hud .rail-view-head .setting-state { flex: none; max-width: 58%; margin-left: auto; padding: 2px 8px; border: 1px solid var(--cmd-edge); border-radius: 999px; background: var(--cmd-raised); color: var(--muted); font-size: 10px; line-height: 1.4; letter-spacing: .01em; }
-#idle-hud .rail-view-head .setting-state:empty { display: none; }
-#idle-hud .rail-view-head .setting-state[data-on="true"] { color: var(--gold-bright); border-color: var(--gold-dim); background: var(--tint-gold-2); }
-#idle-hud .setting-group { padding: 2px 0 10px; }
-#idle-hud .setting-group + .setting-group { padding-top: 12px; border-top: 1px solid var(--hairline); }
-#idle-hud .setting-group-title { display: flex; align-items: center; gap: 6px; margin: 0 0 2px; font: 650 9.5px/1.4 var(--font-ui); letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
-#idle-hud .setting-group-title .glyph { width: 12px; height: 12px; color: var(--gold); opacity: .9; }
-#idle-hud .setting-row { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 10px; row-gap: 4px; align-items: center; padding: 10px 0; border-top: 1px solid var(--hairline); }
-#idle-hud .setting-glyph { grid-column: 1; grid-row: 1; width: 14px; height: 14px; color: var(--gold); opacity: .85; }
-#idle-hud .setting-row[hidden] { display: none; }
-#idle-hud .setting-group-title + .setting-row { border-top: 0; }
-#idle-hud .setting-label { grid-column: 2; grid-row: 1; margin: 0; font: 500 12.5px/1.35 var(--font-ui); color: var(--ivory); cursor: pointer; }
-#idle-hud .setting-row:has(> select:disabled) .setting-label,
-#idle-hud .setting-row:has(input:disabled) .setting-label { color: var(--muted); cursor: default; }
-#idle-hud .setting-row > select,
-#idle-hud .setting-row > .switch { grid-column: 3; grid-row: 1; justify-self: end; }
-#idle-hud .setting-row > select { width: 150px; min-height: 30px; padding: 4px 9px; font-size: 11.5px; background: var(--cmd-surface); border-color: var(--hairline-strong); border-radius: 6px; }
-#idle-hud .setting-switch { gap: 0; margin: 0; }
-#idle-hud .setting-switch input:focus-visible + .track { outline: 2px solid var(--gold-bright); outline-offset: 3px; }
-#idle-hud .setting-hint { grid-column: 2 / -1; grid-row: 2; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
-#idle-hud .setting-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 6px 0 8px; }
-#idle-hud .setting-actions .feed-state { flex: 1; min-width: 0; text-align: right; }
-
 /* the New work strip at the top of the Assistant view: the switch with its
    state word, and one short line saying what it gates */
 #idle-hud .new-work-strip { display: flex; flex-direction: column; gap: 4px; flex: none; padding: 8px 10px 9px; border: 1px solid var(--cmd-edge); border-radius: 9px; background: var(--cmd-raised); }
@@ -4749,13 +4426,6 @@ html[data-no-blur] #idle-hud .cmd-agents-pop { background: var(--panel-solid); b
 #idle-hud .new-work-strip:has(input:checked:not(:disabled)) .new-work-state { color: var(--live); border-color: color-mix(in srgb, var(--live) 40%, var(--cmd-edge)); }
 #idle-hud .new-work-strip:has(input:not(:checked):not(:disabled):not(:indeterminate)) .new-work-state { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, var(--cmd-edge)); }
 #idle-hud .control-help { margin: 0; color: var(--muted); font-size: 10.5px; line-height: 1.5; }
-#idle-hud .feed-help { flex: none; margin: 2px 0 12px; padding: 0 10px; border: 1px solid var(--cmd-edge); border-radius: 8px; background: var(--cmd-raised); }
-#idle-hud .feed-help > summary { cursor: pointer; color: var(--muted); font-size: 11px; padding: 8px 0; }
-#idle-hud .feed-help > summary:hover, #idle-hud .feed-help[open] > summary { color: var(--ivory); }
-#idle-hud .feed-help-list { margin: 0; padding: 0 0 8px; font-size: 11px; line-height: 1.55; }
-#idle-hud .feed-help-list dt { color: var(--gold); font-weight: 600; margin-top: 8px; }
-#idle-hud .feed-help-list dt:first-child { margin-top: 0; }
-#idle-hud .feed-help-list dd { margin: 2px 0 0; color: var(--muted); }
 
 /* the done log */
 #idle-hud .done-list {
@@ -4893,53 +4563,13 @@ html[data-no-blur] #idle-hud .cmd-agents-pop { background: var(--panel-solid); b
 .tracker-cell > strong { color: var(--ivory); font-weight: 600; }
 @media (max-width: 680px) { .tracker-windows { grid-template-columns: 1fr; } }
 
-/* the Command corner's Usage breakdown: opens upward from the Usage pill at the bottom-left */
-#idle-hud .usage-pop { display: flex; flex-direction: column; gap: 8px; width: 320px; max-width: calc(100vw - 48px); max-height: min(66vh, 580px); overflow: auto; padding: 10px 12px 12px; border: 1px solid var(--cmd-edge); border-radius: 12px; background: var(--cmd-surface); box-shadow: var(--cmd-shadow); pointer-events: auto; }
-#idle-hud .usage-pop[hidden] { display: none; }
-#idle-hud .cmd-usage-head { display: flex; align-items: center; gap: 5px; }
-#idle-hud .cmd-usage-title { flex: 1; min-width: 0; margin: 0; font: 600 12px/1.3 var(--font-ui); color: var(--ivory); }
-#idle-hud .cmd-usage-head .ghost.mini { flex: none; min-height: 24px; padding: 2px 8px; font-size: 10px; }
-#idle-hud .cmd-usage-state { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.45; }
-#idle-hud .cmd-usage-body { display: flex; flex-direction: column; gap: 6px; }
-#idle-hud .cmd-usage-body[hidden] { display: none; }
-/* one card per plan: its name and freshness, then a bar per window with the reset beside it */
-#idle-hud .usage-pop .tracker-plans { display: grid; gap: 6px; }
-#idle-hud .usage-pop .tracker-plan { display: grid; gap: 5px; padding: 7px 9px 8px; border: 1px solid var(--hairline); border-radius: 8px; background: color-mix(in srgb, var(--ivory) 3%, transparent); }
-#idle-hud .usage-pop .tracker-plan[data-tone="warn"] { border-color: color-mix(in srgb, var(--warn) 40%, var(--hairline)); }
-#idle-hud .usage-pop .tracker-plan[data-tone="idle"] { border-style: dashed; background: transparent; }
-#idle-hud .usage-pop .tracker-plan-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; min-width: 0; }
-#idle-hud .usage-pop .tracker-plan-name { flex: none; color: var(--ivory); font-size: 11px; font-weight: 600; }
-#idle-hud .usage-pop .tracker-plan-meta { min-width: 0; overflow: hidden; color: var(--muted); font-size: 9.5px; text-overflow: ellipsis; white-space: nowrap; }
-#idle-hud .usage-pop .tracker-windows { grid-template-columns: 1fr; gap: 4px; }
-#idle-hud .usage-pop .tracker-window { grid-template-columns: 34px minmax(0, 1fr) 36px 50px; gap: 6px; font-size: 10px; }
-#idle-hud .usage-pop .tracker-window-label { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-#idle-hud .usage-pop .tracker-window-value { font-size: 10px; min-width: 0; }
-#idle-hud .usage-pop .tracker-window-reset { color: var(--muted); font-size: 9.5px; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
-#idle-hud .usage-pop .tracker-bar { height: 5px; border-radius: 3px; }
-#idle-hud .usage-pop .tracker-kicker { margin: 5px 0 0; color: var(--muted); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
-#idle-hud .usage-pop .tracker-rows { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
-/* the label keeps its width; a long value wraps under itself instead of squeezing the name */
-#idle-hud .usage-pop .tracker-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 10px; align-items: baseline; font-size: 10px; line-height: 1.45; }
-#idle-hud .usage-pop .tracker-row-label { color: var(--ivory); white-space: nowrap; }
-#idle-hud .usage-pop .tracker-row-value { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; overflow-wrap: anywhere; }
-#idle-hud .usage-pop .tracker-row-bar { grid-column: 1 / -1; height: 3px; }
-#idle-hud .usage-pop .tracker-row[data-tone="warn"] .tracker-row-value { color: var(--warn); }
-#idle-hud .usage-pop .tracker-row[data-tone="idle"] .tracker-row-value { opacity: .75; }
-/* a failed read carries its whole reason: the row stacks and the text wraps under the name */
-#idle-hud .usage-pop .tracker-row[data-tone="error"] { grid-template-columns: 1fr; gap: 1px; }
-#idle-hud .usage-pop .tracker-row[data-tone="error"] .tracker-row-value { color: var(--bad); text-align: left; }
-#idle-hud .usage-pop .tracker-line { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
-#idle-hud .usage-pop .tracker-line-warn { color: var(--warn); overflow-wrap: anywhere; }
-#idle-hud .usage-pop .tracker-line-idle { opacity: .8; }
-
 /* ============================================================
-   Command floor at desktop widths: the dock has moved left, so the
-   rail may run down to the dock's floor; wider still, the rail grows
-   and its five tabs get the room they were missing.
+   Command floor at desktop widths: the rail may run down to the
+   floor; wider still, the rail grows and its five tabs get the room
+   they were missing.
    ============================================================ */
 @media (min-width: 1600px) {
   #idle-hud .cmd-rail { bottom: 22px; }
-  #idle-hud { --command-dock-max: calc(100vw - 24px - var(--command-corner-width) - var(--command-corner-gap) - 16px - var(--command-rail-width) - 24px); }
 }
 /* the narrow rail (288px) keeps all five tabs on one line: Assistant tightens instead of clipping */
 @media (max-width: 1100px) {
@@ -4994,9 +4624,6 @@ html[data-no-blur] #idle-hud .cmd-agents-pop { background: var(--panel-solid); b
     overflow: hidden; clip-path: inset(50%); white-space: nowrap;
   }
   body.command-focus #idle-hud .rail-body { padding-right: 66px; }
-  /* The rail now starts beside the top bar: the composer and search end
-     16px short of it instead of running underneath. */
-  body.command-focus #idle-hud .cmd-center { width: min(720px, calc(100% - clamp(320px, 34vw, 576px) - 64px)); }
 
   /* Peek: the strip widens over the detail and brings its labels back, on
      hover or keyboard focus. :focus-visible, not :focus-within: a clicked
@@ -5014,26 +4641,10 @@ html[data-no-blur] #idle-hud .cmd-agents-pop { background: var(--panel-solid); b
     position: static; width: auto; height: auto; margin: 0; clip-path: none;
   }
 
-  /* The dock folds to its More tools pill; hovering or tabbing into it
-     brings every destination back. */
-  body.command-focus #idle-hud .cmd-dock > .dock-item { display: none; }
-  body.command-focus #idle-hud .cmd-dock:hover > .dock-item,
-  body.command-focus #idle-hud .cmd-dock:focus-within > .dock-item { display: revert; }
-
-  /* Legend and Usage keep their glyphs and drop their words. */
-  body.command-focus #idle-hud .cmd-legend .pill .label,
-  body.command-focus #idle-hud .cmd-legend .usage-brief { display: none; }
+  /* The Legend keeps its glyph and drops its word. */
+  body.command-focus #idle-hud .cmd-legend .pill .label { display: none; }
   body.command-focus #idle-hud .cmd-legend:hover .pill .label,
-  body.command-focus #idle-hud .cmd-legend:focus-within .pill .label,
-  body.command-focus #idle-hud .cmd-legend:hover .usage-brief,
-  body.command-focus #idle-hud .cmd-legend:focus-within .usage-brief { display: revert; }
-
-  /* The view toolbar goes glyph-only. Every control keeps its title and
-     aria-label, so nothing becomes unreachable or unnameable. */
-  body.command-focus #idle-hud .cmd-tools .label { display: none; }
-  body.command-focus #idle-hud .cmd-tools:hover .label,
-  body.command-focus #idle-hud .cmd-tools:has(:focus-visible) .label { display: revert; }
-
+  body.command-focus #idle-hud .cmd-legend:focus-within .pill .label { display: revert; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -5343,11 +4954,7 @@ html[data-shell="rail"] #workspace-sidebar-toggle,
 html[data-shell="rail"] #workspace-sidebar-panel .ws-nav,
 html[data-shell="rail"] #workspace-sidebar-panel .ws-quick,
 html[data-shell="rail"] #workspace-tools,
-html[data-shell="rail"] [data-sheet-links],
-html[data-shell="rail"] #idle-hud .cmd-dock { display: none; }
-
-/* The rail carries the brand; Command's heading keeps its words, not a second mark. */
-html[data-shell="rail"] #idle-hud .cmd-brand .monogram { display: none; }
+html[data-shell="rail"] [data-sheet-links] { display: none; }
 
 /* Zen fades the rail with the rest of the HUD. */
 body.command-zen :is(#app-rail, #app-local-nav) { opacity: 0; pointer-events: none; }
@@ -5525,10 +5132,9 @@ html[data-shell="rail"] body:has(#workspace-layer:not([hidden])):not(:has(.works
    The Map (layout v2; docs/unified-studio.md "The Map")
    Under html[data-frame], which only shell.js writes while the 0.5
    layout is on: Command is the Map place, drawn as the prototype draws
-   it. The classic top bar (brand, live pills, Add a task, find box and
-   toolbar) folds away; their homes in the frame are the status bar,
-   New task, Search (Ctrl K), the Map's own bar and View ▾, Settings ›
-   Map look and the player. The bar takes the top left of the free
+   it. What the classic top bar held lives in the status bar, New task,
+   Search (Ctrl K), the Map's own bar and View ▾, Settings › Map look
+   and the player. The bar takes the top left of the free
    area (Map | Fleet | Pipelines, Running only, View ▾), the work rail
    is the inspector column at its right edge, the four state colours
    sit bottom left beside the Legend, and Fit and zoom under the tree.
@@ -5544,7 +5150,6 @@ html[data-frame] #idle-hud {
   --command-panel-top: 60px; --command-panel-bottom: 60px;
   --map-right: calc(var(--command-rail-width) + 16px);
 }
-html[data-frame] #idle-hud :is(.cmd-top, .cmd-hint, #cmd-usage-toggle, #cmd-usage-pop) { display: none; }
 
 /* the bar: the place's pages, Running only and View ▾ */
 html[data-frame] #idle-hud #map-bar {
