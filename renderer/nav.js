@@ -1479,7 +1479,8 @@
   ];
   const LOCAL_ROUTES = Object.freeze({
     home: ["workspace"],
-    work: ["tasks", "plans", "ideas", "analyzer", "worktrees"],
+    // "inbox" is the 0.5 layout's Work › Inbox (renderer/today.js registers it there only); a route nobody registered is skipped.
+    work: ["tasks", "plans", "ideas", "inbox", "analyzer", "worktrees"],
     agents: ["agents", "command", "fleet", "eyes", "trace", "explorer", "overhead", "agent-brain", "skills", "brains", "context", "booklet", "graph", "usage"],
     settings: ["studio"],
   });
@@ -1669,7 +1670,7 @@
     if (nav.dataset.section !== section) {
       nav.dataset.section = section;
       nav.textContent = "";
-      if (section !== "agents" || !window.MefiAgents?.paintNav) for (const route of routes) nav.append(navButton(get(route), "app-local-link", { key: false }));
+      if (section !== "agents" || !window.MefiAgents?.paintNav) for (const route of routes) { const dest = get(route); if (dest) nav.append(navButton(dest, "app-local-link", { key: false })); }
     }
     if (section === "agents") window.MefiAgents?.paintNav?.(nav, id);
     paintHistory(nav);

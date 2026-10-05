@@ -797,7 +797,8 @@
   }
   function paintItem(entry, rec, info, n, total, ctx) {
     const active = rec.id === S.active;
-    const count = rec.home ? needCount() : 0;
+    // Home and the Inbox say how many wait on you: the Inbox's own count, one number everywhere.
+    const count = rec.home || rec.route?.id === "inbox" ? needCount() : 0;
     const attn = !active && (rec.badge === true || (isSession(rec.route) && S.needs.has(rec.route.params.taskId)));
     const hint = n < 8 ? ` · Ctrl ${n + 1}` : n === total - 1 ? " · Ctrl 9" : "";
     const label = `${info.title}${rec.pin && !rec.home ? ", pinned" : ""}${rec.prev ? ", preview" : ""}${attn ? ", needs you" : ""}`;
@@ -1560,10 +1561,20 @@
       changed("host");
     }).catch(() => {}));
   }
-  // Search and Configuration find the card by its words.
+  // Search and Configuration find the card by its words. Before it, what Search can do with the strip, under Tabs as the prototype lists it:
+  // each row runs what its key runs (the keys are bound in onKey, shown here), and the rows go with the strip.
   function registerSettingsRecord() {
+    const showIn = { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false };
+    const row = (id, label, chord, run, more = {}) => safe(() => window.MefiNav?.register?.({
+      id, label, short: label, kind: "action", layer: null, section: "home", group: "layout", key: null, chord, keyMatch: () => false, glyph: "g-frame", badge: null,
+      paletteGroup: "Tabs", desc: label, searchTerms: `tab tabs ${label.toLowerCase()}`, showIn, hidden: () => !S.running || !S.shown, run, ...more,
+    }));
+    row("tabs-do-add", "Open a tab", "Ctrl T", () => { if (S.running) toggleAdd(); }, { glyph: "g-add" });
+    row("tabs-do-reopen", "Reopen a closed tab", "Ctrl Shift T", () => { if (S.running) { closePop(); restore(0); } });
+    row("tabs-do-pin", "Pin or unpin this tab", "Ctrl Alt P", () => { if (S.running) setPin(S.active, !cur().pin); }, { glyph: "g-pin" });
+    row("tabs-do-close", "Close this tab", "Ctrl W", () => { if (S.running) { closePop(); closeActive(); } }, { glyph: "g-close" });
     safe(() => window.MefiNav?.register?.({
-      id: "tabBehaviour", label: "Tab behaviour", short: "Tab behaviour", kind: "action", layer: null, section: "settings", group: "tools", key: null, glyph: "g-sliders", badge: null,
+      id: "tabBehaviour", label: "Tab behaviour", short: "Tab behaviour", kind: "action", layer: null, section: "settings", group: "tools", key: null, glyph: "g-sliders", badge: null, paletteGroup: "Tabs",
       desc: "Preview tab, what an agent that needs you does, closing finished work, how many tabs stay open, pin suggestions",
       searchTerms: "tabs tab strip pin pinned preview close idle agent needs you recently closed", showIn: { palette: true },
       run: () => { if (S.running && ui.cfg && S.shown && !S.compact) openBehaviour(ui.cfg); else window.MefiConfig?.open?.({ category: "ui" }); },

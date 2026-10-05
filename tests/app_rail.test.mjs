@@ -211,6 +211,9 @@ test("each group has one local navigation row and the foot groups Help", () => {
     assert.equal(local.querySelector('[aria-current="page"]').dataset.nav, routes[1]);
     assert.equal(local.getAttribute("aria-label"), `${section[0].toUpperCase()}${section.slice(1)} views`);
   }
+  // Work › Inbox is the 0.5 layout's page (renderer/today.js registers it there only): the classic row lists what is registered, so it is not drawn here.
+  assert.deepEqual([...nav.LOCAL_ROUTES.work], ["tasks", "plans", "ideas", "inbox", "analyzer", "worktrees"]);
+  assert.equal(nav.get("inbox") ?? null, null);
   assert.deepEqual(footOf(rail()), ["studio", "onboarding", "help"]);
   assert.equal(rail().querySelector('.app-rail-search').dataset.nav, "palette", "Search sits beside New task above the main destinations");
   assert.equal(document.getElementById("app-help-menu").hidden, true);

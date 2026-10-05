@@ -825,6 +825,29 @@ test("dependency waits and grouped work remain visible without offering an unsaf
   assert.equal(env.el("backlog-next").textContent, "Up next: Gallery plan");
 });
 
+test("in the 0.5 layout Home's \"N need you\" is the Inbox's count and opens the Inbox; without it Home counts as before", async () => {
+  const opened = [];
+  const today = { on: true, n: 2, isOn: () => today.on, count: () => today.n, openInbox: (anchor) => { opened.push(anchor?.id ?? anchor); return true; } };
+  const env = await environment({ windowOverrides: { MefiToday: today } });
+  env.events.assistant({ state: { projectId: "project-a", messages: [], ai: { keyPresent: true }, questions: [{ id: "q1", title: "Ship it?", status: "open" }] } });
+  assert.equal(env.el("attention-shortcut").textContent, "2 need you", "the Inbox's number, not Home's own sum");
+  assert.equal(env.el("dash-attention-value").textContent, "2 waiting");
+  assert.equal(env.el("dash-attention").dataset.target, "inbox");
+  await env.el("attention-shortcut").trigger("click");
+  assert.equal(opened.length, 1, "the chip opens the Inbox under it");
+  // A decision taken in the Inbox moves the count without a push from the host.
+  today.n = 1;
+  env.emit("mefi:inbox", { count: 1 });
+  assert.equal(env.el("attention-shortcut").textContent, "1 needs you");
+  // No Inbox (the classic layout, or the module switched off): Home counts the questions and the review filter, as before.
+  today.on = false;
+  env.events.assistant({ state: { projectId: "project-a", messages: [], ai: { keyPresent: true }, questions: [{ id: "q1", title: "Ship it?", status: "open" }, { id: "q2", title: "And this?", status: "open" }] } });
+  assert.equal(env.el("attention-shortcut").textContent, "2 need you");
+  assert.equal(env.el("dash-attention").dataset.target, "ask");
+  await env.el("attention-shortcut").trigger("click");
+  assert.equal(opened.length, 1, "and the chip goes where it always went");
+});
+
 test("the dashboard reads the real run state, workers and waiting decisions from pushes", async () => {
   const env = await environment();
   assert.equal(env.el("dash-service-value").textContent, "Ready");

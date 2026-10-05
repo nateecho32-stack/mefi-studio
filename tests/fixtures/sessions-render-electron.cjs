@@ -114,14 +114,24 @@ function bridge(seedData) {
     { path: "src/export/names.ts", dir: "src/export/", name: "names.ts", oldPath: null, status: "added", additions: 52, deletions: 0, binary: false, kind: "file", state: data.changes.reverted ? "reverted" : "can-revert" },
     { path: "tests/export.test.ts", dir: "tests/", name: "export.test.ts", oldPath: null, status: "added", additions: 33, deletions: 14, binary: false, kind: "file", state: data.changes.reverted ? "reverted" : "can-revert" },
   ];
+  // What the host's own list of what waits on you says (scripts/companion.cjs queue(), assistantState.needsYou, the list the taskbar
+  // count is read from): every open question, and the task whose check failed, parked until someone decides. The backlog lists that
+  // task as blocked with its reason, as the scheduler does.
+  const failedOpen = () => data.tasks.find((row) => row.id === "task_failed" && row.status === "open" && row.verification?.state === "failed") ?? null;
+  const digest = () => {
+    const items = data.questions.filter((question) => question.status === "open").map((question) => ({ id: question.id, kind: "question", taskId: question.context?.taskId ?? null, title: question.title, at: question.at, actions: (question.options || []).map((option) => ({ id: option.id, label: option.label })) }));
+    const failed = failedOpen();
+    if (failed) items.push({ id: "parked:task_failed", kind: "parked", taskId: failed.id, title: failed.title, at: failed.updatedAt });
+    return { items, counts: { total: items.length } };
+  };
   const handlers = {
     projectsList: () => ({ ok: true, activeId: pid, projects: [{ id: pid, name: "Notes app", path: data.root }] }),
     tasksList: () => ({ ok: true, projectId: pid, tasks: data.tasks }),
     ideasList: () => ({ ok: true, ideas: data.ideas }),
     planningList: () => ({ ok: true, projectId: pid, plans: [] }),
-    assistantState: () => ({ ok: true, state: { projectId: pid, status: "running", agents: [], messages: data.messages, prefs: { proactive: true, parallel: 8, aiParallel: 4, memoryAlign: true, loopGuard: true, loopGuardApply: true, compactHistory: true, keepAwake: true, background: true }, work: [], questions: data.questions } }),
+    assistantState: () => ({ ok: true, state: { projectId: pid, status: "running", agents: [], messages: data.messages, prefs: { proactive: true, parallel: 8, aiParallel: 4, memoryAlign: true, loopGuard: true, loopGuardApply: true, compactHistory: true, keepAwake: true, background: true }, work: [], questions: data.questions, needsYou: digest() } }),
     assistantStatus: () => ({ ok: true, status: { projectId: pid, enabled: true, execute: true, autoBuild: true, minutes: 5, parallel: 3, adaptiveParallel: true, mode: "swarm", running: data.running, history: [] } }),
-    backlogStatus: () => ({ ok: true, projectId: pid, paused: false, draining: false, counts: {}, taskStates: [], next: [] }),
+    backlogStatus: () => { const failed = failedOpen(); return { ok: true, projectId: pid, paused: false, draining: false, counts: {}, taskStates: failed ? [{ id: failed.id, stage: "blocked" }] : [], next: [], approval: [], blocked: failed ? [{ id: failed.id, kind: "task", title: failed.title, blockedBy: null, reason: failed.verification.reason, canRetry: true }] : [] }; },
     tasksAttempts: ({ taskId }) => {
       const attempts = {
         task_ask: [{ runId: "run_ask_1", startedAt: t - 46 * 60000, via: "OpenCode", fallbacks: [], finishedAt: null, ok: null, stopped: false, limitMinutes: 25, seconds: null, result: "", tail: [], release: null, outcome: "unrecorded" }],
@@ -194,13 +204,17 @@ function bridge(seedData) {
     learningState: () => ({ ok: true, projectId: pid, decisions: { enabled: true, scope: "blend" }, models: "blend", profiles: {} }),
     openrouterModels: () => ({ ok: true, models: [] }), agentModels: () => ({ ok: true, models: [] }),
     workStats: () => ({ ok: true, projectId: pid, totals: { tasks: 12, runs: 31, tokens: 1234567, activeDays: 9, verified: 7 }, peakHour: 14, days: [], models: [], store: { ok: true, error: null } }),
+    // The status bar's right-hand facts: a plan's two windows, what today's recorded calls cost (the usage tracker's own reads).
+    usageTracker: () => ({ ok: true, today: { calls: 14, usage: { costUsd: { known: 1.92, knownRecords: 14 } } } }),
+    opencodeCredits: () => ({ ok: true, fetchedAt: Date.now(), usage: { rolling: { percent: 20, resetsAt: new Date(Date.now() + 3 * 3600000).toISOString() }, weekly: { percent: 50, resetsAt: new Date(Date.now() + 4 * 86400000).toISOString() } } }),
+    usageAccounts: () => ({ ok: true, accounts: [] }),
   };
   const api = {};
   for (const [name, handler] of Object.entries(handlers)) {
     api[name] = async (...args) => { calls.push({ name, args: clone(args) }); return clone(handler(args[0] ?? {}, args)); };
   }
   const callbacks = {};
-  for (const name of ["onTasks", "onProjects", "onAssistant", "onAssistantStatus", "onProjectPreview", "onSettingsChanged", "onStudioLog", "onAutoSetup", "onReviewChanged"]) api[name] = (callback) => { (callbacks[name] ||= []).push(callback); return () => {}; };
+  for (const name of ["onTasks", "onProjects", "onAssistant", "onAssistantStatus", "onProjectPreview", "onSettingsChanged", "onStudioLog", "onAutoSetup", "onReviewChanged", "onMachineStatus"]) api[name] = (callback) => { (callbacks[name] ||= []).push(callback); return () => {}; };
   contextBridge.exposeInMainWorld("mefiStudio", api);
   contextBridge.exposeInMainWorld("sessionsFixture", {
     calls: () => calls, clear: () => { calls.length = 0; }, state: () => clone({ changes: data.changes, tasks: data.tasks.map((row) => ({ id: row.id, title: row.title, status: row.status })), questions: data.questions.length, decisions: data.decisions.length, messages: data.messages.length }),
@@ -230,6 +244,61 @@ const measure = `
     small, scrollers, wide, spill,
     fold: document.documentElement.dataset.layoutFold || '',
   };`;
+
+// ---- what a person can read, in real pixels: no text under 12 px and none under 4.5:1 against what is behind it ----------------------------
+// Runs in the page for the visible text under `rootSelector`. The background is every layer behind the text, from the page's own
+// background up, each composited with its alpha (a gradient counts as the mean of its stops); text in a control that is disabled or
+// faded (opacity under 1) is left out, as WCAG leaves it out. Answers the failures and what was looked at.
+function readableProbe(rootSelector) {
+  const parse = (value) => {
+    const text = String(value || "").trim();
+    let match = /^rgba?\(([^)]+)\)$/.exec(text);
+    if (match) { const parts = match[1].split(/[\s,/]+/).filter(Boolean).map(Number); return { r: parts[0], g: parts[1], b: parts[2], a: parts.length > 3 ? parts[3] : 1 }; }
+    match = /^color\(srgb ([^)]+)\)$/.exec(text);
+    if (match) { const [rgb, alpha] = match[1].split("/"); const channels = rgb.trim().split(/\s+/).map(Number); return { r: channels[0] * 255, g: channels[1] * 255, b: channels[2] * 255, a: alpha === undefined ? 1 : Number(alpha) }; }
+    return null;
+  };
+  const over = (top, under) => ({ r: top.r * top.a + under.r * (1 - top.a), g: top.g * top.a + under.g * (1 - top.a), b: top.b * top.a + under.b * (1 - top.a), a: 1 });
+  const gradient = (image) => {
+    const stops = String(image || "").match(/rgba?\([^)]+\)|color\(srgb [^)]+\)/g);
+    if (!stops || !/gradient/.test(image)) return null;
+    const colors = stops.map(parse).filter(Boolean);
+    if (!colors.length) return null;
+    const mean = (key) => colors.reduce((sum, color) => sum + color[key], 0) / colors.length;
+    return { r: mean("r"), g: mean("g"), b: mean("b"), a: mean("a") };
+  };
+  const luminance = (color) => { const channel = (value) => { const v = value / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * channel(color.r) + 0.7152 * channel(color.g) + 0.0722 * channel(color.b); };
+  const ratio = (a, b) => { const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05); };
+  const base = parse(getComputedStyle(document.documentElement).getPropertyValue("--bg")) || parse(getComputedStyle(document.body).backgroundColor) || { r: 0, g: 0, b: 0, a: 1 };
+  const root = document.querySelector(rootSelector);
+  if (!root) return { missing: rootSelector, failures: [], small: [], looked: 0 };
+  const shown = (node) => { const r = node.getBoundingClientRect(); const s = getComputedStyle(node); return r.width > 0 && r.height > 0 && s.visibility !== "hidden" && s.display !== "none"; };
+  const leaves = [...root.querySelectorAll("*")].filter((node) => shown(node) && [...node.childNodes].some((child) => child.nodeType === 3 && child.textContent.trim()));
+  const failures = [], small = [];
+  let looked = 0, skipped = 0;
+  for (const node of leaves) {
+    if (parseFloat(getComputedStyle(node).fontSize) < 12) small.push(`${node.className || node.tagName}:${getComputedStyle(node).fontSize}:${node.textContent.trim().slice(0, 24)}`);
+    let faded = false;
+    const chain = [];
+    for (let walk = node; walk && walk.nodeType === 1; walk = walk.parentElement) {
+      const style = getComputedStyle(walk);
+      if (Number(style.opacity) < 0.99 || walk.disabled === true || walk.getAttribute?.("aria-disabled") === "true") faded = true;
+      chain.push(style);
+    }
+    if (faded) { skipped += 1; continue; }
+    let behind = base;
+    for (const style of chain.reverse()) {
+      const fill = gradient(style.backgroundImage) || parse(style.backgroundColor);
+      if (fill && fill.a > 0) behind = over(fill, behind);
+    }
+    const ink = parse(getComputedStyle(node).color);
+    if (!ink) continue;
+    looked += 1;
+    const value = ratio(over(ink, behind), behind);
+    if (value < 4.5) failures.push({ text: node.textContent.trim().slice(0, 40), cls: String(node.className || node.tagName).slice(0, 40), ratio: Math.round(value * 100) / 100 });
+  }
+  return { failures, small, looked, skipped };
+}
 
 app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
@@ -357,6 +426,159 @@ app.whenReady().then(async () => {
   const toastAction = (label) => run(`const node = [...document.querySelectorAll('#toast-host .toast-action')].find((item) => item.textContent.trim() === ${q(label)}); if (!node) throw new Error('no toast action ' + ${q(label)}); node.click();`);
   const waitToast = (label) => until(`[...document.querySelectorAll('#toast-host .toast-action')].some((item) => item.textContent.trim() === ${q(label)})`, `a toast offers ${label}`);
 
+  // ---- the chrome at 1920x1080, beside the prototype's shots (docs/prototype/): the status bar, Search and the Inbox ----------------------
+  // Everything a person reads there is checked in every theme (12 px and 4.5:1, readableProbe). It runs on the board as it starts (the
+  // question still open), on Build's Home with no session open, and leaves it as it found it: Aurora on, the player's own status back.
+  const THEMES = ["aurora", "gold", "midnight", "forest", "violet", "ember", "rose", "void", "eclipse", "abyss", "dusk"];
+  const readable = async (rootSelector, label) => {
+    const misses = [];
+    for (const theme of THEMES) {
+      await run(`window.MefiMusic.applyTheme(${q(theme)}, false); await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));`);
+      const seen = await run(`return (${readableProbe.toString()})(${q(rootSelector)});`);
+      assert.ok(!seen.missing && seen.looked > 0, `${label}: there is text to read under ${rootSelector}: ${JSON.stringify(seen)}`);
+      assert.deepEqual(seen.small, [], `${label} (${theme}): no text under 12 px`);
+      for (const miss of seen.failures) misses.push({ theme, ...miss });
+    }
+    await run("window.MefiMusic.applyTheme('aurora', false);");
+    assert.deepEqual(misses, [], `${label}: every text reads at 4.5:1 or better in every theme`);
+    (report.readable ||= {})[label] = THEMES.length;
+  };
+  const statusBar = `const bar = document.getElementById('shell-status'); const box = bar.getBoundingClientRect();
+    const items = [...bar.querySelectorAll('[data-item]')].filter((node) => !node.hidden && getComputedStyle(node).display !== 'none').map((node) => { const r = node.getBoundingClientRect(); return { key: node.dataset.item, x: Math.round(r.left), r: Math.round(r.right), top: Math.round(r.top), bottom: Math.round(r.bottom), text: node.textContent.trim() }; });
+    return { bar: [Math.round(box.left), Math.round(box.top), Math.round(box.right), Math.round(box.bottom)], items, overlaps: items.slice(1).filter((one, at) => one.x < items[at].r - 0.5).map((one) => one.key), overflow: bar.scrollWidth > bar.clientWidth + 1 };`;
+  async function chromeGallery() {
+    await size(1920, 1080, 1);
+    await run("for (const name of ['list', 'inspector']) window.MefiShell.open(name);");
+    // Build's Home with no session open (a session would read its pictures, which the list's own checks below count).
+    await until("window.MefiSessions.selected() === null && document.body.classList.contains('workspace-active')", "Build's Home, no session open");
+    // The status bar: the machine's load from the watcher's push, the plan's two windows and today's cost from the usage reads, and a
+    // player that plays (its status stood in: the fixture has no network to play anything from).
+    await run("window.sessionsFixture.push('onMachineStatus', { wait: false, capacity: { canStart: true, reason: null, resources: { cpuPercent: 34.2, availableMemoryMB: 6390, totalMemoryMB: 16384, lagMs: 14 } } });");
+    await run("window.__playerStatus = window.MefiMusic.status; window.MefiMusic.status = () => ({ ...window.__playerStatus(), playing: true, title: 'Deep Focus, hour two', source: 'local', queueLength: 1 }); window.dispatchEvent(new CustomEvent('mefi-music-change'));");
+    await until("window.MefiUsageTracker?.brief?.()?.plan && ['machine', 'player', 'cost', 'waiting'].every((key) => !document.querySelector(`#shell-status [data-item=${key}]`).hidden)", "the status bar has its facts");
+    await sleep(300);
+    const wide = await run(statusBar);
+    report.statusBar = wide;
+    assert.deepEqual(wide.items.map((one) => one.key), ["layout", "working", "waiting", "player", "machine", "cost", "permission"], `the prototype's order: ${JSON.stringify(wide.items)}`);
+    assert.deepEqual(wide.items.map((one) => one.text), ["Layout", "3 working", "2 waiting on you", "Deep Focus, hour two", "CPU 34% · Mem 61%", "$1.92 today", "Auto"]);
+    assert.equal(await run("return document.querySelectorAll('#shell-status .shell-meter-button').length;"), 2, "the plan's two windows");
+    assert.ok(wide.items.every((one) => one.top >= wide.bar[1] && one.bottom <= wide.bar[3]), `every item sits inside the bar: ${JSON.stringify(wide)}`);
+    assert.deepEqual([wide.overlaps, wide.overflow], [[], false], "nothing overlaps and nothing is cut off");
+    await capture("chrome-status-1920.png");
+    await readable("#shell-status", "the status bar");
+    // A small window keeps what matters: the machine's load and the meters go first.
+    await size(600, 560, 1);
+    const narrow = await run(statusBar);
+    assert.deepEqual(narrow.items.map((one) => one.key).filter((key) => key === "machine"), [], "no machine load under 900 px");
+    assert.deepEqual([narrow.overlaps, narrow.overflow], [[], false], `600 px: nothing overlaps or is cut off: ${JSON.stringify(narrow)}`);
+    assert.equal(await run("return getComputedStyle(document.querySelector('#shell-status .shell-usage')).display;"), "none");
+    await size(1920, 1080, 1);
+    step("the status bar at 1920x1080 and 600 px");
+    // Search (Ctrl K), the prototype's palette: under the bar and centred, 640 px, the box with its magnifier, one heading per group,
+    // twelve rows (the sessions as the list orders them, the places, an action), each a line with its state or key on the right.
+    const palette = `const sheet = document.querySelector('#palette-overlay .palette-sheet').getBoundingClientRect(); const bar = document.getElementById('shell-top').getBoundingClientRect(); const list = document.getElementById('palette-list').getBoundingClientRect(); const layer = document.getElementById('palette-overlay').getBoundingClientRect();
+      const rows = [...document.querySelectorAll('#palette-list li.palette-row')].map((li) => ({ group: li.dataset.group, label: li.querySelector('.label').textContent, hint: li.querySelector('.hint')?.textContent || '', cut: li.scrollWidth > li.clientWidth + 1, inside: li.getBoundingClientRect().right <= sheet.right + 0.5 }));
+      return { sheet: [Math.round(sheet.left), Math.round(sheet.top), Math.round(sheet.right), Math.round(sheet.bottom), Math.round(sheet.width)], layer: [Math.round(layer.left), Math.round(layer.right)], bar: Math.round(bar.bottom), inner: [innerWidth, innerHeight], rows,
+        heads: [...document.querySelectorAll('#palette-list li.palette-heading')].map((li) => li.textContent), list: [Math.round(list.top), Math.round(list.bottom)],
+        hint: document.getElementById('palette-hint').textContent, close: getComputedStyle(document.getElementById('palette-close')).display, placeholder: document.getElementById('palette-input').placeholder,
+        lens: Boolean(document.querySelector('#palette-overlay .palette-search-glyph')), focused: document.activeElement?.id || '' };`;
+    await press("K", ["control"]);
+    await until("!document.getElementById('palette-overlay').hidden && document.querySelectorAll('#palette-list li.palette-row').length === 12", "Ctrl K opens Search with twelve rows");
+    await sleep(350);
+    const pal = await run(palette);
+    report.palette = pal;
+    assert.deepEqual(pal.heads, ["Sessions", "Places", "Actions"], `the empty box's groups: ${JSON.stringify(pal)}`);
+    assert.deepEqual(pal.rows.map((row) => [row.label, row.hint]), [
+      ["Add an empty state to the notes list", "Needs you"], ["Speed up the first paint on the map", "Needs you"], ["Search notes by tag", "Running"], ["Keyboard shortcut for a new note", "Running"], ["Export notes as Markdown", "Review"], ["Dark mode for the settings page", "Queued"],
+      ["Go to Home", "H"], ["Go to Work", "T"], ["Go to Agents", ""], ["Go to Friends", ""], ["Go to Settings", "Ctrl ,"], ["New task", "Ctrl N"],
+    ], "the sessions as the list orders them, the rail's places with their keys, and New task");
+    assert.equal(pal.sheet[4], 640, "640 px wide, as the prototype");
+    assert.ok(Math.abs((pal.sheet[0] + pal.sheet[2]) / 2 - (pal.layer[0] + pal.layer[1]) / 2) <= 2 && pal.sheet[0] >= pal.layer[0] && pal.sheet[2] <= pal.layer[1], `centred in the free area, which every layer keeps to: ${JSON.stringify(pal)}`);
+    assert.ok(pal.sheet[1] >= pal.bar && pal.sheet[1] <= pal.bar + 40, `just under the top bar: ${JSON.stringify(pal)}`);
+    assert.ok(pal.rows.every((row) => !row.cut && row.inside), "no row is cut off");
+    assert.deepEqual([pal.close, pal.lens, pal.focused, pal.placeholder], ["none", true, "palette-input", "Search, or type “task …” or “idea …” to add one"]);
+    assert.equal(pal.hint, "↑↓ moveEnter openEsc closeAdding a task or idea only happens on Enter");
+    await capture("chrome-palette-1920.png");
+    await readable("#palette-overlay .palette-sheet", "Search");
+    await run("const input = document.getElementById('palette-input'); input.value = 'permission'; input.dispatchEvent(new Event('input', { bubbles: true }));");
+    await until("document.querySelector('#palette-list li.palette-row')", "a search shows its rows");
+    const found = await run(palette);
+    assert.ok(found.heads.includes("Permission mode") && found.rows.some((row) => row.label === "Set permission mode: Auto" && row.hint === "current"), `a search reaches the permission mode, the one in force says current: ${JSON.stringify(found.rows)}`);
+    await capture("chrome-palette-search-1920.png");
+    await size(600, 560, 1);
+    const small = await run(palette);
+    assert.ok(small.sheet[0] >= small.layer[0] && small.sheet[2] <= small.layer[1] && small.sheet[3] <= small.inner[1], `600 px: Search fits its free area: ${JSON.stringify(small)}`);
+    assert.ok(small.rows.every((row) => !row.cut && row.inside), "600 px: no row is cut off");
+    await size(1920, 1080, 1);
+    await press("Escape");
+    await until("document.getElementById('palette-overlay').hidden", "Escape closes Search");
+    step("Search at 1920x1080 and 600 px");
+    // One Inbox: the pill, the status bar, Home's own chip, the session list's Needs you and the popover all say the same two.
+    await until("document.querySelector('#shell-need .shell-pill-n')?.textContent === '2'", "the pill counts the Inbox's two");
+    const counts = await run(`return { pill: document.querySelector('#shell-need').textContent.trim(), bar: document.querySelector('#shell-status [data-item=waiting]').textContent.trim(), home: document.getElementById('workspace-attention-shortcut')?.textContent.trim() ?? null,
+      needs: document.querySelector('#sessions-list .sx-gh[data-key="group:needs"] .sx-count')?.textContent ?? null, rows: [...document.querySelectorAll('#sessions-list .sx-row')].slice(0, 2).map((node) => node.dataset.key), today: window.MefiToday.count() };`);
+    report.oneList = counts;
+    assert.deepEqual(counts, { pill: "2 need you", bar: "2 waiting on you", home: "2 need you", needs: "2", rows: ["task_ask", "task_failed"], today: 2 }, `one list, one number: ${JSON.stringify(counts)}`);
+    // The popover, under the pill: the prototype's cards.
+    await click("#shell-need");
+    await until("!document.getElementById('today-inbox').hidden && document.querySelectorAll('#today-inbox .today-need').length === 2", "the pill opens the Inbox with its two");
+    await sleep(400);
+    const inbox = `const pop = document.getElementById('today-inbox').getBoundingClientRect(); const pill = document.getElementById('shell-need').getBoundingClientRect();
+      const cards = [...document.querySelectorAll('#today-inbox .today-need')].map((card) => ({ key: card.dataset.key, kind: card.querySelector('.today-need-label')?.textContent, from: card.querySelector('.today-need-from')?.textContent ?? '', title: card.querySelector('.today-need-title')?.textContent, glyph: Boolean(card.querySelector('.today-need-kind svg')),
+        buttons: [...card.querySelectorAll('.today-need-options button')].map((node) => node.textContent.trim()), first: card.querySelector('.today-option.is-first')?.textContent.trim() ?? null, wide: card.scrollWidth > card.clientWidth + 1 }));
+      return { pop: [Math.round(pop.left), Math.round(pop.top), Math.round(pop.right), Math.round(pop.bottom), Math.round(pop.width)], pill: [Math.round(pill.left), Math.round(pill.bottom), Math.round(pill.right)], inner: [innerWidth, innerHeight], cards, head: document.querySelector('#today-inbox .today-inbox-head')?.textContent.replace(/\\s+/g, ' ').trim() };`;
+    const pop = await run(inbox);
+    report.inbox = pop;
+    assert.deepEqual(pop.cards.map((card) => [card.key, card.kind, card.from, card.glyph]), [["question:q_1", "Question · OpenCode", "Add an empty state to the notes list", true], ["blocked:task_failed", "Checks failed · Codex", "", true]], `what each is and who asked, the task it comes from: ${JSON.stringify(pop.cards)}`);
+    assert.deepEqual(pop.cards[0].buttons, ["1Yes, reuse itRecommended", "2Only when there are no notes"], "the app's own options, the recommended first");
+    assert.equal(pop.cards[0].first, "1Yes, reuse itRecommended", "the first is the filled one");
+    assert.deepEqual(pop.cards[1].buttons, ["Try again", "It's done", "Drop it"]);
+    assert.ok(pop.pop[1] >= pop.pill[1] && pop.pop[2] <= pop.inner[0] && pop.pop[3] <= pop.inner[1], `under the pill, inside the window: ${JSON.stringify(pop)}`);
+    assert.equal(pop.pop[4], 452, "the prototype's width");
+    assert.ok(pop.cards.every((card) => !card.wide), "nothing in a card is cut off");
+    await capture("chrome-inbox-popover-1920.png");
+    await readable("#today-inbox", "the Inbox popover");
+    await press("Escape");
+    await until("document.getElementById('today-inbox').hidden", "Escape closes the popover");
+    // Work › Inbox: the page, in Work's pages, the tab counting the same two.
+    await run("window.MefiNav.go('inbox');");
+    await until("!document.getElementById('inbox-overlay').hidden && document.querySelectorAll('#inbox-list .today-need').length === 2", "Work › Inbox opens with its two");
+    await sleep(500);
+    const page = await run(`const list = document.getElementById('inbox-list'); const cards = [...list.querySelectorAll('.today-need')].map((card) => card.getBoundingClientRect());
+      return { trail: [...document.querySelectorAll('#shell-top .shell-trail .shell-crumb')].map((node) => node.textContent), pages: [...document.querySelectorAll('#shell-pages-list .shell-page')].map((node) => [node.dataset.page, node.getAttribute('aria-current')]),
+        tab: [...document.querySelectorAll('#shell-tabs .ts-item')].map((node) => [node.querySelector('.ts-title')?.textContent, node.querySelector('.ts-count')?.hidden === false ? node.querySelector('.ts-count').textContent : null]).find((row) => row[0] === 'Inbox') ?? null,
+        lead: document.getElementById('inbox-lead').firstChild?.textContent ?? '', count: document.querySelector('#inbox-lead .inbox-count')?.textContent ?? '',
+        columns: new Set(cards.map((box) => Math.round(box.left))).size, width: Math.round(list.getBoundingClientRect().width), rail: document.querySelector('#app-rail .app-rail-head[aria-current="page"]')?.dataset.section ?? null };`);
+    report.inboxPage = page;
+    assert.deepEqual(page.trail, ["Notes app", "Work", "Inbox"], "Work › Inbox, as the prototype's breadcrumb");
+    assert.ok(page.pages.some(([id, current]) => id === "inbox" && current === "page"), `a page of Work's own: ${JSON.stringify(page.pages)}`);
+    assert.deepEqual(page.tab, ["Inbox", "2"], "the tab counts the same two");
+    assert.equal(page.rail, "work", "the rail says Work");
+    assert.match(page.lead, /^Everything waiting on you in one place: .* Ctrl J opens the same list from anywhere\. $/);
+    assert.equal(page.count, "2 things wait on you.");
+    assert.equal(page.columns, 2, "two abreast at 1920 px, as the prototype");
+    assert.ok(page.width <= 1021, `the page's own width, centred: ${page.width}`);
+    await capture("chrome-inbox-page-1920.png");
+    await readable("#inbox-overlay", "Work › Inbox");
+    await size(600, 560, 1);
+    const thin = await run("const list = document.getElementById('inbox-list').getBoundingClientRect(); const cards = [...document.querySelectorAll('#inbox-list .today-need')]; return { right: list.right, inner: innerWidth, wide: cards.some((card) => card.scrollWidth > card.clientWidth + 1), columns: new Set(cards.map((card) => Math.round(card.getBoundingClientRect().left))).size };");
+    assert.ok(thin.right <= thin.inner + 1 && !thin.wide && thin.columns === 1, `600 px: one column, nothing cut off: ${JSON.stringify(thin)}`);
+    await size(1920, 1080, 1);
+    await run("window.MefiNav.close('inbox');");
+    await until("document.getElementById('inbox-overlay').hidden", "the page closes");
+    await run("window.MefiNav.go('workspace');");
+    step("one Inbox: the pill, the status bar, Home, the list and the tab say the same; the popover and Work › Inbox at 1920 and 600 px");
+    await run("window.MefiMusic.status = window.__playerStatus; delete window.__playerStatus; window.dispatchEvent(new CustomEvent('mefi-music-change'));");
+    await size(1440, 900, 1);
+  }
+  if (only === "chrome") {
+    await chromeGallery();
+    assert.deepEqual(report.errors, [], "no console errors");
+    report.complete = true;
+    finish();
+    return;
+  }
+
   // ---- the list ---------------------------------------------------------------------------------------------------------------------------
   const groups = await run("return [...document.querySelectorAll('#sessions-list .sx-gh')].map((node) => [node.dataset.key, node.firstElementChild.textContent, node.querySelector('.sx-count').textContent]);");
   assert.deepEqual(groups, [["group:needs", "Needs you", "2"], ["group:running", "Running", "2"], ["group:review", "Review", "1"], ["group:queued", "Queued", "2"], ["group:done", "Done", "3"]], "the board is grouped by where each task stands");
@@ -369,6 +591,9 @@ app.whenReady().then(async () => {
   assert.equal(await textOf("#sessions-project .sx-proj-words small"), "main");
   assert.equal(await textOf("#sessions-tab-backlog"), "Backlog · 2");
   step("the list is grouped and worded");
+  // The chrome gallery runs here, after the list's words that count time (it takes a while: every theme, four times), and before
+  // anything changes the board.
+  await chromeGallery();
   // The head as the prototype has it: the Git chip (git-sync.js's, branch then state) and the worktrees chip, then the project menu.
   await until("document.querySelector('#sessions-gitrow .gs-chip') && !document.querySelector('#sessions-gitrow .gs-slot').hidden", "the Git chip sits under the project");
   assert.equal(await textOf("#sessions-gitrow .gs-chip-branch-name"), "main");

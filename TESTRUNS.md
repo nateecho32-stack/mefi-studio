@@ -39,6 +39,38 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-04 The v2 chrome closer to the 0.5 prototype: status bar, Search, one Inbox
+
+Branch `ui/chrome` in `C:\wt\ui-chrome` (off land/ui-work-view fe59dd3,
+node_modules junctioned), pushed as wip/ui-chrome: 9947295 status bar (the
+machine's load from machine:status, the prototype's order, the rule before
+the meters, "5 h" and "Week"), 64854cc Search (the prototype's palette over
+the same registry: twelve rows, groups, the frame's, strip's, New task and
+permission-mode records), 05b5c63 one Inbox (the pill, status bar, Home's
+chip, the tabs and the session list's Needs you read one list; the
+prototype's cards; Work › Inbox), cd4444a Search kept to the free area and
+the Python palette contract updated (both found by the full run).
+
+`npm run check` ok (271 targets), lint 0 errors (44 warnings, none in the
+touched files), `npm run audit` 0 findings. `npm run test:fast` at cd4444a's
+tree: 6934 tests, 6919 pass, 14 skipped, 1 fail (rust_parity_snapshots
+"snapshot host", 73 s under load: 3/3 alone; untouched by this branch).
+Python contracts 248 OK (1 skipped) after the palette contract's update.
+
+Full `npm test` at 05b5c63 (quiet machine): Node 6934 tests, 6920 pass, 14
+skipped, 0 fail; Electron lane 75: 72 pass, 1 skipped, 2 fail:
+layout_contract_render (viewport 1921x1081, as on clean main here) and
+shell_render (Search's layer spanned the window; fixed in cd4444a, then
+shell_render alone reached and stopped at the known 1 px check at 1100 px,
+"373 !== 372", as on clean main); Python 1 fail (the palette contract read
+the old span; fixed in cd4444a); path lock ok. Electron suites alone after
+cd4444a: sessions_render pass (93 s, with its new chrome gallery: the bar's
+order and words, Search's groups and rows, one count everywhere, the Inbox
+popover and Work › Inbox at 1920x1080 and 600 px, every text 12 px or more
+and 4.5:1 in all eleven themes); today_render (53 s) and tabs_render (118 s)
+passed alone before it and in the full run.
+Captures (1920x1080) in `C:\wt\gap\after-chrome\final\`, prototype-left
+side-by-sides in `C:\wt\gap\after-chrome\compare\`.
 ## 2026-10-04 The v2 Work view lands on main with Rust stage 2
 
 Branch `land/ui-work-view` in `C:\wt\land-ui`: origin/main 90661df (Rust stage
@@ -372,12 +404,6 @@ Stable remains the default; development requires explicit warning/consent. Devel
 ## 2026-10-02 late evening - memory-only durable-log write health
 
 **Result:** focused Node tests passed (40/40). Executor/work-event append failures remain nonthrowing; later writes recover; fixed channels, saturated counts, detached snapshots, broken clock and Trace success/read-failure metadata covered. Full aggregate and native Trace checks queued until the parent releases the game window. No retention, redaction, export or persistent-log changes.
-
-## 2026-10-02 late evening - Deferred navigation focus source diagnosis and proposed guard
-
-Booklet v3 full aggregate completed with 6760 Node tests: 6743 passed, one Tasks retained-focus assertion failed, 16 skipped. Python 248 OK (one skip), locks six passed, real provider-free Fleet ten steps passed; build/check/audit passed. Active task-new, connected retained summary, unchanged card identity/expansion and changed-card checks match the preserved prior symptom. Booklet remains frozen, unqualified and unlanded. Original inventory run (obsolete wiring/partial packaging fixture plus Plans/tree native timeouts), stopped v2, and all prior failures remain reachable in local evidence. Unchanged tree passed controlled repeat and v3 aggregate; no cause claimed for native timeouts.
-
-Exact production claim() source under controlled frame scheduling demonstrates unconditional task-new focus after later summary/search focus or release. Verified predecessor and booklet v3 navigation bytes match and reproduce the ordering. A separate isolated candidate guards pending initial focus against a newer claim, release, hidden destination or changed active element. Eleven focused cases plus existing navigation/startup/settings contracts passed: 58/58. Unchanged predecessor fails the focus regression cases. Input drafts and valid default navigation focus are covered. Native focus event stack/timing instrumentation and trusted-pointer controlled predecessor/booklet/candidate comparison are prepared, not launched: game owns the native window. Native source-attribution probe remains queued. No production/provider actions, shell default changes, push/merge/release or Library retry. Candidate unqualified pending native attribution and full aggregate; source-level evidence is not a native cause claim.
 
 ## Read Before Any Tests
 

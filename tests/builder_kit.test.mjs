@@ -106,6 +106,26 @@ test("stage groups read the same tone as the menu's groups, so the two can never
   assert.equal(older.a, "needs"); assert.equal(older.b, "working"); assert.equal(older.c, "working");
 });
 
+test("in the 0.5 layout Needs you is the Inbox's list: a session the Inbox holds for a decision is there, one the reading calls blocked that the Inbox does not hold waits with the queue", async () => {
+  const board = [task("asking"), task("held"), task("cooling", { verification: { state: "failed" } }), task("step"), task("parked"), task("checking", { status: "awaiting_verification" }), task("plain")];
+  const stages = { held: "blocked", cooling: "blocked", step: "approval", parked: "ready", checking: "review" };
+  const a = await app({ tasks: board, stages, questions: [{ id: "q", status: "open", taskId: "asking", title: "Sure?" }] });
+  // No Inbox (the classic layout): the reading alone decides, as before.
+  const before = clean(Object.fromEntries(a.B.stageGroups(board, { pinned: new Set(), data: a.data }).flatMap((group) => group.rows.map((row) => [row.id, group.key]))));
+  assert.deepEqual(before, { asking: "needs", held: "needs", cooling: "needs", step: "needs", parked: "queued", checking: "review", plain: "queued" });
+  // The Inbox holds the question's task, the held one and a parked one the reading does not call blocked; not the failed check
+  // that will retry by itself, nor a step whose go-ahead is asked once for its whole request.
+  a.window.MefiToday = { isOn: () => true, needTasks: () => new Set(["asking", "held", "parked"]) };
+  const after = clean(Object.fromEntries(a.B.stageGroups(board, { pinned: new Set(), data: a.data }).flatMap((group) => group.rows.map((row) => [row.id, group.key]))));
+  assert.deepEqual(after, { asking: "needs", held: "needs", cooling: "queued", step: "queued", parked: "needs", checking: "review", plain: "queued" }, "Needs you is exactly what the Inbox holds; a result waits under Review");
+  assert.equal(a.B.reading(board[2], a.data).tone, "wait", "the tabs and the list read the same tone");
+  // An Inbox that is off, or that throws, leaves the reading as it was.
+  a.window.MefiToday = { isOn: () => false, needTasks: () => new Set() };
+  assert.equal(a.B.reading(board[1], a.data).tone, "ask");
+  a.window.MefiToday = { isOn: () => true, needTasks: () => { throw new Error("no"); } };
+  assert.equal(a.B.reading(board[1], a.data).tone, "ask");
+});
+
 // ---- what a task offers ----------------------------------------------------------------------------------------------
 
 test("what a task offers is described once: the sessions layout's buttons and the v2 thread's come from the same specs", async () => {

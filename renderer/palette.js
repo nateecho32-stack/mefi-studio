@@ -2,7 +2,9 @@
 // Fuzzy jumps to pages, sheets, settings, actions, tasks, nodes and models,
 // grouped by the same sections as the navigation rail. With the box empty it
 // starts with Recent (what you last opened or ran from here, kept per project),
-// and "task ..." or "idea ..." adds one on Enter.
+// and "task ..." or "idea ..." adds one on Enter. In the 0.5 layout
+// (html[data-layout="v2"]) the same palette reads as the prototype's: see
+// "the 0.5 layout" below.
 (function () {
   "use strict";
 
@@ -240,7 +242,102 @@
   }
 
   function build() {
-    state.items = [...destinations(), ...tasks(), ...nodes(), ...models()];
+    state.items = v2() ? [...sessionsV2(), ...backlogV2(), ...placesV2(), ...registryV2(), ...nodes().map((item) => ({ ...item, kind: "Nodes", glyph: "g-orbit" })), ...models().map((item) => ({ ...item, kind: "Models", glyph: "g-booklet" }))]
+      : [...destinations(), ...tasks(), ...nodes(), ...models()];
+  }
+
+  // ---- the 0.5 layout: the prototype's Search (docs/prototype/mefi-studio-0.5-v5.html) ----------
+  // With html[data-layout="v2"] it is the same palette, the same keys, Recent and "task ...",
+  // read as the prototype has it: one line per result (its icon, its name and, on the right, its
+  // state, its key or "page"), under the groups Recent, Sessions, Backlog, Places, Actions, Layout,
+  // Tabs, Permission mode and each section's own pages, at most twelve rows. Over the empty box:
+  // Recent, then the sessions that matter now, the places on the rail and the actions marked for it,
+  // twelve rows in all. Sessions are this project's tasks as the session list reads them
+  // (MefiBuilder.reading), from the board Home already holds, so Search makes no read of its own
+  // for them; the backlog is the session list's own (ideas nobody has made a task of). Everything
+  // else is the registry, as in v1: a record says its group (paletteGroup), its words on the right
+  // (paletteHint) and whether the empty box lists it (paletteBrowse, the lower the earlier).
+  const v2 = () => document.documentElement?.dataset?.layout === "v2";
+  const shownMax = () => (v2() ? 12 : 40);
+  const STAGE_WORDS = Object.freeze({ ask: "Needs you", run: "Running", check: "Review", wait: "Queued", ready: "Queued", done: "Done", dropped: "Done" });
+  const STAGE_RANK = Object.freeze({ ask: 0, run: 1, check: 2, wait: 3, ready: 3, done: 4, dropped: 4 });
+  const BROWSE_SESSIONS = 6;
+  const PLACES = Object.freeze([["Home", "workspace"], ["Work", "tasks"], ["Agents", "agents"], ["Friends", "friends"], ["Settings", "studio"]]);
+  const board = () => { const data = window.MefiWorkspace?.snapshot?.(); return data && data.projectId ? data : null; };
+  const stampOf = (value) => { const number = Number(value); return Number.isFinite(number) && number > 0 ? number : Date.parse(value || "") || 0; };
+  const movedAt = (task) => Math.max(stampOf(task.updatedAt), stampOf(task.doneAt), stampOf(task.createdAt), stampOf(task.lastAttempt?.at));
+  function toneOf(task, data) {
+    let tone = null;
+    try { tone = window.MefiBuilder?.reading?.(task, data || undefined)?.tone ?? null; } catch { tone = null; }
+    if (typeof tone === "string" && tone in STAGE_WORDS) return tone;
+    if (["done", "archived", "completed"].includes(task.status)) return task.dropped ? "dropped" : "done";
+    return task.status === "active" ? "run" : task.status === "awaiting_verification" ? "check" : "ready";
+  }
+  function sessionsV2() {
+    const data = board();
+    const projectId = data?.projectId || currentProject();
+    const rows = (data ? data.tasks : state.taskRecords).filter((task) => task?.id);
+    return rows.map((task) => {
+      const archived = task.archived === true || task.status === "archived";
+      return { task, archived, tone: toneOf(task, data), at: movedAt(task) };
+    }).sort((a, b) => Number(a.archived) - Number(b.archived) || STAGE_RANK[a.tone] - STAGE_RANK[b.tone] || b.at - a.at).map(({ task, archived, tone }) => ({
+      key: `task:${task.id}`, kind: "Sessions", label: String(task.title || window.MefiTasks?.shortTitle?.(task) || "Untitled task"),
+      description: task.prompt || task.description || "", hint: archived ? "Archived" : STAGE_WORDS[tone], keyHint: false, count: 0, glyph: "g-tasks",
+      browse: !archived && tone !== "dropped",
+      run: () => { if (!projectId || currentProject() === projectId || board()?.projectId === projectId) window.MefiNav?.go?.("tasks", { taskId: task.id }); },
+    }));
+  }
+  function backlogV2() {
+    const data = board();
+    if (!data) return [];
+    let rows = null;
+    try { rows = window.MefiSessions?.model?.backlog?.(data) ?? null; } catch { rows = null; }
+    if (!Array.isArray(rows)) rows = (Array.isArray(data.ideas) ? data.ideas : []).filter((idea) => idea?.id && idea.status !== "done" && !idea.taskId).map((idea) => ({ id: idea.id, title: idea.title || idea.detail || "Untitled idea" }));
+    const ideas = new Map((Array.isArray(data.ideas) ? data.ideas : []).map((idea) => [idea?.id, idea]));
+    return rows.filter((row) => row && row.kind !== "plan").map((row) => ({
+      key: `idea:${row.id}`, kind: "Backlog", label: String(row.title), description: String(ideas.get(row.id)?.detail || ""), hint: "Idea", keyHint: false, count: 0, glyph: "g-ideas",
+      run: () => window.MefiNav?.go?.("ideas", { ideaId: row.id }),
+    }));
+  }
+  // The rail's places, by the page each opens, with the key that page already has.
+  function placesV2() {
+    const nav = window.MefiNav;
+    return PLACES.map(([label, id]) => [label, nav?.get?.(id)]).filter(([, dest]) => dest && !dest.hidden?.()).map(([label, dest]) => ({
+      key: `place:${dest.id}`, kind: "Places", label: `Go to ${label}`, description: dest.desc || "", searchTerms: `${label} ${dest.label || ""} ${dest.searchTerms || ""}`,
+      hint: dest.chord || dest.key || "", keyHint: Boolean(dest.chord || dest.key), count: 0, glyph: dest.glyph || "g-frame", browse: true,
+      run: () => nav.go(dest.id),
+    }));
+  }
+  function registryV2() {
+    const nav = window.MefiNav;
+    if (!nav?.list) return [];
+    const commandActive = Boolean(window.MefiIdle?.isActive?.());
+    const openSheet = nav.state?.sheet ?? null;
+    const rank = (dest) => nav.sectionRank?.(dest) ?? 0;
+    const words = (value) => { try { return String((typeof value === "function" ? value() : value) || ""); } catch { return ""; } };
+    return nav.list({ showIn: "palette" })
+      .filter((dest) => dest.id !== "palette" && !(dest.id === "command" && commandActive) && dest.id !== openSheet)
+      .sort((a, b) => rank(a) - rank(b))
+      .map((dest) => {
+        const action = dest.kind === "action";
+        const key = dest.key || dest.chord || "";
+        const hint = words(dest.paletteHint) || key || (action ? "" : "page");
+        return {
+          key: `dest:${dest.id}`, kind: dest.paletteGroup || (action ? "Actions" : nav.sectionLabel?.(dest) ?? dest.group), label: dest.label, description: dest.desc || "", searchTerms: dest.searchTerms || "",
+          hint, keyHint: Boolean(key) && hint === key, count: dest.badge ? Number(nav.badges?.[dest.badge]) || 0 : 0, glyph: dest.glyph || (action ? "g-spark" : "g-frame"),
+          browse: Number.isFinite(dest.paletteBrowse) ? dest.paletteBrowse : null,
+          run: () => nav.go(dest.id),
+        };
+      });
+  }
+  // The empty box: Recent, then the sessions that matter now, the places, and the actions marked for it; twelve rows in all.
+  function browseV2(recent) {
+    const shown = new Set(recent.map((item) => item.key));
+    const fresh = (item) => !shown.has(item.key);
+    const sessions = state.items.filter((item) => item.kind === "Sessions" && item.browse && fresh(item)).slice(0, BROWSE_SESSIONS);
+    const places = state.items.filter((item) => item.kind === "Places" && fresh(item));
+    const actions = state.items.filter((item) => item.kind !== "Places" && item.kind !== "Sessions" && Number.isFinite(item.browse) && fresh(item)).sort((a, b) => a.browse - b.browse);
+    return [...recent, ...sessions, ...places, ...actions].slice(0, shownMax());
   }
 
   // ---- Recent: what you last opened or ran from here, per project ----------------------
@@ -300,6 +397,7 @@
     if (!canCreate(kind)) return null;
     return {
       kind: "Create",
+      glyph: kind === "task" ? "g-add" : "g-ideas",
       label: `Add ${kind}: “${clip(text, 60)}”`,
       description: kind === "task" ? "Adds it to the task board; the assistant picks it up." : "Saves it in your ideas. Nothing is built from it until you say so.",
       hint: "Enter",
@@ -349,9 +447,36 @@
       /* the preferences could not be read: keep what was known */
     }
     if (el.input) {
-      el.input.placeholder = flags.quickCreate && (canCreate("task") || canCreate("idea")) ? "Search · “task …” or “idea …” to add" : plainPlaceholder;
+      dress();
       if (!el.overlay.hidden) filter(true);
     }
+  }
+
+  // What the box, its footer and the Close button say, for the layout that is on: v1 as it always was; the 0.5 layout's
+  // as the prototype words it (the keys as keys, and that adding only happens on Enter), with the result count kept for a
+  // screen reader (it is the status line, read out, not shown). Close goes: the scrim and Escape close it there.
+  let plainHint = null;
+  function dress() {
+    const adds = flags.quickCreate && (canCreate("task") || canCreate("idea"));
+    const fresh = v2();
+    el.input.placeholder = adds ? (fresh ? "Search, or type “task …” or “idea …” to add one" : "Search · “task …” or “idea …” to add") : plainPlaceholder;
+    if (el.close && (fresh || el.close.hidden)) el.close.hidden = fresh;
+    if (el.overlay.dataset) el.overlay.dataset.look = fresh ? "v2" : "v1";
+    // The prototype's magnifier before the box; v1 has none.
+    const row = el.input.parentNode;
+    const lens = row?.querySelector?.(".palette-search-glyph") ?? null;
+    if (fresh && row && !lens) { const icon = glyphNode("g-search"); if (icon) { icon.setAttribute("class", "glyph palette-search-glyph"); row.insertBefore?.(icon, el.input); } }
+    else if (!fresh && lens) lens.remove?.();
+    const hint = el.hint;
+    if (!hint || !hint.dataset) return;
+    if (plainHint === null) plainHint = hint.textContent;
+    if (!fresh) { if (hint.dataset.look === "v2") { hint.textContent = plainHint; delete hint.dataset.look; } return; }
+    const key = (text) => { const node = document.createElement("kbd"); node.textContent = text; return node; };
+    const part = (keys, words) => { const node = document.createElement("span"); node.className = "palette-key"; node.append(...keys.map(key), document.createTextNode(` ${words}`)); return node; };
+    const parts = [part(["↑", "↓"], "move"), part(["Enter"], "open"), part(["Esc"], "close")];
+    if (adds) { const note = document.createElement("span"); note.className = "palette-note"; note.textContent = "Adding a task or idea only happens on Enter"; parts.push(note); }
+    hint.replaceChildren(...parts);
+    hint.dataset.look = "v2";
   }
 
   // Roving aria-activedescendant: focus never leaves the input, so the
@@ -372,10 +497,11 @@
 
   function render() {
     el.list.textContent = "";
-    const items = state.filtered.slice(0, 40);
+    const most = shownMax();
+    const items = state.filtered.slice(0, most);
     if (el.status) {
       const count = state.filtered.length;
-      const results = count > 40 ? `Showing 40 of ${count} results. Keep typing to narrow them.` : `${count} result${count === 1 ? "" : "s"}.`;
+      const results = count > most ? `Showing ${most} of ${count} results. Keep typing to narrow them.` : `${count} result${count === 1 ? "" : "s"}.`;
       const taskStatus = state.taskStatus === "loading" ? " Loading project tasks…" : state.taskStatus === "error" ? " Tasks couldn't be loaded. Close and reopen Search to retry." : "";
       el.status.textContent = results + (state.filtered[0]?.create ? " Enter adds it; nothing is added until then." : "") + taskStatus;
     }
@@ -387,6 +513,7 @@
       setActiveOption();
       return;
     }
+    if (v2()) { renderV2(items); return; }
     items.forEach((item, index) => {
       const li = document.createElement("li");
       li.id = `palette-option-${index}`;
@@ -442,6 +569,59 @@
     setActiveOption();
   }
 
+  // The prototype's rows: a heading where a group starts (not an option), then per result its icon, its name, a count when it has
+  // one, and its state, key or "page" on the right in plain words. The option is the same as v1's to the keys and a screen reader.
+  function glyphNode(id) {
+    const svg = document.createElementNS?.("http://www.w3.org/2000/svg", "svg");
+    if (!svg || typeof svg.setAttribute !== "function") return null;
+    svg.setAttribute("class", "glyph palette-glyph"); svg.setAttribute("aria-hidden", "true"); svg.setAttribute("focusable", "false");
+    const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    use.setAttribute("href", `#${id}`); svg.append(use);
+    return svg;
+  }
+  function renderV2(items) {
+    items.forEach((item, index) => {
+      if (index === 0 || items[index - 1].kind !== item.kind) {
+        const head = document.createElement("li");
+        head.className = "palette-heading";
+        head.setAttribute("role", "presentation");
+        head.textContent = item.kind;
+        el.list.append(head);
+      }
+      const li = document.createElement("li");
+      li.id = `palette-option-${index}`;
+      li.className = "palette-row";
+      li.setAttribute("role", "option");
+      li.setAttribute("aria-selected", String(index === state.index));
+      li.setAttribute("aria-posinset", String(index + 1));
+      li.setAttribute("aria-setsize", String(state.filtered.length));
+      li.dataset.group = item.kind;
+      if (index === state.index) li.classList.add("active");
+      const icon = glyphNode(item.glyph || (item.create ? "g-add" : "g-frame"));
+      if (icon) li.append(icon);
+      const label = document.createElement("span");
+      label.className = "label";
+      label.textContent = item.label;
+      li.append(label);
+      if (item.count > 0) {
+        const count = document.createElement("span");
+        count.className = "count";
+        count.textContent = String(item.count);
+        li.append(count);
+      }
+      if (item.hint) {
+        const hint = document.createElement("small");
+        hint.className = "hint";
+        hint.textContent = item.hint;
+        li.append(hint);
+      }
+      li.addEventListener("mouseenter", () => highlight(index, li));
+      li.addEventListener("click", () => run(index));
+      el.list.append(li);
+    });
+    setActiveOption();
+  }
+
   // The pointer moves the highlight in place. Rebuilding every row on each
   // mouseenter was the palette's hover cost; only the two rows that change are
   // touched, and the activedescendant follows.
@@ -479,7 +659,7 @@
       // Recent leads, and what it holds is not listed again below.
       const recent = recentItems();
       const shown = new Set(recent.map((item) => item.key));
-      state.filtered = [...recent, ...grouped(state.items.filter((item) => !item.key || !shown.has(item.key)))];
+      state.filtered = v2() ? browseV2(recent) : [...recent, ...grouped(state.items.filter((item) => !item.key || !shown.has(item.key)))];
     } else {
       state.filtered = grouped(state.items
         .map((item) => ({ item, score: matchScore(query, item) }))
@@ -493,7 +673,7 @@
       if (create) state.filtered.splice(String(state.filtered[0]?.label ?? "").toLowerCase() === query.toLowerCase() ? 1 : 0, 0, create);
     }
     const retained = selected ? state.filtered.findIndex((item) => item.kind === selected.kind && item.label === selected.label) : -1;
-    state.index = retained >= 0 && retained < 40 ? retained : 0;
+    state.index = retained >= 0 && retained < shownMax() ? retained : 0;
     render();
   }
 
@@ -516,13 +696,15 @@
     // bookkeeping to do it for us.
     state.opener = document.activeElement;
     window.MefiNav?.claim?.("palette");
+    dress();
     build();
     el.overlay.hidden = false;
     el.input.setAttribute("aria-expanded", "true");
     el.input.value = "";
     filter();
     el.input.focus();
-    loadTasks();
+    // The 0.5 layout's sessions come from the board Home already holds: no read of its own while there is one.
+    if (!v2() || !board()) loadTasks();
     void readFlags();
   }
 
@@ -558,6 +740,7 @@
     el.list = document.getElementById("palette-list");
     el.close = document.getElementById("palette-close");
     el.status = document.getElementById("palette-status");
+    el.hint = document.getElementById("palette-hint");
     if (!el.overlay) return;
     plainPlaceholder = el.input.placeholder || "";
     void readFlags();
@@ -593,7 +776,7 @@
         event.preventDefault();
         // The list is a cycle: Down past the last option lands on the first,
         // Up from the first lands on the last. Wrap within the 40 shown.
-        const span = Math.min(40, state.filtered.length);
+        const span = Math.min(shownMax(), state.filtered.length);
         if (!span) return;
         state.index = event.key === "ArrowDown" ? (state.index + 1) % span : (state.index - 1 + span) % span;
         render();
@@ -603,7 +786,7 @@
         // query typed they keep their native caret role in the field, so the
         // jump only applies while browsing the default list.
         if (el.input.value.trim()) return;
-        const span = Math.min(40, state.filtered.length);
+        const span = Math.min(shownMax(), state.filtered.length);
         if (!span) return;
         event.preventDefault();
         state.index = event.key === "Home" ? 0 : span - 1;

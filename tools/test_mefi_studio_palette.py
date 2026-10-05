@@ -147,13 +147,15 @@ class MefiStudioPaletteTests(unittest.TestCase):
             "state.index = event.key === \"ArrowDown\" ? (state.index + 1) % span"
             " : (state.index - 1 + span) % span;"
         )
+        # The rows the palette shows: 40, or the 0.5 prototype's twelve in layout v2.
+        self.assertIn("const shownMax = () => (v2() ? 12 : 40);", self.palette, "the wrap span follows the rows shown in each layout")
         for key in ("ArrowDown", "ArrowUp"):
             branch = handler.split(f'event.key === "{key}"', 1)
             self.assertEqual(2, len(branch), f"the keydown handler must keep an {key} branch")
             branch = branch[1].split("} else if", 1)[0]
             self.assertIn("event.preventDefault();", branch, f"{key} must not scroll the page behind the palette")
             self.assertIn(
-                "const span = Math.min(40, state.filtered.length);",
+                "const span = Math.min(shownMax(), state.filtered.length);",
                 branch,
                 f"{key} must wrap within the rows the palette actually shows",
             )

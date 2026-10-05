@@ -47,6 +47,24 @@ test("the host's pushes (tasks, the conversation, the run status, the projects) 
   assert.equal(a.env.frames.length + a.env.timeouts.length, queued, "nothing is queued for panels that are away");
 });
 
+test("Search lists New task with its key while the panels are there; it runs the list's own New task", async () => {
+  const a = await open();
+  await a.settle();
+  const rows = a.calls.registered.filter((row) => row.id === "sessions-new-task");
+  assert.equal(rows.length, 1, "registered once, when the panels attach");
+  const [row] = rows;
+  assert.deepEqual([row.kind, row.label, row.chord, row.paletteGroup, row.paletteBrowse, row.glyph, row.keyMatch()], ["action", "New task", "Ctrl N", "Actions", 1, "g-add", false]);
+  assert.deepEqual({ ...row.showIn }, { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false });
+  assert.equal(row.hidden(), false);
+  a.S.select("queued");
+  await a.settle();
+  row.run();
+  assert.equal(a.S.selected(), null, "the session is put away");
+  assert.equal(a.calls.compose, 1, "and Home's box takes the new task, as the list's button does");
+  a.S.detach();
+  assert.equal(row.hidden(), true, "gone with the panels");
+});
+
 test("a minute's tick draws the words that count time again, and a window nobody can see waits for its turn", async () => {
   const a = await open();
   await a.settle();
@@ -79,6 +97,20 @@ test("a project the workspace opened without announcing it (the first one at lau
   assert.equal(a.S.selected(), "b", "what that project remembered is open");
   assert.equal(a.one("list", "#sessions-tab-backlog").getAttribute("aria-selected"), "true", "and the list it was on");
   assert.deepEqual(a.rowKeys(), ["idea:i1"]);
+});
+
+test("Needs you follows the Inbox: when the Inbox moves (a decision taken in it, a digest that arrived) the list's groups follow, with no push of their own", async () => {
+  const a = await open();
+  await a.settle();
+  const needs = () => a.all("list", ".sx-gh").find((node) => node.dataset.key === "group:needs")?.querySelector(".sx-count").textContent ?? "0";
+  assert.equal(needs(), "1", "the open question, as the reading says without an Inbox");
+  const held = new Set(["asking", "queued"]);
+  a.window.MefiToday = { isOn: () => true, needTasks: () => held };
+  a.env.emit("mefi:inbox"); await a.settle();
+  assert.equal(needs(), "2", "the Inbox holds the queued one for a decision too: it is Needs you");
+  held.delete("queued");
+  a.env.emit("mefi:inbox"); await a.settle();
+  assert.equal(needs(), "1", "decided in the Inbox: it leaves Needs you at once");
 });
 
 test("the page's appearance, permission and layout signals draw what they change: the companion's name, what Mefi decided, a short window", async () => {

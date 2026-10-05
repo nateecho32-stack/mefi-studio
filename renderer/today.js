@@ -24,8 +24,12 @@
 // "Decided" line, and has an Undo where the app has one (a drop or a done can
 // be reopened; Mefi's own decisions undo through autonomy:undo). "N need you" is
 // that list's length, not a second count: count() and onChange() are what the
-// top bar's pill reads, and openInbox(anchor) what it opens (a popover under the
-// pill, and a page, the registry route "inbox", for keeping it open).
+// top bar's pill, the status bar, Home's own chip and the Inbox tab read,
+// needTasks() is which sessions the session list files under Needs you, and
+// openInbox(anchor) what the pill opens (a popover under the pill, and a page,
+// Work > Inbox, the registry route "inbox", for keeping it open). Each card
+// reads as the 0.5 prototype's: what it is and who asked, how long it has
+// waited, the question, the task it comes from, and the app's own options.
 //
 // Everything it shows comes from MefiVibe.data() and watch() (renderer/vibe.js),
 // so the front door and this page never disagree. Nothing is stored: the pieces
@@ -131,8 +135,11 @@
     if (need.kind === "review") {
       if (need.checking) return [done];
       const verifying = task?.status === "verifying";
+      // The prototype's two, then the one more this app has: Approve and finish (the thread's own words), Review changes (the
+      // session on its Changes tab, nothing sent), and Send it back.
       return [
-        { id: "confirm", label: "Confirm done", primary: true, title: "You checked the result yourself: mark it complete", call: tasks({ action: "status", status: "done" }), decided: "Confirmed done", undo: reopen(data, id) },
+        { id: "confirm", label: "Approve and finish", primary: true, title: "You checked the result yourself: mark it complete", call: tasks({ action: "status", status: "done" }), decided: "Approved and finished", undo: reopen(data, id) },
+        { id: "changes", label: "Review changes", title: "Open the session on what it changed", go: () => openChanges(id) },
         { id: "back", label: "Send it back", disabled: verifying, title: verifying ? "Its check is running right now; try again when it settles" : "Return it to the queue for another attempt", call: tasks({ action: "retry" }), decided: "Sent back" },
       ];
     }
@@ -153,9 +160,9 @@
     } else if (need.kind === "approval" || need.kind === "family") {
       kind = "approval"; label = need.kind === "family" ? "Steps to approve" : "Waiting for your go-ahead";
     } else if (need.kind === "blocked") {
-      kind = "failure"; label = HOLD_LABEL[need.row?.blockedBy] || "Stuck";
+      kind = "failure"; label = HOLD_LABEL[need.row?.blockedBy] || (task?.verification?.state === "failed" ? "Checks failed" : "Stuck");
     } else if (need.kind === "review") {
-      kind = "review"; label = need.checking ? "Still checking" : "Finished · yours to check";
+      kind = "review"; label = need.checking ? "Still checking" : "Ready for review";
     }
     const row = digestRow(digest, need);
     const at = time(row?.at) || time(question?.at) || time(need.since) || time(task?.awaitingAt) || time(task?.updatedAt) || 0;
@@ -172,10 +179,16 @@
     else if (need.kind === "approval") detail = "Your permission settings require approval of this brief before it can start.";
     else if (need.kind === "family") detail = `${plural((need.rows || []).length, "step")} wait for your go-ahead. Your request runs last, to put them together and check the whole thing.`;
     const suggested = suggestion && options.find((option) => option.id === suggestion.optionId);
+    // Who asked: the worker on the task now (the run's route), else the one that ran it last. A result says how its checks went.
+    const taskId = question ? context.taskId || null : need.id;
+    const job = taskId ? (Array.isArray(data.running) ? data.running : []).find((row) => row?.taskId === taskId) ?? null : null;
+    const who = clip(job?.route || job?.cli || task?.lastAttempt?.route || "", 40);
+    const results = need.kind === "review" && Array.isArray(task?.verificationRun?.results) ? task.verificationRun.results : [];
+    const facts = results.length ? `${results.filter((result) => result?.ok === true).length} of ${plural(results.length, "check")} passed` : "";
     const hint = suggestion ? `Mefi suggests: ${suggested?.label || "your review"}${suggestion.reason ? `, because ${clip(suggestion.reason, 160).replace(/^because\s+/i, "")}` : ""}` : "";
     return {
       key: `${need.kind}:${need.id}`, need, kind, label, tone: TONES[kind], title: clip(need.title, 200) || "Something needs you",
-      from: question ? clip(context.taskTitle || task?.title || "", 90) : "", taskId: question ? context.taskId || null : need.id,
+      from: question ? clip(context.taskTitle || task?.title || "", 90) : "", taskId, who, facts,
       at, detail, hint, options, evidence: Array.isArray(context.evidence) ? context.evidence.slice(-3).map((line) => clip(line, 200)) : [],
       steps: need.kind === "family" ? (data.families || []).find((family) => family.id === need.id)?.steps?.map((step) => clip(step.title, 90)) ?? [] : [],
     };
@@ -198,7 +211,7 @@
     }
     for (const [key, entry] of handled) {
       if (seen.has(key) || now >= entry.showUntil) continue;
-      const ghost = { key, handled: entry, need: null, kind: entry.kind, label: entry.kindLabel, tone: entry.tone, title: entry.title, from: "", taskId: entry.taskId, at: 0, detail: "", hint: "", options: [], evidence: [], steps: [] };
+      const ghost = { key, handled: entry, need: null, kind: entry.kind, label: entry.kindLabel, tone: entry.tone, title: entry.title, from: "", taskId: entry.taskId, who: "", facts: "", at: 0, detail: "", hint: "", options: [], evidence: [], steps: [] };
       drawn.splice(Math.min(entry.index ?? drawn.length, drawn.length), 0, ghost);
     }
     const count = drawn.filter((item) => !item.handled).length;
@@ -262,6 +275,20 @@
 
   function model() { return build(state.data || vibe()?.data?.() || {}, { handled: state.handled, detail: detailLevel() }); }
   function count() { return state.on ? model().count : 0; }
+  // The sessions the Inbox holds for a decision other than a question (a go-ahead, steps to approve, a task that stopped), and not
+  // for a review (that one stays under Review): the session list files these under Needs you (renderer/builder.js reading), with
+  // the tasks that have an open question, which it reads from the same questions itself (so an answer leaves at once, whichever
+  // copy of the board is fresher). Kept until the data or a decision moves, since the list asks once per row.
+  let needCache = { data: undefined, key: "", set: new Set() };
+  function needTasks() {
+    if (!state.on) return null;
+    const data = state.data || vibe()?.data?.() || {};
+    const key = [...state.handled.keys()].join("\u0001");
+    if (needCache.data === data && needCache.key === key) return needCache.set;
+    const set = new Set(model().items.filter((item) => !item.handled && item.need && item.need.kind !== "question" && item.kind !== "review" && item.taskId).map((item) => String(item.taskId)));
+    needCache = { data, key, set };
+    return set;
+  }
   function items() { return state.on ? model().items.filter((item) => !item.handled).map((item) => ({ key: item.key, kind: item.kind, title: item.title, taskId: item.taskId, at: item.at })) : []; }
 
   // The pill's number and the Inbox's rows move together: tell whoever listens when either does. What start() found is
@@ -384,6 +411,31 @@
     return true;
   }
   function openPlan(planId) { window.MefiNav?.go?.("plans", { planId }); }
+  // A result to review opens as its session on the Changes tab (the session panels' own), else as the task.
+  function openChanges(taskId) {
+    if (!taskId) return false;
+    closeInbox({ restore: false });
+    const sessions = window.MefiSessions;
+    if (sessions?.active?.() && sessions.open?.(String(taskId), { preview: true, tab: "changes" })) return true;
+    return openTask(taskId);
+  }
+  // The kind of a card as the prototype draws it: a question or a failure with its mark, a permission with a lock, a
+  // go-ahead or a result with a tick, a plan with the spark.
+  const KIND_PATHS = Object.freeze({
+    question: ["M8 2.25a5.75 5.75 0 1 0 0 11.5a5.75 5.75 0 0 0 0-11.5z", "M8 5.1v3.4", "M8 10.75v.1"],
+    permission: ["M4.25 7.25h7.5v6h-7.5z", "M5.75 7.25V5.5a2.25 2.25 0 0 1 4.5 0v1.75"],
+    approval: ["M3.25 8.4 6.4 11.5l6.35-7"],
+  });
+  function kindGlyph(kind) {
+    if (kind === "plan") { const sprite = glyph("g-spark"); sprite.classList?.add?.("today-need-glyph"); return sprite; }
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "glyph today-need-glyph"); svg.setAttribute("aria-hidden", "true"); svg.setAttribute("focusable", "false"); svg.setAttribute("viewBox", "0 0 16 16");
+    for (const d of KIND_PATHS[kind === "failure" ? "question" : kind === "review" ? "approval" : kind] || KIND_PATHS.question) {
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", d); svg.append(path);
+    }
+    return svg;
+  }
 
   function renderDecided(item, entry, key = item.key) {
     const node = el("article", "today-need is-decided");
@@ -409,14 +461,17 @@
     node.dataset.key = item.key; node.dataset.kind = item.kind; node.dataset.tone = item.tone;
     node.tabIndex = -1;
     node.setAttribute("aria-busy", String(busy));
+    // As the prototype has it: what it is and who asked, how long it has waited; the question; then the task it comes from
+    // (or how a result's checks went).
     const head = el("div", "today-need-kind");
-    head.append(el("i", "today-dot"), el("span", "today-need-label", item.label));
-    if (item.from) head.append(el("span", "today-need-from", `from ${item.from}`));
+    head.append(kindGlyph(item.kind), el("span", "today-need-label", item.who ? `${item.label} · ${item.who}` : item.label));
     if (item.at) { const when = el("time", "today-need-time", waited(item.at)); when.title = `Waiting ${waited(item.at)}`; head.append(when); }
     const title = el("h5", "today-need-title", item.title);
     title.id = `today-need-${String(item.key).replace(/[^A-Za-z0-9_-]/g, "-")}`;
     node.setAttribute("aria-labelledby", title.id);
     node.append(head, title);
+    const under = item.from && item.from !== item.title ? item.from : item.facts;
+    if (under) node.append(el("p", "today-need-from", under));
     if (item.detail && !(ctx.compact && item.kind !== "question" && item.detail.length > 140)) node.append(el("p", "today-need-detail", ctx.compact ? clip(item.detail, 160) : item.detail));
     if (item.hint) node.append(el("p", "today-need-hint", item.hint));
     if (!ctx.compact && item.evidence.length) node.append(el("pre", "today-need-evidence", item.evidence.join("\n")));
@@ -436,7 +491,7 @@
       input.addEventListener("input", () => state.drafts.set(item.key, { text: input.value, optionId: typed?.id ?? null }));
       input.addEventListener("keydown", (event) => { if (event.key === "Enter" && !event.isComposing) { event.preventDefault(); form.requestSubmit?.() ?? form.trigger?.("submit"); } });
       item.options.forEach((option, index) => {
-        const choose = el("button", `today-option${option.recommended ? " is-recommended" : ""}`);
+        const choose = el("button", `today-option${index === 0 ? " is-first" : ""}${option.recommended ? " is-recommended" : ""}`);
         choose.type = "button"; choose.dataset.option = option.id; choose.disabled = lock;
         if (index < 9) choose.append(el("kbd", "today-key", String(index + 1)));
         choose.append(el("span", "today-option-label", option.label));
@@ -460,7 +515,9 @@
       node.append(choices, form);
     } else {
       for (const action of actionsOf(item, state.data || {})) {
-        choices.append(button(action.label, `today-btn${action.primary ? " primary" : ""}`, () => void perform(item, action), { title: action.title, disabled: lock || action.disabled, confirm: action.confirm }));
+        // A way to look (Review changes) only goes somewhere; everything else is a decision, through perform().
+        const run = typeof action.go === "function" ? () => action.go() : () => void perform(item, action);
+        choices.append(button(action.label, `today-btn${action.primary ? " primary" : ""}`, run, { title: action.title, disabled: lock || action.disabled, confirm: action.confirm }));
       }
       if (choices.children.length) node.append(choices);
     }
@@ -503,7 +560,7 @@
       try { target.focus?.({ preventScroll: true }); if (field) field.setSelectionRange?.(field.value.length, field.value.length); } catch { /* not focusable */ }
     }
   }
-  const itemSignature = (item, ctx, now) => JSON.stringify([item.key, item.title, item.label, item.detail, item.hint, item.options.map((option) => [option.id, option.label, option.recommended]), item.at ? Math.floor(now / 60000) : 0, item.handled ? [item.handled.label, Boolean(item.handled.undo)] : 0,
+  const itemSignature = (item, ctx, now) => JSON.stringify([item.key, item.title, item.label, item.who, item.facts, item.from, item.detail, item.hint, item.options.map((option) => [option.id, option.label, option.recommended]), item.at ? Math.floor(now / 60000) : 0, item.handled ? [item.handled.label, Boolean(item.handled.undo)] : 0,
     state.busy.has(item.key), state.errors.get(item.key) ?? null, state.later.has(item.key), ctx.compact ? 1 : 0, (state.data || {}).projectId ?? null, window.MefiAutonomy?.state?.()?.level ?? null]);
   function orderItems(list) { return [...list.filter((item) => !state.later.has(item.key)), ...list.filter((item) => state.later.has(item.key))]; }
 
@@ -692,8 +749,15 @@
     const now = Date.now();
     const list = orderItems(model().items);
     const open = list.filter((item) => !item.handled).length;
+    // The prototype's words for the page, and how many wait, said for a screen reader (the tab and the pill show the number).
     const lead = byId("inbox-lead");
-    if (lead) lead.textContent = open ? `${plural(open, "thing")} ${open === 1 ? "waits" : "wait"} on you.` : "Nothing is waiting on you.";
+    if (lead) {
+      const said = open ? `${plural(open, "thing")} ${open === 1 ? "waits" : "wait"} on you.` : "Nothing is waiting on you.";
+      if (lead.dataset.said !== said) {
+        lead.dataset.said = said;
+        lead.replaceChildren(document.createTextNode("Everything waiting on you in one place: questions, permissions, approvals, reviews and tasks that stopped. Ctrl J opens the same list from anywhere. "), el("span", "inbox-count", said));
+      }
+    }
     const holder = byId("inbox-list");
     if (holder) {
       reconcile(holder, list.map((item) => ({ key: item.key, sig: itemSignature(item, { compact: false }, now), build: () => renderNeed(item, { compact: false }) })));
@@ -1065,7 +1129,7 @@
       open: (params) => openTodayPage(params), close: () => closeTodayPage(), isOpen: () => overlayOpen("today-overlay"),
     });
     nav.register({
-      id: "inbox", label: "Inbox", short: "Inbox", kind: "overlay", layer: "sheet", section: "home", group: "surfaces", key: null, glyph: "g-bell", badge: null,
+      id: "inbox", label: "Inbox", short: "Inbox", kind: "overlay", layer: "sheet", section: "work", group: "surfaces", key: null, glyph: "g-bell", badge: null,
       desc: "Everything waiting on you: questions, permissions, approvals, reviews and tasks that stopped",
       searchTerms: "inbox needs you questions permission approval review failed stuck decide answer waiting",
       showIn: showIn({ palette: true, help: true }),
@@ -1074,7 +1138,7 @@
     });
     nav.register({
       id: "inbox-open", label: "Open the Inbox", short: "Inbox", kind: "action", layer: null, section: "home", group: "surfaces", key: null, chord: "Ctrl J", glyph: "g-bell", badge: null,
-      desc: "What needs you, answered where you are",
+      paletteGroup: "Actions", paletteBrowse: 3, desc: "What needs you, answered where you are",
       searchTerms: "inbox needs you popover answer decide",
       showIn: showIn({ palette: true, help: true }), keyMatch: () => false,
       run: () => { openInbox(state.anchor); },
@@ -1118,7 +1182,7 @@
 
   window.MefiToday = {
     start, stop, show, hide, isOn: () => state.on, takesNeeds: () => state.on,
-    count, items, onChange, openInbox, closeInbox, toggleInbox, isInboxOpen: inboxIsOpen, ownsKeys, openInboxPage, closeInboxPage, openPage: openTodayPage, closePage: closeTodayPage,
+    count, items, needTasks, onChange, openInbox, closeInbox, toggleInbox, isInboxOpen: inboxIsOpen, ownsKeys, openInboxPage, closeInboxPage, openPage: openTodayPage, closePage: closeTodayPage,
     openNeed, openFromAlert, refresh: () => Promise.resolve(vibe()?.refresh?.()).then(() => { onData(); }),
     // For tests and anything driving Studio: the pure model, and what is in flight.
     build, snapshot: () => { const current = model(); return { count: current.count, items: current.items.map((item) => ({ key: item.key, kind: item.kind, handled: Boolean(item.handled) })), groups: Object.fromEntries(GROUPS.map(([key]) => [key, current.board[key].map((card) => card.key)])), host: state.host, inbox: state.inbox.open, later: [...state.later], busy: [...state.busy] }; },

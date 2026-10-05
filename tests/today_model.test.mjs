@@ -48,7 +48,10 @@ test("every kind says what it is, from which task, and how long it has waited", 
   assert.deepEqual([by["family:t10"].kind, by["family:t10"].label], ["approval", "Steps to approve"]);
   assert.deepEqual([by["blocked:t6"].kind, by["blocked:t6"].label], ["failure", "Maybe done outside Studio"]);
   assert.equal(by["blocked:t9"].label, "Stopped by you");
-  assert.deepEqual([by["review:t7"].kind, by["review:t7"].label, by["review:t7"].tone], ["review", "Finished · yours to check", "info"]);
+  // A task parked because its check failed says so, as the prototype's failure card does; one stuck for no reason it was told is Stuck.
+  const parked = Object.fromEntries(build(board({ needs: [needBlocked({ id: "t11", row: { reason: "The first-paint budget failed." } }), needBlocked({ id: "t12", row: {} })], tasks: [{ id: "t11", status: "open", verification: { state: "failed" } }, { id: "t12", status: "open" }] })).items.map((item) => [item.key, item.label]));
+  assert.deepEqual(parked, { "blocked:t11": "Checks failed", "blocked:t12": "Stuck" });
+  assert.deepEqual([by["review:t7"].kind, by["review:t7"].label, by["review:t7"].tone], ["review", "Ready for review", "info"]);
   assert.equal(by["review:t8"].label, "Still checking", "a check that takes long is listed, and says so");
   // From which task: a question names the task it was asked about; a card is its own task.
   assert.equal(by["question:q1"].from, "Search notes by tag");
@@ -220,7 +223,7 @@ test("a layout other than v2 is also off", async () => {
 test("started in v2 it registers its routes, asks Vibe for its data once, and listens for what it needs", async () => {
   const t = await loadToday({ data: board({ needs: [needQuestion()] }) });
   assert.equal(t.today.isOn(), true);
-  assert.deepEqual(t.nav.registered.map((record) => [record.id, record.kind, record.layer ?? null, record.section]), [["today", "overlay", "sheet", "home"], ["inbox", "overlay", "sheet", "home"], ["inbox-open", "action", null, "home"]]);
+  assert.deepEqual(t.nav.registered.map((record) => [record.id, record.kind, record.layer ?? null, record.section]), [["today", "overlay", "sheet", "home"], ["inbox", "overlay", "sheet", "work"], ["inbox-open", "action", null, "home"]]);
   assert.equal(t.vibe.watchers.size, 1, "one watcher on Vibe's data");
   assert.deepEqual(Object.keys(t.events).sort(), ["keydown", "mefi:appearance", "mefi:layout", "mefi:project-changed"]);
   assert.equal(t.today.count(), 1);

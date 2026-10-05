@@ -278,10 +278,21 @@
     } finally { S.attaching = false; }
     S.stopWaiting?.();
     wire();
+    registerSearch();
     restore();
     updateShort();
     schedule();
     return true;
+  }
+  // Search (Ctrl K) lists New task with its key, as the prototype does; it runs what the list's own button runs, and goes with the panels.
+  function registerSearch() {
+    try {
+      window.MefiNav?.register?.({
+        id: "sessions-new-task", label: "New task", short: "New task", kind: "action", layer: null, section: "home", group: "layout", key: null, chord: "Ctrl N", keyMatch: () => false,
+        glyph: "g-add", badge: null, paletteGroup: "Actions", paletteBrowse: 1, desc: "Start a new task from the box on Home", searchTerms: "new task start create build add",
+        showIn: { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false }, hidden: () => !S.wired, run: () => newTask(),
+      });
+    } catch { /* Search is optional */ }
   }
   function detach() {
     S.stopWaiting?.();
@@ -324,6 +335,8 @@
     listen(window, "mefi:worktrees", () => { if (readWorktrees()) schedule(); });
     listen(window, "mefi:appearance", () => { S.painted.clear(); schedule(); });
     listen(window, "mefi:autonomy-changed", () => { S.painted.delete("thread"); schedule(); });
+    // Needs you is the Inbox's list: when that moves (a decision taken in it, a digest that arrived), the groups follow.
+    listen(window, "mefi:inbox", again);
     listen(window, "mefi:shell-layout", () => { updateShort(); schedule(); });
     listen(window, "mefi:layout", () => { updateShort(); schedule(); });
     listen(window, "resize", () => { if (updateShort()) schedule(); });

@@ -371,12 +371,49 @@ test("the pause button is Home's own: it clicks #workspace-pause, and goes to Ho
   assert.deepEqual(bare.calls.go.at(-1), ["workspace"], "without Home's control it takes you there");
 });
 
+test("Search lists what the frame can do, worded for what a press does now, and only while the frame is there", async () => {
+  const page = loadShell({ ids: ["workspace-pause"], snapshot: snap({ status: { running: [{ id: "a" }] } }) });
+  const rows = Object.fromEntries(page.calls.registered.filter((row) => row.id.startsWith("shell-do-")).map((row) => [row.id, row]));
+  assert.deepEqual(Object.keys(rows), ["shell-do-mode", "shell-do-pause", "shell-do-list", "shell-do-inspector", "shell-do-reset"]);
+  for (const row of Object.values(rows)) {
+    assert.equal(row.kind, "action");
+    assert.deepEqual(plain(row.showIn), { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false }, `${row.id}: Search only; the shortcut sheet has the key rows`);
+    assert.equal(row.keyMatch(), false, `${row.id}: the key is shown here and bound by the frame's own listener`);
+    assert.equal(row.hidden(), false);
+  }
+  assert.deepEqual(Object.values(rows).map((row) => [row.label, row.chord ?? null, row.paletteGroup, row.paletteBrowse ?? null]), [
+    ["Switch to Vibe", "Ctrl M", "Actions", 4], ["Pause new work", null, "Actions", 2], ["Hide the list", "Ctrl B", "Layout", null], ["Hide the inspector", "[", "Layout", null], ["Reset layout", null, "Layout", null],
+  ]);
+  // Each runs what the bar's own control runs, and the words follow.
+  rows["shell-do-list"].run();
+  assert.equal(page.window.MefiShell.isOpen("list"), false);
+  assert.equal(rows["shell-do-list"].label, "Show the list");
+  rows["shell-do-reset"].run();
+  assert.equal(page.window.MefiShell.isOpen("list"), true, "Reset layout puts this mode's list back");
+  assert.equal(rows["shell-do-list"].label, "Hide the list");
+  rows["shell-do-mode"].run();
+  assert.deepEqual(page.calls.vibe.at(-1), ["vibe", { go: true }], "from Home to Home, as the switch does");
+  assert.equal(rows["shell-do-mode"].label, "Switch to Build");
+  assert.equal(rows["shell-do-mode"].glyph, "g-wrench");
+  let clicks = 0;
+  page.$("workspace-pause").click = () => { clicks += 1; };
+  rows["shell-do-pause"].run();
+  assert.equal(clicks, 1, "Home's own pause control keeps the rules");
+  page.snapshot = snap({ status: { running: [], execute: false } });
+  refresh(page);
+  assert.equal(rows["shell-do-pause"].label, "Resume new work");
+  page.window.MefiShell.disable();
+  assert.ok(Object.values(rows).every((row) => row.hidden()), "gone with the frame");
+  const v1 = loadShell({ layout: false });
+  assert.deepEqual(v1.calls.registered.filter((row) => row.id.startsWith("shell-do-")), [], "nothing is listed in v1");
+});
+
 test("the feed owns no timer and polls nothing: pushes and events are coalesced into one 60 ms paint", () => {
   const pushes = {};
   const api = {};
-  for (const name of ["onTasks", "onAssistant", "onAssistantStatus", "onProjects"]) api[name] = (callback) => { pushes[name] = callback; return () => {}; };
+  for (const name of ["onTasks", "onAssistant", "onAssistantStatus", "onProjects", "onMachineStatus"]) api[name] = (callback) => { pushes[name] = callback; return () => {}; };
   const page = loadShell({ extra: { mefiStudio: api } });
-  assert.deepEqual(Object.keys(pushes).sort(), ["onAssistant", "onAssistantStatus", "onProjects", "onTasks"], "it listens to the pushes the page already gets, and to nothing else");
+  assert.deepEqual(Object.keys(pushes).sort(), ["onAssistant", "onAssistantStatus", "onMachineStatus", "onProjects", "onTasks"], "it listens to the pushes the page already gets, and to nothing else");
   assert.deepEqual(page.timers, [], "nothing is waiting");
   page.snapshot = snap({ status: { running: [{ id: "a" }] } });
   pushes.onTasks([]);
@@ -492,8 +529,9 @@ test("the need pill and the waiting item open the inbox through MefiShell.onInbo
 test("the status bar holds only real data: nothing is drawn for what no module has", () => {
   const page = loadShell({ snapshot: null });
   const bar = page.region("status");
-  assert.deepEqual(bar.querySelectorAll("[data-item]").map((node) => [node.dataset.item, node.hidden]), [["layout", false], ["working", true], ["waiting", true], ["player", true], ["cost", true], ["permission", true]]);
+  assert.deepEqual(bar.querySelectorAll("[data-item]").map((node) => [node.dataset.item, node.hidden]), [["layout", false], ["working", true], ["waiting", true], ["player", true], ["machine", true], ["cost", true], ["permission", true]]);
   assert.equal(bar.querySelector(".shell-usage").hidden, true);
+  assert.equal(bar.querySelector(".shell-usage-sep").hidden, true, "the rule before the meters goes with them");
   assert.equal(page.window.MefiShell.status().run, null);
   assert.deepEqual(bar.querySelector(".shell-status-extra").children, [], "room for other modules' items");
   // Modules that throw or answer with nothing leave it as it was.
@@ -529,6 +567,12 @@ test("the right of the status bar: usage meters, the player, the permission mode
   assert.equal(meters[0].dataset.tone, undefined);
   assert.equal(meters[1].dataset.tone, "warn", "90 percent and over is marked");
   assert.equal(meters[1].querySelector(".shell-meter i").style.width, "93%");
+  assert.deepEqual(meters.map((node) => node.querySelector(".shell-meter-label").textContent), ["5 h", "Sonnet"], "the window's own short name, as the tracker gives it");
+  extra.MefiUsageTracker.brief = () => ({ plan: { windows: [{ short: "5h", label: "5-hour window", percent: 20 }, { short: "Wk", label: "Weekly window", percent: 50 }] }, today: { costUsd: 1.923 } });
+  refresh(page);
+  assert.deepEqual(page.region("status").querySelectorAll(".shell-meter-label").map((node) => node.textContent), ["5 h", "Week"], "the tracker's 5h and Wk read as the prototype words them");
+  extra.MefiUsageTracker.brief = () => ({ plan: { windows }, today: { costUsd: 1.923 } });
+  refresh(page);
   await meters[0].click();
   assert.deepEqual(page.calls.go.at(-1), ["usage"], "a meter opens Usage, which has the detail");
   assert.deepEqual([say(item(page, "player")), item(page, "player").dataset.playing, item(page, "player").hidden], ["Deep Focus", "true", false]);
@@ -561,6 +605,60 @@ test("the right of the status bar: usage meters, the player, the permission mode
   await item(bare, "permission").click();
   assert.deepEqual(bare.calls.go.at(-1), ["agents", { section: "setup" }]);
   assert.equal(say(item(bare, "permission")), "ask", "with no label() the level is the words");
+});
+
+test("the machine's load comes from the resource watcher's push: CPU and memory in use, in the prototype's place, only when there is a reading", async () => {
+  let push = null;
+  const page = loadShell({ extra: { mefiStudio: { onMachineStatus: (callback) => { push = callback; return () => {}; } }, MefiMusic: { status: () => ({ playing: true, title: "Deep Focus" }) }, MefiUsageTracker: { brief: () => ({ plan: { windows: [{ short: "5 h", label: "5-hour window", percent: 20 }, { short: "Week", label: "Weekly", percent: 50 }] }, today: { costUsd: 1.92 } }) }, MefiAutonomy: { state: () => ({ level: "auto" }), label: () => "Auto" } } });
+  assert.equal(typeof push, "function", "it listens to machine:status, the push Home's Machine tile and the rail's badge already get");
+  assert.equal(item(page, "machine").hidden, true, "no reading yet: no item");
+  // The right of the bar in the prototype's order, and the rule before the meters only with them.
+  const bar = page.region("status");
+  const right = bar.children.slice(bar.children.findIndex((node) => node.className === "shell-spacer") + 1).filter((node) => node.dataset?.item).map((node) => node.dataset.item);
+  assert.deepEqual(right, ["player", "machine", "cost", "permission"]);
+  const order = bar.children.map((node) => node.dataset?.item || node.className.split(" ").find((name) => ["shell-sep-v", "shell-usage", "shell-spacer"].includes(name)) || "");
+  assert.deepEqual(order.slice(0, 7), ["layout", "shell-sep-v", "working", "waiting", "shell-sep-v", "shell-usage", "shell-spacer"]);
+  assert.equal(bar.querySelector(".shell-usage-sep").hidden, false, "two meters, and the rule before them");
+  // A pass of the watcher: the rounded load, and what is in use of the memory.
+  push({ wait: false, capacity: { canStart: true, reason: null, resources: { cpuPercent: 34.4, availableMemoryMB: 6400, totalMemoryMB: 16384, lagMs: 12 } }, history: new Array(50).fill({}) });
+  assert.deepEqual(page.timers.map((timer) => timer.delay), [60], "one coalesced repaint");
+  page.flush();
+  assert.deepEqual([say(item(page, "machine")), item(page, "machine").hidden], ["CPU 34% · Mem 61%", false]);
+  assert.equal(item(page, "machine").getAttribute("aria-label"), "Machine load: CPU 34 percent, memory 61 percent in use. Open the machine status");
+  assert.deepEqual(plain(page.window.MefiShell.status().machine), { cpu: 34, mem: 61, held: false, reason: "" }, "only these numbers are kept, never the pushed status");
+  // The next pass with the same rounded load repaints nothing.
+  push({ wait: false, capacity: { resources: { cpuPercent: 34.2, availableMemoryMB: 6390, totalMemoryMB: 16384 } } });
+  assert.deepEqual(page.timers, [], "the same load: no repaint");
+  // A machine that holds new workers says why on hover.
+  push({ wait: true, capacity: { canStart: false, reason: "Free memory is under the floor.", resources: { cpuPercent: 91, availableMemoryMB: 900, totalMemoryMB: 16384 } } });
+  page.flush();
+  assert.equal(say(item(page, "machine")), "CPU 91% · Mem 95%");
+  assert.match(item(page, "machine").getAttribute("title"), /New workers wait: Free memory is under the floor\./);
+  // Only the half that was measured is said; a reading with neither number is no reading.
+  push({ capacity: { resources: { cpuPercent: null, availableMemoryMB: 4000, totalMemoryMB: 8000 } } });
+  page.flush();
+  assert.equal(say(item(page, "machine")), "Mem 50%");
+  push({ capacity: { resources: { cpuPercent: 12, availableMemoryMB: null } } });
+  page.flush();
+  assert.equal(say(item(page, "machine")), "CPU 12%");
+  for (const nothing of [null, {}, { capacity: { resources: { cpuPercent: "high", availableMemoryMB: 9, totalMemoryMB: 0 } } }]) {
+    push(nothing);
+    page.flush();
+    assert.equal(item(page, "machine").hidden, true, `no item for ${JSON.stringify(nothing)}`);
+  }
+  // It opens the machine status where the registry has it, else the Explorer's diagnostics.
+  push({ capacity: { resources: { cpuPercent: 20 } } });
+  page.flush();
+  await item(page, "machine").click();
+  assert.deepEqual(page.calls.go.at(-1), ["explorer", { panel: "diagnostics" }]);
+  const listed = loadShell({ registry: { machine: { id: "machine", kind: "action" } }, extra: { mefiStudio: { onMachineStatus: (callback) => { callback({ capacity: { resources: { cpuPercent: 5 } } }); return () => {}; } } } });
+  listed.flush();
+  await item(listed, "machine").click();
+  assert.deepEqual(listed.calls.go.at(-1), ["machine"]);
+  // A removed frame repaints nothing for it.
+  page.window.MefiShell.disable();
+  push({ capacity: { resources: { cpuPercent: 77 } } });
+  assert.deepEqual(page.timers, []);
 });
 
 test("the permission mode is read once when it is not there yet, and after that only pushes bring it", async () => {

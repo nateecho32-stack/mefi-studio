@@ -4,7 +4,7 @@
 // geometry and real input are tests/tabs_render.test.mjs's (Electron).
 import test from "node:test";
 import assert from "node:assert/strict";
-import { tabsEnv, task } from "./fixtures/tabs-env.mjs";
+import { REGISTRY, tabsEnv, task } from "./fixtures/tabs-env.mjs";
 
 const plain = (value) => JSON.parse(JSON.stringify(value));
 const session = (t, id, options = {}) => t.tabs.open("workspace", { view: "task", taskId: id, projectId: "p1" }, { preview: false, ...options });
@@ -136,6 +136,21 @@ test("Home is the first tab: pinned, without a close button, counted by the Toda
   t.window.MefiToday.count = () => 0;
   t.tabs.flush();
   assert.equal(t.items()[0].querySelector(".ts-count").hidden, true, "it goes away with the need");
+});
+
+test("the Inbox's tab carries the Inbox's count, the same number as Home's: one list, one number", async () => {
+  const inbox = { id: "inbox", label: "Inbox", short: "Inbox", kind: "overlay", layer: "sheet", section: "work", glyph: "g-bell", showIn: { palette: true } };
+  const t = await tabsEnv({ registry: [...REGISTRY, inbox] });
+  t.window.MefiToday = { count: () => 2, onChange: () => () => {} };
+  page(t, "inbox"); page(t, "fleet");
+  t.tabs.flush();
+  const chip = t.itemOf("Inbox").querySelector(".ts-count");
+  assert.deepEqual([chip.hidden, chip.textContent, chip.title], [false, "2", "2 need you"]);
+  assert.equal(t.items()[0].querySelector(".ts-count").textContent, "2", "Home says the same");
+  assert.equal(t.itemOf("Fleet").querySelector(".ts-count").hidden, true, "no other page counts");
+  t.window.MefiToday.count = () => 0;
+  t.tabs.flush();
+  assert.equal(t.itemOf("Inbox").querySelector(".ts-count").hidden, true, "it goes with the need");
 });
 
 test("what a tab says: its words, its glyph, pinned ones short, the preview in a way a screen reader can tell", async () => {
@@ -429,6 +444,32 @@ test("Ctrl+T opens the Add menu and Ctrl+T again closes it; Cmd does the same on
   t.key(chord("t", { repeat: true }));
   assert.ok(t.popover(), "a held key does not flicker it: the repeat is swallowed, not acted on");
   assert.equal(t.key(chord("t", { repeat: true })).defaultPrevented, true);
+});
+
+test("Search lists what the strip does, under Tabs with each key, and each row runs what its key runs", async () => {
+  const t = await tabsEnv();
+  const rows = Object.fromEntries(t.nav.registered.filter((row) => row.paletteGroup === "Tabs").map((row) => [row.id, row]));
+  assert.deepEqual(Object.values(rows).map((row) => [row.id, row.label, row.chord ?? null]), [["tabs-do-add", "Open a tab", "Ctrl T"], ["tabs-do-reopen", "Reopen a closed tab", "Ctrl Shift T"], ["tabs-do-pin", "Pin or unpin this tab", "Ctrl Alt P"], ["tabs-do-close", "Close this tab", "Ctrl W"], ["tabBehaviour", "Tab behaviour", null]]);
+  assert.equal(t.nav.registered.at(-1).id, "tabBehaviour", "Tab behaviour stays the last record the strip registers");
+  for (const id of ["tabs-do-add", "tabs-do-reopen", "tabs-do-pin", "tabs-do-close"]) {
+    assert.equal(rows[id].keyMatch(), false, `${id}: shown, not bound twice`);
+    assert.equal(rows[id].hidden(), false);
+    assert.deepEqual({ ...rows[id].showIn }, { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false });
+  }
+  rows["tabs-do-add"].run();
+  assert.equal(t.popover()?.id, "mefi-tabs-pop-add", "Open a tab is the Add menu");
+  rows["tabs-do-add"].run();
+  page(t, "fleet"); page(t, "plans");
+  await t.settle();
+  rows["tabs-do-pin"].run();
+  assert.equal(t.tabs.list().find((tab) => tab.route.id === "plans").pin, true, "Pin is the tab you are on");
+  rows["tabs-do-pin"].run();
+  rows["tabs-do-close"].run();
+  assert.equal(t.tabs.list().some((tab) => tab.route.id === "plans"), false, "Close is the tab you are on");
+  rows["tabs-do-reopen"].run();
+  assert.equal(t.tabs.list().some((tab) => tab.route.id === "plans"), true, "Reopen brings the newest back");
+  t.tabs.stop();
+  assert.ok(["tabs-do-add", "tabs-do-reopen", "tabs-do-pin", "tabs-do-close"].every((id) => rows[id].hidden()), "gone with the strip");
 });
 
 test("Ctrl+W closes the tab you are on, Home says it stays, and the window's own Ctrl+W is not offered the key", async () => {

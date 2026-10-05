@@ -7,6 +7,19 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **The 0.5 layout's status bar, Search and Inbox, as in the prototype.** With
+  the new layout on (`?layout=v2`), the status bar also shows the machine's
+  load ("CPU 34% · Mem 61%", from what the resource watcher already measures)
+  and lists its items in the prototype's order. Search (Ctrl K) opens under
+  the top bar as one tidy list: the sessions that matter with their state, the
+  places on the rail with their keys and the main actions, and a search finds
+  sessions, ideas, pages, actions, layout and tab commands and the permission
+  mode (which it can now set). The Inbox is one list everywhere: the top bar,
+  the status bar, Home's "N need you" (which now opens it), the tabs and the
+  session list's Needs you all count the same things. Its cards say who asked
+  and which task they come from, a finished result offers Approve and finish,
+  Review changes and Send it back, and the Inbox page now lives under Work
+  (Work › Inbox). The classic layout is unchanged.
 - **The 0.5 layout's top bar says where you are.** With the new layout on
   (`?layout=v2`), the bar's middle is a breadcrumb, as in the 0.5 prototype:
   the project and the open session (or Today), or the project, section and
