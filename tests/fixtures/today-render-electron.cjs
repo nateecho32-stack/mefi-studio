@@ -50,6 +50,8 @@ function seedWorld(now) {
   const task = (id, title, more = {}) => ({ id, projectId, title, status: "open", createdAt: now - 90 * MINUTE, updatedAt: now - 30 * MINUTE, ...more });
   const tasks = [
     task("t_run", "Add dark mode to the settings page", { status: "active", runId: "run-1", updatedAt: now - 2 * MINUTE }),
+    // The decision question's own task, waiting for the answer and not running: a run that waits on you is under Needs you only.
+    task("t_tags", "Treat #Work and #work as one tag", { status: "open", updatedAt: now - 4 * MINUTE }),
     task("t_next", "Translate the help page into German", { updatedAt: now - 45 * MINUTE }),
     task("t_check", "Polish the onboarding copy", { status: "awaiting_verification", awaitingAt: now - 6 * MINUTE, updatedAt: now - 6 * MINUTE }),
     task("t_review", "Rename the settings tab to Preferences", { status: "awaiting_verification", awaitingAt: now - 55 * MINUTE, updatedAt: now - 55 * MINUTE, verification: { state: "failed", reason: "The checker could not start a browser to look at the page." } }),
@@ -66,7 +68,7 @@ function seedWorld(now) {
   const at = (minutes) => now - minutes * MINUTE;
   const questions = [
     { id: "q_decision", projectId, status: "open", source: "issue", title: "Should #Work and #work count as the same tag?", detail: "The tag filter matches exactly today; every other filter in this project ignores case.", at: at(4),
-      context: { taskId: "t_run", taskTitle: "Add dark mode to the settings page", severity: "decision", suggestion: { optionId: "yes", reason: "every other filter here ignores case" }, evidence: ["filters.js:41  compares tags with ===", "search.js:88  lowercases both sides"] },
+      context: { taskId: "t_tags", taskTitle: "Treat #Work and #work as one tag", severity: "decision", suggestion: { optionId: "yes", reason: "every other filter here ignores case" }, evidence: ["filters.js:41  compares tags with ===", "search.js:88  lowercases both sides"] },
       options: [{ id: "yes", label: "Yes, ignore case", recommended: true }, { id: "no", label: "Keep them separate" }, { id: "say", label: "Answer it in one line", text: true }] },
     { id: "q_permission", projectId, status: "open", source: "issue", title: "builder-3 wants to write outside its task folder", detail: "It asked for write access to ./shared/tokens.json.", at: at(9),
       context: { taskId: "t_next", taskTitle: "Translate the help page into German", issueKind: "permission", severity: "blocker" },
