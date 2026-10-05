@@ -913,12 +913,12 @@ test("the Add menu lists the places the registry offers, this project's sessions
   assert.equal(pop.id, "mefi-tabs-pop-add");
   assert.equal(pop.getAttribute("role"), "dialog");
   assert.equal(pop.getAttribute("aria-label"), "Open a tab");
-  assert.deepEqual(groupsOf(t), ["Recently closed", "Home", "Sessions", "Work", "Agents", "Settings"], "in the order the app's own sections go");
+  // In the 0.5 layout Home is Work › Today (renderer/nav.js placeOf), so it leads Work's rows rather than a group of its own.
+  assert.deepEqual(groupsOf(t), ["Recently closed", "Work", "Sessions", "Agents", "Settings"], "in the order the app's own places go");
   assert.deepEqual(rowsOf(t), [
     "Plans", // recently closed
-    "Home",
+    "Home", "Tasks", "Plans", "Worktrees",
     "Add dark mode", "Fix login", // newest first; archived ones are not offered
-    "Tasks", "Plans", "Worktrees",
     "Command", "Fleet", "Sessions", "Agents", "Catalog", "Performance",
     "Settings",
   ]);
@@ -953,7 +953,7 @@ test("typing narrows the list (titles, headings and the registry's own search wo
   await typeIn(t, "checkout");
   assert.deepEqual(rowsOf(t), ["Worktrees"], "the registry's search words count");
   await typeIn(t, "work");
-  assert.deepEqual(rowsOf(t), ["Tasks", "Plans", "Worktrees"], "and the heading: everything under Work");
+  assert.deepEqual(rowsOf(t), ["Home", "Tasks", "Plans", "Worktrees"], "and the heading: everything under Work, Today (here Home) first");
   await typeIn(t, "work tree");
   assert.deepEqual(rowsOf(t), ["Worktrees"], "every word has to match");
   await typeIn(t, "plans");
