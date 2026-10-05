@@ -142,3 +142,18 @@ test("the stand-in held to a subscription is the assistant, whatever judge the f
   assert.deepEqual([...new Set(modules)], ["scripts/choice-judge.mjs"], "the free OpenCode judge is never loaded for a held team");
   assert.ok(fetched.every((options) => options.role === "routine" && options.taskType === "judge"), "it rides the team's routine route: the subscription");
 });
+
+test("per-task routing has no stand-in on a coding CLI, which cannot answer in its 4 s", async () => {
+  let route = { ok: true, provider: "claude", cli: true };
+  const context = vm.createContext({
+    loadModule: async () => choiceJudge,
+    resolveAiRoute: async () => route,
+    assistantFetch: async () => assert.fail("no routing question reaches a CLI"),
+  });
+  vm.runInContext(section("async function standInJudge(", "async function applyModelRouting("), context);
+  const saved = { firstRun: { judge: { kind: "assistant" } } };
+  assert.equal(await context.standInJudge(saved, "routing"), null);
+  assert.equal((await context.standInJudge(saved, "intake")).timeoutMs, 15000, "intake keeps its 15 s stand-in on the CLI");
+  route = { ok: true, provider: "zen", model: "gpt-6-luna" };
+  assert.equal((await context.standInJudge(saved, "routing")).timeoutMs, 4000, "a keyed route still answers routing");
+});

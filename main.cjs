@@ -5426,6 +5426,13 @@ async function standInJudge(settings, purpose = "routing", { provider = null } =
   if (saved.kind === "opencode-free" && purpose !== "intake") return null;
   const judge = await loadModule("scripts/choice-judge.mjs");
   const timeoutMs = purpose === "intake" ? 15000 : 4000;
+  if (saved.kind === "assistant" && purpose !== "intake" && typeof resolveAiRoute === "function") {
+    // No coding CLI answers in 4 s: a routing question on a CLI route would
+    // only be stopped at its deadline, on the owner's subscription, so there
+    // is no stand-in then and routing keeps its own record and default.
+    const route = await resolveAiRoute("routine").catch(() => null);
+    if (route && (route.cli === true || ["grok", "claude", "codex", "antigravity"].includes(route.provider))) return null;
+  }
   if (saved.kind === "assistant") {
     // judgeClassify stops waiting at `timeoutMs`; a CLI route is stopped then
     // too (cliAssistantCall's deadline) rather than answering nobody.
