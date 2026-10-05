@@ -80,13 +80,13 @@ const v2 = (options = {}) => { const page = load(options); page.nav.applyLayout(
 // What the vm's objects say, in this realm, so deepStrictEqual compares values and not prototypes.
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
-test("the writer: v1 by default, the saved choice, ?layout= for one launch, and diagnostic launches stay v1 unless asked", () => {
+test("the writer: v2 by default (0.5), a saved v1 kept, ?layout= for one launch, and diagnostic launches stay v1 unless asked", () => {
   const cases = [
     // [search, stored, expected, why]
-    ["", {}, false, "nothing saved: v1"],
-    ["", { "mefiStudio.layout": "v1" }, false, "saved v1"],
+    ["", {}, true, "nothing saved: the 0.5 layout"],
+    ["", { "mefiStudio.layout": "v1" }, false, "saved v1: someone chose the classic layout, and keeps it"],
     ["", { "mefiStudio.layout": "v2" }, true, "saved v2"],
-    ["", { "mefiStudio.layout": "banana" }, false, "a saved value nobody wrote is v1"],
+    ["", { "mefiStudio.layout": "banana" }, true, "a saved value nobody wrote is the default"],
     ["?layout=v2", {}, true, "the parameter alone"],
     ["?layout=v2", { "mefiStudio.layout": "v1" }, true, "the parameter wins over a saved v1"],
     ["?layout=v1", { "mefiStudio.layout": "v2" }, false, "the parameter wins over a saved v2"],
@@ -106,11 +106,11 @@ test("the writer: v1 by default, the saved choice, ?layout= for one launch, and 
     assert.equal(nav.applyLayout(), expected, `${search || "(no query)"} ${JSON.stringify(stored)}: ${why}`);
     assert.equal(root.dataset.layout, expected ? "v2" : undefined, `${why}: the attribute`);
   }
-  // A store that throws, and no location at all, are v1.
+  // A store that throws, and no location at all, are the default: the 0.5 layout.
   const { document } = createDom({ ids: RAIL_IDS });
   const bare = vm.createContext({ window: { innerWidth: 500, innerHeight: 400, addEventListener() {} }, document: { ...document, readyState: "loading", addEventListener() {} }, console, localStorage: { getItem() { throw new Error("blocked"); } } });
   vm.runInContext(source, bare);
-  assert.equal(bare.window.MefiNav.applyLayout(), false, "a blocked store and no location: v1");
+  assert.equal(bare.window.MefiNav.applyLayout(), true, "a blocked store and no location: the default, v2");
 });
 
 test("data-shell keeps its one writer and its one value: the layout is a second attribute", () => {
@@ -153,7 +153,7 @@ test("the layout has one writer in the renderer, and data-shell is only ever giv
 });
 
 test("v1 wires nothing: no attribute, no inline style, no listener, and the setter does nothing", () => {
-  for (const [search, stored] of [["", {}], ["?capture=1", { "mefiStudio.layout": "v2" }]]) {
+  for (const [search, stored] of [["", { "mefiStudio.layout": "v1" }], ["?capture=1", { "mefiStudio.layout": "v2" }]]) {
     const page = load({ search, stored });
     page.nav.applyShell();
     const before = page.added.length;
@@ -408,7 +408,7 @@ test("setLayout saves the person's choice and applies it; the launch parameter s
 
 test("init applies the layout right after the shell, and v1 launches stay silent", () => {
   const launch = (options) => { const page = load(options); page.document.readyState = "complete"; page.nav.init(); return page; };
-  const v1 = launch({});
+  const v1 = launch({ stored: { "mefiStudio.layout": "v1" } });
   assert.equal(v1.root.dataset.layout, undefined);
   assert.equal(v1.root.dataset.shell, "rail");
   assert.ok(!v1.events.includes("mefi:layout"), "v1 announces nothing");

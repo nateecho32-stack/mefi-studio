@@ -40,7 +40,8 @@ function load({ search = "", stored = {}, view = "workspace", sidebar = null, in
   // queries scoped to the rail see its sections.
   get("app-rail").append(get("app-rail-brand"), get("app-rail-sections"), get("app-rail-foot"), get("app-rail-pin"));
   get("app-rail").hidden = true;
-  const store = new Map(Object.entries(stored));
+  // The 0.5 layout is the default now: these cases are the classic rail's unless they ask for v2 (?layout=v2 wins).
+  const store = new Map(Object.entries({ "mefiStudio.layout": "v1", ...stored }));
   const events = [];
   const frames = [];
   const listeners = {};

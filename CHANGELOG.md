@@ -7,6 +7,12 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **The 0.5 layout is now the default.** Studio opens in the new layout
+  (Work, Map, Team and Friends on the rail, the session list, tabs and the
+  status bar) unless you chose the classic one before. The classic layout
+  is still one switch away: Settings › You "Try the 0.5 layout", or Search's
+  "Switch layout: 0.5 or classic". `MEFI_STUDIO_LAYOUT=v1` still opens
+  classic for one launch.
 - **The Command view is the Map in the 0.5 layout, as in the prototype.** With
   the new layout on (`?layout=v2`), the Map keeps your sessions in the list
   beside it, and a small bar over the tree holds Map | Fleet | Pipelines,

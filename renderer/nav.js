@@ -2005,9 +2005,10 @@
       const param = new URLSearchParams(search).get("layout");
       if (param === "v1" || param === "v2") return param;
       if (/[?&](?:smoke|capture)=1(?:&|$)/.test(search)) return "v1";
-      return localStorage.getItem(LAYOUT_KEY) === "v2" ? "v2" : "v1";
+      // The 0.5 layout is the default: only a saved classic choice (the Settings switch, Search's "Switch layout") keeps v1.
+      return localStorage.getItem(LAYOUT_KEY) === "v1" ? "v1" : "v2";
     } catch {
-      return "v1";
+      return "v2";
     }
   }
   const layoutOn = () => document.documentElement?.dataset?.layout === "v2";
