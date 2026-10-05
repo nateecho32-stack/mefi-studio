@@ -1253,8 +1253,11 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     return reply(410, { ok: false, error: 'gone' });
   }, { write: true, readOnlyOk: true, body: 'release' });
 
-  // Forget me: every row about this member goes, rooms they own close.
-  route('POST', '/v1/me/forget', ({ actor }) => {
+  // Forget me: every row about this member goes, rooms they own close. Only a
+  // keyed fingerprint of the account stays for 30 days, so forgetting cannot
+  // reset the credit limits (credits.forget).
+  route('POST', '/v1/me/forget', async ({ actor }) => {
+    const fingerprint = await credits.fingerprint(actor.uid);
     const owned = store.all(`SELECT id FROM rooms WHERE owner_id = ? AND status <> 'closed'`, actor.uid).map((row) => row.id);
     for (const roomId of owned) setStatus({ ...actor, isMod: true }, roomId, 'closed');
     const rooms = store.all('SELECT room_id FROM room_members WHERE user_id = ?', actor.uid).map((row) => row.room_id);
@@ -1275,7 +1278,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
       store.run('DELETE FROM leases WHERE member_id = ?', actor.uid);
       store.run('DELETE FROM token_cache WHERE user_id = ?', actor.uid);
       out.projects = count('SELECT COUNT(*) AS n FROM projects WHERE owner_id = ?', actor.uid);
-      credits.forget(actor.uid);
+      credits.forget(actor.uid, fingerprint);
       store.run('DELETE FROM members WHERE user_id = ?', actor.uid);
       return out;
     });

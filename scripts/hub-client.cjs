@@ -75,6 +75,7 @@ const HISTORY_REPLY_BYTES = 15 * 1024;
 const HISTORY_REPLY_MESSAGES = 100;
 const PROJECT_KINDS = Object.freeze(["game", "app", "tool", "art", "music", "other"]);
 const PROJECT_VIEWS = Object.freeze(["new", "top", "played", "mine"]);
+const CREDIT_HOLDS = Object.freeze(["unknown", "read-only", "new-account", "new-member", "forgot-me"]);
 const RANK_KEY = /^[a-z_]{1,20}$/;
 const ACK_TIMEOUT_MS = 10_000;
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -882,6 +883,8 @@ function createHubClient(options = {}) {
         credits: { balance: count(data.credits?.balance, 1e12) ?? 0, lifetime: count(data.credits?.lifetime, 1e12) ?? 0, today: count(data.credits?.today, 1e6) ?? 0, todayCap: count(data.credits?.todayCap, 1e6) ?? 0 },
         rank: rankOf(data.rank), specialRanks: specialOf(data.specialRanks), streak: { days: count(data.streak?.days, 1e6) ?? 0, best: count(data.streak?.best, 1e6) ?? 0 },
         featureCost: count(data.featureCost, 1e6) ?? 0, canEarn: data.canEarn === true,
+        // Why this member cannot give or earn credits yet, and until when (relay/src/credits.mjs GUARD).
+        hold: object(data.hold) && CREDIT_HOLDS.includes(data.hold.reason) ? { reason: data.hold.reason, until: Number.isFinite(data.hold.until) ? data.hold.until : null } : null,
         projects: Array.isArray(data.projects) ? data.projects.map(projectCard).filter(Boolean) : [],
       };
     },

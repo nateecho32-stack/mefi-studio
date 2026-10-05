@@ -30,6 +30,9 @@ that comes back has to match what was actually said.
 | Cowork claims: paths, branch, title | agents on different PCs do not edit the same files | 7 days after release |
 | Deleted message ids | a peer's copy cannot bring a deleted message back | 7 days |
 | Whether you chose not to show in Who's online | the "Show me as online" switch | until you change it, or forget me |
+| Credits: balance, rank, streak, and who credited whom (ids, kind, amount) | earning, the anti-farming limits, a moderator's credit review | 180 days for each credit |
+| Which member played which project on which day | a play counts once per player and day | 8 days |
+| After Forget me: a keyed fingerprint of the account (not its id) | forgetting cannot reset the credit limits | 30 days |
 | Reports: the reason, plus the reported message only when its relay signature checks out | moderation | 30 days |
 | Moderator actions (ids only) | accountability | 90 days |
 
@@ -38,6 +41,38 @@ rooms you own. Observability is off in `wrangler.toml`. Who's online and The
 Lobby's front page (`GET /v1/front`) are read from the live connections when a
 member asks; nothing about who was online, or when, is written. An unlisted
 room's name never appears on anyone else's front page.
+
+## Credits that cannot be farmed
+
+Credits are earned only by playing and starring other members' projects, and
+the relay works out every balance and rank itself: a Studio only shows what
+the relay says, so a changed Studio can change only its own screen. Against
+alt accounts, trading and replays:
+
+- Both sides must be in good standing: a Discord account at least 30 days
+  old (read from the id itself), a week in the Void Engine server, not
+  timed out or suspended, and not inside the 30 days after Forget me. Plays
+  and stars from anyone else still open the project but count for nothing,
+  not even toward "Top".
+- A play pays its maker once a day per player, whichever of their projects
+  was played, and the player once a day per maker. A star pays a maker once
+  a week per member, so unstarring, a second project or sharing the same link
+  again pays nothing more.
+- One member can make another earn at most 15 credits in 7 days, all kinds
+  together, under each kind's daily cap and 60 a day in all.
+- A play token pays only for the day it started, so it cannot count on both
+  sides of midnight. Starting plays and starring are limited to 30 an hour.
+- Forget me keeps a keyed fingerprint for 30 days, so leaving and coming back
+  cannot reset a limit, and the credits you gave stay counted for the
+  people who received them.
+- Featuring is once a week per owner, however projects are removed and
+  shared again.
+- Moderators: `GET /v1/admin/credits/:id` shows where a member's credits
+  came from in the last 30 days, by who caused them and with their account
+  ages; `POST /v1/admin/credits/:id/revoke` (`{ "from": "<id>", "days": 30 }`,
+  both optional) takes them back off the balance and the lifetime total, and
+  the same plays and stars can never pay again. Suspending a member stops
+  their credits too.
 
 ## Layout
 

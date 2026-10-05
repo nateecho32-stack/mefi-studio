@@ -44,7 +44,11 @@ server.
    never a file. Sharing is free and earns nothing by itself. When a member
    plays someone else's project for two minutes, both earn credits (the maker
    5, the player 2); a star earns the maker 3; at most 60 a day. Credits are
-   never bought; 100 features a project at the top of the hub for a day.
+   never bought; 100 features a project at the top of the hub for a day, once
+   a week. Credits start once your Discord account is 30 days old and you
+   have been in the server a week; one person can make another earn at most
+   15 a week, so a second account gains nothing (the full rules are in
+   [`relay/README.md`](../relay/README.md#credits-that-cannot-be-farmed)).
    Ranks go Spark, Ember, Flame, Comet, Star, Nova, Void by lifetime credits,
    and your Discord roles show as special ranks.
 

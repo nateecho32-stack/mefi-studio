@@ -104,7 +104,7 @@ export const REMOTE_BUTTON_STYLES = Object.freeze(['primary', 'secondary', 'succ
 
 /** Project cards (feature "projects") and why a credits frame was sent (feature "credits"). */
 export const PROJECT_KINDS = Object.freeze(['game', 'app', 'tool', 'art', 'music', 'other']);
-export const CREDIT_REASONS = Object.freeze(['played', 'play', 'starred', 'feature']);
+export const CREDIT_REASONS = Object.freeze(['played', 'play', 'starred', 'feature', 'revoked']);
 
 export const ROOM_KINDS = Object.freeze(['hangout', 'cowork']);
 export const ROOM_POLICIES = Object.freeze(['request', 'invite']);
