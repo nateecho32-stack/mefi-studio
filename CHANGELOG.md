@@ -7,6 +7,13 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Chrome's buttons no longer look struck through.** The metal on main
+  buttons and chosen tabs had a hard dark line at half height, right behind
+  the words. Its horizon is now a soft band below them, and the darkest part
+  is lighter, so the lettering reads better too.
+- **One page at a time over the Map.** In the 0.5 layout, Fleet, Pipelines,
+  Team and the other pages that open over the Map no longer show the Map's
+  nodes faintly through the theme's glass.
 - **The 0.5 layout is now the default.** Studio opens in the new layout
   (Work, Map, Team and Friends on the rail, the session list, tabs and the
   status bar) unless you chose the classic one before. The classic layout
