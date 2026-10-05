@@ -64,10 +64,44 @@ export function vibeLayer({ document, get }) {
 }
 
 /**
+ * Build's Home as renderer/booklet.template.html has it, reduced to what Today borrows: the line that says how a send
+ * went (#workspace-feedback in .ws-feedback-row) and the box (#workspace-form, with its purpose row, its words and its
+ * Send row; `pictures` adds the row composer-pictures.js puts under the words). And workspace.js's own part of the
+ * bargain: send(purpose) and snapshot(), recorded.
+ */
+export function homeLayer({ document, get, calls, pictures = true }) {
+  const siblings = (node) => { Object.defineProperty(node, "nextSibling", { get() { const list = this.parentNode?.children; return list ? list[list.indexOf(this) + 1] ?? null : null; }, configurable: true }); return node; };
+  const make = (tag, className, children = []) => { const node = siblings(document.createElement(tag)); node.className = className; node.append(...children); return node; };
+  const named = (id, className = "", tag = "div") => { const node = siblings(get(id)); node.tagName = tag; if (className) node.className = className; return node; };
+  const layer = siblings(get("workspace-layer"));
+  layer.className = "workspace";
+  layer.hidden = false;
+  const input = named("workspace-input", "", "textarea");
+  input.placeholder = "Ask about this project or discuss an idea…";
+  input.setSelectionRange = () => {};
+  const attach = pictures ? make("div", "composer-attach", [make("button", "composer-attach-button"), make("div", "composer-thumbs"), make("p", "composer-attach-note")]) : null;
+  const form = named("workspace-form", "ws-composer", "form");
+  form.append(make("div", "ws-compose-top", [named("workspace-mode-chat", "", "button"), named("workspace-mode-work", "", "button")]), input, ...(attach ? [attach] : []), make("div", "ws-compose-bottom", [named("workspace-send", "primary", "button")]));
+  const feedbackRow = make("div", "ws-feedback-row", [named("workspace-feedback", "ws-feedback", "p"), named("workspace-created-task", "ghost mini", "button")]);
+  const thread = named("workspace-thread", "ws-thread");
+  const conversation = make("section", "ws-conversation", [thread, feedbackRow, form]);
+  const main = make("div", "ws-main", [make("div", "ws-topbar"), conversation]);
+  layer.append(main);
+  const state = { projectId: "p1", pending: false };
+  const workspace = {
+    state,
+    snapshot: () => ({ projectId: state.projectId, pending: state.pending }),
+    send: async (purpose) => { calls.push(["send", { purpose, words: input.value }]); return undefined; },
+    isActive: () => !layer.hidden,
+  };
+  return { layer, main, conversation, feedbackRow, form, input, attach, thread, workspace };
+}
+
+/**
  * Loads renderer/today.js. `layout` is what html[data-layout] says (v1: the script starts nothing).
  * `bridge` adds or replaces host calls; every call is recorded in `calls` as [name, args].
  */
-export async function loadToday({ layout = "v2", detail = null, data = board(), bridge = {}, extras = {}, mode = "vibe", active = false, layer = false } = {}) {
+export async function loadToday({ layout = "v2", detail = null, data = board(), bridge = {}, extras = {}, mode = "vibe", active = false, layer = false, home = false, pictures = true, intents = null } = {}) {
   const calls = [];
   const events = {};
   const timers = [];
@@ -79,6 +113,9 @@ export async function loadToday({ layout = "v2", detail = null, data = board(), 
   if (detail) documentElement.dataset.detail = detail;
   for (const id of ["today-overlay", "inbox-overlay"]) get(id).hidden = true;
   const front = layer ? vibeLayer({ document, get }) : null;
+  // `home`: Build's Home is up (html[data-ui-mode="build"], the workspace layer shown), and workspace.js answers.
+  const homePage = home ? homeLayer({ document, get, calls, pictures }) : null;
+  if (home) documentElement.dataset.uiMode = mode === "vibe" ? "vibe" : "build";
   const record = (name, reply) => async (args) => { calls.push([name, plain(args)]); return typeof reply === "function" ? reply(args) : reply; };
   const mefiStudio = {
     assistantAnswer: record("assistantAnswer", { ok: true }),
@@ -94,9 +131,11 @@ export async function loadToday({ layout = "v2", detail = null, data = board(), 
     data: () => vibe.current,
     watch: (callback) => { watchers.add(callback); return () => watchers.delete(callback); },
     refresh: async () => { vibe.refreshes += 1; for (const callback of [...watchers]) callback(); },
-    isActive: () => vibe.active, mode: () => mode,
+    isActive: () => vibe.active, mode: () => vibe.mode,
     openPanel: (kind) => calls.push(["openPanel", kind]),
+    ...(intents ? { intents: () => intents } : {}),
   };
+  vibe.mode = mode;
   const nav = {
     registered: [], gone: [], claimed: [], released: [], closed: [],
     register(record) { nav.registered.push(record); return record; },
@@ -125,6 +164,7 @@ export async function loadToday({ layout = "v2", detail = null, data = board(), 
   const toasts = [];
   const window = {
     mefiStudio, MefiVibe, MefiNav: nav,
+    ...(homePage ? { MefiWorkspace: homePage.workspace, MefiTabs: { open: (id, params, options) => { calls.push(["tabs.open", plain({ id, params, options })]); } } } : {}),
     MefiUi: { arm, plainError },
     MefiToast: (text, tone) => toasts.push([text, tone]),
     addEventListener(name, callback) { (events[name] ||= []).push(callback); },
@@ -166,5 +206,5 @@ export async function loadToday({ layout = "v2", detail = null, data = board(), 
   const fire = async (kind = "timeout") => { for (const timer of timers.splice(0)) if (!timer.cancelled && (kind === "all" || !timer.every)) { await timer.callback(); } await settle(); };
   const inbox = () => document.querySelector("#today-inbox");
   const text = (node) => (node ? node.textContent : "");
-  return { window, document, get, body, documentElement, front, today: window.MefiToday, clock, calls, nav, vibe, toasts, events, timers, key, inboxKey, push, fire, inbox, text, settle, callsOf: (name) => calls.filter((call) => call[0] === name).map((call) => call[1]) };
+  return { window, document, get, body, documentElement, front, home: homePage, today: window.MefiToday, clock, calls, nav, vibe, toasts, events, timers, key, inboxKey, push, fire, inbox, text, settle, callsOf: (name) => calls.filter((call) => call[0] === name).map((call) => call[1]) };
 }

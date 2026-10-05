@@ -125,6 +125,8 @@
     }
     // The pictures and the suggestions follow the project and the mode; a switch in flight or a send holds them still.
     composerPictures?.refresh(); composerPicker?.refresh();
+    // Build's Today (layout v2) has its own two buttons on this box; they follow a send the same way.
+    try { window.MefiToday?.composerChanged?.(); } catch { /* Today is optional */ }
   }
   const accentForTheme = (theme) => theme === "forest" ? "sage" : theme;
   function personalize(accentChoice = accentForTheme(window.MefiMusic?.status?.()?.theme) || storage.get("accent", "aurora")) {
@@ -302,7 +304,8 @@
     // Build's sessions layout opens its own New task page (builder.js).
     if (window.MefiBuilder?.active?.()) { window.MefiBuilder.newTask(); return; }
     window.MefiNav?.go?.("workspace");
-    setMode("work");
+    // Build's Today (layout v2) holds the box with its own Talk it over and Build it, so the words in it stay as they are.
+    if (!window.MefiToday?.hostsComposer?.()) setMode("work");
     $("input").focus();
   }
   function renderFocus() {
@@ -981,13 +984,15 @@
       .filter((line) => line && !REGION_BRIEF.test(line) && !CHURN_HINT.test(line) && !TEMPLATE_LINE.test(line) && !FOLLOWUP_LINE.test(line) && !placeholder.test(line));
     return kept.join(" ").replace(/[^\p{L}\p{N}]/gu, "").length >= 3;
   }
-  async function submit(event) {
-    event?.preventDefault();
+  // `purpose` sends the words as a chat ("chat") or as a new task ("work") without switching the box's purpose, so the
+  // draft in the box is what goes: Build's Today (renderer/today.js, layout v2) has Talk it over and Build it for the two.
+  async function submit(event, purpose = null) {
+    event?.preventDefault?.();
     if (window.MefiFileInputs?.isReading($("input"))) { feedback("Wait for the files to finish reading."); return; }
     if (composerPictures?.isBusy()) { feedback("Wait for the picture to finish adding."); return; }
     const value = $("input").value.trim();
     if (!value || state.pending || state.switching || !state.activeId || !api()) return;
-    const id = state.activeId; const mode = state.mode;
+    const id = state.activeId; const mode = purpose === "work" || purpose === "chat" ? purpose : state.mode;
     const images = composerPictures?.take() ?? [];
     if (mode === "work" && !hasRequirement(value)) {
       state.pending = false; controls();
@@ -1106,6 +1111,8 @@
     if (window.MefiVibe?.mode?.() === "vibe") return window.MefiVibe.enter();
     init(); window.MefiIdle?.exit?.(); $("layer").hidden = false;
     document.body.classList.add("workspace-active");
+    // Layout v2: Build's Home is Today (renderer/today.js), which takes the page while it shows.
+    try { window.MefiToday?.syncHome?.(); } catch { /* Today is optional */ }
     showBackdrop();
     renderMachineTile(); renderUsageTile();
     // Usage has no push; one read on entry (cached 5 min by the tracker).
@@ -1115,7 +1122,7 @@
     // the loading layer joins that work instead of issuing a second batch.
     return startupPending || window.MefiBoot?.isActive?.() ? ready() : refresh(true);
   }
-  function exit() { if (!$("layer")) return; $("layer").hidden = true; document.body.classList.remove("workspace-active"); window.MefiIdle?.setHomeBackdrop?.(false); saveDraft(); }
+  function exit() { if (!$("layer")) return; $("layer").hidden = true; document.body.classList.remove("workspace-active"); window.MefiIdle?.setHomeBackdrop?.(false); saveDraft(); try { window.MefiToday?.syncHome?.(); } catch { /* Today is optional */ } }
   function init() {
     if (initialized || !$("layer")) return; initialized = true;
     const projectActions = $("layer").querySelector?.(".ws-project-actions");
@@ -1381,6 +1388,6 @@
     }, 15000);
     document.addEventListener("visibilitychange", () => { if (!document.hidden && active()) refresh(); });
   }
-  window.MefiWorkspace = { enter, exit, refresh, ready, isActive: active, activeProjectId: () => state.activeId, buildMode, setAutoBuild, agentMode, setAgentMode, composeTask, requestChange, startTask, previewAction, previewStatus: () => state.preview, snapshot, setComposerMode: setMode };
+  window.MefiWorkspace = { enter, exit, refresh, ready, isActive: active, activeProjectId: () => state.activeId, buildMode, setAutoBuild, agentMode, setAgentMode, composeTask, requestChange, startTask, previewAction, previewStatus: () => state.preview, snapshot, setComposerMode: setMode, send: (purpose) => submit(null, purpose) };
   init();
 })();

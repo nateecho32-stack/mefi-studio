@@ -729,8 +729,10 @@
     if (isHomeRoute(id)) {
       const session = sessionTitle(snapshot);
       const built = !session && window.MefiBuilder?.view?.()?.view === "task" ? n?.taskContext?.() : null;
+      // Build's classic Home is Today's "chat" view (renderer/today.js): the tab strip and the trail both call it Chat.
+      const chat = window.MefiToday?.homeView?.() === "chat" && rootEl().dataset.uiMode !== "vibe";
       if (session || built?.title) parts.push(String(session || built.title));
-      else parts.push(window.MefiToday ? "Today" : String(dest?.label || dest?.short || "Home"));
+      else parts.push(window.MefiToday ? (chat ? "Chat" : "Today") : String(dest?.label || dest?.short || "Home"));
       return parts;
     }
     let section = null;

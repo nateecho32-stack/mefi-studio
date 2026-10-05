@@ -223,9 +223,9 @@ test("a layout other than v2 is also off", async () => {
 test("started in v2 it registers its routes, asks Vibe for its data once, and listens for what it needs", async () => {
   const t = await loadToday({ data: board({ needs: [needQuestion()] }) });
   assert.equal(t.today.isOn(), true);
-  assert.deepEqual(t.nav.registered.map((record) => [record.id, record.kind, record.layer ?? null, record.section]), [["today", "overlay", "sheet", "home"], ["inbox", "overlay", "sheet", "work"], ["inbox-open", "action", null, "home"]]);
+  assert.deepEqual(t.nav.registered.map((record) => [record.id, record.kind, record.layer ?? null, record.section]), [["today", "overlay", "sheet", "home"], ["inbox", "overlay", "sheet", "work"], ["home-chat", "action", null, "home"], ["inbox-open", "action", null, "home"]]);
   assert.equal(t.vibe.watchers.size, 1, "one watcher on Vibe's data");
-  assert.deepEqual(Object.keys(t.events).sort(), ["keydown", "mefi:appearance", "mefi:layout", "mefi:project-changed"]);
+  assert.deepEqual(Object.keys(t.events).sort(), ["keydown", "mefi:appearance", "mefi:layout", "mefi:nav", "mefi:project-changed"], "the navigation says which view of Home is up (Build's Today or the conversation)");
   assert.equal(t.today.count(), 1);
   assert.equal(t.today.start(), false, "starting again changes nothing");
   assert.equal(t.vibe.watchers.size, 1);

@@ -268,6 +268,9 @@
     on: false, data: null, off: null, host: null, handled: new Map(), busy: new Set(), errors: new Map(), later: new Set(), drafts: new Map(),
     inbox: { open: false, anchor: null, index: 0, node: null, opener: null, focusKey: null }, pageOpen: null, anchor: null, clock: 0, sweep: 0,
     listeners: new Set(), signature: "", parts: null, painted: new WeakMap(),
+    // Build's Home (layout v2): the page, what it borrowed from Home, and the suggestions it asked for. `homeView` is the route's view: "chat" is the classic Home.
+    home: { on: false, node: null, parts: null, tools: null, toolParts: null, lent: [], placeholder: null, keys: null, typing: null, keysOn: null, suggest: { loading: false, error: "", result: null, request: 0 } },
+    homeView: "today",
   };
   const NOT_DONE = "That did not go through. You can also open the task.";
   const DECIDED_SHOW_MS = 8000;
@@ -952,6 +955,7 @@
       }
       paintBoard(board, current, detail);
     }
+    if (homeShowing()) paintHome(current);
   }
 
   // ---- hosts ------------------------------------------------------------------------------------------------
@@ -1042,6 +1046,415 @@
     return true;
   }
 
+  // ---- Build's Home: Today, as the 0.5 prototype draws it ----------------------------------------------------------------
+  // In Build (layout v2), Home with no session open is Today: the greeting and the question, Build's own message box with
+  // Add files or an image, the permission mode, Talk it over and Build it (Ctrl Enter), the four ways to start and Suggest a
+  // next step, then the first thing that needs you, what is running now and what finished. The box is workspace.js's form,
+  // borrowed while Today shows and given back when it goes, so its drafts, its pictures, its @ # / picker and every host
+  // call stay Home's: Talk it over sends the words as a chat (assistant:message) and Build it as a new task (tasks:create).
+  // The classic Home (its conversation, the queue, Activity and the preview, More) is the same route with view "chat",
+  // the page Talk it over and "Open the conversation" open; the tab strip names it Chat. With a session open the thread
+  // covers Home as before (renderer/sessions.js), and Vibe keeps its own Today (show() above).
+  const HOME_PLACEHOLDER = "Describe an idea, a fix or a question…";
+  const HOME_STARTS = ["modify", "experiment", "fix", "improve"];
+  const STARTERS = { modify: { label: "Modify", starter: "Change this project so that " }, experiment: { label: "Experiment", starter: "Try a small experiment: " }, fix: { label: "Fix", starter: "Something is broken: " }, improve: { label: "Improve", starter: "Improve this project by " } };
+  const building = () => vibe()?.mode?.() !== "vibe" && page()?.dataset?.uiMode !== "vibe";
+  const homeInput = () => byId("workspace-input");
+  // The starters are Vibe's own (MefiVibe.intents()), so the two boxes start the same way; these words are only for a page without it.
+  const starters = () => { const given = vibe()?.intents?.(); return given && typeof given === "object" && Object.keys(given).length ? given : STARTERS; };
+  function homeWanted() {
+    const layer = byId("workspace-layer");
+    return Boolean(state.on && v2() && layer && !layer.hidden && building() && state.homeView !== "chat");
+  }
+  // workspace.js calls this when Home comes and goes, and the navigation when the route's view changes.
+  function syncHome() {
+    if (homeWanted()) mountHome(); else unmountHome();
+    return state.home.on;
+  }
+  function homeParts(layer) {
+    if (state.home.node) return state.home.node;
+    const node = el("section", "today today-b"); node.id = "today-build"; node.setAttribute("aria-label", "Today"); node.hidden = true;
+    const scroll = el("div", "today-scroll today-b-scroll"); scroll.id = "today-build-scroll"; scroll.tabIndex = -1;
+    const column = el("div", "today-b-col");
+    // A div, not a header: the app's own header rule (a flex row with a rule under it) is for page heads.
+    const hero = el("div", "today-b-hero");
+    const orb = el("i", "today-b-orb"); orb.setAttribute("aria-hidden", "true");
+    const kicker = el("p", "today-b-kicker"); kicker.id = "today-build-kicker";
+    const title = el("h1", "today-b-title"); title.id = "today-build-title";
+    hero.append(orb, kicker, title);
+    const box = el("div", "today-b-box"); box.id = "today-build-box";
+    const note = el("p", "today-b-note"); note.id = "today-build-note"; note.setAttribute("role", "status"); note.hidden = true;
+    const hint = el("p", "today-b-hint"); hint.id = "today-build-hint";
+    hint.textContent = "Enter to talk it over · Shift Enter for a new line · Ctrl Enter to build";
+    const starts = el("div", "today-b-starts"); starts.id = "today-build-starts"; starts.setAttribute("role", "group"); starts.setAttribute("aria-label", "Ways to start");
+    for (const id of HOME_STARTS) {
+      const chip = button(starters()[id]?.label || STARTERS[id].label, "today-b-chip", () => homeStart(id), { title: starters()[id]?.hint || "" });
+      chip.dataset.start = id; chip.setAttribute("aria-pressed", "false");
+      starts.append(chip);
+    }
+    const suggest = button("", "today-b-chip is-suggest", () => void homeSuggest(), { title: "Mefi reads the project and suggests a few small next steps" });
+    suggest.id = "today-build-suggest"; suggest.dataset.start = "suggest";
+    suggest.append(glyph("g-spark"), el("span", "", "Suggest a next step"));
+    starts.append(suggest);
+    const ideas = el("section", "today-b-sugs"); ideas.id = "today-build-suggestions"; ideas.setAttribute("aria-label", "Suggested next steps"); ideas.hidden = true;
+    const needs = el("section", "today-b-sect"); needs.setAttribute("aria-labelledby", "today-build-needs-title");
+    const needsTitle = el("h3", "today-b-h is-need", "Needs you"); needsTitle.id = "today-build-needs-title";
+    const needHolder = el("div", "today-b-need"); needHolder.id = "today-build-need";
+    needs.append(needsTitle, needHolder);
+    const two = el("div", "today-b-two");
+    const half = (id, words) => {
+      const part = el("section", "today-b-half"); part.setAttribute("aria-labelledby", `${id}-title`);
+      const head = el("h3", "today-b-h", words); head.id = `${id}-title`;
+      const card = el("div", "today-b-card"); card.id = id; card.setAttribute("role", "list");
+      part.append(head, card);
+      return { part, card };
+    };
+    const running = half("today-build-running", "Running now"), finished = half("today-build-finished", "Finished while you were away");
+    two.append(running.part, finished.part);
+    column.append(hero, box, note, hint, starts, ideas, needs, two);
+    scroll.append(column); node.append(scroll);
+    // First in the layer, before the classic page it stands in for (which steps aside while it shows, today.css).
+    const first = layer.children?.[0] ?? layer.firstChild ?? null;
+    if (first && layer.insertBefore) layer.insertBefore(node, first); else layer.append(node);
+    state.home.node = node;
+    state.home.parts = { scroll, kicker, title, box, note, hint, starts, suggest, ideas, needHolder, running: running.card, finished: finished.card };
+    return node;
+  }
+  // The row of controls the prototype puts under the words. Made once and moved in with the box, so the permission mode's own
+  // control (renderer/autonomy-ui.js) is mounted once.
+  function homeTools() {
+    if (state.home.tools) return state.home.tools;
+    const tools = el("div", "today-b-tools"); tools.id = "today-build-tools";
+    const picker = el("input"); picker.type = "file"; picker.multiple = true; picker.hidden = true; picker.id = "today-build-files";
+    picker.addEventListener("change", () => { const files = Array.from(picker.files || []); picker.value = ""; void homeFiles(files); });
+    const attach = button("", "today-b-cc", () => { if (!attach.disabled) picker.click?.(); }, { title: "Add text or code files to the words, or a picture (PNG, JPEG, WebP or GIF) to send with them. You can also paste or drop them into the box." });
+    attach.id = "today-build-attach";
+    const attachWords = el("span", "", "Add files or an image");
+    attach.append(glyph("g-clip"), attachWords);
+    const autonomy = el("span", "today-b-autonomy"); autonomy.id = "today-build-autonomy";
+    const talk = button("", "today-b-talk", () => void homeSend("chat"), { title: "Talk it over with Mefi first: the words go to the conversation, and its page opens" });
+    talk.id = "today-build-talk"; talk.append(glyph("g-chat"), el("span", "", "Talk it over"));
+    const build = button("", "today-b-send", () => void homeSend("work"), { title: "Build it: the words become a task, and a worker picks it up" });
+    build.id = "today-build-build"; build.append(el("span", "", "Build it"), el("kbd", "today-key", "Ctrl Enter"));
+    tools.append(attach, picker, autonomy, talk, build);
+    window.MefiAutonomy?.mount?.(autonomy, { id: "today-build-autonomy-control" });
+    state.home.tools = tools;
+    state.home.toolParts = { attach, attachWords, picker, autonomy, talk, build };
+    return tools;
+  }
+  // Borrow Home's box (and the line that says how a send went) into Today; unmountHome() gives each back where it was.
+  function mountHome() {
+    const layer = byId("workspace-layer");
+    if (!layer) return false;
+    const node = homeParts(layer);
+    if (state.home.on) { paint(); return true; }
+    const form = byId("workspace-form");
+    const parts = state.home.parts;
+    const lend = (piece, into, before = null) => {
+      if (!piece || piece.parentNode === into) return;
+      state.home.lent.push({ node: piece, parent: piece.parentNode, next: piece.nextSibling ?? null });
+      piece.remove?.();
+      if (before) into.insertBefore(piece, before); else into.append(piece);
+    };
+    if (form) {
+      lend(form, parts.box);
+      form.append(homeTools());
+      const input = homeInput();
+      if (input) {
+        state.home.placeholder = input.placeholder ?? "";
+        input.placeholder = HOME_PLACEHOLDER;
+        if (!state.home.keysOn) {
+          state.home.keys = homeKeys; state.home.typing = () => paintStarts(); state.home.keysOn = input;
+          input.addEventListener("keydown", homeKeys, true);
+          input.addEventListener("input", state.home.typing);
+        }
+      }
+    }
+    const feedback = byId("workspace-feedback")?.parentNode;
+    if (feedback && feedback !== layer && feedback.parentNode) lend(feedback, parts.box.parentNode, parts.note);
+    node.hidden = false;
+    if (layer.dataset) layer.dataset.today = "on";
+    state.home.on = true;
+    paint(); startClock();
+    return true;
+  }
+  function unmountHome() {
+    if (!state.home.on) return false;
+    state.home.on = false;
+    const layer = byId("workspace-layer");
+    state.home.tools?.remove?.();
+    for (const { node, parent, next } of state.home.lent.splice(0).reverse()) {
+      if (!parent) continue;
+      node.remove?.();
+      parent.insertBefore(node, next && next.parentNode === parent ? next : null);
+    }
+    const input = homeInput();
+    if (input && state.home.placeholder !== null) input.placeholder = state.home.placeholder;
+    state.home.placeholder = null;
+    if (state.home.keysOn) { state.home.keysOn.removeEventListener("keydown", state.home.keys, true); state.home.keysOn.removeEventListener("input", state.home.typing); }
+    state.home.keys = null; state.home.typing = null; state.home.keysOn = null;
+    if (state.home.node) state.home.node.hidden = true;
+    if (layer?.dataset) delete layer.dataset.today;
+    stopClockIfIdle();
+    return true;
+  }
+  // Enter talks it over, Ctrl Enter builds it, Shift Enter is a new line; an open suggestion list (the @ # / picker) keeps its own Enter.
+  function homeKeys(event) {
+    if (!state.home.on || event.key !== "Enter" || event.shiftKey || event.altKey || event.isComposing) return;
+    if (window.MefiComposerPicker?.get?.(event.target)?.isOpen?.()) return;
+    event.preventDefault?.(); event.stopImmediatePropagation?.(); event.stopPropagation?.();
+    void homeSend(event.ctrlKey || event.metaKey ? "work" : "chat");
+  }
+  function homeNote(words) {
+    const note = state.home.parts?.note;
+    if (!note) return;
+    note.textContent = words || "";
+    note.hidden = !words;
+  }
+  // Talk it over and Build it send what is in the box through Home's own send (workspace.js), as a chat or as a task. A chat's
+  // reply lands in the conversation, so its page opens; a task stays here, with Home's own "Task added" line and View task.
+  async function homeSend(purpose) {
+    const input = homeInput();
+    const workspace = window.MefiWorkspace;
+    if (!input || typeof workspace?.send !== "function") return false;
+    const snap = workspace.snapshot?.() || {};
+    if (snap.pending) return false;
+    if (!snap.projectId) { homeNote("Choose a project first: open one from the project menu."); return false; }
+    if (!String(input.value || "").trim()) { homeNote("Describe what you have in mind first."); input.focus?.(); return false; }
+    homeNote("");
+    const sending = Promise.resolve().then(() => workspace.send(purpose));
+    if (purpose === "chat") openChat();
+    try { await sending; } catch { /* Home's own line says what went wrong */ }
+    paint();
+    return true;
+  }
+  // The classic Home, under Today's own route: the conversation, the queue, Activity and the preview.
+  function openChat() {
+    const tabs = window.MefiTabs;
+    if (typeof tabs?.open === "function") { try { tabs.open("workspace", { view: "chat" }, { preview: true }); return true; } catch { /* the router below */ } }
+    window.MefiNav?.go?.("workspace", { view: "chat" });
+    return true;
+  }
+  // A file picked here goes where a dropped one would: a picture to the box's pictures (composer-pictures.js), the rest into the words (file-inputs.js).
+  async function homeFiles(files) {
+    const input = homeInput();
+    if (!input || !files.length) return;
+    const pictures = window.MefiComposerPictures?.get?.(input);
+    const images = pictures && !homePicturesOff() ? files.filter((file) => String(file?.type || "").startsWith("image/")) : [];
+    const rest = files.filter((file) => !images.includes(file));
+    if (images.length) await pictures.addFiles(images);
+    if (rest.length) await window.MefiFileInputs?.addFiles?.(input, rest);
+    paint();
+  }
+  const homePicturesOff = () => { const row = homeInput()?.parentNode?.querySelector?.(".composer-attach"); return !row || row.hidden === true; };
+  // Modify, Experiment, Fix and Improve start the words the way Vibe's box does: an empty box takes the starter, a starter
+  // already there is swapped, and words of your own are left as they are.
+  function homeStart(id) {
+    const input = homeInput();
+    const entry = starters()[id];
+    if (!input || !entry?.starter) return false;
+    const value = String(input.value || "");
+    const prior = Object.values(starters()).map((item) => item?.starter).find((starter) => starter && value.startsWith(starter));
+    if (!value.trim()) input.value = entry.starter;
+    else if (prior) input.value = entry.starter + value.slice(prior.length);
+    try { if (typeof Event === "function") input.dispatchEvent?.(new Event("input", { bubbles: true })); } catch { /* the draft is saved on the next keystroke */ }
+    input.focus?.();
+    try { input.setSelectionRange?.(input.value.length, input.value.length); } catch { /* not a text field */ }
+    paintStarts();
+    return true;
+  }
+  function paintStarts() {
+    const parts = state.home.parts;
+    if (!parts) return;
+    const value = String(homeInput()?.value || "");
+    for (const chip of parts.starts.children) {
+      const id = chip.dataset?.start;
+      if (!id || id === "suggest") continue;
+      const on = Boolean(starters()[id]?.starter && value.startsWith(starters()[id].starter));
+      if (chip.getAttribute("aria-pressed") !== String(on)) chip.setAttribute("aria-pressed", String(on));
+    }
+  }
+  // Suggest a next step: the same look Vibe's box asks for (planning:explore, suggestions only), for the words in this box.
+  async function homeSuggest() {
+    const ask = state.home.suggest;
+    if (ask.loading) return null;
+    const data = state.data || vibe()?.data?.() || {};
+    const id = data.projectId;
+    if (!id || !api()?.planningExplore) { Object.assign(ask, { error: "Choose a project in the desktop app to ask Mefi for suggestions.", result: null }); paintSuggest(); return null; }
+    const value = String(homeInput()?.value || "").trim();
+    const chosen = HOME_STARTS.find((key) => starters()[key]?.starter && value.startsWith(starters()[key].starter)) || "improve";
+    const intent = starters()[chosen] || STARTERS.improve;
+    const destination = [value || "Suggest a few small, useful next steps for the existing application in this project.", intent.guide ? `Approach: ${intent.label}. ${intent.guide}` : `Approach: ${intent.label}.`].join("\n\n");
+    if (destination.length > 16000) { Object.assign(ask, { error: "Shorten the draft a little before asking for suggestions.", result: null }); paintSuggest(); return null; }
+    const request = ++ask.request;
+    Object.assign(ask, { loading: true, error: "", result: null });
+    paintSuggest();
+    let result = null;
+    try {
+      result = await api().planningExplore({ projectId: id, draft: { title: `${intent.label} this project`, destination, outOfScope: "Suggestions for review only. Do not implement, create tasks, or approve work." }, focus: "destination", intent: "suggest" });
+      if (request !== ask.request || ((state.data || {}).projectId ?? id) !== id) return null;
+      if (!result?.ok || (result.projectId && result.projectId !== id)) throw new Error(result?.error || "Mefi could not explore this project. Try again.");
+      ask.result = (Array.isArray(result.suggestions) ? result.suggestions : []).slice(0, 3).map((row, index) => ({ key: `s${index}`, label: clip(row?.label || "A next step", 90), text: clip(row?.text, 420), reason: clip(row?.reason, 200), used: false }));
+    } catch (error) { if (request === ask.request) ask.error = say(error, "Suggestions are unavailable. Try again."); }
+    finally { if (request === ask.request) { ask.loading = false; paintSuggest(); } }
+    return result;
+  }
+  function useSuggestion(row) {
+    const input = homeInput();
+    if (!input || row.used) return false;
+    const block = [row.label, row.text].filter(Boolean).join("\n\n");
+    const current = String(input.value || "").trimEnd();
+    const next = current ? `${current}\n\n${block}` : block;
+    if (next.length > 16000) { homeNote("This will not fit beside your current draft. Shorten the draft first."); return false; }
+    input.value = next;
+    row.used = true;
+    try { if (typeof Event === "function") input.dispatchEvent?.(new Event("input", { bubbles: true })); } catch { /* saved on the next keystroke */ }
+    input.focus?.();
+    paintSuggest(); paintStarts();
+    return true;
+  }
+  function paintSuggest() {
+    const parts = state.home.parts;
+    if (!parts) return;
+    const ask = state.home.suggest;
+    const label = parts.suggest.querySelector?.("span");
+    const words = ask.loading ? "Looking…" : ask.result ? "Suggest again" : "Suggest a next step";
+    if (label && label.textContent !== words) label.textContent = words;
+    parts.suggest.disabled = ask.loading;
+    parts.suggest.setAttribute("aria-busy", String(ask.loading));
+    const signature = JSON.stringify([ask.loading, ask.error, ask.result?.map((row) => [row.label, row.text, row.used]) ?? null]);
+    if (parts.ideas.dataset.signature === signature) return;
+    parts.ideas.dataset.signature = signature;
+    const rows = [];
+    if (ask.loading) rows.push(el("p", "today-b-sugs-note", "Mefi is reading the project for a useful next step."));
+    if (ask.error) { const bad = el("p", "today-b-sugs-note is-bad", ask.error); bad.setAttribute("role", "alert"); rows.push(bad); }
+    if (ask.result) {
+      const head = el("div", "today-b-sugs-head");
+      head.append(el("b", "", ask.result.length ? "Mefi suggests" : "No next step suggested yet. Say a little more in the box and ask again."), button("Clear", "today-link", () => { Object.assign(state.home.suggest, { result: null, error: "" }); paintSuggest(); state.home.parts?.suggest?.focus?.({ preventScroll: true }); }, { title: "Put these suggestions away" }));
+      rows.push(head);
+      for (const row of ask.result) {
+        const card = el("article", `today-b-sug${row.used ? " is-used" : ""}`);
+        card.append(el("h4", "", row.label));
+        if (row.text) card.append(el("p", "", row.text));
+        if (row.reason) card.append(el("p", "today-b-sug-why", row.reason));
+        card.append(button(row.used ? "Added to the draft" : "Add to the draft", "today-btn", () => useSuggestion(row), { disabled: row.used, title: "Add it under your words; nothing is sent" }));
+        rows.push(card);
+      }
+    }
+    parts.ideas.replaceChildren(...rows);
+    parts.ideas.hidden = rows.length === 0;
+  }
+  // Talk it over and Build it wait while Home's box is sending, as its own Send does; the attach button says what it can take.
+  function paintHomeTools() {
+    const tools = state.home.toolParts;
+    if (!tools) return;
+    const snap = window.MefiWorkspace?.snapshot?.() || {};
+    const off = !snap.projectId || Boolean(snap.pending);
+    for (const node of [tools.talk, tools.build, tools.attach]) if (node.disabled !== off) node.disabled = off;
+    tools.build.setAttribute("aria-busy", String(Boolean(snap.pending)));
+    const words = homePicturesOff() ? "Add files" : "Add files or an image";
+    if (tools.attachWords.textContent !== words) tools.attachWords.textContent = words;
+  }
+  // The rows of Running now and Finished while you were away: one line each, the session's state as a dot, opening the session.
+  function homeRunning(d) {
+    return (Array.isArray(d.running) ? d.running : []).map((job) => {
+      const step = window.MefiVibeFlow?.doing?.(job) ?? { tool: "", step: "" };
+      const who = clip(job.route || job.cli || step.tool || "", 40);
+      const doing = job.stopping ? "stopping" : clip(step.step || job.currentStep || (job.phase ? String(job.phase).replace(/_/g, " ") : "working"), 80);
+      const progress = Number.isFinite(job.progress) ? Math.max(0.04, Math.min(1, job.progress)) : null;
+      return { key: `run:${job.taskId || job.title}`, tone: "run", title: clip(job.title || "A task", 120), taskId: job.taskId || null, meta: [who, doing].filter(Boolean).join(" · "), progress };
+    });
+  }
+  function homeFinished(current, d, now) {
+    const rows = [];
+    for (const item of current.items) {
+      if (item.handled || item.kind !== "review" || !item.taskId) continue;
+      const checking = Boolean(item.need?.checking);
+      rows.push({ key: `review:${item.taskId}`, tone: "rev", title: item.title, taskId: item.taskId, meta: checking ? "Checking its work" : item.facts ? `${item.facts} · ready to review` : "Ready to review", end: checking ? "" : "Review", changes: !checking });
+    }
+    for (const card of current.board.review) if (card.tone === "check") rows.push({ key: card.key, tone: "rev", title: card.title, taskId: card.taskId, meta: "Checking its work", end: "" });
+    for (const card of current.board.done) {
+      const task = taskOf(d, card.taskId);
+      const verified = task?.verification?.state === "verified";
+      rows.push({ key: card.key, tone: "done", title: card.title, taskId: card.taskId, meta: task ? `${verified ? "Verified" : "Done"} ${ago(finishedAt(task), now)}` : "Done", end: "Done" });
+    }
+    return rows.slice(0, 3);
+  }
+  function homeRow(row) {
+    const node = button("", `today-b-row is-${row.tone}`, () => { if (row.changes) openChanges(row.taskId); else openTask(row.taskId); }, { title: row.title, disabled: !row.taskId });
+    node.dataset.key = row.key; node.setAttribute("role", "listitem");
+    const words = el("span", "today-b-row-words");
+    words.append(el("span", "today-b-row-title", row.title), el("span", "today-b-row-meta", row.meta));
+    node.append(el("i", "today-b-dot"), words);
+    if (row.tone === "run") {
+      const bar = el("span", `today-b-bar${row.progress == null ? " is-flowing" : ""}`); bar.setAttribute("aria-hidden", "true");
+      const fill = el("i"); if (row.progress != null) fill.style.width = `${Math.round(row.progress * 100)}%`;
+      bar.append(fill); node.append(bar);
+    } else if (row.end) node.append(el("span", row.end === "Review" ? "today-b-end is-review" : "today-b-end", row.end));
+    return node;
+  }
+  // The first thing that waits on you (a question, a permission, a go-ahead or a task that stopped; a result to review is under
+  // Finished), answered in place with its first two options, or opened.
+  function renderHomeNeed(item) {
+    if (item.handled) return renderDecided(item, item.handled);
+    const busy = state.busy.has(item.key);
+    const node = el("article", `today-b-ask${busy ? " is-busy" : ""}`);
+    node.dataset.key = item.key; node.dataset.kind = item.kind; node.dataset.tone = item.kind === "failure" ? "bad" : "warn";
+    node.setAttribute("aria-busy", String(busy));
+    const from = item.from && item.from !== item.title ? item.from : "";
+    const head = el("div", "today-b-ask-k");
+    head.append(kindGlyph(item.kind), el("b", "", from || item.title));
+    head.title = item.who ? `${item.label} · ${item.who}` : item.label;
+    const words = el("p", "today-b-ask-q", from ? item.title : item.detail || item.label);
+    words.id = `today-build-ask-${String(item.key).replace(/[^A-Za-z0-9_-]/g, "-")}`;
+    node.setAttribute("aria-labelledby", words.id);
+    node.append(head, words);
+    const row = el("div", "today-b-opts"); row.setAttribute("role", "group"); row.setAttribute("aria-label", item.options.length ? "Your answer" : "What to do");
+    const quick = item.options.filter((option) => !option.text && !option.dismiss).slice(0, 2);
+    if (item.options.length) {
+      quick.forEach((option, index) => { const choose = button(option.label, `today-btn${index === 0 ? " primary" : ""}`, () => void answer(item, { optionId: option.id }), { title: option.description || option.label, disabled: busy }); choose.dataset.option = option.id; row.append(choose); });
+      if (!quick.length) row.append(button("Answer", "today-btn primary", () => openInbox(state.anchor, { focus: item.key }), { title: "Answer it in the Inbox", disabled: busy }));
+    } else {
+      for (const action of actionsOf(item, state.data || {}).slice(0, 2)) {
+        const run = typeof action.go === "function" ? () => action.go() : () => void perform(item, action);
+        row.append(button(action.label, `today-btn${action.primary ? " primary" : ""}`, run, { title: action.title, disabled: busy || action.disabled, confirm: action.confirm }));
+      }
+    }
+    if (item.taskId) row.append(button("Open task", "today-btn", () => openTask(item.taskId), { title: "Open its session" }));
+    node.append(row);
+    if (state.errors.has(item.key)) { const bad = el("p", "today-need-note", state.errors.get(item.key)); bad.setAttribute("role", "alert"); node.append(bad); }
+    return node;
+  }
+  function caughtUp() {
+    const node = el("div", "today-b-clear");
+    const tick = el("i", "today-tick"); tick.setAttribute("aria-hidden", "true");
+    const words = el("span", "");
+    words.append(el("b", "", "You're all caught up."), document.createTextNode(" Nothing is waiting on you right now."));
+    node.append(tick, words);
+    return node;
+  }
+  function paintHome(current) {
+    const parts = state.home.parts;
+    if (!state.home.on || !parts) return;
+    const d = state.data || vibe()?.data?.() || {};
+    const now = Date.now();
+    const hour = new Date(now).getHours();
+    const kicker = d.greeting || (hour < 5 ? "Up late" : hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening");
+    const title = d.headline || (d.projectId && d.projectName ? `What's next for ${d.projectName}?` : "Pick a project to begin");
+    if (parts.kicker.textContent !== kicker) parts.kicker.textContent = kicker;
+    if (parts.title.textContent !== title) parts.title.textContent = title;
+    const input = homeInput();
+    if (input && input.placeholder !== HOME_PLACEHOLDER) input.placeholder = HOME_PLACEHOLDER;
+    paintHomeTools(); paintStarts(); paintSuggest();
+    const first = orderItems(current.items).find((item) => item.kind !== "review") ?? null;
+    reconcile(parts.needHolder, first ? [{ key: first.key, sig: `${itemSignature(first, { compact: false }, now)}|home`, build: () => renderHomeNeed(first) }] : [{ key: "__clear", sig: "clear", build: caughtUp }]);
+    const empty = (words) => [{ key: "__none", sig: words, build: () => el("p", "today-b-empty", words) }];
+    const running = homeRunning(d), finished = homeFinished(current, d, now);
+    reconcile(parts.running, running.length ? running.map((row) => ({ key: row.key, sig: JSON.stringify(row), build: () => homeRow(row) })) : empty("Nothing is running."));
+    reconcile(parts.finished, finished.length ? finished.map((row) => ({ key: row.key, sig: JSON.stringify(row), build: () => homeRow(row) })) : empty("Nothing new."));
+  }
+  const homeShowing = () => { const layer = byId("workspace-layer"); return Boolean(state.home.on && layer && !layer.hidden && !layer.hasAttribute?.("inert")); };
+
   // ---- painting and the clock -----------------------------------------------------------------------------
   let paintQueued = false;
   function paint() {
@@ -1053,11 +1466,11 @@
     if (!state.on) return;
     sweepHandled();
     announce();
-    if (state.host === "vibe" || byId("today-overlay")?.hidden === false) paintToday();
+    if (state.host === "vibe" || byId("today-overlay")?.hidden === false || homeShowing()) paintToday();
     if (state.inbox.open) paintInbox();
     if (byId("inbox-overlay")?.hidden === false) paintInboxPage();
   }
-  const visible = () => state.host === "vibe" || state.inbox.open || byId("today-overlay")?.hidden === false || byId("inbox-overlay")?.hidden === false;
+  const visible = () => state.host === "vibe" || state.inbox.open || homeShowing() || byId("today-overlay")?.hidden === false || byId("inbox-overlay")?.hidden === false;
   // One slow clock while something is showing, so "4 min" and the decided lines stay true without a timer per card.
   function startClock() {
     if (state.clock || !visible()) return;
@@ -1104,9 +1517,22 @@
   }
   function onProjectChanged() {
     state.handled.clear(); state.later.clear(); state.errors.clear(); state.drafts.clear(); state.busy.clear();
+    Object.assign(state.home.suggest, { loading: false, error: "", result: null, request: state.home.suggest.request + 1 });
     state.data = vibe()?.data?.() ?? null;
     paint();
   }
+  // The route's view decides Build's Home: Today, or the classic Home under "chat". A session (view "task") covers whichever was there.
+  function onNav(event) {
+    const detail = event?.detail || {};
+    if ((detail.id === "workspace" || detail.id === "vibe") && detail.action === "open") {
+      const view = detail.params?.view;
+      if (view !== "task") state.homeView = view === "chat" ? "chat" : "today";
+    }
+    syncHome();
+    if (state.home.on) { paint(); startClock(); }
+  }
+  // The mode can change without a trip through the router (Settings' switch changes the frame in place).
+  function onPageAttributes() { syncHome(); paint(); }
   function onShortcut(event) {
     if (!state.on || !(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey || event.defaultPrevented) return;
     if (String(event.key || "").toLowerCase() !== "j") return;
@@ -1137,6 +1563,13 @@
       open: (params) => openInboxPage(params), close: () => closeInboxPage(), isOpen: () => overlayOpen("inbox-overlay"),
     });
     nav.register({
+      id: "home-chat", label: "Open the conversation", short: "Conversation", kind: "action", layer: null, section: "home", group: "surfaces", key: null, glyph: "g-chat", badge: null,
+      paletteGroup: "Actions", desc: "Build's Home as it was: the conversation with Mefi, the queue, Activity and the app preview",
+      searchTerms: "conversation chat talk message assistant mefi classic home queue activity preview",
+      showIn: showIn({ palette: true, help: true }), hidden: () => !building(), keyMatch: () => false,
+      run: () => { openChat(); },
+    });
+    nav.register({
       id: "inbox-open", label: "Open the Inbox", short: "Inbox", kind: "action", layer: null, section: "home", group: "surfaces", key: null, chord: "Ctrl J", glyph: "g-bell", badge: null,
       paletteGroup: "Actions", paletteBrowse: 3, desc: "What needs you, answered where you are",
       searchTerms: "inbox needs you popover answer decide",
@@ -1157,17 +1590,22 @@
     window.addEventListener("mefi:appearance", paint);
     window.addEventListener("mefi:layout", onLayout);
     window.addEventListener("keydown", onShortcut);
+    window.addEventListener("mefi:nav", onNav);
     window.MefiSize?.onChange?.(paint);
-    // The Size and density page previews a level while it is being chosen, without an event: the attribute itself is what is watched.
-    if (typeof MutationObserver === "function" && page()) { state.detailWatch = new MutationObserver(() => paint()); state.detailWatch.observe(page(), { attributes: true, attributeFilter: ["data-detail"] }); }
-    // Vibe may already be up (a reload that resumed on it): its front door is the host.
+    // The Size and density page previews a level while it is being chosen, without an event: the attribute itself is what is watched (and the mode, for Build's Home).
+    if (typeof MutationObserver === "function" && page()) { state.detailWatch = new MutationObserver(onPageAttributes); state.detailWatch.observe(page(), { attributes: true, attributeFilter: ["data-detail", "data-ui-mode"] }); }
+    // Vibe may already be up (a reload that resumed on it): its front door is the host. Build's Home may be too.
     if (vibe()?.isActive?.()) show();
+    syncHome();
     return true;
   }
   function stop() {
     if (!state.on) return false;
     closeInbox({ restore: false }); closeInboxPage(); closeTodayPage();
     restore();
+    unmountHome();
+    state.home.node?.remove?.(); state.home.tools?.remove?.();
+    Object.assign(state.home, { node: null, parts: null, tools: null, toolParts: null });
     state.on = false;
     state.off?.(); state.off = null;
     stopClock(); clearTimeout(state.sweep);
@@ -1176,6 +1614,7 @@
     window.removeEventListener("mefi:appearance", paint);
     window.removeEventListener("mefi:layout", onLayout);
     window.removeEventListener("keydown", onShortcut);
+    window.removeEventListener("mefi:nav", onNav);
     state.inbox.node?.remove(); state.inbox.node = null;
     return true;
   }
@@ -1184,8 +1623,10 @@
     start, stop, show, hide, isOn: () => state.on, takesNeeds: () => state.on,
     count, items, needTasks, onChange, openInbox, closeInbox, toggleInbox, isInboxOpen: inboxIsOpen, ownsKeys, openInboxPage, closeInboxPage, openPage: openTodayPage, closePage: closeTodayPage,
     openNeed, openFromAlert, refresh: () => Promise.resolve(vibe()?.refresh?.()).then(() => { onData(); }),
+    // Build's Home (layout v2): workspace.js asks when Home comes and goes and when its box sends; the router's view "chat" is the classic Home.
+    syncHome, hostsComposer: () => state.home.on, composerChanged: () => { if (state.home.on) paintHomeTools(); }, homeView: () => state.homeView, openChat, suggest: () => homeSuggest(),
     // For tests and anything driving Studio: the pure model, and what is in flight.
-    build, snapshot: () => { const current = model(); return { count: current.count, items: current.items.map((item) => ({ key: item.key, kind: item.kind, handled: Boolean(item.handled) })), groups: Object.fromEntries(GROUPS.map(([key]) => [key, current.board[key].map((card) => card.key)])), host: state.host, inbox: state.inbox.open, later: [...state.later], busy: [...state.busy] }; },
+    build, snapshot: () => { const current = model(); return { count: current.count, items: current.items.map((item) => ({ key: item.key, kind: item.kind, handled: Boolean(item.handled) })), groups: Object.fromEntries(GROUPS.map(([key]) => [key, current.board[key].map((card) => card.key)])), host: state.host, home: state.home.on, homeView: state.homeView, inbox: state.inbox.open, later: [...state.later], busy: [...state.busy] }; },
   };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
   else start();
