@@ -20,6 +20,12 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   Codex it ran on the main login only; now a login at its usage limit hands
   the map to the next one, like every other call, a paused tool is not
   started for it, and the map's call is counted in Usage.
+- **The scout no longer spends a CLI login on every new task.** A scout on
+  Claude Code, Codex, Grok or Antigravity (as after "Use for the whole
+  studio") started the CLI for each task made from chat and dropped the
+  answer after 8 s; now it makes no call, the task keeps its local code
+  matches, and the log says so once. Scouts on Zen and other keyed routes
+  are unchanged.
 - **Chrome's buttons no longer look struck through.** The metal on main
   buttons and chosen tabs had a hard dark line at half height, right behind
   the words. Its horizon is now a soft band below them, and the darkest part

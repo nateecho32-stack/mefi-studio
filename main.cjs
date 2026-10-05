@@ -10354,6 +10354,10 @@ function assistantStaleWork(now) {
   );
 }
 
+// A scout on a coding CLI is said in the log once per run of Studio, not
+// once per task.
+let scoutCliNoted = false;
+
 // A resumed reference gather lands on its task the way the renderer does.
 // Exact matches are saved before this optional pass. Luna only chooses among
 // paths the local analyzer actually found, so an invented path cannot enter
@@ -10363,6 +10367,19 @@ async function lunaContextPointer(text, references) {
   if (!files.length) return null;
   const settings = await (typeof readAgentSettings === "function" ? readAgentSettings() : readSettings());
   if (settings.agentBrain?.contextScout === false) return null;
+  // A scout on a coding CLI makes no call. `claude -p` and the other CLIs
+  // cannot start and answer within the 8 s this pointer waits, so the answer
+  // was always dropped while the CLI ran on for minutes on the owner's
+  // subscription, once for every task made from chat. The local matches
+  // already stand on the task. Zen and the other HTTP routes go on as before.
+  const cli = typeof seatCli === "function" ? await seatCli("scout", settings).catch(() => null) : null;
+  if (cli) {
+    if (!scoutCliNoted) {
+      scoutCliNoted = true;
+      logLine(`[scout] the scout seat rides the ${cli} CLI, which cannot answer within the scout's 8 s: tasks keep their local code matches and no ${cli} call is made for them`);
+    }
+    return null;
+  }
   const chosen = seatChoice(settings, "scout");
   // Each string is scrubbed before serializing: JSON-escaped home paths and
   // quoted keys slip past the redaction patterns.
@@ -15161,6 +15178,22 @@ async function seatFetch(seat, system, user, maxTokens = 2400, { fallback = null
   // A caller with its own route keeps it when the seat's provider is out.
   if (typeof fallback === "function") return fallback(system, true);
   return assistantFetch(system, user, maxTokens, { role: "heavy", taskType: `seat-${seat}`, skillRole: null, timeoutMs: cliLeft() });
+}
+
+// Which coding CLI a seat's call would start, found the way seatFetch finds
+// its route but without making the call (keep the two in step): a seat named
+// for a CLI always rides it; Zen on its own key and every other named
+// provider never do (their rescue walk is HTTP only); an "auto" seat or a
+// keyless Zen one takes the heavy route, which can. Null for an HTTP call.
+async function seatCli(seat, settings) {
+  const chosen = seatChoice(settings, seat);
+  if (DATA_ONLY_CLIS.has(chosen.provider)) return chosen.provider;
+  if (chosen.provider !== "auto" && (chosen.provider !== "zen" || decryptKey(settings, "zenApiKeyEncrypted"))) return null;
+  const heavy = roleProvider(settings, "heavy");
+  if (DATA_ONLY_CLIS.has(heavy)) return heavy;
+  if (heavy !== "auto") return null;
+  const route = await resolveAiRoute("heavy");
+  return route?.ok && route.cli ? route.provider : null;
 }
 
 // ---- the Policy Lab's observation-only recorder (build brief PR1) ---------------
