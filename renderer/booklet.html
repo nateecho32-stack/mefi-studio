@@ -5668,6 +5668,131 @@ html[data-shell="rail"] body:has(#workspace-layer:not([hidden])):not(:has(.works
 }
 #overhead-canvas { border-color: var(--hairline); background: var(--bg); }
 
+/* ============================================================
+   The Map (layout v2; docs/unified-studio.md "The Map")
+   Under html[data-frame], which only shell.js writes while the 0.5
+   layout is on: Command is the Map place, drawn as the prototype draws
+   it. The classic top bar (brand, live pills, Add a task, find box and
+   toolbar) folds away; their homes in the frame are the status bar,
+   New task, Search (Ctrl K), the Map's own bar and View ▾, Settings ›
+   Map look and the player. The bar takes the top left of the free
+   area (Map | Fleet | Pipelines, Running only, View ▾), the work rail
+   is the inspector column at its right edge, the four state colours
+   sit bottom left beside the Legend, and Fit and zoom under the tree.
+   The size tokens are re-pointed at the 0.5 type ladder so nothing in
+   it reads under 12 px. Without the frame none of it is drawn.
+   ============================================================ */
+#map-bar, #map-zoom, #map-legend { display: none; }
+html[data-frame] #idle-hud {
+  --fs-2xs: var(--f12, 12px); --fs-xs: var(--f12, 12px); --fs-sm: var(--f125, 12.5px); --fs-md: var(--f135, 13.5px);
+  --map-fs: var(--f125, 12.5px);
+  --map-fill: color-mix(in srgb, var(--panel-solid) 90%, transparent);
+  --command-rail-width: clamp(320px, 24vw, 388px);
+  --command-panel-top: 60px; --command-panel-bottom: 60px;
+  --map-right: calc(var(--command-rail-width) + 16px);
+}
+html[data-frame] #idle-hud :is(.cmd-top, .cmd-hint, #cmd-usage-toggle, #cmd-usage-pop) { display: none; }
+
+/* the bar: the place's pages, Running only and View ▾ */
+html[data-frame] #idle-hud #map-bar {
+  position: absolute; top: 14px; left: 16px; z-index: 3;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  max-width: calc(100% - 32px - var(--map-right)); pointer-events: auto;
+  font: 500 var(--map-fs)/1.2 var(--font-ui);
+}
+html[data-frame] #idle-hud .map-pages { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--hairline); border-radius: 10px; background: var(--map-fill); }
+html[data-frame] #idle-hud .map-page {
+  min-height: 0; height: 26px; padding: 0 11px; border: 0; border-radius: 7px;
+  background: transparent; color: var(--muted); font: inherit; white-space: nowrap;
+}
+html[data-frame] #idle-hud .map-page:hover { background: color-mix(in srgb, var(--ivory) 7%, transparent); color: var(--ivory); }
+html[data-frame] #idle-hud .map-page[aria-current="page"] { background: color-mix(in srgb, var(--ivory) 10%, var(--panel-solid)); color: var(--ivory); font-weight: 650; box-shadow: inset 0 0 0 1px var(--hairline); }
+html[data-frame] #idle-hud .map-chip {
+  min-height: 0; height: 28px; padding: 0 9px; gap: 6px;
+  border: 1px solid var(--hairline-strong); border-radius: 9px;
+  background: var(--map-fill); color: var(--muted); font: inherit;
+}
+html[data-frame] #idle-hud .map-chip .glyph { width: 14px; height: 14px; }
+html[data-frame] #idle-hud .map-chip .chev { width: 12px; height: 12px; transition: rotate var(--motion-fast) var(--ease-out); }
+html[data-frame] #idle-hud .map-chip:hover { color: var(--ivory); border-color: var(--hairline-strong); background: color-mix(in srgb, var(--ivory) 6%, var(--panel-solid)); }
+html[data-frame] #idle-hud .map-chip:is([aria-pressed="true"], [aria-expanded="true"]) { color: var(--ivory); border-color: var(--gold); background: color-mix(in srgb, var(--gold) 16%, var(--panel-solid)); }
+html[data-frame] #idle-hud #map-view-menu[aria-expanded="true"] .chev { rotate: 180deg; }
+
+/* View ▾: Layout, Labels, Camera, View and the way to Settings › Map look */
+html[data-frame] #idle-hud #map-view-pop {
+  top: 56px; left: 16px; right: auto; width: 308px; max-width: calc(100% - 32px); max-height: calc(100% - 72px);
+  gap: 0; padding: 4px 14px 12px; border: 1px solid var(--hairline); border-radius: 14px;
+  background: var(--panel-solid); box-shadow: var(--shadow-3); backdrop-filter: none;
+  font: 450 var(--map-fs)/1.35 var(--font-ui); color: var(--ivory);
+}
+html[data-frame] #idle-hud .map-menu-group { display: grid; gap: 6px; padding: 10px 0 11px; }
+html[data-frame] #idle-hud .map-menu-group + .map-menu-group, html[data-frame] #idle-hud .map-menu-foot { border-top: 1px solid var(--hairline); }
+html[data-frame] #idle-hud .map-menu-head { display: flex; align-items: center; gap: 6px; font: 650 var(--f13, 13px)/1.3 var(--font-ui); color: var(--ivory); }
+html[data-frame] #idle-hud #map-view-pop kbd { min-width: 0; padding: 0 5px; font: 600 var(--f12, 12px)/1.5 var(--font-ui); color: var(--muted); }
+html[data-frame] #idle-hud .map-layouts { display: grid; gap: 2px; }
+html[data-frame] #idle-hud .map-opt {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10px; width: 100%;
+  min-height: 0; padding: 6px 8px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--ivory); font: inherit; text-align: left;
+}
+html[data-frame] #idle-hud .map-opt small { color: var(--muted); font-size: var(--f12, 12px); }
+html[data-frame] #idle-hud .map-opt:is(:hover, :focus-visible) { background: color-mix(in srgb, var(--ivory) 7%, transparent); }
+html[data-frame] #idle-hud .map-opt:is([aria-checked="true"]) { background: color-mix(in srgb, var(--gold) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 30%, transparent); }
+html[data-frame] #idle-hud .map-opt:disabled { opacity: .55; cursor: default; }
+html[data-frame] #idle-hud .map-seg { display: flex; gap: 2px; padding: 3px; border: 1px solid var(--hairline); border-radius: 10px; background: color-mix(in srgb, var(--ivory) 4%, transparent); }
+html[data-frame] #idle-hud .map-seg button {
+  flex: 1 1 0; min-width: 0; min-height: 0; height: 26px; padding: 0 8px; border: 0; border-radius: 7px;
+  background: transparent; color: var(--muted); font: inherit;
+}
+html[data-frame] #idle-hud .map-seg button:is(:hover, :focus-visible) { color: var(--ivory); background: color-mix(in srgb, var(--ivory) 6%, transparent); }
+html[data-frame] #idle-hud .map-seg button[aria-checked="true"] { background: color-mix(in srgb, var(--ivory) 10%, var(--panel-solid)); color: var(--ivory); font-weight: 650; box-shadow: inset 0 0 0 1px var(--hairline); }
+html[data-frame] #idle-hud .map-menu-foot { display: flex; align-items: center; gap: 10px; padding-top: 10px; }
+html[data-frame] #idle-hud .map-menu-foot > span { display: grid; flex: 1; min-width: 0; }
+html[data-frame] #idle-hud .map-menu-foot small { color: var(--muted); font-size: var(--f12, 12px); }
+html[data-frame] #idle-hud #map-look { min-height: 28px; padding: 0 10px; font: 600 var(--map-fs) var(--font-ui); }
+
+/* the work rail as the Map's inspector column */
+html[data-frame] #idle-hud .cmd-rail,
+html[data-frame] body.command-focus #idle-hud .cmd-rail {
+  top: 0; bottom: 0; right: 0; width: var(--command-rail-width);
+  border: 0; border-left: 1px solid var(--hairline); border-radius: 0;
+  background: var(--surface-rail); box-shadow: none; backdrop-filter: none;
+}
+html[data-frame] #idle-hud .cmd-rail.rail-collapsed { bottom: auto; border-bottom: 1px solid var(--hairline); }
+
+/* the state colours beside the Legend, bottom left */
+html[data-frame] #idle-hud .cmd-legend { display: flex; left: 16px; bottom: 12px; flex-direction: row; flex-wrap: wrap-reverse; align-items: center; max-width: calc(100% - 32px - var(--map-right)); }
+html[data-frame] #idle-hud .cmd-legend .legend-list { flex-basis: 100%; max-width: 320px; font-size: var(--f12, 12px); }
+html[data-frame] #idle-hud #map-legend {
+  display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 6px 10px;
+  border: 1px solid var(--hairline); border-radius: 9px; background: var(--map-fill);
+  color: var(--muted); font: 450 var(--f12, 12px)/1.3 var(--font-ui);
+}
+html[data-frame] #idle-hud .map-legend-row { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+html[data-frame] #idle-hud .map-legend-row .sw { width: 9px; height: 9px; }
+html[data-frame] #idle-hud #idle-legend-toggle { min-height: 30px; font-size: var(--f12, 12px); }
+
+/* Fit and zoom, under the tree */
+html[data-frame] #idle-hud #map-zoom {
+  position: absolute; right: calc(var(--map-right) + 0px); bottom: 12px; z-index: 2;
+  display: inline-flex; overflow: hidden; border: 1px solid var(--hairline-strong); border-radius: 9px;
+  background: var(--map-fill); pointer-events: auto;
+}
+html[data-frame] #idle-hud #map-zoom button {
+  min-height: 0; height: 28px; min-width: 30px; padding: 0 8px; gap: 6px; border: 0; border-radius: 0;
+  background: transparent; color: var(--muted); font: 500 var(--map-fs) var(--font-ui);
+}
+html[data-frame] #idle-hud #map-zoom button + button { border-left: 1px solid var(--hairline); }
+html[data-frame] #idle-hud #map-zoom button:hover { background: color-mix(in srgb, var(--ivory) 8%, transparent); color: var(--ivory); }
+html[data-frame] #idle-hud #map-zoom .glyph { width: 14px; height: 14px; }
+
+/* Smaller windows keep the classic rail widths; the state colours give way first, then the Legend. */
+@media (max-width: 1100px) { html[data-frame] #idle-hud { --command-rail-width: 288px; } }
+@media (max-width: 760px) {
+  html[data-frame] #idle-hud { --command-rail-width: 252px; }
+  html[data-frame] #idle-hud #map-legend { display: none; }
+}
+
 /* Integrated music room. Shared theme tokens also colour Command and boards. */
 :root[data-studio-theme] .primary { background: linear-gradient(180deg, var(--gold-bright), var(--gold)); }
 :root[data-studio-theme] .primary { color: var(--ink); }
@@ -13529,6 +13654,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
   <symbol id="g-plans" viewBox="0 0 16 16"><path d="M4 2.5h5.5L12 5v8.5H4z"/><path d="M9.5 2.5V5H12M6 8h4M6 10.5h4"/></symbol>
   <symbol id="g-more" viewBox="0 0 16 16"><circle cx="4.5" cy="4.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="11.5" cy="4.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="4.5" cy="11.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="11.5" cy="11.5" r="1.3" fill="currentColor" stroke="none"/></symbol>
   <symbol id="g-sliders" viewBox="0 0 16 16"><path d="M2.5 4.5h5.5M11 4.5h2.5M2.5 8h1.5M6.5 8h7M2.5 11.5h6.5M12 11.5h1.5"/><circle cx="9.3" cy="4.5" r="1.3"/><circle cx="5.2" cy="8" r="1.3"/><circle cx="10.3" cy="11.5" r="1.3"/></symbol>
+  <symbol id="g-bolt" viewBox="0 0 16 16"><path d="M8.7 2 3.3 9.3h4l-.7 4.7L12 6.7H8z"/></symbol>
   <symbol id="g-textsize" viewBox="0 0 16 16"><path d="M1.75 13 5.5 3l3.75 10M2.95 9.75h5.1"/><path d="M10.5 13l2.25-6 2.25 6M11.3 11.25h2.9"/></symbol>
   <symbol id="g-agents" viewBox="0 0 16 16"><circle cx="8" cy="4" r="1.9"/><circle cx="3.8" cy="12" r="1.9"/><circle cx="12.2" cy="12" r="1.9"/><path d="M7.1 5.7 4.7 10.3M8.9 5.7l2.4 4.6M5.7 12h4.6"/></symbol>
   <symbol id="g-community" viewBox="0 0 16 16"><circle cx="6" cy="5.25" r="2.25"/><path d="M1.75 13.5v-.75A3.25 3.25 0 0 1 5 9.5h2a3.25 3.25 0 0 1 3.25 3.25v.75"/><path d="M11 3a2.25 2.25 0 0 1 0 4.5M12.25 9.6a3.25 3.25 0 0 1 2 3.15v.75"/></symbol>
@@ -14647,6 +14773,61 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
 <canvas id="idle-layer-far" aria-hidden="true" hidden></canvas>
 <canvas id="idle-layer" tabindex="0" role="application" aria-label="Command view" hidden></canvas>
 <div id="idle-hud" hidden>
+  <!-- The Map of the 0.5 layout (html[data-frame], docs/unified-studio.md "The Map"): the place's three pages, Running only and
+       View ▾ over the node tree, as the prototype draws them. styles.css shows them only with the frame; the classic toolbar below
+       is the classic layout's and is folded away there. idle.js owns them; the pages are plain data-nav links. -->
+  <div id="map-bar" class="map-bar" role="toolbar" aria-label="Map">
+    <div class="map-pages" role="group" aria-label="Map pages">
+      <button type="button" class="map-page" data-nav="command" aria-current="page">Map</button>
+      <button type="button" class="map-page" data-nav="fleet" title="Fleet: who sits where on the team, and what each seat is doing">Fleet</button>
+      <button type="button" class="map-page" data-nav="agent-brain" data-nav-params='{"tab":"live"}' title="Pipelines: each task's steps as they happen">Pipelines</button>
+    </div>
+    <button id="map-running-only" class="map-chip" type="button" aria-pressed="false" title="Running only: dim everything that is not running"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-bolt"/></svg><span>Running only</span></button>
+    <button id="map-view-menu" class="map-chip" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="map-view-pop" title="View: layout, labels, camera and 2D or 3D"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-sliders"/></svg><span>View</span><svg class="glyph chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></button>
+  </div>
+  <!-- View ▾: Layout, Labels (L), Camera (C), View (V, and Space for the spin) and a way to Settings › Map look. The same choices
+       as the classic toolbar's camera, View ▾ and Spin, and the same saved settings. -->
+  <div id="map-view-pop" class="pop map-view-pop" role="menu" aria-labelledby="map-view-menu" hidden>
+    <div class="map-menu-group" role="group" aria-labelledby="map-menu-layout">
+      <div class="map-menu-head" id="map-menu-layout">Layout</div>
+      <div id="map-layouts" class="map-layouts"></div>
+    </div>
+    <div class="map-menu-group" role="group" aria-labelledby="map-menu-labels">
+      <div class="map-menu-head" id="map-menu-labels">Labels <kbd>L</kbd></div>
+      <div class="map-seg">
+        <button type="button" role="menuitemradio" tabindex="-1" aria-checked="true" data-map-labels="auto">Auto</button>
+        <button type="button" role="menuitemradio" tabindex="-1" aria-checked="false" data-map-labels="updates">Updates</button>
+        <button type="button" role="menuitemradio" tabindex="-1" aria-checked="false" data-map-labels="all">All</button>
+        <button type="button" role="menuitemradio" tabindex="-1" aria-checked="false" data-map-labels="none">None</button>
+      </div>
+    </div>
+    <div class="map-menu-group" role="group" aria-labelledby="map-menu-camera">
+      <div class="map-menu-head" id="map-menu-camera">Camera <kbd>C</kbd></div>
+      <div class="map-seg">
+        <button type="button" role="menuitemradio" tabindex="-1" aria-checked="true" data-map-cam="orbit" title="Keep the whole tree in frame">Overview</button>
+        <button type="button" role="menuitemradio" tabindex="-1" aria-checked="false" data-map-cam="follow" title="Follow the current work">Follow</button>
+        <button type="button" role="menuitemradio" tabindex="-1" aria-checked="false" data-map-cam="free" title="Stay where you put it">Free</button>
+      </div>
+    </div>
+    <div class="map-menu-group" role="group" aria-labelledby="map-menu-view">
+      <div class="map-menu-head" id="map-menu-view">View <kbd>V</kbd></div>
+      <div class="map-seg">
+        <button type="button" role="menuitemradio" tabindex="-1" aria-checked="false" data-map-view="2d">Flat map</button>
+        <button type="button" role="menuitemradio" tabindex="-1" aria-checked="true" data-map-view="3d">3D orbit</button>
+      </div>
+      <button id="map-spin" class="map-opt" type="button" role="menuitemcheckbox" tabindex="-1" aria-checked="true"><span>Spin</span><small>Turns the 3D orbit <kbd>Space</kbd></small></button>
+    </div>
+    <div class="map-menu-foot">
+      <span><b>Look of the nodes</b><small>Style, colours and movement are in Settings.</small></span>
+      <button id="map-look" class="ghost mini" type="button" role="menuitem" tabindex="-1" data-nav="studio" data-nav-params='{"section":"looks"}'>Map look</button>
+    </div>
+  </div>
+  <!-- Fit and zoom under the Map (F, − and +), where the prototype keeps its zoom. -->
+  <div id="map-zoom" class="map-zoom" role="group" aria-label="Fit and zoom">
+    <button id="map-fit" type="button" title="Rearrange and fit the whole tree (F)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-fit"/></svg><span>Fit</span></button>
+    <button id="map-zoom-out" type="button" title="Zoom out (−)" aria-label="Zoom out"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-zoom-out"/></svg></button>
+    <button id="map-zoom-in" type="button" title="Zoom in (+)" aria-label="Zoom in"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-zoom-in"/></svg></button>
+  </div>
   <div class="cmd-top">
     <div class="cmd-brand">
       <div class="monogram small" aria-hidden="true">M+</div>
@@ -14943,6 +15124,8 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
   </aside>
   <!-- bottom-left corner: the Legend pill with the Usage pill above it; both lists open upward -->
   <div id="cmd-legend" class="cmd-legend">
+    <!-- The Map (layout v2): the colours of the four states, beside the Legend that lists every colour. idle.js renderLegend fills it. -->
+    <span id="map-legend" class="map-legend" role="group" aria-label="What the colours of the states mean"></span>
     <button id="idle-legend-toggle" class="pill" aria-expanded="false" aria-controls="cmd-legend-list" title="What the colours and rings mean"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-legend"/></svg><span class="label">Legend</span></button>
     <button id="cmd-usage-toggle" class="pill usage-pill" type="button" aria-expanded="false" aria-controls="cmd-usage-pop" title="Usage across connected providers"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-graph"/></svg><span class="label">Usage</span><span id="cmd-usage-brief" class="usage-brief"></span><i id="cmd-usage-dot" class="usage-dot" aria-hidden="true" hidden></i></button>
     <ul id="cmd-legend-list" class="legend-list" hidden></ul>
@@ -37206,6 +37389,11 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     focusRestore: null, // what focus changed (the orbit setting), put back on exit
     focusIds: null, // this frame's sharp set, read by the label and bubble painters
     cardStyle: CARD_STYLES.includes(readStore("mefiStudio.cmdCardStyle")) ? readStore("mefiStudio.cmdCardStyle") : "auto",
+    // The Map (layout v2): Running only dims what is not running, remembered per machine. mapOn says the frame is
+    // up (html[data-frame]); it is read on entry and when the frame comes or goes, never per frame, and Running
+    // only dims nothing without it, so the classic layout never shows a dim it has no switch for.
+    runningOnly: readStore("mefiStudio.cmdRunningOnly") === "1",
+    mapOn: false,
   };
 
   const el = {};
@@ -40868,8 +41056,9 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     // node layout is keyed on the frame above, not on this rectangle, so the
     // selection card opening on a click carves the rectangle without
     // re-seeding the tree, and the projection centre glides after it —
-    // stepCenter — instead of jumping.)
-    for (const panel of [feed, chat, state.focusMode && !state.railCollapsed ? rail : null, visibleBox(el.info), visibleBox(el.followStatus), visibleBox(el.legend), visibleBox(el.pop)]) {
+    // stepCenter — instead of jumping.) The Map's bar (layout v2) floats over
+    // the top left the same way; without the frame it is not drawn.
+    for (const panel of [feed, chat, state.focusMode && !state.railCollapsed ? rail : null, visibleBox(el.info), visibleBox(el.followStatus), visibleBox(el.legend), visibleBox(el.pop), visibleBox(el.mapBar), visibleBox(el.mapZoom)]) {
       if (!panel) continue;
       const x = panel.left - 20, y = panel.top - 20, rightEdge = panel.right + 20, bottomEdge = panel.bottom + 20;
       spaces = spaces.flatMap((area) => {
@@ -42445,6 +42634,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       const entry = LEGEND.find((item) => item.key === key);
       if (entry) entry.sw = rgb(tint);
       el.legendList?.querySelector(`[data-sw="${key}"]`)?.style.setProperty("--sw", rgb(tint));
+      el.mapLegend?.querySelector(`[data-sw="${key}"]`)?.style.setProperty("--sw", rgb(tint));
     }
   }
 
@@ -44213,8 +44403,19 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     return [node.hostId, node.targetId, node.targetNode?.id, node.job?.taskId, node.job?.sessionId].some((id) => id && ids.has(id));
   }
 
+  // What Running only (the Map, layout v2) keeps lit: running work and the agents on it, and the hubs everything
+  // hangs from (the root, the assistant, the music), the way the prototype keeps its project hub lit.
+  function runningLit(node) {
+    if (node.kind === "root" || node.kind === "assistant" || node.kind === "music") return true;
+    if (node.kind === "agent") return node.status === "running";
+    if (node.kind === "todo" && node.status === "in_progress") return true;
+    const verifying = node._workLabel === "Verifying" || (node.task ?? node.workTask)?.status === "awaiting_verification";
+    return !verifying && (node._workLabel === "Running" || node.state === "active");
+  }
+
   function emphasis(node) {
     if (state.query) return state.matchSet.has(node.id) ? 1 : 0.25;
+    if (state.runningOnly && state.mapOn) return runningLit(node) ? 1 : 0.25;
     if (state.camMode === "follow" && state.follow) {
       if (followsNode(node, state.follow)) return 1;
       if (node.kind === "music" || node.kind === "assistant") return 0.7;
@@ -44773,7 +44974,8 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     for (const edge of state.frameEdges ?? state.edges) {
       const a = projected[edge.a], b = projected[edge.b];
       if (!a || !b || a.node._absorbed || b.node._absorbed || a.node.kind === "agent" || b.node.kind === "agent") continue;
-      const lifetime = Math.min(a.node._fade ?? 1, b.node._fade ?? 1);
+      // Running only (the Map, layout v2) dims a wire unless both its ends are lit, as it dims their orbs.
+      const lifetime = Math.min(a.node._fade ?? 1, b.node._fade ?? 1) * (state.runningOnly && state.mapOn && !(runningLit(a.node) && runningLit(b.node)) ? 0.3 : 1);
       if (lifetime <= 0.02) continue;
       const sessionId = edge.sessionId ?? b.node.sessionId;
       const inspected = state.branch && sessionId === state.branch || state.hoverNode === a.node || state.hoverNode === b.node;
@@ -48311,7 +48513,29 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
   }
 
   // ---------- legend, view controls, ambience ----------
+  // The Map's legend (layout v2): the four states the prototype names, each in the colour its legend row already
+  // uses here (current work, held for you, awaiting verification, completed).
+  const MAP_LEGEND = [["active", "Running"], ["held", "Needs you"], ["verify", "Review"], ["done", "Done"]];
+  function renderMapLegend() {
+    if (!el.mapLegend || el.mapLegend.childElementCount) return;
+    for (const [key, label] of MAP_LEGEND) {
+      const entry = LEGEND.find((item) => item.key === key);
+      if (!entry) continue;
+      const row = document.createElement("span");
+      row.className = "map-legend-row";
+      const swatch = document.createElement("i");
+      swatch.className = "sw";
+      swatch.dataset.sw = key;
+      swatch.style.setProperty("--sw", entry.sw);
+      const text = document.createElement("span");
+      text.textContent = label;
+      row.append(swatch, text);
+      el.mapLegend.append(row);
+    }
+  }
+
   function renderLegend() {
+    renderMapLegend();
     if (!el.legendList || el.legendList.childElementCount) return;
     for (const entry of LEGEND) {
       const li = document.createElement("li");
@@ -48384,6 +48608,8 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     }
     // Map and Labels sit one menu away, so View ▾ carries their state.
     if (el.viewMenuBtn) el.viewMenuBtn.title = `View: ${state.view === "2d" ? "flat 2D map" : "3D orbit"} · labels ${state.labels} · zoom`;
+    // The Map's own View ▾ (layout v2) says the same, one choice per row.
+    if (el.mapPop) syncMapMenu();
   }
 
   function setOrbit(mode, options = {}) {
@@ -48815,7 +49041,8 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       return true;
     }
     if (key === "n") {
-      el.taskInput?.focus();
+      if (state.mapOn) mapNewTask();
+      else el.taskInput?.focus();
       return true;
     }
     if (key === "m") {
@@ -48823,6 +49050,10 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       return true;
     }
     if (key === "s") {
+      if (state.mapOn) {
+        window.MefiNav?.go?.("palette");
+        return true;
+      }
       el.search?.focus();
       el.search?.select?.();
       return true;
@@ -48843,7 +49074,11 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     }
     // What opened last closes first: the toolbar's popovers, then the
     // corner's Usage and Legend lists (only while they can be seen), and only
-    // then the search, the inspected node and Command itself.
+    // then the search, the inspected node and Command itself. The Map's View ▾ (layout v2) is a toolbar popover too.
+    if (el.mapPop && el.mapPop.hidden === false) {
+      closeMapMenu({ focus: true });
+      return true;
+    }
     if (el.viewPop && el.viewPop.hidden === false) {
       closeViewMenu({ focus: true });
       return true;
@@ -48881,6 +49116,151 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
   function leave() {
     if (window.MefiNav?.leaveCommand) window.MefiNav.leaveCommand();
     else exit();
+  }
+
+  // ---------- the Map (layout v2) ----------
+  // In the 0.5 layout (html[data-frame], docs/unified-studio.md "The Map") Command is the Map place, drawn as the
+  // prototype draws it: Map | Fleet | Pipelines, Running only and View ▾ over the top left of the tree, the colours of
+  // the four states bottom left, Fit and zoom under it. Every control is the classic toolbar's own choice (the same
+  // functions and the same saved settings); styles.css shows these only with the frame and folds the classic top bar
+  // away there. Nothing here runs per frame: the menu paints when it opens and when a choice changes.
+  function syncMapOn() {
+    const on = globalThis.document?.documentElement?.dataset?.frame === "on";
+    if (on === state.mapOn) return;
+    state.mapOn = on;
+    if (!on) closeMapMenu();
+  }
+
+  function setRunningOnly(on, { save = true } = {}) {
+    state.runningOnly = Boolean(on);
+    if (save) writeStore("mefiStudio.cmdRunningOnly", state.runningOnly ? "1" : "0");
+    el.mapRunningOnly?.setAttribute("aria-pressed", String(state.runningOnly));
+    if (el.mapRunningOnly) el.mapRunningOnly.title = state.runningOnly ? "Running only is on: everything that is not running is dimmed. Click to show it all." : "Running only: dim everything that is not running";
+  }
+
+  // The five layouts are music.js's (the names and words Settings › Map look shows); without it there is no row.
+  function renderMapLayouts() {
+    const host = el.mapLayouts;
+    if (!host || host.childElementCount) return;
+    const layouts = typeof window.MefiMusic?.nodeLayouts === "function" ? window.MefiMusic.nodeLayouts() : [];
+    const group = host.closest?.(".map-menu-group");
+    if (group) group.hidden = !layouts.length;
+    for (const layout of layouts) {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "map-opt";
+      item.setAttribute("role", "menuitemradio");
+      item.tabIndex = -1;
+      item.dataset.mapLayout = layout.key;
+      const name = document.createElement("span");
+      name.textContent = layout.name;
+      const detail = document.createElement("small");
+      detail.textContent = layout.detail;
+      item.append(name, detail);
+      host.append(item);
+    }
+  }
+
+  function syncMapMenu() {
+    const pop = el.mapPop;
+    if (!pop) return;
+    const pick = (attribute, key, value) => {
+      for (const item of pop.querySelectorAll(`[${attribute}]`)) item.setAttribute("aria-checked", String(item.dataset[key] === value));
+    };
+    pick("data-map-layout", "mapLayout", state.nodeLayout);
+    pick("data-map-labels", "mapLabels", state.labels);
+    pick("data-map-cam", "mapCam", state.camMode);
+    pick("data-map-view", "mapView", state.view);
+    if (el.mapSpin) {
+      const flat = state.view === "2d";
+      el.mapSpin.disabled = flat;
+      el.mapSpin.setAttribute("aria-checked", String(!flat && state.orbit !== "paused"));
+      el.mapSpin.title = flat ? "Spin turns the 3D orbit only" : state.orbit !== "paused" ? "Spin on · Space pauses" : "Spin paused · Space resumes";
+    }
+    if (el.mapViewBtn) el.mapViewBtn.title = `View: ${state.view === "2d" ? "flat map" : "3D orbit"} · labels ${state.labels} · camera ${state.camMode === "orbit" ? "overview" : state.camMode}`;
+  }
+
+  function mapMenuItems() {
+    return [...(el.mapPop?.querySelectorAll?.("[role='menuitem'], [role='menuitemradio'], [role='menuitemcheckbox']") ?? [])].filter((item) => !item.disabled && !item.closest?.("[hidden]"));
+  }
+
+  function onMapMenuOutside(event) {
+    if (el.mapPop?.contains(event.target) || el.mapViewBtn?.contains(event.target)) return;
+    closeMapMenu();
+  }
+
+  function openMapMenu() {
+    if (!el.mapPop || el.mapPop.hidden === false) return;
+    closeAgentSettings();
+    closeAmbience();
+    closeViewMenu();
+    closeUsagePop();
+    renderMapLayouts();
+    syncMapMenu();
+    el.mapPop.hidden = false;
+    el.mapViewBtn?.setAttribute("aria-expanded", "true");
+    document.addEventListener("mousedown", onMapMenuOutside);
+    mapMenuItems()[0]?.focus?.({ preventScroll: true });
+    bumpHud();
+  }
+
+  function closeMapMenu({ focus = false } = {}) {
+    if (!el.mapPop) return;
+    if (el.mapPop.hidden === false) document.removeEventListener("mousedown", onMapMenuOutside);
+    el.mapPop.hidden = true;
+    el.mapViewBtn?.setAttribute("aria-expanded", "false");
+    if (focus) el.mapViewBtn?.focus?.({ preventScroll: true });
+  }
+
+  function toggleMapMenu() {
+    if (el.mapPop?.hidden === false) closeMapMenu({ focus: true });
+    else openMapMenu();
+  }
+
+  // Inside the open menu the arrows, Home and End walk its items and stop there, so they never also walk the tree; Esc
+  // and Tab close it onto its button. Letters bubble: L, C and V work from the menu as they do over the tree.
+  function mapMenuKey(event) {
+    const items = mapMenuItems();
+    if (!items.length) return;
+    const at = items.indexOf(document.activeElement);
+    let next = null;
+    if (event.key === "ArrowDown" || event.key === "ArrowRight") next = (at + 1) % items.length;
+    else if (event.key === "ArrowUp" || event.key === "ArrowLeft") next = at < 0 ? items.length - 1 : (at - 1 + items.length) % items.length;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = items.length - 1;
+    else if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      closeMapMenu({ focus: true });
+      return;
+    } else if (event.key === "Tab") {
+      closeMapMenu({ focus: true });
+      return;
+    }
+    if (next === null) return;
+    event.preventDefault();
+    event.stopPropagation();
+    items[next].focus({ preventScroll: true });
+  }
+
+  function mapMenuChoose(event) {
+    const item = event.target?.closest?.("[role='menuitem'], [role='menuitemradio'], [role='menuitemcheckbox']");
+    if (!item || item.disabled || !el.mapPop?.contains(item)) return;
+    if (item.dataset.mapLayout) {
+      window.MefiMusic?.applyNodeLayout?.(item.dataset.mapLayout);
+      syncMapMenu();
+    } else if (item.dataset.mapLabels) setLabels(item.dataset.mapLabels);
+    else if (item.dataset.mapCam) setCamMode(item.dataset.mapCam);
+    else if (item.dataset.mapView) setView(item.dataset.mapView);
+    else if (item === el.mapSpin) setOrbit();
+    else if (item.dataset.nav) closeMapMenu();
+  }
+
+  // The keys N and S open what the frame has in place of the classic composer and find box: New task and Search.
+  function mapNewTask() {
+    if (typeof window.MefiSessions?.newTask === "function") window.MefiSessions.newTask();
+    else if (typeof window.MefiWorkspace?.composeTask === "function") window.MefiWorkspace.composeTask();
+    else window.MefiNav?.go?.("workspace");
   }
 
   // ---------- lifecycle ----------
@@ -49140,6 +49520,8 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     closeAmbience();
     closeViewMenu();
     closeAgentSettings();
+    closeMapMenu();
+    syncMapOn();
     el.canvas.hidden = false;
     if (el.far) el.far.hidden = false;
     el.hud.hidden = false;
@@ -49239,6 +49621,7 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     closeAmbience();
     closeViewMenu();
     closeAgentSettings();
+    closeMapMenu();
     hideTip();
     clearSearch();
     el.canvas.hidden = true;
@@ -49609,6 +49992,18 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     el.legendToggle = document.getElementById("idle-legend-toggle");
     el.legend = document.getElementById("cmd-legend");
     el.legendList = document.getElementById("cmd-legend-list");
+    // The Map (layout v2): its bar, its View ▾, the four state colours and Fit and zoom.
+    el.mapBar = document.getElementById("map-bar");
+    el.mapRunningOnly = document.getElementById("map-running-only");
+    el.mapViewBtn = document.getElementById("map-view-menu");
+    el.mapPop = document.getElementById("map-view-pop");
+    el.mapLayouts = document.getElementById("map-layouts");
+    el.mapSpin = document.getElementById("map-spin");
+    el.mapLegend = document.getElementById("map-legend");
+    el.mapZoom = document.getElementById("map-zoom");
+    el.mapFit = document.getElementById("map-fit");
+    el.mapZoomIn = document.getElementById("map-zoom-in");
+    el.mapZoomOut = document.getElementById("map-zoom-out");
     el.empty = document.getElementById("cmd-empty");
     el.emptyTitle = document.getElementById("cmd-empty-title");
     el.emptyCopy = document.getElementById("cmd-empty-copy");
@@ -49832,6 +50227,19 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     el.viewMenuBtn?.addEventListener("click", toggleViewMenu);
     el.viewPop?.addEventListener("keydown", viewMenuKey);
     el.viewPop?.addEventListener("focusout", viewMenuFocusOut);
+    // The Map (layout v2): Running only, View ▾ and its choices, Fit and zoom. The page links are data-nav.
+    setRunningOnly(state.runningOnly, { save: false });
+    el.mapRunningOnly?.addEventListener("click", () => setRunningOnly(!state.runningOnly));
+    el.mapViewBtn?.addEventListener("click", toggleMapMenu);
+    el.mapPop?.addEventListener("keydown", mapMenuKey);
+    el.mapPop?.addEventListener("click", mapMenuChoose);
+    el.mapPop?.addEventListener("focusout", (event) => {
+      const next = event.relatedTarget;
+      if (next && !el.mapPop.contains(next) && next !== el.mapViewBtn) closeMapMenu();
+    });
+    el.mapFit?.addEventListener("click", () => fitAll());
+    el.mapZoomOut?.addEventListener("click", () => userZoom(state.zoom * 0.89));
+    el.mapZoomIn?.addEventListener("click", () => userZoom(state.zoom * 1.12));
     // Both popovers hang from their buttons, so they follow them on a resize.
     window.addEventListener("resize", () => {
       if (el.pop?.hidden === false) placePop(el.pop, el.ambienceBtn);
@@ -50321,6 +50729,8 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
   window.addEventListener("mefi-music-change", syncMusicNode);
   window.addEventListener("mefi-theme-change", syncGraphTheme);
   window.addEventListener("mefi-tree-preferences", (event) => applyTreePreferences(event.detail ?? {}));
+  // The Map (layout v2) follows the frame as it comes and goes; nothing else in the event concerns it.
+  window.addEventListener("mefi:shell-layout", (event) => { const what = event?.detail?.what; if (what === "enable" || what === "disable") syncMapOn(); });
   applyTreePreferences(window.MefiMusic?.graphPreferences?.() ?? {});
 
   window.MefiIdle = {
