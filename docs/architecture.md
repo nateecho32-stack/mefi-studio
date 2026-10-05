@@ -1591,7 +1591,10 @@ failed process stays an error and cannot produce briefing requests.
 - **Appearance** (`U`) groups colour themes, the Void collection, node style,
   layout and effects. **Chrome** is listed first and is what a new install
   opens in: matte black panels, brushed-metal primary buttons and chosen
-  segments, and a thin chrome edge on what is selected (`renderer/chrome.css`);
+  segments, and a thin chrome edge on what is selected, with a sparing
+  iridescent finish over them (silver, ice blue, lilac and pale aqua, the
+  website's colours) on the selection edges, the hairlines, the meter and
+  switches (`renderer/chrome.css`);
   a theme already chosen is kept. **Preview canvas** opens the live view and returns to
   the same category. Music and video are managed from the **audio dropdown**,
   outside Appearance. It groups local files, radio, Links, the audio
