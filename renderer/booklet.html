@@ -7601,6 +7601,9 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   --fleet-escalate: var(--bad); --fleet-rework: var(--warn); --fleet-handoff: var(--gold-bright); --fleet-delegation: var(--info);
   --fleet-verify: var(--good); --fleet-desk: var(--idea); --fleet-report: var(--info); --fleet-dispatch: var(--muted); --fleet-mail: var(--dim);
   display: flex; flex-direction: column;
+  /* The columns below fold by the sheet's own width: the frame leaves it the free area beside the rail and the list
+     column (MefiNav.usable()), about 565 px of a 1100 px window. */
+  container: fleet / inline-size;
 }
 .fleet-body {
   position: relative; display: grid; grid-template-columns: 224px minmax(0, 1fr) 300px; grid-template-areas: "side main inspector";
@@ -7856,14 +7859,14 @@ button.fleet-tnode:focus-visible { outline: 2px solid var(--gold-bright); outlin
 
 /* ---- less than three columns of room: the inspector becomes a drawer over the views' right edge,
    shown while a seat is selected, so the graph keeps the whole area the rest of the time ---- */
-@media (max-width: 1500px) {
+@container fleet (max-width: 1450px) {
   .fleet-body { grid-template-columns: 208px minmax(0, 1fr); grid-template-areas: "side main"; }
   .fleet-inspector { position: absolute; z-index: 5; top: var(--fleet-bar-h, 46px); right: var(--s5, 16px); bottom: var(--s5, 16px); width: min(340px, 60%); box-shadow: -18px 0 34px -18px color-mix(in srgb, var(--bg-deep) 90%, transparent); background: var(--panel-solid); }
   /* Only a selected seat opens the drawer: before the first read, or after a failed one, it stays shut. */
   .fleet-inspector:not([data-mode="seat"]) { display: none; }
 }
-/* ---- a narrow window: one column that scrolls, each part at its own height ---- */
-@media (max-width: 760px) {
+/* ---- a narrow sheet: one column that scrolls, each part at its own height ---- */
+@container fleet (max-width: 740px) {
   .fleet-body { display: flex; flex-direction: column; overflow-y: auto; }
   .fleet-side { flex: none; max-height: 210px; }
   .fleet-main { flex: none; min-height: 440px; }
