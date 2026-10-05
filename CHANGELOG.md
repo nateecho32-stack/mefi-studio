@@ -13,7 +13,8 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   image, the permission mode, Talk it over and Build it (Ctrl Enter), the
   Modify, Experiment, Fix and Improve starters and Suggest a next step, then
   the first thing that needs you (answer it right there), what is running now
-  and what finished. Talk it over sends your words to Mefi and opens the
+  and what finished. A run that waits on you is listed under Needs you only,
+  not under Running as well (in Today and in Work's session list). Talk it over sends your words to Mefi and opens the
   conversation; Build it makes a task. Build's earlier Home (the
   conversation, the queue, Activity and the app preview) is still there as
   the Chat tab (Talk it over or Search's "Open the conversation" opens it).
