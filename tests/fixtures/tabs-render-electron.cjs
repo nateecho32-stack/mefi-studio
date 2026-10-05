@@ -197,7 +197,7 @@ app.whenReady().then(async () => {
     autonomyState: { ok: true, projectId, level: "auto", elevated: {}, categories: [], decisions: [] },
     learningState: { ok: true, projectId, decisions: { enabled: true, scope: "blend" }, models: "blend", profiles: {} },
     brainState: { ok: true, tasks: [], recent: [], pipelines: {} }, brainPlaybook: { ok: true, shelf: [], recipes: [] }, brainMap: { ok: true, map: { systems: [], edges: [], files: [] } },
-    worktreesList: { ok: true, repo: false, projectId, enabled: { on: false, forced: false } },
+    worktreesList: { ok: true, repo: false, projectId, enabled: { on: false, forced: false } }, skillsList: { ok: true, skills: [], roots: [] },
   };
   const names = await bridgeNames();
   const preload = path.join(root, "tabs-preload.cjs");
@@ -384,7 +384,8 @@ app.whenReady().then(async () => {
     assert.deepEqual(menu.missing, []);
     assert.equal(menu.scrollbarWidth, "none", `${label}: native scrollbars stay hidden`);
     assert.equal(menu.role, "dialog");
-    assert.ok(menu.groups.includes("Home") && menu.groups.includes("Sessions") && menu.groups.includes("Work"), `${label}: ${menu.groups}`);
+    // The 0.5 layout's places name the groups (renderer/nav.js placeOf): Today is Work's, Agents is Team, the Command view the Map.
+    assert.ok(["Work", "Sessions", "Map", "Team"].every((group) => menu.groups.includes(group)) && !menu.groups.includes("Home") && !menu.groups.includes("Agents"), `${label}: ${menu.groups}`);
     assert.equal(await run("return document.activeElement && document.activeElement.id;"), "mefi-tabs-search", `${label}: the search box has the keyboard`);
     assert.deepEqual(await run("const node = document.getElementById('mefi-tabs-search'); const style = getComputedStyle(node); return { outline: style.outlineStyle, shadow: style.boxShadow, ring: getComputedStyle(node.parentElement).borderColor !== getComputedStyle(node.parentElement).getPropertyValue('--nothing') };"), { outline: "none", shadow: "none", ring: true }, `${label}: the search row shows the focus ring, not the input inside it`);
     if (["1440x900@1", "600x560@1.5"].includes(label)) await capture(`tabs-add-${label.replace(/[@.]/g, "_")}.png`);
@@ -522,14 +523,15 @@ app.whenReady().then(async () => {
   assert.equal(await run("return window.MefiNav.state.transient;"), null, "and nothing else (Search stays closed)");
   assert.equal(await run("return document.activeElement && document.activeElement.id;"), "mefi-tabs-search");
   await typeText("agents");
-  await until("document.getElementById('mefi-tabs-search').value === 'agents' && [...document.querySelectorAll('.ts-pop-add .ts-rowlabel')].some((node) => node.textContent === 'Agents')", "typing narrows the list to what matches");
+  // The 0.5 layout calls the Agents page Team; its old name still finds it.
+  await until("document.getElementById('mefi-tabs-search').value === 'agents' && [...document.querySelectorAll('.ts-pop-add .ts-rowlabel')].some((node) => node.textContent === 'Team')", "typing narrows the list to what matches");
   assert.equal(await run("return document.getElementById('mefi-tabs-search').value;"), "agents", "the letters went to the search box, not to a shortcut");
   const found = await run("return [...document.querySelectorAll('.ts-pop-add .ts-rowlabel')].map((node) => node.textContent);");
-  assert.ok(found.includes("Agents"), `Agents is among the rows: ${found}`);
-  for (let step = 0; step < found.indexOf("Agents"); step += 1) await key("Down");
-  assert.equal(await run("return document.querySelector('.ts-pop-add .ts-row[aria-selected=\"true\"] .ts-rowlabel').textContent;"), "Agents", "the arrow keys move the selection");
+  assert.ok(found.includes("Team"), `Team is among the rows: ${found}`);
+  for (let step = 0; step < found.indexOf("Team"); step += 1) await key("Down");
+  assert.equal(await run("return document.querySelector('.ts-pop-add .ts-row[aria-selected=\"true\"] .ts-rowlabel').textContent;"), "Team", "the arrow keys move the selection");
   await key("Enter");
-  await until("window.MefiTabs.list().some((tab) => tab.route.id === 'agents') && window.MefiNav.current() === 'agents'", "Enter opens Agents in a tab");
+  await until("window.MefiTabs.list().some((tab) => tab.route.id === 'agents') && window.MefiNav.current() === 'agents'", "Enter opens Team in a tab");
   assert.equal(await run("return !document.querySelector('.ts-pop');"), true);
   // Ctrl+Tab and Ctrl+Shift+Tab walk the tabs in the order they are drawn, round the ends
   const around = async (chord, step) => {
@@ -614,16 +616,17 @@ app.whenReady().then(async () => {
   assert.equal(await run("return window.MefiTabs.list().find((tab) => tab.active).title;"), "Add dark mode to the settings page");
   assert.equal(await run("return window.MefiTabs.list().find((tab) => tab.active).route.params.taskId;"), "t-dark");
   await run(`window.MefiTabs.open('agents', {}, { preview: false });`);
-  await until("window.MefiNav.current() === 'agents'", "Agents from a tab");
+  await until("window.MefiNav.current() === 'agents'", "Team from a tab");
+  // An old way in ({ section, pane }) is a tab of the Team place that holds that pane now: Routing is in Seats and models.
   await run(`window.MefiTabs.open('agents', { section: 'setup', pane: 'routing' }, { preview: false });`);
   await sleep(400);
-  assert.equal(await run("return window.MefiTabs.list().filter((tab) => tab.route.id === 'agents').map((tab) => tab.title);").then((titles) => titles.length), 2, "Agents and Agents · Routing are two tabs");
-  assert.ok((await run("return window.MefiTabs.list().filter((tab) => tab.route.id === 'agents').map((tab) => tab.title);")).includes("Agents · Routing"));
+  assert.deepEqual(await run("return window.MefiTabs.list().filter((tab) => tab.route.id === 'agents').map((tab) => tab.title).sort();"), ["Seats and models", "Team"], "Team and Seats and models are two tabs");
   // back through the nav's own history moves the strip
-  await run(`window.MefiTabs.open('fleet', {}, { preview: false });`);
-  await until("window.MefiNav.current() === 'fleet'", "Fleet");
+  // (History is kept per place in the 0.5 layout, so Back goes from one Team page to the Team page before it.)
+  await run(`window.MefiTabs.open('skills', {}, { preview: false });`);
+  await until("window.MefiNav.current() === 'skills'", "Skills");
   await run("window.MefiNav.back();");
-  await until("window.MefiTabs.list().find((tab) => tab.active).route.id !== 'fleet'", "going Back with the nav's own history moves the strip off Fleet");
+  await until("window.MefiTabs.list().find((tab) => tab.active).route.id !== 'skills'", "going Back with the nav's own history moves the strip off Skills");
   await until("window.MefiNav.current() === window.MefiTabs.list().find((tab) => tab.active).route.id || window.MefiTabs.list().find((tab) => tab.active).route.id === 'workspace'", "to the tab of the page that shows");
   // a page that opens itself (showTab) is followed too
   await run("window.MefiNav.closeAll(); window.MefiWorkspace.exit(); window.MefiBooklet.showTab('graph');");

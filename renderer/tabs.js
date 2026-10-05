@@ -54,8 +54,12 @@
   // Which params say which place. Everything else (a filter, a task selected on the
   // Task board, a card to scroll to) is where you are inside the page, not another tab.
   // Agents is one sheet with two faces: its overview, and Setup with four panes.
-  const IDENTITY = Object.freeze({ workspace: Object.freeze(["view", "taskId", "projectId"]), agents: Object.freeze(["section", "pane"]) });
+  // In the 0.5 layout Agents is Team, one tab per place (renderer/agents.js, TEAM_PLACES): its Overview is the Team tab.
+  // Friends in the 0.5 layout is one tab per place too (renderer/companion-hub.js, FRIENDS_PLACES).
+  const IDENTITY = Object.freeze({ workspace: Object.freeze(["view", "taskId", "projectId"]), agents: Object.freeze(["section", "pane", "place"]), "friends-page": Object.freeze(["place"]) });
+  const friendsPlaceOf = (id) => safe(() => window.MefiCompanionHub?.FRIENDS_PLACES?.find?.((place) => place.id === id) ?? null, null);
   const AGENT_PANES = Object.freeze({ connections: "Connections", team: "Team", routing: "Routing", behavior: "Behavior" });
+  const teamPlaceOf = (id) => safe(() => window.MefiAgents?.TEAM_PLACES?.find?.((place) => place.id === id && Array.isArray(place.panes)) ?? null, null);
   const TONES = Object.freeze({ ask: "warn", run: "live", check: "info", done: "good", dropped: "dim", wait: "dim", ready: "dim" });
 
   // ---- small helpers -------------------------------------------------------------
@@ -122,7 +126,13 @@
       if (params.view === "task" && params.taskId) return { id, params: { view: "task", taskId: params.taskId, ...(params.projectId ? { projectId: params.projectId } : {}) } };
       return { id, params: params.view === "chat" ? { view: "chat" } : {} };
     }
+    if (id === "agents" && v2()) {
+      // One tab per Team place: an old { section, pane } is the place that holds that pane now (MefiAgents.teamPlace).
+      const at = teamPlaceOf(params.place) ? params.place : safe(() => window.MefiAgents?.teamPlace?.("agents", params)?.id ?? null, null);
+      if (teamPlaceOf(at)) return { id, params: at === "overview" ? {} : { place: at } };
+    }
     if (id === "agents") return { id, params: params.section === "setup" ? { section: "setup", pane: AGENT_PANES[params.pane] ? params.pane : "team" } : {} };
+    if (id === "friends-page") return { id, params: { place: friendsPlaceOf(params.place) ? params.place : "rooms" } };
     return { id, params };
   }
   // The key two routes share when they are the same place (the project is fixed by the set, so it is not in it).
@@ -186,6 +196,8 @@
     const dest = safe(() => window.MefiNav?.get?.(route.id), null);
     let title = words(dest?.short || dest?.label || rec.title || route.id, 40);
     if (route.id === "agents" && route.params.pane) title = `Agents · ${AGENT_PANES[route.params.pane]}`;
+    else if (route.id === "agents" && route.params.place) title = words(teamPlaceOf(route.params.place)?.label || title, 40);
+    else if (route.id === "friends-page") title = words(friendsPlaceOf(route.params.place)?.label || title, 40);
     return { title, glyph: dest?.glyph || "g-frame" };
   }
 
@@ -354,6 +366,8 @@
       return view && view.view ? { view: view.view, taskId: view.taskId, projectId: projectId() } : null;
     }],
     ["agents", () => safe(() => window.MefiAgents?.params?.(), null)],
+    // The 0.5 layout's Friends: the place that shows (renderer/companion-hub.js friendsPlace).
+    ["friends-page", () => safe(() => { const here = window.MefiCompanionHub?.friendsPlace?.(); return here ? { place: here.id } : null; }, null)],
   ]);
   function readPlace() {
     const nav = window.MefiNav;
@@ -1231,7 +1245,11 @@
     const ctx = context();
     const closed = q.length ? [] : validClosed().slice(0, 4).map((item) => { const info = describe({ route: item.route, title: item.title }, ctx); return { group: "Recently closed", route: item.route, title: item.title || info.title, glyph: info.glyph, tone: info.tone, closed: item, hint: "Reopen" }; });
     const home = { group: "Home", route: { id: "workspace", params: {} }, title: homeTitle(), glyph: "g-home", terms: "home today vibe front door" };
-    const rows = [...closed, ...[home, ...sessionRows(query), ...destinations()].filter(match)];
+    // In the 0.5 layout Today is Work's first page (nav.js placeOf), so it leads Work's rows instead of a group of its own.
+    const pages = destinations();
+    const lead = v2() ? [{ ...home, group: "Work" }, ...pages.filter((row) => row.group === "Work")] : [home];
+    const rest = v2() ? pages.filter((row) => row.group !== "Work") : pages;
+    const rows = [...closed, ...[...lead, ...sessionRows(query), ...rest].filter(match)];
     const have = new Map(order().map((rec) => [keyOf(rec.route), rec]));
     for (const row of rows) { const rec = have.get(keyOf(row.route)); if (!row.hint) row.hint = rec ? (rec.pin ? "Pinned" : "Open") : ""; }
     return rows;

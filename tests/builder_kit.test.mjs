@@ -117,8 +117,11 @@ test("in the 0.5 layout Needs you is the Inbox's list: a session the Inbox holds
   // that will retry by itself, nor a step whose go-ahead is asked once for its whole request.
   a.window.MefiToday = { isOn: () => true, needTasks: () => new Set(["asking", "held", "parked"]) };
   const after = clean(Object.fromEntries(a.B.stageGroups(board, { pinned: new Set(), data: a.data }).flatMap((group) => group.rows.map((row) => [row.id, group.key]))));
-  assert.deepEqual(after, { asking: "needs", held: "needs", cooling: "queued", step: "queued", parked: "needs", checking: "review", plain: "queued" }, "Needs you is exactly what the Inbox holds; a result waits under Review");
-  assert.equal(a.B.reading(board[2], a.data).tone, "wait", "the tabs and the list read the same tone");
+  // The owner's rule (2026-10-04): the check that retries by itself is with the running work, fixing itself; the step that
+  // goes ahead with its request waits with the queue and says so.
+  assert.deepEqual(after, { asking: "needs", held: "needs", cooling: "running", step: "queued", parked: "needs", checking: "review", plain: "queued" }, "Needs you is exactly what the Inbox holds; a result waits under Review");
+  assert.deepEqual([a.B.reading(board[2], a.data).tone, a.B.reading(board[2], a.data).label, a.B.reading(board[2], a.data).fixing], ["run", "Fixing itself", true], "the tabs and the list read the same tone");
+  assert.equal(a.B.reading(board[3], a.data).label, "Goes ahead with its request");
   // An Inbox that is off, or that throws, leaves the reading as it was.
   a.window.MefiToday = { isOn: () => false, needTasks: () => new Set() };
   assert.equal(a.B.reading(board[1], a.data).tone, "ask");

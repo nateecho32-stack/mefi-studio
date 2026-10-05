@@ -392,7 +392,8 @@ app.whenReady().then(async () => {
   report.board = await run("return window.MefiToday.snapshot().groups;");
   assert.deepEqual(report.board, {
     needs: ["need:question:q_failure", "need:question:q_permission", "need:question:q_decision", "need:family:t_family", "need:approval:t_approve", "need:blocked:t_stuck"],
-    running: ["run:t_run", "next:t_next"], review: ["need:review:t_review", "check:t_check", "plan:plan_1"], done: ["done:t_done1", "done:t_done2", "done:t_done3"],
+    // t_next asked for a permission (q_permission), so it waits under Needs you and is not also up next under Running.
+    running: ["run:t_run"], review: ["need:review:t_review", "check:t_check", "plan:plan_1"], done: ["done:t_done1", "done:t_done2", "done:t_done3"],
   });
   const view = async (label, zoom) => {
     const at = `${label}@${zoom}`;
@@ -599,6 +600,10 @@ app.whenReady().then(async () => {
   assert.equal(await text(`${popCard("question:q_permission")} .today-need-label`), "Permission");
   assert.deepEqual(await run(`return [...document.querySelectorAll(${JSON.stringify(`${popCard("question:q_permission")} [data-option]`)})].map((node) => node.dataset.option);`), ["deny", "grant", "hold"], "the safe answer first");
   await run("window.todayFixture.clear();");
+  // The box for your own words waits behind its link (the owner's choice): the link opens it.
+  assert.equal(await run(`return document.querySelector(${JSON.stringify(`${popCard("question:q_failure")} .today-need-free`)}).hidden;`), true, "the box is folded behind its link");
+  await run(`document.querySelector(${JSON.stringify(`${popCard("question:q_failure")} .today-own-words`)}).click();`);
+  await until(`document.querySelector(${JSON.stringify(`${popCard("question:q_failure")} .today-need-free`)}).hidden === false`, "Answer in my own words opens the box");
   await run(`const input = document.querySelector(${JSON.stringify(`${popCard("question:q_failure")} .today-need-input`)}); input.focus(); input.value = "Try it with the old router first"; input.dispatchEvent(new Event("input", { bubbles: true })); input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));`);
   await until("window.todayFixture.calls().some((call) => call.name === 'assistantAnswer')", "Enter sends a free answer");
   assert.deepEqual(await calls("assistantAnswer"), [{ id: "q_failure", text: "Try it with the old router first", projectId: "today-project", optionId: null }]);

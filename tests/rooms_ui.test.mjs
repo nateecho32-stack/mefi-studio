@@ -67,20 +67,50 @@ test("the panel explains itself until the hub is configured, linked and connecte
   const unset = environment({ status: { configured: false } }).rooms.panel();
   await flush();
   assert.equal(unset.dataset.state, "not-configured");
-  assert.match(unset.find("rooms-status").textContent, /not connected to yet: add its address in Settings › General › Community › Connection details/);
+  assert.match(unset.find("rooms-status").textContent, /no address for: add one in Settings › General › Community › Connection details/);
   const unlinked = environment({ status: { configured: true, linked: false } }).rooms.panel();
   await flush();
-  assert.equal(unlinked.find("rooms-status").textContent, "Link your Discord account to use rooms.");
-  assert.ok(unlinked.find("rooms-link"));
+  assert.equal(unlinked.find("rooms-status").textContent, "Link your Discord account to use rooms. Discord asks once in your browser.");
+  assert.equal(unlinked.find("rooms-link").textContent, "Link Discord");
+  // Linked but not connected: opening Rooms is the ask, so it connects by itself, once.
   const off = environment({ status: { configured: true, linked: true, state: "off" }, rooms: [room()] });
   const panel = off.rooms.panel();
-  await flush();
-  assert.equal(panel.dataset.state, "off");
-  panel.find("rooms-connect").click();
   await flush();
   assert.deepEqual(off.calls[0], ["connect"]);
   assert.equal(panel.dataset.state, "ready");
   assert.equal(panel.byClass("rooms-row").length, 1);
+  // A connection that failed waits for Connect instead of retrying on its own.
+  const failed = environment({ status: { configured: true, linked: true, state: "offline", error: "network" }, rooms: [room()] });
+  const again = failed.rooms.panel();
+  await flush();
+  assert.equal(failed.calls.length, 0);
+  again.find("rooms-connect").click();
+  await flush();
+  assert.deepEqual(failed.calls[0], ["connect"]);
+});
+
+test("Link Discord links right there, then connects; not in the server offers Join and a re-check", async () => {
+  let status = { configured: true, linked: false, state: "off" };
+  const env = environment({ status, rooms: [room()] });
+  let linkAnswer = { ok: false, error: "not-member" };
+  env.window.MefiCommunity = {
+    link: async () => { env.calls.push(["link"]); if (linkAnswer.ok) env.setStatus({ ...status, linked: true }); return linkAnswer; },
+    join: async () => { env.calls.push(["join"]); return { ok: true }; },
+    check: async () => { env.calls.push(["check"]); return { ok: true }; },
+  };
+  const panel = env.rooms.panel();
+  await flush();
+  panel.find("rooms-link").click();
+  await flush();
+  assert.equal(panel.dataset.state, "not-member");
+  assert.match(panel.find("rooms-status").textContent, /isn't in the Void Engine server yet/);
+  panel.find("rooms-join").click();
+  await flush();
+  env.setStatus({ ...status, linked: true });
+  panel.find("rooms-recheck").click();
+  await flush();
+  assert.deepEqual(env.calls.map(([method]) => method).filter((method) => ["link", "join", "check", "connect"].includes(method)), ["link", "join", "check", "connect"]);
+  assert.equal(panel.dataset.state, "ready");
 });
 
 test("each room offers the one action it needs, and invites and requests reach the badge", async () => {

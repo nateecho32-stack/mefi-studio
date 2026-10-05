@@ -84,6 +84,7 @@ function environment({ desktop = true, storage = {}, coach = false, noMotion = f
   const observers = [];
   const routes = [];
   const registered = [];
+  const events = [];
   class IntersectionObserver {
     constructor(callback, options) { this.callback = callback; this.options = options; this.targets = []; observers.push(this); }
     observe(target) { this.targets.push(target); }
@@ -113,10 +114,13 @@ function environment({ desktop = true, storage = {}, coach = false, noMotion = f
       syncMotion() {},
     },
     addEventListener: (type, fn) => { const list = listeners.get(type) ?? []; list.push(fn); listeners.set(type, list); },
+    // What the page says to the rest of the window (mefi:settings-place, for the 0.5 layout's list column).
+    dispatchEvent: (event) => { events.push({ type: event.type, detail: event.detail }); return true; },
   };
   const store = new Map(Object.entries(storage));
   const context = vm.createContext({
     window, document, console, URL, URLSearchParams, Date: FakeDate, IntersectionObserver,
+    CustomEvent: class { constructor(type, init = {}) { this.type = type; this.detail = init.detail; } },
     localStorage: { getItem: (key) => store.get(key) ?? null, setItem: (key, value) => store.set(key, String(value)) },
     requestAnimationFrame: (fn) => { frames.push(fn); return frames.length; },
     cancelAnimationFrame() {},
@@ -126,7 +130,7 @@ function environment({ desktop = true, storage = {}, coach = false, noMotion = f
   const el = (id) => elements.get(id) ?? null;
   const rows = () => el("settings-nav").querySelectorAll(".settings-nav-item");
   return {
-    window, document, el, clock, routes, registered, observers, store, documentElement, body,
+    window, document, el, clock, routes, registered, observers, store, documentElement, body, events,
     booklet: window.MefiBooklet,
     row: (jump) => rows().find((row) => row.dataset.settingsJump === jump) ?? null,
     link: (nav) => rows().find((row) => row.dataset.nav === nav) ?? null,
@@ -496,6 +500,33 @@ test("the 0.5 layout files Settings into the prototype's places, in its order an
   assert.equal(env.document.getElementById("settings-find").closest("#settings-nav"), null);
   assert.ok(env.document.getElementById("settings-find").closest("#settings-sections"));
   assert.deepEqual(JSON.parse(JSON.stringify(env.booklet.settingsPlaces().map((place) => [place.id, place.group, place.sub, place.route]))), [["general", null, false, null], ["notifications", null, false, null], ["appearance", null, false, null], ["size", null, true, "size"], ["looks", null, false, null], ["audio", null, false, null], ["updates", "Updates and help", false, null], ["problem", "Updates and help", false, null], ["system", "Advanced", false, null]]);
+});
+
+test("in the 0.5 layout Settings says where it is (settingsLocation) and says so once per change of place or of search (mefi:settings-place)", async () => {
+  const env = environment({ layout: "v2" });
+  env.booklet.showTab("studio");
+  assert.deepEqual(JSON.parse(JSON.stringify(env.booklet.settingsLocation())), { id: "general", label: "General", search: false });
+  const said = () => env.events.filter((event) => event.type === "mefi:settings-place").map((event) => JSON.parse(JSON.stringify(event.detail)));
+  const before = said().length;
+  env.booklet.jumpToSettings("notifications");
+  env.booklet.jumpToSettings("alerts-quiet");
+  env.booklet.showTab("studio");
+  assert.deepEqual(said().slice(before), [{ place: "notifications", search: false }], "a repaint that moved nothing says nothing");
+  assert.equal(env.booklet.settingsLocation().label, "Notifications");
+  await env.type("stay quiet");
+  assert.deepEqual(said().at(-1), { place: "notifications", search: true }, "Find a setting showing results is a change too");
+  assert.equal(env.booklet.settingsLocation().search, true);
+  assert.equal(environment().booklet.settingsLocation(), null, "the classic layout has no places to say");
+});
+
+test("asking for the places files Settings into them when the layout came on after Settings was wired", () => {
+  const env = environment();
+  assert.equal(env.booklet.settingsPlaces(), null);
+  env.documentElement.dataset.layout = "v2";
+  const byId = env.document.getElementById;
+  env.document.getElementById = (id) => byId(id) ?? env.body.querySelector(`#${id}`);
+  assert.deepEqual(JSON.parse(JSON.stringify(env.booklet.settingsPlaces().map((place) => place.id))), ["general", "notifications", "appearance", "size", "looks", "audio", "updates", "problem", "system"]);
+  assert.equal(env.el("tab-studio").getAttribute("data-places"), "v2");
 });
 
 test("the classic layout keeps its seven categories, and no place of the 0.5 layout", () => {

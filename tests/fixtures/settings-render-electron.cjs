@@ -153,7 +153,8 @@ app.whenReady().then(async () => {
     // thumb, included), composited over the theme's background; off screen, its ancestors.
     const behind = (node) => { const r = node.getClientRects()[0]; let under = null; if (r && r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth) { const stack = document.elementsFromPoint(r.left + Math.min(r.width / 2, 10), r.top + r.height / 2); const at = stack.indexOf(node); if (at >= 0) under = stack.slice(at); } if (!under) { under = []; for (let n = node; n; n = n.parentElement) under.push(n); } let color = base; for (const layer of under.reverse()) { const c = paint(layer); if (c) color = over(c, color); } return color; };
     const dimmed = (node) => { for (let n = node; n && n !== document.documentElement; n = n.parentElement) { if (parseFloat(getComputedStyle(n).opacity) < 0.95 || n.disabled || n.getAttribute?.('aria-disabled') === 'true') return true; } return false; };
-    const all = [...tab.querySelectorAll('*')].filter(shown);
+    // Settings, and the frame around it that the 0.5 layout draws: the list column's places and the rail.
+    const all = [...tab.querySelectorAll('*'), ...(document.getElementById('shell-pages')?.querySelectorAll('*') ?? []), ...(document.getElementById('app-rail')?.querySelectorAll('*') ?? [])].filter(shown);
     // Text a person reads: decorative marks (aria-hidden, or drawn with a zero font size) are not.
     const text = all.filter((node) => own(node) && !node.closest('[aria-hidden="true"]') && parseFloat(getComputedStyle(node).fontSize) > 0);
     const small = text.filter((node) => parseFloat(getComputedStyle(node).fontSize) < 11.95).map((node) => (node.id || String(node.className).slice(0, 40) || node.tagName) + ':' + getComputedStyle(node).fontSize + ':' + node.textContent.trim().slice(0, 30));
@@ -167,7 +168,10 @@ app.whenReady().then(async () => {
       inner: { w: innerWidth, h: innerHeight }, place: tab.dataset.settingsPlace || null, places: tab.dataset.places || null, rows,
       current: [...document.querySelectorAll('#settings-nav [aria-current="true"]')].map((row) => row.querySelector('.label')?.textContent),
       pane: pane?.dataset.settingsCategoryPane ?? null, title: pane?.querySelector('.settings-category-head h2')?.textContent ?? null,
-      head: box(pane?.querySelector('.settings-category-head h2')), find: box(document.querySelector('.settings-find')), sections: box(sections), nav: box(document.getElementById('settings-nav')),
+      head: box(pane?.querySelector('.settings-category-head h2')), find: box(document.querySelector('.settings-find')), sections: box(sections), nav: box(document.getElementById('shell-pages')),
+      // The list column's places (renderer/shell.js): headings and rows, the current one starred; Settings' own list stepped aside.
+      list: document.getElementById('shell-pages')?.hidden === false ? [...document.querySelectorAll('#shell-pages-list > *')].map((node) => (node.tagName === 'H3' ? '# ' : '') + node.textContent.trim() + (node.getAttribute('aria-current') ? ' *' : '')) : null,
+      ownList: shown(document.getElementById('settings-nav-list')), crumbs: [...document.querySelectorAll('.shell-trail .shell-crumb')].map((node) => node.textContent.trim()),
       panes: [...document.querySelectorAll('[data-settings-category-pane]')].filter((node) => !node.hidden).length,
       pageOverflow: document.documentElement.scrollWidth > innerWidth + 1 || document.body.scrollWidth > innerWidth + 1,
       // A switch row reads as the prototype's: its words on the left, its track on the right.
@@ -217,10 +221,14 @@ app.whenReady().then(async () => {
   const first = await run(measure);
   assert.deepEqual(first.rows, PLACES, "the places are the prototype's, in its order, under its headings");
   assert.equal(first.place, "general", "Settings opens on General");
+  // The list column lists the places (renderer/shell.js) while Settings' own list steps aside, and the breadcrumb reads Settings / <place>.
+  assert.deepEqual(first.list, ["General *", "Notifications", "Appearance", "Size and density", "Map look", "Sound and music", "# Updates and help", "Updates", "Report a problem", "# Advanced", "System", "All settings in one place"], "the list column holds the places, under the prototype's headings");
+  assert.equal(first.ownList, false, "Settings' own list is not drawn twice");
+  assert.deepEqual(first.crumbs.slice(-2), ["Settings", "General"]);
   report.model = await run("return window.MefiBooklet.settingsPlaces();");
   assert.deepEqual(report.model.map((row) => [row.id, row.group, row.sub, row.route]), [["general", null, false, null], ["notifications", null, false, null], ["appearance", null, false, null], ["size", null, true, "size"], ["looks", null, false, null], ["audio", null, false, null], ["updates", "Updates and help", false, null], ["problem", "Updates and help", false, null], ["system", "Advanced", false, null]], "the places, as data, for a list drawn elsewhere");
   for (const [id, title] of PAGES) {
-    await click(`#settings-nav [data-settings-category="${id}"]`);
+    await click(`#shell-pages-list [data-page="settings:${id}"]`);
     await until(`document.getElementById('tab-studio').dataset.settingsPlace === ${JSON.stringify(id)}`, `${title} is the place`);
     if (id === "notifications") await until("window.settingsFixture.calls().includes('alertsGet') && document.getElementById('alerts-on').checked", "Notifications read their settings when shown");
     if (id === "problem") await until("document.querySelectorAll('#report-files .report-file').length === 4", "the report is built when its page shows");
@@ -228,6 +236,8 @@ app.whenReady().then(async () => {
     const m = await run(measure);
     m.id = id; report.places.push(m);
     assert.deepEqual(m.current, [title], `${title}: its row is the current one`);
+    assert.deepEqual(m.list.filter((row) => row.endsWith(" *")), [`${title} *`], `${title}: its row in the list column is the current one`);
+    assert.deepEqual(m.crumbs.slice(-2), ["Settings", title], `${title}: the breadcrumb says Settings / ${title}`);
     assert.equal(m.title, title, `${title}: the page says where you are`);
     assert.equal(m.panes, 1, `${title}: one page at a time`);
     if (!m.appearance) {
@@ -242,7 +252,7 @@ app.whenReady().then(async () => {
   assert.deepEqual(found, [], "every page fits, has no text under 12 px and reads at 4.5:1");
   assert.ok(report.places.find((row) => row.id === "general").switches.length >= 6 && report.places.find((row) => row.id === "audio").switches.length >= 1, "the switch rows were measured");
   // Notifications: the card is the page, its four groups are panels in two columns.
-  await click('#settings-nav [data-settings-category="notifications"]');
+  await click('#shell-pages-list [data-page="settings:notifications"]');
   await sleep(400);
   report.notifications = await run(`const box = (id) => { const r = document.getElementById(id).getBoundingClientRect(); return { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width) }; };
     return { open: document.getElementById('settings-notifications').open, summary: getComputedStyle(document.querySelector('#settings-notifications > summary')).display, rows: box('alerts-group-background'), quiet: box('alerts-group-quiet'), words: box('alerts-group-words'), test: box('alerts-group-try'), heading: getComputedStyle(document.querySelector('#alerts-group-background .settings-place-only')).display };`);
@@ -251,8 +261,10 @@ app.whenReady().then(async () => {
   assert.ok(report.notifications.words.x > report.notifications.rows.x + report.notifications.rows.w - 2 && Math.abs(report.notifications.words.y - report.notifications.rows.y) < 2, "what a notification says sits beside the switches");
   assert.ok(report.notifications.quiet.y > report.notifications.rows.y && report.notifications.test.y > report.notifications.words.y, "quiet hours under the switches, Try it under the sample");
   // Size and density is its own page.
-  await click('#settings-nav [data-nav="size"]');
+  await click('#shell-pages-list [data-page="settings:size"]');
   await until("window.MefiSize?.isOpen?.()", "Size and density opens from its row");
+  report.sizeCrumbs = await run("return [...document.querySelectorAll('.shell-trail .shell-crumb')].map((node) => node.textContent.trim());");
+  assert.deepEqual(report.sizeCrumbs.slice(-3), ["Settings", "Appearance", "Size and density"], "the prototype's breadcrumb for Size and density");
   await capture("settings-size-1920x1080.png");
   await run("window.MefiNav.closeAll(); await new Promise((resolve) => setTimeout(resolve, 200)); window.MefiNav.go('studio');");
   await until("document.getElementById('tab-studio')?.hidden === false && !window.MefiSize.isOpen()", "back to Settings");
@@ -263,6 +275,7 @@ app.whenReady().then(async () => {
   assert.ok(report.search.some((line) => line.includes("Settings / Notifications") && line.includes("Stay quiet at night")), `a match says where it lives now: ${JSON.stringify(report.search)}`);
   const searching = await run(measure);
   assertPage(searching, "Search results");
+  assert.deepEqual(searching.crumbs.slice(-2), ["Settings", "Search"], "Find a setting showing results: Settings / Search");
   await capture("settings-search-1920x1080.png");
   await run("document.getElementById('settings-find').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));");
   await until("document.getElementById('tab-studio').dataset.settingsPlace === 'notifications'", "Enter lands on Notifications");
@@ -281,6 +294,8 @@ app.whenReady().then(async () => {
       await sleep(400);
       const m = await run(measure);
       assertPage(m, `${id} at ${width}x${height}@${zoom}`, { contrast: false });
+      // Where the list column is a drawer, Settings' own list of places is back in the page.
+      if (width < 900 * zoom) assert.equal(m.ownList, true, `${id} at ${width}x${height}@${zoom}: Settings' own list is back`);
       if (id === "notifications") await capture(`settings-${id}-${width}x${height}@${zoom}.png`);
     }
   }

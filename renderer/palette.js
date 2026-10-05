@@ -262,7 +262,9 @@
   const STAGE_WORDS = Object.freeze({ ask: "Needs you", run: "Running", check: "Review", wait: "Queued", ready: "Queued", done: "Done", dropped: "Done" });
   const STAGE_RANK = Object.freeze({ ask: 0, run: 1, check: 2, wait: 3, ready: 3, done: 4, dropped: 4 });
   const BROWSE_SESSIONS = 6;
-  const PLACES = Object.freeze([["Home", "workspace"], ["Work", "tasks"], ["Agents", "agents"], ["Friends", "friends"], ["Settings", "studio"]]);
+  // The rail's places (renderer/nav.js, RAIL_PLACES), each by the page it opens and with the rail's glyph: Work is Home
+  // (Work › Today), the Map is the Command view, Team is the Agents page.
+  const PLACES = Object.freeze([["Work", "workspace", "g-tasks"], ["Map", "command", "g-command"], ["Team", "agents", "g-community"], ["Friends", "friends", "g-chat"], ["Settings", "studio", null]]);
   const board = () => { const data = window.MefiWorkspace?.snapshot?.(); return data && data.projectId ? data : null; };
   const stampOf = (value) => { const number = Number(value); return Number.isFinite(number) && number > 0 ? number : Date.parse(value || "") || 0; };
   const movedAt = (task) => Math.max(stampOf(task.updatedAt), stampOf(task.doneAt), stampOf(task.createdAt), stampOf(task.lastAttempt?.at));
@@ -302,9 +304,9 @@
   // The rail's places, by the page each opens, with the key that page already has.
   function placesV2() {
     const nav = window.MefiNav;
-    return PLACES.map(([label, id]) => [label, nav?.get?.(id)]).filter(([, dest]) => dest && !dest.hidden?.()).map(([label, dest]) => ({
+    return PLACES.map(([label, id, glyph]) => [label, nav?.get?.(id), glyph]).filter(([, dest]) => dest && !dest.hidden?.()).map(([label, dest, glyph]) => ({
       key: `place:${dest.id}`, kind: "Places", label: `Go to ${label}`, description: dest.desc || "", searchTerms: `${label} ${dest.label || ""} ${dest.searchTerms || ""}`,
-      hint: dest.chord || dest.key || "", keyHint: Boolean(dest.chord || dest.key), count: 0, glyph: dest.glyph || "g-frame", browse: true,
+      hint: dest.chord || dest.key || "", keyHint: Boolean(dest.chord || dest.key), count: 0, glyph: glyph || dest.glyph || "g-frame", browse: true,
       run: () => nav.go(dest.id),
     }));
   }
@@ -619,6 +621,16 @@
       li.addEventListener("click", () => run(index));
       el.list.append(li);
     });
+    // Past the twelve shown, the list says there is more and how to reach it (the status line says it for a screen reader).
+    const more = state.filtered.length - items.length;
+    if (more > 0) {
+      const foot = document.createElement("li");
+      foot.className = "palette-more";
+      foot.setAttribute("role", "presentation");
+      foot.setAttribute("aria-hidden", "true");
+      foot.textContent = `${more} more result${more === 1 ? "" : "s"} · keep typing to narrow them`;
+      el.list.append(foot);
+    }
     setActiveOption();
   }
 

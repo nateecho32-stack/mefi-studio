@@ -291,6 +291,136 @@ test("with v2 off there is no page list and no breadcrumb: nothing is drawn, and
   assert.deepEqual(plain(page.window.MefiShell.pages()), { shown: false, section: null });
 });
 
+// ---- the 0.5 layout's places in the list column (settingsModel, teamModel, mapModel) and the breadcrumb ----------------
+const PLACE_OF = { studio: "settings", size: "settings", config: "settings", agents: "team", skills: "team", usage: "team", booklet: "team", graph: "team", command: "map", fleet: "map", "agent-brain": "map" };
+const withPlaces = (current, options = {}) => {
+  const page = withPages({ current, registry: {
+    workspace: { id: "workspace", label: "Home" }, tasks: { id: "tasks", label: "Task board" }, studio: { id: "studio", label: "Settings" }, size: { id: "size", label: "Size and density" },
+    config: { id: "config", label: "Configuration" }, agents: { id: "agents", label: "Agents" }, booklet: { id: "booklet", label: "Model catalog" }, graph: { id: "graph", label: "Performance" },
+    command: { id: "command", label: "Map" }, fleet: { id: "fleet", label: "Fleet" }, "agent-brain": { id: "agent-brain", label: "Agent brain" },
+  }, ...options });
+  page.nav.placeOf = (id) => PLACE_OF[id] ?? "work";
+  return page;
+};
+const listed = (page) => page.$("shell-pages-list").children.map((node) => (node.tagName.toLowerCase() === "h3" ? `# ${node.textContent}` : `${node.textContent}${node.getAttribute("aria-current") ? " *" : ""}${node.className.includes("is-sub") ? " (sub)" : ""}${node.className.includes("is-open") ? " (open)" : ""}`));
+const crumbsOf = (page) => page.region("top").children[1].children.filter((node) => node.className.includes("shell-crumb")).map(say);
+const SETTINGS_PLACES = [
+  ["general", "General", "g-studio", null], ["notifications", "Notifications", "g-bell", null], ["appearance", "Appearance", "g-style", null],
+  ["size", "Size and density", "g-textsize", null, "size"], ["looks", "Map look", "g-target", null], ["audio", "Sound and music", "g-audio", null],
+  ["updates", "Updates", "g-update", "Updates and help"], ["problem", "Report a problem", "g-flag", "Updates and help"], ["system", "System", "g-gauge", "Advanced"],
+];
+
+test("Settings in the list column: the prototype's places under its headings, each jumping where Settings' own list jumps, and the breadcrumb reads Settings / <place>", async () => {
+  const page = withPlaces("studio");
+  const where = { place: "notifications", search: false };
+  const jumps = [];
+  page.window.MefiBooklet = {
+    showTab() {},
+    settingsPlaces: () => SETTINGS_PLACES.map(([id, label, glyph, group, route]) => ({ id, label, glyph, group, sub: id === "size", route: route ?? null, current: !route && id === where.place })),
+    settingsLocation: () => ({ id: where.place, label: SETTINGS_PLACES.find(([id]) => id === where.place)[1], search: where.search }),
+    jumpToSettings: (id, options) => { jumps.push([id, plain(options)]); where.place = id; },
+  };
+  page.window.dispatchEvent({ type: "mefi:nav" });
+  const pages = page.$("shell-pages");
+  assert.equal(pages.hidden, false);
+  assert.equal(pages.querySelector(".shell-pages-title").textContent, "Settings");
+  assert.deepEqual(listed(page), ["General", "Notifications *", "Appearance", "Size and density (sub)", "Map look", "Sound and music", "# Updates and help", "Updates", "Report a problem", "# Advanced", "System", "All settings in one place"], "the places in the prototype's order, Size and density under Appearance, the two headings, and the way to every setting in one tree");
+  assert.deepEqual(pages.querySelectorAll(".shell-page use").map((use) => use.getAttribute("href")).slice(0, 3), ["#g-studio", "#g-bell", "#g-style"], "each row keeps its place's glyph");
+  assert.deepEqual(plain(page.window.MefiShell.pages()), { shown: true, section: "settings" });
+  assert.deepEqual(crumbsOf(page), ["Fixture", "Settings", "Notifications"]);
+  // A row jumps where Settings' own list jumps; the keyboard's press takes focus into the page, the pointer's leaves it.
+  const row = (key) => pages.querySelector(`[data-page="settings:${key}"]`);
+  await row("system").click({ detail: 1 });
+  await row("updates").click({ detail: 0 });
+  assert.deepEqual(jumps, [["system", { focus: false }], ["updates", { focus: true }]]);
+  // booklet.js says the place changed (no route did): the list and the breadcrumb follow at once.
+  page.window.dispatchEvent({ type: "mefi:settings-place", detail: { place: "updates", search: false } });
+  assert.equal(row("updates").getAttribute("aria-current"), "page");
+  assert.deepEqual(crumbsOf(page), ["Fixture", "Settings", "Updates"]);
+  where.search = true;
+  page.window.dispatchEvent({ type: "mefi:settings-place", detail: { place: "updates", search: true } });
+  assert.deepEqual(crumbsOf(page), ["Fixture", "Settings", "Search"], "Find a setting showing results: the prototype's Settings / Search");
+  where.search = false;
+  // Size and density is a page of its own: its row opens it, and on it the breadcrumb is the prototype's.
+  await row("size").click();
+  assert.deepEqual(page.calls.go.at(-1), ["size"]);
+  page.current = "size";
+  page.window.dispatchEvent({ type: "mefi:nav" });
+  assert.equal(row("size").getAttribute("aria-current"), "page");
+  assert.equal(row("updates").getAttribute("aria-current"), null, "one current row");
+  assert.deepEqual(crumbsOf(page), ["Fixture", "Settings", "Appearance", "Size and density"]);
+  await row("general").click();
+  assert.deepEqual(page.calls.go.at(-1), ["studio", { section: "general" }], "from Size and density a place is a deep link into Settings");
+  await row("config").click();
+  assert.deepEqual(page.calls.go.at(-1), ["config"], "All settings in one place, which Settings' own list held");
+});
+
+test("while the column lists Settings' places as a column, html[data-frame-pages] says so (Settings' own list steps aside); closed or a drawer, it does not", async () => {
+  const page = withPlaces("studio");
+  page.window.MefiBooklet = { showTab() {}, settingsPlaces: () => SETTINGS_PLACES.map(([id, label, glyph, group]) => ({ id, label, glyph, group, current: id === "general" })), settingsLocation: () => ({ id: "general", label: "General", search: false }), jumpToSettings() {} };
+  page.window.dispatchEvent({ type: "mefi:nav" });
+  assert.equal(page.root.dataset.framePages, "settings");
+  page.window.MefiShell.close("list");
+  assert.equal(page.root.dataset.framePages, undefined, "the column is closed: Settings' own list is back");
+  page.window.MefiShell.open("list");
+  assert.equal(page.root.dataset.framePages, "settings");
+  page.resize({ innerWidth: 800 });
+  assert.equal(page.root.dataset.framePages, undefined, "a small window's drawer is closed: Settings' own list is back");
+  page.resize({ innerWidth: 1440 });
+  page.current = "tasks";
+  page.window.dispatchEvent({ type: "mefi:nav" });
+  assert.equal(page.root.dataset.framePages, "work", "a section's pages say their section");
+  page.window.MefiShell.disable();
+  assert.equal(page.root.dataset.framePages, undefined);
+  // Without the places (the classic filing, or Settings not filed), the one Settings row stands in.
+  const bare = withPlaces("studio");
+  bare.window.MefiBooklet = { showTab() {}, settingsPlaces: () => null };
+  bare.nav.LOCAL_ROUTES = { ...bare.nav.LOCAL_ROUTES, settings: ["studio"] };
+  bare.window.dispatchEvent({ type: "mefi:nav" });
+  assert.deepEqual(listed(bare), ["Settings *"]);
+});
+
+test("Team in the list column: agents.js's places under the prototype's headings, a place's pages under it while you are in it, and Team / <place> in the breadcrumb", async () => {
+  const page = withPlaces("booklet");
+  const ran = [];
+  const view = (label, current = false) => ({ label, current, run: () => ran.push(label) });
+  const place = (id, label, group = null, views = [], current = false) => ({ id, label, glyph: "g-agents", group, current, views, run: () => ran.push(id) });
+  page.window.MefiAgents = {
+    teamPlaces: () => [place("overview", "Overview"), place("providers", "Providers"), place("rules", "Rules", "Context for agents"), place("skills", "Skills", "Context for agents", [view("Skills")]),
+      place("flows", "Workflows", "Context for agents", [view("Brain maps"), view("Context")]), place("models", "Models", "Monitor", [view("Catalog", true), view("Performance")], true), place("inspect", "Inspect", "Monitor", [view("Sessions"), view("Trace")])],
+    teamPlace: () => ({ id: "models", label: "Models" }),
+    navModel: () => { throw new Error("the classic sections are not asked for"); },
+  };
+  page.window.dispatchEvent({ type: "mefi:nav" });
+  assert.equal(page.$("shell-pages").querySelector(".shell-pages-title").textContent, "Team");
+  assert.deepEqual(listed(page), ["Overview", "Providers", "# Context for agents", "Rules", "Skills", "Workflows", "# Monitor", "Models (open)", "Catalog * (sub)", "Performance (sub)", "Inspect"], "only the place you are in shows its pages; a place of one page has none under it");
+  assert.deepEqual(crumbsOf(page), ["Fixture", "Team", "Models"]);
+  const pages = page.$("shell-pages");
+  await pages.querySelector('[data-page="team:models:1"]').click();
+  await pages.querySelector('[data-page="team:inspect"]').click();
+  assert.deepEqual(ran, ["Performance", "inspect"]);
+  page.window.dispatchEvent({ type: "mefi:team-place", detail: { place: "models" } });
+  assert.deepEqual(plain(page.window.MefiShell.pages()), { shown: true, section: "team" });
+});
+
+test("the Map in the list column: Map, Fleet and Pipelines, and the breadcrumb names them as the prototype does", async () => {
+  const page = withPlaces("fleet");
+  page.window.MefiAgentBrain = { tab: () => "live" };
+  page.window.dispatchEvent({ type: "mefi:nav" });
+  assert.equal(page.$("shell-pages").querySelector(".shell-pages-title").textContent, "Map");
+  assert.deepEqual(listed(page), ["Map", "Fleet *", "Pipelines"]);
+  assert.deepEqual(crumbsOf(page), ["Fixture", "Map", "Fleet"]);
+  await page.$("shell-pages").querySelector('[data-page="map:agent-brain"]').click();
+  assert.deepEqual(page.calls.go.at(-1), ["agent-brain", { tab: "live" }], "Pipelines is the Agent brain's live tab");
+  page.current = "agent-brain";
+  page.window.dispatchEvent({ type: "mefi:nav" });
+  assert.deepEqual(listed(page), ["Map", "Fleet", "Pipelines *"]);
+  assert.deepEqual(crumbsOf(page), ["Fixture", "Map", "Pipelines"]);
+  page.current = "command";
+  page.window.dispatchEvent({ type: "mefi:nav" });
+  assert.deepEqual(crumbsOf(page), ["Fixture", "Map"], "the Map itself is said once");
+});
+
 test("N need you: the digest's total, else the open questions, else MefiToday's count; one is a singular", () => {
   const page = loadShell({});
   const pill = page.$("shell-need");
@@ -481,7 +611,9 @@ test("the frame never reaches for setInterval, and its only timer is the 60 ms c
   const source = await readFile(new URL("../renderer/shell.js", import.meta.url), "utf8");
   absent(source, /setInterval|requestIdleCallback|new Worker|fetch\(|XMLHttpRequest|window\.mefiStudio\??\.[a-z][A-Za-z]*\(/, "no poll, no network, no host call made by name");
   const timeouts = [...source.matchAll(/setTimeout\(/g)].length;
-  assert.equal(timeouts, 2, "the feed's coalescer and the layout switch's reload delay");
+  // The third is the player's time left, once a second only while something plays and the window can be seen (the owner's
+  // pick, 2026-10-05); the usage meters ride on the repaints the frame makes anyway.
+  assert.equal(timeouts, 3, "the feed's coalescer, the layout switch's reload delay and the player's time left");
 });
 
 test("the need pill and the waiting item open the inbox through MefiShell.onInbox first, then MefiToday, then Work's own views", async () => {
@@ -621,14 +753,16 @@ test("the machine's load comes from the resource watcher's push: CPU and memory 
   assert.equal(bar.querySelector(".shell-usage-sep").hidden, false, "two meters, and the rule before them");
   // A pass of the watcher: the rounded load, and what is in use of the memory.
   push({ wait: false, capacity: { canStart: true, reason: null, resources: { cpuPercent: 34.4, availableMemoryMB: 6400, totalMemoryMB: 16384, lagMs: 12 } }, history: new Array(50).fill({}) });
-  assert.deepEqual(page.timers.map((timer) => timer.delay), [60], "one coalesced repaint");
+  // (The player plays here, so its time left ticks once a second beside the repaint.)
+  assert.deepEqual(page.timers.map((timer) => timer.delay).filter((delay) => delay !== 1000), [60], "one coalesced repaint");
+  assert.equal(page.timers.filter((timer) => timer.delay === 1000).length, 1, "and one tick for the playing player's time left");
   page.flush();
   assert.deepEqual([say(item(page, "machine")), item(page, "machine").hidden], ["CPU 34% · Mem 61%", false]);
   assert.equal(item(page, "machine").getAttribute("aria-label"), "Machine load: CPU 34 percent, memory 61 percent in use. Open the machine status");
   assert.deepEqual(plain(page.window.MefiShell.status().machine), { cpu: 34, mem: 61, held: false, reason: "" }, "only these numbers are kept, never the pushed status");
   // The next pass with the same rounded load repaints nothing.
   push({ wait: false, capacity: { resources: { cpuPercent: 34.2, availableMemoryMB: 6390, totalMemoryMB: 16384 } } });
-  assert.deepEqual(page.timers, [], "the same load: no repaint");
+  assert.deepEqual(page.timers.filter((timer) => timer.delay !== 1000), [], "the same load: no repaint (the playing player's tick goes on)");
   // A machine that holds new workers says why on hover.
   push({ wait: true, capacity: { canStart: false, reason: "Free memory is under the floor.", resources: { cpuPercent: 91, availableMemoryMB: 900, totalMemoryMB: 16384 } } });
   page.flush();

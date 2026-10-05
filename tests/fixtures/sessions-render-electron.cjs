@@ -490,7 +490,7 @@ app.whenReady().then(async () => {
     assert.deepEqual(pal.heads, ["Sessions", "Places", "Actions"], `the empty box's groups: ${JSON.stringify(pal)}`);
     assert.deepEqual(pal.rows.map((row) => [row.label, row.hint]), [
       ["Add an empty state to the notes list", "Needs you"], ["Speed up the first paint on the map", "Needs you"], ["Search notes by tag", "Running"], ["Keyboard shortcut for a new note", "Running"], ["Export notes as Markdown", "Review"], ["Dark mode for the settings page", "Queued"],
-      ["Go to Home", "H"], ["Go to Work", "T"], ["Go to Agents", ""], ["Go to Friends", ""], ["Go to Settings", "Ctrl ,"], ["New task", "Ctrl N"],
+      ["Go to Work", "H"], ["Go to Map", "D"], ["Go to Team", ""], ["Go to Friends", ""], ["Go to Settings", "Ctrl ,"], ["New task", "Ctrl N"],
     ], "the sessions as the list orders them, the rail's places with their keys, and New task");
     assert.equal(pal.sheet[4], 640, "640 px wide, as the prototype");
     assert.ok(Math.abs((pal.sheet[0] + pal.sheet[2]) / 2 - (pal.layer[0] + pal.layer[1]) / 2) <= 2 && pal.sheet[0] >= pal.layer[0] && pal.sheet[2] <= pal.layer[1], `centred in the free area, which every layer keeps to: ${JSON.stringify(pal)}`);

@@ -27,12 +27,12 @@ const settle = async () => { for (let turn = 0; turn < 8; turn += 1) await Promi
 // the release watcher are live; without it the module loads and waits, like a
 // page before DOMContentLoaded. `ids` seeds more template ids, `width` is
 // window.innerWidth and `host` the preload bridge.
-function load({ search = "", stored = {}, view = "workspace", sidebar = null, init = false, ids = [], width, host } = {}) {
+function load({ search = "", stored = {}, view = "workspace", sidebar = null, init = false, ids = [], width, host, layout = null } = {}) {
   const { document, get } = createDom({ ids: [...RAIL_IDS, ...ids] });
   const lookupId = document.getElementById;
   document.getElementById = (id) => lookupId(id) ?? document.querySelector(`#${id}`);
   document.readyState = "loading"; // init() runs only when a test asks for it
-  document.documentElement.dataset = {};
+  document.documentElement.dataset = layout ? { layout } : {};
   // renderHelp builds each key row in a fragment; the stand-in keeps the
   // fragment as a wrapper, which is enough to see where every row lands.
   document.createDocumentFragment = () => document.createElement("#fragment");
@@ -676,4 +676,137 @@ test("the update pill and toasts point at Settings › Updates and open that car
   assert.match(pill.title, /Settings › Updates/);
   assert.equal(loaded.nav.sectionLabel(loaded.nav.get("updateAuto")), "Settings");
   assert.equal(loaded.nav.sectionLabel(loaded.nav.get("updateApply")), "Settings");
+});
+
+// ---- the 0.5 layout (html[data-layout="v2"]): the prototype's rail ----------------------------------------------------
+// docs/prototype/mefi-studio-0.5-v5.html, railView: Work, Map, Team and Friends at the top; Search, Settings and Help at
+// the foot. The places are a reading of the same records (placeOf); the classic rail above is untouched.
+const v2Rail = (options = {}) => { const loaded = load({ search: "?shell=rail", layout: "v2", ...options }); loaded.nav.applyShell(); return loaded; };
+const SETUP_HELPER = { id: "setup-helper", label: "Setup helper", short: "Setup", kind: "overlay", layer: "sheet", section: "agents", group: "tools", glyph: "g-agents", showIn: { palette: true, help: true, tools: true }, open() {}, close() {}, isOpen: () => false };
+const RELEASE_NOTES = { id: "release-notes", label: "What's new in this version", short: "Release notes", kind: "action", layer: null, section: "help", group: "system", glyph: "g-spark", showIn: { palette: true }, run() {} };
+const REPORT = { id: "settings:report", label: "Settings › System › Report a problem", short: "Report a problem", kind: "action", layer: null, section: "settings", group: "system", glyph: "g-gauge", showIn: { palette: true }, run() {} };
+
+test("in the 0.5 layout the rail is the prototype's: Work, Map, Team and Friends, then Search, Settings and Help at its foot", async () => {
+  const { nav, rail, document } = v2Rail();
+  assert.deepEqual(heads(rail()), ["work", "map", "team", "friends"], "the prototype's places, in its order");
+  const targets = Object.fromEntries(rail().querySelectorAll(".app-rail-head").map((head) => [head.dataset.section, head.dataset.nav]));
+  assert.deepEqual(targets, { work: "workspace", map: "command", team: "agents", friends: "friends" }, "each place opens a route that already existed: Home is Work › Today, the Command view is the Map, Agents is Team");
+  assert.deepEqual(rail().querySelectorAll(".app-rail-head .app-rail-text").map((label) => label.textContent), ["Work", "Map", "Team", "Friends"]);
+  assert.deepEqual(rail().querySelectorAll(".app-rail-head").map((head) => head.getAttribute("aria-label")), ["Work", "Map", "Team", "Friends"]);
+  assert.deepEqual(rail().querySelectorAll(".app-rail-head use").map((use) => use.getAttribute("href")), ["#g-tasks", "#g-command", "#g-community", "#g-chat"], "the prototype's glyphs: a list, a graph, two people, a speech bubble");
+  assert.deepEqual(rail().querySelectorAll(".app-rail-head [data-badge]").map((badge) => badge.dataset.badge), ["tasks", "progress", "questions"], "Work keeps the open-task count, the Map the live dot, Team the decisions waiting");
+  const footRow = document.getElementById("app-rail-foot").children;
+  assert.deepEqual(footRow.filter((node) => node.dataset?.nav).map((button) => button.dataset.nav), ["palette", "studio"], "Search and Settings at the foot, then Help");
+  assert.deepEqual(footRow.filter((node) => node.classList?.contains("app-rail-foot-item")).map((button) => button.getAttribute("aria-label") || button.querySelector(".label").textContent), ["Search", "Settings", "Help"]);
+  assert.equal(rail().querySelector("#app-rail-foot .app-rail-search .key"), null, "the foot's tiles carry a word, not a keycap; the title says the key");
+  assert.equal(rail().querySelector('#app-rail-foot [data-nav="palette"]').title, "Search (Ctrl K)");
+  assert.equal(document.getElementById("app-rail-compose"), null, "New task is the session list's (Ctrl N), not the rail's");
+  assert.equal(document.getElementById("app-rail-recent-list"), null, "the session list holds the tasks");
+  assert.equal(rail().querySelector(".app-rail-vibe"), null, "the mode switch is the top bar's (Ctrl M)");
+  assert.deepEqual(rail().querySelectorAll('.app-rail-section[data-section="friends"] .app-rail-children [data-nav]').map((button) => button.dataset.nav), ["rooms", "your-pcs", "playground"], "Friends keeps its three pages");
+  // The Help menu: the prototype's six, each the record it always was, in its order; a late arrival redraws the foot.
+  nav.register(COMMUNITY); nav.register(SETUP_HELPER); nav.register(RELEASE_NOTES); nav.register(REPORT);
+  await settle();
+  const menu = document.getElementById("app-help-menu");
+  assert.equal(menu.hidden, true);
+  assert.deepEqual(menu.querySelectorAll("[data-nav]").map((button) => [button.dataset.nav, button.querySelector(".label").textContent]), [["onboarding", "Start here"], ["setup-helper", "Setup guide"], ["help", "Shortcuts"], ["release-notes", "What's new"], ["settings:report", "Report a problem"], ["community", "Void Engine Discord"]]);
+  nav.register({ ...RELEASE_NOTES, hidden: () => true });
+  await settle();
+  assert.ok(!document.getElementById("app-help-menu").querySelectorAll("[data-nav]").some((button) => button.dataset.nav === "release-notes"), "no release notes this version: the row is left out");
+  const placed = rail().querySelectorAll("[data-nav]").map((button) => button.dataset.nav);
+  assert.equal(new Set(placed).size, placed.length, "no destination is listed twice");
+});
+
+test("in the 0.5 layout the rail lights the place you are in: Home is Work's, the Command view and Fleet the Map's, Agents and its pages Team's", () => {
+  const where = (view, sheet) => {
+    const loaded = v2Rail({ view });
+    if (sheet) { loaded.nav.state.sheet = sheet; loaded.nav.paintRail(); }
+    const lit = loaded.rail().querySelectorAll('[aria-current="page"]').map((button) => button.dataset.section || button.dataset.nav);
+    const current = loaded.rail().querySelectorAll(".app-rail-section.current").map((group) => group.dataset.section);
+    return [lit, current];
+  };
+  assert.deepEqual(where("workspace"), [["work"], ["work"]]);
+  assert.deepEqual(where("workspace", "tasks"), [["work"], ["work"]]);
+  assert.deepEqual(where("command"), [["map"], ["map"]]);
+  assert.deepEqual(where("workspace", "fleet"), [["map"], ["map"]]);
+  assert.deepEqual(where("workspace", "agents"), [["team"], ["team"]]);
+  for (const page of ["skills", "brains", "explorer", "trace", "overhead"]) assert.deepEqual(where("workspace", page), [["team"], ["team"]], page);
+  const settings = v2Rail({ view: null });
+  settings.window.MefiMusic = { settingsAppearanceActive: () => true };
+  settings.nav.paintRail();
+  assert.deepEqual(settings.rail().querySelectorAll('[aria-current="page"]').map((button) => button.dataset.nav), ["studio"], "Settings at the foot is lit on Settings");
+});
+
+test("in the 0.5 layout a place's head goes back to where you were in it, and from inside it to its first page", async () => {
+  const loaded = v2Rail();
+  const opened = [];
+  loaded.window.MefiTasks = { open: (params) => opened.push(["tasks", params]) };
+  loaded.window.MefiAgents = { open: (params) => opened.push(["agents", params]) };
+  loaded.window.MefiWorkspace.enter = () => opened.push(["workspace", {}]);
+  const clickHead = async (place) => { await loaded.document.body.trigger("click", { target: loaded.rail().querySelector(`.app-rail-head[data-section="${place}"]`) }); opened.push(JSON.parse(JSON.stringify(opened.pop()))); };
+  await clickHead("team");
+  assert.deepEqual(opened.at(-1), ["agents", {}], "an unvisited place opens its first page");
+  loaded.nav.go("agents", { section: "setup", pane: "routing" });
+  loaded.nav.go("tasks", { filter: "open" });
+  loaded.nav.state.sheet = "tasks";
+  await clickHead("team");
+  assert.deepEqual(opened.at(-1), ["agents", { section: "setup", pane: "routing" }], "Team comes back where you were in it");
+  loaded.nav.state.sheet = "agents";
+  await clickHead("team");
+  assert.deepEqual(opened.at(-1), ["agents", {}], "from inside Team, its head is its Overview");
+  await clickHead("work");
+  assert.equal(opened.at(-1)[0], "tasks", "Work comes back to the Task board you were on");
+  loaded.nav.state.sheet = "tasks";
+  await clickHead("work");
+  assert.deepEqual(opened.at(-1), ["workspace", {}], "from inside Work, its head is Today (Home)");
+});
+
+test("in the 0.5 layout records are named and ranked by their place, history is kept per place, and the prototype's names are routes", () => {
+  const loaded = v2Rail();
+  const { nav } = loaded;
+  const label = (id) => nav.sectionLabel(nav.get(id));
+  assert.equal(label("workspace"), "Work");
+  for (const id of ["tasks", "plans", "ideas", "worktrees"]) assert.equal(label(id), "Work", id);
+  for (const id of ["command", "fleet", "agent-brain"]) assert.equal(label(id), "Map", id);
+  for (const id of ["agents", "brains", "eyes", "explorer", "overhead", "skills", "booklet", "graph", "usage", "context", "trace"]) assert.equal(label(id), "Team", id);
+  for (const id of ["studio", "music", "profiler"]) assert.equal(label(id), "Settings", id);
+  assert.equal(nav.placeOf("agent-brain", { tab: "playbook" }), "team", "the Agent brain's Playbook and Project map are Team › Workflows");
+  assert.equal(nav.placeOf("agent-brain", { tab: "live" }), "map", "its live pipelines are Map › Pipelines");
+  assert.equal(nav.get("command").label, "Map", "the Command view is called the Map");
+  assert.equal(nav.get("command").short, "Map");
+  const ranks = ["workspace", "command", "agents", "friends", "studio", "help"].map((id) => nav.sectionRank(nav.get(id)));
+  assert.deepEqual(ranks, [...ranks].sort((a, b) => a - b), "ranks follow the rail from top to bottom");
+  // go("team") and go("map") are the Agents page and the Command view.
+  const opened = [];
+  loaded.window.MefiAgents = { open: (params) => opened.push(["agents", params]) };
+  loaded.window.MefiIdle.enter = (_flag, params) => opened.push(["command", params]);
+  nav.go("team", { place: "providers" });
+  nav.go("map");
+  assert.deepEqual(opened.map(([id]) => id), ["agents", "command"]);
+  assert.deepEqual(opened[0][1], { place: "providers" });
+  // Each place keeps its own history: Back within the Map never lands in Team, and the reverse.
+  const fresh = v2Rail();
+  fresh.window.MefiAgents = { open() {} };
+  fresh.window.MefiFleet = { open() {} };
+  fresh.nav.go("agents", { place: "providers" });
+  fresh.nav.state.sheet = "agents";
+  assert.equal(fresh.nav.historyState().canBack, true, "Team's first page has its Overview behind it");
+  fresh.nav.go("fleet");
+  fresh.nav.state.sheet = "fleet";
+  assert.equal(fresh.nav.historyState().canBack, false, "Fleet is the Map's first page here: nothing of Team's is behind it");
+  // The classic rail keeps the old names.
+  const classic = load({ search: "?shell=rail" });
+  assert.equal(classic.nav.get("command").label, "Command view");
+  assert.equal(classic.nav.sectionLabel(classic.nav.get("agents")), "Agents");
+});
+
+test("the layout switching under a drawn rail draws the rail again: the places with v2 on, the classic sections with it off", () => {
+  const loaded = load({ search: "?shell=rail" });
+  loaded.nav.applyShell();
+  assert.deepEqual(heads(loaded.rail()), ["home", "work", "agents", "friends"]);
+  loaded.nav.applyLayout(true);
+  assert.deepEqual(heads(loaded.rail()), ["work", "map", "team", "friends"]);
+  loaded.nav.applyLayout(false);
+  assert.deepEqual(heads(loaded.rail()), ["home", "work", "agents", "friends"]);
+  assert.ok(loaded.document.getElementById("app-rail-compose"), "New task is back with the classic rail");
 });

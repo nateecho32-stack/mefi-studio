@@ -1,7 +1,8 @@
-/* Chrome: matte black surfaces and brushed-metal controls (renderer/music.js
-   THEMES.chrome, the default theme since the Chrome look; the public website
-   wears the same palette). Every rule is under html[data-studio-theme="chrome"],
-   which paintTheme sets, so no other theme changes; inlined after the other
+/* Chrome: matte black surfaces, brushed-metal controls and a cool iridescent
+   finish (renderer/music.js THEMES.chrome, the default theme since the Chrome
+   look; the public website wears the same palette and the same --chrome-holo
+   tokens). Every rule is under html[data-studio-theme="chrome"], which
+   paintTheme sets, so no other theme changes; inlined after the other
    stylesheets, so it wins a tie.
 
    - Surfaces are flat and opaque enough to read as matte: the panel colour
@@ -13,31 +14,71 @@
    - The metal is for what matters: primary buttons and the chosen segment of a
      segmented control (the Vibe | Build switch, Sessions | Backlog, the tab
      switches) are brushed metal with dark ink, a bright top edge and a dark
-     bottom edge; hover brightens, a press darkens. Selected rows, the open tab
-     and the rail's current place get a thin chrome edge instead of a fill.
+     bottom edge, its light stops a touch cool; hover brightens and adds a soft
+     ice glow and the holo edge's sheen, a press darkens.
+   - The iridescent layer, used sparingly so the black stays dominant:
+     silver-white, ice blue, lilac and pale aqua (--chrome-holo and its
+     -line, -bar, -edge and -glow forms, the website's names and values). The
+     window's ground and Vibe's sky carry a 2-5% wash of the three tints; the
+     sheen on raised surfaces fades from silver to a whisper of ice and lilac
+     by half their height; the usage meter, a switch that is on and Vibe's
+     project mark are filled with the holo.
+   - Selected rows, the open tab and the rail's current place get a thin edge
+     instead of a fill, and the edge is iridescent where it runs straight: the
+     rail's current place, the selected session row, the frame's current page
+     and the palette's active row keep their plain chrome edge round the
+     corners and wear the 2px holo bar along the straight run between them;
+     the underline tabs (the open tab, the inspector's tabs, the local
+     navigation, a chosen theme) a 2px line of the holo. The hairlines between
+     the frame's bars and the floating menus' top edges are the holo line at a
+     quarter of its strength in a plain hairline as bright as the old one, so
+     the black between the bars stays quiet.
+   - Those edges and lines are border images: one draws over the border an
+     element has, or over a width of its own when it has none, so it takes no
+     room and nothing moves. It replaces the whole border, so a ring the border
+     drew comes back as an inset shadow, and the plain var(--chrome-edge) a
+     selection had stays under it (an inset shadow, or the border's own colour)
+     wherever the image is not drawn: round the corners, or everywhere if it
+     cannot be. The text probes read a gradient on a text's own box as what is
+     behind every word, so no holo edge is a background layer of something with
+     words in it. Where only a colour can go (a glyph, a splitter) the edge is
+     plain var(--chrome-edge).
+   - Static gradients only: nothing here moves or repaints frame after frame.
    - Focus is the shared 2px ring (styles.css section 4) in the theme's bright
      accent, a clear silver (#eef1f5), 2px out from a metal button's edge.
-   - Status colours (working, needs you, error, review) are left alone.
+   - Status colours (working, needs you, error, review) are left alone, and so
+     are the progress bars that mean working.
    - The ink on the metal is #0a0a0c: 5.4:1 on the darkest stop of the pressed
-     metal and more everywhere else. The one chrome title, Vibe's greeting,
-     has its darkest stop at 9:1 on the panel. */
+     metal and more everywhere else, and 10:1 or more on every holo stop. The
+     one chrome title, Vibe's greeting, has its darkest stop at 10:1 on the
+     panel. */
 
 html[data-studio-theme="chrome"] {
   --chrome-ink: #0a0a0c;
-  --chrome-metal: linear-gradient(180deg, #fbfcfd 0%, #dfe3e8 20%, #b3b9c2 48%, #8e959e 52%, #cfd4da 60%, #f1f3f6 100%);
-  --chrome-metal-hover: linear-gradient(180deg, #ffffff 0%, #e8ebef 20%, #bec4cc 48%, #9aa1aa 52%, #d9dde2 60%, #f7f8fa 100%);
-  --chrome-metal-press: linear-gradient(180deg, #e3e6ea 0%, #c6cbd2 22%, #a0a6af 48%, #80868f 52%, #b7bcc3 62%, #d9dce0 100%);
+  --chrome-metal: linear-gradient(180deg, #fbfcfe 0%, #dde5f0 20%, #b2bac6 48%, #8e959e 52%, #cdd5e0 60%, #f0f3f8 100%);
+  --chrome-metal-hover: linear-gradient(180deg, #ffffff 0%, #e6ecf6 20%, #bdc5d1 48%, #9aa1aa 52%, #d6dde8 60%, #f6f8fb 100%);
+  --chrome-metal-press: linear-gradient(180deg, #e2e7ee 0%, #c4cbd6 22%, #a0a6af 48%, #80868f 52%, #b5bcc7 62%, #d8dde5 100%);
   /* the edges of a metal part: a bright top lip, a dark bottom lip, a contact shadow */
   --chrome-bevel: inset 0 1px 0 rgb(255 255 255 / .9), inset 0 -1px 0 rgb(0 0 0 / .28), 0 1px 2px rgb(0 0 0 / .55), 0 4px 12px -6px rgb(0 0 0 / .7);
   --chrome-bevel-press: inset 0 1px 0 rgb(255 255 255 / .55), inset 0 -1px 0 rgb(0 0 0 / .3), inset 0 1px 3px rgb(0 0 0 / .25), 0 1px 1px rgb(0 0 0 / .5);
-  /* a chrome hairline (secondary buttons) and the thin chrome edge of a selection */
+  /* a chrome hairline (secondary buttons) and the plain chrome edge of a selection */
   --chrome-rim: rgb(214 219 226 / .3);
   --chrome-rim-hi: rgb(232 236 241 / .55);
   --chrome-edge: #dfe3e8;
-  --chrome-top: inset 0 1px 0 rgb(255 255 255 / .05);
-  --chrome-text: linear-gradient(180deg, #ffffff 0%, #eef0f3 40%, #b9bec6 58%, #dde0e5 100%);
+  --chrome-top: inset 0 1px 0 rgb(236 241 250 / .055);
+  --chrome-text: linear-gradient(180deg, #ffffff 0%, #eef2f7 38%, #b4c3e0 56%, #c9c4ea 74%, #d7ece7 100%);
+  /* The iridescent layer, shared with the website: the same names and values. */
+  --chrome-holo: linear-gradient(115deg, #eef2f7 0%, #a8c5ff 26%, #c6b4ff 52%, #9de8da 78%, #eef2f7 100%);
+  --chrome-holo-line: linear-gradient(90deg, transparent, rgb(168 197 255 / .55) 18%, rgb(198 180 255 / .6) 50%, rgb(157 232 218 / .55) 82%, transparent);
+  --chrome-holo-bar: linear-gradient(180deg, #eef2f7, #a8c5ff 35%, #c6b4ff 65%, #9de8da);
+  --chrome-holo-edge: linear-gradient(150deg, rgb(238 242 247 / .42), rgb(168 197 255 / .22) 32%, rgb(198 180 255 / .12) 62%, rgb(157 232 218 / .24));
+  --chrome-holo-glow: rgb(168 197 255 / .22);
+  /* The hairline between bars and along a floating menu's top: a quarter of the holo line in three quarters of a plain
+     hairline as bright as the old one. -webkit-cross-fade(A, B, p) is p of B and 1 - p of A; where it cannot be drawn,
+     the plain border stays. */
+  --chrome-holo-hairline: -webkit-cross-fade(linear-gradient(rgb(255 255 255 / .24), rgb(255 255 255 / .24)), var(--chrome-holo-line), 25%);
 
-  /* The shared recipes (studio-ui.css), matte and neutral. */
+  /* The shared recipes (studio-ui.css), matte and neutral, with the iridescent layer's whisper. */
   --studio-secondary: #8e959e;
   --studio-gradient-angle: 180deg;
   --studio-title-tracking: -.02em;
@@ -51,27 +92,34 @@ html[data-studio-theme="chrome"] {
   --studio-float-blur: blur(calc(16px + var(--studio-glass) * 16px)) brightness(.9);
   --studio-glass-edge: rgb(255 255 255 / .075);
   --studio-glass-rim: rgb(255 255 255 / .11);
-  --studio-glass-highlight: rgb(255 255 255 / .05);
+  --studio-glass-highlight: rgb(236 241 250 / .05);
   --studio-edge-active: rgb(223 227 232 / .5);
   --studio-glide: rgb(255 255 255 / .06);
   --studio-wash: linear-gradient(transparent, transparent);
-  --studio-sheen: linear-gradient(180deg, rgb(255 255 255 / .018), transparent 40%);
+  /* raised surfaces: silver at the top left, a whisper of ice and lilac, gone by half their height */
+  --studio-sheen: linear-gradient(160deg, rgb(238 242 247 / .04), rgb(168 197 255 / .022) 24%, rgb(198 180 255 / .014) 38%, transparent 52%);
   --studio-selection: linear-gradient(180deg, rgb(255 255 255 / .07), rgb(255 255 255 / .045));
-  --studio-inset-shadow: inset 0 1px 0 rgb(255 255 255 / .04), 0 1px 2px rgb(0 0 0 / .35);
-  --studio-glass-shadow: inset 0 1px 0 rgb(255 255 255 / .05), inset 0 -1px 0 rgb(0 0 0 / .25), 0 1px 2px rgb(0 0 0 / .4), 0 14px 36px -14px rgb(0 0 0 / .7), 0 0 calc(var(--studio-glow) * 40px) rgb(255 255 255 / calc(var(--studio-glow) * .025));
-  --studio-float-shadow: inset 0 1px 0 rgb(255 255 255 / .06), inset 0 -1px 0 rgb(0 0 0 / .3), 0 22px 48px -16px rgb(0 0 0 / .8), 0 2px 8px rgb(0 0 0 / .45);
-  --studio-scene: radial-gradient(ellipse 90% 55% at 50% -12%, rgb(255 255 255 / calc(.02 + var(--studio-glow) * .035)), transparent 70%), var(--studio-reading-bg);
+  --studio-inset-shadow: inset 0 1px 0 rgb(236 241 250 / .045), 0 1px 2px rgb(0 0 0 / .35);
+  --studio-glass-shadow: inset 0 1px 0 rgb(236 241 250 / .055), inset 0 -1px 0 rgb(0 0 0 / .25), 0 1px 2px rgb(0 0 0 / .4), 0 14px 36px -14px rgb(0 0 0 / .7), 0 0 calc(var(--studio-glow) * 40px) rgb(255 255 255 / calc(var(--studio-glow) * .025));
+  --studio-float-shadow: inset 0 1px 0 rgb(236 241 250 / .06), inset 0 -1px 0 rgb(0 0 0 / .3), 0 22px 48px -16px rgb(0 0 0 / .8), 0 2px 8px rgb(0 0 0 / .45);
+  /* the ground: the overhead light, and a faint iridescent air (ice to the top left, lilac to the top right, a breath of aqua low down) */
+  --studio-scene:
+    radial-gradient(ellipse 70% 60% at 0% 0%, rgb(168 197 255 / calc(.03 + var(--studio-glow) * .03)), transparent 70%),
+    radial-gradient(ellipse 60% 55% at 100% 0%, rgb(198 180 255 / calc(.024 + var(--studio-glow) * .03)), transparent 70%),
+    radial-gradient(ellipse 80% 45% at 40% 108%, rgb(157 232 218 / calc(.016 + var(--studio-glow) * .02)), transparent 70%),
+    radial-gradient(ellipse 90% 55% at 50% -12%, rgb(255 255 255 / calc(.02 + var(--studio-glow) * .035)), transparent 70%),
+    var(--studio-reading-bg);
   /* elevation: soft and deep, no colour */
   --shadow-1: 0 1px 2px rgb(0 0 0 / .45), 0 8px 20px -8px rgb(0 0 0 / .65);
   --shadow-2: 0 2px 4px rgb(0 0 0 / .4), 0 18px 40px -12px rgb(0 0 0 / .75);
   --shadow-3: 0 2px 6px rgb(0 0 0 / .45), 0 36px 80px -20px rgb(0 0 0 / .85);
-  --inset-hi: inset 0 1px 0 rgb(255 255 255 / .05);
+  --inset-hi: inset 0 1px 0 rgb(236 241 250 / .05);
   --line: rgb(255 255 255 / .07);
   --line-strong: rgb(255 255 255 / .16);
   --frost-tint: color-mix(in srgb, var(--panel-solid) 82%, transparent);
   --frost-tint-strong: color-mix(in srgb, var(--panel-solid) 90%, transparent);
   --frost-tint-hover: color-mix(in srgb, color-mix(in srgb, #ffffff 4%, var(--panel-solid)) 92%, transparent);
-  --frost-lift: 0 18px 44px -24px rgb(0 0 0 / .85), inset 0 1px 0 rgb(255 255 255 / .05);
+  --frost-lift: 0 18px 44px -24px rgb(0 0 0 / .85), inset 0 1px 0 rgb(236 241 250 / .05);
 }
 /* Focus keeps the shared recipes' flat sheen. */
 html[data-studio-theme="chrome"][data-studio-style="focus"] { --studio-sheen: linear-gradient(transparent, transparent); }
@@ -82,9 +130,10 @@ html[data-studio-theme="chrome"] :is(.primary, .today-option.is-first, .vibe-rai
   box-shadow: var(--chrome-bevel); filter: none; text-shadow: 0 1px 0 rgb(255 255 255 / .35);
   transition: background var(--motion-fast) var(--ease-out), box-shadow var(--motion-fast) var(--ease-out), transform var(--motion-instant) var(--ease-out), filter var(--motion-fast) var(--ease-out);
 }
+/* Under the pointer the metal brightens, catches the holo edge's sheen and gives off a soft ice light. */
 html[data-studio-theme="chrome"] :is(.primary, .today-option.is-first, .vibe-rail .vibe-rail-home, #workspace-layer .today-b .today-b-send):not(.danger, :disabled, [aria-disabled="true"]):is(:hover, :focus-visible) {
-  border-color: transparent; background: var(--chrome-metal-hover); color: var(--chrome-ink); filter: none;
-  box-shadow: var(--chrome-bevel), 0 0 0 1px rgb(255 255 255 / .12), 0 6px 18px -8px rgb(255 255 255 / .16);
+  border-color: transparent; background: var(--chrome-holo-edge), var(--chrome-metal-hover); color: var(--chrome-ink); filter: none;
+  box-shadow: var(--chrome-bevel), 0 0 0 1px rgb(255 255 255 / .12), 0 0 22px -6px var(--chrome-holo-glow), 0 8px 24px -10px var(--chrome-holo-glow);
 }
 html[data-studio-theme="chrome"] :is(.primary, .today-option.is-first, .vibe-rail .vibe-rail-home, #workspace-layer .today-b .today-b-send):not(.danger, :disabled, [aria-disabled="true"]):active {
   background: var(--chrome-metal-press); box-shadow: var(--chrome-bevel-press); transform: translateY(.5px);
@@ -95,9 +144,11 @@ html[data-studio-theme="chrome"] :is(.primary, .today-option.is-first, .vibe-rai
   opacity: 1; color: var(--chrome-ink); background: rgb(10 10 12 / .07); border-color: rgb(10 10 12 / .3); box-shadow: inset 0 1px 0 rgb(255 255 255 / .4);
 }
 html[data-studio-theme="chrome"] :is(.primary, .today-option.is-first, .vibe-rail .vibe-rail-home, #workspace-layer .today-b .today-b-send):not(.danger) :is(.glyph, svg) { color: var(--chrome-ink); }
-/* Small metal marks: Vibe's project tile, Mefi's avatar. */
+/* Small metal marks: Mefi's avatar, the record button, the media rail's logo. */
+html[data-studio-theme="chrome"] :is(.sx-av.m, .vibe-ask-rec, .sm-rail i.sm-logo) { background: var(--chrome-metal); color: var(--chrome-ink); box-shadow: inset 0 1px 0 rgb(255 255 255 / .8), inset 0 -1px 0 rgb(0 0 0 / .25); }
+/* Vibe's project mark is the holo itself, with the metal's ink. */
 html[data-studio-theme="chrome"][data-ui-mode="vibe"] #workspace-sidebar-panel .ws-project-icon,
-html[data-studio-theme="chrome"] :is(.vibe-project-mark, .sx-av.m, .vibe-ask-rec, .sm-rail i.sm-logo) { background: var(--chrome-metal); color: var(--chrome-ink); box-shadow: inset 0 1px 0 rgb(255 255 255 / .8), inset 0 -1px 0 rgb(0 0 0 / .25); }
+html[data-studio-theme="chrome"] .vibe-project-mark { background: var(--chrome-holo); color: var(--chrome-ink); box-shadow: inset 0 1px 0 rgb(255 255 255 / .75), inset 0 -1px 0 rgb(0 0 0 / .22), 0 6px 18px -8px var(--chrome-holo-glow); }
 
 /* ---- secondary buttons: matte, with a chrome hairline ------------------- */
 html[data-studio-theme="chrome"] :is(button, .button):is(.ghost, .vibe-btn, .today-btn):not(.primary, .danger) { border-color: var(--chrome-rim); box-shadow: var(--chrome-top); }
@@ -120,67 +171,95 @@ html[data-studio-theme="chrome"] :is(.sx-switch button.on, #task-filters .chip.o
 html[data-studio-theme="chrome"] #idle-hud .rail-tab[aria-selected="true"] .count { background: rgb(10 10 12 / .1); }
 html[data-studio-theme="chrome"] :is(.sx-switch button:not(.on), .sx-modes button:not(.on), #task-filters .chip:not(.on), .size-seg > button:not([aria-checked="true"]), .sx-lb-tabs button:not(.on), .appearance-sections button:not([aria-pressed="true"]), .segmented > button:not([aria-pressed="true"])):hover { background: rgb(255 255 255 / .05); color: var(--ivory); }
 
-/* ---- selection: a thin chrome edge or underline, not a fill ------------- */
-/* The rail's current place (Build's rail and Vibe's). */
-html[data-studio-theme="chrome"] #app-rail [aria-current="page"] { background: rgb(255 255 255 / .045); box-shadow: inset 2px 0 0 var(--chrome-edge), var(--chrome-top); }
+/* ---- selection: a thin edge, iridescent along its straight run --------- */
+/* The left edge is plain chrome round the corners (an inset shadow) and the 2px holo bar between them
+   (border-image <bar> 0 0 0 1 / <radius> 0 <radius> 2px). On a part with a 1px border the inset edge is
+   1px and the border's own colour is the other: that border is drawn only if the image cannot be.
+   The rail's current place (Build's rail; Vibe's keeps its chrome rim). */
+html[data-studio-theme="chrome"] #app-rail [aria-current="page"] { background: rgb(255 255 255 / .045); box-shadow: inset 2px 0 0 var(--chrome-edge), var(--chrome-top); border-image: var(--chrome-holo-bar) 0 0 0 1 / 7px 0 7px 2px; }
 html[data-studio-theme="chrome"] #app-rail .app-rail-compose { background: rgb(255 255 255 / .04); box-shadow: inset 0 0 0 1px var(--chrome-rim), var(--chrome-top); }
 html[data-studio-theme="chrome"] .vibe-rail button[aria-current="page"] { background: rgb(255 255 255 / .045); box-shadow: inset 0 0 0 1px var(--chrome-rim-hi), var(--chrome-top); }
 html[data-studio-theme="chrome"] .vibe-rail button[aria-current="page"] .glyph { color: var(--chrome-edge); }
 html[data-studio-theme="chrome"] #app-rail .app-rail-brand .monogram { background: var(--chrome-metal); color: var(--chrome-ink); border-color: transparent; box-shadow: inset 0 1px 0 rgb(255 255 255 / .8), inset 0 -1px 0 rgb(0 0 0 / .25), 0 1px 3px rgb(0 0 0 / .5); }
-/* The frame's page list, the session list's rows, the open tab. */
-html[data-studio-theme="chrome"][data-frame] .shell-page[aria-current="page"] { background: rgb(255 255 255 / .045); box-shadow: inset 2px 0 0 var(--chrome-edge), inset 0 0 0 1px var(--studio-glass-edge); }
+/* The frame's page list, the session list's rows, the palette's rows, a chosen option. */
+html[data-studio-theme="chrome"][data-frame] .shell-page[aria-current="page"] { border-color: transparent; border-left-color: var(--chrome-edge); background: rgb(255 255 255 / .045); box-shadow: inset 1px 0 0 var(--chrome-edge), inset 0 0 0 1px var(--studio-glass-edge); border-image: var(--chrome-holo-bar) 0 0 0 1 / 10px 0 10px 2px; }
 html[data-studio-theme="chrome"][data-frame] .shell-page[aria-current="page"] .glyph { color: var(--chrome-edge); }
-html[data-studio-theme="chrome"] .sx-row[data-selected] { border-color: var(--studio-glass-edge); background: rgb(255 255 255 / .045); box-shadow: inset 2px 0 0 var(--chrome-edge); }
+html[data-studio-theme="chrome"] .sx-row[data-selected] { border-color: transparent; border-left-color: var(--chrome-edge); background: rgb(255 255 255 / .045); box-shadow: inset 1px 0 0 var(--chrome-edge), inset 0 0 0 1px var(--studio-glass-edge); border-image: var(--chrome-holo-bar) 0 0 0 1 / var(--r-md, 9px) 0 var(--r-md, 9px) 2px; }
 html[data-studio-theme="chrome"] :is(.sx-row:hover, .sx-row:focus-within):not([data-selected]) { background: rgb(255 255 255 / .03); }
-html[data-studio-theme="chrome"] .ts-item[data-active] { background: rgb(255 255 255 / .05); box-shadow: inset 0 0 0 1px var(--studio-glass-edge), inset 0 -2px 0 var(--chrome-edge), inset 0 2px var(--studio-glass-highlight); }
+html[data-studio-theme="chrome"][data-frame] #palette-overlay #palette-list li.palette-row.active { background: rgb(255 255 255 / .06); box-shadow: inset 2px 0 0 var(--chrome-edge), inset 0 0 0 1px var(--studio-glass-edge); border-image: var(--chrome-holo-bar) 0 0 0 1 / 10px 0 10px 2px; }
+html[data-studio-theme="chrome"] .studio-choice-option[aria-selected="true"] { border-left-color: var(--chrome-edge); background: rgb(255 255 255 / .05); box-shadow: inset 1px 0 0 var(--chrome-edge); color: var(--ivory); border-image: var(--chrome-holo-bar) 0 0 0 1 / 6px 0 6px 2px; }
+html[data-studio-theme="chrome"] .studio-choice-popup[data-layout="tiles"] .studio-choice-option[aria-selected="true"] { border-color: transparent; border-left-color: var(--chrome-edge); box-shadow: inset 1px 0 0 var(--chrome-edge), inset 0 0 0 1px var(--studio-edge-active); }
+html[data-studio-theme="chrome"] #app-local-nav .agents-nav-subsections .app-local-link[aria-current="page"] { background: rgb(255 255 255 / .05); box-shadow: inset 2px 0 0 var(--chrome-edge); color: var(--ivory); border-image: var(--chrome-holo-bar) 0 0 0 1 / 6px 0 6px 2px; }
+/* The underline tabs: the holo on the 2px edge they draw (border-image <holo> 0 0 1 0 / 0 0 2px 0), its plain chrome colour under it. */
+html[data-studio-theme="chrome"] :is(.sx-ptab.on, .sx-itab.on) { border-bottom-color: var(--chrome-edge); border-image: var(--chrome-holo) 0 0 1 0 / 0 0 2px 0; }
+html[data-studio-theme="chrome"] #app-local-nav .app-local-link[aria-current="page"] { background: transparent; border-bottom-color: var(--chrome-edge); color: var(--ivory); border-image: var(--chrome-holo) 0 0 1 0 / 0 0 2px 0; }
+/* Vibe rounds these further (vibe.css): the same edges, kept clear of its corners; the local navigation's pill keeps
+   its own rim and takes the line along its straight foot. */
+html[data-studio-theme="chrome"][data-ui-mode="vibe"] .studio-choice-option[aria-selected="true"] { border-image: var(--chrome-holo-bar) 0 0 0 1 / 12px 0 12px 2px; }
+html[data-studio-theme="chrome"][data-ui-mode="vibe"] #app-local-nav .agents-nav-subsections .app-local-link[aria-current="page"] { border-image: var(--chrome-holo-bar) 0 0 0 1 / 12px 0 12px 2px; }
+html[data-studio-theme="chrome"][data-ui-mode="vibe"] #app-local-nav .app-local-link[aria-current="page"]:not(.agents-nav-subsections *) { border-image: var(--chrome-holo) 0 0 1 0 / 0 19px 2px 19px; }
+/* The open tab: its plain chrome foot round the corners, the holo along the straight run, inside its ring. */
+html[data-studio-theme="chrome"] .ts-item[data-active] { background: rgb(255 255 255 / .05); box-shadow: inset 0 0 0 1px var(--studio-glass-edge), inset 0 -2px 0 var(--chrome-edge), inset 0 2px var(--studio-glass-highlight); border-image: var(--chrome-holo) 0 0 1 0 / 0 9px 2px 9px; }
 html[data-studio-theme="chrome"] .ts-item[data-active] .ts-ico { color: var(--chrome-edge); }
-html[data-studio-theme="chrome"] :is(.sx-ptab.on, .sx-itab.on) { border-bottom-color: var(--chrome-edge); }
-html[data-studio-theme="chrome"] #app-local-nav .app-local-link[aria-current="page"] { background: transparent; border-bottom-color: var(--chrome-edge); color: var(--ivory); }
-html[data-studio-theme="chrome"] :is(.studio-choice-option[aria-selected="true"], #app-local-nav .agents-nav-subsections .app-local-link[aria-current="page"]) { background: rgb(255 255 255 / .05); box-shadow: inset 2px 0 0 var(--chrome-edge); color: var(--ivory); }
-html[data-studio-theme="chrome"][data-frame] #palette-overlay #palette-list li.palette-row.active { background: rgb(255 255 255 / .06); box-shadow: inset 2px 0 0 var(--chrome-edge), inset 0 0 0 1px var(--studio-glass-edge); }
-/* Theme and node choices: a chrome edge under the chosen one. */
-html[data-studio-theme="chrome"] :is(.music-theme, .music-node-choice, .setup-helper-swatch)[aria-pressed="true"],
-html[data-studio-theme="chrome"] .setup-helper-swatch[aria-checked="true"],
-html[data-studio-theme="chrome"] body.appearance-settings-active .settings-media .music-theme[aria-pressed="true"] { border-color: var(--chrome-rim-hi); background: rgb(255 255 255 / .05); box-shadow: inset 0 -2px 0 var(--chrome-edge), var(--chrome-top); color: var(--ivory); }
+/* Theme and node choices: the same foot under the chosen one, its rim as an inset ring. */
+html[data-studio-theme="chrome"] :is(.music-theme, .music-node-choice)[aria-pressed="true"],
+html[data-studio-theme="chrome"] body.appearance-settings-active .settings-media .music-theme[aria-pressed="true"] { border-color: transparent; border-bottom-color: var(--chrome-edge); background: rgb(255 255 255 / .05); box-shadow: inset 0 -1px 0 var(--chrome-edge), inset 0 0 0 1px var(--chrome-rim-hi), var(--chrome-top); color: var(--ivory); border-image: var(--chrome-holo) 0 0 1 0 / 0 9px 2px 9px; }
+html[data-studio-theme="chrome"] .setup-helper-swatch:is([aria-pressed="true"], [aria-checked="true"]) { border-color: transparent; border-bottom-color: var(--chrome-edge); background: rgb(255 255 255 / .05); box-shadow: inset 0 -1px 0 var(--chrome-edge), inset 0 0 0 1px var(--chrome-rim-hi), var(--chrome-top); color: var(--ivory); border-image: var(--chrome-holo) 0 0 1 0 / 0 17px 2px 17px; }
 html[data-studio-theme="chrome"] .music-node-choice[aria-pressed="true"] { color: var(--ivory); }
 
 /* ---- surfaces: matte panels, a top highlight, quiet hairlines ----------- */
 html[data-studio-theme="chrome"] #vibe-layer {
   --v-glass: var(--studio-panel-bg); --v-glass-hi: color-mix(in srgb, color-mix(in srgb, #ffffff 3%, var(--theme-panel-solid)) 94%, transparent);
   --v-edge: rgb(255 255 255 / .08); --v-edge-hi: var(--chrome-rim-hi);
-  --v-lift: 0 1px 2px rgb(0 0 0 / .45), 0 26px 56px -30px rgb(0 0 0 / .9), inset 0 1px 0 rgb(255 255 255 / .05);
+  --v-lift: 0 1px 2px rgb(0 0 0 / .45), 0 26px 56px -30px rgb(0 0 0 / .9), inset 0 1px 0 rgb(236 241 250 / .055);
 }
 html[data-studio-theme="chrome"] :is(.today, .today-inbox, .today-sheet, .inbox-sheet) { --t-card: var(--studio-panel-bg); --t-edge: rgb(255 255 255 / .08); --t-edge-hi: var(--chrome-rim-hi); --t-well: color-mix(in srgb, var(--bg-deep) 70%, transparent); }
-/* Vibe's sky: one neutral light instead of three coloured washes. */
-html[data-studio-theme="chrome"] .vibe-aurora { opacity: .12; mix-blend-mode: screen; }
-html[data-studio-theme="chrome"] .vibe-aurora.two { background: radial-gradient(circle, rgb(255 255 255 / .35), transparent 70%); }
-/* The frame's bars and columns: the page's black, a hairline between. */
+/* Vibe's sky: the three tints, faint, instead of the theme's coloured washes. */
+html[data-studio-theme="chrome"] .vibe-aurora { opacity: .2; mix-blend-mode: screen; }
+html[data-studio-theme="chrome"] .vibe-aurora.one { background: radial-gradient(circle, rgb(168 197 255 / .55), transparent 68%); }
+html[data-studio-theme="chrome"] .vibe-aurora.two { background: radial-gradient(circle, rgb(198 180 255 / .48), transparent 70%); }
+html[data-studio-theme="chrome"] .vibe-aurora.three { background: radial-gradient(circle, rgb(157 232 218 / .4), transparent 70%); }
+/* The frame's bars and columns: the page's black, a holo hairline between (border-image <hairline> on the 1px border each has). */
 html[data-studio-theme="chrome"][data-frame] :is(.shell-top, .shell-tabs) { background: var(--bg); }
+html[data-studio-theme="chrome"][data-frame] .shell-top { border-image: var(--chrome-holo-hairline) 0 0 1 0 / 0 0 1px 0; }
+html[data-studio-theme="chrome"] .ts-strip { border-image: var(--chrome-holo-hairline) 0 0 1 0 / 0 0 1px 0; }
+html[data-studio-theme="chrome"] #app-local-nav { border-image: var(--chrome-holo-hairline) 0 0 1 0 / 0 0 1px 0; }
 html[data-studio-theme="chrome"][data-frame] .shell-column:not([data-state="drawer"]) { background: color-mix(in srgb, #0d0d10 94%, transparent); }
-html[data-studio-theme="chrome"][data-frame] .shell-status { background: #0d0d10; box-shadow: inset 0 1px 0 rgb(255 255 255 / .03); }
+html[data-studio-theme="chrome"][data-frame] .shell-status { background: #0d0d10; box-shadow: inset 0 1px 0 rgb(255 255 255 / .03); border-image: var(--chrome-holo-hairline) 1 0 0 0 / 1px 0 0 0; }
 html[data-studio-theme="chrome"][data-frame] :is(.shell-search, .shell-icon-btn, .shell-pill:not([data-tone="need"])) { border-color: rgb(255 255 255 / .1); box-shadow: var(--chrome-top); }
 html[data-studio-theme="chrome"][data-frame] :is(.shell-search, .shell-icon-btn:not([data-on="true"]), .shell-pill:not([data-tone="need"])):hover { border-color: var(--chrome-rim-hi); }
 html[data-studio-theme="chrome"][data-frame] .shell-icon-btn[data-on="true"] { background: rgb(255 255 255 / .06); color: var(--ivory); border-color: var(--chrome-rim-hi); }
-html[data-studio-theme="chrome"][data-frame] .shell-switch[aria-checked="true"] { background: var(--chrome-metal); border-color: transparent; box-shadow: inset 0 1px 0 rgb(255 255 255 / .8), inset 0 -1px 0 rgb(0 0 0 / .25); }
+html[data-studio-theme="chrome"][data-frame] .shell-switch[aria-checked="true"] { background: var(--chrome-holo); border-color: transparent; box-shadow: inset 0 1px 0 rgb(255 255 255 / .75), inset 0 -1px 0 rgb(0 0 0 / .22); }
 html[data-studio-theme="chrome"][data-frame] .shell-switch[aria-checked="true"] i { background: var(--chrome-ink); }
-html[data-studio-theme="chrome"][data-frame] .shell-meter i { background: linear-gradient(180deg, #eef1f5, #a9afb8); }
+/* The usage meter's fill shows the holo across the meter's whole width, so more use reaches further into it. */
+html[data-studio-theme="chrome"][data-frame] .shell-meter i { background: var(--chrome-holo) left / 46px 100% no-repeat, #a8c5ff; }
 html[data-studio-theme="chrome"][data-frame] :is(.shell-split:hover, .shell-split.is-drag)::after { background: rgb(223 227 232 / .6); }
+/* Floating menus: the holo hairline along the top edge, kept clear of the corners; the rim the border drew is an inset
+   ring. Vibe's own menu rim (a wider radius and a ring of its own in the float shadow) and menus whose header paints
+   over their edge, like the media menu's, keep their plain rim. */
+html[data-studio-theme="chrome"]:not([data-ui-mode="vibe"])[data-studio-style] :is(.palette-sheet, .studio-choice-popup, .surface-tools-menu, .studio-more-links) { box-shadow: inset 0 0 0 1px var(--studio-glass-edge), var(--studio-float-shadow); border-image: var(--chrome-holo-hairline) 1 0 0 0 / 1px 18px 0 18px; }
+html[data-studio-theme="chrome"]:not([data-ui-mode="vibe"]) .ts-pop { box-shadow: inset 0 0 0 1px var(--studio-glass-edge), var(--studio-float-shadow); border-image: var(--chrome-holo-hairline) 1 0 0 0 / 1px 18px 0 18px; }
+html[data-studio-theme="chrome"] .today-inbox { box-shadow: inset 0 0 0 1px var(--t-edge), var(--shadow-3); border-image: var(--chrome-holo-hairline) 1 0 0 0 / 1px 18px 0 18px; }
+html[data-studio-theme="chrome"] :is(.sx-menu, .sx-runmenu) { box-shadow: inset 0 0 0 1px var(--hairline-strong), inset 0 1px var(--studio-glass-highlight), var(--shadow-3); border-image: var(--chrome-holo-hairline) 1 0 0 0 / 1px 18px 0 18px; }
+html[data-studio-theme="chrome"][data-frame] .shell-menu { box-shadow: inset 0 0 0 1px var(--hairline-strong), inset 0 1px var(--studio-glass-highlight), var(--shadow-3); border-image: var(--chrome-holo-hairline) 1 0 0 0 / 1px 18px 0 18px; }
 /* Fields are wells: a little darker than the page, with a top shadow. */
 html[data-studio-theme="chrome"][data-studio-style] :is(input[type=text], input[type=search], input[type=password], input[type=number], input:not([type]), textarea, select, .studio-select) { box-shadow: inset 0 1px 2px rgb(0 0 0 / .35); }
 html[data-studio-theme="chrome"] :is(input, textarea, select):focus:not(:focus-visible) { border-color: var(--chrome-rim-hi); box-shadow: inset 0 1px 2px rgb(0 0 0 / .35), 0 0 0 3px rgb(223 227 232 / .1); }
-/* Switches: a metal track when on. */
-html[data-studio-theme="chrome"] .switch input:checked + .track { background: var(--chrome-metal); border-color: transparent; box-shadow: inset 0 1px 0 rgb(255 255 255 / .8), inset 0 -1px 0 rgb(0 0 0 / .25); }
-html[data-studio-theme="chrome"] .switch input:checked + .track::after { background: var(--chrome-ink); }
+/* Switches (the .switch track, Settings' and the Agents page's switch inputs): a holo track when on, the knob in the metal's ink. */
+html[data-studio-theme="chrome"] :is(.switch input:checked + .track, .settings-control input[type="checkbox"][role="switch"]:checked, .agents-model-settings input[role="switch"]:checked) { background: var(--chrome-holo); border-color: transparent; box-shadow: inset 0 1px 0 rgb(255 255 255 / .75), inset 0 -1px 0 rgb(0 0 0 / .22); }
+html[data-studio-theme="chrome"] :is(.switch input:checked + .track, .settings-control input[type="checkbox"][role="switch"]:checked)::after,
+html[data-studio-theme="chrome"] .agents-model-settings input[role="switch"]:checked::before { background: var(--chrome-ink); }
 
 /* ---- type: a chrome title, readable at 4.5:1 on its darkest stop -------- */
 /* Vibe's greeting already paints its words with a gradient in every theme; under
-   Chrome it is the metal's. Other titles keep plain ink, since the render
-   suites' contrast checks count a gradient on the text's own box as what is
-   behind it. Today's greeting stays plain too (today.css takes its gradient off). */
+   Chrome it is the metal's, tinted with the holo. Other titles keep plain ink,
+   since the render suites' contrast checks count a gradient on the text's own box
+   as what is behind it. Today's greeting stays plain too (today.css takes its
+   gradient off). */
 html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text); -webkit-background-clip: text; background-clip: text; }
 
-/* The Chrome swatch looks like the metal in every theme's picker. */
-.music-theme[data-theme="chrome"]::before { background: linear-gradient(180deg, #fbfcfd 0%, #dfe3e8 22%, #9aa1aa 50%, #cfd4da 62%, #f1f3f6 100%); box-shadow: 0 0 0 1px rgb(0 0 0 / .35), inset 0 1px 0 rgb(255 255 255 / .9); }
+/* The Chrome swatch looks like the metal, with the holo's breath, in every theme's picker. */
+.music-theme[data-theme="chrome"]::before { background: linear-gradient(115deg, rgb(168 197 255 / .3), rgb(198 180 255 / .22) 52%, rgb(157 232 218 / .3)), linear-gradient(180deg, #fbfcfe 0%, #dde5f0 22%, #9aa1aa 50%, #cdd5e0 62%, #f0f3f8 100%); box-shadow: 0 0 0 1px rgb(0 0 0 / .35), inset 0 1px 0 rgb(255 255 255 / .9); }
 
 @media (prefers-reduced-motion: reduce) {
   html[data-studio-theme="chrome"] :is(.primary, .today-option.is-first, .vibe-rail .vibe-rail-home, #workspace-layer .today-b .today-b-send) { transition: none; }

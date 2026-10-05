@@ -517,17 +517,53 @@
       }
     }
 
+    // Linking happens right here: Discord asks once in the browser, then the
+    // room service connects by itself. Not in the server yet: join, then check.
+    let autoConnected = false;
+    const connectNow = () => guard("Connecting…", async () => {
+      const answer = await api.hubConnect();
+      if (answer?.status?.state === "ready" || answer?.ok) await load(); else explain(answer?.status);
+    });
+    async function linkHere() {
+      const community = window.MefiCommunity;
+      if (typeof community?.link !== "function") { window.MefiCompanionHub?.close?.({ immediate: true, restore: false }); window.MefiNav?.go?.("community"); return; }
+      status.textContent = "Discord is asking in your browser. Press Authorize there, then come back.";
+      const linked = await community.link();
+      if (linked?.ok) { autoConnected = true; await connectNow(); return; }
+      if (linked?.error === "not-member") { notMember(); return; }
+      status.textContent = linked?.error === "canceled" ? "Linking was cancelled. Press Link Discord to try again." : "Linking didn't finish. Press Link Discord to try again.";
+    }
+    function notMember() {
+      root.dataset.state = "not-member";
+      status.textContent = "Your Discord account isn't in the Void Engine server yet. Join it, then check again.";
+      body.replaceChildren(button("Join the Discord", () => { void window.MefiCommunity?.join?.(); }, "rooms-join"), button("I've joined, check again", () => guard("Checking…", async () => {
+        const checked = await window.MefiCommunity?.check?.();
+        if (checked?.ok === false && checked.error === "not-member") { notMember(); return; }
+        autoConnected = true;
+        const answer = await api.hubConnect();
+        if (answer?.status?.state === "ready" || answer?.ok) await load(); else explain(answer?.status);
+      }), "rooms-recheck"));
+    }
     function explain(hub) {
       if (!hub?.configured) {
-        status.textContent = "Rooms need the Void Engine room service, which this PC is not connected to yet: add its address in Settings › General › Community › Connection details.";
+        status.textContent = "Rooms need the room service, which this copy of Studio has no address for: add one in Settings › General › Community › Connection details.";
         root.dataset.state = "not-configured";
         body.replaceChildren();
         return false;
       }
       if (!hub.linked) {
-        status.textContent = "Link your Discord account to use rooms.";
+        status.textContent = "Link your Discord account to use rooms. Discord asks once in your browser.";
         root.dataset.state = "not-linked";
-        body.replaceChildren(button("Connect with Discord", () => { window.MefiCompanionHub?.close?.({ immediate: true, restore: false }); window.MefiNav?.go?.("community"); }, "rooms-link"));
+        body.replaceChildren(button("Link Discord", () => { void linkHere(); }, "rooms-link"));
+        return false;
+      }
+      if (hub.error === "not-member") { notMember(); return false; }
+      // Linked and simply not connected yet: opening Rooms is the ask, so connect once by itself.
+      if (hub.state === "off" && !hub.error && !autoConnected) {
+        autoConnected = true;
+        root.dataset.state = "connecting";
+        status.textContent = "Connecting to the room service…";
+        void connectNow();
         return false;
       }
       if (hub.state !== "ready") {

@@ -363,12 +363,47 @@
       });
     }
 
+    // Linking happens right here (Discord asks once in the browser), then the
+    // room service connects by itself; opening the hub while linked connects once.
+    let autoConnected = false;
+    const connectNow = () => guard("Connecting…", async () => {
+      const answer = await api.hubConnect();
+      if (answer?.status?.state === "ready" || answer?.ok) await load(); else explain(answer?.status);
+    });
+    async function linkHere() {
+      const community = window.MefiCommunity;
+      if (typeof community?.link !== "function") { window.MefiNav?.go?.("community"); return; }
+      status.textContent = "Discord is asking in your browser. Press Authorize there, then come back.";
+      const linked = await community.link();
+      if (linked?.ok) { autoConnected = true; await connectNow(); return; }
+      if (linked?.error === "not-member") { notMember(); return; }
+      status.textContent = linked?.error === "canceled" ? "Linking was cancelled. Press Link Discord to try again." : "Linking didn't finish. Press Link Discord to try again.";
+    }
+    function notMember() {
+      root.dataset.state = "not-member";
+      status.textContent = "Your Discord account isn't in the Void Engine server yet. Join it, then check again.";
+      body.replaceChildren(button("Join the Discord", () => { void window.MefiCommunity?.join?.(); }, "project-hub-join"), button("I've joined, check again", () => guard("Checking…", async () => {
+        const checked = await window.MefiCommunity?.check?.();
+        if (checked?.ok === false && checked.error === "not-member") { notMember(); return; }
+        autoConnected = true;
+        const answer = await api.hubConnect();
+        if (answer?.status?.state === "ready" || answer?.ok) await load(); else explain(answer?.status);
+      }), "project-hub-recheck"));
+    }
     function explain(hub) {
-      if (!hub?.configured) { status.textContent = "The project hub needs the room service, which this PC is not connected to yet."; root.dataset.state = "not-configured"; body.replaceChildren(); return false; }
+      if (!hub?.configured) { status.textContent = "The project hub needs the room service, which this copy of Studio has no address for."; root.dataset.state = "not-configured"; body.replaceChildren(); return false; }
       if (!hub.linked) {
-        status.textContent = "Link your Discord account to share and play projects.";
+        status.textContent = "Link your Discord account to share and play projects. Discord asks once in your browser.";
         root.dataset.state = "not-linked";
-        body.replaceChildren(button("Connect with Discord", () => window.MefiNav?.go?.("community"), "project-hub-link"));
+        body.replaceChildren(button("Link Discord", () => { void linkHere(); }, "project-hub-link"));
+        return false;
+      }
+      if (hub.error === "not-member") { notMember(); return false; }
+      if (hub.state === "off" && !hub.error && !autoConnected) {
+        autoConnected = true;
+        root.dataset.state = "connecting";
+        status.textContent = "Connecting to the room service…";
+        void connectNow();
         return false;
       }
       if (hub.state !== "ready") {

@@ -340,7 +340,7 @@
     setupBox.id = "community-setup";
     const client = setupField("Link app ID", "community-setup-client", "17 to 20 digits");
     client.input.inputMode = "numeric";
-    const hub = setupField("Rooms hub address", "community-setup-hub", "https://hub.example.com");
+    const hub = setupField("Rooms hub address", "community-setup-hub", "https://mefi-relay.mefi-studio.workers.dev");
     const env = node("p", "muted community-setup-env");
     env.id = "community-setup-env";
     env.hidden = true;
@@ -377,7 +377,7 @@
     setupBox.addEventListener("toggle", () => { if (setupBox.open) setupTouched = true; });
     setupBox.append(
       node("summary", "", "Connection details"),
-      node("p", "muted", "Studio reaches the Void Engine through two public values: the Mefi Studio Link Application ID (Discord Developer Portal) and the rooms hub's address. Set them once on each PC; they apply at once."),
+      node("p", "muted", "Studio has the Mefi Studio relay and its Discord link app built in. Fill these in only to point this PC at another relay or a test hub; empty boxes use the built-in ones. Changes apply at once."),
       client.wrap, hub.wrap, env, row(save), result,
     );
     body.after(setupBox);

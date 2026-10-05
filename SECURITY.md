@@ -185,7 +185,8 @@
   messages opens a room, the relay asks another member's Studio for what it
   holds of that room and checks each message's signature before passing it
   on, so your copy of a room's chat can reach that room's other members. After that it
-  connects when you ask (Friends › Rooms › Connect, or picking a room or turning
+  connects when you ask (opening Friends › Rooms or the Project hub with Discord
+  linked, Connect, or picking a room or turning
   on **Share what I'm playing** under Listen together) and, on its own, at
   launch when the Discord remote is on or a Listen together room or share was
   left on, and within a minute of a project linked to a cowork room being open.

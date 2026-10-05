@@ -16,6 +16,9 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   a week, and when you open a room after being away, the messages you missed
   are filled in from other members' copies. Every message is signed by the
   relay, so a copy cannot be altered. Its code is public under `relay/`.
+  Linking is one button: **Link Discord** in Friends asks Discord once in
+  your browser and connects by itself; if your account is not in the Void
+  Engine server yet, it offers **Join the Discord** and checks again.
 - **Project hub with credits and ranks (Friends › Project hub).** Share what
   you make as a card (a public link, a title, a line about it; never a file)
   and play what friends make. A star map draws every shared project; New, Top
@@ -27,6 +30,70 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   Discord roles show as special ranks. Your balance is yours alone; others see
   your rank.
 
+- **Friends is a place of its own in the 0.5 layout.** With the new layout on
+  (`?layout=v2`), the rail's Friends opens a page instead of the companion's
+  bubbles: Rooms, Your PCs and Playground in the list beside it, one at a
+  time, each with a line that says what it is for. They are the same cards
+  as before (rooms and their invitations, syncing your PCs through GitHub,
+  playdates and what your companion may share); Playground also keeps
+  "Friends & listening rooms" and "Connect with Discord". Search's Rooms,
+  Your PCs and Playground, and the companion's own Friends bubble, open the
+  page at that place, and each place can be a tab. The classic layout keeps
+  the Friends bubble as it was.
+- **A task that will fix itself no longer looks like a problem.** In the 0.5
+  layout, a task whose checks failed and that tries again by itself is listed
+  with the running work as "Fixing itself", and its page says so calmly
+  instead of showing a red failure; it reaches the Inbox only if it gives
+  up. A step that goes ahead with its whole request's one approval says
+  "Goes ahead with its request".
+- **Your own words wait behind a link in the Inbox.** A question card shows
+  its options first, with a small "Answer in my own words" link that opens
+  the box. An option that asks for words, or a half-written answer, opens it
+  too.
+- **Small things in the 0.5 layout's frame.** The status bar's player shows
+  the time left ("Deep Focus 40:32"), ticking once a second only while
+  something plays and the window can be seen. The usage meters read again
+  after each run ends and every five minutes while Studio is in view, without
+  opening Usage. Search says "N more results · keep typing to narrow them"
+  when there are more than the twelve it shows.
+- **The 0.5 layout's rail and Team, as in the prototype.** With the new layout
+  on (`?layout=v2`), the rail has four places, Work, Map, Team and Friends,
+  with Search, Settings and Help at its foot. Each place remembers where you
+  were in it. The Command view is called the Map, and Help lists Start here,
+  Setup guide, Shortcuts, What's new, Report a problem and the Void Engine
+  Discord. Agents is now **Team**, filed into the prototype's twelve places in
+  the list beside the page: Overview, Providers, Seats and models,
+  Permissions, then Rules, Skills, Connectors, Related folders and Workflows
+  ("Context for agents"), then Health and usage, Models and Inspect
+  ("Monitor"). What moved where: Settings' Connections is Team › Providers,
+  its Models are Team › Seats and models, its Automation is in Team ›
+  Overview, and Mefi's permission mode (which Build opened as a dialog) is
+  Team › Permissions. The Rules card has its own place. Connectors lists the
+  servers in `~/.mefi-studio/mcp.json` with their tools. Related folders says
+  plainly that Studio cannot add them yet. The model catalog, Performance,
+  Usage, Brain maps, the Playbook, Project map, Context, the Session explorer,
+  Activity and evidence, Trace, Overhead and the profiler open from their Team
+  place with that place open in the list. Old links, Search and Settings' Find
+  a setting all land on the place that holds a control now; a plain button
+  such as Run auto setup is named by its own words in Search, so it no longer
+  shows as "Settings › Connections". Settings lists its places in the same
+  column. Team's pages read at 12 px or more and fit a narrow window without
+  scrolling sideways. The classic layout is unchanged.
+- **Vibe's board lists a waiting task once.** A queued task that has asked
+  you something (a permission, a question) is under Needs you only, not also
+  "up next" under Running.
+- **Chrome catches the light.** The Chrome theme keeps its matte black and
+  brushed metal and gains a cool iridescent finish, like anodised chrome, in
+  silver, ice blue, lilac and pale aqua, used sparingly: a faint tint in the
+  background and in Vibe's sky, a soft sheen on panels and cards, an
+  iridescent stripe along the edge of the place, session, page or search
+  result you are on, an iridescent line under the open tab and the chosen tab
+  or theme, faint iridescent lines between the bars and along the top of
+  menus, and an iridescent usage meter, switches and Vibe's project mark. Main
+  buttons are a touch cooler and glow softly under the pointer, and Vibe's
+  greeting takes the same tint. Nothing moves, animates or changes size, the
+  colours that mean something (working, needs you, errors, review) are
+  unchanged, and the colours are the same ones the website uses.
 - **A new Chrome theme, now the look a new install opens in.** Chrome is a
   matte black with smooth metal: flat dark panels with a fine light edge,
   primary buttons and the chosen side of a switch (Vibe | Build, Sessions |

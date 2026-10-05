@@ -163,6 +163,26 @@ html[data-frame] .shell-need[data-tone="clear"] .shell-pill-n, html[data-frame] 
   html[data-frame] .shell-svc { padding: 0 2px; border-color: transparent; }
 }
 
+/* ---- the rail: the prototype's places (renderer/nav.js, renderRailV2) ----
+   At rest each tile is its icon with its word beneath, at 12 px: Work, Map, Team and Friends at the top, and
+   Search, Settings and Help at the foot, as the prototype's railView draws them. The place you are in is a
+   tinted tile. Open (pinned, hovered or focused) the classic rail's rows stand, with every word and count at
+   12 px or more. The rail's geometry (64 px, 256 open) is the layout contract's and is not touched here. */
+html[data-frame] #app-rail { --fs-2xs: max(12px, calc(12px * var(--text-scale, 1))); }
+html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-head .app-rail-text,
+html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) :is(.app-rail-foot-item, #app-rail-foot .update-pill) .label {
+  font-size: max(12px, calc(12px * var(--text-scale, 1))); line-height: 1.2; white-space: nowrap;
+}
+html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-head { min-height: 54px; border-radius: 10px; }
+html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-foot-item { min-height: 50px; border-radius: 10px; }
+html[data-frame] #app-rail .app-rail-search { margin-bottom: 0; }
+html[data-frame] #app-rail .app-rail-section.current > .app-rail-head,
+html[data-frame] #app-rail .app-rail-foot-item[aria-current="page"] { background: var(--tint-gold-3, color-mix(in srgb, var(--gold) 14%, transparent)); color: var(--ivory); }
+html[data-frame] #app-rail .app-rail-section.current > .app-rail-head .glyph,
+html[data-frame] #app-rail .app-rail-foot-item[aria-current="page"] .glyph { color: var(--gold-bright); }
+html[data-frame] #app-rail .app-rail-head .count { min-width: 18px; height: 18px; padding: 0 5px; font: 650 max(12px, calc(12px * var(--text-scale, 1)))/18px var(--font-ui); }
+html[data-frame] #app-rail .app-rail-brand .app-rail-text::after { font-size: max(12px, calc(12px * var(--text-scale, 1))); }
+
 /* ---- the columns ---- */
 html[data-frame] .shell-column { position: fixed; top: 0; bottom: var(--shell-y1); z-index: calc(var(--z-shell) - 1); display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--surface-rail); outline: none; }
 html[data-frame] .shell-list { left: var(--frame-rail-w); width: var(--shell-list-w); border-right: 1px solid var(--hairline); }
@@ -199,6 +219,17 @@ html[data-frame] .shell-page .count.warn { color: var(--warn); }
 html[data-frame] .shell-page .count[hidden] { display: none; }
 html[data-frame] .shell-pages-group { margin: 10px 0 2px; padding: 0 10px; color: var(--muted); font: 650 var(--frame-fs-s)/1.3 var(--font-ui); letter-spacing: 0; text-transform: none; }
 html[data-frame] .shell-pages-group.is-current { color: var(--ivory); }
+/* A place whose page is the current row reads as open; the way to every setting in one tree sits apart at the end. */
+html[data-frame] .shell-page.is-open { color: var(--ivory); font-weight: 600; }
+html[data-frame] .shell-page.is-open .glyph { color: var(--gold-bright); }
+html[data-frame] .shell-page.is-quiet { margin-top: 8px; }
+/* Settings' own list of places steps aside while the column lists them (renderer/shell.js, paintPagesFlag): the page takes
+   the width, Find a setting stays beside its title, and the line Find a setting speaks through stays in the page. With the
+   column closed, or a drawer in a small window, Settings' own list is back. */
+html[data-frame][data-frame-pages="settings"] #tab-studio[data-places="v2"] .settings-layout { grid-template-columns: minmax(0, 1fr); }
+html[data-frame][data-frame-pages="settings"] #tab-studio[data-places="v2"] .settings-sections { margin-inline: auto; }
+html[data-frame][data-frame-pages="settings"] #tab-studio[data-places="v2"] #settings-nav { position: absolute; width: 1px; height: 1px; margin: 0; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); }
+html[data-frame][data-frame-pages="settings"] #tab-studio[data-places="v2"] #settings-nav > :not(#settings-find-status) { display: none; }
 /* small windows: a column is a drawer over the page, under the bar and the strip */
 html[data-frame] .shell-column[data-state="drawer"], html[data-frame][data-ui-mode="vibe"] .shell-column[data-state="drawer"] { top: var(--shell-y0); width: var(--frame-drawer-w, 280px); max-width: calc(100vw - 24px); background: var(--panel-solid); backdrop-filter: none; box-shadow: var(--shadow-2); animation: shell-drawer-in var(--motion-base, 200ms) var(--ease-out, ease-out); }
 html[data-frame] .shell-list[data-state="drawer"] { left: var(--frame-rail-w); max-width: calc(100vw - var(--frame-rail-w) - 12px); }
@@ -246,6 +277,9 @@ html[data-frame] .shell-meter-button + .shell-meter-button .shell-meter i { back
 html[data-frame] .shell-meter-button[data-tone="warn"] .shell-meter i { background: var(--warn); }
 html[data-frame] .shell-player[data-playing="true"] .glyph { color: var(--gold-bright); }
 html[data-frame] .shell-player-title { max-width: 18ch; overflow: hidden; text-overflow: ellipsis; }
+/* The time left, as the prototype's "Deep Focus 40:32" (renderer/shell.js paintPlayerTime). */
+html[data-frame] .shell-player-time { color: var(--muted); font-variant-numeric: tabular-nums; }
+html[data-frame] .shell-player-time[hidden] { display: none; }
 html[data-frame] .shell-status-extra { display: inline-flex; align-items: center; gap: 4px; flex: none; }
 html[data-frame] .shell-status-extra:empty { display: none; }
 @media (max-width: 899.98px) { html[data-frame] .shell-player-title, html[data-frame] .shell-permission .shell-status-word, html[data-frame] .shell-usage, html[data-frame] .shell-usage-sep, html[data-frame] .shell-machine { display: none; } }
@@ -293,6 +327,8 @@ html[data-frame] #palette-overlay .palette-search-row input { min-height: 0; hei
 html[data-frame] #palette-overlay .palette-search-row input::placeholder { color: var(--muted); }
 html[data-frame] #palette-overlay #palette-list { max-height: min(400px, calc(100vh - var(--shell-y0) - 160px)); padding: 6px; }
 html[data-frame] #palette-overlay #palette-list li.palette-heading { min-height: 0; padding: 9px 10px 4px; border-radius: 0; color: var(--muted); font-size: max(12px, calc(12px * var(--text-scale, 1))); font-weight: 650; cursor: default; background: none; outline: none; }
+/* Past the twelve shown: "N more results · keep typing to narrow them" (renderer/palette.js renderV2). */
+html[data-frame] #palette-overlay #palette-list li.palette-more { min-height: 0; padding: 8px 10px 6px; border-radius: 0; color: var(--muted); font-size: max(12px, calc(12px * var(--text-scale, 1))); cursor: default; background: none; outline: none; }
 html[data-frame] #palette-overlay #palette-list li.palette-row { min-height: 0; gap: 11px; padding: 8px 10px; border-radius: 10px; font-size: max(12px, calc(14px * var(--text-scale, 1))); }
 html[data-frame] #palette-overlay #palette-list li.palette-row .palette-glyph { flex: none; width: 17px; height: 17px; color: var(--muted); }
 html[data-frame] #palette-overlay #palette-list li.palette-row .hint { flex: none; margin-left: auto; color: var(--muted); font-size: max(12px, calc(13px * var(--text-scale, 1))); white-space: nowrap; }

@@ -247,3 +247,12 @@ test("a run that waits on you is under Needs you only, not under Running too", (
   assert.ok(picture.board.needs.some((card) => card.taskId === "t2"), "the question's task waits under Needs you");
   assert.deepEqual(picture.board.running.filter((card) => card.tone === "live").map((card) => card.taskId), ["t3"], "and only the other run is Running");
 });
+
+test("a queued task that waits on you is not also up next under Running", () => {
+  const picture = build(board({
+    needs: [needQuestion({ id: "q8", title: "builder-3 wants to write outside its task folder", context: { taskId: "t4", taskTitle: "Translate the help page", issueKind: "permission" } })],
+    next: [{ id: "t4", title: "Translate the help page", stage: "ready" }, { id: "t5", title: "Polish the footer", stage: "ready" }, { id: "t6", title: "Rename a tab", stage: "ready" }],
+  }));
+  assert.ok(picture.board.needs.some((card) => card.taskId === "t4"), "the task that asked waits under Needs you");
+  assert.deepEqual(picture.board.running.filter((card) => card.tone === "next").map((card) => card.taskId), ["t5", "t6"], "and up next lists the next two that do not wait on you");
+});

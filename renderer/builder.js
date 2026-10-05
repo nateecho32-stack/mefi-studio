@@ -138,14 +138,20 @@
     const stage = summary?.stage || (isDone(task) ? "done" : task.status === "active" ? "running" : task.status === "awaiting_verification" ? "review" : "ready");
     const inbox = inboxTasks();
     const listed = inbox && typeof inbox.has === "function" ? inbox.has(String(task.id)) : null;
+    // The owner's rule (2026-10-04): a task that will fix itself never looks like a problem. With the Inbox on, a blocked or
+    // cooling task the Inbox does not hold (a check that failed and tries again by itself) is with the running work, saying
+    // it is fixing itself; it reaches the Inbox only when it gives up. A step whose go-ahead is asked once for its whole
+    // request waits with the queue and says so.
+    const fixing = !question && listed === false && ["blocked", "cooling"].includes(stage) && !isDone(task);
+    const stepWaits = !question && listed === false && stage === "approval";
     const tone = question || listed === true || (listed === null && ["blocked", "approval"].includes(stage)) ? "ask"
-      : stage === "running" ? "run"
+      : stage === "running" || fixing ? "run"
       : stage === "review" ? "check"
       : stage === "done" ? (task.dropped ? "dropped" : "done")
       : ["waiting", "cooling", "deferred", "grouped", "blocked", "approval"].includes(stage) ? "wait"
       : "ready";
-    const label = question ? "Needs your answer" : summary?.label || (tone === "done" ? "Done" : "Queued");
-    return { stage, tone, label, summary, question };
+    const label = question ? "Needs your answer" : fixing ? "Fixing itself" : stepWaits ? "Goes ahead with its request" : summary?.label || (tone === "done" ? "Done" : "Queued");
+    return { stage, tone, label, summary, question, fixing };
   }
 
   // The menu's groups: Pinned, Needs you and Working first, then the rest by

@@ -27,6 +27,7 @@ function registry({ level = "auto" } = {}) {
   return [
     page("workspace", "Home", "home", { key: "H", glyph: "g-home" }),
     page("tasks", "Task board", "work", { key: "T", glyph: "g-tasks", badge: "tasks" }),
+    page("command", "Map", "agents", { key: "D", glyph: "g-orbit" }),
     page("agents", "Agents", "agents", { glyph: "g-agents" }),
     page("friends", "Friends", "friends", { glyph: "g-orbit" }),
     page("studio", "Settings", "settings", { chord: "Ctrl ,", glyph: "g-studio" }),
@@ -118,10 +119,10 @@ test("in the 0.5 layout the empty box is twelve rows: the sessions that matter, 
     ["Sessions", "Dark mode for the settings page", "Queued", "#g-tasks"],
     ["Sessions", "Pin favourite notes", "Done", "#g-tasks"],
     "# Places",
-    ["Places", "Go to Home", "H", "#g-home"],
-    ["Places", "Go to Work", "T", "#g-tasks"],
-    ["Places", "Go to Agents", "", "#g-agents"],
-    ["Places", "Go to Friends", "", "#g-orbit"],
+    ["Places", "Go to Work", "H", "#g-tasks"],
+    ["Places", "Go to Map", "D", "#g-command"],
+    ["Places", "Go to Team", "", "#g-community"],
+    ["Places", "Go to Friends", "", "#g-chat"],
     ["Places", "Go to Settings", "Ctrl ,", "#g-studio"],
     "# Actions",
     ["Actions", "New task", "Ctrl N", "#g-add"],
@@ -183,13 +184,13 @@ test("Enter runs the row: a session through the router (the session panels take 
   await run("share a note");
   assert.deepEqual(plain(env.routes.at(-1)), ["ideas", { ideaId: "idea_1" }]);
   await run("go to work");
-  assert.deepEqual(plain(env.routes.at(-1)), ["tasks"]);
+  assert.deepEqual(plain(env.routes.at(-1)), ["workspace"], "Work is Home, whose content is Work › Today");
   await run("open the inbox");
   assert.deepEqual(plain(env.routes.at(-1)), ["inbox-open"]);
   // What was run comes back first under Recent, with its own icon and words.
   env.palette.open();
   await settle();
-  assert.deepEqual(env.shown().slice(0, 5), ["# Recent", ["Recent", "Open the Inbox", "Ctrl J", "#g-bell"], ["Recent", "Go to Work", "T", "#g-tasks"], ["Recent", "Share a note as a link", "Idea", "#g-ideas"], ["Recent", "Add an empty state to the notes list", "Needs you", "#g-tasks"]]);
+  assert.deepEqual(env.shown().slice(0, 5), ["# Recent", ["Recent", "Open the Inbox", "Ctrl J", "#g-bell"], ["Recent", "Go to Work", "H", "#g-tasks"], ["Recent", "Share a note as a link", "Idea", "#g-ideas"], ["Recent", "Add an empty state to the notes list", "Needs you", "#g-tasks"]]);
   assert.equal(env.rows().length, 12, "Recent counts towards the twelve");
   assert.equal(env.shown().filter((row) => Array.isArray(row) && row[1] === "Add an empty state to the notes list").length, 1, "and is not listed twice");
 });

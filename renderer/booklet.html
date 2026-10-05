@@ -8415,6 +8415,29 @@ html[data-motion="off"] .companion-orb, html[data-motion="off"] .companion-orb .
 .agents-head .muted { font-size: var(--fs-sm); }
 .agents-head-actions { display: flex; align-items: center; justify-content: end; flex-wrap: wrap; gap: 8px; }
 .agents-eyebrow { font-size: var(--fs-2xs); letter-spacing: .12em; color: var(--gold-bright); }
+/* Team in the 0.5 layout (renderer/agents.js openTeam): the prototype's page head, a title with the line that says what
+   the place is for. The breadcrumb names the place, and Discard draft in the save bar reloads what is saved. The size
+   tokens the cards already use are re-pointed at the 0.5 type ladder (renderer/size.css, never under 12 px), as
+   Settings does (#tab-studio[data-places="v2"]), so a card written for the classic page reads at least 12 px too. */
+#agents-overlay[data-places="v2"] { --fs-2xs: var(--f12, 12px); --fs-xs: var(--f12, 12px); --fs-sm: var(--f125, 12.5px); --fs-md: var(--f135, 13.5px); --fs-base: var(--f14, 14px); }
+#agents-overlay[data-places="v2"] .agents-head h1 { font-size: var(--f22, 22px); }
+/* The prototype's page: no frame around it, its head and body in one centred column (page-pad, 1080 px). */
+#agents-overlay[data-places="v2"] { --team-pad: max(16px, calc((100% - 1080px) / 2)); }
+#agents-overlay[data-places="v2"] .agents-sheet { border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+#agents-overlay[data-places="v2"] .agents-head { padding: 22px var(--team-pad) 10px; border-bottom: 0; background: transparent; }
+#agents-overlay[data-places="v2"] .agents-body { padding: 8px var(--team-pad) 20px; }
+#agents-overlay[data-places="v2"] :is(#agents-team, .agents-team-toolbar) { max-width: none; }
+/* A <small> left at the browser's "smaller" reads 12 px at least (no specificity: a card's own size still wins); the few
+   sizes written in pixels are raised by name. */
+:where(#agents-overlay[data-places="v2"]) small { font-size: max(var(--f12, 12px), .8334em); }
+#agents-overlay[data-places="v2"] :is(.autonomy-mode, .autonomy-check) small, #agents-overlay[data-places="v2"] :is(.auto-order-index, .setup-state-label) { font-size: var(--f12, 12px); }
+/* A place's cards are as wide as the page, never as wide as their widest line, and the permission modes wrap their words
+   (as the setup helper's and the run menu's do), so a narrow window never scrolls sideways. */
+#agents-overlay[data-places="v2"] :is(.agents-pane, .settings-category, #studio-desktop) { grid-template-columns: minmax(0, 1fr); }
+#agents-overlay[data-places="v2"] :is(.autonomy-mode, #settings-guided-cli) { height: auto; min-height: 0; white-space: normal; }
+#agents-overlay[data-places="v2"] #settings-guided-cli { text-align: left; }
+#agents-overlay[data-places="v2"] .agents-head p.muted { display: block; margin-top: 2px; font-size: var(--f135, 13.5px); }
+#agents-overlay[data-places="v2"] .agents-head-actions { display: none; }
 .agents-body { container: settings / inline-size; min-width: 0; min-height: 0; overflow-y: auto; padding: 12px 16px; }
 .agents-pane { display: grid; gap: 10px; min-width: 0; }
 .agents-pane[hidden], .agents-save-bar[hidden], .agents-team-toolbar[hidden] { display: none; }
@@ -9724,6 +9747,30 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
 @media (prefers-reduced-transparency: reduce) { .agent-hub, .agent-hub-center, .agent-hub-node, .agent-hub .companion-panel.companion-in-hub { background: var(--panel-solid); backdrop-filter: none; } }
 @media print { .agent-hub, .agent-handoff { display: none !important; } }
 
+/* Friends in the 0.5 layout (renderer/companion-hub.js openPlace): one place at a time in the main area, beside the list
+   column, as the prototype's page: a title, the line that says what the place is for, then the place's own card in a
+   centred 1000 px column with no frame around the page. The cards' own small titles step aside (the page has the name),
+   and the size tokens they use are re-pointed at the 0.5 type ladder (renderer/size.css), so nothing reads under 12 px. */
+/* By its id, so the shared .overlay and .overlay .sheet (a dimmed, centred 620 px dialog, styles.css) never win. */
+#friends-overlay { position: fixed; inset: var(--shell-y0, 72px) var(--shell-x1, 0px) var(--shell-y1, 0px) var(--shell-x0, 80px); z-index: var(--z-sheet); display: block; padding: 0; overflow-y: auto; overscroll-behavior: contain; background: var(--surface-page, var(--bg)); backdrop-filter: none;
+  --fs-2xs: var(--f12, 12px); --fs-xs: var(--f12, 12px); --fs-sm: var(--f125, 12.5px); --fs-md: var(--f135, 13.5px); --fs-base: var(--f14, 14px); }
+#friends-overlay[hidden] { display: none; }
+/* The page's fill is the theme's glass (--studio-page-fill, mostly clear in Chrome), so what it stands over must not read
+   through: the content under it steps aside while it shows, as under a workspace page (studio-ui.css). The frame stays. */
+body:has(#friends-overlay:not([hidden])) > :is(header, main, #tabs, #tree-rail), body:has(#friends-overlay:not([hidden])) :is(#workspace-layer, #idle-hud) { visibility: hidden; pointer-events: none; }
+#friends-overlay .friends-place-sheet { display: grid; gap: 16px; align-content: start; width: 100%; max-width: 1032px; max-height: none; overflow: visible; margin: 0 auto; padding: 22px 16px 28px; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
+#friends-overlay .friends-place-head { display: block; padding: 0; border: 0; background: none; }
+#friends-overlay .friends-place-head h1 { margin: 0; font: 650 var(--f22, 22px)/1.3 var(--font-display); letter-spacing: -.01em; color: var(--ivory); }
+#friends-overlay .friends-place-about { margin: 4px 0 0; max-width: 70ch; font-size: var(--f135, 13.5px); line-height: 1.5; }
+#friends-overlay .friends-place-body { display: grid; gap: 14px; min-width: 0; }
+#friends-overlay .friends-place-body :is(.rooms, .pc-sync, .friends-card) { padding: 16px 18px; border-radius: 14px; background: color-mix(in srgb, var(--panel-solid) 72%, transparent); font-size: var(--f135, 13.5px); }
+#friends-overlay .friends-place-body :is(.rooms-title, .pc-sync-title, .friends-title, .project-hub-title) { display: none; }
+#friends-overlay .friends-place-body small { font-size: max(var(--f12, 12px), .8334em); }
+/* The cards' few pixel sizes (written for the hub's narrow column) read 12 px on the page: Your PCs' group heads,
+   Playground's names, its "never shared" list and the session line. */
+#friends-overlay .friends-place-body :is(h5, h6, li, .friends-name, .friends-subhead, .friends-session, .friends-lines, .friends-say) { font-size: var(--f12, 12px); }
+#friends-overlay .friends-place-more { display: flex; flex-wrap: wrap; gap: 8px; }
+
 /* Friends › Project hub (renderer/project-hub.js): shared projects, credits and ranks. */
 .project-hub { display: grid; gap: 10px; padding: 12px 14px; border: 1px solid var(--hairline); border-radius: 14px; min-width: 0; }
 .project-hub-title { margin: 0; font-size: 13px; font-weight: 600; }
@@ -10947,6 +10994,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 .today-option-label { min-width: 0; overflow-wrap: anywhere; }
 .today-rec { flex: none; padding: 1px 7px; border-radius: 999px; background: color-mix(in srgb, var(--gold) 20%, transparent); color: var(--gold-bright); font-size: var(--t-f12); font-weight: 650; }
 .today-need-free { display: flex; gap: 6px; min-width: 0; }
+/* The box for your own words waits behind its link until asked for (renderer/today.js openOwnWords). */
+.today-need-free[hidden], .today-own-words[hidden] { display: none; }
+.today-own-words { justify-self: start; align-self: flex-start; }
 .today-need-input { flex: 1 1 auto; min-width: 0; min-height: 32px; padding: 0 10px; border: 1px solid var(--t-edge); border-radius: 10px; background: var(--t-well); color: var(--t-ink); font: var(--t-f13)/1.3 var(--font-ui); }
 .today-need-input::placeholder { color: var(--t-faint); }
 .today-need-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 14px; }
@@ -12642,6 +12692,26 @@ html[data-frame] .shell-need[data-tone="clear"] .shell-pill-n, html[data-frame] 
   html[data-frame] .shell-svc { padding: 0 2px; border-color: transparent; }
 }
 
+/* ---- the rail: the prototype's places (renderer/nav.js, renderRailV2) ----
+   At rest each tile is its icon with its word beneath, at 12 px: Work, Map, Team and Friends at the top, and
+   Search, Settings and Help at the foot, as the prototype's railView draws them. The place you are in is a
+   tinted tile. Open (pinned, hovered or focused) the classic rail's rows stand, with every word and count at
+   12 px or more. The rail's geometry (64 px, 256 open) is the layout contract's and is not touched here. */
+html[data-frame] #app-rail { --fs-2xs: max(12px, calc(12px * var(--text-scale, 1))); }
+html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-head .app-rail-text,
+html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) :is(.app-rail-foot-item, #app-rail-foot .update-pill) .label {
+  font-size: max(12px, calc(12px * var(--text-scale, 1))); line-height: 1.2; white-space: nowrap;
+}
+html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-head { min-height: 54px; border-radius: 10px; }
+html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-foot-item { min-height: 50px; border-radius: 10px; }
+html[data-frame] #app-rail .app-rail-search { margin-bottom: 0; }
+html[data-frame] #app-rail .app-rail-section.current > .app-rail-head,
+html[data-frame] #app-rail .app-rail-foot-item[aria-current="page"] { background: var(--tint-gold-3, color-mix(in srgb, var(--gold) 14%, transparent)); color: var(--ivory); }
+html[data-frame] #app-rail .app-rail-section.current > .app-rail-head .glyph,
+html[data-frame] #app-rail .app-rail-foot-item[aria-current="page"] .glyph { color: var(--gold-bright); }
+html[data-frame] #app-rail .app-rail-head .count { min-width: 18px; height: 18px; padding: 0 5px; font: 650 max(12px, calc(12px * var(--text-scale, 1)))/18px var(--font-ui); }
+html[data-frame] #app-rail .app-rail-brand .app-rail-text::after { font-size: max(12px, calc(12px * var(--text-scale, 1))); }
+
 /* ---- the columns ---- */
 html[data-frame] .shell-column { position: fixed; top: 0; bottom: var(--shell-y1); z-index: calc(var(--z-shell) - 1); display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--surface-rail); outline: none; }
 html[data-frame] .shell-list { left: var(--frame-rail-w); width: var(--shell-list-w); border-right: 1px solid var(--hairline); }
@@ -12678,6 +12748,17 @@ html[data-frame] .shell-page .count.warn { color: var(--warn); }
 html[data-frame] .shell-page .count[hidden] { display: none; }
 html[data-frame] .shell-pages-group { margin: 10px 0 2px; padding: 0 10px; color: var(--muted); font: 650 var(--frame-fs-s)/1.3 var(--font-ui); letter-spacing: 0; text-transform: none; }
 html[data-frame] .shell-pages-group.is-current { color: var(--ivory); }
+/* A place whose page is the current row reads as open; the way to every setting in one tree sits apart at the end. */
+html[data-frame] .shell-page.is-open { color: var(--ivory); font-weight: 600; }
+html[data-frame] .shell-page.is-open .glyph { color: var(--gold-bright); }
+html[data-frame] .shell-page.is-quiet { margin-top: 8px; }
+/* Settings' own list of places steps aside while the column lists them (renderer/shell.js, paintPagesFlag): the page takes
+   the width, Find a setting stays beside its title, and the line Find a setting speaks through stays in the page. With the
+   column closed, or a drawer in a small window, Settings' own list is back. */
+html[data-frame][data-frame-pages="settings"] #tab-studio[data-places="v2"] .settings-layout { grid-template-columns: minmax(0, 1fr); }
+html[data-frame][data-frame-pages="settings"] #tab-studio[data-places="v2"] .settings-sections { margin-inline: auto; }
+html[data-frame][data-frame-pages="settings"] #tab-studio[data-places="v2"] #settings-nav { position: absolute; width: 1px; height: 1px; margin: 0; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); }
+html[data-frame][data-frame-pages="settings"] #tab-studio[data-places="v2"] #settings-nav > :not(#settings-find-status) { display: none; }
 /* small windows: a column is a drawer over the page, under the bar and the strip */
 html[data-frame] .shell-column[data-state="drawer"], html[data-frame][data-ui-mode="vibe"] .shell-column[data-state="drawer"] { top: var(--shell-y0); width: var(--frame-drawer-w, 280px); max-width: calc(100vw - 24px); background: var(--panel-solid); backdrop-filter: none; box-shadow: var(--shadow-2); animation: shell-drawer-in var(--motion-base, 200ms) var(--ease-out, ease-out); }
 html[data-frame] .shell-list[data-state="drawer"] { left: var(--frame-rail-w); max-width: calc(100vw - var(--frame-rail-w) - 12px); }
@@ -12725,6 +12806,9 @@ html[data-frame] .shell-meter-button + .shell-meter-button .shell-meter i { back
 html[data-frame] .shell-meter-button[data-tone="warn"] .shell-meter i { background: var(--warn); }
 html[data-frame] .shell-player[data-playing="true"] .glyph { color: var(--gold-bright); }
 html[data-frame] .shell-player-title { max-width: 18ch; overflow: hidden; text-overflow: ellipsis; }
+/* The time left, as the prototype's "Deep Focus 40:32" (renderer/shell.js paintPlayerTime). */
+html[data-frame] .shell-player-time { color: var(--muted); font-variant-numeric: tabular-nums; }
+html[data-frame] .shell-player-time[hidden] { display: none; }
 html[data-frame] .shell-status-extra { display: inline-flex; align-items: center; gap: 4px; flex: none; }
 html[data-frame] .shell-status-extra:empty { display: none; }
 @media (max-width: 899.98px) { html[data-frame] .shell-player-title, html[data-frame] .shell-permission .shell-status-word, html[data-frame] .shell-usage, html[data-frame] .shell-usage-sep, html[data-frame] .shell-machine { display: none; } }
@@ -12772,6 +12856,8 @@ html[data-frame] #palette-overlay .palette-search-row input { min-height: 0; hei
 html[data-frame] #palette-overlay .palette-search-row input::placeholder { color: var(--muted); }
 html[data-frame] #palette-overlay #palette-list { max-height: min(400px, calc(100vh - var(--shell-y0) - 160px)); padding: 6px; }
 html[data-frame] #palette-overlay #palette-list li.palette-heading { min-height: 0; padding: 9px 10px 4px; border-radius: 0; color: var(--muted); font-size: max(12px, calc(12px * var(--text-scale, 1))); font-weight: 650; cursor: default; background: none; outline: none; }
+/* Past the twelve shown: "N more results · keep typing to narrow them" (renderer/palette.js renderV2). */
+html[data-frame] #palette-overlay #palette-list li.palette-more { min-height: 0; padding: 8px 10px 6px; border-radius: 0; color: var(--muted); font-size: max(12px, calc(12px * var(--text-scale, 1))); cursor: default; background: none; outline: none; }
 html[data-frame] #palette-overlay #palette-list li.palette-row { min-height: 0; gap: 11px; padding: 8px 10px; border-radius: 10px; font-size: max(12px, calc(14px * var(--text-scale, 1))); }
 html[data-frame] #palette-overlay #palette-list li.palette-row .palette-glyph { flex: none; width: 17px; height: 17px; color: var(--muted); }
 html[data-frame] #palette-overlay #palette-list li.palette-row .hint { flex: none; margin-left: auto; color: var(--muted); font-size: max(12px, calc(13px * var(--text-scale, 1))); white-space: nowrap; }
@@ -13520,10 +13606,11 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
 .paper-away-note { margin-top: 8px; }
 @media (max-width: 900px) { .paper-away-grid { grid-template-columns: minmax(0, 1fr); } }
 
-/* Chrome: matte black surfaces and brushed-metal controls (renderer/music.js
-   THEMES.chrome, the default theme since the Chrome look; the public website
-   wears the same palette). Every rule is under html[data-studio-theme="chrome"],
-   which paintTheme sets, so no other theme changes; inlined after the other
+/* Chrome: matte black surfaces, brushed-metal controls and a cool iridescent
+   finish (renderer/music.js THEMES.chrome, the default theme since the Chrome
+   look; the public website wears the same palette and the same --chrome-holo
+   tokens). Every rule is under html[data-studio-theme="chrome"], which
+   paintTheme sets, so no other theme changes; inlined after the other
    stylesheets, so it wins a tie.
 
    - Surfaces are flat and opaque enough to read as matte: the panel colour
@@ -13535,31 +13622,71 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
    - The metal is for what matters: primary buttons and the chosen segment of a
      segmented control (the Vibe | Build switch, Sessions | Backlog, the tab
      switches) are brushed metal with dark ink, a bright top edge and a dark
-     bottom edge; hover brightens, a press darkens. Selected rows, the open tab
-     and the rail's current place get a thin chrome edge instead of a fill.
+     bottom edge, its light stops a touch cool; hover brightens and adds a soft
+     ice glow and the holo edge's sheen, a press darkens.
+   - The iridescent layer, used sparingly so the black stays dominant:
+     silver-white, ice blue, lilac and pale aqua (--chrome-holo and its
+     -line, -bar, -edge and -glow forms, the website's names and values). The
+     window's ground and Vibe's sky carry a 2-5% wash of the three tints; the
+     sheen on raised surfaces fades from silver to a whisper of ice and lilac
+     by half their height; the usage meter, a switch that is on and Vibe's
+     project mark are filled with the holo.
+   - Selected rows, the open tab and the rail's current place get a thin edge
+     instead of a fill, and the edge is iridescent where it runs straight: the
+     rail's current place, the selected session row, the frame's current page
+     and the palette's active row keep their plain chrome edge round the
+     corners and wear the 2px holo bar along the straight run between them;
+     the underline tabs (the open tab, the inspector's tabs, the local
+     navigation, a chosen theme) a 2px line of the holo. The hairlines between
+     the frame's bars and the floating menus' top edges are the holo line at a
+     quarter of its strength in a plain hairline as bright as the old one, so
+     the black between the bars stays quiet.
+   - Those edges and lines are border images: one draws over the border an
+     element has, or over a width of its own when it has none, so it takes no
+     room and nothing moves. It replaces the whole border, so a ring the border
+     drew comes back as an inset shadow, and the plain var(--chrome-edge) a
+     selection had stays under it (an inset shadow, or the border's own colour)
+     wherever the image is not drawn: round the corners, or everywhere if it
+     cannot be. The text probes read a gradient on a text's own box as what is
+     behind every word, so no holo edge is a background layer of something with
+     words in it. Where only a colour can go (a glyph, a splitter) the edge is
+     plain var(--chrome-edge).
+   - Static gradients only: nothing here moves or repaints frame after frame.
    - Focus is the shared 2px ring (styles.css section 4) in the theme's bright
      accent, a clear silver (#eef1f5), 2px out from a metal button's edge.
-   - Status colours (working, needs you, error, review) are left alone.
+   - Status colours (working, needs you, error, review) are left alone, and so
+     are the progress bars that mean working.
    - The ink on the metal is #0a0a0c: 5.4:1 on the darkest stop of the pressed
-     metal and more everywhere else. The one chrome title, Vibe's greeting,
-     has its darkest stop at 9:1 on the panel. */
+     metal and more everywhere else, and 10:1 or more on every holo stop. The
+     one chrome title, Vibe's greeting, has its darkest stop at 10:1 on the
+     panel. */
 
 html[data-studio-theme="chrome"] {
   --chrome-ink: #0a0a0c;
-  --chrome-metal: linear-gradient(180deg, #fbfcfd 0%, #dfe3e8 20%, #b3b9c2 48%, #8e959e 52%, #cfd4da 60%, #f1f3f6 100%);
-  --chrome-metal-hover: linear-gradient(180deg, #ffffff 0%, #e8ebef 20%, #bec4cc 48%, #9aa1aa 52%, #d9dde2 60%, #f7f8fa 100%);
-  --chrome-metal-press: linear-gradient(180deg, #e3e6ea 0%, #c6cbd2 22%, #a0a6af 48%, #80868f 52%, #b7bcc3 62%, #d9dce0 100%);
+  --chrome-metal: linear-gradient(180deg, #fbfcfe 0%, #dde5f0 20%, #b2bac6 48%, #8e959e 52%, #cdd5e0 60%, #f0f3f8 100%);
+  --chrome-metal-hover: linear-gradient(180deg, #ffffff 0%, #e6ecf6 20%, #bdc5d1 48%, #9aa1aa 52%, #d6dde8 60%, #f6f8fb 100%);
+  --chrome-metal-press: linear-gradient(180deg, #e2e7ee 0%, #c4cbd6 22%, #a0a6af 48%, #80868f 52%, #b5bcc7 62%, #d8dde5 100%);
   /* the edges of a metal part: a bright top lip, a dark bottom lip, a contact shadow */
   --chrome-bevel: inset 0 1px 0 rgb(255 255 255 / .9), inset 0 -1px 0 rgb(0 0 0 / .28), 0 1px 2px rgb(0 0 0 / .55), 0 4px 12px -6px rgb(0 0 0 / .7);
   --chrome-bevel-press: inset 0 1px 0 rgb(255 255 255 / .55), inset 0 -1px 0 rgb(0 0 0 / .3), inset 0 1px 3px rgb(0 0 0 / .25), 0 1px 1px rgb(0 0 0 / .5);
-  /* a chrome hairline (secondary buttons) and the thin chrome edge of a selection */
+  /* a chrome hairline (secondary buttons) and the plain chrome edge of a selection */
   --chrome-rim: rgb(214 219 226 / .3);
   --chrome-rim-hi: rgb(232 236 241 / .55);
   --chrome-edge: #dfe3e8;
-  --chrome-top: inset 0 1px 0 rgb(255 255 255 / .05);
-  --chrome-text: linear-gradient(180deg, #ffffff 0%, #eef0f3 40%, #b9bec6 58%, #dde0e5 100%);
+  --chrome-top: inset 0 1px 0 rgb(236 241 250 / .055);
+  --chrome-text: linear-gradient(180deg, #ffffff 0%, #eef2f7 38%, #b4c3e0 56%, #c9c4ea 74%, #d7ece7 100%);
+  /* The iridescent layer, shared with the website: the same names and values. */
+  --chrome-holo: linear-gradient(115deg, #eef2f7 0%, #a8c5ff 26%, #c6b4ff 52%, #9de8da 78%, #eef2f7 100%);
+  --chrome-holo-line: linear-gradient(90deg, transparent, rgb(168 197 255 / .55) 18%, rgb(198 180 255 / .6) 50%, rgb(157 232 218 / .55) 82%, transparent);
+  --chrome-holo-bar: linear-gradient(180deg, #eef2f7, #a8c5ff 35%, #c6b4ff 65%, #9de8da);
+  --chrome-holo-edge: linear-gradient(150deg, rgb(238 242 247 / .42), rgb(168 197 255 / .22) 32%, rgb(198 180 255 / .12) 62%, rgb(157 232 218 / .24));
+  --chrome-holo-glow: rgb(168 197 255 / .22);
+  /* The hairline between bars and along a floating menu's top: a quarter of the holo line in three quarters of a plain
+     hairline as bright as the old one. -webkit-cross-fade(A, B, p) is p of B and 1 - p of A; where it cannot be drawn,
+     the plain border stays. */
+  --chrome-holo-hairline: -webkit-cross-fade(linear-gradient(rgb(255 255 255 / .24), rgb(255 255 255 / .24)), var(--chrome-holo-line), 25%);
 
-  /* The shared recipes (studio-ui.css), matte and neutral. */
+  /* The shared recipes (studio-ui.css), matte and neutral, with the iridescent layer's whisper. */
   --studio-secondary: #8e959e;
   --studio-gradient-angle: 180deg;
   --studio-title-tracking: -.02em;
@@ -13573,27 +13700,34 @@ html[data-studio-theme="chrome"] {
   --studio-float-blur: blur(calc(16px + var(--studio-glass) * 16px)) brightness(.9);
   --studio-glass-edge: rgb(255 255 255 / .075);
   --studio-glass-rim: rgb(255 255 255 / .11);
-  --studio-glass-highlight: rgb(255 255 255 / .05);
+  --studio-glass-highlight: rgb(236 241 250 / .05);
   --studio-edge-active: rgb(223 227 232 / .5);
   --studio-glide: rgb(255 255 255 / .06);
   --studio-wash: linear-gradient(transparent, transparent);
-  --studio-sheen: linear-gradient(180deg, rgb(255 255 255 / .018), transparent 40%);
+  /* raised surfaces: silver at the top left, a whisper of ice and lilac, gone by half their height */
+  --studio-sheen: linear-gradient(160deg, rgb(238 242 247 / .04), rgb(168 197 255 / .022) 24%, rgb(198 180 255 / .014) 38%, transparent 52%);
   --studio-selection: linear-gradient(180deg, rgb(255 255 255 / .07), rgb(255 255 255 / .045));
-  --studio-inset-shadow: inset 0 1px 0 rgb(255 255 255 / .04), 0 1px 2px rgb(0 0 0 / .35);
-  --studio-glass-shadow: inset 0 1px 0 rgb(255 255 255 / .05), inset 0 -1px 0 rgb(0 0 0 / .25), 0 1px 2px rgb(0 0 0 / .4), 0 14px 36px -14px rgb(0 0 0 / .7), 0 0 calc(var(--studio-glow) * 40px) rgb(255 255 255 / calc(var(--studio-glow) * .025));
-  --studio-float-shadow: inset 0 1px 0 rgb(255 255 255 / .06), inset 0 -1px 0 rgb(0 0 0 / .3), 0 22px 48px -16px rgb(0 0 0 / .8), 0 2px 8px rgb(0 0 0 / .45);
-  --studio-scene: radial-gradient(ellipse 90% 55% at 50% -12%, rgb(255 255 255 / calc(.02 + var(--studio-glow) * .035)), transparent 70%), var(--studio-reading-bg);
+  --studio-inset-shadow: inset 0 1px 0 rgb(236 241 250 / .045), 0 1px 2px rgb(0 0 0 / .35);
+  --studio-glass-shadow: inset 0 1px 0 rgb(236 241 250 / .055), inset 0 -1px 0 rgb(0 0 0 / .25), 0 1px 2px rgb(0 0 0 / .4), 0 14px 36px -14px rgb(0 0 0 / .7), 0 0 calc(var(--studio-glow) * 40px) rgb(255 255 255 / calc(var(--studio-glow) * .025));
+  --studio-float-shadow: inset 0 1px 0 rgb(236 241 250 / .06), inset 0 -1px 0 rgb(0 0 0 / .3), 0 22px 48px -16px rgb(0 0 0 / .8), 0 2px 8px rgb(0 0 0 / .45);
+  /* the ground: the overhead light, and a faint iridescent air (ice to the top left, lilac to the top right, a breath of aqua low down) */
+  --studio-scene:
+    radial-gradient(ellipse 70% 60% at 0% 0%, rgb(168 197 255 / calc(.03 + var(--studio-glow) * .03)), transparent 70%),
+    radial-gradient(ellipse 60% 55% at 100% 0%, rgb(198 180 255 / calc(.024 + var(--studio-glow) * .03)), transparent 70%),
+    radial-gradient(ellipse 80% 45% at 40% 108%, rgb(157 232 218 / calc(.016 + var(--studio-glow) * .02)), transparent 70%),
+    radial-gradient(ellipse 90% 55% at 50% -12%, rgb(255 255 255 / calc(.02 + var(--studio-glow) * .035)), transparent 70%),
+    var(--studio-reading-bg);
   /* elevation: soft and deep, no colour */
   --shadow-1: 0 1px 2px rgb(0 0 0 / .45), 0 8px 20px -8px rgb(0 0 0 / .65);
   --shadow-2: 0 2px 4px rgb(0 0 0 / .4), 0 18px 40px -12px rgb(0 0 0 / .75);
   --shadow-3: 0 2px 6px rgb(0 0 0 / .45), 0 36px 80px -20px rgb(0 0 0 / .85);
-  --inset-hi: inset 0 1px 0 rgb(255 255 255 / .05);
+  --inset-hi: inset 0 1px 0 rgb(236 241 250 / .05);
   --line: rgb(255 255 255 / .07);
   --line-strong: rgb(255 255 255 / .16);
   --frost-tint: color-mix(in srgb, var(--panel-solid) 82%, transparent);
   --frost-tint-strong: color-mix(in srgb, var(--panel-solid) 90%, transparent);
   --frost-tint-hover: color-mix(in srgb, color-mix(in srgb, #ffffff 4%, var(--panel-solid)) 92%, transparent);
-  --frost-lift: 0 18px 44px -24px rgb(0 0 0 / .85), inset 0 1px 0 rgb(255 255 255 / .05);
+  --frost-lift: 0 18px 44px -24px rgb(0 0 0 / .85), inset 0 1px 0 rgb(236 241 250 / .05);
 }
 /* Focus keeps the shared recipes' flat sheen. */
 html[data-studio-theme="chrome"][data-studio-style="focus"] { --studio-sheen: linear-gradient(transparent, transparent); }
@@ -13604,9 +13738,10 @@ html[data-studio-theme="chrome"] :is(.primary, .today-option.is-first, .vibe-rai
   box-shadow: var(--chrome-bevel); filter: none; text-shadow: 0 1px 0 rgb(255 255 255 / .35);
   transition: background var(--motion-fast) var(--ease-out), box-shadow var(--motion-fast) var(--ease-out), transform var(--motion-instant) var(--ease-out), filter var(--motion-fast) var(--ease-out);
 }
+/* Under the pointer the metal brightens, catches the holo edge's sheen and gives off a soft ice light. */
 html[data-studio-theme="chrome"] :is(.primary, .today-option.is-first, .vibe-rail .vibe-rail-home, #workspace-layer .today-b .today-b-send):not(.danger, :disabled, [aria-disabled="true"]):is(:hover, :focus-visible) {
-  border-color: transparent; background: var(--chrome-metal-hover); color: var(--chrome-ink); filter: none;
-  box-shadow: var(--chrome-bevel), 0 0 0 1px rgb(255 255 255 / .12), 0 6px 18px -8px rgb(255 255 255 / .16);
+  border-color: transparent; background: var(--chrome-holo-edge), var(--chrome-metal-hover); color: var(--chrome-ink); filter: none;
+  box-shadow: var(--chrome-bevel), 0 0 0 1px rgb(255 255 255 / .12), 0 0 22px -6px var(--chrome-holo-glow), 0 8px 24px -10px var(--chrome-holo-glow);
 }
 html[data-studio-theme="chrome"] :is(.primary, .today-option.is-first, .vibe-rail .vibe-rail-home, #workspace-layer .today-b .today-b-send):not(.danger, :disabled, [aria-disabled="true"]):active {
   background: var(--chrome-metal-press); box-shadow: var(--chrome-bevel-press); transform: translateY(.5px);
@@ -13617,9 +13752,11 @@ html[data-studio-theme="chrome"] :is(.primary, .today-option.is-first, .vibe-rai
   opacity: 1; color: var(--chrome-ink); background: rgb(10 10 12 / .07); border-color: rgb(10 10 12 / .3); box-shadow: inset 0 1px 0 rgb(255 255 255 / .4);
 }
 html[data-studio-theme="chrome"] :is(.primary, .today-option.is-first, .vibe-rail .vibe-rail-home, #workspace-layer .today-b .today-b-send):not(.danger) :is(.glyph, svg) { color: var(--chrome-ink); }
-/* Small metal marks: Vibe's project tile, Mefi's avatar. */
+/* Small metal marks: Mefi's avatar, the record button, the media rail's logo. */
+html[data-studio-theme="chrome"] :is(.sx-av.m, .vibe-ask-rec, .sm-rail i.sm-logo) { background: var(--chrome-metal); color: var(--chrome-ink); box-shadow: inset 0 1px 0 rgb(255 255 255 / .8), inset 0 -1px 0 rgb(0 0 0 / .25); }
+/* Vibe's project mark is the holo itself, with the metal's ink. */
 html[data-studio-theme="chrome"][data-ui-mode="vibe"] #workspace-sidebar-panel .ws-project-icon,
-html[data-studio-theme="chrome"] :is(.vibe-project-mark, .sx-av.m, .vibe-ask-rec, .sm-rail i.sm-logo) { background: var(--chrome-metal); color: var(--chrome-ink); box-shadow: inset 0 1px 0 rgb(255 255 255 / .8), inset 0 -1px 0 rgb(0 0 0 / .25); }
+html[data-studio-theme="chrome"] .vibe-project-mark { background: var(--chrome-holo); color: var(--chrome-ink); box-shadow: inset 0 1px 0 rgb(255 255 255 / .75), inset 0 -1px 0 rgb(0 0 0 / .22), 0 6px 18px -8px var(--chrome-holo-glow); }
 
 /* ---- secondary buttons: matte, with a chrome hairline ------------------- */
 html[data-studio-theme="chrome"] :is(button, .button):is(.ghost, .vibe-btn, .today-btn):not(.primary, .danger) { border-color: var(--chrome-rim); box-shadow: var(--chrome-top); }
@@ -13642,67 +13779,95 @@ html[data-studio-theme="chrome"] :is(.sx-switch button.on, #task-filters .chip.o
 html[data-studio-theme="chrome"] #idle-hud .rail-tab[aria-selected="true"] .count { background: rgb(10 10 12 / .1); }
 html[data-studio-theme="chrome"] :is(.sx-switch button:not(.on), .sx-modes button:not(.on), #task-filters .chip:not(.on), .size-seg > button:not([aria-checked="true"]), .sx-lb-tabs button:not(.on), .appearance-sections button:not([aria-pressed="true"]), .segmented > button:not([aria-pressed="true"])):hover { background: rgb(255 255 255 / .05); color: var(--ivory); }
 
-/* ---- selection: a thin chrome edge or underline, not a fill ------------- */
-/* The rail's current place (Build's rail and Vibe's). */
-html[data-studio-theme="chrome"] #app-rail [aria-current="page"] { background: rgb(255 255 255 / .045); box-shadow: inset 2px 0 0 var(--chrome-edge), var(--chrome-top); }
+/* ---- selection: a thin edge, iridescent along its straight run --------- */
+/* The left edge is plain chrome round the corners (an inset shadow) and the 2px holo bar between them
+   (border-image <bar> 0 0 0 1 / <radius> 0 <radius> 2px). On a part with a 1px border the inset edge is
+   1px and the border's own colour is the other: that border is drawn only if the image cannot be.
+   The rail's current place (Build's rail; Vibe's keeps its chrome rim). */
+html[data-studio-theme="chrome"] #app-rail [aria-current="page"] { background: rgb(255 255 255 / .045); box-shadow: inset 2px 0 0 var(--chrome-edge), var(--chrome-top); border-image: var(--chrome-holo-bar) 0 0 0 1 / 7px 0 7px 2px; }
 html[data-studio-theme="chrome"] #app-rail .app-rail-compose { background: rgb(255 255 255 / .04); box-shadow: inset 0 0 0 1px var(--chrome-rim), var(--chrome-top); }
 html[data-studio-theme="chrome"] .vibe-rail button[aria-current="page"] { background: rgb(255 255 255 / .045); box-shadow: inset 0 0 0 1px var(--chrome-rim-hi), var(--chrome-top); }
 html[data-studio-theme="chrome"] .vibe-rail button[aria-current="page"] .glyph { color: var(--chrome-edge); }
 html[data-studio-theme="chrome"] #app-rail .app-rail-brand .monogram { background: var(--chrome-metal); color: var(--chrome-ink); border-color: transparent; box-shadow: inset 0 1px 0 rgb(255 255 255 / .8), inset 0 -1px 0 rgb(0 0 0 / .25), 0 1px 3px rgb(0 0 0 / .5); }
-/* The frame's page list, the session list's rows, the open tab. */
-html[data-studio-theme="chrome"][data-frame] .shell-page[aria-current="page"] { background: rgb(255 255 255 / .045); box-shadow: inset 2px 0 0 var(--chrome-edge), inset 0 0 0 1px var(--studio-glass-edge); }
+/* The frame's page list, the session list's rows, the palette's rows, a chosen option. */
+html[data-studio-theme="chrome"][data-frame] .shell-page[aria-current="page"] { border-color: transparent; border-left-color: var(--chrome-edge); background: rgb(255 255 255 / .045); box-shadow: inset 1px 0 0 var(--chrome-edge), inset 0 0 0 1px var(--studio-glass-edge); border-image: var(--chrome-holo-bar) 0 0 0 1 / 10px 0 10px 2px; }
 html[data-studio-theme="chrome"][data-frame] .shell-page[aria-current="page"] .glyph { color: var(--chrome-edge); }
-html[data-studio-theme="chrome"] .sx-row[data-selected] { border-color: var(--studio-glass-edge); background: rgb(255 255 255 / .045); box-shadow: inset 2px 0 0 var(--chrome-edge); }
+html[data-studio-theme="chrome"] .sx-row[data-selected] { border-color: transparent; border-left-color: var(--chrome-edge); background: rgb(255 255 255 / .045); box-shadow: inset 1px 0 0 var(--chrome-edge), inset 0 0 0 1px var(--studio-glass-edge); border-image: var(--chrome-holo-bar) 0 0 0 1 / var(--r-md, 9px) 0 var(--r-md, 9px) 2px; }
 html[data-studio-theme="chrome"] :is(.sx-row:hover, .sx-row:focus-within):not([data-selected]) { background: rgb(255 255 255 / .03); }
-html[data-studio-theme="chrome"] .ts-item[data-active] { background: rgb(255 255 255 / .05); box-shadow: inset 0 0 0 1px var(--studio-glass-edge), inset 0 -2px 0 var(--chrome-edge), inset 0 2px var(--studio-glass-highlight); }
+html[data-studio-theme="chrome"][data-frame] #palette-overlay #palette-list li.palette-row.active { background: rgb(255 255 255 / .06); box-shadow: inset 2px 0 0 var(--chrome-edge), inset 0 0 0 1px var(--studio-glass-edge); border-image: var(--chrome-holo-bar) 0 0 0 1 / 10px 0 10px 2px; }
+html[data-studio-theme="chrome"] .studio-choice-option[aria-selected="true"] { border-left-color: var(--chrome-edge); background: rgb(255 255 255 / .05); box-shadow: inset 1px 0 0 var(--chrome-edge); color: var(--ivory); border-image: var(--chrome-holo-bar) 0 0 0 1 / 6px 0 6px 2px; }
+html[data-studio-theme="chrome"] .studio-choice-popup[data-layout="tiles"] .studio-choice-option[aria-selected="true"] { border-color: transparent; border-left-color: var(--chrome-edge); box-shadow: inset 1px 0 0 var(--chrome-edge), inset 0 0 0 1px var(--studio-edge-active); }
+html[data-studio-theme="chrome"] #app-local-nav .agents-nav-subsections .app-local-link[aria-current="page"] { background: rgb(255 255 255 / .05); box-shadow: inset 2px 0 0 var(--chrome-edge); color: var(--ivory); border-image: var(--chrome-holo-bar) 0 0 0 1 / 6px 0 6px 2px; }
+/* The underline tabs: the holo on the 2px edge they draw (border-image <holo> 0 0 1 0 / 0 0 2px 0), its plain chrome colour under it. */
+html[data-studio-theme="chrome"] :is(.sx-ptab.on, .sx-itab.on) { border-bottom-color: var(--chrome-edge); border-image: var(--chrome-holo) 0 0 1 0 / 0 0 2px 0; }
+html[data-studio-theme="chrome"] #app-local-nav .app-local-link[aria-current="page"] { background: transparent; border-bottom-color: var(--chrome-edge); color: var(--ivory); border-image: var(--chrome-holo) 0 0 1 0 / 0 0 2px 0; }
+/* Vibe rounds these further (vibe.css): the same edges, kept clear of its corners; the local navigation's pill keeps
+   its own rim and takes the line along its straight foot. */
+html[data-studio-theme="chrome"][data-ui-mode="vibe"] .studio-choice-option[aria-selected="true"] { border-image: var(--chrome-holo-bar) 0 0 0 1 / 12px 0 12px 2px; }
+html[data-studio-theme="chrome"][data-ui-mode="vibe"] #app-local-nav .agents-nav-subsections .app-local-link[aria-current="page"] { border-image: var(--chrome-holo-bar) 0 0 0 1 / 12px 0 12px 2px; }
+html[data-studio-theme="chrome"][data-ui-mode="vibe"] #app-local-nav .app-local-link[aria-current="page"]:not(.agents-nav-subsections *) { border-image: var(--chrome-holo) 0 0 1 0 / 0 19px 2px 19px; }
+/* The open tab: its plain chrome foot round the corners, the holo along the straight run, inside its ring. */
+html[data-studio-theme="chrome"] .ts-item[data-active] { background: rgb(255 255 255 / .05); box-shadow: inset 0 0 0 1px var(--studio-glass-edge), inset 0 -2px 0 var(--chrome-edge), inset 0 2px var(--studio-glass-highlight); border-image: var(--chrome-holo) 0 0 1 0 / 0 9px 2px 9px; }
 html[data-studio-theme="chrome"] .ts-item[data-active] .ts-ico { color: var(--chrome-edge); }
-html[data-studio-theme="chrome"] :is(.sx-ptab.on, .sx-itab.on) { border-bottom-color: var(--chrome-edge); }
-html[data-studio-theme="chrome"] #app-local-nav .app-local-link[aria-current="page"] { background: transparent; border-bottom-color: var(--chrome-edge); color: var(--ivory); }
-html[data-studio-theme="chrome"] :is(.studio-choice-option[aria-selected="true"], #app-local-nav .agents-nav-subsections .app-local-link[aria-current="page"]) { background: rgb(255 255 255 / .05); box-shadow: inset 2px 0 0 var(--chrome-edge); color: var(--ivory); }
-html[data-studio-theme="chrome"][data-frame] #palette-overlay #palette-list li.palette-row.active { background: rgb(255 255 255 / .06); box-shadow: inset 2px 0 0 var(--chrome-edge), inset 0 0 0 1px var(--studio-glass-edge); }
-/* Theme and node choices: a chrome edge under the chosen one. */
-html[data-studio-theme="chrome"] :is(.music-theme, .music-node-choice, .setup-helper-swatch)[aria-pressed="true"],
-html[data-studio-theme="chrome"] .setup-helper-swatch[aria-checked="true"],
-html[data-studio-theme="chrome"] body.appearance-settings-active .settings-media .music-theme[aria-pressed="true"] { border-color: var(--chrome-rim-hi); background: rgb(255 255 255 / .05); box-shadow: inset 0 -2px 0 var(--chrome-edge), var(--chrome-top); color: var(--ivory); }
+/* Theme and node choices: the same foot under the chosen one, its rim as an inset ring. */
+html[data-studio-theme="chrome"] :is(.music-theme, .music-node-choice)[aria-pressed="true"],
+html[data-studio-theme="chrome"] body.appearance-settings-active .settings-media .music-theme[aria-pressed="true"] { border-color: transparent; border-bottom-color: var(--chrome-edge); background: rgb(255 255 255 / .05); box-shadow: inset 0 -1px 0 var(--chrome-edge), inset 0 0 0 1px var(--chrome-rim-hi), var(--chrome-top); color: var(--ivory); border-image: var(--chrome-holo) 0 0 1 0 / 0 9px 2px 9px; }
+html[data-studio-theme="chrome"] .setup-helper-swatch:is([aria-pressed="true"], [aria-checked="true"]) { border-color: transparent; border-bottom-color: var(--chrome-edge); background: rgb(255 255 255 / .05); box-shadow: inset 0 -1px 0 var(--chrome-edge), inset 0 0 0 1px var(--chrome-rim-hi), var(--chrome-top); color: var(--ivory); border-image: var(--chrome-holo) 0 0 1 0 / 0 17px 2px 17px; }
 html[data-studio-theme="chrome"] .music-node-choice[aria-pressed="true"] { color: var(--ivory); }
 
 /* ---- surfaces: matte panels, a top highlight, quiet hairlines ----------- */
 html[data-studio-theme="chrome"] #vibe-layer {
   --v-glass: var(--studio-panel-bg); --v-glass-hi: color-mix(in srgb, color-mix(in srgb, #ffffff 3%, var(--theme-panel-solid)) 94%, transparent);
   --v-edge: rgb(255 255 255 / .08); --v-edge-hi: var(--chrome-rim-hi);
-  --v-lift: 0 1px 2px rgb(0 0 0 / .45), 0 26px 56px -30px rgb(0 0 0 / .9), inset 0 1px 0 rgb(255 255 255 / .05);
+  --v-lift: 0 1px 2px rgb(0 0 0 / .45), 0 26px 56px -30px rgb(0 0 0 / .9), inset 0 1px 0 rgb(236 241 250 / .055);
 }
 html[data-studio-theme="chrome"] :is(.today, .today-inbox, .today-sheet, .inbox-sheet) { --t-card: var(--studio-panel-bg); --t-edge: rgb(255 255 255 / .08); --t-edge-hi: var(--chrome-rim-hi); --t-well: color-mix(in srgb, var(--bg-deep) 70%, transparent); }
-/* Vibe's sky: one neutral light instead of three coloured washes. */
-html[data-studio-theme="chrome"] .vibe-aurora { opacity: .12; mix-blend-mode: screen; }
-html[data-studio-theme="chrome"] .vibe-aurora.two { background: radial-gradient(circle, rgb(255 255 255 / .35), transparent 70%); }
-/* The frame's bars and columns: the page's black, a hairline between. */
+/* Vibe's sky: the three tints, faint, instead of the theme's coloured washes. */
+html[data-studio-theme="chrome"] .vibe-aurora { opacity: .2; mix-blend-mode: screen; }
+html[data-studio-theme="chrome"] .vibe-aurora.one { background: radial-gradient(circle, rgb(168 197 255 / .55), transparent 68%); }
+html[data-studio-theme="chrome"] .vibe-aurora.two { background: radial-gradient(circle, rgb(198 180 255 / .48), transparent 70%); }
+html[data-studio-theme="chrome"] .vibe-aurora.three { background: radial-gradient(circle, rgb(157 232 218 / .4), transparent 70%); }
+/* The frame's bars and columns: the page's black, a holo hairline between (border-image <hairline> on the 1px border each has). */
 html[data-studio-theme="chrome"][data-frame] :is(.shell-top, .shell-tabs) { background: var(--bg); }
+html[data-studio-theme="chrome"][data-frame] .shell-top { border-image: var(--chrome-holo-hairline) 0 0 1 0 / 0 0 1px 0; }
+html[data-studio-theme="chrome"] .ts-strip { border-image: var(--chrome-holo-hairline) 0 0 1 0 / 0 0 1px 0; }
+html[data-studio-theme="chrome"] #app-local-nav { border-image: var(--chrome-holo-hairline) 0 0 1 0 / 0 0 1px 0; }
 html[data-studio-theme="chrome"][data-frame] .shell-column:not([data-state="drawer"]) { background: color-mix(in srgb, #0d0d10 94%, transparent); }
-html[data-studio-theme="chrome"][data-frame] .shell-status { background: #0d0d10; box-shadow: inset 0 1px 0 rgb(255 255 255 / .03); }
+html[data-studio-theme="chrome"][data-frame] .shell-status { background: #0d0d10; box-shadow: inset 0 1px 0 rgb(255 255 255 / .03); border-image: var(--chrome-holo-hairline) 1 0 0 0 / 1px 0 0 0; }
 html[data-studio-theme="chrome"][data-frame] :is(.shell-search, .shell-icon-btn, .shell-pill:not([data-tone="need"])) { border-color: rgb(255 255 255 / .1); box-shadow: var(--chrome-top); }
 html[data-studio-theme="chrome"][data-frame] :is(.shell-search, .shell-icon-btn:not([data-on="true"]), .shell-pill:not([data-tone="need"])):hover { border-color: var(--chrome-rim-hi); }
 html[data-studio-theme="chrome"][data-frame] .shell-icon-btn[data-on="true"] { background: rgb(255 255 255 / .06); color: var(--ivory); border-color: var(--chrome-rim-hi); }
-html[data-studio-theme="chrome"][data-frame] .shell-switch[aria-checked="true"] { background: var(--chrome-metal); border-color: transparent; box-shadow: inset 0 1px 0 rgb(255 255 255 / .8), inset 0 -1px 0 rgb(0 0 0 / .25); }
+html[data-studio-theme="chrome"][data-frame] .shell-switch[aria-checked="true"] { background: var(--chrome-holo); border-color: transparent; box-shadow: inset 0 1px 0 rgb(255 255 255 / .75), inset 0 -1px 0 rgb(0 0 0 / .22); }
 html[data-studio-theme="chrome"][data-frame] .shell-switch[aria-checked="true"] i { background: var(--chrome-ink); }
-html[data-studio-theme="chrome"][data-frame] .shell-meter i { background: linear-gradient(180deg, #eef1f5, #a9afb8); }
+/* The usage meter's fill shows the holo across the meter's whole width, so more use reaches further into it. */
+html[data-studio-theme="chrome"][data-frame] .shell-meter i { background: var(--chrome-holo) left / 46px 100% no-repeat, #a8c5ff; }
 html[data-studio-theme="chrome"][data-frame] :is(.shell-split:hover, .shell-split.is-drag)::after { background: rgb(223 227 232 / .6); }
+/* Floating menus: the holo hairline along the top edge, kept clear of the corners; the rim the border drew is an inset
+   ring. Vibe's own menu rim (a wider radius and a ring of its own in the float shadow) and menus whose header paints
+   over their edge, like the media menu's, keep their plain rim. */
+html[data-studio-theme="chrome"]:not([data-ui-mode="vibe"])[data-studio-style] :is(.palette-sheet, .studio-choice-popup, .surface-tools-menu, .studio-more-links) { box-shadow: inset 0 0 0 1px var(--studio-glass-edge), var(--studio-float-shadow); border-image: var(--chrome-holo-hairline) 1 0 0 0 / 1px 18px 0 18px; }
+html[data-studio-theme="chrome"]:not([data-ui-mode="vibe"]) .ts-pop { box-shadow: inset 0 0 0 1px var(--studio-glass-edge), var(--studio-float-shadow); border-image: var(--chrome-holo-hairline) 1 0 0 0 / 1px 18px 0 18px; }
+html[data-studio-theme="chrome"] .today-inbox { box-shadow: inset 0 0 0 1px var(--t-edge), var(--shadow-3); border-image: var(--chrome-holo-hairline) 1 0 0 0 / 1px 18px 0 18px; }
+html[data-studio-theme="chrome"] :is(.sx-menu, .sx-runmenu) { box-shadow: inset 0 0 0 1px var(--hairline-strong), inset 0 1px var(--studio-glass-highlight), var(--shadow-3); border-image: var(--chrome-holo-hairline) 1 0 0 0 / 1px 18px 0 18px; }
+html[data-studio-theme="chrome"][data-frame] .shell-menu { box-shadow: inset 0 0 0 1px var(--hairline-strong), inset 0 1px var(--studio-glass-highlight), var(--shadow-3); border-image: var(--chrome-holo-hairline) 1 0 0 0 / 1px 18px 0 18px; }
 /* Fields are wells: a little darker than the page, with a top shadow. */
 html[data-studio-theme="chrome"][data-studio-style] :is(input[type=text], input[type=search], input[type=password], input[type=number], input:not([type]), textarea, select, .studio-select) { box-shadow: inset 0 1px 2px rgb(0 0 0 / .35); }
 html[data-studio-theme="chrome"] :is(input, textarea, select):focus:not(:focus-visible) { border-color: var(--chrome-rim-hi); box-shadow: inset 0 1px 2px rgb(0 0 0 / .35), 0 0 0 3px rgb(223 227 232 / .1); }
-/* Switches: a metal track when on. */
-html[data-studio-theme="chrome"] .switch input:checked + .track { background: var(--chrome-metal); border-color: transparent; box-shadow: inset 0 1px 0 rgb(255 255 255 / .8), inset 0 -1px 0 rgb(0 0 0 / .25); }
-html[data-studio-theme="chrome"] .switch input:checked + .track::after { background: var(--chrome-ink); }
+/* Switches (the .switch track, Settings' and the Agents page's switch inputs): a holo track when on, the knob in the metal's ink. */
+html[data-studio-theme="chrome"] :is(.switch input:checked + .track, .settings-control input[type="checkbox"][role="switch"]:checked, .agents-model-settings input[role="switch"]:checked) { background: var(--chrome-holo); border-color: transparent; box-shadow: inset 0 1px 0 rgb(255 255 255 / .75), inset 0 -1px 0 rgb(0 0 0 / .22); }
+html[data-studio-theme="chrome"] :is(.switch input:checked + .track, .settings-control input[type="checkbox"][role="switch"]:checked)::after,
+html[data-studio-theme="chrome"] .agents-model-settings input[role="switch"]:checked::before { background: var(--chrome-ink); }
 
 /* ---- type: a chrome title, readable at 4.5:1 on its darkest stop -------- */
 /* Vibe's greeting already paints its words with a gradient in every theme; under
-   Chrome it is the metal's. Other titles keep plain ink, since the render
-   suites' contrast checks count a gradient on the text's own box as what is
-   behind it. Today's greeting stays plain too (today.css takes its gradient off). */
+   Chrome it is the metal's, tinted with the holo. Other titles keep plain ink,
+   since the render suites' contrast checks count a gradient on the text's own box
+   as what is behind it. Today's greeting stays plain too (today.css takes its
+   gradient off). */
 html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text); -webkit-background-clip: text; background-clip: text; }
 
-/* The Chrome swatch looks like the metal in every theme's picker. */
-.music-theme[data-theme="chrome"]::before { background: linear-gradient(180deg, #fbfcfd 0%, #dfe3e8 22%, #9aa1aa 50%, #cfd4da 62%, #f1f3f6 100%); box-shadow: 0 0 0 1px rgb(0 0 0 / .35), inset 0 1px 0 rgb(255 255 255 / .9); }
+/* The Chrome swatch looks like the metal, with the holo's breath, in every theme's picker. */
+.music-theme[data-theme="chrome"]::before { background: linear-gradient(115deg, rgb(168 197 255 / .3), rgb(198 180 255 / .22) 52%, rgb(157 232 218 / .3)), linear-gradient(180deg, #fbfcfe 0%, #dde5f0 22%, #9aa1aa 50%, #cdd5e0 62%, #f0f3f8 100%); box-shadow: 0 0 0 1px rgb(0 0 0 / .35), inset 0 1px 0 rgb(255 255 255 / .9); }
 
 @media (prefers-reduced-motion: reduce) {
   html[data-studio-theme="chrome"] :is(.primary, .today-option.is-first, .vibe-rail .vibe-rail-home, #workspace-layer .today-b .today-b-send) { transition: none; }
@@ -23358,14 +23523,59 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // What every menu calls a destination's home: "Live" for the Command view,
   // "Community" for community, "Assistant" for the assistant's commands.
   function sectionLabel(dest) {
-    return dest ? SECTIONS.get(sectionOf(dest)) ?? null : null;
+    if (!dest) return null;
+    // In the 0.5 layout a record is named by its place: Team for Agents, Map for the Command view.
+    if (v2Places()) return placeLabel(placeOf(dest, AS_FILED));
+    return SECTIONS.get(sectionOf(dest)) ?? null;
   }
 
   // The rail's top-to-bottom order, for lists that sort by section.
   function sectionRank(dest) {
+    if (v2Places()) {
+      const at = [...PLACES.keys()].indexOf(placeOf(dest, AS_FILED));
+      return at < 0 ? PLACES.size : at;
+    }
     const at = [...SECTIONS.keys()].indexOf(sectionOf(dest));
     return at < 0 ? SECTIONS.size : at;
   }
+
+  // ---- the 0.5 layout's places (html[data-layout="v2"]) --------------------
+  // The prototype (docs/prototype/mefi-studio-0.5-v5.html: railView and the
+  // WHERE_WENT table) has four places on the rail, Work, Map, Team and
+  // Friends, with Search, Settings and Help at its foot. They are a reading of
+  // the same sections, not new ones: Home and Work are Work (Home's content is
+  // Work › Today); the Command view, Fleet and the Agent brain's live
+  // pipelines are Map; everything else that was Agents is Team, and the Agent
+  // brain's Playbook and Project map are Team › Workflows. A record keeps its
+  // section, so the menus, the shortcut sheet and the classic layout read as
+  // they did. placeOf() is what the rail, the breadcrumb, the page list, the
+  // history within a place and Search's groups go by while the layout is on.
+  const v2Places = () => document.documentElement?.dataset?.layout === "v2";
+  const PLACES = new Map([
+    ["work", "Work"],
+    ["map", "Map"],
+    ["team", "Team"],
+    ["friends", "Friends"],
+    ["settings", "Settings"],
+    ["help", "Help"],
+    ["community", "Community"],
+    ["assistant", "Assistant"],
+  ]);
+  const MAP_ROUTES = new Set(["command", "fleet", "agent-brain"]);
+  // The Agent brain's tab: what `params` asks for, else the tab it shows now (it opens on the one it showed last).
+  // A record on its own (Search's groups) is filed where WHERE_WENT files it: Agent brain is Map › Pipelines.
+  const brainTab = (params) => params?.tab ?? window.MefiAgentBrain?.tab?.() ?? null;
+  const AS_FILED = Object.freeze({ tab: "live" });
+  function placeOf(dest, params) {
+    const section = sectionOf(dest);
+    if (!dest || !v2Places()) return section;
+    if (section === "home" || section === "work") return "work";
+    if (section === "command") return "map";
+    if (section !== "agents") return section;
+    if (dest.id === "agent-brain") return ["playbook", "map"].includes(brainTab(params)) ? "team" : "map";
+    return MAP_ROUTES.has(dest.id) ? "map" : "team";
+  }
+  const placeLabel = (place) => PLACES.get(place) ?? null;
 
   // ---- registry ----------------------------------------------------------
 
@@ -23388,6 +23598,14 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       open: (params) => window.MefiAgents?.open?.(params), close: () => window.MefiAgents?.close?.(), isOpen: () => overlayOpen("agents-overlay"),
     },
     {
+      // The 0.5 layout's Friends place (renderer/companion-hub.js openPlace): Rooms, Your PCs or Playground, one at a time.
+      // go("friends") and its three ways in land here while the layout is on (FRIENDS_PAGES); Search lists those four.
+      id: "friends-page", label: "Friends", short: "Friends", kind: "overlay", layer: "sheet", section: "friends", group: "tools",
+      glyph: "g-orbit", badge: null, desc: "Rooms, your PCs and companion playdates", searchTerms: "friends rooms pcs playground",
+      showIn: showIn({}), hidden: () => !v2Places(), element: "friends-overlay", focus: "#friends-place-title",
+      open: (params) => window.MefiCompanionHub?.openPlace?.(params), close: () => window.MefiCompanionHub?.closePlace?.(), isOpen: () => overlayOpen("friends-overlay"),
+    },
+    {
       // In Vibe mode Home is Vibe (go() lands there), so Search, Shortcuts
       // and the rail name it that instead of listing Home and Vibe twice.
       id: "workspace", get label() { return vibeMode() ? "Vibe" : "Home"; }, get short() { return vibeMode() ? "Vibe" : "Home"; }, kind: "view", layer: null,
@@ -23401,8 +23619,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     },
     {
       id: "command",
-      label: "Command view",
-      short: "Command",
+      // The 0.5 layout calls it the Map (WHERE_WENT: "Command view" → Map); the route and its key stay.
+      get label() { return v2Places() ? "Map" : "Command view"; },
+      get short() { return v2Places() ? "Map" : "Command"; },
       kind: "view",
       layer: null,
       section: "agents",
@@ -23412,7 +23631,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       badge: "progress",
       alert: "questions",
       desc: "Live work as a node tree: sessions, agents, todos and tasks",
-      searchTerms: "node tree constellation live work monitor progress workers agents",
+      searchTerms: "map command view node tree constellation live work monitor progress workers agents",
       showIn: showIn({ palette: true, help: true, footer: true }),
       open: (params) => window.MefiIdle?.enter?.(true, params),
       close: () => leaveCommand(),
@@ -24060,16 +24279,19 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     entry.scroll = Array.from(document.querySelectorAll?.("[id]") || []).filter((el) => !el.hidden && (el.scrollTop || el.scrollLeft)).map((el) => [el.id, el.scrollTop, el.scrollLeft]);
     entry.focus = document.activeElement?.id || null;
   }
+  // What a history belongs to: its section, or in the 0.5 layout its place (Map and Team each keep their own, Home is Work's).
+  const historyScope = (dest, params) => (v2Places() ? placeOf(dest, params) : sectionOf(dest));
   function rememberRoute(id, params = {}) {
     if (historyRestoring) return;
-    const dest = get(id), section = sectionOf(dest);
+    const dest = get(id), section = historyScope(dest, params);
     if (!dest || dest.kind === "action" || dest.layer === "transient") return;
     if (historyActive) { const previous = histories.get(historyActive); capturePage(previous?.entries[previous.index]); }
     const key = historyKey(section);
     let history = histories.get(key);
     if (!history) {
       history = { entries: [], index: -1 }; histories.set(key, history);
-      const root = section === "agents" ? "agents" : section === "work" ? "tasks" : null;
+      // A first visit to a page of the section has its main page behind it; Home (Work's in the 0.5 layout) has nothing behind it.
+      const root = section === "agents" || section === "team" ? "agents" : section === "work" && sectionOf(dest) === "work" ? "tasks" : null;
       if (root && (root !== id || Object.keys(params).length)) { history.entries.push({ id: root, params: root === "agents" ? { section: "overview" } : { filter: "all" } }); history.index = 0; }
     }
     const normalized = JSON.parse(JSON.stringify(params || {}));
@@ -24082,7 +24304,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     historyActive = key;
   }
   function historyState() {
-    const history = histories.get(historyKey(sectionOf(get(current()))));
+    const history = histories.get(historyKey(historyScope(get(current()))));
     return { canBack: Boolean(history && history.index > 0), canForward: Boolean(history && history.index < history.entries.length - 1) };
   }
   function lastSectionRoute(section, fallback) {
@@ -24091,7 +24313,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     return entry && get(entry.id) ? entry : { id: fallback, params: {} };
   }
   async function travelHistory(delta) {
-    const key = historyKey(sectionOf(get(current()))), history = histories.get(key);
+    const key = historyKey(historyScope(get(current()))), history = histories.get(key);
     const next = history?.index + delta;
     if (historyRestoring || !history || next < 0 || next >= history.entries.length) return false;
     capturePage(history.entries[history.index]); history.index = next; historyActive = key;
@@ -24188,7 +24410,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (WORKSPACE_PAGES.has(id)) {
       const exit = document.getElementById(`${id}-close`);
       const label = exit?.querySelector(".label");
-      const name = page ? `Back within ${SECTIONS.get(sectionOf(dest)) || "this section"}` : "Close";
+      const name = page ? `Back within ${(v2Places() ? placeLabel(placeOf(dest)) : SECTIONS.get(sectionOf(dest))) || "this section"}` : "Close";
       if (label) label.textContent = page ? "Back" : "Close";
       if (exit) { exit.title = `${name} (Esc)`; exit.setAttribute("aria-label", name); }
       exit?.querySelector("use")?.setAttribute("href", page ? "#g-back" : "#g-close");
@@ -24266,7 +24488,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       // it goes there instead of stopping on Build's section home.
       if (vibeMode()) return go("vibe");
       // A page of Settings (Size and density) has no history when it was opened from Configuration or Search: back to Settings.
-      const home = sectionOf(get(id)) === "agents" ? "agents" : sectionOf(get(id)) === "settings" ? "studio" : "tasks";
+      // In the 0.5 layout Fleet and the live pipelines are pages of the Map, so the Map is what is behind them.
+      const home = v2Places() && placeOf(get(id)) === "map" ? "command" : sectionOf(get(id)) === "agents" ? "agents" : sectionOf(get(id)) === "settings" ? "studio" : "tasks";
       if (id !== home) return go(home);
       return;
     }
@@ -24292,6 +24515,17 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   }
 
   function go(id, params = {}, options = {}) {
+    // The prototype's names for routes that already exist: go("team") is the Agents page, go("map") the Command view.
+    if (id === "team") id = "agents";
+    else if (id === "map") id = "command";
+    // In the 0.5 layout Friends is a place of three pages (renderer/companion-hub.js openPlace): Friends and its three ways
+    // in open that page at their place, where the classic layout opens the companion's Friends bubble.
+    // (Spelled out here, not shared: suites run go() on its own.)
+    const friendsPages = { friends: null, rooms: "rooms", "your-pcs": "pcs", playground: "playground" };
+    if (globalThis.document?.documentElement?.dataset?.layout === "v2" && Object.hasOwn(friendsPages, id)) {
+      params = { place: friendsPages[id] || params.place || params.target || "rooms" };
+      id = "friends-page";
+    }
     const redirected = window.MefiAgents?.redirect?.(id, params);
     if (redirected) return go(redirected.id, redirected.params, options);
     // ---- sessions (renderer/sessions.js) ----
@@ -24382,7 +24616,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       window.MefiIdle?.exit?.();
       return go(from);
     }
-    if (sectionOf(get(current())) === "agents") { if (historyState().canBack) return back(); return go("agents"); }
+    // In the 0.5 layout the Command view is the Map, a place of its own: leaving it goes back within the Map
+    // (Fleet, the pipelines), else to the page it was opened from, as it does from Home.
+    if (v2Places()) { if (historyState().canBack) return back(); }
+    else if (sectionOf(get(current())) === "agents") { if (historyState().canBack) return back(); return go("agents"); }
     const destination = state.commandFrom && state.commandFrom !== "command" ? state.commandFrom : "workspace";
     state.commandFrom = null;
     window.MefiIdle?.exit?.();
@@ -24614,9 +24851,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     // Workspace, Command, Task board, Plans and Brain maps are pinned at the
     // top of the sidebar and Settings / Music sit in its bottom row, so none
     // repeat here.
+    // A page hidden in this layout (the 0.5 layout's Friends page in the classic one) is not offered either.
     appendGrouped(element, list().filter((dest) =>
       !["workspace", "command", "tasks", "plans", "brains", "studio", "music"].includes(dest.id) &&
-      dest.kind !== "action" && (dest.layer !== "transient" || dest.id === "profiler")), "ghost");
+      dest.kind !== "action" && (dest.layer !== "transient" || dest.id === "profiler") && !dest.hidden?.()), "ghost");
     paintBadges(element);
   }
 
@@ -24663,11 +24901,24 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     { id: "agents", label: "Agents", target: "agents" },
     { id: "friends", label: "Friends", target: "friends" },
   ];
+  // The 0.5 layout's rail (the prototype's railView): Work, Map, Team and Friends, each a place (placeOf). Work opens
+  // Home, which is Work › Today, and keeps the count the Work head had; the Map keeps the Command view's live dot and
+  // Team the Agents head's count of decisions waiting. The glyphs are the prototype's (a list, a graph, two people, a
+  // speech bubble); the routes are the ones the classic rail opens.
+  const RAIL_PLACES = [
+    { id: "work", label: "Work", target: "workspace", glyph: "g-tasks", badges: "tasks" },
+    { id: "map", label: "Map", target: "command", glyph: "g-command", badges: "command" },
+    { id: "team", label: "Team", target: "agents", glyph: "g-community", badges: "agents" },
+    { id: "friends", label: "Friends", target: "friends", glyph: "g-chat", badges: "friends" },
+  ];
   const LOCAL_ROUTES = Object.freeze({
     home: ["workspace"],
     // "inbox" is the 0.5 layout's Work › Inbox (renderer/today.js registers it there only); a route nobody registered is skipped.
     work: ["tasks", "plans", "ideas", "inbox", "analyzer", "worktrees"],
     agents: ["agents", "command", "fleet", "eyes", "trace", "explorer", "overhead", "agent-brain", "skills", "brains", "context", "booklet", "graph", "usage"],
+    // The 0.5 layout's Friends page (its places are drawn by renderer/shell.js friendsModel); the classic layout's Friends
+    // entries are actions, so this section never shows there.
+    friends: ["friends-page"],
     settings: ["studio"],
   });
 
@@ -24732,12 +24983,100 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     }
   }
 
+  // The 0.5 layout's Help menu, in the prototype's order (HELP_ITEMS): the walkthrough, the setup guide, the keys, what
+  // changed, a problem report and the community. Each is the record it always was; one that is not there (no release
+  // notes this version) is left out.
+  const HELP_MENU_V2 = [["onboarding", "Start here"], ["setup-helper", "Setup guide"], ["help", "Shortcuts"], ["release-notes", "What's new"], ["settings:report", "Report a problem"], ["community", "Void Engine Discord"]];
+
   function railSection(dest) {
     if (!dest) return null;
     if (ownKey(RAIL_SLOTS, dest.id)) return RAIL_SLOTS[dest.id];
     if (["studio", "palette", "help", "onboarding"].includes(dest.id)) return "foot";
+    // Late arrivals the 0.5 layout's Help menu lists redraw the rail, as Community does.
+    if (v2Places() && HELP_MENU_V2.some(([id]) => id === dest.id)) return "foot";
     if (dest.kind === "action") return null;
     return RAIL_SECTIONS.some((item) => item.id === sectionOf(dest)) ? sectionOf(dest) : null;
+  }
+
+  // A rail head in the 0.5 layout: the place's own word and glyph on the route it opens, with the count it keeps.
+  function placeHead(place) {
+    const target = get(place.target);
+    const from = get(place.badges) ?? target;
+    if (!target) return null;
+    const record = {
+      id: place.target, label: place.label, short: place.label, glyph: place.glyph, key: null,
+      badge: from?.badge ?? null, alert: place.id === "map" ? null : from?.alert ?? null, dot: from?.dot ?? null,
+    };
+    const head = navButton(record, "app-rail-head", { key: false });
+    head.dataset.section = place.id;
+    head.setAttribute("aria-label", place.label);
+    head.title = place.id === "work" ? "Work: Today, your sessions and the backlog" : place.label;
+    const label = head.querySelector(".label");
+    label.className = "app-rail-text";
+    return head;
+  }
+
+  function renderRailV2(sections, foot, kept, helpWasOpen) {
+    for (const place of RAIL_PLACES) {
+      const head = placeHead(place);
+      if (!head) continue;
+      const group = document.createElement("div");
+      group.className = "app-rail-section";
+      group.dataset.section = place.id;
+      group.append(head);
+      if (place.id === "friends") {
+        const children = document.createElement("div");
+        children.className = "app-rail-children app-rail-friends";
+        children.setAttribute("role", "group"); children.setAttribute("aria-label", "Friends tools");
+        for (const id of ["rooms", "your-pcs", "playground"]) children.append(navButton(get(id), "app-rail-item", { key: false }));
+        group.append(children);
+      }
+      sections.append(group);
+    }
+    const search = navButton(get("palette"), "app-rail-item app-rail-foot-item app-rail-search");
+    search.title = "Search (Ctrl K)";
+    search.setAttribute("aria-label", "Search");
+    const searchLabel = search.querySelector(".label");
+    if (searchLabel) searchLabel.textContent = "Search";
+    search.querySelector(".key")?.remove?.();
+    const settings = navButton(get("studio"), "app-rail-item app-rail-foot-item");
+    settings.title = "Settings (Ctrl ,)";
+    settings.querySelector(".key")?.remove?.();
+    const { help, menu } = helpMenu(helpWasOpen, HELP_MENU_V2.map(([id, label]) => [get(id), label]).filter(([dest]) => dest && !dest.hidden?.()));
+    foot.append(search, settings, help, menu, ...kept);
+  }
+
+  // The Help button and its menu: each row is its record's own button.
+  function helpMenu(open, rows) {
+    const help = document.createElement("button");
+    help.id = "app-help-toggle";
+    help.className = "app-rail-item app-rail-foot-item";
+    help.type = "button";
+    help.title = "Help";
+    help.setAttribute("aria-label", "Help");
+    help.setAttribute("aria-expanded", String(open));
+    help.setAttribute("aria-controls", "app-help-menu");
+    help.append(glyphNode("g-help"));
+    const label = document.createElement("span");
+    label.className = "label";
+    label.textContent = "Help";
+    help.append(label);
+    const menu = document.createElement("div");
+    menu.id = "app-help-menu";
+    menu.hidden = !open;
+    menu.setAttribute("role", "group");
+    menu.setAttribute("aria-label", "Help");
+    for (const [dest, words] of rows) {
+      const row = navButton(dest, "app-rail-item", { key: false });
+      if (words) { const text = row.querySelector(".label"); if (text) text.textContent = words; row.title = words; }
+      menu.append(row);
+    }
+    help.addEventListener("click", () => {
+      menu.hidden = !menu.hidden;
+      help.setAttribute("aria-expanded", String(!menu.hidden));
+      if (!menu.hidden) menu.querySelector("button")?.focus?.();
+    });
+    return { help, menu };
   }
 
   function renderRail() {
@@ -24748,6 +25087,14 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const kept = Array.from(foot.children ?? []).filter((child) => !child.classList?.contains?.("app-rail-foot-item") && child.id !== "app-help-menu");
     sections.textContent = "";
     foot.textContent = "";
+    // The 0.5 layout draws the prototype's rail; the classic one below is what it was.
+    if (v2Places()) {
+      renderRailV2(sections, foot, kept, helpWasOpen);
+      window.MefiBuilder?.decorateRail?.({ sections, foot });
+      paintBadges(document.getElementById("app-rail"));
+      paintRail();
+      return;
+    }
     const compose = document.createElement("button"); compose.type = "button";
     compose.id = "app-rail-compose"; compose.className = "app-rail-item app-rail-compose";
     compose.title = "New task"; compose.setAttribute("aria-label", "New task");
@@ -24787,33 +25134,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const recentEmpty = document.createElement("span"); recentEmpty.id = "app-rail-recent-empty"; recentEmpty.textContent = "Your tasks will appear here";
     recent.append(recentHeading, recentList, recentEmpty); sections.append(recent);
     foot.append(navButton(get("studio"), "app-rail-item app-rail-foot-item"));
-    const help = document.createElement("button");
-    help.id = "app-help-toggle";
-    help.className = "app-rail-item app-rail-foot-item";
-    help.type = "button";
-    help.title = "Help";
-    help.setAttribute("aria-label", "Help");
-    help.setAttribute("aria-expanded", String(helpWasOpen));
-    help.setAttribute("aria-controls", "app-help-menu");
-    help.append(glyphNode("g-help"));
-    const label = document.createElement("span");
-    label.className = "label";
-    label.textContent = "Help";
-    help.append(label);
-    const menu = document.createElement("div");
-    menu.id = "app-help-menu";
-    menu.hidden = !helpWasOpen;
-    menu.setAttribute("role", "group");
-    menu.setAttribute("aria-label", "Help");
-    for (const id of ["onboarding", "help", "community"]) {
-      const dest = get(id);
-      if (dest) menu.append(navButton(dest, "app-rail-item", { key: false }));
-    }
-    help.addEventListener("click", () => {
-      menu.hidden = !menu.hidden;
-      help.setAttribute("aria-expanded", String(!menu.hidden));
-      if (!menu.hidden) menu.querySelector("button")?.focus?.();
-    });
+    const { help, menu } = helpMenu(helpWasOpen, ["onboarding", "help", "community"].map((id) => [get(id), null]).filter(([dest]) => dest));
     foot.append(help, menu, ...kept);
     // Build's sessions layout adds the mode switch, the work list and you.
     window.MefiBuilder?.decorateRail?.({ sections, foot });
@@ -24875,10 +25196,12 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (!rail || rail.hidden) return;
     const id = current();
     const section = sectionOf(get(id));
-    for (const group of rail.querySelectorAll(".app-rail-section")) group.classList.toggle("current", group.dataset.section === section);
+    // The 0.5 layout's rail lights the place (Home is Work's, the Command view the Map's).
+    const place = v2Places() ? placeOf(get(id)) : section;
+    for (const group of rail.querySelectorAll(".app-rail-section")) group.classList.toggle("current", group.dataset.section === place);
     for (const button of rail.querySelectorAll(".app-rail-head, .app-rail-foot-item[data-nav]")) {
       // Settings stays lit on its own pages (Size and density), as a section's head does.
-      const selected = button.classList.contains("app-rail-head") ? button.dataset.section === section : button.dataset.nav === id || (section === "settings" && button.dataset.nav === "studio");
+      const selected = button.classList.contains("app-rail-head") ? button.dataset.section === place : button.dataset.nav === id || (section === "settings" && button.dataset.nav === "studio");
       if (selected) button.setAttribute("aria-current", "page");
       else button.removeAttribute("aria-current");
     }
@@ -25139,6 +25462,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (!root) return false;
     const was = layoutOn();
     if (on) root.dataset.layout = "v2"; else delete root.dataset.layout;
+    // The rail has its places in the 0.5 layout (renderRailV2): draw it again when the layout changes under it.
+    if (Boolean(on) !== was && root.dataset.shell === "rail") renderRail();
     wireLayout(Boolean(on));
     if (on) paintLayout(); else if (was) clearLayout();
     if (on || was) announceLayout(false);
@@ -25382,7 +25707,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       const heading = document.createElement("h4");
       heading.className = "help-group";
       heading.id = `help-section-${index}`;
-      heading.textContent = title;
+      // The 0.5 layout's words for the same groups: Home is Work's, Agents is Team (with the Map's page), Command view is the Map.
+      heading.textContent = v2Places() ? ({ "Home & Work": "Work", Agents: "Team and Map", "Command view": "Map" })[title] ?? title : title;
       group.setAttribute("aria-labelledby", heading.id);
       group.append(heading);
       for (const dest of items) {
@@ -25524,7 +25850,13 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         params = {};
       }
     }
-    if (button.classList.contains("app-rail-head")) {
+    if (button.classList.contains("app-rail-head") && v2Places()) {
+      // A place's head goes back to where you were in it, and from inside it to its own first page:
+      // Work to Today, Map to the Map, Team to its Overview.
+      const place = button.dataset.section, fallback = button.dataset.nav;
+      const target = placeOf(get(current())) === place ? { id: fallback, params: {} } : lastSectionRoute(place, fallback);
+      go(target.id, target.params);
+    } else if (button.classList.contains("app-rail-head")) {
       const section = button.dataset.section;
       const fallback = section === "agents" ? "command" : button.dataset.nav;
       const target = sectionOf(get(current())) === section
@@ -26610,6 +26942,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     railSection,
     sectionLabel,
     sectionRank,
+    // The 0.5 layout's places: placeOf(record, params) is "work", "map", "team", ... (the section with v2 off).
+    placeOf: (dest, params) => placeOf(typeof dest === "string" ? get(dest) : dest, params),
+    placeLabel,
+    PLACES: Object.freeze(Object.fromEntries(PLACES)),
     RAIL_SLOTS,
     applyShell,
     setShell,
@@ -63013,7 +63349,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   const STAGE_WORDS = Object.freeze({ ask: "Needs you", run: "Running", check: "Review", wait: "Queued", ready: "Queued", done: "Done", dropped: "Done" });
   const STAGE_RANK = Object.freeze({ ask: 0, run: 1, check: 2, wait: 3, ready: 3, done: 4, dropped: 4 });
   const BROWSE_SESSIONS = 6;
-  const PLACES = Object.freeze([["Home", "workspace"], ["Work", "tasks"], ["Agents", "agents"], ["Friends", "friends"], ["Settings", "studio"]]);
+  // The rail's places (renderer/nav.js, RAIL_PLACES), each by the page it opens and with the rail's glyph: Work is Home
+  // (Work › Today), the Map is the Command view, Team is the Agents page.
+  const PLACES = Object.freeze([["Work", "workspace", "g-tasks"], ["Map", "command", "g-command"], ["Team", "agents", "g-community"], ["Friends", "friends", "g-chat"], ["Settings", "studio", null]]);
   const board = () => { const data = window.MefiWorkspace?.snapshot?.(); return data && data.projectId ? data : null; };
   const stampOf = (value) => { const number = Number(value); return Number.isFinite(number) && number > 0 ? number : Date.parse(value || "") || 0; };
   const movedAt = (task) => Math.max(stampOf(task.updatedAt), stampOf(task.doneAt), stampOf(task.createdAt), stampOf(task.lastAttempt?.at));
@@ -63053,9 +63391,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // The rail's places, by the page each opens, with the key that page already has.
   function placesV2() {
     const nav = window.MefiNav;
-    return PLACES.map(([label, id]) => [label, nav?.get?.(id)]).filter(([, dest]) => dest && !dest.hidden?.()).map(([label, dest]) => ({
+    return PLACES.map(([label, id, glyph]) => [label, nav?.get?.(id), glyph]).filter(([, dest]) => dest && !dest.hidden?.()).map(([label, dest, glyph]) => ({
       key: `place:${dest.id}`, kind: "Places", label: `Go to ${label}`, description: dest.desc || "", searchTerms: `${label} ${dest.label || ""} ${dest.searchTerms || ""}`,
-      hint: dest.chord || dest.key || "", keyHint: Boolean(dest.chord || dest.key), count: 0, glyph: dest.glyph || "g-frame", browse: true,
+      hint: dest.chord || dest.key || "", keyHint: Boolean(dest.chord || dest.key), count: 0, glyph: glyph || dest.glyph || "g-frame", browse: true,
       run: () => nav.go(dest.id),
     }));
   }
@@ -63370,6 +63708,16 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       li.addEventListener("click", () => run(index));
       el.list.append(li);
     });
+    // Past the twelve shown, the list says there is more and how to reach it (the status line says it for a screen reader).
+    const more = state.filtered.length - items.length;
+    if (more > 0) {
+      const foot = document.createElement("li");
+      foot.className = "palette-more";
+      foot.setAttribute("role", "presentation");
+      foot.setAttribute("aria-hidden", "true");
+      foot.textContent = `${more} more result${more === 1 ? "" : "s"} · keep typing to narrow them`;
+      el.list.append(foot);
+    }
     setActiveOption();
   }
 
@@ -73877,6 +74225,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     // Vibe's rail is how Vibe mode moves between pages: its clicks navigate
     // (go() leaves the preview) instead of dismissing into Command.
     if (event.target?.closest?.("#vibe-rail") || event.target?.closest?.("#media-window")) return;
+    // So are the 0.5 layout's rail and its list column (Settings' places, Map look among them): a row there navigates.
+    if (document.documentElement?.dataset?.layout === "v2" && event.target?.closest?.("#shell-pages, #app-rail")) return;
     const consume = () => { event.preventDefault(); event.stopImmediatePropagation(); };
     const canDismiss = () => {
       const transient = window.MefiNav?.state?.transient;
@@ -74034,7 +74384,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (!window.MefiNav?.release) priorFocus?.focus?.();
   }
   window.MefiMusic = { init, open, openPreview, openAudio, closeAudio, toggleAudio, openSection, mountSettings, activateSettings, revealSettingsTarget, settingsAppearanceActive: () => settingsAppearance, leaveSettingsAppearance: (options) => setSettingsAppearance(false, options), close, status, graphPreferences, applyNodeStyle, applyNodeLayout, applyNodeEffects, getAudioElement: () => { init(); return activeDeck(); }, tune, stopRadio,
-    stations: () => STATIONS.map((item) => ({ id: item.id, name: item.name, detail: item.detail, origin: item.origin, mirrors: item.mirrors.length })), setRecommender: (fn) => { recommender = typeof fn === "function" ? fn : null; render(); }, addFiles, setSource, applyTheme, applyCustomColors,
+    stations: () => STATIONS.map((item) => ({ id: item.id, name: item.name, detail: item.detail, origin: item.origin, mirrors: item.mirrors.length })),
+    // Where the playing source is ({ position, duration } in seconds; duration 0 for a stream with no end): the status bar's time left.
+    playback: () => { const at = playbackPosition(); return { position: at.position, duration: at.duration }; }, setRecommender: (fn) => { recommender = typeof fn === "function" ? fn : null; render(); }, addFiles, setSource, applyTheme, applyCustomColors,
     // The free palettes as swatches, and the one on screen (Vibe's settings panel).
     themes: () => Object.entries(THEMES).map(([key, theme]) => ({ key, name: theme.name, accent: theme.accent, bright: theme.bright, bg: theme.bg, panel: theme.panel, ...(theme.accent2 ? { accent2: theme.accent2 } : {}) })),
     // Every node style and layout, for the setup helper's Look section.
@@ -76925,17 +77277,53 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       }
     }
 
+    // Linking happens right here: Discord asks once in the browser, then the
+    // room service connects by itself. Not in the server yet: join, then check.
+    let autoConnected = false;
+    const connectNow = () => guard("Connecting…", async () => {
+      const answer = await api.hubConnect();
+      if (answer?.status?.state === "ready" || answer?.ok) await load(); else explain(answer?.status);
+    });
+    async function linkHere() {
+      const community = window.MefiCommunity;
+      if (typeof community?.link !== "function") { window.MefiCompanionHub?.close?.({ immediate: true, restore: false }); window.MefiNav?.go?.("community"); return; }
+      status.textContent = "Discord is asking in your browser. Press Authorize there, then come back.";
+      const linked = await community.link();
+      if (linked?.ok) { autoConnected = true; await connectNow(); return; }
+      if (linked?.error === "not-member") { notMember(); return; }
+      status.textContent = linked?.error === "canceled" ? "Linking was cancelled. Press Link Discord to try again." : "Linking didn't finish. Press Link Discord to try again.";
+    }
+    function notMember() {
+      root.dataset.state = "not-member";
+      status.textContent = "Your Discord account isn't in the Void Engine server yet. Join it, then check again.";
+      body.replaceChildren(button("Join the Discord", () => { void window.MefiCommunity?.join?.(); }, "rooms-join"), button("I've joined, check again", () => guard("Checking…", async () => {
+        const checked = await window.MefiCommunity?.check?.();
+        if (checked?.ok === false && checked.error === "not-member") { notMember(); return; }
+        autoConnected = true;
+        const answer = await api.hubConnect();
+        if (answer?.status?.state === "ready" || answer?.ok) await load(); else explain(answer?.status);
+      }), "rooms-recheck"));
+    }
     function explain(hub) {
       if (!hub?.configured) {
-        status.textContent = "Rooms need the Void Engine room service, which this PC is not connected to yet: add its address in Settings › General › Community › Connection details.";
+        status.textContent = "Rooms need the room service, which this copy of Studio has no address for: add one in Settings › General › Community › Connection details.";
         root.dataset.state = "not-configured";
         body.replaceChildren();
         return false;
       }
       if (!hub.linked) {
-        status.textContent = "Link your Discord account to use rooms.";
+        status.textContent = "Link your Discord account to use rooms. Discord asks once in your browser.";
         root.dataset.state = "not-linked";
-        body.replaceChildren(button("Connect with Discord", () => { window.MefiCompanionHub?.close?.({ immediate: true, restore: false }); window.MefiNav?.go?.("community"); }, "rooms-link"));
+        body.replaceChildren(button("Link Discord", () => { void linkHere(); }, "rooms-link"));
+        return false;
+      }
+      if (hub.error === "not-member") { notMember(); return false; }
+      // Linked and simply not connected yet: opening Rooms is the ask, so connect once by itself.
+      if (hub.state === "off" && !hub.error && !autoConnected) {
+        autoConnected = true;
+        root.dataset.state = "connecting";
+        status.textContent = "Connecting to the room service…";
+        void connectNow();
         return false;
       }
       if (hub.state !== "ready") {
@@ -77025,9 +77413,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
 // is featured, a faint line between projects by the same maker); New, Top
 // and Mine list the same cards; Share adds yours.
 //
-// Credits are earned, never bought: sharing a project, a member playing it
-// for two minutes or starring it, and playing other members' projects. They
-// are spent on a day at the top of the hub. Ranks: a level from lifetime
+// Sharing is free and earns nothing by itself. Credits come from playing:
+// when a member plays someone else's project for two minutes, both earn (the
+// maker 5, the player 2), and a star earns the maker 3. Never bought; spent
+// on a day at the top of the hub. Ranks: a level from lifetime
 // credits (Spark to Void) and the member's Discord roles as special ranks.
 // Your balance is yours; others see only your rank badge.
 //
@@ -77245,6 +77634,18 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
             ctx.beginPath(); ctx.arc(at.x, at.y, star.r + 5, 0, Math.PI * 2); ctx.stroke();
           }
         }
+        // Names beside the stars while the map is not crowded; the list below always has them.
+        if (stars.length <= 30) {
+          ctx.font = "12px system-ui, sans-serif";
+          ctx.textBaseline = "middle";
+          for (const star of stars) {
+            const at = place(star);
+            const right = at.x < width - 120;
+            ctx.textAlign = right ? "left" : "right";
+            ctx.fillStyle = star.project.id === selected ? tone("--ivory", "#fff") : tone("--muted", "#abc4c9");
+            ctx.fillText(star.project.title, at.x + (right ? 1 : -1) * (star.r + 8), at.y);
+          }
+        }
         canvas.dataset.stars = String(stars.length);
         canvas._place = place;
       }
@@ -77294,14 +77695,14 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       const submit = node("button", "project-hub-button", "Share it");
       submit.type = "submit";
       form.append(field("Link", url), field("Title", name), field("About it", blurb), field("Kind", kind), submit,
-        node("p", "muted", "Only the link, title and line above are kept on the hub, never a file. Sharing earns 10 credits once a day; each member who plays it for two minutes earns you 5."));
+        node("p", "muted", "Sharing is free. Only the link, title and line above are kept on the hub, never a file. When a member plays it for two minutes, you both earn credits: 5 for you, 2 for them."));
       form.addEventListener("submit", (event) => {
         event.preventDefault();
         void guard("Sharing…", async () => {
           const answer = await call("shareProject", { url: url.value.trim(), title: name.value.trim(), blurb: blurb.value.trim(), kind: kind.value });
           if (!answer?.ok) { status.textContent = why(answer, "That could not be shared."); return; }
           Object.assign(draft, { url: "", title: "", blurb: "" });
-          status.textContent = answer.credited ? `Shared. +${answer.credited} credits.` : "Shared.";
+          status.textContent = "Shared. When members play it for two minutes, you both earn credits.";
           tab = "mine";
           await refresh();
         });
@@ -77370,12 +77771,47 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       });
     }
 
+    // Linking happens right here (Discord asks once in the browser), then the
+    // room service connects by itself; opening the hub while linked connects once.
+    let autoConnected = false;
+    const connectNow = () => guard("Connecting…", async () => {
+      const answer = await api.hubConnect();
+      if (answer?.status?.state === "ready" || answer?.ok) await load(); else explain(answer?.status);
+    });
+    async function linkHere() {
+      const community = window.MefiCommunity;
+      if (typeof community?.link !== "function") { window.MefiNav?.go?.("community"); return; }
+      status.textContent = "Discord is asking in your browser. Press Authorize there, then come back.";
+      const linked = await community.link();
+      if (linked?.ok) { autoConnected = true; await connectNow(); return; }
+      if (linked?.error === "not-member") { notMember(); return; }
+      status.textContent = linked?.error === "canceled" ? "Linking was cancelled. Press Link Discord to try again." : "Linking didn't finish. Press Link Discord to try again.";
+    }
+    function notMember() {
+      root.dataset.state = "not-member";
+      status.textContent = "Your Discord account isn't in the Void Engine server yet. Join it, then check again.";
+      body.replaceChildren(button("Join the Discord", () => { void window.MefiCommunity?.join?.(); }, "project-hub-join"), button("I've joined, check again", () => guard("Checking…", async () => {
+        const checked = await window.MefiCommunity?.check?.();
+        if (checked?.ok === false && checked.error === "not-member") { notMember(); return; }
+        autoConnected = true;
+        const answer = await api.hubConnect();
+        if (answer?.status?.state === "ready" || answer?.ok) await load(); else explain(answer?.status);
+      }), "project-hub-recheck"));
+    }
     function explain(hub) {
-      if (!hub?.configured) { status.textContent = "The project hub needs the room service, which this PC is not connected to yet."; root.dataset.state = "not-configured"; body.replaceChildren(); return false; }
+      if (!hub?.configured) { status.textContent = "The project hub needs the room service, which this copy of Studio has no address for."; root.dataset.state = "not-configured"; body.replaceChildren(); return false; }
       if (!hub.linked) {
-        status.textContent = "Link your Discord account to share and play projects.";
+        status.textContent = "Link your Discord account to share and play projects. Discord asks once in your browser.";
         root.dataset.state = "not-linked";
-        body.replaceChildren(button("Connect with Discord", () => window.MefiNav?.go?.("community"), "project-hub-link"));
+        body.replaceChildren(button("Link Discord", () => { void linkHere(); }, "project-hub-link"));
+        return false;
+      }
+      if (hub.error === "not-member") { notMember(); return false; }
+      if (hub.state === "off" && !hub.error && !autoConnected) {
+        autoConnected = true;
+        root.dataset.state = "connecting";
+        status.textContent = "Connecting to the room service…";
+        void connectNow();
         return false;
       }
       if (hub.state !== "ready") {
@@ -77403,7 +77839,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       if (root.isConnected === false) { dispose(); return; }
       if (event?.type === "credits" && me) {
         me.credits = { ...me.credits, balance: event.balance, lifetime: event.lifetime ?? me.credits.lifetime, today: event.today ?? me.credits.today };
-        if (event.delta > 0) status.textContent = `+${event.delta} credits${{ share: " for sharing", played: ": someone played your project", play: " for playing", starred: ": someone starred your project" }[event.reason] ?? ""}.`;
+        if (event.delta > 0) status.textContent = `+${event.delta} credits${{ played: ": someone played your project", play: " for playing", starred: ": someone starred your project" }[event.reason] ?? ""}.`;
         void refresh();
       } else if (event?.type === "played") {
         status.textContent = event.counted ? `Play counted${event.credited?.you ? `: +${event.credited.you} credits for you` : ""}.` : "Play noted.";
@@ -80137,7 +80573,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     setupBox.id = "community-setup";
     const client = setupField("Link app ID", "community-setup-client", "17 to 20 digits");
     client.input.inputMode = "numeric";
-    const hub = setupField("Rooms hub address", "community-setup-hub", "https://hub.example.com");
+    const hub = setupField("Rooms hub address", "community-setup-hub", "https://mefi-relay.mefi-studio.workers.dev");
     const env = node("p", "muted community-setup-env");
     env.id = "community-setup-env";
     env.hidden = true;
@@ -80174,7 +80610,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     setupBox.addEventListener("toggle", () => { if (setupBox.open) setupTouched = true; });
     setupBox.append(
       node("summary", "", "Connection details"),
-      node("p", "muted", "Studio reaches the Void Engine through two public values: the Mefi Studio Link Application ID (Discord Developer Portal) and the rooms hub's address. Set them once on each PC; they apply at once."),
+      node("p", "muted", "Studio has the Mefi Studio relay and its Discord link app built in. Fill these in only to point this PC at another relay or a test hub; empty boxes use the built-in ones. Changes apply at once."),
       client.wrap, hub.wrap, env, row(save), result,
     );
     body.after(setupBox);
@@ -80929,6 +81365,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
   function openSettings() {
     if (window.MefiVibe?.mode?.() === "vibe") window.MefiVibe.openPanel("settings");
+    // In the 0.5 layout the full control lives on Team › Permissions (renderer/agents.js), which is where Build goes.
+    else if (document.documentElement?.dataset?.layout === "v2" && window.MefiNav?.go) window.MefiNav.go("agents", { place: "perms" });
     else {
       let dialog = document.getElementById("autonomy-settings-dialog");
       if (!dialog) {
@@ -81827,6 +82265,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const section = typeof options === "string" ? options : options?.section;
     const target = typeof options === "object" ? options?.target : null;
     const requested = items.some(([id]) => id === section) ? section : null;
+    // In the 0.5 layout Friends is a place of its own (openPlace below): asked for, it opens there instead of a bubble.
+    if (requested === "friends" && friendsLayout()) {
+      if (hub.open) close({ immediate: true, restore: false });
+      window.MefiNav?.go?.("friends-page", { place: friendsPlaceOfTarget(target) ?? "rooms" });
+      return true;
+    }
     if (hub.open) {
       if (hub.closing) { clearTimeout(hub.timer); hub.closing = false; el.layer.classList.remove("leaving"); }
       if (requested) { if (hub.section === requested) focusFriend(target); else select(requested, target); }
@@ -81878,6 +82322,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     heading.focus({ preventScroll: true }); heading.scrollIntoView?.({ block: "start", behavior: "instant" });
   }
   function select(section, target = null) {
+    // The Friends bubble in the 0.5 layout goes to the Friends place (openPlace).
+    if (section === "friends" && friendsLayout()) { navigate(() => window.MefiNav?.go?.("friends-page", { place: friendsPlaceOfTarget(target) ?? "rooms" })); return; }
     const previous = hub.section; hub.section = section;
     hub.friendTarget = section === "friends" && Object.hasOwn(FRIENDS_TARGETS, target) ? target : null;
     if (host.panel.parentElement === el.detail) {
@@ -82059,7 +82505,95 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (index < 0 || event.shiftKey && index === 0 || !event.shiftKey && index === controls.length - 1) { event.preventDefault(); controls[event.shiftKey ? controls.length - 1 : 0].focus(); }
     event.stopPropagation();
   }
-  window.MefiCompanionHub = { attach, face, play, thinking, boot, handoff, guide, open, close, update, resize, back: () => select(null), isOpen: () => hub.open, contains: (target) => Boolean(hub.open && el.layer?.contains(target)) };
+  // ---- Friends in the 0.5 layout (html[data-layout="v2"]) ----
+  // The prototype's Friends (docs/prototype/mefi-studio-0.5-v5.html: friendsView, FRIEND_SUBS) is a place of three pages,
+  // one at a time beside the list column: Rooms (renderer/rooms.js), Your PCs (renderer/pc-sync.js) and Playground
+  // (renderer/companion-friends.js). They are the cards the hub's Friends bubble stacks, with their ids, controls and host
+  // calls; nothing is copied. renderer/nav.js sends go("friends") and its three ways in here while the layout is on (the
+  // route "friends-page", { place }), and renderer/shell.js draws the list (friendsPlaces) and the breadcrumb (friendsPlace).
+  // Without the layout none of this is built and the hub's Friends bubble is as it was.
+  const friendsLayout = () => document.documentElement?.dataset?.layout === "v2";
+  const FRIENDS_PLACES = Object.freeze([
+    { id: "rooms", label: "Rooms", glyph: "g-orbit", about: "Hang out, cowork, listen together, or share what you are making. Rooms are optional and never see your projects unless you share them." },
+    { id: "pcs", label: "Your PCs", glyph: "g-explorer", about: "Keep work in step across machines through GitHub. Studio only looks until you press Sync." },
+    { id: "playground", label: "Playground", glyph: "g-ambience", about: "Practice with your companion, and set what it may share." },
+    // renderer/project-hub.js: members' shared projects, credits and ranks on the Mefi Studio relay.
+    { id: "hub", label: "Project hub", glyph: "g-orbit", about: "Share what you make and play what friends make. Playing someone else's project for two minutes earns you both credits." },
+  ]);
+  // The hub's targets (FRIENDS_TARGETS) name the same three places.
+  const friendsPlaceOfTarget = (target) => (FRIENDS_PLACES.some((place) => place.id === target) ? target : null);
+  const friendsPage = { place: null, root: null, body: null, title: null, about: null };
+  const friendsPlaceById = (id) => FRIENDS_PLACES.find((place) => place.id === id) ?? null;
+  const friendsOpen = () => Boolean(friendsPage.root && friendsPage.root.hidden === false);
+  function mountFriendsPage() {
+    if (friendsPage.root) return;
+    const overlay = node("div", "overlay friends-place"); overlay.id = "friends-overlay"; overlay.hidden = true;
+    const sheet = node("section", "sheet friends-place-sheet"); sheet.tabIndex = -1;
+    sheet.setAttribute("role", "region"); sheet.setAttribute("aria-labelledby", "friends-place-title");
+    const head = node("header", "friends-place-head");
+    const title = node("h1", "", "Friends"); title.id = "friends-place-title"; title.tabIndex = -1;
+    const about = node("p", "muted friends-place-about");
+    head.append(title, about);
+    const body = node("div", "friends-place-body"); body.id = "friends-place-body";
+    sheet.append(head, body); overlay.append(sheet); document.body.append(overlay);
+    Object.assign(friendsPage, { root: overlay, body, title, about });
+  }
+  // A place's card, made when it shows; the one before lets go of what it holds first (Rooms' open room).
+  function paintFriendsPlace(place) {
+    for (const child of [...friendsPage.body.children]) child.dispose?.();
+    let card = null;
+    if (place.id === "rooms") card = window.MefiRooms?.panel?.();
+    else if (place.id === "hub") card = window.MefiProjectHub?.card?.();
+    else if (place.id === "pcs") card = window.MefiPcSync?.card?.();
+    else card = window.MefiCompanionFriends?.card?.({ name: name(), face: (look) => lookFace(look) });
+    const parts = [card ?? node("p", "muted", "This part of Friends is not in this build.")];
+    // What the hub's Friends bubble also offered: listening together and the Discord community.
+    if (place.id === "playground") {
+      const more = node("div", "friends-place-more");
+      more.append(button("Friends & listening rooms", () => { window.MefiMusic?.openAudio?.(); window.MefiMusic?.setSource?.("link"); window.MefiMusic?.openSection?.("more"); }, "ghost"),
+        button("Connect with Discord", () => window.MefiNav?.go?.("community"), "ghost"));
+      parts.push(more);
+    }
+    friendsPage.body.replaceChildren(...parts);
+    friendsPage.body.dataset.place = place.id;
+  }
+  function openPlace(params = {}) {
+    if (!friendsLayout()) return false;
+    mountFriendsPage();
+    const place = friendsPlaceById(params.place) ?? friendsPlaceById(friendsPlaceOfTarget(params.target)) ?? friendsPlaceById(friendsPage.place) ?? FRIENDS_PLACES[0];
+    window.MefiNav?.claim?.("friends-page");
+    const moved = friendsPage.place !== place.id;
+    friendsPage.root.hidden = false;
+    friendsPage.root.dataset.place = place.id;
+    friendsPage.title.textContent = place.label;
+    friendsPage.about.textContent = place.about;
+    if (moved || !friendsPage.body.childElementCount) { paintFriendsPlace(place); friendsPage.body.scrollTop = 0; }
+    friendsPage.place = place.id;
+    if (moved) window.dispatchEvent(new CustomEvent("mefi:friends-place", { detail: { place: place.id } }));
+    window.MefiNav?.paintCurrent?.();
+    window.MefiScroll?.scan?.(friendsPage.root);
+    return true;
+  }
+  function closePlace() {
+    if (!friendsPage.root) return;
+    for (const child of [...friendsPage.body.children]) child.dispose?.();
+    friendsPage.body.replaceChildren();
+    friendsPage.root.hidden = true;
+    friendsPage.place = null;
+  }
+  // The places in order, for a list drawn elsewhere (renderer/shell.js): each with whether it shows and the way there.
+  function friendsPlaces() {
+    if (!friendsLayout()) return null;
+    const here = friendsOpen() ? friendsPage.place : null;
+    return FRIENDS_PLACES.map((place) => ({ id: place.id, label: place.label, glyph: place.glyph, current: place.id === here, run: () => window.MefiNav?.go?.("friends-page", { place: place.id }) }));
+  }
+  // Where you are in Friends ({ id, label }), for the breadcrumb and the tab; null when the page is not up.
+  function friendsPlace() {
+    const place = friendsOpen() ? friendsPlaceById(friendsPage.place) : null;
+    return place ? { id: place.id, label: place.label } : null;
+  }
+  window.MefiCompanionHub = { attach, face, play, thinking, boot, handoff, guide, open, close, update, resize, back: () => select(null), isOpen: () => hub.open, contains: (target) => Boolean(hub.open && el.layer?.contains(target)),
+    openPlace, closePlace, friendsPlaces, friendsPlace, FRIENDS_PLACES };
 })();
 
 // Project map navigation: evidence-backed relationships and a living work tree.
@@ -84700,6 +85234,91 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       views: (children[section] || []).map(([childLabel, childRoute, childTarget = {}]) => ({ label: childLabel, current: selected(childRoute, childTarget), run: () => go(childRoute, childTarget) })),
     }));
   }
+  // ---- Team: the 0.5 layout's place (html[data-layout="v2"]) ----
+  // The prototype's Team (docs/prototype/mefi-studio-0.5-v5.html: TEAM_SUBS, teamView, WHERE_WENT) is this page and the
+  // pages it already led to, filed into twelve places. A place is either panes of this page (Overview is the overview and
+  // the run behavior; Seats and models the team and its routing; Providers the connections; Permissions, Rules,
+  // Connectors and Related folders panes the 0.5 layout adds), or pages that exist (Skills; Workflows: Brain maps,
+  // Playbook, Project map, Context; Health and usage; Models: Catalog and Performance; Inspect: Sessions, Activity and
+  // evidence, Trace, Overhead, the profiler, machine status and the connection log). Cards keep their ids, controls and
+  // host calls; nothing is copied. Old parameters ({ section, pane }) and deep links land in the place that holds them,
+  // and go("agents", { place }) is the new way in. Where the engine has nothing for a place (Related folders) the page
+  // says what exists and what does not. renderer/shell.js draws the list (teamPlaces) and the breadcrumb (teamPlace).
+  const teamLayout = () => document.documentElement?.dataset?.layout === "v2";
+  const TEAM_PLACES = Object.freeze([
+    { id: "overview", label: "Overview", glyph: "g-home", panes: ["overview", "behavior"], draft: true, about: "Who does the work, how many can work at once, and how much they can do without asking." },
+    { id: "providers", label: "Providers", glyph: "g-key", panes: ["connections"], about: "Where the models come from. Connect what you already pay for, or add a key. Seats choose from what is connected here." },
+    { id: "seats", label: "Seats and models", glyph: "g-agents", panes: ["team", "routing"], draft: true, about: "Each seat keeps its place on the team when the agent behind it changes. Changes apply when you press Apply changes." },
+    { id: "perms", label: "Permissions", glyph: "g-flag", panes: ["perms"], about: "How much Mefi can decide without asking you. Every mode leaves the same things to you." },
+    { id: "rules", label: "Rules", glyph: "g-booklet", group: "Context for agents", panes: ["rules"], scoped: true, about: "Standing rules every model on this project reads. Write what you would tell a new teammate on their first day." },
+    { id: "skills", label: "Skills", glyph: "g-skills", group: "Context for agents", views: [["Skills", "skills"]] },
+    { id: "connectors", label: "Connectors", glyph: "g-plug", group: "Context for agents", panes: ["connectors"], about: "Connectors give agents extra tools, like GitHub or a browser. Each one is a program that runs on this PC." },
+    { id: "folders", label: "Related folders", glyph: "g-explorer", group: "Context for agents", panes: ["folders"], about: "Extra folders agents may read but never change." },
+    { id: "flows", label: "Workflows", glyph: "g-route", group: "Context for agents", views: [["Brain maps", "brains"], ["Playbook", "agent-brain", { tab: "playbook" }], ["Project map", "agent-brain", { tab: "map" }], ["Context", "context"]] },
+    { id: "health", label: "Health and usage", glyph: "g-gauge", group: "Monitor", views: [["Recorded calls", "usage", { view: "usage" }], ["Provider accounts", "usage", { view: "tracker" }]] },
+    { id: "models", label: "Models", glyph: "g-graph", group: "Monitor", views: [["Catalog", "booklet"], ["Performance", "graph"]] },
+    { id: "inspect", label: "Inspect", glyph: "g-eyes", group: "Monitor", views: [["Sessions", "explorer"], ["Activity and evidence", "eyes"], ["Trace", "trace"], ["Overhead", "overhead"], ["Performance profiler", "profiler"], ["Machine status", "explorer", { panel: "diagnostics" }], ["Connection log", "agents", { place: "providers", target: "settings-log" }]] },
+  ]);
+  // The panes of the classic Agents page, by the place that holds them now.
+  const PANE_PLACES = Object.freeze({ overview: "overview", behavior: "overview", connections: "providers", team: "seats", routing: "seats", perms: "perms", rules: "rules", connectors: "connectors", folders: "folders" });
+  const teamPlaceById = (id) => TEAM_PLACES.find((place) => place.id === id) ?? null;
+  // The place this page shows for a set of parameters: { place } itself, else the pane a target sits in, else the classic
+  // { section, pane } (Setup with no pane was Team & models).
+  function teamPlaceFromParams(options = {}) {
+    if (teamPlaceById(options.place)?.panes) return options.place;
+    const holder = options.target ? $(options.target)?.closest?.("[data-agents-pane]")?.dataset?.agentsPane : null;
+    if (holder && PANE_PLACES[holder]) return PANE_PLACES[holder];
+    if (options.section === "setup") return PANE_PLACES[options.pane] || "seats";
+    return PANE_PLACES[options.pane] && options.section !== "overview" ? PANE_PLACES[options.pane] : "overview";
+  }
+  const brainTabOf = (options) => options?.tab ?? window.MefiAgentBrain?.tab?.() ?? null;
+  // The Team place a route is in, or null (the Map's pages, and everything that is not Team's).
+  function teamPlaceOf(id, options) {
+    if (id === "agents") return options ? teamPlaceFromParams(options) : params.place || teamPlaceFromParams(params);
+    for (const place of TEAM_PLACES) for (const [, route, target = {}] of place.views || []) {
+      if (route !== id || route === "agents") continue;
+      if (route === "agent-brain" && target.tab !== brainTabOf(options)) continue;
+      return place.id;
+    }
+    return null;
+  }
+  function teamViewCurrent(id, route, target) {
+    if (route !== id || route === "agents") return false;
+    if (route === "agent-brain") return target.tab === brainTabOf();
+    if (route === "usage") return target.view === (window.MefiModelLab?.view?.() === "tracker" ? "tracker" : "usage");
+    // Sessions and Machine status are one page (the Explorer); its rows go to its panels, and the page is Sessions.
+    if (route === "explorer") return !target.panel;
+    return true;
+  }
+  function openTeamPlace(id) {
+    const place = teamPlaceById(id);
+    if (!place) return;
+    if (place.views) { const [, route, target = {}] = place.views[0]; go(route, target); }
+    else go("agents", { place: place.id });
+  }
+  // The places in order, for a list drawn elsewhere (renderer/shell.js): each with whether you are in it, the way there, and
+  // the pages it holds with the one you are on. Null with the layout off.
+  function teamPlaces(id = window.MefiNav?.current?.()) {
+    if (!teamLayout()) return null;
+    const here = teamPlaceOf(id);
+    return TEAM_PLACES.map((place) => ({
+      id: place.id, label: place.label, glyph: place.glyph, group: place.group ?? null, current: place.id === here, run: () => openTeamPlace(place.id),
+      views: (place.views || []).map(([label, route, target = {}]) => ({ label, current: place.id === here && teamViewCurrent(id, route, target), run: () => go(route, target) })),
+    }));
+  }
+  // Where you are in Team ({ id, label }), for the breadcrumb; null outside Team or with the layout off.
+  function teamPlace(id = window.MefiNav?.current?.(), options) {
+    if (!teamLayout()) return null;
+    const place = teamPlaceById(teamPlaceOf(id, options));
+    return place ? { id: place.id, label: place.label } : null;
+  }
+  // The place a control on this page sits in now (Search's words for it), or null.
+  function teamPlaceOfElement(element) {
+    const pane = element?.closest?.("[data-agents-pane]")?.dataset?.agentsPane;
+    const place = teamLayout() && pane ? teamPlaceById(PANE_PLACES[pane]) : null;
+    return place ? { id: place.id, label: place.label } : null;
+  }
+
   let closeNavMenu = () => {};
   function paintNav(nav, id, options = {}) {
     const here = location(id, options), signature = JSON.stringify([id, here, window.MefiAgentBrain?.tab?.(), options.view || window.MefiModelLab?.view?.()]);
@@ -84790,6 +85409,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   const aliases = { connections: "connections", providers: "connections", "auto-setup": "connections", "settings-setup": "connections", "settings-assistant": "connections", "decision-model": "connections", "settings-jev": "connections", models: "routing", "model-routing": "routing", "settings-routing": "routing", "coding-workers": "routing", "settings-workers": "routing", automation: "behavior", "agents-queue": "behavior", "settings-automation": "behavior", "settings-automation-behavior": "behavior", "connection-log": "connections", "settings-log": "connections" };
   function redirect(id, options = {}) {
     if (id === "agent-brain" && options.tab === "seats") return { id: "agents", params: { section: "setup", pane: "team" } };
+    // go("agents", { place }) for a place that is pages of its own (Skills, Models, ...) opens its first page.
+    if (id === "agents" && teamPlaceById(options.place)?.views) { const [, route, target = {}] = teamPlaceById(options.place).views[0]; return { id: route, params: { ...target } }; }
     if (id !== "studio") return null;
     const target = options.section || options.category || "";
     const pane = aliases[target] || $(target)?.closest?.("[data-agents-pane]")?.dataset.agentsPane;
@@ -84828,9 +85449,13 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     $("agents-connections").prepend(node("p", "agents-scope-note", "Device-wide connections · Keys stay encrypted on this machine. Teams reference these connections."));
     // All routes into these controls resolve here, including older saved tours.
     for (const pane of body.querySelectorAll("[data-agents-pane]")) for (const el of pane.querySelectorAll("input[id], select[id], button[id], details[id]")) {
-      const label = el.getAttribute("aria-label") || el.closest("label")?.querySelector(".field-label, b")?.textContent || (el.querySelector("summary b, summary strong") || el.querySelector("summary"))?.textContent || el.title;
+      // A plain button (Run auto setup, Save) is named by its own words, so Search does not keep the name Settings gave
+      // it before the card moved here.
+      const label = el.getAttribute("aria-label") || el.closest("label")?.querySelector(".field-label, b")?.textContent || (el.querySelector("summary b, summary strong") || el.querySelector("summary"))?.textContent || el.title || (el.tagName === "BUTTON" ? el.textContent.replace(/\s+/g, " ").trim() : "");
       const help = (el.closest("label")?.querySelector("small") || el.querySelector("summary small, summary .settings-summary-text > span"))?.textContent?.trim() || "";
-      if (label) window.MefiNav?.register({ id: `settings:${el.id}`, kind: "action", section: "agents", group: "tools", label: `Agents › ${label.trim().slice(0, 100)}`, desc: help.slice(0, 160), glyph: "g-agents", showIn: { palette: true }, run: () => go("agents", { section: "setup", pane: pane.dataset.agentsPane, target: el.id }) });
+      // In the 0.5 layout Search names the control by the Team place that holds it now (read when Search reads it).
+      const words = label?.trim().slice(0, 100);
+      if (label) window.MefiNav?.register({ id: `settings:${el.id}`, kind: "action", section: "agents", group: "tools", get label() { const place = teamPlaceOfElement(el); return place ? `Team › ${place.label} › ${words}` : `Agents › ${words}`; }, desc: help.slice(0, 160), glyph: "g-agents", showIn: { palette: true }, run: () => go("agents", { section: "setup", pane: pane.dataset.agentsPane, target: el.id }) });
     }
     $("agents-team").append(buildRules());
     buildSetupHeader(); buildOverview(); buildRoles(); buildBehavior();
@@ -85313,6 +85938,63 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const local = card("Local studio roles", "Watcher, Machine, Auditor, Keeper, Compactor, Foreman and Reference organise and inspect local work. Their maintenance does not require a model.");
     local.append(node("p", "muted", "The Briefer, Overseer, Ideas, Improver, Grower, Responder and cluster planning/review roles inherit the configured routine or heavy route.")); root.append(local);
   }
+  // The 0.5 layout's panes, made once, the first time Team opens with the layout on: Permissions (the full permission
+  // control, which Build opened as a dialog), Rules (the rules card, moved), Connectors and Related folders.
+  let teamFiled = false;
+  function fileTeamV2() {
+    const body = $("agents-body");
+    if (teamFiled || !teamLayout() || !body) return false;
+    teamFiled = true;
+    const pane = (name, id) => { const el = node("div", "agents-pane"); el.id = id; el.dataset.agentsPane = name; el.hidden = true; body.append(el); return el; };
+    const perms = pane("perms", "agents-perms");
+    const control = node("div"); control.id = "agents-permissions"; perms.append(control);
+    window.MefiAutonomy?.mount?.(control, { full: true });
+    const rules = pane("rules", "agents-rules-place");
+    const card = $("agents-rules"); if (card) rules.append(card);
+    buildConnectors(pane("connectors", "agents-connectors"));
+    buildFolders(pane("folders", "agents-folders"));
+    $("agents-overlay")?.setAttribute("data-places", "v2");
+    return true;
+  }
+  // Connectors: the stdio servers Studio already runs for an agent (~/.mefi-studio/mcp.json, read with the team), each
+  // with its tools, and where each agent is allowed to use them. What the prototype adds (adding, approving, testing and
+  // importing a connector from here) does not exist yet, and the page says so.
+  function buildConnectors(root) {
+    const yours = card("Your connectors", "Stdio servers from ~/.mefi-studio/mcp.json. Studio starts one only for an agent you allowed to use its tools.");
+    yours.id = "agents-connectors-yours";
+    const rows = node("div", "agents-connector-rows"); rows.id = "agents-connector-rows";
+    const actions = node("div", "agents-actions");
+    actions.append(button("Choose who may use them", () => go("agents", { place: "seats" }), "ghost"), button("Reload saved settings", discard, "ghost"));
+    yours.append(rows, actions);
+    const own = card("Studio's own tools", "Search the web, read web pages you link and read project files. Each agent has its own switches, with the + beside it in Seats and models; a builder can use at most sixteen connector tools.");
+    const missing = card("Not in Studio yet", "Adding a connector from this page, approving its command, testing it, and importing the ones Claude Code already has. Until then, add a server to ~/.mefi-studio/mcp.json and reload.");
+    missing.classList.add("agents-gap");
+    root.append(yours, own, missing);
+  }
+  function paintConnectors() {
+    const rows = $("agents-connector-rows");
+    if (!rows) return;
+    const tools = Array.isArray(draft()?.saved?.mcpTools) ? draft().saved.mcpTools : [];
+    const servers = new Map();
+    for (const tool of tools) { if (!tool?.server) continue; if (!servers.has(tool.server)) servers.set(tool.server, []); servers.get(tool.server).push(tool); }
+    rows.replaceChildren();
+    if (!servers.size) { rows.append(node("p", "muted", "No connectors yet. Add a stdio server to ~/.mefi-studio/mcp.json, then reload saved settings.")); return; }
+    for (const [server, list] of servers) {
+      const row = node("div", "agents-connector"); row.dataset.server = server;
+      const words = node("div", "agents-connector-words");
+      words.append(node("strong", "", server), node("small", "muted", `${list.length} tool${list.length === 1 ? "" : "s"}: ${list.map((tool) => tool.name).join(", ")}`));
+      row.append(words);
+      rows.append(row);
+    }
+  }
+  // Related folders: Studio has none yet. What it has is said, with the way to it.
+  function buildFolders(root) {
+    const gap = card("Not in Studio yet", "Agents read this project's folder and nothing outside it. Folders an agent may read but never change, like a shared design system, are not something Studio can add yet.");
+    gap.classList.add("agents-gap"); gap.id = "agents-folders-gap";
+    const now = card("What agents read today", "The project's own files, and with Rules the project's AGENTS.md and CLAUDE.md.");
+    now.append(button("Open Rules", () => go("agents", { place: "rules" }), "ghost"));
+    root.append(gap, now);
+  }
   function renderConfiguration() {
     const item = draft(); if (!item) return;
     $("agents-team-summary").textContent = `${item.saved.name} · ${item.saved.inherited ? "Studio defaults" : "Project team"}`;
@@ -85385,6 +86067,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     picker.value = selected;
     say(item.dirty ? "Draft · applies to new work after you choose Apply." : `${scope === "defaults" ? "Studio defaults" : item.saved.inherited ? "Inheriting Studio defaults" : "Independent project team"} · Saved`);
     paintRules();
+    paintConnectors();
     window.MefiScroll?.scan($("agents-overlay"));
   }
   function stageRouting(patch) {
@@ -85451,8 +86134,36 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     finally { saving = false; if (draft() && rulesUi.box) paintRulesLive(draft()); }
   }
   function discard() { drafts.delete(draftKey()); load(); }
+  // Team in the 0.5 layout: one place at a time, its panes, its title and the line under it. params keeps the classic
+  // section and pane beside the place, so routing's staging (stageRouting, routingView) reads the page as it did.
+  let teamPlaceSaid = null;
+  async function openTeam(options = {}) {
+    fileTeamV2();
+    const place = teamPlaceById(teamPlaceFromParams(options)) ?? TEAM_PLACES[0];
+    const pane = place.id === "seats" ? (options.pane === "routing" || $(options.target)?.closest?.("#agents-routing") ? "routing" : "team") : place.id === "providers" ? "connections" : place.panes[0];
+    const moved = params.place !== place.id;
+    params = { section: place.id === "overview" ? "overview" : "setup", pane, place: place.id };
+    window.MefiNav?.claim("agents"); $("agents-overlay").hidden = false; paintOverview();
+    $("agents-overlay").dataset.teamPlace = place.id;
+    // The prototype titles the Overview page Team; the breadcrumb still says Team / Overview.
+    $("agents-title").textContent = place.id === "overview" ? "Team" : place.label;
+    const about = $("agents-title")?.nextElementSibling;
+    if (about) about.textContent = place.about || "";
+    for (const node of $("agents-body").children) if (node.classList.contains("agents-pane")) node.hidden = !place.panes.includes(node.dataset.agentsPane);
+    // The team draft's Apply and Discard go with the places that edit it; the project or defaults choice also with Rules.
+    $("agents-save-bar").hidden = !place.draft;
+    $("agents-team-toolbar").hidden = !(place.draft || place.scoped);
+    if (moved && !options.target) $("agents-body").scrollTop = 0;
+    if (teamPlaceSaid !== place.id) { teamPlaceSaid = place.id; window.dispatchEvent(new CustomEvent("mefi:team-place", { detail: { place: place.id } })); }
+    await Promise.all([load(), refreshQueue()]); syncQueue();
+    window.MefiNav?.paintCurrent(); window.MefiScroll?.refresh();
+    if (options.target) {
+      const target = $(options.target); if (target && $("agents-overlay").contains(target)) { for (let el = target; el && el !== $("agents-body"); el = el.parentElement) if (el.tagName === "DETAILS") el.open = true; target.scrollIntoView?.({ block: "nearest" }); (target.nextElementSibling?.classList.contains("studio-select") ? target.nextElementSibling : target).focus?.({ preventScroll: true }); }
+    }
+  }
   async function open(options = {}) {
     mount();
+    if (teamLayout()) return openTeam(options);
     params = { section: options.section === "setup" ? "setup" : "overview", pane: ["connections", "team", "routing", "behavior"].includes(options.pane) ? options.pane : "team" };
     window.MefiNav?.claim("agents"); $("agents-overlay").hidden = false; paintOverview();
     $("agents-title").textContent = params.section === "overview" ? "Agents" : `Agent setup · ${children.setup.find(([, , value]) => value.pane === params.pane)?.[0] || "Team"}`;
@@ -85487,11 +86198,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       if ($("agents-overlay")?.hidden === false) void load();
     });
     window.addEventListener("mefi:queue-settings", syncQueue);
-    window.MefiNav?.register({ id: "agents", label: "Agents", short: "Agents", kind: "overlay", layer: "sheet", section: "agents", group: "tools", glyph: "g-agents", badge: "questions", desc: "Set up your team, follow live work, workflows, models and usage", searchTerms: "agent setup team presets seats connections provider effort routing automation", showIn: { palette: true, help: true, tools: true }, element: "agents-overlay", focus: "#agents-title", open, close, isOpen: () => $("agents-overlay")?.hidden === false });
+    // The 0.5 layout calls the page Team (WHERE_WENT: "Agents" → Team, renamed), with the prototype's two people for its glyph.
+    window.MefiNav?.register({ id: "agents", get label() { return teamLayout() ? "Team" : "Agents"; }, get short() { return teamLayout() ? "Team" : "Agents"; }, kind: "overlay", layer: "sheet", section: "agents", group: "tools", get glyph() { return teamLayout() ? "g-community" : "g-agents"; }, badge: "questions", get desc() { return teamLayout() ? "Who does the work, how many can work at once, and how much they can do without asking" : "Set up your team, follow live work, workflows, models and usage"; }, searchTerms: "team agents agent setup presets seats connections providers provider effort routing automation permissions rules connectors", showIn: { palette: true, help: true, tools: true }, element: "agents-overlay", focus: "#agents-title", open, close, isOpen: () => $("agents-overlay")?.hidden === false });
     // Canonical settings ownership is established before the first visit.
     mount();
   }
-  window.MefiAgents = { open, close, mount, redirect, paintNav, navModel, location, stageRouting, routingView, params: () => ({ ...params }), reload: discard, draft: () => draft() ? clone(draft().configuration) : null };
+  window.MefiAgents = { open, close, mount, redirect, paintNav, navModel, location, stageRouting, routingView, params: () => ({ ...params }), reload: discard, draft: () => draft() ? clone(draft().configuration) : null, teamPlaces, teamPlace, teamPlaceOfElement, TEAM_PLACES };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
 })();
 
@@ -90758,7 +91470,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       running.push({ key: `run:${job.taskId || job.title}`, group: "running", tone: "live", title: clip(job.title || "A task", 120), taskId: job.taskId || null, progress, worktree: worktrees.has(job.taskId),
         meta: [who, job.startedAt ? waited(job.startedAt, now) : "", job.stopping ? "stopping" : clip(step.step, 80) || phase].filter(Boolean).join(" · "), more: [] });
     }
-    for (const next of (Array.isArray(d.next) ? d.next : []).slice(0, 2)) {
+    // A queued task that waits on you (a permission it asked for, a question) is under Needs you only, like a run.
+    for (const next of (Array.isArray(d.next) ? d.next : []).filter((next) => !(next?.id && waiting.has(String(next.id)))).slice(0, 2)) {
       running.push({ key: `next:${next.id}`, group: "running", tone: "next", title: clip(next.title || "Next task", 120), taskId: next.id || null,
         meta: next.stage === "waiting" ? "waiting for what it depends on" : next.stage === "cooling" ? "trying again soon" : "up next · waits for a free worker", more: [] });
     }
@@ -90785,7 +91498,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 
   // ---- state ---------------------------------------------------------------------------------------
   const state = {
-    on: false, data: null, off: null, host: null, handled: new Map(), busy: new Set(), errors: new Map(), later: new Set(), drafts: new Map(),
+    on: false, data: null, off: null, host: null, handled: new Map(), busy: new Set(), errors: new Map(), later: new Set(), drafts: new Map(), ownWords: new Set(),
     inbox: { open: false, anchor: null, index: 0, node: null, opener: null, focusKey: null }, pageOpen: null, anchor: null, clock: 0, sweep: 0,
     listeners: new Set(), signature: "", parts: null, painted: new WeakMap(),
     // Build's Home (layout v2): the page, what it borrowed from Home, and the suggestions it asked for. `homeView` is the route's view: "chat" is the classic Home.
@@ -91022,7 +91735,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         if (option.description) choose.title = option.description;
         choose.addEventListener("click", () => {
           // An option that asks for words takes them from the box; one that does not answers at once.
-          if (option.text) { typed = option; state.drafts.set(item.key, { text: input.value, optionId: option.id }); input.placeholder = "Your one-line answer…"; input.focus?.(); return; }
+          if (option.text) { typed = option; state.drafts.set(item.key, { text: input.value, optionId: option.id }); openOwnWords(); input.placeholder = "Your one-line answer…"; input.focus?.(); return; }
           void answer(item, { optionId: option.id });
         });
         choices.append(choose);
@@ -91035,7 +91748,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         if (!words) { input.focus?.(); return; }
         void answer(item, { optionId: typed?.id ?? null, text: words });
       });
-      node.append(choices, form);
+      // The owner's choice (2026-10-04): the box for your own words waits behind a small link, so a card reads as its
+      // options first. It opens on the link, on an option that asks for words, and stays open while it holds a draft.
+      const own = button("Answer in my own words", "today-link today-own-words", () => { openOwnWords(); input.focus?.(); }, { title: "Write your own answer instead of picking one", disabled: lock });
+      function openOwnWords() { state.ownWords.add(item.key); form.hidden = false; own.hidden = true; }
+      if (kept?.text || state.ownWords.has(item.key)) openOwnWords(); else form.hidden = true;
+      node.append(choices, own, form);
     } else {
       for (const action of actionsOf(item, state.data || {})) {
         // A way to look (Review changes) only goes somewhere; everything else is a decision, through perform().
@@ -93124,14 +93842,20 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const stage = summary?.stage || (isDone(task) ? "done" : task.status === "active" ? "running" : task.status === "awaiting_verification" ? "review" : "ready");
     const inbox = inboxTasks();
     const listed = inbox && typeof inbox.has === "function" ? inbox.has(String(task.id)) : null;
+    // The owner's rule (2026-10-04): a task that will fix itself never looks like a problem. With the Inbox on, a blocked or
+    // cooling task the Inbox does not hold (a check that failed and tries again by itself) is with the running work, saying
+    // it is fixing itself; it reaches the Inbox only when it gives up. A step whose go-ahead is asked once for its whole
+    // request waits with the queue and says so.
+    const fixing = !question && listed === false && ["blocked", "cooling"].includes(stage) && !isDone(task);
+    const stepWaits = !question && listed === false && stage === "approval";
     const tone = question || listed === true || (listed === null && ["blocked", "approval"].includes(stage)) ? "ask"
-      : stage === "running" ? "run"
+      : stage === "running" || fixing ? "run"
       : stage === "review" ? "check"
       : stage === "done" ? (task.dropped ? "dropped" : "done")
       : ["waiting", "cooling", "deferred", "grouped", "blocked", "approval"].includes(stage) ? "wait"
       : "ready";
-    const label = question ? "Needs your answer" : summary?.label || (tone === "done" ? "Done" : "Queued");
-    return { stage, tone, label, summary, question };
+    const label = question ? "Needs your answer" : fixing ? "Fixing itself" : stepWaits ? "Goes ahead with its request" : summary?.label || (tone === "done" ? "Done" : "Queued");
+    return { stage, tone, label, summary, question, fixing };
   }
 
   // The menu's groups: Pinned, Needs you and Working first, then the rest by
@@ -96481,6 +97205,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     els.scrim.hidden = !state.drawer;
     els.frame.dataset.drawer = state.drawer || "";
     rootEl().dataset.frame = "on";
+    paintPagesFlag();
     paintSplitters();
     paintToggles();
     paintMenu();
@@ -96785,6 +97510,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       else parts.push(window.MefiToday ? (chat ? "Chat" : rootEl().dataset.uiMode === "vibe" ? "Today, the board" : "Today") : String(dest?.label || dest?.short || "Home"));
       return parts;
     }
+    const place = placeTrail(n, id, dest);
+    if (place) return [...parts, ...place];
     let section = null;
     try { section = dest ? n?.sectionLabel?.(dest) ?? null : null; } catch { section = null; }
     const page = dest ? String(dest.label || dest.short || id) : null;
@@ -96824,10 +97551,104 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const said = document.body?.dataset?.navSection;
     return said && Array.isArray(routes[said]) ? said : null;
   }
+  // ---- the 0.5 layout's places: Settings, Team and the Map, in the list column and the breadcrumb --------------------------
+  // The prototype's subnav (docs/prototype/mefi-studio-0.5-v5.html): Settings and Team list their own places, a row each,
+  // under the headings the prototype gives a group ("Updates and help", "Advanced"; "Context for agents", "Monitor"). Each
+  // row runs what the place's own list runs: MefiBooklet.jumpToSettings, or MefiNav.go for a place that is a page of its own
+  // (Size and density), and for Team what MefiAgents.teamPlaces says, with the pages a place holds (Models: Catalog and
+  // Performance) under it while you are in it. The Map lists its three pages. booklet.js and agents.js say when the place
+  // changes (mefi:settings-place, mefi:team-place), and the breadcrumb reads Settings / <place> and Team / <place>.
+  const placeOfRoute = (n, id) => { try { return layoutOn() && typeof n?.placeOf === "function" ? n.placeOf(id) ?? null : null; } catch { return null; } };
+  const MAP_PAGES = [["command", "Map", "g-command", {}], ["fleet", "Fleet", "g-fleet", {}], ["agent-brain", "Pipelines", "g-route", { tab: "live" }]];
+  function settingsModel(n, id) {
+    let places = null;
+    try { places = window.MefiBooklet?.settingsPlaces?.() ?? null; } catch { places = null; }
+    if (!Array.isArray(places) || !places.length) return null;
+    const rows = [];
+    let group = null;
+    for (const place of places) {
+      if ((place.group ?? null) !== group) { group = place.group ?? null; if (group) rows.push({ kind: "heading", label: String(group) }); }
+      const route = typeof place.route === "string" ? place.route : null;
+      rows.push({
+        kind: "row", key: `settings:${place.id}`, label: String(place.label), glyph: typeof place.glyph === "string" ? place.glyph : null, sub: Boolean(place.sub),
+        current: route ? id === route : id === "studio" && Boolean(place.current),
+        run: (event) => {
+          if (route) { n?.go?.(route); return; }
+          if (id === "studio" && typeof window.MefiBooklet?.jumpToSettings === "function") window.MefiBooklet.jumpToSettings(place.id, { focus: event?.detail === 0 });
+          else n?.go?.("studio", { section: place.id });
+        },
+      });
+    }
+    // Settings' own list closes while this one shows, and with it its way to every setting in one tree: it comes here.
+    if (n?.get?.("config")) rows.push({ kind: "row", key: "settings:config", label: "All settings in one place", glyph: null, quiet: true, current: false, run: () => n.go("config") });
+    return { section: "settings", title: "Settings", rows };
+  }
+  function teamModel(n, id) {
+    let places = null;
+    try { places = window.MefiAgents?.teamPlaces?.(id) ?? null; } catch { places = null; }
+    if (!Array.isArray(places) || !places.length) return null;
+    const rows = [];
+    let group = null;
+    for (const place of places) {
+      if ((place.group ?? null) !== group) { group = place.group ?? null; if (group) rows.push({ kind: "heading", label: String(group) }); }
+      // While one of a place's pages is the current row, the place itself reads as open rather than current.
+      const inView = Array.isArray(place.views) && place.views.length > 1 && place.views.some((view) => view.current);
+      rows.push({ kind: "row", key: `team:${place.id}`, label: String(place.label), glyph: typeof place.glyph === "string" ? place.glyph : null, current: Boolean(place.current) && !inView, open: Boolean(place.current) && inView, run: place.run });
+      if (place.current && Array.isArray(place.views) && place.views.length > 1) {
+        place.views.forEach((view, at) => rows.push({ kind: "row", key: `team:${place.id}:${at}`, label: String(view.label), glyph: null, sub: true, current: Boolean(view.current), run: view.run }));
+      }
+    }
+    return { section: "team", title: "Team", rows };
+  }
+  // Friends lists its three places (renderer/companion-hub.js friendsPlaces), the one that shows current.
+  function friendsModel(n, id) {
+    let places = null;
+    try { places = window.MefiCompanionHub?.friendsPlaces?.() ?? null; } catch { places = null; }
+    if (!Array.isArray(places) || !places.length) return null;
+    const rows = places.map((place) => ({ kind: "row", key: `friends:${place.id}`, label: String(place.label), glyph: typeof place.glyph === "string" ? place.glyph : null, current: id === "friends-page" && Boolean(place.current), run: place.run }));
+    return { section: "friends", title: "Friends", rows };
+  }
+  function mapModel(n, id) {
+    const tab = (() => { try { return window.MefiAgentBrain?.tab?.() ?? null; } catch { return null; } })();
+    const rows = MAP_PAGES.filter(([route]) => n?.get?.(route)).map(([route, label, glyph, params]) => ({
+      kind: "row", key: `map:${route}`, label, glyph, current: id === route && (route !== "agent-brain" || tab === "live" || tab == null), run: () => n.go(route, params),
+    }));
+    return rows.length ? { section: "map", title: "Map", rows } : null;
+  }
+  // Where you are, past the project, in a place that has places of its own; null leaves it to the section and the page.
+  function placeTrail(n, id, dest) {
+    const place = placeOfRoute(n, id);
+    if (place === "settings") {
+      if (id === "size") return ["Settings", "Appearance", String(dest?.label || "Size and density")];
+      let here = null;
+      try { here = window.MefiBooklet?.settingsLocation?.() ?? null; } catch { here = null; }
+      return id === "studio" && here ? ["Settings", here.search ? "Search" : String(here.label)] : null;
+    }
+    if (place === "team") {
+      let here = null;
+      try { here = window.MefiAgents?.teamPlace?.(id) ?? null; } catch { here = null; }
+      return here?.label ? ["Team", String(here.label)] : null;
+    }
+    if (place === "map") {
+      const page = MAP_PAGES.find(([route]) => route === id);
+      return page ? (page[0] === "command" ? ["Map"] : ["Map", page[1]]) : null;
+    }
+    if (place === "friends" && id === "friends-page") {
+      let here = null;
+      try { here = window.MefiCompanionHub?.friendsPlace?.() ?? null; } catch { here = null; }
+      return here?.label ? ["Friends", String(here.label)] : ["Friends"];
+    }
+    return null;
+  }
   function pageModel() {
     const n = nav();
     const id = n?.current?.() ?? null;
     if (isHomeRoute(id)) return null;
+    const place = placeOfRoute(n, id);
+    if (place === "settings" || place === "team" || place === "map" || place === "friends") {
+      const model = place === "settings" ? settingsModel(n, id) : place === "team" ? teamModel(n, id) : place === "friends" ? friendsModel(n, id) : mapModel(n, id);
+      if (model) return model;
+    }
     const section = sectionOfRoute(n, id);
     if (!section || section === "home") return null;
     const dest = n?.get?.(id);
@@ -96867,7 +97688,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     return root;
   }
   function pageButton(label, current, run, extra = {}) {
-    const node = button(`shell-btn shell-page${extra.sub ? " is-sub" : ""}`, null, run, { "data-page": extra.key || label });
+    const node = button(`shell-btn shell-page${extra.sub ? " is-sub" : ""}${extra.open ? " is-open" : ""}${extra.quiet ? " is-quiet" : ""}`, null, run, { "data-page": extra.key || label });
     if (extra.glyph) {
       const svg = document.createElementNS(SVG_NS, "svg");
       svg.setAttribute("class", "glyph"); svg.setAttribute("aria-hidden", "true"); svg.setAttribute("focusable", "false");
@@ -96905,7 +97726,13 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       if (model) {
         pages.title.textContent = model.title;
         pages.root.setAttribute("aria-label", `${model.title} pages`);
-        if (model.groups) {
+        if (model.rows) {
+          // A place's list (settingsModel, teamModel, mapModel): headings over groups, rows with the place's glyph.
+          for (const row of model.rows) {
+            if (row.kind === "heading") rows.push(text("h3", "shell-pages-group", row.label));
+            else rows.push(pageButton(row.label, row.current, (event) => row.run?.(event), { key: row.key, glyph: row.glyph, sub: row.sub, open: row.open, quiet: row.quiet }));
+          }
+        } else if (model.groups) {
           for (const group of model.groups) {
             if (!group.views.length) { rows.push(pageButton(group.label, group.current, () => group.run?.(), { key: `group:${group.id}` })); continue; }
             rows.push(text("h3", `shell-pages-group${group.current ? " is-current" : ""}`, group.label));
@@ -96925,6 +97752,16 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       pages.section = model?.section ?? null;
       emit({ what: "pages", shown, section: pages.section });
     }
+    paintPagesFlag();
+  }
+  // html[data-frame-pages]: the place whose list the column shows as a column (not a closed drawer). Settings' own list of
+  // places steps aside while it does (shell.css), and comes back when the column closes or folds into a drawer.
+  function paintPagesFlag() {
+    const root = rootEl();
+    if (!root?.dataset) return;
+    const section = state.on && state.pages?.shown && state.els.list?.dataset?.state === "docked" ? state.pages.section : null;
+    if ((root.dataset.framePages ?? null) === section) return;
+    if (section) root.dataset.framePages = section; else delete root.dataset.framePages;
   }
   // The arrows move between the pages, Home and End go to the ends; Tab leaves the list.
   function pageKeys(event) {
@@ -97106,7 +97943,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     items.usageSep = el("span", "shell-sep-v shell-usage-sep", { "aria-hidden": "true" });
     item("player", "shell-player", () => { const music = window.MefiMusic; if (typeof music?.toggleAudio === "function") music.toggleAudio(); else nav()?.go?.("audio"); }, "Music and video");
     items.player.setAttribute("aria-haspopup", "true");
-    items.player.append(icon("audio"), text("span", "shell-player-title", ""));
+    items.player.append(icon("audio"), text("span", "shell-player-title", ""), text("span", "shell-player-time", ""));
     // The machine's load opens the machine status (the Explorer's diagnostics), where Home's Machine tile goes too.
     item("machine", "shell-machine", () => { const n = nav(); if (n?.get?.("machine")) n.go?.("machine"); else n?.go?.("explorer", { panel: "diagnostics" }); }, "Machine load");
     items.machine.append(text("span", "", ""));
@@ -97137,7 +97974,57 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (one.percent >= 90) node.dataset.tone = "warn";
     return node;
   }
+  // The player's time left (the prototype's "Deep Focus 40:32"), read from the player (MefiMusic.playback). It ticks once a
+  // second only while something plays and the window can be seen, and writes only when the words change; a stream with no
+  // end (the radio) shows none.
+  let playerTimer = 0;
+  function playerTimeLeft() {
+    let at = null;
+    try { at = window.MefiMusic?.playback?.() ?? null; } catch { at = null; }
+    if (!at || !(at.duration > 0) || !finite(at.position)) return "";
+    const total = Math.max(0, Math.round(at.duration - at.position));
+    const hours = Math.floor(total / 3600), minutes = Math.floor((total % 3600) / 60), seconds = total % 60;
+    const two = (value) => String(value).padStart(2, "0");
+    return hours ? `${hours}:${two(minutes)}:${two(seconds)}` : `${minutes}:${two(seconds)}`;
+  }
+  function paintPlayerTime() {
+    const node = state.statusParts?.items?.player?.querySelector?.(".shell-player-time");
+    if (!node) return;
+    const words = playerTimeLeft();
+    if (node.textContent !== words) node.textContent = words;
+    node.hidden = !words;
+  }
+  // One timeout at a time, chained while it is still wanted (the frame owns no interval). Hidden, paused or off, it stops;
+  // the repaint the frame makes when the window is seen again starts it once more.
+  function syncPlayerTick(playing) {
+    const want = Boolean(playing) && !document.hidden && state.on;
+    if (want && !playerTimer) nextPlayerTick();
+    else if (!want && playerTimer) { clearTimeout(playerTimer); playerTimer = 0; }
+  }
+  function nextPlayerTick() {
+    playerTimer = setTimeout(() => {
+      playerTimer = 0;
+      if (document.hidden || !state.on || state.statusParts?.items?.player?.dataset?.playing !== "true") return;
+      paintPlayerTime();
+      nextPlayerTick();
+    }, 1000);
+  }
+  // The usage meters keep up by themselves: once a run ends (fewer working than the paint before), and on any paint of the
+  // bar once the last reading is five minutes old, while Studio can be seen. The frame owns no interval: the bar repaints on
+  // every push already. renderer/tracker.js does the read and answers from its last reading while that is fresh; the
+  // classic layout reads only while Command shows, as before.
+  const USAGE_EVERY_MS = 5 * 60 * 1000;
+  let lastWorking = null, usageAskedAt = 0;
+  const readUsage = (force) => { usageAskedAt = Date.now(); try { void window.MefiUsageTracker?.refresh?.({ force, probe: false })?.catch?.(() => {}); } catch { /* no tracker in this build */ } };
+  function syncUsageReads(live) {
+    const ended = live && Number.isFinite(live.working) && lastWorking !== null && live.working < lastWorking;
+    if (live && Number.isFinite(live.working)) lastWorking = live.working;
+    if (!state.on || document.hidden) return;
+    if (ended) readUsage(true);
+    else if (Date.now() - usageAskedAt >= USAGE_EVERY_MS) readUsage(false);
+  }
   function paintStatusItems(live) {
+    syncUsageReads(live);
     const parts = state.statusParts;
     if (!parts) return;
     const { items, working, waiting } = parts;
@@ -97168,7 +98055,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       items.player.setAttribute("aria-label", `${live.player.playing ? "Playing" : "Paused"}: ${live.player.title}. Music and video`);
       items.player.setAttribute("title", `${live.player.playing ? "Playing" : "Paused"}: ${live.player.title}. Open the music and video menu.`);
       items.player.dataset.playing = String(live.player.playing);
+      paintPlayerTime();
     }
+    syncPlayerTick(Boolean(live.player?.playing));
     items.permission.hidden = !live.permission;
     if (live.permission) {
       items.permission.children[1].textContent = live.permission;
@@ -97487,6 +98376,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     state.on = false;
     clearTimeout(state.timer);
     state.timer = 0;
+    syncPlayerTick(false);
     state.drawer = null;
     state.returnFocus = null;
     const layout = nav()?.layout;
@@ -97494,6 +98384,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     state.requested = {};
     removeRegions();
     delete rootEl().dataset.frame;
+    delete rootEl().dataset.framePages;
     state.top = null; state.statusParts = null; state.splits = null; state.plan = null; state.live = null; state.liveKey = "";
     emit({ what: "disable" });
     return true;
@@ -97528,7 +98419,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       closeMenu(false);
       sync("nav");
     });
-    for (const name of ["mefi:workspace-state", "mefi:usage-report", "mefi:nav-badges", "mefi:autonomy-changed", "mefi:project-changed", "mefi:task-context", "mefi-music-change", "mefi:companion-state"]) window.addEventListener(name, () => scheduleLive());
+    for (const name of ["mefi:workspace-state", "mefi:usage-report", "mefi:nav-badges", "mefi:autonomy-changed", "mefi:project-changed", "mefi:task-context", "mefi-music-change", "mefi:companion-state"]) window.addEventListener(name, () => scheduleLive());    // A place changed inside Settings or Team without a route of its own: the list column and the breadcrumb follow at once.
+    for (const name of ["mefi:settings-place", "mefi:team-place", "mefi:friends-place"]) window.addEventListener(name, () => { if (state.on) paintLive(); });
     window.addEventListener("keydown", onKey, true);
     document.addEventListener("visibilitychange", () => { if (state.on && state.stale && !document.hidden) { state.stale = false; scheduleLive(); } });
     document.addEventListener("pointerdown", (event) => { if (!state.on) return; outsideMenu(event); outsideDrawer(event); }, true);
@@ -97660,8 +98552,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // Which params say which place. Everything else (a filter, a task selected on the
   // Task board, a card to scroll to) is where you are inside the page, not another tab.
   // Agents is one sheet with two faces: its overview, and Setup with four panes.
-  const IDENTITY = Object.freeze({ workspace: Object.freeze(["view", "taskId", "projectId"]), agents: Object.freeze(["section", "pane"]) });
+  // In the 0.5 layout Agents is Team, one tab per place (renderer/agents.js, TEAM_PLACES): its Overview is the Team tab.
+  // Friends in the 0.5 layout is one tab per place too (renderer/companion-hub.js, FRIENDS_PLACES).
+  const IDENTITY = Object.freeze({ workspace: Object.freeze(["view", "taskId", "projectId"]), agents: Object.freeze(["section", "pane", "place"]), "friends-page": Object.freeze(["place"]) });
+  const friendsPlaceOf = (id) => safe(() => window.MefiCompanionHub?.FRIENDS_PLACES?.find?.((place) => place.id === id) ?? null, null);
   const AGENT_PANES = Object.freeze({ connections: "Connections", team: "Team", routing: "Routing", behavior: "Behavior" });
+  const teamPlaceOf = (id) => safe(() => window.MefiAgents?.TEAM_PLACES?.find?.((place) => place.id === id && Array.isArray(place.panes)) ?? null, null);
   const TONES = Object.freeze({ ask: "warn", run: "live", check: "info", done: "good", dropped: "dim", wait: "dim", ready: "dim" });
 
   // ---- small helpers -------------------------------------------------------------
@@ -97728,7 +98624,13 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       if (params.view === "task" && params.taskId) return { id, params: { view: "task", taskId: params.taskId, ...(params.projectId ? { projectId: params.projectId } : {}) } };
       return { id, params: params.view === "chat" ? { view: "chat" } : {} };
     }
+    if (id === "agents" && v2()) {
+      // One tab per Team place: an old { section, pane } is the place that holds that pane now (MefiAgents.teamPlace).
+      const at = teamPlaceOf(params.place) ? params.place : safe(() => window.MefiAgents?.teamPlace?.("agents", params)?.id ?? null, null);
+      if (teamPlaceOf(at)) return { id, params: at === "overview" ? {} : { place: at } };
+    }
     if (id === "agents") return { id, params: params.section === "setup" ? { section: "setup", pane: AGENT_PANES[params.pane] ? params.pane : "team" } : {} };
+    if (id === "friends-page") return { id, params: { place: friendsPlaceOf(params.place) ? params.place : "rooms" } };
     return { id, params };
   }
   // The key two routes share when they are the same place (the project is fixed by the set, so it is not in it).
@@ -97792,6 +98694,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const dest = safe(() => window.MefiNav?.get?.(route.id), null);
     let title = words(dest?.short || dest?.label || rec.title || route.id, 40);
     if (route.id === "agents" && route.params.pane) title = `Agents · ${AGENT_PANES[route.params.pane]}`;
+    else if (route.id === "agents" && route.params.place) title = words(teamPlaceOf(route.params.place)?.label || title, 40);
+    else if (route.id === "friends-page") title = words(friendsPlaceOf(route.params.place)?.label || title, 40);
     return { title, glyph: dest?.glyph || "g-frame" };
   }
 
@@ -97960,6 +98864,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       return view && view.view ? { view: view.view, taskId: view.taskId, projectId: projectId() } : null;
     }],
     ["agents", () => safe(() => window.MefiAgents?.params?.(), null)],
+    // The 0.5 layout's Friends: the place that shows (renderer/companion-hub.js friendsPlace).
+    ["friends-page", () => safe(() => { const here = window.MefiCompanionHub?.friendsPlace?.(); return here ? { place: here.id } : null; }, null)],
   ]);
   function readPlace() {
     const nav = window.MefiNav;
@@ -98837,7 +99743,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const ctx = context();
     const closed = q.length ? [] : validClosed().slice(0, 4).map((item) => { const info = describe({ route: item.route, title: item.title }, ctx); return { group: "Recently closed", route: item.route, title: item.title || info.title, glyph: info.glyph, tone: info.tone, closed: item, hint: "Reopen" }; });
     const home = { group: "Home", route: { id: "workspace", params: {} }, title: homeTitle(), glyph: "g-home", terms: "home today vibe front door" };
-    const rows = [...closed, ...[home, ...sessionRows(query), ...destinations()].filter(match)];
+    // In the 0.5 layout Today is Work's first page (nav.js placeOf), so it leads Work's rows instead of a group of its own.
+    const pages = destinations();
+    const lead = v2() ? [{ ...home, group: "Work" }, ...pages.filter((row) => row.group === "Work")] : [home];
+    const rest = v2() ? pages.filter((row) => row.group !== "Work") : pages;
+    const rows = [...closed, ...[...lead, ...sessionRows(query), ...rest].filter(match)];
     const have = new Map(order().map((rec) => [keyOf(rec.route), rec]));
     for (const row of rows) { const rec = have.get(keyOf(row.route)); if (!row.hint) row.hint = rec ? (rec.pin ? "Pinned" : "Open") : ""; }
     return rows;
@@ -100450,6 +101360,13 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }
     if (reading.tone === "check") {
       return [banner("info", "Checking the result", "The worker finished. Completion checks are pending; this is not marked done yet.", [ghost("See the changes", () => setTab(task, "changes")), ghost("Request changes", () => setIntent(task, "change", true)), spec(statusSpec(task, "done", "Approve and finish", "Marked done. You confirmed the result.", "Really finish?"))])];
+    }
+    // A task that will fix itself (builder.js reading().fixing: its checks failed and it tries again by itself) is not a
+    // problem to look at: it says so, calmly, and the checks stay one press away.
+    if (!run && reading.fixing) {
+      const retry = Number(task.nextRunAt) - Date.now();
+      const when = retry > 60000 ? ` in about ${Math.round(retry / 60000)} min` : retry > 0 ? " in a moment" : "";
+      return [banner("info", "Fixing itself", `The last try did not pass its checks, so it tries again by itself${when}. It only asks you if it gives up.`, [ghost("See the checks", () => setTab(task, "checks"))])];
     }
     if (!run && (task.verification?.state === "failed" || reading.stage === "blocked")) {
       const why = task.verification?.reason || summary.blocker || task.lastRunError || (last?.outcome === "failed" ? last.error : "") || "The last attempt could not be confirmed.";
@@ -102483,6 +103400,23 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         entries.push({ id: control.id, label, category, terms: `${label} ${heading?.textContent ?? ""} ${control.id.replace(/-/g, " ")}` });
       }
     }
+    // In the 0.5 layout the cards and controls Team holds (the Connections, Models and Automation cards Settings gave to
+    // Agents, and Agents' own panes) are found here too, under the Team place that holds each now; a match opens it there
+    // (jumpToSettings asks MefiAgents.redirect). Search (Ctrl K) has them already, from renderer/agents.js.
+    const team = window.MefiAgents?.teamPlaceOfElement;
+    if (settingsFiled && typeof team === "function") {
+      for (const pane of document.querySelectorAll("#agents-body [data-agents-pane]")) {
+        for (const control of pane.querySelectorAll(".settings-card, input, select, textarea")) {
+          if (!control.id || control.type === "hidden" || control.hidden || control.getAttribute?.("aria-hidden") === "true" || !settingsAvailable(control)) continue;
+          const place = team(control);
+          if (!place) continue;
+          const card = control.classList?.contains?.("settings-card") ? control : control.closest?.(".settings-card");
+          const heading = card?.querySelector?.(card.tagName === "DETAILS" ? "summary" : "h3");
+          const label = control === card ? String((heading?.querySelector?.(".settings-summary-text b") ?? heading)?.textContent ?? "").replace(/\s+/g, " ").trim() : settingsControlLabel(control);
+          if (label) entries.push({ id: control.id, label, category: "team", team: true, path: `Team / ${place.label}`, terms: `${label} ${heading?.textContent ?? ""} ${control.id.replace(/-/g, " ")}` });
+        }
+      }
+    }
     return entries;
   }
   function syncSettingsNav() {
@@ -102490,12 +103424,23 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     // Appearance and Map look show their own sections of the shared pane (styles.css), under their own title.
     if (!settingsFiled) return;
     document.getElementById("tab-studio")?.setAttribute("data-settings-place", settingsQuery() ? "search" : settingsCategory);
+    announceSettingsPlace();
     const looks = settingsCategory === "looks";
     const heading = document.getElementById("settings-category-appearance-heading");
     if (heading && heading.textContent !== (looks ? "Map look" : "Appearance")) heading.textContent = looks ? "Map look" : "Appearance";
     const about = heading?.parentElement?.querySelector?.("p");
     const words = looks ? "How the Map draws your work. Changes show on the Map straight away." : "Themes, colours and how the interface moves.";
     if (about && about.textContent !== words) about.textContent = words;
+  }
+  // mefi:settings-place: Settings changed place (or Find a setting started or stopped showing results), so a list or a
+  // breadcrumb drawn elsewhere follows (renderer/shell.js). Said once per change, never for a repaint that moved nothing.
+  let settingsPlaceSaid = "";
+  function announceSettingsPlace() {
+    const search = Boolean(settingsQuery());
+    const signature = `${settingsCategory}|${search}`;
+    if (signature === settingsPlaceSaid) return;
+    settingsPlaceSaid = signature;
+    try { window.dispatchEvent?.(new CustomEvent("mefi:settings-place", { detail: { place: settingsCategory, search } })); } catch { /* nobody listens without events */ }
   }
   function syncSettingsAutomation() {
     const current = window.MefiIdle?.queueSettings?.();
@@ -102563,7 +103508,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (document.querySelector && !document.querySelector(`[data-settings-category-pane="${settingsPane(settingsCategory)}"]`)) settingsCategory = "general";
     const query = settingsQuery();
     const words = query.split(/\s+/).filter(Boolean);
-    settingsMatches = words.length ? settingsEntries().filter((item) => words.every((word) => `${SETTINGS_CATEGORIES[item.category]} ${item.terms}`.toLowerCase().includes(word))) : [];
+    settingsMatches = words.length ? settingsEntries().filter((item) => words.every((word) => `${item.path ?? SETTINGS_CATEGORIES[item.category]} ${item.terms}`.toLowerCase().includes(word))) : [];
     const results = document.getElementById("settings-search-results");
     if (results) {
       results.replaceChildren();
@@ -102571,7 +103516,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       for (const item of settingsMatches) {
         const row = document.createElement("button"); row.type = "button"; row.className = "settings-search-result";
         row.dataset.settingsResult = item.id;
-        const path = document.createElement("span"); path.className = "settings-result-path"; path.textContent = `Settings / ${SETTINGS_CATEGORIES[item.category]}`;
+        const path = document.createElement("span"); path.className = "settings-result-path"; path.textContent = item.path ?? `Settings / ${SETTINGS_CATEGORIES[item.category]}`;
         const name = document.createElement("strong"); name.textContent = item.label;
         row.append(path, name); results.appendChild(row);
       }
@@ -102660,7 +103605,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
   function registerSettingsSearch() {
     for (const item of settingsEntries()) {
-      if (settingsSearchRegistered.has(item.id)) continue;
+      // Team's controls are registered by renderer/agents.js, under their Team place.
+      if (item.team || settingsSearchRegistered.has(item.id)) continue;
       settingsSearchRegistered.add(item.id);
       try { window.MefiNav?.register?.({
         id: `settings:${item.id}`, label: `Settings › ${SETTINGS_CATEGORIES[item.category]} › ${item.label}`,
@@ -103938,9 +104884,15 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 
   // The one facade nav.js drives: tabs (with a Settings card to land on),
   // catalog refresh, the shortcut sheet, and the Settings jump itself.
-  // settingsPlaces: the 0.5 layout's Settings places in order (null in the classic layout), for a list drawn elsewhere.
-  const settingsPlaces = () => (settingsFiled ? SETTINGS_PLACES.map((place) => ({ id: place.id, label: place.label, glyph: place.glyph, group: place.group ?? null, sub: Boolean(place.sub), route: place.route ?? null, current: !place.route && place.id === settingsCategory })) : null);
-  window.MefiBooklet = { showTab, refresh, toggleHelp, jumpToSettings, initStudio, settingsPlaces };
+  // settingsPlaces: the 0.5 layout's Settings places in order (null in the classic layout), for a list drawn elsewhere
+  // (renderer/shell.js draws them in the list column). Asking files Settings into its places if nothing has yet.
+  const settingsPlaces = () => {
+    if (!settingsFiled) fileSettingsV2();
+    return settingsFiled ? SETTINGS_PLACES.map((place) => ({ id: place.id, label: place.label, glyph: place.glyph, group: place.group ?? null, sub: Boolean(place.sub), route: place.route ?? null, current: !place.route && place.id === settingsCategory })) : null;
+  };
+  // settingsLocation: the place Settings shows, and whether Find a setting is showing results instead (null in the classic layout).
+  const settingsLocation = () => (settingsFiled ? { id: settingsCategory, label: SETTINGS_CATEGORIES[settingsCategory] ?? settingsCategory, search: Boolean(settingsQuery()) } : null);
+  window.MefiBooklet = { showTab, refresh, toggleHelp, jumpToSettings, initStudio, settingsPlaces, settingsLocation };
 
   const headless = new URLSearchParams(window.location.search);
   const capture = headless.get("capture") === "1";

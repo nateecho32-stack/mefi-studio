@@ -69,13 +69,13 @@ test("the hub explains itself until the room service carries projects", async ()
   await flush();
   assert.equal(old.dataset.state, "unsupported");
   assert.equal(old.find("project-hub-status").textContent, "This room service has no project hub yet.");
+  // Linked but not connected: opening the hub connects by itself, once.
   const off = environment({ status: { configured: true, linked: true, state: "off", projects: true } });
   const card = off.hub.card();
   await flush();
-  card.find("project-hub-connect").click();
-  await flush();
   assert.deepEqual(off.calls[0], ["connect"]);
   assert.equal(card.dataset.state, "ready");
+  assert.equal(unlinked.find("project-hub-link").textContent, "Link Discord", "and linking starts right there");
 });
 
 test("your rank, credits, progress and special ranks; the map and the lists offer the actions each project needs", async () => {
