@@ -7,6 +7,32 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Friends is a place of its own in the 0.5 layout.** With the new layout on
+  (`?layout=v2`), the rail's Friends opens a page instead of the companion's
+  bubbles: Rooms, Your PCs and Playground in the list beside it, one at a
+  time, each with a line that says what it is for. They are the same cards
+  as before (rooms and their invitations, syncing your PCs through GitHub,
+  playdates and what your companion may share); Playground also keeps
+  "Friends & listening rooms" and "Connect with Discord". Search's Rooms,
+  Your PCs and Playground, and the companion's own Friends bubble, open the
+  page at that place, and each place can be a tab. The classic layout keeps
+  the Friends bubble as it was.
+- **A task that will fix itself no longer looks like a problem.** In the 0.5
+  layout, a task whose checks failed and that tries again by itself is listed
+  with the running work as "Fixing itself", and its page says so calmly
+  instead of showing a red failure; it reaches the Inbox only if it gives
+  up. A step that goes ahead with its whole request's one approval says
+  "Goes ahead with its request".
+- **Your own words wait behind a link in the Inbox.** A question card shows
+  its options first, with a small "Answer in my own words" link that opens
+  the box. An option that asks for words, or a half-written answer, opens it
+  too.
+- **Small things in the 0.5 layout's frame.** The status bar's player shows
+  the time left ("Deep Focus 40:32"), ticking once a second only while
+  something plays and the window can be seen. The usage meters read again
+  after each run ends and every five minutes while Studio is in view, without
+  opening Usage. Search says "N more results · keep typing to narrow them"
+  when there are more than the twelve it shows.
 - **The 0.5 layout's rail and Team, as in the prototype.** With the new layout
   on (`?layout=v2`), the rail has four places, Work, Map, Team and Friends,
   with Search, Settings and Help at its foot. Each place remembers where you

@@ -600,6 +600,10 @@ app.whenReady().then(async () => {
   assert.equal(await text(`${popCard("question:q_permission")} .today-need-label`), "Permission");
   assert.deepEqual(await run(`return [...document.querySelectorAll(${JSON.stringify(`${popCard("question:q_permission")} [data-option]`)})].map((node) => node.dataset.option);`), ["deny", "grant", "hold"], "the safe answer first");
   await run("window.todayFixture.clear();");
+  // The box for your own words waits behind its link (the owner's choice): the link opens it.
+  assert.equal(await run(`return document.querySelector(${JSON.stringify(`${popCard("question:q_failure")} .today-need-free`)}).hidden;`), true, "the box is folded behind its link");
+  await run(`document.querySelector(${JSON.stringify(`${popCard("question:q_failure")} .today-own-words`)}).click();`);
+  await until(`document.querySelector(${JSON.stringify(`${popCard("question:q_failure")} .today-need-free`)}).hidden === false`, "Answer in my own words opens the box");
   await run(`const input = document.querySelector(${JSON.stringify(`${popCard("question:q_failure")} .today-need-input`)}); input.focus(); input.value = "Try it with the old router first"; input.dispatchEvent(new Event("input", { bubbles: true })); input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));`);
   await until("window.todayFixture.calls().some((call) => call.name === 'assistantAnswer')", "Enter sends a free answer");
   assert.deepEqual(await calls("assistantAnswer"), [{ id: "q_failure", text: "Try it with the old router first", projectId: "today-project", optionId: null }]);

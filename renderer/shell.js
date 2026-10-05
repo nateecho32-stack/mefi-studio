@@ -827,6 +827,14 @@
     }
     return { section: "team", title: "Team", rows };
   }
+  // Friends lists its three places (renderer/companion-hub.js friendsPlaces), the one that shows current.
+  function friendsModel(n, id) {
+    let places = null;
+    try { places = window.MefiCompanionHub?.friendsPlaces?.() ?? null; } catch { places = null; }
+    if (!Array.isArray(places) || !places.length) return null;
+    const rows = places.map((place) => ({ kind: "row", key: `friends:${place.id}`, label: String(place.label), glyph: typeof place.glyph === "string" ? place.glyph : null, current: id === "friends-page" && Boolean(place.current), run: place.run }));
+    return { section: "friends", title: "Friends", rows };
+  }
   function mapModel(n, id) {
     const tab = (() => { try { return window.MefiAgentBrain?.tab?.() ?? null; } catch { return null; } })();
     const rows = MAP_PAGES.filter(([route]) => n?.get?.(route)).map(([route, label, glyph, params]) => ({
@@ -852,6 +860,11 @@
       const page = MAP_PAGES.find(([route]) => route === id);
       return page ? (page[0] === "command" ? ["Map"] : ["Map", page[1]]) : null;
     }
+    if (place === "friends" && id === "friends-page") {
+      let here = null;
+      try { here = window.MefiCompanionHub?.friendsPlace?.() ?? null; } catch { here = null; }
+      return here?.label ? ["Friends", String(here.label)] : ["Friends"];
+    }
     return null;
   }
   function pageModel() {
@@ -859,8 +872,8 @@
     const id = n?.current?.() ?? null;
     if (isHomeRoute(id)) return null;
     const place = placeOfRoute(n, id);
-    if (place === "settings" || place === "team" || place === "map") {
-      const model = place === "settings" ? settingsModel(n, id) : place === "team" ? teamModel(n, id) : mapModel(n, id);
+    if (place === "settings" || place === "team" || place === "map" || place === "friends") {
+      const model = place === "settings" ? settingsModel(n, id) : place === "team" ? teamModel(n, id) : place === "friends" ? friendsModel(n, id) : mapModel(n, id);
       if (model) return model;
     }
     const section = sectionOfRoute(n, id);
@@ -1157,7 +1170,7 @@
     items.usageSep = el("span", "shell-sep-v shell-usage-sep", { "aria-hidden": "true" });
     item("player", "shell-player", () => { const music = window.MefiMusic; if (typeof music?.toggleAudio === "function") music.toggleAudio(); else nav()?.go?.("audio"); }, "Music and video");
     items.player.setAttribute("aria-haspopup", "true");
-    items.player.append(icon("audio"), text("span", "shell-player-title", ""));
+    items.player.append(icon("audio"), text("span", "shell-player-title", ""), text("span", "shell-player-time", ""));
     // The machine's load opens the machine status (the Explorer's diagnostics), where Home's Machine tile goes too.
     item("machine", "shell-machine", () => { const n = nav(); if (n?.get?.("machine")) n.go?.("machine"); else n?.go?.("explorer", { panel: "diagnostics" }); }, "Machine load");
     items.machine.append(text("span", "", ""));
@@ -1188,7 +1201,57 @@
     if (one.percent >= 90) node.dataset.tone = "warn";
     return node;
   }
+  // The player's time left (the prototype's "Deep Focus 40:32"), read from the player (MefiMusic.playback). It ticks once a
+  // second only while something plays and the window can be seen, and writes only when the words change; a stream with no
+  // end (the radio) shows none.
+  let playerTimer = 0;
+  function playerTimeLeft() {
+    let at = null;
+    try { at = window.MefiMusic?.playback?.() ?? null; } catch { at = null; }
+    if (!at || !(at.duration > 0) || !finite(at.position)) return "";
+    const total = Math.max(0, Math.round(at.duration - at.position));
+    const hours = Math.floor(total / 3600), minutes = Math.floor((total % 3600) / 60), seconds = total % 60;
+    const two = (value) => String(value).padStart(2, "0");
+    return hours ? `${hours}:${two(minutes)}:${two(seconds)}` : `${minutes}:${two(seconds)}`;
+  }
+  function paintPlayerTime() {
+    const node = state.statusParts?.items?.player?.querySelector?.(".shell-player-time");
+    if (!node) return;
+    const words = playerTimeLeft();
+    if (node.textContent !== words) node.textContent = words;
+    node.hidden = !words;
+  }
+  // One timeout at a time, chained while it is still wanted (the frame owns no interval). Hidden, paused or off, it stops;
+  // the repaint the frame makes when the window is seen again starts it once more.
+  function syncPlayerTick(playing) {
+    const want = Boolean(playing) && !document.hidden && state.on;
+    if (want && !playerTimer) nextPlayerTick();
+    else if (!want && playerTimer) { clearTimeout(playerTimer); playerTimer = 0; }
+  }
+  function nextPlayerTick() {
+    playerTimer = setTimeout(() => {
+      playerTimer = 0;
+      if (document.hidden || !state.on || state.statusParts?.items?.player?.dataset?.playing !== "true") return;
+      paintPlayerTime();
+      nextPlayerTick();
+    }, 1000);
+  }
+  // The usage meters keep up by themselves: once a run ends (fewer working than the paint before), and on any paint of the
+  // bar once the last reading is five minutes old, while Studio can be seen. The frame owns no interval: the bar repaints on
+  // every push already. renderer/tracker.js does the read and answers from its last reading while that is fresh; the
+  // classic layout reads only while Command shows, as before.
+  const USAGE_EVERY_MS = 5 * 60 * 1000;
+  let lastWorking = null, usageAskedAt = 0;
+  const readUsage = (force) => { usageAskedAt = Date.now(); try { void window.MefiUsageTracker?.refresh?.({ force, probe: false })?.catch?.(() => {}); } catch { /* no tracker in this build */ } };
+  function syncUsageReads(live) {
+    const ended = live && Number.isFinite(live.working) && lastWorking !== null && live.working < lastWorking;
+    if (live && Number.isFinite(live.working)) lastWorking = live.working;
+    if (!state.on || document.hidden) return;
+    if (ended) readUsage(true);
+    else if (Date.now() - usageAskedAt >= USAGE_EVERY_MS) readUsage(false);
+  }
   function paintStatusItems(live) {
+    syncUsageReads(live);
     const parts = state.statusParts;
     if (!parts) return;
     const { items, working, waiting } = parts;
@@ -1219,7 +1282,9 @@
       items.player.setAttribute("aria-label", `${live.player.playing ? "Playing" : "Paused"}: ${live.player.title}. Music and video`);
       items.player.setAttribute("title", `${live.player.playing ? "Playing" : "Paused"}: ${live.player.title}. Open the music and video menu.`);
       items.player.dataset.playing = String(live.player.playing);
+      paintPlayerTime();
     }
+    syncPlayerTick(Boolean(live.player?.playing));
     items.permission.hidden = !live.permission;
     if (live.permission) {
       items.permission.children[1].textContent = live.permission;
@@ -1538,6 +1603,7 @@
     state.on = false;
     clearTimeout(state.timer);
     state.timer = 0;
+    syncPlayerTick(false);
     state.drawer = null;
     state.returnFocus = null;
     const layout = nav()?.layout;
@@ -1580,9 +1646,8 @@
       closeMenu(false);
       sync("nav");
     });
-    for (const name of ["mefi:workspace-state", "mefi:usage-report", "mefi:nav-badges", "mefi:autonomy-changed", "mefi:project-changed", "mefi:task-context", "mefi-music-change", "mefi:companion-state"]) window.addEventListener(name, () => scheduleLive());
-    // A place changed inside Settings or Team without a route of its own: the list column and the breadcrumb follow at once.
-    for (const name of ["mefi:settings-place", "mefi:team-place"]) window.addEventListener(name, () => { if (state.on) paintLive(); });
+    for (const name of ["mefi:workspace-state", "mefi:usage-report", "mefi:nav-badges", "mefi:autonomy-changed", "mefi:project-changed", "mefi:task-context", "mefi-music-change", "mefi:companion-state"]) window.addEventListener(name, () => scheduleLive());    // A place changed inside Settings or Team without a route of its own: the list column and the breadcrumb follow at once.
+    for (const name of ["mefi:settings-place", "mefi:team-place", "mefi:friends-place"]) window.addEventListener(name, () => { if (state.on) paintLive(); });
     window.addEventListener("keydown", onKey, true);
     document.addEventListener("visibilitychange", () => { if (state.on && state.stale && !document.hidden) { state.stale = false; scheduleLive(); } });
     document.addEventListener("pointerdown", (event) => { if (!state.on) return; outsideMenu(event); outsideDrawer(event); }, true);

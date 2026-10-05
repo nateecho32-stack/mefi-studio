@@ -55,7 +55,9 @@
   // Task board, a card to scroll to) is where you are inside the page, not another tab.
   // Agents is one sheet with two faces: its overview, and Setup with four panes.
   // In the 0.5 layout Agents is Team, one tab per place (renderer/agents.js, TEAM_PLACES): its Overview is the Team tab.
-  const IDENTITY = Object.freeze({ workspace: Object.freeze(["view", "taskId", "projectId"]), agents: Object.freeze(["section", "pane", "place"]) });
+  // Friends in the 0.5 layout is one tab per place too (renderer/companion-hub.js, FRIENDS_PLACES).
+  const IDENTITY = Object.freeze({ workspace: Object.freeze(["view", "taskId", "projectId"]), agents: Object.freeze(["section", "pane", "place"]), "friends-page": Object.freeze(["place"]) });
+  const friendsPlaceOf = (id) => safe(() => window.MefiCompanionHub?.FRIENDS_PLACES?.find?.((place) => place.id === id) ?? null, null);
   const AGENT_PANES = Object.freeze({ connections: "Connections", team: "Team", routing: "Routing", behavior: "Behavior" });
   const teamPlaceOf = (id) => safe(() => window.MefiAgents?.TEAM_PLACES?.find?.((place) => place.id === id && Array.isArray(place.panes)) ?? null, null);
   const TONES = Object.freeze({ ask: "warn", run: "live", check: "info", done: "good", dropped: "dim", wait: "dim", ready: "dim" });
@@ -130,6 +132,7 @@
       if (teamPlaceOf(at)) return { id, params: at === "overview" ? {} : { place: at } };
     }
     if (id === "agents") return { id, params: params.section === "setup" ? { section: "setup", pane: AGENT_PANES[params.pane] ? params.pane : "team" } : {} };
+    if (id === "friends-page") return { id, params: { place: friendsPlaceOf(params.place) ? params.place : "rooms" } };
     return { id, params };
   }
   // The key two routes share when they are the same place (the project is fixed by the set, so it is not in it).
@@ -194,6 +197,7 @@
     let title = words(dest?.short || dest?.label || rec.title || route.id, 40);
     if (route.id === "agents" && route.params.pane) title = `Agents · ${AGENT_PANES[route.params.pane]}`;
     else if (route.id === "agents" && route.params.place) title = words(teamPlaceOf(route.params.place)?.label || title, 40);
+    else if (route.id === "friends-page") title = words(friendsPlaceOf(route.params.place)?.label || title, 40);
     return { title, glyph: dest?.glyph || "g-frame" };
   }
 

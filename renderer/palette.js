@@ -621,6 +621,16 @@
       li.addEventListener("click", () => run(index));
       el.list.append(li);
     });
+    // Past the twelve shown, the list says there is more and how to reach it (the status line says it for a screen reader).
+    const more = state.filtered.length - items.length;
+    if (more > 0) {
+      const foot = document.createElement("li");
+      foot.className = "palette-more";
+      foot.setAttribute("role", "presentation");
+      foot.setAttribute("aria-hidden", "true");
+      foot.textContent = `${more} more result${more === 1 ? "" : "s"} · keep typing to narrow them`;
+      el.list.append(foot);
+    }
     setActiveOption();
   }
 

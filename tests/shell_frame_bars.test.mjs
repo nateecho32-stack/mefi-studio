@@ -611,7 +611,9 @@ test("the frame never reaches for setInterval, and its only timer is the 60 ms c
   const source = await readFile(new URL("../renderer/shell.js", import.meta.url), "utf8");
   absent(source, /setInterval|requestIdleCallback|new Worker|fetch\(|XMLHttpRequest|window\.mefiStudio\??\.[a-z][A-Za-z]*\(/, "no poll, no network, no host call made by name");
   const timeouts = [...source.matchAll(/setTimeout\(/g)].length;
-  assert.equal(timeouts, 2, "the feed's coalescer and the layout switch's reload delay");
+  // The third is the player's time left, once a second only while something plays and the window can be seen (the owner's
+  // pick, 2026-10-05); the usage meters ride on the repaints the frame makes anyway.
+  assert.equal(timeouts, 3, "the feed's coalescer, the layout switch's reload delay and the player's time left");
 });
 
 test("the need pill and the waiting item open the inbox through MefiShell.onInbox first, then MefiToday, then Work's own views", async () => {
@@ -751,14 +753,16 @@ test("the machine's load comes from the resource watcher's push: CPU and memory 
   assert.equal(bar.querySelector(".shell-usage-sep").hidden, false, "two meters, and the rule before them");
   // A pass of the watcher: the rounded load, and what is in use of the memory.
   push({ wait: false, capacity: { canStart: true, reason: null, resources: { cpuPercent: 34.4, availableMemoryMB: 6400, totalMemoryMB: 16384, lagMs: 12 } }, history: new Array(50).fill({}) });
-  assert.deepEqual(page.timers.map((timer) => timer.delay), [60], "one coalesced repaint");
+  // (The player plays here, so its time left ticks once a second beside the repaint.)
+  assert.deepEqual(page.timers.map((timer) => timer.delay).filter((delay) => delay !== 1000), [60], "one coalesced repaint");
+  assert.equal(page.timers.filter((timer) => timer.delay === 1000).length, 1, "and one tick for the playing player's time left");
   page.flush();
   assert.deepEqual([say(item(page, "machine")), item(page, "machine").hidden], ["CPU 34% · Mem 61%", false]);
   assert.equal(item(page, "machine").getAttribute("aria-label"), "Machine load: CPU 34 percent, memory 61 percent in use. Open the machine status");
   assert.deepEqual(plain(page.window.MefiShell.status().machine), { cpu: 34, mem: 61, held: false, reason: "" }, "only these numbers are kept, never the pushed status");
   // The next pass with the same rounded load repaints nothing.
   push({ wait: false, capacity: { resources: { cpuPercent: 34.2, availableMemoryMB: 6390, totalMemoryMB: 16384 } } });
-  assert.deepEqual(page.timers, [], "the same load: no repaint");
+  assert.deepEqual(page.timers.filter((timer) => timer.delay !== 1000), [], "the same load: no repaint (the playing player's tick goes on)");
   // A machine that holds new workers says why on hover.
   push({ wait: true, capacity: { canStart: false, reason: "Free memory is under the floor.", resources: { cpuPercent: 91, availableMemoryMB: 900, totalMemoryMB: 16384 } } });
   page.flush();

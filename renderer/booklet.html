@@ -9726,6 +9726,22 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
 @media (prefers-reduced-transparency: reduce) { .agent-hub, .agent-hub-center, .agent-hub-node, .agent-hub .companion-panel.companion-in-hub { background: var(--panel-solid); backdrop-filter: none; } }
 @media print { .agent-hub, .agent-handoff { display: none !important; } }
 
+/* Friends in the 0.5 layout (renderer/companion-hub.js openPlace): one place at a time in the main area, beside the list
+   column, as the prototype's page: a title, the line that says what the place is for, then the place's own card in a
+   centred 1000 px column with no frame around the page. The cards' own small titles step aside (the page has the name),
+   and the size tokens they use are re-pointed at the 0.5 type ladder (renderer/size.css), so nothing reads under 12 px. */
+.friends-place { position: fixed; inset: var(--shell-y0, 72px) var(--shell-x1, 0px) var(--shell-y1, 0px) var(--shell-x0, 80px); z-index: var(--z-sheet); padding: 0; overflow-y: auto; overscroll-behavior: contain; background: var(--surface-page, var(--bg)); backdrop-filter: none;
+  --fs-2xs: var(--f12, 12px); --fs-xs: var(--f12, 12px); --fs-sm: var(--f125, 12.5px); --fs-md: var(--f135, 13.5px); --fs-base: var(--f14, 14px); }
+.friends-place[hidden] { display: none; }
+.friends-place .friends-place-sheet { display: grid; gap: 16px; align-content: start; width: 100%; max-width: 1032px; max-height: none; margin: 0 auto; padding: 22px 16px 28px; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.friends-place-head h1 { margin: 0; font: 650 var(--f22, 22px)/1.3 var(--font-display); letter-spacing: -.01em; color: var(--ivory); }
+.friends-place-about { margin: 4px 0 0; max-width: 70ch; font-size: var(--f135, 13.5px); line-height: 1.5; }
+.friends-place-body { display: grid; gap: 14px; min-width: 0; }
+.friends-place-body :is(.rooms, .pc-sync, .friends-card) { padding: 16px 18px; border-radius: 14px; background: color-mix(in srgb, var(--panel-solid) 72%, transparent); font-size: var(--f135, 13.5px); }
+.friends-place-body :is(.rooms-title, .pc-sync-title, .friends-title) { display: none; }
+.friends-place-body small { font-size: max(var(--f12, 12px), .8334em); }
+.friends-place-more { display: flex; flex-wrap: wrap; gap: 8px; }
+
 /* Vibe: the calm front door (renderer/vibe.js), the Vibe / Build switch and
    the one-time "what's new" card. Inlined last, so it wins ties. Every colour
    comes from the active theme's tokens (--gold is the accent, --ivory the
@@ -10906,6 +10922,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 .today-option-label { min-width: 0; overflow-wrap: anywhere; }
 .today-rec { flex: none; padding: 1px 7px; border-radius: 999px; background: color-mix(in srgb, var(--gold) 20%, transparent); color: var(--gold-bright); font-size: var(--t-f12); font-weight: 650; }
 .today-need-free { display: flex; gap: 6px; min-width: 0; }
+/* The box for your own words waits behind its link until asked for (renderer/today.js openOwnWords). */
+.today-need-free[hidden], .today-own-words[hidden] { display: none; }
+.today-own-words { justify-self: start; align-self: flex-start; }
 .today-need-input { flex: 1 1 auto; min-width: 0; min-height: 32px; padding: 0 10px; border: 1px solid var(--t-edge); border-radius: 10px; background: var(--t-well); color: var(--t-ink); font: var(--t-f13)/1.3 var(--font-ui); }
 .today-need-input::placeholder { color: var(--t-faint); }
 .today-need-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 14px; }
@@ -12710,6 +12729,9 @@ html[data-frame] .shell-meter-button + .shell-meter-button .shell-meter i { back
 html[data-frame] .shell-meter-button[data-tone="warn"] .shell-meter i { background: var(--warn); }
 html[data-frame] .shell-player[data-playing="true"] .glyph { color: var(--gold-bright); }
 html[data-frame] .shell-player-title { max-width: 18ch; overflow: hidden; text-overflow: ellipsis; }
+/* The time left, as the prototype's "Deep Focus 40:32" (renderer/shell.js paintPlayerTime). */
+html[data-frame] .shell-player-time { color: var(--muted); font-variant-numeric: tabular-nums; }
+html[data-frame] .shell-player-time[hidden] { display: none; }
 html[data-frame] .shell-status-extra { display: inline-flex; align-items: center; gap: 4px; flex: none; }
 html[data-frame] .shell-status-extra:empty { display: none; }
 @media (max-width: 899.98px) { html[data-frame] .shell-player-title, html[data-frame] .shell-permission .shell-status-word, html[data-frame] .shell-usage, html[data-frame] .shell-usage-sep, html[data-frame] .shell-machine { display: none; } }
@@ -12757,6 +12779,8 @@ html[data-frame] #palette-overlay .palette-search-row input { min-height: 0; hei
 html[data-frame] #palette-overlay .palette-search-row input::placeholder { color: var(--muted); }
 html[data-frame] #palette-overlay #palette-list { max-height: min(400px, calc(100vh - var(--shell-y0) - 160px)); padding: 6px; }
 html[data-frame] #palette-overlay #palette-list li.palette-heading { min-height: 0; padding: 9px 10px 4px; border-radius: 0; color: var(--muted); font-size: max(12px, calc(12px * var(--text-scale, 1))); font-weight: 650; cursor: default; background: none; outline: none; }
+/* Past the twelve shown: "N more results · keep typing to narrow them" (renderer/palette.js renderV2). */
+html[data-frame] #palette-overlay #palette-list li.palette-more { min-height: 0; padding: 8px 10px 6px; border-radius: 0; color: var(--muted); font-size: max(12px, calc(12px * var(--text-scale, 1))); cursor: default; background: none; outline: none; }
 html[data-frame] #palette-overlay #palette-list li.palette-row { min-height: 0; gap: 11px; padding: 8px 10px; border-radius: 10px; font-size: max(12px, calc(14px * var(--text-scale, 1))); }
 html[data-frame] #palette-overlay #palette-list li.palette-row .palette-glyph { flex: none; width: 17px; height: 17px; color: var(--muted); }
 html[data-frame] #palette-overlay #palette-list li.palette-row .hint { flex: none; margin-left: auto; color: var(--muted); font-size: max(12px, calc(13px * var(--text-scale, 1))); white-space: nowrap; }
@@ -23228,6 +23252,14 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       open: (params) => window.MefiAgents?.open?.(params), close: () => window.MefiAgents?.close?.(), isOpen: () => overlayOpen("agents-overlay"),
     },
     {
+      // The 0.5 layout's Friends place (renderer/companion-hub.js openPlace): Rooms, Your PCs or Playground, one at a time.
+      // go("friends") and its three ways in land here while the layout is on (FRIENDS_PAGES); Search lists those four.
+      id: "friends-page", label: "Friends", short: "Friends", kind: "overlay", layer: "sheet", section: "friends", group: "tools",
+      glyph: "g-orbit", badge: null, desc: "Rooms, your PCs and companion playdates", searchTerms: "friends rooms pcs playground",
+      showIn: showIn({}), hidden: () => !v2Places(), element: "friends-overlay", focus: "#friends-place-title",
+      open: (params) => window.MefiCompanionHub?.openPlace?.(params), close: () => window.MefiCompanionHub?.closePlace?.(), isOpen: () => overlayOpen("friends-overlay"),
+    },
+    {
       // In Vibe mode Home is Vibe (go() lands there), so Search, Shortcuts
       // and the rail name it that instead of listing Home and Vibe twice.
       id: "workspace", get label() { return vibeMode() ? "Vibe" : "Home"; }, get short() { return vibeMode() ? "Vibe" : "Home"; }, kind: "view", layer: null,
@@ -24140,6 +24172,14 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     // The prototype's names for routes that already exist: go("team") is the Agents page, go("map") the Command view.
     if (id === "team") id = "agents";
     else if (id === "map") id = "command";
+    // In the 0.5 layout Friends is a place of three pages (renderer/companion-hub.js openPlace): Friends and its three ways
+    // in open that page at their place, where the classic layout opens the companion's Friends bubble.
+    // (Spelled out here, not shared: suites run go() on its own.)
+    const friendsPages = { friends: null, rooms: "rooms", "your-pcs": "pcs", playground: "playground" };
+    if (globalThis.document?.documentElement?.dataset?.layout === "v2" && Object.hasOwn(friendsPages, id)) {
+      params = { place: friendsPages[id] || params.place || params.target || "rooms" };
+      id = "friends-page";
+    }
     const redirected = window.MefiAgents?.redirect?.(id, params);
     if (redirected) return go(redirected.id, redirected.params, options);
     // ---- sessions (renderer/sessions.js) ----
@@ -24465,9 +24505,10 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     // Workspace, Command, Task board, Plans and Brain maps are pinned at the
     // top of the sidebar and Settings / Music sit in its bottom row, so none
     // repeat here.
+    // A page hidden in this layout (the 0.5 layout's Friends page in the classic one) is not offered either.
     appendGrouped(element, list().filter((dest) =>
       !["workspace", "command", "tasks", "plans", "brains", "studio", "music"].includes(dest.id) &&
-      dest.kind !== "action" && (dest.layer !== "transient" || dest.id === "profiler")), "ghost");
+      dest.kind !== "action" && (dest.layer !== "transient" || dest.id === "profiler") && !dest.hidden?.()), "ghost");
     paintBadges(element);
   }
 
@@ -24529,6 +24570,9 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     // "inbox" is the 0.5 layout's Work › Inbox (renderer/today.js registers it there only); a route nobody registered is skipped.
     work: ["tasks", "plans", "ideas", "inbox", "analyzer", "worktrees"],
     agents: ["agents", "command", "fleet", "eyes", "trace", "explorer", "overhead", "agent-brain", "skills", "brains", "context", "booklet", "graph", "usage"],
+    // The 0.5 layout's Friends page (its places are drawn by renderer/shell.js friendsModel); the classic layout's Friends
+    // entries are actions, so this section never shows there.
+    friends: ["friends-page"],
     settings: ["studio"],
   });
 
@@ -63317,6 +63361,16 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
       li.addEventListener("click", () => run(index));
       el.list.append(li);
     });
+    // Past the twelve shown, the list says there is more and how to reach it (the status line says it for a screen reader).
+    const more = state.filtered.length - items.length;
+    if (more > 0) {
+      const foot = document.createElement("li");
+      foot.className = "palette-more";
+      foot.setAttribute("role", "presentation");
+      foot.setAttribute("aria-hidden", "true");
+      foot.textContent = `${more} more result${more === 1 ? "" : "s"} · keep typing to narrow them`;
+      el.list.append(foot);
+    }
     setActiveOption();
   }
 
@@ -73978,7 +74032,9 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
     if (!window.MefiNav?.release) priorFocus?.focus?.();
   }
   window.MefiMusic = { init, open, openPreview, openAudio, closeAudio, toggleAudio, openSection, mountSettings, activateSettings, revealSettingsTarget, settingsAppearanceActive: () => settingsAppearance, leaveSettingsAppearance: (options) => setSettingsAppearance(false, options), close, status, graphPreferences, applyNodeStyle, applyNodeLayout, applyNodeEffects, getAudioElement: () => { init(); return activeDeck(); }, tune, stopRadio,
-    stations: () => STATIONS.map((item) => ({ id: item.id, name: item.name, detail: item.detail, origin: item.origin, mirrors: item.mirrors.length })), setRecommender: (fn) => { recommender = typeof fn === "function" ? fn : null; render(); }, addFiles, setSource, applyTheme, applyCustomColors,
+    stations: () => STATIONS.map((item) => ({ id: item.id, name: item.name, detail: item.detail, origin: item.origin, mirrors: item.mirrors.length })),
+    // Where the playing source is ({ position, duration } in seconds; duration 0 for a stream with no end): the status bar's time left.
+    playback: () => { const at = playbackPosition(); return { position: at.position, duration: at.duration }; }, setRecommender: (fn) => { recommender = typeof fn === "function" ? fn : null; render(); }, addFiles, setSource, applyTheme, applyCustomColors,
     // The free palettes as swatches, and the one on screen (Vibe's settings panel).
     themes: () => Object.entries(THEMES).map(([key, theme]) => ({ key, name: theme.name, accent: theme.accent, bright: theme.bright, bg: theme.bg, panel: theme.panel, ...(theme.accent2 ? { accent2: theme.accent2 } : {}) })),
     // Every node style and layout, for the setup helper's Look section.
@@ -81355,6 +81411,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const section = typeof options === "string" ? options : options?.section;
     const target = typeof options === "object" ? options?.target : null;
     const requested = items.some(([id]) => id === section) ? section : null;
+    // In the 0.5 layout Friends is a place of its own (openPlace below): asked for, it opens there instead of a bubble.
+    if (requested === "friends" && friendsLayout()) {
+      if (hub.open) close({ immediate: true, restore: false });
+      window.MefiNav?.go?.("friends-page", { place: friendsPlaceOfTarget(target) ?? "rooms" });
+      return true;
+    }
     if (hub.open) {
       if (hub.closing) { clearTimeout(hub.timer); hub.closing = false; el.layer.classList.remove("leaving"); }
       if (requested) { if (hub.section === requested) focusFriend(target); else select(requested, target); }
@@ -81406,6 +81468,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     heading.focus({ preventScroll: true }); heading.scrollIntoView?.({ block: "start", behavior: "instant" });
   }
   function select(section, target = null) {
+    // The Friends bubble in the 0.5 layout goes to the Friends place (openPlace).
+    if (section === "friends" && friendsLayout()) { navigate(() => window.MefiNav?.go?.("friends-page", { place: friendsPlaceOfTarget(target) ?? "rooms" })); return; }
     const previous = hub.section; hub.section = section;
     hub.friendTarget = section === "friends" && Object.hasOwn(FRIENDS_TARGETS, target) ? target : null;
     if (host.panel.parentElement === el.detail) {
@@ -81584,7 +81648,92 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (index < 0 || event.shiftKey && index === 0 || !event.shiftKey && index === controls.length - 1) { event.preventDefault(); controls[event.shiftKey ? controls.length - 1 : 0].focus(); }
     event.stopPropagation();
   }
-  window.MefiCompanionHub = { attach, face, play, thinking, boot, handoff, guide, open, close, update, resize, back: () => select(null), isOpen: () => hub.open, contains: (target) => Boolean(hub.open && el.layer?.contains(target)) };
+  // ---- Friends in the 0.5 layout (html[data-layout="v2"]) ----
+  // The prototype's Friends (docs/prototype/mefi-studio-0.5-v5.html: friendsView, FRIEND_SUBS) is a place of three pages,
+  // one at a time beside the list column: Rooms (renderer/rooms.js), Your PCs (renderer/pc-sync.js) and Playground
+  // (renderer/companion-friends.js). They are the cards the hub's Friends bubble stacks, with their ids, controls and host
+  // calls; nothing is copied. renderer/nav.js sends go("friends") and its three ways in here while the layout is on (the
+  // route "friends-page", { place }), and renderer/shell.js draws the list (friendsPlaces) and the breadcrumb (friendsPlace).
+  // Without the layout none of this is built and the hub's Friends bubble is as it was.
+  const friendsLayout = () => document.documentElement?.dataset?.layout === "v2";
+  const FRIENDS_PLACES = Object.freeze([
+    { id: "rooms", label: "Rooms", glyph: "g-orbit", about: "Hang out, cowork, listen together, or share what you are making. Rooms are optional and never see your projects unless you share them." },
+    { id: "pcs", label: "Your PCs", glyph: "g-explorer", about: "Keep work in step across machines through GitHub. Studio only looks until you press Sync." },
+    { id: "playground", label: "Playground", glyph: "g-ambience", about: "Practice with your companion, and set what it may share." },
+  ]);
+  // The hub's targets (FRIENDS_TARGETS) name the same three places.
+  const friendsPlaceOfTarget = (target) => (FRIENDS_PLACES.some((place) => place.id === target) ? target : null);
+  const friendsPage = { place: null, root: null, body: null, title: null, about: null };
+  const friendsPlaceById = (id) => FRIENDS_PLACES.find((place) => place.id === id) ?? null;
+  const friendsOpen = () => Boolean(friendsPage.root && friendsPage.root.hidden === false);
+  function mountFriendsPage() {
+    if (friendsPage.root) return;
+    const overlay = node("div", "overlay friends-place"); overlay.id = "friends-overlay"; overlay.hidden = true;
+    const sheet = node("section", "sheet friends-place-sheet"); sheet.tabIndex = -1;
+    sheet.setAttribute("role", "region"); sheet.setAttribute("aria-labelledby", "friends-place-title");
+    const head = node("header", "friends-place-head");
+    const title = node("h1", "", "Friends"); title.id = "friends-place-title"; title.tabIndex = -1;
+    const about = node("p", "muted friends-place-about");
+    head.append(title, about);
+    const body = node("div", "friends-place-body"); body.id = "friends-place-body";
+    sheet.append(head, body); overlay.append(sheet); document.body.append(overlay);
+    Object.assign(friendsPage, { root: overlay, body, title, about });
+  }
+  // A place's card, made when it shows; the one before lets go of what it holds first (Rooms' open room).
+  function paintFriendsPlace(place) {
+    for (const child of [...friendsPage.body.children]) child.dispose?.();
+    let card = null;
+    if (place.id === "rooms") card = window.MefiRooms?.panel?.();
+    else if (place.id === "pcs") card = window.MefiPcSync?.card?.();
+    else card = window.MefiCompanionFriends?.card?.({ name: name(), face: (look) => lookFace(look) });
+    const parts = [card ?? node("p", "muted", "This part of Friends is not in this build.")];
+    // What the hub's Friends bubble also offered: listening together and the Discord community.
+    if (place.id === "playground") {
+      const more = node("div", "friends-place-more");
+      more.append(button("Friends & listening rooms", () => { window.MefiMusic?.openAudio?.(); window.MefiMusic?.setSource?.("link"); window.MefiMusic?.openSection?.("more"); }, "ghost"),
+        button("Connect with Discord", () => window.MefiNav?.go?.("community"), "ghost"));
+      parts.push(more);
+    }
+    friendsPage.body.replaceChildren(...parts);
+    friendsPage.body.dataset.place = place.id;
+  }
+  function openPlace(params = {}) {
+    if (!friendsLayout()) return false;
+    mountFriendsPage();
+    const place = friendsPlaceById(params.place) ?? friendsPlaceById(friendsPlaceOfTarget(params.target)) ?? friendsPlaceById(friendsPage.place) ?? FRIENDS_PLACES[0];
+    window.MefiNav?.claim?.("friends-page");
+    const moved = friendsPage.place !== place.id;
+    friendsPage.root.hidden = false;
+    friendsPage.root.dataset.place = place.id;
+    friendsPage.title.textContent = place.label;
+    friendsPage.about.textContent = place.about;
+    if (moved || !friendsPage.body.childElementCount) { paintFriendsPlace(place); friendsPage.body.scrollTop = 0; }
+    friendsPage.place = place.id;
+    if (moved) window.dispatchEvent(new CustomEvent("mefi:friends-place", { detail: { place: place.id } }));
+    window.MefiNav?.paintCurrent?.();
+    window.MefiScroll?.scan?.(friendsPage.root);
+    return true;
+  }
+  function closePlace() {
+    if (!friendsPage.root) return;
+    for (const child of [...friendsPage.body.children]) child.dispose?.();
+    friendsPage.body.replaceChildren();
+    friendsPage.root.hidden = true;
+    friendsPage.place = null;
+  }
+  // The places in order, for a list drawn elsewhere (renderer/shell.js): each with whether it shows and the way there.
+  function friendsPlaces() {
+    if (!friendsLayout()) return null;
+    const here = friendsOpen() ? friendsPage.place : null;
+    return FRIENDS_PLACES.map((place) => ({ id: place.id, label: place.label, glyph: place.glyph, current: place.id === here, run: () => window.MefiNav?.go?.("friends-page", { place: place.id }) }));
+  }
+  // Where you are in Friends ({ id, label }), for the breadcrumb and the tab; null when the page is not up.
+  function friendsPlace() {
+    const place = friendsOpen() ? friendsPlaceById(friendsPage.place) : null;
+    return place ? { id: place.id, label: place.label } : null;
+  }
+  window.MefiCompanionHub = { attach, face, play, thinking, boot, handoff, guide, open, close, update, resize, back: () => select(null), isOpen: () => hub.open, contains: (target) => Boolean(hub.open && el.layer?.contains(target)),
+    openPlace, closePlace, friendsPlaces, friendsPlace, FRIENDS_PLACES };
 })();
 
 // Project map navigation: evidence-backed relationships and a living work tree.
@@ -90489,7 +90638,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 
   // ---- state ---------------------------------------------------------------------------------------
   const state = {
-    on: false, data: null, off: null, host: null, handled: new Map(), busy: new Set(), errors: new Map(), later: new Set(), drafts: new Map(),
+    on: false, data: null, off: null, host: null, handled: new Map(), busy: new Set(), errors: new Map(), later: new Set(), drafts: new Map(), ownWords: new Set(),
     inbox: { open: false, anchor: null, index: 0, node: null, opener: null, focusKey: null }, pageOpen: null, anchor: null, clock: 0, sweep: 0,
     listeners: new Set(), signature: "", parts: null, painted: new WeakMap(),
     // Build's Home (layout v2): the page, what it borrowed from Home, and the suggestions it asked for. `homeView` is the route's view: "chat" is the classic Home.
@@ -90726,7 +90875,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         if (option.description) choose.title = option.description;
         choose.addEventListener("click", () => {
           // An option that asks for words takes them from the box; one that does not answers at once.
-          if (option.text) { typed = option; state.drafts.set(item.key, { text: input.value, optionId: option.id }); input.placeholder = "Your one-line answer…"; input.focus?.(); return; }
+          if (option.text) { typed = option; state.drafts.set(item.key, { text: input.value, optionId: option.id }); openOwnWords(); input.placeholder = "Your one-line answer…"; input.focus?.(); return; }
           void answer(item, { optionId: option.id });
         });
         choices.append(choose);
@@ -90739,7 +90888,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         if (!words) { input.focus?.(); return; }
         void answer(item, { optionId: typed?.id ?? null, text: words });
       });
-      node.append(choices, form);
+      // The owner's choice (2026-10-04): the box for your own words waits behind a small link, so a card reads as its
+      // options first. It opens on the link, on an option that asks for words, and stays open while it holds a draft.
+      const own = button("Answer in my own words", "today-link today-own-words", () => { openOwnWords(); input.focus?.(); }, { title: "Write your own answer instead of picking one", disabled: lock });
+      function openOwnWords() { state.ownWords.add(item.key); form.hidden = false; own.hidden = true; }
+      if (kept?.text || state.ownWords.has(item.key)) openOwnWords(); else form.hidden = true;
+      node.append(choices, own, form);
     } else {
       for (const action of actionsOf(item, state.data || {})) {
         // A way to look (Review changes) only goes somewhere; everything else is a decision, through perform().
@@ -92828,14 +92982,20 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const stage = summary?.stage || (isDone(task) ? "done" : task.status === "active" ? "running" : task.status === "awaiting_verification" ? "review" : "ready");
     const inbox = inboxTasks();
     const listed = inbox && typeof inbox.has === "function" ? inbox.has(String(task.id)) : null;
+    // The owner's rule (2026-10-04): a task that will fix itself never looks like a problem. With the Inbox on, a blocked or
+    // cooling task the Inbox does not hold (a check that failed and tries again by itself) is with the running work, saying
+    // it is fixing itself; it reaches the Inbox only when it gives up. A step whose go-ahead is asked once for its whole
+    // request waits with the queue and says so.
+    const fixing = !question && listed === false && ["blocked", "cooling"].includes(stage) && !isDone(task);
+    const stepWaits = !question && listed === false && stage === "approval";
     const tone = question || listed === true || (listed === null && ["blocked", "approval"].includes(stage)) ? "ask"
-      : stage === "running" ? "run"
+      : stage === "running" || fixing ? "run"
       : stage === "review" ? "check"
       : stage === "done" ? (task.dropped ? "dropped" : "done")
       : ["waiting", "cooling", "deferred", "grouped", "blocked", "approval"].includes(stage) ? "wait"
       : "ready";
-    const label = question ? "Needs your answer" : summary?.label || (tone === "done" ? "Done" : "Queued");
-    return { stage, tone, label, summary, question };
+    const label = question ? "Needs your answer" : fixing ? "Fixing itself" : stepWaits ? "Goes ahead with its request" : summary?.label || (tone === "done" ? "Done" : "Queued");
+    return { stage, tone, label, summary, question, fixing };
   }
 
   // The menu's groups: Pinned, Needs you and Working first, then the rest by
@@ -96580,6 +96740,14 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }
     return { section: "team", title: "Team", rows };
   }
+  // Friends lists its three places (renderer/companion-hub.js friendsPlaces), the one that shows current.
+  function friendsModel(n, id) {
+    let places = null;
+    try { places = window.MefiCompanionHub?.friendsPlaces?.() ?? null; } catch { places = null; }
+    if (!Array.isArray(places) || !places.length) return null;
+    const rows = places.map((place) => ({ kind: "row", key: `friends:${place.id}`, label: String(place.label), glyph: typeof place.glyph === "string" ? place.glyph : null, current: id === "friends-page" && Boolean(place.current), run: place.run }));
+    return { section: "friends", title: "Friends", rows };
+  }
   function mapModel(n, id) {
     const tab = (() => { try { return window.MefiAgentBrain?.tab?.() ?? null; } catch { return null; } })();
     const rows = MAP_PAGES.filter(([route]) => n?.get?.(route)).map(([route, label, glyph, params]) => ({
@@ -96605,6 +96773,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       const page = MAP_PAGES.find(([route]) => route === id);
       return page ? (page[0] === "command" ? ["Map"] : ["Map", page[1]]) : null;
     }
+    if (place === "friends" && id === "friends-page") {
+      let here = null;
+      try { here = window.MefiCompanionHub?.friendsPlace?.() ?? null; } catch { here = null; }
+      return here?.label ? ["Friends", String(here.label)] : ["Friends"];
+    }
     return null;
   }
   function pageModel() {
@@ -96612,8 +96785,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const id = n?.current?.() ?? null;
     if (isHomeRoute(id)) return null;
     const place = placeOfRoute(n, id);
-    if (place === "settings" || place === "team" || place === "map") {
-      const model = place === "settings" ? settingsModel(n, id) : place === "team" ? teamModel(n, id) : mapModel(n, id);
+    if (place === "settings" || place === "team" || place === "map" || place === "friends") {
+      const model = place === "settings" ? settingsModel(n, id) : place === "team" ? teamModel(n, id) : place === "friends" ? friendsModel(n, id) : mapModel(n, id);
       if (model) return model;
     }
     const section = sectionOfRoute(n, id);
@@ -96910,7 +97083,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     items.usageSep = el("span", "shell-sep-v shell-usage-sep", { "aria-hidden": "true" });
     item("player", "shell-player", () => { const music = window.MefiMusic; if (typeof music?.toggleAudio === "function") music.toggleAudio(); else nav()?.go?.("audio"); }, "Music and video");
     items.player.setAttribute("aria-haspopup", "true");
-    items.player.append(icon("audio"), text("span", "shell-player-title", ""));
+    items.player.append(icon("audio"), text("span", "shell-player-title", ""), text("span", "shell-player-time", ""));
     // The machine's load opens the machine status (the Explorer's diagnostics), where Home's Machine tile goes too.
     item("machine", "shell-machine", () => { const n = nav(); if (n?.get?.("machine")) n.go?.("machine"); else n?.go?.("explorer", { panel: "diagnostics" }); }, "Machine load");
     items.machine.append(text("span", "", ""));
@@ -96941,7 +97114,57 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (one.percent >= 90) node.dataset.tone = "warn";
     return node;
   }
+  // The player's time left (the prototype's "Deep Focus 40:32"), read from the player (MefiMusic.playback). It ticks once a
+  // second only while something plays and the window can be seen, and writes only when the words change; a stream with no
+  // end (the radio) shows none.
+  let playerTimer = 0;
+  function playerTimeLeft() {
+    let at = null;
+    try { at = window.MefiMusic?.playback?.() ?? null; } catch { at = null; }
+    if (!at || !(at.duration > 0) || !finite(at.position)) return "";
+    const total = Math.max(0, Math.round(at.duration - at.position));
+    const hours = Math.floor(total / 3600), minutes = Math.floor((total % 3600) / 60), seconds = total % 60;
+    const two = (value) => String(value).padStart(2, "0");
+    return hours ? `${hours}:${two(minutes)}:${two(seconds)}` : `${minutes}:${two(seconds)}`;
+  }
+  function paintPlayerTime() {
+    const node = state.statusParts?.items?.player?.querySelector?.(".shell-player-time");
+    if (!node) return;
+    const words = playerTimeLeft();
+    if (node.textContent !== words) node.textContent = words;
+    node.hidden = !words;
+  }
+  // One timeout at a time, chained while it is still wanted (the frame owns no interval). Hidden, paused or off, it stops;
+  // the repaint the frame makes when the window is seen again starts it once more.
+  function syncPlayerTick(playing) {
+    const want = Boolean(playing) && !document.hidden && state.on;
+    if (want && !playerTimer) nextPlayerTick();
+    else if (!want && playerTimer) { clearTimeout(playerTimer); playerTimer = 0; }
+  }
+  function nextPlayerTick() {
+    playerTimer = setTimeout(() => {
+      playerTimer = 0;
+      if (document.hidden || !state.on || state.statusParts?.items?.player?.dataset?.playing !== "true") return;
+      paintPlayerTime();
+      nextPlayerTick();
+    }, 1000);
+  }
+  // The usage meters keep up by themselves: once a run ends (fewer working than the paint before), and on any paint of the
+  // bar once the last reading is five minutes old, while Studio can be seen. The frame owns no interval: the bar repaints on
+  // every push already. renderer/tracker.js does the read and answers from its last reading while that is fresh; the
+  // classic layout reads only while Command shows, as before.
+  const USAGE_EVERY_MS = 5 * 60 * 1000;
+  let lastWorking = null, usageAskedAt = 0;
+  const readUsage = (force) => { usageAskedAt = Date.now(); try { void window.MefiUsageTracker?.refresh?.({ force, probe: false })?.catch?.(() => {}); } catch { /* no tracker in this build */ } };
+  function syncUsageReads(live) {
+    const ended = live && Number.isFinite(live.working) && lastWorking !== null && live.working < lastWorking;
+    if (live && Number.isFinite(live.working)) lastWorking = live.working;
+    if (!state.on || document.hidden) return;
+    if (ended) readUsage(true);
+    else if (Date.now() - usageAskedAt >= USAGE_EVERY_MS) readUsage(false);
+  }
   function paintStatusItems(live) {
+    syncUsageReads(live);
     const parts = state.statusParts;
     if (!parts) return;
     const { items, working, waiting } = parts;
@@ -96972,7 +97195,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       items.player.setAttribute("aria-label", `${live.player.playing ? "Playing" : "Paused"}: ${live.player.title}. Music and video`);
       items.player.setAttribute("title", `${live.player.playing ? "Playing" : "Paused"}: ${live.player.title}. Open the music and video menu.`);
       items.player.dataset.playing = String(live.player.playing);
+      paintPlayerTime();
     }
+    syncPlayerTick(Boolean(live.player?.playing));
     items.permission.hidden = !live.permission;
     if (live.permission) {
       items.permission.children[1].textContent = live.permission;
@@ -97291,6 +97516,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     state.on = false;
     clearTimeout(state.timer);
     state.timer = 0;
+    syncPlayerTick(false);
     state.drawer = null;
     state.returnFocus = null;
     const layout = nav()?.layout;
@@ -97333,9 +97559,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       closeMenu(false);
       sync("nav");
     });
-    for (const name of ["mefi:workspace-state", "mefi:usage-report", "mefi:nav-badges", "mefi:autonomy-changed", "mefi:project-changed", "mefi:task-context", "mefi-music-change", "mefi:companion-state"]) window.addEventListener(name, () => scheduleLive());
-    // A place changed inside Settings or Team without a route of its own: the list column and the breadcrumb follow at once.
-    for (const name of ["mefi:settings-place", "mefi:team-place"]) window.addEventListener(name, () => { if (state.on) paintLive(); });
+    for (const name of ["mefi:workspace-state", "mefi:usage-report", "mefi:nav-badges", "mefi:autonomy-changed", "mefi:project-changed", "mefi:task-context", "mefi-music-change", "mefi:companion-state"]) window.addEventListener(name, () => scheduleLive());    // A place changed inside Settings or Team without a route of its own: the list column and the breadcrumb follow at once.
+    for (const name of ["mefi:settings-place", "mefi:team-place", "mefi:friends-place"]) window.addEventListener(name, () => { if (state.on) paintLive(); });
     window.addEventListener("keydown", onKey, true);
     document.addEventListener("visibilitychange", () => { if (state.on && state.stale && !document.hidden) { state.stale = false; scheduleLive(); } });
     document.addEventListener("pointerdown", (event) => { if (!state.on) return; outsideMenu(event); outsideDrawer(event); }, true);
@@ -97468,7 +97693,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // Task board, a card to scroll to) is where you are inside the page, not another tab.
   // Agents is one sheet with two faces: its overview, and Setup with four panes.
   // In the 0.5 layout Agents is Team, one tab per place (renderer/agents.js, TEAM_PLACES): its Overview is the Team tab.
-  const IDENTITY = Object.freeze({ workspace: Object.freeze(["view", "taskId", "projectId"]), agents: Object.freeze(["section", "pane", "place"]) });
+  // Friends in the 0.5 layout is one tab per place too (renderer/companion-hub.js, FRIENDS_PLACES).
+  const IDENTITY = Object.freeze({ workspace: Object.freeze(["view", "taskId", "projectId"]), agents: Object.freeze(["section", "pane", "place"]), "friends-page": Object.freeze(["place"]) });
+  const friendsPlaceOf = (id) => safe(() => window.MefiCompanionHub?.FRIENDS_PLACES?.find?.((place) => place.id === id) ?? null, null);
   const AGENT_PANES = Object.freeze({ connections: "Connections", team: "Team", routing: "Routing", behavior: "Behavior" });
   const teamPlaceOf = (id) => safe(() => window.MefiAgents?.TEAM_PLACES?.find?.((place) => place.id === id && Array.isArray(place.panes)) ?? null, null);
   const TONES = Object.freeze({ ask: "warn", run: "live", check: "info", done: "good", dropped: "dim", wait: "dim", ready: "dim" });
@@ -97543,6 +97770,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       if (teamPlaceOf(at)) return { id, params: at === "overview" ? {} : { place: at } };
     }
     if (id === "agents") return { id, params: params.section === "setup" ? { section: "setup", pane: AGENT_PANES[params.pane] ? params.pane : "team" } : {} };
+    if (id === "friends-page") return { id, params: { place: friendsPlaceOf(params.place) ? params.place : "rooms" } };
     return { id, params };
   }
   // The key two routes share when they are the same place (the project is fixed by the set, so it is not in it).
@@ -97607,6 +97835,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     let title = words(dest?.short || dest?.label || rec.title || route.id, 40);
     if (route.id === "agents" && route.params.pane) title = `Agents · ${AGENT_PANES[route.params.pane]}`;
     else if (route.id === "agents" && route.params.place) title = words(teamPlaceOf(route.params.place)?.label || title, 40);
+    else if (route.id === "friends-page") title = words(friendsPlaceOf(route.params.place)?.label || title, 40);
     return { title, glyph: dest?.glyph || "g-frame" };
   }
 
@@ -100269,6 +100498,13 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }
     if (reading.tone === "check") {
       return [banner("info", "Checking the result", "The worker finished. Completion checks are pending; this is not marked done yet.", [ghost("See the changes", () => setTab(task, "changes")), ghost("Request changes", () => setIntent(task, "change", true)), spec(statusSpec(task, "done", "Approve and finish", "Marked done. You confirmed the result.", "Really finish?"))])];
+    }
+    // A task that will fix itself (builder.js reading().fixing: its checks failed and it tries again by itself) is not a
+    // problem to look at: it says so, calmly, and the checks stay one press away.
+    if (!run && reading.fixing) {
+      const retry = Number(task.nextRunAt) - Date.now();
+      const when = retry > 60000 ? ` in about ${Math.round(retry / 60000)} min` : retry > 0 ? " in a moment" : "";
+      return [banner("info", "Fixing itself", `The last try did not pass its checks, so it tries again by itself${when}. It only asks you if it gives up.`, [ghost("See the checks", () => setTab(task, "checks"))])];
     }
     if (!run && (task.verification?.state === "failed" || reading.stage === "blocked")) {
       const why = task.verification?.reason || summary.blocker || task.lastRunError || (last?.outcome === "failed" ? last.error : "") || "The last attempt could not be confirmed.";

@@ -247,6 +247,14 @@
       open: (params) => window.MefiAgents?.open?.(params), close: () => window.MefiAgents?.close?.(), isOpen: () => overlayOpen("agents-overlay"),
     },
     {
+      // The 0.5 layout's Friends place (renderer/companion-hub.js openPlace): Rooms, Your PCs or Playground, one at a time.
+      // go("friends") and its three ways in land here while the layout is on (FRIENDS_PAGES); Search lists those four.
+      id: "friends-page", label: "Friends", short: "Friends", kind: "overlay", layer: "sheet", section: "friends", group: "tools",
+      glyph: "g-orbit", badge: null, desc: "Rooms, your PCs and companion playdates", searchTerms: "friends rooms pcs playground",
+      showIn: showIn({}), hidden: () => !v2Places(), element: "friends-overlay", focus: "#friends-place-title",
+      open: (params) => window.MefiCompanionHub?.openPlace?.(params), close: () => window.MefiCompanionHub?.closePlace?.(), isOpen: () => overlayOpen("friends-overlay"),
+    },
+    {
       // In Vibe mode Home is Vibe (go() lands there), so Search, Shortcuts
       // and the rail name it that instead of listing Home and Vibe twice.
       id: "workspace", get label() { return vibeMode() ? "Vibe" : "Home"; }, get short() { return vibeMode() ? "Vibe" : "Home"; }, kind: "view", layer: null,
@@ -1159,6 +1167,14 @@
     // The prototype's names for routes that already exist: go("team") is the Agents page, go("map") the Command view.
     if (id === "team") id = "agents";
     else if (id === "map") id = "command";
+    // In the 0.5 layout Friends is a place of three pages (renderer/companion-hub.js openPlace): Friends and its three ways
+    // in open that page at their place, where the classic layout opens the companion's Friends bubble.
+    // (Spelled out here, not shared: suites run go() on its own.)
+    const friendsPages = { friends: null, rooms: "rooms", "your-pcs": "pcs", playground: "playground" };
+    if (globalThis.document?.documentElement?.dataset?.layout === "v2" && Object.hasOwn(friendsPages, id)) {
+      params = { place: friendsPages[id] || params.place || params.target || "rooms" };
+      id = "friends-page";
+    }
     const redirected = window.MefiAgents?.redirect?.(id, params);
     if (redirected) return go(redirected.id, redirected.params, options);
     // ---- sessions (renderer/sessions.js) ----
@@ -1484,9 +1500,10 @@
     // Workspace, Command, Task board, Plans and Brain maps are pinned at the
     // top of the sidebar and Settings / Music sit in its bottom row, so none
     // repeat here.
+    // A page hidden in this layout (the 0.5 layout's Friends page in the classic one) is not offered either.
     appendGrouped(element, list().filter((dest) =>
       !["workspace", "command", "tasks", "plans", "brains", "studio", "music"].includes(dest.id) &&
-      dest.kind !== "action" && (dest.layer !== "transient" || dest.id === "profiler")), "ghost");
+      dest.kind !== "action" && (dest.layer !== "transient" || dest.id === "profiler") && !dest.hidden?.()), "ghost");
     paintBadges(element);
   }
 
@@ -1548,6 +1565,9 @@
     // "inbox" is the 0.5 layout's Work › Inbox (renderer/today.js registers it there only); a route nobody registered is skipped.
     work: ["tasks", "plans", "ideas", "inbox", "analyzer", "worktrees"],
     agents: ["agents", "command", "fleet", "eyes", "trace", "explorer", "overhead", "agent-brain", "skills", "brains", "context", "booklet", "graph", "usage"],
+    // The 0.5 layout's Friends page (its places are drawn by renderer/shell.js friendsModel); the classic layout's Friends
+    // entries are actions, so this section never shows there.
+    friends: ["friends-page"],
     settings: ["studio"],
   });
 

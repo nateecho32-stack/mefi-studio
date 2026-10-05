@@ -272,6 +272,9 @@ html[data-frame] .shell-meter-button + .shell-meter-button .shell-meter i { back
 html[data-frame] .shell-meter-button[data-tone="warn"] .shell-meter i { background: var(--warn); }
 html[data-frame] .shell-player[data-playing="true"] .glyph { color: var(--gold-bright); }
 html[data-frame] .shell-player-title { max-width: 18ch; overflow: hidden; text-overflow: ellipsis; }
+/* The time left, as the prototype's "Deep Focus 40:32" (renderer/shell.js paintPlayerTime). */
+html[data-frame] .shell-player-time { color: var(--muted); font-variant-numeric: tabular-nums; }
+html[data-frame] .shell-player-time[hidden] { display: none; }
 html[data-frame] .shell-status-extra { display: inline-flex; align-items: center; gap: 4px; flex: none; }
 html[data-frame] .shell-status-extra:empty { display: none; }
 @media (max-width: 899.98px) { html[data-frame] .shell-player-title, html[data-frame] .shell-permission .shell-status-word, html[data-frame] .shell-usage, html[data-frame] .shell-usage-sep, html[data-frame] .shell-machine { display: none; } }
@@ -319,6 +322,8 @@ html[data-frame] #palette-overlay .palette-search-row input { min-height: 0; hei
 html[data-frame] #palette-overlay .palette-search-row input::placeholder { color: var(--muted); }
 html[data-frame] #palette-overlay #palette-list { max-height: min(400px, calc(100vh - var(--shell-y0) - 160px)); padding: 6px; }
 html[data-frame] #palette-overlay #palette-list li.palette-heading { min-height: 0; padding: 9px 10px 4px; border-radius: 0; color: var(--muted); font-size: max(12px, calc(12px * var(--text-scale, 1))); font-weight: 650; cursor: default; background: none; outline: none; }
+/* Past the twelve shown: "N more results · keep typing to narrow them" (renderer/palette.js renderV2). */
+html[data-frame] #palette-overlay #palette-list li.palette-more { min-height: 0; padding: 8px 10px 6px; border-radius: 0; color: var(--muted); font-size: max(12px, calc(12px * var(--text-scale, 1))); cursor: default; background: none; outline: none; }
 html[data-frame] #palette-overlay #palette-list li.palette-row { min-height: 0; gap: 11px; padding: 8px 10px; border-radius: 10px; font-size: max(12px, calc(14px * var(--text-scale, 1))); }
 html[data-frame] #palette-overlay #palette-list li.palette-row .palette-glyph { flex: none; width: 17px; height: 17px; color: var(--muted); }
 html[data-frame] #palette-overlay #palette-list li.palette-row .hint { flex: none; margin-left: auto; color: var(--muted); font-size: max(12px, calc(13px * var(--text-scale, 1))); white-space: nowrap; }

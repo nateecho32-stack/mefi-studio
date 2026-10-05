@@ -115,6 +115,13 @@ test("words of your own: the box answers with text, an empty box does nothing, a
   let card = cardOf(t, "question:q1");
   const input = card.querySelector(".today-need-input");
   const form = card.querySelector("form");
+  // The owner's choice: the box waits behind a small "Answer in my own words" link, which opens it with the caret in it.
+  const own = card.querySelector(".today-own-words");
+  assert.equal(form.hidden, true, "the box is folded away at first");
+  assert.equal(own.hidden, false); assert.match(words(own), /Answer in my own words/);
+  await press(t, own);
+  assert.equal(form.hidden, false, "the link opens the box");
+  assert.equal(own.hidden, true, "and steps aside");
   form.trigger("submit"); await t.settle();
   assert.deepEqual(t.callsOf("assistantAnswer"), [], "nothing typed, nothing sent");
   input.value = "  Case never matters here  ";
@@ -129,6 +136,7 @@ test("words of your own: the box answers with text, an empty box does nothing, a
   const say = card.querySelector('[data-option="say"]');
   await press(u, say);
   assert.deepEqual(u.callsOf("assistantAnswer"), [], "it only asks for the line");
+  assert.equal(card.querySelector("form").hidden, false, "an option that asks for words opens the box too");
   assert.match(card.querySelector(".today-need-input").placeholder, /one-line answer/);
   const box = card.querySelector(".today-need-input");
   box.value = "Ignore the case";

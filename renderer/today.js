@@ -288,7 +288,7 @@
 
   // ---- state ---------------------------------------------------------------------------------------
   const state = {
-    on: false, data: null, off: null, host: null, handled: new Map(), busy: new Set(), errors: new Map(), later: new Set(), drafts: new Map(),
+    on: false, data: null, off: null, host: null, handled: new Map(), busy: new Set(), errors: new Map(), later: new Set(), drafts: new Map(), ownWords: new Set(),
     inbox: { open: false, anchor: null, index: 0, node: null, opener: null, focusKey: null }, pageOpen: null, anchor: null, clock: 0, sweep: 0,
     listeners: new Set(), signature: "", parts: null, painted: new WeakMap(),
     // Build's Home (layout v2): the page, what it borrowed from Home, and the suggestions it asked for. `homeView` is the route's view: "chat" is the classic Home.
@@ -525,7 +525,7 @@
         if (option.description) choose.title = option.description;
         choose.addEventListener("click", () => {
           // An option that asks for words takes them from the box; one that does not answers at once.
-          if (option.text) { typed = option; state.drafts.set(item.key, { text: input.value, optionId: option.id }); input.placeholder = "Your one-line answer…"; input.focus?.(); return; }
+          if (option.text) { typed = option; state.drafts.set(item.key, { text: input.value, optionId: option.id }); openOwnWords(); input.placeholder = "Your one-line answer…"; input.focus?.(); return; }
           void answer(item, { optionId: option.id });
         });
         choices.append(choose);
@@ -538,7 +538,12 @@
         if (!words) { input.focus?.(); return; }
         void answer(item, { optionId: typed?.id ?? null, text: words });
       });
-      node.append(choices, form);
+      // The owner's choice (2026-10-04): the box for your own words waits behind a small link, so a card reads as its
+      // options first. It opens on the link, on an option that asks for words, and stays open while it holds a draft.
+      const own = button("Answer in my own words", "today-link today-own-words", () => { openOwnWords(); input.focus?.(); }, { title: "Write your own answer instead of picking one", disabled: lock });
+      function openOwnWords() { state.ownWords.add(item.key); form.hidden = false; own.hidden = true; }
+      if (kept?.text || state.ownWords.has(item.key)) openOwnWords(); else form.hidden = true;
+      node.append(choices, own, form);
     } else {
       for (const action of actionsOf(item, state.data || {})) {
         // A way to look (Review changes) only goes somewhere; everything else is a decision, through perform().

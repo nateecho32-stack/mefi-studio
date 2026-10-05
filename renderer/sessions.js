@@ -1188,6 +1188,13 @@
     if (reading.tone === "check") {
       return [banner("info", "Checking the result", "The worker finished. Completion checks are pending; this is not marked done yet.", [ghost("See the changes", () => setTab(task, "changes")), ghost("Request changes", () => setIntent(task, "change", true)), spec(statusSpec(task, "done", "Approve and finish", "Marked done. You confirmed the result.", "Really finish?"))])];
     }
+    // A task that will fix itself (builder.js reading().fixing: its checks failed and it tries again by itself) is not a
+    // problem to look at: it says so, calmly, and the checks stay one press away.
+    if (!run && reading.fixing) {
+      const retry = Number(task.nextRunAt) - Date.now();
+      const when = retry > 60000 ? ` in about ${Math.round(retry / 60000)} min` : retry > 0 ? " in a moment" : "";
+      return [banner("info", "Fixing itself", `The last try did not pass its checks, so it tries again by itself${when}. It only asks you if it gives up.`, [ghost("See the checks", () => setTab(task, "checks"))])];
+    }
     if (!run && (task.verification?.state === "failed" || reading.stage === "blocked")) {
       const why = task.verification?.reason || summary.blocker || task.lastRunError || (last?.outcome === "failed" ? last.error : "") || "The last attempt could not be confirmed.";
       return [banner("bad", task.verification?.state === "failed" ? "Its checks did not pass" : "It is blocked", why, [ghost("See the checks", () => setTab(task, "checks")), ghost("Request a change", () => setIntent(task, "change", true))])];
