@@ -445,7 +445,7 @@ commit rewrites the JSON view as well.
   the events) and `layout_contract_css.test.mjs` (every moved declaration
   evaluated as CSS would: unchanged with the regions at 0, moved by exactly its
   region otherwise; every remaining raw `--shell-rail-w` or `--shell-local-h`
-  read named). `layout-contract-ledger.json` lists the 74 declarations that moved.
+  read named). `layout-contract-ledger.json` lists the 73 declarations that moved and are still there.
 - **Size and density** is pinned by `size_model.test.mjs` (limits and steps, the
   old stores, launch painting, Apply/Undo/Reset, broken storage, events),
   `size_page.test.mjs` (the page and its miniature: every combination of the four

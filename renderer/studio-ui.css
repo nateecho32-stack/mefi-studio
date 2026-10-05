@@ -24,7 +24,7 @@ html, body, body * { scrollbar-width: none !important; scrollbar-gutter: auto !i
 .studio-select-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .studio-select-chevron { color: var(--muted); flex-shrink: 0; }
 /* Text carets (U+2304) sit below the UI font's midline, so every text-built chevron draws the #g-chev path instead. */
-span.studio-select-chevron, span.agents-nav-chevron, span.planning-section-chevron, span.catalog-expand, .surface-tools > summary::after { content: ""; display: inline-block; flex: none; width: 12px; height: 12px; font-size: 0; line-height: 0; vertical-align: middle; background: currentColor; -webkit-mask: var(--chev-mask) center / contain no-repeat; mask: var(--chev-mask) center / contain no-repeat; }
+span.studio-select-chevron, span.planning-section-chevron, span.catalog-expand, .surface-tools > summary::after { content: ""; display: inline-block; flex: none; width: 12px; height: 12px; font-size: 0; line-height: 0; vertical-align: middle; background: currentColor; -webkit-mask: var(--chev-mask) center / contain no-repeat; mask: var(--chev-mask) center / contain no-repeat; }
 :root { --chev-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
 span.catalog-expand { width: 16px; height: 16px; }
 .studio-select[aria-expanded=true] { border-color: var(--gold); }
@@ -214,7 +214,7 @@ html[data-studio-style] table#table th { background: var(--studio-menu-fill); ba
 
 /* Floating menus are readable over both the scene and another page of text. */
 html[data-studio-style] :is(.pop, .palette-sheet, .studio-choice-popup, .surface-tools-menu, .studio-more-links, .studio-more > .tools-cluster, .brains-menu, .brains-search-panel, .brains-dialog-panel, .brains-shortcuts-panel, .music-dropdown, .companion-panel, .companion-bubble, .tree-tip, .tip, .profiler-hud, .toast, .legend-list, .feed-drop, .autonomy-popover),
-#app-help-menu, .agents-nav-subsections, .workspace .ws-project-actions > div {
+#app-help-menu, .workspace .ws-project-actions > div {
   background: var(--studio-wash), var(--studio-sheen), var(--studio-float-fill);
   border-color: var(--studio-glass-edge); backdrop-filter: var(--studio-float-blur);
   box-shadow: var(--studio-float-shadow);
@@ -243,8 +243,6 @@ html[data-studio-style] #workspace-sidebar-panel.ws-sidebar {
 }
 #app-rail .app-rail-brand .monogram { background: var(--studio-selection); border-color: var(--studio-edge-active); color: var(--gold-bright); border-radius: 10px; }
 #app-local-nav .app-local-link[aria-current=page] { background: linear-gradient(0deg, var(--tint-gold-3), transparent); color: var(--gold-bright); }
-#app-local-nav .agents-nav-subsections .app-local-link { border-radius: var(--r-sm); padding: 10px 12px; }
-#app-local-nav .agents-nav-subsections .app-local-link[aria-current=page] { background: var(--studio-selection); box-shadow: inset 2px 0 var(--gold); }
 
 /* Fields keep their own boundary. Transparent colour controls and range tracks
    retain the specialised previews defined by the Appearance sheet. */
@@ -484,39 +482,38 @@ html[data-studio-theme-tone=light] {
    "presence" section of styles.css). A hover child menu keeps its top edge
    still while it grows, so the gap the pointer crosses from its tab never
    moves. */
-:is(#app-help-menu, .agents-nav-subsections, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div, .brains-menu) {
+:is(#app-help-menu, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div, .brains-menu) {
   animation: none;
   transform-origin: var(--menu-from, top left);
   transition: opacity var(--motion-base) var(--ease-out), scale var(--motion-spring) var(--ease-spring),
     translate var(--motion-spring) var(--ease-spring), display var(--motion-base) allow-discrete;
 }
-:is(#app-help-menu, .agents-nav-subsections, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div, .brains-menu)[hidden] {
+:is(#app-help-menu, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div, .brains-menu)[hidden] {
   opacity: 0; scale: .96; translate: var(--menu-shift, 0 0); pointer-events: none;
   transition: opacity var(--motion-exit) var(--ease-in), scale var(--motion-exit) var(--ease-in),
     translate var(--motion-exit) var(--ease-in), display var(--motion-exit) allow-discrete;
 }
 @starting-style {
-  :is(#app-help-menu, .agents-nav-subsections, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div, .brains-menu):not([hidden]) { opacity: 0; scale: .96; translate: var(--menu-shift, 0 0); }
+  :is(#app-help-menu, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div, .brains-menu):not([hidden]) { opacity: 0; scale: .96; translate: var(--menu-shift, 0 0); }
 }
 #app-help-menu { --menu-from: bottom left; --menu-shift: -6px 0; }
-.agents-nav-group:last-child .agents-nav-subsections { --menu-from: top right; }
 .studio-choice-popup { transform-origin: top center; animation-duration: var(--motion-slow); animation-timing-function: var(--ease-spring); }
 /* The rows arrive one after another (an animation, so each row's own hover
    transitions stay its own). */
 @keyframes studio-item-in { from { opacity: 0; translate: 0 3px; } }
-:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > * { animation: studio-item-in var(--motion-slow) var(--ease-out) backwards; animation-delay: calc(var(--item-i, 0) * 16ms + 24ms); }
-:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(2) { --item-i: 1; }
-:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(3) { --item-i: 2; }
-:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(4) { --item-i: 3; }
-:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(5) { --item-i: 4; }
-:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(6) { --item-i: 5; }
-:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(n+7) { --item-i: 6; }
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > * { animation: studio-item-in var(--motion-slow) var(--ease-out) backwards; animation-delay: calc(var(--item-i, 0) * 16ms + 24ms); }
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(2) { --item-i: 1; }
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(3) { --item-i: 2; }
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(4) { --item-i: 3; }
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(5) { --item-i: 4; }
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(6) { --item-i: 5; }
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(n+7) { --item-i: 6; }
 /* One highlight glides to the row under the pointer (or the keyboard's focus)
    instead of each row lighting up on its own. It is the host's ::after, placed
    by studio-ui.js (glideTo) through --glide-*; rows that carry their own state
    (current page, selected option, pressed toggle, an open tab) keep it. */
-:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail)[data-glide] { isolation: isolate; }
-:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail)[data-glide]::after {
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail)[data-glide] { isolation: isolate; }
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail)[data-glide]::after {
   content: ""; position: absolute; top: 0; left: 0; z-index: -1; pointer-events: none;
   width: var(--glide-w, 0px); height: var(--glide-h, 0px);
   transform: translate(var(--glide-x, 0px), var(--glide-y, 0px));
@@ -528,20 +525,20 @@ html[data-studio-theme-tone=light] {
     width calc(var(--motion-base) * 1.5) var(--ease-spring), height calc(var(--motion-base) * 1.5) var(--ease-spring),
     border-radius var(--motion-fast) var(--ease-out);
 }
-:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail):is([data-glide=on], [data-glide=jump])::after { opacity: 1; }
-:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail)[data-glide=jump]::after { transition: opacity var(--motion-fast) var(--ease-out); }
-:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail):is([data-glide=on], [data-glide=jump]) :is(button, a[href], [role=menuitem], [role=option], .studio-choice-option):hover:not([aria-current=page], [aria-selected=true], [aria-pressed=true], [aria-expanded=true], .primary, .app-rail-compose, :disabled) { background-color: transparent !important; }
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail):is([data-glide=on], [data-glide=jump])::after { opacity: 1; }
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail)[data-glide=jump]::after { transition: opacity var(--motion-fast) var(--ease-out); }
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail):is([data-glide=on], [data-glide=jump]) :is(button, a[href], [role=menuitem], [role=option], .studio-choice-option):hover:not([aria-current=page], [aria-selected=true], [aria-pressed=true], [aria-expanded=true], .primary, .app-rail-compose, :disabled) { background-color: transparent !important; }
 /* The rail's words ease in as it opens instead of appearing at full width. */
 #app-rail :is(.label, .key, .app-rail-text, .app-rail-recent, .app-rail-heading) {
   transition: opacity var(--motion-base) var(--ease-out) 40ms, translate var(--motion-base) var(--ease-out) 40ms;
 }
 @starting-style { #app-rail :is(.label, .key, .app-rail-text, .app-rail-recent, .app-rail-heading) { opacity: 0; translate: -3px 0; } }
 @media (prefers-reduced-motion: reduce) {
-  :is(#app-help-menu, .agents-nav-subsections, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div, .brains-menu), #app-rail :is(.label, .key, .app-rail-text, .app-rail-recent, .app-rail-heading) { transition: none; }
-  :is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > * { animation: none; }
-  :is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail)[data-glide]::after { transition: opacity var(--motion-fast) linear; }
+  :is(#app-help-menu, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div, .brains-menu), #app-rail :is(.label, .key, .app-rail-text, .app-rail-recent, .app-rail-heading) { transition: none; }
+  :is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > * { animation: none; }
+  :is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail)[data-glide]::after { transition: opacity var(--motion-fast) linear; }
 }
-html[data-motion=off] :is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > * { animation: none; }
+html[data-motion=off] :is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > * { animation: none; }
 @media print { :root, body { background: #fff; } }
 /* ---- Refinement pass ---------------------------------------------------------
    One calm system across the pages. The Command nebula stays on Command, every

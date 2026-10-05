@@ -60,18 +60,6 @@
   }
   window.MefiAgentControls = { snapshot: queueSnapshot, refresh: refreshQueue, set: setQueue };
 
-  const sections = [
-    ["overview", "Overview", "agents", { section: "overview" }],
-    ["setup", "Setup", "agents", { section: "setup", pane: "team" }], ["live", "Live", "command", {}], ["workflows", "Workflows", "brains", {}],
-    ["models", "Models", "booklet", {}], ["usage", "Usage", "usage", {}],
-  ];
-  const children = {
-    setup: [["Team & models", "agents", { section: "setup", pane: "team" }], ["Providers", "agents", { section: "setup", pane: "connections" }], ["Routing & fallback", "agents", { section: "setup", pane: "routing" }], ["Run behavior", "agents", { section: "setup", pane: "behavior" }], ["Skills", "skills"]],
-    live: [["Command", "command"], ["Fleet", "fleet"], ["Pipelines", "agent-brain", { tab: "live" }], ["Sessions", "explorer"], ["Activity", "eyes"], ["Trace", "trace"], ["Overhead", "overhead"]],
-    workflows: [["Brain maps", "brains"], ["Playbook", "agent-brain", { tab: "playbook" }], ["Project map", "agent-brain", { tab: "map" }], ["Context", "context"]],
-    models: [["Catalog", "booklet"], ["Performance", "graph"]],
-    usage: [["Recorded calls", "usage", { view: "usage" }], ["Provider accounts", "usage", { view: "tracker" }]],
-  };
   let mounted = false, params = { section: "overview", pane: "team" }, scope = "project", readSerial = 0, saving = false;
   const drafts = new Map();
   const draftKey = () => `${projectId() || "none"}:${scope}`;
@@ -94,25 +82,6 @@
   const plain = (error, fallback) => window.MefiUi?.plainError ? window.MefiUi.plainError(error, fallback) : error?.message || fallback;
   function card(title, detail) { const el = node("section", "agents-card"); el.append(node("h3", "", title)); if (detail) el.append(node("p", "muted", detail)); return el; }
   function say(text, bad = false) { const el = $("agents-save-status"); if (el) { el.textContent = text; el.dataset.tone = bad ? "bad" : "good"; } }
-  function location(id, options = {}) {
-    if (id === "agents") return { section: options.section || params.section, pane: options.pane || params.pane };
-    if (id === "agent-brain") return { section: ["map", "playbook"].includes(options.tab || window.MefiAgentBrain?.tab?.()) ? "workflows" : "live" };
-    if (["brains", "context"].includes(id)) return { section: "workflows" };
-    if (["booklet", "graph"].includes(id)) return { section: "models" };
-    if (id === "usage") return { section: "usage" };
-    if (id === "skills") return { section: "setup" };
-    return { section: "live" };
-  }
-  // The same sections and views as data, for the 0.5 frame's page list (renderer/shell.js draws them as a list in its list
-  // column): each with whether it is where the person is, and a way there.
-  function navModel(id, options = {}) {
-    const here = location(id, options);
-    const selected = (route, target) => route === id && (route !== "agents" || target.pane === here.pane) && (route !== "agent-brain" || target.tab === window.MefiAgentBrain?.tab?.()) && (route !== "usage" || target.view === (options.view || window.MefiModelLab?.view?.() || "usage"));
-    return sections.map(([section, label, route, target]) => ({
-      id: section, label, current: section === here.section, run: () => go(route, target),
-      views: (children[section] || []).map(([childLabel, childRoute, childTarget = {}]) => ({ label: childLabel, current: selected(childRoute, childTarget), run: () => go(childRoute, childTarget) })),
-    }));
-  }
   // ---- Team: the 0.5 layout's place (html[data-layout="v2"]) ----
   // The prototype's Team (docs/prototype/mefi-studio-0.5-v5.html: TEAM_SUBS, teamView, WHERE_WENT) is this page and the
   // pages it already led to, filed into twelve places. A place is either panes of this page (Overview is the overview and
@@ -123,7 +92,6 @@
   // host calls; nothing is copied. Old parameters ({ section, pane }) and deep links land in the place that holds them,
   // and go("agents", { place }) is the new way in. Where the engine has nothing for a place (Related folders) the page
   // says what exists and what does not. renderer/shell.js draws the list (teamPlaces) and the breadcrumb (teamPlace).
-  const teamLayout = () => document.documentElement?.dataset?.layout === "v2";
   const TEAM_PLACES = Object.freeze([
     { id: "overview", label: "Overview", glyph: "g-home", panes: ["overview", "behavior"], draft: true, about: "Who does the work, how many can work at once, and how much they can do without asking." },
     { id: "providers", label: "Providers", glyph: "g-key", panes: ["connections"], about: "Where the models come from. Connect what you already pay for, or add a key. Seats choose from what is connected here." },
@@ -176,115 +144,26 @@
     else go("agents", { place: place.id });
   }
   // The places in order, for a list drawn elsewhere (renderer/shell.js): each with whether you are in it, the way there, and
-  // the pages it holds with the one you are on. Null with the layout off.
+  // the pages it holds with the one you are on.
   function teamPlaces(id = window.MefiNav?.current?.()) {
-    if (!teamLayout()) return null;
     const here = teamPlaceOf(id);
     return TEAM_PLACES.map((place) => ({
       id: place.id, label: place.label, glyph: place.glyph, group: place.group ?? null, current: place.id === here, run: () => openTeamPlace(place.id),
       views: (place.views || []).map(([label, route, target = {}]) => ({ label, current: place.id === here && teamViewCurrent(id, route, target), run: () => go(route, target) })),
     }));
   }
-  // Where you are in Team ({ id, label }), for the breadcrumb; null outside Team or with the layout off.
+  // Where you are in Team ({ id, label }), for the breadcrumb; null outside Team.
   function teamPlace(id = window.MefiNav?.current?.(), options) {
-    if (!teamLayout()) return null;
     const place = teamPlaceById(teamPlaceOf(id, options));
     return place ? { id: place.id, label: place.label } : null;
   }
   // The place a control on this page sits in now (Search's words for it), or null.
   function teamPlaceOfElement(element) {
     const pane = element?.closest?.("[data-agents-pane]")?.dataset?.agentsPane;
-    const place = teamLayout() && pane ? teamPlaceById(PANE_PLACES[pane]) : null;
+    const place = pane ? teamPlaceById(PANE_PLACES[pane]) : null;
     return place ? { id: place.id, label: place.label } : null;
   }
 
-  let closeNavMenu = () => {};
-  function paintNav(nav, id, options = {}) {
-    const here = location(id, options), signature = JSON.stringify([id, here, window.MefiAgentBrain?.tab?.(), options.view || window.MefiModelLab?.view?.()]);
-    if (nav.dataset.agentsSignature === signature && nav.querySelector(".agents-navigation")) return;
-    closeNavMenu();
-    nav.dataset.agentsSignature = signature;
-    nav.querySelector(".agents-navigation")?.remove();
-    const root = node("div", "agents-navigation"), main = node("div", "agents-nav-sections");
-    main.setAttribute("aria-label", "Agents sections");
-    let opened = null, openTimer, closeTimer;
-    const cancelTimers = () => { clearTimeout(openTimer); clearTimeout(closeTimer); };
-    closeNavMenu = (restoreFocus = false) => {
-      cancelTimers();
-      if (!opened) return;
-      const { item, menu } = opened; opened = null;
-      const focusHeld = menu.contains(document.activeElement);
-      menu.hidden = true; item.setAttribute("aria-expanded", "false");
-      if (restoreFocus || focusHeld) item.focus({ preventScroll: true });
-    };
-    const reveal = (entry, focus = false) => {
-      cancelTimers();
-      if (opened !== entry) closeNavMenu();
-      opened = entry; entry.menu.hidden = false; entry.item.setAttribute("aria-expanded", "true");
-      if (focus) entry.menu.querySelector("button")?.focus({ preventScroll: true });
-    };
-    const selectedChild = (route, target) => route === id && (route !== "agents" || target.pane === here.pane) && (route !== "agent-brain" || target.tab === window.MefiAgentBrain?.tab?.()) && (route !== "usage" || target.view === (options.view || window.MefiModelLab?.view?.() || "usage"));
-    for (const [section, label, route, target] of sections) {
-      const group = node("div", "agents-nav-group"), views = children[section];
-      let entry;
-      const item = button(label, (event) => {
-        if (!views) { closeNavMenu(); go(route, target); return; }
-        if (opened === entry && event.detail !== 0) closeNavMenu();
-        else reveal(entry, event.detail === 0);
-      }, "app-local-link");
-      item.dataset.agentSection = section; item.setAttribute("aria-current", section === here.section ? "page" : "false"); group.append(item); main.append(group);
-      group.addEventListener("pointerenter", (event) => {
-        if (event.pointerType === "touch") return;
-        cancelTimers();
-        openTimer = setTimeout(() => { if (entry) reveal(entry); else closeNavMenu(); }, 100);
-      });
-      group.addEventListener("pointerleave", (event) => {
-        if (event.pointerType === "touch") return;
-        cancelTimers(); closeTimer = setTimeout(() => closeNavMenu(), 220);
-      });
-      if (!views) continue;
-      const menu = node("div", "agents-nav-subsections");
-      menu.id = `agents-menu-${section}`; menu.hidden = true; menu.setAttribute("role", "group"); menu.setAttribute("aria-label", `${label} views`);
-      item.setAttribute("aria-expanded", "false"); item.setAttribute("aria-controls", menu.id);
-      item.append(node("span", "agents-nav-chevron", "⌄"));
-      entry = { item, menu };
-      for (const [childLabel, childRoute, childTarget = {}] of views) {
-        const child = button(childLabel, () => { closeNavMenu(true); go(childRoute, childTarget); }, "app-local-link");
-        child.setAttribute("aria-current", selectedChild(childRoute, childTarget) ? "page" : "false"); menu.append(child);
-      }
-      item.addEventListener("keydown", (event) => {
-        if (!["ArrowDown", "ArrowUp"].includes(event.key)) return;
-        event.preventDefault(); event.stopPropagation(); reveal(entry);
-        (event.key === "ArrowUp" ? menu.lastElementChild : menu.firstElementChild)?.focus();
-      });
-      menu.addEventListener("keydown", (event) => {
-        const keys = ["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End"];
-        if (!keys.includes(event.key)) return;
-        event.preventDefault(); event.stopPropagation();
-        if (["ArrowLeft", "ArrowRight"].includes(event.key)) {
-          const parents = Array.from(main.querySelectorAll("[data-agent-section]")), at = parents.indexOf(item);
-          closeNavMenu(); parents[(at + (event.key === "ArrowRight" ? 1 : -1) + parents.length) % parents.length]?.focus(); return;
-        }
-        const buttons = Array.from(menu.children), at = buttons.indexOf(document.activeElement);
-        buttons[event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (at + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) % buttons.length]?.focus();
-      });
-      group.addEventListener("focusin", () => clearTimeout(closeTimer));
-      group.addEventListener("focusout", (event) => { if (!group.contains(event.relatedTarget)) closeNavMenu(); });
-      group.append(menu);
-    }
-    const compact = node("select"); compact.setAttribute("aria-label", "Agents section"); compact.className = "agents-section-picker";
-    for (const [section, label] of sections) { const option = node("option", "", label); option.value = section; compact.append(option); }
-    compact.value = here.section; compact.addEventListener("change", () => { const choice = sections.find((item) => item[0] === compact.value); if (choice) go(choice[2], choice[3]); });
-    root.append(main, compact);
-    const currentViews = children[here.section] || [];
-    if (currentViews.length) {
-      const pick = node("select"); pick.className = "agents-subsection-picker"; pick.setAttribute("aria-label", "Agents view");
-      for (const [index, [label, route, target = {}]] of currentViews.entries()) { const option = node("option", "", label); option.value = String(index); option.selected = selectedChild(route, target); pick.append(option); }
-      pick.addEventListener("change", () => { const choice = currentViews[Number(pick.value)]; if (choice) go(choice[1], choice[2]); });
-      root.append(pick);
-    }
-    nav.append(root); window.MefiScroll?.scan(root);
-  }
   const aliases = { connections: "connections", providers: "connections", "auto-setup": "connections", "settings-setup": "connections", "settings-assistant": "connections", "decision-model": "connections", "settings-jev": "connections", models: "routing", "model-routing": "routing", "settings-routing": "routing", "coding-workers": "routing", "settings-workers": "routing", automation: "behavior", "agents-queue": "behavior", "settings-automation": "behavior", "settings-automation-behavior": "behavior", "connection-log": "connections", "settings-log": "connections" };
   function redirect(id, options = {}) {
     if (id === "agent-brain" && options.tab === "seats") return { id: "agents", params: { section: "setup", pane: "team" } };
@@ -817,12 +696,12 @@
     const local = card("Local studio roles", "Watcher, Machine, Auditor, Keeper, Compactor, Foreman and Reference organise and inspect local work. Their maintenance does not require a model.");
     local.append(node("p", "muted", "The Briefer, Overseer, Ideas, Improver, Grower, Responder and cluster planning/review roles inherit the configured routine or heavy route.")); root.append(local);
   }
-  // The 0.5 layout's panes, made once, the first time Team opens with the layout on: Permissions (the full permission
+  // The 0.5 layout's panes, made once, the first time Team opens: Permissions (the full permission
   // control, which Build opened as a dialog), Rules (the rules card, moved), Connectors and Related folders.
   let teamFiled = false;
   function fileTeamV2() {
     const body = $("agents-body");
-    if (teamFiled || !teamLayout() || !body) return false;
+    if (teamFiled || !body) return false;
     teamFiled = true;
     const pane = (name, id) => { const el = node("div", "agents-pane"); el.id = id; el.dataset.agentsPane = name; el.hidden = true; body.append(el); return el; };
     const perms = pane("perms", "agents-perms");
@@ -1042,29 +921,10 @@
   }
   async function open(options = {}) {
     mount();
-    if (teamLayout()) return openTeam(options);
-    params = { section: options.section === "setup" ? "setup" : "overview", pane: ["connections", "team", "routing", "behavior"].includes(options.pane) ? options.pane : "team" };
-    window.MefiNav?.claim("agents"); $("agents-overlay").hidden = false; paintOverview();
-    $("agents-title").textContent = params.section === "overview" ? "Agents" : `Agent setup · ${children.setup.find(([, , value]) => value.pane === params.pane)?.[0] || "Team"}`;
-    for (const pane of $("agents-body").children) if (pane.classList.contains("agents-pane")) pane.hidden = pane.id !== `agents-${params.section === "overview" ? "overview" : params.pane}`;
-    $("agents-save-bar").hidden = params.section !== "setup" || params.pane === "connections";
-    $("agents-team-toolbar").hidden = params.section !== "setup" || params.pane === "connections";
-    await Promise.all([load(), refreshQueue()]); syncQueue();
-    window.MefiNav?.paintCurrent(); window.MefiScroll?.refresh();
-    if (options.target) {
-      const target = $(options.target); if (target && $("agents-overlay").contains(target)) { for (let el = target; el && el !== $("agents-body"); el = el.parentElement) if (el.tagName === "DETAILS") el.open = true; target.scrollIntoView?.({ block: "nearest" }); (target.nextElementSibling?.classList.contains("studio-select") ? target.nextElementSibling : target).focus?.({ preventScroll: true }); }
-    }
+    return openTeam(options);
   }
   function close() { if ($("agents-overlay")) $("agents-overlay").hidden = true; window.MefiNav?.release("agents"); }
   function init() {
-    document.addEventListener("pointerdown", (event) => { if (!event.target.closest?.(".agents-nav-group")) closeNavMenu(); }, true);
-    document.addEventListener("keydown", (event) => {
-      if (event.key !== "Escape" || !document.querySelector('.agents-nav-group > [aria-expanded="true"]')) return;
-      event.preventDefault(); event.stopImmediatePropagation(); closeNavMenu(true);
-    }, true);
-    window.addEventListener("mefi:nav", () => closeNavMenu());
-    window.addEventListener("resize", () => closeNavMenu());
-    window.addEventListener("blur", () => closeNavMenu());
     api()?.onAssistantStatus?.((status) => adoptQueue(status)); api()?.onAssistant?.((payload) => adoptQueue(null, payload?.state));
     api()?.onProjects?.(() => { readSerial++; if ($("agents-overlay")?.hidden === false) load(); });
     // Another writer changed settings: a clean draft is re-read. A push during
@@ -1078,10 +938,10 @@
     });
     window.addEventListener("mefi:queue-settings", syncQueue);
     // The 0.5 layout calls the page Team (WHERE_WENT: "Agents" → Team, renamed), with the prototype's two people for its glyph.
-    window.MefiNav?.register({ id: "agents", get label() { return teamLayout() ? "Team" : "Agents"; }, get short() { return teamLayout() ? "Team" : "Agents"; }, kind: "overlay", layer: "sheet", section: "agents", group: "tools", get glyph() { return teamLayout() ? "g-community" : "g-agents"; }, badge: "questions", get desc() { return teamLayout() ? "Who does the work, how many can work at once, and how much they can do without asking" : "Set up your team, follow live work, workflows, models and usage"; }, searchTerms: "team agents agent setup presets seats connections providers provider effort routing automation permissions rules connectors", showIn: { palette: true, help: true, tools: true }, element: "agents-overlay", focus: "#agents-title", open, close, isOpen: () => $("agents-overlay")?.hidden === false });
+    window.MefiNav?.register({ id: "agents", label: "Team", short: "Team", kind: "overlay", layer: "sheet", section: "agents", group: "tools", glyph: "g-community", badge: "questions", desc: "Who does the work, how many can work at once, and how much they can do without asking", searchTerms: "team agents agent setup presets seats connections providers provider effort routing automation permissions rules connectors", showIn: { palette: true, help: true, tools: true }, element: "agents-overlay", focus: "#agents-title", open, close, isOpen: () => $("agents-overlay")?.hidden === false });
     // Canonical settings ownership is established before the first visit.
     mount();
   }
-  window.MefiAgents = { open, close, mount, redirect, paintNav, navModel, location, stageRouting, routingView, params: () => ({ ...params }), reload: discard, draft: () => draft() ? clone(draft().configuration) : null, teamPlaces, teamPlace, teamPlaceOfElement, TEAM_PLACES };
+  window.MefiAgents = { open, close, mount, redirect, stageRouting, routingView, params: () => ({ ...params }), reload: discard, draft: () => draft() ? clone(draft().configuration) : null, teamPlaces, teamPlace, teamPlaceOfElement, TEAM_PLACES };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
 })();
