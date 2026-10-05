@@ -260,7 +260,8 @@
       running.push({ key: `run:${job.taskId || job.title}`, group: "running", tone: "live", title: clip(job.title || "A task", 120), taskId: job.taskId || null, progress, worktree: worktrees.has(job.taskId),
         meta: [who, job.startedAt ? waited(job.startedAt, now) : "", job.stopping ? "stopping" : clip(step.step, 80) || phase].filter(Boolean).join(" · "), more: [] });
     }
-    for (const next of (Array.isArray(d.next) ? d.next : []).slice(0, 2)) {
+    // A queued task that waits on you (a permission it asked for, a question) is under Needs you only, like a run.
+    for (const next of (Array.isArray(d.next) ? d.next : []).filter((next) => !(next?.id && waiting.has(String(next.id)))).slice(0, 2)) {
       running.push({ key: `next:${next.id}`, group: "running", tone: "next", title: clip(next.title || "Next task", 120), taskId: next.id || null,
         meta: next.stage === "waiting" ? "waiting for what it depends on" : next.stage === "cooling" ? "trying again soon" : "up next · waits for a free worker", more: [] });
     }
