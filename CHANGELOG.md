@@ -7,6 +7,26 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Friends works with no setup: the Mefi Studio relay.** Rooms, room chat,
+  Listen together, companions in the Playground and cowork file claims now
+  run through a free relay on Cloudflare
+  (`https://mefi-relay.mefi-studio.workers.dev`) that is built into Studio.
+  You no longer enter a hub address, and no PC has to stay on. The relay keeps
+  no chat: your Studio keeps its own encrypted copy of each room's messages for
+  a week, and when you open a room after being away, the messages you missed
+  are filled in from other members' copies. Every message is signed by the
+  relay, so a copy cannot be altered. Its code is public under `relay/`.
+- **Project hub with credits and ranks (Friends › Project hub).** Share what
+  you make as a card (a public link, a title, a line about it; never a file)
+  and play what friends make. A star map draws every shared project; New, Top
+  and Mine list them. Sharing is free and earns nothing by itself: when a
+  member plays someone else's project for two minutes, both earn credits (the
+  maker 5, the player 2), and a star earns the maker 3, up to 60 a day.
+  Credits are never bought; 100 features a project at the top of the hub for
+  a day. Ranks run Spark, Ember, Flame, Comet, Star, Nova, Void, and your
+  Discord roles show as special ranks. Your balance is yours alone; others see
+  your rank.
+
 - **A new Chrome theme, now the look a new install opens in.** Chrome is a
   matte black with smooth metal: flat dark panels with a fine light edge,
   primary buttons and the chosen side of a switch (Vibe | Build, Sessions |

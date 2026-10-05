@@ -88,7 +88,8 @@ test("the hub address takes https anywhere and http only on loopback", () => {
     assert.equal(hub.hubAddress(bad), null, String(bad));
   }
   assert.equal(hub.configuredUrl({ MEFI_STUDIO_HUB_URL: " https://hub.example.test " }), "https://hub.example.test");
-  assert.equal(hub.configuredUrl({}), hub.HUB_URL, "without the variable the built-in address (empty until the hub has one)");
+  assert.equal(hub.configuredUrl({}), hub.HUB_URL, "without the variable the built-in address");
+  assert.deepEqual({ ...hub.hubAddress(hub.HUB_URL) }, { http: "https://mefi-relay.mefi-studio.workers.dev", ws: "wss://mefi-relay.mefi-studio.workers.dev/v1/ws" }, "the Mefi Studio relay, at the root of its host");
 });
 
 test("without an address nothing connects and the status says so", async () => {

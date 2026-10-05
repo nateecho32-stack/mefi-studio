@@ -424,7 +424,8 @@ test("community:open opens only the hard-coded Discord targets", async () => {
 });
 
 test("without a client id nothing tries to log in", async () => {
-  const h = host({ env: {} });
+  // A build that ships without one (a fork, before its own app is registered).
+  const h = host({ env: {}, rules: { ...community, CLIENT_ID: "" } });
   const status = await h.invoke("community:status");
   assert.equal(status.status.configured, false);
   const link = await h.invoke("community:link");
@@ -435,6 +436,7 @@ test("without a client id nothing tries to log in", async () => {
   assert.equal(h.calls.length, 0);
   assert.equal(host({ env: { MEFI_STUDIO_DISCORD_CLIENT_ID: "not-an-id" } }).run("communityClientId()"), "");
   assert.equal(host({ env: { MEFI_STUDIO_DISCORD_CLIENT_ID: ` ${CLIENT} ` } }).run("communityClientId()"), CLIENT);
+  assert.equal(host({ env: {} }).run("communityClientId()"), community.CLIENT_ID, "this build's own Mefi Studio Link app when nothing overrides it");
 });
 
 test("Check now runs at most once a minute", async () => {

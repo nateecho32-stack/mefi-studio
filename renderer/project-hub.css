@@ -1,0 +1,42 @@
+/* Friends › Project hub (renderer/project-hub.js): shared projects, credits and ranks. */
+.project-hub { display: grid; gap: 10px; padding: 12px 14px; border: 1px solid var(--hairline); border-radius: 14px; min-width: 0; }
+.project-hub-title { margin: 0; font-size: 13px; font-weight: 600; }
+.project-hub-status { margin: 0; font-size: 12px; color: var(--muted); }
+.project-hub-body { display: grid; gap: 10px; min-width: 0; }
+.project-hub-me { display: grid; gap: 6px; }
+.project-hub-me:empty { display: none; }
+.project-hub-me-head { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.project-hub-me-line { margin: 0; font-size: 12px; }
+.project-hub-meter { height: 6px; border-radius: 999px; background: var(--hairline); overflow: hidden; }
+.project-hub-meter-fill { display: block; height: 100%; border-radius: inherit; background: var(--gold); }
+.project-hub-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.project-hub-chip { display: inline-block; padding: 1px 8px; border: 1px solid var(--hairline-strong); border-radius: 999px; font-size: 12px; color: var(--ivory); }
+.project-hub-chip.featured { border-color: var(--warn); color: var(--warn); }
+.project-hub-rank { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid currentColor; }
+.project-hub-rank.rank-spark { color: var(--muted); }
+.project-hub-rank.rank-ember { color: var(--warn); }
+.project-hub-rank.rank-flame { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
+.project-hub-rank.rank-comet { color: var(--gold); }
+.project-hub-rank.rank-star { color: var(--gold-bright); background: color-mix(in srgb, var(--gold) 16%, transparent); }
+.project-hub-rank.rank-nova { color: var(--ivory); background: color-mix(in srgb, var(--gold-bright) 22%, transparent); }
+.project-hub-rank.rank-void { color: var(--ivory); background: color-mix(in srgb, var(--ivory) 14%, transparent); box-shadow: 0 0 10px color-mix(in srgb, var(--gold-bright) 40%, transparent); }
+.project-hub-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.project-hub-tabs [aria-selected=true] { border-color: var(--gold); color: var(--gold-bright); }
+.project-hub-button { white-space: normal; }
+.project-hub-list, .project-hub-map-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.project-hub-featured { padding: 6px; border: 1px dashed var(--warn); border-radius: 12px; }
+.project-hub-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; padding: 8px 10px; border: 1px solid var(--hairline); border-radius: 10px; font-size: 12px; overflow-wrap: anywhere; }
+.project-hub-row-text { display: grid; gap: 2px; min-width: 0; flex: 1 1 180px; }
+.project-hub-row-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; }
+.project-hub-blurb { margin: 0; color: var(--ivory); }
+.project-hub-meta, .project-hub-by { font-size: 12px; }
+.project-hub-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.project-hub-map { display: grid; gap: 8px; min-width: 0; }
+.project-hub-canvas { width: 100%; border: 1px solid var(--hairline); border-radius: 12px; background: radial-gradient(ellipse at 50% 40%, color-mix(in srgb, var(--gold) 8%, transparent), transparent 70%); cursor: pointer; }
+.project-hub-map-list { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+.project-hub-map-item { width: 100%; text-align: left; font-size: 12px; }
+.project-hub-share { display: grid; gap: 8px; max-width: 520px; }
+.project-hub-share p { margin: 0; font-size: 12px; }
+.project-hub-field { display: grid; gap: 4px; font-size: 12px; }
+.project-hub-field input, .project-hub-field select { font: inherit; }
+@media (prefers-reduced-motion: reduce) { .project-hub-meter-fill { transition: none; } }

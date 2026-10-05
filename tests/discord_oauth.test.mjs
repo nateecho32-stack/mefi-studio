@@ -282,7 +282,7 @@ test("an unconfigured client never listens", async () => {
     assert.deepEqual(opened, []);
   }
   assert.deepEqual(await authorize({ clientId: CLIENT, ports: [await freePort()] }), { ok: false, error: "not-configured" }, "no openExternal");
-  assert.deepEqual(await authorize(), { ok: false, error: "not-configured" }, "the shipped CLIENT_ID is empty");
+  assert.deepEqual(await authorize(), { ok: false, error: "not-configured" }, "no browser to open, whatever the shipped CLIENT_ID");
   assert.deepEqual(await authorize("garbage"), { ok: false, error: "not-configured" });
 });
 

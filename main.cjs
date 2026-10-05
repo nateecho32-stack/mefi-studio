@@ -2201,7 +2201,7 @@ function communitySetupView() {
     ok: true, clientId: saved.clientId, hubUrl: saved.hubUrl,
     environment: { clientId: set("MEFI_STUDIO_DISCORD_CLIENT_ID"), hubUrl: set("MEFI_STUDIO_HUB_URL") },
     linkReady: Boolean(communityClientId()),
-    hubReady: Boolean(hubModule?.hubAddress(communityHubUrl())),
+    hubReady: Boolean(hubModule?.hubAddress(hubModule.configuredUrl({ MEFI_STUDIO_HUB_URL: communityHubUrl() }))),
   };
 }
 // Whether the saved hub answers, so the form can say so at once.
@@ -2388,6 +2388,39 @@ function hubRoom(method, args) {
   // as evidence only when its signature checks out.
   if (method === "report") return hubCall((client) => client.report(plain[0], plain[1], plain[2], roomHistory()?.page(plain[0], null, 500).messages.find((item) => item.id === String(plain[1])) ?? null));
   return hubCall((client) => client[method](...plain));
+}
+// Friends › Project hub (renderer/project-hub.js): credits, ranks and shared
+// projects on the Mefi Studio relay (relay/src/credits.mjs). Same gate as
+// Rooms: a listed method and plain arguments. Playing opens the project's
+// public link in the browser and, two minutes later while Studio is still
+// running, tells the relay the play happened, which credits its owner and
+// this member. A play still waiting is kept once per project.
+const HUB_PROJECT_METHODS = Object.freeze({ me: 0, memberCard: 1, projects: 1, shareProject: 1, removeProject: 1, playProject: 1, star: 2, feature: 1 });
+const hubPlayTimers = new Map(); // projectId -> timeout
+function hubProjects(method, args) {
+  const arity = Object.hasOwn(HUB_PROJECT_METHODS, method) ? HUB_PROJECT_METHODS[method] : -1;
+  if (arity < 0 || !Array.isArray(args) || args.length > arity) return Promise.resolve({ ok: false, error: "bad-request" });
+  const plain = args.map((value) => (value == null || ["string", "number", "boolean"].includes(typeof value) ? value : typeof value === "object" && !Array.isArray(value) ? { ...value } : null));
+  if (method !== "playProject") return hubCall((client) => client[method](...plain));
+  return hubCall(async (client) => {
+    const projectId = String(plain[0] ?? "");
+    const play = await client.playProject(projectId);
+    if (!play.ok) return play;
+    let link = null;
+    try { link = new URL(play.url); } catch { link = null; }
+    if (link?.protocol !== "https:") return { ok: false, error: "bad-link" };
+    await shell.openExternal(link.href);
+    if (hubPlayTimers.has(projectId)) return { ok: true, minMs: play.minMs, waiting: true };
+    const timer = setTimeout(() => {
+      hubPlayTimers.delete(projectId);
+      client.finishPlay(projectId, play.token)
+        .then((done) => send("hub:event", { type: "played", projectId, counted: done.ok && done.counted === true, credited: done.ok ? done.credited : null }))
+        .catch((error) => logLine(`[hub] play not counted: ${error?.message ?? error}`));
+    }, play.minMs + 1000);
+    timer.unref?.();
+    hubPlayTimers.set(projectId, timer);
+    return { ok: true, minMs: play.minMs };
+  });
 }
 // ---- end of the rooms hub ---------------------------------------------------
 
@@ -24614,6 +24647,8 @@ function registerIpc() {
   ipcMain.handle("hub:now-playing", async (_event, payload) => hubNowPlaying(payload?.track ?? null));
   // Friends › Rooms: one channel, HUB_ROOM_METHODS decides what it may call.
   ipcMain.handle("hub:room", async (_event, payload) => hubRoom(String(payload?.method ?? ""), Array.isArray(payload?.args) ? payload.args : []));
+  // Friends › Project hub: one channel, HUB_PROJECT_METHODS decides what it may call.
+  ipcMain.handle("hub:projects", async (_event, payload) => hubProjects(String(payload?.method ?? ""), Array.isArray(payload?.args) ? payload.args : []));
   // Companion friends (the "Companion friends" block): what friends' companions
   // may see, the friends out now, and playdates.
   ipcMain.handle("hub:friends", async (_event, payload) => friendsView(payload ?? {}));

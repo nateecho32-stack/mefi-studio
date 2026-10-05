@@ -21,6 +21,7 @@
 // it to: rate buckets refill, pending peer-history asks just lapse.
 
 import { createChat, idTime } from './chat.mjs';
+import { createCredits } from './credits.mjs';
 import { createLeases } from './leases.mjs';
 import { createListen } from './listen.mjs';
 import { createOembed, publicLink } from './media.mjs';
@@ -124,6 +125,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
   let chat = null;
   let leases = null;
   let listen = null;
+  let credits = null;
   let alarmAt = undefined; // unknown after a wake
   const oembed = createOembed({ fetch: fetchImpl, now });
 
@@ -153,15 +155,17 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     }
     const master = await hmacKey(fromB64url(secret));
     const derive = async (label) => hmacKey(await hmac(master, label));
-    const keys = { session: await derive('session v1'), token: await derive('token-cache v1'), message: await derive('message v1') };
+    const keys = { session: await derive('session v1'), token: await derive('token-cache v1'), message: await derive('message v1'), play: await derive('play v1') };
     sessions = createSessions({ store, keys, config, fetch: fetchImpl, now });
     chat = createChat({ key: keys.message, now });
     leases = createLeases({ store, clock: { now }, isRoomMember: (roomId, uid) => isMember(roomId, uid) });
     listen = createListen({ store, now, oembed, publish: (roomId, session) => publishRoom(roomId, 'listen', { roomId, session, sentAt: now() }), roomFor });
+    credits = createCredits({ store, now, key: keys.play, sendToUser, member: (uid) => sessions.member(uid) });
+    credits.routes(route);
   }
 
   const paused = () => config.paused || store.meta('paused') === 'true';
-  const features = () => [FEATURES.companion, FEATURES.companionDirect, FEATURES.historyPeer, FEATURES.keepalive, FEATURES.messagesSigned];
+  const features = () => [FEATURES.companion, FEATURES.companionDirect, FEATURES.historyPeer, FEATURES.keepalive, FEATURES.messagesSigned, FEATURES.credits, FEATURES.projects];
 
   // ---- rooms in the store --------------------------------------------------------
 
@@ -330,6 +334,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
       store.run('DELETE FROM reports WHERE created_at < ?', at - RETENTION.reportMs);
       store.run('DELETE FROM audit WHERE at < ?', at - RETENTION.auditMs);
       store.run(`DELETE FROM members WHERE last_seen < ? AND user_id NOT IN (SELECT user_id FROM room_members)`, at - RETENTION.idleMemberMs);
+      credits.upkeep();
       store.setMeta('upkeep_at', at);
     });
   }
@@ -1096,6 +1101,8 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
       store.run('DELETE FROM reports WHERE reporter_id = ? OR author_id = ?', actor.uid, actor.uid);
       store.run('DELETE FROM leases WHERE member_id = ?', actor.uid);
       store.run('DELETE FROM token_cache WHERE user_id = ?', actor.uid);
+      out.projects = count('SELECT COUNT(*) AS n FROM projects WHERE owner_id = ?', actor.uid);
+      credits.forget(actor.uid);
       store.run('DELETE FROM members WHERE user_id = ?', actor.uid);
       return out;
     });

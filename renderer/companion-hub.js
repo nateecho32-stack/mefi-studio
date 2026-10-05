@@ -380,6 +380,9 @@
         // of navigating away.
         const rooms = window.MefiRooms?.panel?.();
         if (rooms) el.extra.append(rooms);
+        // Friends › Project hub (renderer/project-hub.js): shared projects, credits and ranks.
+        const projectHub = window.MefiProjectHub?.card?.();
+        if (projectHub) el.extra.append(projectHub);
         const pcs = window.MefiPcSync?.card?.();
         if (pcs) el.extra.append(pcs);
       } else {

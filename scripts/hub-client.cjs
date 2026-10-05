@@ -32,6 +32,10 @@
 //     this Studio to answer from its own copy with historyReply). `hello`
 //     names what this Studio can do (CLIENT_FEATURES); a hub that does not
 //     know the field drops it.
+//   - Credits and the project hub (features "credits" and "projects", relay
+//     only): me() and memberCard() for ranks and balances, projects() for the
+//     hub, shareProject / playProject / finishPlay / star / feature, and a
+//     `credits` event when this member earns or spends.
 //
 // Like scripts/discord-oauth.cjs this is a network module, and everything it
 // reaches for is injected: fetch, the WebSocket class, the clock and the
@@ -47,10 +51,10 @@
 const cowork = require("./cowork.cjs");
 
 const PROTOCOL_VERSION = 1;
-// The hub's public address. It is filled once the hub has one; until then the
-// feature reports "not configured". MEFI_STUDIO_HUB_URL wins, so a maintainer
-// can point a build at a test hub (http is accepted only on loopback).
-const HUB_URL = "";
+// The Mefi Studio relay's public address (relay/, on Cloudflare). Settings ›
+// Community › Connection details and MEFI_STUDIO_HUB_URL win, so a maintainer
+// can point a build at a test relay or hub (http is accepted only on loopback).
+const HUB_URL = "https://mefi-relay.mefi-studio.workers.dev";
 const SESSION_MARGIN_MS = 60_000;
 const PRESENCE_EVERY_MS = 30_000;
 // The relay's keepalive: this exact frame, byte for byte, is answered by
@@ -62,6 +66,9 @@ const CLIENT_FEATURES = Object.freeze(["history.peer", "keepalive"]);
 // A historyReply must fit the hub's 16 KB frame limit.
 const HISTORY_REPLY_BYTES = 15 * 1024;
 const HISTORY_REPLY_MESSAGES = 100;
+const PROJECT_KINDS = Object.freeze(["game", "app", "tool", "art", "music", "other"]);
+const PROJECT_VIEWS = Object.freeze(["new", "top", "played", "mine"]);
+const RANK_KEY = /^[a-z_]{1,20}$/;
 const ACK_TIMEOUT_MS = 10_000;
 const REQUEST_TIMEOUT_MS = 15_000;
 const BACKOFF_MS = Object.freeze([1_000, 2_000, 5_000, 10_000, 30_000, 60_000]);
@@ -258,6 +265,28 @@ function remotePcs(value) {
   return value.slice(0, 8).map((item) => (object(item) && PC_ID.test(String(item.id ?? "")) && line(item.name, 40) ? { id: item.id, name: item.name, since: Number.isFinite(item.since) ? item.since : null } : null)).filter(Boolean);
 }
 
+// A project card from the relay's hub, or null.
+function projectCard(value) {
+  if (!object(value) || !OPAQUE_ID.test(String(value.id)) || !object(value.owner) || !SNOWFLAKE.test(String(value.owner.id))) return null;
+  const url = listenUrl(value.url);
+  const title = line(value.title, 100);
+  if (!url || !title) return null;
+  return {
+    id: value.id, url, host: line(value.host, 253) ?? new URL(url).hostname, title, blurb: line(value.blurb, 300) ?? "",
+    kind: PROJECT_KINDS.includes(value.kind) ? value.kind : "other",
+    owner: { id: String(value.owner.id), name: text(value.owner.name, 100) || "member", rank: RANK_KEY.test(String(value.owner.rank ?? "")) ? value.owner.rank : "spark" },
+    plays: count(value.plays, 1e9) ?? 0, stars: count(value.stars, 1e9) ?? 0,
+    createdAt: Number.isFinite(value.createdAt) ? value.createdAt : null, lastPlayedAt: Number.isFinite(value.lastPlayedAt) ? value.lastPlayedAt : null,
+    featuredUntil: Number.isFinite(value.featuredUntil) ? value.featuredUntil : null, starred: value.starred === true,
+  };
+}
+function rankOf(value) {
+  if (!object(value) || !RANK_KEY.test(String(value.key))) return null;
+  const next = object(value.next) && RANK_KEY.test(String(value.next.key)) ? { key: value.next.key, name: line(value.next.name, 20) ?? value.next.key, at: count(value.next.at, 1e9) ?? 0 } : null;
+  return { key: value.key, name: line(value.name, 20) ?? value.key, next, progress: Number.isFinite(value.progress) ? Math.max(0, Math.min(1, value.progress)) : 0 };
+}
+const specialOf = (value) => (Array.isArray(value) ? value.filter((key) => RANK_KEY.test(String(key))).slice(0, 12) : []);
+
 function createHubClient(options = {}) {
   const {
     url = configuredUrl(),
@@ -311,6 +340,7 @@ function createHubClient(options = {}) {
       companions: features.includes("companion"), companionDirect: features.includes("companion") && features.includes("companion.direct"),
       remote: features.includes("remote"), remoteOn: Boolean(remote?.on) && features.includes("remote"), remotePcs: remoteList,
       history: features.includes("history.peer"),
+      credits: features.includes("credits"), projects: features.includes("projects"),
     };
   }
   function setState(next, nextError = null) {
@@ -518,6 +548,12 @@ function createHubClient(options = {}) {
       case "historyRequest":
         if (features.includes("history.peer") && OPAQUE_ID.test(String(frame.roomId)) && OPAQUE_ID.test(String(frame.requestId)) && rooms.has(frame.roomId)) {
           emit({ type: "historyRequest", roomId: frame.roomId, requestId: frame.requestId, before: SNOWFLAKE.test(String(frame.before ?? "")) ? String(frame.before) : null });
+        }
+        return;
+      // This member earned or spent credits (feature "credits").
+      case "credits":
+        if (Number.isFinite(frame.balance) && Number.isFinite(frame.delta)) {
+          emit({ type: "credits", balance: frame.balance, lifetime: Number.isFinite(frame.lifetime) ? frame.lifetime : null, today: Number.isFinite(frame.today) ? frame.today : null, delta: frame.delta, reason: typeof frame.reason === "string" ? frame.reason.slice(0, 20) : "", rank: RANK_KEY.test(String(frame.rank ?? "")) ? frame.rank : null });
         }
         return;
       // Another member's copy of a room's messages, each checked by the relay.
@@ -751,6 +787,77 @@ function createHubClient(options = {}) {
       while (wire.length && size(wire) > HISTORY_REPLY_BYTES) { wire.shift(); more = true; }
       return send({ type: "historyReply", requestId, messages: wire, hasMore: more });
     },
+    // ---- Credits, ranks and the project hub (features "credits", "projects") ---
+    async me() {
+      if (!features.includes("credits")) return { ok: false, error: "unsupported" };
+      const answer = await authed("GET", "/v1/me");
+      if (!answer.ok) return refused(answer);
+      const data = answer.data;
+      return {
+        ok: true, user: user(data.user),
+        credits: { balance: count(data.credits?.balance, 1e12) ?? 0, lifetime: count(data.credits?.lifetime, 1e12) ?? 0, today: count(data.credits?.today, 1e6) ?? 0, todayCap: count(data.credits?.todayCap, 1e6) ?? 0 },
+        rank: rankOf(data.rank), specialRanks: specialOf(data.specialRanks), streak: { days: count(data.streak?.days, 1e6) ?? 0, best: count(data.streak?.best, 1e6) ?? 0 },
+        featureCost: count(data.featureCost, 1e6) ?? 0, canEarn: data.canEarn === true,
+        projects: Array.isArray(data.projects) ? data.projects.map(projectCard).filter(Boolean) : [],
+      };
+    },
+    async memberCard(userId) {
+      if (!features.includes("credits")) return { ok: false, error: "unsupported" };
+      if (!SNOWFLAKE.test(String(userId ?? ""))) return { ok: false, error: "bad-request" };
+      const answer = await authed("GET", `/v1/members/${userId}/card`);
+      if (!answer.ok) return refused(answer);
+      const card = answer.data.member;
+      const who = user(card);
+      if (!who) return { ok: false, error: "failed" };
+      return { ok: true, member: { ...who, rank: rankOf(card.rank), specialRanks: specialOf(card.specialRanks), projects: Array.isArray(card.projects) ? card.projects.map(projectCard).filter(Boolean) : [] } };
+    },
+    async projects(view = "new") {
+      if (!features.includes("projects")) return { ok: false, error: "unsupported" };
+      const which = PROJECT_VIEWS.includes(view) ? view : "new";
+      const answer = await authed("GET", `/v1/projects?view=${which}`);
+      if (!answer.ok) return refused(answer);
+      const list = (value) => (Array.isArray(value) ? value.map(projectCard).filter(Boolean) : []);
+      return { ok: true, projects: list(answer.data.projects), featured: list(answer.data.featured) };
+    },
+    async shareProject(fields = {}) {
+      if (!features.includes("projects")) return { ok: false, error: "unsupported" };
+      const url = listenUrl(fields?.url);
+      const title = line(fields?.title, 100);
+      const blurb = fields?.blurb == null || fields.blurb === "" ? "" : line(fields.blurb, 300);
+      if (!url || !title || blurb == null) return { ok: false, error: "bad-request" };
+      const answer = await authed("POST", "/v1/projects", { url, title, ...(blurb ? { blurb } : {}), kind: PROJECT_KINDS.includes(fields?.kind) ? fields.kind : "other" });
+      if (!answer.ok) return refused(answer);
+      return { ok: true, project: projectCard(answer.data.project), credited: count(answer.data.credited, 1e6) ?? 0 };
+    },
+    removeProject(projectId) { return id(projectId) && features.includes("projects") ? simple("DELETE", `/v1/projects/${projectId}`) : bad(); },
+    // Opening a project: the link to open and a token; finishPlay with the
+    // token at least two minutes later counts the play (and credits both).
+    async playProject(projectId) {
+      if (!features.includes("projects") || !id(projectId)) return { ok: false, error: "bad-request" };
+      const answer = await authed("POST", `/v1/projects/${projectId}/play`);
+      if (!answer.ok) return refused(answer);
+      const url = listenUrl(answer.data.url);
+      if (!url || typeof answer.data.token !== "string") return { ok: false, error: "failed" };
+      return { ok: true, url, token: answer.data.token, minMs: count(answer.data.minMs, 86_400_000) ?? 120_000, expiresAt: Number.isFinite(answer.data.expiresAt) ? answer.data.expiresAt : null };
+    },
+    async finishPlay(projectId, token) {
+      if (!features.includes("projects") || !id(projectId) || typeof token !== "string" || token.length > 64) return { ok: false, error: "bad-request" };
+      const answer = await authed("POST", `/v1/projects/${projectId}/played`, { token });
+      if (!answer.ok) return refused(answer);
+      return { ok: true, counted: answer.data.counted === true, credited: { owner: count(answer.data.credited?.owner, 1e6) ?? 0, you: count(answer.data.credited?.you, 1e6) ?? 0 } };
+    },
+    async star(projectId, on = true) {
+      if (!features.includes("projects") || !id(projectId)) return { ok: false, error: "bad-request" };
+      const answer = await authed(on ? "POST" : "DELETE", `/v1/projects/${projectId}/star`);
+      if (!answer.ok) return refused(answer);
+      return { ok: true, project: projectCard(answer.data.project) };
+    },
+    async feature(projectId) {
+      if (!features.includes("projects") || !id(projectId)) return { ok: false, error: "bad-request" };
+      const answer = await authed("POST", `/v1/projects/${projectId}/feature`);
+      if (!answer.ok) return refused(answer);
+      return { ok: true, featuredUntil: Number.isFinite(answer.data.featuredUntil) ? answer.data.featuredUntil : null, balance: count(answer.data.balance, 1e12) ?? 0 };
+    },
     // ---- File claims in a cowork room (main.cjs "Cowork claims") -------------
     // Claim before editing, renew every minute, release when done. A conflict
     // answers { ok: false, error: "conflict", conflicts } naming who holds
@@ -880,5 +987,5 @@ module.exports = {
   PROTOCOL_VERSION, HUB_URL, LISTEN_PROVIDERS, NOW_PLAYING_PROVIDERS, LISTEN_ACTIONS, HOLDERS, BACKOFF_MS, PRESENCE_EVERY_MS, SESSION_MARGIN_MS,
   hubAddress, configuredUrl, listenSession, nowPlayingTrack, roomSummary, roomMessage, joinRequest, roomInvite, postText, createHubClient,
   remoteText, remoteButtons, remoteCommand, remotePcs,
-  KEEPALIVE_FRAME, KEEPALIVE_EVERY_MS, CLIENT_FEATURES, wireMessage,
+  KEEPALIVE_FRAME, KEEPALIVE_EVERY_MS, CLIENT_FEATURES, wireMessage, projectCard, PROJECT_KINDS,
 };

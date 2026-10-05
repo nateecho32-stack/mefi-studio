@@ -78,6 +78,8 @@ export const FEATURES = Object.freeze({
   historyPeer: 'history.peer', // historyRequest / historyReply / history
   keepalive: 'keepalive', // {"type":"ping"} every 30 s, answered by Cloudflare without waking the relay
   messagesSigned: 'messages.signed', // message.sig on every message and messageUpdate
+  credits: 'credits', // GET /v1/me, member cards, the credits frame
+  projects: 'projects', // the project hub: share, play, star, feature
 });
 
 /** listen{action}: a room's shared player. */
@@ -95,6 +97,10 @@ export const REMOTE_COMMANDS = Object.freeze(['status', 'needs', 'made', 'digest
 export const REMOTE_NOTICE_KINDS = Object.freeze(['needs-you', 'done', 'failed', 'stuck', 'digest', 'info']);
 /** A remote button's style (Discord's button styles; the default is secondary). */
 export const REMOTE_BUTTON_STYLES = Object.freeze(['primary', 'secondary', 'success', 'danger']);
+
+/** Project cards (feature "projects") and why a credits frame was sent (feature "credits"). */
+export const PROJECT_KINDS = Object.freeze(['game', 'app', 'tool', 'art', 'music', 'other']);
+export const CREDIT_REASONS = Object.freeze(['played', 'play', 'starred', 'feature']);
 
 export const ROOM_KINDS = Object.freeze(['hangout', 'cowork']);
 export const ROOM_POLICIES = Object.freeze(['request', 'invite']);
@@ -459,8 +465,17 @@ export const HUB_FRAMES = Object.freeze({
   companion: { roomId: opaqueId(), from: snowflake(), card: nullable(opaqueObject(LIMITS.companionCardBytes)), to: optional(snowflake()) },
   // To one member's Studio: send what you hold of this room before `before` as a historyReply.
   historyRequest: { roomId: opaqueId(), requestId: opaqueId(), before: optional(snowflake()) },
-  // To the asker: the messages a peer held, each with a checked seal, newest last.
+  // To the asker: the messages a peer held, each with a checked sig, newest last.
   history: { roomId: opaqueId(), messages: list(roomMessage(), LIMITS.historyMessages), hasMore: boolean() },
+  // To the member who earned or spent credits (feature "credits"): the new totals and why.
+  credits: {
+    balance: integer(0, Number.MAX_SAFE_INTEGER),
+    lifetime: integer(0, Number.MAX_SAFE_INTEGER),
+    today: integer(0, 1000),
+    delta: integer(-1_000_000, 1_000_000),
+    reason: oneOf(CREDIT_REASONS),
+    rank: string(1, 20, { pattern: /^[a-z]+$/ }),
+  },
 });
 
 function validateFrame(table, frame) {
@@ -577,6 +592,12 @@ export const HTTP_BODIES = Object.freeze({
   },
   // DELETE /v1/claims/:leaseId
   release: { reason: optional(line(0, 200)) },
+  // POST /v1/projects (feature "projects"): a project card, a link and words only.
+  shareProject: { url: string(1, 512, { pattern: HTTPS_URL }), title: string(1, 100, { pattern: SINGLE_LINE, nonBlank: true }), blurb: optional(line(0, 300)), kind: optional(oneOf(PROJECT_KINDS)) },
+  // PUT /v1/projects/:id
+  editProject: { title: optional(string(1, 100, { pattern: SINGLE_LINE, nonBlank: true })), blurb: optional(line(0, 300)), kind: optional(oneOf(PROJECT_KINDS)) },
+  // POST /v1/projects/:id/played: the token from POST /v1/projects/:id/play, at least two minutes old.
+  playFinish: { token: string(1, 64, { pattern: /^[a-z0-9]{1,12}\.[A-Za-z0-9_-]{22}$/ }) },
 });
 
 /** Query strings, by name. */

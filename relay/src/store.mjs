@@ -10,7 +10,7 @@
 // What is kept, and why, is listed in relay/README.md. Chat text, files, IP
 // addresses and Discord tokens are never written here.
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 // One statement per entry: Cloudflare's exec runs a single statement when it has bindings.
 const V1 = [
@@ -123,7 +123,60 @@ const V1 = [
   `CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY, kind TEXT NOT NULL, actor_id TEXT, target_id TEXT, room_id TEXT, detail TEXT, at INTEGER NOT NULL) STRICT`,
 ];
 
-export const MIGRATIONS = Object.freeze([{ version: 1, statements: V1 }]);
+// v2: credits, ranks and the project hub (credits.mjs). Ids, counters and project cards only.
+const V2 = [
+  `CREATE TABLE IF NOT EXISTS accounts (
+     user_id TEXT PRIMARY KEY,
+     balance INTEGER NOT NULL DEFAULT 0,
+     lifetime INTEGER NOT NULL DEFAULT 0,
+     day INTEGER NOT NULL DEFAULT 0,
+     earned_today INTEGER NOT NULL DEFAULT 0,
+     streak INTEGER NOT NULL DEFAULT 0,
+     streak_day INTEGER NOT NULL DEFAULT 0,
+     best_streak INTEGER NOT NULL DEFAULT 0
+   ) STRICT`,
+  // One row per credit, so each is paid once: (who caused it, who earned it, kind, what makes it unique).
+  `CREATE TABLE IF NOT EXISTS credit_events (
+     id INTEGER PRIMARY KEY,
+     actor_id TEXT NOT NULL,
+     target_id TEXT NOT NULL,
+     kind TEXT NOT NULL,
+     ref TEXT,
+     uniq TEXT NOT NULL,
+     day INTEGER NOT NULL,
+     amount INTEGER NOT NULL,
+     at INTEGER NOT NULL,
+     UNIQUE (actor_id, target_id, kind, uniq)
+   ) STRICT`,
+  `CREATE INDEX IF NOT EXISTS credit_events_target_day ON credit_events (target_id, kind, day)`,
+  `CREATE INDEX IF NOT EXISTS credit_events_at ON credit_events (at)`,
+  // A shared project is a card: a public link, a title and a blurb. Never a file.
+  `CREATE TABLE IF NOT EXISTS projects (
+     id TEXT PRIMARY KEY,
+     owner_id TEXT NOT NULL,
+     url TEXT NOT NULL,
+     host TEXT NOT NULL,
+     title TEXT NOT NULL,
+     blurb TEXT NOT NULL DEFAULT '',
+     kind TEXT NOT NULL DEFAULT 'other',
+     plays INTEGER NOT NULL DEFAULT 0,
+     stars INTEGER NOT NULL DEFAULT 0,
+     created_at INTEGER NOT NULL,
+     updated_at INTEGER NOT NULL,
+     last_played_at INTEGER,
+     featured_until INTEGER,
+     cooldown_until INTEGER,
+     UNIQUE (owner_id, url)
+   ) STRICT`,
+  `CREATE INDEX IF NOT EXISTS projects_created ON projects (created_at)`,
+  `CREATE TABLE IF NOT EXISTS stars (project_id TEXT NOT NULL, user_id TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (project_id, user_id)) STRICT, WITHOUT ROWID`,
+  `CREATE TABLE IF NOT EXISTS features (id INTEGER PRIMARY KEY, project_id TEXT NOT NULL, owner_id TEXT NOT NULL, cost INTEGER NOT NULL, starts_at INTEGER NOT NULL, ends_at INTEGER NOT NULL) STRICT`,
+];
+
+export const MIGRATIONS = Object.freeze([
+  { version: 1, statements: V1 },
+  { version: 2, statements: V2 },
+]);
 
 const bindValue = (value) => (value === undefined ? null : value === true ? 1 : value === false ? 0 : value);
 

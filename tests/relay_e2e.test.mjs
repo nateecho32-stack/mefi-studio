@@ -198,6 +198,9 @@ test("peer history: a member's own copy fills the gap, and forged copies are dro
   await alice.client.sendMessage(roomId, "second");
   const copies = await until(() => (keeper.of("message").length === 2 ? keeper.of("message").map((frame) => frame.message) : null), "the keeper's copies");
   assert.match(copies[0].sig, /^[A-Za-z0-9_-]{22}$/);
+  // The members' own Studios also answer asks now; leave just the keeper to answer this one.
+  await alice.client.disconnect();
+  await bob.client.disconnect();
 
   // Another of Alice's Studios asks the room; the relay forwards the ask to the keeper.
   const asker = await rawSocket(relay, "tok-alice");
@@ -223,8 +226,6 @@ test("peer history: a member's own copy fills the gap, and forged copies are dro
   await until(() => asker.of("nack").length || asker.of("ack").length > 1, "the second ask's answer");
   assert.ok(asker.of("nack").some((frame) => frame.nonce === "h2" && ["no-peer", "rate-limited"].includes(frame.reason)));
   asker.socket.close();
-  await alice.client.disconnect();
-  await bob.client.disconnect();
 });
 
 test("reconnects after the relay sleeps, renews, and the keepalive ping never wakes it", async () => {
@@ -244,6 +245,38 @@ test("reconnects after the relay sleeps, renews, and the keepalive ping never wa
   raw.socket.send('{"type":"ping"}');
   await until(() => raw.of("pong").length, "pong before hello");
   raw.socket.close();
+  await alice.client.disconnect();
+  await bob.client.disconnect();
+});
+
+test("the project hub through Studio's client: share, play for two minutes, star, credits arrive live", async () => {
+  let clock = Date.now();
+  const relay = makeRelay({ now: () => clock });
+  const alice = member(relay, "tok-alice");
+  const bob = member(relay, "tok-bob");
+  await connectAll(alice, bob);
+  assert.equal(alice.client.status().projects, true);
+  const shared = await alice.client.shareProject({ url: "https://alice.itch.io/void-runner", title: "Void Runner", blurb: "Jump the void", kind: "game" });
+  assert.equal(shared.ok, true);
+  assert.equal(shared.credited, 0, "sharing is free and pays nothing");
+
+  const hub = await bob.client.projects("new");
+  assert.deepEqual(hub.projects.map((item) => item.title), ["Void Runner"]);
+  const play = await bob.client.playProject(shared.project.id);
+  assert.equal(play.url, "https://alice.itch.io/void-runner");
+  clock += play.minMs + 1;
+  const done = await bob.client.finishPlay(shared.project.id, play.token);
+  assert.deepEqual(done.credited, { owner: 5, you: 2 });
+  await until(() => alice.of("credits").some((event) => event.reason === "played"), "alice hears the play");
+  assert.equal((await bob.client.star(shared.project.id)).project.stars, 1);
+
+  const me = await alice.client.me();
+  assert.equal(me.credits.balance, 8, "5 for bob's play + 3 for his star");
+  assert.equal(me.rank.key, "spark");
+  assert.equal(me.rank.next.key, "ember");
+  const card = await bob.client.memberCard(ALICE.id);
+  assert.equal(card.member.projects[0].plays, 1);
+  assert.equal(card.member.credits, undefined);
   await alice.client.disconnect();
   await bob.client.disconnect();
 });

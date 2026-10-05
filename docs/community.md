@@ -338,6 +338,29 @@ Then walk the whole flow in an Electron probe with its own userData:
 Confirm that the file holds only ciphertext and that `settings.json` holds no
 token.
 
+## The Mefi Studio relay (2026-10-05)
+
+Rooms, Listen together, companions, cowork claims and the Project hub now run
+on the Mefi Studio relay ([relay/README.md](../relay/README.md)) instead of a
+Void Engine hub on the maintainer's PC: a Cloudflare Worker with one Durable
+Object, free plan, at `https://mefi-relay.mefi-studio.workers.dev`. It speaks
+the hub's protocol v1, so everything below about frames and routes still
+holds, with these differences:
+
+- Rooms are the relay's own, not Discord threads. Chat is passed along and
+  never stored; each Studio keeps its own copy (`scripts/room-history.cjs`)
+  and fills other members' gaps through peer history (`historyRequest` /
+  `historyReply` / `history`, feature `history.peer`). Every message carries
+  the relay's `sig`, which the relay checks when a copy comes back.
+- Sign-in reads the member's roles, join date and timeout with the member's
+  own token (`guilds.members.read`); the relay holds no bot token. `/v1/health`
+  names the Studio Link app (`studioAppId`).
+- New `ready.features`: `keepalive` (a `{"type":"ping"}` every 30 s that
+  Cloudflare answers without waking the relay), `messages.signed`, `credits`
+  and `projects` (the Project hub: `/v1/me`, `/v1/members/:id/card`,
+  `/v1/projects`, play, star and feature). The Discord remote returns once the
+  bot is linked to the relay.
+
 ## What comes later
 
 Phase 1, described above, is the Studio side only. Later phases each get their

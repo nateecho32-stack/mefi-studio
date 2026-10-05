@@ -24,7 +24,7 @@ new_sqlite_classes = ["Hub"]
 
 [vars]
 # The "Mefi Studio Link" Discord application (public client) whose tokens Studio sends.
-STUDIO_APP_ID = ""
+STUDIO_APP_ID = "1556715336928334004"
 # The Void Engine Discord server.
 GUILD_ID = "1345380333302059129"
 # Discord role ids: moderators, and the roles rooms and ranks read (JSON object of key -> role id).

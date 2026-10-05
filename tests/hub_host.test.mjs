@@ -128,7 +128,7 @@ const plainCopy = (value) => JSON.parse(JSON.stringify(value));
 
 test("connection details save, answer at once and say whether the hub is there", async () => {
   const h = setupHost();
-  assert.deepEqual(plainCopy(h.api.communitySetupView()), { ok: true, clientId: "", hubUrl: "", environment: { clientId: false, hubUrl: false }, linkReady: false, hubReady: false });
+  assert.deepEqual(plainCopy(h.api.communitySetupView()), { ok: true, clientId: "", hubUrl: "", environment: { clientId: false, hubUrl: false }, linkReady: false, hubReady: true }, "nothing saved: the built-in relay is ready");
   const saved = plainCopy(await h.api.communitySetupSave({ clientId: APP, hubUrl: "https://hub.example.com/" }));
   assert.equal(saved.ok, true);
   assert.deepEqual([saved.clientId, saved.hubUrl, saved.linkReady, saved.hubReady], [APP, "https://hub.example.com", true, true]);
@@ -160,7 +160,7 @@ test("bad values are refused with the reason and nothing is saved; empty values 
   assert.equal(h.fetches.length, 0);
   await h.api.communitySetupSave({ clientId: "", hubUrl: "" });
   assert.equal("communitySetup" in h.settings(), false, "cleared from settings");
-  assert.deepEqual([h.api.communitySetupView().linkReady, h.api.communitySetupView().hubReady], [false, false]);
+  assert.deepEqual([h.api.communitySetupView().linkReady, h.api.communitySetupView().hubReady], [false, true], "cleared: back to the built-in relay");
 });
 
 test("the environment still wins, and an unreachable hub is saved with the reason", async () => {
