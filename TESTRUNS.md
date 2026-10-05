@@ -39,6 +39,37 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-04 Today in both modes closer to the 0.5 prototype: Build's Home and Vibe's board
+
+Branch `ui/today` in `C:\wt\ui-today` (off land/ui-chrome 74bf360,
+node_modules junctioned), pushed as wip/ui-today: 0b52d4c Build's Today
+(Home with no session open: the greeting and "What's next for <project>?",
+Home's own box borrowed with Add files or an image, the permission mode,
+Talk it over and Build it, the starters and Suggest a next step, Needs you,
+Running now, Finished while you were away; the classic Home is the route's
+"chat" view), 75b3dfa Vibe's Today (the prototype's board: four columns that
+say when they are empty, a waiting card as its session, results under
+Review, Build it with its key, "Today, the board").
+
+`npm run check` ok (271 targets), lint 0 errors (no warning in the touched
+files), `npm run audit` 0 findings. `npm run test:fast` at 0b52d4c's tree
+under heavy load: 6950 tests, 6926 pass, 14 skipped, 8 fail, 2 cancelled,
+all in six host suites that took 700-860 s each (attempt_review_host,
+attempt_snapshots_host, git_actions, pc_vault, rust_parity_git,
+rust_parity_repo): 137 tests, 134 pass, 3 skipped, 0 fail alone.
+
+Full `npm test` at 75b3dfa: Node 6952 tests, 6934 pass, 14 skipped, 4 fail
+(attempt_review_host 2, attempt_snapshots_host, rust_parity_snapshots,
+sync_changes: 63 tests, 60 pass, 3 skipped, 0 fail alone); Electron lane 75:
+72 pass, 1 skipped, 2 fail, layout_contract_render (viewport 1921x1081) and
+shell_render ("373 !== 372" at 1100 px), both as on clean main on this PC;
+sessions_render (with its new Today gallery: Build's Today at 1920x1080 and
+1100x720, 600x560 at 1 and 1.5, Vibe's board, every text 12 px or more and
+4.5:1 in all eleven themes for both) and today_render pass; Python 248 OK
+(1 skipped); path lock ok.
+Captures (1920x1080) in `C:\wt\gap\after-today\final\`, prototype-left
+side-by-sides in `C:\wt\gap\after-today\compare\`.
+
 ## 2026-10-04 The v2 chrome closer to the 0.5 prototype: status bar, Search, one Inbox
 
 Branch `ui/chrome` in `C:\wt\ui-chrome` (off land/ui-work-view fe59dd3,
@@ -400,10 +431,6 @@ Stable remains the default; development requires explicit warning/consent. Devel
 ## 2026-10-02 late evening - bounded review and tree harness completion
 
 **Result:** complete affected suites passed (29/29). Paired predecessor/candidate probes demonstrated that fixed sleeps can precede async metadata writes and animation callbacks. The isolated harness waits for durable end-shot metadata and the unchanged >1px movement plus radius-growth criterion, with five-second bounds. Controlled delayed completion and permanent-frame-absence checks are recorded in external evidence. Earlier red aggregate remains preserved; full supervised aggregate qualification pending. Application execution, logging, retention and exports are unchanged from the frozen log-diagnostics candidate.
-
-## 2026-10-02 late evening - memory-only durable-log write health
-
-**Result:** focused Node tests passed (40/40). Executor/work-event append failures remain nonthrowing; later writes recover; fixed channels, saturated counts, detached snapshots, broken clock and Trace success/read-failure metadata covered. Full aggregate and native Trace checks queued until the parent releases the game window. No retention, redaction, export or persistent-log changes.
 
 ## Read Before Any Tests
 

@@ -7,6 +7,20 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Today, in both modes, as in the 0.5 prototype.** With the new layout on
+  (`?layout=v2`), Build's Home with no session open is now Today: a greeting
+  and "What's next for your project?", the message box with Add files or an
+  image, the permission mode, Talk it over and Build it (Ctrl Enter), the
+  Modify, Experiment, Fix and Improve starters and Suggest a next step, then
+  the first thing that needs you (answer it right there), what is running now
+  and what finished. Talk it over sends your words to Mefi and opens the
+  conversation; Build it makes a task. Build's earlier Home (the
+  conversation, the queue, Activity and the app preview) is still there as
+  the Chat tab (Talk it over or Search's "Open the conversation" opens it).
+  Vibe's Today is the prototype's board: four columns that say when they are
+  empty, a card that waits on you shows its task, its question in a box and
+  its first two answers or actions, a result to review sits under Review, and
+  Build it shows its key. The classic layout is unchanged.
 - **The 0.5 layout's status bar, Search and Inbox, as in the prototype.** With
   the new layout on (`?layout=v2`), the status bar also shows the machine's
   load ("CPU 34% · Mem 61%", from what the resource watcher already measures)
