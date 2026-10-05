@@ -1,7 +1,6 @@
 [
 ["agent-brain.css", "bottom", "14px", "calc(14px + var(--shell-y1))"],
 ["agents.css", "inset", "var(--shell-local-h, 72px) 0 0 var(--shell-rail-w, 80px)", "var(--shell-y0, 72px) var(--shell-x1, 0px) var(--shell-y1, 0px) var(--shell-x0, 80px)"],
-["agents.css", "max-width", "calc(100vw - var(--shell-rail-w) - 32px)", "calc(100vw - var(--shell-x0) - var(--shell-x1) - 32px)"],
 ["companion-hub.css", "width", "min(660px, calc(100vw - var(--shell-rail-w, 0px) - 32px))", "min(660px, calc(100vw - var(--shell-x0, 0px) - var(--shell-x1, 0px) - 32px))"],
 ["companion-hub.css", "width", "min(740px, calc(100vw - var(--shell-rail-w, 0px) - 32px))", "min(740px, calc(100vw - var(--shell-x0, 0px) - var(--shell-x1, 0px) - 32px))"],
 ["git-sync.css", "width", "min(var(--gs-w, 480px), calc(100vw - var(--shell-rail-w, 0px) - 32px))", "min(var(--gs-w, 480px), calc(100vw - var(--shell-x0, 0px) - var(--shell-x1, 0px) - 32px))"],

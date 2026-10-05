@@ -5,7 +5,7 @@
 // goes red when it is taken out. The strip's own DOM is tests/tabs_strip.test.mjs, where the app really is tests/tabs_render.test.mjs.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { tabsEnv, task } from "./fixtures/tabs-env.mjs";
+import { tabsEnv, task, teamAgents } from "./fixtures/tabs-env.mjs";
 
 const MIN = 60_000;
 const openSession = (t, id, options = { preview: false }) => t.tabs.open("workspace", { view: "task", taskId: id, projectId: "p1" }, options);
@@ -836,21 +836,21 @@ test("MefiTabs.needs() badges a tab by hand, takes it off, and makes a backgroun
 });
 
 test("a page can say which of its views is showing (MefiTabs.reader), and taking the answer back reads the page the way it was", async () => {
-  const t = await tabsEnv({ extras: { MefiAgents: { params: () => ({ section: "setup", pane: "team" }) } } });
+  const t = await tabsEnv({ extras: { MefiAgents: teamAgents(() => ({ section: "setup", pane: "team", place: "seats" })) } });
   await t.go("agents"); t.tabs.keep();
-  assert.deepEqual(t.titles(), ["Home", "Agents · Team"], "the page's own say, built in");
-  const off = t.tabs.reader("agents", () => ({ section: "setup", pane: "routing" }));
+  assert.deepEqual(t.titles(), ["Home", "Seats and models"], "the page's own say, built in");
+  const off = t.tabs.reader("agents", () => ({ place: "perms" }));
   t.window.dispatchEvent({ type: "mefi:model-view" }); await t.settle();
-  assert.deepEqual(t.titles(), ["Home", "Agents · Team", "Agents · Routing"], "a reader registered by another module wins");
+  assert.deepEqual(t.titles(), ["Home", "Seats and models", "Permissions"], "a reader registered by another module wins");
   off();
   t.window.dispatchEvent({ type: "mefi:model-view" }); await t.settle();
-  assert.equal(t.active(), "Agents · Team", "and when it is taken back the built-in one is read again");
+  assert.equal(t.active(), "Seats and models", "and when it is taken back the built-in one is read again");
   assert.equal(typeof t.tabs.reader("", () => ({})), "function", "a reader with no page is ignored, and still gives back something callable");
-  const mine = t.tabs.reader("agents", () => ({ section: "setup", pane: "behavior" }));
+  const mine = t.tabs.reader("agents", () => ({ place: "perms" }));
   const theirs = t.tabs.reader("agents", () => ({ section: "setup", pane: "connections" }));
   mine();
   t.window.dispatchEvent({ type: "mefi:model-view" }); await t.settle();
-  assert.equal(t.active(), "Agents · Connections", "taking back a reader that was already replaced leaves the newer one alone");
+  assert.equal(t.active(), "Providers", "taking back a reader that was already replaced leaves the newer one alone");
   theirs();
 });
 

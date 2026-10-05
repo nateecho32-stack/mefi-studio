@@ -766,10 +766,10 @@
   }
 
   // ---- the page list: the section's pages, in the list column ----------------------------------------
-  // What the classic bar listed between Back and Forward: the routes MefiNav keeps for the section (LOCAL_ROUTES), or for
-  // Agents its sections and their views (MefiAgents.navModel, so a pane or a tab is reachable as before). Home has none:
-  // its list is the session list. While the page list shows, the column's panels make way (html[data-pages] on the column)
-  // and MefiShell.pages() says so, so the session list does not draw for nobody.
+  // What the classic bar listed between Back and Forward: the routes MefiNav keeps for the section (LOCAL_ROUTES); Team's
+  // places are teamModel's, below. Home has none: its list is the session list. While the page list shows, the column's
+  // panels make way (html[data-pages] on the column) and MefiShell.pages() says so, so the session list does not draw for
+  // nobody.
   function sectionOfRoute(n, id) {
     const routes = n?.LOCAL_ROUTES;
     if (!routes || typeof routes !== "object") return null;
@@ -879,11 +879,6 @@
     let title = null;
     try { title = dest ? n?.sectionLabel?.(dest) ?? null : null; } catch { title = null; }
     title = String(title || section.charAt(0).toUpperCase() + section.slice(1));
-    if (section === "agents" && typeof window.MefiAgents?.navModel === "function") {
-      let groups = null;
-      try { groups = window.MefiAgents.navModel(id); } catch { groups = null; }
-      if (Array.isArray(groups) && groups.length) return { section, title, groups: groups.map((group) => ({ id: String(group.id), label: String(group.label), current: Boolean(group.current), run: group.run, views: (Array.isArray(group.views) ? group.views : []).map((view) => ({ label: String(view.label), current: Boolean(view.current), run: view.run })) })) };
-    }
     const pages = (n.LOCAL_ROUTES[section] || []).map((route) => n.get?.(route)).filter(Boolean).map((page) => ({
       id: String(page.id), label: String(page.short || page.label || page.id), glyph: typeof page.glyph === "string" ? page.glyph : null,
       badge: typeof page.badge === "string" ? page.badge : null, alert: typeof page.alert === "string" ? page.alert : null, current: page.id === id,

@@ -4,7 +4,7 @@
 // opens itself or closes under Escape, through Vibe or Build's own views. The stubs are tests/fixtures/tabs-env.mjs'.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { tabsEnv, task } from "./fixtures/tabs-env.mjs";
+import { tabsEnv, task, teamAgents } from "./fixtures/tabs-env.mjs";
 
 const plain = (value) => JSON.parse(JSON.stringify(value));
 const WINDOW_EVENTS = ["mefi:nav", "mefi:model-view", "mefi:shell", "mefi:project-changed", "mefi:workspace-state", "mefi:appearance", "mefi:shell-layout", "mefi:layout", "resize", "keydown", "pagehide"];
@@ -191,26 +191,29 @@ test("Build's own view of Home is believed when it has one: a view change nobody
   assert.equal(t.active(), "Home", "Escape out of a task in Build's own Home");
 });
 
-test("Agents is one sheet with two faces: its overview, and Setup with four panes, each its own tab, named for the pane", async () => {
+test("Team is one tab per place, named for the place: an old { section, pane } is the place that holds the pane, and the Overview is the page's own tab", async () => {
   const t = await tabsEnv();
   let params = { section: "overview", pane: "team" };
-  t.window.MefiAgents = { params: () => ({ ...params }) };
+  t.window.MefiAgents = teamAgents(() => ({ ...params }));
   await t.go("agents", { section: "overview" });
   assert.deepEqual(t.titles(), ["Home", "Agents"]);
   t.tabs.keep(); await t.settle();
   params = { section: "setup", pane: "routing" };
   await t.go("agents", { section: "setup", pane: "routing", target: "some-control" });
-  assert.deepEqual(t.titles(), ["Home", "Agents", "Agents · Routing"]);
-  assert.deepEqual(plain(t.tabs.list()[2].route), { id: "agents", params: { section: "setup", pane: "routing" } }, "a control to scroll to is not part of the place");
+  assert.deepEqual(t.titles(), ["Home", "Agents", "Seats and models"]);
+  assert.deepEqual(plain(t.tabs.list()[2].route), { id: "agents", params: { place: "seats" } }, "a control to scroll to is not part of the place");
   t.tabs.keep(); await t.settle();
-  params = { section: "setup", pane: "team" };
-  await t.go("agents", { section: "setup", pane: "team" });
-  assert.equal(t.titles().length, 4);
+  params = { section: "setup", pane: "team", place: "seats" };
+  await t.go("agents", { place: "seats" });
+  assert.equal(t.titles().length, 3, "Team & models and Routing are both Seats and models now: one tab");
+  params = { section: "setup", pane: "connections", place: "providers" };
+  await t.go("agents", { place: "providers" });
+  assert.deepEqual(t.titles(), ["Home", "Agents", "Seats and models", "Providers"]);
   // going back to a tab asks for exactly its place
   t.tabs.activate(t.tabs.list()[2].id); await t.settle();
-  assert.deepEqual(plain(t.nav.calls.at(-1)), ["agents", { section: "setup", pane: "routing" }]);
+  assert.deepEqual(plain(t.nav.calls.at(-1)), ["agents", { place: "seats" }]);
   // the overview's pane is not part of its identity
-  params = { section: "overview", pane: "behavior" };
+  params = { section: "overview", pane: "behavior", place: "overview" };
   await t.go("agents");
   assert.equal(t.active(), "Agents");
 });

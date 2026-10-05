@@ -261,26 +261,13 @@ test("the page list: on a page of a section with pages, the list column lists th
   assert.equal(pages.hidden, true);
 });
 
-test("the page list draws Agents' sections and views, from agents.js, so every pane and tab is still a press away", async () => {
+test("a page of the agents section outside Team's places lists the section's own routes, as any section does", async () => {
   const page = withPages({ current: "command" });
-  const ran = [];
-  page.window.MefiAgents = { navModel: (id) => [
-    { id: "overview", label: "Overview", current: false, run: () => ran.push("overview"), views: [] },
-    { id: "live", label: "Live", current: id === "command", run: () => ran.push("live"), views: [{ label: "Command", current: id === "command", run: () => ran.push("command") }, { label: "Fleet", current: false, run: () => ran.push("fleet") }] },
-  ] };
-  page.window.dispatchEvent({ type: "mefi:nav" });
-  const pages = page.$("shell-pages");
-  assert.equal(pages.querySelector(".shell-pages-title").textContent, "Agents");
-  assert.deepEqual(pages.querySelector(".shell-pages-list").children.map((node) => [node.tagName.toLowerCase(), node.textContent]), [["button", "Overview"], ["h3", "Live"], ["button", "Command"], ["button", "Fleet"]], "a section with views is a heading over them");
-  const rows = pages.querySelectorAll(".shell-page");
-  assert.deepEqual(rows.map((node) => node.getAttribute("aria-current")), [null, "page", null]);
-  assert.ok(rows.slice(1).every((node) => node.className.includes("is-sub")));
-  await rows[2].click();
-  assert.deepEqual(ran, ["fleet"], "each goes where the classic bar's menu went");
-  // Without agents.js's model the section's own routes stand in.
-  delete page.window.MefiAgents;
+  // agents.js has no classic sections to draw any more: the section's routes (LOCAL_ROUTES) are its list.
+  page.window.MefiAgents = { teamPlaces: () => null };
   page.history = { canBack: false, canForward: true };
   page.window.dispatchEvent({ type: "mefi:nav" });
+  const pages = page.$("shell-pages");
   assert.equal(pages.querySelectorAll(".shell-page").length, 0, "agents and command are not in this registry: nothing to list");
   assert.equal(pages.hidden, true);
 });
@@ -389,7 +376,6 @@ test("Team in the list column: agents.js's places under the prototype's headings
     teamPlaces: () => [place("overview", "Overview"), place("providers", "Providers"), place("rules", "Rules", "Context for agents"), place("skills", "Skills", "Context for agents", [view("Skills")]),
       place("flows", "Workflows", "Context for agents", [view("Brain maps"), view("Context")]), place("models", "Models", "Monitor", [view("Catalog", true), view("Performance")], true), place("inspect", "Inspect", "Monitor", [view("Sessions"), view("Trace")])],
     teamPlace: () => ({ id: "models", label: "Models" }),
-    navModel: () => { throw new Error("the classic sections are not asked for"); },
   };
   page.window.dispatchEvent({ type: "mefi:nav" });
   assert.equal(page.$("shell-pages").querySelector(".shell-pages-title").textContent, "Team");

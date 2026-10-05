@@ -459,7 +459,7 @@
   // instead of each row lighting up on its own. It is the host's ::after
   // (studio-ui.css "menus in motion"), placed through --glide-* properties, so
   // no element is ever added to a menu that code or tests count.
-  const GLIDE_HOSTS = "#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail";
+  const GLIDE_HOSTS = "#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail";
   const GLIDE_ITEMS = "button, a[href], [role=menuitem], [role=option], .studio-choice-option";
   let glideHost = null, glideItem = null, glideFrame = 0;
   function glideRest() {

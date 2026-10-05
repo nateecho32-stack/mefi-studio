@@ -724,9 +724,6 @@ html[data-ui-mode="vibe"] #app-local-nav .app-local-link:hover { background: col
 html[data-ui-mode="vibe"] #app-local-nav .app-local-link[aria-current="page"] { background: var(--v-menu-pick); color: var(--ivory); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 32%, transparent); }
 html[data-ui-mode="vibe"] #app-local-nav .studio-history { border-right-color: color-mix(in srgb, var(--ivory) 8%, transparent); }
 html[data-ui-mode="vibe"] #app-local-nav :is(.studio-history, .app-task-context) button { border-radius: 12px; }
-/* The bar's own blur leaves a nested menu nothing to blur, so it is near solid. */
-html[data-ui-mode="vibe"] #app-local-nav .agents-nav-subsections { gap: 2px; padding: 8px; border-color: var(--v-menu-edge); background: var(--studio-wash), color-mix(in srgb, var(--theme-panel-solid, var(--panel-solid)) 97%, transparent); }
-html[data-ui-mode="vibe"] #app-local-nav .agents-nav-subsections .app-local-link { border-radius: 12px; }
 
 /* Command's pop-overs (View, Agents, More) and the shared dropdowns */
 html[data-ui-mode="vibe"] #idle-hud :is(.cmd-view-pop, .cmd-agents-pop, .cmd-more-links, .pop) { border-color: var(--v-menu-edge); border-radius: 20px; }

@@ -191,15 +191,13 @@ html[data-studio-theme="chrome"] :is(.sx-row:hover, .sx-row:focus-within):not([d
 html[data-studio-theme="chrome"][data-frame] #palette-overlay #palette-list li.palette-row.active { background: rgb(255 255 255 / .06); box-shadow: inset 2px 0 0 var(--chrome-edge), inset 0 0 0 1px var(--studio-glass-edge); border-image: var(--chrome-holo-bar) 0 0 0 1 / 10px 0 10px 2px; }
 html[data-studio-theme="chrome"] .studio-choice-option[aria-selected="true"] { border-left-color: var(--chrome-edge); background: rgb(255 255 255 / .05); box-shadow: inset 1px 0 0 var(--chrome-edge); color: var(--ivory); border-image: var(--chrome-holo-bar) 0 0 0 1 / 6px 0 6px 2px; }
 html[data-studio-theme="chrome"] .studio-choice-popup[data-layout="tiles"] .studio-choice-option[aria-selected="true"] { border-color: transparent; border-left-color: var(--chrome-edge); box-shadow: inset 1px 0 0 var(--chrome-edge), inset 0 0 0 1px var(--studio-edge-active); }
-html[data-studio-theme="chrome"] #app-local-nav .agents-nav-subsections .app-local-link[aria-current="page"] { background: rgb(255 255 255 / .05); box-shadow: inset 2px 0 0 var(--chrome-edge); color: var(--ivory); border-image: var(--chrome-holo-bar) 0 0 0 1 / 6px 0 6px 2px; }
 /* The underline tabs: the holo on the 2px edge they draw (border-image <holo> 0 0 1 0 / 0 0 2px 0), its plain chrome colour under it. */
 html[data-studio-theme="chrome"] :is(.sx-ptab.on, .sx-itab.on) { border-bottom-color: var(--chrome-edge); border-image: var(--chrome-holo) 0 0 1 0 / 0 0 2px 0; }
 html[data-studio-theme="chrome"] #app-local-nav .app-local-link[aria-current="page"] { background: transparent; border-bottom-color: var(--chrome-edge); color: var(--ivory); border-image: var(--chrome-holo) 0 0 1 0 / 0 0 2px 0; }
 /* Vibe rounds these further (vibe.css): the same edges, kept clear of its corners; the local navigation's pill keeps
    its own rim and takes the line along its straight foot. */
 html[data-studio-theme="chrome"][data-ui-mode="vibe"] .studio-choice-option[aria-selected="true"] { border-image: var(--chrome-holo-bar) 0 0 0 1 / 12px 0 12px 2px; }
-html[data-studio-theme="chrome"][data-ui-mode="vibe"] #app-local-nav .agents-nav-subsections .app-local-link[aria-current="page"] { border-image: var(--chrome-holo-bar) 0 0 0 1 / 12px 0 12px 2px; }
-html[data-studio-theme="chrome"][data-ui-mode="vibe"] #app-local-nav .app-local-link[aria-current="page"]:not(.agents-nav-subsections *) { border-image: var(--chrome-holo) 0 0 1 0 / 0 19px 2px 19px; }
+html[data-studio-theme="chrome"][data-ui-mode="vibe"] #app-local-nav .app-local-link[aria-current="page"] { border-image: var(--chrome-holo) 0 0 1 0 / 0 19px 2px 19px; }
 /* The open tab: its plain chrome foot round the corners, the holo along the straight run, inside its ring. */
 html[data-studio-theme="chrome"] .ts-item[data-active] { background: rgb(255 255 255 / .05); box-shadow: inset 0 0 0 1px var(--studio-glass-edge), inset 0 -2px 0 var(--chrome-edge), inset 0 2px var(--studio-glass-highlight); border-image: var(--chrome-holo) 0 0 1 0 / 0 9px 2px 9px; }
 html[data-studio-theme="chrome"] .ts-item[data-active] .ts-ico { color: var(--chrome-edge); }

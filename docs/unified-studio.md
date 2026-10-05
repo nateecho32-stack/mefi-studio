@@ -259,9 +259,9 @@ board the task it has selected, as a button that opens it (the classic bar's
 "Current task"). The classic local navigation (Back, Forward, the section's
 pages, the Git chip) is not drawn in the frame: the section's pages are the
 **page list** in the list column, on every page of a section that has pages of
-its own (`MefiNav.LOCAL_ROUTES`: Work, Agents, Settings; for Agents the
-sections and views of `MefiAgents.navModel()`, so every pane and tab is still a
-press away), with Back and Forward within the section (Alt ← and Alt → as
+its own (`MefiNav.LOCAL_ROUTES`: Work, Agents, Settings; for Team the places
+of `MefiAgents.teamPlaces()`, so every pane and tab is still a press away),
+with Back and Forward within the section (Alt ← and Alt → as
 before) and the Git chip. While it shows, the column's panels make way
 (`.shell-list[data-pages="on"]`) and `MefiShell.pages()` says so, so the
 session list does not draw; Home keeps its session list. Right: the Search pill (opens the palette, shows Ctrl K), "N need you" and

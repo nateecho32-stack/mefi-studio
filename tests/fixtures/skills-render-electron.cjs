@@ -190,10 +190,8 @@ app.whenReady().then(async () => {
   await run("window.MefiSkills.close(); window.MefiNav.go('tasks'); window.MefiNav.go('skills');");
   await until("document.querySelectorAll('#skills-list .skills-row').length === 10", "the page is back");
   assert.equal(await text("#skills-headline"), "7 skills in this project. Type / in Home's message box to call one.");
-  // The Agents menu holds the page under Setup, and marks it while it is open.
-  assert.deepEqual(await run("return [...document.querySelectorAll('#agents-menu-setup button')].map((node) => node.textContent);"), ["Team & models", "Providers", "Routing & fallback", "Run behavior", "Skills"]);
-  assert.equal(await run("return document.querySelector('.agents-navigation [data-agent-section=setup]').getAttribute('aria-current');"), "page", "Setup is the section this page belongs to");
-  assert.equal(await run("return [...document.querySelectorAll('#agents-menu-setup button')].find((node) => node.textContent === 'Skills').getAttribute('aria-current');"), "page");
+  // Team's list column holds the page as a place of its own, and marks it while it is open.
+  await until(`document.querySelector('#shell-pages [data-page="team:skills"]')?.getAttribute('aria-current') === 'page'`, "Skills is the Team place that shows");
   assert.deepEqual(await run("return [...document.querySelectorAll('#skills-list .skills-list .skills-row:not(.skills-starter)')].map((node) => node.dataset.name);"), ["a-rather-long-skill-name-that-goes-on-and-on-to-test-wrapping-in-a-narrow-window", "Bad_Name", "bug-triage", "commit", "design-review", "no-front-matter", "too-long-for-agents"]);
   assert.equal(await run(`return ${rowOf("design-review")}.querySelector('.skills-flag').textContent;`), "Over 16 KB: agents use it only when you call /design-review");
   assert.match(await run(`return ${rowOf("no-front-matter")}.querySelector('.skills-flag').textContent;`), /^It has no front matter/);

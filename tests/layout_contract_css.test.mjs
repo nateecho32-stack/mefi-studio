@@ -126,7 +126,8 @@ const DELTAS = {
 };
 
 test("the ledger is the whole set of declarations that moved, and each is in the stylesheet as written", () => {
-  assert.ok(ledger.length >= 74, "the ledger lists every declaration that moved");
+  // 74 moved; the classic Agents menu's max-width went with the menu.
+  assert.ok(ledger.length >= 73, "the ledger lists every declaration that moved");
   const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   for (const [file, property, , after] of ledger) {
     assert.ok(css[file], `${file} exists`);
