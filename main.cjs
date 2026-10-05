@@ -14144,7 +14144,13 @@ async function assistantIssueAction(action = {}, note = null, { origin = "owner"
   // model (executorCore.heavyRetryPending, heavyRetryRoute). The deep shape,
   // held in memory like the classifier's own answers, still steers a builder
   // routed per task when no Heavy model is set.
-  if (verb === "retry-deep") rememberWorkShape(taskId, { weight: "deep", intent: "build", complexity: "high", role: "worker" });
+  // The kind of job stays what the classifier said (coding-explore...), so the
+  // heavier attempt counts toward that kind's record; "build" was no kind the
+  // classifier gives and filed those attempts in a row of their own.
+  if (verb === "retry-deep") {
+    const known = typeof workShapeFor === "function" ? workShapeFor(taskId)?.intent : null;
+    rememberWorkShape(taskId, { weight: "deep", intent: typeof known === "string" && /^[a-z]+$/.test(known) ? known : "implement", complexity: "high", role: "worker" });
+  }
   // A split files the uncovered work as a new card (written with the decision
   // above) and never re-arms the one it came from: re-running the parent
   // wiped its verification budget and loop ledger, and its worker only

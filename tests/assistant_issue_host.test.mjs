@@ -238,8 +238,15 @@ test("granting reach writes it on that task alone, then re-arms the work", async
 test("a heavier retry is a routing hint for the next dispatch", async () => {
   const h = issueHost();
   await h.env.assistantIssueAction({ action: "retry-deep", payload: { taskId: "task_1", issueKind: "capability" } });
-  assert.deepEqual(plain(h.shapes), [{ taskId: "task_1", shape: { weight: "deep", intent: "build", complexity: "high", role: "worker" } }]);
+  assert.deepEqual(plain(h.shapes), [{ taskId: "task_1", shape: { weight: "deep", intent: "implement", complexity: "high", role: "worker" } }]);
   assert.deepEqual(plain(h.backlog), [{ action: "retry", taskId: "task_1" }]);
+});
+
+test("a heavier retry keeps the kind of job the classifier gave the card", async () => {
+  const h = issueHost();
+  h.env.workShapeFor = () => ({ weight: "standard", intent: "explore" });
+  await h.env.assistantIssueAction({ action: "retry-deep", payload: { taskId: "task_1", issueKind: "capability" } });
+  assert.equal(plain(h.shapes)[0].shape.intent, "explore", "its record stays under coding-explore, not a build row of its own");
 });
 
 test("splitting the extra work out makes a card for it and keeps this brief", async () => {
