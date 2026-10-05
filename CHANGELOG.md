@@ -7,6 +7,10 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Use for the whole studio now covers every project.** A project that had
+  saved its own team kept its old providers; now each one moves to the chosen
+  subscription too (its rules stay), and the message says how many project
+  teams were switched.
 - **Chrome's buttons no longer look struck through.** The metal on main
   buttons and chosen tabs had a hard dark line at half height, right behind
   the words. Its horizon is now a soft band below them, and the darkest part

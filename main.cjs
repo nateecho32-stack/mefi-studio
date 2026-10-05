@@ -22942,11 +22942,12 @@ function registerIpc() {
       const account = cliAccountFind(await readSettings(), id);
       return account && !account.main && account.provider === provider ? cliAccounts.accountEnv(account) : null;
     } });
-  // Setup describes this machine, not one folder. First-run and subscription
-  // setup write Studio defaults, so the next folder added inherits the route,
-  // and also the open project's own team when it keeps one (a project that
-  // inherits the defaults simply follows them). Other projects' saved teams
-  // are left alone.
+  // Setup describes this machine, not one folder. First-run setup writes
+  // Studio defaults, so the next folder added inherits the route, and also the
+  // open project's own team when it keeps one (a project that inherits the
+  // defaults simply follows them); other projects' saved teams are left alone.
+  // "Use for the whole studio" (setup:cli-use) goes further and switches every
+  // project's saved team as well (cliSetup.singleProviderEverywhere).
   function setupEverywhere(raw, mutate) {
     const refusal = mutate(raw);
     if (refusal === false || refusal?.ok === false) return refusal;
@@ -22984,8 +22985,11 @@ function registerIpc() {
   ipcMain.handle("setup:cli-use", async (_event, id) => {
     if (!cliSetup.SUBSCRIPTIONS.includes(id)) return { ok: false, error: "Choose a subscription CLI." };
     if (!(await codingCliStatus()).some((cli) => cli.id === id && cli.installed)) return { ok: false, error: "Install this tool before using it." };
+    // The whole studio: the defaults and every project team saved on this PC,
+    // each keeping its own rules. The count goes back in the message.
+    let teams = 0;
     await updateSettings((settings) => {
-      setupEverywhere(settings, (next) => { cliSetup.singleProvider(next, id); });
+      teams = cliSetup.singleProviderEverywhere(settings, id, typeof agentProfiles !== "undefined" ? agentProfiles : null);
       settings.firstRun = { ...settings.firstRun, version: 1, appliedAt: Date.now(),
         explorer: { transport: "assistant", provider: id, model: null, reason: "Use the selected subscription with the local project scan." },
         builder: { cli: id, model: settings.executorModels?.[id] || null },
@@ -22993,7 +22997,7 @@ function registerIpc() {
     });
     providerBreaker.reset();
     send("settings:changed", { source: "subscription-setup" });
-    return { ok: true, provider: id, message: "Your subscription now handles chat, mapping, planning, agent roles and coding. Its model access and usage limits still apply." };
+    return { ok: true, provider: id, projects: teams, message: cliSetup.wholeStudioMessage(id, teams) };
   });
 
   // Several logins per coding CLI (the block beside cliAccountTurn): Setup
@@ -23574,7 +23578,7 @@ function registerIpc() {
     ]);
     firstRunService = service.createFirstRunService({
       // Use this setup lands in Studio defaults as well as the open project's
-      // own team (setupEverywhere), like the subscription choice.
+      // own team (setupEverywhere).
       scanner, mapper, judge, readSettings: readAgentSettings, writeSettings, updateSettings: updateSetupSettings, decryptKey,
       assistantRoute: async () => { try { return await resolveAiRoute("routine"); } catch (error) { return { ok: false, error: String(error?.message ?? error) }; } },
       projects,

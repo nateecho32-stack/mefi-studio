@@ -32,6 +32,32 @@ function singleProvider(settings, provider) {
   return settings;
 }
 
+// "Use for the whole studio" means every project: the Studio defaults and each
+// team a project saved of its own (settings.agentTeams.projects) take the one
+// subscription, and a project that inherits the defaults follows them.
+// `profiles` is scripts/agent-profiles.cjs. Its update() rewrites a team from
+// that team's own saved copy, so a project keeps its rules (singleProvider
+// never touches agentRules, which are the project's own words) and its name,
+// and every rewrite bumps the teams' revision: an Agents draft opened before
+// this is refused as stale instead of saving the old providers back.
+// Returns how many project teams were switched.
+function singleProviderEverywhere(settings, provider, profiles = null) {
+  singleProvider(settings, provider);
+  if (!profiles) return 0;
+  let switched = 0;
+  for (const projectId of profiles.projectTeams(settings)) {
+    if (profiles.update(settings, projectId, (team) => { singleProvider(team, provider); }) === null) switched += 1;
+  }
+  return switched;
+}
+
+// What setup says afterwards, counting the project teams it switched.
+function wholeStudioMessage(provider, teams = 0) {
+  const name = CLIS.find((cli) => cli.id === provider)?.name ?? provider;
+  const reach = teams === 1 ? ", including the one project that has its own team" : teams > 1 ? `, including the ${teams} projects that have their own team` : "";
+  return `${name} now handles chat, mapping, planning, every agent seat and coding across the studio${reach}. Its model access and usage limits still apply.`;
+}
+
 // The per-user folders vendor installers use. Studio's own PATH refresh
 // (main.cjs refreshProcessPath) adds the same ones, so a CLI whose installer
 // did not update the user PATH is still found here and signed in right away.
@@ -101,4 +127,4 @@ function createCliSetup({ spawn, openExternal, refresh = async () => {}, closed 
   return { action };
 }
 
-module.exports = { CLIS, SUBSCRIPTIONS, INSTALL_FOLDERS, singleProvider, setupScript, createCliSetup };
+module.exports = { CLIS, SUBSCRIPTIONS, INSTALL_FOLDERS, singleProvider, singleProviderEverywhere, wholeStudioMessage, setupScript, createCliSetup };

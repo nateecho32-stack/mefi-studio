@@ -23,15 +23,17 @@ sends a new user back through the walkthrough.
    sign-in, update and instructions available. Passwords and tokens stay with
    the CLI; the renderer receives no credentials.
 4. **Use for the whole studio** saves the subscription for Studio defaults and
-   the current project (a project that inherits the defaults follows them; one
-   with its own team gets the same change). It replaces conflicting
-   routine/heavy and seat choices,
+   every project: a project that inherits the defaults follows them, and each
+   project that saved a team of its own gets the same change (its rules and
+   name stay, and the message says how many project teams moved). It replaces
+   conflicting routine/heavy and seat choices,
    makes subtasks follow the builder, sets Auto coding tier and provider model
    defaults, and turns cross-provider fallback off. Saved per-provider models
-   and keys remain. Other projects with explicitly saved teams retain them.
+   and keys remain.
    This choice starts a map if a project is selected, or waits for a folder.
-   The scan's **Use this setup** and Settings' **Auto setup** save to the same
-   places, so folders added later inherit the route.
+   The scan's **Use this setup** and Settings' **Auto setup** save to the
+   defaults and the open project's own team, so folders added later inherit
+   the route.
 
 ## More than one login
 
