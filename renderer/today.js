@@ -240,13 +240,18 @@
     return card;
   }
 
+  // The tasks the Inbox holds for you (anything but a review): a run among them waits on you, so it is not also "running".
+  const waitingTasks = (items) => new Set(items.filter((item) => !item.handled && item.kind !== "review" && item.taskId).map((item) => String(item.taskId)));
   function boardOf(d, now, items, detail) {
     const cards = items.map((item) => cardOfItem(item, detail, d));
     const needs = cards.filter((card) => card.group === "needs");
     const worktrees = new Set(window.MefiWorktrees?.summary?.()?.tasks ?? []);
     const asked = new Set(items.filter((item) => item.kind === "review").map((item) => item.taskId));
+    // A run that waits on you is under Needs you, not under Running too (the session list files it the same way).
+    const waiting = waitingTasks(items);
     const running = [];
     for (const job of Array.isArray(d.running) ? d.running : []) {
+      if (job.taskId && waiting.has(String(job.taskId))) continue;
       const step = window.MefiVibeFlow?.doing?.(job) ?? { tool: "", step: "" };
       const phase = job.stopping ? "stopping" : job.phase ? String(job.phase).replace(/_/g, " ") : "working";
       const progress = Number.isFinite(job.progress) ? Math.max(0.04, Math.min(1, job.progress)) : null;
@@ -1401,8 +1406,9 @@
     if (tools.attachWords.textContent !== words) tools.attachWords.textContent = words;
   }
   // The rows of Running now and Finished while you were away: one line each, the session's state as a dot, opening the session.
-  function homeRunning(d) {
-    return (Array.isArray(d.running) ? d.running : []).map((job) => {
+  function homeRunning(d, current) {
+    const waiting = waitingTasks(current.items);
+    return (Array.isArray(d.running) ? d.running : []).filter((job) => !(job.taskId && waiting.has(String(job.taskId)))).map((job) => {
       const step = window.MefiVibeFlow?.doing?.(job) ?? { tool: "", step: "" };
       const who = clip(job.route || job.cli || step.tool || "", 40);
       const doing = job.stopping ? "stopping" : clip(step.step || job.currentStep || (job.phase ? String(job.phase).replace(/_/g, " ") : "working"), 80);
@@ -1494,7 +1500,7 @@
     const first = orderItems(current.items).find((item) => item.kind !== "review") ?? null;
     reconcile(parts.needHolder, first ? [{ key: first.key, sig: `${itemSignature(first, { compact: false }, now)}|home`, build: () => renderHomeNeed(first) }] : [{ key: "__clear", sig: "clear", build: caughtUp }]);
     const empty = (words) => [{ key: "__none", sig: words, build: () => el("p", "today-b-empty", words) }];
-    const running = homeRunning(d), finished = homeFinished(current, d, now);
+    const running = homeRunning(d, current), finished = homeFinished(current, d, now);
     reconcile(parts.running, running.length ? running.map((row) => ({ key: row.key, sig: JSON.stringify(row), build: () => homeRow(row) })) : empty("Nothing is running."));
     reconcile(parts.finished, finished.length ? finished.map((row) => ({ key: row.key, sig: JSON.stringify(row), build: () => homeRow(row) })) : empty("Nothing new."));
   }

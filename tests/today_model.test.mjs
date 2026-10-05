@@ -238,3 +238,12 @@ test("started in v2 it registers its routes, asks Vibe for its data once, and li
   const build = await loadToday({ mode: "build" });
   assert.equal(build.nav.registered.find((record) => record.id === "today").hidden(), false, "in Build it is the pinned tab's page");
 });
+
+test("a run that waits on you is under Needs you only, not under Running too", () => {
+  const picture = build(board({
+    needs: [needQuestion({ id: "q9", title: "Should the empty state also appear for a search?", context: { taskId: "t2", taskTitle: "Add an empty state" } })],
+    running: [{ taskId: "t2", title: "Add an empty state", phase: "building", startedAt: NOW - 60000 }, { taskId: "t3", title: "Search notes by tag", phase: "building", startedAt: NOW - 60000 }],
+  }));
+  assert.ok(picture.board.needs.some((card) => card.taskId === "t2"), "the question's task waits under Needs you");
+  assert.deepEqual(picture.board.running.filter((card) => card.tone === "live").map((card) => card.taskId), ["t3"], "and only the other run is Running");
+});
