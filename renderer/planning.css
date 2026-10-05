@@ -381,3 +381,48 @@ html[data-no-blur] #plans-overlay { --planning-blur: none; --planning-page-blur:
 .planning-ready:hover { border-color: var(--hairline-strong); color: var(--ivory); }
 @media (prefers-reduced-motion: reduce) { .planning-ready::before, .planning-flow-stage[data-celebrate="true"] .planning-step-icon, .planning-flow-stage[data-celebrate="true"]::before { animation: none !important; } }
 :is(.no-motion, .ws-still, html[data-motion="off"]) .planning-ready::before, :is(.no-motion, .ws-still, html[data-motion="off"]) .planning-flow-stage[data-celebrate="true"] .planning-step-icon, :is(.no-motion, .ws-still, html[data-motion="off"]) .planning-flow-stage[data-celebrate="true"]::before { animation: none !important; }
+
+/* ---- The plan draft page (the 0.5 layout; renderer/planning.js, renderDraftPage) ----
+   A plan opened from Work's Backlog reads as the 0.5 prototype's page: its name,
+   where it stands, its outcome, what to do next and its versions. The plan
+   library and the sheet's own head step aside; Open the full plan brings every
+   step back. Text is at least 12 px and follows the 0.5 text size. */
+#plans-sheet[data-view="draft"] :is(.planning-sidebar, .planning-head) { display: none; }
+#plans-sheet[data-view="draft"] .planning-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+#plans-sheet[data-view="draft"] .planning-detail { min-height: 0; padding: 28px 24px 40px; overflow-y: auto; overflow-x: hidden; }
+.planning-page { display: grid; gap: 14px; width: min(780px, 100%); margin: 0 auto; }
+/* the page's own head: the plan's name with its chips under it, not a sheet bar */
+#plans-sheet .planning-page-head { position: static; display: block; min-height: 0; margin: 0; padding: 0; border: 0; background: none; box-shadow: none; }
+.planning-page-head h2 { margin: 0 0 8px; color: var(--ivory); font: 650 max(12px, calc(22px * var(--text-scale, 1)))/1.3 var(--font-display); letter-spacing: -.01em; overflow-wrap: anywhere; }
+.planning-page-head h2::after { display: none; }
+.planning-page-head h2:focus { outline: none; }
+.planning-page-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.planning-page-chip { display: inline-flex; align-items: center; min-height: 26px; padding: 0 11px; border: 1px solid var(--planning-edge); border-radius: var(--r-pill, 999px); color: var(--ivory); font-size: max(12px, calc(12.5px * var(--text-scale, 1))); white-space: nowrap; }
+.planning-page-chip.is-plan { border-color: color-mix(in srgb, var(--idea) 55%, transparent); color: var(--idea); }
+.planning-page-note { padding: 14px 16px; border: 1px solid var(--planning-edge); border-radius: 12px; background: var(--planning-panel); color: var(--ivory); font-size: max(12px, calc(14px * var(--text-scale, 1))); line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.planning-page-out { margin: -4px 0 0; color: var(--muted); font-size: max(12px, calc(13px * var(--text-scale, 1))); line-height: 1.5; overflow-wrap: anywhere; }
+.planning-page-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+/* the next step is the studio's own primary, as in the prototype; Plans keeps its quieter one elsewhere */
+#plans-sheet .planning-page-actions > button.primary { background: linear-gradient(120deg, var(--studio-action-end, var(--gold-bright)), var(--gold)); border-color: transparent; color: var(--ink); box-shadow: inset 0 1px rgb(255 255 255 / .2); font-weight: 600; }
+#plans-sheet .planning-page-actions > button.primary:not(:disabled):hover { background: linear-gradient(120deg, var(--studio-action-end, var(--gold-bright)), var(--gold)); box-shadow: 0 4px 16px color-mix(in srgb, var(--gold) 18%, transparent); }
+.planning-page-actions > button { min-height: 36px; font-size: max(12px, calc(13.5px * var(--text-scale, 1))); }
+.planning-page-fine { margin: -4px 0 0; color: var(--muted); font-size: max(12px, calc(13px * var(--text-scale, 1))); line-height: 1.5; }
+.planning-page-versions { margin-top: 4px; overflow: hidden; border: 1px solid var(--planning-edge); border-radius: 12px; background: var(--planning-panel); }
+.planning-page-versions-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--planning-edge); }
+.planning-page-versions-head h3 { margin: 0; color: var(--ivory); font: 650 max(12px, calc(14px * var(--text-scale, 1)))/1.3 var(--font-ui); }
+.planning-page-versions-head span { color: var(--muted); font-size: max(12px, calc(13px * var(--text-scale, 1))); }
+.planning-page-version { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
+.planning-page-version + .planning-page-version { border-top: 1px solid color-mix(in srgb, var(--ivory) 7%, transparent); }
+.planning-page-mark { display: grid; flex: none; place-items: center; width: 20px; height: 20px; border: 1.5px dashed color-mix(in srgb, var(--muted) 70%, transparent); border-radius: 50%; color: var(--gold-bright); font-size: max(12px, calc(12px * var(--text-scale, 1))); }
+.planning-page-mark.is-current { border: 0; background: color-mix(in srgb, var(--gold) 22%, transparent); }
+.planning-page-version-words { display: grid; flex: 1 1 auto; gap: 2px; min-width: 0; }
+.planning-page-version-words b { color: var(--ivory); font-size: max(12px, calc(14px * var(--text-scale, 1))); font-weight: 600; overflow-wrap: anywhere; }
+.planning-page-version-words small { color: var(--muted); font-size: max(12px, calc(12.5px * var(--text-scale, 1))); }
+.planning-page-current { flex: none; color: var(--muted); font-size: max(12px, calc(12.5px * var(--text-scale, 1))); }
+.planning-page-version > button { flex: none; font-size: max(12px, calc(12.5px * var(--text-scale, 1))); }
+.planning-page-versions > button { margin: 4px 16px 12px; font-size: max(12px, calc(12.5px * var(--text-scale, 1))); }
+.planning-page-full { justify-self: start; font-size: max(12px, calc(12.5px * var(--text-scale, 1))); }
+@media (max-width: 640px) {
+  #plans-sheet[data-view="draft"] .planning-detail { padding: 18px 14px 28px; }
+  .planning-page-version { flex-wrap: wrap; }
+}

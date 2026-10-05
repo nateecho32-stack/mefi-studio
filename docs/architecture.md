@@ -2448,7 +2448,13 @@ never disagree. Nothing is drawn unless the layout is on and a shell is there.
   purpose); and **Sessions | Backlog**. The backlog lists plan drafts first
   (Plans not yet made into tasks, read with the Plans page's own
   `planning:list` when the project is taken up, the tab opens or at most every
-  30 s; a draft opens in Plans), then ideas nobody has made a task of, with
+  30 s; a draft opens in Plans as its own page, the 0.5 prototype's plan draft
+  page: its name, where it stands and the decisions left, its outcome, the
+  workflow's next step (Build it once the specification is approved, which
+  creates the tasks), Talk it over (the interview), Archive, its newest five
+  versions with Restore this version, and Open the full plan for every step;
+  `MefiPlanning.open({ planId, view: "draft" })`), then ideas nobody has made
+  a task of, with
   Scan the project (the Analyzer) and Scan chats for ideas (the palette's own
   action); under it a filter. A row's menu is open in a new tab, pin, rename
   (`tasks:action rename`), stop and delete (the board's own `tasks:delete` behind

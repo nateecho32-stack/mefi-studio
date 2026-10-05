@@ -696,7 +696,7 @@
     box.append(main, more);
     return box;
   }
-  // A backlog row: a plan draft opens in Plans, an idea in Ideas (their own pages).
+  // A backlog row: a plan draft opens as its own page in Plans (renderer/planning.js, the draft page), an idea in Ideas.
   function ideaRow(idea) {
     const plan = idea.kind === "plan";
     const box = el("div", "sx-row"); box.dataset.key = `${plan ? "plan" : "idea"}:${idea.id}`; box.dataset.tone = plan ? "plan" : "idea";
@@ -707,7 +707,7 @@
     text.append(el("span", "sx-row-top", idea.title));
     text.append(el("span", "sx-row-meta", idea.meta));
     main.append(el("i", "sx-dot"), text);
-    main.addEventListener("click", () => (plan ? window.MefiNav?.go?.("plans", { planId: idea.id }) : window.MefiNav?.go?.("ideas", { ideaId: idea.id })));
+    main.addEventListener("click", () => (plan ? window.MefiNav?.go?.("plans", { planId: idea.id, view: "draft" }) : window.MefiNav?.go?.("ideas", { ideaId: idea.id })));
     box.append(main);
     return box;
   }

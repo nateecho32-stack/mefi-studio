@@ -7,6 +7,12 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **A plan draft opens as its own page in the 0.5 layout.** A plan picked from
+  Work's Backlog now shows as one page, as in the 0.5 prototype: its name, where
+  it stands and how many decisions are left, its outcome, the next step (Build
+  it once its specification is approved, Talk it over before that), Archive, and
+  its versions with Restore this version. Open the full plan shows every step
+  as before, and Plans opened anywhere else is unchanged.
 - **A three-step first run in the 0.5 layout.** With the new layout on, a
   fresh profile meets the 0.5 prototype's welcome instead of the whole setup
   helper: connect the AI you already use (each coding tool found on this PC,
