@@ -23,15 +23,19 @@ sends a new user back through the walkthrough.
    sign-in, update and instructions available. Passwords and tokens stay with
    the CLI; the renderer receives no credentials.
 4. **Use for the whole studio** saves the subscription for Studio defaults and
-   the current project (a project that inherits the defaults follows them; one
-   with its own team gets the same change). It replaces conflicting
-   routine/heavy and seat choices,
+   every project: a project that inherits the defaults follows them, and each
+   project that saved a team of its own gets the same change (its rules and
+   name stay, and the message says how many project teams moved). It replaces
+   conflicting routine/heavy and seat choices,
    makes subtasks follow the builder, sets Auto coding tier and provider model
    defaults, and turns cross-provider fallback off. Saved per-provider models
-   and keys remain. Other projects with explicitly saved teams retain them.
+   and keys remain. While a team stays on that one subscription, Jev's intake
+   and work shaping ask it too (the assistant stand-in), and Jev keys, saved
+   or in the environment, are set aside for them.
    This choice starts a map if a project is selected, or waits for a folder.
-   The scan's **Use this setup** and Settings' **Auto setup** save to the same
-   places, so folders added later inherit the route.
+   The scan's **Use this setup** and Settings' **Auto setup** save to the
+   defaults and the open project's own team, so folders added later inherit
+   the route.
 
 ## More than one login
 
@@ -45,8 +49,9 @@ first. **Check** sends the same small prompt as Check connection on that login,
 **Sign in** reopens its window, and **Remove** forgets it and deletes its folder
 with the sign-in in it.
 
-- Every Claude Code or Codex call (chat, planning, seats, coding workers and
-  the usage read) runs on the first login that is not topped out.
+- Every Claude Code or Codex call (chat, planning, seats, the first project
+  map, coding workers and the usage read) runs on the first login that is not
+  topped out.
 - A login that reports its usage limit ("5-hour limit reached ∙ resets 3pm",
   "You've hit your limit", Codex's "try again in 4 days 3 hours") is set
   aside until the reset it names, or for half an hour while a usage reading
@@ -100,6 +105,11 @@ and rules for the turn, and disables execution, hooks, MCP and app tools.
 Antigravity uses a no-tools custom main agent and receives no prompt until its
 initial event confirms that agent and an empty tool roster. Incompatible CLI
 versions fail the connection check; Studio never retries with fewer controls.
+A text call whose caller stops waiting (the Jev stand-in after 15 s, the
+Daily editor after 60 s, the chat at its budget, the outside-work check)
+stops the CLI's process tree at that moment instead of letting it run on to
+its own three-minute limit; a call stopped that way is not counted toward
+pausing the tool, and the usage ledger keeps it as cancelled.
 Studio's configured research tools remain available through its host tool loop.
 Coding workers retain their existing execution paths and project permissions.
 

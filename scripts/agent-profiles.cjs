@@ -26,6 +26,11 @@ function store(settings = {}) {
   const source = record(settings.agentTeams) ? settings.agentTeams : {};
   return { version: 1, revision: Number(source.revision) || 0, projects: record(source.projects) ? clone(source.projects) : {}, presets: Array.isArray(source.presets) ? clone(source.presets) : [] };
 }
+// The projects that saved a team of their own; every other project follows
+// the Studio defaults. "project_none" (no folder open) never holds a team.
+function projectTeams(settings = {}) {
+  return Object.keys(store(settings).projects).filter((id) => id && id !== "project_none");
+}
 function effective(settings, projectId, snapshot) {
   const selected = snapshot?.configuration ?? store(settings).projects[projectId]?.configuration;
   if (!selected) return { ...settings };
@@ -202,4 +207,4 @@ function resume(snapshot, projectId) {
   runtime.getStore().snapshot = clone(snapshot);
   return true;
 }
-module.exports = { FIELDS, PROVIDERS, CLIS, EFFORTS, extract, effective, capabilities, useCatalog, validate, view, mutate, capture, update, run, current, resume };
+module.exports = { FIELDS, PROVIDERS, CLIS, EFFORTS, extract, effective, projectTeams, capabilities, useCatalog, validate, view, mutate, capture, update, run, current, resume };

@@ -4144,6 +4144,23 @@ async function chargeJevCall(result, purpose, route = null) {
   await flushJevCharges().catch((error) => logLine(`[jev] accounting pending: ${error.message}`));
 }
 
+// "Use for the whole studio" (cli-setup.cjs singleProvider) holds a team to
+// one subscription CLI with nothing to fall back to: the test executorRunEnv
+// makes for the builders (singleAccount). Jev's intake and work shaping then
+// ask the assistant stand-in, which rides that subscription, and never a Jev
+// route: a key in the environment (AI_GATEWAY_API_KEY, TYPESAFE_API_KEY,
+// OPENCODE_ZEN_API_KEY, OPENROUTER_API_KEY) must not send the owner's work to
+// a provider they did not pick. A Jev key saved in Settings waits too: Studio
+// does not record when a Jev route was picked, so it cannot tell one chosen
+// after this setup from a key saved long before it, and the subscription the
+// owner chose for the whole studio wins until the team allows fallbacks or
+// moves to another provider. That provider, or null.
+async function jevSubscriptionOnly() {
+  const team = await (typeof readAgentSettings === "function" ? readAgentSettings() : readSettings());
+  const only = team?.aiAutoFallback === false && Array.isArray(team.aiAutoProviders) && team.aiAutoProviders.length === 1 ? team.aiAutoProviders[0] : null;
+  return only && only === team.executorCli && ["claude", "codex", "grok", "antigravity"].includes(only) ? only : null;
+}
+
 async function runJevIntake(additions) {
   const settings = await readSettings();
   if (settings.jevShadow === false) return { ok: true, defer: true, reason: "disabled" };
@@ -4152,12 +4169,14 @@ async function runJevIntake(additions) {
     loadModule("scripts/work-classification.mjs"), getEyes(),
   ]);
   const route = client.resolveJevRoute(settings);
-  const resolved = client.resolveApiKey({ settings, decrypt: decryptKey, route });
+  // One subscription for the whole studio: its stand-in, never a Jev key.
+  const only = typeof jevSubscriptionOnly === "function" ? await jevSubscriptionOnly() : null;
+  const resolved = only ? null : client.resolveApiKey({ settings, decrypt: decryptKey, route });
   // No Jev key: the stand-in judge chosen at first run (the assistant model,
   // or a free OpenCode model through the CLI) answers the same questions and
   // its proposals are recorded the same way. Its calls are not Jev calls, so
   // the Jev ledger is left alone.
-  const standIn = !resolved && typeof standInJudge === "function" ? await standInJudge(settings, "intake") : null;
+  const standIn = !resolved && typeof standInJudge === "function" ? await standInJudge(settings, "intake", { provider: only }) : null;
   if (!resolved && !standIn) return { ok: true, defer: true, reason: "no-key" };
   if (!standIn) {
     try { await flushJevCharges(); }
@@ -4305,8 +4324,10 @@ async function classifyPendingWork() {
   if (!pending.length) return { ok: true, attempted: false, shaped: 0 };
 
   const route = client.resolveJevRoute(settings);
-  const resolved = client.resolveApiKey({ settings, decrypt: decryptKey, route });
-  const standIn = !resolved && typeof standInJudge === "function" ? await standInJudge(settings, "intake") : null;
+  // One subscription for the whole studio: its stand-in, never a Jev key (jevSubscriptionOnly).
+  const only = typeof jevSubscriptionOnly === "function" ? await jevSubscriptionOnly() : null;
+  const resolved = only ? null : client.resolveApiKey({ settings, decrypt: decryptKey, route });
+  const standIn = !resolved && typeof standInJudge === "function" ? await standInJudge(settings, "intake", { provider: only }) : null;
   if (!resolved && !standIn) return { ok: true, defer: true, reason: "no-key" };
   if (!standIn) {
     try { await flushJevCharges(); }
@@ -5396,15 +5417,20 @@ function routingSettingsKey(settings) {
 // serves batch intake only; per-task routing keeps Jev's 4 s budget and
 // therefore accepts the assistant kind alone. Answers are revalidated by the
 // same code that checks Jev's, and none of this touches a Jev key.
-async function standInJudge(settings, purpose = "routing") {
-  const saved = settings?.firstRun?.judge ?? null;
+// `provider` names the one subscription a team is held to
+// (jevSubscriptionOnly): the assistant answers on it whatever judge the first
+// scan saved, since a free OpenCode model would be another provider.
+async function standInJudge(settings, purpose = "routing", { provider = null } = {}) {
+  const saved = provider ? { kind: "assistant" } : settings?.firstRun?.judge ?? null;
   if (!saved || !["assistant", "opencode-free"].includes(saved.kind)) return null;
   if (saved.kind === "opencode-free" && purpose !== "intake") return null;
   const judge = await loadModule("scripts/choice-judge.mjs");
   const timeoutMs = purpose === "intake" ? 15000 : 4000;
   if (saved.kind === "assistant") {
-    const transport = async ({ system, user }) => {
-      const call = await assistantFetch(system, user, 600, { role: "routine", taskType: "judge" });
+    // judgeClassify stops waiting at `timeoutMs`; a CLI route is stopped then
+    // too (cliAssistantCall's deadline) rather than answering nobody.
+    const transport = async ({ system, user, timeoutMs }) => {
+      const call = await assistantFetch(system, user, 600, { role: "routine", taskType: "judge", timeoutMs });
       return call?.ok ? { ok: true, text: call.text, model: call.model ?? null, usage: call.tokenUsage ?? null } : { ok: false, error: call?.error ?? "assistant unavailable" };
     };
     return { kind: "assistant", model: null, timeoutMs,
@@ -6952,16 +6978,21 @@ async function executorRunEnv({ cliOverride = null } = {}) {
   return opencodeRoute();
 }
 
-async function assistantFetch(system, user, maxTokens = 6000, { role = "routine", taskType = role, allowCli = true, skillRole = role } = {}) {
+// `timeoutMs` is how long a caller that gives up (the Jev stand-in, the chat)
+// waits when the route is a coding CLI: one deadline across the tool loop's
+// turns, after which cliAssistantCall stops the CLI. HTTP keeps its own abort.
+async function assistantFetch(system, user, maxTokens = 6000, { role = "routine", taskType = role, allowCli = true, skillRole = role, timeoutMs = null } = {}) {
+  const until = Number(timeoutMs) > 0 ? Date.now() + Number(timeoutMs) : null;
+  const left = () => (until === null ? null : Math.max(1, until - Date.now()));
   if (typeof agentProfiles !== "undefined" && !agentProfiles.current()) {
     const snapshot = agentProfiles.capture(await readSettings(), projects.current().id);
-    return agentProfiles.run(snapshot, () => assistantFetch(system, user, maxTokens, { role, taskType, allowCli, skillRole }));
+    return agentProfiles.run(snapshot, () => assistantFetch(system, user, maxTokens, { role, taskType, allowCli, skillRole, timeoutMs: left() }));
   }
   if (typeof agentAddons !== "undefined" && skillRole) system += scrubOutbound(await agentAddons.instructions(projectRoot(), await readAgentSettings(), skillRole));
   if (typeof agentTools !== "undefined" && !agentTools.active.getStore() && taskType !== "ai-probe") {
     return agentTools.run({ system, user, root: projectRoot(), settings: await readAgentSettings(), role: skillRole || role, scrub: scrubOutbound,
       onTool: (tool) => logLine(`[tools:${skillRole || role}] ${tool.name}: ${tool.ok ? "completed" : "failed"}`),
-      call: (prompt, input) => assistantFetch(prompt, input, maxTokens, { role, taskType, allowCli: allowCli === false ? false : DATA_ONLY_CLIS, skillRole: null }) });
+      call: (prompt, input) => assistantFetch(prompt, input, maxTokens, { role, taskType, allowCli: allowCli === false ? false : DATA_ONLY_CLIS, skillRole: null, timeoutMs: left() }) });
   }
   // The transmission gate. Every assistant call — chat, the cadence passes,
   // the overseer, ideas, the analyzer, setup assist, the judge and the probe —
@@ -6981,7 +7012,7 @@ async function assistantFetch(system, user, maxTokens = 6000, { role = "routine"
   // a missing binary, a timeout or an empty reply falls back once to the
   // keyed HTTP routes — the rest of the auto order, never back to a CLI.
   if (route.cli === true || route.provider === "grok" || route.provider === "claude" || route.provider === "codex" || route.provider === "antigravity") {
-    return cliAssistantCall(route, system, user, maxTokens, { role, taskType });
+    return cliAssistantCall(route, system, user, maxTokens, { role, taskType, timeoutMs: left() });
   }
   return httpAssistantCall(route, system, user, maxTokens, { taskType, role });
 }
@@ -7007,13 +7038,22 @@ async function textCallEffort(route, role, effort = null) {
   const start = modelLadder.startLevel({ mode, explicit: supported.includes(own) ? own : null });
   return modelLadder.fitEffort(supported, modelLadder.effortOf(start.level));
 }
-async function cliAssistantCall(route, system, user, maxTokens, { role = "routine", taskType = role, source = "request", fallback = true, effort = null } = {}) {
+// `timeoutMs` is the caller's deadline. A caller that stops waiting before
+// cli-text's own 180 s (the Jev stand-in's 15 s, the Daily editor's 60 s, the
+// chat's budget) passes it, so the CLI's process tree is killed then instead
+// of running on, on the owner's subscription, for an answer nobody reads. A
+// call stopped that way is `abandoned`: the breaker leaves the route's record
+// alone and the ledger keeps the row as cancelled, not as a failure.
+// `onSpawn` hears each CLI child (the first map cancels through it).
+async function cliAssistantCall(route, system, user, maxTokens, { role = "routine", taskType = role, source = "request", fallback = true, effort = null, timeoutMs = null, onSpawn = null } = {}) {
+  const until = Number(timeoutMs) > 0 ? Date.now() + Number(timeoutMs) : null;
+  const left = () => (until === null ? null : until - Date.now());
   if (typeof agentTools !== "undefined" && !agentTools.active.getStore() && taskType !== "ai-probe") {
     const settings = await readAgentSettings();
     if (typeof agentAddons !== "undefined") system += scrubOutbound(await agentAddons.instructions(projectRoot(), settings, role));
     return agentTools.run({ system, user, root: projectRoot(), settings, role, scrub: scrubOutbound,
       onTool: (tool) => logLine(`[tools:${role}] ${tool.name}: ${tool.ok ? "completed" : "failed"}`),
-      call: (prompt, input) => cliAssistantCall(route, prompt, scrubOutbound(input), maxTokens, { role, taskType, source, effort }) });
+      call: (prompt, input) => cliAssistantCall(route, prompt, scrubOutbound(input), maxTokens, { role, taskType, source, effort, timeoutMs: until === null ? null : Math.max(1, left()), onSpawn }) });
   }
   const thinkingEffort = typeof textCallEffort === "function" ? await textCallEffort(route, role, effort).catch(() => null) : null;
   // A paused CLI is not spawned at all — its failures tend to run to the
@@ -7030,10 +7070,25 @@ async function cliAssistantCall(route, system, user, maxTokens, { role = "routin
     // A picture on the message is only named to a CLI, in one plain line (the "Picture attachments" block).
     const said = typeof imageCliText === "function" ? imageCliText(user) : user;
     try {
-      cli = await turn(route.provider, (login) => route.provider === "grok" ? grokCompletion(system, said, route.model)
-        : route.provider === "claude" ? claudeCompletion(system, said, route.model, { ...login, effort: thinkingEffort })
-          : route.provider === "codex" ? codexCompletion(system, said, route.model, { ...login, effort: thinkingEffort })
-            : antigravityCompletion(system, said, route.model));
+      cli = await turn(route.provider, async (login) => {
+        // Each login gets what is left of the deadline. With under a second
+        // left no CLI could start and answer before its caller is gone, so
+        // none is started.
+        if (until !== null && left() < 1000) return { ok: false, abandoned: true, error: `${route.provider} was not started: its caller had stopped waiting` };
+        const options = { ...login, ...(until === null ? {} : { timeoutMs: left() }), ...(onSpawn ? { onSpawn } : {}) };
+        // How hard Claude Code and Codex think (textCallEffort); Grok and
+        // Antigravity take no effort.
+        const thinking = thinkingEffort ? { ...options, effort: thinkingEffort } : options;
+        const reply = await (route.provider === "grok" ? grokCompletion(system, said, route.model, options)
+          : route.provider === "claude" ? claudeCompletion(system, said, route.model, thinking)
+            : route.provider === "codex" ? codexCompletion(system, said, route.model, thinking)
+              : antigravityCompletion(system, said, route.model, options));
+        // A failure at the deadline is cli-text stopping the CLI there (its
+        // timer and this clock may differ by a few milliseconds).
+        return until !== null && !reply?.ok && left() < 250
+          ? { ...reply, abandoned: true, error: `${route.provider} timed out after ${Math.round(Number(timeoutMs) / 1000)} s, when its caller stopped waiting` }
+          : reply;
+      });
     } finally {
       settleProvider(route.provider, gate, cli);
     }
@@ -7041,7 +7096,7 @@ async function cliAssistantCall(route, system, user, maxTokens, { role = "routin
     if (!cli.toppedOut) {
       const observationId = crypto.randomUUID();
       await recordModelCall({ id: observationId, model: cli.model || route.model || `${route.provider}-default`, provider: route.provider, taskType, source,
-        at: startedAt, elapsedMs: Date.now() - startedAt, status: cli.ok ? "ok" : "error", errorKind: cli.ok ? null : "cli", tokenUsage: cli.tokenUsage ?? {}, costUsd: cli.costUsd ?? null,
+        at: startedAt, elapsedMs: Date.now() - startedAt, status: cli.ok ? "ok" : cli.abandoned ? "cancelled" : "error", errorKind: cli.ok || cli.abandoned ? null : "cli", tokenUsage: cli.tokenUsage ?? {}, costUsd: cli.costUsd ?? null,
         ...(thinkingEffort ? { requestedEffort: thinkingEffort, appliedEffort: thinkingEffort } : {}) });
       cli.observationId = observationId;
     }
@@ -7052,6 +7107,8 @@ async function cliAssistantCall(route, system, user, maxTokens, { role = "routin
   }
   const settings = await (typeof readAgentSettings === "function" ? readAgentSettings() : readSettings());
   if (!fallback || !autoFallbackEnabled(settings)) return cli;
+  // Past the caller's deadline a keyed retry would answer no one.
+  if (until !== null && left() < 1000) return cli;
   const http = await resolveAiRoute(role, { allowCli: false });
   if (!http.ok) return cli;
   const retried = await httpAssistantCall(http, system, user, maxTokens, { taskType, source, role });
@@ -7172,6 +7229,10 @@ const providerLastFailure = new Map();
 const providerName = (provider) => AUTO_PROVIDER_NAMES[provider] ?? provider;
 
 function settleProvider(provider, gate, result) {
+  // A CLI call stopped because its caller stopped waiting (cliAssistantCall's
+  // deadline) says nothing about the route: a slow answer is not an outage,
+  // so it neither counts toward a pause nor clears one.
+  if (result?.abandoned === true) { gate.settle(null); return; }
   // Every login known to be topped out started no call and broke nothing:
   // pausing the provider for it would outlast the reset.
   const failed = !result || (!result.ok && result.errorKind !== "validation" && result.toppedOut !== true);
@@ -10359,6 +10420,10 @@ function assistantStaleWork(now) {
   );
 }
 
+// A scout on a coding CLI is said in the log once per run of Studio, not
+// once per task.
+let scoutCliNoted = false;
+
 // A resumed reference gather lands on its task the way the renderer does.
 // Exact matches are saved before this optional pass. Luna only chooses among
 // paths the local analyzer actually found, so an invented path cannot enter
@@ -10368,6 +10433,19 @@ async function lunaContextPointer(text, references) {
   if (!files.length) return null;
   const settings = await (typeof readAgentSettings === "function" ? readAgentSettings() : readSettings());
   if (settings.agentBrain?.contextScout === false) return null;
+  // A scout on a coding CLI makes no call. `claude -p` and the other CLIs
+  // cannot start and answer within the 8 s this pointer waits, so the answer
+  // was always dropped while the CLI ran on for minutes on the owner's
+  // subscription, once for every task made from chat. The local matches
+  // already stand on the task. Zen and the other HTTP routes go on as before.
+  const cli = typeof seatCli === "function" ? await seatCli("scout", settings).catch(() => null) : null;
+  if (cli) {
+    if (!scoutCliNoted) {
+      scoutCliNoted = true;
+      logLine(`[scout] the scout seat rides the ${cli} CLI, which cannot answer within the scout's 8 s: tasks keep their local code matches and no ${cli} call is made for them`);
+    }
+    return null;
+  }
   const chosen = seatChoice(settings, "scout");
   // Each string is scrubbed before serializing: JSON-escaped home paths and
   // quoted keys slip past the redaction patterns.
@@ -11201,8 +11279,9 @@ async function outsideWorkCheck(project, reason = "") {
   if (asked.length && await assistantKeyPresent() && !(Number(assistantState?.ai?.backoffUntil) > Date.now())) {
     const prompt = outsideWork.relevancePrompt({ report: rep, cards: asked, root });
     let timer = null;
+    // The same limit stops a CLI route when the check stops waiting.
     const call = await Promise.race([
-      assistantFetch(prompt.system, prompt.user, 1500, { taskType: "relevance", allowCli: DATA_ONLY_CLIS, skillRole: null }).catch((error) => ({ ok: false, error: error?.message ?? String(error) })),
+      assistantFetch(prompt.system, prompt.user, 1500, { taskType: "relevance", allowCli: DATA_ONLY_CLIS, skillRole: null, timeoutMs: OUTSIDE_CHECK_TIMEOUT_MS }).catch((error) => ({ ok: false, error: error?.message ?? String(error) })),
       new Promise((resolve) => { timer = setTimeout(() => resolve({ ok: false, timedOut: true }), OUTSIDE_CHECK_TIMEOUT_MS); }),
     ]);
     clearTimeout(timer);
@@ -12399,10 +12478,12 @@ async function assistantOverseerTurn({ user, text, intent, facts, did, slot, foc
   // (model, ordering wait, actions) must fit the pool's 150 s job deadline.
   const budgetMs = route.cli ? 90000 : 45000;
   let timer = null;
+  // A reply abandoned at the budget stops a CLI too (cliTimeoutMs/timeoutMs:
+  // cliAssistantCall's deadline); an HTTP reply keeps its own abort.
   const ask = () => Promise.race([
     typeof seatFetch === "function"
-      ? seatFetch("companion", chatSystem, body, 1500, { fallback: (system = chatSystem) => assistantFetch(system, body, 1500, { taskType: "conversation", allowCli: DATA_ONLY_CLIS, skillRole: null }) })
-      : assistantFetch(chatSystem, body, 1500, { taskType: "conversation", allowCli: DATA_ONLY_CLIS }),
+      ? seatFetch("companion", chatSystem, body, 1500, { fallback: (system = chatSystem) => assistantFetch(system, body, 1500, { taskType: "conversation", allowCli: DATA_ONLY_CLIS, skillRole: null, timeoutMs: budgetMs }), cliTimeoutMs: budgetMs })
+      : assistantFetch(chatSystem, body, 1500, { taskType: "conversation", allowCli: DATA_ONLY_CLIS, timeoutMs: budgetMs }),
     new Promise((resolve) => (timer = setTimeout(() => resolve({ ok: false, timedOut: true, error: `no reply within ${Math.round(budgetMs / 1000)} s` }), budgetMs))),
   ]);
   // A picture on the message rides a scope around the call, so every request it makes can carry it.
@@ -15123,8 +15204,13 @@ function seatChoice(settings, seat) {
   return { provider, model, effort, fast };
 }
 // `onTool` also hears each tool turn (Vibe shows the lead's while it sizes).
-async function seatFetch(seat, system, user, maxTokens = 2400, { fallback = null, timeoutMs = 120000, onTool = null } = {}) {
-  if (typeof agentProfiles !== "undefined" && !agentProfiles.current()) return agentProfiles.run(agentProfiles.capture(await readSettings(), projects.current().id), () => seatFetch(seat, system, user, maxTokens, { fallback, timeoutMs, onTool }));
+// `timeoutMs` bounds each HTTP call. `cliTimeoutMs` is how long a caller that
+// gives up (the chat) waits for a seat on a coding CLI: one deadline across
+// the tool loop's turns, after which the CLI is stopped (cliAssistantCall).
+async function seatFetch(seat, system, user, maxTokens = 2400, { fallback = null, timeoutMs = 120000, onTool = null, cliTimeoutMs = null } = {}) {
+  const until = Number(cliTimeoutMs) > 0 ? Date.now() + Number(cliTimeoutMs) : null;
+  const cliLeft = () => (until === null ? null : Math.max(1, until - Date.now()));
+  if (typeof agentProfiles !== "undefined" && !agentProfiles.current()) return agentProfiles.run(agentProfiles.capture(await readSettings(), projects.current().id), () => seatFetch(seat, system, user, maxTokens, { fallback, timeoutMs, onTool, cliTimeoutMs: cliLeft() }));
   const settings = await (typeof readAgentSettings === "function" ? readAgentSettings() : readSettings());
   const chosen = seatChoice(settings, seat);
   if (typeof agentAddons !== "undefined" && (typeof agentTools === "undefined" || !agentTools.active.getStore())) system += scrubOutbound(await agentAddons.instructions(projectRoot(), settings, seat));
@@ -15134,7 +15220,7 @@ async function seatFetch(seat, system, user, maxTokens = 2400, { fallback = null
         logLine(`[tools:${seat}] ${tool.name}: ${tool.ok ? "completed" : "failed"}`);
         try { onTool?.(tool); } catch { /* a listener never breaks the call */ }
       },
-      call: (prompt, input) => seatFetch(seat, prompt, input, maxTokens, { fallback, timeoutMs }) });
+      call: (prompt, input) => seatFetch(seat, prompt, input, maxTokens, { fallback, timeoutMs, cliTimeoutMs: cliLeft() }) });
   }
   if (chosen.provider === "zen") {
     const zenKey = decryptKey(settings, "zenApiKeyEncrypted");
@@ -15157,14 +15243,30 @@ async function seatFetch(seat, system, user, maxTokens = 2400, { fallback = null
       if (!route.ok) return route;
       const options = { role: "heavy", taskType: `seat-${seat}`, source: `seat:${seat}`, pinned: true };
       // A seat on Claude Code or Codex thinks at its own saved effort too.
-      if (route.cli) return cliAssistantCall(route, system, scrubOutbound(user), maxTokens, { ...options, effort: chosen.effort || null });
+      if (route.cli) return cliAssistantCall(route, system, scrubOutbound(user), maxTokens, { ...options, effort: chosen.effort || null, timeoutMs: cliLeft() });
       const support = agentProfiles.capabilities(route.provider, route.model);
       return httpAssistantCall(route, system, scrubOutbound(user), maxTokens, { ...options, effort: support.efforts.includes(chosen.effort) ? chosen.effort : null, timeoutMs });
     });
   }
   // A caller with its own route keeps it when the seat's provider is out.
   if (typeof fallback === "function") return fallback(system, true);
-  return assistantFetch(system, user, maxTokens, { role: "heavy", taskType: `seat-${seat}`, skillRole: null });
+  return assistantFetch(system, user, maxTokens, { role: "heavy", taskType: `seat-${seat}`, skillRole: null, timeoutMs: cliLeft() });
+}
+
+// Which coding CLI a seat's call would start, found the way seatFetch finds
+// its route but without making the call (keep the two in step): a seat named
+// for a CLI always rides it; Zen on its own key and every other named
+// provider never do (their rescue walk is HTTP only); an "auto" seat or a
+// keyless Zen one takes the heavy route, which can. Null for an HTTP call.
+async function seatCli(seat, settings) {
+  const chosen = seatChoice(settings, seat);
+  if (DATA_ONLY_CLIS.has(chosen.provider)) return chosen.provider;
+  if (chosen.provider !== "auto" && (chosen.provider !== "zen" || decryptKey(settings, "zenApiKeyEncrypted"))) return null;
+  const heavy = roleProvider(settings, "heavy");
+  if (DATA_ONLY_CLIS.has(heavy)) return heavy;
+  if (heavy !== "auto") return null;
+  const route = await resolveAiRoute("heavy");
+  return route?.ok && route.cli ? route.provider : null;
 }
 
 // ---- the Policy Lab's observation-only recorder (build brief PR1) ---------------
@@ -23308,11 +23410,12 @@ function registerIpc() {
       const account = cliAccountFind(await readSettings(), id);
       return account && !account.main && account.provider === provider ? cliAccounts.accountEnv(account) : null;
     } });
-  // Setup describes this machine, not one folder. First-run and subscription
-  // setup write Studio defaults, so the next folder added inherits the route,
-  // and also the open project's own team when it keeps one (a project that
-  // inherits the defaults simply follows them). Other projects' saved teams
-  // are left alone.
+  // Setup describes this machine, not one folder. First-run setup writes
+  // Studio defaults, so the next folder added inherits the route, and also the
+  // open project's own team when it keeps one (a project that inherits the
+  // defaults simply follows them); other projects' saved teams are left alone.
+  // "Use for the whole studio" (setup:cli-use) goes further and switches every
+  // project's saved team as well (cliSetup.singleProviderEverywhere).
   function setupEverywhere(raw, mutate) {
     const refusal = mutate(raw);
     if (refusal === false || refusal?.ok === false) return refusal;
@@ -23350,8 +23453,11 @@ function registerIpc() {
   ipcMain.handle("setup:cli-use", async (_event, id) => {
     if (!cliSetup.SUBSCRIPTIONS.includes(id)) return { ok: false, error: "Choose a subscription CLI." };
     if (!(await codingCliStatus()).some((cli) => cli.id === id && cli.installed)) return { ok: false, error: "Install this tool before using it." };
+    // The whole studio: the defaults and every project team saved on this PC,
+    // each keeping its own rules. The count goes back in the message.
+    let teams = 0;
     await updateSettings((settings) => {
-      setupEverywhere(settings, (next) => { cliSetup.singleProvider(next, id); });
+      teams = cliSetup.singleProviderEverywhere(settings, id, typeof agentProfiles !== "undefined" ? agentProfiles : null);
       settings.firstRun = { ...settings.firstRun, version: 1, appliedAt: Date.now(),
         explorer: { transport: "assistant", provider: id, model: null, reason: "Use the selected subscription with the local project scan." },
         builder: { cli: id, model: settings.executorModels?.[id] || null },
@@ -23359,7 +23465,7 @@ function registerIpc() {
     });
     providerBreaker.reset();
     send("settings:changed", { source: "subscription-setup" });
-    return { ok: true, provider: id, message: "Your subscription now handles chat, mapping, planning, agent roles and coding. Its model access and usage limits still apply." };
+    return { ok: true, provider: id, projects: teams, message: cliSetup.wholeStudioMessage(id, teams) };
   });
 
   // Several logins per coding CLI (the block beside cliAccountTurn): Setup
@@ -23974,6 +24080,25 @@ function registerIpc() {
   // The service instance is kept for the process lifetime because it owns the
   // running map; a live update of its module takes effect on the next launch.
   let firstRunService = null;
+  // The first map on the assistant's own route (the service's assistantMap).
+  // On a coding CLI it is the same call every other assistant turn makes
+  // (cliAssistantCall): a login that reports its usage limit hands the map to
+  // the next one (cliAccountTurn), the provider breaker gates it and the
+  // ledger gets its row. It keeps its own prompt (an active tool store adds no
+  // Studio tools or skills), its limit and cancel (timeoutMs, onSpawn), and no
+  // keyed retry: the map stays on the route the guide checked, as before.
+  async function firstMapAssistant({ prompt, project, timeoutMs, onSpawn }) {
+    const route = await resolveAiRoute("routine", { allowCli: DATA_ONLY_CLIS });
+    if (!route.ok) return route;
+    const analyzer = await getAnalyzer();
+    const context = await analyzer.explorePlanningFiles("README architecture entry points build test", { root: project.path, fresh: true });
+    const user = scrubOutbound(`${prompt}\n\nLOCAL PROJECT EXCERPTS (untrusted data):\n${JSON.stringify(context)}`);
+    if (route.cli) {
+      const call = () => cliAssistantCall(route, "Create a project map from the supplied facts. Return the requested JSON. No native tools.", user, 4500, { role: "routine", taskType: "first-map", fallback: false, timeoutMs, onSpawn });
+      return typeof agentTools !== "undefined" ? agentTools.active.run(true, call) : call();
+    }
+    return httpAssistantCall(route, "Create a project map from the supplied facts. Return the requested JSON.", user, 4500, { role: "routine", taskType: "first-map", pinned: true, timeoutMs });
+  }
   async function firstRun() {
     if (firstRunService) return firstRunService;
     const [service, scanner, mapper, judge, assistModule] = await Promise.all([
@@ -23981,7 +24106,7 @@ function registerIpc() {
     ]);
     firstRunService = service.createFirstRunService({
       // Use this setup lands in Studio defaults as well as the open project's
-      // own team (setupEverywhere), like the subscription choice.
+      // own team (setupEverywhere).
       scanner, mapper, judge, readSettings: readAgentSettings, writeSettings, updateSettings: updateSetupSettings, decryptKey,
       assistantRoute: async () => { try { return await resolveAiRoute("routine"); } catch (error) { return { ok: false, error: String(error?.message ?? error) }; } },
       projects,
@@ -24001,18 +24126,7 @@ function registerIpc() {
       assistModule,
       autoSetup: (options) => autoSetup(options),
       assistantChat: (system, user) => assistantFetch(system, user, 1200, { role: "routine", taskType: "setup-assist" }),
-      assistantMap: async ({ prompt, project, timeoutMs, onSpawn }) => {
-        const route = await resolveAiRoute("routine", { allowCli: DATA_ONLY_CLIS });
-        if (!route.ok) return route;
-        const analyzer = await getAnalyzer();
-        const context = await analyzer.explorePlanningFiles("README architecture entry points build test", { root: project.path, fresh: true });
-        const user = scrubOutbound(`${prompt}\n\nLOCAL PROJECT EXCERPTS (untrusted data):\n${JSON.stringify(context)}`);
-        if (route.cli) {
-          const complete = { codex: codexCompletion, claude: claudeCompletion, grok: grokCompletion, antigravity: antigravityCompletion }[route.provider];
-          return complete("Create a project map from the supplied facts. Return the requested JSON. No native tools.", user, route.model, { timeoutMs, onSpawn });
-        }
-        return httpAssistantCall(route, "Create a project map from the supplied facts. Return the requested JSON.", user, 4500, { role: "routine", taskType: "first-map", pinned: true, timeoutMs });
-      },
+      assistantMap: firstMapAssistant,
       readMapFile: async (name) => (await getEyes()).readJson(path.join(STUDIO_ROOT, "data", name), null),
       smoke: SMOKE || CAPTURE || CLI_MODE,
     });
@@ -24485,13 +24599,17 @@ function registerIpc() {
     fetch: globalThis.fetch, readFile, writeFile, mkdir,
     dir: path.join(app.getPath("userData"), "news"), log: logLine, version: app.getVersion(),
     enabled: async () => !SMOKE && !CAPTURE && (await readSettings().catch(() => ({})))?.ui?.dailyNews !== false,
-    edit: async (system, user) => {
+    edit: async (system, user, { timeoutMs = null } = {}) => {
+      const until = Number(timeoutMs) > 0 ? Date.now() + Number(timeoutMs) : null;
       const route = await resolveAiRoute("routine", { allowCli: DATA_ONLY_CLIS });
       if (!route?.ok) return null;
       // Headlines are untrusted text: the editor runs with no Studio tools
       // (an active tool store makes agentTools.run a plain call) and a
       // data-only CLI, so a feed can never drive a search or an MCP action.
-      const call = () => (route.cli ? cliAssistantCall : httpAssistantCall)(route, system, user, 1800, { role: "routine", taskType: "daily-news", source: "daily-news" });
+      // The paper stops waiting after timeoutMs; a CLI editor is stopped then
+      // too (cliAssistantCall's deadline), an HTTP one keeps its own abort.
+      const deadline = route.cli && until !== null ? { timeoutMs: Math.max(1, until - Date.now()) } : {};
+      const call = () => (route.cli ? cliAssistantCall : httpAssistantCall)(route, system, user, 1800, { role: "routine", taskType: "daily-news", source: "daily-news", ...deadline });
       const reply = typeof agentTools !== "undefined" ? await agentTools.active.run(true, call) : await call();
       return reply?.ok ? reply.text : null;
     },
