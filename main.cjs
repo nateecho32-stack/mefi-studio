@@ -2378,6 +2378,7 @@ const hubNowPlaying = (track) => hubCall((client) => ({ ok: client.setNowPlaying
 const HUB_ROOM_METHODS = Object.freeze({
   createRoom: 1, requestJoin: 2, requests: 0, decide: 2, cancelRequest: 1, invite: 2, invites: 0, acceptInvite: 1, declineInvite: 1,
   leave: 1, removeMember: 2, lock: 1, unlock: 1, close: 1, searchMembers: 1, messages: 2, report: 3, sendMessage: 2, editMessage: 3, deleteMessage: 2,
+  roomCode: 1, newRoomCode: 1, joinCode: 1, online: 0, setOnlineVisible: 1,
 });
 function hubRoom(method, args) {
   const arity = Object.hasOwn(HUB_ROOM_METHODS, method) ? HUB_ROOM_METHODS[method] : -1;

@@ -56,7 +56,8 @@ function environment({ status = { configured: true, linked: true, state: "ready"
     ...extra,
   } : undefined;
   const window = { mefiStudio: api, confirm: () => true };
-  const context = vm.createContext({ window, document: { createElement: (tag) => new Element(tag) }, Date, Number, Array, Set, Map, Promise, JSON, Object, String });
+  // Timers do nothing here: the Online list's 30-second refresh never fires in a test.
+  const context = vm.createContext({ window, document: { createElement: (tag) => new Element(tag) }, Date, Number, Array, Set, Map, Promise, JSON, Object, String, setTimeout: () => 0, clearTimeout: () => {} });
   vm.runInContext(source, context);
   return { rooms: window.MefiRooms, window, calls, push: (event) => hubEvent(event), setStatus: (next) => { status = next; }, hearing: () => hearing, setLists: (next) => { requests = next.requests ?? requests; invites = next.invites ?? invites; } };
 }
@@ -383,4 +384,58 @@ test("every room says moderators can read it; a cowork room offers to carry the 
   panel.find("rooms-cowork-link").click();
   await flush();
   assert.deepEqual(links, ["room_work", null], "and can stop");
+});
+
+test("connecting made simple: the Lobby opens by itself, a code joins, a room shows its invite, Online invites in one press", async () => {
+  const lobby = room({ id: "lobby", name: "Lobby", you: "member", ownerId: null, memberCount: 3, maxMembers: 1000 });
+  const mine = room({ id: "room_mine", name: "Lo-fi corner", you: "owner" });
+  const env = environment({
+    status: { configured: true, linked: true, state: "ready", user: ME, lobby: true, joinCodes: true, online: true },
+    rooms: [lobby, mine],
+    replies: {
+      messages: { ok: true, messages: [], hasMore: false },
+      joinCode: (code) => (code.includes("BAD") ? { ok: false, error: "not-found", reason: "code" } : { ok: true, room: room({ id: "room_joined", name: "Friday jam", you: "member" }) }),
+      roomCode: { ok: true, code: "7K3Q-M2XR", link: "https://mefi-relay.mefi-studio.workers.dev/join/7K3QM2XR" },
+      online: { ok: true, people: [{ id: FRIEND.id, name: "Aksana", rank: "ember", specialRanks: [] }], visible: true },
+      invite: { ok: true, invite: { id: "inv_1" } },
+    },
+  });
+  const panel = env.rooms.panel();
+  await flush();
+  assert.equal(panel.dataset.view, "room", "Friends opens straight into the Lobby");
+  assert.match(panel.find("rooms-privacy").textContent, /Everyone signed in to Studio/);
+  assert.equal(panel.buttons("Leave room").length, 0, "nobody leaves the Lobby");
+  assert.equal(panel.find("rooms-invite"), null, "the Lobby needs no invite");
+
+  panel.find("rooms-back").click();
+  await flush();
+  panel.find("rooms-join-code").value = "BAD-CODE";
+  panel.find("rooms-join").click();
+  await flush();
+  assert.equal(panel.find("rooms-status").textContent, "That code didn't match a room. Check it and try again.");
+  panel.find("rooms-join-code").value = "7k3q m2xr";
+  panel.find("rooms-join").click();
+  await flush();
+  assert.deepEqual(env.calls.find(([method, code]) => method === "joinCode" && code !== "BAD-CODE"), ["joinCode", "7k3q m2xr"]);
+  assert.equal(panel.dataset.view, "room", "a joined room opens");
+
+  panel.find("rooms-back").click();
+  await flush();
+  panel.all().find((item) => item.dataset?.room === "room_mine")?.children.flatMap((child) => child.all?.() ?? [child]).find((item) => item.tagName === "BUTTON")?.click();
+  await flush();
+  assert.equal(panel.byClass("rooms-code")[0].textContent, "7K3Q-M2XR");
+  panel.find("rooms-copy-invite").click();
+  await flush();
+  assert.equal(panel.find("rooms-status").textContent, "Your code is 7K3Q-M2XR.", "without a clipboard the code is shown");
+
+  panel.find("rooms-back").click();
+  await flush();
+  panel.find("rooms-tab-online").click();
+  await flush();
+  assert.equal(panel.find("rooms-tab-online").textContent, "Online (1)");
+  assert.equal(panel.find("rooms-online-visible").checked, true);
+  panel.buttons("Invite to Lo-fi corner")[0].click();
+  await flush();
+  assert.deepEqual(env.calls.find(([method]) => method === "invite"), ["invite", "room_mine", FRIEND.id]);
+  assert.match(panel.find("rooms-status").textContent, /^Invited Aksana to Lo-fi corner/);
 });

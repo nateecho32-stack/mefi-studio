@@ -10,7 +10,7 @@
 // What is kept, and why, is listed in relay/README.md. Chat text, files, IP
 // addresses and Discord tokens are never written here.
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 // One statement per entry: Cloudflare's exec runs a single statement when it has bindings.
 const V1 = [
@@ -173,9 +173,18 @@ const V2 = [
   `CREATE TABLE IF NOT EXISTS features (id INTEGER PRIMARY KEY, project_id TEXT NOT NULL, owner_id TEXT NOT NULL, cost INTEGER NOT NULL, starts_at INTEGER NOT NULL, ends_at INTEGER NOT NULL) STRICT`,
 ];
 
+// v3: connecting made simple. A short join code per room (anyone with it may
+// join), and whether a member shows in Who's online.
+const V3 = [
+  `CREATE TABLE IF NOT EXISTS room_codes (code TEXT PRIMARY KEY, room_id TEXT NOT NULL, created_by TEXT, created_at INTEGER NOT NULL) STRICT, WITHOUT ROWID`,
+  `CREATE INDEX IF NOT EXISTS room_codes_room ON room_codes (room_id)`,
+  `ALTER TABLE members ADD COLUMN online_hidden INTEGER NOT NULL DEFAULT 0`,
+];
+
 export const MIGRATIONS = Object.freeze([
   { version: 1, statements: V1 },
   { version: 2, statements: V2 },
+  { version: 3, statements: V3 },
 ]);
 
 const bindValue = (value) => (value === undefined ? null : value === true ? 1 : value === false ? 0 : value);

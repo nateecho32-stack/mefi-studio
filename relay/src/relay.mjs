@@ -63,10 +63,24 @@ export const ROOM_LIMITS = Object.freeze({
   listMax: 100,
 });
 
+// The Lobby: one room every signed-in member is in, so there is always
+// somewhere to meet without making a room first. Nobody owns it; moderators
+// keep it. It cannot be left, locked or closed, and has no join code.
+export const LOBBY = Object.freeze({ id: 'lobby', name: 'Lobby', maxMembers: 1000 });
+
+// Join codes: 8 characters from an alphabet without look-alikes (no 0/O, 1/I/L),
+// shown as two groups of four.
+export const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+export const CODE_LENGTH = 8;
+export const joinLinkFor = (base, code) => `${base}/join/${code}`;
+export const showCode = (code) => `${code.slice(0, 4)}-${code.slice(4)}`;
+export const readCode = (text) => String(text ?? '').toUpperCase().replace(/[\s-]/g, '');
+
 export const HTTP_LIMITS = Object.freeze({
   perUser: { capacity: 60, refillPerSec: 1 },
   sessionMint: { capacity: 10, refillPerSec: 10 / 60 },
   search: { capacity: 10, refillPerSec: 10 / 60 },
+  joins: { capacity: 10, refillPerSec: 10 / 60 }, // join-code tries a minute, so codes cannot be guessed
   reports: { capacity: 5, refillPerSec: 5 / 3600 },
   claims: { capacity: 20, refillPerSec: 0.5 },
 });
@@ -135,6 +149,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
   const searches = keyedBuckets({ ...HTTP_LIMITS.search, now });
   const reportsBucket = keyedBuckets({ ...HTTP_LIMITS.reports, now });
   const claimWrites = keyedBuckets({ ...HTTP_LIMITS.claims, now });
+  const joinTries = keyedBuckets({ ...HTTP_LIMITS.joins, now });
   const connects = keyedBuckets({ capacity: WS_LIMITS.connectsPerMinute, refillPerSec: WS_LIMITS.connectsPerMinute / 60, now });
   const frames = keyedBuckets({ capacity: WS_LIMITS.frameBurst, refillPerSec: WS_LIMITS.framesPerSecond, now });
   const postsShort = keyedBuckets({ capacity: ROOM_LIMITS.postsPer10s, refillPerSec: ROOM_LIMITS.postsPer10s / 10, now });
@@ -162,10 +177,35 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     listen = createListen({ store, now, oembed, publish: (roomId, session) => publishRoom(roomId, 'listen', { roomId, session, sentAt: now() }), roomFor });
     credits = createCredits({ store, now, key: keys.play, sendToUser, member: (uid) => sessions.member(uid) });
     credits.routes(route);
+    const at = now();
+    store.run(
+      `INSERT INTO rooms (id, kind, name, owner_id, policy, listed, max_members, status, member_count, created_at, updated_at)
+         VALUES (?, 'hangout', ?, NULL, 'request', 1, ?, 'active', 0, ?, ?) ON CONFLICT (id) DO NOTHING`,
+      LOBBY.id,
+      LOBBY.name,
+      LOBBY.maxMembers,
+      at,
+      at,
+    );
   }
 
+  /** Every signed-in member is in the Lobby, unless a moderator removed them lately. */
+  function joinLobby(uid) {
+    if (!isSnowflake(uid) || store.get('SELECT 1 AS yes FROM room_members WHERE room_id = ? AND user_id = ?', LOBBY.id, uid)) return false;
+    const at = now();
+    return store.transaction(() => {
+      const lobby = roomRow(LOBBY.id);
+      if (!lobby || lobby.member_count >= lobby.max_members) return false;
+      if (store.get('SELECT 1 AS yes FROM removals WHERE room_id = ? AND user_id = ? AND at > ?', LOBBY.id, uid, at - ROOM_LIMITS.removedCooldownMs)) return false;
+      store.run('INSERT INTO room_members (room_id, user_id, role, joined_at) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING', LOBBY.id, uid, 'member', at);
+      store.run('UPDATE rooms SET member_count = member_count + 1, updated_at = ? WHERE id = ?', at, LOBBY.id);
+      return true;
+    });
+  }
+  const onlineHidden = (uid) => store.get('SELECT online_hidden FROM members WHERE user_id = ?', uid)?.online_hidden === 1;
+
   const paused = () => config.paused || store.meta('paused') === 'true';
-  const features = () => [FEATURES.companion, FEATURES.companionDirect, FEATURES.historyPeer, FEATURES.keepalive, FEATURES.messagesSigned, FEATURES.credits, FEATURES.projects];
+  const features = () => [FEATURES.companion, FEATURES.companionDirect, FEATURES.historyPeer, FEATURES.keepalive, FEATURES.messagesSigned, FEATURES.lobby, FEATURES.joinCodes, FEATURES.online, FEATURES.credits, FEATURES.projects];
 
   // ---- rooms in the store --------------------------------------------------------
 
@@ -261,7 +301,8 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
 
   function publishPresence(roomId) {
     const members = memberIds(roomId);
-    const inStudio = [...new Set(readySockets().filter(({ a }) => a.rooms?.includes(roomId) && members.has(a.uid)).map(({ a }) => a.uid))];
+    let inStudio = [...new Set(readySockets().filter(({ a }) => a.rooms?.includes(roomId) && members.has(a.uid)).map(({ a }) => a.uid))];
+    if (roomId === LOBBY.id) inStudio = inStudio.filter((uid) => !onlineHidden(uid));
     publishRoom(roomId, 'presence', { roomId, inStudio });
   }
 
@@ -333,14 +374,17 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
       store.run('DELETE FROM tombstones WHERE at < ?', at - RETENTION.tombstoneMs);
       store.run('DELETE FROM reports WHERE created_at < ?', at - RETENTION.reportMs);
       store.run('DELETE FROM audit WHERE at < ?', at - RETENTION.auditMs);
+      store.run(`DELETE FROM room_members WHERE room_id = 'lobby' AND user_id IN (SELECT user_id FROM members WHERE last_seen < ?) AND user_id NOT IN (SELECT user_id FROM room_members WHERE room_id <> 'lobby')`, at - RETENTION.idleMemberMs);
+      store.run(`UPDATE rooms SET member_count = (SELECT COUNT(*) FROM room_members WHERE room_id = 'lobby') WHERE id = 'lobby'`);
       store.run(`DELETE FROM members WHERE last_seen < ? AND user_id NOT IN (SELECT user_id FROM room_members)`, at - RETENTION.idleMemberMs);
+      store.run(`DELETE FROM room_codes WHERE room_id NOT IN (SELECT id FROM rooms WHERE status <> 'closed')`);
       credits.upkeep();
       store.setMeta('upkeep_at', at);
     });
   }
 
   function deleteRoomRows(roomId) {
-    for (const table of ['room_members', 'join_requests', 'invites', 'removals', 'listen_sessions', 'leases', 'fences', 'tombstones']) store.run(`DELETE FROM ${table} WHERE room_id = ?`, roomId);
+    for (const table of ['room_members', 'join_requests', 'invites', 'removals', 'listen_sessions', 'leases', 'fences', 'tombstones', 'room_codes']) store.run(`DELETE FROM ${table} WHERE room_id = ?`, roomId);
     store.run('DELETE FROM rooms WHERE id = ?', roomId);
   }
 
@@ -472,6 +516,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     const member = sessions.member(claims.uid);
     if (!member) return closeSocket(ws, a, CLOSE_CODES.unauthorized, 'unknown member');
     if (readySockets().filter((entry) => entry.a.uid === claims.uid).length >= WS_LIMITS.socketsPerUser) return closeSocket(ws, a, CLOSE_CODES.tooManySockets, 'too many sockets');
+    joinLobby(claims.uid);
     Object.assign(a, { s: 'ready', uid: claims.uid, sid: claims.sid, exp: claims.exp, ro: claims.readOnly || member.readOnly ? 1 : 0, name: member.name, mod: member.isMod ? 1 : 0, j: member.joinedAt, rooms: [], cf: frame.features ?? [], np: null });
     sockets.write(ws, a);
     sendReady(ws, a);
@@ -708,12 +753,13 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
 
   // Rooms
   route('GET', '/v1/rooms', ({ actor }) => {
+    joinLobby(actor.uid);
     const at = now();
     const rows = store.all(
       `SELECT r.* FROM rooms r LEFT JOIN room_members m ON m.room_id = r.id AND m.user_id = ?1
         WHERE r.status <> 'closed' AND (r.listed = 1 OR m.user_id IS NOT NULL
           OR EXISTS (SELECT 1 FROM invites i WHERE i.room_id = r.id AND i.invitee_id = ?1 AND i.status = 'pending' AND i.expires_at > ?2))
-        ORDER BY (m.user_id IS NOT NULL) DESC, r.created_at DESC LIMIT ?3`,
+        ORDER BY (r.id = 'lobby') DESC, (m.user_id IS NOT NULL) DESC, r.created_at DESC LIMIT ?3`,
       actor.uid,
       at,
       ROOM_LIMITS.listMax,
@@ -935,6 +981,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
       const room = roomRow(params.id);
       if (!room || !isMember(room.id, actor.uid)) return fail('not-found');
       if (room.owner_id === actor.uid) return fail('conflict', 'owner-must-close');
+      if (room.id === LOBBY.id) return fail('conflict', 'lobby');
       store.run('DELETE FROM room_members WHERE room_id = ? AND user_id = ?', room.id, actor.uid);
       store.run('UPDATE rooms SET member_count = MAX(0, member_count - 1), updated_at = ? WHERE id = ?', now(), room.id);
       return { ok: true, roomId: room.id };
@@ -971,6 +1018,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
       if (!room) return fail('not-found');
       if (room.status === 'closed') return fail('gone', 'closed');
       if (room.owner_id !== actor.uid && !actor.isMod) return fail('forbidden');
+      if (room.id === LOBBY.id) return fail('conflict', 'lobby');
       if (target === 'closed') {
         store.run(`UPDATE rooms SET status = 'closed', closed_at = ?, updated_at = ? WHERE id = ?`, at, at, room.id);
         store.run(`UPDATE join_requests SET status = 'cancelled', decided_at = ? WHERE room_id = ? AND status = 'pending'`, at, room.id);
@@ -998,6 +1046,83 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
   route('POST', '/v1/rooms/:id/lock', ({ actor, params }) => setStatus(actor, params.id, 'locked'), { write: true });
   route('POST', '/v1/rooms/:id/unlock', ({ actor, params }) => setStatus(actor, params.id, 'active'), { write: true });
   route('POST', '/v1/rooms/:id/close', ({ actor, params }) => setStatus(actor, params.id, 'closed'), { write: true });
+
+  // ---- connecting made simple: join codes and Who's online ----
+
+  function codeFor(roomId, uid, { fresh = false } = {}) {
+    return store.transaction(() => {
+      const held = store.get('SELECT code FROM room_codes WHERE room_id = ?', roomId)?.code;
+      if (held && !fresh) return held;
+      store.run('DELETE FROM room_codes WHERE room_id = ?', roomId);
+      for (;;) {
+        const bytes = randomBytes(CODE_LENGTH);
+        const code = [...bytes].map((byte) => CODE_ALPHABET[byte % CODE_ALPHABET.length]).join('');
+        if (store.get('SELECT 1 AS yes FROM room_codes WHERE code = ?', code)) continue;
+        store.run('INSERT INTO room_codes (code, room_id, created_by, created_at) VALUES (?, ?, ?, ?)', code, roomId, uid, now());
+        return code;
+      }
+    });
+  }
+  const codeAnswer = (code) => ({ ok: true, code: showCode(code), link: joinLinkFor(config.publicBase || 'https://mefi-relay.mefi-studio.workers.dev', code) });
+
+  // Any member of a room may hand out its code; the owner or a moderator may replace it (the old one stops working).
+  route('GET', '/v1/rooms/:id/code', ({ actor, params }) => {
+    const room = roomRow(params.id);
+    if (!room || room.status === 'closed') return fromResult(fail('not-found'));
+    if (room.id === LOBBY.id) return fromResult(fail('conflict', 'lobby'));
+    if (!isMember(room.id, actor.uid)) return fromResult(fail('not-member'));
+    return reply(200, codeAnswer(codeFor(room.id, actor.uid)));
+  });
+
+  route('POST', '/v1/rooms/:id/code', ({ actor, params }) => {
+    const room = roomRow(params.id);
+    if (!room || room.status === 'closed') return fromResult(fail('not-found'));
+    if (room.id === LOBBY.id) return fromResult(fail('conflict', 'lobby'));
+    if (room.owner_id !== actor.uid && !actor.isMod) return fromResult(fail('forbidden'));
+    return reply(200, codeAnswer(codeFor(room.id, actor.uid, { fresh: true })));
+  }, { write: true });
+
+  // Joining by code: no request to approve. A removed member stays out for 30 days.
+  route('POST', '/v1/join', ({ actor, body }) => {
+    const rate = joinTries.take(actor.uid);
+    if (!rate.ok) return reply(429, { ok: false, error: 'rate-limited', retryAfter: rate.retryAfterMs });
+    const code = readCode(body.code);
+    const at = now();
+    const result = store.transaction(() => {
+      const row = code.length === CODE_LENGTH ? store.get('SELECT room_id FROM room_codes WHERE code = ?', code) : null;
+      const room = row ? roomRow(row.room_id) : null;
+      if (!room || room.status === 'closed') return fail('not-found', 'code');
+      if (isMember(room.id, actor.uid)) return { ok: true, room: summary(room, actor.uid), unchanged: true };
+      if (room.status === 'locked') return fail('conflict', 'locked');
+      if (store.get('SELECT 1 AS yes FROM removals WHERE room_id = ? AND user_id = ? AND at > ?', room.id, actor.uid, at - ROOM_LIMITS.removedCooldownMs)) return fail('forbidden', 'removed');
+      if (room.member_count >= room.max_members) return fail('limit', 'room-full');
+      store.run('INSERT INTO room_members (room_id, user_id, role, joined_at) VALUES (?, ?, ?, ?)', room.id, actor.uid, 'member', at);
+      store.run('UPDATE rooms SET member_count = member_count + 1, updated_at = ? WHERE id = ?', at, room.id);
+      store.run(`UPDATE join_requests SET status = 'approved', decided_at = ? WHERE room_id = ? AND requester_id = ? AND status = 'pending'`, at, room.id, actor.uid);
+      store.run(`UPDATE invites SET status = 'accepted', decided_at = ? WHERE room_id = ? AND invitee_id = ? AND status = 'pending'`, at, room.id, actor.uid);
+      return { ok: true, room: summary(roomRow(room.id), actor.uid) };
+    });
+    if (result.ok && !result.unchanged) publishRoom(result.room.id, 'membership', { roomId: result.room.id, userId: actor.uid, state: 'joined' });
+    const { unchanged: _u, ...out } = result;
+    return fromResult(out);
+  }, { write: true, body: 'joinCode' });
+
+  // Who is in Studio right now: members with a live socket, apart from you and anyone who chose not to show.
+  route('GET', '/v1/online', ({ actor }) => {
+    const ids = [...new Set(readySockets().map(({ a }) => a.uid))].filter((uid) => uid !== actor.uid && !onlineHidden(uid)).slice(0, 200);
+    const people = ids.map((uid) => {
+      const card = credits.card(uid);
+      return card ? { id: uid, name: card.name, rank: card.rank.key, specialRanks: card.specialRanks } : null;
+    }).filter(Boolean);
+    people.sort((x, y) => x.name.localeCompare(y.name));
+    return reply(200, { ok: true, people, visible: !onlineHidden(actor.uid) });
+  });
+
+  route('POST', '/v1/me/online', ({ actor, body }) => {
+    store.run('UPDATE members SET online_hidden = ? WHERE user_id = ?', body.visible ? 0 : 1, actor.uid);
+    publishPresence(LOBBY.id);
+    return reply(200, { ok: true, visible: body.visible });
+  }, { body: 'onlineVisible', readOnlyOk: true });
 
   route('GET', '/v1/members/search', ({ actor, query }) => {
     const checked = validateQuery('membersSearch', query);

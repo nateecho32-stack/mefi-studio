@@ -32,6 +32,10 @@
 //     this Studio to answer from its own copy with historyReply). `hello`
 //     names what this Studio can do (CLIENT_FEATURES); a hub that does not
 //     know the field drops it.
+//   - Connecting made simple (relay features "lobby", "join.codes",
+//     "online"): every member is in the Lobby; roomCode / newRoomCode hand
+//     out a room's short join code and link, joinCode joins with one, and
+//     online() lists who is in Studio now (setOnlineVisible hides you).
 //   - Credits and the project hub (features "credits" and "projects", relay
 //     only): me() and memberCard() for ranks and balances, projects() for the
 //     hub, shareProject / playProject / finishPlay / star / feature, and a
@@ -286,6 +290,12 @@ function rankOf(value) {
   return { key: value.key, name: line(value.name, 20) ?? value.key, next, progress: Number.isFinite(value.progress) ? Math.max(0, Math.min(1, value.progress)) : 0 };
 }
 const specialOf = (value) => (Array.isArray(value) ? value.filter((key) => RANK_KEY.test(String(key))).slice(0, 12) : []);
+// A room's join code ("7K3Q-M2XR") and its link, or a failure.
+function codeOf(data) {
+  const code = typeof data?.code === "string" && /^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(data.code) ? data.code : null;
+  const link = typeof data?.link === "string" && /^https:\/\/[^\s]+\/join\/[A-Z0-9]{8}$/.test(data.link) ? data.link : null;
+  return code ? { ok: true, code, link } : { ok: false, error: "failed" };
+}
 
 function createHubClient(options = {}) {
   const {
@@ -341,6 +351,7 @@ function createHubClient(options = {}) {
       remote: features.includes("remote"), remoteOn: Boolean(remote?.on) && features.includes("remote"), remotePcs: remoteList,
       history: features.includes("history.peer"),
       credits: features.includes("credits"), projects: features.includes("projects"),
+      lobby: features.includes("lobby"), joinCodes: features.includes("join.codes"), online: features.includes("online"),
     };
   }
   function setState(next, nextError = null) {
@@ -786,6 +797,42 @@ function createHubClient(options = {}) {
       const size = (list) => Buffer.byteLength(JSON.stringify({ type: "historyReply", requestId, messages: list, hasMore: more }));
       while (wire.length && size(wire) > HISTORY_REPLY_BYTES) { wire.shift(); more = true; }
       return send({ type: "historyReply", requestId, messages: wire, hasMore: more });
+    },
+    // ---- Connecting: join codes and Who's online (relay) ----------------------
+    async roomCode(roomId) {
+      if (!features.includes("join.codes")) return { ok: false, error: "unsupported" };
+      if (!id(roomId)) return { ok: false, error: "bad-request" };
+      const answer = await authed("GET", `/v1/rooms/${roomId}/code`);
+      if (!answer.ok) return refused(answer);
+      return codeOf(answer.data);
+    },
+    async newRoomCode(roomId) {
+      if (!features.includes("join.codes")) return { ok: false, error: "unsupported" };
+      if (!id(roomId)) return { ok: false, error: "bad-request" };
+      const answer = await authed("POST", `/v1/rooms/${roomId}/code`);
+      if (!answer.ok) return refused(answer);
+      return codeOf(answer.data);
+    },
+    joinCode(code) {
+      const typed = typeof code === "string" ? code.trim() : "";
+      if (!features.includes("join.codes")) return Promise.resolve({ ok: false, error: "unsupported" });
+      if (!/^[A-Za-z0-9 -]{4,24}$/.test(typed)) return Promise.resolve({ ok: false, error: "bad-request", reason: "code" });
+      return one("POST", "/v1/join", { code: typed }, "room", roomSummary);
+    },
+    async online() {
+      if (!features.includes("online")) return { ok: false, error: "unsupported" };
+      const answer = await authed("GET", "/v1/online");
+      if (!answer.ok) return refused(answer);
+      const people = Array.isArray(answer.data.people) ? answer.data.people.map((item) => {
+        const who = user(item);
+        return who ? { ...who, rank: RANK_KEY.test(String(item.rank ?? "")) ? item.rank : "spark", specialRanks: specialOf(item.specialRanks) } : null;
+      }).filter(Boolean).slice(0, 200) : [];
+      return { ok: true, people, visible: answer.data.visible !== false };
+    },
+    async setOnlineVisible(visible) {
+      if (!features.includes("online") || typeof visible !== "boolean") return { ok: false, error: "bad-request" };
+      const answer = await authed("POST", "/v1/me/online", { visible });
+      return answer.ok ? { ok: true, visible: answer.data.visible === true } : refused(answer);
     },
     // ---- Credits, ranks and the project hub (features "credits", "projects") ---
     async me() {

@@ -78,6 +78,9 @@ export const FEATURES = Object.freeze({
   historyPeer: 'history.peer', // historyRequest / historyReply / history
   keepalive: 'keepalive', // {"type":"ping"} every 30 s, answered by Cloudflare without waking the relay
   messagesSigned: 'messages.signed', // message.sig on every message and messageUpdate
+  lobby: 'lobby', // the Lobby every signed-in member is in
+  joinCodes: 'join.codes', // a short code per room; anyone with it may join
+  online: 'online', // GET /v1/online: who is in Studio right now
   credits: 'credits', // GET /v1/me, member cards, the credits frame
   projects: 'projects', // the project hub: share, play, star, feature
 });
@@ -596,6 +599,10 @@ export const HTTP_BODIES = Object.freeze({
   shareProject: { url: string(1, 512, { pattern: HTTPS_URL }), title: string(1, 100, { pattern: SINGLE_LINE, nonBlank: true }), blurb: optional(line(0, 300)), kind: optional(oneOf(PROJECT_KINDS)) },
   // PUT /v1/projects/:id
   editProject: { title: optional(string(1, 100, { pattern: SINGLE_LINE, nonBlank: true })), blurb: optional(line(0, 300)), kind: optional(oneOf(PROJECT_KINDS)) },
+  // POST /v1/join: a room's join code as a person typed it ("7K3Q-M2XR", spaces and dashes allowed).
+  joinCode: { code: string(4, 24, { pattern: /^[A-Za-z0-9 -]+$/ }) },
+  // POST /v1/me/online: whether this member shows in Who's online and the Lobby's list.
+  onlineVisible: { visible: boolean() },
   // POST /v1/projects/:id/played: the token from POST /v1/projects/:id/play, at least two minutes old.
   playFinish: { token: string(1, 64, { pattern: /^[a-z0-9]{1,12}\.[A-Za-z0-9_-]{22}$/ }) },
 });

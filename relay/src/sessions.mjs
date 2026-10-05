@@ -54,6 +54,8 @@ export function readConfig(env = {}) {
     roleIds: Object.freeze(roleIds),
     paused: String(env.PAUSED ?? '') === 'true',
     apiBase,
+    // Where join links point (the relay's own address); PUBLIC_BASE in wrangler.toml.
+    publicBase: /^https:\/\/[a-z0-9.-]+$/.test(String(env.PUBLIC_BASE ?? '')) ? env.PUBLIC_BASE : '',
   });
 }
 

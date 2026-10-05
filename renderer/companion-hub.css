@@ -172,6 +172,11 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 .rooms-row-text { min-width: 0; flex: 1 1 160px; }
 .rooms-row-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .rooms-button { white-space: normal; }
+.rooms-join, .rooms-invite { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.rooms-join input { flex: 1 1 200px; min-width: 0; }
+.rooms-invite { padding: 8px 10px; border: 1px dashed var(--hairline-strong); border-radius: 10px; font-size: 12px; }
+.rooms-code { font-size: 15px; letter-spacing: .08em; color: var(--gold-bright); }
+.rooms-online-toggle { display: flex; align-items: center; gap: 8px; font-size: 12px; }
 .rooms-note, .rooms-name, .rooms-compose { flex: 1 1 100%; min-width: 0; box-sizing: border-box; }
 .rooms-quote { display: block; margin-top: 4px; color: var(--muted); font-style: italic; }
 .rooms-create { display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid var(--hairline); }
