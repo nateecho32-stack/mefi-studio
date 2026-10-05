@@ -217,8 +217,10 @@ of the local navigation's, and the window's other edges. In v2 it is also
 clear of the list, the tab strip, the inspector and the status bar. Ask it
 each time something is placed, not once.
 
-**Turning it on.** Three ways, each ending in `html[data-layout="v2"]`, and
-classic is always one switch away. In Settings (the You section, which
+**Turning it on.** Since 0.5 it is the default: with nothing saved, the page
+opens in it (`renderer/nav.js` `layoutChoice`); smoke and capture launches stay
+classic unless they ask, so the diagnostic fixtures keep their geometry. Classic
+is always one switch away, and the ways to choose are the same. In Settings (the You section, which
 Configuration › UI & Surfaces lists too) the switch "Try the 0.5 layout"; in
 Search the action "Switch layout: 0.5 or classic". Both save the choice through
 `MefiNav.setLayout` and reload the window, the way Build's sessions-layout

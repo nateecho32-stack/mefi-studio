@@ -201,7 +201,7 @@ const AT_LOGIN = !SMOKE && !CAPTURE && !CLI_MODE && process.argv.includes(LOGIN_
 // MEFI_STUDIO_LAYOUT=v2 opens the window in the 0.5 layout for this launch and =v1 in the
 // classic one, which beats whatever was saved: it is the kill switch. The page reads the
 // choice as ?layout= (renderer/nav.js). Anything else leaves it to the page: the Settings
-// switch, Search's "Switch layout", or classic when nothing was saved.
+// switch, Search's "Switch layout", or the 0.5 layout when nothing was saved.
 const layoutFromEnv = () => {
   try {
     const wanted = String(process.env.MEFI_STUDIO_LAYOUT ?? "").trim().toLowerCase();
