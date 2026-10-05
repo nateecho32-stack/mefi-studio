@@ -1,3 +1,6 @@
+// The companion's Friends bubble (renderer/companion-hub.js): Friends is a place of its own, so asking the hub for it
+// (the bubble, a menu's Friends entry with a target) closes the hub and goes to the Friends page at that place; the
+// hub never builds the Friends cards itself. The page's own walk is tests/friends_render.test.mjs.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -9,7 +12,7 @@ const source = await readFile(new URL("../renderer/companion-hub.js", import.met
 function load({ delayed = false } = {}) {
   const { document } = createDom();
   document.hidden = true; // No audio animation loop in this behavior fixture.
-  const frames = [], paints = [], listeners = {}, made = [], disposed = [];
+  const frames = [], paints = [], listeners = {}, made = [], disposed = [], went = [];
   const create = document.createElement;
   document.createElement = (tag) => {
     const el = create(tag);
@@ -32,7 +35,7 @@ function load({ delayed = false } = {}) {
   };
   const window = {
     addEventListener: (type, fn) => { (listeners[type] ??= []).push(fn); },
-    MefiNav: { noMotion: () => true, typeScope() {} },
+    MefiNav: { noMotion: () => true, typeScope() {}, go: (id, params) => { went.push([id, { ...params }]); } },
     MefiCompanionUI: { freeze() {} },
     MefiMotion: { swap: (_owner, paint) => delayed ? paints.push(paint) : paint() },
     MefiRooms: { panel: () => card("rooms", "rooms-title"), subscribe() {}, pending: () => 0 },
@@ -50,73 +53,48 @@ function load({ delayed = false } = {}) {
   vm.runInContext(source, context);
   window.MefiCompanionHub.attach({ orb, panel, toggle() {}, refresh() {} });
   return {
-    hub: window.MefiCompanionHub, document, window, origin, made, disposed,
+    hub: window.MefiCompanionHub, document, window, origin, made, disposed, went,
     layer: () => document.querySelector("#agent-hub"),
     flush: () => { for (const paint of paints.splice(0)) paint(); for (const frame of frames.splice(0)) frame(); },
     fire: (type, event = {}) => { for (const fn of listeners[type] ?? []) fn({ type, preventDefault() {}, stopPropagation() {}, stopImmediatePropagation() {}, ...event }); },
   };
 }
 
-for (const [target, id] of [["rooms", "rooms-title"], ["pcs", "pc-sync-title"], ["playground", "friends-title"]]) {
-  test(`Friends ${target} opens and focuses the existing card after its transition paints`, () => {
-    const loaded = load({ delayed: true });
+for (const target of ["rooms", "pcs", "playground"]) {
+  test(`Friends ${target} goes to the Friends page at that place, without a bubble or a card of the hub's`, () => {
+    const loaded = load();
     assert.equal(loaded.hub.open({ section: "friends", target }), true);
-    assert.equal(loaded.layer().dataset.section, "friends");
-    assert.equal(loaded.document.querySelector(`#${id}`), null, "transition has not painted yet");
-    loaded.fire("mefi:nav", { detail: { id: target === "pcs" ? "your-pcs" : target, action: "open" } });
-    assert.equal(loaded.hub.isOpen(), true, "its own navigation event keeps the hub open");
-    loaded.flush();
-    const heading = loaded.document.querySelector(`#${id}`);
-    assert.equal(loaded.document.activeElement, heading);
-    assert.equal(heading.tabIndex, -1, "card heading accepts programmatic focus");
-    assert.equal(heading.scrolledIntoView, true, "a card below the fold comes into view");
-    assert.deepEqual(loaded.made, ["playground", "rooms", "pcs"], "same Friends cards are built once");
+    assert.equal(loaded.hub.isOpen(), false, "no bubble opens for Friends");
+    assert.deepEqual(loaded.went, [["friends-page", { place: target }]]);
+    assert.deepEqual(loaded.made, [], "the page builds the cards, not the hub");
   });
 }
 
-test("another Friends target preserves mounted room chat; Escape returns through the bubbles to its menu origin", () => {
+test("Friends without a known target lands on Rooms", () => {
   const loaded = load();
-  loaded.hub.open({ section: "friends", target: "rooms" }); loaded.flush();
-  const room = loaded.document.querySelector("#rooms-title");
-  loaded.hub.open({ section: "friends", target: "pcs" });
-  assert.equal(loaded.document.querySelector("#rooms-title"), room, "switching targets retains existing room controls");
-  assert.equal(loaded.document.activeElement.id, "pc-sync-title");
-  assert.deepEqual(loaded.disposed, []);
-  loaded.fire("keydown", { key: "Escape" });
-  assert.equal(loaded.hub.isOpen(), true);
-  assert.equal(loaded.layer().dataset.section, "home");
-  assert.deepEqual(loaded.disposed, ["playground", "rooms", "pcs"], "leaving Friends releases its cards once");
-  loaded.fire("keydown", { key: "Escape" });
-  assert.equal(loaded.hub.isOpen(), false);
-  assert.equal(loaded.document.activeElement, loaded.origin);
+  loaded.hub.open("friends");
+  loaded.hub.open({ section: "friends", target: "somewhere" });
+  assert.deepEqual(loaded.went, [["friends-page", { place: "rooms" }], ["friends-page", { place: "rooms" }]]);
 });
 
-test("a second target requested before the Friends transition paints wins focus", () => {
-  const loaded = load({ delayed: true });
-  loaded.hub.open({ section: "friends", target: "rooms" });
-  loaded.hub.open({ section: "friends", target: "pcs" });
-  loaded.flush();
-  assert.equal(loaded.document.activeElement.id, "pc-sync-title");
-  assert.deepEqual(loaded.made, ["playground", "rooms", "pcs"]);
-});
-
-test("legacy companion entry still opens all bubbles, and unrelated navigation closes targeted Friends", () => {
+test("the bubbles still open, Friends from them closes the hub on its way to the page, and Escape closes as before", () => {
   const loaded = load();
   loaded.hub.open();
   assert.equal(loaded.layer().dataset.section, "home");
   assert.equal(loaded.document.activeElement.id, "agent-hub-return");
-  loaded.hub.open("friends"); loaded.flush();
-  assert.equal(loaded.layer().dataset.section, "friends");
-  loaded.fire("mefi:nav", { detail: { id: "tasks", action: "open" } });
-  assert.equal(loaded.hub.isOpen(), false);
-  assert.deepEqual(loaded.disposed, ["playground", "rooms", "pcs"]);
+  loaded.hub.open({ section: "friends", target: "pcs" });
+  assert.equal(loaded.hub.isOpen(), false, "the hub lets go before the page opens");
+  assert.deepEqual(loaded.went, [["friends-page", { place: "pcs" }]]);
   assert.equal(loaded.origin.inert, undefined, "the modal releases its origin");
+  loaded.hub.open();
+  loaded.fire("keydown", { key: "Escape" });
+  assert.equal(loaded.hub.isOpen(), false);
 });
 
-test("closing before target focus runs leaves focus at the invoking menu", () => {
+test("any navigation closes the open hub", () => {
   const loaded = load();
-  loaded.hub.open({ section: "friends", target: "playground" });
-  loaded.hub.close({ immediate: true }); loaded.flush();
+  loaded.hub.open();
+  loaded.fire("mefi:nav", { detail: { id: "tasks", action: "open" } });
   assert.equal(loaded.hub.isOpen(), false);
-  assert.equal(loaded.document.activeElement, loaded.origin);
+  assert.deepEqual(loaded.disposed, []);
 });

@@ -254,11 +254,11 @@ test("the browser preview has no bridge, so the card says where syncing works", 
   assert.equal(card.byClass("pc-sync-actions").hidden, true);
 });
 
-test("the Friends section mounts the card inside the hub, and the Friends bubble carries the badge", () => {
-  const friends = hub.slice(hub.indexOf('} else if (section === "friends") {'), hub.indexOf("} else {", hub.indexOf('} else if (section === "friends") {')));
-  assert.match(friends, /window\.MefiPcSync\?\.card\?\.\(\)/);
-  assert.match(friends, /el\.extra\.append\(pcs\)/);
-  assert.doesNotMatch(friends, /action\([^)]*MefiPcSync/, "Sync answers in place; it is not a navigate-away action");
+test("Friends › Your PCs mounts the card on the Friends page, and the Friends bubble carries the badge", () => {
+  const friends = hub.slice(hub.indexOf("function paintFriendsPlace(place) {"), hub.indexOf("function openPlace("));
+  assert.match(friends, /if \(place\.id === "pcs"\) card = window\.MefiPcSync\?\.card\?\.\(\);/);
+  assert.match(friends, /friendsPage\.body\.replaceChildren\(\.\.\.parts\)/);
+  assert.doesNotMatch(friends, /button\([^)]*MefiPcSync/, "Sync answers in place; it is not a navigate-away action");
   const badge = hub.slice(hub.indexOf("function syncBadge()"), hub.indexOf("function update(next)"));
   assert.match(badge, /\[data-hub-section="friends"\]/);
   assert.match(badge, /window\.MefiPcSync\?\.badge\?\.\(\)/);

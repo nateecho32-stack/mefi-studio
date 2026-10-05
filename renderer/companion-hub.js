@@ -16,7 +16,7 @@
     return !Number.isFinite(number) ? fallback : /ms$/.test(value) ? number : /s$/.test(value) ? number * 1000 : number;
   }
   const glyphSvg = (id) => `<svg class="glyph" aria-hidden="true" focusable="false"><use href="#${id}"/></svg>`;
-  const hub = { open: false, closing: false, section: null, friendTarget: null, locked: new Map(), returnFocus: null, timer: 0 };
+  const hub = { open: false, closing: false, section: null, locked: new Map(), returnFocus: null, timer: 0 };
   const el = {};
   let host, data, bootPhase, audioFrame = 0, audioAt = 0, energy = 0, wakeTimer = 0, reactionIndex = 0, chatThinking = false, anticTimer = 0, lastTouch = Date.now();
   const plays = new WeakMap();
@@ -217,8 +217,6 @@
     ["friends", "Friends", "g-orbit", "Playdates, sharing, rooms and your PCs"],
     ["settings", "Personality", "g-ambience", "How I behave, and settings"],
   ];
-  const FRIENDS_ROUTES = new Set(["friends", "rooms", "your-pcs", "playground"]);
-  const FRIENDS_TARGETS = { rooms: "rooms-title", pcs: "pc-sync-title", playground: "friends-title" };
   function icon(glyph) { const span = node("span", "agent-hub-icon"); span.innerHTML = `<svg class="glyph" aria-hidden="true"><use href="#${glyph}"/></svg>`; return span; }
   function attach(value) {
     if (host) return;
@@ -259,9 +257,8 @@
     syncBadge();
     layer.addEventListener("click", (event) => { if (event.target === layer) close(); });
     layer.addEventListener("keydown", trap);
-    // The open section's box takes stray typing: Talk, Suggest work, and an
-    // open room's message box under Friends. Other sections have none.
-    window.MefiNav?.typeScope?.(layer, () => hub.section === "ask" ? host.panel.querySelector("#companion-pane-ask textarea") : hub.section === "ideas" ? extra.querySelector("#agent-hub-suggest-text") : hub.section === "friends" ? extra.querySelector(".rooms-compose") : null);
+    // The open section's box takes stray typing: Talk and Suggest work. Other sections have none.
+    window.MefiNav?.typeScope?.(layer, () => hub.section === "ask" ? host.panel.querySelector("#companion-pane-ask textarea") : hub.section === "ideas" ? extra.querySelector("#agent-hub-suggest-text") : null);
     // Capture while this modal owns the keyboard; nested selects/confirmations
     // get first refusal and retain their own focus restoration.
     window.addEventListener("keydown", (event) => {
@@ -271,7 +268,7 @@
       // than being dropped; either way Studio's shortcuts never see it.
       else if (!(event.key === "Tab" || event.key === "Enter" || event.key === " " || event.key.startsWith("Arrow") || event.target?.closest?.("input, textarea, select"))) { window.MefiNav?.typeInto?.(event); event.stopPropagation(); }
     }, true);
-    window.addEventListener("mefi:nav", (event) => { if (hub.open && !FRIENDS_ROUTES.has(event.detail?.id)) close({ immediate: true, restore: false }); });
+    window.addEventListener("mefi:nav", () => { if (hub.open) close({ immediate: true, restore: false }); });
     window.addEventListener("resize", resize);
     document.addEventListener("visibilitychange", () => { el.layer.toggleAttribute("data-suspended", document.hidden); if (document.hidden) for (const creature of document.querySelectorAll(".agent-creature")) clearPlay(creature); cancelAnimationFrame(audioFrame); audioFrame = 0; if (!document.hidden && hub.open) audioFrame = requestAnimationFrame(audioTick); });
     window.addEventListener("mefi-audio-change", updateAudio);
@@ -296,15 +293,15 @@
     const section = typeof options === "string" ? options : options?.section;
     const target = typeof options === "object" ? options?.target : null;
     const requested = items.some(([id]) => id === section) ? section : null;
-    // In the 0.5 layout Friends is a place of its own (openPlace below): asked for, it opens there instead of a bubble.
-    if (requested === "friends" && friendsLayout()) {
+    // Friends is a place of its own (openPlace below): asked for, it opens there instead of a bubble.
+    if (requested === "friends") {
       if (hub.open) close({ immediate: true, restore: false });
       window.MefiNav?.go?.("friends-page", { place: friendsPlaceOfTarget(target) ?? "rooms" });
       return true;
     }
     if (hub.open) {
       if (hub.closing) { clearTimeout(hub.timer); hub.closing = false; el.layer.classList.remove("leaving"); }
-      if (requested) { if (hub.section === requested) focusFriend(target); else select(requested, target); }
+      if (requested && hub.section !== requested) select(requested, target);
       return true;
     }
     host.toggle(false); window.MefiCompanionUI?.freeze(); window.MefiSelect?.close();
@@ -343,20 +340,10 @@
   }
   function navigate(action) { close({ immediate: true, restore: false }); action(); }
   function action(title, run) { return button(title, () => navigate(run), "ghost agent-hub-action"); }
-  function focusFriend(target) {
-    hub.friendTarget = Object.hasOwn(FRIENDS_TARGETS, target) ? target : null;
-    const id = hub.friendTarget ? FRIENDS_TARGETS[hub.friendTarget] : null;
-    if (!id || !hub.open || hub.section !== "friends") return;
-    const heading = el.extra.querySelector(`#${id}`);
-    if (!heading) return;
-    heading.tabIndex = -1;
-    heading.focus({ preventScroll: true }); heading.scrollIntoView?.({ block: "start", behavior: "instant" });
-  }
   function select(section, target = null) {
-    // The Friends bubble in the 0.5 layout goes to the Friends place (openPlace).
-    if (section === "friends" && friendsLayout()) { navigate(() => window.MefiNav?.go?.("friends-page", { place: friendsPlaceOfTarget(target) ?? "rooms" })); return; }
+    // The Friends bubble goes to the Friends place (openPlace).
+    if (section === "friends") { navigate(() => window.MefiNav?.go?.("friends-page", { place: friendsPlaceOfTarget(target) ?? "rooms" })); return; }
     const previous = hub.section; hub.section = section;
-    hub.friendTarget = section === "friends" && Object.hasOwn(FRIENDS_TARGETS, target) ? target : null;
     if (host.panel.parentElement === el.detail) {
       host.toggle(false); document.body.append(host.panel); host.panel.inert = hub.locked.has(host.panel) ? true : false;
       host.panel.classList.remove("companion-in-hub"); host.panel.setAttribute("role", "dialog");
@@ -376,26 +363,9 @@
         el.detail.append(host.panel); host.panel.inert = false; host.panel.classList.add("companion-in-hub"); host.panel.setAttribute("role", "region");
         host.toggle(true, { hub: true }); window.MefiCompanionUI?.showTab(panelTab);
         if (section === "settings") el.extra.append(action("Open app settings", () => window.MefiNav?.go("studio", { category: "general" })));
-      } else if (section === "friends") {
-        // Friends › Playground (renderer/companion-friends.js): friends'
-        // companions, playdates and what yours may share, answered in place.
-        const playground = window.MefiCompanionFriends?.card?.({ name: name(), face: (look) => lookFace(look) });
-        if (playground) el.extra.append(playground);
-        el.extra.append(action("Friends & listening rooms", () => { window.MefiMusic?.openAudio?.(); window.MefiMusic?.setSource?.("link"); window.MefiMusic?.openSection?.("more"); }),
-          action("Connect with Discord", () => window.MefiNav?.go("community")));
-        // Friends › Rooms (renderer/rooms.js) and Friends › Your PCs
-        // (renderer/pc-sync.js) stay in the hub: they answer in place instead
-        // of navigating away.
-        const rooms = window.MefiRooms?.panel?.();
-        if (rooms) el.extra.append(rooms);
-        const pcs = window.MefiPcSync?.card?.();
-        if (pcs) el.extra.append(pcs);
       } else {
         el.extra.append(...ideas());
       }
-      // A target can sit below a delayed section transition. Focus only after
-      // its actual card exists; the same cards own all Friends entry points.
-      if (section === "friends") requestAnimationFrame(() => focusFriend(hub.friendTarget));
     };
     // The section arrives from the bubbles' side, or across from the last one,
     // which fades where it was (renderer/motion.js); without layout it just paints.
@@ -533,20 +503,18 @@
     if (index < 0 || event.shiftKey && index === 0 || !event.shiftKey && index === controls.length - 1) { event.preventDefault(); controls[event.shiftKey ? controls.length - 1 : 0].focus(); }
     event.stopPropagation();
   }
-  // ---- Friends in the 0.5 layout (html[data-layout="v2"]) ----
+  // ---- Friends, a place of its own ----
   // The prototype's Friends (docs/prototype/mefi-studio-0.5-v5.html: friendsView, FRIEND_SUBS) is a place of three pages,
   // one at a time beside the list column: Rooms (renderer/rooms.js), Your PCs (renderer/pc-sync.js) and Playground
-  // (renderer/companion-friends.js). They are the cards the hub's Friends bubble stacks, with their ids, controls and host
-  // calls; nothing is copied. renderer/nav.js sends go("friends") and its three ways in here while the layout is on (the
+  // (renderer/companion-friends.js), each the module's own card with its ids, controls and host
+  // calls; nothing is copied. renderer/nav.js sends go("friends") and its three ways in here (the
   // route "friends-page", { place }), and renderer/shell.js draws the list (friendsPlaces) and the breadcrumb (friendsPlace).
-  // Without the layout none of this is built and the hub's Friends bubble is as it was.
-  const friendsLayout = () => document.documentElement?.dataset?.layout === "v2";
   const FRIENDS_PLACES = Object.freeze([
     { id: "rooms", label: "Rooms", glyph: "g-orbit", about: "Hang out, cowork, listen together, or share what you are making. Rooms are optional and never see your projects unless you share them." },
     { id: "pcs", label: "Your PCs", glyph: "g-explorer", about: "Keep work in step across machines through GitHub. Studio only looks until you press Sync." },
     { id: "playground", label: "Playground", glyph: "g-ambience", about: "Practice with your companion, and set what it may share." },
   ]);
-  // The hub's targets (FRIENDS_TARGETS) name the same three places.
+  // A way in may name its place by target ("rooms", "pcs", "playground").
   const friendsPlaceOfTarget = (target) => (FRIENDS_PLACES.some((place) => place.id === target) ? target : null);
   const friendsPage = { place: null, root: null, body: null, title: null, about: null };
   const friendsPlaceById = (id) => FRIENDS_PLACES.find((place) => place.id === id) ?? null;
@@ -583,7 +551,6 @@
     friendsPage.body.dataset.place = place.id;
   }
   function openPlace(params = {}) {
-    if (!friendsLayout()) return false;
     mountFriendsPage();
     const place = friendsPlaceById(params.place) ?? friendsPlaceById(friendsPlaceOfTarget(params.target)) ?? friendsPlaceById(friendsPage.place) ?? FRIENDS_PLACES[0];
     window.MefiNav?.claim?.("friends-page");
@@ -608,7 +575,6 @@
   }
   // The places in order, for a list drawn elsewhere (renderer/shell.js): each with whether it shows and the way there.
   function friendsPlaces() {
-    if (!friendsLayout()) return null;
     const here = friendsOpen() ? friendsPage.place : null;
     return FRIENDS_PLACES.map((place) => ({ id: place.id, label: place.label, glyph: place.glyph, current: place.id === here, run: () => window.MefiNav?.go?.("friends-page", { place: place.id }) }));
   }

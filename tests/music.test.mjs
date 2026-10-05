@@ -2505,10 +2505,10 @@ test("Typing in the menu goes to the Browse box while a video source shows, and 
   env.music.closeAudio(); env.music.openAudio(); assert.equal(env.typeScopes.length, 1, "the menu registers once, however often it opens");
 });
 
-test("Companion hub's Friends & listening rooms opens the media menu on More, where Listen together lives", async () => {
+test("Friends › Playground's Friends & listening rooms opens the media menu on More, where Listen together lives", async () => {
   const hub = await readFile(new URL("../renderer/companion-hub.js", import.meta.url), "utf8");
-  const action = /action\("Friends & listening rooms", \(\) => \{([^}]*)\}\)/.exec(hub);
-  assert.ok(action, "the hub keeps its Friends & listening rooms action");
+  const action = /button\("Friends & listening rooms", \(\) => \{([^}]*)\}, "ghost"\)/.exec(hub);
+  assert.ok(action, "the Friends page keeps its Friends & listening rooms button");
   const calls = [...action[1].matchAll(/window\.MefiMusic\?\.(\w+)\?\.\(([^)]*)\)/g)].map((match) => [match[1], match[2] ? JSON.parse(match[2]) : undefined]);
   assert.deepEqual(calls, [["openAudio", undefined], ["setSource", "link"], ["openSection", "more"]], "it opens the menu on Video, then on More");
   // Those calls, made on the menu itself, land on More with Listen together inside it.
