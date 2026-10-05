@@ -39,6 +39,34 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-04 The v2 Settings, first run and plan draft page closer to the 0.5 prototype
+
+Branch `wip/ui-settings` (worktree `C:\wt\ui-settings` off main c01604e,
+node_modules junctioned), three commits: 70bc565 Settings filed into the
+prototype's places (booklet.js, styles.css, template wrappers, report.js),
+4ac04f8 the three-step first run (setup-helper.js/.css), 7d268b0 a Backlog
+plan opens as its own draft page (planning.js/.css, one line of sessions.js).
+New Electron fixture `settings_render` (MEFI_SETTINGS_CAPTURE_DIR); the
+setup_helper_render and planning_render fixtures gained a v2 phase each; new
+shared `tests/fixtures/text-probe.cjs` (no text under 12 px, 4.5:1 against
+what is painted behind it).
+
+`npm run check` ok (271 targets), `npm run audit` 0 findings, lint: no
+warning in a changed file. `npm run test:fast` before each commit: 6923/6909
+pass/0 fail; 6929/6913 pass/2 fail (attempt_review_host and
+attempt_snapshots_host under load: 55 tests, 52 pass, 0 fail alone); 6933/6919
+pass/0 fail (14 skipped each). Full `npm test` on 7d268b0: Node 6933 tests,
+6917 pass, 14 skipped, 2 fail under load (update_host_bridge 8/8 and
+rust_parity_snapshots 3/3 alone); Electron lane 76: 72 pass, 1 skipped, 3
+fail: layout_contract_render (viewport 1921x1081) and shell_render (as on
+clean main on this PC), tree_dynamics_render (fails alone, and on c01604e
+too); command_render 1/1; eyes_toggle_electron 0/1 (fails on c01604e too);
+occlusion_probe 2/2; Python 248 OK (1 skipped); path lock ok.
+settings_render, setup_helper_render and planning_render pass in the run.
+Captures in `C:\wt\gap\after-settings\v2\` (settings, first-run,
+plan-draft); prototype captures in `C:\wt\gap\after-settings\proto\`; the
+prototype beside v2 in `C:\wt\gap\after-settings\compare\`.
+
 ## 2026-10-04 The v2 Work view lands on main with Rust stage 2
 
 Branch `land/ui-work-view` in `C:\wt\land-ui`: origin/main 90661df (Rust stage
@@ -372,12 +400,6 @@ Stable remains the default; development requires explicit warning/consent. Devel
 ## 2026-10-02 late evening - memory-only durable-log write health
 
 **Result:** focused Node tests passed (40/40). Executor/work-event append failures remain nonthrowing; later writes recover; fixed channels, saturated counts, detached snapshots, broken clock and Trace success/read-failure metadata covered. Full aggregate and native Trace checks queued until the parent releases the game window. No retention, redaction, export or persistent-log changes.
-
-## 2026-10-02 late evening - Deferred navigation focus source diagnosis and proposed guard
-
-Booklet v3 full aggregate completed with 6760 Node tests: 6743 passed, one Tasks retained-focus assertion failed, 16 skipped. Python 248 OK (one skip), locks six passed, real provider-free Fleet ten steps passed; build/check/audit passed. Active task-new, connected retained summary, unchanged card identity/expansion and changed-card checks match the preserved prior symptom. Booklet remains frozen, unqualified and unlanded. Original inventory run (obsolete wiring/partial packaging fixture plus Plans/tree native timeouts), stopped v2, and all prior failures remain reachable in local evidence. Unchanged tree passed controlled repeat and v3 aggregate; no cause claimed for native timeouts.
-
-Exact production claim() source under controlled frame scheduling demonstrates unconditional task-new focus after later summary/search focus or release. Verified predecessor and booklet v3 navigation bytes match and reproduce the ordering. A separate isolated candidate guards pending initial focus against a newer claim, release, hidden destination or changed active element. Eleven focused cases plus existing navigation/startup/settings contracts passed: 58/58. Unchanged predecessor fails the focus regression cases. Input drafts and valid default navigation focus are covered. Native focus event stack/timing instrumentation and trusted-pointer controlled predecessor/booklet/candidate comparison are prepared, not launched: game owns the native window. Native source-attribution probe remains queued. No production/provider actions, shell default changes, push/merge/release or Library retry. Candidate unqualified pending native attribution and full aggregate; source-level evidence is not a native cause claim.
 
 ## Read Before Any Tests
 
