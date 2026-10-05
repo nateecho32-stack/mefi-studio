@@ -161,14 +161,17 @@ app.whenReady().then(async () => {
   await run("document.querySelector('#companion-pane-status .companion-item button').click();");
   assert.ok(await run("return !window.MefiCompanionHub.isOpen()&&!document.getElementById('vibe-layer').inert;"), 'orb action releases the hub focus lock');
   assert.equal(await run("return window.unifiedFixture.calls().filter(c=>c.name==='assistantAnswer').length;"), 0, 'the drawer waits for the answer');
-  await until("document.querySelector('.vibe-suggestion')",'suggestion');
+  // In the 0.5 layout a request opens the Inbox (renderer/today.js) on its card: what Mefi suggests and why, the options, a
+  // refused answer said on the card, and an option that asks for one line putting the caret in the card's own answer box.
+  const scopeCard = "document.querySelector('#today-inbox [data-option=narrow]')?.closest('.today-need')";
+  await until(`!document.getElementById('today-inbox').hidden && ${scopeCard}?.querySelector('.today-need-hint')?.textContent.startsWith('Mefi suggests: Keep the agreed scope, because')`,'suggestion');
   await capture('vibe-suggestion.png');
-  await run("document.querySelector('.vibe-ask-option').click();");
-  await until("document.getElementById('vibe-ask-note').textContent.includes('needs review')",'item error');
-  await run("[...document.querySelectorAll('.vibe-ask-option')].find(b=>b.textContent.includes('one line')).click();");
-  assert.equal(await run("return document.activeElement.tagName;"),'TEXTAREA');
+  await run("document.querySelector('#today-inbox [data-option=narrow]').click();");
+  await until(`${scopeCard}?.querySelector('.today-need-note')?.textContent.includes('needs review')`,'item error');
+  await run("document.querySelector('#today-inbox [data-option=instruct]').click();");
+  assert.ok(await run(`const card=${scopeCard};return document.activeElement?.classList.contains('today-need-input')&&card.contains(document.activeElement);`),'the one-line option puts the caret in the card\'s answer box');
   await capture('vibe-one-line.png');
-  await run("window.MefiVibe.closeDrawers();document.getElementById('vibe-chat-toggle').click();");
+  await run("window.MefiToday.closeInbox();window.MefiVibe.closeDrawers();document.getElementById('vibe-chat-toggle').click();");
   await until("document.querySelector('.vibe-inline-confirm')",'inline confirmation');
   assert.equal(await run("return document.querySelectorAll('#vibe-thread .vibe-spark').length;"),1);
   await capture('vibe-chat-confirm.png');
