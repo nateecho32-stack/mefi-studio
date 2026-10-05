@@ -63,6 +63,8 @@
   }
   function openSettings() {
     if (window.MefiVibe?.mode?.() === "vibe") window.MefiVibe.openPanel("settings");
+    // In the 0.5 layout the full control lives on Team › Permissions (renderer/agents.js), which is where Build goes.
+    else if (document.documentElement?.dataset?.layout === "v2" && window.MefiNav?.go) window.MefiNav.go("agents", { place: "perms" });
     else {
       let dialog = document.getElementById("autonomy-settings-dialog");
       if (!dialog) {

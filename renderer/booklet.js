@@ -850,6 +850,23 @@
         entries.push({ id: control.id, label, category, terms: `${label} ${heading?.textContent ?? ""} ${control.id.replace(/-/g, " ")}` });
       }
     }
+    // In the 0.5 layout the cards and controls Team holds (the Connections, Models and Automation cards Settings gave to
+    // Agents, and Agents' own panes) are found here too, under the Team place that holds each now; a match opens it there
+    // (jumpToSettings asks MefiAgents.redirect). Search (Ctrl K) has them already, from renderer/agents.js.
+    const team = window.MefiAgents?.teamPlaceOfElement;
+    if (settingsFiled && typeof team === "function") {
+      for (const pane of document.querySelectorAll("#agents-body [data-agents-pane]")) {
+        for (const control of pane.querySelectorAll(".settings-card, input, select, textarea")) {
+          if (!control.id || control.type === "hidden" || control.hidden || control.getAttribute?.("aria-hidden") === "true" || !settingsAvailable(control)) continue;
+          const place = team(control);
+          if (!place) continue;
+          const card = control.classList?.contains?.("settings-card") ? control : control.closest?.(".settings-card");
+          const heading = card?.querySelector?.(card.tagName === "DETAILS" ? "summary" : "h3");
+          const label = control === card ? String((heading?.querySelector?.(".settings-summary-text b") ?? heading)?.textContent ?? "").replace(/\s+/g, " ").trim() : settingsControlLabel(control);
+          if (label) entries.push({ id: control.id, label, category: "team", team: true, path: `Team / ${place.label}`, terms: `${label} ${heading?.textContent ?? ""} ${control.id.replace(/-/g, " ")}` });
+        }
+      }
+    }
     return entries;
   }
   function syncSettingsNav() {
@@ -941,7 +958,7 @@
     if (document.querySelector && !document.querySelector(`[data-settings-category-pane="${settingsPane(settingsCategory)}"]`)) settingsCategory = "general";
     const query = settingsQuery();
     const words = query.split(/\s+/).filter(Boolean);
-    settingsMatches = words.length ? settingsEntries().filter((item) => words.every((word) => `${SETTINGS_CATEGORIES[item.category]} ${item.terms}`.toLowerCase().includes(word))) : [];
+    settingsMatches = words.length ? settingsEntries().filter((item) => words.every((word) => `${item.path ?? SETTINGS_CATEGORIES[item.category]} ${item.terms}`.toLowerCase().includes(word))) : [];
     const results = document.getElementById("settings-search-results");
     if (results) {
       results.replaceChildren();
@@ -949,7 +966,7 @@
       for (const item of settingsMatches) {
         const row = document.createElement("button"); row.type = "button"; row.className = "settings-search-result";
         row.dataset.settingsResult = item.id;
-        const path = document.createElement("span"); path.className = "settings-result-path"; path.textContent = `Settings / ${SETTINGS_CATEGORIES[item.category]}`;
+        const path = document.createElement("span"); path.className = "settings-result-path"; path.textContent = item.path ?? `Settings / ${SETTINGS_CATEGORIES[item.category]}`;
         const name = document.createElement("strong"); name.textContent = item.label;
         row.append(path, name); results.appendChild(row);
       }
@@ -1038,7 +1055,8 @@
   }
   function registerSettingsSearch() {
     for (const item of settingsEntries()) {
-      if (settingsSearchRegistered.has(item.id)) continue;
+      // Team's controls are registered by renderer/agents.js, under their Team place.
+      if (item.team || settingsSearchRegistered.has(item.id)) continue;
       settingsSearchRegistered.add(item.id);
       try { window.MefiNav?.register?.({
         id: `settings:${item.id}`, label: `Settings › ${SETTINGS_CATEGORIES[item.category]} › ${item.label}`,

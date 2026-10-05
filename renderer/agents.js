@@ -113,6 +113,91 @@
       views: (children[section] || []).map(([childLabel, childRoute, childTarget = {}]) => ({ label: childLabel, current: selected(childRoute, childTarget), run: () => go(childRoute, childTarget) })),
     }));
   }
+  // ---- Team: the 0.5 layout's place (html[data-layout="v2"]) ----
+  // The prototype's Team (docs/prototype/mefi-studio-0.5-v5.html: TEAM_SUBS, teamView, WHERE_WENT) is this page and the
+  // pages it already led to, filed into twelve places. A place is either panes of this page (Overview is the overview and
+  // the run behavior; Seats and models the team and its routing; Providers the connections; Permissions, Rules,
+  // Connectors and Related folders panes the 0.5 layout adds), or pages that exist (Skills; Workflows: Brain maps,
+  // Playbook, Project map, Context; Health and usage; Models: Catalog and Performance; Inspect: Sessions, Activity and
+  // evidence, Trace, Overhead, the profiler, machine status and the connection log). Cards keep their ids, controls and
+  // host calls; nothing is copied. Old parameters ({ section, pane }) and deep links land in the place that holds them,
+  // and go("agents", { place }) is the new way in. Where the engine has nothing for a place (Related folders) the page
+  // says what exists and what does not. renderer/shell.js draws the list (teamPlaces) and the breadcrumb (teamPlace).
+  const teamLayout = () => document.documentElement?.dataset?.layout === "v2";
+  const TEAM_PLACES = Object.freeze([
+    { id: "overview", label: "Overview", glyph: "g-home", panes: ["overview", "behavior"], draft: true, about: "Who does the work, how many can work at once, and how much they can do without asking." },
+    { id: "providers", label: "Providers", glyph: "g-key", panes: ["connections"], about: "Where the models come from. Connect what you already pay for, or add a key. Seats choose from what is connected here." },
+    { id: "seats", label: "Seats and models", glyph: "g-agents", panes: ["team", "routing"], draft: true, about: "Each seat keeps its place on the team when the agent behind it changes. Changes apply when you press Apply changes." },
+    { id: "perms", label: "Permissions", glyph: "g-flag", panes: ["perms"], about: "How much Mefi can decide without asking you. Every mode leaves the same things to you." },
+    { id: "rules", label: "Rules", glyph: "g-booklet", group: "Context for agents", panes: ["rules"], scoped: true, about: "Standing rules every model on this project reads. Write what you would tell a new teammate on their first day." },
+    { id: "skills", label: "Skills", glyph: "g-skills", group: "Context for agents", views: [["Skills", "skills"]] },
+    { id: "connectors", label: "Connectors", glyph: "g-plug", group: "Context for agents", panes: ["connectors"], about: "Connectors give agents extra tools, like GitHub or a browser. Each one is a program that runs on this PC." },
+    { id: "folders", label: "Related folders", glyph: "g-explorer", group: "Context for agents", panes: ["folders"], about: "Extra folders agents may read but never change." },
+    { id: "flows", label: "Workflows", glyph: "g-route", group: "Context for agents", views: [["Brain maps", "brains"], ["Playbook", "agent-brain", { tab: "playbook" }], ["Project map", "agent-brain", { tab: "map" }], ["Context", "context"]] },
+    { id: "health", label: "Health and usage", glyph: "g-gauge", group: "Monitor", views: [["Recorded calls", "usage", { view: "usage" }], ["Provider accounts", "usage", { view: "tracker" }]] },
+    { id: "models", label: "Models", glyph: "g-graph", group: "Monitor", views: [["Catalog", "booklet"], ["Performance", "graph"]] },
+    { id: "inspect", label: "Inspect", glyph: "g-eyes", group: "Monitor", views: [["Sessions", "explorer"], ["Activity and evidence", "eyes"], ["Trace", "trace"], ["Overhead", "overhead"], ["Performance profiler", "profiler"], ["Machine status", "explorer", { panel: "diagnostics" }], ["Connection log", "agents", { place: "providers", target: "settings-log" }]] },
+  ]);
+  // The panes of the classic Agents page, by the place that holds them now.
+  const PANE_PLACES = Object.freeze({ overview: "overview", behavior: "overview", connections: "providers", team: "seats", routing: "seats", perms: "perms", rules: "rules", connectors: "connectors", folders: "folders" });
+  const teamPlaceById = (id) => TEAM_PLACES.find((place) => place.id === id) ?? null;
+  // The place this page shows for a set of parameters: { place } itself, else the pane a target sits in, else the classic
+  // { section, pane } (Setup with no pane was Team & models).
+  function teamPlaceFromParams(options = {}) {
+    if (teamPlaceById(options.place)?.panes) return options.place;
+    const holder = options.target ? $(options.target)?.closest?.("[data-agents-pane]")?.dataset?.agentsPane : null;
+    if (holder && PANE_PLACES[holder]) return PANE_PLACES[holder];
+    if (options.section === "setup") return PANE_PLACES[options.pane] || "seats";
+    return PANE_PLACES[options.pane] && options.section !== "overview" ? PANE_PLACES[options.pane] : "overview";
+  }
+  const brainTabOf = (options) => options?.tab ?? window.MefiAgentBrain?.tab?.() ?? null;
+  // The Team place a route is in, or null (the Map's pages, and everything that is not Team's).
+  function teamPlaceOf(id, options) {
+    if (id === "agents") return options ? teamPlaceFromParams(options) : params.place || teamPlaceFromParams(params);
+    for (const place of TEAM_PLACES) for (const [, route, target = {}] of place.views || []) {
+      if (route !== id || route === "agents") continue;
+      if (route === "agent-brain" && target.tab !== brainTabOf(options)) continue;
+      return place.id;
+    }
+    return null;
+  }
+  function teamViewCurrent(id, route, target) {
+    if (route !== id || route === "agents") return false;
+    if (route === "agent-brain") return target.tab === brainTabOf();
+    if (route === "usage") return target.view === (window.MefiModelLab?.view?.() === "tracker" ? "tracker" : "usage");
+    // Sessions and Machine status are one page (the Explorer); its rows go to its panels, and the page is Sessions.
+    if (route === "explorer") return !target.panel;
+    return true;
+  }
+  function openTeamPlace(id) {
+    const place = teamPlaceById(id);
+    if (!place) return;
+    if (place.views) { const [, route, target = {}] = place.views[0]; go(route, target); }
+    else go("agents", { place: place.id });
+  }
+  // The places in order, for a list drawn elsewhere (renderer/shell.js): each with whether you are in it, the way there, and
+  // the pages it holds with the one you are on. Null with the layout off.
+  function teamPlaces(id = window.MefiNav?.current?.()) {
+    if (!teamLayout()) return null;
+    const here = teamPlaceOf(id);
+    return TEAM_PLACES.map((place) => ({
+      id: place.id, label: place.label, glyph: place.glyph, group: place.group ?? null, current: place.id === here, run: () => openTeamPlace(place.id),
+      views: (place.views || []).map(([label, route, target = {}]) => ({ label, current: place.id === here && teamViewCurrent(id, route, target), run: () => go(route, target) })),
+    }));
+  }
+  // Where you are in Team ({ id, label }), for the breadcrumb; null outside Team or with the layout off.
+  function teamPlace(id = window.MefiNav?.current?.(), options) {
+    if (!teamLayout()) return null;
+    const place = teamPlaceById(teamPlaceOf(id, options));
+    return place ? { id: place.id, label: place.label } : null;
+  }
+  // The place a control on this page sits in now (Search's words for it), or null.
+  function teamPlaceOfElement(element) {
+    const pane = element?.closest?.("[data-agents-pane]")?.dataset?.agentsPane;
+    const place = teamLayout() && pane ? teamPlaceById(PANE_PLACES[pane]) : null;
+    return place ? { id: place.id, label: place.label } : null;
+  }
+
   let closeNavMenu = () => {};
   function paintNav(nav, id, options = {}) {
     const here = location(id, options), signature = JSON.stringify([id, here, window.MefiAgentBrain?.tab?.(), options.view || window.MefiModelLab?.view?.()]);
@@ -203,6 +288,8 @@
   const aliases = { connections: "connections", providers: "connections", "auto-setup": "connections", "settings-setup": "connections", "settings-assistant": "connections", "decision-model": "connections", "settings-jev": "connections", models: "routing", "model-routing": "routing", "settings-routing": "routing", "coding-workers": "routing", "settings-workers": "routing", automation: "behavior", "agents-queue": "behavior", "settings-automation": "behavior", "settings-automation-behavior": "behavior", "connection-log": "connections", "settings-log": "connections" };
   function redirect(id, options = {}) {
     if (id === "agent-brain" && options.tab === "seats") return { id: "agents", params: { section: "setup", pane: "team" } };
+    // go("agents", { place }) for a place that is pages of its own (Skills, Models, ...) opens its first page.
+    if (id === "agents" && teamPlaceById(options.place)?.views) { const [, route, target = {}] = teamPlaceById(options.place).views[0]; return { id: route, params: { ...target } }; }
     if (id !== "studio") return null;
     const target = options.section || options.category || "";
     const pane = aliases[target] || $(target)?.closest?.("[data-agents-pane]")?.dataset.agentsPane;
@@ -243,7 +330,9 @@
     for (const pane of body.querySelectorAll("[data-agents-pane]")) for (const el of pane.querySelectorAll("input[id], select[id], button[id], details[id]")) {
       const label = el.getAttribute("aria-label") || el.closest("label")?.querySelector(".field-label, b")?.textContent || (el.querySelector("summary b, summary strong") || el.querySelector("summary"))?.textContent || el.title;
       const help = (el.closest("label")?.querySelector("small") || el.querySelector("summary small, summary .settings-summary-text > span"))?.textContent?.trim() || "";
-      if (label) window.MefiNav?.register({ id: `settings:${el.id}`, kind: "action", section: "agents", group: "tools", label: `Agents › ${label.trim().slice(0, 100)}`, desc: help.slice(0, 160), glyph: "g-agents", showIn: { palette: true }, run: () => go("agents", { section: "setup", pane: pane.dataset.agentsPane, target: el.id }) });
+      // In the 0.5 layout Search names the control by the Team place that holds it now (read when Search reads it).
+      const words = label?.trim().slice(0, 100);
+      if (label) window.MefiNav?.register({ id: `settings:${el.id}`, kind: "action", section: "agents", group: "tools", get label() { const place = teamPlaceOfElement(el); return place ? `Team › ${place.label} › ${words}` : `Agents › ${words}`; }, desc: help.slice(0, 160), glyph: "g-agents", showIn: { palette: true }, run: () => go("agents", { section: "setup", pane: pane.dataset.agentsPane, target: el.id }) });
     }
     $("agents-team").append(buildRules());
     buildSetupHeader(); buildOverview(); buildRoles(); buildBehavior();
@@ -726,6 +815,63 @@
     const local = card("Local studio roles", "Watcher, Machine, Auditor, Keeper, Compactor, Foreman and Reference organise and inspect local work. Their maintenance does not require a model.");
     local.append(node("p", "muted", "The Briefer, Overseer, Ideas, Improver, Grower, Responder and cluster planning/review roles inherit the configured routine or heavy route.")); root.append(local);
   }
+  // The 0.5 layout's panes, made once, the first time Team opens with the layout on: Permissions (the full permission
+  // control, which Build opened as a dialog), Rules (the rules card, moved), Connectors and Related folders.
+  let teamFiled = false;
+  function fileTeamV2() {
+    const body = $("agents-body");
+    if (teamFiled || !teamLayout() || !body) return false;
+    teamFiled = true;
+    const pane = (name, id) => { const el = node("div", "agents-pane"); el.id = id; el.dataset.agentsPane = name; el.hidden = true; body.append(el); return el; };
+    const perms = pane("perms", "agents-perms");
+    const control = node("div"); control.id = "agents-permissions"; perms.append(control);
+    window.MefiAutonomy?.mount?.(control, { full: true });
+    const rules = pane("rules", "agents-rules-place");
+    const card = $("agents-rules"); if (card) rules.append(card);
+    buildConnectors(pane("connectors", "agents-connectors"));
+    buildFolders(pane("folders", "agents-folders"));
+    $("agents-overlay")?.setAttribute("data-places", "v2");
+    return true;
+  }
+  // Connectors: the stdio servers Studio already runs for an agent (~/.mefi-studio/mcp.json, read with the team), each
+  // with its tools, and where each agent is allowed to use them. What the prototype adds (adding, approving, testing and
+  // importing a connector from here) does not exist yet, and the page says so.
+  function buildConnectors(root) {
+    const yours = card("Your connectors", "Stdio servers from ~/.mefi-studio/mcp.json. Studio starts one only for an agent you allowed to use its tools.");
+    yours.id = "agents-connectors-yours";
+    const rows = node("div", "agents-connector-rows"); rows.id = "agents-connector-rows";
+    const actions = node("div", "agents-actions");
+    actions.append(button("Choose who may use them", () => go("agents", { place: "seats" }), "ghost"), button("Reload saved settings", discard, "ghost"));
+    yours.append(rows, actions);
+    const own = card("Studio's own tools", "Search the web, read web pages you link and read project files. Each agent has its own switches, with the + beside it in Seats and models; a builder can use at most sixteen connector tools.");
+    const missing = card("Not in Studio yet", "Adding a connector from this page, approving its command, testing it, and importing the ones Claude Code already has. Until then, add a server to ~/.mefi-studio/mcp.json and reload.");
+    missing.classList.add("agents-gap");
+    root.append(yours, own, missing);
+  }
+  function paintConnectors() {
+    const rows = $("agents-connector-rows");
+    if (!rows) return;
+    const tools = Array.isArray(draft()?.saved?.mcpTools) ? draft().saved.mcpTools : [];
+    const servers = new Map();
+    for (const tool of tools) { if (!tool?.server) continue; if (!servers.has(tool.server)) servers.set(tool.server, []); servers.get(tool.server).push(tool); }
+    rows.replaceChildren();
+    if (!servers.size) { rows.append(node("p", "muted", "No connectors yet. Add a stdio server to ~/.mefi-studio/mcp.json, then reload saved settings.")); return; }
+    for (const [server, list] of servers) {
+      const row = node("div", "agents-connector"); row.dataset.server = server;
+      const words = node("div", "agents-connector-words");
+      words.append(node("strong", "", server), node("small", "muted", `${list.length} tool${list.length === 1 ? "" : "s"}: ${list.map((tool) => tool.name).join(", ")}`));
+      row.append(words);
+      rows.append(row);
+    }
+  }
+  // Related folders: Studio has none yet. What it has is said, with the way to it.
+  function buildFolders(root) {
+    const gap = card("Not in Studio yet", "Agents read this project's folder and nothing outside it. Folders an agent may read but never change, like a shared design system, are not something Studio can add yet.");
+    gap.classList.add("agents-gap"); gap.id = "agents-folders-gap";
+    const now = card("What agents read today", "The project's own files, and with Rules the project's AGENTS.md and CLAUDE.md.");
+    now.append(button("Open Rules", () => go("agents", { place: "rules" }), "ghost"));
+    root.append(gap, now);
+  }
   function renderConfiguration() {
     const item = draft(); if (!item) return;
     $("agents-team-summary").textContent = `${item.saved.name} · ${item.saved.inherited ? "Studio defaults" : "Project team"}`;
@@ -798,6 +944,7 @@
     picker.value = selected;
     say(item.dirty ? "Draft · applies to new work after you choose Apply." : `${scope === "defaults" ? "Studio defaults" : item.saved.inherited ? "Inheriting Studio defaults" : "Independent project team"} · Saved`);
     paintRules();
+    paintConnectors();
     window.MefiScroll?.scan($("agents-overlay"));
   }
   function stageRouting(patch) {
@@ -864,8 +1011,35 @@
     finally { saving = false; if (draft() && rulesUi.box) paintRulesLive(draft()); }
   }
   function discard() { drafts.delete(draftKey()); load(); }
+  // Team in the 0.5 layout: one place at a time, its panes, its title and the line under it. params keeps the classic
+  // section and pane beside the place, so routing's staging (stageRouting, routingView) reads the page as it did.
+  let teamPlaceSaid = null;
+  async function openTeam(options = {}) {
+    fileTeamV2();
+    const place = teamPlaceById(teamPlaceFromParams(options)) ?? TEAM_PLACES[0];
+    const pane = place.id === "seats" ? (options.pane === "routing" || $(options.target)?.closest?.("#agents-routing") ? "routing" : "team") : place.id === "providers" ? "connections" : place.panes[0];
+    const moved = params.place !== place.id;
+    params = { section: place.id === "overview" ? "overview" : "setup", pane, place: place.id };
+    window.MefiNav?.claim("agents"); $("agents-overlay").hidden = false; paintOverview();
+    $("agents-overlay").dataset.teamPlace = place.id;
+    $("agents-title").textContent = place.label;
+    const about = $("agents-title")?.nextElementSibling;
+    if (about) about.textContent = place.about || "";
+    for (const node of $("agents-body").children) if (node.classList.contains("agents-pane")) node.hidden = !place.panes.includes(node.dataset.agentsPane);
+    // The team draft's Apply and Discard go with the places that edit it; the project or defaults choice also with Rules.
+    $("agents-save-bar").hidden = !place.draft;
+    $("agents-team-toolbar").hidden = !(place.draft || place.scoped);
+    if (moved && !options.target) $("agents-body").scrollTop = 0;
+    if (teamPlaceSaid !== place.id) { teamPlaceSaid = place.id; window.dispatchEvent(new CustomEvent("mefi:team-place", { detail: { place: place.id } })); }
+    await Promise.all([load(), refreshQueue()]); syncQueue();
+    window.MefiNav?.paintCurrent(); window.MefiScroll?.refresh();
+    if (options.target) {
+      const target = $(options.target); if (target && $("agents-overlay").contains(target)) { for (let el = target; el && el !== $("agents-body"); el = el.parentElement) if (el.tagName === "DETAILS") el.open = true; target.scrollIntoView?.({ block: "nearest" }); (target.nextElementSibling?.classList.contains("studio-select") ? target.nextElementSibling : target).focus?.({ preventScroll: true }); }
+    }
+  }
   async function open(options = {}) {
     mount();
+    if (teamLayout()) return openTeam(options);
     params = { section: options.section === "setup" ? "setup" : "overview", pane: ["connections", "team", "routing", "behavior"].includes(options.pane) ? options.pane : "team" };
     window.MefiNav?.claim("agents"); $("agents-overlay").hidden = false; paintOverview();
     $("agents-title").textContent = params.section === "overview" ? "Agents" : `Agent setup · ${children.setup.find(([, , value]) => value.pane === params.pane)?.[0] || "Team"}`;
@@ -900,10 +1074,11 @@
       if ($("agents-overlay")?.hidden === false) void load();
     });
     window.addEventListener("mefi:queue-settings", syncQueue);
-    window.MefiNav?.register({ id: "agents", label: "Agents", short: "Agents", kind: "overlay", layer: "sheet", section: "agents", group: "tools", glyph: "g-agents", badge: "questions", desc: "Set up your team, follow live work, workflows, models and usage", searchTerms: "agent setup team presets seats connections provider effort routing automation", showIn: { palette: true, help: true, tools: true }, element: "agents-overlay", focus: "#agents-title", open, close, isOpen: () => $("agents-overlay")?.hidden === false });
+    // The 0.5 layout calls the page Team (WHERE_WENT: "Agents" → Team, renamed), with the prototype's two people for its glyph.
+    window.MefiNav?.register({ id: "agents", get label() { return teamLayout() ? "Team" : "Agents"; }, get short() { return teamLayout() ? "Team" : "Agents"; }, kind: "overlay", layer: "sheet", section: "agents", group: "tools", get glyph() { return teamLayout() ? "g-community" : "g-agents"; }, badge: "questions", get desc() { return teamLayout() ? "Who does the work, how many can work at once, and how much they can do without asking" : "Set up your team, follow live work, workflows, models and usage"; }, searchTerms: "team agents agent setup presets seats connections providers provider effort routing automation permissions rules connectors", showIn: { palette: true, help: true, tools: true }, element: "agents-overlay", focus: "#agents-title", open, close, isOpen: () => $("agents-overlay")?.hidden === false });
     // Canonical settings ownership is established before the first visit.
     mount();
   }
-  window.MefiAgents = { open, close, mount, redirect, paintNav, navModel, location, stageRouting, routingView, params: () => ({ ...params }), reload: discard, draft: () => draft() ? clone(draft().configuration) : null };
+  window.MefiAgents = { open, close, mount, redirect, paintNav, navModel, location, stageRouting, routingView, params: () => ({ ...params }), reload: discard, draft: () => draft() ? clone(draft().configuration) : null, teamPlaces, teamPlace, teamPlaceOfElement, TEAM_PLACES };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
 })();
