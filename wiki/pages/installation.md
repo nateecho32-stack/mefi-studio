@@ -43,7 +43,7 @@ The launch screen asks which project to open. Pick one or choose **Open another 
 
 **Help › Start here** then walks you through setup, sign-in and a connection check. Continue with [Your first project](getting-started.md).
 
-> <span class="status next">Coming in 0.4.5</span> The [setup helper](setup-helper.md) opens first on a new install, and once after you update. With no project yet, the launch screen leads with **Open a folder…**. **Settings › General › When Studio opens** picks the default button: **Resume what I had** (the default), **Start agents** or **Keep agents off**.
+> <span class="status next">Coming in 0.5</span> The [setup helper](setup-helper.md) opens first on a new install, and once after you update. With no project yet, the launch screen leads with **Open a folder…**. **Settings › General › When Studio opens** picks the default button: **Resume what I had** (the default), **Start agents** or **Keep agents off**.
 
 ## Connect an AI account
 
@@ -66,7 +66,7 @@ Saved keys are encrypted for the Windows account that saved them. On another PC,
 
 ## Updates
 
-Open **Settings › System › Updates** and press **Check GitHub** to look for a newer release. In 0.4.4 the in-app update can't finish installing, so move to 0.4.5 [by hand](updates.md#update-from-044-by-hand) when it comes out. [Update Studio](updates.md) has the details.
+Open **Settings › System › Updates** and press **Check GitHub** to look for a newer release. In 0.4.4 the in-app update can't finish installing, so move to 0.5 [by hand](updates.md#update-from-044-by-hand) when it comes out. [Update Studio](updates.md) has the details.
 
 ## From source
 
@@ -82,7 +82,7 @@ npm start
 
 Run these commands from the repository root. If Studio says that `ELECTRON_RUN_AS_NODE` is set, clear that variable in your shell and try again.
 
-A source install runs what's on `main`. It already has the changes marked <span class="status next">Coming in 0.4.5</span>, and it changes often. On `main`, `npm ci` downloads Electron for you and stops if your Node.js is older than 24.
+A source install runs what's on `main`. It already has the changes marked <span class="status next">Coming in 0.5</span>, and it changes often. On `main`, `npm ci` downloads Electron for you and stops if your Node.js is older than 24.
 
 `Run Mefi's Studio AI+.cmd` starts the portable build in `dist/` when there is one, otherwise the source install. `npm run start:web` opens a browser preview at <http://localhost:4173>. The preview can't launch coding workers.
 

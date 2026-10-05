@@ -69,7 +69,7 @@ Then adjust **Density** (**Comfortable** or **Compact**), **Glass intensity** an
 - **Blur behind panels**: turn it off to give sheets, menus and Home's panels a plain, darker backdrop.
 - **Let your companion move**: turn it off to keep your [companion](#/companion) still.
 
-<span class="status next">Coming in 0.4.5</span> **Interface scale** makes the whole interface 70% to 150% of its size, text included, and keeps it for the next launch. Find it in **Configuration** under **UI & Surfaces**. Open Configuration with **Ctrl + Shift + ,** or **All settings in one place** in Settings.
+<span class="status next">Coming in 0.5</span> **Interface scale** makes the whole interface 70% to 150% of its size, text included, and keeps it for the next launch. Find it in **Configuration** under **UI & Surfaces**. Open Configuration with **Ctrl + Shift + ,** or **All settings in one place** in Settings.
 
 ## Keys
 

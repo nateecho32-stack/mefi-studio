@@ -156,3 +156,73 @@
   .home .float-chip { animation: none; }
   .home .hero-shot.tilt .frame-hero { transform: none; }
 }
+
+/* ---- 0.5 refresh ------------------------------------------------------------ */
+/* the hero's second window: Today, overlapping the Build shot's lower right */
+.home .hero-shot { max-width: 1120px; }
+.home .frame-float {
+  position: absolute; z-index: 1; right: -36px; bottom: -42px; width: 34%;
+  border-radius: 12px; box-shadow: 0 30px 70px rgba(0, 0, 0, 0.65), 0 0 0 1px rgb(var(--accent-rgb) / 0.3);
+}
+.home .frame-float .window-bar { height: 22px; font-size: 0.68rem; }
+.home .frame-float .window-bar i { width: 8px; height: 8px; }
+.home .chip-c { right: 36%; bottom: -20px; }
+
+/* A first look at 0.5: one tab row, one panel at a time (home.js); without script every panel shows. */
+.home .first-look { padding-top: calc(var(--section) - 8px); }
+.home .first-look .section-head .eyebrow { display: flex; justify-content: center; }
+.home .look-tabs {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: 0 auto 26px; padding: 5px;
+  width: fit-content; max-width: 100%; border-radius: var(--r-pill); background: rgb(var(--panel-rgb) / 0.6); border: 1px solid var(--hairline);
+}
+.home .look-tabs button {
+  font: inherit; font-size: 0.93rem; font-weight: 600; color: var(--muted); background: transparent; border: 0;
+  padding: 8px 16px; border-radius: var(--r-pill); cursor: pointer; transition: color .15s ease, background .15s ease;
+}
+.home .look-tabs button:hover { color: var(--ivory); background: rgb(var(--accent-rgb) / 0.08); }
+.home .look-tabs button[aria-selected="true"] { color: var(--ink); background: linear-gradient(180deg, var(--accent-bright), var(--accent)); box-shadow: 0 6px 18px rgb(var(--accent-rgb) / 0.22); }
+.home .look-tabs button:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }
+.home .look-panel { display: grid; grid-template-columns: minmax(0, 2.15fr) minmax(0, 1fr); gap: 34px; align-items: center; }
+.home .look-panel + .look-panel { margin-top: 48px; }
+.home .js-look .look-panel + .look-panel { margin-top: 0; }
+.home .js-look .look-panel[hidden] { display: none; }
+.home .look-panel:focus-visible { outline: none; }
+.home .look-shot { box-shadow: var(--glow); }
+.home .look-shot-detail { max-width: 760px; justify-self: center; width: 100%; }
+.home .look-copy h3 { font-size: clamp(1.35rem, 2.2vw, 1.7rem); margin-bottom: 10px; }
+.home .look-copy > p { color: var(--muted); font-size: 1.04rem; margin-bottom: 18px; }
+.home .look-note { margin-top: 28px; }
+@media (prefers-reduced-motion: no-preference) {
+  .home .js-look .look-panel:not([hidden]) { animation: look-in .45s var(--ease); }
+  @keyframes look-in { from { opacity: 0; transform: translateY(10px); } }
+}
+
+/* Moving to Rust: the three stages as a vertical track */
+.home .rust-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 56px; align-items: center; }
+.home .rust .section-head { margin-bottom: 0; }
+.home .stages { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; position: relative; }
+.home .stages::before { content: ""; position: absolute; z-index: 1; left: 21px; top: 22px; bottom: 22px; width: 2px; background: linear-gradient(180deg, var(--accent), var(--live) 50%, rgb(var(--accent-rgb) / 0.15)); }
+.home .stage { position: relative; display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 16px; padding: 18px 20px 18px 0; }
+/* The card starts under the line, so each number sits half on it; one box draws every card, the current one with its border. */
+.home .stage::before { content: ""; position: absolute; inset: 0 0 0 22px; border-radius: var(--r); background: rgb(var(--panel-rgb) / 0.7); border: 1px solid transparent; }
+.home .stage > div { position: relative; padding: 2px 0 0; }
+.home .stage h3 { margin: 0 0 6px; font-size: 1.12rem; }
+.home .stage p { margin: 0 0 10px; color: var(--muted); font-size: 0.96rem; }
+.home .stage-n {
+  position: relative; z-index: 1; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center;
+  font-family: var(--font-display); font-weight: 700; color: var(--muted); background: var(--panel-solid); border: 2px solid rgb(var(--accent-rgb) / 0.25);
+}
+.home .stage.is-done .stage-n { color: var(--ink); background: linear-gradient(180deg, var(--accent-bright), var(--accent)); border-color: transparent; }
+.home .stage.is-now .stage-n { color: var(--live); border-color: var(--live); box-shadow: 0 0 0 6px rgba(87, 255, 154, 0.10), 0 0 24px rgba(87, 255, 154, 0.25); }
+.home .stage.is-now::before { border-color: rgba(87, 255, 154, 0.22); }
+
+@media (max-width: 960px) {
+  .home .look-panel { grid-template-columns: 1fr; gap: 20px; }
+  .home .rust-grid { grid-template-columns: 1fr; gap: 32px; }
+  .home .frame-float { display: none; }
+  .home .chip-c { right: 8%; }
+}
+@media (max-width: 720px) {
+  .home .look-tabs { border-radius: var(--r); justify-content: flex-start; }
+  .home .look-tabs button { padding: 7px 12px; font-size: 0.88rem; }
+}

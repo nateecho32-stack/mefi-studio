@@ -1,6 +1,6 @@
 # The setup helper
 
-> <span class="status next">Coming in 0.4.5</span> The setup helper isn't in the 0.4.4 download. It's finished on main and ships with 0.4.5. On 0.4.4, read [Set up in 0.4.4](#/setup-helper/set-up-in-044) below.
+> <span class="status next">Coming in 0.5</span> The setup helper isn't in the 0.4.4 download. It's finished on main and ships with 0.5. On 0.4.4, read [Set up in 0.4.4](#/setup-helper/set-up-in-044) below.
 
 The setup helper is one guided sheet for everything that decides what your agents do. You connect an AI, choose who does what, decide how much Mefi may do on its own and set how Studio behaves on your PC, all in one place.
 
@@ -9,7 +9,7 @@ Every change saves as you make it. The helper has no settings of its own: each c
 ## When it opens
 
 - **On a new install**, it opens by itself before the Start here walkthrough.
-- **After you update to 0.4.5**, it opens once, with your current choices already filled in.
+- **After you update to 0.5**, it opens once, with your current choices already filled in.
 - **Any time later**, press `Ctrl K` and type *setup helper*. To go straight to one part, pick it from the results, for example **Setup helper › Routing** or **Setup helper › Permissions**.
 
 **Save & close** (or `Esc`) leaves at any point. Nothing is lost, because every change is already saved.
@@ -84,7 +84,7 @@ The 0.4.4 download has no setup helper. Use these instead:
 - **Help › Start here** walks you through connecting an AI and opening a project. Its **Use the account you already have** panel has **Install and sign in**, **Check connection** and **Use for the whole studio**.
 - **Agents › Setup** holds the same agent settings in four panes: **Team & models**, **Providers**, **Routing & fallback** and **Run behavior**.
 
-> **Known problem in 0.4.4:** the window that **Install and sign in** or **Sign in** opens may close at once, before it does anything. Install and sign in to the tool from a terminal instead, following its own setup instructions (**Setup instructions** opens them). Then come back and use **Check connection** and **Use for the whole studio**. This is fixed in 0.4.5.
+> **Known problem in 0.4.4:** the window that **Install and sign in** or **Sign in** opens may close at once, before it does anything. Install and sign in to the tool from a terminal instead, following its own setup instructions (**Setup instructions** opens them). Then come back and use **Check connection** and **Use for the whole studio**. This is fixed in 0.5.
 
 These are the sign-in commands Studio runs for each tool:
 
@@ -101,4 +101,4 @@ These are the sign-in commands Studio runs for each tool:
 - [Connect an AI](#/connections) covers every provider in more detail.
 - [Permissions and decisions](#/permissions) explains the four permission modes.
 - [Settings and Configuration](#/settings) covers everything that isn't about agents.
-- [Coming in 0.4.5](#/coming-in-0-4-5) lists everything else that's on its way.
+- [Coming in 0.5](#/coming-in-0-5) lists everything else that's on its way.

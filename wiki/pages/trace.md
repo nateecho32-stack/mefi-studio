@@ -2,7 +2,7 @@
 
 When something goes wrong, Trace shows you what Studio was doing. It puts Studio's logs in one viewer that you can search, filter and follow live. For slowdowns and connection checks, **Settings › System › Diagnostics** has a few more tools.
 
-Trace arrived in 0.4.4. Small fixes are <span class="status next">Coming in 0.4.5</span>, and a bigger logging rework is <span class="status progress">In progress for 0.4.6</span>.
+Trace arrived in 0.4.4. Small fixes are <span class="status next">Coming in 0.5</span>, and a bigger logging rework is <span class="status progress">In progress for 0.5</span>.
 
 ## Open Trace
 
@@ -37,7 +37,7 @@ The **Studio log** and **Window** channels live in memory. They keep this sessio
 6. **Newest first** flips to **Oldest first** and back.
 7. **Copy** copies the lines shown. **Open file** shows the log file in its folder, for channels that have a file.
 
-<span class="status next">Coming in 0.4.5</span> The chips keep keyboard focus while **Follow** updates them, the level chips no longer read "All undefined", errors read as plain sentences, and an empty channel says so where the lines would be.
+<span class="status next">Coming in 0.5</span> The chips keep keyboard focus while **Follow** updates them, the level chips no longer read "All undefined", errors read as plain sentences, and an empty channel says so where the lines would be.
 
 ## Diagnostics
 
@@ -59,9 +59,9 @@ The **Connection log** (provider, tool and probe activity) is in **Agents › Se
 
 You can also ask for help in the [Void Engine Discord](https://discord.gg/xgfKc5pVxG). It's optional; GitHub works without it.
 
-## In progress for 0.4.6
+## In progress for 0.5
 
-> <span class="status progress">In progress for 0.4.6</span> A logging rework: structured logs, a transcript of each run, and old logs archived instead of deleted, with all of them kept. It is outside the 0.4.5 scope; that release does not wait for this rework. See the [roadmap](../roadmap.html).
+> <span class="status progress">In progress for 0.5</span> A logging rework: structured logs, a transcript of each run, and old logs archived instead of deleted, with all of them kept. It was meant for 0.4.6, which was folded into 0.5. It's being built on a branch, so it isn't on `main` yet. See the [roadmap](../roadmap.html).
 
 ## Related pages
 

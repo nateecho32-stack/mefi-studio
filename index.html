@@ -10,7 +10,7 @@
 <meta property="og:site_name" content="Mefi Studio">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://nateecho32-stack.github.io/mefi-studio/">
-<meta property="og:image" content="https://nateecho32-stack.github.io/mefi-studio/assets/studio-community-card.jpg">
+<meta property="og:image" content="https://nateecho32-stack.github.io/mefi-studio/assets/shots/og-05.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:type" content="image/jpeg">
@@ -18,7 +18,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Mefi Studio — Bring an idea. Find your people.">
 <meta name="twitter:description" content="Build your ideas with coding agents and share them with people. Join the Discord, follow the roadmap and request what you'd like next. Free and open source for Windows.">
-<meta name="twitter:image" content="https://nateecho32-stack.github.io/mefi-studio/assets/studio-community-card.jpg">
+<meta name="twitter:image" content="https://nateecho32-stack.github.io/mefi-studio/assets/shots/og-05.jpg">
 <meta name="twitter:image:alt" content="Mefi Studio: Bring an idea. Find your people. Make it together.">
 <link rel="canonical" href="https://nateecho32-stack.github.io/mefi-studio/">
 <meta name="theme-color" content="#050d13">
@@ -62,13 +62,14 @@
     </details>
   </div>
 </header>
+<a class="now-strip" href="roadmap.html#now"><span class="now-dot" aria-hidden="true"></span><b>Now</b> <span>0.5 is being built, and Studio is moving to Rust.</span> <span class="now-more">What’s coming <span aria-hidden="true">→</span></span></a>
 <main id="main">
 
 <!-- HERO -->
 <section class="hero" aria-labelledby="hero-title">
   <canvas class="hero-sky" aria-hidden="true"></canvas>
   <div class="container hero-copy">
-    <a class="pill enter" style="--i:0" href="roadmap.html"><b>Roadmap</b> See what's done, what's being built and what's planned <span aria-hidden="true">→</span></a>
+    <a class="pill enter" style="--i:0" href="roadmap.html#now"><b>0.5</b> A new layout is being built, and Studio is moving to Rust <span aria-hidden="true">→</span></a>
     <h1 id="hero-title" class="enter" style="--i:1">Bring an idea.<br>Find your people.<br><span class="grad shine">Make it together.</span></h1>
     <p class="lede enter" style="--i:2">Mefi Studio is a free, open-source app for Windows. Build your ideas with coding agents, bring your work in progress to the Discord, and help decide what Studio becomes next.</p>
     <div class="cta-row enter" style="--i:3">
@@ -82,12 +83,17 @@
     <p class="fine enter" style="--i:5">Free and open source · Windows 10 and 11 · No Studio account · Discord is optional</p>
   </div>
   <div class="container hero-shot enter" style="--i:6">
-    <figure class="frame frame-hero">
-      <a class="zoom" href="assets/shots/vibe.webp"><img src="assets/shots/vibe.webp" width="2400" height="1500" alt="Vibe mode: a box that asks What's next for Notes app?, with Needs you, Building now, Freshly done and Fresh ideas cards below it" fetchpriority="high" decoding="async"><span class="visually-hidden"> (open a larger view)</span></a>
+    <figure class="frame window frame-hero">
+      <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i><span>Mefi Studio · 0.5 layout · Build</span></div>
+      <a class="zoom" href="assets/shots/05/build.webp"><img src="assets/shots/05/build.webp" width="1920" height="1080" alt="Studio's 0.5 layout in Build: the project's sessions grouped as Needs you, Running, Review, Queued and Done on the left; the session Search notes by tag in the middle with its run, steps and live output; its plan, brief, acceptance checks and versions in the inspector on the right" fetchpriority="high" decoding="async"><span class="visually-hidden"> (open a larger view)</span></a>
     </figure>
-    <div class="float-chip chip-a" aria-hidden="true"><i class="dot live"></i>2 agents building</div>
-    <div class="float-chip chip-b" aria-hidden="true"><i class="dot warn"></i>1 decision needs you</div>
-    <div class="float-chip chip-c" aria-hidden="true"><i class="dot info"></i>1 task checking its work</div>
+    <figure class="frame window frame-float" aria-hidden="true">
+      <div class="window-bar"><i></i><i></i><i></i><span>Vibe · Today</span></div>
+      <img src="assets/shots/05/today-960.webp" width="960" height="540" alt="" loading="lazy" decoding="async">
+    </figure>
+    <div class="float-chip chip-a" aria-hidden="true"><i class="dot live"></i>3 agents working</div>
+    <div class="float-chip chip-b" aria-hidden="true"><i class="dot warn"></i>2 need you</div>
+    <div class="float-chip chip-c" aria-hidden="true"><i class="dot info"></i>4 files changed · Accept or Revert</div>
   </div>
 </section>
 
@@ -107,6 +113,135 @@
       </ul>
     </div>
     <p class="fine center">Start here can install and sign in the first four. Product names belong to their owners, and Studio isn't affiliated with them.</p>
+  </div>
+</section>
+
+<!-- 0.5: A FIRST LOOK -->
+<section class="first-look" id="first-look" aria-labelledby="look-title">
+  <div class="container">
+    <div class="section-head center" data-reveal>
+      <p class="eyebrow"><span class="status next">Coming in 0.5</span></p>
+      <h2 id="look-title">A first look at the 0.5 layout.</h2>
+      <p>Vibe and Build share one frame: your sessions on the left, the work in the middle, an inspector beside it, tabs on top and a status bar below. It is built on main and can be switched on in Settings while it is being finished. The download is still 0.4.4.</p>
+    </div>
+    <div class="look" data-look data-reveal>
+      <div class="look-tabs" role="tablist" aria-label="Screens from the 0.5 layout">
+        <button type="button" role="tab" id="look-tab-build" aria-controls="look-build" aria-selected="true">Build</button>
+        <button type="button" role="tab" id="look-tab-today" aria-controls="look-today" aria-selected="false" tabindex="-1">Today</button>
+        <button type="button" role="tab" id="look-tab-inbox" aria-controls="look-inbox" aria-selected="false" tabindex="-1">Inbox</button>
+        <button type="button" role="tab" id="look-tab-changes" aria-controls="look-changes" aria-selected="false" tabindex="-1">Changes</button>
+        <button type="button" role="tab" id="look-tab-ask" aria-controls="look-ask" aria-selected="false" tabindex="-1">Questions</button>
+        <button type="button" role="tab" id="look-tab-search" aria-controls="look-search" aria-selected="false" tabindex="-1">Search</button>
+        <button type="button" role="tab" id="look-tab-size" aria-controls="look-size" aria-selected="false" tabindex="-1">Size</button>
+      </div>
+      <div class="look-panels">
+      <div class="look-panel" id="look-build" role="tabpanel" aria-labelledby="look-tab-build" tabindex="0">
+        <figure class="frame window look-shot">
+          <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i><span>Build</span></div>
+          <a class="zoom" href="assets/shots/05/build.webp"><img src="assets/shots/05/build.webp" width="1920" height="1080" alt="Build in the 0.5 layout: sessions on the left, a running session with its steps and live output in the middle, and its plan, brief, checks and versions in the inspector." loading="lazy" decoding="async"><span class="visually-hidden"> (open a larger view)</span></a>
+        </figure>
+        <div class="look-copy">
+          <h3>Build: your tasks as sessions</h3>
+          <p>Every task is a session with a thread: the brief, each run with its steps, your notes and questions, and what the worker said.</p>
+          <ul class="ticks"><li>Grouped as Needs you, Running, Review, Queued and Done.</li><li>An inspector with Plan, Changes, Checks, Preview and Agent.</li><li>A box for a Note, an Ask or a Change, with pictures and the @ # / picker.</li></ul>
+        </div>
+      </div>
+      <div class="look-panel" id="look-today" role="tabpanel" aria-labelledby="look-tab-today" tabindex="0">
+        <figure class="frame window look-shot">
+          <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i><span>Today</span></div>
+          <a class="zoom" href="assets/shots/05/today.webp"><img src="assets/shots/05/today.webp" width="1920" height="1080" alt="Vibe in the 0.5 layout: What’s next for Sunrise? with a box to build or talk it over, and a board of Needs you, Running, Review and Done today cards." loading="lazy" decoding="async"><span class="visually-hidden"> (open a larger view)</span></a>
+        </figure>
+        <div class="look-copy">
+          <h3>Today: Vibe’s calm home</h3>
+          <p>Vibe opens on Today: say what you want next, and keep an eye on what needs you, what runs, what to review and what is done.</p>
+          <ul class="ticks"><li>Answer a question or a permission from its card.</li><li>Mefi’s own decisions show with an Undo.</li><li>The same frame, tabs and status bar as Build.</li></ul>
+        </div>
+      </div>
+      <div class="look-panel" id="look-inbox" role="tabpanel" aria-labelledby="look-tab-inbox" tabindex="0">
+        <figure class="frame window look-shot">
+          <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i><span>Inbox</span></div>
+          <a class="zoom" href="assets/shots/05/inbox.webp"><img src="assets/shots/05/inbox.webp" width="1920" height="1080" alt="Work › Inbox: a question from OpenCode with Mefi’s suggestion and two options, and a failed check with Try again, It’s done and Drop it." loading="lazy" decoding="async"><span class="visually-hidden"> (open a larger view)</span></a>
+        </figure>
+        <div class="look-copy">
+          <h3>One Inbox for everything waiting on you</h3>
+          <p>Questions, permissions, approvals, reviews and stopped tasks, in one list that every count in the window agrees with.</p>
+          <ul class="ticks"><li>The recommended answer comes first, with Mefi’s reason.</li><li>Decide later, or answer in your own words.</li><li>Ctrl J opens it from anywhere; a Windows notification opens it too.</li></ul>
+        </div>
+      </div>
+      <div class="look-panel" id="look-changes" role="tabpanel" aria-labelledby="look-tab-changes" tabindex="0">
+        <figure class="frame window look-shot">
+          <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i><span>Changes</span></div>
+          <a class="zoom" href="assets/shots/05/changes.webp"><img src="assets/shots/05/changes.webp" width="1920" height="1080" alt="A finished session in review: the worker’s run and a picture you attached in the thread, and four changed files with Accept changes, Revert attempt and Revert per file in the inspector." loading="lazy" decoding="async"><span class="visually-hidden"> (open a larger view)</span></a>
+        </figure>
+        <div class="look-copy">
+          <h3>See what changed, and take it back</h3>
+          <p>After a worker runs, the inspector lists the files it changed. Accept them, or revert one file or the whole attempt.</p>
+          <ul class="ticks"><li>A private before and after copy of the folder, so a revert can be undone.</li><li>Lint and typecheck after an attempt, as advice.</li><li>Pictures on a message, read back in the thread.</li></ul>
+        </div>
+      </div>
+      <div class="look-panel" id="look-ask" role="tabpanel" aria-labelledby="look-tab-ask" tabindex="0">
+        <figure class="frame window look-shot">
+          <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i><span>Questions</span></div>
+          <a class="zoom" href="assets/shots/05/ask.webp"><img src="assets/shots/05/ask.webp" width="1920" height="1080" alt="A session whose worker asks: Should the empty state also appear when a search has no matches? with Yes, reuse it, Only when there are no notes and Decide later, above the message box." loading="lazy" decoding="async"><span class="visually-hidden"> (open a larger view)</span></a>
+        </figure>
+        <div class="look-copy">
+          <h3>Questions that wait for you, not on you</h3>
+          <p>When a worker needs a decision, the question sits above the box with its options, Mefi’s suggestion and why.</p>
+          <ul class="ticks"><li>Pick an option, answer in your own words, or decide later.</li><li>The plan, brief and acceptance checks stay beside it.</li><li>Every saved change to the brief is kept as a version.</li></ul>
+        </div>
+      </div>
+      <div class="look-panel" id="look-search" role="tabpanel" aria-labelledby="look-tab-search" tabindex="0">
+        <figure class="frame window look-shot">
+          <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i><span>Search</span></div>
+          <a class="zoom" href="assets/shots/05/search.webp"><img src="assets/shots/05/search.webp" width="1920" height="1080" alt="Search (Ctrl K) open over Build: sessions with their state, and the places on the rail with their keys." loading="lazy" decoding="async"><span class="visually-hidden"> (open a larger view)</span></a>
+        </figure>
+        <div class="look-copy">
+          <h3>Search, and everything else, in one place</h3>
+          <p>Ctrl K finds sessions, ideas, pages and actions, and can add work: type “task …” or “idea …”.</p>
+          <ul class="ticks"><li>It starts with what you used last.</li><li>Tabs you add and pin, which Studio keeps tidy.</li><li>Ctrl T, Ctrl W, Ctrl Tab and Ctrl 1 to 9.</li></ul>
+        </div>
+      </div>
+      <div class="look-panel" id="look-size" role="tabpanel" aria-labelledby="look-tab-size" tabindex="0">
+        <figure class="frame window look-shot look-shot-detail">
+          <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i><span>Size</span></div>
+          <a class="zoom" href="assets/shots/05/size.webp"><img src="assets/shots/05/size.webp" width="1112" height="860" alt="Size and density: sliders for interface scale and text size, density and detail choices, and a live miniature of the window beside them." loading="lazy" decoding="async"><span class="visually-hidden"> (open a larger view)</span></a>
+        </figure>
+        <div class="look-copy">
+          <h3>Size and density, with a live preview</h3>
+          <p>Make text and information bigger or smaller and watch a miniature of the window change before you apply it.</p>
+          <ul class="ticks"><li>Interface scale, text size, three densities and three detail levels.</li><li>No more flipping back and forth to check a setting.</li><li>Ctrl +, Ctrl − and Ctrl 0, remembered.</li></ul>
+        </div>
+      </div>
+      </div>
+    </div>
+    <p class="fine center look-note">Real screens from the current build, with sample data from a made-up Notes app and Sunrise project.</p>
+  </div>
+</section>
+
+<!-- MOVING TO RUST -->
+<section class="band rust" id="rust" aria-labelledby="rust-title">
+  <div class="container rust-grid">
+    <div class="section-head" data-reveal>
+      <p class="eyebrow">Under the hood</p>
+      <h2 id="rust-title">Studio is moving to Rust.</h2>
+      <p>Studio is moving from Electron to Rust with Tauri 2, in stages. The interface stays the same, and so do your settings and saved keys. The app keeps working at every step, and each part that moves gives the same answers as the code it replaces, held equal by tests that run both.</p>
+      <p class="fine">Started 3 October 2026. The download is still the Electron build, and the switch has no date yet.</p>
+      <div class="cta-row"><a class="btn" href="roadmap.html#moving-to-rust">Follow it on the roadmap <span aria-hidden="true">→</span></a></div>
+    </div>
+    <ol class="stages" data-reveal>
+      <li class="stage is-done">
+        <span class="stage-n" aria-hidden="true">1</span>
+        <div><h3>The Rust host</h3><p>Rust runs the window, the tray, dialogs, notifications, saved keys and the page’s bridge, with the engine beside it. It already runs from source, and a portable build can ship on it.</p><span class="status next">Built on main</span></div>
+      </li>
+      <li class="stage is-now">
+        <span class="stage-n" aria-hidden="true">2</span>
+        <div><h3>The engine moves into Rust</h3><p>Part by part: so far the session store, sync and worktrees, the file picker’s search, the Git chip, Skills, pictures, Revert, and settings and keys. Early result: the usage ledger’s repeat reads are about nine times faster.</p><span class="status progress">In progress</span></div>
+      </li>
+      <li class="stage">
+        <span class="stage-n" aria-hidden="true">3</span>
+        <div><h3>One Rust program</h3><p>A release carries only the Rust host, with no Node runtime beside it. One bridge release carries today’s installs across.</p><span class="status planned">Planned</span></div>
+      </li>
+    </ol>
   </div>
 </section>
 
@@ -345,7 +480,7 @@
         <span class="status rolling">Rolling out</span>
         <h3>Friends in Studio</h3>
         <p><b>Friends › Rooms</b> brings the community inside Studio: hangout rooms for up to 25 people and cowork rooms for up to 10, each with a plain-text chat. <b>Listen together</b> plays one link for everyone in a room, at the same point.</p>
-        <p class="note">Both are built: Listen together is in 0.4.4 and Rooms come with 0.4.5. They switch on once the community's rooms hub is online.</p>
+        <p class="note">Both are built: Listen together is in 0.4.4 and Rooms come with 0.5. They switch on once the community's rooms hub is online.</p>
       </article>
       <article class="card card-feature plan-card" data-reveal>
         <span class="status planned">Planned</span>
@@ -362,9 +497,9 @@
   <div class="container">
     <div class="head-row" data-reveal>
       <div class="section-head">
-        <p class="eyebrow">A quick look</p>
-        <h2 id="tour-title">See it before you download it.</h2>
-        <p>Three screens from Studio, using sample data from a made-up Notes app.</p>
+        <p class="eyebrow"><span class="status released">In 0.4.4</span></p>
+        <h2 id="tour-title">What’s in the download today.</h2>
+        <p>Three screens from 0.4.4, the version you can download now, using sample data from a made-up Notes app.</p>
       </div>
       <a class="btn" href="features.html">See every feature <span aria-hidden="true">→</span></a>
     </div>
@@ -413,7 +548,7 @@
       <div class="section-head">
         <p class="eyebrow">Roadmap</p>
         <h2 id="roadmap-title">Done, being worked on, and planned.</h2>
-        <p>0.4.5 brings the work already on main and small usability wins. Bigger rebuilds stay later; the current download is 0.4.4. <a href="roadmap.html#scope-0-4-5">See what will and won’t ship</a>.</p>
+        <p>0.5 is next: the new layout and everything built since 0.4.4, including what was planned for 0.4.5 and 0.4.6. The download is 0.4.4, and 0.5 has no date yet. <a href="roadmap.html#now">See what’s in 0.5</a>.</p>
       </div>
       <a class="btn" href="roadmap.html">See the whole roadmap <span aria-hidden="true">→</span></a>
     </div>
@@ -439,31 +574,31 @@
       </div>
       <div class="lane" data-reveal>
         <div class="lane-head"><h3>Being worked on</h3></div>
-        <p class="lane-note">Built and on its way to you, or being built now.</p>
+        <p class="lane-note">Built on main for 0.5, or being built now.</p>
         <div class="item">
-          <h4>The setup helper, and more</h4>
-          <p>Every agent setting in one guided menu, more than one Claude Code or Codex login, and PCs that stay in step.</p>
-          <div class="meta"><span class="status next">Coming in 0.4.5</span></div>
+          <h4>The 0.5 layout</h4>
+          <p>One frame for Vibe and Build, with sessions, an inspector, tabs you pin, one Inbox and Size and density.</p>
+          <div class="meta"><span class="status next">Coming in 0.5</span></div>
         </div>
         <div class="item">
-          <h4>The Fleet page</h4>
-          <p>Your team’s seats, pods and wires, with Graph, Table, Recent, Tree and Health views.</p>
-          <div class="meta"><span class="status next">Coming in 0.4.5</span></div>
+          <h4>Changes you can take back</h4>
+          <p>See the files a worker changed, then accept them or revert a file or the whole attempt.</p>
+          <div class="meta"><span class="status next">Coming in 0.5</span></div>
         </div>
         <div class="item">
-          <h4>Friends and tidier Ideas</h4>
-          <p>Friends gets its own main-menu section, and Ideas gets compact cards that fill the free space.</p>
-          <div class="meta"><span class="status next">Coming in 0.4.5</span></div>
+          <h4>Windows tells you when something needs you</h4>
+          <p>Notifications, a taskbar count and quiet hours, plus Report a problem and What’s new after an update.</p>
+          <div class="meta"><span class="status next">Coming in 0.5</span></div>
+        </div>
+        <div class="item">
+          <h4>Moving to Rust</h4>
+          <p>The Rust host is built; the engine is moving into Rust part by part.</p>
+          <div class="meta"><span class="status progress">In progress</span></div>
         </div>
         <div class="item">
           <h4>Faster agents, and logs that are kept</h4>
           <p>Agents get only what's new and pick up where they left off. Old logs are archived, never deleted.</p>
-          <div class="meta"><span class="status progress">In progress for 0.4.6</span></div>
-        </div>
-        <div class="item">
-          <h4>Friends 2.0</h4>
-          <p>A lobby with three rooms, who's online, and invite links that take one click.</p>
-          <div class="meta"><span class="status progress">In progress for 0.4.6</span></div>
+          <div class="meta"><span class="status progress">In progress for 0.5</span></div>
         </div>
         <div class="item">
           <h4>Rooms and Listen together</h4>
@@ -572,9 +707,9 @@
         <summary>What do the labels mean?</summary>
         <ul class="labels">
           <li><span class="status released">In 0.4.4</span> in the download today.</li>
-          <li><span class="status next">Coming in 0.4.5</span> built, and ships with 0.4.5, the next release.</li>
+          <li><span class="status next">Coming in 0.5</span> built on main, and ships with 0.5, the next release. 0.4.5 and 0.4.6 were folded into it.</li>
           <li><span class="status rolling">Rolling out</span> built, and switches on once the community's rooms hub is online.</li>
-          <li><span class="status progress">In progress for 0.4.6</span> being built now, for the release after 0.4.5.</li>
+          <li><span class="status progress">In progress for 0.5</span> being built now on its own branch, aiming for 0.5.</li>
           <li><span class="status planned">Planned</span> decided, with details still open. There are no dates.</li>
         </ul>
       </details>

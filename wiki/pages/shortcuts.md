@@ -35,15 +35,15 @@ The pin button, **Keep the menu open**, keeps the menu open beside the page in w
 | **Work** | Tasks, Plans, Ideas and Analyzer |
 | **Agents › Overview** | Your team, whether it's ready, and the queue switches |
 | **Agents › Setup** | Team & models, Providers, Routing & fallback, Run behavior |
-| **Agents › Live** | Command, Pipelines, Sessions, Activity, Trace, Overhead; <span class="status next">Coming in 0.4.5</span> Fleet |
+| **Agents › Live** | Command, Pipelines, Sessions, Activity, Trace, Overhead; <span class="status next">Coming in 0.5</span> Fleet |
 | **Agents › Workflows** | Brain maps, Playbook, Project map, Context |
 | **Agents › Models** | Catalog, Performance |
 | **Agents › Usage** | Recorded calls, Provider accounts |
 | **Settings** | General, Appearance, Audio, System. See [Settings](settings.md). |
 
-> <span class="status next">Coming in 0.4.5</span> **M+** opens Projects with keyboard focus on the project you're in.
+> <span class="status next">Coming in 0.5</span> **M+** opens Projects with keyboard focus on the project you're in.
 
-<span class="status next">Coming in 0.4.5</span> Build adds a **Friends** section with **Rooms**, **Your PCs** and **Playground**. Vibe’s rail gets a Friends stop too. Search opens Friends or any of those cards directly in both modes; the companion’s Friends bubble stays available.
+<span class="status next">Coming in 0.5</span> Build adds a **Friends** section with **Rooms**, **Your PCs** and **Playground**. Vibe’s rail gets a Friends stop too. Search opens Friends or any of those cards directly in both modes; the companion’s Friends bubble stays available.
 
 ## Single keys
 
@@ -71,7 +71,7 @@ These work when you're not typing in a text field.
 | --- | --- |
 | `Ctrl K` | Search Studio |
 | `Ctrl ,` | Open Settings, even while typing |
-| `Ctrl Shift ,` | <span class="status next">Coming in 0.4.5</span> Open **Configuration**: every setting in one searchable tree |
+| `Ctrl Shift ,` | <span class="status next">Coming in 0.5</span> Open **Configuration**: every setting in one searchable tree |
 | `/` | Search the model catalog |
 | `R` | Refresh the model catalog |
 | `G` | Pin the node-tree preview |

@@ -61,6 +61,7 @@
     </details>
   </div>
 </header>
+<a class="now-strip" href="roadmap.html#now"><span class="now-dot" aria-hidden="true"></span><b>Now</b> <span>0.5 is being built, and Studio is moving to Rust.</span> <span class="now-more">What’s coming <span aria-hidden="true">→</span></span></a>
 
 <main id="main">
 
@@ -112,7 +113,7 @@
     <div class="container">
       <div class="notice warn" data-reveal>
         <h2 id="from044-title">On 0.4.4? Your next update is by hand</h2>
-        <p>The <strong>Update</strong> button in 0.4.4 can download a new release but can't install it: its install step doesn't run after Studio closes. 0.4.5 fixes that, so when it comes out, move to it by hand this once:</p>
+        <p>The <strong>Update</strong> button in 0.4.4 can download a new release but can't install it: its install step doesn't run after Studio closes. 0.5, the next release, fixes that, so when it comes out, move to it by hand this once. The 0.5 release will say how; these are the steps as they stand today:</p>
         <ol>
           <li>Quit Studio. Closing the window keeps it in the tray, so right-click the tray icon and choose <strong>Quit</strong>.</li>
           <li>Unzip the new release into a new folder.</li>
@@ -227,18 +228,19 @@ $want = (Get-Content "$zip.sha256").Split(" ")[0]
       </div>
       <div class="notice" data-reveal>
         <h3>On 0.4.4?</h3>
-        <p>0.4.4 can't install a new release by itself. When 0.4.5 is out, <a href="#from-044">update by hand this once</a>. From 0.4.5 on, <strong>Update</strong> installs new releases for you.</p>
+        <p>0.4.4 can't install a new release by itself. When 0.5 is out, <a href="#from-044">update by hand this once</a>. From 0.5 on, <strong>Update</strong> installs new releases for you.</p>
       </div>
     </div>
   </section>
 
-  <!-- COMING IN 0.4.5 -->
+  <!-- COMING IN 0.5 -->
   <section class="section-tight" aria-labelledby="coming-title">
     <div class="container">
-      <div class="coming" data-until="0.4.5" data-reveal>
+      <div class="coming" data-until="0.5" data-reveal>
         <div class="coming-head">
-          <h2 id="coming-title">Next up <span class="status next">Coming in 0.4.5</span></h2>
-          <p>Built already, and it ships with 0.4.5. <a href="wiki/#/coming-in-0-4-5">See everything that's coming</a>.</p>
+          <h2 id="coming-title">Next up <span class="status next">Coming in 0.5</span></h2>
+          <p>Built already, and it ships with 0.5, the next release. There's no 0.4.5 or 0.4.6: both were folded into 0.5. <a href="wiki/#/coming-in-0-5">See everything that's coming</a>.</p>
+          <p class="muted">0.5 is being built now and has no release date yet. Studio is also moving to Rust, in stages, with the same screens, settings and API keys. The download is still the Electron build, and there's no date for the switch. On 0.4.4, you'll move to 0.5 by hand when it ships, and the release will say how.</p>
         </div>
         <div class="grid-2">
           <div>
@@ -260,7 +262,7 @@ $want = (Get-Content "$zip.sha256").Split(" ")[0]
         </div>
         <a class="more" href="roadmap.html">See everything on the roadmap →</a>
       </div>
-      <div class="coming" data-from="0.4.5" hidden>
+      <div class="coming" data-from="0.5" hidden>
         <div class="coming-head">
           <h2>A newer release is out</h2>
           <p>The download above is the newest build. Its <a href="https://github.com/nateecho32-stack/mefi-studio/releases/latest" rel="noopener">release notes</a> list what changed, and the <a href="roadmap.html">roadmap</a> shows what comes next.</p>
@@ -302,7 +304,7 @@ npm start</code></pre>
         </a>
         <a class="card card-link" href="https://github.com/nateecho32-stack/mefi-studio/blob/main/CHANGELOG.md" rel="noopener" data-reveal>
           <h3>Changelog</h3>
-          <p>Every change, release by release, including what's already built for 0.4.5.</p>
+          <p>Every change, release by release, including what's already built for 0.5.</p>
           <span class="more">Read the changelog <span aria-hidden="true">↗</span></span>
         </a>
         <a class="card card-link" href="wiki/#/troubleshooting" data-reveal>

@@ -42,7 +42,7 @@
   const metaDescription = document.querySelector('meta[name="description"]');
   const baseDescription = metaDescription ? metaDescription.getAttribute("content") : "";
 
-  let manifest = { title: "Mefi Studio guide", sections: [], aliases: {}, release: "0.4.4", next: "0.4.5" };
+  let manifest = { title: "Mefi Studio guide", sections: [], aliases: {}, release: "0.4.4", next: "0.5" };
   let flat = [];
   let current = null;   // the page being shown or loaded
   let rendered = null;  // the slug whose content is in the article
@@ -95,7 +95,7 @@
   }
   function hideNotice() { el.notice.hidden = true; }
   // A heading's words without its "#" link or status badge (ids stay stable
-  // when a "Coming in 0.4.5" badge is later removed).
+  // when a "Coming in 0.5" badge is later removed).
   function headingText(h) {
     const copy = h.cloneNode(true);
     copy.querySelectorAll(".anchor, .status").forEach((n) => n.remove());
@@ -133,7 +133,7 @@
       title: data.title || "Mefi Studio guide",
       aliases: data.aliases && typeof data.aliases === "object" ? data.aliases : {},
       release: data.release || "0.4.4",
-      next: data.next || "0.4.5",
+      next: data.next || "0.5",
     };
     return manifest;
   }
@@ -273,7 +273,7 @@
       img.decoding = "async";
     });
 
-    // "> **Coming in 0.4.5:** …" and friends take the status colours.
+    // "> **Coming in 0.5:** …" and friends take the status colours.
     root.querySelectorAll("blockquote").forEach((q) => {
       const p = q.firstElementChild;
       const lead = p && p.firstChild && p.firstChild.nodeType === 1 ? p.firstChild : null;

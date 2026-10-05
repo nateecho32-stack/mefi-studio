@@ -37,9 +37,9 @@ Decoration only: every page reads the same without it, and `prefers-reduced-moti
 ## Status labels
 
 Every feature and roadmap item says where it stands. Keep the labels honest:
-- Before a release: **In 0.4.4** (in the download today) and **Coming in 0.4.5** (built on `main`, ships with the next release).
-- After it: **In Studio** (in the download) and **New in 0.4.5** (new in the latest release). The switch is one commit, "Site: pre-release form for 0.4.5"; revert it when 0.4.5 is published.
-- **In progress** (with the release it's meant for, such as 0.4.6): being built now, not in a download yet.
+- Before a release: **In 0.4.4** (in the download today) and **Coming in 0.5** (built on `main`, ships with the next release). 0.4.5 and 0.4.6 were folded into 0.5.
+- After it: **In Studio** (in the download) and **New in 0.5** (new in the latest release).
+- **In progress** (with the release it's meant for, such as "In progress for 0.5"): being built now, not in a download yet.
 - **Rolling out**: built, but it needs the community rooms hub and the Discord link to be online.
 - **Planned**, and ideas with no date.
 

@@ -81,7 +81,7 @@
 .dl-update .notice p { color: var(--muted); }
 .dl-update .notice strong { color: var(--ivory); }
 
-/* ---- coming in 0.4.5 ---- */
+/* ---- coming in 0.5 ---- */
 .coming { padding: 30px; border-radius: var(--r-lg); border: 1px solid rgba(140, 123, 255, 0.34); background: radial-gradient(640px 260px at 100% 0%, rgba(140, 123, 255, 0.14), transparent 70%), var(--panel-solid); }
 .coming-head { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: baseline; justify-content: space-between; margin-bottom: 18px; }
 .coming-head h2 { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }

@@ -136,4 +136,33 @@
     box.addEventListener("click", () => box.close());
     box.addEventListener("close", () => { big.removeAttribute("src"); if (opener) opener.focus(); });
   }
+
+  // ---- 0.5 first look: a tab row that shows one screen at a time ----------
+  // Without script every panel shows, one under the other.
+  const look = document.querySelector("[data-look]");
+  if (look) {
+    const tabs = Array.from(look.querySelectorAll('[role="tab"]'));
+    const panels = tabs.map((tab) => document.getElementById(tab.getAttribute("aria-controls")));
+    look.classList.add("js-look");
+    const show = (index, focus) => {
+      tabs.forEach((tab, i) => {
+        const on = i === index;
+        tab.setAttribute("aria-selected", on ? "true" : "false");
+        tab.tabIndex = on ? 0 : -1;
+        if (panels[i]) panels[i].hidden = !on;
+      });
+      if (focus) tabs[index].focus();
+    };
+    tabs.forEach((tab, i) => {
+      tab.addEventListener("click", () => show(i, false));
+      tab.addEventListener("keydown", (event) => {
+        const last = tabs.length - 1;
+        const to = { ArrowRight: i === last ? 0 : i + 1, ArrowLeft: i === 0 ? last : i - 1, Home: 0, End: last }[event.key];
+        if (to === undefined) return;
+        event.preventDefault();
+        show(to, true);
+      });
+    });
+    show(Math.max(0, tabs.findIndex((tab) => tab.getAttribute("aria-selected") === "true")), false);
+  }
 })();

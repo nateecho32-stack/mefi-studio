@@ -1,10 +1,10 @@
 # Updates
 
-The current release is **0.4.4**, from 27 September 2026. The next one, 0.4.5, includes work built on `main` and selected usability fixes. It has not been published and has no release date. See [the 0.4.5 scope](#/coming-in-0-4-5/what-will-and-wont-ship). A source install gets new work by pulling `main`.
+The current release is **0.4.4**, from 27 September 2026. The next one is 0.5, and it's being built now. It includes work built on `main` and selected usability fixes, and it has no release date. There is no 0.4.5 or 0.4.6: both were folded into 0.5. See [the 0.5 scope](#/coming-in-0-5/what-will-and-wont-ship). A source install gets new work by pulling `main`.
 
 Open **Settings › System › Updates** to see your version and look for a newer one.
 
-> **In 0.4.4, in-app updates don't finish installing.** Studio downloads and verifies the new release, but the step that installs it after Studio closes never runs. So when 0.4.5 comes out, [update by hand](#update-from-044-by-hand), just this once. <span class="status next">Coming in 0.4.5</span> The install step works, so from 0.4.5 on, updates install themselves.
+> **In 0.4.4, in-app updates don't finish installing.** Studio downloads and verifies the new release, but the step that installs it after Studio closes never runs. So when 0.5 comes out, [update by hand](#update-from-044-by-hand), just this once. The 0.5 release will say how. <span class="status next">Coming in 0.5</span> The install step works, so from 0.5 on, updates install themselves.
 
 ## How the portable build updates
 
@@ -20,6 +20,8 @@ The zip and the executable keep the older **Mefi Studio AI+** names. That's expe
 
 ## Update from 0.4.4 by hand
 
+These are the steps as they stand today. The 0.5 release will say how to move to it, so read its release notes first.
+
 1. Download the new release zip from the [download page](../../download.html) or [GitHub releases](https://github.com/nateecho32-stack/mefi-studio/releases). You can [check its SHA-256](installation.md#check-the-download) first.
 2. Quit Studio. Closing the window only hides it in the tray, so right-click the tray icon and choose **Quit**.
 3. Extract the new zip into a **new** folder. Don't extract it over the old one.
@@ -27,6 +29,10 @@ The zip and the executable keep the older **Mefi Studio AI+** names. That's expe
 5. Open `Mefi Studio AI+.exe` in the new folder.
 
 Your settings, saved keys, project list and Discord link live in `%APPDATA%\Mefi's Studio AI+`, so they carry over by themselves. Keep the old folder until you've checked that everything is there.
+
+## Studio is moving to Rust
+
+Studio is moving from Electron to Rust with Tauri 2, in stages. The work started on 3 October 2026. The Electron build is unchanged and is still what ships. The screens, settings and API keys stay the same, and there's no date for the switch. A source install can already run the Rust host with `npm run host`. See [Studio is moving to Rust](#/coming-in-0-5/studio-is-moving-to-rust).
 
 ## Update a source install
 
@@ -51,7 +57,7 @@ Turn off **Apply updates automatically** if you'd rather choose when changes app
 
 A public release needs no GitHub token. A private repository needs a read-only token, saved in **Settings › System › Updates**.
 
-> <span class="status next">Coming in 0.4.5</span> The [setup helper](setup-helper.md)'s **Machine & app** section also holds **Install updates automatically** and the GitHub token.
+> <span class="status next">Coming in 0.5</span> The [setup helper](setup-helper.md)'s **Machine & app** section also holds **Install updates automatically** and the GitHub token.
 
 ## Publishing a release
 

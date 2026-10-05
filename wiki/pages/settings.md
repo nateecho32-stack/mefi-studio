@@ -2,7 +2,7 @@
 
 **Settings** holds your personal choices: your names, how Studio starts, how it looks and sounds, updates and diagnostics. Everything about agents lives in **Agents › Setup** instead.
 
-Two new ways to find settings are <span class="status next">Coming in 0.4.5</span>: **Configuration**, a searchable list of every setting, and the [setup helper](#/setup-helper), which walks you through every agent setting.
+Two new ways to find settings are <span class="status next">Coming in 0.5</span>: **Configuration**, a searchable list of every setting, and the [setup helper](#/setup-helper), which walks you through every agent setting.
 
 ## Open Settings
 
@@ -23,7 +23,7 @@ Settings has four categories: **General**, **Appearance**, **Audio** and **Syste
 - **Open Home on launch**, which reads **Open Vibe on launch** in Vibe mode. Turn it off to open the Command view instead.
 - **Studio mode**: **Vibe** or **Build**. See [Vibe mode](#/vibe-mode).
 
-<span class="status next">Coming in 0.4.5</span> Three more startup settings:
+<span class="status next">Coming in 0.5</span> Three more startup settings:
 
 - **When Studio opens**: **Resume what I had** (the default), **Start agents** or **Keep agents off**. The launch screen's main button follows it, and opening with agents off stays one click away.
 - **Show Command view after 5 quiet minutes**, off by default. In 0.4.4, Studio switched to the Command view by itself after five quiet minutes.
@@ -35,7 +35,7 @@ Your link to the Void Engine Discord. **Help › Community** opens this card too
 
 When linking is available, you'll see **Link my Discord**, **Check now** and **Unlink**. Linking reads your Discord id and name, and your roles and join date in the Void Engine server. Nothing about your projects is sent.
 
-<span class="status next">Coming in 0.4.5</span> **Connection details** takes the Mefi Studio Link application ID and the rooms hub's address, once per PC. **Save** says whether the hub answered.
+<span class="status next">Coming in 0.5</span> **Connection details** takes the Mefi Studio Link application ID and the rooms hub's address, once per PC. **Save** says whether the hub answered.
 
 > <span class="status rolling">Rolling out</span> Discord linking and rooms switch on once the owner's rooms hub is online and the Mefi Studio Link app is set up. See [Friends, rooms and playdates](#/friends-and-rooms) and [The Void Engine Discord](#/discord).
 
@@ -55,7 +55,7 @@ Themes, node styles, layouts, motion and glass, shown beside the live tree. Pres
 - **Published builds**: the portable app checks GitHub every 20 minutes. **Check GitHub** checks now, and **Update** downloads the new build and checks it.
 - **Live update** is for source installs: Studio applies changes to its own files while it runs. **Apply updates automatically** lets it do that without asking.
 
-> **In 0.4.4, Update doesn't finish.** It downloads and checks the new release, but the step that installs it never runs. Update by hand this once: the [download page](../download.html#updates) has the steps. This is fixed in 0.4.5. See [Updates](#/updates).
+> **In 0.4.4, Update doesn't finish.** It downloads and checks the new release, but the step that installs it never runs. Update by hand this once: the [download page](../download.html#updates) has the steps. This is fixed in 0.5, the next release. See [Updates](#/updates).
 
 ### Diagnostics
 
@@ -66,7 +66,7 @@ The speed probe, the Performance profiler, the auditor and machine tools. See [T
 Two optional extras for separate projects:
 
 - **Integrations** launches the optional Ruins Runner game. See [Ruins Runner](#/ruins-runner).
-- **Discord Server Styler** starts a separate bot and its local dashboard. <span class="status next">Coming in 0.4.5</span> The card stays hidden until Studio finds that project.
+- **Discord Server Styler** starts a separate bot and its local dashboard. <span class="status next">Coming in 0.5</span> The card stays hidden until Studio finds that project.
 
 ## Agent settings
 
@@ -88,7 +88,7 @@ Team changes wait for **Apply changes**, or **Discard draft** to drop them. Olde
 
 ## Configuration
 
-> <span class="status next">Coming in 0.4.5</span> Configuration isn't in the 0.4.4 download.
+> <span class="status next">Coming in 0.5</span> Configuration isn't in the 0.4.4 download.
 
 Configuration lists every setting in Studio in one searchable tree.
 
@@ -106,4 +106,6 @@ Your settings, saved keys, project list and Discord link are stored on your PC i
 
 ## Planned
 
-After 0.4.5, a menu overhaul is planned that puts every setting on one Settings page. See the [roadmap](../roadmap.html).
+A menu overhaul that puts every setting on one Settings page is planned, with no release set yet. See the [roadmap](../roadmap.html).
+
+<span class="status next">Coming in 0.5</span> The optional 0.5 layout has new Settings of its own. Turn the layout on with **Try the 0.5 layout** in Settings. See [the 0.5 layout](#/coming-in-0-5/the-05-layout).

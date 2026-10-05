@@ -50,7 +50,7 @@
 .prose .table-wrap table { margin: 0; }
 .prose .table-wrap:focus-visible { outline-offset: 2px; }
 
-/* Status notes: "> **Coming in 0.4.5:** …" and friends (the words carry the
+/* Status notes: "> **Coming in 0.5:** …" and friends (the words carry the
    status; the colour only repeats it). */
 .prose blockquote.note { color: var(--text); }
 .prose blockquote.note-next { border-left-color: var(--void); background: rgba(140, 123, 255, 0.08); }

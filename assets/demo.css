@@ -22,6 +22,8 @@
 @keyframes marquee { to { transform: translateX(calc(-50% - 6px)); } }
 
 /* ---- the walkthrough ------------------------------------------------------ */
+/* The stage's glow reaches past the column; clip it at the page edge so the page never scrolls sideways. */
+.flow { overflow-x: clip; }
 .flow-grid { display: grid; grid-template-columns: minmax(290px, 0.7fr) minmax(0, 1.5fr); gap: 44px; align-items: center; }
 .flow-side { display: grid; gap: 14px; align-content: start; }
 .flow-steps { position: relative; display: grid; gap: 4px; }

@@ -44,12 +44,18 @@ An update's **Restart now** stops the coding agents, saves their latest work and
 
 ## Known problems in 0.4.4
 
-- **In-app updates don't finish installing.** Studio can check GitHub, download a new release and verify it, but the step that installs it after Studio closes doesn't run. When 0.4.5 comes out, [update by hand](updates.md#update-from-044-by-hand). The fix ships in 0.4.5, so in-app updates work from 0.4.5 on.
-- **Guided sign-in windows may close at once.** [Sign in from a terminal](connections.md#sign-in-from-a-terminal), then use **Check connection** and **Use for the whole studio**. Fixed in 0.4.5.
+- **In-app updates don't finish installing.** Studio can check GitHub, download a new release and verify it, but the step that installs it after Studio closes doesn't run. When 0.5 comes out, [update by hand](updates.md#update-from-044-by-hand); the 0.5 release will say how. The fix ships in 0.5, so in-app updates work from 0.5 on.
+- **Guided sign-in windows may close at once.** [Sign in from a terminal](connections.md#sign-in-from-a-terminal), then use **Check connection** and **Use for the whole studio**. Fixed in 0.5.
 
-## Coming in 0.4.5
+## Coming in 0.5
 
-The next release is already taking shape on `main`: the setup helper, clearer reasons when agents aren't working, more than one Claude Code or Codex login, sharing between your own PCs, and more. Rooms and companion playdates are built too, and they're <span class="status rolling">Rolling out</span>. [Coming in 0.4.5](coming-in-0-4-5.md) lists it all.
+0.4.4 is still the current download. The next release is 0.5, and it's being built now, with no release date yet. There is no 0.4.5 or 0.4.6: both were folded into 0.5.
+
+0.5 is taking shape on `main`: the setup helper, clearer reasons when agents aren't working, more than one Claude Code or Codex login, sharing between your own PCs, an optional new layout, Windows notifications, undo for deleted tasks and ideas, Sign in with ChatGPT, and more. Rooms and companion playdates are built too, and they're <span class="status rolling">Rolling out</span>. Faster agent sends, kept logs, a faster launch and Friends 2.0 are planned for 0.5 and still <span class="status progress">In progress</span>. [Coming in 0.5](coming-in-0-5.md) lists it all.
+
+## Studio is moving to Rust
+
+On 3 October 2026, work started on moving Studio to Rust with Tauri 2, in stages. The screens stay HTML and JavaScript, with the same settings and API keys. The Electron build is unchanged and is still what ships, and there's no date for the switch. [Studio is moving to Rust](coming-in-0-5.md#studio-is-moving-to-rust) has the stages.
 
 ## Full history
 

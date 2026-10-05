@@ -13,7 +13,7 @@ Now and then Studio shows a small card inviting you to join. **Not now** snoozes
 ## Share your work
 
 - **In the Discord**: post it to the showcase, with a link and a short description. Ask for feedback, or find someone to build with.
-- **With a friend** <span class="status next">Coming in 0.4.5</span>: **Share with friends** saves one brain, recipe, team setup, set of model results, memory note or your preferences to a `.mefishare` file you can send however you like. Studio cleans it and shows you what's inside first. A friend's file is reviewed before you use it, and it can't change your permissions. This needs no rooms hub. See [Your PCs](your-pcs.md).
+- **With a friend** <span class="status next">Coming in 0.5</span>: **Share with friends** saves one brain, recipe, team setup, set of model results, memory note or your preferences to a `.mefishare` file you can send however you like. Studio cleans it and shows you what's inside first. A friend's file is reviewed before you use it, and it can't change your permissions. This needs no rooms hub. See [Your PCs](your-pcs.md).
 
 ## Friends in Studio <span class="status rolling">Rolling out</span>
 
@@ -22,7 +22,7 @@ Your companion's **Friends** bubble is where friends live in Studio. Most of it 
 - **Link my Discord**, under **Settings › General › Community**, is optional and unlocks nothing. Listen together and rooms use it to find your Void Engine rooms. Linking reads your Discord id and name, and your roles and join date in the server, and nothing about your projects.
 - **Listen together**: in **Music & video › Links**, pick one of your rooms and play a link for it. Everyone else in the room chooses **Listen along**. **Share what I'm playing** is a separate, optional setting that lets the Void Engine bot show what you're playing with `/nowplaying`.
 
-> <span class="status next">Coming in 0.4.5</span> More of Friends arrives, still rolling out while the hub comes online:
+> <span class="status next">Coming in 0.5</span> More of Friends arrives, still rolling out while the hub comes online:
 >
 > - **Friends › Rooms**: browse your rooms and the listed ones, **Ask to join** with a note, and accept or decline invites. If you have the Room Host role, **Make a room**: a Hangout (up to 25 people) or a Cowork room (up to 10). Room chat is plain text with @names, links are never made clickable, and every message can be reported. Void Engine moderators can read every room.
 > - **Cowork rooms for agents**: **Use this room for this project's agents** lets agents on several PCs share a project without editing the same file at once.

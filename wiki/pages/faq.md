@@ -24,7 +24,7 @@ You can open the app, browse the catalog and use your saved work without any AI 
 
 OpenCode, Claude Code, Codex, Grok and Antigravity. Start with one you already use, and check its connection before you create a task.
 
-In 0.4.4, work built by a tool other than OpenCode usually waits for you to confirm it. <span class="status next">Coming in 0.4.5</span> Studio checks every tool's builds itself. See [Verification](verification.md).
+In 0.4.4, work built by a tool other than OpenCode usually waits for you to confirm it. <span class="status next">Coming in 0.5</span> Studio checks every tool's builds itself. See [Verification](verification.md).
 
 ## What are Vibe and Build?
 
@@ -32,7 +32,7 @@ In 0.4.4, work built by a tool other than OpenCode usually waits for you to conf
 
 ## Does it work on macOS or Linux?
 
-Studio is built and tested for Windows 10 and 11. Other systems are untested. Linux support is <span class="status planned">Planned</span> for after 0.4.5: see the [roadmap](../roadmap.html). The portable Windows download needs no installer or Node.js.
+Studio is built and tested for Windows 10 and 11. Other systems are untested. Linux support is <span class="status planned">Planned</span> for a release after 0.5: see the [roadmap](../roadmap.html). The portable Windows download needs no installer or Node.js.
 
 ## Does my code leave my computer?
 
@@ -54,7 +54,7 @@ Yes. Studio can run up to three builders at once and coordinates which files the
 
 Yes. Closing the window hides Studio in the Windows tray, and running work carries on while your PC is on and awake. To exit, choose **Quit** from the tray icon. A sleeping or switched-off PC can't run agents.
 
-> <span class="status next">Coming in 0.4.5</span> A **Keep running in the tray when the window closes** switch in the [setup helper](setup-helper.md), and **Start with Windows**, which opens Studio in the tray when you sign in.
+> <span class="status next">Coming in 0.5</span> A **Keep running in the tray when the window closes** switch in the [setup helper](setup-helper.md), and **Start with Windows**, which opens Studio in the tray when you sign in.
 
 ## Why does a task say Verifying?
 
@@ -64,23 +64,27 @@ The worker finished its attempt, but Studio still needs evidence that it works. 
 
 Yes. Install it on each PC. **Friends › Your PCs** keeps a project's Git commits in step through GitHub, with **Sync this PC**. Tasks, conversations and settings don't travel that way, so set up your connections on each PC.
 
-> <span class="status next">Coming in 0.4.5</span> **Share between my PCs** carries the items you choose, such as open tasks and ideas, preferences and model results, between your own PCs. Keys go only after you type a confirmation. Conversations still stay on each PC. See [Your PCs](your-pcs.md).
+> <span class="status next">Coming in 0.5</span> **Share between my PCs** carries the items you choose, such as open tasks and ideas, preferences and model results, between your own PCs. Keys go only after you type a confirmation. Conversations still stay on each PC. See [Your PCs](your-pcs.md).
 
 ## Can I share my setup with a friend?
 
-<span class="status next">Coming in 0.4.5</span> Yes. **Share with friends** saves one brain, recipe, team setup, set of model results, memory note or your preferences to a `.mefishare` file. Studio cleans it and shows you what's inside first. A friend's file is reviewed before you use it, and it can't change your permissions.
+<span class="status next">Coming in 0.5</span> Yes. **Share with friends** saves one brain, recipe, team setup, set of model results, memory note or your preferences to a `.mefishare` file. Studio cleans it and shows you what's inside first. A friend's file is reviewed before you use it, and it can't change your permissions.
 
 ## Can I use two Claude or ChatGPT subscriptions?
 
-<span class="status next">Coming in 0.4.5</span> Yes. Add up to six Claude Code or Codex logins under **Connect an AI › More than one login** in the setup helper. Studio moves to the next login when one reaches its usage limit. See [Connect an AI](connections.md#more-than-one-login).
+<span class="status next">Coming in 0.5</span> Yes. Add up to six Claude Code or Codex logins under **Connect an AI › More than one login** in the setup helper. Studio moves to the next login when one reaches its usage limit. See [Connect an AI](connections.md#more-than-one-login).
 
-## What's in 0.4.5, and when does it come out?
+## What's in 0.5, and when does it come out?
 
-The built work selected for 0.4.5 is on `main`, but the release is not published and has no date yet: see [Coming in 0.4.5](coming-in-0-4-5.md) for its scope and service dependencies. The release after it, 0.4.6, is <span class="status progress">In progress</span>, with faster agents, kept logs, a faster launch and Friends 2.0. There's no date yet. The [roadmap](../roadmap.html) shows what's being built.
+0.5 is the next release. There is no 0.4.5 or 0.4.6: both were folded into 0.5. The work built for 0.4.5 is on `main` and ships with 0.5, along with an optional new layout and more. Faster agents, kept logs, a faster launch and Friends 2.0 were meant for 0.4.6. They're planned for 0.5 and still <span class="status progress">In progress</span> on branches. 0.5 isn't published and has no date yet. [Coming in 0.5](coming-in-0-5.md) lists its scope and service dependencies, and the [roadmap](../roadmap.html) shows what's being built.
+
+## Is Studio moving to Rust?
+
+Yes, in stages. The move started on 3 October 2026 and uses Tauri 2. The screens stay HTML and JavaScript, and your settings and API keys stay the same. The Electron build is still what ships, and there's no date for the switch. See [Studio is moving to Rust](coming-in-0-5.md#studio-is-moving-to-rust).
 
 ## How do I update?
 
-Open **Settings › System › Updates** and choose **Check GitHub**, or use the [download page](../../download.html). In 0.4.4 the in-app update can't finish installing, so move to 0.4.5 [by hand](updates.md#update-from-044-by-hand).
+Open **Settings › System › Updates** and choose **Check GitHub**, or use the [download page](../../download.html). In 0.4.4 the in-app update can't finish installing, so move to 0.5 [by hand](updates.md#update-from-044-by-hand) when it comes out. The 0.5 release will say how.
 
 ## Where do I ask for a feature or get help?
 

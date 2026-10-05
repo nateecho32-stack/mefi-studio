@@ -24,7 +24,7 @@ Discord linking and rooms need the rooms hub that the Studio owner runs, and the
 
 **Audio link** uses desktop audio or the microphone only when you turn it on, and only to move the visuals: nothing is transcribed. A "Hey Studio" voice shortcut is an <span class="status idea">Idea</span>, not a feature.
 
-## New network features in 0.4.5 <span class="status next">Coming in 0.4.5</span>
+## New network features in 0.5 <span class="status next">Coming in 0.5</span>
 
 | Feature | What it sends, and where |
 | --- | --- |
@@ -47,7 +47,7 @@ Studio coordinates its own workers to avoid clashing edits. It can't stop anothe
 
 ## Sharing a bug report
 
-Include the app version, what you tried and the error you saw. Remove keys, tokens, private paths and project content from screenshots and log excerpts. Don't post `auth.json`, `community-auth.json`, `settings.json`, `session.json` or your `data` folder. From 0.4.5, also keep your vault pairing code private, and don't share a `.mefishare` file you haven't reviewed.
+Include the app version, what you tried and the error you saw. Remove keys, tokens, private paths and project content from screenshots and log excerpts. Don't post `auth.json`, `community-auth.json`, `settings.json`, `session.json` or your `data` folder. From 0.5, also keep your vault pairing code private, and don't share a `.mefishare` file you haven't reviewed.
 
 [Trace, logs and diagnostics](trace.md) explains how to gather logs safely.
 

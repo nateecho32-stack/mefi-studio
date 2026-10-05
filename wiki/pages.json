@@ -1,12 +1,14 @@
 {
   "title": "Mefi Studio guide",
   "release": "0.4.4",
-  "next": "0.4.5",
+  "next": "0.5",
   "aliases": {
     "logs-and-diagnostics": "trace",
     "logs": "trace",
     "permission-modes": "permissions",
-    "coming-in-045": "coming-in-0-4-5",
+    "coming-in-045": "coming-in-0-5",
+    "coming-in-0-4-5": "coming-in-0-5",
+    "coming-in-05": "coming-in-0-5",
     "setup": "setup-helper",
     "vibe": "vibe-mode",
     "rooms": "friends-and-rooms",
@@ -41,7 +43,7 @@
         {
           "slug": "setup-helper",
           "title": "The setup helper",
-          "summary": "Coming in 0.4.5: one guided sheet for connecting an AI, permissions and every agent setting",
+          "summary": "Coming in 0.5: one guided sheet for connecting an AI, permissions and every agent setting",
           "status": "next"
         },
         {
@@ -50,9 +52,9 @@
           "summary": "What the current download added: easier setup, clearer work, more control and free themes"
         },
         {
-          "slug": "coming-in-0-4-5",
-          "title": "Coming in 0.4.5",
-          "summary": "The 0.4.5 scope: setup, Fleet, Friends, compact Ideas and PC sharing; what stays later or needs the hub"
+          "slug": "coming-in-0-5",
+          "title": "Coming in 0.5",
+          "summary": "The 0.5 scope, which took in 0.4.5 and 0.4.6: setup, the 0.5 layout, Fleet, Friends, PC sharing and the move to Rust; what stays later or needs the hub"
         }
       ]
     },
