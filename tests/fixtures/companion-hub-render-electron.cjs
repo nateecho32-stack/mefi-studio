@@ -133,21 +133,22 @@ app.whenReady().then(async () => {
   await until("document.querySelector('[data-hub-section=\"friends\"] .agent-hub-count')?.textContent==='2'", "background look badges Friends");
   assert.match(await run("return document.querySelector('[data-hub-section=\"friends\"]').getAttribute('aria-label');"), /2 to sync between your PCs/);
   await capture("07b-friends-badge");
+  // Friends is a place of its own: the bubble lets the hub go and opens the Friends page on Rooms.
   await click('[data-hub-section="friends"]');
-  await until("document.querySelector('#agent-hub .pc-sync')?.dataset.state==='pending'", "Friends › Your PCs looks");
+  await until("document.getElementById('friends-overlay')?.hidden===false && document.getElementById('friends-overlay').dataset.place==='rooms' && !window.MefiCompanionHub.isOpen()", "Friends opens its page on Rooms");
+  await run("window.MefiNav.go('friends-page',{place:'pcs'});");
+  await until("document.querySelector('#friends-overlay .pc-sync')?.dataset.state==='pending'", "Friends › Your PCs looks");
   // Looks only: the card's own and the project-switch look at startup, never a sync.
   const looks = await run("return hubFixture.calls().filter(call=>call.key.startsWith('sync')).map(call=>call.key);");
   assert.ok(looks.length >= 1 && looks.every((key) => key === "syncStatus"), `opening Friends only looks: ${looks}`);
   await capture("08-friends-pcs");
   await click("#pc-sync-run");
-  await until("document.querySelector('#agent-hub .pc-sync')?.dataset.state==='clean'", "Sync this PC");
-  assert.equal(await run("return window.MefiCompanionHub.isOpen() && document.getElementById('pc-sync-status').textContent;"), "This PC matches GitHub main.", "the answer lands inside the hub");
+  await until("document.querySelector('#friends-overlay .pc-sync')?.dataset.state==='clean'", "Sync this PC");
+  assert.equal(await run("return document.getElementById('friends-overlay').hidden===false && document.getElementById('pc-sync-status').textContent;"), "This PC matches GitHub main.", "the answer lands on the Friends page");
   // A clean sync leaves only the room request on the badge.
   await until("document.querySelector('[data-hub-section=\"friends\"] .agent-hub-count')?.textContent==='1'", "a clean sync clears Your PCs from the badge");
   assert.equal(await run("return document.querySelector('[data-hub-section=\"friends\"]').getAttribute('aria-label');"), "Friends · 1 waiting in Rooms");
   await capture("09-friends-synced"); report.pcs = true;
-  // Rooms loads above Your PCs; let it settle before clicking below it.
-  await until("document.getElementById('rooms')?.dataset.state==='ready' && document.getElementById('rooms-tab-requests')?.textContent==='Requests (1)'", "Rooms lists the room and its request");
   // Set up this PC opens in place and only then checks the PC.
   assert.equal(await run("return hubFixture.calls().some(call=>call.key==='pcSetupStatus');"), false, "nothing is checked until the section opens");
   // Out of the way of the panel's "more below" arrow, which sits at the edge.
@@ -171,6 +172,7 @@ app.whenReady().then(async () => {
   await capture("09d-friends-vault"); report.vault = true;
   // Friends › Rooms: the request tab counts, the room opens with its chat as
   // text, and a message goes out through hub:room.
+  await run("window.MefiNav.go('friends-page',{place:'rooms'});");
   await until("document.getElementById('rooms')?.dataset.state==='ready' && document.getElementById('rooms-tab-requests')?.textContent==='Requests (1)'", "Rooms lists the room and its request");
   await click("#rooms [data-room=\"room_jam\"] .rooms-button");
   await until("document.querySelector('#rooms .rooms-message-text')?.textContent==='hi @Mefi, ready for Friday?'", "the room opens with its chat");
@@ -178,10 +180,11 @@ app.whenReady().then(async () => {
   await click("#rooms-send");
   await until("hubFixture.calls().some(call=>call.key==='hubRoom'&&call.args[0]==='sendMessage')", "the message goes out");
   assert.deepEqual(await run("return hubFixture.calls().find(call=>call.key==='hubRoom'&&call.args[0]==='sendMessage').args;"), ["sendMessage", "room_jam", "Yes! Snacks welcome."]);
-  assert.ok(await run("const el=document.getElementById('rooms-send');el.scrollIntoView({block:'nearest'});const r=el.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return r.width>0&&(hit===el||el.contains(hit));"), "Send is clickable in the hub");
+  assert.ok(await run("const el=document.getElementById('rooms-send');el.scrollIntoView({block:'nearest'});const r=el.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return r.width>0&&(hit===el||el.contains(hit));"), "Send is clickable on the Friends page");
   await capture("09c-friends-rooms"); await click("#rooms-back"); report.rooms = true;
   // Friends › Playground: a friend who shares more makes the companion ask;
   // nothing is shared back until the owner answers.
+  await run("window.MefiNav.go('friends-page',{place:'playground'});");
   await until("document.getElementById('friends-status')?.textContent.includes(\"1 friend's companion is out\") && document.querySelector('.friends-ask')", "playground lists a friend");
   assert.match(await run("return document.querySelector('.friends-ask p').textContent;"), /^Nova told us how its person's work is going/);
   assert.equal(await run("return hubFixture.calls().filter(call=>call.key==='hubSharingSet').length;"), 0, "nothing is shared back on its own");
@@ -198,8 +201,8 @@ app.whenReady().then(async () => {
   assert.equal(await run("return document.querySelectorAll('.friends-lines li').length;"), practiceLines, "every line is kept as text");
   assert.ok(await run("return hubFixture.calls().some(call=>call.key==='hubPlaydate'&&call.args[0].practice===true);"));
   await run("document.documentElement.dataset.motion='on';"); report.playground = true;
-  // Petting: stroking the wisp back and forth reaches the bond once.
-  await escape();
+  // Petting: stroking the wisp back and forth reaches the bond once (the hub again, over the closed Friends page).
+  await run("window.MefiNav.closeAll(); window.MefiCompanionHub.open();"); await sleep(400);
   const heart = await run("const r=document.getElementById('agent-hub-return').getBoundingClientRect();return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)};");
   for (let i = 0; i < 10; i += 1) { wc.sendInputEvent({ type: "mouseMove", x: heart.x + (i % 2 ? 20 : -20), y: heart.y }); await sleep(50); }
   await until("hubFixture.calls().some(call=>call.key==='companionBond'&&call.args[0]==='pet')", "petting the wisp");
@@ -258,10 +261,11 @@ app.whenReady().then(async () => {
     await click('[data-hub-section="ask"]'); await sleep(450);
     assert.ok(await run("const el=document.querySelector('#companion-pane-ask textarea');el.scrollIntoView({block:'nearest'});const r=el.getBoundingClientRect();return r.width>0&&r.left>=0&&r.right<=innerWidth+1&&r.top>=0&&r.bottom<=innerHeight+1;"), "chat stays reachable");
     await escape(); await run("if(!window.MefiCompanionHub.isOpen())window.MefiCompanionHub.open();window.MefiCompanionHub.back();"); await sleep(300);
-    await click('[data-hub-section="friends"]'); await until("document.getElementById('pc-sync-run')", `Friends at ${width}/${zoom}`); await sleep(450);
-    assert.ok(await run("const el=document.getElementById('pc-sync-run');el.scrollIntoView({block:'nearest'});await new Promise(r=>requestAnimationFrame(r));const r=el.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);const card=document.querySelector('#agent-hub .pc-sync').getBoundingClientRect();return r.width>0&&r.left>=0&&r.right<=innerWidth+1&&r.top>=0&&r.bottom<=innerHeight+1&&(hit===el||el.contains(hit))&&card.left>=0&&card.right<=innerWidth+1;"), `Sync this PC reachable at ${width}/${zoom}`);
+    await click('[data-hub-section="friends"]'); await until("document.getElementById('friends-overlay')?.hidden===false", `Friends at ${width}/${zoom}`);
+    await run("window.MefiNav.go('friends-page',{place:'pcs'});"); await until("document.getElementById('pc-sync-run')", `Your PCs at ${width}/${zoom}`); await sleep(450);
+    assert.ok(await run("const el=document.getElementById('pc-sync-run');el.scrollIntoView({block:'nearest'});await new Promise(r=>requestAnimationFrame(r));const r=el.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);const card=document.querySelector('#friends-overlay .pc-sync').getBoundingClientRect();return r.width>0&&r.left>=0&&r.right<=innerWidth+1&&r.top>=0&&r.bottom<=innerHeight+1&&(hit===el||el.contains(hit))&&card.left>=0&&card.right<=innerWidth+1;"), `Sync this PC reachable at ${width}/${zoom}`);
     await capture(`10-friends-${width}-${zoom}`);
-    await run("window.MefiCompanionHub.back();"); await sleep(200);
+    await run("window.MefiNav.closeAll(); window.MefiCompanionHub.open();"); await sleep(300);
   }
   report.layouts = true;
   await finish();
