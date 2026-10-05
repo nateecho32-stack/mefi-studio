@@ -12727,7 +12727,7 @@
     releaseReactiveInput();
     const active = document.activeElement;
     if (active === el.canvas || el.hud.contains(active)) {
-      (document.querySelector(".tab.active") ?? document.body).focus?.({ preventScroll: true });
+      document.body.focus?.({ preventScroll: true });
     }
     document.body.classList.remove("command-active");
     window.dispatchEvent(new CustomEvent("mefi:command", { detail: { active: false } }));

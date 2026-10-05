@@ -272,9 +272,6 @@ select:focus-visible,
 textarea:focus-visible,
 summary:focus-visible,
 .chip:focus-visible,
-.tab:focus-visible,
-.home-tab:focus-visible,
-.tool:focus-visible,
 .dock-item:focus-visible,
 .pill:focus-visible,
 [tabindex]:focus-visible {
@@ -419,11 +416,11 @@ kbd, .key {
   border-radius: var(--r-xs);
   white-space: nowrap;
 }
-button > .key, .tab > .key, .home-tab > .key, .tool > .key, .dock-item > .key {
+button > .key, .dock-item > .key {
   font-size: 10px; padding: 0 5px; opacity: 0.62; background: color-mix(in srgb, var(--gold) 8%, transparent);
   border-bottom-width: 1px;
 }
-.tab:hover > .key, .tab.active > .key, .dock-item:hover > .key, .tool:hover > .key { opacity: 0.9; }
+.dock-item:hover > .key { opacity: 0.9; }
 
 /* --- numeric / short-text badge painted by MefiNav.paintBadges --- */
 .count {
@@ -496,10 +493,6 @@ header {
   box-shadow: var(--shadow-1), inset 0 1px 0 color-mix(in srgb, var(--gold-bright) 25%, transparent);
 }
 .monogram.small { width: 28px; height: 28px; border-radius: 9px; font-size: 13px; }
-.head-actions { display: flex; gap: var(--s2); align-items: center; flex-wrap: wrap; }
-.head-actions .ghost { color: var(--muted); border-color: var(--hairline); }
-.head-actions .ghost:hover { color: var(--ivory); }
-.head-actions .ghost .glyph { color: var(--gold); }
 /* The tab pages' header names the page you are on (#page-title) and, when
    Command sent you here, offers the way back (#page-return); nav.js paints both. */
 .page-heading { min-width: 0; }
@@ -510,7 +503,7 @@ header {
    on screen the header keeps only the page's name and the way back. */
 @media screen {
   html[data-shell="rail"] header.page-head { padding-top: var(--s5); }
-  html[data-shell="rail"] header.page-head :is(.monogram, .eyebrow, .head-actions) { display: none; }
+  html[data-shell="rail"] header.page-head :is(.monogram, .eyebrow) { display: none; }
 }
 @media print { #page-return { display: none !important; } }
 
@@ -541,105 +534,24 @@ html:not([data-rail-pinned]) #app-rail:not(:hover):not(:has(:focus-visible)) #ap
 /* ============================================================
    8. Tabs row, Command home button, tools cluster
    ============================================================ */
-.tabs {
-  display: flex; align-items: center; gap: var(--s1);
-  position: sticky; top: 0;
-  padding: var(--s3) 0 10px;
-  z-index: var(--z-tabs);
-  background: linear-gradient(rgba(5, 5, 7, 0.92) 70%, transparent);
-  backdrop-filter: blur(10px);
-}
-.tabs-sep { width: 1px; height: 18px; background: var(--hairline); margin: 0 var(--s2); flex: none; }
 .spacer { flex: 1; }
 
 /* --- the four surfaces --- */
-.tab {
-  position: relative;
-  display: inline-flex; align-items: center; gap: var(--s2);
-  min-height: var(--ctl-h); padding: 0 16px;
-  border: 1px solid transparent; background: transparent;
-  color: var(--muted);
-  border-radius: var(--r-sm);
-  letter-spacing: var(--track-ui);
-  font-size: var(--fs-md);
-  transition: color var(--dur-2) var(--ease), background var(--dur-2) var(--ease),
-              border-color var(--dur-2) var(--ease), transform var(--dur-2) var(--ease);
-}
-.tab:hover { color: var(--ivory); background: var(--tint-gold-1); transform: translateY(-1px); box-shadow: none; }
-.tab.active { color: var(--gold-bright); background: var(--tint-gold-2); border-color: var(--hairline); }
-.tab.active::after {
-  content: "";
-  position: absolute; left: 16px; right: 16px; bottom: -1px;
-  height: 2px; border-radius: 2px;
-  background: linear-gradient(90deg, transparent, var(--gold-bright), transparent);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--gold-bright) 70%, transparent);
-  transition: opacity var(--dur-2) var(--ease);
-}
-.tab > .label { overflow: hidden; text-overflow: ellipsis; }
 /* Roving keyboard focus (nav.js): the rail is one tab stop and arrows reseat
    it, so the section-4 gold :focus-visible ring is the only visible change —
    drawn with outline, it never shifts layout. */
 /* exactly one thing reads as "current": while Command is home, the tab underline stands down */
-body.command-active .tab.active::after { opacity: 0; }
-body.command-active .tab.active { color: var(--muted); background: rgba(236, 229, 216, 0.04); border-color: transparent; }
 
 /* --- #nav-command (never .tab: booklet.js sweeps .tab.active) --- */
-.home-tab {
-  position: relative;
-  display: inline-flex; align-items: center; gap: var(--s2);
-  min-height: var(--ctl-h); padding: 0 14px;
-  border: 1px solid var(--hairline);
-  background: var(--tint-gold-1);
-  color: var(--gold);
-  border-radius: var(--r-sm);
-  font-size: var(--fs-md);
-  letter-spacing: var(--track-ui);
-  transition: color var(--dur-2) var(--ease), background var(--dur-2) var(--ease),
-              border-color var(--dur-2) var(--ease), box-shadow var(--dur-2) var(--ease);
-}
-.home-tab:hover { color: var(--gold-bright); background: var(--tint-gold-3); border-color: var(--hairline-strong); transform: none; box-shadow: none; }
-.home-tab .glyph { color: inherit; }
-.home-tab .glyph-back { display: none; }
-.home-tab .label { overflow: hidden; text-overflow: ellipsis; }
-.home-tab > .key { order: 3; }
-.home-tab > .dot { order: 4; }
 
 /* lit: Command is the visible surface */
-body.command-active .home-tab {
-  color: var(--gold-bright);
-  background: var(--tint-gold-3);
-  border-color: var(--gold);
-  box-shadow: var(--glow-gold);
-}
 
 /* return: a tab deep link came from Command — swap glyph + label */
-.home-tab.return { color: var(--gold-bright); background: var(--tint-gold-3); border-color: var(--hairline-strong); }
-.home-tab.return .glyph-home,
-.home-tab.return .label { display: none; }
-.home-tab.return .glyph-back { display: inline-block; }
-.home-tab.return::after { content: attr(data-return-label); order: 2; }
 
 /* --- tools cluster --- */
-.tools-cluster { display: flex; align-items: center; gap: var(--s1); margin-left: auto; }
-.tool {
-  position: relative;
-  display: inline-flex; align-items: center; gap: 6px;
-  min-height: var(--ctl-h-hud); padding: 0 10px;
-  border: 1px solid transparent; background: transparent;
-  color: var(--muted);
-  border-radius: var(--r-sm);
-  font-size: var(--fs-sm);
-  transition: color var(--dur-1) var(--ease), background var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease);
-}
-.tool:hover { color: var(--ivory); background: var(--tint-gold-2); border-color: var(--hairline); transform: none; box-shadow: none; }
-.tool .glyph { color: var(--gold); }
-.tool:hover .glyph { color: var(--gold-bright); }
-.tool .label { overflow: hidden; text-overflow: ellipsis; }
-.tool .count { position: absolute; top: -11px; right: -3px; box-shadow: 0 0 0 2px var(--bg); }   /* clear of the keycap */
-.tool .tone-dot { position: absolute; bottom: -2px; right: -2px; box-shadow: 0 0 0 2px var(--bg); }   /* the assistant's state, under the count */
-.tool.icon { width: auto; min-width: 0; padding: 0 8px; }   /* palette tool: glyph + ⌃K, never a 36px square */
-.tools-cluster.compact .tool .label { display: none; }
-.tools-cluster.compact .tool { padding: 0 8px; }
+   /* clear of the keycap */
+   /* the assistant's state, under the count */
+   /* palette tool: glyph + ⌃K, never a 36px square */
 
 /* ============================================================
    9. Page components (panels, cards, chips, graph, tables, A-Eyes, sheet interiors)
@@ -2351,7 +2263,7 @@ body.command-active { overflow: hidden; }                 /* removes the page sc
    second) under every frame. Command skips it once its own fade-in is done;
    leaving shows it at once, at the size it had (contain-intrinsic-size auto).
    Settings and the music preview float the page over Command and keep it. */
-body.command-active:not(.appearance-settings-active):not(.music-preview-active) > :is(main, header.page-head, #tabs) {
+body.command-active:not(.appearance-settings-active):not(.music-preview-active) > :is(main, header.page-head) {
   content-visibility: hidden;
   contain-intrinsic-size: auto none;
   transition: content-visibility var(--motion-base) allow-discrete;
@@ -2398,7 +2310,6 @@ footer {
   display: flex; gap: var(--s4); flex-wrap: wrap;
   padding-right: var(--s1);
 }
-#footer-keys { color: var(--muted); }
 
 /* Settings › Updates: the live update and published-build rows */
 .update-block { margin-top: var(--s5); padding-top: var(--s4); border-top: 1px solid var(--hairline); }
@@ -2417,12 +2328,11 @@ footer {
   animation: none !important;
   scroll-behavior: auto !important;
 }
-.no-motion button:hover, .no-motion .button:hover, .no-motion .chip:hover,
-.no-motion .tab:hover, .no-motion .card:hover, .no-motion .feed li:hover,
+.no-motion button:hover, .no-motion .button:hover, .no-motion .chip:hover, .no-motion .card:hover, .no-motion .feed li:hover,
 .no-motion #rank li:hover { transform: none !important; }
 
 @media (prefers-reduced-motion: reduce) {
-  button:hover, .button:hover, .chip:hover, .tab:hover,
+  button:hover, .button:hover, .chip:hover,
   .card:hover, .feed li:hover, #rank li:hover { transform: none !important; }
 }
 
@@ -2461,13 +2371,10 @@ footer {
   .explorer-col:last-child { grid-column: 1 / -1; border-top: 1px solid color-mix(in srgb, var(--gold) 8%, transparent); }
   .explorer-grid.two-col { grid-template-columns: minmax(0, 1fr); }
   /* safety net for .tools-cluster.compact: nav's ResizeObserver is the real trigger */
-  .tools-cluster .label { display: none; }
-  .tools-cluster .tool { padding: 0 var(--s2); }
   .sheet-links { margin-left: 0; order: 5; flex-basis: 100%; justify-content: flex-start; }
   .sheet-links .dock-item.small .label { display: none; }
   /* the tabs row fits without wrapping down to ~1170px (see below); from here
      .tools-cluster.compact has nothing left to hide, so wrap is the backstop */
-  .tabs { flex-wrap: wrap; }
   /* .cmd-dock .key is already hidden by the 1430px block above */
   .cmd-dock .dock-item { padding: 0 9px; }
 }
@@ -2479,7 +2386,6 @@ footer {
      at ~1170px, long before the 900px block that hides the rail. Drop the caps
      here; the wrap above is the backstop, because #tree-rail (--z-rail) paints
      over the tabs row (--z-tabs) and an overflowing tool would sit under it. */
-  .tab > .key, .home-tab > .key { display: none; }
 }
 
 @media (max-width: 1150px) {
@@ -2750,9 +2656,9 @@ body.no-motion :is(.boot-spinner, .boot-chip-skeleton), body.no-motion #boot-ope
   h1, h2, h3, .card h3, .stat .v, .verdict { color: #111; }
   .sub, .muted, .stat .k, .stat .s, .why, .vendor, footer { color: #555; }
   .eyebrow, details summary, a { color: #6b5626; }
-  .tabs, .head-actions, .toolbar, #tree-rail, #tab-graph, #tab-studio, #tab-eyes, footer, .overlay { display: none !important; }
+  .toolbar, #tree-rail, #tab-graph, #tab-studio, #tab-eyes, footer, .overlay { display: none !important; }
   #idle-layer, #idle-hud, #cmd-dock, #cmd-legend, #cmd-empty, #cmd-chat, #cmd-tip,
-  #toast-host, .glyph-sprite, .home-tab, .tools-cluster, .update-pill,
+  #toast-host, .glyph-sprite, .update-pill,
   .count, .dot, kbd, .key { display: none !important; }
   .card { border: 1px solid #bbb; background: #fff; break-inside: avoid; backdrop-filter: none; }
   .catalog-model::details-content { content-visibility: visible; block-size: auto; }
@@ -2792,7 +2698,7 @@ body.no-motion :is(.boot-spinner, .boot-chip-skeleton), body.no-motion #boot-ope
 .workspace[data-accent="sage"] { --ws-accent: #b9cfae; --ws-accent-rgb: 185,207,174; }
 .workspace[data-accent="violet"] { --ws-accent: #c5b7e8; --ws-accent-rgb: 197,183,232; }
 body.workspace-active { overflow: hidden; }
-body.workspace-active > header, body.workspace-active > #tabs, body.workspace-active > main, body.workspace-active > footer, body.workspace-active > #tree-rail { visibility: hidden; pointer-events: none; }
+body.workspace-active > header, body.workspace-active > main, body.workspace-active > #tree-rail { visibility: hidden; pointer-events: none; }
 .workspace button, .workspace textarea, .workspace input, .workspace select { font-family: var(--font-ui); }
 .workspace button { transition: background .18s, border-color .18s, color .18s; }
 .workspace button:focus-visible, .workspace summary:focus-visible { outline: 2px solid var(--ws-accent); outline-offset: 3px; }
@@ -3090,9 +2996,9 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 .studio-more > summary > .chev { color: var(--muted); transition: transform var(--dur-2) var(--ease); }
 .studio-more > summary:hover, .studio-more[open] > summary { color: var(--ivory); background: var(--tint-gold-2); border-color: var(--hairline-strong); }
 .studio-more[open] > summary > .chev { transform: rotate(180deg); }
-.studio-more > .tools-cluster, .studio-more-links { position: absolute; z-index: 95; top: calc(100% + 6px); right: 0; display: grid; min-width: 236px; padding: 8px; border: 1px solid var(--hairline-strong); border-radius: var(--r-md); background: var(--glass-hard); backdrop-filter: var(--blur); box-shadow: var(--shadow-2), var(--inset-hi); }
-.studio-more:not([open]) > .tools-cluster, .studio-more:not([open]) .studio-more-links { display: none; }
-.studio-more-links .dock-item, .studio-more .tool { justify-content: flex-start; width: 100%; }
+.studio-more-links { position: absolute; z-index: 95; top: calc(100% + 6px); right: 0; display: grid; min-width: 236px; padding: 8px; border: 1px solid var(--hairline-strong); border-radius: var(--r-md); background: var(--glass-hard); backdrop-filter: var(--blur); box-shadow: var(--shadow-2), var(--inset-hi); }
+.studio-more:not([open]) .studio-more-links { display: none; }
+.studio-more-links .dock-item { justify-content: flex-start; width: 100%; }
 .sheet-links:has(.studio-more) { border: none; background: transparent; overflow: visible; padding: 0; }
 @keyframes ws-float { 0%,100% { transform: translateY(1px) rotate(-3deg); } 50% { transform: translateY(-3px) rotate(3deg); } }
 @keyframes ws-blink { 0%,42%,46%,100% { transform: scaleY(1); } 44% { transform: scaleY(.1); } }
@@ -3243,15 +3149,6 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 #workspace-sidebar details[open] > summary .ws-chev { transform: rotate(180deg); }
 #workspace-sidebar .ws-tools[open] > summary { color: var(--muted); }
 #workspace-tool-links { display: grid; gap: 8px; padding: 0 0 4px; }
-#workspace-tool-links .nav-menu-group { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; border: 0; padding: 0; margin: 0; }
-#workspace-tool-links .nav-menu-heading { grid-column: 1 / -1; padding: 2px 8px 0; font-size: 9.5px; }
-#workspace-tool-links .nav-menu-group button { position: relative; display: flex; align-items: center; justify-content: flex-start; gap: 8px; min-height: 38px; padding: 6px 9px; font-size: 12px; text-align: left; border: 1px solid rgba(var(--ws-accent-rgb), 0.1); border-radius: var(--r-sm); background: rgba(var(--ws-accent-rgb), 0.04); color: var(--muted); }
-#workspace-tool-links .nav-menu-group button:hover { background: rgba(var(--ws-accent-rgb), 0.12); border-color: rgba(var(--ws-accent-rgb), 0.3); color: var(--ivory); transform: none; box-shadow: none; }
-#workspace-tool-links .nav-menu-group button .glyph { color: var(--ws-accent); }
-#workspace-tool-links .nav-menu-group button .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#workspace-tool-links .nav-menu-group .key { display: none; }
-#workspace-tool-links .nav-menu-group .count { position: absolute; top: -6px; right: -4px; box-shadow: 0 0 0 2px var(--panel-solid); }
-#workspace-tool-links .nav-menu-group .tone-dot { position: absolute; bottom: -2px; right: -2px; box-shadow: 0 0 0 2px var(--panel-solid); }
 /* bottom row */
 #workspace-sidebar .ws-sidebar-bottom { display: block; padding-top: 14px; }
 #workspace-sidebar .ws-quick { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
@@ -4046,7 +3943,6 @@ body > main > section:not([hidden]),
 .model-lab > [role="tabpanel"]:not([hidden]) {
   animation: studio-content-enter var(--motion-content) var(--ease-enter);
 }
-.studio-more[open] > .tools-cluster,
 .ws-tools[open] > #workspace-tool-links,
 .cmd-more-tools[open] > .cmd-more-links {
   animation: studio-menu-enter var(--motion-menu) var(--ease-enter);
@@ -4104,14 +4000,9 @@ html[data-motion="off"]::view-transition-new(*) { animation: none !important; }
 }
 
                                                     
-.nav-menu-group { display: grid; gap: 2px; min-width: 0; }
-.nav-menu-group + .nav-menu-group { border-top: 1px solid var(--hairline); padding-top: 8px; margin-top: 6px; }
-.nav-menu-heading { padding: 4px 9px 3px; color: var(--dim); font: 650 10px/1.4 var(--font-ui); letter-spacing: .1em; text-transform: uppercase; }
-.studio-more > .tools-cluster, .studio-more-links { max-height: min(65vh, 540px); overflow: auto; }
-.studio-more .tools-cluster .tool .label { display: inline; }
-.studio-more .tools-cluster .tool, .studio-more-links .dock-item { gap: 9px; min-height: 34px; padding: 6px 10px; border-radius: 8px; }
-.studio-more .tools-cluster .key, .studio-more-links .key { margin-left: auto; }
-.studio-more .tools-cluster .tool .count, .studio-more .tools-cluster .tool .tone-dot { position: static; margin-left: 4px; box-shadow: none; }
+.studio-more-links { max-height: min(65vh, 540px); overflow: auto; }
+.studio-more-links .dock-item { gap: 9px; min-height: 34px; padding: 6px 10px; border-radius: 8px; }
+.studio-more-links .key { margin-left: auto; }
 #idle-hud .cmd-more-links { display: block; width: 290px; max-height: min(65vh, 540px); overflow: auto; }
 #idle-hud .cmd-more-links .dock-item { width: 100%; min-height: 34px; padding: 6px 10px; border-radius: 8px; }
 .walkthrough-invitation { flex: none; display: flex; align-items: center; gap: 20px; justify-content: space-between; margin: 0 0 16px; padding: 12px 15px; border: 1px solid var(--hairline-strong); border-radius: 12px; background: color-mix(in srgb, var(--gold) 6%, var(--panel)); }
@@ -5448,8 +5339,6 @@ html[data-shell="rail"] .lab-tabs { display: none; }
 
 /* One navigation: with the rail on, the older chromes that only navigated
    step aside. Phase E deletes them; until then the flag brings them back. */
-html[data-shell="rail"] #tabs,
-html[data-shell="rail"] body > footer,
 html[data-shell="rail"] #workspace-sidebar-toggle,
 html[data-shell="rail"] #workspace-sidebar-panel .ws-nav,
 html[data-shell="rail"] #workspace-sidebar-panel .ws-quick,

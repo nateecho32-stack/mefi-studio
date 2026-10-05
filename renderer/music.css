@@ -191,7 +191,7 @@ body[data-media-background="true"]:is([data-media-view="workspace"], [data-media
 body[data-media-visible="true"].command-active :is(#idle-layer-far, #idle-layer):not([hidden]),
 html[data-shell="rail"] body[data-media-visible="true"].command-active :is(#idle-layer-far, #idle-layer):not([hidden]) { opacity: var(--media-tree-opacity, 1); }
 body[data-media-background="true"] #idle-layer-far { background: transparent; }
-body[data-media-background="true"].command-active:not(.appearance-settings-active):not(.music-preview-active) > :is(main, header.page-head, #tabs) { visibility: hidden; }
+body[data-media-background="true"].command-active:not(.appearance-settings-active):not(.music-preview-active) > :is(main, header.page-head) { visibility: hidden; }
 html[data-shell="rail"] body[data-media-background="true"] :is(.workspace-page, .agents-overlay, #plans-overlay) { background: var(--studio-page-fill); }
 html[data-motion="off"] .media-window, html[data-motion="off"] .media-window .music-link-player { transition: none; }
 @media (prefers-reduced-motion: reduce) { .media-window, .media-window .music-link-player { transition: none; } }

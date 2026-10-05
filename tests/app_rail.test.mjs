@@ -316,7 +316,7 @@ test("model routes and legacy appearance/audio shortcuts use their canonical vie
 
 test("model routes survive Command and retain the selected Usage reading", () => {
   const loaded = load({view:"page"}), views=[];
-  const tab=loaded.document.createElement("button"); tab.className="tab active"; tab.dataset.tab="graph"; loaded.document.body.append(tab);
+  const page=loaded.document.createElement("section"); page.id="tab-graph"; page.hidden=false; loaded.document.body.append(page);
   loaded.window.MefiModelLab={show:view=>views.push(view)};
   loaded.window.MefiIdle.enter=()=>loaded.setView("command");
   loaded.window.MefiIdle.exit=()=>loaded.setView("page");

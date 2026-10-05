@@ -120,7 +120,7 @@
   // section 17): it cannot show a hint, and measuring inside it would force
   // the skipped layout back. A selector match, not a computed-style read,
   // which would itself force a style recalculation on every refresh.
-  const COVERED = "body.command-active:not(.appearance-settings-active):not(.music-preview-active) > :is(main, header.page-head, #tabs)";
+  const COVERED = "body.command-active:not(.appearance-settings-active):not(.music-preview-active) > :is(main, header.page-head)";
   function skippedRoots() {
     return document.body.classList.contains("command-active") ? [...document.querySelectorAll(COVERED)] : [];
   }

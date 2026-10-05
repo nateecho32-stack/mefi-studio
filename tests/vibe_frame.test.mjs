@@ -26,10 +26,10 @@ function load({ mode = "vibe", view = "vibe", stored = {} } = {}) {
   document.documentElement.dataset = {};
   document.createDocumentFragment = () => document.createElement("#fragment");
   get("app-rail").append(get("app-rail-brand"), get("app-rail-sections"), get("app-rail-foot"), get("app-rail-pin"));
-  // The tab row's active button is how nav.js reads which page is showing.
-  const tab = document.createElement("button");
-  tab.className = "tab";
-  document.body.append(tab);
+  // The #tab-* section showTab leaves visible is how nav.js reads which page is showing.
+  const pages = Object.fromEntries(["booklet", "graph", "eyes", "studio"].map((name) => {
+    const page = document.createElement("section"); page.id = `tab-${name}`; page.hidden = true; document.body.append(page); return [name, page];
+  }));
   const store = new Map(Object.entries(stored));
   const listeners = {};
   const tabs = [];
@@ -56,7 +56,7 @@ function load({ mode = "vibe", view = "vibe", stored = {} } = {}) {
       exit: () => { if (view === "vibe") view = "page"; },
     },
     MefiTasks: { open: () => log.push("tasks"), close() {} },
-    MefiBooklet: { showTab: (name) => { tabs.push(name); log.push(`tab:${name}`); tab.className = "tab active"; tab.dataset.tab = name; view = "page"; } },
+    MefiBooklet: { showTab: (name) => { tabs.push(name); log.push(`tab:${name}`); for (const [key, page] of Object.entries(pages)) page.hidden = key !== name; view = "page"; } },
     MefiToast() {},
   };
   const context = vm.createContext({
@@ -141,7 +141,7 @@ test("the Vibe rail in the template points only at registered destinations, and 
 test("vibe.js and vibe.css wire the rail to the mode", () => {
   assert.match(vibeSource, /rail\.hidden = current !== "vibe"/, "the rail shows only in Vibe mode");
   assert.match(vibeSource, /closest\?\.\("button\[data-ui-mode\]"\)/, "any mode button switches, never the <html> that carries the mode");
-  assert.match(vibeCss, /html\[data-ui-mode="vibe"\] :is\(#app-rail, #tabs, #workspace-sidebar-toggle, body > footer\) \{ display: none !important; \}/, "Build's frame never shows in Vibe mode");
+  assert.match(vibeCss, /html\[data-ui-mode="vibe"\] :is\(#app-rail, #workspace-sidebar-toggle\) \{ display: none !important; \}/, "Build's frame never shows in Vibe mode");
   assert.match(vibeCss, /body:has\(\.workspace-page:not\(\[hidden\]\)\) #vibe-layer \{ visibility: hidden;/, "pages cover Vibe instead of showing it through");
 });
 

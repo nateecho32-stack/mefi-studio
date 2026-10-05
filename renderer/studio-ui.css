@@ -170,7 +170,7 @@ html[data-shell=rail][data-studio-style] :is(.workspace-page, .agents-overlay),
   backdrop-filter: none;
 }
 /* A transparent destination must reveal the scene, not an inactive tab's text. */
-html[data-shell=rail] body:has(.workspace-page:not([hidden])) > :is(header, main, #tabs, #tree-rail) { visibility: hidden; pointer-events: none; }
+html[data-shell=rail] body:has(.workspace-page:not([hidden])) > :is(header, main, #tree-rail) { visibility: hidden; pointer-events: none; }
 html[data-shell=rail] body:has(.workspace-page:not([hidden])) :is(#workspace-layer, #idle-hud) { visibility: hidden; pointer-events: none; }
 html[data-shell=rail] body:has(.workspace-page:not([hidden])) #idle-layer { opacity: .04; }
 html[data-shell=rail] .workspace-page > :is(.sheet, .explorer-sheet, .brains-sheet),
@@ -213,7 +213,7 @@ html[data-studio-style] .sheet-head.plain { background: transparent; backdrop-fi
 html[data-studio-style] table#table th { background: var(--studio-menu-fill); backdrop-filter: var(--studio-menu-blur); }
 
 /* Floating menus are readable over both the scene and another page of text. */
-html[data-studio-style] :is(.pop, .palette-sheet, .studio-choice-popup, .surface-tools-menu, .studio-more-links, .studio-more > .tools-cluster, .brains-menu, .brains-search-panel, .brains-dialog-panel, .brains-shortcuts-panel, .music-dropdown, .companion-panel, .companion-bubble, .tree-tip, .tip, .profiler-hud, .toast, .legend-list, .feed-drop, .autonomy-popover),
+html[data-studio-style] :is(.pop, .palette-sheet, .studio-choice-popup, .surface-tools-menu, .studio-more-links, .brains-menu, .brains-search-panel, .brains-dialog-panel, .brains-shortcuts-panel, .music-dropdown, .companion-panel, .companion-bubble, .tree-tip, .tip, .profiler-hud, .toast, .legend-list, .feed-drop, .autonomy-popover),
 #app-help-menu, .workspace .ws-project-actions > div {
   background: var(--studio-wash), var(--studio-sheen), var(--studio-float-fill);
   border-color: var(--studio-glass-edge); backdrop-filter: var(--studio-float-blur);

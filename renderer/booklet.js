@@ -160,7 +160,6 @@
     sort: document.getElementById("sort"),
     cards: document.getElementById("cards"),
     count: document.getElementById("count"),
-    footer: document.getElementById("footer-meta"),
     alsoTracked: document.getElementById("also-tracked"),
     alsoTrackedBody: document.getElementById("also-tracked-body"),
     banner2: null,
@@ -381,7 +380,6 @@
     const source = state.source === "baked" ? "built-in data" : `the ${state.source}`;
     els.status.textContent = `${doc.models.length} models · ${roster} live${when ? ` · updated ${when}` : ""} · from ${source}`;
     els.status.title = `Catalog hash ${doc.hash.slice(0, 8)}`;
-    els.footer.textContent = `catalog hash ${doc.hash.slice(0, 12)} · roster ${doc.rosterHash.slice(0, 12)}`;
   }
 
   // Picks: four highlights worked out from the catalog itself, legacy models
@@ -575,9 +573,6 @@
   // The page header names the tab on show; nav.js repaints it on mefi:nav, and
   // this covers the launch, which restores a tab without announcing it.
   const PAGE_TITLES = { booklet: "Model catalog", graph: "Performance", eyes: "Activity & evidence", studio: "Settings" };
-  // The tab page on show: the one #tab-* section showTab left visible ("booklet" at launch), or null.
-  const TAB_NAMES = Object.freeze(Object.keys(PAGE_TITLES));
-  function shownTab() { return TAB_NAMES.find((name) => document.getElementById(`tab-${name}`)?.hidden === false) ?? null; }
   function showTab(name, params = {}) {
     if (name !== "studio") window.MefiMusic?.activateSettings?.(null);
     const insights = document.getElementById("model-lab-catalog");
@@ -590,7 +585,6 @@
         requestAnimationFrame(() => state.graph?.redraw());
       });
     }
-    document.querySelectorAll(".tab").forEach((tab) => tab.classList.toggle("active", tab.dataset.tab === name));
     document.getElementById("tab-booklet").hidden = name !== "booklet";
     document.getElementById("tab-graph").hidden = name !== "graph";
     document.getElementById("tab-eyes").hidden = name !== "eyes";
@@ -2240,14 +2234,6 @@
     const pick = event.target.closest?.(".catalog-pick[data-id]");
     if (pick) revealModel(pick.dataset.id);
   });
-  document.getElementById("tabs").addEventListener("click", (event) => {
-    const tab = event.target.closest(".tab");
-    if (!tab) return;
-    // Route through nav so a tab click also closes an open sheet and leaves the
-    // Command view with a "return" marker on #nav-command.
-    if (window.MefiNav) window.MefiNav.go(tab.dataset.tab, {}, { source: "tabs" });
-    else showTab(tab.dataset.tab);
-  });
   wireSettingsNav();
   registerSettingsSearch();
   // renderer/nav.js sets the 0.5 layout once the page has loaded: Settings is
@@ -2317,10 +2303,6 @@
       window.MefiNav?.release?.("help");
     }
   };
-  document.getElementById("help-btn").addEventListener("click", () => {
-    if (window.MefiNav) window.MefiNav.toggle("help");
-    else toggleHelp();
-  });
   helpOverlay.addEventListener("click", (event) => {
     if (event.target === helpOverlay) toggleHelp(false);
   });
@@ -2345,7 +2327,7 @@
   };
   // settingsLocation: the place Settings shows, and whether Find a setting is showing results instead (null in the classic layout).
   const settingsLocation = () => (settingsFiled ? { id: settingsCategory, label: SETTINGS_CATEGORIES[settingsCategory] ?? settingsCategory, search: Boolean(settingsQuery()) } : null);
-  window.MefiBooklet = { showTab, shownTab, refresh, toggleHelp, jumpToSettings, initStudio, settingsPlaces, settingsLocation };
+  window.MefiBooklet = { showTab, refresh, toggleHelp, jumpToSettings, initStudio, settingsPlaces, settingsLocation };
 
   const headless = new URLSearchParams(window.location.search);
   const capture = headless.get("capture") === "1";

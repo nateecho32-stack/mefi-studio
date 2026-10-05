@@ -1077,7 +1077,7 @@
     } else if (window.MefiWorkspace?.isActive?.()) {
       document.getElementById("workspace-layer")?.focus?.({ preventScroll: true });
     } else {
-      (document.querySelector(".tab.active") ?? document.getElementById("nav-command"))?.focus?.();
+      (document.querySelector?.('#app-rail [aria-current="page"]') ?? document.body)?.focus?.({ preventScroll: true });
     }
     if (layer) state.focusReturn[layer] = null;
     dispatchNav(id, "close", {});
@@ -1154,7 +1154,6 @@
     if (id === "tasks" && !params.taskId && !params.filter && !params.readiness && context) params = { ...params, taskId: context.taskId, projectId: context.projectId };
     if (id === "command" && !params.preserveSelection && !params.selected && !params.sessionId && !params.rail && (params.taskId || context?.taskId)) params = { ...params, selected: `task:${params.taskId || context.taskId}` };
     if (dest.kind !== "action" && dest.layer !== "transient" && options.history !== false) rememberRoute(id, params);
-    const navCommand = document.getElementById("nav-command");
     if (dest.kind === "action") {
       dest.run?.(params, options);
       dispatchNav(id, "open", params);
@@ -1168,7 +1167,6 @@
       if (id !== "vibe") window.MefiVibe?.exit?.();
       if (id !== "command" && idleActive()) window.MefiIdle?.exit?.();
       state.returnTo = null;
-      navCommand?.classList.remove("return");
       const opened = dest.open?.(params);
       dispatchNav(id, "open", params);
       return opened;
@@ -1180,7 +1178,6 @@
       if (idleActive()) {
         window.MefiIdle?.exit?.();
         state.returnTo = "command";
-        navCommand?.classList.add("return");
         // Only a deep link needs explaining; a plain tab click speaks for itself.
         if (params && Object.keys(params).length) window.MefiToast?.("D returns to Command", "info");
       }
@@ -1201,11 +1198,15 @@
     return dest.open?.(params);
   }
 
-  // The surface under any sheet: the workspace, or the active tab.
+  // The tab page on show: the one #tab-* section booklet.js's showTab left visible.
+  const TAB_PAGES = Object.freeze(["booklet", "graph", "eyes", "studio"]);
+  const shownTab = () => TAB_PAGES.find((name) => document.getElementById?.(`tab-${name}`)?.hidden === false) ?? null;
+
+  // The surface under any sheet: the workspace, or the tab page on show.
   function underlyingView() {
     if (window.MefiWorkspace?.isActive?.()) return "workspace";
     if (window.MefiVibe?.isActive?.()) return "vibe";
-    const tab = document.querySelector?.(".tab.active")?.dataset?.tab ?? null;
+    const tab = shownTab();
     return tab === "graph" ? modelRoute : tab;
   }
 
@@ -1395,35 +1396,6 @@
     if (options.key !== false && dest.key) button.append(keyCap(options.keyText ?? dest.key));
     for (const badge of badgeNodes(dest)) button.append(badge);
     return button;
-  }
-
-  // The More tools menus group by the same sections as the rail. Home rides
-  // with Work, the foot's Community with Help, and anything else unfiled
-  // lands in Settings.
-  const MENU_GROUPS = ["Work", "Agents", "Friends", "Settings", "Help"];
-  function menuGroup(dest) {
-    const section = sectionOf(dest);
-    if (section === "home") return "Work";
-    if (section === "community") return "Help";
-    const label = SECTIONS.get(section);
-    return MENU_GROUPS.includes(label) ? label : "Settings";
-  }
-
-  function appendGrouped(target, destinations, buttonClass) {
-    for (const label of MENU_GROUPS) {
-      const items = destinations.filter((dest) => menuGroup(dest) === label);
-      if (!items.length) continue;
-      const group = document.createElement("div");
-      group.className = "nav-menu-group";
-      group.setAttribute("role", "group");
-      group.setAttribute("aria-label", label);
-      const title = document.createElement("span");
-      title.className = "nav-menu-heading";
-      title.textContent = label;
-      group.append(title);
-      for (const dest of items) group.append(navButton(dest, buttonClass));
-      target.append(group);
-    }
   }
 
   // ---- the one rail --------------------------------------------------------
@@ -1986,42 +1958,6 @@
     }
   }
 
-  function renderTools(target) {
-    const element = target ?? document.getElementById("nav-tools");
-    if (!element) return;
-    element.textContent = "";
-    appendGrouped(element, list({ showIn: "tools" }), "tool");
-    paintBadges(element);
-    watchToolsWidth(element);
-  }
-
-  let toolsObserver = null;
-  function watchToolsWidth(element) {
-    const tabs = document.getElementById("tabs");
-    if (!tabs || typeof ResizeObserver !== "function" || toolsObserver) return;
-    const fit = () => {
-      // Measure uncompacted, or the cluster could never expand again.
-      element.classList.remove("compact");
-      if (tabs.scrollWidth > tabs.clientWidth) element.classList.add("compact");
-    };
-    let queued = false;
-    toolsObserver = new ResizeObserver(() => {
-      if (queued) return;
-      queued = true;
-      // Deferred so the measure/write pair cannot re-enter the observer.
-      requestAnimationFrame(() => {
-        queued = false;
-        fit();
-      });
-    });
-    toolsObserver.observe(tabs);
-    // "Back to Command" and the progress dot widen #nav-command without resizing
-    // the row itself, and a stale fit would push the cluster under #tree-rail.
-    const home = document.getElementById("nav-command");
-    if (home) toolsObserver.observe(home);
-    fit();
-  }
-
   function helpRow(key, text) {
     const fragment = document.createDocumentFragment();
     fragment.append(keyCap(key));
@@ -2070,27 +2006,6 @@
     });
   }
 
-  function hintLine() {
-    const parts = [];
-    const command = get("command");
-    if (command?.key) parts.push(`${command.key} ${command.short}`);
-    const tabs = list({ group: "surfaces" }).filter((dest) => dest.kind === "tab" && dest.key);
-    if (tabs.length) parts.push(`${tabs[0].key}–${tabs[tabs.length - 1].key} tabs`);
-    const tools = list({ group: "tools" })
-      .filter((dest) => dest.key)
-      .map((dest) => dest.key);
-    if (tools.length) parts.push(`${tools.join(" ")} tools`);
-    if (get("palette")) parts.push("⌃K jump");
-    if (get("help")) parts.push("? shortcuts");
-    return parts.join(" · ");
-  }
-
-  function renderFooter(target) {
-    const element = target ?? document.getElementById("footer-keys");
-    if (!element) return;
-    element.textContent = hintLine();
-  }
-
   // ---- motion switch -----------------------------------------------------
   // One answer for CSS and JS: body.no-motion (the Motion setting) or the OS
   // reduced-motion preference. It is cached, because the Command canvas asks
@@ -2125,57 +2040,6 @@
   }
 
   // ---- tab rail roving focus ---------------------------------------------
-
-  // The four surface tabs are one tab stop: the roving tabindex sits on the
-  // active tab while focus is elsewhere and on whatever arrowing last focused
-  // once inside. Left/Right walk the rail, Home/End jump to the ends, and
-  // Enter/Space activate through the native button click booklet.js routes to
-  // go(). Only tabindex and the section-4 outline move, so nothing reflows.
-  function tabRail() {
-    return Array.from(document.querySelectorAll("#tabs .tab"));
-  }
-
-  function setRovingTab(tabs, current) {
-    for (const tab of tabs) tab.tabIndex = tab === current ? 0 : -1;
-  }
-
-  function rove(tabs, index) {
-    const next = tabs[((index % tabs.length) + tabs.length) % tabs.length];
-    if (!next) return;
-    setRovingTab(tabs, next);
-    next.focus({ preventScroll: true });
-  }
-
-  function wireTabRail() {
-    const rail = document.getElementById("tabs");
-    if (!rail) return;
-    const tabs = tabRail();
-    if (!tabs.length) return;
-    setRovingTab(tabs, tabs.find((tab) => tab.classList.contains("active")) ?? tabs[0]);
-    rail.addEventListener("keydown", (event) => {
-      if (event.altKey || event.ctrlKey || event.metaKey) return;
-      const current = document.activeElement?.closest?.(".tab");
-      if (!current || !rail.contains(current)) return;
-      const at = tabs.indexOf(current);
-      if (at < 0) return;
-      if (event.key === "ArrowLeft") rove(tabs, at - 1);
-      else if (event.key === "ArrowRight") rove(tabs, at + 1);
-      else if (event.key === "Home") rove(tabs, 0);
-      else if (event.key === "End") rove(tabs, tabs.length - 1);
-      else return; // Enter/Space fall through to the button's own click
-      event.preventDefault();
-    });
-    // Keys 1–4 and palette jumps change tabs without moving focus; keep the
-    // single tab stop on the surface actually showing so Tab always lands there.
-    window.addEventListener("mefi:nav", (event) => {
-      if (event.detail?.action !== "open") return;
-      if (get(event.detail?.id)?.kind !== "tab") return;
-      const focused = document.activeElement?.closest?.(".tab");
-      if (focused && rail.contains(focused)) return;
-      const target = tabs.find((tab) => tab.dataset.tab === event.detail.id);
-      if (target) setRovingTab(tabs, target);
-    });
-  }
 
   // ---- input -------------------------------------------------------------
 
@@ -2400,7 +2264,7 @@
     if (idleActive()) return "command";
     if (window.MefiWorkspace?.isActive?.()) return "workspace";
     if (window.MefiVibe?.isActive?.()) return "vibe";
-    const tab = document.querySelector?.(".tab.active")?.dataset?.tab ?? null;
+    const tab = shownTab();
     return tab === "graph" ? modelRoute : tab;
   }
 
@@ -2455,9 +2319,8 @@
 
   // ---- page header -------------------------------------------------------
   // The tab pages share one header. It names the page you are on and, when
-  // Command sent you there, offers the way back: the classic tabs row keeps
-  // that marker on #nav-command, which the rail shell hides. Painted from
-  // go()'s own announcement, so every route that opens a page is covered.
+  // Command sent you there, offers the way back. Painted from go()'s own
+  // announcement, so every route that opens a page is covered.
   let pageFromCommand = false;
   function paintPage(detail) {
     const dest = detail?.action === "open" ? get(detail.id) : null;
@@ -3191,13 +3054,10 @@
 
   function init() {
     watchMotion();
-    renderTools();
     applyShell();
     applyLayout();
     wireRail();
     paintCurrent();
-    renderFooter();
-    wireTabRail();
     paintBadges();
     refreshBadges();
     window.mefiStudio?.onTasks?.((tasks) => setBadge("tasks", openTasks(tasks)));
@@ -3227,7 +3087,6 @@
     window.addEventListener("mefi:command", (event) => {
       if (!event.detail?.active) return;
       state.returnTo = null;
-      document.getElementById("nav-command")?.classList.remove("return");
       paintBadges(document.querySelector("#idle-hud"));
     });
     // A backstop only: the push subscriptions above carry the live numbers, and
@@ -3301,7 +3160,6 @@
     setBadge,
     refreshBadges,
     paintBadges,
-    renderTools,
     renderRail,
     paintLocalNav,
     LOCAL_ROUTES,
@@ -3322,8 +3180,6 @@
     paintCurrent,
     current,
     renderHelp,
-    renderFooter,
-    hintLine,
     handleKey,
     typeScope,
     typeInto,

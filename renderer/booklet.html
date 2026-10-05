@@ -282,9 +282,6 @@ select:focus-visible,
 textarea:focus-visible,
 summary:focus-visible,
 .chip:focus-visible,
-.tab:focus-visible,
-.home-tab:focus-visible,
-.tool:focus-visible,
 .dock-item:focus-visible,
 .pill:focus-visible,
 [tabindex]:focus-visible {
@@ -429,11 +426,11 @@ kbd, .key {
   border-radius: var(--r-xs);
   white-space: nowrap;
 }
-button > .key, .tab > .key, .home-tab > .key, .tool > .key, .dock-item > .key {
+button > .key, .dock-item > .key {
   font-size: 10px; padding: 0 5px; opacity: 0.62; background: color-mix(in srgb, var(--gold) 8%, transparent);
   border-bottom-width: 1px;
 }
-.tab:hover > .key, .tab.active > .key, .dock-item:hover > .key, .tool:hover > .key { opacity: 0.9; }
+.dock-item:hover > .key { opacity: 0.9; }
 
 /* --- numeric / short-text badge painted by MefiNav.paintBadges --- */
 .count {
@@ -506,10 +503,6 @@ header {
   box-shadow: var(--shadow-1), inset 0 1px 0 color-mix(in srgb, var(--gold-bright) 25%, transparent);
 }
 .monogram.small { width: 28px; height: 28px; border-radius: 9px; font-size: 13px; }
-.head-actions { display: flex; gap: var(--s2); align-items: center; flex-wrap: wrap; }
-.head-actions .ghost { color: var(--muted); border-color: var(--hairline); }
-.head-actions .ghost:hover { color: var(--ivory); }
-.head-actions .ghost .glyph { color: var(--gold); }
 /* The tab pages' header names the page you are on (#page-title) and, when
    Command sent you here, offers the way back (#page-return); nav.js paints both. */
 .page-heading { min-width: 0; }
@@ -520,7 +513,7 @@ header {
    on screen the header keeps only the page's name and the way back. */
 @media screen {
   html[data-shell="rail"] header.page-head { padding-top: var(--s5); }
-  html[data-shell="rail"] header.page-head :is(.monogram, .eyebrow, .head-actions) { display: none; }
+  html[data-shell="rail"] header.page-head :is(.monogram, .eyebrow) { display: none; }
 }
 @media print { #page-return { display: none !important; } }
 
@@ -551,105 +544,24 @@ html:not([data-rail-pinned]) #app-rail:not(:hover):not(:has(:focus-visible)) #ap
 /* ============================================================
    8. Tabs row, Command home button, tools cluster
    ============================================================ */
-.tabs {
-  display: flex; align-items: center; gap: var(--s1);
-  position: sticky; top: 0;
-  padding: var(--s3) 0 10px;
-  z-index: var(--z-tabs);
-  background: linear-gradient(rgba(5, 5, 7, 0.92) 70%, transparent);
-  backdrop-filter: blur(10px);
-}
-.tabs-sep { width: 1px; height: 18px; background: var(--hairline); margin: 0 var(--s2); flex: none; }
 .spacer { flex: 1; }
 
 /* --- the four surfaces --- */
-.tab {
-  position: relative;
-  display: inline-flex; align-items: center; gap: var(--s2);
-  min-height: var(--ctl-h); padding: 0 16px;
-  border: 1px solid transparent; background: transparent;
-  color: var(--muted);
-  border-radius: var(--r-sm);
-  letter-spacing: var(--track-ui);
-  font-size: var(--fs-md);
-  transition: color var(--dur-2) var(--ease), background var(--dur-2) var(--ease),
-              border-color var(--dur-2) var(--ease), transform var(--dur-2) var(--ease);
-}
-.tab:hover { color: var(--ivory); background: var(--tint-gold-1); transform: translateY(-1px); box-shadow: none; }
-.tab.active { color: var(--gold-bright); background: var(--tint-gold-2); border-color: var(--hairline); }
-.tab.active::after {
-  content: "";
-  position: absolute; left: 16px; right: 16px; bottom: -1px;
-  height: 2px; border-radius: 2px;
-  background: linear-gradient(90deg, transparent, var(--gold-bright), transparent);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--gold-bright) 70%, transparent);
-  transition: opacity var(--dur-2) var(--ease);
-}
-.tab > .label { overflow: hidden; text-overflow: ellipsis; }
 /* Roving keyboard focus (nav.js): the rail is one tab stop and arrows reseat
    it, so the section-4 gold :focus-visible ring is the only visible change —
    drawn with outline, it never shifts layout. */
 /* exactly one thing reads as "current": while Command is home, the tab underline stands down */
-body.command-active .tab.active::after { opacity: 0; }
-body.command-active .tab.active { color: var(--muted); background: rgba(236, 229, 216, 0.04); border-color: transparent; }
 
 /* --- #nav-command (never .tab: booklet.js sweeps .tab.active) --- */
-.home-tab {
-  position: relative;
-  display: inline-flex; align-items: center; gap: var(--s2);
-  min-height: var(--ctl-h); padding: 0 14px;
-  border: 1px solid var(--hairline);
-  background: var(--tint-gold-1);
-  color: var(--gold);
-  border-radius: var(--r-sm);
-  font-size: var(--fs-md);
-  letter-spacing: var(--track-ui);
-  transition: color var(--dur-2) var(--ease), background var(--dur-2) var(--ease),
-              border-color var(--dur-2) var(--ease), box-shadow var(--dur-2) var(--ease);
-}
-.home-tab:hover { color: var(--gold-bright); background: var(--tint-gold-3); border-color: var(--hairline-strong); transform: none; box-shadow: none; }
-.home-tab .glyph { color: inherit; }
-.home-tab .glyph-back { display: none; }
-.home-tab .label { overflow: hidden; text-overflow: ellipsis; }
-.home-tab > .key { order: 3; }
-.home-tab > .dot { order: 4; }
 
 /* lit: Command is the visible surface */
-body.command-active .home-tab {
-  color: var(--gold-bright);
-  background: var(--tint-gold-3);
-  border-color: var(--gold);
-  box-shadow: var(--glow-gold);
-}
 
 /* return: a tab deep link came from Command — swap glyph + label */
-.home-tab.return { color: var(--gold-bright); background: var(--tint-gold-3); border-color: var(--hairline-strong); }
-.home-tab.return .glyph-home,
-.home-tab.return .label { display: none; }
-.home-tab.return .glyph-back { display: inline-block; }
-.home-tab.return::after { content: attr(data-return-label); order: 2; }
 
 /* --- tools cluster --- */
-.tools-cluster { display: flex; align-items: center; gap: var(--s1); margin-left: auto; }
-.tool {
-  position: relative;
-  display: inline-flex; align-items: center; gap: 6px;
-  min-height: var(--ctl-h-hud); padding: 0 10px;
-  border: 1px solid transparent; background: transparent;
-  color: var(--muted);
-  border-radius: var(--r-sm);
-  font-size: var(--fs-sm);
-  transition: color var(--dur-1) var(--ease), background var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease);
-}
-.tool:hover { color: var(--ivory); background: var(--tint-gold-2); border-color: var(--hairline); transform: none; box-shadow: none; }
-.tool .glyph { color: var(--gold); }
-.tool:hover .glyph { color: var(--gold-bright); }
-.tool .label { overflow: hidden; text-overflow: ellipsis; }
-.tool .count { position: absolute; top: -11px; right: -3px; box-shadow: 0 0 0 2px var(--bg); }   /* clear of the keycap */
-.tool .tone-dot { position: absolute; bottom: -2px; right: -2px; box-shadow: 0 0 0 2px var(--bg); }   /* the assistant's state, under the count */
-.tool.icon { width: auto; min-width: 0; padding: 0 8px; }   /* palette tool: glyph + ⌃K, never a 36px square */
-.tools-cluster.compact .tool .label { display: none; }
-.tools-cluster.compact .tool { padding: 0 8px; }
+   /* clear of the keycap */
+   /* the assistant's state, under the count */
+   /* palette tool: glyph + ⌃K, never a 36px square */
 
 /* ============================================================
    9. Page components (panels, cards, chips, graph, tables, A-Eyes, sheet interiors)
@@ -2361,7 +2273,7 @@ body.command-active { overflow: hidden; }                 /* removes the page sc
    second) under every frame. Command skips it once its own fade-in is done;
    leaving shows it at once, at the size it had (contain-intrinsic-size auto).
    Settings and the music preview float the page over Command and keep it. */
-body.command-active:not(.appearance-settings-active):not(.music-preview-active) > :is(main, header.page-head, #tabs) {
+body.command-active:not(.appearance-settings-active):not(.music-preview-active) > :is(main, header.page-head) {
   content-visibility: hidden;
   contain-intrinsic-size: auto none;
   transition: content-visibility var(--motion-base) allow-discrete;
@@ -2408,7 +2320,6 @@ footer {
   display: flex; gap: var(--s4); flex-wrap: wrap;
   padding-right: var(--s1);
 }
-#footer-keys { color: var(--muted); }
 
 /* Settings › Updates: the live update and published-build rows */
 .update-block { margin-top: var(--s5); padding-top: var(--s4); border-top: 1px solid var(--hairline); }
@@ -2427,12 +2338,11 @@ footer {
   animation: none !important;
   scroll-behavior: auto !important;
 }
-.no-motion button:hover, .no-motion .button:hover, .no-motion .chip:hover,
-.no-motion .tab:hover, .no-motion .card:hover, .no-motion .feed li:hover,
+.no-motion button:hover, .no-motion .button:hover, .no-motion .chip:hover, .no-motion .card:hover, .no-motion .feed li:hover,
 .no-motion #rank li:hover { transform: none !important; }
 
 @media (prefers-reduced-motion: reduce) {
-  button:hover, .button:hover, .chip:hover, .tab:hover,
+  button:hover, .button:hover, .chip:hover,
   .card:hover, .feed li:hover, #rank li:hover { transform: none !important; }
 }
 
@@ -2471,13 +2381,10 @@ footer {
   .explorer-col:last-child { grid-column: 1 / -1; border-top: 1px solid color-mix(in srgb, var(--gold) 8%, transparent); }
   .explorer-grid.two-col { grid-template-columns: minmax(0, 1fr); }
   /* safety net for .tools-cluster.compact: nav's ResizeObserver is the real trigger */
-  .tools-cluster .label { display: none; }
-  .tools-cluster .tool { padding: 0 var(--s2); }
   .sheet-links { margin-left: 0; order: 5; flex-basis: 100%; justify-content: flex-start; }
   .sheet-links .dock-item.small .label { display: none; }
   /* the tabs row fits without wrapping down to ~1170px (see below); from here
      .tools-cluster.compact has nothing left to hide, so wrap is the backstop */
-  .tabs { flex-wrap: wrap; }
   /* .cmd-dock .key is already hidden by the 1430px block above */
   .cmd-dock .dock-item { padding: 0 9px; }
 }
@@ -2489,7 +2396,6 @@ footer {
      at ~1170px, long before the 900px block that hides the rail. Drop the caps
      here; the wrap above is the backstop, because #tree-rail (--z-rail) paints
      over the tabs row (--z-tabs) and an overflowing tool would sit under it. */
-  .tab > .key, .home-tab > .key { display: none; }
 }
 
 @media (max-width: 1150px) {
@@ -2760,9 +2666,9 @@ body.no-motion :is(.boot-spinner, .boot-chip-skeleton), body.no-motion #boot-ope
   h1, h2, h3, .card h3, .stat .v, .verdict { color: #111; }
   .sub, .muted, .stat .k, .stat .s, .why, .vendor, footer { color: #555; }
   .eyebrow, details summary, a { color: #6b5626; }
-  .tabs, .head-actions, .toolbar, #tree-rail, #tab-graph, #tab-studio, #tab-eyes, footer, .overlay { display: none !important; }
+  .toolbar, #tree-rail, #tab-graph, #tab-studio, #tab-eyes, footer, .overlay { display: none !important; }
   #idle-layer, #idle-hud, #cmd-dock, #cmd-legend, #cmd-empty, #cmd-chat, #cmd-tip,
-  #toast-host, .glyph-sprite, .home-tab, .tools-cluster, .update-pill,
+  #toast-host, .glyph-sprite, .update-pill,
   .count, .dot, kbd, .key { display: none !important; }
   .card { border: 1px solid #bbb; background: #fff; break-inside: avoid; backdrop-filter: none; }
   .catalog-model::details-content { content-visibility: visible; block-size: auto; }
@@ -2802,7 +2708,7 @@ body.no-motion :is(.boot-spinner, .boot-chip-skeleton), body.no-motion #boot-ope
 .workspace[data-accent="sage"] { --ws-accent: #b9cfae; --ws-accent-rgb: 185,207,174; }
 .workspace[data-accent="violet"] { --ws-accent: #c5b7e8; --ws-accent-rgb: 197,183,232; }
 body.workspace-active { overflow: hidden; }
-body.workspace-active > header, body.workspace-active > #tabs, body.workspace-active > main, body.workspace-active > footer, body.workspace-active > #tree-rail { visibility: hidden; pointer-events: none; }
+body.workspace-active > header, body.workspace-active > main, body.workspace-active > #tree-rail { visibility: hidden; pointer-events: none; }
 .workspace button, .workspace textarea, .workspace input, .workspace select { font-family: var(--font-ui); }
 .workspace button { transition: background .18s, border-color .18s, color .18s; }
 .workspace button:focus-visible, .workspace summary:focus-visible { outline: 2px solid var(--ws-accent); outline-offset: 3px; }
@@ -3100,9 +3006,9 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 .studio-more > summary > .chev { color: var(--muted); transition: transform var(--dur-2) var(--ease); }
 .studio-more > summary:hover, .studio-more[open] > summary { color: var(--ivory); background: var(--tint-gold-2); border-color: var(--hairline-strong); }
 .studio-more[open] > summary > .chev { transform: rotate(180deg); }
-.studio-more > .tools-cluster, .studio-more-links { position: absolute; z-index: 95; top: calc(100% + 6px); right: 0; display: grid; min-width: 236px; padding: 8px; border: 1px solid var(--hairline-strong); border-radius: var(--r-md); background: var(--glass-hard); backdrop-filter: var(--blur); box-shadow: var(--shadow-2), var(--inset-hi); }
-.studio-more:not([open]) > .tools-cluster, .studio-more:not([open]) .studio-more-links { display: none; }
-.studio-more-links .dock-item, .studio-more .tool { justify-content: flex-start; width: 100%; }
+.studio-more-links { position: absolute; z-index: 95; top: calc(100% + 6px); right: 0; display: grid; min-width: 236px; padding: 8px; border: 1px solid var(--hairline-strong); border-radius: var(--r-md); background: var(--glass-hard); backdrop-filter: var(--blur); box-shadow: var(--shadow-2), var(--inset-hi); }
+.studio-more:not([open]) .studio-more-links { display: none; }
+.studio-more-links .dock-item { justify-content: flex-start; width: 100%; }
 .sheet-links:has(.studio-more) { border: none; background: transparent; overflow: visible; padding: 0; }
 @keyframes ws-float { 0%,100% { transform: translateY(1px) rotate(-3deg); } 50% { transform: translateY(-3px) rotate(3deg); } }
 @keyframes ws-blink { 0%,42%,46%,100% { transform: scaleY(1); } 44% { transform: scaleY(.1); } }
@@ -3253,15 +3159,6 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 #workspace-sidebar details[open] > summary .ws-chev { transform: rotate(180deg); }
 #workspace-sidebar .ws-tools[open] > summary { color: var(--muted); }
 #workspace-tool-links { display: grid; gap: 8px; padding: 0 0 4px; }
-#workspace-tool-links .nav-menu-group { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; border: 0; padding: 0; margin: 0; }
-#workspace-tool-links .nav-menu-heading { grid-column: 1 / -1; padding: 2px 8px 0; font-size: 9.5px; }
-#workspace-tool-links .nav-menu-group button { position: relative; display: flex; align-items: center; justify-content: flex-start; gap: 8px; min-height: 38px; padding: 6px 9px; font-size: 12px; text-align: left; border: 1px solid rgba(var(--ws-accent-rgb), 0.1); border-radius: var(--r-sm); background: rgba(var(--ws-accent-rgb), 0.04); color: var(--muted); }
-#workspace-tool-links .nav-menu-group button:hover { background: rgba(var(--ws-accent-rgb), 0.12); border-color: rgba(var(--ws-accent-rgb), 0.3); color: var(--ivory); transform: none; box-shadow: none; }
-#workspace-tool-links .nav-menu-group button .glyph { color: var(--ws-accent); }
-#workspace-tool-links .nav-menu-group button .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#workspace-tool-links .nav-menu-group .key { display: none; }
-#workspace-tool-links .nav-menu-group .count { position: absolute; top: -6px; right: -4px; box-shadow: 0 0 0 2px var(--panel-solid); }
-#workspace-tool-links .nav-menu-group .tone-dot { position: absolute; bottom: -2px; right: -2px; box-shadow: 0 0 0 2px var(--panel-solid); }
 /* bottom row */
 #workspace-sidebar .ws-sidebar-bottom { display: block; padding-top: 14px; }
 #workspace-sidebar .ws-quick { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
@@ -4056,7 +3953,6 @@ body > main > section:not([hidden]),
 .model-lab > [role="tabpanel"]:not([hidden]) {
   animation: studio-content-enter var(--motion-content) var(--ease-enter);
 }
-.studio-more[open] > .tools-cluster,
 .ws-tools[open] > #workspace-tool-links,
 .cmd-more-tools[open] > .cmd-more-links {
   animation: studio-menu-enter var(--motion-menu) var(--ease-enter);
@@ -4114,14 +4010,9 @@ html[data-motion="off"]::view-transition-new(*) { animation: none !important; }
 }
 
                                                     
-.nav-menu-group { display: grid; gap: 2px; min-width: 0; }
-.nav-menu-group + .nav-menu-group { border-top: 1px solid var(--hairline); padding-top: 8px; margin-top: 6px; }
-.nav-menu-heading { padding: 4px 9px 3px; color: var(--dim); font: 650 10px/1.4 var(--font-ui); letter-spacing: .1em; text-transform: uppercase; }
-.studio-more > .tools-cluster, .studio-more-links { max-height: min(65vh, 540px); overflow: auto; }
-.studio-more .tools-cluster .tool .label { display: inline; }
-.studio-more .tools-cluster .tool, .studio-more-links .dock-item { gap: 9px; min-height: 34px; padding: 6px 10px; border-radius: 8px; }
-.studio-more .tools-cluster .key, .studio-more-links .key { margin-left: auto; }
-.studio-more .tools-cluster .tool .count, .studio-more .tools-cluster .tool .tone-dot { position: static; margin-left: 4px; box-shadow: none; }
+.studio-more-links { max-height: min(65vh, 540px); overflow: auto; }
+.studio-more-links .dock-item { gap: 9px; min-height: 34px; padding: 6px 10px; border-radius: 8px; }
+.studio-more-links .key { margin-left: auto; }
 #idle-hud .cmd-more-links { display: block; width: 290px; max-height: min(65vh, 540px); overflow: auto; }
 #idle-hud .cmd-more-links .dock-item { width: 100%; min-height: 34px; padding: 6px 10px; border-radius: 8px; }
 .walkthrough-invitation { flex: none; display: flex; align-items: center; gap: 20px; justify-content: space-between; margin: 0 0 16px; padding: 12px 15px; border: 1px solid var(--hairline-strong); border-radius: 12px; background: color-mix(in srgb, var(--gold) 6%, var(--panel)); }
@@ -5458,8 +5349,6 @@ html[data-shell="rail"] .lab-tabs { display: none; }
 
 /* One navigation: with the rail on, the older chromes that only navigated
    step aside. Phase E deletes them; until then the flag brings them back. */
-html[data-shell="rail"] #tabs,
-html[data-shell="rail"] body > footer,
 html[data-shell="rail"] #workspace-sidebar-toggle,
 html[data-shell="rail"] #workspace-sidebar-panel .ws-nav,
 html[data-shell="rail"] #workspace-sidebar-panel .ws-quick,
@@ -5961,7 +5850,7 @@ body[data-media-background="true"]:is([data-media-view="workspace"], [data-media
 body[data-media-visible="true"].command-active :is(#idle-layer-far, #idle-layer):not([hidden]),
 html[data-shell="rail"] body[data-media-visible="true"].command-active :is(#idle-layer-far, #idle-layer):not([hidden]) { opacity: var(--media-tree-opacity, 1); }
 body[data-media-background="true"] #idle-layer-far { background: transparent; }
-body[data-media-background="true"].command-active:not(.appearance-settings-active):not(.music-preview-active) > :is(main, header.page-head, #tabs) { visibility: hidden; }
+body[data-media-background="true"].command-active:not(.appearance-settings-active):not(.music-preview-active) > :is(main, header.page-head) { visibility: hidden; }
 html[data-shell="rail"] body[data-media-background="true"] :is(.workspace-page, .agents-overlay, #plans-overlay) { background: var(--studio-page-fill); }
 html[data-motion="off"] .media-window, html[data-motion="off"] .media-window .music-link-player { transition: none; }
 @media (prefers-reduced-motion: reduce) { .media-window, .media-window .music-link-player { transition: none; } }
@@ -8963,7 +8852,7 @@ html[data-shell=rail][data-studio-style] :is(.workspace-page, .agents-overlay),
   backdrop-filter: none;
 }
 /* A transparent destination must reveal the scene, not an inactive tab's text. */
-html[data-shell=rail] body:has(.workspace-page:not([hidden])) > :is(header, main, #tabs, #tree-rail) { visibility: hidden; pointer-events: none; }
+html[data-shell=rail] body:has(.workspace-page:not([hidden])) > :is(header, main, #tree-rail) { visibility: hidden; pointer-events: none; }
 html[data-shell=rail] body:has(.workspace-page:not([hidden])) :is(#workspace-layer, #idle-hud) { visibility: hidden; pointer-events: none; }
 html[data-shell=rail] body:has(.workspace-page:not([hidden])) #idle-layer { opacity: .04; }
 html[data-shell=rail] .workspace-page > :is(.sheet, .explorer-sheet, .brains-sheet),
@@ -9006,7 +8895,7 @@ html[data-studio-style] .sheet-head.plain { background: transparent; backdrop-fi
 html[data-studio-style] table#table th { background: var(--studio-menu-fill); backdrop-filter: var(--studio-menu-blur); }
 
 /* Floating menus are readable over both the scene and another page of text. */
-html[data-studio-style] :is(.pop, .palette-sheet, .studio-choice-popup, .surface-tools-menu, .studio-more-links, .studio-more > .tools-cluster, .brains-menu, .brains-search-panel, .brains-dialog-panel, .brains-shortcuts-panel, .music-dropdown, .companion-panel, .companion-bubble, .tree-tip, .tip, .profiler-hud, .toast, .legend-list, .feed-drop, .autonomy-popover),
+html[data-studio-style] :is(.pop, .palette-sheet, .studio-choice-popup, .surface-tools-menu, .studio-more-links, .brains-menu, .brains-search-panel, .brains-dialog-panel, .brains-shortcuts-panel, .music-dropdown, .companion-panel, .companion-bubble, .tree-tip, .tip, .profiler-hud, .toast, .legend-list, .feed-drop, .autonomy-popover),
 #app-help-menu, .workspace .ws-project-actions > div {
   background: var(--studio-wash), var(--studio-sheen), var(--studio-float-fill);
   border-color: var(--studio-glass-edge); backdrop-filter: var(--studio-float-blur);
@@ -9835,7 +9724,7 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
 #friends-overlay[hidden] { display: none; }
 /* The page's fill is the theme's glass (--studio-page-fill, mostly clear in Chrome), so what it stands over must not read
    through: the content under it steps aside while it shows, as under a workspace page (studio-ui.css). The frame stays. */
-body:has(#friends-overlay:not([hidden])) > :is(header, main, #tabs, #tree-rail), body:has(#friends-overlay:not([hidden])) :is(#workspace-layer, #idle-hud) { visibility: hidden; pointer-events: none; }
+body:has(#friends-overlay:not([hidden])) > :is(header, main, #tree-rail), body:has(#friends-overlay:not([hidden])) :is(#workspace-layer, #idle-hud) { visibility: hidden; pointer-events: none; }
 #friends-overlay .friends-place-sheet { display: grid; gap: 16px; align-content: start; width: 100%; max-width: 1032px; max-height: none; overflow: visible; margin: 0 auto; padding: 22px 16px 28px; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
 #friends-overlay .friends-place-head { display: block; padding: 0; border: 0; background: none; }
 #friends-overlay .friends-place-head h1 { margin: 0; font: 650 var(--f22, 22px)/1.3 var(--font-display); letter-spacing: -.01em; color: var(--ivory); }
@@ -9895,7 +9784,7 @@ html[data-studio-material="solid"] #vibe-layer { --v-glass: var(--studio-panel-b
 /* The Build frame steps aside while Vibe is up; the tree stays as the sky.
    Home's section bar (Back, Forward, Home) is Build's too, and it sat over
    Vibe's own top bar, where it swallowed the Search and Settings buttons. */
-body.vibe-active :is(#app-rail, #workspace-sidebar-toggle, body > header.page-head, #tabs, #tree-rail) { visibility: hidden; }
+body.vibe-active :is(#app-rail, #workspace-sidebar-toggle, body > header.page-head, #tree-rail) { visibility: hidden; }
 body.vibe-active:not(:has(.workspace-page:not([hidden]))) #app-local-nav { display: none; }
 /* The page under Vibe does not scroll (or offer its scroll arrows) through it. */
 body.vibe-active { overflow: hidden; }
@@ -10462,7 +10351,7 @@ button.vibe-ask-chip:hover { border-color: var(--v-edge-hi); color: var(--v-ink)
    while Vibe is the mode, so the classic-tabs preference only shapes Build. */
 html[data-ui-mode="vibe"][data-shell="rail"],
 html[data-ui-mode="vibe"][data-shell="rail"][data-rail-pinned] { --shell-rail-w: 72px; }
-html[data-ui-mode="vibe"] :is(#app-rail, #tabs, #workspace-sidebar-toggle, body > footer) { display: none !important; }
+html[data-ui-mode="vibe"] :is(#app-rail, #workspace-sidebar-toggle) { display: none !important; }
 html[data-ui-mode="vibe"] #app-local-nav { background: var(--studio-menu-fill); backdrop-filter: var(--studio-menu-blur); }
 
 .vibe-rail {
@@ -14363,21 +14252,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       <p class="sub" id="status">Loading catalog…</p>
     </div>
   </div>
-  <div class="head-actions">
-    <button id="help-btn" class="ghost icon" title="Shortcuts (?)" aria-label="Shortcuts"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-help"/></svg></button>
-  </div>
 </header>
-<nav class="tabs" id="tabs" aria-label="Surfaces and tools">
-  <button class="home-tab" data-nav="workspace" title="Your workspace (H)">← Workspace</button>
-  <button id="nav-command" class="home-tab" data-nav="command" data-return-label="Back to Command" title="Command view (D)"><svg class="glyph glyph-home" aria-hidden="true" focusable="false"><use href="#g-orbit"/></svg><svg class="glyph glyph-back" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span><kbd class="key">D</kbd><span class="dot live" data-badge="progress" data-badge-mode="dot" hidden></span><span class="count warn" data-badge="questions" hidden></span></button>
-  <span class="tabs-sep" aria-hidden="true"></span>
-  <button class="tab active" data-tab="booklet" title="Model catalog (1)"><span class="label">Model catalog</span><kbd class="key">1</kbd></button>
-  <button class="tab" data-tab="graph" title="Performance (2)"><span class="label">Performance</span><kbd class="key">2</kbd></button>
-  <button class="tab" data-tab="eyes" title="Activity & evidence (3)"><span class="label">Activity & evidence</span><kbd class="key">3</kbd></button>
-  <button class="tab" data-tab="studio" title="Settings (4 or Ctrl ,)"><span class="label">Settings</span><kbd class="key">4</kbd></button>
-  <span class="spacer" aria-hidden="true"></span>
-  <details class="studio-more"><summary><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-more"/></svg><span class="label">More tools</span><svg class="glyph chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary><div id="nav-tools" class="tools-cluster" role="group" aria-label="Tools"></div></details>
-</nav>
 <div id="banner" class="banner" hidden></div>
 <main>
   <section id="tab-booklet">
@@ -16266,11 +16141,6 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   </div>
 </div>
 <div id="toast-host" role="status" aria-live="polite"></div>
-<footer>
-  <span>Sources: <a class="link" href="https://opencode.ai/go" target="_blank" rel="noreferrer">opencode.ai/go<svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-external"/></svg></a> · models.dev · dev.opencode.ai/docs/go</span>
-  <span id="footer-keys">D Command · 1–4 tabs · E T I O A tools · ⌃K jump · ? shortcuts</span>
-  <span id="footer-meta"></span>
-</footer>
 <script id="booklet-data" type="application/json">{
   "schemaVersion": 1,
   "plan": {
@@ -22589,7 +22459,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // section 17): it cannot show a hint, and measuring inside it would force
   // the skipped layout back. A selector match, not a computed-style read,
   // which would itself force a style recalculation on every refresh.
-  const COVERED = "body.command-active:not(.appearance-settings-active):not(.music-preview-active) > :is(main, header.page-head, #tabs)";
+  const COVERED = "body.command-active:not(.appearance-settings-active):not(.music-preview-active) > :is(main, header.page-head)";
   function skippedRoots() {
     return document.body.classList.contains("command-active") ? [...document.querySelectorAll(COVERED)] : [];
   }
@@ -24513,7 +24383,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     } else if (window.MefiWorkspace?.isActive?.()) {
       document.getElementById("workspace-layer")?.focus?.({ preventScroll: true });
     } else {
-      (document.querySelector(".tab.active") ?? document.getElementById("nav-command"))?.focus?.();
+      (document.querySelector?.('#app-rail [aria-current="page"]') ?? document.body)?.focus?.({ preventScroll: true });
     }
     if (layer) state.focusReturn[layer] = null;
     dispatchNav(id, "close", {});
@@ -24590,7 +24460,6 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (id === "tasks" && !params.taskId && !params.filter && !params.readiness && context) params = { ...params, taskId: context.taskId, projectId: context.projectId };
     if (id === "command" && !params.preserveSelection && !params.selected && !params.sessionId && !params.rail && (params.taskId || context?.taskId)) params = { ...params, selected: `task:${params.taskId || context.taskId}` };
     if (dest.kind !== "action" && dest.layer !== "transient" && options.history !== false) rememberRoute(id, params);
-    const navCommand = document.getElementById("nav-command");
     if (dest.kind === "action") {
       dest.run?.(params, options);
       dispatchNav(id, "open", params);
@@ -24604,7 +24473,6 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       if (id !== "vibe") window.MefiVibe?.exit?.();
       if (id !== "command" && idleActive()) window.MefiIdle?.exit?.();
       state.returnTo = null;
-      navCommand?.classList.remove("return");
       const opened = dest.open?.(params);
       dispatchNav(id, "open", params);
       return opened;
@@ -24616,7 +24484,6 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       if (idleActive()) {
         window.MefiIdle?.exit?.();
         state.returnTo = "command";
-        navCommand?.classList.add("return");
         // Only a deep link needs explaining; a plain tab click speaks for itself.
         if (params && Object.keys(params).length) window.MefiToast?.("D returns to Command", "info");
       }
@@ -24637,11 +24504,15 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     return dest.open?.(params);
   }
 
-  // The surface under any sheet: the workspace, or the active tab.
+  // The tab page on show: the one #tab-* section booklet.js's showTab left visible.
+  const TAB_PAGES = Object.freeze(["booklet", "graph", "eyes", "studio"]);
+  const shownTab = () => TAB_PAGES.find((name) => document.getElementById?.(`tab-${name}`)?.hidden === false) ?? null;
+
+  // The surface under any sheet: the workspace, or the tab page on show.
   function underlyingView() {
     if (window.MefiWorkspace?.isActive?.()) return "workspace";
     if (window.MefiVibe?.isActive?.()) return "vibe";
-    const tab = document.querySelector?.(".tab.active")?.dataset?.tab ?? null;
+    const tab = shownTab();
     return tab === "graph" ? modelRoute : tab;
   }
 
@@ -24831,35 +24702,6 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (options.key !== false && dest.key) button.append(keyCap(options.keyText ?? dest.key));
     for (const badge of badgeNodes(dest)) button.append(badge);
     return button;
-  }
-
-  // The More tools menus group by the same sections as the rail. Home rides
-  // with Work, the foot's Community with Help, and anything else unfiled
-  // lands in Settings.
-  const MENU_GROUPS = ["Work", "Agents", "Friends", "Settings", "Help"];
-  function menuGroup(dest) {
-    const section = sectionOf(dest);
-    if (section === "home") return "Work";
-    if (section === "community") return "Help";
-    const label = SECTIONS.get(section);
-    return MENU_GROUPS.includes(label) ? label : "Settings";
-  }
-
-  function appendGrouped(target, destinations, buttonClass) {
-    for (const label of MENU_GROUPS) {
-      const items = destinations.filter((dest) => menuGroup(dest) === label);
-      if (!items.length) continue;
-      const group = document.createElement("div");
-      group.className = "nav-menu-group";
-      group.setAttribute("role", "group");
-      group.setAttribute("aria-label", label);
-      const title = document.createElement("span");
-      title.className = "nav-menu-heading";
-      title.textContent = label;
-      group.append(title);
-      for (const dest of items) group.append(navButton(dest, buttonClass));
-      target.append(group);
-    }
   }
 
   // ---- the one rail --------------------------------------------------------
@@ -25422,42 +25264,6 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     }
   }
 
-  function renderTools(target) {
-    const element = target ?? document.getElementById("nav-tools");
-    if (!element) return;
-    element.textContent = "";
-    appendGrouped(element, list({ showIn: "tools" }), "tool");
-    paintBadges(element);
-    watchToolsWidth(element);
-  }
-
-  let toolsObserver = null;
-  function watchToolsWidth(element) {
-    const tabs = document.getElementById("tabs");
-    if (!tabs || typeof ResizeObserver !== "function" || toolsObserver) return;
-    const fit = () => {
-      // Measure uncompacted, or the cluster could never expand again.
-      element.classList.remove("compact");
-      if (tabs.scrollWidth > tabs.clientWidth) element.classList.add("compact");
-    };
-    let queued = false;
-    toolsObserver = new ResizeObserver(() => {
-      if (queued) return;
-      queued = true;
-      // Deferred so the measure/write pair cannot re-enter the observer.
-      requestAnimationFrame(() => {
-        queued = false;
-        fit();
-      });
-    });
-    toolsObserver.observe(tabs);
-    // "Back to Command" and the progress dot widen #nav-command without resizing
-    // the row itself, and a stale fit would push the cluster under #tree-rail.
-    const home = document.getElementById("nav-command");
-    if (home) toolsObserver.observe(home);
-    fit();
-  }
-
   function helpRow(key, text) {
     const fragment = document.createDocumentFragment();
     fragment.append(keyCap(key));
@@ -25506,27 +25312,6 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     });
   }
 
-  function hintLine() {
-    const parts = [];
-    const command = get("command");
-    if (command?.key) parts.push(`${command.key} ${command.short}`);
-    const tabs = list({ group: "surfaces" }).filter((dest) => dest.kind === "tab" && dest.key);
-    if (tabs.length) parts.push(`${tabs[0].key}–${tabs[tabs.length - 1].key} tabs`);
-    const tools = list({ group: "tools" })
-      .filter((dest) => dest.key)
-      .map((dest) => dest.key);
-    if (tools.length) parts.push(`${tools.join(" ")} tools`);
-    if (get("palette")) parts.push("⌃K jump");
-    if (get("help")) parts.push("? shortcuts");
-    return parts.join(" · ");
-  }
-
-  function renderFooter(target) {
-    const element = target ?? document.getElementById("footer-keys");
-    if (!element) return;
-    element.textContent = hintLine();
-  }
-
   // ---- motion switch -----------------------------------------------------
   // One answer for CSS and JS: body.no-motion (the Motion setting) or the OS
   // reduced-motion preference. It is cached, because the Command canvas asks
@@ -25561,57 +25346,6 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   }
 
   // ---- tab rail roving focus ---------------------------------------------
-
-  // The four surface tabs are one tab stop: the roving tabindex sits on the
-  // active tab while focus is elsewhere and on whatever arrowing last focused
-  // once inside. Left/Right walk the rail, Home/End jump to the ends, and
-  // Enter/Space activate through the native button click booklet.js routes to
-  // go(). Only tabindex and the section-4 outline move, so nothing reflows.
-  function tabRail() {
-    return Array.from(document.querySelectorAll("#tabs .tab"));
-  }
-
-  function setRovingTab(tabs, current) {
-    for (const tab of tabs) tab.tabIndex = tab === current ? 0 : -1;
-  }
-
-  function rove(tabs, index) {
-    const next = tabs[((index % tabs.length) + tabs.length) % tabs.length];
-    if (!next) return;
-    setRovingTab(tabs, next);
-    next.focus({ preventScroll: true });
-  }
-
-  function wireTabRail() {
-    const rail = document.getElementById("tabs");
-    if (!rail) return;
-    const tabs = tabRail();
-    if (!tabs.length) return;
-    setRovingTab(tabs, tabs.find((tab) => tab.classList.contains("active")) ?? tabs[0]);
-    rail.addEventListener("keydown", (event) => {
-      if (event.altKey || event.ctrlKey || event.metaKey) return;
-      const current = document.activeElement?.closest?.(".tab");
-      if (!current || !rail.contains(current)) return;
-      const at = tabs.indexOf(current);
-      if (at < 0) return;
-      if (event.key === "ArrowLeft") rove(tabs, at - 1);
-      else if (event.key === "ArrowRight") rove(tabs, at + 1);
-      else if (event.key === "Home") rove(tabs, 0);
-      else if (event.key === "End") rove(tabs, tabs.length - 1);
-      else return; // Enter/Space fall through to the button's own click
-      event.preventDefault();
-    });
-    // Keys 1–4 and palette jumps change tabs without moving focus; keep the
-    // single tab stop on the surface actually showing so Tab always lands there.
-    window.addEventListener("mefi:nav", (event) => {
-      if (event.detail?.action !== "open") return;
-      if (get(event.detail?.id)?.kind !== "tab") return;
-      const focused = document.activeElement?.closest?.(".tab");
-      if (focused && rail.contains(focused)) return;
-      const target = tabs.find((tab) => tab.dataset.tab === event.detail.id);
-      if (target) setRovingTab(tabs, target);
-    });
-  }
 
   // ---- input -------------------------------------------------------------
 
@@ -25836,7 +25570,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (idleActive()) return "command";
     if (window.MefiWorkspace?.isActive?.()) return "workspace";
     if (window.MefiVibe?.isActive?.()) return "vibe";
-    const tab = document.querySelector?.(".tab.active")?.dataset?.tab ?? null;
+    const tab = shownTab();
     return tab === "graph" ? modelRoute : tab;
   }
 
@@ -25891,9 +25625,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
 
   // ---- page header -------------------------------------------------------
   // The tab pages share one header. It names the page you are on and, when
-  // Command sent you there, offers the way back: the classic tabs row keeps
-  // that marker on #nav-command, which the rail shell hides. Painted from
-  // go()'s own announcement, so every route that opens a page is covered.
+  // Command sent you there, offers the way back. Painted from go()'s own
+  // announcement, so every route that opens a page is covered.
   let pageFromCommand = false;
   function paintPage(detail) {
     const dest = detail?.action === "open" ? get(detail.id) : null;
@@ -26627,13 +26360,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
 
   function init() {
     watchMotion();
-    renderTools();
     applyShell();
     applyLayout();
     wireRail();
     paintCurrent();
-    renderFooter();
-    wireTabRail();
     paintBadges();
     refreshBadges();
     window.mefiStudio?.onTasks?.((tasks) => setBadge("tasks", openTasks(tasks)));
@@ -26663,7 +26393,6 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     window.addEventListener("mefi:command", (event) => {
       if (!event.detail?.active) return;
       state.returnTo = null;
-      document.getElementById("nav-command")?.classList.remove("return");
       paintBadges(document.querySelector("#idle-hud"));
     });
     // A backstop only: the push subscriptions above carry the live numbers, and
@@ -26737,7 +26466,6 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     setBadge,
     refreshBadges,
     paintBadges,
-    renderTools,
     renderRail,
     paintLocalNav,
     LOCAL_ROUTES,
@@ -26758,8 +26486,6 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     paintCurrent,
     current,
     renderHelp,
-    renderFooter,
-    hintLine,
     handleKey,
     typeScope,
     typeInto,
@@ -49885,7 +49611,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     releaseReactiveInput();
     const active = document.activeElement;
     if (active === el.canvas || el.hud.contains(active)) {
-      (document.querySelector(".tab.active") ?? document.body).focus?.({ preventScroll: true });
+      document.body.focus?.({ preventScroll: true });
     }
     document.body.classList.remove("command-active");
     window.dispatchEvent(new CustomEvent("mefi:command", { detail: { active: false } }));
@@ -101928,7 +101654,6 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     sort: document.getElementById("sort"),
     cards: document.getElementById("cards"),
     count: document.getElementById("count"),
-    footer: document.getElementById("footer-meta"),
     alsoTracked: document.getElementById("also-tracked"),
     alsoTrackedBody: document.getElementById("also-tracked-body"),
     banner2: null,
@@ -102149,7 +101874,6 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const source = state.source === "baked" ? "built-in data" : `the ${state.source}`;
     els.status.textContent = `${doc.models.length} models · ${roster} live${when ? ` · updated ${when}` : ""} · from ${source}`;
     els.status.title = `Catalog hash ${doc.hash.slice(0, 8)}`;
-    els.footer.textContent = `catalog hash ${doc.hash.slice(0, 12)} · roster ${doc.rosterHash.slice(0, 12)}`;
   }
 
   // Picks: four highlights worked out from the catalog itself, legacy models
@@ -102343,9 +102067,6 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // The page header names the tab on show; nav.js repaints it on mefi:nav, and
   // this covers the launch, which restores a tab without announcing it.
   const PAGE_TITLES = { booklet: "Model catalog", graph: "Performance", eyes: "Activity & evidence", studio: "Settings" };
-  // The tab page on show: the one #tab-* section showTab left visible ("booklet" at launch), or null.
-  const TAB_NAMES = Object.freeze(Object.keys(PAGE_TITLES));
-  function shownTab() { return TAB_NAMES.find((name) => document.getElementById(`tab-${name}`)?.hidden === false) ?? null; }
   function showTab(name, params = {}) {
     if (name !== "studio") window.MefiMusic?.activateSettings?.(null);
     const insights = document.getElementById("model-lab-catalog");
@@ -102358,7 +102079,6 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         requestAnimationFrame(() => state.graph?.redraw());
       });
     }
-    document.querySelectorAll(".tab").forEach((tab) => tab.classList.toggle("active", tab.dataset.tab === name));
     document.getElementById("tab-booklet").hidden = name !== "booklet";
     document.getElementById("tab-graph").hidden = name !== "graph";
     document.getElementById("tab-eyes").hidden = name !== "eyes";
@@ -104008,14 +103728,6 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const pick = event.target.closest?.(".catalog-pick[data-id]");
     if (pick) revealModel(pick.dataset.id);
   });
-  document.getElementById("tabs").addEventListener("click", (event) => {
-    const tab = event.target.closest(".tab");
-    if (!tab) return;
-    // Route through nav so a tab click also closes an open sheet and leaves the
-    // Command view with a "return" marker on #nav-command.
-    if (window.MefiNav) window.MefiNav.go(tab.dataset.tab, {}, { source: "tabs" });
-    else showTab(tab.dataset.tab);
-  });
   wireSettingsNav();
   registerSettingsSearch();
   // renderer/nav.js sets the 0.5 layout once the page has loaded: Settings is
@@ -104085,10 +103797,6 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       window.MefiNav?.release?.("help");
     }
   };
-  document.getElementById("help-btn").addEventListener("click", () => {
-    if (window.MefiNav) window.MefiNav.toggle("help");
-    else toggleHelp();
-  });
   helpOverlay.addEventListener("click", (event) => {
     if (event.target === helpOverlay) toggleHelp(false);
   });
@@ -104113,7 +103821,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   };
   // settingsLocation: the place Settings shows, and whether Find a setting is showing results instead (null in the classic layout).
   const settingsLocation = () => (settingsFiled ? { id: settingsCategory, label: SETTINGS_CATEGORIES[settingsCategory] ?? settingsCategory, search: Boolean(settingsQuery()) } : null);
-  window.MefiBooklet = { showTab, shownTab, refresh, toggleHelp, jumpToSettings, initStudio, settingsPlaces, settingsLocation };
+  window.MefiBooklet = { showTab, refresh, toggleHelp, jumpToSettings, initStudio, settingsPlaces, settingsLocation };
 
   const headless = new URLSearchParams(window.location.search);
   const capture = headless.get("capture") === "1";
