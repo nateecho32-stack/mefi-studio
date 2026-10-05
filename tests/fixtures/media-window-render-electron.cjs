@@ -115,8 +115,10 @@ app.whenReady().then(async () => {
   await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1" } });
   // Studio's little companion roams to a random edge spot every few seconds, and when it looks for a clear
   // place it ignores frames, so it can settle on the player's corner. It is not what this fixture
-  // measures: it stays out of the way, so a run does not depend on where it happens to be.
-  await run("const style=document.createElement('style');style.textContent='.companion-orb,.companion-bubble{display:none!important}';document.head.append(style);");
+  // measures: it stays out of the way, so a run does not depend on where it happens to be. Its panel goes
+  // too: a hidden orb measures at 0,0, so the run's pointer in the top-left corner reads as a hover on it,
+  // and in the 0.5 frame the panel then opens in the free area, over the player.
+  await run("const style=document.createElement('style');style.textContent='.companion-orb,.companion-bubble,.companion-panel{display:none!important}';document.head.append(style);");
   await run("window.MefiNav.go('studio',{category:'audio'});window.MefiMusic.playLink('https://youtu.be/dQw4w9WgXcQ',{autoplay:false});window.fixtureMedia=window.MefiMusic.linkElement().element;");
   // What the embed reports having been told, as "command:args", so a click in Studio can be followed to the frame.
   await run("window.fixtureCommands=[];window.addEventListener('message',event=>{if(event.source!==window.fixtureMedia.contentWindow)return;try{const message=JSON.parse(event.data);if(message.probeCommand)window.fixtureCommands.push([message.probeCommand,...(message.args||[])].join(':'));}catch{}});");
@@ -238,10 +240,11 @@ app.whenReady().then(async () => {
   assert.equal(await run("const holder=document.createElement('div');holder.hidden=true;const page=document.createElement('section');page.className='workspace-page';holder.append(page);document.body.append(holder);const bright=getComputedStyle(document.getElementById('idle-layer')).opacity==='1'&&getComputedStyle(document.getElementById('idle-layer-far')).opacity==='1'&&getComputedStyle(document.querySelector('.music-link-player')).filter==='brightness(1)';holder.remove();return bright;"), true, "inactive workspace pages cannot dim the tree at zero transparency");
   await capture("media-window-background-tree.png");
   await run("document.getElementById('media-window-background').click();");
-  await mouse(10, 10);
-  // The hover opener is Settings › Audio's "Open music & video": Command's toolbar Music button went with the classic top bar.
+  // The 0.5 frame has no Command toolbar (its music button went with it); the button that opens the card on a
+  // hover is Settings › Sound and music's "Open music & video".
   await run("await window.MefiNav.go('studio',{category:'audio'});"); await sleep(300);
-  const mediaButton = await run("window.fixtureHoverFocus=document.activeElement;const r=document.getElementById('settings-audio-open').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};");
+  await mouse(10, 10);
+  const mediaButton = await run("window.fixtureHoverFocus=document.activeElement;const n=document.getElementById('settings-audio-open');n.scrollIntoView({block:'nearest'});const r=n.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};");
   await mouse(mediaButton.x, mediaButton.y);
   // Hover opens the menu after a short delay; a busy box can take longer than a fixed wait, so wait for it.
   await until("return !document.getElementById('music-dropdown').hidden;", "a native hover to open the mini player");

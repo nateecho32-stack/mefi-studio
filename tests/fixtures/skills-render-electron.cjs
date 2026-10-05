@@ -144,7 +144,8 @@ app.whenReady().then(async () => {
   assert.deepEqual(report.registered, { id: "skills", kind: "overlay", layer: "sheet", section: "agents", group: "tools", key: null, tools: true, palette: true, element: "skills-overlay", glyph: "g-skills" });
   assert.equal(await run("return Boolean(document.getElementById('g-skills'));"), true, "the glyph exists in the sprite");
   assert.ok(await run("return window.MefiNav.LOCAL_ROUTES.agents.includes('skills');"), "it sits in Agents' local row");
-  assert.equal(await run("return window.MefiNav.sectionLabel(window.MefiNav.get('skills'));"), "Agents");
+  // The 0.5 layout names a record by its place: what was Agents is Team.
+  assert.equal(await run("return window.MefiNav.sectionLabel(window.MefiNav.get('skills'));"), "Team");
 
   const layouts = [[1720, 900, 1], [1440, 900, 1], [1100, 720, 1], [600, 560, 1], [1100, 720, 1.25], [600, 560, 1.5]];
   for (const editing of [false, true]) {
