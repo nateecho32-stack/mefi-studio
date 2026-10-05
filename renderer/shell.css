@@ -158,6 +158,26 @@ html[data-frame] .shell-need[data-tone="clear"] .shell-pill-n, html[data-frame] 
   html[data-frame] .shell-svc { padding: 0 2px; border-color: transparent; }
 }
 
+/* ---- the rail: the prototype's places (renderer/nav.js, renderRailV2) ----
+   At rest each tile is its icon with its word beneath, at 12 px: Work, Map, Team and Friends at the top, and
+   Search, Settings and Help at the foot, as the prototype's railView draws them. The place you are in is a
+   tinted tile. Open (pinned, hovered or focused) the classic rail's rows stand, with every word and count at
+   12 px or more. The rail's geometry (64 px, 256 open) is the layout contract's and is not touched here. */
+html[data-frame] #app-rail { --fs-2xs: max(12px, calc(12px * var(--text-scale, 1))); }
+html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-head .app-rail-text,
+html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) :is(.app-rail-foot-item, #app-rail-foot .update-pill) .label {
+  font-size: max(12px, calc(12px * var(--text-scale, 1))); line-height: 1.2; white-space: nowrap;
+}
+html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-head { min-height: 54px; border-radius: 10px; }
+html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-foot-item { min-height: 50px; border-radius: 10px; }
+html[data-frame] #app-rail .app-rail-search { margin-bottom: 0; }
+html[data-frame] #app-rail .app-rail-section.current > .app-rail-head,
+html[data-frame] #app-rail .app-rail-foot-item[aria-current="page"] { background: var(--tint-gold-3, color-mix(in srgb, var(--gold) 14%, transparent)); color: var(--ivory); }
+html[data-frame] #app-rail .app-rail-section.current > .app-rail-head .glyph,
+html[data-frame] #app-rail .app-rail-foot-item[aria-current="page"] .glyph { color: var(--gold-bright); }
+html[data-frame] #app-rail .app-rail-head .count { min-width: 18px; height: 18px; padding: 0 5px; font: 650 max(12px, calc(12px * var(--text-scale, 1)))/18px var(--font-ui); }
+html[data-frame] #app-rail .app-rail-brand .app-rail-text::after { font-size: max(12px, calc(12px * var(--text-scale, 1))); }
+
 /* ---- the columns ---- */
 html[data-frame] .shell-column { position: fixed; top: 0; bottom: var(--shell-y1); z-index: calc(var(--z-shell) - 1); display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--surface-rail); outline: none; }
 html[data-frame] .shell-list { left: var(--frame-rail-w); width: var(--shell-list-w); border-right: 1px solid var(--hairline); }
