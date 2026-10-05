@@ -946,16 +946,10 @@
         pages.title.textContent = model.title;
         pages.root.setAttribute("aria-label", `${model.title} pages`);
         if (model.rows) {
-          // A place's list (settingsModel, teamModel, mapModel): headings over groups, rows with the place's glyph.
+          // A place's list (settingsModel, teamModel, friendsModel): headings over groups, rows with the place's glyph.
           for (const row of model.rows) {
             if (row.kind === "heading") rows.push(text("h3", "shell-pages-group", row.label));
             else rows.push(pageButton(row.label, row.current, (event) => row.run?.(event), { key: row.key, glyph: row.glyph, sub: row.sub, open: row.open, quiet: row.quiet }));
-          }
-        } else if (model.groups) {
-          for (const group of model.groups) {
-            if (!group.views.length) { rows.push(pageButton(group.label, group.current, () => group.run?.(), { key: `group:${group.id}` })); continue; }
-            rows.push(text("h3", `shell-pages-group${group.current ? " is-current" : ""}`, group.label));
-            group.views.forEach((view, at) => rows.push(pageButton(view.label, view.current, () => view.run?.(), { key: `${group.id}:${at}`, sub: true })));
           }
         } else for (const page of model.pages) rows.push(pageButton(page.label, page.current, () => n?.go?.(page.id), { key: page.id, glyph: page.glyph, badge: page.badge, alert: page.alert }));
       }

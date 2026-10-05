@@ -575,6 +575,9 @@
   // The page header names the tab on show; nav.js repaints it on mefi:nav, and
   // this covers the launch, which restores a tab without announcing it.
   const PAGE_TITLES = { booklet: "Model catalog", graph: "Performance", eyes: "Activity & evidence", studio: "Settings" };
+  // The tab page on show: the one #tab-* section showTab left visible ("booklet" at launch), or null.
+  const TAB_NAMES = Object.freeze(Object.keys(PAGE_TITLES));
+  function shownTab() { return TAB_NAMES.find((name) => document.getElementById(`tab-${name}`)?.hidden === false) ?? null; }
   function showTab(name, params = {}) {
     if (name !== "studio") window.MefiMusic?.activateSettings?.(null);
     const insights = document.getElementById("model-lab-catalog");
@@ -2342,7 +2345,7 @@
   };
   // settingsLocation: the place Settings shows, and whether Find a setting is showing results instead (null in the classic layout).
   const settingsLocation = () => (settingsFiled ? { id: settingsCategory, label: SETTINGS_CATEGORIES[settingsCategory] ?? settingsCategory, search: Boolean(settingsQuery()) } : null);
-  window.MefiBooklet = { showTab, refresh, toggleHelp, jumpToSettings, initStudio, settingsPlaces, settingsLocation };
+  window.MefiBooklet = { showTab, shownTab, refresh, toggleHelp, jumpToSettings, initStudio, settingsPlaces, settingsLocation };
 
   const headless = new URLSearchParams(window.location.search);
   const capture = headless.get("capture") === "1";

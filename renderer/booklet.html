@@ -2157,7 +2157,6 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
 .dock-item .count { position: absolute; top: -9px; right: -2px; box-shadow: 0 0 0 2px var(--bg-deep); }
 .dock-item .dot { position: absolute; top: -1px; right: 0; }
 .dock-item .tone-dot { top: auto; bottom: -1px; box-shadow: 0 0 0 2px var(--bg-deep); }   /* the Explorer item: machine count above, assistant tone below */
-.dock-sep { width: 1px; height: 20px; background: var(--hairline); margin: 0 2px; flex: none; }
 
 /* small variant: the four cross-links in every sheet header */
 .dock-item.small { min-height: var(--ctl-h-sm); padding: 0 9px; gap: 6px; font-size: var(--fs-sm); border-radius: var(--r-pill); }
@@ -2235,8 +2234,6 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
    that corner instead of drawing a square one across it. */
 .palette-search-row input { flex: 1; min-width: 0; border-bottom: 0; border-radius: var(--r-lg) var(--r-xs) var(--r-xs) var(--r-xs); }
 .palette-search-row button { flex-shrink: 0; min-height: 28px; padding: 4px 8px; border-color: var(--hairline); border-radius: 5px; background: transparent; color: var(--dim); font-size: 11px; box-shadow: none; }
-.palette-result-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-#palette-list .description { color: var(--dim); font-size: 12px; line-height: 1.45; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .palette-footer { padding: 12px 22px; border-top: 1px solid var(--hairline); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; color: var(--dim); font-size: 11px; }
 .palette-footer p { margin: 0; }
 /* Keyboard driving: the input keeps the shared focus ring (inset, so the
@@ -2250,13 +2247,6 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
   display: flex; gap: 14px; align-items: center;
   cursor: pointer;
 }
-#palette-list li .kind { color: var(--dim); font-size: 11px; font-weight: 500; text-transform: none; letter-spacing: 0; min-width: 68px; }
-/* A section's name heads its group once instead of on every row. The rest keep
-   it (it is part of each option's spoken name) but only show it, faintly, on the
-   row you are on, so a long group scrolled past its first row still says where
-   you are. Opacity, not visibility, so screen readers hear it unchanged. */
-#palette-list li:not(.palette-group-start) .kind { opacity: 0; }
-#palette-list li:not(.palette-group-start):is(.active, :hover) .kind { opacity: .5; }
 #palette-list li .label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #palette-list li .count { position: static; }
 #palette-list li .hint { color: var(--dim); font-size: var(--fs-xs); margin-left: auto; display: inline-flex; align-items: center; gap: var(--s1); }
@@ -2268,13 +2258,6 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
    ring from section 4 so the palette reads as focused while it is open. */
 #palette-list li:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: -2px; }
 .palette-sheet:focus-within { box-shadow: 0 24px 80px #0005; }
-/* Results run in section order (palette.js marks where each new section
-   starts): a hairline between sections, never above the first result. */
-#palette-list li.palette-group-start:not(:first-child) { position: relative; margin-top: 9px; }
-#palette-list li.palette-group-start:not(:first-child)::before {
-  content: ""; position: absolute; left: var(--s3); right: var(--s3); top: -5px;
-  height: 1px; background: var(--hairline); pointer-events: none;
-}
 
 /* ============================================================
    15. Help grid (rows come from MefiNav.renderHelp)
@@ -5152,12 +5135,9 @@ html[data-no-blur] #idle-hud .cmd-agents-pop { background: var(--panel-solid); b
 
   /* The dock folds to its More tools pill; hovering or tabbing into it
      brings every destination back. */
-  body.command-focus #idle-hud .cmd-dock > .dock-item,
-  body.command-focus #idle-hud .cmd-dock > .dock-sep { display: none; }
+  body.command-focus #idle-hud .cmd-dock > .dock-item { display: none; }
   body.command-focus #idle-hud .cmd-dock:hover > .dock-item,
-  body.command-focus #idle-hud .cmd-dock:focus-within > .dock-item,
-  body.command-focus #idle-hud .cmd-dock:hover > .dock-sep,
-  body.command-focus #idle-hud .cmd-dock:focus-within > .dock-sep { display: revert; }
+  body.command-focus #idle-hud .cmd-dock:focus-within > .dock-item { display: revert; }
 
   /* Legend and Usage keep their glyphs and drop their words. */
   body.command-focus #idle-hud .cmd-legend .pill .label,
@@ -5338,14 +5318,9 @@ html[data-rail-pinned] #app-rail .app-rail-head .count { position: static; margi
 #app-rail [aria-current="page"] { color: var(--ivory); background: color-mix(in srgb, var(--ivory) 9%, transparent); border-color: transparent; }
 #app-rail .app-rail-compose { margin-bottom: 2px; background: color-mix(in srgb, var(--ivory) 7%, transparent); color: var(--ivory); font-weight: 550; }
 #app-rail .app-rail-search { margin-bottom: 16px; }
-#app-rail .app-rail-recent { display: flex; flex-direction: column; margin-top: 26px; gap: 8px; }
 #app-rail .app-rail-heading { padding: 0 12px; color: var(--dim); font: 500 11px/1.5 var(--font-ui); }
 #app-rail .app-rail-friends { display: flex; flex-direction: column; gap: 1px; }
 #app-rail .app-rail-friends .app-rail-item { min-height: 34px; padding-left: 20px; font-size: 13px; }
-#app-rail-recent-list { display: flex; flex-direction: column; gap: 1px; }
-#app-rail .app-rail-recent-task { min-height: 36px; font-size: 13px; font-weight: 400; }
-#app-rail .app-rail-recent-task[aria-pressed="true"] { color: var(--ivory); background: color-mix(in srgb, var(--ivory) 6%, transparent); }
-#app-rail-recent-empty { padding: 0 12px; color: var(--dim); font-size: 12px; line-height: 1.5; white-space: normal; }
 
 /* A list taller than the window says so: its scrolled-off edges fade out. The
    fade depths follow the scroll position (a scroll-driven animation), so a
@@ -5366,7 +5341,6 @@ html[data-rail-pinned] #app-rail .app-rail-head .count { position: static; margi
 /* At rest the one-line buttons (brand, foot, pin) are icon only: their words,
    keycaps and counts wait for the rail to open instead of peeking out clipped. */
 html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) :is(.app-rail-brand, .app-rail-foot-item, .app-rail-pin, .app-rail-compose, .app-rail-search) :is(.label, .key, .app-rail-text, .count) { display: none; }
-html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-recent { display: none; }
 html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-friends { display: none; }
 /* ...except the foot's Settings and Help and the update dot: at rest they keep
    a word under the icon, as the sections above do, instead of bare glyphs. */
@@ -8685,23 +8659,9 @@ html[data-motion="off"] .companion-orb, html[data-motion="off"] .companion-orb .
 }
 html[data-density=compact] .agents-model-row { padding-block: 6px; }
 html[data-density=compact] .agents-model-settings .studio-field { padding-block: 0; }
-.agents-navigation { min-width: 0; flex: 1; display: flex; align-items: center; gap: 8px; }
-.agents-nav-sections { display: flex; align-items: center; gap: 4px; min-width: 0; }
-.agents-nav-group { position: relative; }
-.agents-nav-chevron { font-size: 11px; color: var(--muted); opacity: .65; }
-.agents-nav-subsections { position: absolute; top: calc(100% + 6px); left: 0; z-index: 2; display: flex; flex-direction: column; gap: 3px; min-width: 208px; width: max-content; max-width: calc(100vw - var(--shell-x0) - var(--shell-x1) - 32px); padding: 6px; border: 1px solid var(--studio-glass-edge); border-radius: var(--r-lg); background: var(--studio-menu-fill); backdrop-filter: var(--studio-glass-blur); box-shadow: var(--studio-glass-shadow); animation: studio-menu-in var(--motion-fast) var(--ease-out); }
-.agents-nav-subsections::before { content: ""; position: absolute; inset: -8px 0 100%; }
-.agents-nav-subsections[hidden] { display: none; }
-.agents-nav-group:last-child .agents-nav-subsections { left: auto; right: 0; }
-#app-local-nav .agents-nav-subsections .app-local-link { width: 100%; justify-content: flex-start; min-height: 36px; padding: 8px 12px; font-size: 13px; border: 1px solid transparent; border-radius: var(--r-md); }
-#app-local-nav .agents-nav-subsections .app-local-link[aria-current="page"] { background: var(--tint-gold-2); border-color: color-mix(in srgb, var(--gold) 20%, transparent); color: var(--gold-bright); }
-#app-local-nav .agents-nav-sections > .agents-nav-group > .app-local-link { min-height: 36px; padding: 6px 11px; gap: 7px; }
-#app-local-nav .agents-nav-group > .app-local-link[aria-expanded="true"] { color: var(--ivory); background: color-mix(in srgb, var(--ivory) 5%, transparent); }
-.agents-section-picker, .agents-section-picker + .studio-select, .agents-subsection-picker, .agents-subsection-picker + .studio-select { display: none; }
 body[data-nav-section=agents] { --shell-local-h: 60px; }
 body[data-nav-section=agents] #app-local-nav { height: var(--shell-local-h); overflow: visible; gap: 16px; }
 body[data-nav-section=agents] #app-task-context { display: none; }
-#cmd-settings[data-relocated=agents] { display: none !important; }
 @media (max-width: 1100px) { .agents-overview-grid { grid-template-columns: 1fr; } .agents-role-grid { grid-template-columns: 1fr; } }
 @media (max-width: 760px) {
   .agents-overlay { padding: 8px; }
@@ -8711,17 +8671,12 @@ body[data-nav-section=agents] #app-task-context { display: none; }
   .agents-body { padding: 10px 12px; }
   .agents-save-bar { padding: 8px 12px; flex-wrap: wrap; gap: 6px 8px; }
   .agents-save-bar p { flex-basis: 100%; }
-  .agents-nav-sections { display: none; }
-  .agents-section-picker + .studio-select { display: flex; flex: 1; width: 0; max-width: 240px; }
-  .agents-nav-subsections { display: none; }
-  .agents-subsection-picker + .studio-select { display: flex; flex: 1; width: 0; max-width: 240px; }
   .agents-head .muted { display: none; }
   .agents-eyebrow { display: none; }
   .agents-team-toolbar { margin-bottom: 8px; }
   body[data-nav-section=agents] #app-local-nav { padding-inline: 8px; gap: 8px; }
 }
-@media (prefers-reduced-motion: reduce) { .agents-nav-subsections { animation: none; } .agents-model-row { transition: none; } }
-html[data-motion=off] .agents-nav-subsections { animation: none; }
+@media (prefers-reduced-motion: reduce) { .agents-model-row { transition: none; } }
 html[data-motion=off] .agents-model-row { transition: none; }
 
 /* Habits (scripts/habits.cjs) in each agent's Skills, tools & habits panel:
@@ -8862,7 +8817,7 @@ html, body, body * { scrollbar-width: none !important; scrollbar-gutter: auto !i
 .studio-select-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .studio-select-chevron { color: var(--muted); flex-shrink: 0; }
 /* Text carets (U+2304) sit below the UI font's midline, so every text-built chevron draws the #g-chev path instead. */
-span.studio-select-chevron, span.agents-nav-chevron, span.planning-section-chevron, span.catalog-expand, .surface-tools > summary::after { content: ""; display: inline-block; flex: none; width: 12px; height: 12px; font-size: 0; line-height: 0; vertical-align: middle; background: currentColor; -webkit-mask: var(--chev-mask) center / contain no-repeat; mask: var(--chev-mask) center / contain no-repeat; }
+span.studio-select-chevron, span.planning-section-chevron, span.catalog-expand, .surface-tools > summary::after { content: ""; display: inline-block; flex: none; width: 12px; height: 12px; font-size: 0; line-height: 0; vertical-align: middle; background: currentColor; -webkit-mask: var(--chev-mask) center / contain no-repeat; mask: var(--chev-mask) center / contain no-repeat; }
 :root { --chev-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
 span.catalog-expand { width: 16px; height: 16px; }
 .studio-select[aria-expanded=true] { border-color: var(--gold); }
@@ -9052,7 +9007,7 @@ html[data-studio-style] table#table th { background: var(--studio-menu-fill); ba
 
 /* Floating menus are readable over both the scene and another page of text. */
 html[data-studio-style] :is(.pop, .palette-sheet, .studio-choice-popup, .surface-tools-menu, .studio-more-links, .studio-more > .tools-cluster, .brains-menu, .brains-search-panel, .brains-dialog-panel, .brains-shortcuts-panel, .music-dropdown, .companion-panel, .companion-bubble, .tree-tip, .tip, .profiler-hud, .toast, .legend-list, .feed-drop, .autonomy-popover),
-#app-help-menu, .agents-nav-subsections, .workspace .ws-project-actions > div {
+#app-help-menu, .workspace .ws-project-actions > div {
   background: var(--studio-wash), var(--studio-sheen), var(--studio-float-fill);
   border-color: var(--studio-glass-edge); backdrop-filter: var(--studio-float-blur);
   box-shadow: var(--studio-float-shadow);
@@ -9081,8 +9036,6 @@ html[data-studio-style] #workspace-sidebar-panel.ws-sidebar {
 }
 #app-rail .app-rail-brand .monogram { background: var(--studio-selection); border-color: var(--studio-edge-active); color: var(--gold-bright); border-radius: 10px; }
 #app-local-nav .app-local-link[aria-current=page] { background: linear-gradient(0deg, var(--tint-gold-3), transparent); color: var(--gold-bright); }
-#app-local-nav .agents-nav-subsections .app-local-link { border-radius: var(--r-sm); padding: 10px 12px; }
-#app-local-nav .agents-nav-subsections .app-local-link[aria-current=page] { background: var(--studio-selection); box-shadow: inset 2px 0 var(--gold); }
 
 /* Fields keep their own boundary. Transparent colour controls and range tracks
    retain the specialised previews defined by the Appearance sheet. */
@@ -9322,39 +9275,38 @@ html[data-studio-theme-tone=light] {
    "presence" section of styles.css). A hover child menu keeps its top edge
    still while it grows, so the gap the pointer crosses from its tab never
    moves. */
-:is(#app-help-menu, .agents-nav-subsections, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div, .brains-menu) {
+:is(#app-help-menu, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div, .brains-menu) {
   animation: none;
   transform-origin: var(--menu-from, top left);
   transition: opacity var(--motion-base) var(--ease-out), scale var(--motion-spring) var(--ease-spring),
     translate var(--motion-spring) var(--ease-spring), display var(--motion-base) allow-discrete;
 }
-:is(#app-help-menu, .agents-nav-subsections, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div, .brains-menu)[hidden] {
+:is(#app-help-menu, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div, .brains-menu)[hidden] {
   opacity: 0; scale: .96; translate: var(--menu-shift, 0 0); pointer-events: none;
   transition: opacity var(--motion-exit) var(--ease-in), scale var(--motion-exit) var(--ease-in),
     translate var(--motion-exit) var(--ease-in), display var(--motion-exit) allow-discrete;
 }
 @starting-style {
-  :is(#app-help-menu, .agents-nav-subsections, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div, .brains-menu):not([hidden]) { opacity: 0; scale: .96; translate: var(--menu-shift, 0 0); }
+  :is(#app-help-menu, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div, .brains-menu):not([hidden]) { opacity: 0; scale: .96; translate: var(--menu-shift, 0 0); }
 }
 #app-help-menu { --menu-from: bottom left; --menu-shift: -6px 0; }
-.agents-nav-group:last-child .agents-nav-subsections { --menu-from: top right; }
 .studio-choice-popup { transform-origin: top center; animation-duration: var(--motion-slow); animation-timing-function: var(--ease-spring); }
 /* The rows arrive one after another (an animation, so each row's own hover
    transitions stay its own). */
 @keyframes studio-item-in { from { opacity: 0; translate: 0 3px; } }
-:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > * { animation: studio-item-in var(--motion-slow) var(--ease-out) backwards; animation-delay: calc(var(--item-i, 0) * 16ms + 24ms); }
-:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(2) { --item-i: 1; }
-:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(3) { --item-i: 2; }
-:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(4) { --item-i: 3; }
-:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(5) { --item-i: 4; }
-:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(6) { --item-i: 5; }
-:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(n+7) { --item-i: 6; }
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > * { animation: studio-item-in var(--motion-slow) var(--ease-out) backwards; animation-delay: calc(var(--item-i, 0) * 16ms + 24ms); }
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(2) { --item-i: 1; }
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(3) { --item-i: 2; }
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(4) { --item-i: 3; }
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(5) { --item-i: 4; }
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(6) { --item-i: 5; }
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(n+7) { --item-i: 6; }
 /* One highlight glides to the row under the pointer (or the keyboard's focus)
    instead of each row lighting up on its own. It is the host's ::after, placed
    by studio-ui.js (glideTo) through --glide-*; rows that carry their own state
    (current page, selected option, pressed toggle, an open tab) keep it. */
-:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail)[data-glide] { isolation: isolate; }
-:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail)[data-glide]::after {
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail)[data-glide] { isolation: isolate; }
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail)[data-glide]::after {
   content: ""; position: absolute; top: 0; left: 0; z-index: -1; pointer-events: none;
   width: var(--glide-w, 0px); height: var(--glide-h, 0px);
   transform: translate(var(--glide-x, 0px), var(--glide-y, 0px));
@@ -9366,20 +9318,20 @@ html[data-studio-theme-tone=light] {
     width calc(var(--motion-base) * 1.5) var(--ease-spring), height calc(var(--motion-base) * 1.5) var(--ease-spring),
     border-radius var(--motion-fast) var(--ease-out);
 }
-:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail):is([data-glide=on], [data-glide=jump])::after { opacity: 1; }
-:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail)[data-glide=jump]::after { transition: opacity var(--motion-fast) var(--ease-out); }
-:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail):is([data-glide=on], [data-glide=jump]) :is(button, a[href], [role=menuitem], [role=option], .studio-choice-option):hover:not([aria-current=page], [aria-selected=true], [aria-pressed=true], [aria-expanded=true], .primary, .app-rail-compose, :disabled) { background-color: transparent !important; }
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail):is([data-glide=on], [data-glide=jump])::after { opacity: 1; }
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail)[data-glide=jump]::after { transition: opacity var(--motion-fast) var(--ease-out); }
+:is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail):is([data-glide=on], [data-glide=jump]) :is(button, a[href], [role=menuitem], [role=option], .studio-choice-option):hover:not([aria-current=page], [aria-selected=true], [aria-pressed=true], [aria-expanded=true], .primary, .app-rail-compose, :disabled) { background-color: transparent !important; }
 /* The rail's words ease in as it opens instead of appearing at full width. */
 #app-rail :is(.label, .key, .app-rail-text, .app-rail-recent, .app-rail-heading) {
   transition: opacity var(--motion-base) var(--ease-out) 40ms, translate var(--motion-base) var(--ease-out) 40ms;
 }
 @starting-style { #app-rail :is(.label, .key, .app-rail-text, .app-rail-recent, .app-rail-heading) { opacity: 0; translate: -3px 0; } }
 @media (prefers-reduced-motion: reduce) {
-  :is(#app-help-menu, .agents-nav-subsections, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div, .brains-menu), #app-rail :is(.label, .key, .app-rail-text, .app-rail-recent, .app-rail-heading) { transition: none; }
-  :is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > * { animation: none; }
-  :is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail)[data-glide]::after { transition: opacity var(--motion-fast) linear; }
+  :is(#app-help-menu, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div, .brains-menu), #app-rail :is(.label, .key, .app-rail-text, .app-rail-recent, .app-rail-heading) { transition: none; }
+  :is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > * { animation: none; }
+  :is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail)[data-glide]::after { transition: opacity var(--motion-fast) linear; }
 }
-html[data-motion=off] :is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > * { animation: none; }
+html[data-motion=off] :is(#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > * { animation: none; }
 @media print { :root, body { background: #fff; } }
 /* ---- Refinement pass ---------------------------------------------------------
    One calm system across the pages. The Command nebula stays on Command, every
@@ -10596,8 +10548,7 @@ html[data-ui-mode="vibe"] #palette-list { padding: 10px; }
 html[data-ui-mode="vibe"] #palette-list li { border-radius: 14px; transition: background var(--motion-fast) var(--ease-out); }
 html[data-ui-mode="vibe"] #palette-list li:hover { background: color-mix(in srgb, var(--ivory) 6%, transparent); }
 html[data-ui-mode="vibe"] #palette-list li.active { background: var(--v-menu-pick); outline-color: color-mix(in srgb, var(--gold) 30%, transparent); }
-html[data-ui-mode="vibe"] #palette-list li.palette-group-start .kind { color: var(--gold-bright); font-weight: 600; }
-html[data-ui-mode="vibe"] :is(#palette-list, #help-overlay, #vibe-ask) .key { border-radius: 8px; border-color: color-mix(in srgb, var(--gold) 30%, transparent); background: color-mix(in srgb, var(--gold) 10%, transparent); color: var(--ivory); }
+html[data-ui-mode="vibe"] :is(#help-overlay, #vibe-ask) .key { border-radius: 8px; border-color: color-mix(in srgb, var(--gold) 30%, transparent); background: color-mix(in srgb, var(--gold) 10%, transparent); color: var(--ivory); }
 html[data-ui-mode="vibe"] .palette-footer { border-top-color: color-mix(in srgb, var(--ivory) 8%, transparent); }
 
 /* Shortcuts, Start here and the other small sheets */
@@ -10624,9 +10575,6 @@ html[data-ui-mode="vibe"] #app-local-nav .app-local-link:hover { background: col
 html[data-ui-mode="vibe"] #app-local-nav .app-local-link[aria-current="page"] { background: var(--v-menu-pick); color: var(--ivory); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 32%, transparent); }
 html[data-ui-mode="vibe"] #app-local-nav .studio-history { border-right-color: color-mix(in srgb, var(--ivory) 8%, transparent); }
 html[data-ui-mode="vibe"] #app-local-nav :is(.studio-history, .app-task-context) button { border-radius: 12px; }
-/* The bar's own blur leaves a nested menu nothing to blur, so it is near solid. */
-html[data-ui-mode="vibe"] #app-local-nav .agents-nav-subsections { gap: 2px; padding: 8px; border-color: var(--v-menu-edge); background: var(--studio-wash), color-mix(in srgb, var(--theme-panel-solid, var(--panel-solid)) 97%, transparent); }
-html[data-ui-mode="vibe"] #app-local-nav .agents-nav-subsections .app-local-link { border-radius: 12px; }
 
 /* Command's pop-overs (View, Agents, More) and the shared dropdowns */
 html[data-ui-mode="vibe"] #idle-hud :is(.cmd-view-pop, .cmd-agents-pop, .cmd-more-links, .pop) { border-color: var(--v-menu-edge); border-radius: 20px; }
@@ -11490,14 +11438,6 @@ button.setup-welcome-opt:hover { border-color: color-mix(in srgb, var(--gold) 40
 /* ---- the chip -------------------------------------------------------------- */
 .gs-slot { display: inline-flex; flex: none; align-items: center; }
 .gs-slot[hidden] { display: none; }
-/* At the tail of the section bar, just before the task shortcuts (the bar orders those last), and held in view when a
-   narrow window makes the bar scroll. What it covers then is blurred, not painted over, so the chip has no edge of its
-   own against the bar's glass; without blur (solid, no-blur, reduced transparency) it takes the bar's own fill. */
-.gs-slot[data-variant="bar"] { order: 98; position: sticky; right: 12px; z-index: 1; margin-left: auto; padding-left: 8px; backdrop-filter: blur(14px); }
-html[data-no-blur] .gs-slot[data-variant="bar"], :root[data-studio-material="solid"] .gs-slot[data-variant="bar"] { background: var(--studio-shell-fill, var(--bg)); backdrop-filter: none; }
-@media (prefers-reduced-transparency: reduce) { .gs-slot[data-variant="bar"] { background: var(--studio-shell-fill, var(--bg)); backdrop-filter: none; } }
-/* The task shortcuts float right on a margin of their own: beside the chip they follow it instead of splitting the free space. */
-#app-local-nav:has(> .gs-slot[data-variant="bar"]:not([hidden])) > .app-task-context { margin-left: 0; }
 .gs-chip { --T: var(--muted); position: relative; display: inline-flex; align-items: center; gap: 6px; min-height: 26px; padding: 4px 10px; border: 1px solid color-mix(in srgb, var(--T) 45%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--T) 12%, transparent); color: var(--ivory); font: 550 12px/1.3 var(--font-ui); white-space: nowrap; cursor: pointer; transition: border-color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out), box-shadow var(--motion-base) var(--ease-out); }
 .gs-chip[data-tone="good"] { --T: var(--good); }
 .gs-chip[data-tone="info"] { --T: var(--info); }
@@ -11533,8 +11473,8 @@ button.gs-chip[aria-expanded="true"] { box-shadow: 0 0 0 3px color-mix(in srgb, 
   .gs-slot[data-variant="list"] .gs-chip:not(.gs-chip-static) { width: auto; min-width: 0; height: 28px; min-height: 28px; padding: 0 10px 0 8px; justify-content: flex-start; border-radius: 14px; }
   .gs-slot[data-variant="list"] .gs-chip:not(.gs-chip-static) .gs-chip-label { display: inline; }
 }
-/* Hidden in Zen and in the classic shell, where the section bar is not drawn. */
-body.command-zen .gs-slot, html:not([data-shell="rail"]) .gs-slot { display: none; }
+/* Hidden in Zen. */
+body.command-zen .gs-slot { display: none; }
 
 /* ---- working glyphs (they go still under reduced motion) ---------------------- */
 @keyframes gs-turn { to { transform: rotate(360deg); } }
@@ -12930,7 +12870,7 @@ html[data-frame] .shell-menu-fine { margin: 0; color: var(--dim); font-size: var
 html[data-frame] .shell-menu-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 html[data-frame] .shell-action { height: 28px; padding: 0 10px; border-color: var(--hairline-strong); border-radius: 8px; color: var(--ivory); font-size: var(--frame-fs); }
 
-/* ---- Search (Ctrl K) in the frame: the prototype's palette (renderer/palette.js, "the 0.5 layout") ----
+/* ---- Search (Ctrl K) in the frame: the prototype's palette (renderer/palette.js, "the prototype's Search") ----
    In the free area like every layer (the layout contract keeps the list, the inspector and the status bar clear; the
    prototype's scrim covers the whole window), under the top bar and centred, 640 px wide: the box with its glass on a 52 px row, a heading where a
    group starts, one line per result (icon, name, and its state or key on the right in plain words), at
@@ -13887,15 +13827,13 @@ html[data-studio-theme="chrome"] :is(.sx-row:hover, .sx-row:focus-within):not([d
 html[data-studio-theme="chrome"][data-frame] #palette-overlay #palette-list li.palette-row.active { background: rgb(255 255 255 / .06); box-shadow: inset 2px 0 0 var(--chrome-edge), inset 0 0 0 1px var(--studio-glass-edge); border-image: var(--chrome-holo-bar) 0 0 0 1 / 10px 0 10px 2px; }
 html[data-studio-theme="chrome"] .studio-choice-option[aria-selected="true"] { border-left-color: var(--chrome-edge); background: rgb(255 255 255 / .05); box-shadow: inset 1px 0 0 var(--chrome-edge); color: var(--ivory); border-image: var(--chrome-holo-bar) 0 0 0 1 / 6px 0 6px 2px; }
 html[data-studio-theme="chrome"] .studio-choice-popup[data-layout="tiles"] .studio-choice-option[aria-selected="true"] { border-color: transparent; border-left-color: var(--chrome-edge); box-shadow: inset 1px 0 0 var(--chrome-edge), inset 0 0 0 1px var(--studio-edge-active); }
-html[data-studio-theme="chrome"] #app-local-nav .agents-nav-subsections .app-local-link[aria-current="page"] { background: rgb(255 255 255 / .05); box-shadow: inset 2px 0 0 var(--chrome-edge); color: var(--ivory); border-image: var(--chrome-holo-bar) 0 0 0 1 / 6px 0 6px 2px; }
 /* The underline tabs: the holo on the 2px edge they draw (border-image <holo> 0 0 1 0 / 0 0 2px 0), its plain chrome colour under it. */
 html[data-studio-theme="chrome"] :is(.sx-ptab.on, .sx-itab.on) { border-bottom-color: var(--chrome-edge); border-image: var(--chrome-holo) 0 0 1 0 / 0 0 2px 0; }
 html[data-studio-theme="chrome"] #app-local-nav .app-local-link[aria-current="page"] { background: transparent; border-bottom-color: var(--chrome-edge); color: var(--ivory); border-image: var(--chrome-holo) 0 0 1 0 / 0 0 2px 0; }
 /* Vibe rounds these further (vibe.css): the same edges, kept clear of its corners; the local navigation's pill keeps
    its own rim and takes the line along its straight foot. */
 html[data-studio-theme="chrome"][data-ui-mode="vibe"] .studio-choice-option[aria-selected="true"] { border-image: var(--chrome-holo-bar) 0 0 0 1 / 12px 0 12px 2px; }
-html[data-studio-theme="chrome"][data-ui-mode="vibe"] #app-local-nav .agents-nav-subsections .app-local-link[aria-current="page"] { border-image: var(--chrome-holo-bar) 0 0 0 1 / 12px 0 12px 2px; }
-html[data-studio-theme="chrome"][data-ui-mode="vibe"] #app-local-nav .app-local-link[aria-current="page"]:not(.agents-nav-subsections *) { border-image: var(--chrome-holo) 0 0 1 0 / 0 19px 2px 19px; }
+html[data-studio-theme="chrome"][data-ui-mode="vibe"] #app-local-nav .app-local-link[aria-current="page"] { border-image: var(--chrome-holo) 0 0 1 0 / 0 19px 2px 19px; }
 /* The open tab: its plain chrome foot round the corners, the holo along the straight run, inside its ring. */
 html[data-studio-theme="chrome"] .ts-item[data-active] { background: rgb(255 255 255 / .05); box-shadow: inset 0 0 0 1px var(--studio-glass-edge), inset 0 -2px 0 var(--chrome-edge), inset 0 2px var(--studio-glass-highlight); border-image: var(--chrome-holo) 0 0 1 0 / 0 9px 2px 9px; }
 html[data-studio-theme="chrome"] .ts-item[data-active] .ts-ico { color: var(--chrome-edge); }
@@ -22990,7 +22928,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // instead of each row lighting up on its own. It is the host's ::after
   // (studio-ui.css "menus in motion"), placed through --glide-* properties, so
   // no element is ever added to a menu that code or tests count.
-  const GLIDE_HOSTS = "#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail";
+  const GLIDE_HOSTS = "#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail";
   const GLIDE_ITEMS = "button, a[href], [role=menuitem], [role=option], .studio-choice-option";
   let glideHost = null, glideItem = null, glideFrame = 0;
   function glideRest() {
@@ -23548,31 +23486,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     try { localStorage.setItem(`mefiStudio.taskContext.${projectId}`, JSON.stringify(selected)); } catch { /* Optional persistence. */ }
     if (previous?.taskId !== taskId || previous?.title !== selected.title) {
       window.dispatchEvent(new CustomEvent("mefi:task-context", { detail: { ...selected } }));
-      paintTaskContext();
     }
     return { ...selected };
   }
-  function paintTaskContext() {
-    const nav = document.getElementById("app-local-nav");
-    if (!nav || nav.hidden) return;
-    let row = document.getElementById("app-task-context");
-    if (!row) { row = document.createElement("div"); row.id = "app-task-context"; row.className = "app-task-context"; nav.insertBefore(row, nav.firstChild); }
-    const context = taskContext();
-    row.hidden = !["work", "agents"].includes(nav.dataset.section);
-    // In Vibe mode Home is Vibe (go() lands there), so the button says so.
-    const homeLabel = vibeMode() ? "Vibe" : "Home";
-    const signature = JSON.stringify([context, current(), homeLabel]);
-    if (row.dataset.signature === signature) return;
-    row.dataset.signature = signature; row.textContent = "";
-    const home = document.createElement("button"); home.type = "button"; home.className = "ghost mini"; home.textContent = homeLabel;
-    home.addEventListener("click", () => go("workspace")); row.append(home);
-    if (context) {
-      const task = document.createElement("button"); task.type = "button"; task.className = "ghost mini";
-      task.textContent = current() === "tasks" ? "Current task" : "Open current task";
-      task.title = context.title; task.addEventListener("click", () => go("tasks", { taskId: context.taskId, projectId: context.projectId })); row.append(task);
-    }
-  }
-
   // A record with no key, or a multi-character display key such as "Ctrl K",
   // needs its own keyMatch or it never matches (spec 2.2).
   const defaultKeyMatch = (key) => (event) =>
@@ -23671,22 +23587,17 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // "Community" for community, "Assistant" for the assistant's commands.
   function sectionLabel(dest) {
     if (!dest) return null;
-    // In the 0.5 layout a record is named by its place: Team for Agents, Map for the Command view.
-    if (v2Places()) return placeLabel(placeOf(dest, AS_FILED));
-    return SECTIONS.get(sectionOf(dest)) ?? null;
+    // A record is named by its place: Team for Agents, Map for the Command view.
+    return placeLabel(placeOf(dest, AS_FILED));
   }
 
   // The rail's top-to-bottom order, for lists that sort by section.
   function sectionRank(dest) {
-    if (v2Places()) {
-      const at = [...PLACES.keys()].indexOf(placeOf(dest, AS_FILED));
-      return at < 0 ? PLACES.size : at;
-    }
-    const at = [...SECTIONS.keys()].indexOf(sectionOf(dest));
-    return at < 0 ? SECTIONS.size : at;
+    const at = [...PLACES.keys()].indexOf(placeOf(dest, AS_FILED));
+    return at < 0 ? PLACES.size : at;
   }
 
-  // ---- the 0.5 layout's places (html[data-layout="v2"]) --------------------
+  // ---- the places --------------------------------------------------------
   // The prototype (docs/prototype/mefi-studio-0.5-v5.html: railView and the
   // WHERE_WENT table) has four places on the rail, Work, Map, Team and
   // Friends, with Search, Settings and Help at its foot. They are a reading of
@@ -23694,10 +23605,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // Work › Today); the Command view, Fleet and the Agent brain's live
   // pipelines are Map; everything else that was Agents is Team, and the Agent
   // brain's Playbook and Project map are Team › Workflows. A record keeps its
-  // section, so the menus, the shortcut sheet and the classic layout read as
-  // they did. placeOf() is what the rail, the breadcrumb, the page list, the
-  // history within a place and Search's groups go by while the layout is on.
-  const v2Places = () => document.documentElement?.dataset?.layout === "v2";
+  // section; placeOf() is what the rail, the breadcrumb, the page list, the
+  // history within a place and Search's groups go by.
   const PLACES = new Map([
     ["work", "Work"],
     ["map", "Map"],
@@ -23715,7 +23624,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   const AS_FILED = Object.freeze({ tab: "live" });
   function placeOf(dest, params) {
     const section = sectionOf(dest);
-    if (!dest || !v2Places()) return section;
+    if (!dest) return section;
     if (section === "home" || section === "work") return "work";
     if (section === "command") return "map";
     if (section !== "agents") return section;
@@ -23746,10 +23655,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     },
     {
       // The 0.5 layout's Friends place (renderer/companion-hub.js openPlace): Rooms, Your PCs or Playground, one at a time.
-      // go("friends") and its three ways in land here while the layout is on (FRIENDS_PAGES); Search lists those four.
+      // go("friends") and its three ways in land here (FRIENDS_PAGES); Search lists those four.
       id: "friends-page", label: "Friends", short: "Friends", kind: "overlay", layer: "sheet", section: "friends", group: "tools",
       glyph: "g-orbit", badge: null, desc: "Rooms, your PCs and companion playdates", searchTerms: "friends rooms pcs playground",
-      showIn: showIn({}), hidden: () => !v2Places(), element: "friends-overlay", focus: "#friends-place-title",
+      showIn: showIn({}), element: "friends-overlay", focus: "#friends-place-title",
       open: (params) => window.MefiCompanionHub?.openPlace?.(params), close: () => window.MefiCompanionHub?.closePlace?.(), isOpen: () => overlayOpen("friends-overlay"),
     },
     {
@@ -23766,9 +23675,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     },
     {
       id: "command",
-      // The 0.5 layout calls it the Map (WHERE_WENT: "Command view" → Map); the route and its key stay.
-      get label() { return v2Places() ? "Map" : "Command view"; },
-      get short() { return v2Places() ? "Map" : "Command"; },
+      // The prototype calls it the Map (WHERE_WENT: "Command view" → Map); the route and its key stay.
+      label: "Map",
+      short: "Map",
       kind: "view",
       layer: null,
       section: "agents",
@@ -24359,7 +24268,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   }
 
   const WORKSPACE_PAGES = new Set(["tasks", "plans", "ideas", "brains", "analyzer", "worktrees", "explorer", "trace", "fleet", "overhead", "agent-brain", "skills", "agents", "today", "inbox"]);
-  const isWorkspacePage = (dest) => document.documentElement?.dataset?.shell === "rail" && WORKSPACE_PAGES.has(dest?.id);
+  const isWorkspacePage = (dest) => WORKSPACE_PAGES.has(dest?.id);
   // Settings' Size and density page (renderer/size.js, registered only in layout v2) is a page of the workspace too.
   WORKSPACE_PAGES.add("size");
   function syncPageInert() {
@@ -24377,7 +24286,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     else registry.push(dest);
     // community.js registers at DOMContentLoaded, after init() drew the rail:
     // a late arrival with a place in the rail redraws it.
-    if (document.documentElement?.dataset?.shell === "rail" && railSection(dest)) queueRailRender();
+    if (railSection(dest)) queueRailRender();
     return dest;
   }
 
@@ -24426,8 +24335,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     entry.scroll = Array.from(document.querySelectorAll?.("[id]") || []).filter((el) => !el.hidden && (el.scrollTop || el.scrollLeft)).map((el) => [el.id, el.scrollTop, el.scrollLeft]);
     entry.focus = document.activeElement?.id || null;
   }
-  // What a history belongs to: its section, or in the 0.5 layout its place (Map and Team each keep their own, Home is Work's).
-  const historyScope = (dest, params) => (v2Places() ? placeOf(dest, params) : sectionOf(dest));
+  // What a history belongs to: its place (Map and Team each keep their own, Home is Work's).
+  const historyScope = (dest, params) => placeOf(dest, params);
   function rememberRoute(id, params = {}) {
     if (historyRestoring) return;
     const dest = get(id), section = historyScope(dest, params);
@@ -24478,20 +24387,6 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   }
   const back = () => travelHistory(-1);
   const forward = () => travelHistory(1);
-  function paintHistory(nav) {
-    let controls = nav.querySelector?.(".studio-history");
-    if (!controls) {
-      controls = document.createElement("div"); controls.className = "studio-history"; controls.setAttribute("role", "group"); controls.setAttribute("aria-label", "Section history");
-      for (const [name, glyph, run] of [["Back", "←", back], ["Forward", "→", forward]]) {
-        const button = document.createElement("button"); button.type = "button"; button.className = "ghost mini";
-        button.textContent = glyph; button.dataset.history = name.toLowerCase(); button.setAttribute("aria-label", `${name} within this section`); button.title = `${name} within this section (Alt ${name === "Back" ? "←" : "→"})`; button.addEventListener("click", run); controls.append(button);
-      }
-      nav.insertBefore(controls, nav.firstChild);
-    }
-    const status = historyState();
-    controls.querySelector('[data-history="back"]').disabled = !status.canBack;
-    controls.querySelector('[data-history="forward"]').disabled = !status.canForward;
-  }
   document.addEventListener("keydown", (event) => {
     if (!event.altKey || event.ctrlKey || event.metaKey || !["ArrowLeft", "ArrowRight"].includes(event.key)) return;
     event.preventDefault(); event.stopPropagation(); if (event.key === "ArrowLeft") back(); else forward();
@@ -24557,7 +24452,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (WORKSPACE_PAGES.has(id)) {
       const exit = document.getElementById(`${id}-close`);
       const label = exit?.querySelector(".label");
-      const name = page ? `Back within ${(v2Places() ? placeLabel(placeOf(dest)) : SECTIONS.get(sectionOf(dest))) || "this section"}` : "Close";
+      const name = page ? `Back within ${placeLabel(placeOf(dest)) || "this section"}` : "Close";
       if (label) label.textContent = page ? "Back" : "Close";
       if (exit) { exit.title = `${name} (Esc)`; exit.setAttribute("aria-label", name); }
       exit?.querySelector("use")?.setAttribute("href", page ? "#g-back" : "#g-close");
@@ -24635,8 +24530,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       // it goes there instead of stopping on Build's section home.
       if (vibeMode()) return go("vibe");
       // A page of Settings (Size and density) has no history when it was opened from Configuration or Search: back to Settings.
-      // In the 0.5 layout Fleet and the live pipelines are pages of the Map, so the Map is what is behind them.
-      const home = v2Places() && placeOf(get(id)) === "map" ? "command" : sectionOf(get(id)) === "agents" ? "agents" : sectionOf(get(id)) === "settings" ? "studio" : "tasks";
+      // Fleet and the live pipelines are pages of the Map, so the Map is what is behind them.
+      const home = placeOf(get(id)) === "map" ? "command" : sectionOf(get(id)) === "agents" ? "agents" : sectionOf(get(id)) === "settings" ? "studio" : "tasks";
       if (id !== home) return go(home);
       return;
     }
@@ -24763,10 +24658,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       window.MefiIdle?.exit?.();
       return go(from);
     }
-    // In the 0.5 layout the Command view is the Map, a place of its own: leaving it goes back within the Map
+    // The Command view is the Map, a place of its own: leaving it goes back within the Map
     // (Fleet, the pipelines), else to the page it was opened from, as it does from Home.
-    if (v2Places()) { if (historyState().canBack) return back(); }
-    else if (sectionOf(get(current())) === "agents") { if (historyState().canBack) return back(); return go("agents"); }
+    if (historyState().canBack) return back();
     const destination = state.commandFrom && state.commandFrom !== "command" ? state.commandFrom : "workspace";
     state.commandFrom = null;
     window.MefiIdle?.exit?.();
@@ -24939,29 +24833,6 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     return button;
   }
 
-  // The "More tools" summary every menu shares: a glyph, the label and a chevron
-  // that the stylesheet turns while the menu is open.
-  function moreSummary(className) {
-    const summary = document.createElement("summary");
-    if (className) summary.className = className;
-    summary.append(glyphNode("g-more"));
-    const label = document.createElement("span");
-    label.className = "label";
-    label.textContent = "More tools";
-    summary.append(label);
-    const chevron = glyphNode("g-chev");
-    chevron.setAttribute("class", "glyph chev");
-    summary.append(chevron);
-    return summary;
-  }
-
-  function separator(className) {
-    const element = document.createElement("span");
-    element.className = className;
-    element.setAttribute("aria-hidden", "true");
-    return element;
-  }
-
   // The More tools menus group by the same sections as the rail. Home rides
   // with Work, the foot's Community with Help, and anything else unfiled
   // lands in Settings.
@@ -24991,39 +24862,6 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     }
   }
 
-  function renderWorkspaceTools(target) {
-    const element = target ?? document.getElementById("workspace-tool-links");
-    if (!element) return;
-    element.textContent = "";
-    // Workspace, Command, Task board, Plans and Brain maps are pinned at the
-    // top of the sidebar and Settings / Music sit in its bottom row, so none
-    // repeat here.
-    // A page hidden in this layout (the 0.5 layout's Friends page in the classic one) is not offered either.
-    appendGrouped(element, list().filter((dest) =>
-      !["workspace", "command", "tasks", "plans", "brains", "studio", "music"].includes(dest.id) &&
-      dest.kind !== "action" && (dest.layer !== "transient" || dest.id === "profiler") && !dest.hidden?.()), "ghost");
-    paintBadges(element);
-  }
-
-  function renderDock(target) {
-    const element = target ?? document.getElementById("cmd-dock");
-    if (!element) return;
-    element.textContent = "";
-    const destinations = list({ showIn: "dock" });
-    for (const dest of destinations.filter((item) => item.commandPrimary)) element.append(navButton(dest, "dock-item"));
-    element.append(separator("dock-sep"));
-    const more = document.createElement("details");
-    more.id = "cmd-more-tools";
-    more.className = "cmd-more-tools";
-    const summary = moreSummary("dock-item");
-    const links = document.createElement("div");
-    links.className = "cmd-more-links";
-    appendGrouped(links, destinations.filter((item) => !item.commandPrimary), "dock-item");
-    more.append(summary, links);
-    element.append(more);
-    paintBadges(element);
-  }
-
   // ---- the one rail --------------------------------------------------------
   // docs/ux-audit.md, Phase 3: one navigation surface for the whole app instead
   // of a tabs row, a dock and a hover sidebar that each render the registry
@@ -25036,18 +24874,12 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   //
   // It is the only shell: html[data-shell="rail"] (applyShell) turns it on at every launch.
   const RAIL_PIN_KEY = "mefiStudio.railPinned";
-  // Each head is its target's own button and draws the target's glyph, so a
-  // section and its main destination never show two different icons.
-  const RAIL_SECTIONS = [
-    { id: "home", label: "Home", target: "workspace" },
-    { id: "work", label: "Work", target: "tasks" },
-    { id: "agents", label: "Agents", target: "agents" },
-    { id: "friends", label: "Friends", target: "friends" },
-  ];
-  // The 0.5 layout's rail (the prototype's railView): Work, Map, Team and Friends, each a place (placeOf). Work opens
+  // The sections whose records the rail draws: a late registration in one of them redraws it.
+  const RAIL_SECTION_IDS = new Set(["home", "work", "agents", "friends"]);
+  // The rail (the prototype's railView): Work, Map, Team and Friends, each a place (placeOf). Work opens
   // Home, which is Work › Today, and keeps the count the Work head had; the Map keeps the Command view's live dot and
   // Team the Agents head's count of decisions waiting. The glyphs are the prototype's (a list, a graph, two people, a
-  // speech bubble); the routes are the ones the classic rail opens.
+  // speech bubble).
   const RAIL_PLACES = [
     { id: "work", label: "Work", target: "workspace", glyph: "g-tasks", badges: "tasks" },
     { id: "map", label: "Map", target: "command", glyph: "g-command", badges: "command" },
@@ -25059,8 +24891,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     // "inbox" is the 0.5 layout's Work › Inbox (renderer/today.js registers it there only); a route nobody registered is skipped.
     work: ["tasks", "plans", "ideas", "inbox", "analyzer", "worktrees"],
     agents: ["agents", "command", "fleet", "eyes", "trace", "explorer", "overhead", "agent-brain", "skills", "brains", "context", "booklet", "graph", "usage"],
-    // The 0.5 layout's Friends page (its places are drawn by renderer/shell.js friendsModel); the classic layout's Friends
-    // entries are actions, so this section never shows there.
+    // The Friends page (its places are drawn by renderer/shell.js friendsModel).
     friends: ["friends-page"],
     settings: ["studio"],
   });
@@ -25087,43 +24918,13 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     // board has no selected task that could otherwise update this context.
     if (!(window.MefiWorkspace?.activeProjectId?.() || window.MefiWorkspace?.state?.activeId) && taskProjectId !== projectId) {
       taskProjectId = projectId;
-      paintTaskContext();
     }
     paintRecentTasks();
   }
 
   function paintRecentTasks() {
     // Build's sessions layout lists the whole board itself (builder.js).
-    if (window.MefiBuilder?.paintRail?.()) return;
-    const list = document.getElementById("app-rail-recent-list");
-    if (!list) return;
-    const projectId = (window.MefiWorkspace?.activeProjectId?.() || window.MefiWorkspace?.state?.activeId) || taskProjectId || recentProjectId;
-    const rows = recentTasks.get(projectId) || [];
-    const selected = taskContext(projectId);
-    const held = list.contains(document.activeElement) ? document.activeElement : null;
-    const existing = new Map(Array.from(list.querySelectorAll("button")).map((button) => [`${button.dataset.projectId}:${button.dataset.taskId}`, button]));
-    const wanted = new Set(rows.map((task) => `${projectId}:${task.id}`));
-    for (const [key, button] of existing) if (!wanted.has(key)) button.remove();
-    rows.forEach((task, index) => {
-      let button = existing.get(`${projectId}:${task.id}`);
-      if (!button) {
-        button = document.createElement("button"); button.type = "button";
-        button.className = "app-rail-item app-rail-recent-task"; button.tabIndex = -1;
-        button.dataset.taskId = task.id; button.dataset.projectId = projectId;
-        const label = document.createElement("span"); label.className = "label"; button.append(label);
-        button.addEventListener("click", () => go("tasks", { taskId: task.id, projectId, title: button.title }));
-      }
-      button.querySelector(".label").textContent = task.label;
-      button.title = task.title;
-      button.setAttribute("aria-pressed", String(selected?.taskId === task.id));
-      if (list.children[index] !== button) { button.remove(); list.insertBefore(button, list.children[index] || null); }
-    });
-    const empty = document.getElementById("app-rail-recent-empty");
-    if (empty) empty.hidden = rows.length > 0;
-    if (held && document.activeElement !== held) {
-      if (list.contains(held)) focusRailButton(held);
-      else document.querySelector('#app-rail .app-rail-head[data-section="work"]')?.focus?.();
-    }
+    window.MefiBuilder?.paintRail?.();
   }
 
   // The 0.5 layout's Help menu, in the prototype's order (HELP_ITEMS): the walkthrough, the setup guide, the keys, what
@@ -25136,9 +24937,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (ownKey(RAIL_SLOTS, dest.id)) return RAIL_SLOTS[dest.id];
     if (["studio", "palette", "help", "onboarding"].includes(dest.id)) return "foot";
     // Late arrivals the 0.5 layout's Help menu lists redraw the rail, as Community does.
-    if (v2Places() && HELP_MENU_V2.some(([id]) => id === dest.id)) return "foot";
+    if (HELP_MENU_V2.some(([id]) => id === dest.id)) return "foot";
     if (dest.kind === "action") return null;
-    return RAIL_SECTIONS.some((item) => item.id === sectionOf(dest)) ? sectionOf(dest) : null;
+    return RAIL_SECTION_IDS.has(sectionOf(dest)) ? sectionOf(dest) : null;
   }
 
   // A rail head in the 0.5 layout: the place's own word and glyph on the route it opens, with the count it keeps.
@@ -25230,56 +25031,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const kept = Array.from(foot.children ?? []).filter((child) => !child.classList?.contains?.("app-rail-foot-item") && child.id !== "app-help-menu");
     sections.textContent = "";
     foot.textContent = "";
-    // The 0.5 layout draws the prototype's rail; the classic one below is what it was.
-    if (v2Places()) {
-      renderRailV2(sections, foot, kept, helpWasOpen);
-      window.MefiBuilder?.decorateRail?.({ sections, foot });
-      paintBadges(document.getElementById("app-rail"));
-      paintRail();
-      return;
-    }
-    const compose = document.createElement("button"); compose.type = "button";
-    compose.id = "app-rail-compose"; compose.className = "app-rail-item app-rail-compose";
-    compose.title = "New task"; compose.setAttribute("aria-label", "New task");
-    compose.append(glyphNode("g-add"));
-    const composeLabel = document.createElement("span"); composeLabel.className = "label"; composeLabel.textContent = "New task"; compose.append(composeLabel);
-    compose.addEventListener("click", () => window.MefiWorkspace?.composeTask?.());
-    const search = navButton(get("palette"), "app-rail-item app-rail-search");
-    const vibe = get("vibe") ? navButton(get("vibe"), "app-rail-item app-rail-vibe", { key: false }) : null;
-    if (vibe) { vibe.id = "app-rail-vibe"; vibe.title = "Vibe: the calm front door"; vibe.querySelector(".label").textContent = "Vibe mode"; }
-    sections.append(...[vibe, compose, search].filter(Boolean));
-    for (const section of RAIL_SECTIONS) {
-      const target = get(section.target);
-      const group = document.createElement("div");
-      group.className = "app-rail-section";
-      group.dataset.section = section.id;
-      const head = navButton(target, "app-rail-head", { key: false });
-      head.dataset.section = section.id;
-      head.setAttribute("aria-label", section.label);
-      head.title = section.label;
-      const label = head.querySelector(".label");
-      label.className = "app-rail-text";
-      label.textContent = section.label;
-      group.append(head);
-      if (section.id === "friends") {
-        const children = document.createElement("div");
-        children.className = "app-rail-children app-rail-friends";
-        children.setAttribute("role", "group"); children.setAttribute("aria-label", "Friends tools");
-        for (const id of ["rooms", "your-pcs", "playground"]) children.append(navButton(get(id), "app-rail-item", { key: false }));
-        group.append(children);
-      }
-      sections.append(group);
-    }
-    const recent = document.createElement("div"); recent.className = "app-rail-recent app-rail-children";
-    recent.setAttribute("role", "group"); recent.setAttribute("aria-label", "Recent tasks");
-    const recentHeading = document.createElement("span"); recentHeading.className = "app-rail-heading"; recentHeading.textContent = "Recent tasks";
-    const recentList = document.createElement("div"); recentList.id = "app-rail-recent-list";
-    const recentEmpty = document.createElement("span"); recentEmpty.id = "app-rail-recent-empty"; recentEmpty.textContent = "Your tasks will appear here";
-    recent.append(recentHeading, recentList, recentEmpty); sections.append(recent);
-    foot.append(navButton(get("studio"), "app-rail-item app-rail-foot-item"));
-    const { help, menu } = helpMenu(helpWasOpen, ["onboarding", "help", "community"].map((id) => [get(id), null]).filter(([dest]) => dest));
-    foot.append(help, menu, ...kept);
-    // Build's sessions layout adds the mode switch, the work list and you.
+    // The prototype's rail; Build's sessions layout adds the mode switch, the work list and you.
+    renderRailV2(sections, foot, kept, helpWasOpen);
     window.MefiBuilder?.decorateRail?.({ sections, foot });
     paintBadges(document.getElementById("app-rail"));
     paintRail();
@@ -25296,42 +25049,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     return true;
   }
 
-  function paintLocalNav(section, id) {
-    let nav = document.getElementById("app-local-nav");
-    if (!nav) {
-      nav = document.createElement("nav");
-      nav.id = "app-local-nav";
-      document.body.append(nav);
-      nav.addEventListener("keydown", (event) => {
-        if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key) || event.altKey || event.ctrlKey || event.metaKey) return;
-        const parentRow = event.target?.closest?.(".agents-nav-sections");
-        const buttons = Array.from(parentRow ? parentRow.querySelectorAll("[data-agent-section]") : nav.querySelectorAll("button")).filter((button) => !button.closest?.("[hidden]"));
-        const at = buttons.indexOf(event.target?.closest?.("button"));
-        const index = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (at + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
-        event.preventDefault(); event.stopPropagation();
-        buttons[index]?.focus?.();
-      });
-    }
-    const routes = LOCAL_ROUTES[section];
-    nav.hidden = !routes || document.documentElement.dataset.shell !== "rail";
+  // The classic bar of a section's pages is gone (the frame's list column holds a place's pages); what is left is the
+  // section mark the stylesheets and the frame read.
+  function paintLocalNav(section) {
     document.body.dataset.navSection = section || "home";
-    if (!routes) return;
-    nav.setAttribute("aria-label", `${SECTIONS.get(section)} views`);
-    if (nav.dataset.section !== section) {
-      nav.dataset.section = section;
-      nav.textContent = "";
-      if (section !== "agents" || !window.MefiAgents?.paintNav) for (const route of routes) { const dest = get(route); if (dest) nav.append(navButton(dest, "app-local-link", { key: false })); }
-    }
-    if (section === "agents") window.MefiAgents?.paintNav?.(nav, id);
-    paintHistory(nav);
-    for (const button of nav.querySelectorAll("button[data-nav]")) {
-      if (button.dataset.nav === id) button.setAttribute("aria-current", "page");
-      else button.removeAttribute("aria-current");
-    }
-    paintBadges(nav);
-    paintTaskContext();
-    // The Git sync chip rides at the tail of the bar (renderer/git-sync.js).
-    window.MefiGitSync?.mount?.(nav, { variant: "bar" });
   }
 
   function paintRail() {
@@ -25339,8 +25060,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (!rail || rail.hidden) return;
     const id = current();
     const section = sectionOf(get(id));
-    // The 0.5 layout's rail lights the place (Home is Work's, the Command view the Map's).
-    const place = v2Places() ? placeOf(get(id)) : section;
+    // The rail lights the place (Home is Work's, the Command view the Map's).
+    const place = placeOf(get(id));
     for (const group of rail.querySelectorAll(".app-rail-section")) group.classList.toggle("current", group.dataset.section === place);
     for (const button of rail.querySelectorAll(".app-rail-head, .app-rail-foot-item[data-nav]")) {
       // Settings stays lit on its own pages (Size and density), as a section's head does.
@@ -25392,7 +25113,6 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
 
   // The rail is Studio's only shell (0.5.0): the classic tabs shell and its switch are gone.
   function vibeMode() { return window.MefiVibe?.mode?.() === "vibe"; }
-  function shellOn() { return true; }
 
   // A pinned rail takes its open width from the page. Below this window width
   // it yields and behaves unpinned, opening over the page on hover or focus;
@@ -25423,21 +25143,17 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (changed || force) window.dispatchEvent(new Event("resize"));
   }
 
-  function applyShell(on = shellOn()) {
+  function applyShell() {
     const rail = document.getElementById("app-rail");
     if (!rail) return false;
-    const root = document.documentElement;
-    if (on) root.dataset.shell = "rail";
-    else delete root.dataset.shell;
-    rail.hidden = !on;
-    const local = document.getElementById("app-local-nav");
-    if (local) local.hidden = !on;
+    document.documentElement.dataset.shell = "rail";
+    rail.hidden = false;
     let pinned = true;
     try { pinned = localStorage.getItem(RAIL_PIN_KEY) !== "0"; } catch { /* use the wide-window default */ }
-    setRailPinned(on && pinned, { save: false });
-    if (on) renderRail();
-    window.dispatchEvent(new CustomEvent("mefi:shell", { detail: { rail: on } }));
-    return on;
+    setRailPinned(pinned, { save: false });
+    renderRail();
+    window.dispatchEvent(new CustomEvent("mefi:shell", { detail: { rail: true } }));
+    return true;
   }
 
   // ---- the layout contract -----------------------------------------------
@@ -25577,7 +25293,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const was = layoutOn();
     if (on) root.dataset.layout = "v2"; else delete root.dataset.layout;
     // The rail has its places in the 0.5 layout (renderRailV2): draw it again when the layout changes under it.
-    if (Boolean(on) !== was && root.dataset.shell === "rail") renderRail();
+    if (Boolean(on) !== was) renderRail();
     wireLayout(Boolean(on));
     if (on) paintLayout(); else if (was) clearLayout();
     if (on || was) announceLayout(false);
@@ -25742,27 +25458,6 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     fit();
   }
 
-  // Both arguments are optional: with none, every [data-sheet-links] container
-  // is filled from its own data-sheet-links id. The Explorer's static cluster
-  // carries no attribute and is therefore left alone.
-  function renderSheetLinks(target, selfId) {
-    const containers = target ? [target] : Array.from(document.querySelectorAll("[data-sheet-links]"));
-    for (const container of containers) {
-      const self = selfId ?? container.dataset?.sheetLinks;
-      if (!self) continue;
-      container.textContent = "";
-      const menu = document.createElement("details");
-      menu.className = "studio-more";
-      menu.append(moreSummary());
-      const links = document.createElement("div");
-      links.className = "studio-more-links";
-      appendGrouped(links, list({ showIn: "tools" }).filter((dest) => dest.layer === "sheet" && dest.id !== self), "dock-item small");
-      menu.append(links);
-      container.append(menu);
-      paintBadges(container);
-    }
-  }
-
   function helpRow(key, text) {
     const fragment = document.createDocumentFragment();
     fragment.append(keyCap(key));
@@ -25798,8 +25493,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       const heading = document.createElement("h4");
       heading.className = "help-group";
       heading.id = `help-section-${index}`;
-      // The 0.5 layout's words for the same groups: Home is Work's, Agents is Team (with the Map's page), Command view is the Map.
-      heading.textContent = v2Places() ? ({ "Home & Work": "Work", Agents: "Team and Map", "Command view": "Map" })[title] ?? title : title;
+      // The places' words for the groups: Home is Work's, Agents is Team (with the Map's page), Command view is the Map.
+      heading.textContent = ({ "Home & Work": "Work", Agents: "Team and Map", "Command view": "Map" })[title] ?? title;
       group.setAttribute("aria-labelledby", heading.id);
       group.append(heading);
       for (const dest of items) {
@@ -25922,9 +25617,6 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
 
   document.addEventListener("click", (event) => {
     if (!event.target?.closest?.("#app-help-menu, #app-help-toggle")) closeHelpMenu();
-    for (const menu of document.querySelectorAll(".studio-more[open], .cmd-more-tools[open]")) {
-      if (!menu.contains(event.target)) menu.open = false;
-    }
     const button = event.target?.closest?.("[data-nav], [data-nav-close]");
     if (!button) return;
     const closeId = button.dataset.navClose;
@@ -25941,18 +25633,11 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         params = {};
       }
     }
-    if (button.classList.contains("app-rail-head") && v2Places()) {
+    if (button.classList.contains("app-rail-head")) {
       // A place's head goes back to where you were in it, and from inside it to its own first page:
       // Work to Today, Map to the Map, Team to its Overview.
       const place = button.dataset.section, fallback = button.dataset.nav;
       const target = placeOf(get(current())) === place ? { id: fallback, params: {} } : lastSectionRoute(place, fallback);
-      go(target.id, target.params);
-    } else if (button.classList.contains("app-rail-head")) {
-      const section = button.dataset.section;
-      const fallback = section === "agents" ? "command" : button.dataset.nav;
-      const target = sectionOf(get(current())) === section
-        ? { id: fallback, params: {} }
-        : lastSectionRoute(section, fallback);
       go(target.id, target.params);
     } else go(button.dataset.nav, params);
     const menu = button.closest("details");
@@ -26077,7 +25762,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     }
     // Command's own More tools menu is the fallback only while Command is on
     // top; a sheet above it must not have Esc (and focus) pulled out from under it.
-    const more = document.activeElement?.closest?.(".studio-more[open], .cmd-more-tools[open], .surface-tools[open]") ?? Array.from(document.querySelectorAll?.(".surface-tools[open]") ?? []).find(visibleNavTarget) ?? (top() === "command" ? document.getElementById("cmd-more-tools") : null);
+    const more = document.activeElement?.closest?.(".surface-tools[open]") ?? Array.from(document.querySelectorAll?.(".surface-tools[open]") ?? []).find(visibleNavTarget) ?? (top() === "command" ? document.getElementById("cmd-more-tools") : null);
     if (event.key === "Escape" && more?.open) {
       event.preventDefault();
       more.open = false;
@@ -26168,10 +25853,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // ---- the 0.5 layout's Map pages (the prototype's mapView "maptools") ----
   // Map, Fleet and Pipelines are one place with a switch over each page. The Map draws its own over the tree
   // (renderer/idle.js #map-bar); Fleet's and the Agent brain's heads get the same three buttons here, made once per head
-  // and marked on every paint. Pipelines is the Agent brain's live tab. Without the layout nothing is added.
+  // and marked on every paint. Pipelines is the Agent brain's live tab.
   const MAP_SWITCH = [["command", "Map", null], ["fleet", "Fleet", null], ["agent-brain", "Pipelines", { tab: "live" }]];
   function syncMapSwitch(id = current()) {
-    if (!v2Places() || typeof document.querySelectorAll !== "function") return;
+    if (typeof document.querySelectorAll !== "function") return;
     const tab = (() => { try { return window.MefiAgentBrain?.tab?.() ?? null; } catch { return null; } })();
     for (const head of document.querySelectorAll("#fleet-overlay .sheet-head, #agent-brain-overlay .sheet-head")) {
       let group = head.querySelector?.(".map-pages");
@@ -26943,11 +26628,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   function init() {
     watchMotion();
     renderTools();
-    renderDock();
     applyShell();
     applyLayout();
     wireRail();
-    renderSheetLinks();
     paintCurrent();
     renderFooter();
     wireTabRail();
@@ -26958,7 +26641,6 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       if (!payload?.activeId || payload.activeId === taskProjectId) return;
       taskProjectId = payload.activeId;
       window.dispatchEvent(new CustomEvent("mefi:task-context", { detail: taskContext() || { projectId: taskProjectId, taskId: null } }));
-      paintTaskContext();
       paintRecentTasks();
     });
     window.addEventListener("mefi:task-context", paintRecentTasks);
@@ -27055,9 +26737,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     setBadge,
     refreshBadges,
     paintBadges,
-    renderDock,
     renderTools,
-    renderWorkspaceTools,
     renderRail,
     paintLocalNav,
     LOCAL_ROUTES,
@@ -27065,7 +26745,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     railSection,
     sectionLabel,
     sectionRank,
-    // The 0.5 layout's places: placeOf(record, params) is "work", "map", "team", ... (the section with v2 off).
+    // The places: placeOf(record, params) is "work", "map", "team", ...
     placeOf: (dest, params) => placeOf(typeof dest === "string" ? get(dest) : dest, params),
     placeLabel,
     PLACES: Object.freeze(Object.fromEntries(PLACES)),
@@ -27077,7 +26757,6 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     setRailPinned,
     paintCurrent,
     current,
-    renderSheetLinks,
     renderHelp,
     renderFooter,
     hintLine,
@@ -51882,7 +51561,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
 })();
 
 // Git sync: the one Push and Pull control. A status chip (in Vibe's project
-// cluster, and at the tail of the section bar on every other page) says where
+// cluster, and in the 0.5 frame's list column on every other page) says where
 // the open project stands against GitHub in one word; pressing it opens a
 // popover with one plain sentence, the numbers and ONE button that fits the
 // state. The words, tone and glyph of every state come from the host's chip
@@ -51896,7 +51575,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
 // and push never commits without the dialog, and a public repository needs the
 // name typed back. Routine changes are announced through one persistent status
 // region and only a failure that blocks work through the alert. Hidden in Zen
-// and in the classic shell (git-sync.css). tests/git_sync_ui.test.mjs pins it
+// (git-sync.css). tests/git_sync_ui.test.mjs pins it
 // in a vm with a fake bridge (tests/fixtures/git-sync-bridge.cjs).
 (function () {
   "use strict";
@@ -52082,7 +51761,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   const mounts = [];
   function makeMount(host, variant) {
     const slot = el("span", "gs-slot");
-    slot.dataset.variant = variant;
+    if (variant) slot.dataset.variant = variant;
     slot.hidden = true;
     const chip = button("", "gs-chip");
     chip.setAttribute("aria-haspopup", "dialog");
@@ -52100,8 +51779,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     return entry;
   }
   const kids = (host) => Array.from(host.children ?? []);
-  // Whether the chip already sits where it goes: nav.js asks on every repaint of
-  // the bar, so this is the cheap answer (no list is built in a browser).
+  // Whether the chip already sits where it goes: the frame's list column asks on
+  // every repaint, so this is the cheap answer (no list is built in a browser).
   function inPlace({ host, slot }, after) {
     if (slot.parentNode !== host) return false;
     if (after && after.parentNode === host) return (slot.previousElementSibling ?? kids(host)[kids(host).indexOf(slot) - 1]) === after;
@@ -52115,16 +51794,17 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       host.insertBefore(slot, list[list.indexOf(after) + 1] ?? null);
     } else host.append(slot);
   }
-  // A surface hands over the place its chip goes (nav.js: the tail of the
-  // section bar; vibe.js: right after New app). Calling again is harmless, and
-  // it puts the chip back when the bar was rebuilt around it.
+  // A surface hands over the place its chip goes (shell.js and sessions.js: the
+  // tail of a row in the list column; vibe.js: right after New app). Calling
+  // again is harmless, and it puts the chip back when the row was rebuilt
+  // around it. With no variant it is the plain tone chip.
   function mount(host, options = {}) {
     if (!host || typeof host.append !== "function") return null;
     let entry = mounts.find((item) => item.host === host);
     if (entry && inPlace(entry, options.after)) return entry.slot;
     layer();
     const fresh = !entry;
-    if (fresh) { entry = makeMount(host, ["vibe", "list"].includes(options.variant) ? options.variant : "bar"); mounts.push(entry); }
+    if (fresh) { entry = makeMount(host, ["vibe", "list"].includes(options.variant) ? options.variant : null); mounts.push(entry); }
     place(entry, options);
     if (fresh) paintMount(entry, view());
     return entry.slot;
@@ -53453,23 +53133,18 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   }
 
   // ---- start ----------------------------------------------------------------------------------
-  // A bar that lost its chip when it was rebuilt gets it back on the next
-  // navigation; a project switch forgets the old answer and looks again.
+  // A project switch forgets the old answer and looks again.
   function start() {
     try { layer(); } catch { /* no body yet: the first mount makes it */ }
     const bridge = api();
     if (typeof bridge?.onGitState === "function") bridge.onGitState((raw) => accept(raw));
     if (typeof bridge?.onProjects === "function") bridge.onProjects((payload) => { const found = payload?.projects?.find?.((item) => item.id === payload.activeId); if (found) state.project = { id: found.id, name: String(found.name ?? "").slice(0, 120) }; });
-    // The bar may have been drawn before this file loaded; nav.js asks again on every repaint.
-    const bar = document.getElementById?.("app-local-nav");
-    if (bar) mount(bar, { variant: "bar" });
     window.addEventListener?.("mefi:project-changed", forget);
     window.addEventListener?.("mefi:nav", () => close({ restore: false }));
-    // Zen (a class on body) and the classic shell (an attribute on html) hide the chip by style alone, so an open popover has to notice.
+    // Zen (a class on body) hides the chip by style alone, so an open popover has to notice.
     if (typeof MutationObserver === "function") {
       const hidden = new MutationObserver(() => { if (pop.open && !visible(pop.opener)) close({ restore: false }); });
       if (document.body) hidden.observe(document.body, { attributes: true, attributeFilter: ["class"] });
-      if (document.documentElement) hidden.observe(document.documentElement, { attributes: true, attributeFilter: ["data-shell"] });
     }
     document.addEventListener?.("visibilitychange", () => { if (!document.hidden) void refresh(); });
     void readProject();
@@ -63434,12 +63109,11 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
 })();
 
 // Mefi's Studio AI+ — Search Studio, the command palette (Ctrl/Cmd+K).
-// Fuzzy jumps to pages, sheets, settings, actions, tasks, nodes and models,
-// grouped by the same sections as the navigation rail. With the box empty it
+// Fuzzy jumps to sessions, ideas, the rail's places, pages, sheets, settings,
+// actions, nodes and models, each under its group. With the box empty it
 // starts with Recent (what you last opened or ran from here, kept per project),
-// and "task ..." or "idea ..." adds one on Enter. In the 0.5 layout
-// (html[data-layout="v2"]) the same palette reads as the prototype's: see
-// "the 0.5 layout" below.
+// and "task ..." or "idea ..." adds one on Enter. It reads as the 0.5
+// prototype's Search: see "the prototype's Search" below.
 (function () {
   "use strict";
 
@@ -63484,14 +63158,13 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       const baked = JSON.parse(document.getElementById("booklet-data").textContent);
       return baked.models.map((model) => ({
         key: `model:${model.name} · ${model.vendor}`,
-        kind: "model",
+        kind: "Models",
+        glyph: "g-booklet",
         label: `${model.name} · ${model.vendor}`,
         hint: model.quality?.index != null ? `AA ${model.quality.index}` : "unmeasured",
-        keyHint: false,
         count: 0,
         run: () => {
-          if (window.MefiNav) window.MefiNav.go("booklet");
-          else document.querySelector('.tab[data-tab="booklet"]')?.click();
+          window.MefiNav?.go?.("booklet");
           const search = document.getElementById("search");
           search.value = model.name;
           search.dispatchEvent(new Event("input"));
@@ -63501,36 +63174,6 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     } catch {
       return [];
     }
-  }
-
-  // Every destination, key hint and label comes from the registry, so the palette
-  // cannot drift from the dock, the tools cluster, the help sheet or the footer.
-  // Each result is filed under its rail section (Home, Work, Live, Models,
-  // Settings, Help, Community, Assistant), and the browse list keeps the rail's
-  // top-to-bottom order.
-  function destinations() {
-    const nav = window.MefiNav;
-    if (!nav?.list) return [];
-    const commandActive = Boolean(window.MefiIdle?.isActive?.());
-    const openSheet = nav.state?.sheet ?? null;
-    // The assistant's commands say what the service is doing instead of a key.
-    const serviceLine = () => window.MefiTree?.assistantSummary?.()?.sublabel ?? "";
-    const rank = (dest) => nav.sectionRank?.(dest) ?? 0;
-    return nav
-      .list({ showIn: "palette" })
-      .filter((dest) => !(dest.id === "command" && commandActive) && dest.id !== openSheet)
-      .sort((a, b) => rank(a) - rank(b))
-      .map((dest) => ({
-        key: `dest:${dest.id}`,
-        kind: nav.sectionLabel?.(dest) ?? dest.group,
-        label: dest.label,
-        description: dest.desc || "",
-        searchTerms: dest.searchTerms || "",
-        hint: dest.key ?? (dest.group === "assistant" ? serviceLine() : ""),
-        keyHint: Boolean(dest.key),
-        count: dest.badge ? Number(nav.badges?.[dest.badge]) || 0 : 0,
-        run: () => nav.go(dest.id),
-      }));
   }
 
   // The assistant's four commands live in the registry like every other action
@@ -63589,22 +63232,6 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       desc: "Pause or resume the assistant service",
       run: () => control(paused() ? "start-work" : "pause", "control"),
     });
-  }
-
-  function tasks() {
-    const projectId = currentProject();
-    return state.taskRecords.map((task) => ({
-      key: `task:${task.id}`,
-      kind: "task",
-      label: task.title,
-      description: task.prompt || task.description || "",
-      hint: task.status,
-      keyHint: false,
-      count: 0,
-      run: () => {
-        if (currentProject() === projectId) window.MefiNav?.go?.("tasks", { taskId: task.id });
-      },
-    }));
   }
 
   function currentProject() {
@@ -63667,33 +63294,30 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (!window.MefiIdle?.isActive?.() || typeof window.MefiIdle.select !== "function") return [];
     return (window.MefiIdle.debugNodes?.() ?? []).slice(0, 120).map((node) => ({
       key: `node:${node.id}`,
-      kind: "node",
+      kind: "Nodes",
+      glyph: "g-orbit",
       label: node.label ?? node.id,
       hint: node.kind,
-      keyHint: false,
       count: 0,
       run: () => window.MefiIdle?.select?.(node.id),
     }));
   }
 
   function build() {
-    state.items = v2() ? [...sessionsV2(), ...backlogV2(), ...placesV2(), ...registryV2(), ...nodes().map((item) => ({ ...item, kind: "Nodes", glyph: "g-orbit" })), ...models().map((item) => ({ ...item, kind: "Models", glyph: "g-booklet" }))]
-      : [...destinations(), ...tasks(), ...nodes(), ...models()];
+    state.items = [...sessionsV2(), ...backlogV2(), ...placesV2(), ...registryV2(), ...nodes(), ...models()];
   }
 
-  // ---- the 0.5 layout: the prototype's Search (docs/prototype/mefi-studio-0.5-v5.html) ----------
-  // With html[data-layout="v2"] it is the same palette, the same keys, Recent and "task ...",
-  // read as the prototype has it: one line per result (its icon, its name and, on the right, its
+  // ---- the prototype's Search (docs/prototype/mefi-studio-0.5-v5.html) ----------
+  // It reads as the prototype has it: one line per result (its icon, its name and, on the right, its
   // state, its key or "page"), under the groups Recent, Sessions, Backlog, Places, Actions, Layout,
   // Tabs, Permission mode and each section's own pages, at most twelve rows. Over the empty box:
   // Recent, then the sessions that matter now, the places on the rail and the actions marked for it,
   // twelve rows in all. Sessions are this project's tasks as the session list reads them
   // (MefiBuilder.reading), from the board Home already holds, so Search makes no read of its own
   // for them; the backlog is the session list's own (ideas nobody has made a task of). Everything
-  // else is the registry, as in v1: a record says its group (paletteGroup), its words on the right
+  // else is the registry: a record says its group (paletteGroup), its words on the right
   // (paletteHint) and whether the empty box lists it (paletteBrowse, the lower the earlier).
-  const v2 = () => document.documentElement?.dataset?.layout === "v2";
-  const shownMax = () => (v2() ? 12 : 40);
+  const SHOWN_MAX = 12;
   const STAGE_WORDS = Object.freeze({ ask: "Needs you", run: "Running", check: "Review", wait: "Queued", ready: "Queued", done: "Done", dropped: "Done" });
   const STAGE_RANK = Object.freeze({ ask: 0, run: 1, check: 2, wait: 3, ready: 3, done: 4, dropped: 4 });
   const BROWSE_SESSIONS = 6;
@@ -63719,7 +63343,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       return { task, archived, tone: toneOf(task, data), at: movedAt(task) };
     }).sort((a, b) => Number(a.archived) - Number(b.archived) || STAGE_RANK[a.tone] - STAGE_RANK[b.tone] || b.at - a.at).map(({ task, archived, tone }) => ({
       key: `task:${task.id}`, kind: "Sessions", label: String(task.title || window.MefiTasks?.shortTitle?.(task) || "Untitled task"),
-      description: task.prompt || task.description || "", hint: archived ? "Archived" : STAGE_WORDS[tone], keyHint: false, count: 0, glyph: "g-tasks",
+      description: task.prompt || task.description || "", hint: archived ? "Archived" : STAGE_WORDS[tone], count: 0, glyph: "g-tasks",
       browse: !archived && tone !== "dropped",
       run: () => { if (!projectId || currentProject() === projectId || board()?.projectId === projectId) window.MefiNav?.go?.("tasks", { taskId: task.id }); },
     }));
@@ -63732,7 +63356,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (!Array.isArray(rows)) rows = (Array.isArray(data.ideas) ? data.ideas : []).filter((idea) => idea?.id && idea.status !== "done" && !idea.taskId).map((idea) => ({ id: idea.id, title: idea.title || idea.detail || "Untitled idea" }));
     const ideas = new Map((Array.isArray(data.ideas) ? data.ideas : []).map((idea) => [idea?.id, idea]));
     return rows.filter((row) => row && row.kind !== "plan").map((row) => ({
-      key: `idea:${row.id}`, kind: "Backlog", label: String(row.title), description: String(ideas.get(row.id)?.detail || ""), hint: "Idea", keyHint: false, count: 0, glyph: "g-ideas",
+      key: `idea:${row.id}`, kind: "Backlog", label: String(row.title), description: String(ideas.get(row.id)?.detail || ""), hint: "Idea", count: 0, glyph: "g-ideas",
       run: () => window.MefiNav?.go?.("ideas", { ideaId: row.id }),
     }));
   }
@@ -63741,7 +63365,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const nav = window.MefiNav;
     return PLACES.map(([label, id, glyph]) => [label, nav?.get?.(id), glyph]).filter(([, dest]) => dest && !dest.hidden?.()).map(([label, dest, glyph]) => ({
       key: `place:${dest.id}`, kind: "Places", label: `Go to ${label}`, description: dest.desc || "", searchTerms: `${label} ${dest.label || ""} ${dest.searchTerms || ""}`,
-      hint: dest.chord || dest.key || "", keyHint: Boolean(dest.chord || dest.key), count: 0, glyph: glyph || dest.glyph || "g-frame", browse: true,
+      hint: dest.chord || dest.key || "", count: 0, glyph: glyph || dest.glyph || "g-frame", browse: true,
       run: () => nav.go(dest.id),
     }));
   }
@@ -63761,7 +63385,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         const hint = words(dest.paletteHint) || key || (action ? "" : "page");
         return {
           key: `dest:${dest.id}`, kind: dest.paletteGroup || (action ? "Actions" : nav.sectionLabel?.(dest) ?? dest.group), label: dest.label, description: dest.desc || "", searchTerms: dest.searchTerms || "",
-          hint, keyHint: Boolean(key) && hint === key, count: dest.badge ? Number(nav.badges?.[dest.badge]) || 0 : 0, glyph: dest.glyph || (action ? "g-spark" : "g-frame"),
+          hint, count: dest.badge ? Number(nav.badges?.[dest.badge]) || 0 : 0, glyph: dest.glyph || (action ? "g-spark" : "g-frame"),
           browse: Number.isFinite(dest.paletteBrowse) ? dest.paletteBrowse : null,
           run: () => nav.go(dest.id),
         };
@@ -63774,7 +63398,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const sessions = state.items.filter((item) => item.kind === "Sessions" && item.browse && fresh(item)).slice(0, BROWSE_SESSIONS);
     const places = state.items.filter((item) => item.kind === "Places" && fresh(item));
     const actions = state.items.filter((item) => item.kind !== "Places" && item.kind !== "Sessions" && Number.isFinite(item.browse) && fresh(item)).sort((a, b) => a.browse - b.browse);
-    return [...recent, ...sessions, ...places, ...actions].slice(0, shownMax());
+    return [...recent, ...sessions, ...places, ...actions].slice(0, SHOWN_MAX);
   }
 
   // ---- Recent: what you last opened or ran from here, per project ----------------------
@@ -63836,9 +63460,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       kind: "Create",
       glyph: kind === "task" ? "g-add" : "g-ideas",
       label: `Add ${kind}: “${clip(text, 60)}”`,
-      description: kind === "task" ? "Adds it to the task board; the assistant picks it up." : "Saves it in your ideas. Nothing is built from it until you say so.",
       hint: "Enter",
-      keyHint: true,
       count: 0,
       create: true,
       run: () => createQuick(kind, text),
@@ -63889,25 +63511,19 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     }
   }
 
-  // What the box, its footer and the Close button say, for the layout that is on: v1 as it always was; the 0.5 layout's
-  // as the prototype words it (the keys as keys, and that adding only happens on Enter), with the result count kept for a
-  // screen reader (it is the status line, read out, not shown). Close goes: the scrim and Escape close it there.
-  let plainHint = null;
+  // What the box, its footer and the Close button say, as the prototype words it (the keys as keys, and that adding only
+  // happens on Enter), with the result count kept for a screen reader (it is the status line, read out, not shown). Close
+  // goes: the scrim and Escape close it.
   function dress() {
     const adds = flags.quickCreate && (canCreate("task") || canCreate("idea"));
-    const fresh = v2();
-    el.input.placeholder = adds ? (fresh ? "Search, or type “task …” or “idea …” to add one" : "Search · “task …” or “idea …” to add") : plainPlaceholder;
-    if (el.close && (fresh || el.close.hidden)) el.close.hidden = fresh;
-    if (el.overlay.dataset) el.overlay.dataset.look = fresh ? "v2" : "v1";
-    // The prototype's magnifier before the box; v1 has none.
+    el.input.placeholder = adds ? "Search, or type “task …” or “idea …” to add one" : plainPlaceholder;
+    if (el.close) el.close.hidden = true;
+    if (el.overlay.dataset) el.overlay.dataset.look = "v2";
+    // The prototype's magnifier before the box.
     const row = el.input.parentNode;
-    const lens = row?.querySelector?.(".palette-search-glyph") ?? null;
-    if (fresh && row && !lens) { const icon = glyphNode("g-search"); if (icon) { icon.setAttribute("class", "glyph palette-search-glyph"); row.insertBefore?.(icon, el.input); } }
-    else if (!fresh && lens) lens.remove?.();
+    if (row && !row.querySelector?.(".palette-search-glyph")) { const icon = glyphNode("g-search"); if (icon) { icon.setAttribute("class", "glyph palette-search-glyph"); row.insertBefore?.(icon, el.input); } }
     const hint = el.hint;
     if (!hint || !hint.dataset) return;
-    if (plainHint === null) plainHint = hint.textContent;
-    if (!fresh) { if (hint.dataset.look === "v2") { hint.textContent = plainHint; delete hint.dataset.look; } return; }
     const key = (text) => { const node = document.createElement("kbd"); node.textContent = text; return node; };
     const part = (keys, words) => { const node = document.createElement("span"); node.className = "palette-key"; node.append(...keys.map(key), document.createTextNode(` ${words}`)); return node; };
     const parts = [part(["↑", "↓"], "move"), part(["Enter"], "open"), part(["Esc"], "close")];
@@ -63934,7 +63550,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
 
   function render() {
     el.list.textContent = "";
-    const most = shownMax();
+    const most = SHOWN_MAX;
     const items = state.filtered.slice(0, most);
     if (el.status) {
       const count = state.filtered.length;
@@ -63950,64 +63566,11 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       setActiveOption();
       return;
     }
-    if (v2()) { renderV2(items); return; }
-    items.forEach((item, index) => {
-      const li = document.createElement("li");
-      li.id = `palette-option-${index}`;
-      li.setAttribute("role", "option");
-      li.setAttribute("aria-selected", String(index === state.index));
-      // Position in the full result set (not just the 40 shown), so screen
-      // readers announce "3 of 128" correctly while a query narrows the list.
-      li.setAttribute("aria-posinset", String(index + 1));
-      li.setAttribute("aria-setsize", String(state.filtered.length));
-      if (index === state.index) li.classList.add("active");
-      // Rows arrive grouped by section; the first row of each group carries
-      // the marker the stylesheet draws the section divider from.
-      if (index === 0 || items[index - 1].kind !== item.kind) li.classList.add("palette-group-start");
-      const kind = document.createElement("span");
-      kind.className = "kind";
-      kind.textContent = item.kind;
-      const label = document.createElement("span");
-      label.className = "label";
-      label.textContent = item.label;
-      const copy = document.createElement("span");
-      copy.className = "palette-result-copy";
-      copy.append(label);
-      if (item.description) {
-        const description = document.createElement("span");
-        description.className = "description";
-        description.textContent = String(item.description).replace(/\s+/g, " ").slice(0, 200);
-        copy.append(description);
-      }
-      li.append(kind, copy);
-      if (item.count > 0) {
-        const count = document.createElement("span");
-        count.className = "count";
-        count.textContent = String(item.count);
-        li.append(count);
-      }
-      if (item.hint) {
-        const hint = document.createElement("span");
-        hint.className = "hint";
-        if (item.keyHint) {
-          const key = document.createElement("kbd");
-          key.className = "key";
-          key.textContent = item.hint;
-          hint.append(key);
-        } else {
-          hint.textContent = item.hint;
-        }
-        li.append(hint);
-      }
-      li.addEventListener("mouseenter", () => highlight(index, li));
-      li.addEventListener("click", () => run(index));
-      el.list.append(li);
-    });
-    setActiveOption();
+    renderV2(items);
   }
 
   // The prototype's rows: a heading where a group starts (not an option), then per result its icon, its name, a count when it has
-  // one, and its state, key or "page" on the right in plain words. The option is the same as v1's to the keys and a screen reader.
+  // one, and its state, key or "page" on the right in plain words.
   function glyphNode(id) {
     const svg = document.createElementNS?.("http://www.w3.org/2000/svg", "svg");
     if (!svg || typeof svg.setAttribute !== "function") return null;
@@ -64083,9 +63646,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     setActiveOption();
   }
 
-  // Results stay in their sections: groups come in the order of their best
-  // match (on the browse list, the rail's own order) and rows keep their rank
-  // inside a group, so the first row is always the best match.
+  // Results stay in their groups: groups come in the order of their best
+  // match and rows keep their rank inside a group, so the first row is always
+  // the best match.
   function grouped(items) {
     const groups = new Map();
     for (const item of items) {
@@ -64104,9 +63667,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const selected = preserveSelection && !(query === "" && state.index === 0) ? state.filtered[state.index] : null;
     if (!query) {
       // Recent leads, and what it holds is not listed again below.
-      const recent = recentItems();
-      const shown = new Set(recent.map((item) => item.key));
-      state.filtered = v2() ? browseV2(recent) : [...recent, ...grouped(state.items.filter((item) => !item.key || !shown.has(item.key)))];
+      state.filtered = browseV2(recentItems());
     } else {
       state.filtered = grouped(state.items
         .map((item) => ({ item, score: matchScore(query, item) }))
@@ -64120,7 +63681,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       if (create) state.filtered.splice(String(state.filtered[0]?.label ?? "").toLowerCase() === query.toLowerCase() ? 1 : 0, 0, create);
     }
     const retained = selected ? state.filtered.findIndex((item) => item.kind === selected.kind && item.label === selected.label) : -1;
-    state.index = retained >= 0 && retained < shownMax() ? retained : 0;
+    state.index = retained >= 0 && retained < SHOWN_MAX ? retained : 0;
     render();
   }
 
@@ -64150,8 +63711,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     el.input.value = "";
     filter();
     el.input.focus();
-    // The 0.5 layout's sessions come from the board Home already holds: no read of its own while there is one.
-    if (!v2() || !board()) loadTasks();
+    // The sessions come from the board Home already holds: no read of its own while there is one.
+    if (!board()) loadTasks();
     void readFlags();
   }
 
@@ -64222,8 +63783,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         if (document.activeElement !== el.input) return;
         event.preventDefault();
         // The list is a cycle: Down past the last option lands on the first,
-        // Up from the first lands on the last. Wrap within the 40 shown.
-        const span = Math.min(shownMax(), state.filtered.length);
+        // Up from the first lands on the last. Wrap within the twelve shown.
+        const span = Math.min(SHOWN_MAX, state.filtered.length);
         if (!span) return;
         state.index = event.key === "ArrowDown" ? (state.index + 1) % span : (state.index - 1 + span) % span;
         render();
@@ -64233,7 +63794,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         // query typed they keep their native caret role in the field, so the
         // jump only applies while browsing the default list.
         if (el.input.value.trim()) return;
-        const span = Math.min(shownMax(), state.filtered.length);
+        const span = Math.min(SHOWN_MAX, state.filtered.length);
         if (!span) return;
         event.preventDefault();
         state.index = event.key === "Home" ? 0 : span - 1;
@@ -71147,7 +70708,6 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     syncThemeChoice();
     $("motion").checked = storage.get("motion", "1") !== "0";
     $("motion").addEventListener("change", () => { storage.set("motion", $("motion").checked ? "1" : "0"); personalize(); });
-    window.MefiNav?.renderWorkspaceTools?.($("tool-links"));
     api()?.onProjects?.((result) => { adoptProjects(result); refresh(true); });
     api()?.onTasks?.((tasks) => { if (tasks?.some((task) => task.projectId && task.projectId !== state.activeId)) return; revisions.tasks += 1; state.tasks = tasks || []; if (active()) { renderWork(); renderCompanion(); } scheduleBacklogRead(); });
     api()?.onIdeas?.((ideas) => { if (ideas?.some((idea) => idea.projectId && idea.projectId !== state.activeId)) return; revisions.ideas += 1; state.ideas = ideas || []; if (active()) renderWork(); scheduleBacklogRead(); });
@@ -85021,18 +84581,6 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
   window.MefiAgentControls = { snapshot: queueSnapshot, refresh: refreshQueue, set: setQueue };
 
-  const sections = [
-    ["overview", "Overview", "agents", { section: "overview" }],
-    ["setup", "Setup", "agents", { section: "setup", pane: "team" }], ["live", "Live", "command", {}], ["workflows", "Workflows", "brains", {}],
-    ["models", "Models", "booklet", {}], ["usage", "Usage", "usage", {}],
-  ];
-  const children = {
-    setup: [["Team & models", "agents", { section: "setup", pane: "team" }], ["Providers", "agents", { section: "setup", pane: "connections" }], ["Routing & fallback", "agents", { section: "setup", pane: "routing" }], ["Run behavior", "agents", { section: "setup", pane: "behavior" }], ["Skills", "skills"]],
-    live: [["Command", "command"], ["Fleet", "fleet"], ["Pipelines", "agent-brain", { tab: "live" }], ["Sessions", "explorer"], ["Activity", "eyes"], ["Trace", "trace"], ["Overhead", "overhead"]],
-    workflows: [["Brain maps", "brains"], ["Playbook", "agent-brain", { tab: "playbook" }], ["Project map", "agent-brain", { tab: "map" }], ["Context", "context"]],
-    models: [["Catalog", "booklet"], ["Performance", "graph"]],
-    usage: [["Recorded calls", "usage", { view: "usage" }], ["Provider accounts", "usage", { view: "tracker" }]],
-  };
   let mounted = false, params = { section: "overview", pane: "team" }, scope = "project", readSerial = 0, saving = false;
   const drafts = new Map();
   const draftKey = () => `${projectId() || "none"}:${scope}`;
@@ -85055,25 +84603,6 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   const plain = (error, fallback) => window.MefiUi?.plainError ? window.MefiUi.plainError(error, fallback) : error?.message || fallback;
   function card(title, detail) { const el = node("section", "agents-card"); el.append(node("h3", "", title)); if (detail) el.append(node("p", "muted", detail)); return el; }
   function say(text, bad = false) { const el = $("agents-save-status"); if (el) { el.textContent = text; el.dataset.tone = bad ? "bad" : "good"; } }
-  function location(id, options = {}) {
-    if (id === "agents") return { section: options.section || params.section, pane: options.pane || params.pane };
-    if (id === "agent-brain") return { section: ["map", "playbook"].includes(options.tab || window.MefiAgentBrain?.tab?.()) ? "workflows" : "live" };
-    if (["brains", "context"].includes(id)) return { section: "workflows" };
-    if (["booklet", "graph"].includes(id)) return { section: "models" };
-    if (id === "usage") return { section: "usage" };
-    if (id === "skills") return { section: "setup" };
-    return { section: "live" };
-  }
-  // The same sections and views as data, for the 0.5 frame's page list (renderer/shell.js draws them as a list in its list
-  // column): each with whether it is where the person is, and a way there.
-  function navModel(id, options = {}) {
-    const here = location(id, options);
-    const selected = (route, target) => route === id && (route !== "agents" || target.pane === here.pane) && (route !== "agent-brain" || target.tab === window.MefiAgentBrain?.tab?.()) && (route !== "usage" || target.view === (options.view || window.MefiModelLab?.view?.() || "usage"));
-    return sections.map(([section, label, route, target]) => ({
-      id: section, label, current: section === here.section, run: () => go(route, target),
-      views: (children[section] || []).map(([childLabel, childRoute, childTarget = {}]) => ({ label: childLabel, current: selected(childRoute, childTarget), run: () => go(childRoute, childTarget) })),
-    }));
-  }
   // ---- Team: the 0.5 layout's place (html[data-layout="v2"]) ----
   // The prototype's Team (docs/prototype/mefi-studio-0.5-v5.html: TEAM_SUBS, teamView, WHERE_WENT) is this page and the
   // pages it already led to, filed into twelve places. A place is either panes of this page (Overview is the overview and
@@ -85084,7 +84613,6 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // host calls; nothing is copied. Old parameters ({ section, pane }) and deep links land in the place that holds them,
   // and go("agents", { place }) is the new way in. Where the engine has nothing for a place (Related folders) the page
   // says what exists and what does not. renderer/shell.js draws the list (teamPlaces) and the breadcrumb (teamPlace).
-  const teamLayout = () => document.documentElement?.dataset?.layout === "v2";
   const TEAM_PLACES = Object.freeze([
     { id: "overview", label: "Overview", glyph: "g-home", panes: ["overview", "behavior"], draft: true, about: "Who does the work, how many can work at once, and how much they can do without asking." },
     { id: "providers", label: "Providers", glyph: "g-key", panes: ["connections"], about: "Where the models come from. Connect what you already pay for, or add a key. Seats choose from what is connected here." },
@@ -85137,115 +84665,26 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     else go("agents", { place: place.id });
   }
   // The places in order, for a list drawn elsewhere (renderer/shell.js): each with whether you are in it, the way there, and
-  // the pages it holds with the one you are on. Null with the layout off.
+  // the pages it holds with the one you are on.
   function teamPlaces(id = window.MefiNav?.current?.()) {
-    if (!teamLayout()) return null;
     const here = teamPlaceOf(id);
     return TEAM_PLACES.map((place) => ({
       id: place.id, label: place.label, glyph: place.glyph, group: place.group ?? null, current: place.id === here, run: () => openTeamPlace(place.id),
       views: (place.views || []).map(([label, route, target = {}]) => ({ label, current: place.id === here && teamViewCurrent(id, route, target), run: () => go(route, target) })),
     }));
   }
-  // Where you are in Team ({ id, label }), for the breadcrumb; null outside Team or with the layout off.
+  // Where you are in Team ({ id, label }), for the breadcrumb; null outside Team.
   function teamPlace(id = window.MefiNav?.current?.(), options) {
-    if (!teamLayout()) return null;
     const place = teamPlaceById(teamPlaceOf(id, options));
     return place ? { id: place.id, label: place.label } : null;
   }
   // The place a control on this page sits in now (Search's words for it), or null.
   function teamPlaceOfElement(element) {
     const pane = element?.closest?.("[data-agents-pane]")?.dataset?.agentsPane;
-    const place = teamLayout() && pane ? teamPlaceById(PANE_PLACES[pane]) : null;
+    const place = pane ? teamPlaceById(PANE_PLACES[pane]) : null;
     return place ? { id: place.id, label: place.label } : null;
   }
 
-  let closeNavMenu = () => {};
-  function paintNav(nav, id, options = {}) {
-    const here = location(id, options), signature = JSON.stringify([id, here, window.MefiAgentBrain?.tab?.(), options.view || window.MefiModelLab?.view?.()]);
-    if (nav.dataset.agentsSignature === signature && nav.querySelector(".agents-navigation")) return;
-    closeNavMenu();
-    nav.dataset.agentsSignature = signature;
-    nav.querySelector(".agents-navigation")?.remove();
-    const root = node("div", "agents-navigation"), main = node("div", "agents-nav-sections");
-    main.setAttribute("aria-label", "Agents sections");
-    let opened = null, openTimer, closeTimer;
-    const cancelTimers = () => { clearTimeout(openTimer); clearTimeout(closeTimer); };
-    closeNavMenu = (restoreFocus = false) => {
-      cancelTimers();
-      if (!opened) return;
-      const { item, menu } = opened; opened = null;
-      const focusHeld = menu.contains(document.activeElement);
-      menu.hidden = true; item.setAttribute("aria-expanded", "false");
-      if (restoreFocus || focusHeld) item.focus({ preventScroll: true });
-    };
-    const reveal = (entry, focus = false) => {
-      cancelTimers();
-      if (opened !== entry) closeNavMenu();
-      opened = entry; entry.menu.hidden = false; entry.item.setAttribute("aria-expanded", "true");
-      if (focus) entry.menu.querySelector("button")?.focus({ preventScroll: true });
-    };
-    const selectedChild = (route, target) => route === id && (route !== "agents" || target.pane === here.pane) && (route !== "agent-brain" || target.tab === window.MefiAgentBrain?.tab?.()) && (route !== "usage" || target.view === (options.view || window.MefiModelLab?.view?.() || "usage"));
-    for (const [section, label, route, target] of sections) {
-      const group = node("div", "agents-nav-group"), views = children[section];
-      let entry;
-      const item = button(label, (event) => {
-        if (!views) { closeNavMenu(); go(route, target); return; }
-        if (opened === entry && event.detail !== 0) closeNavMenu();
-        else reveal(entry, event.detail === 0);
-      }, "app-local-link");
-      item.dataset.agentSection = section; item.setAttribute("aria-current", section === here.section ? "page" : "false"); group.append(item); main.append(group);
-      group.addEventListener("pointerenter", (event) => {
-        if (event.pointerType === "touch") return;
-        cancelTimers();
-        openTimer = setTimeout(() => { if (entry) reveal(entry); else closeNavMenu(); }, 100);
-      });
-      group.addEventListener("pointerleave", (event) => {
-        if (event.pointerType === "touch") return;
-        cancelTimers(); closeTimer = setTimeout(() => closeNavMenu(), 220);
-      });
-      if (!views) continue;
-      const menu = node("div", "agents-nav-subsections");
-      menu.id = `agents-menu-${section}`; menu.hidden = true; menu.setAttribute("role", "group"); menu.setAttribute("aria-label", `${label} views`);
-      item.setAttribute("aria-expanded", "false"); item.setAttribute("aria-controls", menu.id);
-      item.append(node("span", "agents-nav-chevron", "⌄"));
-      entry = { item, menu };
-      for (const [childLabel, childRoute, childTarget = {}] of views) {
-        const child = button(childLabel, () => { closeNavMenu(true); go(childRoute, childTarget); }, "app-local-link");
-        child.setAttribute("aria-current", selectedChild(childRoute, childTarget) ? "page" : "false"); menu.append(child);
-      }
-      item.addEventListener("keydown", (event) => {
-        if (!["ArrowDown", "ArrowUp"].includes(event.key)) return;
-        event.preventDefault(); event.stopPropagation(); reveal(entry);
-        (event.key === "ArrowUp" ? menu.lastElementChild : menu.firstElementChild)?.focus();
-      });
-      menu.addEventListener("keydown", (event) => {
-        const keys = ["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End"];
-        if (!keys.includes(event.key)) return;
-        event.preventDefault(); event.stopPropagation();
-        if (["ArrowLeft", "ArrowRight"].includes(event.key)) {
-          const parents = Array.from(main.querySelectorAll("[data-agent-section]")), at = parents.indexOf(item);
-          closeNavMenu(); parents[(at + (event.key === "ArrowRight" ? 1 : -1) + parents.length) % parents.length]?.focus(); return;
-        }
-        const buttons = Array.from(menu.children), at = buttons.indexOf(document.activeElement);
-        buttons[event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (at + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) % buttons.length]?.focus();
-      });
-      group.addEventListener("focusin", () => clearTimeout(closeTimer));
-      group.addEventListener("focusout", (event) => { if (!group.contains(event.relatedTarget)) closeNavMenu(); });
-      group.append(menu);
-    }
-    const compact = node("select"); compact.setAttribute("aria-label", "Agents section"); compact.className = "agents-section-picker";
-    for (const [section, label] of sections) { const option = node("option", "", label); option.value = section; compact.append(option); }
-    compact.value = here.section; compact.addEventListener("change", () => { const choice = sections.find((item) => item[0] === compact.value); if (choice) go(choice[2], choice[3]); });
-    root.append(main, compact);
-    const currentViews = children[here.section] || [];
-    if (currentViews.length) {
-      const pick = node("select"); pick.className = "agents-subsection-picker"; pick.setAttribute("aria-label", "Agents view");
-      for (const [index, [label, route, target = {}]] of currentViews.entries()) { const option = node("option", "", label); option.value = String(index); option.selected = selectedChild(route, target); pick.append(option); }
-      pick.addEventListener("change", () => { const choice = currentViews[Number(pick.value)]; if (choice) go(choice[1], choice[2]); });
-      root.append(pick);
-    }
-    nav.append(root); window.MefiScroll?.scan(root);
-  }
   const aliases = { connections: "connections", providers: "connections", "auto-setup": "connections", "settings-setup": "connections", "settings-assistant": "connections", "decision-model": "connections", "settings-jev": "connections", models: "routing", "model-routing": "routing", "settings-routing": "routing", "coding-workers": "routing", "settings-workers": "routing", automation: "behavior", "agents-queue": "behavior", "settings-automation": "behavior", "settings-automation-behavior": "behavior", "connection-log": "connections", "settings-log": "connections" };
   function redirect(id, options = {}) {
     if (id === "agent-brain" && options.tab === "seats") return { id: "agents", params: { section: "setup", pane: "team" } };
@@ -85778,12 +85217,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const local = card("Local studio roles", "Watcher, Machine, Auditor, Keeper, Compactor, Foreman and Reference organise and inspect local work. Their maintenance does not require a model.");
     local.append(node("p", "muted", "The Briefer, Overseer, Ideas, Improver, Grower, Responder and cluster planning/review roles inherit the configured routine or heavy route.")); root.append(local);
   }
-  // The 0.5 layout's panes, made once, the first time Team opens with the layout on: Permissions (the full permission
+  // The 0.5 layout's panes, made once, the first time Team opens: Permissions (the full permission
   // control, which Build opened as a dialog), Rules (the rules card, moved), Connectors and Related folders.
   let teamFiled = false;
   function fileTeamV2() {
     const body = $("agents-body");
-    if (teamFiled || !teamLayout() || !body) return false;
+    if (teamFiled || !body) return false;
     teamFiled = true;
     const pane = (name, id) => { const el = node("div", "agents-pane"); el.id = id; el.dataset.agentsPane = name; el.hidden = true; body.append(el); return el; };
     const perms = pane("perms", "agents-perms");
@@ -86003,29 +85442,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
   async function open(options = {}) {
     mount();
-    if (teamLayout()) return openTeam(options);
-    params = { section: options.section === "setup" ? "setup" : "overview", pane: ["connections", "team", "routing", "behavior"].includes(options.pane) ? options.pane : "team" };
-    window.MefiNav?.claim("agents"); $("agents-overlay").hidden = false; paintOverview();
-    $("agents-title").textContent = params.section === "overview" ? "Agents" : `Agent setup · ${children.setup.find(([, , value]) => value.pane === params.pane)?.[0] || "Team"}`;
-    for (const pane of $("agents-body").children) if (pane.classList.contains("agents-pane")) pane.hidden = pane.id !== `agents-${params.section === "overview" ? "overview" : params.pane}`;
-    $("agents-save-bar").hidden = params.section !== "setup" || params.pane === "connections";
-    $("agents-team-toolbar").hidden = params.section !== "setup" || params.pane === "connections";
-    await Promise.all([load(), refreshQueue()]); syncQueue();
-    window.MefiNav?.paintCurrent(); window.MefiScroll?.refresh();
-    if (options.target) {
-      const target = $(options.target); if (target && $("agents-overlay").contains(target)) { for (let el = target; el && el !== $("agents-body"); el = el.parentElement) if (el.tagName === "DETAILS") el.open = true; target.scrollIntoView?.({ block: "nearest" }); (target.nextElementSibling?.classList.contains("studio-select") ? target.nextElementSibling : target).focus?.({ preventScroll: true }); }
-    }
+    return openTeam(options);
   }
   function close() { if ($("agents-overlay")) $("agents-overlay").hidden = true; window.MefiNav?.release("agents"); }
   function init() {
-    document.addEventListener("pointerdown", (event) => { if (!event.target.closest?.(".agents-nav-group")) closeNavMenu(); }, true);
-    document.addEventListener("keydown", (event) => {
-      if (event.key !== "Escape" || !document.querySelector('.agents-nav-group > [aria-expanded="true"]')) return;
-      event.preventDefault(); event.stopImmediatePropagation(); closeNavMenu(true);
-    }, true);
-    window.addEventListener("mefi:nav", () => closeNavMenu());
-    window.addEventListener("resize", () => closeNavMenu());
-    window.addEventListener("blur", () => closeNavMenu());
     api()?.onAssistantStatus?.((status) => adoptQueue(status)); api()?.onAssistant?.((payload) => adoptQueue(null, payload?.state));
     api()?.onProjects?.(() => { readSerial++; if ($("agents-overlay")?.hidden === false) load(); });
     // Another writer changed settings: a clean draft is re-read. A push during
@@ -86039,11 +85459,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     });
     window.addEventListener("mefi:queue-settings", syncQueue);
     // The 0.5 layout calls the page Team (WHERE_WENT: "Agents" → Team, renamed), with the prototype's two people for its glyph.
-    window.MefiNav?.register({ id: "agents", get label() { return teamLayout() ? "Team" : "Agents"; }, get short() { return teamLayout() ? "Team" : "Agents"; }, kind: "overlay", layer: "sheet", section: "agents", group: "tools", get glyph() { return teamLayout() ? "g-community" : "g-agents"; }, badge: "questions", get desc() { return teamLayout() ? "Who does the work, how many can work at once, and how much they can do without asking" : "Set up your team, follow live work, workflows, models and usage"; }, searchTerms: "team agents agent setup presets seats connections providers provider effort routing automation permissions rules connectors", showIn: { palette: true, help: true, tools: true }, element: "agents-overlay", focus: "#agents-title", open, close, isOpen: () => $("agents-overlay")?.hidden === false });
+    window.MefiNav?.register({ id: "agents", label: "Team", short: "Team", kind: "overlay", layer: "sheet", section: "agents", group: "tools", glyph: "g-community", badge: "questions", desc: "Who does the work, how many can work at once, and how much they can do without asking", searchTerms: "team agents agent setup presets seats connections providers provider effort routing automation permissions rules connectors", showIn: { palette: true, help: true, tools: true }, element: "agents-overlay", focus: "#agents-title", open, close, isOpen: () => $("agents-overlay")?.hidden === false });
     // Canonical settings ownership is established before the first visit.
     mount();
   }
-  window.MefiAgents = { open, close, mount, redirect, paintNav, navModel, location, stageRouting, routingView, params: () => ({ ...params }), reload: discard, draft: () => draft() ? clone(draft().configuration) : null, teamPlaces, teamPlace, teamPlaceOfElement, TEAM_PLACES };
+  window.MefiAgents = { open, close, mount, redirect, stageRouting, routingView, params: () => ({ ...params }), reload: discard, draft: () => draft() ? clone(draft().configuration) : null, teamPlaces, teamPlace, teamPlaceOfElement, TEAM_PLACES };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
 })();
 
@@ -97379,10 +96799,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
 
   // ---- the page list: the section's pages, in the list column ----------------------------------------
-  // What the classic bar listed between Back and Forward: the routes MefiNav keeps for the section (LOCAL_ROUTES), or for
-  // Agents its sections and their views (MefiAgents.navModel, so a pane or a tab is reachable as before). Home has none:
-  // its list is the session list. While the page list shows, the column's panels make way (html[data-pages] on the column)
-  // and MefiShell.pages() says so, so the session list does not draw for nobody.
+  // What the classic bar listed between Back and Forward: the routes MefiNav keeps for the section (LOCAL_ROUTES); Team's
+  // places are teamModel's, below. Home has none: its list is the session list. While the page list shows, the column's
+  // panels make way (html[data-pages] on the column) and MefiShell.pages() says so, so the session list does not draw for
+  // nobody.
   function sectionOfRoute(n, id) {
     const routes = n?.LOCAL_ROUTES;
     if (!routes || typeof routes !== "object") return null;
@@ -97492,11 +96912,6 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     let title = null;
     try { title = dest ? n?.sectionLabel?.(dest) ?? null : null; } catch { title = null; }
     title = String(title || section.charAt(0).toUpperCase() + section.slice(1));
-    if (section === "agents" && typeof window.MefiAgents?.navModel === "function") {
-      let groups = null;
-      try { groups = window.MefiAgents.navModel(id); } catch { groups = null; }
-      if (Array.isArray(groups) && groups.length) return { section, title, groups: groups.map((group) => ({ id: String(group.id), label: String(group.label), current: Boolean(group.current), run: group.run, views: (Array.isArray(group.views) ? group.views : []).map((view) => ({ label: String(view.label), current: Boolean(view.current), run: view.run })) })) };
-    }
     const pages = (n.LOCAL_ROUTES[section] || []).map((route) => n.get?.(route)).filter(Boolean).map((page) => ({
       id: String(page.id), label: String(page.short || page.label || page.id), glyph: typeof page.glyph === "string" ? page.glyph : null,
       badge: typeof page.badge === "string" ? page.badge : null, alert: typeof page.alert === "string" ? page.alert : null, current: page.id === id,
@@ -97564,16 +96979,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         pages.title.textContent = model.title;
         pages.root.setAttribute("aria-label", `${model.title} pages`);
         if (model.rows) {
-          // A place's list (settingsModel, teamModel, mapModel): headings over groups, rows with the place's glyph.
+          // A place's list (settingsModel, teamModel, friendsModel): headings over groups, rows with the place's glyph.
           for (const row of model.rows) {
             if (row.kind === "heading") rows.push(text("h3", "shell-pages-group", row.label));
             else rows.push(pageButton(row.label, row.current, (event) => row.run?.(event), { key: row.key, glyph: row.glyph, sub: row.sub, open: row.open, quiet: row.quiet }));
-          }
-        } else if (model.groups) {
-          for (const group of model.groups) {
-            if (!group.views.length) { rows.push(pageButton(group.label, group.current, () => group.run?.(), { key: `group:${group.id}` })); continue; }
-            rows.push(text("h3", `shell-pages-group${group.current ? " is-current" : ""}`, group.label));
-            group.views.forEach((view, at) => rows.push(pageButton(view.label, view.current, () => view.run?.(), { key: `${group.id}:${at}`, sub: true })));
           }
         } else for (const page of model.pages) rows.push(pageButton(page.label, page.current, () => n?.go?.(page.id), { key: page.id, glyph: page.glyph, badge: page.badge, alert: page.alert }));
       }
@@ -98362,12 +97771,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   const CAP_RANGE = Object.freeze([3, 12]); // and 0, "no limit", one step past the top
   // Which params say which place. Everything else (a filter, a task selected on the
   // Task board, a card to scroll to) is where you are inside the page, not another tab.
-  // Agents is one sheet with two faces: its overview, and Setup with four panes.
-  // In the 0.5 layout Agents is Team, one tab per place (renderer/agents.js, TEAM_PLACES): its Overview is the Team tab.
+  // Agents is Team, one tab per place (renderer/agents.js, TEAM_PLACES): its Overview is the Team tab, and an old
+  // { section, pane } is the place that holds that pane now.
   // Friends in the 0.5 layout is one tab per place too (renderer/companion-hub.js, FRIENDS_PLACES).
   const IDENTITY = Object.freeze({ workspace: Object.freeze(["view", "taskId", "projectId"]), agents: Object.freeze(["section", "pane", "place"]), "friends-page": Object.freeze(["place"]) });
   const friendsPlaceOf = (id) => safe(() => window.MefiCompanionHub?.FRIENDS_PLACES?.find?.((place) => place.id === id) ?? null, null);
-  const AGENT_PANES = Object.freeze({ connections: "Connections", team: "Team", routing: "Routing", behavior: "Behavior" });
   const teamPlaceOf = (id) => safe(() => window.MefiAgents?.TEAM_PLACES?.find?.((place) => place.id === id && Array.isArray(place.panes)) ?? null, null);
   const TONES = Object.freeze({ ask: "warn", run: "live", check: "info", done: "good", dropped: "dim", wait: "dim", ready: "dim" });
 
@@ -98435,12 +97843,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       if (params.view === "task" && params.taskId) return { id, params: { view: "task", taskId: params.taskId, ...(params.projectId ? { projectId: params.projectId } : {}) } };
       return { id, params: params.view === "chat" ? { view: "chat" } : {} };
     }
-    if (id === "agents" && v2()) {
+    if (id === "agents") {
       // One tab per Team place: an old { section, pane } is the place that holds that pane now (MefiAgents.teamPlace).
+      // The Overview, and a place nobody can name, is the Team tab.
       const at = teamPlaceOf(params.place) ? params.place : safe(() => window.MefiAgents?.teamPlace?.("agents", params)?.id ?? null, null);
-      if (teamPlaceOf(at)) return { id, params: at === "overview" ? {} : { place: at } };
+      return { id, params: teamPlaceOf(at) && at !== "overview" ? { place: at } : {} };
     }
-    if (id === "agents") return { id, params: params.section === "setup" ? { section: "setup", pane: AGENT_PANES[params.pane] ? params.pane : "team" } : {} };
     if (id === "friends-page") return { id, params: { place: friendsPlaceOf(params.place) ? params.place : "rooms" } };
     return { id, params };
   }
@@ -98504,8 +97912,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (route.id === "workspace") return { title: route.params.view === "chat" ? "Chat" : homeTitle(), glyph: route.params.view === "chat" ? "g-spark" : "g-home" };
     const dest = safe(() => window.MefiNav?.get?.(route.id), null);
     let title = words(dest?.short || dest?.label || rec.title || route.id, 40);
-    if (route.id === "agents" && route.params.pane) title = `Agents · ${AGENT_PANES[route.params.pane]}`;
-    else if (route.id === "agents" && route.params.place) title = words(teamPlaceOf(route.params.place)?.label || title, 40);
+    if (route.id === "agents" && route.params.place) title = words(teamPlaceOf(route.params.place)?.label || title, 40);
     else if (route.id === "friends-page") title = words(friendsPlaceOf(route.params.place)?.label || title, 40);
     return { title, glyph: dest?.glyph || "g-frame" };
   }
@@ -102936,6 +102343,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // The page header names the tab on show; nav.js repaints it on mefi:nav, and
   // this covers the launch, which restores a tab without announcing it.
   const PAGE_TITLES = { booklet: "Model catalog", graph: "Performance", eyes: "Activity & evidence", studio: "Settings" };
+  // The tab page on show: the one #tab-* section showTab left visible ("booklet" at launch), or null.
+  const TAB_NAMES = Object.freeze(Object.keys(PAGE_TITLES));
+  function shownTab() { return TAB_NAMES.find((name) => document.getElementById(`tab-${name}`)?.hidden === false) ?? null; }
   function showTab(name, params = {}) {
     if (name !== "studio") window.MefiMusic?.activateSettings?.(null);
     const insights = document.getElementById("model-lab-catalog");
@@ -104703,7 +104113,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   };
   // settingsLocation: the place Settings shows, and whether Find a setting is showing results instead (null in the classic layout).
   const settingsLocation = () => (settingsFiled ? { id: settingsCategory, label: SETTINGS_CATEGORIES[settingsCategory] ?? settingsCategory, search: Boolean(settingsQuery()) } : null);
-  window.MefiBooklet = { showTab, refresh, toggleHelp, jumpToSettings, initStudio, settingsPlaces, settingsLocation };
+  window.MefiBooklet = { showTab, shownTab, refresh, toggleHelp, jumpToSettings, initStudio, settingsPlaces, settingsLocation };
 
   const headless = new URLSearchParams(window.location.search);
   const capture = headless.get("capture") === "1";

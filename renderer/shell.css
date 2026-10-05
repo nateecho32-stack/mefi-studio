@@ -318,7 +318,7 @@ html[data-frame] .shell-menu-fine { margin: 0; color: var(--dim); font-size: var
 html[data-frame] .shell-menu-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 html[data-frame] .shell-action { height: 28px; padding: 0 10px; border-color: var(--hairline-strong); border-radius: 8px; color: var(--ivory); font-size: var(--frame-fs); }
 
-/* ---- Search (Ctrl K) in the frame: the prototype's palette (renderer/palette.js, "the 0.5 layout") ----
+/* ---- Search (Ctrl K) in the frame: the prototype's palette (renderer/palette.js, "the prototype's Search") ----
    In the free area like every layer (the layout contract keeps the list, the inspector and the status bar clear; the
    prototype's scrim covers the whole window), under the top bar and centred, 640 px wide: the box with its glass on a 52 px row, a heading where a
    group starts, one line per result (icon, name, and its state or key on the right in plain words), at
