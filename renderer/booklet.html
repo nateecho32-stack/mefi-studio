@@ -10567,6 +10567,32 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 .today .vibe-evolution-suggestion h3, .today .vibe-evolution-suggestion > p { font-size: var(--t-f13); }
 .today :is(.autonomy-chip, .autonomy-note) { font-size: var(--t-f12); }
 
+/* ---- Vibe's Today as the 0.5 prototype draws it ------------------------------------------------------------------------------------------
+   The greeting says which mode it is; the box is the words with one row of controls under them (Add files, the permission mode, then Talk
+   it over and Build it with its key), the keys' line under the box; each card that waits on you is its session, with the question in a box
+   of its own and the first two answers; every column says when it is empty. */
+#vibe-layer[data-today="on"] .today .vibe-kicker::after { content: " · Vibe"; }
+/* The question in plain ink, as the prototype's (the front door's gradient lettering stays the front door's own, in v1). */
+#vibe-layer[data-today="on"] .today .vibe-hero h1 { background: none; -webkit-background-clip: border-box; background-clip: border-box; color: var(--t-ink); }
+#vibe-layer[data-today="on"] .today .vibe-compose { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 8px; row-gap: 6px; padding: 14px 16px 12px; }
+#vibe-layer[data-today="on"] .today .vibe-compose > textarea { grid-column: 1 / -1; grid-row: 1; min-height: 56px; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+#vibe-layer[data-today="on"] .today .vibe-compose > .file-input-tools { display: contents; }
+#vibe-layer[data-today="on"] .today .vibe-compose > .file-input-tools > [role="status"] { grid-column: 1 / -1; grid-row: 2; min-width: 0; color: var(--t-soft); font-size: var(--t-f12); }
+#vibe-layer[data-today="on"] .today .vibe-compose > .file-input-tools > button,
+#vibe-layer[data-today="on"] .today .vibe-compose .autonomy-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; height: 28px; padding: 0 9px; border: 1px solid var(--hairline-strong); border-radius: 9px; background: transparent; color: var(--t-soft); font: 500 var(--t-f125)/1 var(--font-ui); white-space: nowrap; }
+#vibe-layer[data-today="on"] .today .vibe-compose > .file-input-tools > button { grid-column: 1; grid-row: 3; justify-self: start; }
+#vibe-layer[data-today="on"] .today .vibe-compose > .vibe-compose-foot { grid-column: 2; grid-row: 3; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; margin: 0; }
+#vibe-layer[data-today="on"] .today .vibe-compose #vibe-talk { margin-left: auto; }
+#vibe-layer[data-today="on"] .today .vibe-compose :is(#vibe-talk, #vibe-build) { min-height: 32px; height: 32px; padding: 0 13px; border-radius: 10px; font-size: var(--t-f13); }
+#vibe-layer[data-today="on"] .today #vibe-build .today-key { min-width: 17px; height: 20px; padding: 0 5px; border: 1px solid color-mix(in srgb, currentColor 55%, transparent); border-radius: 6px; background: transparent; color: inherit; font: 600 var(--t-f12)/1 var(--font-ui); }
+#vibe-layer[data-today="on"] .today-box > .vibe-hint { display: block; margin: -2px 2px 0; color: var(--t-soft); font-size: var(--t-f125); line-height: 1.6; }
+#vibe-layer[data-today="on"] .today-box > .vibe-hint .key { min-width: 0; height: auto; padding: 0; border: 0; background: none; box-shadow: none; color: inherit; font: inherit; }
+/* A card that waits on you: the question in its own warm box (the prototype's .bq), the answers under it. */
+.today-card-q { margin: 0; padding: 7px 9px; border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent); border-radius: 9px; background: color-mix(in srgb, var(--warn) 7%, transparent); color: var(--t-ink); font-size: var(--t-f13); line-height: 1.45; overflow-wrap: anywhere; }
+.today-card[data-tone="bad"] .today-card-q { border-color: color-mix(in srgb, var(--bad) 35%, transparent); background: color-mix(in srgb, var(--bad) 7%, transparent); }
+.today-col-empty { margin: 0; padding: 6px 6px 8px; color: var(--t-soft); font-size: var(--t-f125); }
+.today-col-empty[hidden] { display: none; }
+
 /* ---- the board: one line per session, in four groups ------------------------------------------------------------ */
 .today-quiet { margin: 6px 0 0; padding: 0; color: var(--t-faint); font-size: var(--t-f14); line-height: 1.5; }
 .today-quiet[hidden] { display: none; }
@@ -89448,16 +89474,30 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     return { projectId: d.projectId ?? null, projectName: d.projectName || "", items: drawn, count, board, quiet: board.total === 0 && count === 0 };
   }
 
-  function cardOfItem(item, detail) {
-    if (item.handled) return { key: `need:${item.key}`, group: "needs", tone: "done", item, decided: true, title: item.title, meta: "", more: [] };
-    const card = { key: `need:${item.key}`, group: "needs", tone: item.tone, item, title: item.title, taskId: item.taskId, open: item.taskId ? { taskId: item.taskId } : null, meta: [item.label, item.from && item.from !== item.title ? `from ${item.from}` : "", item.at ? waited(item.at) : ""].filter(Boolean).join(" · "), more: [] };
+  // What a card that waits on you says first, as the prototype's board does ("Asking a question · 4 min"): a question and a permission by
+  // what they are, the rest by their own label.
+  const ASKING = { question: "Asking a question", permission: "Asking permission" };
+  // A need on the board is its session: the task as the title, how long it has waited, then the question (or what holds it) in its own box and
+  // the first two answers or actions. A result to review is a card under Review (it is still in the Inbox, and in the count).
+  function cardOfItem(item, detail, data = {}) {
+    const group = item.kind === "review" ? "review" : "needs";
+    if (item.handled) return { key: `need:${item.key}`, group, tone: "done", item, decided: true, title: item.title, meta: "", more: [] };
+    const from = item.from && item.from !== item.title ? item.from : "";
+    if (group === "review") {
+      const checking = Boolean(item.need?.checking);
+      return { key: `need:${item.key}`, group, tone: "check", item, review: true, checking, title: item.title, taskId: item.taskId, meta: [checking ? "Checking its work" : item.facts || "Ready to review", item.at ? waited(item.at) : ""].filter(Boolean).join(" · "), more: detail === "all" && item.detail ? [item.detail] : [] };
+    }
+    const card = { key: `need:${item.key}`, group, tone: item.tone, item, title: from || item.title, taskId: item.taskId, open: item.taskId ? { taskId: item.taskId } : null, meta: [ASKING[item.kind] || item.label, item.at ? waited(item.at) : ""].filter(Boolean).join(" · "), q: from ? item.title : item.detail, more: [] };
     if (detail !== "titles" && item.options.length) card.quick = item.options.filter((option) => !option.text && !option.dismiss).slice(0, 2);
+    // A thing with no options of its own offers the app's first two actions for it (its go-ahead, Try again, It's done), as the Inbox does.
+    if (detail !== "titles" && !item.options.length) card.acts = actionsOf(item, data).slice(0, 2).map((action) => ({ id: action.id, label: action.label, primary: Boolean(action.primary), disabled: Boolean(action.disabled) }));
     if (detail === "all") { if (item.hint) card.more.push(item.hint); for (const line of item.evidence.slice(-1)) card.more.push(line); }
     return card;
   }
 
   function boardOf(d, now, items, detail) {
-    const needs = items.map((item) => cardOfItem(item, detail));
+    const cards = items.map((item) => cardOfItem(item, detail, d));
+    const needs = cards.filter((card) => card.group === "needs");
     const worktrees = new Set(window.MefiWorktrees?.summary?.()?.tasks ?? []);
     const asked = new Set(items.filter((item) => item.kind === "review").map((item) => item.taskId));
     const running = [];
@@ -89465,17 +89505,20 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       const step = window.MefiVibeFlow?.doing?.(job) ?? { tool: "", step: "" };
       const phase = job.stopping ? "stopping" : job.phase ? String(job.phase).replace(/_/g, " ") : "working";
       const progress = Number.isFinite(job.progress) ? Math.max(0.04, Math.min(1, job.progress)) : null;
+      // Who is on it, for how long, and what it is doing now: the prototype's "builder-2 · 40 min · step 4/5", in the words the run has.
+      const who = clip(job.route || job.cli || step.tool || "", 40);
       running.push({ key: `run:${job.taskId || job.title}`, group: "running", tone: "live", title: clip(job.title || "A task", 120), taskId: job.taskId || null, progress, worktree: worktrees.has(job.taskId),
-        meta: [step.tool, phase, job.startedAt ? `started ${ago(job.startedAt, now)}` : ""].filter(Boolean).join(" · "), more: [step.step].filter(Boolean) });
+        meta: [who, job.startedAt ? waited(job.startedAt, now) : "", job.stopping ? "stopping" : clip(step.step, 80) || phase].filter(Boolean).join(" · "), more: [] });
     }
     for (const next of (Array.isArray(d.next) ? d.next : []).slice(0, 2)) {
       running.push({ key: `next:${next.id}`, group: "running", tone: "next", title: clip(next.title || "Next task", 120), taskId: next.id || null,
         meta: next.stage === "waiting" ? "waiting for what it depends on" : next.stage === "cooling" ? "trying again soon" : "up next · waits for a free worker", more: [] });
     }
-    const review = [];
+    // Review: results ready for you first, then what is being checked, then plans waiting on you.
+    const review = cards.filter((card) => card.group === "review");
     for (const task of Array.isArray(d.checking) ? d.checking : []) {
       if (asked.has(task.id)) continue;
-      review.push({ key: `check:${task.id}`, group: "review", tone: "check", title: clip(task.title || "A finished task", 120), taskId: task.id, worktree: worktrees.has(task.id), meta: "checking its work", more: [] });
+      review.push({ key: `check:${task.id}`, group: "review", tone: "check", title: clip(task.title || "A finished task", 120), taskId: task.id, worktree: worktrees.has(task.id), meta: "Checking its work", more: [] });
     }
     for (const need of Array.isArray(d.needs) ? d.needs : []) {
       if (need?.kind !== "plan") continue;
@@ -89486,10 +89529,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const cutoff = Math.min(start.getTime(), now - 12 * 3600000);
     const finished = (Array.isArray(d.tasks) ? d.tasks : []).filter((task) => ["done", "archived", "completed"].includes(task?.status) && !task.dropped && finishedAt(task) >= cutoff).sort((a, b) => finishedAt(b) - finishedAt(a));
     const done = finished.slice(0, 6).map((task) => ({ key: `done:${task.id}`, group: "done", tone: "done", title: clip(task.title || "A task", 120), taskId: task.id, worktree: worktrees.has(task.id),
-      meta: `${task.verification?.state === "verified" ? "verified" : "done"} · ${ago(finishedAt(task), now)}`, more: [clip(task.verification?.reason, 140)].filter(Boolean) }));
+      meta: `${task.verification?.state === "verified" ? "Verified" : "Done"} · ${ago(finishedAt(task), now)}`, more: [clip(task.verification?.reason, 140)].filter(Boolean) }));
     const notices = (Array.isArray(d.assistant?.messages) ? d.assistant.messages : []).filter((message) => message?.kind === "notice" && message.text && !String(message.taskId || "").startsWith("__")).slice(-4).reverse()
       .map((message) => ({ key: `note:${message.id || message.at}`, text: clip(message.text, 160), at: time(message.at) }));
-    return { needs, running, review, done, doneMore: Math.max(0, finished.length - done.length), latest: notices, total: needs.filter((card) => !card.decided).length + running.length + review.length + done.length };
+    return { needs, running, review, done, doneMore: Math.max(0, finished.length - done.length), latest: notices, total: needs.filter((card) => !card.decided).length + running.length + review.filter((card) => !card.decided).length + done.length };
   }
 
   // ---- state ---------------------------------------------------------------------------------------
@@ -90035,7 +90078,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // ---- Today: the board ------------------------------------------------------------------------------
   function renderCard(card, detail) {
     if (card.decided) return renderDecided(card.item, card.item.handled, card.key);
-    if (card.item) return renderBoardNeed(card, detail);
+    if (card.item && !card.review) return renderBoardNeed(card, detail);
     const node = el("article", `today-card is-${card.tone}`);
     node.dataset.key = card.key;
     const head = el("div", "today-card-head");
@@ -90045,7 +90088,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     open.append(el("span", "today-card-title", card.title));
     open.title = card.title;
     open.setAttribute("aria-label", `${card.title}, ${card.meta || card.group}`);
-    open.addEventListener("click", () => { if (card.planId) openPlan(card.planId); else if (card.taskId) openTask(card.taskId); });
+    // A result to review opens on what it changed (its session's Changes tab); anything else opens its session, a plan its page.
+    open.addEventListener("click", () => { if (card.planId) openPlan(card.planId); else if (card.review && !card.checking && card.taskId) openChanges(card.taskId); else if (card.taskId) openTask(card.taskId); });
     if (!card.planId && !card.taskId) open.disabled = true;
     head.append(open);
     if (card.worktree) { const mark = el("span", "today-wt"); mark.title = "Runs in its own worktree"; mark.append(glyph("g-worktree")); head.append(mark); }
@@ -90058,7 +90102,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (detail === "all") for (const line of card.more) node.append(el("div", "today-card-more", line));
     return node;
   }
-  // A need on the board answers in place with its first two options, or opens the Inbox on it.
+  // A need on the board answers in place: its first two options, or the app's first two actions for it, and More, which opens the Inbox on it.
   function renderBoardNeed(card, detail) {
     const item = card.item;
     const node = el("article", `today-card is-need${state.busy.has(item.key) ? " is-busy" : ""}`);
@@ -90075,34 +90119,48 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     node.append(head);
     if (detail !== "titles") {
       node.append(el("div", "today-card-meta", card.meta));
+      if (card.q) node.append(el("p", "today-card-q", card.q));
+      const row = el("div", "today-card-quick");
+      const busy = state.busy.has(item.key);
       if (card.quick && card.quick.length) {
-        const row = el("div", "today-card-quick");
-        for (const option of card.quick) {
-          const choose = el("button", `today-btn${option.recommended ? " primary" : ""}`, option.label);
-          choose.type = "button"; choose.dataset.option = option.id; choose.disabled = state.busy.has(item.key); choose.title = option.label;
+        card.quick.forEach((option, index) => {
+          const choose = el("button", `today-btn${index === 0 ? " primary" : ""}`, option.label);
+          choose.type = "button"; choose.dataset.option = option.id; choose.disabled = busy; choose.title = option.label;
           choose.addEventListener("click", () => void answer(item, { optionId: option.id }));
           row.append(choose);
+        });
+      } else if (card.acts && card.acts.length) {
+        const live = actionsOf(item, state.data || {});
+        for (const shown of card.acts) {
+          const action = live.find((entry) => entry.id === shown.id);
+          if (!action) continue;
+          const run = typeof action.go === "function" ? () => action.go() : () => void perform(item, action);
+          const act = button(action.label, `today-btn${action.primary ? " primary" : ""}`, run, { title: action.title, disabled: busy || action.disabled, confirm: action.confirm });
+          act.dataset.action = action.id;
+          row.append(act);
         }
-        row.append(button("More", "today-link", () => openInbox(state.anchor, { focus: item.key }), { title: "See every option and answer in your own words" }));
-        node.append(row);
       } else {
-        node.append(button(item.kind === "question" || item.kind === "permission" ? "Answer" : item.kind === "approval" ? "Review" : "Decide", "today-btn", () => openInbox(state.anchor, { focus: item.key }), { title: "Open it in the Inbox" }));
+        row.append(button("Answer", "today-btn primary", () => openInbox(state.anchor, { focus: item.key }), { title: "Answer it in the Inbox", disabled: busy }));
       }
+      row.append(button("More", "today-link", () => openInbox(state.anchor, { focus: item.key }), { title: "See everything about it in the Inbox, and answer in your own words" }));
+      node.append(row);
       if (state.errors.has(item.key)) { const note = el("p", "today-need-note", state.errors.get(item.key)); note.setAttribute("role", "alert"); node.append(note); }
     }
     if (detail === "all") for (const line of card.more) node.append(el("div", "today-card-more", line));
     return node;
   }
-  const GROUPS = [["needs", "Needs you"], ["running", "Running"], ["review", "Review"], ["done", "Done today"]];
+  // The prototype's four columns (Done holds what finished today), each with its own words when it is empty.
+  const GROUPS = [["needs", "Needs you"], ["running", "Running"], ["review", "Review"], ["done", "Done"]];
+  const GROUP_EMPTY = { needs: "Nothing is waiting on you.", running: "Nothing is running.", review: "Nothing to review.", done: "Nothing finished yet today." };
   // What a card says, time included (its meta carries "4 min"), so it is rebuilt exactly when something it shows has changed.
-  const cardSignature = (card, detail) => JSON.stringify([card.key, card.title, card.meta, card.progress ?? null, card.worktree ?? false, card.quick?.map((option) => option.id) ?? null, card.item ? state.busy.has(card.item.key) : 0,
+  const cardSignature = (card, detail) => JSON.stringify([card.key, card.title, card.meta, card.q ?? null, card.acts ?? null, card.progress ?? null, card.worktree ?? false, card.quick?.map((option) => option.id) ?? null, card.item ? state.busy.has(card.item.key) : 0,
     card.item ? state.errors.get(card.item.key) ?? null : null, card.decided ? [card.item.handled.label, Boolean(card.item.handled.undo)] : 0, detail, card.more]);
-  // The four groups stay put as nodes (only the ones with something to say are drawn); their cards are kept or
-  // rebuilt one by one, so a push that changes one card leaves the others, and any answer being typed, alone.
+  // The four groups stay put as nodes (all four while a project is open, each saying so when it is empty, as the prototype's board);
+  // their cards are kept or rebuilt one by one, so a push that changes one card leaves the others, and any answer being typed, alone.
   function paintBoard(holder, current, detail) {
     const now = Date.now();
     const groups = holder.querySelector?.(".today-groups") || holder;
-    const shown = GROUPS.filter(([key]) => current.board[key].length > 0);
+    const shown = current.projectId ? GROUPS : [];
     holder.dataset.groups = String(shown.length);
     reconcile(groups, shown.map(([key, label]) => ({
       key, sig: `${key}|${label}`,
@@ -90110,7 +90168,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         const group = el("section", "today-group");
         group.dataset.group = key; group.setAttribute("aria-label", label);
         const heading = el("h3", "", label); heading.append(el("span", "today-count", ""));
-        group.append(heading, el("div", "today-cards"));
+        const empty = el("p", "today-col-empty", GROUP_EMPTY[key]); empty.hidden = true;
+        group.append(heading, el("div", "today-cards"), empty);
         return group;
       },
     })));
@@ -90123,6 +90182,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       if (count && count.textContent !== String(open)) count.textContent = String(open);
       const list = group.querySelector(".today-cards");
       reconcile(list, cards.map((card) => ({ key: card.key, sig: cardSignature(card, detail), build: () => renderCard(card, detail) })));
+      const empty = group.querySelector(".today-col-empty");
+      if (empty && empty.hidden !== (cards.length > 0)) empty.hidden = cards.length > 0;
       if (key === "done") {
         let more = group.querySelector(".today-more");
         if (current.board.doneMore && !more) { more = button("", "today-link today-more", () => window.MefiNav?.go?.("tasks", { filter: "done" }), { title: "All finished work" }); group.append(more); }
@@ -90150,7 +90211,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     return node;
   }
   function paintSummary(holder, current) {
-    const needs = current.count, running = current.board.running.filter((card) => card.tone === "live").length, review = current.board.review.length;
+    const needs = current.count, running = current.board.running.filter((card) => card.tone === "live").length, review = current.board.review.filter((card) => !card.decided).length;
     const set = (key, tag, words, on) => {
       const node = chip(holder, key, tag);
       node.hidden = !on;
@@ -90165,8 +90226,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 
   // Everything Today shows, on whichever host is up: the front door's own page, and the Today page Build opens.
   const HOSTS = [
-    { id: "vibe", summary: "today-summary", quiet: "today-quiet", board: "today-board", up: () => state.host === "vibe", none: "Pick a project to begin: choose one from the project name above.", calm: "All quiet. Nothing is waiting on you and nothing is running. Describe something above and it starts here." },
-    { id: "page", summary: "today-overlay-summary", quiet: "today-overlay-quiet", board: "today-overlay-board", up: () => byId("today-overlay")?.hidden === false, none: "Pick a project to begin: choose one from the project menu.", calm: "All quiet. Nothing is waiting on you and nothing is running. Start something with New task." },
+    { id: "vibe", summary: "today-summary", quiet: "today-quiet", board: "today-board", up: () => state.host === "vibe", none: "Pick a project to begin: choose one from the project name above." },
+    { id: "page", summary: "today-overlay-summary", quiet: "today-overlay-quiet", board: "today-overlay-board", up: () => byId("today-overlay")?.hidden === false, none: "Pick a project to begin: choose one from the project menu." },
   ];
   function paintToday() {
     const current = model();
@@ -90177,10 +90238,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       if (!board) continue;
       const summary = byId(host.summary), quiet = byId(host.quiet);
       if (summary) paintSummary(summary, current);
+      // With a project open the four columns say what is empty; without one, this line says what to do.
       if (quiet) {
         const hasProject = Boolean(current.projectId);
-        quiet.hidden = hasProject && !current.quiet;
-        quiet.textContent = hasProject ? host.calm : host.none;
+        quiet.hidden = hasProject;
+        quiet.textContent = hasProject ? "" : host.none;
       }
       paintBoard(board, current, detail);
     }
@@ -90189,7 +90251,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 
   // ---- hosts ------------------------------------------------------------------------------------------------
   // Vibe's own layer is the host of the Home page: its backdrop, its drawers (the conversation, panels) and its keys stay.
-  const MOVED = ["vibe-compose", "vibe-flow", "vibe-feedback", "vibe-sparks", "vibe-decisions", "vibe-gate", "vibe-last"];
+  // The line that says the keys (#vibe-hint, from the box's own row) goes right under the box, as the prototype's.
+  const MOVED = ["vibe-compose", "vibe-hint", "vibe-flow", "vibe-feedback", "vibe-sparks", "vibe-decisions", "vibe-gate", "vibe-last"];
   function ensurePage(layer) {
     let today = byId("today-page");
     if (today) return today;
@@ -90225,6 +90288,13 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     row.append(summary);
     for (const id of MOVED) place(byId(id), slot);
     for (const chip of slot.querySelectorAll?.(".vibe-evolution-intent") ?? []) { const hint = chip.querySelector?.("small")?.textContent; if (hint && !chip.title) chip.title = hint; }
+    // Build it says its key inside the button (the prototype's "Build it  Ctrl Enter"); restore() takes it out again.
+    const build = byId("vibe-build");
+    if (build && !build.querySelector?.(".today-key")) {
+      const key = el("kbd", "today-key", "Ctrl Enter"); key.setAttribute("aria-hidden", "true");
+      build.append(key); build.setAttribute("aria-keyshortcuts", "Control+Enter");
+      (state.added ||= []).push(() => { key.remove?.(); build.removeAttribute?.("aria-keyshortcuts"); });
+    }
     return today;
   }
   function show() {
@@ -90248,6 +90318,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const layer = byId("vibe-layer");
     for (const { node, parent, next } of [...(state.parts || [])].reverse()) { if (parent) parent.insertBefore(node, next && next.parentNode === parent ? next : null); }
     state.parts = null;
+    for (const undo of (state.added || []).splice(0)) { try { undo(); } catch { /* already gone */ } }
     byId("today-page")?.remove();
     if (layer?.dataset) delete layer.dataset.today;
     state.host = null;
@@ -90601,7 +90672,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       const checking = Boolean(item.need?.checking);
       rows.push({ key: `review:${item.taskId}`, tone: "rev", title: item.title, taskId: item.taskId, meta: checking ? "Checking its work" : item.facts ? `${item.facts} · ready to review` : "Ready to review", end: checking ? "" : "Review", changes: !checking });
     }
-    for (const card of current.board.review) if (card.tone === "check") rows.push({ key: card.key, tone: "rev", title: card.title, taskId: card.taskId, meta: "Checking its work", end: "" });
+    for (const card of current.board.review) if (card.tone === "check" && !card.review) rows.push({ key: card.key, tone: "rev", title: card.title, taskId: card.taskId, meta: "Checking its work", end: "" });
     for (const card of current.board.done) {
       const task = taskOf(d, card.taskId);
       const verified = task?.verification?.state === "verified";
@@ -95461,7 +95532,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       // Build's classic Home is Today's "chat" view (renderer/today.js): the tab strip and the trail both call it Chat.
       const chat = window.MefiToday?.homeView?.() === "chat" && rootEl().dataset.uiMode !== "vibe";
       if (session || built?.title) parts.push(String(session || built.title));
-      else parts.push(window.MefiToday ? (chat ? "Chat" : "Today") : String(dest?.label || dest?.short || "Home"));
+      // Vibe's Today is the board: the prototype's breadcrumb says so.
+      else parts.push(window.MefiToday ? (chat ? "Chat" : rootEl().dataset.uiMode === "vibe" ? "Today, the board" : "Today") : String(dest?.label || dest?.short || "Home"));
       return parts;
     }
     let section = null;

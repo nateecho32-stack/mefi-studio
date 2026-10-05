@@ -101,6 +101,32 @@
 .today .vibe-evolution-suggestion h3, .today .vibe-evolution-suggestion > p { font-size: var(--t-f13); }
 .today :is(.autonomy-chip, .autonomy-note) { font-size: var(--t-f12); }
 
+/* ---- Vibe's Today as the 0.5 prototype draws it ------------------------------------------------------------------------------------------
+   The greeting says which mode it is; the box is the words with one row of controls under them (Add files, the permission mode, then Talk
+   it over and Build it with its key), the keys' line under the box; each card that waits on you is its session, with the question in a box
+   of its own and the first two answers; every column says when it is empty. */
+#vibe-layer[data-today="on"] .today .vibe-kicker::after { content: " · Vibe"; }
+/* The question in plain ink, as the prototype's (the front door's gradient lettering stays the front door's own, in v1). */
+#vibe-layer[data-today="on"] .today .vibe-hero h1 { background: none; -webkit-background-clip: border-box; background-clip: border-box; color: var(--t-ink); }
+#vibe-layer[data-today="on"] .today .vibe-compose { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 8px; row-gap: 6px; padding: 14px 16px 12px; }
+#vibe-layer[data-today="on"] .today .vibe-compose > textarea { grid-column: 1 / -1; grid-row: 1; min-height: 56px; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+#vibe-layer[data-today="on"] .today .vibe-compose > .file-input-tools { display: contents; }
+#vibe-layer[data-today="on"] .today .vibe-compose > .file-input-tools > [role="status"] { grid-column: 1 / -1; grid-row: 2; min-width: 0; color: var(--t-soft); font-size: var(--t-f12); }
+#vibe-layer[data-today="on"] .today .vibe-compose > .file-input-tools > button,
+#vibe-layer[data-today="on"] .today .vibe-compose .autonomy-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; height: 28px; padding: 0 9px; border: 1px solid var(--hairline-strong); border-radius: 9px; background: transparent; color: var(--t-soft); font: 500 var(--t-f125)/1 var(--font-ui); white-space: nowrap; }
+#vibe-layer[data-today="on"] .today .vibe-compose > .file-input-tools > button { grid-column: 1; grid-row: 3; justify-self: start; }
+#vibe-layer[data-today="on"] .today .vibe-compose > .vibe-compose-foot { grid-column: 2; grid-row: 3; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; margin: 0; }
+#vibe-layer[data-today="on"] .today .vibe-compose #vibe-talk { margin-left: auto; }
+#vibe-layer[data-today="on"] .today .vibe-compose :is(#vibe-talk, #vibe-build) { min-height: 32px; height: 32px; padding: 0 13px; border-radius: 10px; font-size: var(--t-f13); }
+#vibe-layer[data-today="on"] .today #vibe-build .today-key { min-width: 17px; height: 20px; padding: 0 5px; border: 1px solid color-mix(in srgb, currentColor 55%, transparent); border-radius: 6px; background: transparent; color: inherit; font: 600 var(--t-f12)/1 var(--font-ui); }
+#vibe-layer[data-today="on"] .today-box > .vibe-hint { display: block; margin: -2px 2px 0; color: var(--t-soft); font-size: var(--t-f125); line-height: 1.6; }
+#vibe-layer[data-today="on"] .today-box > .vibe-hint .key { min-width: 0; height: auto; padding: 0; border: 0; background: none; box-shadow: none; color: inherit; font: inherit; }
+/* A card that waits on you: the question in its own warm box (the prototype's .bq), the answers under it. */
+.today-card-q { margin: 0; padding: 7px 9px; border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent); border-radius: 9px; background: color-mix(in srgb, var(--warn) 7%, transparent); color: var(--t-ink); font-size: var(--t-f13); line-height: 1.45; overflow-wrap: anywhere; }
+.today-card[data-tone="bad"] .today-card-q { border-color: color-mix(in srgb, var(--bad) 35%, transparent); background: color-mix(in srgb, var(--bad) 7%, transparent); }
+.today-col-empty { margin: 0; padding: 6px 6px 8px; color: var(--t-soft); font-size: var(--t-f125); }
+.today-col-empty[hidden] { display: none; }
+
 /* ---- the board: one line per session, in four groups ------------------------------------------------------------ */
 .today-quiet { margin: 6px 0 0; padding: 0; color: var(--t-faint); font-size: var(--t-f14); line-height: 1.5; }
 .today-quiet[hidden] { display: none; }

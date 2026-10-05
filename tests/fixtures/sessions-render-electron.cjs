@@ -657,7 +657,14 @@ app.whenReady().then(async () => {
     await until("document.getElementById('vibe-layer').dataset.today === 'on' && !document.getElementById('vibe-layer').hidden && document.querySelector('#today-board .today-group')", "Vibe's Today");
     await sleep(900);
     await capture("today-vibe-1920.png");
-    report.todayVibe = await run("return { trail: [...document.querySelectorAll('#shell-top .shell-crumb')].map((node) => node.textContent), groups: [...document.querySelectorAll('#today-board .today-group')].map((node) => [node.dataset.group, node.querySelector('h3').textContent]) };");
+    report.todayVibe = await run("return { trail: [...document.querySelectorAll('#shell-top .shell-crumb')].map((node) => node.textContent), groups: [...document.querySelectorAll('#today-board .today-group')].map((node) => [node.dataset.group, node.querySelector('h3').firstChild.textContent, node.querySelectorAll('.today-card, .today-need').length, node.querySelector('.today-col-empty').hidden ? null : node.querySelector('.today-col-empty').textContent]), need: { title: document.querySelector('#today-board [data-group=needs] .today-card-title')?.textContent ?? null, meta: document.querySelector('#today-board [data-group=needs] .today-card-meta')?.textContent ?? null, q: document.querySelector('#today-board [data-group=needs] .today-card-q')?.textContent ?? null }, kicker: getComputedStyle(document.querySelector('#today-page .vibe-kicker'), '::after').content, build: document.querySelector('#vibe-build .today-key')?.textContent ?? null };");
+    assert.deepEqual(report.todayVibe.trail, ["Notes app", "Today, the board"], "the prototype's breadcrumb for Vibe's Today");
+    assert.deepEqual(report.todayVibe.groups.map((group) => group[1]), ["Needs you", "Running", "Review", "Done"], "the prototype's four columns, all four drawn");
+    assert.deepEqual(report.todayVibe.groups.find((group) => group[0] === "done").slice(2), [0, "Nothing finished yet today."], "an empty column says so");
+    assert.deepEqual({ ...report.todayVibe.need, meta: report.todayVibe.need.meta?.replace(/\d+ min$/, "N min") }, { title: "Add an empty state to the notes list", meta: "Asking a question · N min", q: "Should the empty state also appear when a search has no matches?" }, "a card that waits on you is its session: the task, what it asks and for how long, the question in its box");
+    assert.equal(report.todayVibe.kicker, '" · Vibe"');
+    assert.equal(report.todayVibe.build, "Ctrl Enter");
+    await readable("#today-page", "Vibe's Today");
     await run("await window.MefiVibe.setMode('build', { go: false }); window.MefiNav.applyShell(true); window.MefiNav.setRailPinned(false, { save: false }); window.MefiNav.go('workspace');");
     await until("window.MefiToday.hostsComposer() && !document.getElementById('today-build').hidden", "Build's Today again");
     await size(1440, 900, 1);

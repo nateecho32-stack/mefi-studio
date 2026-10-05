@@ -389,8 +389,8 @@ app.whenReady().then(async () => {
   assert.equal(await run("return window.MefiToday.count();"), 7);
   report.board = await run("return window.MefiToday.snapshot().groups;");
   assert.deepEqual(report.board, {
-    needs: ["need:question:q_failure", "need:question:q_permission", "need:question:q_decision", "need:family:t_family", "need:approval:t_approve", "need:blocked:t_stuck", "need:review:t_review"],
-    running: ["run:t_run", "next:t_next"], review: ["check:t_check", "plan:plan_1"], done: ["done:t_done1", "done:t_done2", "done:t_done3"],
+    needs: ["need:question:q_failure", "need:question:q_permission", "need:question:q_decision", "need:family:t_family", "need:approval:t_approve", "need:blocked:t_stuck"],
+    running: ["run:t_run", "next:t_next"], review: ["need:review:t_review", "check:t_check", "plan:plan_1"], done: ["done:t_done1", "done:t_done2", "done:t_done3"],
   });
   const view = async (label, zoom) => {
     const at = `${label}@${zoom}`;
