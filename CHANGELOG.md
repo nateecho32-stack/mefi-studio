@@ -7,6 +7,21 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Team, Fleet and the Project map fit narrow windows in the 0.5 layout.**
+  With the session list beside them they have less room than the window:
+  Team's seat rows now fold by the page's own width (at 1100 px Effort and
+  Fast mode no longer sit on the provider button), Fleet folds its columns
+  by its own width (so Fit shows the whole team at 1100 px), and in the
+  smallest window at 150% the Project map keeps a map with its zoom
+  controls (it had no room left at all).
+- **Studio is lighter: the classic layout's code is gone.** The classic tab
+  row, sidebar menus, Search rows, Agents navigation, Command toolbar and
+  its Ambience, View and Agent settings pop-overs, and the companion's own
+  Friends section are removed, about 2,600 lines of Studio's own code. Every control
+  they held already has its place in the 0.5 layout (Settings › Map look
+  and Sound and music, Team › Overview, the Map's View menu, the Friends
+  page). The short "About these controls" note that sat under the old
+  Agent settings is gone with them.
 - **"Start the first task" on an empty Map works again in Build.** It
   pointed at the classic task box, which the 0.5 layout hides, so it did
   nothing; it now opens a new task, as N does. The first-run key tips for
