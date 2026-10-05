@@ -13335,7 +13335,7 @@
     pillOf("progress")?.addEventListener("click", () => focusNextInProgress());
     pillOf("assistant")?.addEventListener("click", () => selectAssistant({ focus: true }));
     el.emptyAssistant?.addEventListener("click", () => window.MefiCompanion?.open?.());
-    // The fresh card's first step: Vibe's box in Vibe, Command's own task box in Build.
+    // The fresh card's first step: Vibe's box in Vibe, a new task in Build (the Map's N).
     document.getElementById("cmd-empty-start")?.addEventListener("click", () => {
       if (window.MefiVibe?.mode?.() === "vibe") {
         window.MefiNav?.go?.("vibe");
@@ -13343,7 +13343,7 @@
         setTimeout(() => box?.focus?.({ preventScroll: true }), 0);
         return;
       }
-      document.getElementById("idle-task-input")?.focus?.();
+      mapNewTask();
     });
 
     // The broadcast carries the list that was just written. Using it skips a

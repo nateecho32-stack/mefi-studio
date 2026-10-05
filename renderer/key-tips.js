@@ -28,10 +28,10 @@
     { id: "vibe-dock", when: onVibe, target: "#vibe-dock", side: "right", parts: [["D", "watch the tree"], ["T", "tasks"], ["M", "team"]] },
     { id: "vibe-pulse", when: onVibe, target: "#vibe-pulse", side: "bottom", parts: [["N", "what needs you"], ["C", "the conversation"]] },
     { id: "vibe-search", when: onVibe, target: "#vibe-layer .vibe-top-actions [data-nav='palette']", side: "bottom", parts: [["Ctrl+K", "find anything"], ["?", "every shortcut"]] },
-    { id: "build-home", when: onBuild, target: "#app-rail-sections, #tabs", side: "right", parts: [["H", "Home"], ["D", "Command view"], ["T", "task board"]] },
-    { id: "build-search", when: onBuild, target: "#app-rail-foot [data-nav='palette'], .tools-cluster [data-nav='palette'], [data-nav='palette']", side: "right", parts: [["Ctrl+K", "jump anywhere"], ["?", "every shortcut"], ["Ctrl+,", "Settings"]] },
-    { id: "command-walk", when: onCommand, target: "#idle-task-input", side: "bottom", parts: [["← →", "walk the tree"], ["Enter", "open a node"], ["F", "fit it all"]] },
-    { id: "command-leave", when: onCommand, target: "#cmd-dock, .cmd-dock", side: "top", parts: [["Esc", "step back out"], ["V", "3D or flat map"], ["?", "every key"]] },
+    { id: "build-home", when: onBuild, target: "#app-rail-sections", side: "right", parts: [["H", "Home"], ["D", "the Map"], ["T", "task board"]] },
+    { id: "build-search", when: onBuild, target: "#app-rail-foot [data-nav='palette'], [data-nav='palette']", side: "right", parts: [["Ctrl+K", "jump anywhere"], ["?", "every shortcut"], ["Ctrl+,", "Settings"]] },
+    { id: "command-walk", when: onCommand, target: "#map-bar", side: "bottom", parts: [["← →", "walk the tree"], ["Enter", "open a node"], ["F", "fit it all"]] },
+    { id: "command-leave", when: onCommand, target: "#map-zoom", side: "top", parts: [["Esc", "step back out"], ["V", "3D or flat map"], ["?", "every key"]] },
   ];
 
   const state = { shown: new Map(), timer: null, started: false, seen: readSeen() };

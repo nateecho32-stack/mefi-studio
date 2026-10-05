@@ -7,6 +7,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **"Start the first task" on an empty Map works again in Build.** It
+  pointed at the classic task box, which the 0.5 layout hides, so it did
+  nothing; it now opens a new task, as N does. The first-run key tips for
+  the Map sit on its bar and its zoom, and Build's on the rail, instead of
+  on hidden controls where they never showed.
 - **Chrome's buttons no longer look struck through.** The metal on main
   buttons and chosen tabs had a hard dark line at half height, right behind
   the words. Its horizon is now a soft band below them, and the darkest part
