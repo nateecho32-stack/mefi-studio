@@ -32,7 +32,7 @@
 <p align="center">
   <img src="docs/images/0.5/build.webp" width="960" alt="The 0.5 layout in Build: sessions grouped as Needs you, Running, Review, Queued and Done on the left, a running session with its steps and live output in the middle, and its plan, brief, checks and versions in the inspector on the right">
   <br>
-  <sub>The 0.5 layout in Build, from the current build on <code>main</code> with sample data.</sub>
+  <sub>The 0.5 layout in Build, in the new Chrome theme, from the current build on <code>main</code> with sample data.</sub>
 </p>
 
 Pick a project folder, say what you want, and coding agents build it while you watch. Every change waits for you to accept or revert it, and the [Void Engine Discord](https://discord.gg/xgfKc5pVxG) is there when you want company, feedback or a hand.
@@ -83,7 +83,7 @@ The [public roadmap](https://nateecho32-stack.github.io/mefi-studio/roadmap.html
   </tr>
 </table>
 
-Also in 0.5: tabs you add and pin, Work › Worktrees, Windows notifications and quiet hours, Report a problem, What's new after an update, pictures on a message, the `@ # /` picker, Skills and rules for agents, and The Studio Daily. The [0.5 scope](docs/release-scope-0.5.0.md) has the full list and what moves to 0.5.x.
+Also in 0.5: **Chrome**, a new matte black and brushed-metal theme that new installs open in (a theme you already picked stays), tabs you add and pin, Work › Worktrees, Windows notifications and quiet hours, Report a problem, What's new after an update, pictures on a message, the `@ # /` picker, Skills and rules for agents, and The Studio Daily. The [0.5 scope](docs/release-scope-0.5.0.md) has the full list and what moves to 0.5.x.
 
 ## Moving to Rust
 
