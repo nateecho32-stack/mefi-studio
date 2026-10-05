@@ -13,8 +13,8 @@
      in the site's CSS is written as rgb(var(--…-rgb) / alpha) so it follows. */
   --accent-rgb: 195 200 208;
   --bright-rgb: 238 241 245;
-  --accent-2-rgb: 150 170 196;
-  --accent-3-rgb: 214 218 226;
+  --accent-2-rgb: 168 197 255;
+  --accent-3-rgb: 198 180 255;
   --bg-rgb: 10 10 12;
   --bg-2-rgb: 15 15 18;
   --panel-rgb: 20 20 24;
@@ -30,8 +30,8 @@
   /* accents */
   --accent: #c3c8d0;
   --accent-bright: #eef1f5;
-  --accent-2: #96aac4;
-  --accent-3: #d6dae2;
+  --accent-2: #a8c5ff;
+  --accent-3: #c6b4ff;
   --accent-dim: rgb(var(--accent-rgb) / 0.12);
   /* Void and its cyan stay fixed: the "Coming in" badges and Void glyphs use them as meaning, not decoration. */
   --void: #8c7bff;
@@ -77,6 +77,15 @@
   --edge-strong: linear-gradient(180deg, rgb(255 255 255 / 0.42), rgb(255 255 255 / 0.12) 40%, rgb(255 255 255 / 0.06) 75%, rgb(255 255 255 / 0.18));
   --matte: linear-gradient(180deg, #141418, #0f0f12);
   --matte-raised: linear-gradient(180deg, #1a1a1f, #121216);
+  /* Chrome's iridescent layer: silver-white, ice blue, lilac and pale aqua, like
+     anodised metal. The same values as Studio's Chrome theme (--chrome-holo...). */
+  --holo: linear-gradient(115deg, #eef2f7 0%, #a8c5ff 26%, #c6b4ff 52%, #9de8da 78%, #eef2f7 100%);
+  --holo-text: linear-gradient(100deg, #f6f8fc 0%, #c3d6ff 26%, #d9cdff 52%, #bff2e8 78%, #f6f8fc 100%);
+  --holo-line: linear-gradient(90deg, transparent, rgb(168 197 255 / 0.55) 18%, rgb(198 180 255 / 0.6) 50%, rgb(157 232 218 / 0.55) 82%, transparent);
+  --holo-bar: linear-gradient(180deg, #eef2f7, #a8c5ff 35%, #c6b4ff 65%, #9de8da);
+  --holo-edge: linear-gradient(150deg, rgb(238 242 247 / 0.42), rgb(168 197 255 / 0.22) 32%, rgb(198 180 255 / 0.12) 62%, rgb(157 232 218 / 0.24));
+  --holo-edge-strong: linear-gradient(150deg, rgb(238 242 247 / 0.72), rgb(168 197 255 / 0.48) 32%, rgb(198 180 255 / 0.34) 62%, rgb(157 232 218 / 0.48));
+  --holo-glow: rgb(168 197 255 / 0.22);
 }
 
 /* ---- base ---- */

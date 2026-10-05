@@ -15,7 +15,7 @@
   // glows, the sky). The Void collection carries its own second hue; the rest
   // get analogues of the accent.
   var THEMES = {
-    chrome:   { name: "Chrome",     accent: "#c3c8d0", bright: "#eef1f5", bg: "#0a0a0c", panel: "#141418", muted: "#a4a9b2", text: "#f2f4f7", a2: "#96aac4", a3: "#d6dae2" },
+    chrome:   { name: "Chrome",     accent: "#c3c8d0", bright: "#eef1f5", bg: "#0a0a0c", panel: "#141418", muted: "#a4a9b2", text: "#f2f4f7", a2: "#a8c5ff", a3: "#c6b4ff" },
     aurora:   { name: "Aurora",     accent: "#71cbb7", bright: "#a7f3da", bg: "#050d13", panel: "#101f29", muted: "#a9c1c6", text: "#e9f6f0", a2: "#36d1ff", a3: "#8c7bff" },
     midnight: { name: "Midnight",   accent: "#82a8e6", bright: "#bbd5ff", bg: "#050913", panel: "#0d1524", muted: "#a2b2ca" },
     forest:   { name: "Forest",     accent: "#85bca3", bright: "#b4e1c9", bg: "#050d0b", panel: "#0d1915", muted: "#a2b8ae" },

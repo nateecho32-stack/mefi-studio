@@ -11,7 +11,7 @@
     const ctx = canvas.getContext("2d");
     // The sky wears the page's theme: accent, bright accent, and the two companions.
     const CHANNELS = ["--accent-rgb", "--bright-rgb", "--accent-3-rgb", "--accent-2-rgb"];
-    const FALLBACK = ["195,200,208", "238,241,245", "214,218,226", "150,170,196"];
+    const FALLBACK = ["195,200,208", "238,241,245", "198,180,255", "168,197,255"];
     let colors = FALLBACK.slice();
     const readColors = () => {
       colors = CHANNELS.map((name, i) => {
