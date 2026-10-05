@@ -183,13 +183,13 @@
             },
             {
               "id": "chrome-theme",
-              "title": "Chrome: matte black and brushed metal",
-              "text": "A new theme and the look new installs open in: matte black panels, silver type and brushed chrome on the main buttons and the side of a switch you are on.",
+              "title": "Chrome: matte black, brushed metal, an iridescent finish",
+              "text": "A new theme and the look new installs open in: matte black panels, silver type, brushed chrome on the main buttons and the side of a switch you are on, and an iridescent finish on the edges and highlights.",
               "status": "next",
               "label": "Coming in 0.5",
               "area": "Media & looks",
               "details": [
-                "Silver nodes and links in the Command view, and the same palette as this website.",
+                "Silver, ice blue, lilac and aqua on the selection bars, the open tab, the hairlines and the greeting; silver nodes in the Command view; the same palette as this website.",
                 "A theme you already picked, Aurora included, stays; every other theme is still there.",
                 "The colours that mean something (working, needs you, errors, review) are unchanged."
               ]
