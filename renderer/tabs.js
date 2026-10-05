@@ -366,6 +366,8 @@
       return view && view.view ? { view: view.view, taskId: view.taskId, projectId: projectId() } : null;
     }],
     ["agents", () => safe(() => window.MefiAgents?.params?.(), null)],
+    // The 0.5 layout's Friends: the place that shows (renderer/companion-hub.js friendsPlace).
+    ["friends-page", () => safe(() => { const here = window.MefiCompanionHub?.friendsPlace?.(); return here ? { place: here.id } : null; }, null)],
   ]);
   function readPlace() {
     const nav = window.MefiNav;

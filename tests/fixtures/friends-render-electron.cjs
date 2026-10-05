@@ -181,7 +181,8 @@ app.whenReady().then(async () => {
   await run("window.MefiVibe?.setMode?.('build', { go: false }); window.MefiNav.setRailPinned?.(false, { save: false });");
   await resize(1920, 1080);
   // The rail's Friends opens the page on its first place.
-  await click('#app-rail .app-rail-head[data-section="friends"]');
+  // (A press, not a pointer: the rail widens under a hovering pointer, so a release can land on the row beneath.)
+  await run(`document.querySelector('#app-rail .app-rail-head[data-section="friends"]').click();`);
   await until(placeIs("rooms"), "the rail's Friends opens Friends › Rooms");
   await sleep(500);
   const first = await run(measure);
