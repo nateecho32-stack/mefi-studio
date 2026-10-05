@@ -14,6 +14,8 @@ Press **U**, or open **Settings › Appearance**. The sidebar sits beside the li
 
 Pick one of seven themes: **Aurora** (the default), **Studio gold**, **Midnight**, **Forest**, **Violet**, **Ember** and **Rose**.
 
+<span class="status next">Coming in 0.5</span> **Chrome** joins them, first in the list: matte black panels, silver type and brushed metal on the main buttons and the side of a switch you are on. It becomes the look a new install opens in. If you already picked a theme, Aurora included, you keep it.
+
 The **Void collection** adds four two-tone themes, each with a second color of its own: **Void**, **Eclipse**, **Abyss** and **Neon Dusk**. They sit under their own heading, and since 0.4.4 they're free for everyone, like every other look.
 
 Choose **Custom palette** to pick your own **Accent**, **Background**, **Panels** and **Text** colors, with the color picker or a `#RRGGBB` value. Studio adjusts text and borders so they stay readable. **Reset custom colors** starts over.

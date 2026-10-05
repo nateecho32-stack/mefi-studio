@@ -182,6 +182,19 @@
               ]
             },
             {
+              "id": "chrome-theme",
+              "title": "Chrome: matte black and brushed metal",
+              "text": "A new theme and the look new installs open in: matte black panels, silver type and brushed chrome on the main buttons and the side of a switch you are on.",
+              "status": "next",
+              "label": "Coming in 0.5",
+              "area": "Media & looks",
+              "details": [
+                "Silver nodes and links in the Command view, and the same palette as this website.",
+                "A theme you already picked, Aurora included, stays; every other theme is still there.",
+                "The colours that mean something (working, needs you, errors, review) are unchanged."
+              ]
+            },
+            {
               "id": "notifications",
               "title": "Windows tells you when something needs you",
               "text": "A question, an approval or a failed task that waits while you are away becomes a Windows notification.",

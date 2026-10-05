@@ -67,8 +67,9 @@
   --ease: cubic-bezier(.22, 1, .36, 1);
   --grad: linear-gradient(100deg, var(--accent-bright) 0%, var(--accent) 30%, var(--accent-2) 68%, var(--accent-3) 100%);
   /* Chrome's metal (used by assets/chrome.css while Chrome is the theme). */
-  --metal: linear-gradient(180deg, #fdfdfe 0%, #e4e7eb 16%, #bcc1c8 44%, #8e949d 50%, #c6cad0 57%, #eceef1 84%, #d2d6db 100%);
-  --metal-hover: linear-gradient(180deg, #ffffff 0%, #eef0f3 16%, #cdd1d7 44%, #a0a6ae 50%, #d6d9de 57%, #f6f7f9 84%, #e0e3e7 100%);
+  /* The same metal as Studio's Chrome theme (renderer/chrome.css, --chrome-metal). */
+  --metal: linear-gradient(180deg, #fbfcfd 0%, #dfe3e8 20%, #b3b9c2 48%, #8e959e 52%, #cfd4da 60%, #f1f3f6 100%);
+  --metal-hover: linear-gradient(180deg, #ffffff 0%, #e8ebef 20%, #bec4cc 48%, #9aa1aa 52%, #d9dde2 60%, #f7f8fa 100%);
   --metal-text: linear-gradient(180deg, #ffffff 0%, #f1f3f6 34%, #b4bac2 52%, #dfe2e6 66%, #fdfdfe 100%);
   --metal-soft: linear-gradient(180deg, #ffffff 0%, #e9ecef 45%, #c2c7ce 55%, #f3f5f7 100%);
   --metal-line: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.3) 22%, rgb(255 255 255 / 0.5) 50%, rgb(255 255 255 / 0.3) 78%, transparent);

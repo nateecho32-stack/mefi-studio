@@ -96,6 +96,7 @@ The 0.5 layout is optional and off by default. Turn it on with **Try the 0.5 lay
 
 ## Settings and menus
 
+- **Chrome, the new default look.** A new theme of matte black panels, silver type and brushed chrome on the main buttons and the side of a switch you are on, with silver nodes in the Command view. New installs open in it. A theme you already picked, Aurora included, stays. Every theme also gets a finer finish: buttons ease into hover and press, and raised controls catch a fine top highlight. See [Appearance](#/appearance).
 - **Configuration.** Every setting in one searchable tree (`Ctrl Shift ,`), with the setup helper’s sections, a pinned **Walk me through setup**, and a new **Interface scale** from 70% to 150%. See [Configuration](#/settings/configuration).
 - **When Studio opens.** Choose **Resume what I had**, **Start agents** or **Keep agents off**.
 - **No surprise Command view.** Switching to the Command view after five quiet minutes is now a setting, off by default.
