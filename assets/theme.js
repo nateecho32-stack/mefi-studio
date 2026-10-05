@@ -2,18 +2,20 @@
    The palettes are the app's own (THEMES in the app repository's
    renderer/music.js), so the site can be dressed in the same eleven looks as
    Studio. It is loaded from <head>: a saved choice is applied before the first
-   paint. Aurora is the site's own look and is applied by clearing overrides.
+   paint. Chrome (matte black and brushed metal) is the site's own look: it
+   lives in site.css and chrome.css and is applied by clearing overrides.
    Picker UI lives in fx.js (every page) and demo.js (Home). */
 (function () {
   "use strict";
   var KEY = "mefiSite.theme.v1";
-  var DEFAULT = "aurora";
+  var DEFAULT = "chrome";
   var root = document.documentElement;
 
   // a2 / a3 are the two decorative companions of the accent (headline gradient,
   // glows, the sky). The Void collection carries its own second hue; the rest
   // get analogues of the accent.
   var THEMES = {
+    chrome:   { name: "Chrome",     accent: "#c3c8d0", bright: "#eef1f5", bg: "#0a0a0c", panel: "#141418", muted: "#a4a9b2", text: "#f2f4f7", a2: "#96aac4", a3: "#d6dae2" },
     aurora:   { name: "Aurora",     accent: "#71cbb7", bright: "#a7f3da", bg: "#050d13", panel: "#101f29", muted: "#a9c1c6", text: "#e9f6f0", a2: "#36d1ff", a3: "#8c7bff" },
     midnight: { name: "Midnight",   accent: "#82a8e6", bright: "#bbd5ff", bg: "#050913", panel: "#0d1524", muted: "#a2b2ca" },
     forest:   { name: "Forest",     accent: "#85bca3", bright: "#b4e1c9", bg: "#050d0b", panel: "#0d1915", muted: "#a2b8ae" },
@@ -26,7 +28,7 @@
     abyss:    { name: "Abyss",      accent: "#2fd6c3", bright: "#8ff5e8", bg: "#01080b", panel: "#06151a", muted: "#9dbfc0", text: "#e2f7f4", a2: "#7b5cff", a3: "#8ff5e8", collection: "void" },
     dusk:     { name: "Neon Dusk",  accent: "#ff5fa2", bright: "#ffa3cb", bg: "#0a0512", panel: "#170c24", muted: "#c4a9c9", text: "#fbe9f3", a2: "#3fd0ff", a3: "#ffa3cb", collection: "void" }
   };
-  var ORDER = ["aurora", "midnight", "forest", "violet", "rose", "ember", "gold", "void", "eclipse", "abyss", "dusk"];
+  var ORDER = ["chrome", "aurora", "midnight", "forest", "violet", "rose", "ember", "gold", "void", "eclipse", "abyss", "dusk"];
 
   // ---- colour helpers ------------------------------------------------------
   function rgb(h) { h = h.replace("#", ""); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
@@ -72,7 +74,7 @@
     }
     if (id === DEFAULT) root.removeAttribute("data-theme"); else root.setAttribute("data-theme", id);
     var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute("content", id === DEFAULT ? "#050d13" : THEMES[id].bg);
+    if (meta) meta.setAttribute("content", id === DEFAULT ? "#0a0a0c" : THEMES[id].bg);
     current = id;
     if (!silent) {
       listeners.forEach(function (fn) { try { fn(id, THEMES[id]); } catch (e) { /* a listener must not break the switch */ } });

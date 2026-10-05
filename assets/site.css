@@ -1,47 +1,48 @@
 /* Mefi Studio — website design system (shared by every page and the wiki).
-   Dark, matching the app: midnight blue-green surfaces, ivory type, the
-   app's mint accent, the Void violet/cyan as a second accent and the icon's
-   gold as a small brand highlight. System fonts only (no third-party
-   requests). No build step; plain CSS. Page-specific rules live in
-   assets/<page>.css and build on these tokens and components. */
+   The default look is Chrome: matte black surfaces, silver type and brushed
+   metal for the things you press, matching Studio's Chrome theme. The other
+   palettes are Studio's own and come from assets/theme.js; assets/chrome.css
+   adds the metal and matte finish while Chrome is on. System fonts only (no
+   third-party requests). No build step; plain CSS. Page-specific rules live
+   in assets/<page>.css and build on these tokens and components. */
 
 :root {
   color-scheme: dark;
   /* Colour channels ("r g b"). assets/theme.js rewrites these, and the hex
      tokens beside them, when a visitor picks a theme; every translucent colour
      in the site's CSS is written as rgb(var(--…-rgb) / alpha) so it follows. */
-  --accent-rgb: 113 203 183;
-  --bright-rgb: 167 243 218;
-  --accent-2-rgb: 54 209 255;
-  --accent-3-rgb: 140 123 255;
-  --bg-rgb: 5 13 19;
-  --bg-2-rgb: 8 24 32;
-  --panel-rgb: 16 31 41;
-  --panel-2-rgb: 19 36 47;
+  --accent-rgb: 195 200 208;
+  --bright-rgb: 238 241 245;
+  --accent-2-rgb: 150 170 196;
+  --accent-3-rgb: 214 218 226;
+  --bg-rgb: 10 10 12;
+  --bg-2-rgb: 15 15 18;
+  --panel-rgb: 20 20 24;
+  --panel-2-rgb: 25 25 30;
   /* surfaces */
-  --bg: #050d13;
-  --bg-2: #081820;
+  --bg: #0a0a0c;
+  --bg-2: #0f0f12;
   --panel: rgb(var(--panel-rgb) / 0.78);
-  --panel-solid: #0f1d27;
-  --panel-raised: #13242f;
+  --panel-solid: #121215;
+  --panel-raised: #18181c;
   --hairline: rgb(var(--accent-rgb) / 0.15);
   --hairline-strong: rgb(var(--accent-rgb) / 0.36);
   /* accents */
-  --accent: #71cbb7;
-  --accent-bright: #a7f3da;
-  --accent-2: #36d1ff;
-  --accent-3: #8c7bff;
+  --accent: #c3c8d0;
+  --accent-bright: #eef1f5;
+  --accent-2: #96aac4;
+  --accent-3: #d6dae2;
   --accent-dim: rgb(var(--accent-rgb) / 0.12);
   /* Void and its cyan stay fixed: the "Coming in" badges and Void glyphs use them as meaning, not decoration. */
   --void: #8c7bff;
   --void-2: #36d1ff;
   --brand-gold: #d8b36a;
   /* type colours */
-  --ivory: #e9f6f0;
-  --text: #d6e8e2;
-  --muted: #a9c1c6;
-  --dim: #7f9398;
-  --ink: #04110d;
+  --ivory: #f2f4f7;
+  --text: #d4d8de;
+  --muted: #a4a9b2;
+  --dim: #80858d;
+  --ink: #0a0a0c;
   /* states */
   --live: #57ff9a;
   --warn: #ffd479;
@@ -65,6 +66,16 @@
   --ring: 0 0 0 3px rgb(var(--accent-rgb) / 0.28);
   --ease: cubic-bezier(.22, 1, .36, 1);
   --grad: linear-gradient(100deg, var(--accent-bright) 0%, var(--accent) 30%, var(--accent-2) 68%, var(--accent-3) 100%);
+  /* Chrome's metal (used by assets/chrome.css while Chrome is the theme). */
+  --metal: linear-gradient(180deg, #fdfdfe 0%, #e4e7eb 16%, #bcc1c8 44%, #8e949d 50%, #c6cad0 57%, #eceef1 84%, #d2d6db 100%);
+  --metal-hover: linear-gradient(180deg, #ffffff 0%, #eef0f3 16%, #cdd1d7 44%, #a0a6ae 50%, #d6d9de 57%, #f6f7f9 84%, #e0e3e7 100%);
+  --metal-text: linear-gradient(180deg, #ffffff 0%, #f1f3f6 34%, #b4bac2 52%, #dfe2e6 66%, #fdfdfe 100%);
+  --metal-soft: linear-gradient(180deg, #ffffff 0%, #e9ecef 45%, #c2c7ce 55%, #f3f5f7 100%);
+  --metal-line: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.3) 22%, rgb(255 255 255 / 0.5) 50%, rgb(255 255 255 / 0.3) 78%, transparent);
+  --edge: linear-gradient(180deg, rgb(255 255 255 / 0.2), rgb(255 255 255 / 0.07) 38%, rgb(255 255 255 / 0.035) 75%, rgb(255 255 255 / 0.09));
+  --edge-strong: linear-gradient(180deg, rgb(255 255 255 / 0.42), rgb(255 255 255 / 0.12) 40%, rgb(255 255 255 / 0.06) 75%, rgb(255 255 255 / 0.18));
+  --matte: linear-gradient(180deg, #141418, #0f0f12);
+  --matte-raised: linear-gradient(180deg, #1a1a1f, #121216);
 }
 
 /* ---- base ---- */
@@ -550,8 +561,13 @@ footer:not(.site-foot) { border-top: 1px solid var(--hairline); padding: 36px 0 
 .ticks li { position: relative; padding-left: 26px; color: var(--muted); font-size: 0.97rem; line-height: 1.5; }
 .ticks li::before {
   content: ""; position: absolute; left: 0; top: 0.28em; width: 16px; height: 16px; border-radius: 50%;
-  background: rgb(var(--accent-rgb) / 0.14) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8.4 6.8 11.2 12.2 5' fill='none' stroke='%23a7f3da' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px no-repeat;
-  border: 1px solid var(--hairline-strong); transform: none;
+  background: rgb(var(--accent-rgb) / 0.14); border: 1px solid var(--hairline-strong); transform: none;
+}
+/* The check is a mask, so it takes the theme's bright accent. */
+.ticks li::after {
+  content: ""; position: absolute; left: 1px; top: calc(0.28em + 1px); width: 16px; height: 16px; background: var(--accent-bright);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4.6 8.3 7 10.7 11.6 5.6' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4.6 8.3 7 10.7 11.6 5.6' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px no-repeat;
 }
 h1, h2 { text-wrap: balance; }
 .lede, .section-head p { text-wrap: pretty; }

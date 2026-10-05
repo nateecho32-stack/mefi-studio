@@ -1,0 +1,200 @@
+/* Mefi Studio — Chrome, the site's default look (and Studio's Chrome theme).
+   Matte black surfaces with a fine grain, silver type, and brushed metal for
+   the few things you press or should notice first. Everything here applies
+   only while Chrome is the theme (assets/theme.js clears data-theme for it),
+   so the other palettes keep their own colours. Loaded on every page after
+   fx.css; the tokens (--metal, --edge, --matte ...) live in site.css. */
+
+/* ---- ground: matte black with a soft overhead light and a fine grain ------ */
+:root:not([data-theme]) {
+  --hairline: rgb(255 255 255 / 0.075);
+  --hairline-strong: rgb(255 255 255 / 0.16);
+  --accent-dim: rgb(255 255 255 / 0.06);
+  --ring: 0 0 0 1px #0a0a0c, 0 0 0 3px rgb(238 241 245 / 0.55);
+  --shadow: 0 18px 44px rgb(0 0 0 / 0.6);
+  --shadow-lg: 0 44px 100px -12px rgb(0 0 0 / 0.85);
+  --glow: 0 0 0 1px rgb(0 0 0 / 0.9), 0 40px 100px -24px rgb(0 0 0 / 0.95), 0 0 140px -48px rgb(225 230 238 / 0.22);
+  --grad: var(--metal-text);
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+}
+:root:not([data-theme]) body {
+  background-color: var(--bg);
+  background-image:
+    var(--grain),
+    radial-gradient(1200px 520px at 50% -12%, rgb(255 255 255 / 0.07), transparent 62%),
+    radial-gradient(900px 500px at 100% 30%, rgb(150 170 196 / 0.045), transparent 60%);
+  background-repeat: repeat, no-repeat, no-repeat;
+}
+:root:not([data-theme]) ::selection { background: rgb(238 241 245 / 0.24); color: #fff; }
+:root:not([data-theme]) .ambient { opacity: 0.5; }
+:root:not([data-theme]) a { color: #e9ecf0; }
+:root:not([data-theme]) a:hover { color: #fff; }
+/* Links inside running text are white like bold text, so they carry a quiet underline. */
+:root:not([data-theme]) :is(p, dd, td, .prose li, .ticks li, .faq li, .feature-copy li, .item li) a:not(.btn):not(.chip):not(.card):not(.more):not(.now-strip) {
+  text-decoration: underline; text-decoration-color: rgb(255 255 255 / 0.32); text-underline-offset: 3px; text-decoration-thickness: 1px;
+}
+:root:not([data-theme]) :is(p, dd, td, .prose li, .ticks li, .faq li, .feature-copy li, .item li) a:not(.btn):hover { text-decoration-color: rgb(255 255 255 / 0.85); }
+:root:not([data-theme]) :focus-visible { outline-color: #eef1f5; }
+
+/* ---- type: chrome headlines, quiet silver labels --------------------------- */
+/* Each line gets its own band of metal (background-size: one line high). */
+:root:not([data-theme]) h1,
+:root:not([data-theme]) h2 {
+  background: var(--metal-text); background-size: 100% 1lh; background-repeat: repeat-y;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+:root:not([data-theme]) h2 { background-image: var(--metal-soft); }
+/* Small headings that are labels, not titles, stay solid. */
+:root:not([data-theme]) :is(.foot-col h2, .theme-pop h2, .lane-head h2, .cta-band h2, .wiki-side h4, .visually-hidden) {
+  background: none; color: inherit;
+}
+:root:not([data-theme]) .lane-head h2, :root:not([data-theme]) .cta-band h2 { color: var(--ivory); }
+:root:not([data-theme]) h3, :root:not([data-theme]) h4 { color: #f4f6f8; }
+:root:not([data-theme]) .eyebrow { color: #b9bec6; letter-spacing: 0.24em; }
+:root:not([data-theme]) .eyebrow:not(:has(.status, .badge))::before {
+  content: ""; display: inline-block; width: 22px; height: 1px; margin-right: 12px; vertical-align: 0.32em;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.7));
+}
+:root:not([data-theme]) .center .eyebrow:not(:has(.status, .badge))::after, :root:not([data-theme]) .eyebrow.center:not(:has(.status, .badge))::after {
+  content: ""; display: inline-block; width: 22px; height: 1px; margin-left: 12px; vertical-align: 0.32em;
+  background: linear-gradient(90deg, rgb(255 255 255 / 0.7), transparent);
+}
+:root:not([data-theme]) .grad, :root:not([data-theme]) .shine { filter: drop-shadow(0 1px 0 rgb(0 0 0 / 0.6)); }
+
+/* ---- header, status strip and footer ------------------------------------- */
+:root:not([data-theme]) .site-head { background: rgb(10 10 12 / 0.74); border-bottom-color: transparent; }
+:root:not([data-theme]) .site-head::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; pointer-events: none; background: var(--metal-line); opacity: 0.6;
+}
+:root:not([data-theme]) .brand img { box-shadow: 0 0 0 1px rgb(255 255 255 / 0.4), 0 4px 12px rgb(0 0 0 / 0.7); }
+:root:not([data-theme]) .tabs { background: linear-gradient(180deg, #121215, #0c0c0e) padding-box, var(--edge) border-box; border: 1px solid transparent; box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.6); }
+:root:not([data-theme]) .tabs a:hover { background: rgb(255 255 255 / 0.06); }
+:root:not([data-theme]) .tabs a[aria-current="page"],
+:root:not([data-theme]) .chip[aria-pressed="true"],
+:root:not([data-theme]) .chip[aria-current="true"],
+:root:not([data-theme]) .look-tabs [aria-selected="true"],
+:root:not([data-theme]) .tabset [role="tab"][aria-selected="true"] {
+  color: #0b0b0d; background: var(--metal); border-color: transparent;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.95), inset 0 -1px 0 rgb(0 0 0 / 0.28), 0 6px 16px -6px rgb(0 0 0 / 0.9);
+  text-shadow: 0 1px 0 rgb(255 255 255 / 0.45);
+}
+:root:not([data-theme]) .now-strip {
+  position: relative; color: #b7bcc4;
+  background: linear-gradient(180deg, #111114, #0c0c0e); border-bottom-color: rgb(255 255 255 / 0.05);
+}
+:root:not([data-theme]) .now-strip .now-more { color: #f1f3f6; }
+:root:not([data-theme]) .site-foot { background: linear-gradient(180deg, transparent, rgb(0 0 0 / 0.5)); border-top-color: transparent; position: relative; }
+:root:not([data-theme]) .site-foot::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px; background: var(--metal-line); opacity: 0.4; }
+:root:not([data-theme]) .foot-col h2 { color: #9da3ab; }
+:root:not([data-theme]) .scroll-progress { background: var(--metal-line); box-shadow: 0 0 10px rgb(255 255 255 / 0.35); height: 2px; }
+
+/* ---- buttons: brushed metal for the main action, matte with a chrome rim for the rest ---- */
+:root:not([data-theme]) .btn-primary,
+:root:not([data-theme]) .home .pill b {
+  color: #0b0b0d; background: var(--metal); border: 1px solid rgb(255 255 255 / 0.5);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.95), inset 0 -1px 0 rgb(0 0 0 / 0.3), 0 0 0 1px rgb(0 0 0 / 0.65), 0 12px 30px -10px rgb(0 0 0 / 0.95);
+  text-shadow: 0 1px 0 rgb(255 255 255 / 0.5);
+}
+:root:not([data-theme]) .btn-primary:hover { background: var(--metal-hover); color: #000; border-color: rgb(255 255 255 / 0.7); }
+:root:not([data-theme]) .btn-primary:active { transform: translateY(0); filter: brightness(0.93); }
+:root:not([data-theme]) .btn-primary::after { background: linear-gradient(108deg, transparent 34%, rgb(255 255 255 / 0.85) 48%, transparent 62%); }
+:root:not([data-theme]) .btn:not(.btn-primary):not(.btn-void),
+:root:not([data-theme]) .chip:not([aria-pressed="true"]):not([aria-current="true"]),
+:root:not([data-theme]) .home .pill {
+  background: var(--matte) padding-box, var(--edge-strong) border-box; border: 1px solid transparent;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04), 0 10px 24px -14px rgb(0 0 0 / 0.9);
+}
+:root:not([data-theme]) .btn:not(.btn-primary):not(.btn-void):hover,
+:root:not([data-theme]) .chip:not([aria-pressed="true"]):not([aria-current="true"]):hover,
+:root:not([data-theme]) .home .pill:hover {
+  background: var(--matte-raised) padding-box, linear-gradient(180deg, rgb(255 255 255 / 0.6), rgb(255 255 255 / 0.18) 45%, rgb(255 255 255 / 0.28)) border-box;
+  color: #fff;
+}
+:root:not([data-theme]) .icon-link:hover, :root:not([data-theme]) .theme-btn:hover, :root:not([data-theme]) .theme-btn[aria-expanded="true"] {
+  background: rgb(255 255 255 / 0.06); border-color: rgb(255 255 255 / 0.14);
+}
+
+/* ---- surfaces: matte panels with a chrome edge that catches the light from above ---- */
+:root:not([data-theme]) :is(.card, .item, .step, .faq details, .release-card, .wiki-nav a, .menu-panel, .theme-pop) {
+  background: var(--matte) padding-box, var(--edge) border-box; border: 1px solid transparent;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.035), 0 16px 40px -22px rgb(0 0 0 / 0.95);
+}
+:root:not([data-theme]) .card-feature { background: linear-gradient(160deg, #1a1a1f, #0e0e11) padding-box, var(--edge-strong) border-box; }
+:root:not([data-theme]) .card-glow { background: var(--matte-raised) padding-box, var(--edge-strong) border-box; box-shadow: var(--glow); }
+:root:not([data-theme]) :is(.card-link, .item, .faq details):hover {
+  background: var(--matte-raised) padding-box, var(--edge-strong) border-box;
+}
+:root:not([data-theme]) .lane { background: linear-gradient(180deg, #111114, #0c0c0e) padding-box, var(--edge) border-box; border: 1px solid transparent; }
+:root:not([data-theme]) .band { background: linear-gradient(180deg, rgb(255 255 255 / 0.022), transparent); border-block-color: rgb(255 255 255 / 0.06); }
+:root:not([data-theme]) .cta-band {
+  background: radial-gradient(640px 260px at 0% 0%, rgb(255 255 255 / 0.07), transparent 70%), radial-gradient(640px 260px at 100% 100%, rgb(150 170 196 / 0.08), transparent 70%), var(--matte) padding-box, var(--edge-strong) border-box;
+  border: 1px solid transparent;
+}
+:root:not([data-theme]) .card .glyph, :root:not([data-theme]) .glyph:not(.void):not(.gold) {
+  color: #f1f3f6; background: linear-gradient(180deg, #24242a, #141418) padding-box, var(--edge-strong) border-box; border: 1px solid transparent;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.1), 0 6px 14px -6px rgb(0 0 0 / 0.9);
+}
+:root:not([data-theme]) .step::before { background: var(--metal-text); -webkit-background-clip: text; background-clip: text; color: transparent; }
+:root:not([data-theme]) .strip div { border-left: 0; position: relative; }
+:root:not([data-theme]) .strip div::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; border-radius: 2px; background: var(--metal); }
+
+/* ---- product shots: a chrome bezel and a matte title bar ----------------- */
+:root:not([data-theme]) .frame {
+  background: #0d0d10 padding-box, linear-gradient(180deg, rgb(255 255 255 / 0.36), rgb(255 255 255 / 0.1) 22%, rgb(255 255 255 / 0.05) 70%, rgb(255 255 255 / 0.16)) border-box;
+  border: 1px solid transparent;
+}
+:root:not([data-theme]) .window-bar { background: linear-gradient(180deg, #1d1d22, #141418); border-bottom-color: rgb(0 0 0 / 0.8); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08); color: #9298a1; }
+:root:not([data-theme]) .window-bar i { background: radial-gradient(circle at 35% 30%, #f4f5f7, #9aa0a8 55%, #5d626a); box-shadow: 0 0 0 1px rgb(0 0 0 / 0.6); opacity: 0.85; }
+:root:not([data-theme]) .frame figcaption { background: #0c0c0e; }
+
+/* ---- small things ---------------------------------------------------------- */
+:root:not([data-theme]) .ticks li::before { background: linear-gradient(180deg, #26262c, #141418); border-color: rgb(255 255 255 / 0.22); }
+:root:not([data-theme]) .ticks li::after { background: #f4f6f8; }
+:root:not([data-theme]) .feature-copy li::before { border-color: #d6dae2; }
+:root:not([data-theme]) :not(pre) > code { background: rgb(255 255 255 / 0.06); border-color: rgb(255 255 255 / 0.1); color: #eef1f5; }
+:root:not([data-theme]) blockquote { border-left-color: #c3c8d0; background: rgb(255 255 255 / 0.03); }
+:root:not([data-theme]) .faq summary::after { color: #e6e9ed; }
+:root:not([data-theme]) .search input { background: #0d0d10; border-color: rgb(255 255 255 / 0.14); }
+:root:not([data-theme]) .search input:focus { border-color: rgb(255 255 255 / 0.5); }
+:root:not([data-theme]) kbd.key { background: linear-gradient(180deg, #24242a, #151519); border-color: rgb(255 255 255 / 0.18); box-shadow: 0 1px 0 #000, inset 0 1px 0 rgb(255 255 255 / 0.1); }
+:root:not([data-theme]) .wiki-side li a[aria-current="page"], :root:not([data-theme]) .menu-panel a[aria-current="page"] { background: rgb(255 255 255 / 0.06); color: #fff; box-shadow: inset 2px 0 0 #e6e9ed; }
+:root:not([data-theme]) .wiki-toc li a.active { color: #fff; box-shadow: inset 2px 0 0 #e6e9ed; }
+:root:not([data-theme]) .swatch[aria-pressed="true"] { border-color: rgb(255 255 255 / 0.5); }
+:root:not([data-theme]) .status.released { color: #eef1f5; background: rgb(255 255 255 / 0.06); border-color: rgb(255 255 255 / 0.2); }
+:root:not([data-theme]) .spot::after { background: radial-gradient(380px circle at var(--mx, 50%) var(--my, 50%), rgb(255 255 255 / 0.07), transparent 62%); }
+
+/* ---- home ------------------------------------------------------------------ */
+:root:not([data-theme]) .home .hero::before {
+  background:
+    radial-gradient(640px 360px at 50% 14%, rgb(255 255 255 / 0.1), transparent 70%),
+    radial-gradient(520px 340px at 14% 64%, rgb(214 218 226 / 0.05), transparent 70%),
+    radial-gradient(520px 340px at 88% 58%, rgb(150 170 196 / 0.07), transparent 70%);
+}
+:root:not([data-theme]) .home .hero-sky { opacity: 0.55; }
+:root:not([data-theme]) .home .pill b { padding: 3px 10px; }
+/* A soft pool of light under the hero window, as if it stood on a dark, polished floor. */
+:root:not([data-theme]) .home .hero-shot::after {
+  content: ""; position: absolute; left: 8%; right: 8%; bottom: -46px; height: 70px; z-index: -1; pointer-events: none;
+  background: radial-gradient(50% 50% at 50% 50%, rgb(235 240 248 / 0.16), transparent 72%); filter: blur(6px);
+}
+:root:not([data-theme]) .marquee li { background: var(--matte) padding-box, var(--edge) border-box; border: 1px solid transparent; }
+:root:not([data-theme]) .marquee li::before,
+:root:not([data-theme]) .marquee li:nth-child(n)::before { background: radial-gradient(circle at 35% 30%, #fff, #a9afb8 60%, #6b7078); box-shadow: 0 0 10px rgb(255 255 255 / 0.35); }
+:root:not([data-theme]) .stats { background: var(--matte) padding-box, var(--edge) border-box; border: 1px solid transparent; }
+:root:not([data-theme]) .stat .num { background: var(--metal-text); -webkit-background-clip: text; background-clip: text; }
+:root:not([data-theme]) .band, :root:not([data-theme]) section.band { border-block: 0; position: relative; }
+:root:not([data-theme]) .band::before, :root:not([data-theme]) .band::after {
+  content: ""; position: absolute; left: 0; right: 0; height: 1px; pointer-events: none; background: var(--metal-line); opacity: 0.22;
+}
+:root:not([data-theme]) .band::before { top: 0; }
+:root:not([data-theme]) .band::after { bottom: 0; }
+
+/* ---- stage numbers (home's Rust stages, roadmap's stages) ------------------- */
+:root:not([data-theme]) .home .stage.is-done .stage-n { background: var(--metal); color: #0b0b0d; box-shadow: inset 0 1px 0 #fff, 0 0 0 1px rgb(0 0 0 / 0.6); }
+:root:not([data-theme]) .home .stages::before { background: linear-gradient(180deg, #eef1f5, var(--live) 50%, rgb(255 255 255 / 0.12)); }
+:root:not([data-theme]) .home .stage::before { background: var(--matte) padding-box, var(--edge) border-box; }
+:root:not([data-theme]) .home .stage.is-now::before { background: var(--matte-raised) padding-box, linear-gradient(180deg, rgb(87 255 154 / 0.45), rgb(87 255 154 / 0.12)) border-box; }
+
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-theme]) .shine { background-image: var(--metal-text); }
+}

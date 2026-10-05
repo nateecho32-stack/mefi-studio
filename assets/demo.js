@@ -58,6 +58,7 @@
     if (!T || !Fx || !picker || !stack || !cap) return;
     // Real Command-view screenshots that exist for these themes.
     var SHOTS = {
+      chrome: "assets/shots/thumb-command-chrome.webp",
       aurora: "assets/shots/thumb-command-aurora.webp",
       midnight: "assets/shots/thumb-command-midnight.webp",
       ember: "assets/shots/thumb-command-ember.webp",
@@ -74,7 +75,7 @@
     picker.appendChild(Fx.buildSwatches(duo));
 
     function show(id) {
-      var name = T.themes[id].name, has = Boolean(SHOTS[id]), used = has ? id : "aurora";
+      var name = T.themes[id].name, has = Boolean(SHOTS[id]), used = has ? id : T.defaultId;
       var img = qs("img[data-skin-theme=\"" + used + "\"]", stack);
       if (!img) {
         img = new Image();
@@ -91,11 +92,11 @@
       lead.textContent = has ? "Command view in " + name + "." : name + " is on the page around you.";
       cap.appendChild(lead);
       cap.appendChild(document.createTextNode(has
-        ? (id === "aurora" ? " Studio's default theme." : " A real screenshot from Studio, using sample data.")
-        : " This preview stays on Aurora because the site has no " + name + " screenshot yet."));
+        ? (id === T.defaultId ? " Studio's default theme from 0.5, with sample data." : " A real screenshot from Studio, using sample data.")
+        : " This preview stays on " + T.themes[T.defaultId].name + " because the site has no " + name + " screenshot yet."));
     }
     T.onChange(show);
-    if (T.current() !== "aurora") show(T.current());
+    if (T.current() !== T.defaultId) show(T.current());
   })();
 
   // ---- the walkthrough ------------------------------------------------------
