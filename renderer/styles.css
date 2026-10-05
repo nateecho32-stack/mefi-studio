@@ -5657,3 +5657,128 @@ html[data-shell="rail"] body:has(#workspace-layer:not([hidden])):not(:has(.works
   --graph-card-shadow: 0 5px 16px rgba(0, 0, 0, .26);
 }
 #overhead-canvas { border-color: var(--hairline); background: var(--bg); }
+
+/* ============================================================
+   The Map (layout v2; docs/unified-studio.md "The Map")
+   Under html[data-frame], which only shell.js writes while the 0.5
+   layout is on: Command is the Map place, drawn as the prototype draws
+   it. The classic top bar (brand, live pills, Add a task, find box and
+   toolbar) folds away; their homes in the frame are the status bar,
+   New task, Search (Ctrl K), the Map's own bar and View ▾, Settings ›
+   Map look and the player. The bar takes the top left of the free
+   area (Map | Fleet | Pipelines, Running only, View ▾), the work rail
+   is the inspector column at its right edge, the four state colours
+   sit bottom left beside the Legend, and Fit and zoom under the tree.
+   The size tokens are re-pointed at the 0.5 type ladder so nothing in
+   it reads under 12 px. Without the frame none of it is drawn.
+   ============================================================ */
+#map-bar, #map-zoom, #map-legend { display: none; }
+html[data-frame] #idle-hud {
+  --fs-2xs: var(--f12, 12px); --fs-xs: var(--f12, 12px); --fs-sm: var(--f125, 12.5px); --fs-md: var(--f135, 13.5px);
+  --map-fs: var(--f125, 12.5px);
+  --map-fill: color-mix(in srgb, var(--panel-solid) 90%, transparent);
+  --command-rail-width: clamp(320px, 24vw, 388px);
+  --command-panel-top: 60px; --command-panel-bottom: 60px;
+  --map-right: calc(var(--command-rail-width) + 16px);
+}
+html[data-frame] #idle-hud :is(.cmd-top, .cmd-hint, #cmd-usage-toggle, #cmd-usage-pop) { display: none; }
+
+/* the bar: the place's pages, Running only and View ▾ */
+html[data-frame] #idle-hud #map-bar {
+  position: absolute; top: 14px; left: 16px; z-index: 3;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  max-width: calc(100% - 32px - var(--map-right)); pointer-events: auto;
+  font: 500 var(--map-fs)/1.2 var(--font-ui);
+}
+html[data-frame] #idle-hud .map-pages { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--hairline); border-radius: 10px; background: var(--map-fill); }
+html[data-frame] #idle-hud .map-page {
+  min-height: 0; height: 26px; padding: 0 11px; border: 0; border-radius: 7px;
+  background: transparent; color: var(--muted); font: inherit; white-space: nowrap;
+}
+html[data-frame] #idle-hud .map-page:hover { background: color-mix(in srgb, var(--ivory) 7%, transparent); color: var(--ivory); }
+html[data-frame] #idle-hud .map-page[aria-current="page"] { background: color-mix(in srgb, var(--ivory) 10%, var(--panel-solid)); color: var(--ivory); font-weight: 650; box-shadow: inset 0 0 0 1px var(--hairline); }
+html[data-frame] #idle-hud .map-chip {
+  min-height: 0; height: 28px; padding: 0 9px; gap: 6px;
+  border: 1px solid var(--hairline-strong); border-radius: 9px;
+  background: var(--map-fill); color: var(--muted); font: inherit;
+}
+html[data-frame] #idle-hud .map-chip .glyph { width: 14px; height: 14px; }
+html[data-frame] #idle-hud .map-chip .chev { width: 12px; height: 12px; transition: rotate var(--motion-fast) var(--ease-out); }
+html[data-frame] #idle-hud .map-chip:hover { color: var(--ivory); border-color: var(--hairline-strong); background: color-mix(in srgb, var(--ivory) 6%, var(--panel-solid)); }
+html[data-frame] #idle-hud .map-chip:is([aria-pressed="true"], [aria-expanded="true"]) { color: var(--ivory); border-color: var(--gold); background: color-mix(in srgb, var(--gold) 16%, var(--panel-solid)); }
+html[data-frame] #idle-hud #map-view-menu[aria-expanded="true"] .chev { rotate: 180deg; }
+
+/* View ▾: Layout, Labels, Camera, View and the way to Settings › Map look */
+html[data-frame] #idle-hud #map-view-pop {
+  top: 56px; left: 16px; right: auto; width: 308px; max-width: calc(100% - 32px); max-height: calc(100% - 72px);
+  gap: 0; padding: 4px 14px 12px; border: 1px solid var(--hairline); border-radius: 14px;
+  background: var(--panel-solid); box-shadow: var(--shadow-3); backdrop-filter: none;
+  font: 450 var(--map-fs)/1.35 var(--font-ui); color: var(--ivory);
+}
+html[data-frame] #idle-hud .map-menu-group { display: grid; gap: 6px; padding: 10px 0 11px; }
+html[data-frame] #idle-hud .map-menu-group + .map-menu-group, html[data-frame] #idle-hud .map-menu-foot { border-top: 1px solid var(--hairline); }
+html[data-frame] #idle-hud .map-menu-head { display: flex; align-items: center; gap: 6px; font: 650 var(--f13, 13px)/1.3 var(--font-ui); color: var(--ivory); }
+html[data-frame] #idle-hud #map-view-pop kbd { min-width: 0; padding: 0 5px; font: 600 var(--f12, 12px)/1.5 var(--font-ui); color: var(--muted); }
+html[data-frame] #idle-hud .map-layouts { display: grid; gap: 2px; }
+html[data-frame] #idle-hud .map-opt {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10px; width: 100%;
+  min-height: 0; padding: 6px 8px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--ivory); font: inherit; text-align: left;
+}
+html[data-frame] #idle-hud .map-opt small { color: var(--muted); font-size: var(--f12, 12px); }
+html[data-frame] #idle-hud .map-opt:is(:hover, :focus-visible) { background: color-mix(in srgb, var(--ivory) 7%, transparent); }
+html[data-frame] #idle-hud .map-opt:is([aria-checked="true"]) { background: color-mix(in srgb, var(--gold) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 30%, transparent); }
+html[data-frame] #idle-hud .map-opt:disabled { opacity: .55; cursor: default; }
+html[data-frame] #idle-hud .map-seg { display: flex; gap: 2px; padding: 3px; border: 1px solid var(--hairline); border-radius: 10px; background: color-mix(in srgb, var(--ivory) 4%, transparent); }
+html[data-frame] #idle-hud .map-seg button {
+  flex: 1 1 0; min-width: 0; min-height: 0; height: 26px; padding: 0 8px; border: 0; border-radius: 7px;
+  background: transparent; color: var(--muted); font: inherit;
+}
+html[data-frame] #idle-hud .map-seg button:is(:hover, :focus-visible) { color: var(--ivory); background: color-mix(in srgb, var(--ivory) 6%, transparent); }
+html[data-frame] #idle-hud .map-seg button[aria-checked="true"] { background: color-mix(in srgb, var(--ivory) 10%, var(--panel-solid)); color: var(--ivory); font-weight: 650; box-shadow: inset 0 0 0 1px var(--hairline); }
+html[data-frame] #idle-hud .map-menu-foot { display: flex; align-items: center; gap: 10px; padding-top: 10px; }
+html[data-frame] #idle-hud .map-menu-foot > span { display: grid; flex: 1; min-width: 0; }
+html[data-frame] #idle-hud .map-menu-foot small { color: var(--muted); font-size: var(--f12, 12px); }
+html[data-frame] #idle-hud #map-look { min-height: 28px; padding: 0 10px; font: 600 var(--map-fs) var(--font-ui); }
+
+/* the work rail as the Map's inspector column */
+html[data-frame] #idle-hud .cmd-rail,
+html[data-frame] body.command-focus #idle-hud .cmd-rail {
+  top: 0; bottom: 0; right: 0; width: var(--command-rail-width);
+  border: 0; border-left: 1px solid var(--hairline); border-radius: 0;
+  background: var(--surface-rail); box-shadow: none; backdrop-filter: none;
+}
+html[data-frame] #idle-hud .cmd-rail.rail-collapsed { bottom: auto; border-bottom: 1px solid var(--hairline); }
+
+/* the state colours beside the Legend, bottom left */
+html[data-frame] #idle-hud .cmd-legend { display: flex; left: 16px; bottom: 12px; flex-direction: row; flex-wrap: wrap-reverse; align-items: center; max-width: calc(100% - 32px - var(--map-right)); }
+html[data-frame] #idle-hud .cmd-legend .legend-list { flex-basis: 100%; max-width: 320px; font-size: var(--f12, 12px); }
+html[data-frame] #idle-hud #map-legend {
+  display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 6px 10px;
+  border: 1px solid var(--hairline); border-radius: 9px; background: var(--map-fill);
+  color: var(--muted); font: 450 var(--f12, 12px)/1.3 var(--font-ui);
+}
+html[data-frame] #idle-hud .map-legend-row { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+html[data-frame] #idle-hud .map-legend-row .sw { width: 9px; height: 9px; }
+html[data-frame] #idle-hud #idle-legend-toggle { min-height: 30px; font-size: var(--f12, 12px); }
+
+/* Fit and zoom, under the tree */
+html[data-frame] #idle-hud #map-zoom {
+  position: absolute; right: calc(var(--map-right) + 0px); bottom: 12px; z-index: 2;
+  display: inline-flex; overflow: hidden; border: 1px solid var(--hairline-strong); border-radius: 9px;
+  background: var(--map-fill); pointer-events: auto;
+}
+html[data-frame] #idle-hud #map-zoom button {
+  min-height: 0; height: 28px; min-width: 30px; padding: 0 8px; gap: 6px; border: 0; border-radius: 0;
+  background: transparent; color: var(--muted); font: 500 var(--map-fs) var(--font-ui);
+}
+html[data-frame] #idle-hud #map-zoom button + button { border-left: 1px solid var(--hairline); }
+html[data-frame] #idle-hud #map-zoom button:hover { background: color-mix(in srgb, var(--ivory) 8%, transparent); color: var(--ivory); }
+html[data-frame] #idle-hud #map-zoom .glyph { width: 14px; height: 14px; }
+
+/* Smaller windows keep the classic rail widths; the state colours give way first, then the Legend. */
+@media (max-width: 1100px) { html[data-frame] #idle-hud { --command-rail-width: 288px; } }
+@media (max-width: 760px) {
+  html[data-frame] #idle-hud { --command-rail-width: 252px; }
+  html[data-frame] #idle-hud #map-legend { display: none; }
+}
