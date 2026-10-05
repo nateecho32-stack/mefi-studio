@@ -783,10 +783,12 @@
   // under the headings the prototype gives a group ("Updates and help", "Advanced"; "Context for agents", "Monitor"). Each
   // row runs what the place's own list runs: MefiBooklet.jumpToSettings, or MefiNav.go for a place that is a page of its own
   // (Size and density), and for Team what MefiAgents.teamPlaces says, with the pages a place holds (Models: Catalog and
-  // Performance) under it while you are in it. The Map lists its three pages. booklet.js and agents.js say when the place
-  // changes (mefi:settings-place, mefi:team-place), and the breadcrumb reads Settings / <place> and Team / <place>.
+  // Performance) under it while you are in it. The Map keeps the session list in the column (the prototype's map is the
+  // sessions drawn as a graph); its three pages are the switch over each page (renderer/idle.js #map-bar, nav.js
+  // syncMapSwitch), and only the breadcrumb names them here. booklet.js and agents.js say when the place changes
+  // (mefi:settings-place, mefi:team-place), and the breadcrumb reads Settings / <place> and Team / <place>.
   const placeOfRoute = (n, id) => { try { return layoutOn() && typeof n?.placeOf === "function" ? n.placeOf(id) ?? null : null; } catch { return null; } };
-  const MAP_PAGES = [["command", "Map", "g-command", {}], ["fleet", "Fleet", "g-fleet", {}], ["agent-brain", "Pipelines", "g-route", { tab: "live" }]];
+  const MAP_PAGES = [["command", "Map"], ["fleet", "Fleet"], ["agent-brain", "Pipelines"]];
   function settingsModel(n, id) {
     let places = null;
     try { places = window.MefiBooklet?.settingsPlaces?.() ?? null; } catch { places = null; }
@@ -835,13 +837,6 @@
     const rows = places.map((place) => ({ kind: "row", key: `friends:${place.id}`, label: String(place.label), glyph: typeof place.glyph === "string" ? place.glyph : null, current: id === "friends-page" && Boolean(place.current), run: place.run }));
     return { section: "friends", title: "Friends", rows };
   }
-  function mapModel(n, id) {
-    const tab = (() => { try { return window.MefiAgentBrain?.tab?.() ?? null; } catch { return null; } })();
-    const rows = MAP_PAGES.filter(([route]) => n?.get?.(route)).map(([route, label, glyph, params]) => ({
-      kind: "row", key: `map:${route}`, label, glyph, current: id === route && (route !== "agent-brain" || tab === "live" || tab == null), run: () => n.go(route, params),
-    }));
-    return rows.length ? { section: "map", title: "Map", rows } : null;
-  }
   // Where you are, past the project, in a place that has places of its own; null leaves it to the section and the page.
   function placeTrail(n, id, dest) {
     const place = placeOfRoute(n, id);
@@ -872,8 +867,10 @@
     const id = n?.current?.() ?? null;
     if (isHomeRoute(id)) return null;
     const place = placeOfRoute(n, id);
-    if (place === "settings" || place === "team" || place === "map" || place === "friends") {
-      const model = place === "settings" ? settingsModel(n, id) : place === "team" ? teamModel(n, id) : place === "friends" ? friendsModel(n, id) : mapModel(n, id);
+    // The Map's pages keep the session list (the column's own panels): no page list over them.
+    if (place === "map") return null;
+    if (place === "settings" || place === "team" || place === "friends") {
+      const model = place === "settings" ? settingsModel(n, id) : place === "team" ? teamModel(n, id) : friendsModel(n, id);
       if (model) return model;
     }
     const section = sectionOfRoute(n, id);

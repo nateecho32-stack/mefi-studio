@@ -2720,6 +2720,38 @@
       else button.removeAttribute("aria-current");
     }
     paintRail();
+    syncMapSwitch(id);
+  }
+
+  // ---- the 0.5 layout's Map pages (the prototype's mapView "maptools") ----
+  // Map, Fleet and Pipelines are one place with a switch over each page. The Map draws its own over the tree
+  // (renderer/idle.js #map-bar); Fleet's and the Agent brain's heads get the same three buttons here, made once per head
+  // and marked on every paint. Pipelines is the Agent brain's live tab. Without the layout nothing is added.
+  const MAP_SWITCH = [["command", "Map", null], ["fleet", "Fleet", null], ["agent-brain", "Pipelines", { tab: "live" }]];
+  function syncMapSwitch(id = current()) {
+    if (!v2Places() || typeof document.querySelectorAll !== "function") return;
+    const tab = (() => { try { return window.MefiAgentBrain?.tab?.() ?? null; } catch { return null; } })();
+    for (const head of document.querySelectorAll("#fleet-overlay .sheet-head, #agent-brain-overlay .sheet-head")) {
+      let group = head.querySelector?.(".map-pages");
+      if (!group) {
+        group = document.createElement("div");
+        group.className = "map-pages";
+        group.setAttribute("role", "group");
+        group.setAttribute("aria-label", "Map pages");
+        for (const [route, label, params] of MAP_SWITCH) {
+          const button = document.createElement("button");
+          button.type = "button"; button.className = "map-page"; button.dataset.nav = route; button.textContent = label;
+          if (params) button.dataset.navParams = JSON.stringify(params);
+          group.append(button);
+        }
+        const title = head.querySelector?.(".sheet-title");
+        if (typeof title?.after === "function") title.after(group); else head.append?.(group);
+      }
+      for (const button of Array.from(group.children ?? [])) {
+        const on = button.dataset.nav === id && (id !== "agent-brain" || tab === "live");
+        if (on) button.setAttribute("aria-current", "page"); else button.removeAttribute("aria-current");
+      }
+    }
   }
 
   window.addEventListener("mefi:nav", paintCurrent);

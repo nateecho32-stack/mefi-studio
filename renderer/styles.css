@@ -5690,13 +5690,14 @@ html[data-frame] #idle-hud #map-bar {
   max-width: calc(100% - 32px - var(--map-right)); pointer-events: auto;
   font: 500 var(--map-fs)/1.2 var(--font-ui);
 }
-html[data-frame] #idle-hud .map-pages { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--hairline); border-radius: 10px; background: var(--map-fill); }
-html[data-frame] #idle-hud .map-page {
+/* The switch over each of the Map's pages: the Map's bar, and Fleet's and the Agent brain's heads (nav.js syncMapSwitch). */
+html[data-frame] :is(#idle-hud, #fleet-overlay, #agent-brain-overlay) .map-pages { display: inline-flex; flex: none; gap: 2px; padding: 3px; border: 1px solid var(--hairline); border-radius: 10px; background: var(--map-fill, color-mix(in srgb, var(--panel-solid) 90%, transparent)); font: 500 var(--f125, 12.5px)/1.2 var(--font-ui); }
+html[data-frame] :is(#idle-hud, #fleet-overlay, #agent-brain-overlay) .map-page {
   min-height: 0; height: 26px; padding: 0 11px; border: 0; border-radius: 7px;
   background: transparent; color: var(--muted); font: inherit; white-space: nowrap;
 }
-html[data-frame] #idle-hud .map-page:hover { background: color-mix(in srgb, var(--ivory) 7%, transparent); color: var(--ivory); }
-html[data-frame] #idle-hud .map-page[aria-current="page"] { background: color-mix(in srgb, var(--ivory) 10%, var(--panel-solid)); color: var(--ivory); font-weight: 650; box-shadow: inset 0 0 0 1px var(--hairline); }
+html[data-frame] :is(#idle-hud, #fleet-overlay, #agent-brain-overlay) .map-page:hover { background: color-mix(in srgb, var(--ivory) 7%, transparent); color: var(--ivory); }
+html[data-frame] :is(#idle-hud, #fleet-overlay, #agent-brain-overlay) .map-page[aria-current="page"] { background: color-mix(in srgb, var(--ivory) 10%, var(--panel-solid)); color: var(--ivory); font-weight: 650; box-shadow: inset 0 0 0 1px var(--hairline); }
 html[data-frame] #idle-hud .map-chip {
   min-height: 0; height: 28px; padding: 0 9px; gap: 6px;
   border: 1px solid var(--hairline-strong); border-radius: 9px;

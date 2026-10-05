@@ -5700,13 +5700,14 @@ html[data-frame] #idle-hud #map-bar {
   max-width: calc(100% - 32px - var(--map-right)); pointer-events: auto;
   font: 500 var(--map-fs)/1.2 var(--font-ui);
 }
-html[data-frame] #idle-hud .map-pages { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--hairline); border-radius: 10px; background: var(--map-fill); }
-html[data-frame] #idle-hud .map-page {
+/* The switch over each of the Map's pages: the Map's bar, and Fleet's and the Agent brain's heads (nav.js syncMapSwitch). */
+html[data-frame] :is(#idle-hud, #fleet-overlay, #agent-brain-overlay) .map-pages { display: inline-flex; flex: none; gap: 2px; padding: 3px; border: 1px solid var(--hairline); border-radius: 10px; background: var(--map-fill, color-mix(in srgb, var(--panel-solid) 90%, transparent)); font: 500 var(--f125, 12.5px)/1.2 var(--font-ui); }
+html[data-frame] :is(#idle-hud, #fleet-overlay, #agent-brain-overlay) .map-page {
   min-height: 0; height: 26px; padding: 0 11px; border: 0; border-radius: 7px;
   background: transparent; color: var(--muted); font: inherit; white-space: nowrap;
 }
-html[data-frame] #idle-hud .map-page:hover { background: color-mix(in srgb, var(--ivory) 7%, transparent); color: var(--ivory); }
-html[data-frame] #idle-hud .map-page[aria-current="page"] { background: color-mix(in srgb, var(--ivory) 10%, var(--panel-solid)); color: var(--ivory); font-weight: 650; box-shadow: inset 0 0 0 1px var(--hairline); }
+html[data-frame] :is(#idle-hud, #fleet-overlay, #agent-brain-overlay) .map-page:hover { background: color-mix(in srgb, var(--ivory) 7%, transparent); color: var(--ivory); }
+html[data-frame] :is(#idle-hud, #fleet-overlay, #agent-brain-overlay) .map-page[aria-current="page"] { background: color-mix(in srgb, var(--ivory) 10%, var(--panel-solid)); color: var(--ivory); font-weight: 650; box-shadow: inset 0 0 0 1px var(--hairline); }
 html[data-frame] #idle-hud .map-chip {
   min-height: 0; height: 28px; padding: 0 9px; gap: 6px;
   border: 1px solid var(--hairline-strong); border-radius: 9px;
@@ -26132,6 +26133,38 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       else button.removeAttribute("aria-current");
     }
     paintRail();
+    syncMapSwitch(id);
+  }
+
+  // ---- the 0.5 layout's Map pages (the prototype's mapView "maptools") ----
+  // Map, Fleet and Pipelines are one place with a switch over each page. The Map draws its own over the tree
+  // (renderer/idle.js #map-bar); Fleet's and the Agent brain's heads get the same three buttons here, made once per head
+  // and marked on every paint. Pipelines is the Agent brain's live tab. Without the layout nothing is added.
+  const MAP_SWITCH = [["command", "Map", null], ["fleet", "Fleet", null], ["agent-brain", "Pipelines", { tab: "live" }]];
+  function syncMapSwitch(id = current()) {
+    if (!v2Places() || typeof document.querySelectorAll !== "function") return;
+    const tab = (() => { try { return window.MefiAgentBrain?.tab?.() ?? null; } catch { return null; } })();
+    for (const head of document.querySelectorAll("#fleet-overlay .sheet-head, #agent-brain-overlay .sheet-head")) {
+      let group = head.querySelector?.(".map-pages");
+      if (!group) {
+        group = document.createElement("div");
+        group.className = "map-pages";
+        group.setAttribute("role", "group");
+        group.setAttribute("aria-label", "Map pages");
+        for (const [route, label, params] of MAP_SWITCH) {
+          const button = document.createElement("button");
+          button.type = "button"; button.className = "map-page"; button.dataset.nav = route; button.textContent = label;
+          if (params) button.dataset.navParams = JSON.stringify(params);
+          group.append(button);
+        }
+        const title = head.querySelector?.(".sheet-title");
+        if (typeof title?.after === "function") title.after(group); else head.append?.(group);
+      }
+      for (const button of Array.from(group.children ?? [])) {
+        const on = button.dataset.nav === id && (id !== "agent-brain" || tab === "live");
+        if (on) button.setAttribute("aria-current", "page"); else button.removeAttribute("aria-current");
+      }
+    }
   }
 
   window.addEventListener("mefi:nav", paintCurrent);
@@ -97336,10 +97369,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // under the headings the prototype gives a group ("Updates and help", "Advanced"; "Context for agents", "Monitor"). Each
   // row runs what the place's own list runs: MefiBooklet.jumpToSettings, or MefiNav.go for a place that is a page of its own
   // (Size and density), and for Team what MefiAgents.teamPlaces says, with the pages a place holds (Models: Catalog and
-  // Performance) under it while you are in it. The Map lists its three pages. booklet.js and agents.js say when the place
-  // changes (mefi:settings-place, mefi:team-place), and the breadcrumb reads Settings / <place> and Team / <place>.
+  // Performance) under it while you are in it. The Map keeps the session list in the column (the prototype's map is the
+  // sessions drawn as a graph); its three pages are the switch over each page (renderer/idle.js #map-bar, nav.js
+  // syncMapSwitch), and only the breadcrumb names them here. booklet.js and agents.js say when the place changes
+  // (mefi:settings-place, mefi:team-place), and the breadcrumb reads Settings / <place> and Team / <place>.
   const placeOfRoute = (n, id) => { try { return layoutOn() && typeof n?.placeOf === "function" ? n.placeOf(id) ?? null : null; } catch { return null; } };
-  const MAP_PAGES = [["command", "Map", "g-command", {}], ["fleet", "Fleet", "g-fleet", {}], ["agent-brain", "Pipelines", "g-route", { tab: "live" }]];
+  const MAP_PAGES = [["command", "Map"], ["fleet", "Fleet"], ["agent-brain", "Pipelines"]];
   function settingsModel(n, id) {
     let places = null;
     try { places = window.MefiBooklet?.settingsPlaces?.() ?? null; } catch { places = null; }
@@ -97388,13 +97423,6 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const rows = places.map((place) => ({ kind: "row", key: `friends:${place.id}`, label: String(place.label), glyph: typeof place.glyph === "string" ? place.glyph : null, current: id === "friends-page" && Boolean(place.current), run: place.run }));
     return { section: "friends", title: "Friends", rows };
   }
-  function mapModel(n, id) {
-    const tab = (() => { try { return window.MefiAgentBrain?.tab?.() ?? null; } catch { return null; } })();
-    const rows = MAP_PAGES.filter(([route]) => n?.get?.(route)).map(([route, label, glyph, params]) => ({
-      kind: "row", key: `map:${route}`, label, glyph, current: id === route && (route !== "agent-brain" || tab === "live" || tab == null), run: () => n.go(route, params),
-    }));
-    return rows.length ? { section: "map", title: "Map", rows } : null;
-  }
   // Where you are, past the project, in a place that has places of its own; null leaves it to the section and the page.
   function placeTrail(n, id, dest) {
     const place = placeOfRoute(n, id);
@@ -97425,8 +97453,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const id = n?.current?.() ?? null;
     if (isHomeRoute(id)) return null;
     const place = placeOfRoute(n, id);
-    if (place === "settings" || place === "team" || place === "map" || place === "friends") {
-      const model = place === "settings" ? settingsModel(n, id) : place === "team" ? teamModel(n, id) : place === "friends" ? friendsModel(n, id) : mapModel(n, id);
+    // The Map's pages keep the session list (the column's own panels): no page list over them.
+    if (place === "map") return null;
+    if (place === "settings" || place === "team" || place === "friends") {
+      const model = place === "settings" ? settingsModel(n, id) : place === "team" ? teamModel(n, id) : friendsModel(n, id);
       if (model) return model;
     }
     const section = sectionOfRoute(n, id);

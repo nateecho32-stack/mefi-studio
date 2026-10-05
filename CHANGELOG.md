@@ -7,6 +7,19 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **The Command view is the Map in the 0.5 layout, as in the prototype.** With
+  the new layout on (`?layout=v2`), the Map keeps your sessions in the list
+  beside it, and a small bar over the tree holds Map | Fleet | Pipelines,
+  "Running only" (everything that is not running dims, remembered on this
+  PC) and View ▾: the five layouts, Labels (L), Camera (C), flat map or 3D
+  orbit (V) with Spin (Space), and a way to Settings › Map look. The colours
+  of the four states (Running, Needs you, Review, Done) sit bottom left beside
+  the Legend, and Fit and zoom bottom right. Fleet and Pipelines (the Agent
+  brain's live work) carry the same Map | Fleet | Pipelines switch in their
+  heads. The classic toolbar's choices are the same settings; in the new
+  layout its top bar folds away (Search, New task and the player live in the
+  frame). N opens a new task and S opens Search on the Map. The classic
+  layout is unchanged.
 - **Friends is a place of its own in the 0.5 layout.** With the new layout on
   (`?layout=v2`), the rail's Friends opens a page instead of the companion's
   bubbles: Rooms, Your PCs and Playground in the list beside it, one at a

@@ -403,18 +403,18 @@ test("Team in the list column: agents.js's places under the prototype's headings
   assert.deepEqual(plain(page.window.MefiShell.pages()), { shown: true, section: "team" });
 });
 
-test("the Map in the list column: Map, Fleet and Pipelines, and the breadcrumb names them as the prototype does", async () => {
+test("the Map's pages keep the session list in the list column, as the prototype does, and the breadcrumb names them", async () => {
   const page = withPlaces("fleet");
   page.window.MefiAgentBrain = { tab: () => "live" };
   page.window.dispatchEvent({ type: "mefi:nav" });
-  assert.equal(page.$("shell-pages").querySelector(".shell-pages-title").textContent, "Map");
-  assert.deepEqual(listed(page), ["Map", "Fleet *", "Pipelines"]);
+  // The Map is the sessions drawn as a graph: the column stays the session list, and Map, Fleet and Pipelines are the
+  // switch over each page (renderer/idle.js #map-bar, renderer/nav.js syncMapSwitch).
+  assert.equal(page.$("shell-pages").hidden, true, "no page list over the Map's pages");
+  assert.equal(plain(page.window.MefiShell.pages()).shown, false);
   assert.deepEqual(crumbsOf(page), ["Fixture", "Map", "Fleet"]);
-  await page.$("shell-pages").querySelector('[data-page="map:agent-brain"]').click();
-  assert.deepEqual(page.calls.go.at(-1), ["agent-brain", { tab: "live" }], "Pipelines is the Agent brain's live tab");
   page.current = "agent-brain";
   page.window.dispatchEvent({ type: "mefi:nav" });
-  assert.deepEqual(listed(page), ["Map", "Fleet", "Pipelines *"]);
+  assert.equal(page.$("shell-pages").hidden, true);
   assert.deepEqual(crumbsOf(page), ["Fixture", "Map", "Pipelines"]);
   page.current = "command";
   page.window.dispatchEvent({ type: "mefi:nav" });
