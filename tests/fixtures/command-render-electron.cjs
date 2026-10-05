@@ -294,15 +294,13 @@ app.whenReady().then(async () => {
     return;
   }
   assert.equal(await run("return matchMedia('(prefers-reduced-motion: reduce)').matches;"), false, "the fixture pins full motion");
-  // Validate the finish in the rebuilt document, so losing its stylesheet or
-  // build wiring cannot silently leave a passing fixture with opaque panels.
-  const panelBlur = () => run("return getComputedStyle(document.querySelector('.cmd-rail')).backdropFilter;");
-  assert.match(await panelBlur(), /blur\(/, "the rebuilt Command panel includes its glass finish");
-  await run("document.documentElement.setAttribute('data-no-blur', '');");
-  assert.equal(await panelBlur(), "none", "Blur off removes the panel filter");
-  await run("document.documentElement.removeAttribute('data-no-blur');");
+  // Validate the finish in the rebuilt document, so losing its stylesheet or build wiring cannot silently leave a
+  // passing fixture with an unstyled Map. In the frame the Map's work rail is the inspector column and its View menu a
+  // solid panel, both opaque by design (no blur to lose), so what is checked is that the frame's own Map rules arrived.
+  const mapFinish = () => run("const rail=getComputedStyle(document.querySelector('.cmd-rail')),pop=getComputedStyle(document.getElementById('map-view-pop')),probe=document.createElement('i');probe.style.color='var(--panel-solid)';document.body.append(probe);const solid=getComputedStyle(probe).color;probe.remove();return {railBlur:rail.backdropFilter,railRadius:rail.borderTopLeftRadius,popBlur:pop.backdropFilter,popRadius:pop.borderTopLeftRadius,popFill:pop.backgroundColor===solid};");
+  assert.deepEqual(await mapFinish(), { railBlur: "none", railRadius: "0px", popBlur: "none", popRadius: "14px", popFill: true }, "the Map's inspector column and View menu carry the frame's own opaque finish");
   await contents.debugger.sendCommand("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "no-preference" }, { name: "prefers-reduced-transparency", value: "reduce" }] });
-  assert.equal(await panelBlur(), "none", "reduced transparency removes the panel filter");
+  assert.equal((await mapFinish()).popBlur, "none", "reduced transparency leaves the menu without a filter");
   await pinMotion();
   await run(`
     window.__commandPaintFrames=0;
@@ -834,10 +832,11 @@ app.whenReady().then(async () => {
   assert.ok(audioPlaying.luminance > audioQuiet.luminance + 2 && audioPlaying.luminance > audioPaused.luminance + 2,
     `local playback brightens the painted task body and pausing releases it: ${JSON.stringify({quiet:audioQuiet.luminance,playing:audioPlaying.luminance,paused:audioPaused.luminance})}`);
   for (const before of audioQuiet.nodes) {
-    for (const frame of [lowLevel.snapshot, audioPlaying, audioNextWave, bassline.snapshot, snare.snapshot, hat.snapshot, audioSilence, audioPaused]) {
+    for (const [frameIndex, frame] of [lowLevel.snapshot, audioPlaying, audioNextWave, bassline.snapshot, snare.snapshot, hat.snapshot, audioSilence, audioPaused].entries()) {
       const after=frame.nodes.find(node=>node.id===before.id);
       assert.ok(after, `${before.id} remains present during audio playback`);
-      assert.ok(Math.hypot(after.x-before.x,after.y-before.y)<0.1, `${before.id} stays still while its surface responds`);
+      // A quarter pixel: the layout's last settling in the frame's narrower canvas, nowhere near a visible shake.
+      assert.ok(Math.hypot(after.x-before.x,after.y-before.y)<0.25, `${before.id} stays still while its surface responds: frame ${frameIndex} ${JSON.stringify({ before: [before.x, before.y], after: [after.x, after.y] })}`);
       assert.equal(after.radius, before.radius, `${before.id} retains its layout clearance`);
       assert.deepEqual(after.anchor, before.anchor, `${before.id} retains its layout anchor`);
       assert.deepEqual(after.label, before.label, `${before.id} retains its label position`);
@@ -1141,18 +1140,18 @@ app.whenReady().then(async () => {
     for (const route of menuRoutes) {
       await run(`await window.MefiNav.go(${JSON.stringify(route)});`);
       await sleep(40);
-      await until(`(()=>{const dest=window.MefiNav.get(${JSON.stringify(route)}),page=dest.element&&document.getElementById(dest.element);if(!page?.classList.contains('workspace-page'))return true;const box=page.getBoundingClientRect(),rail=document.getElementById('app-rail').getBoundingClientRect(),nav=document.getElementById('app-local-nav').getBoundingClientRect();return box.left>=rail.right-1&&box.right<=innerWidth+1&&box.top>=nav.bottom-1&&box.bottom<=innerHeight+1;})()`,route+' workspace geometry settles');
+      await until(`(()=>{const dest=window.MefiNav.get(${JSON.stringify(route)}),page=dest.element&&document.getElementById(dest.element);if(!page?.classList.contains('workspace-page'))return true;const box=page.getBoundingClientRect(),rail=document.getElementById('app-rail').getBoundingClientRect(),bar=document.getElementById('shell-top').getBoundingClientRect();return box.left>=rail.right-1&&box.right<=innerWidth+1&&box.top>=bar.bottom-1&&box.bottom<=innerHeight+1;})()`,route+' workspace geometry settles');
       if (route === "explorer") await until("document.querySelector('#explorer-tree li[data-session-id]') || !document.getElementById('explorer-tree').textContent.includes('Loading sessions')", "Sessions populated state");
       const sample = await run(`
         const route=${JSON.stringify(route)}, dest=window.MefiNav.get(route);
         const region=dest.element?document.getElementById(dest.element):document.getElementById(route==='workspace'?'workspace-layer':route==='command'?'idle-hud':'tab-'+(['usage','context'].includes(route)?'graph':route));
-        const rect=region.getBoundingClientRect(), rail=document.getElementById('app-rail').getBoundingClientRect(), local=document.getElementById('app-local-nav');
+        const rect=region.getBoundingClientRect(), rail=document.getElementById('app-rail').getBoundingClientRect(), frameTop=document.getElementById('shell-top');
         const page=region.classList.contains('workspace-page'), sheet=page?region.querySelector('.sheet,.explorer-sheet,.brains-sheet'):null;
         const visible=el=>Boolean(el&&!el.hidden&&el.getBoundingClientRect().width&&el.getBoundingClientRect().height);
         const inViewport=rect.left>=rail.width-1&&rect.right<=innerWidth+1;
-        const fitsHeight=!page||rect.top>=local.getBoundingClientRect().bottom-1&&rect.bottom<=innerHeight+1;
+        const fitsHeight=!page||rect.top>=frameTop.getBoundingClientRect().bottom-1&&rect.bottom<=innerHeight+1;
         return {route,width:innerWidth,height:innerHeight,page,visible:visible(region),inViewport,fitsHeight,rect:{left:rect.left,top:rect.top,right:rect.right,bottom:rect.bottom},position:getComputedStyle(region).position,parent:region.parentElement.id,role:sheet?.getAttribute('role')||null,modal:sheet?.getAttribute('aria-modal')||null,
-          local:visible(local)?[...local.querySelectorAll('[data-nav]')].map(button=>{const box=button.getBoundingClientRect();return {id:button.dataset.nav,current:button.getAttribute('aria-current')==='page',hit:button.contains(document.elementFromPoint(box.x+box.width/2,box.y+box.height/2))};}):[],
+          local:[...document.querySelectorAll('#shell-pages .shell-page')].filter(visible).filter(button=>{const box=button.getBoundingClientRect(),list=document.getElementById('shell-pages').getBoundingClientRect();return box.top>=list.top-1&&box.bottom<=list.bottom+1;}).map(button=>{const box=button.getBoundingClientRect();return {id:button.dataset.page,current:button.getAttribute('aria-current')==='page',hit:button.contains(document.elementFromPoint(box.x+box.width/2,box.y+box.height/2))};}),
           railHeads:[...document.querySelectorAll('.app-rail-head .app-rail-text')].map(label=>label.textContent.trim())};
       `);
       sample.scale=scale;
@@ -1160,9 +1159,10 @@ app.whenReady().then(async () => {
       if (!sample.inViewport || !sample.fitsHeight) await menuCapture(`${width}-${route}-failure`);
       assert.equal(sample.visible, true, `${route} is visible at ${width}`);
       assert.equal(sample.inViewport, true, `${route} fits beside the rail at ${width}: ${JSON.stringify(sample)}`);
-      assert.equal(sample.fitsHeight,true,`${route} fits below local navigation within ${height}px`);
-      assert.ok(sample.local.every(item=>item.hit),`${route} local navigation remains clickable at ${width}×${height}`);
-      assert.deepEqual(sample.railHeads, ["Home", "Work", "Agents", "Friends"]);
+      assert.equal(sample.fitsHeight,true,`${route} fits below the frame's top bar within ${height}px`);
+      // Only the rows the column shows (a long list scrolls inside it).
+      assert.ok(sample.local.every(item=>item.hit),`${route}: the place's pages in the list column remain clickable at ${width}×${height}: ${JSON.stringify(sample.local.filter(item=>!item.hit))}`);
+      assert.deepEqual(sample.railHeads, ["Work", "Map", "Team", "Friends"]);
       if (sample.page) { assert.equal(sample.role,"region"); assert.equal(sample.modal,null); }
       if (!["workspace","studio"].includes(route) && sample.local.some(item=>item.id===route)) assert.equal(sample.local.find(item=>item.id===route)?.current,true,`${route} has a selected local view`);
       await menuCapture(`${width}${scale===1?'':'-125pct'}-${route}`);
