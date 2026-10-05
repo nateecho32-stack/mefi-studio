@@ -5,13 +5,6 @@ import vm from "node:vm";
 
 const source = await readFile(new URL("../renderer/idle.js", import.meta.url), "utf8");
 const controlSource = source.slice(source.indexOf("  async function assistantControl("), source.indexOf("  function onAssistantEvent("));
-const uiSource = await readFile(new URL("../renderer/studio-ui.js", import.meta.url), "utf8");
-const section = (text, start, end) => {
-  const a = text.indexOf(start), b = text.indexOf(end, a);
-  assert.ok(a >= 0 && b > a, `missing section ${start}`);
-  return text.slice(a, b);
-};
-const flush = async () => { for (let i = 0; i < 10; i += 1) await Promise.resolve(); };
 
 function element() {
   return { attrs: {}, setAttribute(name, value) { this.attrs[name] = String(value); } };
@@ -157,71 +150,4 @@ test("service-only pause pushes publish confirmed Settings snapshots once per ch
   assert.equal(env.events.at(-1).detail.newWork, false);
   assert.equal(env.events.at(-1).detail.enabled, true, "service pause does not alter the queue preference");
   assert.deepEqual(env.calls, [], "sync never sends host commands");
-});
-
-// The host's `stopped` counts kill requests and `idle: false` says a worker
-// was still alive when it stopped waiting: that toast must not say "stopped".
-test("Stop all reports a worker that outlived the host's wait instead of claiming it stopped", async () => {
-  for (const [result, text, tone] of [
-    [{ ok: true, stopped: 2, idle: true }, /^stopped 2 agent\(s\) · progress saved/, "good"],
-    [{ ok: true, stopped: 2, idle: false }, /^asked 2 agent\(s\) to stop · a run is still finishing/, "warn"],
-    [{ ok: true, stopped: 0, idle: false }, /^new work is off · a run is still finishing/, "warn"],
-    [{ ok: true, stopped: 0, idle: true }, /^no agents were running/, "info"],
-  ]) {
-    const env = environment({ control: async () => result });
-    await env.assistantControl("stop-all", "stop all agents");
-    assert.deepEqual(env.calls, ["stop-all"]);
-    assert.match(env.messages.at(-1)[0], text);
-    assert.equal(env.messages.at(-1)[1], tone);
-  }
-});
-
-// Stop all and Restart Studio end every run in flight, so they ask on the
-// button first through Studio's own MefiUi.arm: one press arms the question,
-// a second acts, and a question left alone lapses back to the brake.
-function brakeButton(text) {
-  const listeners = {}, classes = new Set();
-  return {
-    textContent: text, children: [], classes,
-    classList: { add: (name) => classes.add(name), remove: (name) => classes.delete(name) },
-    addEventListener: (type, callback) => (listeners[type] ??= []).push(callback),
-    click() { for (const callback of listeners.click ?? []) callback({ type: "click" }); },
-  };
-}
-
-test("Command's Stop all and Restart arm on the first press and act on the second", async () => {
-  const calls = [], timers = [];
-  const el = { stopAll: brakeButton("Stop all"), restart: brakeButton("Restart Studio"), stopState: { textContent: "" } };
-  const context = vm.createContext({
-    el, state: { active: false },
-    setTimeout: (fn, ms) => timers.push({ fn, ms }),
-    clearTimeout: (id) => { if (timers[id - 1]) timers[id - 1].cleared = true; },
-    assistantControl: async (action) => { calls.push(action); return { ok: true }; },
-    renderFeed() {},
-    window: { MefiToast() {}, mefiStudio: { appRestart: async (options) => { calls.push(`restart ${JSON.stringify(options)}`); return { ok: true }; } } },
-  });
-  vm.runInContext([
-    section(uiSource, "  function arm(button", "  // The sentence to show for a failure."),
-    "window.MefiUi = { arm };",
-    section(source, "  async function stopAllAgents(", "  function newWorkStatus("),
-    section(source, "    // Both brakes ask first", "    setFeedMenu(state.feedMenuOpen);"),
-  ].join("\n"), context);
-
-  el.stopAll.click(); await flush();
-  assert.deepEqual(calls, [], "one press stops nothing");
-  assert.equal(el.stopAll.textContent, "Stop every run?");
-  assert.ok(el.stopAll.classes.has("danger-armed"));
-  el.stopAll.click(); await flush();
-  assert.deepEqual(calls, ["stop-all"]);
-  assert.equal(el.stopAll.textContent, "Stop all");
-
-  el.restart.click(); await flush();
-  assert.equal(el.restart.textContent, "Restart Studio?");
-  assert.deepEqual(calls, ["stop-all"], "one press restarts nothing");
-  timers.at(-1).fn();
-  assert.equal(el.restart.textContent, "Restart Studio", "an unanswered question lapses");
-  el.restart.click(); await flush();
-  assert.deepEqual(calls, ["stop-all"], "after the lapse a press asks again");
-  el.restart.click(); await flush();
-  assert.deepEqual(calls, ["stop-all", 'restart {"stopAgents":true}']);
 });

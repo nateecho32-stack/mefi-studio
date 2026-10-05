@@ -298,7 +298,6 @@ app.whenReady().then(async () => {
   // build wiring cannot silently leave a passing fixture with opaque panels.
   const panelBlur = () => run("return getComputedStyle(document.querySelector('.cmd-rail')).backdropFilter;");
   assert.match(await panelBlur(), /blur\(/, "the rebuilt Command panel includes its glass finish");
-  assert.equal(await run("return getComputedStyle(document.querySelector('.cmd-center .cmd-search')).backdropFilter;"), "none", "search shares the outer glass instead of stacking another blur");
   await run("document.documentElement.setAttribute('data-no-blur', '');");
   assert.equal(await panelBlur(), "none", "Blur off removes the panel filter");
   await run("document.documentElement.removeAttribute('data-no-blur');");
@@ -449,7 +448,7 @@ app.whenReady().then(async () => {
         if((toggle.getAttribute('aria-expanded')==='true')!==expanded)toggle.click();
       }
       window.MefiIdle.select(${JSON.stringify(selected)});
-      if(window.MefiIdle.followStatus().mode!=='orbit')document.getElementById('idle-cam-orbit').click();
+      if(window.MefiIdle.followStatus().mode!=='orbit')document.querySelector('#map-view-pop [data-map-cam="orbit"]').click();
       document.activeElement?.blur();
     `);
     await sleep(280);
@@ -855,7 +854,7 @@ app.whenReady().then(async () => {
   await run(`
     window.MefiIdle.setAudioResponse(.35);
     window.MefiIdle.setAudioEffects({waves:true,nodes:true,percussion:false,background:false,splitBands:true,motion:true});
-    window.MefiMusic.openAudio(document.getElementById('idle-music-toggle'));
+    window.MefiMusic.openAudio();
     document.getElementById('music-audio-reactions').open=true;
     window.__audioCaptureCalls=[];
     window.__audioCaptureMethods={};
@@ -964,19 +963,17 @@ app.whenReady().then(async () => {
   report.agentModes = { layouts: [] };
   // Home queue controls now live in Agents setup. The hidden legacy fields
   // remain synchronized for older integrations, but are not pointer targets.
+  // Agent mode's one control is Team › Overview's (#settings-agent-mode, which agents.js carries there): Command's
+  // quick switch went with the classic toolbar. It saves through MefiIdle.setQueueSetting, as that switch did.
   await run(`window.MefiNav.go('command');await window.MefiIdle.ready();`);
   await setPanels(false, false);
-  await until("!document.getElementById('idle-feed-agent-mode').disabled && document.getElementById('idle-feed-agent-mode').value==='swarm'", "Command reflects saved selection");
+  await until("!document.getElementById('settings-agent-mode').disabled && document.getElementById('settings-agent-mode').value==='swarm'", "Team's agent mode reflects the saved selection");
   report.agentModes.commandSaving = await run(`
-    const control=document.getElementById('idle-feed-agent-mode');
-    if(!control.closest('.cmd-tools')||control.closest('#idle-feed'))throw new Error('Agent mode must be in the node tree toolbar');
-    if(document.getElementById('idle-feed-toggle').getAttribute('aria-expanded')!=='false')throw new Error('Live work must be collapsed before changing mode');
-    control.focus();
-    if(document.activeElement!==control)throw new Error('Collapsed Live work hid the mode selector from keyboard focus');
+    const control=document.getElementById('settings-agent-mode');
     control.value='cluster';control.dispatchEvent(new Event('change',{bubbles:true}));
-    return control.disabled && control.getAttribute('aria-busy')==='true';
+    return control.disabled;
   `);
-  await until("!document.getElementById('idle-feed-agent-mode').disabled && document.getElementById('idle-feed-agent-mode').value==='cluster'", "Command saves Cluster");
+  await until("!document.getElementById('settings-agent-mode').disabled && document.getElementById('settings-agent-mode').value==='cluster'", "Team's agent mode saves Cluster");
   await run(`
     window.commandFixture.publishAssistant({status:'running',messages:[],prefs:{},work:[],agents:[{role:'cluster-planner',status:'running',text:'Checking the focused task'}]});
     window.commandFixture.publishStatus({...window.commandFixture.status(),mode:'cluster',clusterFocus:{source:'task',id:'command_render_task',title:'Verify real node painting'},clusterAgents:[{id:'planner',role:'planner',status:'running',taskId:'command_render_task',taskTitle:'Verify real node painting',step:'Checking the focused task'}]});

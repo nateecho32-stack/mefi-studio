@@ -2217,8 +2217,7 @@
         close("palette");
         return;
       }
-      if (event.target?.matches?.("#idle-search")) window.MefiIdle?.clearSearch?.();
-      else field.blur?.();
+      field.blur?.();
       // An open layer covers the constellation, so keep focus inside that dialog
       // instead of parking it on the canvas underneath (the guard from E15).
       const covering = state.transient ?? state.sheet;

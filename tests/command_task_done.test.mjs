@@ -8,7 +8,7 @@ import vm from "node:vm";
 // "marked done" log line while the toast claimed success. It now uses the
 // same targeted status action as the task board, and reports refusals.
 const source = await readFile(new URL("../renderer/idle.js", import.meta.url), "utf8");
-const doneSource = source.slice(source.indexOf("  async function confirmTaskDone("), source.indexOf("  function pillOf("));
+const doneSource = source.slice(source.indexOf("  async function confirmTaskDone("), source.indexOf("  // ---------- the assistant ----------"));
 
 function environment(tasksAction) {
   const calls = [], saves = [];

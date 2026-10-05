@@ -1207,7 +1207,7 @@ test("a notice never counts as the assistant's reply to the owner's last message
     SPEECH_TTL_LONG: 9000,
   });
   vm.runInContext(section(idle, "  // Drop a just-repeated user/assistant pair.", "  function commandChatActivity("), env);
-  vm.runInContext(section(idle, "  function onAssistantEvent(payload) {", "  function focusNextInProgress("), env);
+  vm.runInContext(section(idle, "  function onAssistantEvent(payload) {", "  function constellationHasWork("), env);
   full = { messages: [question, answer] };
   env.onAssistantEvent({ event: { kind: "reply", text: "ai: It is verifying now." } });
   assert.deepEqual(said.at(-1), ["__assistant__", "It is verifying now.", "say"]);
@@ -1235,7 +1235,7 @@ function hubFixture() {
     SPEECH_TTL_LONG: 9000,
   });
   vm.runInContext(section(idle, "  // Drop a just-repeated user/assistant pair.", "  function commandChatActivity("), env);
-  vm.runInContext(section(idle, "  function onAssistantEvent(payload) {", "  function focusNextInProgress("), env);
+  vm.runInContext(section(idle, "  function onAssistantEvent(payload) {", "  function constellationHasWork("), env);
   return {
     said, toasts,
     show: (messages, extra = {}) => { full = { ...extra, messages }; },
@@ -1315,70 +1315,4 @@ test("a new reply is said and toasted once, and an answer already in the thread 
   hub.push({ kind: "reply", text: "local: Restored 1 saved job(s)." });
   assert.equal(hub.said.at(-1)[1], "Restored 1 saved job(s).");
   assert.equal(hub.toasts.length, 1, "another project's old answer is not news either");
-});
-
-// The Command "Add a task… (Enter)" field writes a board task through
-// tasks:create (the path Work mode uses), never through the chat classifier.
-function composerFixture({ tasksCreate, addTask = null, projectId = "p1" } = {}) {
-  const toasts = [], navs = [], created = [], handlers = {};
-  let reads = 0;
-  const el = { taskInput: { value: "", addEventListener: (type, fn) => { handlers[type] = fn; } }, taskAdd: null };
-  const env = vm.createContext({
-    el, String, Promise,
-    state: { projectId, active: false, nodes: [] },
-    window: {
-      mefiStudio: { ...(tasksCreate ? { tasksCreate: async (payload) => { created.push(payload); return tasksCreate(payload); } } : {}), assistantMessage: () => { throw new Error("Add a task must not message the assistant"); } },
-      MefiToast: (text, tone) => toasts.push([text, tone]),
-      MefiTasks: addTask ? { addTask } : undefined,
-    },
-    sendAssistant: () => { throw new Error("Add a task must not go through the chat classifier"); },
-    refreshTasks: async () => { reads += 1; }, refreshGraph() {}, updateTelemetry() {}, selectNode() {}, focusNode() {},
-    nav: (...args) => navs.push(args),
-  });
-  vm.runInContext(`${section(idle, "    const addTaskFromComposer = async () => {", "    el.search?.addEventListener(")}\nthis.addTaskFromComposer = addTaskFromComposer;`, env);
-  return { env, el, toasts, navs, created, handlers, reads: () => reads };
-}
-
-test("Add a task creates a board task through tasks:create and toasts 'on the board' only when one comes back", async () => {
-  const task = { id: "task_1", title: "Pause button in the music player", status: "open", pin: true };
-  const ok = composerFixture({ tasksCreate: async () => ({ ok: true, task, tasks: [task], projectId: "p1" }) });
-  ok.el.taskInput.value = "  Pause button in the music player ";
-  const result = await ok.env.addTaskFromComposer();
-  assert.equal(result.id, "task_1");
-  assert.deepEqual(JSON.parse(JSON.stringify(ok.created)), [{ title: "Pause button in the music player", prompt: "Pause button in the music player", projectId: "p1" }], "a statement with a service word is still a task, not a pause");
-  assert.deepEqual(ok.toasts, [["on the board · Pause button in the music player", "good"]]);
-  assert.equal(ok.el.taskInput.value, "");
-  assert.equal(ok.reads(), 1, "the board is re-read after the write");
-  ok.el.taskInput.value = "Dark mode for settings";
-  await ok.handlers.keydown({ key: "Enter", ctrlKey: true });
-  assert.deepEqual(JSON.parse(JSON.stringify(ok.navs)), [["tasks", { taskId: "task_1" }]], "Ctrl+Enter opens the task the host returned");
-
-  const refused = composerFixture({ tasksCreate: async () => ({ ok: false, error: "An unfinished task with this title already exists." }) });
-  refused.el.taskInput.value = "Export button broken on Safari";
-  assert.equal(await refused.env.addTaskFromComposer(), null);
-  assert.deepEqual(refused.toasts, [["task not added · An unfinished task with this title already exists.", "bad"]], "the host's reason, never 'on the board'");
-  assert.equal(refused.el.taskInput.value, "Export button broken on Safari", "the text is handed back");
-  await refused.handlers.keydown({ key: "Enter", ctrlKey: true });
-  assert.equal(refused.navs.length, 0, "nothing to open when no task came back");
-
-  const empty = composerFixture({ tasksCreate: async () => ({ ok: true }) });
-  empty.el.taskInput.value = "Start the export feature";
-  assert.equal(await empty.env.addTaskFromComposer(), null, "an ok without a task is not a task");
-  assert.equal(empty.toasts[0][1], "bad");
-
-  const thrown = composerFixture({ tasksCreate: async () => { throw new Error("IPC closed"); } });
-  thrown.el.taskInput.value = "Retune the mixer";
-  assert.equal(await thrown.env.addTaskFromComposer(), null);
-  assert.deepEqual(thrown.toasts, [["task not added · IPC closed", "bad"]]);
-  assert.equal(thrown.el.taskInput.value, "Retune the mixer");
-
-  const unscoped = composerFixture({ projectId: null, tasksCreate: async () => ({ ok: true, task: { id: "t2", title: "Retune" } }) });
-  unscoped.el.taskInput.value = "Retune";
-  await unscoped.env.addTaskFromComposer();
-  assert.equal("projectId" in unscoped.created[0], false, "before a project event the host's current project applies");
-
-  const browser = composerFixture({ addTask: async (text) => ({ id: "local_1", title: text }) });
-  browser.el.taskInput.value = "Offline task";
-  assert.equal((await browser.env.addTaskFromComposer()).id, "local_1", "browser mode still writes through tasks.js");
-  assert.deepEqual(browser.toasts, [["on the board · Offline task", "good"]]);
 });

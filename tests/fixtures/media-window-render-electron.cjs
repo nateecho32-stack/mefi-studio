@@ -239,7 +239,9 @@ app.whenReady().then(async () => {
   await capture("media-window-background-tree.png");
   await run("document.getElementById('media-window-background').click();");
   await mouse(10, 10);
-  const mediaButton = await run("window.fixtureHoverFocus=document.activeElement;const r=document.getElementById('idle-music-toggle').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};");
+  // The hover opener is Settings › Audio's "Open music & video": Command's toolbar Music button went with the classic top bar.
+  await run("await window.MefiNav.go('studio',{category:'audio'});"); await sleep(300);
+  const mediaButton = await run("window.fixtureHoverFocus=document.activeElement;const r=document.getElementById('settings-audio-open').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};");
   await mouse(mediaButton.x, mediaButton.y);
   // Hover opens the menu after a short delay; a busy box can take longer than a fixed wait, so wait for it.
   await until("return !document.getElementById('music-dropdown').hidden;", "a native hover to open the mini player");

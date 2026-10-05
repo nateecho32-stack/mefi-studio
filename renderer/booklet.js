@@ -926,25 +926,8 @@
     if (theme) theme.hidden = true;
     move(document.getElementById("jev-enabled")?.closest?.("label"), document.getElementById("settings-behavior-controls"));
     for (const id of ["proactive-mode", "memory-align", "loop-guard", "loop-guard-apply"]) move(document.getElementById(id)?.closest?.("label"), document.getElementById("settings-behavior-controls"));
-    for (const id of ["idle-backdrop", "idle-bubbles", "idle-card-style", "idle-ambient-zen"]) move(document.getElementById(id)?.closest?.("label"), document.getElementById("settings-tree-controls"));
-    for (const id of ["idle-profile", "idle-zen"]) move(document.getElementById(id)?.closest?.("label"), document.getElementById("settings-audio-controls"));
-    const ambience = document.getElementById("idle-ambience-pop");
-    if (ambience && !ambience.dataset.settingsTrimmed) {
-      ambience.dataset.settingsTrimmed = "true";
-      for (const group of ambience.querySelectorAll(".pop-group")) if (!group.querySelector("select, input, button")) group.remove();
-      for (const divider of ambience.querySelectorAll("hr")) divider.remove();
-      const appearanceLink = ambience.querySelector(".pop-link");
-      if (appearanceLink) {
-        appearanceLink.textContent = "Appearance settings";
-        appearanceLink.dataset.nav = "studio";
-        appearanceLink.dataset.navParams = JSON.stringify({ section: "appearance" });
-        appearanceLink.title = "Open Settings › Appearance";
-      }
-      const audioLink = ambience.querySelectorAll(".pop-link")[1] ?? document.createElement("button");
-      audioLink.type = "button"; audioLink.className = "ghost mini pop-link"; audioLink.textContent = "Audio settings";
-      audioLink.dataset.nav = "studio"; audioLink.dataset.navParams = JSON.stringify({ section: "audio" });
-      if (!(audioLink.parentElement ?? audioLink.parentNode)) ambience.appendChild(audioLink);
-    }
+    // The node tree's Backdrop, Speech bubbles, Card style and Zen mode, and the bells' Profile and Zen bells, are written
+    // in their Settings cards (#settings-tree-controls, #settings-audio-controls); idle.js wires them.
     window.MefiMusic?.mountSettings?.({ look: document.getElementById("settings-appearance-media") });
     const browser = document.getElementById("studio-browser");
     if (browser) browser.hidden = Boolean(window.mefiStudio?.launchStudio);
