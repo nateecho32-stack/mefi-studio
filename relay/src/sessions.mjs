@@ -291,6 +291,11 @@ export function createSessions({ store, keys, config, fetch: fetchImpl, now }) {
     revokeSid,
     revokeUser,
     mint,
-    member: (uid) => describeMember(memberRow(uid), now()),
+    // OWNER_IDS count at once, not only after the member's next Discord check.
+    member: (uid) => {
+      const info = describeMember(memberRow(uid), now());
+      if (info && config.ownerIds.includes(uid)) info.isMod = true;
+      return info;
+    },
   });
 }
