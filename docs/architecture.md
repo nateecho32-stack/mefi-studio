@@ -2474,8 +2474,8 @@ on a tab the page it opens takes the keyboard, as any page does.
 
 ### Build's desktop in the 0.5 frame: the session list, the thread and the inspector
 
-With the new layout on (`html[data-layout="v2"]`, off by default; `?layout=v2`
-or `MefiNav.setLayout("v2")`) Build's Home is three panels that
+In the 0.5 layout (`html[data-layout="v2"]`, Studio's only layout since
+0.5.0) Build's Home is three panels that
 `renderer/sessions.js` (`window.MefiSessions`, with `renderer/sessions.css`)
 hands to the shell's regions (`MefiShell.mount("list" | "main" | "inspector",
 key, element, { title, order })`). The panels only read what the page already

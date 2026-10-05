@@ -681,7 +681,7 @@
   function onZoomPush(payload) {
     if (isNumber(payload?.factor)) setZoom(zoomFromFactor(payload.factor), "keys");
   }
-  // The layout can be switched off and on again while the window is open (MefiNav.setLayout):
+  // A suite can take the layout off and put it back while the window is open (MefiNav.applyLayout):
   // off takes the text size and detail off the window, on puts them back.
   function onLayout(event) {
     const on = event?.detail?.on;

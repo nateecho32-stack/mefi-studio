@@ -1,13 +1,13 @@
 "use strict";
 
-// Build's desktop inside the 0.5 frame (renderer/sessions.js), in a real Chromium: a copied booklet, the new layout
-// switched on (?layout=v2), the real shell (renderer/shell.js: its list, main and inspector regions, its drawers below
+// Build's desktop inside the 0.5 frame (renderer/sessions.js), in a real Chromium: a copied booklet in the 0.5 layout,
+// the real shell (renderer/shell.js: its list, main and inspector regions, its drawers below
 // 900 CSS px, its bars) and a synthetic
 // bridge that answers with a board that has a task in every stage, a run in its own worktree, an open question, a finished
 // attempt with changes (Accept, Revert and its Undo really change what the bridge answers next), pictures a brief and a
 // message carry, and the before and after shots of an attempt. It checks what the DOM tests cannot: the list, the thread
 // and the inspector fit six window sizes (the five of the layout contract and a short, wide one), no scroller reserves width for a bar, nothing is under 12 px, pictures and shots
-// are whole (never cropped) and open in the lightbox, the keys work, and with the layout off (v1) none of it exists.
+// are whole (never cropped) and open in the lightbox, and the keys work.
 // Screenshots are kept when the test is given a capture folder. No application main process or live state is loaded;
 // network, permissions and child processes are blocked.
 const { app, BrowserWindow, session } = require("electron");
@@ -16,7 +16,7 @@ const fs = require("node:fs"), path = require("node:path");
 const { fileURLToPath } = require("node:url");
 const root = process.env.MEFI_SESSIONS_FIXTURE;
 if (!root || !path.isAbsolute(root)) throw new Error("An isolated Sessions fixture directory is required");
-const report = { errors: [], networkAttempts: [], processAttempts: [], layouts: [], v1: null, steps: [] };
+const report = { errors: [], networkAttempts: [], processAttempts: [], layouts: [], steps: [] };
 app.setName("Sessions Fixture");
 for (const name of ["userData", "sessionData", "crashDumps"]) {
   const directory = path.join(root, name); fs.mkdirSync(directory, { recursive: true }); app.setPath(name, directory);
@@ -334,32 +334,8 @@ app.whenReady().then(async () => {
   const size = async (width, height, zoom = 1) => { window.setContentSize(width, height); contents.setZoomFactor(zoom); await sleep(350); };
   const step = (label) => report.steps.push(label);
   report.shots = [];
-  // The phases are named so a failing one can be run alone while debugging: MEFI_SESSIONS_PHASE=v1|shots|chrome|today (default: all).
+  // The phases are named so a failing one can be run alone while debugging: MEFI_SESSIONS_PHASE=shots|chrome|today (default: all).
   const only = process.env.MEFI_SESSIONS_PHASE || "all";
-
-  // ---- v1: the layout is off, and nothing of this module exists ------------------------------------------------------------------------
-  await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1" } });
-  await until("window.MefiNav && window.MefiWorkspace && window.MefiSessions && !window.MefiBoot?.isActive?.()", "studio ready (v1)");
-  await run("window.MefiNav.go('workspace');");
-  await until("document.body.classList.contains('workspace-active')", "Home is up (v1)");
-  await sleep(1200);
-  report.v1 = await run(`return {
-    layout: document.documentElement.dataset.layout || null, active: window.MefiSessions.active(), enabled: window.MefiSessions.enabled(),
-    elements: document.querySelectorAll('.sx-panel, #sessions-list, #sessions-thread, #sessions-inspector, .sx-lightbox').length,
-    stored: Object.keys(localStorage).filter((key) => key.startsWith('mefiStudio.sessions')),
-    calls: window.sessionsFixture.calls().map((call) => call.name),
-    redirect: window.MefiSessions.redirect('tasks', { taskId: 'task_run' }),
-    styles: [...document.styleSheets].length,
-  };`);
-  assert.equal(report.v1.layout, null, "v1 is the layout without the attribute");
-  assert.equal(report.v1.active, false, "the panels are not drawn in v1");
-  assert.equal(report.v1.elements, 0, "v1 has no session panel anywhere");
-  assert.deepEqual(report.v1.stored, [], "v1 stores nothing of this module's");
-  assert.equal(report.v1.redirect, null, "v1 leaves nav.go('tasks', { taskId }) alone");
-  const mine = ["assistantImageRead", "tasksHistory", "taskMetrics", "tasksEvidence", "tasksChanges", "tasksChecks", "tasksCap", "worktreesList"];
-  assert.deepEqual(report.v1.calls.filter((name) => mine.includes(name)), [], `v1 calls none of the host reads the panels make: ${report.v1.calls.join(",")}`);
-  step("v1 is untouched");
-  if (only === "v1") { finish(); return; }
 
   // ---- v2 ----------------------------------------------------------------------------------------------------------------------------------
   await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1", layout: "v2" } });
@@ -1183,16 +1159,8 @@ app.whenReady().then(async () => {
   assert.equal(await run("return window.MefiSessions.redirect('tasks', { taskId: 'task_run' });"), null, "nor does a link");
   assert.equal(await run("return window.MefiSessions.setEnabled(true);"), true);
   await until("document.querySelectorAll('.sx-panel').length === 3", "switching it on brings the panels back");
-  // Turning the layout off at run time takes everything away too (nav.js applyLayout calls detach).
-  assert.equal(await run("return window.MefiNav.setLayout('v1');"), false);
-  assert.equal(await count(".sx-panel"), 0, "v1 removes the panels");
-  assert.equal(await run("return window.MefiSessions.active();"), false);
-  assert.equal(await run("return window.MefiNav.setLayout('v2');"), true);
-  // A live switch back to v2 does not build the frame (a reload does, or MefiShell.enable() at once): the panels wait for it and draw when it is up.
-  await run("if (!window.MefiShell.active()) window.MefiShell.enable();");
-  await until("window.MefiSessions.active() && document.querySelectorAll('.sx-panel').length === 3", "v2 brings them back");
   await until("document.querySelectorAll('#sessions-list .sx-row').length >= 9", "with the board");
-  step("off and on, and v1 and v2 again");
+  step("off and on again");
 
   // ---- a launch that says ?sessions=off, and one that restores the session ------------------------------------------------------------------
   await run("window.MefiSessions.select('task_run2'); window.MefiNav.saveResume();");

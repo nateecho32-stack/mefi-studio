@@ -2,7 +2,7 @@
 // tab region (tests/fixtures/tabs-render-electron.cjs; it is left out, and the strip runs in the renderer's own MefiShell, once
 // renderer/shell.js exists). Five window sizes with a dozen tabs (nothing overflows, no scroller
 // reserves width, no text under 12 px, menus stay inside the window), real pointer and keyboard input, real pages, the
-// reload, v1 untouched, the host's switch, and Ctrl+W against the window's own menu (two small windows are shown for about two
+// reload, the host's switch, and Ctrl+W against the window's own menu (two small windows are shown for about two
 // seconds; MEFI_TABS_SKIP_WINDOW_PROBE=1 leaves that step out). Set MEFI_TABS_CAPTURE_DIR to an absolute folder to keep the screenshots.
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -18,7 +18,7 @@ const studio = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const executable = path.join(studio, "node_modules", "electron", "dist", process.platform === "win32" ? "electron.exe" : process.platform === "darwin" ? "Electron.app/Contents/MacOS/Electron" : "electron");
 const canRun = existsSync(executable) && (process.platform !== "linux" || Boolean(process.env.DISPLAY || process.env.WAYLAND_DISPLAY));
 
-test("the tab strip fits, folds and menus at five window sizes, takes real input, opens real pages, survives a reload, and in v1 draws, stores and hears nothing", { skip: !canRun, timeout: 560000 }, async (t) => {
+test("the tab strip fits, folds and menus at five window sizes, takes real input, opens real pages, survives a reload", { skip: !canRun, timeout: 560000 }, async (t) => {
   const fixture = await mkdtemp(path.join(tmpdir(), "mefi-tabs-render-"));
   try {
     await mkdir(path.join(fixture, "renderer")); await mkdir(path.join(fixture, "data"));
@@ -52,7 +52,6 @@ test("the tab strip fits, folds and menus at five window sizes, takes real input
     assert.deepEqual(report.processAttempts, []);
     assert.ok(report.complete, "the fixture ran to its end");
     assert.deepEqual(Object.keys(report.sizes), ["1920x1080@1", "1440x900@1", "1100x720@1", "600x560@1", "600x560@1.5"], "all five window sizes were walked");
-    assert.ok(report.v1Untouched, "v1 was checked");
     assert.equal(report.keys.ctrlWClosesTheTab, true, "Ctrl+W closes the tab you are on");
     if (process.env.MEFI_TABS_SKIP_WINDOW_PROBE !== "1") {
       if (report.keys.windowMenuCloseObservable) assert.equal(report.keys.pageTakesCtrlW, "the window stayed", "a page that takes Ctrl+W keeps its window");

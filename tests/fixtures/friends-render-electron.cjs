@@ -6,8 +6,7 @@
 // with a real pointer at 1920x1080 and measures: the list in the prototype's order, the current row, the breadcrumb
 // (Friends / <place>), the page's title and the line under it, the one card that shows, nothing wider than the page,
 // and no text under 12 px. The rail's Friends, Search's Rooms, Your PCs and Playground, and the companion's Friends
-// bubble land on the page; a tab per place. A second launch without ?layout=v2 opens the companion's Friends bubble as
-// it was. Screenshots are kept when the test is given a capture folder (MEFI_FRIENDS_CAPTURE_DIR). No application main
+// bubble land on the page; a tab per place. Screenshots are kept when the test is given a capture folder (MEFI_FRIENDS_CAPTURE_DIR). No application main
 // process or live state is loaded; network, permissions and child processes are blocked.
 const { app, BrowserWindow, session } = require("electron");
 const assert = require("node:assert/strict");
@@ -165,15 +164,6 @@ app.whenReady().then(async () => {
   const found = [];
   const go = (id, params) => run(`window.MefiNav.go(${JSON.stringify(id)}${params ? `, ${JSON.stringify(params)}` : ""});`);
   const placeIs = (place) => `document.getElementById('friends-overlay')?.hidden === false && document.getElementById('friends-overlay').dataset.place === ${JSON.stringify(place)} && window.MefiNav.current() === 'friends-page'`;
-
-  // ---- v1: the companion's Friends bubble, as it was -------------------------------------------------
-  await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1" } });
-  await until("window.MefiNav && window.MefiCompanionHub && !window.MefiBoot?.isActive?.()", "studio ready (v1)");
-  await go("friends");
-  await until("document.getElementById('agent-hub')?.hidden === false && document.getElementById('agent-hub').dataset.section === 'friends'", "Friends opens the companion's Friends bubble (v1)");
-  report.v1 = await run("return { page: Boolean(document.getElementById('friends-overlay')), places: window.MefiCompanionHub.friendsPlaces(), route: window.MefiNav.get('friends-page')?.hidden?.() };");
-  assert.deepEqual(report.v1, { page: false, places: null, route: true }, "with the layout off there is no Friends page and the bubble is as it was");
-  report.steps.push("v1 is untouched");
 
   // ---- v2 ------------------------------------------------------------------------------------------
   await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1", layout: "v2" } });

@@ -1666,36 +1666,10 @@
     }
   }
 
-  // ---- the way in (this runs with v2 off too) -------------------------------------------------------------
-  // A Settings switch and a Search action: each saves the choice through MefiNav.setLayout and reloads,
-  // as builder.js's layout switch does, so every module starts in the layout it was asked for.
-  function switchLayout(next) {
-    const n = nav();
-    if (!n?.setLayout) return false;
-    const to = next === "v2" ? "v2" : "v1";
-    n.setLayout(to);
-    window.MefiToast?.(to === "v2" ? "Switching to the 0.5 layout. Studio reloads to do it." : "Going back to the classic layout. Studio reloads to do it.", "info");
-    setTimeout(() => { try { n.saveResume?.(); } catch { /* resume is optional */ } try { window.location.reload(); } catch { /* no reload here */ } }, 350);
-    return true;
-  }
-  function wayIn() {
-    nav()?.register?.({
-      id: "layout-switch", label: "Switch layout: 0.5 or classic", short: "Layout", kind: "action", layer: null, section: "settings", group: "system",
-      glyph: "g-frame", badge: null, desc: "The 0.5 layout adds a list, an inspector, tabs and a status bar around every page. Studio reloads to switch.",
-      searchTerms: "layout 0.5 classic v1 v2 new shell list inspector tabs status bar panels frame switch try",
-      showIn: { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false },
-      run: () => switchLayout(layoutOn() ? "v1" : "v2"),
-    });
-    const box = document.getElementById?.("settings-layout-v2");
-    if (box) {
-      box.checked = layoutOn();
-      box.addEventListener("change", () => { const wanted = box.checked; if (!switchLayout(wanted ? "v2" : "v1")) box.checked = !wanted; });
-    }
-  }
+  // The 0.5 layout is Studio's only layout (0.5.0): there is no switch back to the classic one.
   function start() {
     if (state.armed) return;
     state.armed = true;
-    wayIn();
     if (layoutOn()) enable();
   }
 

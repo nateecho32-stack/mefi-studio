@@ -4,7 +4,7 @@
 // at a desktop and a phone-narrow width, keeps Tab inside the dialog, saves
 // through the bridge and closes on Escape. No application main process or
 // live state is loaded; network, permissions and child processes are blocked.
-// With ?layout=v2 it also walks the first run's three-step welcome at 1920x1080 and at 600x560 zoomed 150%.
+// It also walks the first run's three-step welcome at 1920x1080 and at 600x560 zoomed 150%.
 const { app, BrowserWindow, session } = require("electron");
 const assert = require("node:assert/strict");
 const fs = require("node:fs"), path = require("node:path");

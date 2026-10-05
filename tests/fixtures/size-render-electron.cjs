@@ -14,7 +14,7 @@
 // own rows follow, Undo and Reset put it back, and the interface scale zooms the real
 // window and follows the keys. Every combination of text size, density and detail is
 // applied and swept for overflow and small text, the way in from Settings, Configuration
-// and Search is used, and a second launch without ?layout=v2 shows none of it.
+// and Search is used.
 // Screenshots: Compact, Comfortable and Spacious at 80, 100 and 130% text, and each size.
 // No application main process or live state is loaded; network, permissions and child
 // processes are blocked.
@@ -488,33 +488,6 @@ app.whenReady().then(async () => {
   await until("window.MefiSize.isOpen() && window.MefiNav.current() === 'size'", "open() enters the page through the navigation");
   await click("#size-close");
   await until("!window.MefiSize.isOpen() && window.MefiNav.current() === 'studio'", "Back is within Settings, where the page lives, whichever way it was entered");
-
-  // ---- v1: none of it --------------------------------------------------------------------------------------
-  await run("await window.MefiSize.apply({ text: 1.3, density: 'spacious', detail: 'all' });");
-  await sleep(200);
-  assert.ok(await run("return localStorage.getItem('mefiStudio.appearance').includes('\"text\":1.3');"), "a v2 choice is saved");
-  await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1" } });
-  await until("window.MefiSize && window.MefiNav && window.MefiVibe && !window.MefiBoot?.isActive?.()", "studio ready again, without the layout");
-  await sleep(500);
-  report.v1 = await run(`
-    const root = document.documentElement, style = getComputedStyle(root);
-    const field = document.getElementById('studio-density')?.closest('.studio-field');
-    return { layout: root.dataset.layout ?? null, density: root.dataset.density, detail: root.dataset.detail ?? null, scale: root.style.getPropertyValue('--text-scale'), tokens: style.getPropertyValue('--d-row').trim(), ladder: style.getPropertyValue('--f12').trim(),
-      record: Boolean(window.MefiNav.get('size')), row: Boolean(window.MefiNav.get('settings:size')), palette: window.MefiNav.list({ showIn: 'palette' }).some((record) => record.id === 'size'),
-      drawn: document.getElementById('size-body').children.length, link: Boolean(document.querySelector('[data-size-link]')), oldRow: field ? { hidden: field.hidden } : null,
-      opens: window.MefiSize.open(), applied: (await window.MefiSize.apply({ text: 1.2 })).ok, backup: localStorage.getItem('mefiStudio.appearance.backup.v1'), get: window.MefiSize.get(),
-      zoomAsked: window.sizeFixture.calls().includes('uiZoomGet'), listeners: window.sizeFixture.calls().includes('onUiZoom') };`);
-  assert.deepEqual(report.v1, { ...report.v1, layout: null, density: "comfortable", detail: null, scale: "", tokens: "", ladder: "", record: false, row: false, palette: false, drawn: 0, link: false, oldRow: { hidden: false }, opens: false, applied: false, backup: null, zoomAsked: false }, "with the layout off nothing of it is there: the saved spacious reads as comfortable, no token, no record, no page, no row, the old Density list as it was");
-  assert.deepEqual([report.v1.get.text, report.v1.get.detail], [1.3, "all"], "the saved choice is read, not used");
-  // Settings > Appearance > Interface shows the Density list as it always did, and it still does what it did.
-  await run("window.MefiNav.go('studio', { section: 'appearance' });");
-  await until("document.querySelector('[data-appearance-section=\"interface\"]')?.getClientRects().length > 0", "the Appearance editor is up, in v1");
-  await click('[data-appearance-section="interface"]');
-  await until("document.getElementById('studio-density')?.closest('.studio-field')?.getClientRects().length > 0", "the old Density row is shown");
-  assert.equal(await run("return Boolean(document.querySelector('[data-size-link]'));"), false, "with no pointer to a page that does not exist");
-  await run("window.MefiAppearance.apply({ density: 'compact' }, false);");
-  assert.equal(await run("return document.documentElement.dataset.density;"), "compact");
-  assert.equal(await run("return document.documentElement.dataset.detail ?? null;"), null);
 
   assert.deepEqual(report.errors, [], JSON.stringify(report.errors));
   report.complete = true;

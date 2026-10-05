@@ -197,19 +197,6 @@ const CLI_MODE = process.argv.some((arg) =>
 const LOGIN_ARG = "--at-login";
 const AT_LOGIN = !SMOKE && !CAPTURE && !CLI_MODE && process.argv.includes(LOGIN_ARG);
 
-// ---- Layout v2's way in (docs/unified-studio.md, "Layout contract", "Turning it on") ----
-// MEFI_STUDIO_LAYOUT=v2 opens the window in the 0.5 layout for this launch and =v1 in the
-// classic one, which beats whatever was saved: it is the kill switch. The page reads the
-// choice as ?layout= (renderer/nav.js). Anything else leaves it to the page: the Settings
-// switch, Search's "Switch layout", or the 0.5 layout when nothing was saved.
-const layoutFromEnv = () => {
-  try {
-    const wanted = String(process.env.MEFI_STUDIO_LAYOUT ?? "").trim().toLowerCase();
-    return wanted === "v1" || wanted === "v2" ? wanted : "";
-  } catch { return ""; }
-};
-const layoutQuery = () => { const layout = layoutFromEnv(); return layout ? { layout } : {}; };
-// ---- end of Layout v2's way in ----
 
 // GUI launches are single-instance: two windows would fight over the same
 // userData cache and double every watcher. CLI runs skip the lock so headless
@@ -24976,7 +24963,7 @@ function createWindow() {
   }
   const view = window;
   const loadView = () => view.loadFile(page, {
-    query: { capture: CAPTURE ? "1" : "0", smoke: SMOKE ? "1" : "0", ...layoutQuery() },
+    query: { capture: CAPTURE ? "1" : "0", smoke: SMOKE ? "1" : "0" },
   });
   rendererRecovery = attachRendererRecovery({
     window: view,

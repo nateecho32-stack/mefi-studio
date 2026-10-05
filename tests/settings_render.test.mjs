@@ -15,7 +15,7 @@ const studio = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const executable = path.join(studio, "node_modules", "electron", "dist", process.platform === "win32" ? "electron.exe" : process.platform === "darwin" ? "Electron.app/Contents/MacOS/Electron" : "electron");
 const canRun = existsSync(executable) && (process.platform !== "linux" || Boolean(process.env.DISPLAY || process.env.WAYLAND_DISPLAY));
 
-test("Settings in the 0.5 layout: the prototype's places in its order, one page at a time with Find a setting beside its title, panels that fit four window sizes with no text under 12 px and 4.5:1 in every theme, deep links and Search on the new places, and the classic layout untouched", { skip: !canRun, timeout: 360000 }, async (t) => {
+test("Settings in the 0.5 layout: the prototype's places in its order, one page at a time with Find a setting beside its title, panels that fit four window sizes with no text under 12 px and 4.5:1 in every theme, deep links and Search on the new places", { skip: !canRun, timeout: 360000 }, async (t) => {
   const fixture = await mkdtemp(path.join(tmpdir(), "mefi-settings-render-"));
   try {
     await mkdir(path.join(fixture, "renderer")); await mkdir(path.join(fixture, "data"));

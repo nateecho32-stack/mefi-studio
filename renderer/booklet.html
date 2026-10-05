@@ -14676,7 +14676,6 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
             <label class="switch" id="idle-home-switch" title="On: every launch lands on Home. Off: Studio reopens the last tab page you used. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span id="idle-home-label">Open Home on launch</span></label>
             <label class="switch" id="settings-start-vibe-switch" title="On: every launch starts in Vibe, even if you closed Studio in Build. Off: Studio keeps the mode you closed it in."><input type="checkbox" id="settings-start-vibe" checked><span class="track"></span><span>Always start in Vibe</span></label>
             <label class="switch" id="settings-key-tips-switch" title="Small pop-ups beside buttons and tabs that show the key that does the same thing. Click one to fade it away."><input type="checkbox" id="settings-key-tips" checked><span class="track"></span><span>Show key tips</span></label>
-            <label class="switch" id="settings-layout-v2-switch" title="The 0.5 layout puts a list, an inspector, tabs and a status bar around every page, and a Vibe and Build switch in the top bar. Studio reloads to switch; switch it off here or in Search (Switch layout) to go back."><input type="checkbox" id="settings-layout-v2"><span class="track"></span><span>Try the 0.5 layout</span></label>
             <label class="switch" id="settings-composer-picker-switch" title="Typing @ in Home's message box offers this project's files, # its tasks and / its skills, and the box shows what the message points at. Off leaves @, # and / as plain typing, and a /skill in a message is not expanded."><input type="checkbox" id="settings-composer-picker" checked><span class="track"></span><span>Suggest files, tasks and skills while I type</span></label>
             <label class="switch" title="On: after five minutes without input, Studio switches to Command view. Off: it stays on the page you left open."><input type="checkbox" id="idle-command-idle"><span class="track"></span><span>Show Command view after 5 quiet minutes</span></label>
           </div>
@@ -25035,11 +25034,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // the shortcut sheet and the palette use), and RAIL_SLOTS places the late
   // arrivals whose kind would otherwise keep them out (Community).
   //
-  // It is the default. html[data-shell="rail"] (applyShell) is what turns it
-  // on, and "classic" — ?shell=classic, or the palette's switch, remembered —
-  // brings back the tabs row, the Command dock and the hover sidebar for anyone
-  // who needs them while the rail beds in.
-  const SHELL_KEY = "mefiStudio.shell";
+  // It is the only shell: html[data-shell="rail"] (applyShell) turns it on at every launch.
   const RAIL_PIN_KEY = "mefiStudio.railPinned";
   // Each head is its target's own button and draws the target's glyph, so a
   // section and its main destination never show two different icons.
@@ -25395,21 +25390,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (list?.style) list.style.display = "";
   }
 
-  // Vibe has one frame, its own rail on the rail shell's geometry; the
-  // classic-tabs choice is kept, and only shapes Build.
+  // The rail is Studio's only shell (0.5.0): the classic tabs shell and its switch are gone.
   function vibeMode() { return window.MefiVibe?.mode?.() === "vibe"; }
-  function shellOn() {
-    return vibeMode() || shellPreferred();
-  }
-  function shellPreferred() {
-    try {
-      const param = new URLSearchParams(location.search).get("shell");
-      if (param) return param !== "classic";
-      return localStorage.getItem(SHELL_KEY) !== "classic";
-    } catch {
-      return true;
-    }
-  }
+  function shellOn() { return true; }
 
   // A pinned rail takes its open width from the page. Below this window width
   // it yields and behaves unpinned, opening over the page on hover or focus;
@@ -25457,11 +25440,6 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     return on;
   }
 
-  function setShell(on) {
-    try { localStorage.setItem(SHELL_KEY, on ? "rail" : "classic"); } catch { /* this launch only */ }
-    return applyShell(Boolean(on) || vibeMode());
-  }
-
   // ---- the layout contract -----------------------------------------------
   // docs/unified-studio.md, "Layout contract". html[data-layout="v2"] is the
   // second attribute the 0.5.0 plan asks for (a third data-shell value would
@@ -25476,7 +25454,6 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // the fold rule for small windows, and usable(), the rectangle a floating
   // thing keeps inside. This is the only writer of html[data-layout] and of
   // html[data-layout-fold]; tests/layout_contract_nav.test.mjs pins that.
-  const LAYOUT_KEY = "mefiStudio.layout";
   const LAYOUT_REGIONS = Object.freeze({
     list: Object.freeze({ variable: "--shell-list-w", max: 420, folds: true }),
     inspector: Object.freeze({ variable: "--shell-inspector-w", max: 640, folds: true }),
@@ -25495,21 +25472,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   let layoutApplied = { list: 0, inspector: 0, tabs: 0, status: 0 };
   let layoutResize = null;
 
-  // ?layout=v1|v2 wins for one launch. A diagnostic launch (?smoke=1,
-  // ?capture=1) stays v1 unless it asks, so the render fixtures see the layout
-  // they were written for; otherwise the saved choice, and v1 by default.
-  function layoutChoice() {
-    try {
-      const search = String(location.search || "");
-      const param = new URLSearchParams(search).get("layout");
-      if (param === "v1" || param === "v2") return param;
-      if (/[?&](?:smoke|capture)=1(?:&|$)/.test(search)) return "v1";
-      // The 0.5 layout is the default: only a saved classic choice (the Settings switch, Search's "Switch layout") keeps v1.
-      return localStorage.getItem(LAYOUT_KEY) === "v1" ? "v1" : "v2";
-    } catch {
-      return "v2";
-    }
-  }
+  // The 0.5 layout is Studio's only layout (0.5.0): every launch, a diagnostic one too, opens in it. The classic layout,
+  // its switch, ?layout= and a saved choice are gone.
+  function layoutChoice() { return "v2"; }
   const layoutOn = () => document.documentElement?.dataset?.layout === "v2";
   const viewportSize = () => ({
     w: Number(window.innerWidth) || document.documentElement?.clientWidth || 0,
@@ -25604,8 +25569,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     }
   }
 
-  // The writer of html[data-layout]: v2 on or off, now. init() asks the launch
-  // (layoutChoice), setLayout() the person's saved choice.
+  // The writer of html[data-layout]: init() turns the 0.5 layout on (layoutChoice). A suite may pass false to see the
+  // page without the frame.
   function applyLayout(on = layoutChoice() === "v2") {
     const root = document.documentElement;
     if (!root) return false;
@@ -25621,11 +25586,6 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (on) window.MefiSessions?.attach?.(); else if (was) window.MefiSessions?.detach?.();
     // ---- end of sessions ----
     return Boolean(on);
-  }
-  function setLayout(choice) {
-    const next = choice === "v2" ? "v2" : "v1";
-    try { localStorage.setItem(LAYOUT_KEY, next); } catch { /* this launch only */ }
-    return applyLayout(next === "v2");
   }
 
   // The one way a region claims room: set("list", 280). The value is cut to
@@ -25745,24 +25705,6 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       if (sidebar) new MutationObserver(() => brand?.setAttribute("aria-expanded", String(sidebar.dataset.open === "true"))).observe(sidebar, { attributes: true, attributeFilter: ["data-open"] });
     }
   }
-
-  register({
-    id: "shellRail",
-    label: "Switch navigation: rail or classic",
-    short: "Navigation",
-    kind: "action",
-    layer: null,
-    section: "settings",
-    group: "system",
-    key: null,
-    glyph: "g-pin",
-    badge: null,
-    desc: "Swap the navigation rail for the classic tabs row, Command dock and hover sidebar, or back",
-    searchTerms: ["shell", "sidebar", "navigation", "menu", "layout"],
-    showIn: showIn({ palette: true }),
-    // Vibe always shows the rail, so there it flips the choice Build will use.
-    run: () => setShell(vibeMode() ? !shellPreferred() : document.documentElement.dataset.shell !== "rail"),
-  });
 
   function renderTools(target) {
     const element = target ?? document.getElementById("nav-tools");
@@ -27129,9 +27071,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     PLACES: Object.freeze(Object.fromEntries(PLACES)),
     RAIL_SLOTS,
     applyShell,
-    setShell,
     applyLayout,
-    setLayout,
     layout,
     usable,
     setRailPinned,
@@ -65330,7 +65270,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   function onZoomPush(payload) {
     if (isNumber(payload?.factor)) setZoom(zoomFromFactor(payload.factor), "keys");
   }
-  // The layout can be switched off and on again while the window is open (MefiNav.setLayout):
+  // A suite can take the layout off and put it back while the window is open (MefiNav.applyLayout):
   // off takes the text size and detail off the window, on puts them back.
   function onLayout(event) {
     const on = event?.detail?.on;
@@ -98339,36 +98279,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }
   }
 
-  // ---- the way in (this runs with v2 off too) -------------------------------------------------------------
-  // A Settings switch and a Search action: each saves the choice through MefiNav.setLayout and reloads,
-  // as builder.js's layout switch does, so every module starts in the layout it was asked for.
-  function switchLayout(next) {
-    const n = nav();
-    if (!n?.setLayout) return false;
-    const to = next === "v2" ? "v2" : "v1";
-    n.setLayout(to);
-    window.MefiToast?.(to === "v2" ? "Switching to the 0.5 layout. Studio reloads to do it." : "Going back to the classic layout. Studio reloads to do it.", "info");
-    setTimeout(() => { try { n.saveResume?.(); } catch { /* resume is optional */ } try { window.location.reload(); } catch { /* no reload here */ } }, 350);
-    return true;
-  }
-  function wayIn() {
-    nav()?.register?.({
-      id: "layout-switch", label: "Switch layout: 0.5 or classic", short: "Layout", kind: "action", layer: null, section: "settings", group: "system",
-      glyph: "g-frame", badge: null, desc: "The 0.5 layout adds a list, an inspector, tabs and a status bar around every page. Studio reloads to switch.",
-      searchTerms: "layout 0.5 classic v1 v2 new shell list inspector tabs status bar panels frame switch try",
-      showIn: { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false },
-      run: () => switchLayout(layoutOn() ? "v1" : "v2"),
-    });
-    const box = document.getElementById?.("settings-layout-v2");
-    if (box) {
-      box.checked = layoutOn();
-      box.addEventListener("change", () => { const wanted = box.checked; if (!switchLayout(wanted ? "v2" : "v1")) box.checked = !wanted; });
-    }
-  }
+  // The 0.5 layout is Studio's only layout (0.5.0): there is no switch back to the classic one.
   function start() {
     if (state.armed) return;
     state.armed = true;
-    wayIn();
     if (layoutOn()) enable();
   }
 

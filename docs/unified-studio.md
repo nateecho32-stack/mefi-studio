@@ -156,9 +156,8 @@ The shell keeps room in its geometry for four regions: a session list beside
 the rail, an inspector at the right, a tab strip under the local navigation
 and a status bar along the bottom. `renderer/shell.js` draws the frame in them
 (see "The frame" below); the contract is what it stands on. With every region
-at 0 (the default, "layout v1") each page, sheet and floating thing is exactly
-where it was: `tests/fixtures/layout-contract-v1.json` holds the boxes of the
-base commit and the render fixture compares them.
+at 0 each page, sheet and floating thing stands where it stood before the
+regions existed; the frame sets them from its own sizes.
 
 | Variable | Range | Meaning |
 | --- | --- | --- |
@@ -176,8 +175,7 @@ starts" with them and nothing else: `--shell-x0` (rail plus list),
 navigation itself, and their remaining uses are named in
 `tests/layout_contract_css.test.mjs`.
 
-The contract is for the rail shell, which Vibe always has. Build's classic-tabs
-choice keeps its row of tabs and has no room for the regions.
+The contract is for the rail shell, which is Studio's only shell since 0.5.0.
 
 Only `MefiNav.layout.set(name, value)` (`renderer/nav.js`) gives a region room,
 where `name` is `list`, `inspector`, `tabs` or `status`. The value is cut to
@@ -217,19 +215,13 @@ of the local navigation's, and the window's other edges. In v2 it is also
 clear of the list, the tab strip, the inspector and the status bar. Ask it
 each time something is placed, not once.
 
-**Turning it on.** Since 0.5 it is the default: with nothing saved, the page
-opens in it (`renderer/nav.js` `layoutChoice`); smoke and capture launches stay
-classic unless they ask, so the diagnostic fixtures keep their geometry. Classic
-is always one switch away, and the ways to choose are the same. In Settings (the You section, which
-Configuration › UI & Surfaces lists too) the switch "Try the 0.5 layout"; in
-Search the action "Switch layout: 0.5 or classic". Both save the choice through
-`MefiNav.setLayout` and reload the window, the way Build's sessions-layout
-switch does, so every module starts in the layout it was asked for. For one
-launch, `?layout=v2` (or `v1`) on the page's address wins over the saved
-choice, and so does the environment variable `MEFI_STUDIO_LAYOUT=v2` (or
-`v1`) for the desktop app: `main.cjs` passes it to the window as that query.
-`MEFI_STUDIO_LAYOUT=v1` is the kill switch, since it opens classic whatever was
-saved; any other value is ignored.
+**The only layout.** Since 0.5.0 the 0.5 layout is Studio's only layout:
+`renderer/nav.js` (`layoutChoice`, `applyLayout`) writes `html[data-layout="v2"]`
+at every launch, diagnostic ones too, and the rail is the only shell
+(`shellOn`). The classic layout and its ways in are gone: the Settings switch,
+Search's "Switch layout" and "Switch navigation", `?layout=`, `?shell=classic`,
+a saved choice and the desktop app's environment variable. A suite can still
+call `applyLayout(false)` to look at a page without the frame.
 
 ## The frame
 
@@ -409,15 +401,12 @@ project isolation and draft retention. No live project data or
 credentials are used. Screenshots can be retained with
 `MEFI_UNIFIED_CAPTURE_DIR` pointing to a directory outside the repository.
 
-The layout contract has three suites. `tests/layout_contract_nav.test.mjs`
-pins the layout writer, the launch choice, the clamps and `usable()` against
-a fake document. `tests/layout_contract_css.test.mjs` evaluates every
-declaration that moved onto the derived edges, with the regions at 0 (it must
-equal what it was) and at the sample sizes (it must move by exactly the
-region). `tests/layout_contract_render.test.mjs` launches an Electron fixture
-that measures the rail, the local navigation and every registered destination
-in four window sizes, Build and Vibe, the menu closed and pinned: v1 must
-reproduce `tests/fixtures/layout-contract-v1.json`, and v2 with fixture-only
-boxes for the four regions (list 280, inspector 400, tab strip 36, status bar
-28) must keep every page clear of them and inside the window. Screenshots can
-be retained with `MEFI_LAYOUT_CAPTURE_DIR`.
+The layout contract has two suites. `tests/layout_contract_nav.test.mjs`
+pins the layout writer, the clamps and `usable()` against a fake document.
+`tests/layout_contract_css.test.mjs` evaluates every declaration that moved
+onto the derived edges, with the regions at 0 (it must equal what it was) and
+at the sample sizes (it must move by exactly the region). The real frame's
+geometry in a real window is `tests/shell_render.test.mjs`'s, with the tab
+strip's and the session list's own render suites. The render fixture that
+compared the classic layout with a record of its boxes went with the classic
+layout in 0.5.0.

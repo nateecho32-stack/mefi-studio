@@ -1536,11 +1536,7 @@
   // the shortcut sheet and the palette use), and RAIL_SLOTS places the late
   // arrivals whose kind would otherwise keep them out (Community).
   //
-  // It is the default. html[data-shell="rail"] (applyShell) is what turns it
-  // on, and "classic" — ?shell=classic, or the palette's switch, remembered —
-  // brings back the tabs row, the Command dock and the hover sidebar for anyone
-  // who needs them while the rail beds in.
-  const SHELL_KEY = "mefiStudio.shell";
+  // It is the only shell: html[data-shell="rail"] (applyShell) turns it on at every launch.
   const RAIL_PIN_KEY = "mefiStudio.railPinned";
   // Each head is its target's own button and draws the target's glyph, so a
   // section and its main destination never show two different icons.
@@ -1896,21 +1892,9 @@
     if (list?.style) list.style.display = "";
   }
 
-  // Vibe has one frame, its own rail on the rail shell's geometry; the
-  // classic-tabs choice is kept, and only shapes Build.
+  // The rail is Studio's only shell (0.5.0): the classic tabs shell and its switch are gone.
   function vibeMode() { return window.MefiVibe?.mode?.() === "vibe"; }
-  function shellOn() {
-    return vibeMode() || shellPreferred();
-  }
-  function shellPreferred() {
-    try {
-      const param = new URLSearchParams(location.search).get("shell");
-      if (param) return param !== "classic";
-      return localStorage.getItem(SHELL_KEY) !== "classic";
-    } catch {
-      return true;
-    }
-  }
+  function shellOn() { return true; }
 
   // A pinned rail takes its open width from the page. Below this window width
   // it yields and behaves unpinned, opening over the page on hover or focus;
@@ -1958,11 +1942,6 @@
     return on;
   }
 
-  function setShell(on) {
-    try { localStorage.setItem(SHELL_KEY, on ? "rail" : "classic"); } catch { /* this launch only */ }
-    return applyShell(Boolean(on) || vibeMode());
-  }
-
   // ---- the layout contract -----------------------------------------------
   // docs/unified-studio.md, "Layout contract". html[data-layout="v2"] is the
   // second attribute the 0.5.0 plan asks for (a third data-shell value would
@@ -1977,7 +1956,6 @@
   // the fold rule for small windows, and usable(), the rectangle a floating
   // thing keeps inside. This is the only writer of html[data-layout] and of
   // html[data-layout-fold]; tests/layout_contract_nav.test.mjs pins that.
-  const LAYOUT_KEY = "mefiStudio.layout";
   const LAYOUT_REGIONS = Object.freeze({
     list: Object.freeze({ variable: "--shell-list-w", max: 420, folds: true }),
     inspector: Object.freeze({ variable: "--shell-inspector-w", max: 640, folds: true }),
@@ -1996,21 +1974,9 @@
   let layoutApplied = { list: 0, inspector: 0, tabs: 0, status: 0 };
   let layoutResize = null;
 
-  // ?layout=v1|v2 wins for one launch. A diagnostic launch (?smoke=1,
-  // ?capture=1) stays v1 unless it asks, so the render fixtures see the layout
-  // they were written for; otherwise the saved choice, and v1 by default.
-  function layoutChoice() {
-    try {
-      const search = String(location.search || "");
-      const param = new URLSearchParams(search).get("layout");
-      if (param === "v1" || param === "v2") return param;
-      if (/[?&](?:smoke|capture)=1(?:&|$)/.test(search)) return "v1";
-      // The 0.5 layout is the default: only a saved classic choice (the Settings switch, Search's "Switch layout") keeps v1.
-      return localStorage.getItem(LAYOUT_KEY) === "v1" ? "v1" : "v2";
-    } catch {
-      return "v2";
-    }
-  }
+  // The 0.5 layout is Studio's only layout (0.5.0): every launch, a diagnostic one too, opens in it. The classic layout,
+  // its switch, ?layout= and a saved choice are gone.
+  function layoutChoice() { return "v2"; }
   const layoutOn = () => document.documentElement?.dataset?.layout === "v2";
   const viewportSize = () => ({
     w: Number(window.innerWidth) || document.documentElement?.clientWidth || 0,
@@ -2105,8 +2071,8 @@
     }
   }
 
-  // The writer of html[data-layout]: v2 on or off, now. init() asks the launch
-  // (layoutChoice), setLayout() the person's saved choice.
+  // The writer of html[data-layout]: init() turns the 0.5 layout on (layoutChoice). A suite may pass false to see the
+  // page without the frame.
   function applyLayout(on = layoutChoice() === "v2") {
     const root = document.documentElement;
     if (!root) return false;
@@ -2122,11 +2088,6 @@
     if (on) window.MefiSessions?.attach?.(); else if (was) window.MefiSessions?.detach?.();
     // ---- end of sessions ----
     return Boolean(on);
-  }
-  function setLayout(choice) {
-    const next = choice === "v2" ? "v2" : "v1";
-    try { localStorage.setItem(LAYOUT_KEY, next); } catch { /* this launch only */ }
-    return applyLayout(next === "v2");
   }
 
   // The one way a region claims room: set("list", 280). The value is cut to
@@ -2246,24 +2207,6 @@
       if (sidebar) new MutationObserver(() => brand?.setAttribute("aria-expanded", String(sidebar.dataset.open === "true"))).observe(sidebar, { attributes: true, attributeFilter: ["data-open"] });
     }
   }
-
-  register({
-    id: "shellRail",
-    label: "Switch navigation: rail or classic",
-    short: "Navigation",
-    kind: "action",
-    layer: null,
-    section: "settings",
-    group: "system",
-    key: null,
-    glyph: "g-pin",
-    badge: null,
-    desc: "Swap the navigation rail for the classic tabs row, Command dock and hover sidebar, or back",
-    searchTerms: ["shell", "sidebar", "navigation", "menu", "layout"],
-    showIn: showIn({ palette: true }),
-    // Vibe always shows the rail, so there it flips the choice Build will use.
-    run: () => setShell(vibeMode() ? !shellPreferred() : document.documentElement.dataset.shell !== "rail"),
-  });
 
   function renderTools(target) {
     const element = target ?? document.getElementById("nav-tools");
@@ -3630,9 +3573,7 @@
     PLACES: Object.freeze(Object.fromEntries(PLACES)),
     RAIL_SLOTS,
     applyShell,
-    setShell,
     applyLayout,
-    setLayout,
     layout,
     usable,
     setRailPinned,

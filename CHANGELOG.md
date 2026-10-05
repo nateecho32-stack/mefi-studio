@@ -14,12 +14,13 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 - **One page at a time over the Map.** In the 0.5 layout, Fleet, Pipelines,
   Team and the other pages that open over the Map no longer show the Map's
   nodes faintly through the theme's glass.
-- **The 0.5 layout is now the default.** Studio opens in the new layout
+- **The 0.5 layout is Studio's only layout.** Studio opens in it every time
   (Work, Map, Team and Friends on the rail, the session list, tabs and the
-  status bar) unless you chose the classic one before. The classic layout
-  is still one switch away: Settings › You "Try the 0.5 layout", or Search's
-  "Switch layout: 0.5 or classic". `MEFI_STUDIO_LAYOUT=v1` still opens
-  classic for one launch.
+  status bar), whatever was chosen before. The way back to the classic
+  layout is gone: Settings › You no longer has "Try the 0.5 layout",
+  Search no longer offers "Switch layout: 0.5 or classic" or the rail
+  switch, and `MEFI_STUDIO_LAYOUT` and `?layout=` are no longer read. The
+  old choice stays in this PC's storage and does nothing.
 - **The Command view is the Map in the 0.5 layout, as in the prototype.** With
   the new layout on (`?layout=v2`), the Map keeps your sessions in the list
   beside it, and a small bar over the tree holds Map | Fleet | Pipelines,

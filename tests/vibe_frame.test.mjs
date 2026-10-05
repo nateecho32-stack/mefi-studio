@@ -84,22 +84,6 @@ function load({ mode = "vibe", view = "vibe", stored = {} } = {}) {
   return { nav, log, tabs, window, get, document, store, view: () => view };
 }
 
-test("Vibe keeps the rail shell's frame even when Build is set to the classic tabs", () => {
-  const classic = { "mefiStudio.shell": "classic" };
-  assert.equal(load({ mode: "vibe", stored: classic }).nav.applyShell(), true, "Vibe's rail needs the rail geometry");
-  assert.equal(load({ mode: "build", stored: classic }).nav.applyShell(), false, "Build still honours the classic choice");
-});
-
-test("switching shells from Vibe records Build's choice without taking Vibe's rail away", () => {
-  const loaded = load();
-  loaded.nav.applyShell();
-  loaded.nav.get("shellRail").run();
-  assert.equal(loaded.store.get("mefiStudio.shell"), "classic", "Build will open with the classic tabs");
-  assert.equal(loaded.document.documentElement.dataset.shell, "rail", "Vibe keeps its frame");
-  loaded.nav.get("shellRail").run();
-  assert.equal(loaded.store.get("mefiStudio.shell"), "rail", "a second run flips the choice back");
-});
-
 test("Home is Vibe: every route to Build's Home lands on Vibe instead", () => {
   const loaded = load({ view: "page" });
   loaded.nav.go("workspace");

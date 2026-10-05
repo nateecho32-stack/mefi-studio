@@ -1,6 +1,6 @@
 // The 0.5 shell's frame in a real window: a copied booklet and a synthetic bridge
-// (tests/fixtures/shell-render-electron.cjs). v1 has no frame and keeps the way in;
-// v2 draws every region where the layout contract says, at five window sizes, in
+// (tests/fixtures/shell-render-electron.cjs). It is built at launch, with no way back;
+// it draws every region where the layout contract says, at five window sizes, in
 // Build and Vibe, with the menu closed and pinned; the splitters work with a real
 // pointer and real keys; the smallest window's drawers stay inside it. Set
 // MEFI_SHELL_CAPTURE_DIR to an absolute folder to keep the screenshots.
@@ -18,7 +18,7 @@ const studio = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const executable = path.join(studio, "node_modules", "electron", "dist", process.platform === "win32" ? "electron.exe" : process.platform === "darwin" ? "Electron.app/Contents/MacOS/Electron" : "electron");
 const canRun = existsSync(executable) && (process.platform !== "linux" || Boolean(process.env.DISPLAY || process.env.WAYLAND_DISPLAY));
 
-test("the frame in a real window: v1 has none, v2 draws every region where the contract says, the splitters and drawers work", { skip: !canRun, timeout: 780000 }, async (t) => {
+test("the frame in a real window: built at launch with no way back, every region where the contract says, the splitters and drawers work", { skip: !canRun, timeout: 780000 }, async (t) => {
   const fixture = await mkdtemp(path.join(tmpdir(), "mefi-shell-render-"));
   try {
     await mkdir(path.join(fixture, "renderer")); await mkdir(path.join(fixture, "data"));

@@ -441,17 +441,11 @@ commit rewrites the JSON view as well.
 - **The layout contract** (room for a session list, an inspector, a tab strip and
   a status bar; `docs/unified-studio.md`) is pinned by
   `layout_contract_nav.test.mjs` (the one writer of `html[data-layout]` and
-  `data-layout-fold`, the launch choice, the clamps and the 320 px budget, the
-  fold, `usable()` in v1 and v2, the events), `layout_contract_css.test.mjs`
-  (every moved declaration evaluated as CSS would: unchanged in v1, moved by
-  exactly its region in v2; every remaining raw `--shell-rail-w` or
-  `--shell-local-h` read named) and `layout_contract_render.test.mjs` with
-  `fixtures/layout-contract-electron.cjs`, `layout-contract-v2.cjs` and
-  `layout-contract-floats.cjs` (real Chromium, about five minutes: every page and
-  sheet against `layout-contract-v1.json`, the geometry recorded on the base
-  commit, then in v2 at eight window and mode combinations, with real pointer
-  drags of the media window and the orb). `layout-contract-ledger.json` lists the
-  74 declarations that moved.
+  `data-layout-fold`, the clamps and the 320 px budget, the fold, `usable()`,
+  the events) and `layout_contract_css.test.mjs` (every moved declaration
+  evaluated as CSS would: unchanged with the regions at 0, moved by exactly its
+  region otherwise; every remaining raw `--shell-rail-w` or `--shell-local-h`
+  read named). `layout-contract-ledger.json` lists the 74 declarations that moved.
 - **Size and density** is pinned by `size_model.test.mjs` (limits and steps, the
   old stores, launch painting, Apply/Undo/Reset, broken storage, events),
   `size_page.test.mjs` (the page and its miniature: every combination of the four

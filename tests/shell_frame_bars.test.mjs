@@ -611,9 +611,10 @@ test("the frame never reaches for setInterval, and its only timer is the 60 ms c
   const source = await readFile(new URL("../renderer/shell.js", import.meta.url), "utf8");
   absent(source, /setInterval|requestIdleCallback|new Worker|fetch\(|XMLHttpRequest|window\.mefiStudio\??\.[a-z][A-Za-z]*\(/, "no poll, no network, no host call made by name");
   const timeouts = [...source.matchAll(/setTimeout\(/g)].length;
-  // The third is the player's time left, once a second only while something plays and the window can be seen (the owner's
-  // pick, 2026-10-05); the usage meters ride on the repaints the frame makes anyway.
-  assert.equal(timeouts, 3, "the feed's coalescer, the layout switch's reload delay and the player's time left");
+  // The second is the player's time left, once a second only while something plays and the window can be seen (the owner's
+  // pick, 2026-10-05); the usage meters ride on the repaints the frame makes anyway. The layout switch's reload delay went
+  // with the switch (0.5.0: the 0.5 layout is the only one).
+  assert.equal(timeouts, 2, "the feed's coalescer and the player's time left");
 });
 
 test("the need pill and the waiting item open the inbox through MefiShell.onInbox first, then MefiToday, then Work's own views", async () => {

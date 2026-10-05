@@ -8,8 +8,7 @@
 // only where the team is edited, nothing wider than the page, and no text under 12 px. A place that is pages of its own
 // (Skills, Workflows, Health and usage, Models, Inspect) opens its first page with the place open in the list. Old ways
 // in (Settings' Connections, Models and Automation, Agents' setup panes, the permission control) land on the place that
-// holds them now, and Search names a control by its Team place. A second launch without ?layout=v2 shows Agents as it
-// was. Screenshots are kept when the test is given a capture folder (MEFI_TEAM_CAPTURE_DIR). No application main
+// holds them now, and Search names a control by its Team place. Screenshots are kept when the test is given a capture folder (MEFI_TEAM_CAPTURE_DIR). No application main
 // process or live state is loaded; network, permissions and child processes are blocked.
 const { app, BrowserWindow, session } = require("electron");
 const assert = require("node:assert/strict");
@@ -191,20 +190,6 @@ app.whenReady().then(async () => {
   const found = [];
   const go = (id, params) => run(`window.MefiNav.go(${JSON.stringify(id)}${params ? `, ${JSON.stringify(params)}` : ""});`);
   const placeIs = (place) => `document.getElementById('agents-overlay')?.hidden === false && document.getElementById('agents-overlay').dataset.teamPlace === ${JSON.stringify(place)}`;
-
-  // ---- v1: Agents as it was ------------------------------------------------------------------------
-  await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1" } });
-  await until("window.MefiNav && window.MefiAgents && !window.MefiBoot?.isActive?.()", "studio ready (v1)");
-  await go("agents");
-  await until("document.getElementById('agents-overlay')?.hidden === false", "Agents is up (v1)");
-  report.v1 = await run(`return {
-    layout: document.documentElement.dataset.layout || null, places: document.getElementById('agents-overlay').dataset.places || null,
-    title: document.getElementById('agents-title').textContent, label: window.MefiNav.get('agents').label,
-    panes: [...document.querySelectorAll('#agents-body > [data-agents-pane]')].map((node) => node.dataset.agentsPane),
-    model: window.MefiAgents.teamPlaces(), crumb: window.MefiAgents.teamPlace(),
-  };`);
-  assert.deepEqual(report.v1, { layout: null, places: null, title: "Agents", label: "Agents", panes: ["overview", "connections", "team", "routing", "behavior"], model: null, crumb: null }, "with the layout off Agents keeps its name, its five panes and no Team places");
-  report.steps.push("v1 is untouched");
 
   // ---- v2 ------------------------------------------------------------------------------------------
   await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1", layout: "v2" } });

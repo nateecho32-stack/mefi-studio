@@ -99,8 +99,7 @@ decision, and each has an owner-side default already in the code.
 - After pulling, delete the local branches `git branch --merged origin/main`
   lists (the parked `wip/*` branches are in `main` now).
 - Run the real-window fixtures that hosted CI skips, one at a time: at least
-  `layout_contract_render` (about 5 minutes; recorded on Linux, every number is
-  CSS geometry and should match), `builder_render`, `command_render`.
+  `builder_render` and `command_render`.
   `project_map_render` also fails on the Linux lane at 600x560 and 150% zoom
   (9 px over its box) with or without this work; check it on Windows.
 - Measure startup once (`tools/benchmark_startup.py`) so the load-time work has
