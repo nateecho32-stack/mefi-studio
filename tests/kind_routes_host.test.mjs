@@ -101,6 +101,17 @@ test("with trying other models off, or models chosen by hand, Studio starts noth
   assert.equal((await host({ onPath: [] }).route("coding-explore"))?.model, "opencode-go/deepseek-v4-pro", "no Claude Code here: the worker's own stronger model is tried");
 });
 
+test("with one provider for the whole studio, only that tool's own models are offered", async () => {
+  const sonnetWeak = [...many(4, "sonnet", "coding-explore", "verified", { provider: "claude" }), ...many(12, "sonnet", "coding-explore", "failed", { provider: "claude" })];
+  const settings = { aiAutoFallback: false, aiAutoProviders: ["claude"], executorCli: "claude", executorModels: { claude: "sonnet" } };
+  const held = host({ settings, rows: sonnetWeak, onPath: ["claude", "codex"], signedIn: { claude: true, codex: true } });
+  const report = await held.report();
+  assert.deepEqual(report.suggestions.map((item) => [item.to.cli, item.to.model]), [["claude", "opus"]]);
+  assert.ok(report.untried.every((item) => item.cli === "claude"), "Codex is not offered while Claude Code runs the whole studio");
+  const open = host({ settings: { executorCli: "claude", executorModels: { claude: "sonnet" } }, rows: sonnetWeak, onPath: ["claude", "codex"], signedIn: { claude: true, codex: true } });
+  assert.ok((await open.report()).untried.some((item) => item.cli === "codex"), "without that hold, Codex is a candidate too");
+});
+
 test("an owner's route is used as it is, and its trial is judged the same way", async () => {
   const h = host({ settings: { agentKinds: { "coding-explore": { cli: "claude", model: "opus", by: "owner", trial: null, kept: { at: 1, wins: 0, losses: 0 } } } } });
   const route = await h.route("coding-explore");

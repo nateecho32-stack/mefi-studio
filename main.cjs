@@ -17483,7 +17483,11 @@ function builderPreview(settings) {
 // signed-in ChatGPT login.
 async function kindCandidates(settings) {
   const out = [];
+  // "Use for the whole studio" holds the team to one subscription CLI
+  // (cliSetup.singleProvider): only that CLI's own models are offered then.
+  const only = settings.aiAutoFallback === false && Array.isArray(settings.aiAutoProviders) && settings.aiAutoProviders.length === 1 && BUILDER_CLIS.includes(settings.aiAutoProviders[0]) ? settings.aiAutoProviders[0] : null;
   const add = (cli, model) => {
+    if (only && cli !== only) return;
     if (out.some((item) => item.cli === cli && item.model === model)) return;
     const identity = workerLedgerIdentity({ cli, model, via: "" });
     out.push({ cli, model, provider: identity.provider, ledgerModel: identity.model });
