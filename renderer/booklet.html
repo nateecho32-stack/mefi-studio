@@ -6994,6 +6994,10 @@ html[data-no-blur] #plans-overlay { --planning-blur: none; --planning-page-blur:
    library and the sheet's own head step aside; Open the full plan brings every
    step back. Text is at least 12 px and follows the 0.5 text size. */
 #plans-sheet[data-view="draft"] :is(.planning-sidebar, .planning-head) { display: none; }
+/* In the 0.5 frame the top bar's trail and the tab strip already name the page, and the tab's close and Esc leave it, so the
+   full plan's sheet head steps aside too: its band would cost the first step's form the room it needs to fit a desktop window
+   (Create plan in view at 1440x1000 under the frame's bars). */
+html[data-frame] #plans-sheet .planning-head { display: none; }
 #plans-sheet[data-view="draft"] .planning-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
 #plans-sheet[data-view="draft"] .planning-detail { min-height: 0; padding: 28px 24px 40px; overflow-y: auto; overflow-x: hidden; }
 .planning-page { display: grid; gap: 14px; width: min(780px, 100%); margin: 0 auto; }
