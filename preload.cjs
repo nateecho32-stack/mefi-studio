@@ -48,6 +48,8 @@ const api = {
   startupState: () => ipcRenderer.invoke("startup:state"),
   startupChoose: (id) => ipcRenderer.invoke("startup:choose", { id: typeof id === "string" ? id : null }),
   startupBegin: () => ipcRenderer.invoke("startup:begin"),
+  // The page's startup marks, once, after the launch gate releases (renderer/startup-marks.js).
+  startupMarks: (payload) => ipcRenderer.invoke("startup:marks", payload ?? {}),
   readCatalog: () => ipcRenderer.invoke("catalog:read"),
   refreshCatalog: () => ipcRenderer.invoke("catalog:refresh"),
   launchStudio: () => ipcRenderer.invoke("studio:launch"),
@@ -419,6 +421,9 @@ const api = {
   onAssistantStatus: (callback) => ipcRenderer.on("assistant:status", (_event, status) => callback(status)),
   onMachineStatus: (callback) => ipcRenderer.on("machine:status", (_event, status) => callback(status)),
   onTasks: (callback) => ipcRenderer.on("eyes:tasks", (_event, tasks) => callback(tasks)),
+  // A running card's newest runProgress, { projectId, byTask: { id: runProgress } }
+  // (main.cjs persistExecutorCheckpoint), instead of the whole board.
+  onTaskProgress: (callback) => ipcRenderer.on("eyes:progress", (_event, payload) => callback(payload)),
   onIdeas: (callback) => ipcRenderer.on("eyes:ideas", (_event, ideas) => callback(ideas)),
   onRequests: (callback) => ipcRenderer.on("eyes:requests", (_event, requests) => callback(requests)),
   onCheckpoints: (callback) => ipcRenderer.on("eyes:checkpoints", (_event, data) => callback(data)),
@@ -532,9 +537,32 @@ const api = {
 // kept copy from another rev (a push the page never got) stands in once
 // while the host is asked for whole keys again; with nothing kept at all the
 // push is dropped, and the next one is whole.
+//
+// eyes:tasks, eyes:requests, eyes:ideas and eyes:checkpoints carry only the
+// rows this page does not hold (scripts/row-push.cjs). mergeRows keeps each
+// list as { rev, projectId, byId, order } and hands every subscriber a new
+// plain list (or object, for the checkpoint store) in which unchanged rows
+// are the same objects as last time. A push whose `base` is not the rev kept
+// here (a reload, a push that never arrived) is dropped and the host is asked
+// once for the whole list (eyes:rows-sync). A push in the old shape, a plain
+// list (MEFI_STUDIO_FULL_PUSHES=1), goes out as it came. Rows are shared
+// across pushes now, so no subscriber may edit one.
+//
+// eyes:progress carries a running card's newest runProgress instead of the
+// board. It reaches onTaskProgress subscribers and taskProgress(id), and the
+// held board carries it: a row whose own runProgress is older, for the same
+// run, is delivered as a copy with the newer one, at once to onTasks (the list
+// is rebuilt here, so the page sees progress as live as before while only a
+// few hundred bytes cross from main) and in every later list. The kept row is
+// replaced, never edited.
 function installBridge(api, host) {
   const channels = new Map();
   const kept = new Map(); // eyes:assistant state key -> { rev, value }
+  const ROWS = { onTasks: "eyes:tasks", onRequests: "eyes:requests", onIdeas: "eyes:ideas", onCheckpoints: "eyes:checkpoints" };
+  const lists = new Map(); // push channel -> { rev, projectId, object, order, byId }
+  const asked = new Set(); // push channels waiting for a whole list
+  const progress = { projectId: null, byId: new Map() }; // card id -> newest pushed runProgress
+  const DROP = {}; // a merge's answer when nothing may reach the subscribers
   const deliver = (subscribers, value) => {
     for (const subscriber of subscribers.slice()) {
       try {
@@ -564,32 +592,188 @@ function installBridge(api, host) {
     if (resync || !complete) host.assistantSync();
     return complete ? { ...push, state } : null;
   };
+  // A card's pushed progress stands in for its row's own while it is about the
+  // run the row holds and newer.
+  const newer = (entry, row) => Boolean(entry && row && typeof row === "object" && entry.runId && entry.runId === row.runId
+    && (Number(entry.at) || 0) > (Number(row.runProgress?.at) || 0));
+  // After rows arrive from the host: a pushed progress still newer is laid
+  // over its row as a copy; one the row caught up with, or whose run or card
+  // is gone, is forgotten.
+  const settleProgress = (list, ids, whole) => {
+    if (progress.projectId !== list.projectId) {
+      progress.byId.clear();
+      progress.projectId = list.projectId;
+    }
+    if (whole) for (const id of [...progress.byId.keys()]) if (!list.byId.has(id)) progress.byId.delete(id);
+    for (const id of ids) {
+      const entry = progress.byId.get(id);
+      if (!entry) continue;
+      const row = list.byId.get(id);
+      if (newer(entry, row)) list.byId.set(id, { ...row, runProgress: entry });
+      else progress.byId.delete(id);
+    }
+  };
+  const isRowPush = (payload) => Boolean(payload) && typeof payload === "object" && !Array.isArray(payload)
+    && Number.isFinite(payload.rev) && (payload.full === true || Number.isFinite(payload.base));
+  // Rows by id in list order; null when they cannot all be named.
+  const index = (rows, ids) => {
+    if (Array.isArray(rows)) {
+      const order = [];
+      const byId = new Map();
+      for (let at = 0; at < rows.length; at += 1) {
+        const id = ids ? ids[at] : rows[at]?.id;
+        if (typeof id !== "string" || !id || byId.has(id)) return null;
+        order.push(id);
+        byId.set(id, rows[at]);
+      }
+      return { object: false, order, byId };
+    }
+    if (rows && typeof rows === "object") return { object: true, order: Object.keys(rows), byId: new Map(Object.entries(rows)) };
+    return null;
+  };
+  const listOf = (list) => (list.object ? Object.fromEntries(list.order.map((id) => [id, list.byId.get(id)])) : list.order.map((id) => list.byId.get(id)));
+  const ask = (channel) => {
+    if (asked.has(channel)) return;
+    asked.add(channel);
+    host.rowsSync(channel);
+  };
+  const mergeRows = (channel, payload) => {
+    if (!isRowPush(payload)) {
+      lists.delete(channel);
+      return payload;
+    }
+    const tasks = channel === "eyes:tasks";
+    if (payload.full === true) {
+      asked.delete(channel);
+      const table = index(payload.rows, Array.isArray(payload.ids) ? payload.ids : null);
+      if (!table) {
+        lists.delete(channel);
+        return payload.rows;
+      }
+      const list = { rev: payload.rev, projectId: payload.projectId ?? null, ...table };
+      if (tasks) settleProgress(list, list.order, true);
+      lists.set(channel, list);
+      return listOf(list);
+    }
+    const list = lists.get(channel);
+    const shaped = list && (list.object
+      ? Boolean(payload.set) && typeof payload.set === "object" && !Array.isArray(payload.set) && Array.isArray(payload.del)
+      : Array.isArray(payload.upsert) && Array.isArray(payload.remove));
+    if (!shaped || list.rev !== payload.base || list.projectId !== (payload.projectId ?? null)) {
+      ask(channel);
+      return DROP;
+    }
+    const gone = list.object ? payload.del : payload.remove;
+    const incoming = list.object ? Object.entries(payload.set) : payload.upsert.map((row, at) => [Array.isArray(payload.ids) ? payload.ids[at] : row?.id, row]);
+    const byId = new Map(list.byId);
+    for (const id of gone) byId.delete(id);
+    const added = [];
+    let named = true;
+    for (const [id, row] of incoming) {
+      if (typeof id !== "string" || !id) named = false;
+      else {
+        if (!byId.has(id)) added.push(id);
+        byId.set(id, row);
+      }
+    }
+    const left = new Set(gone);
+    const order = Array.isArray(payload.order) ? payload.order.slice() : [...list.order.filter((id) => !left.has(id)), ...added];
+    if (!named || order.length !== byId.size || new Set(order).size !== order.length || order.some((id) => !byId.has(id))) {
+      ask(channel);
+      return DROP;
+    }
+    const next = { rev: payload.rev, projectId: list.projectId, object: list.object, order, byId };
+    if (tasks) settleProgress(next, [...incoming.map(([id]) => id), ...gone], false);
+    lists.set(channel, next);
+    return listOf(next);
+  };
+  let relist = null; // the task list mergeProgress changed, to deliver again
+  const mergeProgress = (payload) => {
+    let moved = false;
+    const byTask = payload?.byTask;
+    if (!byTask || typeof byTask !== "object") return DROP;
+    const tasks = lists.get("eyes:tasks");
+    // Another project's cards: the switch already sent this project's board.
+    if (tasks && tasks.projectId !== (payload.projectId ?? null)) return DROP;
+    if (progress.projectId !== (payload.projectId ?? null)) {
+      progress.byId.clear();
+      progress.projectId = payload.projectId ?? null;
+    }
+    for (const [id, entry] of Object.entries(byTask)) {
+      if (!entry || typeof entry !== "object") {
+        progress.byId.delete(id);
+        continue;
+      }
+      progress.byId.set(id, entry);
+      const row = tasks?.byId.get(id);
+      if (newer(entry, row)) {
+        tasks.byId.set(id, { ...row, runProgress: entry });
+        moved = true;
+      }
+    }
+    // A card on the held board shows newer progress: onTasks subscribers get
+    // the list again (built here, no copy crossed from main), so a surface that
+    // reads row.runProgress (tasks.js, sessions.js, builder.js) stays live.
+    if (moved) relist = tasks;
+    return payload;
+  };
+  const listen = (name) => {
+    let subscribers = channels.get(name);
+    if (subscribers) return subscribers;
+    subscribers = [];
+    channels.set(name, subscribers);
+    const send = (merged) => {
+      if (merged !== DROP) deliver(subscribers, merged);
+    };
+    if (name === "onAssistant") {
+      api.onAssistant((payload) => {
+        const merged = mergeAssistant(payload);
+        if (merged) deliver(subscribers, merged);
+      });
+      host.assistantSync();
+    } else if (ROWS[name]) {
+      // Progress lays over the rows even when nothing subscribes to it.
+      if (name === "onTasks") listen("onTaskProgress");
+      api[name]((payload) => send(mergeRows(ROWS[name], payload)));
+    } else if (name === "onTaskProgress") {
+      api.onTaskProgress((payload) => {
+        relist = null;
+        send(mergeProgress(payload));
+        const tasks = relist;
+        relist = null;
+        const listeners = channels.get("onTasks");
+        if (tasks && listeners?.length && lists.get("eyes:tasks") === tasks) deliver(listeners, listOf(tasks));
+      });
+    } else {
+      api[name]((value) => deliver(subscribers, value));
+    }
+    return subscribers;
+  };
   const bridge = { ...api };
   for (const name of Object.keys(api)) {
     if (!/^on[A-Z]/.test(name)) continue;
     bridge[name] = (callback) => {
       if (typeof callback !== "function") return;
-      let subscribers = channels.get(name);
-      if (!subscribers) {
-        subscribers = [];
-        channels.set(name, subscribers);
-        if (name === "onAssistant") {
-          api.onAssistant((payload) => {
-            const merged = mergeAssistant(payload);
-            if (merged) deliver(subscribers, merged);
-          });
-          host.assistantSync();
-        } else {
-          api[name]((value) => deliver(subscribers, value));
-        }
-      }
-      subscribers.push(callback);
+      listen(name).push(callback);
     };
   }
+  // The newest runProgress eyes:progress brought for a card, or null: callers
+  // fall back to the row's own (`taskProgress(id) ?? row.runProgress`).
+  bridge.taskProgress = (id) => {
+    listen("onTaskProgress");
+    return progress.byId.get(String(id)) ?? null;
+  };
   Object.defineProperty(globalThis, "mefiStudio", { value: Object.freeze(bridge), enumerable: true });
 }
 
+const ROW_CHANNELS = ["eyes:tasks", "eyes:requests", "eyes:ideas", "eyes:checkpoints"];
 contextBridge.executeInMainWorld({
   func: installBridge,
-  args: [api, { assistantSync: () => ipcRenderer.send("eyes:assistant-sync") }],
+  args: [api, {
+    assistantSync: () => ipcRenderer.send("eyes:assistant-sync"),
+    // Only the four list channels; main resends that list whole.
+    rowsSync: (channel) => {
+      if (ROW_CHANNELS.includes(channel)) ipcRenderer.send("eyes:rows-sync", channel);
+    },
+  }],
 });

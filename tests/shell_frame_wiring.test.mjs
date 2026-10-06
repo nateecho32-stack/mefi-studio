@@ -64,7 +64,7 @@ test("the 0.5 layout is the only layout: no Search action, no Settings switch, a
   }
   const main = await read("main.cjs");
   absent(main, /MEFI_STUDIO_LAYOUT|layoutQuery|layoutFromEnv/, "main.cjs reads no layout from the environment");
-  assert.match(main, /query: \{ capture: CAPTURE \? "1" : "0", smoke: SMOKE \? "1" : "0" \}/, "the window loads with the diagnostic flags only");
+  assert.match(main, /query: \{ capture: CAPTURE \? "1" : "0", smoke: SMOKE \? "1" : "0"(, \.\.\.\(typeof startupMarks !== "undefined" && startupMarks \? \{\} : \{ marks: "0" \}\))? \}/, "the window loads with the diagnostic flags and the startup marks' switch only");
   const template = await read("renderer", "booklet.template.html");
   absent(template, /settings-layout-v2/, "Settings has no layout switch");
 });

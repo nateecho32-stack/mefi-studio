@@ -367,7 +367,7 @@ test("the host, bridge and page wire the rollback and the boot flag", async () =
   assert.match(preload, /releaseRollback: \(\) => ipcRenderer\.invoke\("release:rollback"\)/);
   assert.match(preload, /bootHealthy: \(\) => ipcRenderer\.invoke\("boot:healthy"\)/);
   assert.match(booklet, /window\.mefiStudio\?\.bootHealthy\?\.\(\)/, "the shell reports once its scripts ran");
-  assert.ok(booklet.indexOf("bootHealthy") < booklet.indexOf("window.MefiBoot.run(["), "before the boot steps, which wait on the owner's launch choice");
+  assert.ok(booklet.indexOf("bootHealthy") < booklet.indexOf("launchGate.run(["), "before the boot steps, which wait on the owner's launch choice");
 
   assert.match(template, /id="release-rollback"/);
   assert.match(template, /id="release-note"/);
