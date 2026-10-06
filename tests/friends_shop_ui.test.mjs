@@ -748,3 +748,19 @@ test("Settings › Appearance's Theme section gets a way in to the Shop", async 
   await one(cardIn, "Open the Shop").click();
   assert.deepEqual(env.went.at(-1), ["friends-page", { place: "shop" }]);
 });
+
+// The Shop's editor and the relay judge a pack the same way: every case in the
+// shared fixture gets the same answer from both (relay/src/shop-pack.mjs).
+test("the editor's pack check and the relay's agree on every shared case", async () => {
+  const { checkPack: relayCheck } = await import("../relay/src/shop-pack.mjs");
+  const cases = JSON.parse(await readFile(new URL("./fixtures/shop-pack-cases.json", import.meta.url), "utf8"));
+  const { shop } = environment();
+  assert.ok(cases.length >= 8, "the fixture has cases");
+  for (const item of cases) {
+    const relay = relayCheck(item.data);
+    const studio = shop.checkPack(item.data);
+    assert.equal(relay.ok, item.ok, `relay: ${item.name}`);
+    assert.equal(studio.ok, item.ok, `Studio: ${item.name}`);
+    if (!item.ok) assert.equal(studio.error, relay.error, `same refusal: ${item.name}`);
+  }
+});
