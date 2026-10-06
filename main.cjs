@@ -8,6 +8,26 @@
 // they all benefit; MEFI_STUDIO_NO_COMPILE_CACHE=1 turns it off.
 try { if (process.env.MEFI_STUDIO_NO_COMPILE_CACHE !== "1") require("node:module").enableCompileCache?.(); } catch { /* an older Node has none: modules compile as before */ }
 
+// ---- Startup marks --------------------------------------------------------------
+// Launch timings on one timeline, ms since this process's performance.timeOrigin
+// (scripts/startup-marks.cjs): this first statement, app ready, the window, its
+// dom-ready and did-finish-load, and the page's own marks (renderer/
+// startup-marks.js) over startup:marks. Trace gets one [startup] line when the
+// launch gate releases; --startup-report <file> or MEFI_STUDIO_STARTUP_REPORT=<file>
+// also writes them as JSON (docs/performance.md). MEFI_STUDIO_STARTUP_MARKS=0
+// turns both halves off.
+const startupMarks = process.env.MEFI_STUDIO_STARTUP_MARKS === "0" ? null
+  : optionalHelper("./scripts/startup-marks.cjs", () => require("./scripts/startup-marks.cjs"), null)?.createStartupMarks({
+    origin: performance.timeOrigin,
+    now: () => performance.now(),
+    argv: process.argv,
+    env: process.env,
+    log: (line) => logLine(line),
+    write: (file, report) => authStore.atomicWriteJson(path.resolve(file), report),
+    about: () => ({ version: app.getVersion(), electron: process.versions.electron, platform: process.platform, packaged: app.isPackaged, smoke: SMOKE, capture: CAPTURE }),
+  }) ?? null;
+// ---- end of the startup marks ---------------------------------------------------
+
 // Two helpers this file gained after the shipped builds already knew how to
 // carry them: scripts/updater.mjs holds a live payload until every local
 // require in it resolves (missingRequires), and the portable swap robocopies
@@ -58,6 +78,7 @@ const credentials = optionalHelper(
 const authStore = require("./scripts/auth-store.cjs");
 const { createProjects } = require("./scripts/projects.cjs");
 const { createAssistantPush } = require("./scripts/assistant-push.cjs");
+const { createRowPush } = require("./scripts/row-push.cjs");
 const backlog = require("./scripts/backlog.cjs");
 const autonomy = require("./scripts/autonomy.cjs");
 const { loopStatus } = require("./scripts/loop-status.cjs");
@@ -233,6 +254,20 @@ const SETTINGS_PATH = path.join(app.getPath("userData"), "settings.json");
 // split): settings.json stays plain, copyable state, auth.json stays
 // machine-bound. A missing auth file simply means no keys are saved.
 const AUTH_PATH = path.join(app.getPath("userData"), "auth.json");
+// ---- Settings cache -----------------------------------------------------------
+// readSettings answers from memory while settings.json and auth.json keep the
+// same stat, one structured clone per caller (scripts/settings-cache.cjs has
+// the rules). writeSettings and the legacy-key migration invalidate it; any
+// other writer moves the stat. MEFI_STUDIO_SETTINGS_CACHE=0 reads both files
+// on every call, as before.
+const settingsCache = process.env.MEFI_STUDIO_SETTINGS_CACHE === "0" ? null
+  : optionalHelper("./scripts/settings-cache.cjs", () => require("./scripts/settings-cache.cjs"), null)?.createSettingsCache({
+    files: [SETTINGS_PATH, AUTH_PATH],
+    stat: (file) => stat(file, { bigint: true }),
+    read: () => readSettingsFiles(),
+    now: () => Date.now(),
+  }) ?? null;
+// ---- end of the settings cache ------------------------------------------------
 // settings.json health, shared by the startup read below and readSettings
 // (settingsFromDisk has the rules): the text last parsed or written here, the
 // session's saves held in memory while nothing good was ever read, the
@@ -7606,6 +7641,11 @@ const ASSISTANT_STOP_WORDS = new Set(["what", "with", "that", "this", "please", 
 let assistantState = null;
 // What each eyes:assistant push carries: the keys the page does not hold yet.
 const assistantPush = createAssistantPush();
+// What each board list and checkpoint store push carries (sendRows): the rows
+// the page does not hold yet. MEFI_STUDIO_FULL_PUSHES=1 sends them whole, and
+// checkpoints ride eyes:tasks instead of eyes:progress, exactly as before.
+const rowPushes = process.env.MEFI_STUDIO_FULL_PUSHES === "1" ? null
+  : new Map(["eyes:tasks", "eyes:requests", "eyes:ideas", "eyes:checkpoints"].map((channel) => [channel, createRowPush({ start: Date.now() })]));
 let assistantLoading = null;
 let assistantLoop = false;
 let assistantTimer = null;
@@ -16503,7 +16543,8 @@ async function persistExecutorCheckpoint(entry) {
         const row = board.tasks.find((item) => item?.runId === entry.id);
         if (!row || entry.finished || row.lease?.pid !== entry.ownerPid || (row.projectId && row.projectId !== entry.projectId)) return null;
         row.runProgress = progress;
-        return {};
+        // Only the card's progress moved: the page gets eyes:progress, not the board.
+        return { progressOnly: { [row.id]: progress } };
       }));
     } while (entry.checkpointDirty && !entry.finished && autopilot.jobs.includes(entry));
   })().then(async () => {
@@ -16868,6 +16909,18 @@ function sameRows(next, prev) {
 // process (a fresh parse after the file changed underneath) is hashed as
 // before, so drift written by another process is still recorded.
 const revisionBodies = new WeakMap();
+// A written board list goes to the page. A write that only moved running
+// cards' progress (the mutator returns `progressOnly`: { id: runProgress },
+// persistExecutorCheckpoint) also sends it as eyes:progress, a few KB; the
+// list itself then carries nothing new past runProgress, so its row push sends
+// nothing unless the write changed something else too. With whole pushes
+// (MEFI_STUDIO_FULL_PUSHES=1) the list carries the progress, as before.
+function sendBoardRows(event, key, rows, patch, project) {
+  if (key === "tasks" && patch?.progressOnly && typeof patch.progressOnly === "object" && typeof rowPushes === "object" && rowPushes) {
+    send("eyes:progress", { projectId: project?.id ?? null, byTask: patch.progressOnly });
+  }
+  send(event, key === "tasks" ? rows.map(taskView) : rows);
+}
 // `options.beforeWrite({ before, after })` (optional, async) is for a caller that
 // must keep what a change removes BEFORE the change lands: Recently deleted
 // (the "Board trash" block). It runs inside the lock, after the mutator has
@@ -16933,7 +16986,7 @@ async function mutateBoard(mutator, options = {}) {
     if (typeof eyes.boardMutate === "function" && eyes.boardEnabled() && typeof options?.beforeWrite !== "function") {
       const result = await eyes.boardMutate(applyMutation);
       const events = { requests: "eyes:requests", tasks: "eyes:tasks", ideas: "eyes:ideas" };
-      for (const key of result.written ?? []) send(events[key], key === "tasks" ? result[key].map(taskView) : result[key]);
+      for (const key of result.written ?? []) sendBoardRows(events[key], key, result[key], result, project);
       return result;
     }
     // File fallback (database unavailable): same contract, plain files. The
@@ -16968,7 +17021,7 @@ async function mutateBoard(mutator, options = {}) {
       // skip the write and broadcast.
       if (sameRows(result[key], original[key])) continue;
       await eyes.writeJson(file, result[key]);
-      send(event, key === "tasks" ? result[key].map(taskView) : result[key]);
+      sendBoardRows(event, key, result[key], patch, project);
       written.push(key);
     }
     return { ...patch, requests: result.requests, tasks: result.tasks, ideas: result.ideas, written };
@@ -20755,7 +20808,19 @@ function rustSettings() {
 
 async function readSettings() {
   const rust = rustSettings();
+  // Under the Rust host its settings store keeps the file's health and answers
+  // reads itself; the cache below fronts only the Electron build's own reads.
   if (rust) return rememberAutonomySettings(await rust.read());
+  // The settings cache (the block beside AUTH_PATH) answers while both files keep their stat.
+  if (typeof settingsCache !== "undefined" && settingsCache) return rememberAutonomySettings(await settingsCache.get());
+  return rememberAutonomySettings((await readSettingsFiles()).value);
+}
+
+// Both files as they are on disk, merged. `cacheable` is false while
+// settings.json is unreadable (the view is a fallback), for the read that
+// migrates legacy ciphertext, and when an auth file with content read as no
+// keys (locked or mid-write): none of those may be kept.
+async function readSettingsFiles() {
   let bytes = null, failure = null;
   try {
     bytes = await readFile(SETTINGS_PATH);
@@ -20768,9 +20833,11 @@ async function readSettings() {
   if (Object.keys(stale).length) {
     await authStore.writeAuthStore(AUTH_PATH, { ...auth, ...stale });
     await authStore.atomicWriteJson(SETTINGS_PATH, { ...plain, projects: projects.saved() });
-    return rememberAutonomySettings(authStore.mergeAuthFields(plain, { ...auth, ...stale }));
+    if (typeof settingsCache !== "undefined" && settingsCache) settingsCache.invalidate();
+    return { value: authStore.mergeAuthFields(plain, { ...auth, ...stale }), cacheable: false };
   }
-  return rememberAutonomySettings(authStore.mergeAuthFields(settings, auth));
+  const authLost = !Object.keys(auth).length && typeof settingsCache !== "undefined" && settingsCache ? await settingsCache.hasContent(AUTH_PATH) : false;
+  return { value: authStore.mergeAuthFields(settings, auth), cacheable: !settingsDisk.unreadable && !authLost };
 }
 
 // Callers pass the merged readSettings() view. Credential fields ride that
@@ -20778,6 +20845,8 @@ async function readSettings() {
 // slice replaces the store so a deleted key leaves disk too. A fresh install
 // with no keys anywhere writes no auth file at all.
 async function writeSettings(next) {
+  // The settings cache forgets its view before and after the files change.
+  if (typeof settingsCache !== "undefined" && settingsCache) settingsCache.invalidate();
   const rust = rustSettings();
   if (rust) {
     await rust.write(next);
@@ -20801,6 +20870,7 @@ async function writeSettings(next) {
   if (Object.keys(auth).length || Object.keys(await authStore.readAuthStore(AUTH_PATH)).length) {
     await authStore.writeAuthStore(AUTH_PATH, auth);
   }
+  if (typeof settingsCache !== "undefined" && settingsCache) settingsCache.invalidate();
 }
 
 // One verdict for every settings.json read, the startup read included. A
@@ -20869,7 +20939,34 @@ function send(channel, payload) {
     pushBoardList(channel, payload);
     return;
   }
-  if (window && !window.isDestroyed()) window.webContents.send(channel, payload);
+  if (!window || window.isDestroyed()) return;
+  if (channel === "eyes:checkpoints") sendRows(channel, payload, projects.active().id);
+  else window.webContents.send(channel, payload);
+}
+
+// What the page does not hold yet of a board list or the checkpoint store
+// (scripts/row-push.cjs), worked out as it goes out: the rows that changed,
+// or the whole list the first time, after a project switch and when the page
+// asks (eyes:rows-sync). False when nothing is new, so nothing was sent.
+function sendRows(channel, payload, projectId) {
+  const push = typeof rowPushes === "object" && rowPushes ? rowPushes.get(channel) : null;
+  const value = push ? push.payload(payload, { projectId }) : payload;
+  if (push && value === null) return false;
+  window.webContents.send(channel, value);
+  return true;
+}
+
+// The page's bridge holds another rev than a push came from, or nothing (a
+// reload): the list goes whole, at once. A newer list already on its way
+// (coalesced, or held while the window is hidden) goes whole instead.
+function resyncRows(channel) {
+  const push = typeof rowPushes === "object" && rowPushes ? rowPushes.get(channel) : null;
+  if (!push) return;
+  push.resync();
+  if (boardPushes.get(channel)?.pending || heldPushes.has(channel)) return;
+  const last = push.last();
+  if (!last || last.projectId !== projects.active().id || holdWhileHidden(channel, last.rows)) return;
+  if (window && !window.isDestroyed()) sendRows(channel, last.rows, last.projectId);
 }
 
 // A window parked in the tray or minimized shows none of these snapshots, yet
@@ -20885,8 +20982,12 @@ let flushingHeld = false;
 function holdWhileHidden(channel, payload) {
   if (flushingHeld || SMOKE || CAPTURE || !HELD_WHILE_HIDDEN.has(channel)) return false;
   if (!window || window.isDestroyed() || (!window.isMinimized() && window.isVisible())) return false;
+  const held = heldPushes.get(channel);
   heldPushes.delete(channel); // re-inserted, so the flush follows push order
-  heldPushes.set(channel, { payload, projectId: BOARD_PUSH_CHANNELS.has(channel) ? projects.active().id : null });
+  // Progress from several running cards: each card keeps its newest.
+  const kept = channel === "eyes:progress" && held && held.payload?.projectId === payload?.projectId
+    ? { ...payload, byTask: { ...held.payload.byTask, ...payload?.byTask } } : payload;
+  heldPushes.set(channel, { payload: kept, projectId: BOARD_PUSH_CHANNELS.has(channel) || channel === "eyes:progress" ? projects.active().id : null });
   return true;
 }
 
@@ -20903,16 +21004,18 @@ function flushHeldPushes() {
   }
 }
 
-// Board pushes carry whole lists (eyes:tasks is every card on the board), and
-// a busy executor mutates the board several times a second: each push was
+// Board pushes carried whole lists (eyes:tasks is every card on the board),
+// and a busy executor mutates the board several times a second: each push was
 // copied into every renderer listener and rebuilt the Command graph, the
 // Tasks sheet and the Workspace. The first push of a quiet window still goes
 // at once; later pushes inside BOARD_PUSH_MS share one trailing push of the
 // newest list. A list queued in one project is dropped if the owner switches
-// to another before it goes out; the switch sends its own lists.
+// to another before it goes out; the switch sends its own lists. What goes
+// out is worked out as it goes (sendRows): only the rows the page does not
+// hold, and nothing at all, with no window opened, when no row changed.
 const BOARD_PUSH_MS = 250;
 const BOARD_PUSH_CHANNELS = new Set(["eyes:tasks", "eyes:requests", "eyes:ideas"]);
-const HELD_WHILE_HIDDEN = new Set([...BOARD_PUSH_CHANNELS, "machine:status", "fleet:update"]);
+const HELD_WHILE_HIDDEN = new Set([...BOARD_PUSH_CHANNELS, "machine:status", "fleet:update", "eyes:progress"]);
 const boardPushes = new Map(); // channel -> { timer, pending: { payload, projectId } | null }
 
 function pushBoardList(channel, payload) {
@@ -20924,7 +21027,8 @@ function pushBoardList(channel, payload) {
     slot.pending = { payload, projectId };
     return;
   }
-  if (window && !window.isDestroyed()) window.webContents.send(channel, payload);
+  // Nothing the page does not hold yet: nothing is sent, and no window opens.
+  if (window && !window.isDestroyed() && !sendRows(channel, payload, projectId)) return;
   const next = { timer: null, pending: null };
   next.timer = setTimeout(() => {
     boardPushes.delete(channel);
@@ -22814,6 +22918,8 @@ function registerIpc() {
     return { ...result, ok: true, chosen: true };
   });
   ipcMain.handle("startup:begin", () => releaseStartupHold());
+  // The page's startup marks after its launch gate released (the Startup marks block).
+  ipcMain.handle("startup:marks", (_event, payload) => (typeof startupMarks !== "undefined" && startupMarks ? startupMarks.receive(payload) : { ok: false, error: "Startup marks are off." }));
   ipcMain.handle("planning:list", (_event, payload) => planningRequest("list", payload));
   ipcMain.handle("planning:action", (_event, payload) => planningRequest("action", payload));
   ipcMain.handle("planning:assist", (_event, payload) => planningRequest("assist", payload));
@@ -25083,6 +25189,7 @@ function createWindow() {
       backgroundThrottling: !SMOKE && !CAPTURE,
     },
   });
+  if (typeof startupMarks !== "undefined" && startupMarks) startupMarks.watch(window.webContents); // Startup marks
   // maximize() also shows the window, so a login launch keeps it for later.
   if (saved?.maximized && !AT_LOGIN) window.maximize();
   else if (saved?.maximized) { const created = window; created.once("show", () => { if (!created.isDestroyed()) created.maximize(); }); }
@@ -25090,6 +25197,9 @@ function createWindow() {
   // The page's bridge (preload.cjs) says it is listening and holds no
   // assistant state yet, on its first onAssistant: send whole keys again.
   window.webContents.ipc.on("eyes:assistant-sync", () => assistantPush.resync());
+  // Its bridge (preload.cjs mergeRows) got a list push it cannot apply: that
+  // list goes whole again.
+  window.webContents.ipc.on("eyes:rows-sync", (_event, channel) => resyncRows(channel));
   nameStudioToEmbeds(window.webContents.session);
   // Zen mode's "desktop audio" reactive input arrives as a getDisplayMedia
   // request. Answer it with the screen the window sits on plus system
@@ -25126,7 +25236,8 @@ function createWindow() {
   }
   const view = window;
   const loadView = () => view.loadFile(page, {
-    query: { capture: CAPTURE ? "1" : "0", smoke: SMOKE ? "1" : "0", ...layoutQuery() },
+    // marks=0: startup marks are off (MEFI_STUDIO_STARTUP_MARKS=0), so the page takes none.
+    query: { capture: CAPTURE ? "1" : "0", smoke: SMOKE ? "1" : "0", ...layoutQuery(), ...(typeof startupMarks !== "undefined" && startupMarks ? {} : { marks: "0" }) },
   });
   rendererRecovery = attachRendererRecovery({
     window: view,
@@ -25362,6 +25473,7 @@ async function captureTabs() {
 }
 
 app.whenReady().then(() => {
+  if (typeof startupMarks !== "undefined" && startupMarks) startupMarks.mark("ready"); // Startup marks
   registerIpc();
   bootHealthStart();
   reportStart();

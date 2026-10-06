@@ -6,6 +6,80 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-03 Rust stage 2: the Git chip's actions move into Rust
+
+Branch `wip/rust-host`, after d428f9d. `scripts/git-actions.cjs` (glance,
+glanceMany, preview, save, pushBranch, publish, link, owners, nameCheck,
+publishPreview, account, identity) and the git-link/pc-setup/redaction/
+share-review rules it reads now have a Rust port in
+`crates/mefi-core/src/git/`, reached through the `git-actions` factory under
+the Rust host only. New: `jsre.rs` (JavaScript regexes with JavaScript's
+meaning) and the `MEFI_STUDIO_RUST_OFF` kill switch.
+
+`npm run check` ok (265 targets); `npm run test:fast` 6773 tests, 0 fail,
+14 skipped; lint 0 errors, 42 warnings (all pre-existing); audit ok;
+mefi-core 26 unit tests, host 13. Parity: `tests/rust_parity_git.test.mjs`
+(2 tests: about 330 pure-helper calls, and 89 steps on two identical
+folder trees with a local bare GitHub and a fake gh: every kind of save
+row, secrets by name and content, UTF-16 keys, a junction out of the
+project, 50/100 MB files, lock retries, merge in progress, push with a
+failing and a passing check, a rejected push, every publish path including
+resume and a taken name, and link related/unrelated/empty), all identical,
+with identical commit ids; `tests/rust_modules.test.mjs` 4 tests. The Git
+chip's existing suites (git_actions, git_host, git_link, git_link_host) and
+the other three parity suites: 202 tests, 0 fail. Live self-test on the Rust
+host: `git:state`, `projects:glance` and `git:save-preview` answered through
+Rust (rustCalls core.git.glance 3, glanceMany 1, preview 1); this checkout's
+preview (17 rows) and glance were byte-identical JSON to the JavaScript's.
+Timing on this checkout: glance about 330 ms and preview about 720 ms in
+both (git's own time). `fsutil fsinfo volumeinfo` is refused without admin
+on this PC, so the weak-drive check reads unknown in both languages.
+
+## 2026-10-03 Rust stage 2: the store and repo modules move into Rust
+
+Branch `wip/rust-host`, after 80b1e0e. The OpenCode store reads
+(`eyes.mjs` worker methods) and `sync.mjs`/`worktrees.mjs`/
+`worktree-actions.mjs` now have Rust ports in `crates/mefi-core`, served under
+the Rust host only.
+
+Full `npm test` on the store port (node_modules junctioned to the main
+checkout, so the Electron lane ran): Node 6765 tests, 0 fail in the parallel
+stage; Python 248 OK; path lock ok. Four Electron fixtures failed in the
+loaded run: `tree_dynamics_render` and `today_render` pass solo (load);
+`layout_contract_render` (viewport 1921x1081, was 1920x1080) and
+`shell_render` (373 vs 372 px) fail identically on a clean origin/main
+worktree (72c6f58) on this PC, so they are this display's state, not the port.
+
+After the repo port: `npm run check` ok (265 targets), `npm run test:fast`
+6768 tests, 0 fail; lint 0 errors, no new warnings; audit ok; 16 mefi-core
+unit tests. Parity: `tests/rust_parity_eyes.test.mjs` (4 tests, ~100 store
+reads plus the dump and git helpers) and `tests/rust_parity_repo.test.mjs`
+(3 tests: sync through clean/behind/check-failed/pushed/diverged/rebased,
+lost work found and acknowledged, every worktree action) all identical. On
+the owner's 20 GB OpenCode store, read-only: 12 of 12 reads identical;
+usageLedger cold 2.1 s vs 3.1 s, warm 22 ms vs ~190 ms. Live self-test on
+the Rust host: `eyes:state` and `worktrees:list` answered through Rust
+(rustCalls lists eyes.* and repo.sync.sync, repo.worktrees.listWorktrees).
+
+## 2026-10-03 Rust host stage 1 (Tauri) - first gate
+
+Branch `claude/app-migration-rust-b89096` (pushed as `wip/rust-host`), based on
+72c6f58. `npm run check` ok (264 targets). `npm test`: Node 6757 tests, 6743
+pass, 14 skipped, 0 fail (274 s); Python contracts 248 OK; normalized-path lock
+ok. The Electron lane skipped 39 suites in that run because the worktree had no
+`node_modules`; with a junction to the main checkout's, `evidence_capture`,
+`startup_render`, `task_overview_render` and `command_render` (56 s) each pass
+solo. `npm run lint`: 0 errors, no new warnings. `npm run audit`: ok.
+
+New: `tests/rust_host_bridge.test.mjs` (4 tests, no Rust needed: the wire's
+tagging, the engine shim over a real pipe against a fake host, the page bridge
+built from the real preload.cjs). `npm run host:test`: 13 Rust unit tests pass.
+On the host itself, with scratch userData: `--smoke` exits 0 (45 cards, models,
+assistant tick 1); `MEFI_HOST_SELFTEST` recorded a 1825x1175 page capture, 40
+invokes, 29 channels listened to, live pushes and an accepted toast. Electron
+44.4.1 safeStorage round trip verified both ways on synthetic data in a scratch
+app folder. No change to what the Electron build does.
+
 ## 2026-10-03 Weak-drive check without administrator rights
 
 `fsutil fsinfo volumeinfo C:\` refuses a normal user on the owner's PC

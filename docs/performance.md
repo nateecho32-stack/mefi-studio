@@ -1,6 +1,86 @@
 # Agent loop and startup measurements
 
 
+## Startup marks and the settings cache, October 6, 2026
+
+Every launch now times itself on one timeline, milliseconds since the main
+process started (`scripts/startup-marks.cjs`, `renderer/startup-marks.js`):
+main's first statement, app ready, the window, the booklet file's arrival,
+first paint, when the inline script began, DOMContentLoaded, each launch-gate
+step's start and settle, the launch choice and the gate's release. Trace
+gets one `[startup]` line per launch. For numbers:
+
+```
+npm start -- --startup-report logs/startup.json     # or MEFI_STUDIO_STARTUP_REPORT=<file>
+python tools/benchmark_startup.py --runs 5          # Linux: xvfb-run -a, as a non-root user
+```
+
+`benchmark_startup.py` reads the report and prints app ready, first paint and
+gate released beside its own loaded and interactive times, and now knows Vibe
+as a home. `MEFI_STUDIO_STARTUP_MARKS=0` turns both halves off (the page then
+opens with `?marks=0` and wraps nothing).
+
+Five smoke launches each (Linux container, Electron 44.4.1, xvfb, medians;
+"before" is main 24d6756, "after" this slice):
+
+| | Before | After |
+| --- | ---: | ---: |
+| booklet loaded (benchmark clock) | 2,624 ms | 2,616 ms |
+| interactive, Vibe (benchmark clock) | 4,055 ms | 4,024 ms |
+| app ready (main clock) | not measured | 212 ms |
+| first paint | not measured | 462 ms |
+| launch gate released | not measured | 3,856 ms |
+
+The marks cost nothing measurable. What they show: the gate opens about
+700 ms in, but the launch choice lands only at about 2,200 ms (dom-ready
+arrives with it), the five steps then take 0.4-560 ms in parallel, and the
+release comes about 600 ms after the last step settles. Those two gaps are
+the next levers (C2/C4).
+
+`readSettings` read and parsed `settings.json` and `auth.json` on every call,
+and the host calls it for nearly every model call, dispatch and IPC read.
+`scripts/settings-cache.cjs` keeps the merged view while both files keep the
+same bigint stat and hands each caller a clone; a read that is a fallback, a
+migration, a lost auth read, racy (modified within 2 s) or raced by a write
+is never kept, and `writeSettings` forgets the view before and after it
+writes. Main.cjs's own code on a 47 KB settings file: about 460 µs per call
+before, about 265 µs with the cache, and two stats instead of two file reads.
+`MEFI_STUDIO_SETTINGS_CACHE=0` reads both files every call. Under the Rust
+host its settings store answers first and the cache is not consulted;
+`tests/rust_parity_settings.test.mjs` holds the JavaScript with the cache on
+equal to Rust as well.
+## Board pushes carry the rows that changed, October 6, 2026
+
+`eyes:tasks` was every card on the board and went out on every board write,
+up to once a second per running job through the executor's checkpoints;
+`eyes:checkpoints` was the whole checkpoint store. `scripts/row-push.cjs` now
+works out, as each push leaves main (`sendRows`), what the page does not hold
+yet: the rows whose content changed or are new, the ids that left, and the id
+order only when it moved (the checkpoint store travels as `set`/`del`). A
+checkpoint that only moves a running card's `runProgress` sends the small
+`eyes:progress` push and no list at all. The page's bridge (`preload.cjs`
+`mergeRows`) rebuilds plain lists, reuses the objects of unchanged rows, lays
+pushed progress over its card and hands `onTasks` the board again at once, so
+every surface that reads `runProgress` stays as live as before. A push whose
+base the page does not hold is dropped and the page asks for the list whole
+(`eyes:rows-sync`).
+
+Measured with `node --test tests/row_push.test.mjs` (a seeded board shaped
+like the live one, sizes as JSON bytes over IPC):
+
+| Push | Before | After |
+| --- | ---: | ---: |
+| `eyes:tasks`, 134 cards, one card changed | 688,319 B | 5,211 B |
+| an executor checkpoint (one card's progress) | 688,319 B | 665 B (`eyes:progress`, no list) |
+| `eyes:checkpoints`, 104 sessions, one changed | 760,443 B | 7,433 B |
+| a board write that changes nothing | sent the list | nothing sent |
+
+`MEFI_STUDIO_FULL_PUSHES=1` sends whole lists in the old shape and
+checkpoints ride `eyes:tasks` again (pinned by `host_push_batching`,
+`preload_fanout`). Still open (S4): `tasks.js`, `sessions.js` and
+`builder.js` can take `onTaskProgress` instead of rebuilding from the
+re-delivered board, and `agent-brain.js` can take rows from `onTasks`.
+
 ## Tree brightness paints a pass once, not every shape, September 30, 2026
 
 Appearance › Tree brightness & outlines set a canvas filter (`brightness(2)`

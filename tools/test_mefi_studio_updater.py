@@ -253,7 +253,7 @@ console.log(JSON.stringify({ queued, exitsWhileQueued, reloads: calls.reload.map
             with self.subTest(name=name):
                 self.assertIn(name, inputs["scripts"])
         self.assertIn("styles.css", inputs["styles"])
-        self.assertEqual(["stage-labels.js", "node-visuals.js", "performance-core.js", "profiler.js", "task-groups.js", "studio-ui.js", "file-inputs.js", "motion.js", "card-layout.js", "nav.js", "sidebar.js", "graph.js", "model-lab.js", "tracker.js", "node-styles.js", "tree3d.js", "tree-dynamics.js", "idle.js"], inputs["scripts"][:18])
+        self.assertEqual(["startup-marks.js", "stage-labels.js", "node-visuals.js", "performance-core.js", "profiler.js", "task-groups.js", "studio-ui.js", "file-inputs.js", "motion.js", "card-layout.js", "nav.js", "sidebar.js", "graph.js", "model-lab.js", "tracker.js", "node-styles.js", "tree3d.js", "tree-dynamics.js", "idle.js"], inputs["scripts"][:19])
         self.assertNotIn('from "electron"', self.updater)
         self.assertNotIn('require("electron")', self.updater)
         check = self.package.get("scripts", {}).get("check", "")
