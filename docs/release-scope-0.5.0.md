@@ -100,7 +100,8 @@ Landed on 5 and 6 October, after the layout:
   and a light eye on agents, Studio for in-depth building with the social
   features still there). Labels only: settings keep `vibe` and `build`, so
   nothing resets. Studio's rail shows each place's whole word at every window
-  size, and the window no longer scrolls under a page.
+  size, Search has one home (the top bar), and the window no longer scrolls
+  under a page.
 - **The social side:** an open room reads like a chat app, rooms are cards,
   Friends has icons and plain words; a review's fixes (say what helps, why a
   play earned nothing, private first rooms, a steady Lobby, one vocabulary);
@@ -162,7 +163,6 @@ release.
 | --- | --- | --- |
 | Settings › Other apps: a setup prompt to copy for Claude Code, Codex or another helper, and a Studio API, MCP server and skill for other apps on this PC (off until turned on) | `feat/studio-api` | Pushed 6 October, not on `main`. Large (33 files); whether it is 0.5.0 or 0.5.x is yours to say |
 | Your PCs and Friends reconnect by themselves after a restart, update, rollback or crash; only a Studio that is really behind is asked to update | `wip/auto-reconnect` | Pushed 6 October, not on `main` |
-| Search has one home in the frame (the top bar); place tiles keep their size in short windows | `ui/rail-one-search` | Pushed 6 October, not on `main` |
 | A once-seen hosted CI failure in the model-performance ledger (two writes in one clock tick) | `fix/model-perf-race` | Pushed 6 October, not on `main` |
 | Space plays or pauses the video in Command | `wip/space-plays-video` | Unfinished since 3 October (nothing calls it yet); 0.5.x unless finished |
 | Not built: an embedded live Preview tab (the inspector's Preview has the project's controls and Before and After), the pinned tree strip as a panel, Drafts in the session list (the app keeps none) | — | 0.5.x. Design source: `docs/prototype/` |
