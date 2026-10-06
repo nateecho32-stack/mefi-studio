@@ -125,14 +125,30 @@
     function paintStatus() {
       const view = state.view, hub = view.hub;
       const out = view.friends.length;
-      status.textContent = !hub.configured ? "Friends' companions meet through the rooms hub, which this PC isn't connected to yet: add its address in Settings › General › Community › Connection details. Pip is here to practice."
-        : !hub.linked ? "Link Discord under Community to meet friends' companions. Pip, the practice buddy, is always here."
-        : hub.state !== "ready" ? "Connect under Rooms below, then open a room, and friends' companions there can visit."
-        : !hub.companions ? "This rooms hub does not carry companions yet, so friends cannot visit. Pip is here to practice."
+      status.textContent = !hub.configured ? "Friends' companions meet through the room service, which this copy of Studio can't reach. Pip, the practice buddy, is always here."
+        : !hub.linked ? "Sign in with Discord in Friends to meet friends' companions. Pip, the practice buddy, is always here."
+        : hub.state !== "ready" ? "Connecting to the room service. Open a room in Rooms and friends' companions there can visit."
+        : !hub.companions ? "This room service doesn't carry companions yet, so friends can't visit. Pip is here to practice."
         : !hub.rooms.length ? "Open a room under Rooms below, and friends' companions there can visit."
         : out ? `${out} friend${out === 1 ? "'s companion is" : "s' companions are"} out in your rooms.`
         : "No friends' companions are out in your rooms right now.";
-      preview.textContent = `Friends see: ${view.preview.summary} (${levelLabel(view.preview.level)} · ${view.preview.why}).`;
+      preview.textContent = seeSentence(view.preview);
+    }
+
+    // What friends see of your companion, as one plain sentence: the look and mood, then whatever the level adds.
+    function seeSentence(preview) {
+      const card = preview?.card;
+      if (!card) return "Friends see nothing of your companion right now.";
+      const a = (word) => `${/^[aeiou]/i.test(String(word)) ? "an" : "a"} ${word}`;
+      const bits = [card.name ? `${card.name}, ${a(card.look)} that looks ${card.mood}` : `${a(card.look)} that looks ${card.mood}`];
+      if (card.personality) bits.push(`its ${card.personality} personality`);
+      if (card.status) bits.push(`whether you're working (${card.status.running} running, ${card.status.doneToday} done today)`);
+      if (card.work?.project) bits.push(`your project's name, ${card.work.project}`);
+      const titles = card.work ? card.work.running.length + card.work.done.length : 0;
+      if (titles) bits.push(`${titles} task title${titles === 1 ? "" : "s"}`);
+      const list = bits.length === 1 ? bits[0] : `${bits.slice(0, -1).join(", ")} and ${bits.at(-1)}`;
+      const who = preview.why === "Everyone" ? "your choice for everyone" : `set for ${preview.why}`;
+      return `Friends see ${list}. That's ${levelLabel(preview.level)}, ${who}.`;
     }
 
     function paintFriends() {

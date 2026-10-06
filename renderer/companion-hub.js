@@ -550,11 +550,11 @@
   const FRIENDS_PLACES = Object.freeze([
     // renderer/friends-front.js: Friends' front page, and the sign-in card for anyone not signed in yet.
     { id: "lobby", label: "The Lobby", glyph: "g-community", about: "Who's online, the rooms open now and what your friends are making." },
-    { id: "rooms", label: "Rooms", glyph: "g-orbit", about: "Hang out, cowork, listen together, or share what you are making. Rooms are optional and never see your projects unless you share them." },
+    { id: "rooms", label: "Rooms", glyph: "g-chat", about: "Hang out, cowork, listen together, or share what you are making. Rooms are optional and never see your projects unless you share them." },
     { id: "pcs", label: "Your PCs", glyph: "g-explorer", about: "Keep work in step across machines through GitHub. Studio only looks until you press Sync." },
     { id: "playground", label: "Playground", glyph: "g-ambience", about: "Practice with your companion, and set what it may share." },
     // renderer/project-hub.js: members' shared projects, credits and ranks on the Mefi Studio relay.
-    { id: "hub", label: "Project hub", glyph: "g-orbit", about: "Share what you make and play what friends make. Playing someone else's project for two minutes earns you both credits." },
+    { id: "hub", label: "Project hub", glyph: "g-spark", about: "Share what you make and play what friends make. Playing someone else's project for two minutes earns you both credits." },
     // renderer/friends-mod.js: shown only once the relay says this member is a moderator (it checks every action again).
     { id: "mod", label: "Moderation", glyph: "g-flag", about: "Reports, credits that look farmed, and suspensions. Only moderators see this place.", modOnly: true },
   ]);

@@ -68,7 +68,7 @@ test("the hub explains itself until the room service carries projects", async ()
   const old = environment({ status: { configured: true, linked: true, state: "ready", projects: false } }).hub.card();
   await flush();
   assert.equal(old.dataset.state, "unsupported");
-  assert.equal(old.find("project-hub-status").textContent, "This room service has no project hub yet.");
+  assert.equal(old.find("project-hub-status").textContent, "The Project hub isn't on this room service yet. Rooms and chat still work.");
   // Linked but not connected: opening the hub connects by itself, once.
   const off = environment({ status: { configured: true, linked: true, state: "off", projects: true } });
   const card = off.hub.card();

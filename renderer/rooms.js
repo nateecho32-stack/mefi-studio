@@ -104,13 +104,14 @@
     });
   }
 
-  // The text of a message with its <@id> mentions as @name.
-  function readable(message) {
+  // The text of a message with its <@id> mentions as @name: the message's own
+  // list first, then a name this panel knows (lookup), else "@someone".
+  function readable(message, lookup = null) {
     const names = new Map((message.mentions ?? []).map((item) => [item.id, item.name]));
-    return String(message.text ?? "").replace(/<@!?(\d{17,20})>/g, (raw, id) => (names.get(id) ? `@${names.get(id)}` : raw));
+    return String(message.text ?? "").replace(/<@!?(\d{17,20})>/g, (raw, id) => `@${names.get(id) || lookup?.(id) || "someone"}`);
   }
+  const initials = (name) => String(name || "?").trim().split(/\s+/).slice(0, 2).map((part) => part[0] ?? "").join("").toUpperCase() || "?";
 
-  // options.room: a room to open once the list is in (The Lobby's rooms and people).
   function panel(options = {}) {
     const root = node("section", "rooms");
     root.id = "rooms";
@@ -135,6 +136,8 @@
     let flags = { lobby: false, joinCodes: false, online: false };
     let lobbyOpened = false, people = null, showOnline = true, onlineTimer = null;
     let wanted = typeof options?.room === "string" && options.room ? options.room : null;
+    let creating = false, roomMenu = false, here = [], hereBox = null;
+    const messageMenus = new Set(); // messages whose small menu is open
     const codes = new Map(); // room id -> { code, link }
     let rooms = [], requests = [], invites = [], messages = [], more = false;
     // Fields keyed by what they hold. A repaint gives each its text back, and
@@ -183,10 +186,12 @@
     }
 
     function roomRow(room) {
-      const row = node("li", "rooms-row");
+      const row = node("li", "rooms-row rooms-card");
       row.dataset.room = room.id;
       const text = node("div", "rooms-row-text");
-      text.append(node("strong", "", room.name), node("span", "muted", ` · ${room.kind === "cowork" ? "cowork" : "hangout"} · ${room.memberCount}${room.maxMembers ? `/${room.maxMembers}` : ""}${room.status !== "active" ? ` · ${room.status}` : ""}`));
+      const people = `${room.memberCount}${room.maxMembers ? ` of ${room.maxMembers}` : ""} ${room.memberCount === 1 ? "person" : "people"}`;
+      const meta = [room.kind === "cowork" ? "Cowork" : "Hangout", people, room.you === "owner" ? "yours" : room.you === "member" ? "you're in" : null, room.listed ? null : "private", room.status !== "active" ? room.status : null].filter(Boolean).join(" · ");
+      text.append(node("strong", "rooms-card-name", room.name), node("span", "muted rooms-card-meta", meta));
       const actions = node("div", "rooms-row-actions");
       const mine = requests.find((item) => item.roomId === room.id && item.requester.id === me?.id && item.status === "pending");
       const invitation = invites.find((item) => item.roomId === room.id && item.status === "pending");
@@ -229,9 +234,10 @@
       await refresh();
     });
 
+    // "New room" opens this small form; it closes again when the room is made.
     function createForm() {
       const form = node("div", "rooms-create");
-      form.append(node("h5", "", "Make a room"));
+      form.append(node("h5", "", "New room"));
       const name = field(node("input", "rooms-name"), "create-name");
       name.type = "text";
       name.maxLength = 80;
@@ -256,19 +262,24 @@
       listedLabel.append(listed, node("span", "", " Show it in the room list (opens at Flame rank)"));
       const create = button("Make room", () => guard("Making the room…", async () => {
         const answer = await call("createRoom", { name: name.value.trim(), kind: kind.value, policy: policy.value, listed: listed.checked });
-        status.textContent = answer?.ok ? `${answer.room.name} is ready.` : why(answer, answer?.error === "bad-request" ? "Give the room a one-line name of up to 80 characters." : "The room could not be made.");
-        if (answer?.ok) { name.value = ""; await refresh(); }
+        status.textContent = answer?.ok ? `${answer.room.name} is ready. Open it, then share its invite code.` : why(answer, answer?.error === "bad-request" ? "Give the room a one-line name of up to 80 characters." : "The room could not be made.");
+        if (answer?.ok) { name.value = ""; creating = false; await refresh(); }
       }), "rooms-create");
-      form.append(name, kind, policy, listedLabel, create);
+      const actions = node("div", "rooms-row-actions");
+      actions.append(create, button("Cancel", () => { creating = false; paint(); }, "rooms-create-cancel"));
+      form.append(name, kind, policy, listedLabel, actions);
       return form;
     }
 
     function listView() {
-      const list = node("ul", "rooms-list");
+      const list = node("ul", "rooms-list rooms-cards");
       const shown = rooms.filter((room) => room.status !== "closed");
       list.append(...shown.map(roomRow));
-      if (!shown.length) list.append(node("li", "muted", "No rooms yet. Make one, or ask a friend to invite you."));
-      return [...(flags.joinCodes ? [joinRow()] : []), list, createForm()];
+      if (!shown.length) list.append(node("li", "muted rooms-empty", "No rooms yet. Make one, join with a friend's code, or say hi in the Lobby."));
+      const tools = node("div", "rooms-tools");
+      if (flags.joinCodes) tools.append(joinRow());
+      tools.append(button(creating ? "Close the form" : "New room", () => { creating = !creating; paint(); }, "rooms-new"));
+      return [tools, ...(creating ? [createForm()] : []), list];
     }
 
     // ---- connecting made simple: a join code, and who is online ----------------
@@ -414,22 +425,41 @@
     const log = node("ol", "rooms-messages");
     log.setAttribute("aria-live", "polite");
     log.setAttribute("aria-label", "Room messages");
-    // Each row is built once per message and belongs to the room it came from.
+    // A name this panel knows for a member id: authors, the online list, requests and invites.
+    function nameOf(id) {
+      if (id === me?.id) return me?.name || "You";
+      const author = messages.find((message) => message.author.id === id)?.author.name;
+      return author || people?.find((person) => person.id === id)?.name || requests.find((item) => item.requester.id === id)?.requester.name || invites.find((item) => item.invitedBy.id === id)?.invitedBy.name || null;
+    }
+    // Each row is built once per message and belongs to the room it came from;
+    // its Report or Delete waits in a small menu (⋯) so the chat stays quiet.
     function messageItem(message, roomId) {
-      const item = node("li", "rooms-message");
+      const mine = message.author.id === me?.id;
+      const item = node("li", `rooms-message${mine ? " mine" : ""}`);
       item.dataset.message = message.id;
       const head = node("div", "rooms-message-head");
-      head.append(node("strong", "", message.author.name || "Someone"), node("span", "muted", ` ${time(message.createdAt)}${message.editedAt ? " · edited" : ""}${message.author.viaStudio ? " · Studio" : ""}`));
-      const text = node("p", "rooms-message-text", readable(message));
+      head.append(node("strong", "", mine ? "You" : message.author.name || "Someone"), node("span", "muted", ` ${time(message.createdAt)}${message.editedAt ? " · edited" : ""}`));
+      const canDelete = mine && message.author.viaStudio;
+      const canReport = !mine;
+      if (canDelete || canReport) {
+        const more = button("⋯", () => { if (messageMenus.has(message.id)) messageMenus.delete(message.id); else messageMenus.add(message.id); rows.delete(message.id); showMessages(); });
+        more.className = "ghost rooms-button rooms-message-more";
+        more.setAttribute("aria-label", mine ? "Options for your message" : `Options for ${message.author.name || "this"} message`);
+        more.setAttribute("aria-expanded", String(messageMenus.has(message.id)));
+        head.append(more);
+      }
+      const text = node("p", "rooms-message-text", readable(message, nameOf));
       item.append(head, text);
       if (message.attachments?.length) item.append(node("p", "muted", `Attachments in Discord: ${message.attachments.map((file) => file.name).join(", ")}`));
-      const actions = node("div", "rooms-row-actions");
-      if (message.author.id === me?.id && message.author.viaStudio) actions.append(confirmed("Delete", "Delete it?", "Delete this message?", () => guard("Deleting…", async () => {
-        const answer = await call("deleteMessage", roomId, message.id);
-        status.textContent = answer?.ok ? "Deleted." : why(answer, "The message could not be deleted.");
-      })));
-      else if (message.author.id !== me?.id) actions.append(button("Report", () => { if (!reporting.has(message.id)) { reporting.add(message.id); report(message, item, roomId); } }));
-      item.append(actions);
+      if (messageMenus.has(message.id)) {
+        const actions = node("div", "rooms-row-actions rooms-message-actions");
+        if (canDelete) actions.append(confirmed("Delete", "Delete it?", "Delete this message?", () => guard("Deleting…", async () => {
+          const answer = await call("deleteMessage", roomId, message.id);
+          status.textContent = answer?.ok ? "Deleted." : why(answer, "The message could not be deleted.");
+        })));
+        else if (canReport) actions.append(button("Report", () => { reporting.add(message.id); messageMenus.delete(message.id); rows.delete(message.id); showMessages(); }));
+        item.append(actions);
+      }
       if (reporting.has(message.id)) report(message, item, roomId);
       return item;
     }
@@ -437,12 +467,12 @@
       const reason = field(node("input", "rooms-note"), `report:${message.id}`);
       reason.type = "text";
       reason.maxLength = 500;
-      reason.placeholder = "Why? Moderators see the message link, not this text.";
+      reason.placeholder = "Why? Moderators see the message and this reason.";
       reason.setAttribute("aria-label", "Reason for the report");
       item.append(reason, button("Send report", () => guard("Reporting…", async () => {
         const answer = await call("report", roomId, message.id, reason.value);
-        status.textContent = answer?.ok ? "Reported to the moderators." : why(answer, "Say briefly why, then send.");
-        if (answer?.ok) reporting.delete(message.id);
+        status.textContent = answer?.ok ? "Reported to the moderators. Thank you." : why(answer, "Say briefly why, then send.");
+        if (answer?.ok) { reporting.delete(message.id); rows.delete(message.id); showMessages(); }
       })));
     }
     // The log keeps each message's row, so a new message never wipes a report
@@ -483,7 +513,7 @@
       if (seq !== openSeq) return;
       messages = page?.ok ? page.messages : [];
       more = page?.hasMore === true;
-      status.textContent = page?.ok ? `${room.name}` : why(page, "Messages could not be loaded.");
+      status.textContent = page?.ok ? "" : why(page, "Messages could not be loaded. Check your connection, then open the room again.");
       paint();
       showMessages({ follow: true });
     }
@@ -528,46 +558,31 @@
       void Promise.resolve(api.coworkStatus?.()).then(show).catch(() => {});
       return box;
     }
-    function roomView() {
-      const room = openRoom;
-      const head = node("div", "rooms-room-head");
-      head.append(button("‹ All rooms", close, "rooms-back"), node("strong", "", room.name));
-      // Who reads a room: the relay passes messages to the room's members and keeps none.
-      const privacy = node("p", "muted rooms-privacy", room.id === "lobby" ? "Everyone signed in to Studio from the Void Engine server is in the Lobby." : flags.lobby ? "Messages go only to the people in this room. The room service keeps none of them." : "Void Engine moderators can read every room.");
-      privacy.id = "rooms-privacy";
+    // Who is in the room in Studio now (presence frames), as small faces beside its name.
+    function paintHere() {
+      if (!hereBox) return;
+      const ids = here.filter((id) => id !== me?.id);
+      const chips = ids.slice(0, 5).map((id) => {
+        const name = nameOf(id) || "Someone";
+        const chip = node("span", "rooms-here-chip", initials(name));
+        chip.title = name;
+        chip.setAttribute("aria-label", name);
+        return chip;
+      });
+      if (ids.length > 5) chips.push(node("span", "rooms-here-chip rooms-here-more", `+${ids.length - 5}`));
+      hereBox.replaceChildren(...chips, node("span", "muted rooms-here-words", ids.length ? `${ids.length} here` : "Just you here"));
+    }
+
+    // The room's ⋯ menu: its invite code, inviting by name, agents working
+    // together (cowork rooms), and Lock, Close or Leave.
+    function roomPanel(room) {
+      const panel = node("div", "rooms-room-panel");
+      panel.id = "rooms-room-panel";
+      if (flags.joinCodes) panel.append(inviteStrip(room));
       coworkShow = null;
-      const together = room.kind === "cowork" && room.status === "active" && ["owner", "member"].includes(room.you) && typeof api.coworkStatus === "function" ? coworkSection(room) : null;
-      const earlier = button("Load earlier", () => guard("Loading earlier messages…", async () => {
-        const seq = openSeq;
-        const page = await call("messages", room.id, messages[0]?.id ?? null);
-        if (seq !== openSeq) return;
-        if (page?.ok) { messages = [...page.messages, ...messages]; more = page.hasMore === true; }
-        status.textContent = page?.ok ? room.name : why(page, "Earlier messages could not be loaded.");
-        paint();
-      }));
-      earlier.hidden = !more;
-      showMessages();
-      const box = field(node("textarea", "rooms-compose"), `compose:${room.id}`);
-      box.id = "rooms-compose";
-      box.maxLength = 2000;
-      box.rows = 2;
-      box.placeholder = room.status === "active" ? `Message ${room.name}` : "This room is not taking messages.";
-      box.disabled = room.status !== "active";
-      box.setAttribute("aria-label", `Message ${room.name}`);
-      const send = button("Send", () => {
-        const text = box.value;
-        if (!text.trim()) return;
-        void guard("Sending…", async () => {
-          const answer = await call("sendMessage", room.id, text);
-          if (answer?.ok) { box.value = ""; status.textContent = room.name; }
-          else status.textContent = `Not sent: ${why(answer, "try again.")}`;
-        });
-      }, "rooms-send");
-      send.disabled = box.disabled;
-      box.addEventListener("keydown", (event) => { if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); send.click(); } });
-      const owner = room.you === "owner";
+      if (room.kind === "cowork" && room.status === "active" && ["owner", "member"].includes(room.you) && typeof api.coworkStatus === "function") panel.append(coworkSection(room));
       const controls = node("div", "rooms-row-actions");
-      if (owner) {
+      if (room.you === "owner") {
         const find = field(node("input", "rooms-note"), `find:${room.id}`);
         find.type = "text";
         find.maxLength = 32;
@@ -584,9 +599,12 @@
             })));
             return row;
           }));
-          status.textContent = answer?.ok ? (answer.members.length ? "Pick who to invite." : "Nobody by that name.") : why(answer, "Search did not work.");
+          status.textContent = answer?.ok ? (answer.members.length ? "Pick who to invite." : "Nobody by that name has signed in yet.") : why(answer, "Search did not work.");
         }));
-        controls.append(find, search, button(room.status === "locked" ? "Unlock" : "Lock", () => guard("Updating…", async () => {
+        const findRow = node("div", "rooms-join");
+        findRow.append(find, search);
+        panel.append(findRow, found);
+        controls.append(button(room.status === "locked" ? "Unlock" : "Lock", () => guard("Updating…", async () => {
           const answer = await call(room.status === "locked" ? "unlock" : "lock", room.id);
           if (answer?.ok && openRoom?.id === room.id) openRoom = merged(openRoom, answer.room);
           status.textContent = answer?.ok ? (answer.room.status === "locked" ? "Locked: no new posts or requests." : "Unlocked.") : why(answer, "That did not go through.");
@@ -598,17 +616,87 @@
             if (answer?.ok) close();
           });
         }));
-        return [head, privacy, ...(flags.joinCodes ? [inviteStrip(room)] : []), ...(together ? [together] : []), earlier, log, box, send, controls, found];
+      } else {
+        controls.append(confirmed("Leave room", "Leave it?", `Leave ${room.name}?`, () => {
+          void guard("Leaving…", async () => {
+            const answer = await call("leave", room.id);
+            status.textContent = answer?.ok ? `You left ${room.name}.` : why(answer, "You could not leave.");
+            if (answer?.ok) close();
+          });
+        }));
       }
-      if (room.id === "lobby") return [head, privacy, earlier, log, box, send];
-      controls.append(confirmed("Leave room", "Leave it?", `Leave ${room.name}?`, () => {
-        void guard("Leaving…", async () => {
-          const answer = await call("leave", room.id);
-          status.textContent = answer?.ok ? `You left ${room.name}.` : why(answer, "You could not leave.");
-          if (answer?.ok) close();
+      panel.append(controls);
+      return panel;
+    }
+
+    function composer(room) {
+      const wrap = node("div", "rooms-composer");
+      const box = field(node("textarea", "rooms-compose"), `compose:${room.id}`);
+      box.id = "rooms-compose";
+      box.maxLength = 2000;
+      box.rows = 1;
+      box.placeholder = room.status === "active" ? `Message ${room.name}` : "This room is not taking messages.";
+      box.disabled = room.status !== "active";
+      box.setAttribute("aria-label", `Message ${room.name} (Enter sends, Shift+Enter for a new line)`);
+      const send = button("Send", () => {
+        const text = box.value;
+        if (!text.trim()) return;
+        void guard(null, async () => {
+          const answer = await call("sendMessage", room.id, text);
+          if (answer?.ok) { box.value = ""; grow(); status.textContent = ""; }
+          else status.textContent = `Not sent: ${why(answer, "try again.")}`;
         });
-      }));
-      return [head, privacy, ...(flags.joinCodes ? [inviteStrip(room)] : []), ...(together ? [together] : []), earlier, log, box, send, controls];
+      }, "rooms-send");
+      send.disabled = box.disabled;
+      // One line that grows with what is typed, up to about six.
+      const grow = () => { if (!box.style) return; box.style.height = "auto"; box.style.height = `${Math.min(box.scrollHeight || 0, 140)}px`; };
+      box.addEventListener("input", grow);
+      box.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" || event.isComposing) return;
+        if (event.shiftKey) return;
+        event.preventDefault();
+        send.click();
+      });
+      wrap.append(box, send);
+      return wrap;
+    }
+
+    function roomView() {
+      const room = openRoom;
+      const head = node("div", "rooms-room-head");
+      const back = button("‹ Rooms", close, "rooms-back");
+      back.setAttribute("aria-label", "Back to all rooms");
+      const title = node("div", "rooms-room-title");
+      // Who reads a room: the relay passes messages to the room's members and keeps none.
+      const privacy = node("span", "muted rooms-privacy", room.id === "lobby" ? "Everyone signed in from the Void Engine server is here." : flags.lobby ? "Only the people in this room get its messages. The room service keeps none." : "Void Engine moderators can read every room.");
+      privacy.id = "rooms-privacy";
+      title.append(node("strong", "rooms-room-name", room.name), privacy);
+      hereBox = node("div", "rooms-here");
+      hereBox.setAttribute("aria-label", "Who's here");
+      paintHere();
+      const tools = node("div", "rooms-room-tools");
+      if (room.status === "active" && window.MefiMusic?.openAudio) tools.append(button("Listen together", () => { window.MefiMusic.openAudio(); window.MefiMusic.setSource?.("link"); window.MefiMusic.openSection?.("more"); }, "rooms-listen"));
+      if (room.id !== "lobby") {
+        const menu = button("⋯", () => { roomMenu = !roomMenu; paint(); }, "rooms-room-menu");
+        menu.setAttribute("aria-label", roomMenu ? "Hide room options" : "Room options: invite, lock, leave");
+        menu.setAttribute("aria-expanded", String(roomMenu));
+        tools.append(menu);
+      }
+      head.append(back, title, hereBox, tools);
+      const earlier = button("Load earlier", () => guard("Loading earlier messages…", async () => {
+        const seq = openSeq;
+        const page = await call("messages", room.id, messages[0]?.id ?? null);
+        if (seq !== openSeq) return;
+        if (page?.ok) { messages = [...page.messages, ...messages]; more = page.hasMore === true; }
+        status.textContent = page?.ok ? "" : why(page, "Earlier messages could not be loaded.");
+        paint();
+      }), "rooms-earlier");
+      earlier.hidden = !more;
+      showMessages();
+      const chat = node("div", "rooms-chat");
+      chat.append(earlier, log);
+      if (!messages.length) log.replaceChildren(node("li", "muted rooms-empty", room.id === "lobby" ? "Nobody has said anything yet. Say hi!" : "No messages yet. Say hi, or share the room's invite code from ⋯."));
+      return [head, ...(roomMenu && room.id !== "lobby" ? [roomPanel(room)] : []), chat, composer(room)];
     }
 
     // Rebuilds the view and gives every keyed field its draft (and focus) back.
@@ -735,6 +823,7 @@
         return;
       }
       if (!openRoom || event?.roomId !== openRoom.id) return;
+      if (event.type === "presence") { here = Array.isArray(event.inStudio) ? event.inStudio : []; paintHere(); return; }
       if (event.type === "claims") { if (coworkShow) void Promise.resolve(api.coworkStatus?.()).then(coworkShow).catch(() => {}); return; }
       if (event.type === "message" && !messages.some((item) => item.id === event.message.id)) { messages = [...messages, event.message].slice(-500); showMessages(); }
       else if (event.type === "messageUpdate") { messages = messages.map((item) => (item.id === event.message.id ? event.message : item)); showMessages(); }

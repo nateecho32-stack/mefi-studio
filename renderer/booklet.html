@@ -9717,32 +9717,91 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 /* Friends › Rooms (renderer/rooms.js). */
 .rooms { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--hairline); border-radius: 14px; }
 .rooms-title { margin: 0; font-size: 13px; font-weight: 600; }
-.rooms-body { display: grid; gap: 8px; min-width: 0; }
-.rooms-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
-.rooms-tabs [aria-selected=true] { border-color: var(--gold); color: var(--gold-bright); }
+.rooms-status:empty { display: none; }
+.rooms-body { display: grid; gap: 10px; min-width: 0; }
+/* The Rooms | Online | Requests | Invites switch: one segmented control, the chosen part filled. */
+.rooms-tabs { display: inline-flex; flex-wrap: wrap; gap: 2px; width: fit-content; max-width: 100%; padding: 3px; border: 1px solid var(--hairline); border-radius: 10px; }
+.rooms-tabs [role=tab] { min-height: 30px; padding: 4px 12px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); }
+.rooms-tabs [role=tab][aria-selected=true] { background: color-mix(in srgb, var(--gold) 18%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 50%, transparent); color: var(--ivory); font-weight: 600; }
 .rooms-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .rooms-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; padding: 8px 10px; border: 1px solid var(--hairline); border-radius: 10px; font-size: 12px; overflow-wrap: anywhere; }
 .rooms-row-text { min-width: 0; flex: 1 1 160px; }
 .rooms-row-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .rooms-button { white-space: normal; }
+/* Rooms as cards, like The Lobby's "Rooms open now". */
+.rooms-cards { grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 10px; }
+.rooms-card { display: grid; align-content: space-between; gap: 10px; padding: 12px 14px; border-radius: 12px; }
+.rooms-card .rooms-row-text { display: grid; gap: 2px; }
+.rooms-card-name { font-size: 15px; color: var(--ivory); }
+.rooms-card-meta { font-size: 12px; }
+.rooms-empty { padding: 6px 2px; font-size: 13px; }
+.rooms-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.rooms-tools .rooms-join { flex: 1 1 320px; }
 .rooms-join, .rooms-invite { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .rooms-join input { flex: 1 1 200px; min-width: 0; }
 .rooms-invite { padding: 8px 10px; border: 1px dashed var(--hairline-strong); border-radius: 10px; font-size: 12px; }
 .rooms-code { font-size: 15px; letter-spacing: .08em; color: var(--gold-bright); }
 .rooms-online-toggle { display: flex; align-items: center; gap: 8px; font-size: 12px; }
-.rooms-note, .rooms-name, .rooms-compose { flex: 1 1 100%; min-width: 0; box-sizing: border-box; }
+.rooms-note, .rooms-name { flex: 1 1 100%; min-width: 0; box-sizing: border-box; }
 .rooms-quote { display: block; margin-top: 4px; color: var(--muted); font-style: italic; }
-.rooms-create { display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid var(--hairline); }
-.rooms-create h5 { margin: 0; font-size: 12px; font-weight: 600; }
+/* New room: a small form, not a settings page. */
+.rooms-create { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 8px; max-width: 640px; padding: 12px 14px; border: 1px solid var(--hairline); border-radius: 12px; }
+.rooms-create > :is(h5, .rooms-name, .rooms-check, .rooms-row-actions) { grid-column: 1 / -1; }
+.rooms-create h5 { margin: 0; font-size: 13px; font-weight: 600; }
 .rooms-check { font-size: 12px; }
-.rooms-room-head { display: flex; align-items: center; gap: 8px; }
-.rooms-messages { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 260px; overflow-y: auto; }
-.rooms-message { padding: 6px 8px; border-radius: 8px; background: color-mix(in srgb, var(--gold) 3%, transparent); font-size: 12px; }
+/* One room: a header, the options menu, the chat that fills the page, one composer. */
+.rooms[data-view="room"] { display: flex; flex-direction: column; min-height: 0; }
+.rooms[data-view="room"] > .rooms-body { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.rooms-room-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding-bottom: 10px; border-bottom: 1px solid var(--hairline); }
+.rooms-room-title { display: grid; flex: 1 1 200px; min-width: 0; }
+.rooms-room-name { font-size: 15px; color: var(--ivory); overflow-wrap: anywhere; }
+.rooms-privacy { margin: 0; font-size: 12px; }
+.rooms-here { display: flex; align-items: center; }
+.rooms-here-chip { display: grid; place-items: center; width: 26px; height: 26px; margin-left: -6px; border: 2px solid var(--panel-solid, var(--bg)); border-radius: 50%; background: color-mix(in srgb, var(--gold) 32%, var(--panel-solid, var(--bg))); color: var(--ivory); font-size: 12px; font-weight: 700; }
+.rooms-here-chip:first-child { margin-left: 0; }
+.rooms-here-words { margin-left: 8px; font-size: 12px; }
+.rooms-room-tools { display: flex; gap: 6px; }
+.rooms-room-panel { display: grid; gap: 10px; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: 10px; }
+.rooms-chat { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 140px; }
+.rooms-chat #rooms-earlier { align-self: center; min-height: 0; padding: 2px 6px; border: 0; background: none; box-shadow: none; color: var(--muted); font-size: 12px; text-decoration: underline; text-underline-offset: .2em; }
+.rooms-chat #rooms-earlier[hidden] { display: none; }
+/* The room's own controls are small: the chat is the point. */
+.rooms-room-head button, .rooms-composer button, .rooms-message-actions button { min-height: 30px; padding: 0 10px; }
+.rooms-messages { list-style: none; margin: 0; padding: 6px 2px; display: grid; align-content: start; gap: 6px; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.rooms-message { position: relative; padding: 6px 10px; border-radius: 10px; background: color-mix(in srgb, var(--gold) 4%, transparent); font-size: 13px; }
+.rooms-message.mine { background: color-mix(in srgb, var(--gold) 12%, transparent); }
+.rooms-message-head { display: flex; align-items: baseline; gap: 6px; font-size: 12px; }
 .rooms-message-text { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-/* The privacy line and a cowork room's shared file claims. */
-.rooms-privacy { margin: 0; font-size: 11px; }
+.rooms-message-more { margin-left: auto; min-height: 0; padding: 0 8px; border: 0; background: none; color: var(--muted); line-height: 1.4; opacity: 0; }
+.rooms-message:is(:hover, :focus-within) .rooms-message-more, .rooms-message-more[aria-expanded=true] { opacity: 1; }
+@media (hover: none) { .rooms-message-more { opacity: 1; } }
+.rooms-message-actions { margin-top: 4px; }
+.rooms-composer { display: flex; align-items: flex-end; gap: 6px; margin-top: 8px; padding: 6px 6px 6px 12px; border: 1px solid var(--hairline-strong); border-radius: 12px; background: color-mix(in srgb, var(--panel-solid, var(--bg)) 85%, transparent); }
+.rooms-composer:focus-within { border-color: var(--gold); }
+.rooms-composer .rooms-compose, .rooms-composer .rooms-compose:focus, #friends-overlay .rooms-composer .rooms-compose { flex: 1 1 auto; min-width: 0; min-height: 24px; max-height: 140px; padding: 4px 0; border: 0; border-radius: 0; background: transparent; color: var(--ivory); font: inherit; line-height: 1.45; resize: none; outline: none; box-shadow: none; }
+.rooms-composer #rooms-send { flex: none; }
 .rooms-cowork { display: grid; gap: 6px; padding: 8px 10px; border: 1px solid var(--hairline); border-radius: 10px; font-size: 12px; overflow-wrap: anywhere; }
 .rooms-cowork > p { margin: 0; }
+/* In the Friends page an open room takes the whole height: the log grows and the composer stays at the bottom. */
+#friends-overlay:has(.rooms[data-view="room"]) .friends-place-sheet { height: 100%; grid-template-rows: auto minmax(0, 1fr); padding-bottom: 12px; }
+#friends-overlay:has(.rooms[data-view="room"]) .friends-place-about { display: none; }
+#friends-overlay:has(.rooms[data-view="room"]) .friends-place-body { display: flex; flex-direction: column; min-height: 0; }
+#friends-overlay .friends-place-body > .rooms[data-view="room"] { flex: 1 1 auto; padding: 12px 14px; }
+@media (max-width: 700px) {
+  #friends-overlay .friends-place-sheet { padding: 12px 10px 16px; }
+  #friends-overlay .friends-place-body > .rooms { padding: 10px; }
+  .rooms-here-words { display: none; }
+}
+/* A short window gives the chat every line it can: the page title steps aside (still read aloud), and so does the privacy line. */
+@media (max-height: 560px) {
+  #friends-overlay:has(.rooms[data-view="room"]) .friends-place-sheet { grid-template-rows: minmax(0, 1fr); gap: 0; padding-top: 6px; padding-bottom: 6px; }
+  #friends-overlay:has(.rooms[data-view="room"]) .friends-place-head { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  #friends-overlay .friends-place-body > .rooms[data-view="room"] { padding: 8px 10px; }
+  .rooms[data-view="room"] .rooms-privacy { display: none; }
+  .rooms[data-view="room"] .rooms-room-head { gap: 6px; padding-bottom: 6px; }
+  .rooms[data-view="room"] .rooms-chat { min-height: 60px; }
+  .rooms[data-view="room"] .rooms-composer { margin-top: 6px; }
+}
 .agent-hub .companion-panel.companion-in-hub { position: relative; inset: auto; width: 100%; min-height: 160px; max-height: min(510px, calc(100dvh - 290px)); flex: 0 1 auto; background: color-mix(in srgb, var(--theme-panel-solid) 24%, transparent); backdrop-filter: blur(10px); box-shadow: none; transition: height var(--motion-slow) var(--ease-emphasized); }
 .companion-in-hub .companion-shell-head { display: none; }
 /* In the hub the bubbles are the menu; the panel's own tabs would repeat them. */
@@ -24012,10 +24071,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     ...[
       ["friends", "Friends", "g-orbit", "Rooms, your PCs and companion playdates", null],
       ["the-lobby", "The Lobby", "g-community", "Who's online, rooms open now and what friends are making", "lobby"],
-      ["rooms", "Rooms", "g-orbit", "Room chat, invitations and requests to join", "rooms"],
+      ["rooms", "Rooms", "g-chat", "Room chat, invitations and requests to join", "rooms"],
       ["your-pcs", "Your PCs", "g-explorer", "Connect your PCs and sync work through GitHub", "pcs"],
       ["playground", "Playground", "g-ambience", "Companion playdates, sharing rules and practice with Pip", "playground"],
-      ["project-hub", "Project hub", "g-orbit", "Share and play members' projects, credits and ranks", "hub"],
+      ["project-hub", "Project hub", "g-spark", "Share and play members' projects, credits and ranks", "hub"],
     ].map(([id, label, glyph, desc, target]) => ({
       id, label, short: label, glyph, desc, kind: "action", layer: null, section: "friends", group: "tools", key: null,
       searchTerms: `friends ${label} ${desc}`,
@@ -77338,14 +77397,30 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     function paintStatus() {
       const view = state.view, hub = view.hub;
       const out = view.friends.length;
-      status.textContent = !hub.configured ? "Friends' companions meet through the rooms hub, which this PC isn't connected to yet: add its address in Settings › General › Community › Connection details. Pip is here to practice."
-        : !hub.linked ? "Link Discord under Community to meet friends' companions. Pip, the practice buddy, is always here."
-        : hub.state !== "ready" ? "Connect under Rooms below, then open a room, and friends' companions there can visit."
-        : !hub.companions ? "This rooms hub does not carry companions yet, so friends cannot visit. Pip is here to practice."
+      status.textContent = !hub.configured ? "Friends' companions meet through the room service, which this copy of Studio can't reach. Pip, the practice buddy, is always here."
+        : !hub.linked ? "Sign in with Discord in Friends to meet friends' companions. Pip, the practice buddy, is always here."
+        : hub.state !== "ready" ? "Connecting to the room service. Open a room in Rooms and friends' companions there can visit."
+        : !hub.companions ? "This room service doesn't carry companions yet, so friends can't visit. Pip is here to practice."
         : !hub.rooms.length ? "Open a room under Rooms below, and friends' companions there can visit."
         : out ? `${out} friend${out === 1 ? "'s companion is" : "s' companions are"} out in your rooms.`
         : "No friends' companions are out in your rooms right now.";
-      preview.textContent = `Friends see: ${view.preview.summary} (${levelLabel(view.preview.level)} · ${view.preview.why}).`;
+      preview.textContent = seeSentence(view.preview);
+    }
+
+    // What friends see of your companion, as one plain sentence: the look and mood, then whatever the level adds.
+    function seeSentence(preview) {
+      const card = preview?.card;
+      if (!card) return "Friends see nothing of your companion right now.";
+      const a = (word) => `${/^[aeiou]/i.test(String(word)) ? "an" : "a"} ${word}`;
+      const bits = [card.name ? `${card.name}, ${a(card.look)} that looks ${card.mood}` : `${a(card.look)} that looks ${card.mood}`];
+      if (card.personality) bits.push(`its ${card.personality} personality`);
+      if (card.status) bits.push(`whether you're working (${card.status.running} running, ${card.status.doneToday} done today)`);
+      if (card.work?.project) bits.push(`your project's name, ${card.work.project}`);
+      const titles = card.work ? card.work.running.length + card.work.done.length : 0;
+      if (titles) bits.push(`${titles} task title${titles === 1 ? "" : "s"}`);
+      const list = bits.length === 1 ? bits[0] : `${bits.slice(0, -1).join(", ")} and ${bits.at(-1)}`;
+      const who = preview.why === "Everyone" ? "your choice for everyone" : `set for ${preview.why}`;
+      return `Friends see ${list}. That's ${levelLabel(preview.level)}, ${who}.`;
     }
 
     function paintFriends() {
@@ -77593,13 +77668,14 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     });
   }
 
-  // The text of a message with its <@id> mentions as @name.
-  function readable(message) {
+  // The text of a message with its <@id> mentions as @name: the message's own
+  // list first, then a name this panel knows (lookup), else "@someone".
+  function readable(message, lookup = null) {
     const names = new Map((message.mentions ?? []).map((item) => [item.id, item.name]));
-    return String(message.text ?? "").replace(/<@!?(\d{17,20})>/g, (raw, id) => (names.get(id) ? `@${names.get(id)}` : raw));
+    return String(message.text ?? "").replace(/<@!?(\d{17,20})>/g, (raw, id) => `@${names.get(id) || lookup?.(id) || "someone"}`);
   }
+  const initials = (name) => String(name || "?").trim().split(/\s+/).slice(0, 2).map((part) => part[0] ?? "").join("").toUpperCase() || "?";
 
-  // options.room: a room to open once the list is in (The Lobby's rooms and people).
   function panel(options = {}) {
     const root = node("section", "rooms");
     root.id = "rooms";
@@ -77624,6 +77700,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     let flags = { lobby: false, joinCodes: false, online: false };
     let lobbyOpened = false, people = null, showOnline = true, onlineTimer = null;
     let wanted = typeof options?.room === "string" && options.room ? options.room : null;
+    let creating = false, roomMenu = false, here = [], hereBox = null;
+    const messageMenus = new Set(); // messages whose small menu is open
     const codes = new Map(); // room id -> { code, link }
     let rooms = [], requests = [], invites = [], messages = [], more = false;
     // Fields keyed by what they hold. A repaint gives each its text back, and
@@ -77672,10 +77750,12 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     }
 
     function roomRow(room) {
-      const row = node("li", "rooms-row");
+      const row = node("li", "rooms-row rooms-card");
       row.dataset.room = room.id;
       const text = node("div", "rooms-row-text");
-      text.append(node("strong", "", room.name), node("span", "muted", ` · ${room.kind === "cowork" ? "cowork" : "hangout"} · ${room.memberCount}${room.maxMembers ? `/${room.maxMembers}` : ""}${room.status !== "active" ? ` · ${room.status}` : ""}`));
+      const people = `${room.memberCount}${room.maxMembers ? ` of ${room.maxMembers}` : ""} ${room.memberCount === 1 ? "person" : "people"}`;
+      const meta = [room.kind === "cowork" ? "Cowork" : "Hangout", people, room.you === "owner" ? "yours" : room.you === "member" ? "you're in" : null, room.listed ? null : "private", room.status !== "active" ? room.status : null].filter(Boolean).join(" · ");
+      text.append(node("strong", "rooms-card-name", room.name), node("span", "muted rooms-card-meta", meta));
       const actions = node("div", "rooms-row-actions");
       const mine = requests.find((item) => item.roomId === room.id && item.requester.id === me?.id && item.status === "pending");
       const invitation = invites.find((item) => item.roomId === room.id && item.status === "pending");
@@ -77718,9 +77798,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       await refresh();
     });
 
+    // "New room" opens this small form; it closes again when the room is made.
     function createForm() {
       const form = node("div", "rooms-create");
-      form.append(node("h5", "", "Make a room"));
+      form.append(node("h5", "", "New room"));
       const name = field(node("input", "rooms-name"), "create-name");
       name.type = "text";
       name.maxLength = 80;
@@ -77745,19 +77826,24 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       listedLabel.append(listed, node("span", "", " Show it in the room list (opens at Flame rank)"));
       const create = button("Make room", () => guard("Making the room…", async () => {
         const answer = await call("createRoom", { name: name.value.trim(), kind: kind.value, policy: policy.value, listed: listed.checked });
-        status.textContent = answer?.ok ? `${answer.room.name} is ready.` : why(answer, answer?.error === "bad-request" ? "Give the room a one-line name of up to 80 characters." : "The room could not be made.");
-        if (answer?.ok) { name.value = ""; await refresh(); }
+        status.textContent = answer?.ok ? `${answer.room.name} is ready. Open it, then share its invite code.` : why(answer, answer?.error === "bad-request" ? "Give the room a one-line name of up to 80 characters." : "The room could not be made.");
+        if (answer?.ok) { name.value = ""; creating = false; await refresh(); }
       }), "rooms-create");
-      form.append(name, kind, policy, listedLabel, create);
+      const actions = node("div", "rooms-row-actions");
+      actions.append(create, button("Cancel", () => { creating = false; paint(); }, "rooms-create-cancel"));
+      form.append(name, kind, policy, listedLabel, actions);
       return form;
     }
 
     function listView() {
-      const list = node("ul", "rooms-list");
+      const list = node("ul", "rooms-list rooms-cards");
       const shown = rooms.filter((room) => room.status !== "closed");
       list.append(...shown.map(roomRow));
-      if (!shown.length) list.append(node("li", "muted", "No rooms yet. Make one, or ask a friend to invite you."));
-      return [...(flags.joinCodes ? [joinRow()] : []), list, createForm()];
+      if (!shown.length) list.append(node("li", "muted rooms-empty", "No rooms yet. Make one, join with a friend's code, or say hi in the Lobby."));
+      const tools = node("div", "rooms-tools");
+      if (flags.joinCodes) tools.append(joinRow());
+      tools.append(button(creating ? "Close the form" : "New room", () => { creating = !creating; paint(); }, "rooms-new"));
+      return [tools, ...(creating ? [createForm()] : []), list];
     }
 
     // ---- connecting made simple: a join code, and who is online ----------------
@@ -77903,22 +77989,41 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const log = node("ol", "rooms-messages");
     log.setAttribute("aria-live", "polite");
     log.setAttribute("aria-label", "Room messages");
-    // Each row is built once per message and belongs to the room it came from.
+    // A name this panel knows for a member id: authors, the online list, requests and invites.
+    function nameOf(id) {
+      if (id === me?.id) return me?.name || "You";
+      const author = messages.find((message) => message.author.id === id)?.author.name;
+      return author || people?.find((person) => person.id === id)?.name || requests.find((item) => item.requester.id === id)?.requester.name || invites.find((item) => item.invitedBy.id === id)?.invitedBy.name || null;
+    }
+    // Each row is built once per message and belongs to the room it came from;
+    // its Report or Delete waits in a small menu (⋯) so the chat stays quiet.
     function messageItem(message, roomId) {
-      const item = node("li", "rooms-message");
+      const mine = message.author.id === me?.id;
+      const item = node("li", `rooms-message${mine ? " mine" : ""}`);
       item.dataset.message = message.id;
       const head = node("div", "rooms-message-head");
-      head.append(node("strong", "", message.author.name || "Someone"), node("span", "muted", ` ${time(message.createdAt)}${message.editedAt ? " · edited" : ""}${message.author.viaStudio ? " · Studio" : ""}`));
-      const text = node("p", "rooms-message-text", readable(message));
+      head.append(node("strong", "", mine ? "You" : message.author.name || "Someone"), node("span", "muted", ` ${time(message.createdAt)}${message.editedAt ? " · edited" : ""}`));
+      const canDelete = mine && message.author.viaStudio;
+      const canReport = !mine;
+      if (canDelete || canReport) {
+        const more = button("⋯", () => { if (messageMenus.has(message.id)) messageMenus.delete(message.id); else messageMenus.add(message.id); rows.delete(message.id); showMessages(); });
+        more.className = "ghost rooms-button rooms-message-more";
+        more.setAttribute("aria-label", mine ? "Options for your message" : `Options for ${message.author.name || "this"} message`);
+        more.setAttribute("aria-expanded", String(messageMenus.has(message.id)));
+        head.append(more);
+      }
+      const text = node("p", "rooms-message-text", readable(message, nameOf));
       item.append(head, text);
       if (message.attachments?.length) item.append(node("p", "muted", `Attachments in Discord: ${message.attachments.map((file) => file.name).join(", ")}`));
-      const actions = node("div", "rooms-row-actions");
-      if (message.author.id === me?.id && message.author.viaStudio) actions.append(confirmed("Delete", "Delete it?", "Delete this message?", () => guard("Deleting…", async () => {
-        const answer = await call("deleteMessage", roomId, message.id);
-        status.textContent = answer?.ok ? "Deleted." : why(answer, "The message could not be deleted.");
-      })));
-      else if (message.author.id !== me?.id) actions.append(button("Report", () => { if (!reporting.has(message.id)) { reporting.add(message.id); report(message, item, roomId); } }));
-      item.append(actions);
+      if (messageMenus.has(message.id)) {
+        const actions = node("div", "rooms-row-actions rooms-message-actions");
+        if (canDelete) actions.append(confirmed("Delete", "Delete it?", "Delete this message?", () => guard("Deleting…", async () => {
+          const answer = await call("deleteMessage", roomId, message.id);
+          status.textContent = answer?.ok ? "Deleted." : why(answer, "The message could not be deleted.");
+        })));
+        else if (canReport) actions.append(button("Report", () => { reporting.add(message.id); messageMenus.delete(message.id); rows.delete(message.id); showMessages(); }));
+        item.append(actions);
+      }
       if (reporting.has(message.id)) report(message, item, roomId);
       return item;
     }
@@ -77926,12 +78031,12 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       const reason = field(node("input", "rooms-note"), `report:${message.id}`);
       reason.type = "text";
       reason.maxLength = 500;
-      reason.placeholder = "Why? Moderators see the message link, not this text.";
+      reason.placeholder = "Why? Moderators see the message and this reason.";
       reason.setAttribute("aria-label", "Reason for the report");
       item.append(reason, button("Send report", () => guard("Reporting…", async () => {
         const answer = await call("report", roomId, message.id, reason.value);
-        status.textContent = answer?.ok ? "Reported to the moderators." : why(answer, "Say briefly why, then send.");
-        if (answer?.ok) reporting.delete(message.id);
+        status.textContent = answer?.ok ? "Reported to the moderators. Thank you." : why(answer, "Say briefly why, then send.");
+        if (answer?.ok) { reporting.delete(message.id); rows.delete(message.id); showMessages(); }
       })));
     }
     // The log keeps each message's row, so a new message never wipes a report
@@ -77972,7 +78077,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       if (seq !== openSeq) return;
       messages = page?.ok ? page.messages : [];
       more = page?.hasMore === true;
-      status.textContent = page?.ok ? `${room.name}` : why(page, "Messages could not be loaded.");
+      status.textContent = page?.ok ? "" : why(page, "Messages could not be loaded. Check your connection, then open the room again.");
       paint();
       showMessages({ follow: true });
     }
@@ -78017,46 +78122,31 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       void Promise.resolve(api.coworkStatus?.()).then(show).catch(() => {});
       return box;
     }
-    function roomView() {
-      const room = openRoom;
-      const head = node("div", "rooms-room-head");
-      head.append(button("‹ All rooms", close, "rooms-back"), node("strong", "", room.name));
-      // Who reads a room: the relay passes messages to the room's members and keeps none.
-      const privacy = node("p", "muted rooms-privacy", room.id === "lobby" ? "Everyone signed in to Studio from the Void Engine server is in the Lobby." : flags.lobby ? "Messages go only to the people in this room. The room service keeps none of them." : "Void Engine moderators can read every room.");
-      privacy.id = "rooms-privacy";
+    // Who is in the room in Studio now (presence frames), as small faces beside its name.
+    function paintHere() {
+      if (!hereBox) return;
+      const ids = here.filter((id) => id !== me?.id);
+      const chips = ids.slice(0, 5).map((id) => {
+        const name = nameOf(id) || "Someone";
+        const chip = node("span", "rooms-here-chip", initials(name));
+        chip.title = name;
+        chip.setAttribute("aria-label", name);
+        return chip;
+      });
+      if (ids.length > 5) chips.push(node("span", "rooms-here-chip rooms-here-more", `+${ids.length - 5}`));
+      hereBox.replaceChildren(...chips, node("span", "muted rooms-here-words", ids.length ? `${ids.length} here` : "Just you here"));
+    }
+
+    // The room's ⋯ menu: its invite code, inviting by name, agents working
+    // together (cowork rooms), and Lock, Close or Leave.
+    function roomPanel(room) {
+      const panel = node("div", "rooms-room-panel");
+      panel.id = "rooms-room-panel";
+      if (flags.joinCodes) panel.append(inviteStrip(room));
       coworkShow = null;
-      const together = room.kind === "cowork" && room.status === "active" && ["owner", "member"].includes(room.you) && typeof api.coworkStatus === "function" ? coworkSection(room) : null;
-      const earlier = button("Load earlier", () => guard("Loading earlier messages…", async () => {
-        const seq = openSeq;
-        const page = await call("messages", room.id, messages[0]?.id ?? null);
-        if (seq !== openSeq) return;
-        if (page?.ok) { messages = [...page.messages, ...messages]; more = page.hasMore === true; }
-        status.textContent = page?.ok ? room.name : why(page, "Earlier messages could not be loaded.");
-        paint();
-      }));
-      earlier.hidden = !more;
-      showMessages();
-      const box = field(node("textarea", "rooms-compose"), `compose:${room.id}`);
-      box.id = "rooms-compose";
-      box.maxLength = 2000;
-      box.rows = 2;
-      box.placeholder = room.status === "active" ? `Message ${room.name}` : "This room is not taking messages.";
-      box.disabled = room.status !== "active";
-      box.setAttribute("aria-label", `Message ${room.name}`);
-      const send = button("Send", () => {
-        const text = box.value;
-        if (!text.trim()) return;
-        void guard("Sending…", async () => {
-          const answer = await call("sendMessage", room.id, text);
-          if (answer?.ok) { box.value = ""; status.textContent = room.name; }
-          else status.textContent = `Not sent: ${why(answer, "try again.")}`;
-        });
-      }, "rooms-send");
-      send.disabled = box.disabled;
-      box.addEventListener("keydown", (event) => { if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); send.click(); } });
-      const owner = room.you === "owner";
+      if (room.kind === "cowork" && room.status === "active" && ["owner", "member"].includes(room.you) && typeof api.coworkStatus === "function") panel.append(coworkSection(room));
       const controls = node("div", "rooms-row-actions");
-      if (owner) {
+      if (room.you === "owner") {
         const find = field(node("input", "rooms-note"), `find:${room.id}`);
         find.type = "text";
         find.maxLength = 32;
@@ -78073,9 +78163,12 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
             })));
             return row;
           }));
-          status.textContent = answer?.ok ? (answer.members.length ? "Pick who to invite." : "Nobody by that name.") : why(answer, "Search did not work.");
+          status.textContent = answer?.ok ? (answer.members.length ? "Pick who to invite." : "Nobody by that name has signed in yet.") : why(answer, "Search did not work.");
         }));
-        controls.append(find, search, button(room.status === "locked" ? "Unlock" : "Lock", () => guard("Updating…", async () => {
+        const findRow = node("div", "rooms-join");
+        findRow.append(find, search);
+        panel.append(findRow, found);
+        controls.append(button(room.status === "locked" ? "Unlock" : "Lock", () => guard("Updating…", async () => {
           const answer = await call(room.status === "locked" ? "unlock" : "lock", room.id);
           if (answer?.ok && openRoom?.id === room.id) openRoom = merged(openRoom, answer.room);
           status.textContent = answer?.ok ? (answer.room.status === "locked" ? "Locked: no new posts or requests." : "Unlocked.") : why(answer, "That did not go through.");
@@ -78087,17 +78180,87 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
             if (answer?.ok) close();
           });
         }));
-        return [head, privacy, ...(flags.joinCodes ? [inviteStrip(room)] : []), ...(together ? [together] : []), earlier, log, box, send, controls, found];
+      } else {
+        controls.append(confirmed("Leave room", "Leave it?", `Leave ${room.name}?`, () => {
+          void guard("Leaving…", async () => {
+            const answer = await call("leave", room.id);
+            status.textContent = answer?.ok ? `You left ${room.name}.` : why(answer, "You could not leave.");
+            if (answer?.ok) close();
+          });
+        }));
       }
-      if (room.id === "lobby") return [head, privacy, earlier, log, box, send];
-      controls.append(confirmed("Leave room", "Leave it?", `Leave ${room.name}?`, () => {
-        void guard("Leaving…", async () => {
-          const answer = await call("leave", room.id);
-          status.textContent = answer?.ok ? `You left ${room.name}.` : why(answer, "You could not leave.");
-          if (answer?.ok) close();
+      panel.append(controls);
+      return panel;
+    }
+
+    function composer(room) {
+      const wrap = node("div", "rooms-composer");
+      const box = field(node("textarea", "rooms-compose"), `compose:${room.id}`);
+      box.id = "rooms-compose";
+      box.maxLength = 2000;
+      box.rows = 1;
+      box.placeholder = room.status === "active" ? `Message ${room.name}` : "This room is not taking messages.";
+      box.disabled = room.status !== "active";
+      box.setAttribute("aria-label", `Message ${room.name} (Enter sends, Shift+Enter for a new line)`);
+      const send = button("Send", () => {
+        const text = box.value;
+        if (!text.trim()) return;
+        void guard(null, async () => {
+          const answer = await call("sendMessage", room.id, text);
+          if (answer?.ok) { box.value = ""; grow(); status.textContent = ""; }
+          else status.textContent = `Not sent: ${why(answer, "try again.")}`;
         });
-      }));
-      return [head, privacy, ...(flags.joinCodes ? [inviteStrip(room)] : []), ...(together ? [together] : []), earlier, log, box, send, controls];
+      }, "rooms-send");
+      send.disabled = box.disabled;
+      // One line that grows with what is typed, up to about six.
+      const grow = () => { if (!box.style) return; box.style.height = "auto"; box.style.height = `${Math.min(box.scrollHeight || 0, 140)}px`; };
+      box.addEventListener("input", grow);
+      box.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" || event.isComposing) return;
+        if (event.shiftKey) return;
+        event.preventDefault();
+        send.click();
+      });
+      wrap.append(box, send);
+      return wrap;
+    }
+
+    function roomView() {
+      const room = openRoom;
+      const head = node("div", "rooms-room-head");
+      const back = button("‹ Rooms", close, "rooms-back");
+      back.setAttribute("aria-label", "Back to all rooms");
+      const title = node("div", "rooms-room-title");
+      // Who reads a room: the relay passes messages to the room's members and keeps none.
+      const privacy = node("span", "muted rooms-privacy", room.id === "lobby" ? "Everyone signed in from the Void Engine server is here." : flags.lobby ? "Only the people in this room get its messages. The room service keeps none." : "Void Engine moderators can read every room.");
+      privacy.id = "rooms-privacy";
+      title.append(node("strong", "rooms-room-name", room.name), privacy);
+      hereBox = node("div", "rooms-here");
+      hereBox.setAttribute("aria-label", "Who's here");
+      paintHere();
+      const tools = node("div", "rooms-room-tools");
+      if (room.status === "active" && window.MefiMusic?.openAudio) tools.append(button("Listen together", () => { window.MefiMusic.openAudio(); window.MefiMusic.setSource?.("link"); window.MefiMusic.openSection?.("more"); }, "rooms-listen"));
+      if (room.id !== "lobby") {
+        const menu = button("⋯", () => { roomMenu = !roomMenu; paint(); }, "rooms-room-menu");
+        menu.setAttribute("aria-label", roomMenu ? "Hide room options" : "Room options: invite, lock, leave");
+        menu.setAttribute("aria-expanded", String(roomMenu));
+        tools.append(menu);
+      }
+      head.append(back, title, hereBox, tools);
+      const earlier = button("Load earlier", () => guard("Loading earlier messages…", async () => {
+        const seq = openSeq;
+        const page = await call("messages", room.id, messages[0]?.id ?? null);
+        if (seq !== openSeq) return;
+        if (page?.ok) { messages = [...page.messages, ...messages]; more = page.hasMore === true; }
+        status.textContent = page?.ok ? "" : why(page, "Earlier messages could not be loaded.");
+        paint();
+      }), "rooms-earlier");
+      earlier.hidden = !more;
+      showMessages();
+      const chat = node("div", "rooms-chat");
+      chat.append(earlier, log);
+      if (!messages.length) log.replaceChildren(node("li", "muted rooms-empty", room.id === "lobby" ? "Nobody has said anything yet. Say hi!" : "No messages yet. Say hi, or share the room's invite code from ⋯."));
+      return [head, ...(roomMenu && room.id !== "lobby" ? [roomPanel(room)] : []), chat, composer(room)];
     }
 
     // Rebuilds the view and gives every keyed field its draft (and focus) back.
@@ -78224,6 +78387,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         return;
       }
       if (!openRoom || event?.roomId !== openRoom.id) return;
+      if (event.type === "presence") { here = Array.isArray(event.inStudio) ? event.inStudio : []; paintHere(); return; }
       if (event.type === "claims") { if (coworkShow) void Promise.resolve(api.coworkStatus?.()).then(coworkShow).catch(() => {}); return; }
       if (event.type === "message" && !messages.some((item) => item.id === event.message.id)) { messages = [...messages, event.message].slice(-500); showMessages(); }
       else if (event.type === "messageUpdate") { messages = messages.map((item) => (item.id === event.message.id ? event.message : item)); showMessages(); }
@@ -78300,7 +78464,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     credits: "You need 100 credits to feature a project.",
     self: "You cannot star your own project.",
     title: "Give it a title.",
-    unsupported: "This room service has no project hub yet.",
+    unsupported: "The Project hub isn't on this room service yet. Rooms and chat still work.",
     offline: "Not connected to the room service.",
     "rate-limited": "Slow down a moment, then try again.",
     "read-only": "Your account is read-only in the server right now.",
@@ -84093,11 +84257,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   const FRIENDS_PLACES = Object.freeze([
     // renderer/friends-front.js: Friends' front page, and the sign-in card for anyone not signed in yet.
     { id: "lobby", label: "The Lobby", glyph: "g-community", about: "Who's online, the rooms open now and what your friends are making." },
-    { id: "rooms", label: "Rooms", glyph: "g-orbit", about: "Hang out, cowork, listen together, or share what you are making. Rooms are optional and never see your projects unless you share them." },
+    { id: "rooms", label: "Rooms", glyph: "g-chat", about: "Hang out, cowork, listen together, or share what you are making. Rooms are optional and never see your projects unless you share them." },
     { id: "pcs", label: "Your PCs", glyph: "g-explorer", about: "Keep work in step across machines through GitHub. Studio only looks until you press Sync." },
     { id: "playground", label: "Playground", glyph: "g-ambience", about: "Practice with your companion, and set what it may share." },
     // renderer/project-hub.js: members' shared projects, credits and ranks on the Mefi Studio relay.
-    { id: "hub", label: "Project hub", glyph: "g-orbit", about: "Share what you make and play what friends make. Playing someone else's project for two minutes earns you both credits." },
+    { id: "hub", label: "Project hub", glyph: "g-spark", about: "Share what you make and play what friends make. Playing someone else's project for two minutes earns you both credits." },
     // renderer/friends-mod.js: shown only once the relay says this member is a moderator (it checks every action again).
     { id: "mod", label: "Moderation", glyph: "g-flag", about: "Reports, credits that look farmed, and suspensions. Only moderators see this place.", modOnly: true },
   ]);
@@ -100235,7 +100399,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       if (teamPlaceOf(at)) return { id, params: at === "overview" ? {} : { place: at } };
     }
     if (id === "agents") return { id, params: params.section === "setup" ? { section: "setup", pane: AGENT_PANES[params.pane] ? params.pane : "team" } : {} };
-    if (id === "friends-page") return { id, params: { place: friendsPlaceOf(params.place) ? params.place : "rooms" } };
+    if (id === "friends-page") return { id, params: { place: friendsPlaceOf(params.place) ? params.place : "lobby" } };
     return { id, params };
   }
   // The key two routes share when they are the same place (the project is fixed by the set, so it is not in it).
@@ -100301,7 +100465,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (route.id === "agents" && route.params.pane) title = `Agents · ${AGENT_PANES[route.params.pane]}`;
     else if (route.id === "agents" && route.params.place) title = words(teamPlaceOf(route.params.place)?.label || title, 40);
     else if (route.id === "friends-page") title = words(friendsPlaceOf(route.params.place)?.label || title, 40);
-    return { title, glyph: dest?.glyph || "g-frame" };
+    // A Friends tab wears its place's own icon (The Lobby's people, Rooms' chat), not the page's.
+    const placeGlyph = route.id === "friends-page" ? friendsPlaceOf(route.params.place)?.glyph : null;
+    return { title, glyph: placeGlyph || dest?.glyph || "g-frame" };
   }
 
   // ---- the model ---------------------------------------------------------------------

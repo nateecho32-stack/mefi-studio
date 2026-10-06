@@ -190,7 +190,7 @@ app.whenReady().then(async () => {
   await until("document.getElementById('friends-status')?.textContent.includes(\"1 friend's companion is out\") && document.querySelector('.friends-ask')", "playground lists a friend");
   assert.match(await run("return document.querySelector('.friends-ask p').textContent;"), /^Nova told us how its person's work is going/);
   assert.equal(await run("return hubFixture.calls().filter(call=>call.key==='hubSharingSet').length;"), 0, "nothing is shared back on its own");
-  assert.match(await run("return document.getElementById('friends-preview').textContent;"), /^Friends see: wisp look · idle mood \(Play only/);
+  assert.match(await run("return document.getElementById('friends-preview').textContent;"), /^Friends see a wisp that looks idle\. That's Play only, your choice for everyone\.$/);
   await run("document.querySelector('.friends-ask').scrollIntoView({block:'center'});"); await capture("11-friends-playground");
   await click(".friends-ask .primary");
   await until("hubFixture.calls().some(call=>call.key==='hubSharingSet') && !document.querySelector('.friends-ask')", "share back for this session");
