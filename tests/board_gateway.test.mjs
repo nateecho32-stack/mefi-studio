@@ -20,7 +20,9 @@ import { migrateLegacyRequests } from "../scripts/task-history.mjs";
 const require = createRequire(import.meta.url);
 const backlog = require("../scripts/backlog.cjs");
 const taskContext = require("../scripts/task-context.cjs");
+const executorResume = require("../scripts/executor-resume.cjs");
 const { createProjects } = require("../scripts/projects.cjs");
+const { createRowPush } = require("../scripts/row-push.cjs");
 
 const source = (await readFile(new URL("../main.cjs", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const section = (start, end) => {
@@ -30,17 +32,24 @@ const section = (start, end) => {
 };
 const gateway = section("const isThenable = (value) =>", "// Drop a claim this run still owns.");
 
-async function harness() {
+// `rows` stands in for main's row pushes, so the gateway sends eyes:progress
+// to the `send` stub. `window` runs main's own send path instead (the
+// rowPushes line and "function send" … "// registerIpc installs") into a fake
+// window, plus persistExecutorCheckpoint, with the coalescing timers held
+// until the test runs them (tick).
+async function harness({ rows = false, window: live = false } = {}) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "mefi-gateway-"));
   const projects = createProjects({ defaultRoot: dir, studioRoot: dir, isDirectory: () => true });
   const scoped = projects.eyes(eyes);
   const sent = [];
+  const timers = [];
   let revisions = 0;
   const context = vm.createContext({
     console, structuredClone, Buffer,
     getEyes: async () => scoped,
     withBoardLock: (fn) => fn(),
-    send: (channel, payload) => sent.push({ channel, payload }),
+    ...(live ? {} : { send: (channel, payload) => sent.push({ channel, payload }) }),
+    ...(rows ? { rowPushes: new Map(), projects } : {}),
     taskView: (task) => task,
     backlog,
     taskContext: { ...taskContext, recordTaskRevision: (...args) => { revisions += 1; return taskContext.recordTaskRevision(...args); } },
@@ -48,17 +57,29 @@ async function harness() {
     TASKS_PATH: path.join(dir, "eyes-tasks.json"),
     IDEAS_PATH: path.join(dir, "eyes-feature-ideas.json"),
   });
+  if (live) {
+    Object.assign(context, {
+      projects, executorResume, autopilot: { jobs: [] }, process: { env: {} }, createRowPush, Date, SMOKE: false, CAPTURE: false,
+      window: { isDestroyed: () => false, isMinimized: () => false, isVisible: () => true, webContents: { send: (channel, payload) => sent.push({ channel, payload }) } },
+      setTimeout: (fn) => { timers.push(fn); return { unref() {} }; }, clearTimeout() {},
+    });
+    vm.runInContext(section("const rowPushes = ", "let assistantLoading = null;"), context);
+    vm.runInContext(section("function send(channel, payload) {", "// registerIpc installs"), context);
+    vm.runInContext(section("async function persistExecutorCheckpoint(", "// `delay` lets plain output lines"), context);
+  }
   vm.runInContext(gateway, context);
   // Rows carry the facade's project stamp from the start: a row created
   // without it is stamped on write and, as before this change, gains a
   // catch-up revision on the next pass because projectId is snapshot state.
   const project = projects.current();
   return {
-    context, sent, scoped,
+    context, sent, scoped, project,
     task: (row) => ({ ...row, projectId: project.id, projectPath: project.path }),
     tasksFile: path.join(dir, "eyes-tasks.json"),
     revisions: () => revisions,
     reset: () => { revisions = 0; sent.length = 0; },
+    // The coalescing windows close: their trailing pushes go out.
+    tick: () => { for (const fn of timers.splice(0)) fn(); },
     close: () => rm(dir, { recursive: true, force: true }),
   };
 }
@@ -220,6 +241,67 @@ test("a failed tasks write while a verifying row moves to the board loses nothin
     await mutateBoard(migrate);
     assert.deepEqual(await inbox(), [], "then the row goes");
     assert.equal((await rowsOnDisk(h)).length, 1, "with one task, not two");
+  } finally {
+    await h.close();
+  }
+});
+
+// A running card's checkpoint (persistExecutorCheckpoint) marks its write
+// progress-only. The page then gets eyes:progress, a few KB, instead of the
+// board; with whole pushes (MEFI_STUDIO_FULL_PUSHES=1, no row pushes) the
+// list carries the progress alone, as before.
+test("a progress-only write sends eyes:progress beside the list, and only with row pushes", async () => {
+  for (const rows of [true, false]) {
+    const h = await harness({ rows });
+    try {
+      const { mutateBoard } = h.context;
+      await mutateBoard((board) => { board.tasks.push(h.task({ id: "t1", title: "One", status: "active", runId: "run-1" })); return {}; });
+      h.reset();
+      const progress = { version: 1, runId: "run-1", at: 5, progress: 0.4 };
+      const result = await mutateBoard((board) => { board.tasks[0].runProgress = progress; return { progressOnly: { t1: progress } }; });
+      assert.deepEqual(written(result), ["tasks"], "the checkpoint is saved");
+      assert.equal((await rowsOnDisk(h))[0].contextHistory.entries.length, 1, "and is no revision");
+      assert.deepEqual(h.sent.map((item) => item.channel), rows ? ["eyes:progress", "eyes:tasks"] : ["eyes:tasks"]);
+      if (rows) assert.deepEqual(JSON.parse(JSON.stringify(h.sent[0].payload)), { projectId: h.project.id, byTask: { t1: progress } });
+      assert.equal(h.sent.at(-1).payload[0].runProgress.progress, 0.4, "the list still holds the progress for the row push to leave out");
+    } finally {
+      await h.close();
+    }
+  }
+});
+
+test("a running card's checkpoint reaches the window as eyes:progress alone, and a later edit as one row", async () => {
+  const h = await harness({ window: true });
+  try {
+    const { mutateBoard, persistExecutorCheckpoint, autopilot } = h.context;
+    await mutateBoard((board) => {
+      board.tasks.push(h.task({ id: "t1", title: "One", status: "active", runId: "run-1", lease: { pid: 42, at: 1 } }), h.task({ id: "t2", title: "Two", status: "open" }));
+      return {};
+    });
+    assert.deepEqual(h.sent.map((item) => item.channel), ["eyes:tasks"]);
+    assert.equal(h.sent[0].payload.full, true, "the first list is whole");
+    h.tick();
+    h.reset();
+
+    const entry = { id: "run-1", project: h.project, projectId: h.project.id, projectPath: h.project.path, ownerPid: 42, pid: 43, startedAt: 1,
+      sessionId: "session-1", progress: 0.25, todos: [{ content: "Write it", status: "in_progress" }], outputTail: ["working"], ref: { id: "t1", title: "One" } };
+    autopilot.jobs.push(entry);
+    await persistExecutorCheckpoint(entry);
+    assert.deepEqual(h.sent.map((item) => item.channel), ["eyes:progress"], "the board did not cross");
+    const pushed = h.sent[0].payload;
+    assert.equal(pushed.projectId, h.project.id);
+    assert.deepEqual(Object.keys(pushed.byTask), ["t1"]);
+    assert.equal(pushed.byTask.t1.runId, "run-1");
+    assert.equal(pushed.byTask.t1.progress, 0.25);
+    assert.equal((await rowsOnDisk(h)).find((task) => task.id === "t1").runProgress.sessionId, "session-1", "the checkpoint is on the board");
+
+    h.reset();
+    await mutateBoard((board) => { board.tasks.find((task) => task.id === "t2").title = "Two, renamed"; return {}; });
+    assert.deepEqual(h.sent.map((item) => item.channel), ["eyes:tasks"]);
+    const delta = h.sent[0].payload;
+    assert.deepEqual(delta.upsert.map((row) => row.id), ["t2"], "one row crosses");
+    assert.deepEqual(delta.remove, []);
+    assert.equal("order" in delta, false);
   } finally {
     await h.close();
   }

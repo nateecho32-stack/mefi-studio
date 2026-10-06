@@ -7,6 +7,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **The board reaches the window as changes, not as a copy of every card.**
+  When a task changes, Studio now sends only that card (about 5 KB instead of
+  about 690 KB on a 134-card board), and a running task's progress travels as
+  a few hundred bytes. Nothing on screen changes. `MEFI_STUDIO_FULL_PUSHES=1`
+  brings back whole-board pushes for one launch.
 - **Chrome's buttons no longer look struck through.** The metal on main
   buttons and chosen tabs had a hard dark line at half height, right behind
   the words. Its horizon is now a soft band below them, and the darkest part

@@ -58,6 +58,7 @@ const credentials = optionalHelper(
 const authStore = require("./scripts/auth-store.cjs");
 const { createProjects } = require("./scripts/projects.cjs");
 const { createAssistantPush } = require("./scripts/assistant-push.cjs");
+const { createRowPush } = require("./scripts/row-push.cjs");
 const backlog = require("./scripts/backlog.cjs");
 const autonomy = require("./scripts/autonomy.cjs");
 const { loopStatus } = require("./scripts/loop-status.cjs");
@@ -7572,6 +7573,11 @@ const ASSISTANT_STOP_WORDS = new Set(["what", "with", "that", "this", "please", 
 let assistantState = null;
 // What each eyes:assistant push carries: the keys the page does not hold yet.
 const assistantPush = createAssistantPush();
+// What each board list and checkpoint store push carries (sendRows): the rows
+// the page does not hold yet. MEFI_STUDIO_FULL_PUSHES=1 sends them whole, and
+// checkpoints ride eyes:tasks instead of eyes:progress, exactly as before.
+const rowPushes = process.env.MEFI_STUDIO_FULL_PUSHES === "1" ? null
+  : new Map(["eyes:tasks", "eyes:requests", "eyes:ideas", "eyes:checkpoints"].map((channel) => [channel, createRowPush({ start: Date.now() })]));
 let assistantLoading = null;
 let assistantLoop = false;
 let assistantTimer = null;
@@ -16469,7 +16475,8 @@ async function persistExecutorCheckpoint(entry) {
         const row = board.tasks.find((item) => item?.runId === entry.id);
         if (!row || entry.finished || row.lease?.pid !== entry.ownerPid || (row.projectId && row.projectId !== entry.projectId)) return null;
         row.runProgress = progress;
-        return {};
+        // Only the card's progress moved: the page gets eyes:progress, not the board.
+        return { progressOnly: { [row.id]: progress } };
       }));
     } while (entry.checkpointDirty && !entry.finished && autopilot.jobs.includes(entry));
   })().then(async () => {
@@ -16834,6 +16841,18 @@ function sameRows(next, prev) {
 // process (a fresh parse after the file changed underneath) is hashed as
 // before, so drift written by another process is still recorded.
 const revisionBodies = new WeakMap();
+// A written board list goes to the page. A write that only moved running
+// cards' progress (the mutator returns `progressOnly`: { id: runProgress },
+// persistExecutorCheckpoint) also sends it as eyes:progress, a few KB; the
+// list itself then carries nothing new past runProgress, so its row push sends
+// nothing unless the write changed something else too. With whole pushes
+// (MEFI_STUDIO_FULL_PUSHES=1) the list carries the progress, as before.
+function sendBoardRows(event, key, rows, patch, project) {
+  if (key === "tasks" && patch?.progressOnly && typeof patch.progressOnly === "object" && typeof rowPushes === "object" && rowPushes) {
+    send("eyes:progress", { projectId: project?.id ?? null, byTask: patch.progressOnly });
+  }
+  send(event, key === "tasks" ? rows.map(taskView) : rows);
+}
 // `options.beforeWrite({ before, after })` (optional, async) is for a caller that
 // must keep what a change removes BEFORE the change lands: Recently deleted
 // (the "Board trash" block). It runs inside the lock, after the mutator has
@@ -16899,7 +16918,7 @@ async function mutateBoard(mutator, options = {}) {
     if (typeof eyes.boardMutate === "function" && eyes.boardEnabled() && typeof options?.beforeWrite !== "function") {
       const result = await eyes.boardMutate(applyMutation);
       const events = { requests: "eyes:requests", tasks: "eyes:tasks", ideas: "eyes:ideas" };
-      for (const key of result.written ?? []) send(events[key], key === "tasks" ? result[key].map(taskView) : result[key]);
+      for (const key of result.written ?? []) sendBoardRows(events[key], key, result[key], result, project);
       return result;
     }
     // File fallback (database unavailable): same contract, plain files. The
@@ -16934,7 +16953,7 @@ async function mutateBoard(mutator, options = {}) {
       // skip the write and broadcast.
       if (sameRows(result[key], original[key])) continue;
       await eyes.writeJson(file, result[key]);
-      send(event, key === "tasks" ? result[key].map(taskView) : result[key]);
+      sendBoardRows(event, key, result[key], patch, project);
       written.push(key);
     }
     return { ...patch, requests: result.requests, tasks: result.tasks, ideas: result.ideas, written };
@@ -20835,7 +20854,34 @@ function send(channel, payload) {
     pushBoardList(channel, payload);
     return;
   }
-  if (window && !window.isDestroyed()) window.webContents.send(channel, payload);
+  if (!window || window.isDestroyed()) return;
+  if (channel === "eyes:checkpoints") sendRows(channel, payload, projects.active().id);
+  else window.webContents.send(channel, payload);
+}
+
+// What the page does not hold yet of a board list or the checkpoint store
+// (scripts/row-push.cjs), worked out as it goes out: the rows that changed,
+// or the whole list the first time, after a project switch and when the page
+// asks (eyes:rows-sync). False when nothing is new, so nothing was sent.
+function sendRows(channel, payload, projectId) {
+  const push = typeof rowPushes === "object" && rowPushes ? rowPushes.get(channel) : null;
+  const value = push ? push.payload(payload, { projectId }) : payload;
+  if (push && value === null) return false;
+  window.webContents.send(channel, value);
+  return true;
+}
+
+// The page's bridge holds another rev than a push came from, or nothing (a
+// reload): the list goes whole, at once. A newer list already on its way
+// (coalesced, or held while the window is hidden) goes whole instead.
+function resyncRows(channel) {
+  const push = typeof rowPushes === "object" && rowPushes ? rowPushes.get(channel) : null;
+  if (!push) return;
+  push.resync();
+  if (boardPushes.get(channel)?.pending || heldPushes.has(channel)) return;
+  const last = push.last();
+  if (!last || last.projectId !== projects.active().id || holdWhileHidden(channel, last.rows)) return;
+  if (window && !window.isDestroyed()) sendRows(channel, last.rows, last.projectId);
 }
 
 // A window parked in the tray or minimized shows none of these snapshots, yet
@@ -20851,8 +20897,12 @@ let flushingHeld = false;
 function holdWhileHidden(channel, payload) {
   if (flushingHeld || SMOKE || CAPTURE || !HELD_WHILE_HIDDEN.has(channel)) return false;
   if (!window || window.isDestroyed() || (!window.isMinimized() && window.isVisible())) return false;
+  const held = heldPushes.get(channel);
   heldPushes.delete(channel); // re-inserted, so the flush follows push order
-  heldPushes.set(channel, { payload, projectId: BOARD_PUSH_CHANNELS.has(channel) ? projects.active().id : null });
+  // Progress from several running cards: each card keeps its newest.
+  const kept = channel === "eyes:progress" && held && held.payload?.projectId === payload?.projectId
+    ? { ...payload, byTask: { ...held.payload.byTask, ...payload?.byTask } } : payload;
+  heldPushes.set(channel, { payload: kept, projectId: BOARD_PUSH_CHANNELS.has(channel) || channel === "eyes:progress" ? projects.active().id : null });
   return true;
 }
 
@@ -20869,16 +20919,18 @@ function flushHeldPushes() {
   }
 }
 
-// Board pushes carry whole lists (eyes:tasks is every card on the board), and
-// a busy executor mutates the board several times a second: each push was
+// Board pushes carried whole lists (eyes:tasks is every card on the board),
+// and a busy executor mutates the board several times a second: each push was
 // copied into every renderer listener and rebuilt the Command graph, the
 // Tasks sheet and the Workspace. The first push of a quiet window still goes
 // at once; later pushes inside BOARD_PUSH_MS share one trailing push of the
 // newest list. A list queued in one project is dropped if the owner switches
-// to another before it goes out; the switch sends its own lists.
+// to another before it goes out; the switch sends its own lists. What goes
+// out is worked out as it goes (sendRows): only the rows the page does not
+// hold, and nothing at all, with no window opened, when no row changed.
 const BOARD_PUSH_MS = 250;
 const BOARD_PUSH_CHANNELS = new Set(["eyes:tasks", "eyes:requests", "eyes:ideas"]);
-const HELD_WHILE_HIDDEN = new Set([...BOARD_PUSH_CHANNELS, "machine:status", "fleet:update"]);
+const HELD_WHILE_HIDDEN = new Set([...BOARD_PUSH_CHANNELS, "machine:status", "fleet:update", "eyes:progress"]);
 const boardPushes = new Map(); // channel -> { timer, pending: { payload, projectId } | null }
 
 function pushBoardList(channel, payload) {
@@ -20890,7 +20942,8 @@ function pushBoardList(channel, payload) {
     slot.pending = { payload, projectId };
     return;
   }
-  if (window && !window.isDestroyed()) window.webContents.send(channel, payload);
+  // Nothing the page does not hold yet: nothing is sent, and no window opens.
+  if (window && !window.isDestroyed() && !sendRows(channel, payload, projectId)) return;
   const next = { timer: null, pending: null };
   next.timer = setTimeout(() => {
     boardPushes.delete(channel);
@@ -25056,6 +25109,9 @@ function createWindow() {
   // The page's bridge (preload.cjs) says it is listening and holds no
   // assistant state yet, on its first onAssistant: send whole keys again.
   window.webContents.ipc.on("eyes:assistant-sync", () => assistantPush.resync());
+  // Its bridge (preload.cjs mergeRows) got a list push it cannot apply: that
+  // list goes whole again.
+  window.webContents.ipc.on("eyes:rows-sync", (_event, channel) => resyncRows(channel));
   nameStudioToEmbeds(window.webContents.session);
   // Zen mode's "desktop audio" reactive input arrives as a getDisplayMedia
   // request. Answer it with the screen the window sits on plus system

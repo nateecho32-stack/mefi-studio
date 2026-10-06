@@ -216,6 +216,7 @@ worker's claim).
 | `renderer-recovery.cjs` | 167 | Recovers a renderer that died while its window and tray stayed alive. |
 | `booklet-source-location.cjs` | 74 | Maps a runtime error's line in the booklet's one inlined `<script>` back to `renderer/<file>:<line>`, through the `booklet.sources.json` manifest `build-booklet.mjs` writes beside it. |
 | `assistant-push.cjs` | 63 | What one `eyes:assistant` push carries: once the page's bridge listens, state keys it already holds ride as `same` references by content, and `preload.cjs` puts its kept copies back. |
+| `row-push.cjs` | 112 | What one board list (`eyes:tasks`, `eyes:requests`, `eyes:ideas`) or checkpoint store push carries: the changed rows, the ids that left and the order only when it moved, a whole list the first time, after a project switch or when the page asks (`eyes:rows-sync`). `preload.cjs` `mergeRows` rebuilds plain lists; `MEFI_STUDIO_FULL_PUSHES=1` sends them whole. |
 | `performance-profiler.cjs` | 250 | Opt-in, in-memory host diagnostics. |
 | `music-recommendations.cjs` | 66 | Validates a mood request and parses a model's music suggestions. |
 | `daily-news.cjs` | 513 | The Studio Daily, pure: parses RSS, Atom, the Hacker News front page and GitHub release lists into items (headline, short plain summary, link), clusters one story across outlets, ranks the day's biggest, composes the edition, and checks an AI editor's reply (`applyEditor`: known ids only, no links, no new numbers, else the heuristic paper). |
