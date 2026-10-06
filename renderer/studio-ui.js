@@ -264,7 +264,8 @@
     if (!popup) return;
     const current = popup; popup = null;
     current.button.setAttribute("aria-expanded", "false"); current.button.removeAttribute("aria-activedescendant");
-    current.root.remove();
+    // A menu effect from the Shop plays it away (renderer/effects.js); without one it simply goes.
+    if (typeof window.MefiEffects?.leave === "function") window.MefiEffects.leave(current.root); else current.root.remove();
     if (focus && visible(current.button)) current.button.focus({ preventScroll: true });
     schedule();
   }
@@ -385,6 +386,7 @@
     root.append(list); layer().append(root); root.addEventListener("keydown", selectKeys);
     button.setAttribute("aria-controls", list.id); button.setAttribute("aria-expanded", "true");
     drawOptions(); root.querySelector("input")?.focus({ preventScroll: true });
+    if (typeof window.MefiEffects?.prepare === "function" && typeof requestAnimationFrame === "function") requestAnimationFrame(() => window.MefiEffects.prepare(root));
   }
   function enhanceSelect(select) {
     if (selects.has(select) || select.hidden || select.classList.contains("segmented-source") || select.getAttribute("aria-hidden") === "true") return;

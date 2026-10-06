@@ -1,0 +1,19 @@
+/* Mefi's Studio AI+ — the pet and the menu effects (renderer/pets.js, renderer/effects.js).
+   Both draw on small canvases of their own that sit above everything and
+   never take the pointer: the pet's travels with it, and a closing menu's
+   dust is laid over the menu only while it leaves. */
+.studio-pet,
+.exit-effect-dust {
+  position: fixed;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  contain: strict;
+  will-change: transform;
+}
+.studio-pet { z-index: 2147482600; }
+.studio-pet[hidden] { display: none; }
+.exit-effect-dust { z-index: 2147482500; }
+@media print {
+  .studio-pet, .exit-effect-dust { display: none; }
+}

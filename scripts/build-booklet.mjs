@@ -118,6 +118,8 @@ export const BOOKLET_INPUTS = {
     "shell.js",
     "tabs.js",
     "sessions.js",
+    "effects.js",
+    "pets.js",
     "booklet.js"
   ],
   "styles": [
@@ -157,6 +159,7 @@ export const BOOKLET_INPUTS = {
     "chat-tools.css",
     "connectors.css",
     "daily-paper.css",
+    "effects.css",
     "chrome.css"
   ]
 };
