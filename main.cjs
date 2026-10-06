@@ -2624,7 +2624,8 @@ function hubEvents(method, args) {
 // everything. SHOP_STUDIO_ITEMS mirrors the relay's CATALOG for that (the
 // packs with their data); tests/shop_host.test.mjs keeps the two the same.
 const HUB_SHOP_METHODS = Object.freeze({ shop: 2, shopOwned: 0, shopBuy: 3, shopPublish: 1, shopUpdate: 2, shopUnlist: 1, shopReport: 2, modShopRemove: 2 });
-const SHOP_ALL = process.env.MEFI_STUDIO_SHOP_ALL === "1";
+// Read guarded: tests run slices of this file in a vm with no process.
+const SHOP_ALL = typeof process !== "undefined" && process.env.MEFI_STUDIO_SHOP_ALL === "1";
 const SHOP_STUDIO_ITEMS = Object.freeze([
   { id: "studio:skin-frost", kind: "skin", name: "Frost scales" },
   { id: "studio:skin-jade", kind: "skin", name: "Jade scales" },
