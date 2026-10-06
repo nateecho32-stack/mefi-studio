@@ -241,7 +241,7 @@
     // The hint follows its target while cards glide about.
     function follow() { placeHint(); hintRaf = requestAnimationFrame(follow); }
     function hint(target, label, side) {
-      if (hintTarget) hintTarget.classList.remove("pl-target", "pl-nudge");
+      if (hintTarget) hintTarget.classList.remove("pl-target");
       cancelAnimationFrame(hintRaf);
       hintTarget = target;
       hintSide = side || "above";
@@ -251,10 +251,14 @@
       hintEl.classList.add("on");
       follow();
     }
-    // A press anywhere else: the hint and its target bounce, to say "this one".
+    // A press anywhere else: the hint and its target bounce, to say "this one". (Web Animations, so the
+    // target's own CSS animations are left alone.)
     function nudge() {
       if (!hintTarget) return;
-      [hintEl, hintTarget].forEach(function (n, i) { var c = i ? "pl-nudge" : "nudge"; n.classList.remove(c); void n.offsetWidth; n.classList.add(c); });
+      hintEl.classList.add("nudge");
+      if (still() || !hintEl.animate) return;
+      hintEl.animate([{ scale: "1" }, { scale: "1.18" }, { scale: ".94" }, { scale: "1.04" }, { scale: "1" }], { duration: 500, easing: "ease-out" });
+      hintTarget.animate([{ translate: "0 0" }, { translate: "-5px 0" }, { translate: "5px 0" }, { translate: "-3px 0" }, { translate: "2px 0" }, { translate: "0 0" }], { duration: 450, easing: "ease-out" });
     }
     window.addEventListener("resize", placeHint, on);
 

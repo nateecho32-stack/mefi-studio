@@ -234,10 +234,6 @@
 
 /* ---- the rails: only what the step asks for can be pressed -------------------------- */
 .pl-app button:not(.pl-ok):not(.pl-ok *):not(.pl-skip) { cursor: default; }
-.pl-hint.on.nudge { animation: pl-nudge .5s var(--ease-out), pl-bob 1.6s ease-in-out .5s infinite; }
-@keyframes pl-nudge { 25% { scale: 1.18; } 55% { scale: .94; } 80% { scale: 1.04; } }
-.pl-target.pl-nudge { animation: pl-shake .45s var(--ease-out), pl-pulse 1.8s var(--ease-out) .45s infinite; }
-@keyframes pl-shake { 20% { translate: -5px 0; } 40% { translate: 5px 0; } 60% { translate: -3px 0; } 80% { translate: 2px 0; } }
 .pl-app.fresh { animation: pl-fresh .6s var(--ease-out) both; }
 @keyframes pl-fresh { from { opacity: 0; transform: scale(.985); } }
 
@@ -408,7 +404,11 @@
 .pl-steps li.past { color: var(--muted); } .pl-steps li.past::before { background: var(--live); }
 
 /* ---- the hint: a pulse on what to press, and one or two words ----------------------- */
-.pl-target { position: relative; z-index: 3; animation: pl-pulse 1.8s var(--ease-out) infinite; }
+/* The pulse rides on a ring of its own, so the target's own animations (a card's entrance) never restart.
+   A canvas can't hold a ring, and has no animation of its own. */
+.pl-target { position: relative; z-index: 3; }
+.pl-target:not(canvas)::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; animation: pl-pulse 1.8s var(--ease-out) infinite; }
+canvas.pl-target { animation: pl-pulse 1.8s var(--ease-out) infinite; }
 @keyframes pl-pulse { 0% { box-shadow: 0 0 0 0 rgb(var(--accent-2-rgb) / 0.7); } 70%, 100% { box-shadow: 0 0 0 12px rgb(var(--accent-2-rgb) / 0); } }
 .pl-hint { position: fixed; left: 0; top: 0; z-index: 140; pointer-events: none; padding: 7px 12px; border-radius: 10px; font: 700 13px var(--font-ui); color: var(--ink); background: linear-gradient(180deg, #fff, var(--accent-bright)); box-shadow: 0 10px 30px -8px rgb(0 0 0 / 0.8), 0 0 30px -6px rgb(var(--accent-2-rgb) / 0.6); opacity: 0; transition: opacity .3s, transform .5s var(--ease-out); white-space: nowrap; }
 .pl-hint.on { opacity: 1; animation: pl-bob 1.6s ease-in-out infinite; }
