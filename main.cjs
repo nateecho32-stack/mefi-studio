@@ -15619,6 +15619,68 @@ const fleetHost = (() => {
     return null;
   }
 })();
+// The resource manager for other apps (Team › Resources,
+// docs/resource-manager.md): it slows, pauses or closes OTHER apps so the
+// agents get this PC while they build, by hand or in auto mode. The rules are
+// scripts/resource-rules.cjs, the host scripts/resource-host.cjs and the
+// Windows helper scripts/resource-helper.cs. It only reads the executor's
+// state (autopilot) and the LÖVE watcher's capacity reading (resourcePass);
+// it never gates a worker start. MEFI_STUDIO_NO_RESOURCE_MANAGER=1 turns it
+// off for a launch, and test, capture and CLI launches never start it.
+async function resourceFolder() {
+  const dirs = optionalHelper("./scripts/local-dirs.cjs", () => require("./scripts/local-dirs.cjs"), null);
+  if (!dirs) return null;
+  const settings = await readSettings().catch(() => ({}));
+  const userData = app.getPath("userData");
+  const chosen = SMOKE || CAPTURE ? path.join(userData, "local") : typeof settings?.storage?.localDir === "string" ? settings.storage.localDir : null;
+  return dirs.localRoot({ platform: process.platform, env: process.env, homedir: os.homedir(), userData, chosen }).resourcesDir();
+}
+// Building, as the resource manager means it: a worker is running, or work is
+// queued and waiting for the machine (then making room is what lets it start).
+function resourceBuilding() {
+  const running = autopilot.jobs.filter((entry) => !entry.finished).length;
+  const waiting = autopilot.execute === true && (autopilot.capacityWaiting === true || autopilot.waiting === "machine busy");
+  const hold = autopilot.capacity?.resources?.holdKind ?? null;
+  return {
+    active: running > 0 || (waiting && autopilot.queueDepth > 0),
+    running,
+    waiting,
+    waitingForMemory: waiting && ["memory", "memory-severe", "memory-cap"].includes(hold),
+  };
+}
+// Loaded on first use (the launch's look for leftovers, four seconds after the
+// window; the page; a quit), never while Studio starts.
+let resourceHostLoaded;
+function resourceHostGet() {
+  if (resourceHostLoaded !== undefined) return resourceHostLoaded;
+  try {
+    resourceHostLoaded = require("./scripts/resource-host.cjs").createResourceHost({
+      spawn,
+      execFile: require("node:child_process").execFile,
+      fs: require("node:fs/promises"),
+      dir: () => resourceFolder(),
+      source: path.join(STUDIO_ROOT, "scripts", "resource-helper.cs"),
+      // Studio's own roots: this process, and under the Rust host the host that runs it.
+      studioPids: () => (process.env.MEFI_STUDIO_HOST === "tauri" ? [process.pid, process.ppid] : [process.pid]),
+      readPrefs: async () => (await readSettings()).resources ?? {},
+      savePrefs: async (prefs) => (await updateSettings((next) => { next.resources = prefs; })).resources,
+      building: () => resourceBuilding(),
+      // The only channels it may push, named here so the IPC audit sees them.
+      send: (channel, payload) => {
+        if (channel === "resources:update") send("resources:update", payload);
+        else if (channel === "resources:acted") send("resources:acted", payload);
+      },
+      logLine: (line) => logLine(line),
+      disabled: process.env.MEFI_STUDIO_NO_RESOURCE_MANAGER === "1"
+        ? "The resource manager is turned off for this launch (MEFI_STUDIO_NO_RESOURCE_MANAGER=1)."
+        : SMOKE || CAPTURE || CLI_MODE ? "The resource manager does not run in a test, capture or command-line launch." : null,
+    });
+  } catch (error) {
+    console.error(`[resources] disabled: ${error.message}`);
+    resourceHostLoaded = null;
+  }
+  return resourceHostLoaded;
+}
 const agentBrain = (() => {
   try {
     return require("./scripts/agent-brain-host.cjs").createAgentBrain({
@@ -21919,7 +21981,7 @@ function flushHeldPushes() {
 // hold, and nothing at all, with no window opened, when no row changed.
 const BOARD_PUSH_MS = 250;
 const BOARD_PUSH_CHANNELS = new Set(["eyes:tasks", "eyes:requests", "eyes:ideas"]);
-const HELD_WHILE_HIDDEN = new Set([...BOARD_PUSH_CHANNELS, "machine:status", "fleet:update", "eyes:progress"]);
+const HELD_WHILE_HIDDEN = new Set([...BOARD_PUSH_CHANNELS, "machine:status", "fleet:update", "eyes:progress", "resources:update"]);
 const boardPushes = new Map(); // channel -> { timer, pending: { payload, projectId } | null }
 
 function pushBoardList(channel, payload) {
@@ -25620,6 +25682,24 @@ function registerIpc() {
     return { ok: true, prefs: settings.ui, ...(loginItem ? { loginItem } : {}) };
   });
 
+  // ---- the resource manager for other apps (Team › Resources) ------------
+  // resource-host.cjs: a read, a watch lease that keeps "resources:update"
+  // coming while the page is on screen, one action on one app named by its
+  // key (never a pid from the page: the host finds the processes itself),
+  // Make room now (op "focus"), Restore all, and the preferences.
+  const resourcesOff = { ok: false, error: "The resource manager is not available in this build." };
+  ipcMain.handle("resources:state", async () => resourceHostGet()?.snapshot() ?? resourcesOff);
+  ipcMain.handle("resources:watch", async (_event, payload) => resourceHostGet()?.watch(payload ?? {}) ?? resourcesOff);
+  ipcMain.handle("resources:act", async (_event, payload) => {
+    const host = resourceHostGet();
+    if (!host) return resourcesOff;
+    const op = typeof payload?.op === "string" ? payload.op : "";
+    if (op === "focus") return host.focus();
+    return host.act({ key: typeof payload?.key === "string" ? payload.key : "", op });
+  });
+  ipcMain.handle("resources:restore-all", async () => resourceHostGet()?.restoreAll() ?? resourcesOff);
+  ipcMain.handle("resources:set", async (_event, payload) => resourceHostGet()?.setPrefs(payload ?? {}) ?? resourcesOff);
+
   // ---- machine coordination + resource manager ----------------------------
   // A failed scan must reach the panel as a degraded result, not a rejected
   // invoke: the renderer read has no catch, and a stale "free" badge would
@@ -26726,6 +26806,8 @@ app.whenReady().then(() => {
   if (AT_LOGIN) setTimeout(() => showLoginWindowWithoutTray(), 15000).unref?.();
   // Watchers start after the window is up so first paint is never delayed.
   setTimeout(() => startMachineWatch(), 2500);
+  // What a previous Studio left held on other apps goes back; auto mode starts watching.
+  if (!SMOKE && !CAPTURE && !CLI_MODE) setTimeout(() => { resourceHostGet()?.start().catch((error) => logLine(`[resources] start failed: ${error?.message ?? error}`)); }, 4000).unref?.();
   if (!SMOKE && !CAPTURE && !CLI_MODE) setTimeout(() => bootAutopilot(), 8000);
   // Both are fire-and-forget: a failure is logged, never an unhandled rejection.
   if (!SMOKE && !CAPTURE && !CLI_MODE) setTimeout(() => startUpdateWatch().catch((error) => logLine(`[update] watch failed: ${error?.message ?? error}`)), 3500);
@@ -26827,6 +26909,8 @@ app.on("before-quit", (event) => {
   if (typeof reportEnd === "function") reportEnd("quit");
   if (typeof alertsStop === "function") alertsStop();
   if (typeof outsideWorkQuit === "function") outsideWorkQuit();
+  // Every app the resource manager slowed or paused goes back as Studio leaves.
+  if (typeof resourceHostLoaded !== "undefined" && resourceHostLoaded) resourceHostLoaded.quit();
   executorClosing = true;
   performanceProfiler.stop();
   for (const pending of jevProjectQueues.values()) pending.then((queue) => queue.stop()).catch(() => {});

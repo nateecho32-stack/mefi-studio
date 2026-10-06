@@ -150,6 +150,7 @@ test("with every candidate in OneDrive the answer is userData's local folder, fl
 test("the layout names safe folders", () => {
   const where = localRoot({ platform: "linux", env: { HOME: "/h" }, userData: "/u" });
   assert.equal(where.logsDir(), "/h/.local/state/mefi-studio/logs");
+  assert.equal(where.resourcesDir(), "/h/.local/state/mefi-studio/resources", "the resource manager's helper and journal stay on this PC");
   assert.equal(where.archiveDir("log"), "/h/.local/state/mefi-studio/archive/log");
   const escaped = path.posix.basename(where.journalDir("../../etc"));
   assert.equal(path.posix.dirname(where.journalDir("../../etc")), "/h/.local/state/mefi-studio/journal", "an id never climbs out of the journal");
