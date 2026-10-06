@@ -581,7 +581,10 @@ app.whenReady().then(async () => {
     await resize([1100, 720, 1]);
     state = await p();
     assert.equal(state.info.inspector.docked, true);
-    assert.equal(state.boxes.inspector[2], 1100 - 64 - 344 - 320, "it shrinks to leave the main area its 320");
+    // Measured against the page's own width: at 125% or 150% display scaling a
+    // 1100 px window comes out one CSS px wider (resize allows exactly that one
+    // pixel), and the inspector takes it, so the rule is checked as written.
+    assert.equal(state.boxes.inspector[2], state.inner[0] - 64 - 344 - 320, "it shrinks to leave the main area its 320");
     await resize([1000, 720, 1]);
     state = await p();
     assert.equal(state.info.inspector.drawer, true, "and below its own minimum it is a drawer");

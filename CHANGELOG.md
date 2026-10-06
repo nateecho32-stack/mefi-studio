@@ -12,6 +12,10 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   test windows) is stopped together with everything it started, and the run
   says which suites were still going. One stuck test window had held every
   session's window tests for nine hours.
+- **A way to Routing lands on Routing again.** Routing moved into **More
+  settings** on Team's Seats and models page, so Search's Routing (and
+  Team's own links to it) opened the page with Routing folded away. It now
+  opens More settings at Routing.
 - **Friends › Events: the community runs its own events.** Every week a
   **Build Jam** opens on Monday with a theme (and shows next week's): enter
   one of your shared projects until Saturday, play the others and vote for up

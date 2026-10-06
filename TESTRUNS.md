@@ -39,6 +39,37 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-06 A way to Routing opens More settings at Routing; the background check reads the Settings strip where Settings shows
+
+Branch `fix/routing-narrow` in `C:\wt\routing`, off main 017d51a. The full Electron lane on main 0b2fa14 (here, one
+suite at a time under the test lease) had 43 of 47 ok: command_render and today_render passed alone again (flakes),
+shell_render stops at the display-scaling check as before, and unified_studio_render failed every time at
+"#ai-role-routine-choice fits in narrow Routing". The Seats and models page (wip/models, 6c9126b) files Routing into
+the closed More settings, and go("agents", {pane: "routing"}) left it closed, so the controls were laid out but
+folded away (about 5,800 px down, nothing hit). agents.js openTeam now opens More at #settings-routing for a Routing
+way in that names no control. The suite then reached its contrast sweep, where `.settings-nav` read transparent:
+its solid fill is a container query on the Settings page, and since the window-scroll fix (efec563, bf0d0ce) the tab
+pages are not laid out under another page; the sweep now reads the strip with Settings open in the Studio mode and
+requires it measured there.
+
+unified_studio_render ok (alone, under the lease); team_render, agent_setup_render, settings_render ok; npm run check
+ok; npm run lint 0 errors and 47 warnings, as on clean main 017d51a. Hosted CI (Windows) on ef34f7a: green (37472060180). After merging main 4b150b3 (shell_render at 125% scaling): shell_render ok here, its first pass on this PC, so every window suite is green with this fix.
+
+## 2026-10-06 shell_render passes at 125% display scaling: the inspector check reads the page's own width
+
+Branch `fx/scaling` (on main 017d51a; first proven on 0b2fa14): in `tests/fixtures/shell-render-electron.cjs` the narrow-window
+check "it shrinks to leave the main area its 320" compared the inspector with `1100 - 64 - 344 - 320`. At 125% or
+150% display scaling a 1100 px content size comes out 1101 CSS px (the fixture's resize already allows exactly that
+one pixel) and the inspector takes it, so the suite failed on the owner's PCs even on clean main ("373 !== 372").
+The expected width is now `state.inner[0] - 64 - 344 - 320`, the probe's own innerWidth; the rule itself is
+unchanged.
+
+Proof on the owner's PC (AppliedDPI 120, 125%), Electron alone: `node --test tests/shell_render.test.mjs` 1/1 pass
+(112 s); the same suite on clean main fails at that check. `npm run check` ok. Not run: the full `npm test` (one
+fixture line; hosted CI runs the Node stage on the branch and skips real-window suites).
+`layout_contract_render` is gone from main with the classic layout; before that it also failed with the fixture
+forced to device scale factor 1 ("v1 geometry moved"), so its red on the PCs was not only scaling.
+
 ## 2026-10-06 Friends › Events: the community budget, the weekly Build Jam, co-work hours and building together
 
 Branch `wip/economy-events` (C:\wt\econ) off 33c3c4e, main merged in up to 711ceb5 (0d82a1a: seven files resolved by
@@ -459,81 +490,6 @@ screenshots; no file this branch changed but CHANGELOG). Merged as d39878e (CHAN
 regenerated) and re-checked rather than re-gated: `npm run check`; chrome_theme 9/9, tabs_strip 66/66,
 shell_frame_bars 34/34, today_inbox 38/38, builder_kit 21/21; settings_render (every theme at 4.5:1), friends_render,
 team_render and today_render 1/1 each.
-
-## 2026-10-05 Chrome's iridescent finish: holo edges, hairlines and a tinted ground
-
-Branch `paint/chrome-gradients` in a cloud worktree (Linux, Node 24.21.0,
-Electron fixtures as tester under xvfb, two at a time, on snapshots of the
-tree), off origin/main 3752b7e. renderer/chrome.css takes the website's
---chrome-holo tokens word for word and uses them sparingly: 2-5% ice, lilac and
-aqua washes in the scene and Vibe's aurora, a tinted sheen, the 2px holo bar on
-the straight run of the rail's current place, the selected session row, the
-frame's current page and the palette's active row (plain chrome round the
-corners), a 2px holo line under the open tab, the inspector's tabs, the local
-navigation and a chosen theme, the holo line at a quarter strength in the
-hairlines under the top bar and tab strip, over the status bar and along the
-floating menus' tops, a cooler metal that glows under the pointer, holo
-meter, switches and project mark, and a holo-tinted greeting. The edges and
-lines are border images (no room taken, never a layer behind words, which the
-readability probes would read as the colour under every word). Static
-gradients, no hot path touched, nothing to measure.
-
-`npm run check` ok (271 targets, 30 stylesheets used), `npm run audit` 0
-findings, `npm run lint` 0 errors and the same 44 warnings as clean main.
-`npm run test:fast`: 6981 tests, 6922 pass, 58 skipped, 1 fail: rust_modules
-"the image-store factory ... keeps folder the engine's", as on clean
-origin/main here (a Windows path resolved on Linux). tests/chrome_theme.test.mjs
-9/9 (new: Chrome is static; the holo layer is the website's tokens, each used,
-edges and lights only, the ground and the sky faint); 15 hand mutations of
-chrome.css (a bar as a background layer, 3px, an outset, a border width, an
-animation, a loud ground, a changed token...) each fail it. Python contracts
-258 OK (3 skipped).
-
-Electron on the final tree: today_render (63 s), shell_render (152 s),
-sessions_render (122 s; the every-theme 4.5:1 probes on the status bar, Search,
-the Inbox and both Todays), tabs_render (150 s), layout_contract_render
-(349 s), size_render (47 s), review_render (12 s), command_render (83 s) and
-unified_studio_render (169 s) pass. settings_render fails exactly as on clean
-main (600x560 at 1.5: the same four Report a problem rows, 391 > 384); with that
-size left out in a throwaway copy its every-theme contrast pass is green for
-Chrome and the other twelve palettes, on this tree and on clean main.
-unified_studio_render failed once on clean main ("at the end of the pane the
-thumb rests on its bottom edge", 39 s) and passed on the rerun (138 s). A
-throwaway copy of today_render also opened v1's Vibe front door in Chrome for
-the greeting and Build it under the pointer.
-
-## 2026-10-05 The Chrome theme, now the default, and a finish pass for every theme
-
-Branch `paint/chrome` in a cloud worktree (Linux, Node 24.21.0, Electron
-fixtures under xvfb), off origin/main 1df1651. Chrome joins THEMES first with
-the website's palette and is DEFAULT_THEME (a saved theme, Aurora included,
-is kept); renderer/chrome.css, bundled last and scoped to
-html[data-studio-theme="chrome"], paints the matte surfaces, the brushed
-metal on primary buttons and chosen segments and the thin chrome edge on
-selections; studio-ui.css, shell.css, tabs.css and sessions.css get the shared
-finish (140 ms hover, 90 ms press, 1px top highlights). Paint only: no hot path
-touched, resolvePalette's memo unchanged, so nothing to measure.
-
-`npm run check` ok (271 targets, 30 stylesheets used), `npm run audit` 0
-findings, `npm run lint` 0 errors and the same 44 warnings as clean main.
-`npm run test:fast`: 6979 tests, 6920 pass, 58 skipped, 1 fail:
-rust_modules "the image-store factory ... keeps folder the engine's", which
-fails the same way on clean origin/main here (a Windows path resolved on
-Linux). New: tests/chrome_theme.test.mjs (7/7) and two music.test.mjs tests
-(the default and the palette; 4.5:1 for text, muted, dim and bright, the
-canvas and the ink on the accent in all twelve themes and the custom palette).
-Python contracts 258 OK (3 skipped).
-
-Electron, as tester under xvfb, on snapshots of the tree: today_render,
-shell_render, sessions_render (every-theme 4.5:1 probes, Chrome included),
-tabs_render, layout_contract_render (353 s), size_render, builder_render,
-review_render, command_render, media_window_render and unified_studio_render
-pass. unified_studio_render failed once ("holding an arrow continues
-scrolling", 37 s, two fixtures racing) and passed on the rerun (135 s), as on
-clean main (393 s). settings_render fails exactly as on clean main (600x560 at
-1.5: the Report a problem rows 7 px past the page's edge); with that one size
-left out in a throwaway copy, its every-theme contrast pass is green for
-Chrome and the other twelve palettes, on this tree and on clean main.
 
 ## Read Before Any Tests
 
