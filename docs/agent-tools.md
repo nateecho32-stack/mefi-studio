@@ -124,6 +124,19 @@ usage tracker and fallback handling. Tool results are bounded, scrubbed by the
 host's outbound filter, and labelled untrusted. The application log records
 tool names and success/failure, without arguments or results.
 
+While the prompt cache is on (`settings.ai.promptCache`, `MEFI_STUDIO_PROMPT_CACHE`)
+the system prompt is the same bytes every round and the tool transcript rides
+at the end of the user's text, so a provider that caches prompt prefixes reads
+the earlier round, the user's whole message included, from its cache; a message
+with pictures keeps the transcript in the system prompt. A Zen `gpt-*` call
+also names its cache (`prompt_cache_key`, a hash of the role, model and start
+of the system prompt, never its text) and an OpenRouter Claude or Gemini call
+marks its system prompt cacheable (`cache_control`); a provider that answers
+HTTP 400 naming either option has it off until Studio restarts, and that call
+is sent once more without it. Cached input is read from each provider's usage
+(OpenAI's `cached_tokens`, DeepSeek's hit count, Anthropic's cache reads and
+writes) into the usage tracker's `cacheReadTokens` and `cacheWriteTokens`.
+
 Project reads are off by default. Enabling them allows text files up to 32 KB
 inside the selected project. Traversal, symlinks outside the project, hidden
 paths, `data`, `dist`, `node_modules`, keys and databases, files whose names say

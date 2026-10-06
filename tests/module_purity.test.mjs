@@ -94,6 +94,11 @@ const PROMISES = [
   // readSettings' memory and the launch timings; main.cjs's blocks of those names own their stat, reads and writes.
   { file: "scripts/settings-cache.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (time", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   { file: "scripts/startup-marks.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (time", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  // Live progress from Claude Code and Codex, and cache-friendly provider calls; main.cjs's blocks of those names own the processes, settings and requests.
+  { file: "scripts/cli-stream.cjs", says: "Pure module: no Electron, filesystem, network, processes, timers or clock", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  { file: "scripts/prompt-cache.cjs", says: "Pure module: no Electron, filesystem, network, processes, timers or clock", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  // Where this PC's own files live (never inside OneDrive); main.cjs's "Log core" block makes the folders.
+  { file: "scripts/local-dirs.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
 ];
 
 const CLOCK = /\bDate\.now\s*\(|new\s+Date\s*\(\s*\)|\bperformance\.now\s*\(/;

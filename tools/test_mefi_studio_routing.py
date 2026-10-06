@@ -324,7 +324,9 @@ class MefiStudioRoutingTests(unittest.TestCase):
         # Builders: same subscription login, agentic print mode, prompt on stdin.
         spawn = _function_body(self.main, "spawnNextJob")
         self.assertIn('cli === "claude"', self.core)
-        self.assertIn('"-p", "--output-format", "text", "--dangerously-skip-permissions"', self.core, "nobody is at the keyboard to approve an edit")
+        # Text mode, or with live progress stream-json (scripts/cli-stream.cjs
+        # decodes it); permissions are skipped either way.
+        self.assertIn('const args = ["-p", "--output-format", ...(live ? ["stream-json", "--verbose", ...session] : ["text"]), "--dangerously-skip-permissions"', self.core, "nobody is at the keyboard to approve an edit")
         self.assertIn('chosenCli === "claude"', _function_body(self.main, "executorRunEnv"))
         self.assertIn("claudeCliAvailable", _function_body(self.main, "executorRunEnv"))
         self.assertIn("claude: true", _function_body(self.main, "executorRunEnv"))
@@ -353,7 +355,7 @@ class MefiStudioRoutingTests(unittest.TestCase):
         # keyboard, plain stdout so the sentinel protocol stays readable.
         spawn = _function_body(self.main, "spawnNextJob")
         self.assertIn('cli === "codex"', self.core)
-        self.assertIn('"exec", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "--color", "never"', self.core)
+        self.assertIn('"exec", ...(live ? ["--json"] : []), "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "--color", "never"', self.core)
         route = _function_body(self.main, "executorRunEnv")
         self.assertIn('chosenCli === "codex"', route)
         self.assertIn("codexCliAvailable", route)

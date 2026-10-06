@@ -66,6 +66,54 @@ Run alone here on the merge: friends_render, companion_hub_render, friends_two_r
 each; rooms_ui 14/14, friends_front_ui 12/12, friends_mod_ui 4/4, friends_navigation 8/8, project_hub_ui 7/7, app_rail
 40/40, onboarding 43/43, tabs_strip 66/66, module_purity 63/63, booklet_build 5/5, hub_host 14/14, relay_connect 6/6.
 `npm run check` ok. Windows CI runs the full gate on the landing commit before the fast-forward.
+## 2026-10-06 The studio log kept on disk and Trace's Load older (S2) land on main
+
+Branch `land/s2-log` in a cloud session (Linux, Node 24.21.0), stacked on S12 over main f1934aa (first gated over 00d32ca): the parked "not
+shippable" slice 9782c8c re-applied (one conflict in traceRead, both sides kept) and finished (2611874): main.cjs's "Log
+core" block, which the WIP's hooks called but never had (lazy require, the core opening 1.5 s after ready, early lines
+bounded at 5,000, smoke and capture launches under their own profile, worker output and assistant ticks at debug
+level); a fix in segment-archive.cjs (a month whose index was lost was invisible to reads until its next seal; open()
+now re-indexes it from the members' headers); and Trace's Load older (renderer/trace.js, template, booklet rebuilt).
+
+Logging cost (main.cjs's own logLine and "Log core" code, a 200,000-line burst, two rounds): 2.9-4.3 us per logLine
+on the main thread before, 5.4-6.0 us after; total CPU 0.55-0.87 s before, 1.74-1.83 s after with the async writes
+and credential masking; 15.5 MB of segments, 1.22 MB once sealed (12.7x); newest 250 lines 5.4 ms (14-15 ms from a
+sealed archive), a problems page 15-20 ms, a page 90% back 51-60 ms. Kill switches MEFI_STUDIO_LOG_CORE=0 and
+settings.logs.keep false (memory only, as before), settings.logs.level for the threshold; all pinned.
+
+`npm run check` ok, `npm run audit` 0 findings, `npm run lint` 0 errors and 45 warnings (as main). `npm run
+test:fast` with mefi-core built, on the final tree: 7270 tests, 7234 pass, 34 skipped, 2 fail: rust_parity_git's two, as on clean main
+with the same binary (for the Rust chat). New: segment_archive 15/15 (a crash after each of the six seal steps keeps
+every record exactly once and the month zcat-readable, a half-written member past the index, torn lines, month
+rollover, a lost index readable at open, the lock, the exit path), log_core 9/9 (with local-dirs: OneDrive refused by
+env and by segment, case-blind on Windows, the userData fallback), log_core_host 7/7, trace 9/9 (+ Load older);
+alerts_wiring and report_wiring keep their start order. Python contracts 248 OK (3 skipped). Electron under xvfb as a
+non-root user: startup_render, renderer_startup and renderer_recovery 21 pass, 1 skipped.
+
+## 2026-10-06 Live CLI progress and prompts a provider can cache (S12) land on main
+
+Branch `land/s12-cli` in a cloud session (Linux, Node 24.21.0) over main f1934aa (first gated over 0b051b8; merged with skills everywhere, whose loaded skills stay beside the system prompt while the transcript moves to the user text): the parked "not shippable" slice
+f7c8f42 re-applied by hand (main's worker prompt, tool loop and Codex app-server harness had moved), finished and
+tested (5ddb52d). Fixed on the way: a fresh Claude session UUID per attempt (the WIP reused one, which Claude Code
+refuses on a retry); live progress decided for every run so a CLI fallback attempt streams too; picture messages keep
+the old tool-loop order; seat fallbacks receive the user content so a tool round's transcript survives them.
+
+Prompt size (tests/prompt_cache.test.mjs, the prefix two consecutive requests share; no prompt got longer): two
+workers' prompts 5 -> 4,241 of 4,615 characters; two chat turns (30-card board, 16-message thread) 12 -> 4,128 of
+4,167; two tool rounds with a 3,080-character user message 3,292 -> 6,373 of 6,499. Kill switches
+MEFI_STUDIO_PROMPT_CACHE=0 / settings.ai.promptCache false (every old byte back) and MEFI_STUDIO_LIVE_PROGRESS=0 /
+settings.executor.liveProgress false (text mode), both pinned. Live progress was checked against Claude Code
+stream-json and codex --json event shapes in fixtures, not against a real CLI run here.
+
+`npm run check` ok, `npm run audit` 0 findings, `npm run lint` 0 errors and 45 warnings (as main). `npm run
+test:fast` with mefi-core built: 7129 tests, 7093 pass, 34 skipped, 2 fail: rust_parity_git "the actions answer like
+the JavaScript" and "the chip's host answers like git-host.cjs", as on clean main with the same binary (Linux git;
+for the Rust chat). New: cli_stream 10/10, executor_live_progress 4/4 (the real spawnNextJob: a chunked Claude stream
+sets session, todos, tool and usage, the sentinel counts once, the attempt keeps cliSession and usage; the switch off
+keeps the text command line; the app server is untouched), prompt_cache 14/14. Updated pins: agent_tools,
+agent_tools_project and agent_tools_skills (read the whole request), mentions_host, tools/test_mefi_studio_routing.py. The executor, agent
+tools, task oversight and outside-work suites 658/658 (1 skipped). Python contracts 248 OK (3 skipped).
+
 ## 2026-10-06 Test runs take turns on one PC, size to free memory and start the slowest suites first
 
 Branch `wip/test-lease` (C:\wt\coop) off 00d32ca: `scripts/test-lease.mjs` (a machine-wide lease board in
@@ -483,54 +531,6 @@ Captures in `C:\wt\gap\after-settings\v2\` (settings, first-run,
 plan-draft); prototype captures in `C:\wt\gap\after-settings\proto\`; the
 prototype beside v2 in `C:\wt\gap\after-settings\compare\`.
 
-## 2026-10-04 The v2 status bar, Search and one Inbox land on main
-
-Branch `land/ui-chrome` in `C:\wt\land-ui`: origin/main c01604e with
-wip/ui-chrome f9e758c merged (only TESTRUNS.md conflicted: both rows kept,
-newest first, one more older row rotated). The branch's own run was at
-05b5c63; cd4444a fixed what it found (Search's layer kept to the free area,
-the Python palette contract), so the whole tree was gated again here.
-
-Full `npm test` on 74bf360: Node 6934 tests, 6920 pass, 14 skipped, 0 fail;
-Electron lane 75: 72 pass, 1 skipped, 2 fail: layout_contract_render
-(viewport 1921x1081) and shell_render (stops at "it shrinks to leave the main
-area its 320: 373 !== 372" at 1100 px), both as on clean main on this PC;
-Python 248 OK; path lock ok; `npm run audit` 0 findings; `npm run check` ok
-(271 targets); booklet rebuilt with no drift. Side-by-sides with the
-prototype: `C:\wt\gap\after-chrome\compare\`.
-
-## 2026-10-04 The v2 chrome closer to the 0.5 prototype: status bar, Search, one Inbox
-
-Branch `ui/chrome` in `C:\wt\ui-chrome` (off land/ui-work-view fe59dd3,
-node_modules junctioned), pushed as wip/ui-chrome: 9947295 status bar (the
-machine's load from machine:status, the prototype's order, the rule before
-the meters, "5 h" and "Week"), 64854cc Search (the prototype's palette over
-the same registry: twelve rows, groups, the frame's, strip's, New task and
-permission-mode records), 05b5c63 one Inbox (the pill, status bar, Home's
-chip, the tabs and the session list's Needs you read one list; the
-prototype's cards; Work › Inbox), cd4444a Search kept to the free area and
-the Python palette contract updated (both found by the full run).
-
-`npm run check` ok (271 targets), lint 0 errors (44 warnings, none in the
-touched files), `npm run audit` 0 findings. `npm run test:fast` at cd4444a's
-tree: 6934 tests, 6919 pass, 14 skipped, 1 fail (rust_parity_snapshots
-"snapshot host", 73 s under load: 3/3 alone; untouched by this branch).
-Python contracts 248 OK (1 skipped) after the palette contract's update.
-
-Full `npm test` at 05b5c63 (quiet machine): Node 6934 tests, 6920 pass, 14
-skipped, 0 fail; Electron lane 75: 72 pass, 1 skipped, 2 fail:
-layout_contract_render (viewport 1921x1081, as on clean main here) and
-shell_render (Search's layer spanned the window; fixed in cd4444a, then
-shell_render alone reached and stopped at the known 1 px check at 1100 px,
-"373 !== 372", as on clean main); Python 1 fail (the palette contract read
-the old span; fixed in cd4444a); path lock ok. Electron suites alone after
-cd4444a: sessions_render pass (93 s, with its new chrome gallery: the bar's
-order and words, Search's groups and rows, one count everywhere, the Inbox
-popover and Work › Inbox at 1920x1080 and 600 px, every text 12 px or more
-and 4.5:1 in all eleven themes); today_render (53 s) and tabs_render (118 s)
-passed alone before it and in the full run.
-Captures (1920x1080) in `C:\wt\gap\after-chrome\final\`, prototype-left
-side-by-sides in `C:\wt\gap\after-chrome\compare\`.
 ## Read Before Any Tests
 
 This is the test guide for the standalone Mefi's Studio AI+ repository. Run all commands from this repository root.

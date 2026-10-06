@@ -214,7 +214,7 @@ test("the channels are project-gated, the bridge carries them, and the reply pat
   assert.match(preload, /agentsSkills: \(\) => ipcRenderer\.invoke\("agents:skills"\),/);
   assert.match(source, /const chatSystem = ASSISTANT_CHAT_SYSTEM \+ \(extras\?\.system \?\? ""\);/);
   assert.match(source, /message: extras\?\.message \? `\$\{text\}\\n\\n\$\{extras\.message\}` : text/);
-  assert.match(source, /seatFetch\("companion", chatSystem, body, 1500, \{ fallback: \(system = chatSystem\) =>/);
+  assert.match(source, /seatFetch\("companion", chatSystem, body, 1500, \{ fallback: \(system = chatSystem, _fromSeat = false, input = body\) =>/);
   assert.match(source, /if \(typeof mentionExtras === "function"\) \{ try \{ mention = await mentionExtras\(user\);/);
   assert.equal(format.describe("---\nname: a\ndescription: d\n---\n"), "d");
 });

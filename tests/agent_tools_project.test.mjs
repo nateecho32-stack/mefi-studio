@@ -13,6 +13,11 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
+// What one model call was given, system and user together: with the prompt
+// cache on, the tool transcript rides at the end of the user content so the
+// system prompt stays the same bytes every round (scripts/agent-tools.cjs run).
+const whole = (prompt, input) => (typeof input === "string" ? `${prompt}\n${input}` : prompt);
+
 const require = createRequire(import.meta.url);
 const tools = require("../scripts/agent-tools.cjs");
 const profiles = require("../scripts/agent-profiles.cjs");
@@ -74,7 +79,7 @@ test("MEFI_STUDIO_NO_PROJECT_SEARCH=1 removes both tools everywhere and leaves p
   for (const value of ["0", "", "true", "yes", "on"]) await withSwitch(value, async () => assert.deepEqual(await offered(ON), ["project_read", "project_list", "project_search"], `only exactly 1 is the switch (${JSON.stringify(value)})`));
   // The loop never offers them to a model, and a model that asks anyway is told they are not allowed.
   const prompts = [];
-  const result = await tools.run({ root, role: "companion", settings: ON, system: "S", user: "U", call: async (system) => { prompts.push(system); return { ok: true, text: prompts.length === 1 ? '{"studio_tool_calls":[{"name":"project_search","arguments":{"query":"needle"}}]}' : "done" }; } });
+  const result = await tools.run({ root, role: "companion", settings: ON, system: "S", user: "U", call: async (...asked) => { const system = whole(...asked); prompts.push(system); return { ok: true, text: prompts.length === 1 ? '{"studio_tool_calls":[{"name":"project_search","arguments":{"query":"needle"}}]}' : "done" }; } });
   assert.doesNotMatch(prompts[0], /project_search|project_list/); assert.match(prompts[0], /project_read/);
   assert.deepEqual(result.toolTrace.map((item) => item.ok), [false]); assert.match(prompts[1], /not allowed/);
 })));
@@ -119,7 +124,7 @@ test("a model asks for them in the tool loop: results come back whole, once, ins
     { name: "project_search", arguments: { query: "needle", maxResults: 100, perFile: 20, context: 3 } },
     { name: "project_search", arguments: { query: "(", regex: true } },
   ];
-  const result = await tools.run({ root, role: "companion", settings: ON, system: "Return JSON", user: "Where is needle?", scrub: scrubOutbound, call: async (system) => {
+  const result = await tools.run({ root, role: "companion", settings: ON, system: "Return JSON", user: "Where is needle?", scrub: scrubOutbound, call: async (...asked) => { const system = whole(...asked);
     prompts.push(system);
     return { ok: true, text: prompts.length === 1 ? JSON.stringify({ studio_tool_calls: asks }) : '{"answer":"src"}' };
   } });
@@ -191,7 +196,7 @@ test("the host's real call paths run them: an HTTP turn and a seat's turn ask, g
   const context = vm.createContext({ agentTools: tools, agentProfiles: profiles, agentAddons: { instructions: async () => "" }, scrubOutbound, logLine() {}, projectRoot: () => root, readSettings: async () => settings, readAgentSettings: async () => settings,
     projects: { current: () => ({ id: "p" }), active: () => ({ id: "p" }) }, assistantState: null, DATA_ONLY_CLIS: new Set(), applyModelRouting: async (route) => route, ZAI_MODEL_HEAVY: "z", ZEN_MODEL_HEAVY: "h", ZEN_MODEL_ROUTINE: "r",
     providerBreaker: { enter: () => ({ allowed: true }) }, settleProvider() {}, assistantSessionId: async () => "s", decryptKey: () => "k", zenEndpoint: () => "http://zen.invalid",
-    chatCompletion: async (_e, _k, model, body) => { sent.push(body.messages[0].content); return { ok: true, model, text: sent.length % 2 === 1 ? '{"studio_tool_calls":[{"name":"project_search","arguments":{"query":"needle","path":"src"}}]}' : '{"answer":"src/app.js"}' }; } });
+    chatCompletion: async (_e, _k, model, body) => { sent.push(body.messages.map((message) => message.content).join("\n")); return { ok: true, model, text: sent.length % 2 === 1 ? '{"studio_tool_calls":[{"name":"project_search","arguments":{"query":"needle","path":"src"}}]}' : '{"answer":"src/app.js"}' }; } });
   vm.runInContext(source.slice(source.indexOf("async function httpAssistantCall("), source.indexOf("// Circuit breakers for the host's own model calls")), context);
   vm.runInContext(source.slice(source.indexOf("const SEAT_DEFAULTS"), source.indexOf("// ---- the Policy Lab's observation-only recorder")), context);
   const http = await context.httpAssistantCall({ provider: "custom", model: "m", endpoint: "http://x", apiKey: "k", fallbacks: [] }, "Return JSON", "Where?", 500, { role: "routine" });

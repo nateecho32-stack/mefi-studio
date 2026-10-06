@@ -1,6 +1,70 @@
 # Agent loop and startup measurements
 
 
+## The studio log kept on disk, October 6, 2026
+
+The studio log lived only in a 5,000-line ring (five builders filled it in
+about 80 seconds) and the window stream, so nothing older than a few minutes
+survived. `main.cjs`'s "Log core" block now keeps it, with the assistant's log
+and the window's warnings, as JSON lines in this PC's local folder
+(`scripts/local-dirs.cjs`: `%LOCALAPPDATA%\MefiStudio`, never inside OneDrive),
+sealed into monthly gzip archives that are never deleted
+(`scripts/segment-archive.cjs`), and Trace's **Load older** pages back through
+it. The core opens 1.5 s after the app is ready, so neither its modules nor
+its folder touch the launch; a builder's own output lines are kept at debug
+level, under the default threshold.
+
+Measured with main.cjs's own `logLine` and "Log core" code (Linux, Node 24, a
+200,000-line burst of 80-100 character lines, two rounds):
+
+| | Before | After |
+| --- | ---: | ---: |
+| main-thread time per `logLine` | 2.9-4.3 us | 5.4-6.0 us |
+| total CPU for the burst, writes and masking included | 0.55-0.87 s | 1.74-1.83 s |
+| on disk | nothing | 15.5 MB of segments, 1.22 MB once sealed (12.7x) |
+| newest 250 lines | the ring only | 5.4 ms (14-15 ms from a sealed archive) |
+| 250 problems (errors and warnings) | the ring only | 15-20 ms |
+| a page 90% of the way back | not kept | 51-60 ms |
+
+No write is synchronous except the exit path's last flush. A busy session
+logs tens of lines a second, so the extra cost is well under a millisecond a
+second. `MEFI_STUDIO_LOG_CORE=0` or `settings.logs.keep: false` keeps the log
+in memory only, as before; `settings.logs.level` sets the threshold.
+
+## Prompts a provider can cache, and live progress from the coding CLIs, October 6, 2026
+
+A provider that caches prompt prefixes bills a repeated prefix as a cheap
+cache read, but only up to the first byte that differs. Three of Studio's
+prompts led with what changes most: a worker's prompt opened with the task's
+title, the chat payload with the owner's new message, and the tool loop grew
+its system prompt every round. With the prompt cache on (the default;
+`settings.ai.promptCache: false` or `MEFI_STUDIO_PROMPT_CACHE=0` restores the
+old bytes) the shared parts lead and the new part comes last, a Zen `gpt-*`
+call names its cache and an OpenRouter Claude or Gemini call marks its system
+prompt cacheable.
+
+The prefix two consecutive requests share, from `node --test
+tests/prompt_cache.test.mjs` (same content, same sizes):
+
+| Request | Before | After |
+| --- | ---: | ---: |
+| two workers' prompts (Windows, 4,615 characters) | 5 | 4,241 |
+| two chat turns (30-card board, 16-message thread, 4,167 characters) | 12 | 4,128 |
+| two tool rounds (a 3,080-character user message, 6,499 characters) | 3,292 | 6,373 |
+
+No prompt got longer: the worker prompt is the same words in another order
+(`executorCore.promptParts` is `promptTail` split at the run's identity), the
+chat payload the same sections, and the tool round the same transcript.
+
+Claude Code (`--output-format stream-json --verbose`) and `codex exec --json`
+now report their steps while they work, through `scripts/cli-stream.cjs`:
+the run's session, todo list, active tool and token totals reach the entry,
+its checkpoint and its attempt record as they happen instead of only the
+final text. The decoding costs one `JSON.parse` per event line, on lines the
+text mode read anyway; a stream that prints no events in its first 20 lines is
+read as text. `MEFI_STUDIO_LIVE_PROGRESS=0` or
+`settings.executor.liveProgress: false` keeps text mode.
+
 ## Startup marks and the settings cache, October 6, 2026
 
 Every launch now times itself on one timeline, milliseconds since the main
