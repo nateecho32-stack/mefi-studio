@@ -30,3 +30,32 @@ test("paired close occurs after final restart deferrals and before relaunch; clo
   calls.length=0;context.pairedWorkersPrepareRestart=async()=>({ok:false,error:"held journal"});assert.equal((await context.applyRestart([])).ok,false);assert.deepEqual(calls,[]);
   context.pairedWorkersPrepareRestart=async()=>{context.projectSwitching=true;return {ok:true};};assert.equal((await context.applyRestart([])).deferred,true);assert.deepEqual(calls,[]);
 });
+
+test("an automatic restart waits for a running paired check; a manual one and idle services do not",async()=>{
+  const begin=source.indexOf("async function applyRestart("),end=source.indexOf("async function startUpdateWatch",begin);const calls=[];let busy=true;
+  const context=vm.createContext({activeChild:null,projectSwitching:false,autopilot:{jobs:[]},updateDrainRequested:false,updater:null,window:null,updateSettings:async change=>change({}),saveResume:async()=>{},setTimeout,UPDATE_GRACE_MS:0,stopUpdateWatch:()=>{},stopEyesWatch:()=>{},stopMachineWatch:()=>{},stopAssistant:()=>{},relaunchArgs:()=>[],app:{releaseSingleInstanceLock:()=>{},relaunch:()=>calls.push("relaunch"),exit:()=>{}},pairedWorkersBusy:()=>busy,pairedWorkersPrepareRestart:async()=>{calls.push("paired");return {ok:true};}});
+  vm.runInContext(source.slice(begin,end),context);
+  const held=await context.applyRestart([]);assert.equal(held.deferred,true);assert.match(held.reason,/paired check/);assert.deepEqual(calls,[],"nothing closes while a check runs");
+  assert.equal((await context.applyRestart([],{counted:false})).ok,true,"a manual Restart goes ahead");assert.deepEqual(calls,["paired","relaunch"]);
+  calls.length=0;busy=false;assert.equal((await context.applyRestart([])).ok,true,"idle paired services close and the relaunch starts them again");assert.deepEqual(calls,["paired","relaunch"]);
+});
+
+test("release updates and rollbacks wait for a running check only, close paired services first, and launch brings them back",async()=>{
+  const apply=source.slice(source.indexOf("async function applyReleaseUpdate("),source.indexOf("// The Roll back button",source.indexOf("async function applyReleaseUpdate(")));
+  assert.match(apply,/pairedWorkersBusy\(\)\) return \{ ok: false, error: "A paired check is running; install the update when it finishes\."/);
+  assert.ok(apply.indexOf("pairedWorkersPrepareRestart()")<apply.indexOf("app.exit(0)"),"paired services close before the exit");
+  const rollback=source.slice(source.indexOf("async function releaseRollback("));
+  assert.ok(rollback.indexOf("pairedWorkersPrepareRestart()")<rollback.indexOf("app.exit(0)"));
+  assert.match(source,/function pairedWorkersBusy\(\) \{ return pairedWorkersHost\?\.inFlight\?\.\(\) === true; \}/);
+  assert.match(source,/if \(!SMOKE && !CAPTURE && !CLI_MODE && typeof startPairedResume === "function"\) startPairedResume\(\);/);
+});
+
+test("launch resumes paired services only when the owner left one running",async()=>{
+  const begin=source.indexOf("const PAIRED_RESUME_MS"),end=source.indexOf("function pairedWorkersQuit(",begin);const lines=[],calls=[];let settings={};
+  const context=vm.createContext({SMOKE:false,CAPTURE:false,CLI_MODE:false,readSettings:async()=>settings,logLine:line=>lines.push(line),pairedWorkersCall:async method=>{calls.push(method);return {ok:true,started:["worker"],coordinator:{resumeError:"listen EADDRINUSE"},worker:{}};},setTimeout,clearTimeout});
+  vm.runInContext(source.slice(begin,end),context);
+  assert.equal(await context.pairedWorkersResume(),null,"nothing saved: the host is never built");assert.deepEqual(calls,[]);
+  settings={pairedWorker:{autoStart:true}};const answer=await context.pairedWorkersResume();
+  assert.deepEqual(calls,["resume"]);assert.deepEqual([...answer.started],["worker"]);
+  assert.deepEqual(lines,["[paired] started again by itself: worker","[paired] the coordinator did not start by itself: listen EADDRINUSE"]);
+});

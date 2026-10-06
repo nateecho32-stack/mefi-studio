@@ -438,6 +438,7 @@ const api = {
   pairedPair: (code) => ipcRenderer.invoke("paired:pair", { code: typeof code === "string" ? code.slice(0, 2049) : "" }),
   pairedWorker: (action, jobId) => ipcRenderer.invoke("paired:worker", { action, jobId }),
   pairedEnqueue: () => ipcRenderer.invoke("paired:enqueue"),
+  pairedAuto: (role, on) => ipcRenderer.invoke("paired:auto", { role: role === "coordinator" ? "coordinator" : "worker", on: on === true }),
   pairedRevoke: (workerId) => ipcRenderer.invoke("paired:revoke", { workerId }),
   pairedHistory: (jobId, options) => ipcRenderer.invoke("paired:history", { jobId, chunk: options?.chunk, offset: options?.offset }),
   syncRun: (options) => ipcRenderer.invoke("sync:run", { rebase: options?.rebase === true }),

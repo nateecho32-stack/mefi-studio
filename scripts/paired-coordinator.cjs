@@ -6,6 +6,7 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const { randomUUID, randomBytes, createHash, timingSafeEqual } = require("node:crypto");
 const { scrubOutbound } = require("./redaction.cjs");
+const { appVersion } = require("./link-compat.cjs");
 const LIMITS = Object.freeze({ workers: 16, jobs: 1000, page: 30, progress: 20, text: 800, result: 4000, leaseMs: 30000, inviteMs: 300000 });
 const ID = /^[a-zA-Z0-9_-]{1,80}$/;
 const REPO = /^[a-zA-Z0-9-]{1,39}\/[a-zA-Z0-9_.-]{1,100}$/;
@@ -18,7 +19,8 @@ function specOf(raw) {
   if (!raw || !REPO.test(raw.repo) || !SHA.test(raw.commit) || raw.profile !== "studio-check") throw fault("Choose a GitHub repository, an exact commit and Studio checks.",400);
   return {repo:raw.repo,commit:raw.commit,profile:"studio-check"};
 }
-const publicWorker = w => ({id:w.id,name:w.name,repos:w.repos,profiles:w.profiles,revoked:w.revoked,lastSeen:w.lastSeen});
+// app/protocol: the Studio version and protocol the worker last spoke (null before it said).
+const publicWorker = w => ({id:w.id,name:w.name,repos:w.repos,profiles:w.profiles,revoked:w.revoked,lastSeen:w.lastSeen,app:w.app??null,protocol:w.protocol??null});
 const publicJob = j => ({id:j.id,key:j.key,spec:j.spec,state:j.state,workerId:j.workerId,fence:j.fence,leaseUntil:j.leaseUntil,createdAt:j.createdAt,updatedAt:j.updatedAt,progress:j.progress,result:j.result,archived:j.archived??0,archiveChunks:j.archiveChunks??0});
 async function atomic(file,value) {
   await fs.mkdir(path.dirname(file),{recursive:true});
@@ -63,8 +65,12 @@ async function createCoordinator({directory,now=Date.now,write=atomic}={}) {
   const session=(w,auth)=>{
     if(w.instanceId&&w.instanceId!==auth.instanceId&&w.sessionUntil>now())throw fault("This worker is already connected from another instance.");
     w.instanceId=auth.instanceId;w.sessionUntil=now()+LIMITS.leaseMs;w.lastSeen=now();
+    if(appVersion(auth.app))w.app=auth.app;if(Number.isInteger(auth.protocol))w.protocol=auth.protocol;
   };
   return {
+    // Checks assigned or running right now. An update waits for these, and
+    // only these: an idle coordinator stops, updates and starts again.
+    activeJobs(){return state.jobs.filter(j=>["assigned","running"].includes(j.state)&&j.leaseUntil>now()).length;},
     async status({before=null}={}) {await tail;const index=before?state.jobs.findIndex(j=>j.id===before):state.jobs.length;if(index<0)throw fault("Queue history cursor is unavailable.",400);const eligible=state.jobs.slice(0,index),page=eligible.slice(-LIMITS.page).reverse();return {workers:state.workers.map(publicWorker),jobs:page.map(publicJob),total:state.jobs.length,nextCursor:eligible.length>LIMITS.page?page.at(-1).id:null};},
     async history(jobId,{chunk=0,offset=0}={}){await tail;const job=state.jobs.find(j=>j.id===jobId);if(!job||!Number.isInteger(chunk)||chunk<0||chunk>(job.archiveChunks??0)||!Number.isInteger(offset)||offset<0)throw fault("Progress history is unavailable.",400);let raw;try{raw=await fs.readFile(path.join(directory,"progress",`${job.id}-${chunk}.jsonl`),"utf8");}catch(error){if(error.code==="ENOENT")return {lines:[],next:null,previous:null};throw error;}const lines=raw.trim().split("\n").filter(Boolean).map(line=>JSON.parse(line));let previous=offset>0?{chunk,offset:Math.max(0,offset-LIMITS.progress)}:null;if(!previous&&chunk>0){const prior=(await fs.readFile(path.join(directory,"progress",`${job.id}-${chunk-1}.jsonl`),"utf8")).trim().split("\n").filter(Boolean);previous={chunk:chunk-1,offset:Math.floor(Math.max(0,prior.length-1)/LIMITS.progress)*LIMITS.progress};}return {lines:lines.slice(offset,offset+LIMITS.progress),next:offset+LIMITS.progress<lines.length?offset+LIMITS.progress:null,previous};},
     invite(){return transaction(s=>{expire(s);if(s.invites.length>=8)throw fault("Use or let an existing pairing code expire first.");const secret=randomBytes(32).toString("base64url"),id=randomUUID();s.invites.push({id,hash:digest(secret),until:now()+LIMITS.inviteMs});return {inviteId:id,secret,expiresAt:now()+LIMITS.inviteMs};});},
@@ -74,8 +80,11 @@ async function createCoordinator({directory,now=Date.now,write=atomic}={}) {
       const repos=Array.isArray(request.repos)?[...new Set(request.repos.filter(r=>typeof r==="string"&&REPO.test(r)))].slice(0,8):[];
       if(!repos.length||!Array.isArray(request.profiles)||!request.profiles.includes("studio-check"))throw fault("This worker must allow a repository and Studio checks.",400);
       const token=randomBytes(32).toString("base64url"),id=randomUUID();s.invites=s.invites.filter(i=>i.id!==invite.id);
-      s.workers.push({id,name:text(request.name,60)||"Worker",tokenHash:digest(token),repos,profiles:["studio-check"],revoked:false,lastSeen:now(),instanceId:null,sessionUntil:0});return {workerId:id,token};
+      s.workers.push({id,name:text(request.name,60)||"Worker",tokenHash:digest(token),repos,profiles:["studio-check"],revoked:false,lastSeen:now(),instanceId:null,sessionUntil:0,app:appVersion(request.app)});return {workerId:id,token};
     });},
+    // A worker stopping cleanly (a restart, an update, Stop) gives its session
+    // back, so the next instance connects at once instead of after the lease.
+    release(auth){return transaction(s=>{const w=worker(s,auth);if(w.instanceId===auth.instanceId)w.sessionUntil=0;return {ok:true};});},
     revoke(workerId){return transaction(s=>{const w=s.workers.find(w=>w.id===workerId);if(!w)throw fault("Worker not found.",404);w.revoked=true;for(const j of s.jobs){if(j.workerId===w.id&&["assigned","running"].includes(j.state))j.state="uncertain";}return {ok:true};});},
     enqueue(raw){return transaction(s=>{const spec=specOf(raw?.spec);if(!ID.test(raw?.key??""))throw fault("A queue request identity is required.",400);const previous=s.jobs.find(j=>j.key===raw.key);
       if(previous){if(JSON.stringify(previous.spec)!==JSON.stringify(spec))throw fault("Queue identity already belongs to another commit.");return publicJob(previous);}

@@ -28,7 +28,7 @@ import { createLeases } from './leases.mjs';
 import { createListen } from './listen.mjs';
 import { createOembed, publicLink } from './media.mjs';
 import { createPcs } from './pcs.mjs';
-import { CLOSE_CODES, FEATURES, LIMITS, NOW_PLAYING_PROVIDERS, PROTOCOL_VERSION, hubFrame, parseClientFrame, validateBody, validateQuery } from './protocol.mjs';
+import { CLOSE_CODES, FEATURES, LIMITS, NOW_PLAYING_PROVIDERS, OLDEST_PROTOCOL, PROTOCOL_VERSION, checkVersion, hubFrame, parseClientFrame, validateBody, validateQuery } from './protocol.mjs';
 import { createSessions, readConfig, describeMember } from './sessions.mjs';
 import { createStore } from './store.mjs';
 import { DAY_MS, MINUTE_MS, SECOND_MS, b64url, cleanLine, cleanText, fromB64url, hmac, hmacKey, isOpaqueId, isSnowflake, keyedBuckets, newId, randomBytes } from './util.mjs';
@@ -600,7 +600,11 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
   }
 
   async function hello(ws, a, frame) {
-    if (frame.protocol !== PROTOCOL_VERSION) return closeSocket(ws, a, CLOSE_CODES.versionMismatch, 'protocol version');
+    // A window, not one number: a Studio a release or two either side of this
+    // relay still connects. The close reason says which side must update;
+    // Studio retries by itself when it is the relay.
+    const version = checkVersion(frame.protocol, frame.oldest);
+    if (!version.ok) return closeSocket(ws, a, CLOSE_CODES.versionMismatch, version.behind === 'relay' ? 'relay version' : 'protocol version');
     const verdict = await sessions.verify(frame.session);
     if (!verdict.ok) return closeSocket(ws, a, verdict.error === 'expired' ? CLOSE_CODES.sessionExpired : CLOSE_CODES.unauthorized, 'session');
     const { claims } = verdict;
@@ -609,7 +613,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     const mine = readySockets().filter((entry) => entry.a.uid === claims.uid).length;
     if (mine >= WS_LIMITS.socketsPerUser) return closeSocket(ws, a, CLOSE_CODES.tooManySockets, 'too many sockets');
     joinLobby(claims.uid);
-    Object.assign(a, { s: 'ready', uid: claims.uid, sid: claims.sid, exp: claims.exp, ro: claims.readOnly || member.readOnly ? 1 : 0, name: member.name, mod: member.isMod ? 1 : 0, j: member.joinedAt, rooms: [], cf: frame.features ?? [], np: null });
+    Object.assign(a, { s: 'ready', uid: claims.uid, sid: claims.sid, exp: claims.exp, ro: claims.readOnly || member.readOnly ? 1 : 0, name: member.name, mod: member.isMod ? 1 : 0, j: member.joinedAt, rooms: [], cf: frame.features ?? [], np: null, pv: version.speak });
     sockets.write(ws, a);
     sendReady(ws, a);
     if (!mine) announceOnline(claims.uid, member.name);
@@ -650,7 +654,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
   }
 
   function sendReady(ws, a) {
-    sendFrame(ws, 'ready', { user: { id: a.uid, name: a.name }, protocol: PROTOCOL_VERSION, paused: paused(), readOnly: a.ro === 1, features: features() });
+    sendFrame(ws, 'ready', { user: { id: a.uid, name: a.name }, protocol: a.pv ?? PROTOCOL_VERSION, oldest: OLDEST_PROTOCOL, paused: paused(), readOnly: a.ro === 1, features: features() });
   }
 
   async function renew(ws, a, frame) {

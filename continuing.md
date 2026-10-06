@@ -458,8 +458,10 @@ The owner asked for this (2026-09-28):
 - **Old logs:** don't delete `tools/logs` (about 966 MB inside OneDrive). The logging rework in
   section 1 (S18) archives it, and the owner decided nothing gets deleted. The five one-off root
   `*.log` files can go with it.
-- **Release workflow:** run `gh auth refresh -s workflow` so `release.yml` can be fixed (hosted
-  Windows runners fail four render fixtures), unless section 1's list already covers it.
+- **Release workflow:** fixed on 6 Oct from a cloud session: `release.yml` has the `gate: hosted`
+  input (hosted Windows runners fail four render fixtures), the smoke launch, the SignPath steps
+  (off until the variables are set) and the Rust host switch. `gh auth refresh -s workflow` is
+  still needed to push a workflow change from a PC.
 - **`docs/friends-setup.md`** already tells people to update to 0.4.5.
 
 ## 5. Model tracker, community model ratings and probes

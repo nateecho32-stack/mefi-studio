@@ -35,7 +35,7 @@ function host({ link = { userId: "42" }, tokens = null, clientId = "1234567890",
       createHubClient: (options) => { created = options; return { status: () => ({ configured: true, state: "off", error: null, user: null, readOnly: false, paused: false, rooms: [] }), ...client }; },
     }),
   });
-  vm.runInContext(`${block}\nthis.api = { hubAccessToken, hubStatus, hubInstance, hubSubscribe, hubConnect, hubDisconnect, hubPresenceLook, startHubPresence, hubBuildingLook, hubBuildingShare, hubRoom };`, context);
+  vm.runInContext(`${block}\nthis.api = { hubAccessToken, hubStatus, hubInstance, hubSubscribe, hubConnect, hubDisconnect, hubPresenceLook, startHubPresence, hubBuildingLook, hubBuildingShare, hubRoom, hubPresenceWake, hubVersionBehind };`, context);
   return { api: context.api, context, sent, checks, created: () => created };
 }
 
@@ -110,6 +110,41 @@ test("Share what I'm building: off until turned on, then the open project's name
   assert.equal((await h.api.hubStatus()).shareBuilding, true, "The Lobby reads the switch from hub:status");
   await h.api.hubRoom("shareBuilding", [false]);
   assert.deepEqual(shared.at(-1), null, "off again: the relay forgets it");
+});
+
+test("Reconnect by itself: on unless turned off, remembered, connects at once when turned on, and a wake retries", async () => {
+  let settings = {}, state = "off";
+  const connects = [], wakes = [], looks = [];
+  const h = host({ client: {
+    status: () => ({ configured: true, state, error: null, user: null, readOnly: false, paused: false, rooms: [] }),
+    connect: async () => { connects.push(1); state = "ready"; return { state }; },
+    reconnectNow: () => { wakes.push(1); return state === "offline"; },
+  } });
+  h.context.readSettings = async () => settings;
+  h.context.updateSettings = async (mutate) => { const next = JSON.parse(JSON.stringify(settings)); mutate(next); settings = next; };
+  h.api.hubInstance();
+  assert.equal((await h.api.hubStatus()).autoConnect, true, "on by default");
+  const off = await h.api.hubRoom("autoConnect", [false]);
+  assert.equal(off.ok, true); assert.equal(off.autoConnect, false);
+  assert.equal(settings.friends.connectAtLaunch, false, "remembered across restarts");
+  assert.equal(await h.api.hubPresenceLook(), false, "off: a launch does not connect");
+  assert.equal((await h.api.hubStatus()).autoConnect, false, "The Lobby reads the switch from hub:status");
+  const on = await h.api.hubRoom("autoConnect", [true]);
+  assert.equal(on.autoConnect, true); assert.equal(settings.friends.connectAtLaunch, true);
+  assert.equal(connects.length, 1, "turning it on connects now");
+  state = "offline";
+  assert.equal(await h.api.hubPresenceWake(), true, "after sleep the client retries at once");
+  assert.equal(wakes.length, 1);
+  state = "off";
+  assert.equal(await h.api.hubPresenceWake(), true, "a client that had stopped connects again");
+  assert.equal(connects.length, 2);
+  settings = { friends: { connectAtLaunch: false } };
+  assert.equal(await h.api.hubPresenceWake(), false, "switched off: a wake leaves it alone");
+  // The relay says this Studio is too old: look for an update, at most once an hour.
+  h.context.checkRelease = async () => { looks.push(1); };
+  h.api.hubVersionBehind(); h.api.hubVersionBehind();
+  assert.equal(looks.length, 1);
+  assert.match(main, /if \(event\?\.type === "status" && event\.status\?\.error === "version"\) hubVersionBehind\(\);/);
 });
 
 test("a live Discord access token is handed over as is", async () => {

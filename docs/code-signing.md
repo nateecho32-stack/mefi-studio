@@ -6,13 +6,13 @@ Smart App Control on Windows 11 blocks one outright. Studio's Windows builds
 are going to be signed through the SignPath Foundation's free programme for
 open-source projects.
 
-**Status:** every release so far is unsigned, and so is 0.4.5. The tested workflow is preserved in
-[release-workflow-signpath.yml](release-workflow-signpath.yml); activation is
-pending because the current GitHub credential lacks the `workflow` scope.
-An authorized maintainer must replace `.github/workflows/release.yml` with
-that proposal and land it using a credential allowed to change workflows.
-Signed releases then require SignPath Foundation to accept the project. Until then the download page's SmartScreen steps still
-apply.
+**Status:** every release so far is unsigned. Since 6 October 2026
+[`.github/workflows/release.yml`](../.github/workflows/release.yml) carries
+the signing steps, the packaged-app smoke launch and the hosted-runner gate
+(they were kept in a separate proposal file until a credential allowed to
+change workflows could land them). The signing steps stay off until
+SignPath Foundation accepts the project and the variables below are set.
+Until then the download page's SmartScreen steps still apply.
 
 Free code signing provided by [SignPath.io](https://signpath.io), certificate
 by [SignPath Foundation](https://signpath.org).
@@ -28,7 +28,10 @@ signs it only when its product name is `Mefi's Studio AI+` and its product
 version is the release's version. Every other file in the zip is either
 Studio's own source (JavaScript, HTML, CSS and data, which are not signed
 code) or Electron's upstream runtime, shipped exactly as Electron publishes
-it.
+it. A Rust-host build (`host: tauri`, see
+[rust-migration.md](rust-migration.md)) ships the Rust host's program under
+the same name and stamp, so the same configuration signs it; the `node.exe`
+beside it is Node's own build, copied as Node publishes it.
 
 **Where it is built.** Only by
 [`.github/workflows/release.yml`](../.github/workflows/release.yml), on a
@@ -114,6 +117,9 @@ then, as before.
    (its TESTRUNS row).
 3. Approve the signing request in SignPath. The run waits up to an hour, then
    checks the signature and publishes the zip and its `.sha256`.
+   A tag push always builds on Electron (`TAG_HOST` in the workflow). To add
+   the Rust-host zip to the same release, start the workflow by hand with the
+   tag and `host: tauri`; it is signed and published the same way.
 4. Check the published executable:
    `Get-AuthenticodeSignature "Mefi Studio AI+.exe"` should say `Valid`, and
    its signer should name SignPath Foundation.

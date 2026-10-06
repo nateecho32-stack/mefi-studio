@@ -24,6 +24,12 @@
 //   Studio side: parseHubFrame(raw), clientFrame('send', {...})
 
 export const PROTOCOL_VERSION = 1;
+// The oldest protocol this relay still speaks. A hello may name any number
+// from here to PROTOCOL_VERSION (and its own `oldest`, when it sends one), so
+// a Studio a release or two behind keeps connecting; only one below this
+// number is told to update. Keep it a few releases behind PROTOCOL_VERSION,
+// and equal to LINKS.friends in Studio's scripts/link-compat.cjs.
+export const OLDEST_PROTOCOL = 1;
 
 export const LIMITS = Object.freeze({
   frameBytes: 16 * 1024, // client -> hub WebSocket frame
@@ -430,7 +436,8 @@ const pcView = () =>
 /** Client -> hub. Every frame is {type, ...fields}. */
 export const CLIENT_FRAMES = Object.freeze({
   // features: what this Studio can do beyond the core frames (for example "history.peer", "keepalive").
-  hello: { session: session(), protocol: integer(1, 1000), features: optional(list(string(1, 40, { pattern: FEATURE }), LIMITS.hubFeatures)) },
+  // oldest: the lowest protocol this Studio still speaks (absent: only `protocol`).
+  hello: { session: session(), protocol: integer(1, 1000), oldest: optional(integer(1, 1000)), features: optional(list(string(1, 40, { pattern: FEATURE }), LIMITS.hubFeatures)) },
   renew: { session: session() },
   subscribe: { roomId: opaqueId() },
   unsubscribe: { roomId: opaqueId() },
@@ -475,7 +482,8 @@ export const CLIENT_FRAMES = Object.freeze({
 export const HUB_FRAMES = Object.freeze({
   ready: {
     user: user(),
-    protocol: integer(1, 1000),
+    protocol: integer(1, 1000), // the protocol this socket speaks
+    oldest: optional(integer(1, 1000)), // the relay's OLDEST_PROTOCOL
     paused: optional(boolean()),
     readOnly: optional(boolean()),
     features: optional(list(string(1, 40, { pattern: FEATURE }), LIMITS.hubFeatures)),
@@ -609,8 +617,17 @@ export function encodeHubFrame(type, fields = {}) {
   return JSON.stringify(hubFrame(type, fields));
 }
 
-export function checkVersion(protocol) {
-  return protocol === PROTOCOL_VERSION;
+/**
+ * The protocol a hello speaks with this relay: the highest number both sides
+ * know. { ok: true, speak } or { ok: false, behind: 'client' | 'relay' }, the
+ * side that has to update. A hello without `oldest` speaks only `protocol`.
+ */
+export function checkVersion(protocol, oldest = protocol) {
+  if (!Number.isInteger(protocol) || protocol < 1) return { ok: false, behind: 'client' };
+  const theirs = Math.min(Number.isInteger(oldest) ? oldest : protocol, protocol);
+  const speak = Math.min(protocol, PROTOCOL_VERSION);
+  if (speak >= Math.max(theirs, OLDEST_PROTOCOL)) return { ok: true, speak };
+  return { ok: false, behind: protocol < OLDEST_PROTOCOL ? 'client' : 'relay' };
 }
 
 // ---- HTTP -------------------------------------------------------------------------
