@@ -17689,7 +17689,7 @@ async function teamReport(settings) {
   const known = new Set(card.models.map((entry) => `${entry.provider}::${entry.model}`));
   return {
     ok: true, thinking: modelLadder.thinking(settings), selection: settings.modelSelection === "fixed" ? "fixed" : "jev",
-    builder: { cli: preview.cli, model: preview.model, name: modelKinds.modelName(preview.model, preview.cli) },
+    builder: { cli: preview.cli, model: preview.model, name: modelKinds.modelName(preview.model, preview.cli), key: `${builder.provider}::${builder.model}` },
     checked: card.checked, from: card.from, to: card.to, models: card.models,
     untried: available.filter((item) => !known.has(`${item.provider}::${item.ledgerModel}`)).map((item) => ({ cli: item.cli, model: item.model, name: modelKinds.modelName(item.ledgerModel || item.model, item.cli) })),
     kinds, suggestions: modelKinds.suggestions(card, { builder, available, routes: saved }),

@@ -234,9 +234,11 @@
   }
   const verdictOf = (wins, settled) => settled < 5 ? "few" : wins / settled >= 0.6 ? "good" : wins / settled >= 0.4 ? "ok" : "weak";
   // The coding worker's record on this PC, from the report card.
-  function resultOf(report, cli, model, name) {
+  // `known` is the host's own ledger key for the worker as it is set up
+  // (teamReport's builder.key), used while the draft has not moved it.
+  function resultOf(report, cli, model, name, known = null) {
     const models = Array.isArray(report?.models) ? report.models : [];
-    const key = ledgerKey(cli, isDefault(model) ? "" : model);
+    const key = known || ledgerKey(cli, isDefault(model) ? "" : model);
     const entry = models.find((item) => item?.key === key) || models.find((item) => name && item?.name === name);
     const settled = Number(entry?.settled) || 0;
     if (!entry || !settled) return null;
@@ -268,7 +270,7 @@
       return {
         ...job, provider, model, name, pending, via: viaOf(provider, model, { builder }), good: goodFor(model, provider, { builder }),
         ok: choice ? choice.ok !== false : true, reason: String(choice?.reason || ""),
-        levels, level, explicit: Boolean(explicit), result: builder ? resultOf(report, provider, model, name) : null,
+        levels, level, explicit: Boolean(explicit), result: builder ? resultOf(report, provider, model, name, !pending && typeof report?.builder?.key === "string" ? report.builder.key : null) : null,
       };
     });
   }

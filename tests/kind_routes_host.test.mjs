@@ -60,7 +60,7 @@ test("the report card names the worker's weak kind and suggests trying Sonnet on
   const h = host();
   const report = await h.report();
   assert.equal(report.checked, 121);
-  assert.deepEqual(report.builder, { cli: "opencode", model: "opencode-go/deepseek-v4.1-flash", name: "DeepSeek V4.1 Flash" });
+  assert.deepEqual(report.builder, { cli: "opencode", model: "opencode-go/deepseek-v4.1-flash", name: "DeepSeek V4.1 Flash", key: "opencode::deepseek-v4.1-flash" }, "the key is how the ledger files its runs");
   assert.deepEqual(report.models[0].kinds.map((kind) => [kind.taskType, kind.verdict]), [["coding-implement", "good"], ["coding-explore", "weak"]]);
   assert.deepEqual(report.suggestions.map((item) => [item.taskType, item.to.cli, item.to.model]), [["coding-explore", "claude", "sonnet"]]);
   assert.deepEqual(report.untried.map((item) => item.name), ["Sonnet", "DeepSeek V4 Pro", "Opus"]);

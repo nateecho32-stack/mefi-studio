@@ -140,12 +140,18 @@ function mutate(settings, request, { id, projectId } = {}) {
     if (error) return { ok: false, error };
   }
   if (action === "save") {
+    // The kind-of-job routes are written by their own call (Try it, Stop) and
+    // by trials as they are judged, never by the page's draft: a draft read
+    // before a trial started or ended must not undo it, so the saved routes
+    // stay whatever the draft says.
+    const kinds = effective(settings, request.scope === "defaults" ? null : projectId).agentKinds;
+    const keepKinds = (configuration) => { const next = { ...configuration }; delete next.agentKinds; if (kinds !== undefined) next.agentKinds = clone(kinds); return next; };
     if (request.scope === "defaults") {
       for (const field of FIELDS) delete settings[field];
-      Object.assign(settings, extract(request.configuration));
+      Object.assign(settings, keepKinds(extract(request.configuration)));
     } else {
       if (!projectId || projectId === "project_none") return { ok: false, error: "Choose a project before saving its team." };
-      saved.projects[projectId] = { name, configuration: extract(request.configuration) };
+      saved.projects[projectId] = { name, configuration: keepKinds(extract(request.configuration)) };
     }
   } else if (action === "rules") {
     // Only the rules change: the rest of the team stays as it was saved. A
