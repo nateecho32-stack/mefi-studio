@@ -1585,7 +1585,7 @@ test("Ask puts your words to Mefi about this task, shows that it is thinking, an
   const sending = submit(app);
   await app.env.settle();
   app.env.flush();
-  assert.deepEqual(clean(bridge.calls.find((call) => call[0] === "assistantMessage")), ["assistantMessage", "About the task \"Add a sitemap\" (s1): Did you include the blog routes?", "p1", { view: "Build · task", companion: "Mefi", taskId: "s1" }]);
+  assert.deepEqual(clean(bridge.calls.find((call) => call[0] === "assistantMessage")), ["assistantMessage", "About the task \"Add a sitemap\" (s1): Did you include the blog routes?", "p1", { view: "Studio · task", companion: "Mefi", taskId: "s1" }]);
   assert.equal(c.send.textContent, "Sending…", "while it is out");
   assert.equal(c.send.disabled, true);
   const asked = feed(app).find((item) => item.head === "You asked" && item.text === "Did you include the blog routes?");

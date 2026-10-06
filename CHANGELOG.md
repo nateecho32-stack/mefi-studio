@@ -7,6 +7,13 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Vibe is now Social, Build is now Studio.** The two modes have new names
+  for what they are for: **Social** is vibing with friends and keeping a
+  light eye on your agents, **Studio** is in-depth building, with the social
+  features still there. The switch at the top, Search ("Switch to Studio"),
+  the keys sheet, Settings ("Always start in Social") and the Size page say
+  the new names. Nothing else changes: your saved mode, settings and links
+  carry over as they are.
 - **Activity, the permissions menu and the Team card no longer cover or
   cut their own words.** On Home's chat view, Activity used to lie over the
   conversation, message box and Send included, at every window width in the

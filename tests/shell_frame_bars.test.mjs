@@ -61,12 +61,12 @@ test("the Vibe | Build switch is a radiogroup that calls MefiVibe's own setter, 
   const page = loadShell({});
   const group = page.region("top").querySelector(".mode-switch");
   assert.equal(group.getAttribute("role"), "radiogroup");
-  assert.equal(group.getAttribute("aria-label"), "Studio mode");
+  assert.equal(group.getAttribute("aria-label"), "Mode");
   const [vibe, build] = group.querySelectorAll("button");
   assert.deepEqual([vibe.getAttribute("role"), build.getAttribute("role")], ["radio", "radio"]);
   assert.deepEqual([vibe.dataset.uiMode, build.dataset.uiMode], ["vibe", "build"], "the two values MefiVibe already has; no new uiMode");
   assert.deepEqual([vibe.getAttribute("aria-checked"), build.getAttribute("aria-checked"), group.dataset.mode], ["false", "true", "build"]);
-  assert.deepEqual([vibe.getAttribute("aria-label"), build.getAttribute("aria-label")], ["Vibe", "Build"], "named without their words, which a small bar hides");
+  assert.deepEqual([vibe.getAttribute("aria-label"), build.getAttribute("aria-label")], ["Social", "Studio"], "named without their words, which a small bar hides");
   assert.deepEqual([vibe.tabIndex, build.tabIndex], [-1, 0], "one tab stop, on the mode that is on");
   let stopped = 0, prevented = 0;
   await vibe.click({ stopPropagation: () => { stopped += 1; }, preventDefault: () => { prevented += 1; } });
@@ -498,7 +498,7 @@ test("Search lists what the frame can do, worded for what a press does now, and 
     assert.equal(row.hidden(), false);
   }
   assert.deepEqual(Object.values(rows).map((row) => [row.label, row.chord ?? null, row.paletteGroup, row.paletteBrowse ?? null]), [
-    ["Switch to Vibe", "Ctrl M", "Actions", 4], ["Pause new work", null, "Actions", 2], ["Hide the list", "Ctrl B", "Layout", null], ["Hide the inspector", "[", "Layout", null], ["Reset layout", null, "Layout", null],
+    ["Switch to Social", "Ctrl M", "Actions", 4], ["Pause new work", null, "Actions", 2], ["Hide the list", "Ctrl B", "Layout", null], ["Hide the inspector", "[", "Layout", null], ["Reset layout", null, "Layout", null],
   ]);
   // Each runs what the bar's own control runs, and the words follow.
   rows["shell-do-list"].run();
@@ -509,7 +509,7 @@ test("Search lists what the frame can do, worded for what a press does now, and 
   assert.equal(rows["shell-do-list"].label, "Hide the list");
   rows["shell-do-mode"].run();
   assert.deepEqual(page.calls.vibe.at(-1), ["vibe", { go: true }], "from Home to Home, as the switch does");
-  assert.equal(rows["shell-do-mode"].label, "Switch to Build");
+  assert.equal(rows["shell-do-mode"].label, "Switch to Studio");
   assert.equal(rows["shell-do-mode"].glyph, "g-wrench");
   let clicks = 0;
   page.$("workspace-pause").click = () => { clicks += 1; };
@@ -811,7 +811,7 @@ test("the Layout menu: switches for the list, the inspector and the tab strip, e
   assert.equal(menu.getAttribute("role"), "dialog");
   assert.equal(menu.getAttribute("aria-label"), "Layout");
   assert.equal(button.getAttribute("aria-expanded"), "true");
-  assert.match(say(menu), /Build mode/);
+  assert.match(say(menu), /Studio mode/);
   const switches = menu.querySelectorAll('[role="switch"]');
   assert.deepEqual(switches.map((node) => [node.dataset.key, node.getAttribute("aria-checked")]), [["list", "true"], ["inspector", "true"], ["tabs", "true"]]);
   await switches[0].click();
@@ -822,7 +822,7 @@ test("the Layout menu: switches for the list, the inspector and the tab strip, e
   await switches[2].click();
   assert.equal(shell.isOpen("tabs"), true);
   const grid = menu.querySelector(".shell-menu-grid");
-  assert.deepEqual(grid.children.map(say), ["", "Build", "Vibe", "List", "closed", "closed", "Inspector", "388 px", "closed"], "both modes' layouts side by side: Build's list was just closed");
+  assert.deepEqual(grid.children.map(say), ["", "Studio", "Social", "List", "closed", "closed", "Inspector", "388 px", "closed"], "both modes' layouts side by side: Studio's list was just closed");
   shell.resize("inspector", 500);
   assert.equal(say(menu.querySelector(".shell-menu-grid").children[7]), "500 px", "and it follows a resize");
   // The buttons at the foot.
@@ -836,8 +836,8 @@ test("the Layout menu: switches for the list, the inspector and the tab strip, e
   assert.deepEqual(page.calls.go.at(-1), ["worktrees"]);
   await button.click();
   await page.$("shell-menu").querySelectorAll(".shell-action")[0].click();
-  assert.equal(shell.isOpen("list"), true, "Reset layout put Build's preset back");
-  assert.equal(page.toasts.at(-1)[0].startsWith("Layout reset for Build"), true);
+  assert.equal(shell.isOpen("list"), true, "Reset layout put Studio's preset back");
+  assert.equal(page.toasts.at(-1)[0].startsWith("Layout reset for Studio"), true);
   assert.equal(page.document.activeElement, button, "and focus is back on the Layout button");
 });
 
@@ -861,8 +861,8 @@ test("the Layout menu closes on Escape, on a press outside, on the button again 
   const button = item(page, "layout");
   const open = async () => { button.focus(); if (!page.$("shell-menu")) await button.click(); return page.$("shell-menu"); };
   let menu = await open();
-  assert.match(say(menu), /Vibe mode/, "the menu says which mode's layout it is changing");
-  assert.deepEqual(menu.querySelector(".shell-menu-grid").children.map(say), ["", "Build", "Vibe", "List", "280 px", "closed", "Inspector", "388 px", "closed"]);
+  assert.match(say(menu), /Social mode/, "the menu says which mode's layout it is changing");
+  assert.deepEqual(menu.querySelector(".shell-menu-grid").children.map(say), ["", "Studio", "Social", "List", "280 px", "closed", "Inspector", "388 px", "closed"]);
   await page.press(menu.querySelector(".shell-menu-head"));
   assert.ok(page.$("shell-menu"), "a press inside the menu keeps it");
   await page.press(button);

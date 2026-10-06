@@ -227,7 +227,7 @@
     if (vibe === "vibe" || vibe === "build") return vibe;
     return rootEl()?.dataset?.uiMode === "vibe" ? "vibe" : "build";
   };
-  const modeWords = (mode) => (mode === "vibe" ? "Vibe" : "Build");
+  const modeWords = (mode) => (mode === "vibe" ? "Social" : "Studio");
   const isColumn = (name) => name === "list" || name === "inspector";
 
   // ---- the regions: the DOM ---------------------------------------------------------------
@@ -615,12 +615,12 @@
     parts.listToggle.id = "shell-list-toggle";
     parts.listToggle.append(icon("panelL"));
     // The app's own mode switch look (vibe.css); the click and the keys are this module's.
-    parts.group = el("div", "mode-switch shell-mode", { role: "radiogroup", "aria-label": "Studio mode", "data-mode": "build" });
+    parts.group = el("div", "mode-switch shell-mode", { role: "radiogroup", "aria-label": "Mode", "data-mode": "build" });
     parts.group.append(el("i", "mode-thumb", { "aria-hidden": "true" }));
     for (const mode of MODES) {
       const choice = button("shell-mode-choice", null, (event) => { event?.stopPropagation?.(); event?.preventDefault?.(); setMode(mode); }, { role: "radio", "aria-checked": "false", "data-ui-mode": mode });
       choice.setAttribute("aria-label", modeWords(mode));
-      choice.setAttribute("title", mode === "vibe" ? "Vibe: a calm board that is easy to keep an eye on (Ctrl M)" : "Build: list, thread and inspector, in depth (Ctrl M)");
+      choice.setAttribute("title", mode === "vibe" ? "Social: friends, and a light eye on your agents (Ctrl M)" : "Studio: in-depth building with the list, thread and inspector (Ctrl M)");
       choice.append(icon(mode === "vibe" ? "spark" : "build"), text("span", "", modeWords(mode)));
       choice.addEventListener("keydown", (event) => modeKeys(event, mode));
       parts.group.append(choice);
@@ -1368,7 +1368,7 @@
     }
     menu.parts.tabs.toggleButton.setAttribute("aria-checked", String(prefs.tabs.open));
     const cell = (other, name) => (state.prefs[other][name].open ? `${state.prefs[other][name].w} px` : "closed");
-    const grid = ["", "Build", "Vibe", "List", cell("build", "list"), cell("vibe", "list"), "Inspector", cell("build", "inspector"), cell("vibe", "inspector")];
+    const grid = ["", "Studio", "Social", "List", cell("build", "list"), cell("vibe", "list"), "Inspector", cell("build", "inspector"), cell("vibe", "inspector")];
     menu.table.replaceChildren(...grid.map((value, at) => text(at < 3 || at % 3 === 0 ? "span" : "b", at < 3 ? "shell-grid-head" : "", value)));
   }
   // Size and density is the SIZE page's; until it says how to open it, Configuration's UI & Surfaces is where the scale lives.
@@ -1533,7 +1533,7 @@
     const n = nav();
     if (state.keyRows || !n?.register) return;
     state.keyRows = true;
-    for (const [key, id, label] of [["Ctrl M", "shell-key-mode", "Switch between Vibe and Build"], ["Ctrl B", "shell-key-list", "Show or hide the list"], ["[", "shell-key-inspector", "Show or hide the inspector"]]) {
+    for (const [key, id, label] of [["Ctrl M", "shell-key-mode", "Switch between Social and Studio"], ["Ctrl B", "shell-key-list", "Show or hide the list"], ["[", "shell-key-inspector", "Show or hide the inspector"]]) {
       try { n.register({ id, label, short: label, desc: label, kind: "action", layer: null, section: "home", group: "command", key, glyph: null, badge: null, showIn: { tabs: false, tools: false, dock: false, palette: false, help: true, footer: false }, hidden: () => !state.on }); } catch { /* the sheet is optional */ }
     }
   }
@@ -1547,9 +1547,9 @@
     const base = { kind: "action", layer: null, section: "home", group: "layout", key: null, keyMatch: () => false, badge: null, showIn: { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false }, hidden: () => !state.on };
     const run = () => (state.live ?? readLive()).run;
     const rows = [
-      { ...base, id: "shell-do-mode", chord: "Ctrl M", paletteGroup: "Actions", paletteBrowse: 4, searchTerms: "mode vibe build switch calm in depth",
-        get label() { return currentMode() === "vibe" ? "Switch to Build" : "Switch to Vibe"; }, get glyph() { return currentMode() === "vibe" ? "g-wrench" : "g-spark"; },
-        desc: "Vibe is the calm board; Build is the list, the thread and the inspector", run: () => setMode(currentMode() === "vibe" ? "build" : "vibe") },
+      { ...base, id: "shell-do-mode", chord: "Ctrl M", paletteGroup: "Actions", paletteBrowse: 4, searchTerms: "mode social studio vibe build switch friends calm in depth",
+        get label() { return currentMode() === "vibe" ? "Switch to Studio" : "Switch to Social"; }, get glyph() { return currentMode() === "vibe" ? "g-wrench" : "g-spark"; },
+        desc: "Social is for friends and a light eye on your agents; Studio is for in-depth building", run: () => setMode(currentMode() === "vibe" ? "build" : "vibe") },
       { ...base, id: "shell-do-pause", paletteGroup: "Actions", paletteBrowse: 2, glyph: null, searchTerms: "pause resume hold stop new work agents start",
         get label() { const now = run(); return now === "paused" ? "Resume new work" : now === "off" ? "Start agents" : "Pause new work"; },
         desc: "Hold all new work; running jobs finish normally", hidden: () => !state.on || run() === null, run: () => togglePause() },

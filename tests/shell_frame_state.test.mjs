@@ -380,7 +380,7 @@ test("Reset layout puts this mode's preset back, leaves the other mode alone, an
   assert.equal(shell.layout().vibe.list.open, true);
   assert.equal(page.toasts.length, 1);
   const [words, kind, options] = page.toasts[0];
-  assert.match(words, /Layout reset for Build: list 280 px, inspector 388 px/);
+  assert.match(words, /Layout reset for Studio: list 280 px, inspector 388 px/);
   assert.equal(kind, "info");
   assert.equal(options.action.label, "Undo");
   options.action.run();

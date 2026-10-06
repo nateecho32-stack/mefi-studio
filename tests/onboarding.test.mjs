@@ -841,13 +841,13 @@ test("in Vibe mode the Create and Review walks use Vibe's box and Tasks panel, n
   assert.equal(env.document.activeElement, env.get("vibe-input"));
   assert.equal(env.query("#vibe-input").classList.contains("walkthrough-focus"), true);
   assert.equal(env.query("#workspace-input").classList.contains("walkthrough-focus"), false);
-  assert.match(env.el("coach-copy").textContent, /Vibe's box .*Build it/);
+  assert.match(env.el("coach-copy").textContent, /Social's box .*Build it/);
   env.el("coach-next").click(); // Monitor
   env.el("coach-next").click(); // Review
   assert.deepEqual(panels, [["tasks", { fold: "done" }]]);
   assert.equal(env.get("workspace-review").clicks, 0);
   assert.equal(env.query("#vibe-panel").classList.contains("walkthrough-focus"), true);
-  assert.match(env.el("coach-copy").textContent, /Tasks in Vibe/);
+  assert.match(env.el("coach-copy").textContent, /Tasks in Social/);
   // The suggested first task lands in the box the user actually sees.
   env.get("workspace-project-name").textContent = "My project";
   env.guide.open();

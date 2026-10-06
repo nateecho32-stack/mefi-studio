@@ -10415,7 +10415,7 @@ html[data-ui-mode="vibe"] .settings-nav :is(button, a) { border-radius: 12px; }
    The greeting says which mode it is; the box is the words with one row of controls under them (Add files, the permission mode, then Talk
    it over and Build it with its key), the keys' line under the box; each card that waits on you is its session, with the question in a box
    of its own and the first two answers; every column says when it is empty. */
-#vibe-layer[data-today="on"] .today .vibe-kicker::after { content: " · Vibe"; }
+#vibe-layer[data-today="on"] .today .vibe-kicker::after { content: " · Social"; }
 /* The question in plain ink, as the prototype's (the front door's gradient lettering stays the front door's own, in v1). */
 #vibe-layer[data-today="on"] .today .vibe-hero h1 { background: none; -webkit-background-clip: border-box; background-clip: border-box; color: var(--t-ink); }
 #vibe-layer[data-today="on"] .today .vibe-compose { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 8px; row-gap: 6px; padding: 14px 16px 12px; }
@@ -13679,17 +13679,17 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
      go the same way, and each opens a compact panel beside the front door
      (renderer/vibe-panels.js) instead of a Build sheet. The Build view
      (everything above and below) is one switch away. -->
-<section id="vibe-layer" class="vibe" aria-label="Vibe" hidden tabindex="-1">
+<section id="vibe-layer" class="vibe" aria-label="Social" hidden tabindex="-1">
   <div class="vibe-sky" aria-hidden="true"><i class="vibe-aurora one"></i><i class="vibe-aurora two"></i><i class="vibe-aurora three"></i></div>
   <header class="vibe-top">
     <div class="vibe-top-left">
       <button id="vibe-project" class="vibe-project" type="button" title="Switch project" aria-controls="workspace-sidebar-panel"><span class="vibe-project-mark" aria-hidden="true">M+</span><span class="vibe-project-text"><small>Project</small><b id="vibe-project-name">Choose a project</b></span><svg class="glyph vibe-chev" aria-hidden="true"><use href="#g-chev"/></svg></button>
       <button id="vibe-new-app" class="vibe-icon" type="button" data-vibe-panel="newapp" title="Start a new app from a prompt" aria-label="Start a new app"><svg class="glyph" aria-hidden="true"><use href="#g-add"/></svg></button>
     </div>
-    <div class="mode-switch" role="radiogroup" aria-label="Studio mode" data-mode="vibe">
+    <div class="mode-switch" role="radiogroup" aria-label="Mode" data-mode="vibe">
       <i class="mode-thumb" aria-hidden="true"></i>
-      <button type="button" role="radio" data-ui-mode="vibe" aria-checked="true" title="Vibe: the calm front door"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Vibe</span></button>
-      <button type="button" role="radio" data-ui-mode="build" aria-checked="false" title="Build: the full studio"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Build</span></button>
+      <button type="button" role="radio" data-ui-mode="vibe" aria-checked="true" title="Social: friends, and a light eye on your agents"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Social</span></button>
+      <button type="button" role="radio" data-ui-mode="build" aria-checked="false" title="Studio: in-depth building"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Studio</span></button>
     </div>
     <div class="vibe-top-actions">
       <button id="vibe-update" class="vibe-pulse vibe-update" type="button" data-tone="ask" title="An update is ready" hidden><svg class="glyph" aria-hidden="true"><use href="#g-update"/></svg><span id="vibe-update-text">Update ready</span></button>
@@ -13779,7 +13779,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
        beside the front door (renderer/vibe-panels.js). Full view opens the
        Build page for the same thing inside Vibe's rail. -->
   <aside id="vibe-panel" class="vibe-chat vibe-panel" aria-labelledby="vibe-panel-title" hidden>
-    <header class="vibe-chat-head"><div class="vibe-panel-heading"><button id="vibe-panel-back" class="vibe-icon vibe-panel-back" type="button" aria-label="Back" title="Back (Esc)" hidden><svg class="glyph" aria-hidden="true"><use href="#g-back"/></svg></button><div><small id="vibe-panel-kicker">Vibe</small><h2 id="vibe-panel-title">Tasks</h2></div></div><button id="vibe-panel-close" class="vibe-icon" type="button" aria-label="Close the panel" title="Close (Esc)"><svg class="glyph" aria-hidden="true"><use href="#g-close"/></svg></button></header>
+    <header class="vibe-chat-head"><div class="vibe-panel-heading"><button id="vibe-panel-back" class="vibe-icon vibe-panel-back" type="button" aria-label="Back" title="Back (Esc)" hidden><svg class="glyph" aria-hidden="true"><use href="#g-back"/></svg></button><div><small id="vibe-panel-kicker">Social</small><h2 id="vibe-panel-title">Tasks</h2></div></div><button id="vibe-panel-close" class="vibe-icon" type="button" aria-label="Close the panel" title="Close (Esc)"><svg class="glyph" aria-hidden="true"><use href="#g-close"/></svg></button></header>
     <div id="vibe-panel-body" class="vibe-panel-body"></div>
     <footer class="vibe-ask-foot vibe-panel-foot"><span id="vibe-panel-note" class="vibe-ask-note" role="status" aria-live="polite"></span><button id="vibe-panel-full" class="vibe-ask-link" type="button">Full view <span aria-hidden="true">↗</span></button></footer>
   </aside>
@@ -13789,8 +13789,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
      and the rest, so leaving the front door never lands in the Build view; the
      spark at the top goes back to Vibe and only the switch at the foot leaves
      the mode. Hidden in Build, and on the Vibe page itself, where the dock is. -->
-<nav id="vibe-rail" class="vibe-rail" aria-label="Vibe" hidden>
-  <button id="vibe-rail-home" class="vibe-rail-home" type="button" data-nav="vibe" title="Back to Vibe (H)"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Vibe</span></button>
+<nav id="vibe-rail" class="vibe-rail" aria-label="Social" hidden>
+  <button id="vibe-rail-home" class="vibe-rail-home" type="button" data-nav="vibe" title="Back to Social (H)"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Social</span></button>
   <div class="vibe-rail-items">
     <button type="button" data-nav="command" data-vibe-section="agents" title="Watch the live node tree (D)"><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span>Watch</span><span class="count warn" data-badge="questions" hidden></span></button>
     <button type="button" data-nav="tasks" data-vibe-section="work" title="Your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span>Tasks</span><span class="count" data-badge="tasks" hidden></span></button>
@@ -13802,7 +13802,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   </div>
   <div class="vibe-rail-foot">
     <button type="button" data-nav="studio" title="Settings (Ctrl ,)"><svg class="glyph" aria-hidden="true"><use href="#g-sliders"/></svg><span>Settings</span></button>
-    <button id="vibe-rail-build" type="button" data-ui-mode="build" title="Switch to Build: the full studio"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Build</span></button>
+    <button id="vibe-rail-build" type="button" data-ui-mode="build" title="Switch to Studio: in-depth building"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Studio</span></button>
   </div>
 </nav>
 <!-- Today and the Inbox (layout v2; renderer/today.js registers both routes only then). Vibe's Home draws the same board
@@ -13858,18 +13858,18 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
 <div id="vibe-notes" class="vibe-notes" hidden>
   <div class="vibe-notes-card" role="dialog" aria-modal="true" aria-labelledby="vibe-notes-title" aria-describedby="vibe-notes-lede">
     <header class="vibe-notes-head"><span class="vibe-notes-tag"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg>What's new</span><button id="vibe-notes-close" class="vibe-icon" type="button" aria-label="Close what's new" title="Close (Esc)"><svg class="glyph" aria-hidden="true"><use href="#g-close"/></svg></button></header>
-    <h2 id="vibe-notes-title">Two ways to work: Vibe and Build</h2>
-    <p id="vibe-notes-lede" class="vibe-notes-lede">Studio now opens in <b>Vibe</b>, a calmer front door. Everything you already use lives in <b>Build</b>, one click away.</p>
+    <h2 id="vibe-notes-title">Two ways to work: Social and Studio</h2>
+    <p id="vibe-notes-lede" class="vibe-notes-lede">Mefi Studio opens in <b>Social</b>: friends, and a light eye on your agents. In-depth building lives in <b>Studio</b>, one click away.</p>
     <div class="vibe-notes-modes">
-      <figure class="vibe-notes-mode is-vibe"><div class="vibe-mini" aria-hidden="true"><i class="mini-orb"></i><i class="mini-box"></i><i class="mini-lane"></i><i class="mini-lane"></i><i class="mini-lane"></i><i class="mini-dock"></i></div><figcaption><b>Vibe</b><span>Say what you want, watch it build, answer what needs you.</span></figcaption></figure>
-      <figure class="vibe-notes-mode is-build"><div class="build-mini" aria-hidden="true"><i class="mini-rail"></i><i class="mini-head"></i><i class="mini-panel"></i><i class="mini-side"></i></div><figcaption><b>Build</b><span>The full studio: Command, boards, models and every setting.</span></figcaption></figure>
+      <figure class="vibe-notes-mode is-vibe"><div class="vibe-mini" aria-hidden="true"><i class="mini-orb"></i><i class="mini-box"></i><i class="mini-lane"></i><i class="mini-lane"></i><i class="mini-lane"></i><i class="mini-dock"></i></div><figcaption><b>Social</b><span>Say what you want, watch it build, answer what needs you.</span></figcaption></figure>
+      <figure class="vibe-notes-mode is-build"><div class="build-mini" aria-hidden="true"><i class="mini-rail"></i><i class="mini-head"></i><i class="mini-panel"></i><i class="mini-side"></i></div><figcaption><b>Studio</b><span>In-depth building: Command, boards, models and every setting.</span></figcaption></figure>
     </div>
     <ul class="vibe-notes-list">
-      <li>Switch any time with the <b>Vibe / Build</b> toggle at the top, or from the menu and Search.</li>
+      <li>Switch any time with the <b>Social / Studio</b> switch at the top, or from the menu and Search.</li>
       <li>One box: <b>Talk it over</b> with Mefi, or <b>Build it</b> as a task.</li>
       <li>Building now, Needs you and Freshly done share one screen.</li>
     </ul>
-    <footer class="vibe-notes-foot"><button id="vibe-notes-changelog" class="vibe-notes-link" type="button">Full changelog<svg class="glyph" aria-hidden="true"><use href="#g-external"/></svg></button><button id="vibe-notes-build" class="vibe-btn quiet" type="button">Keep Build</button><button id="vibe-notes-ok" class="vibe-btn primary" type="button">Try Vibe</button></footer>
+    <footer class="vibe-notes-foot"><button id="vibe-notes-changelog" class="vibe-notes-link" type="button">Full changelog<svg class="glyph" aria-hidden="true"><use href="#g-external"/></svg></button><button id="vibe-notes-build" class="vibe-btn quiet" type="button">Keep Studio</button><button id="vibe-notes-ok" class="vibe-btn primary" type="button">Try Social</button></footer>
   </div>
 </div>
 <!-- What's new (renderer/whats-new.js): opens from the toast after an update, from Settings › Updates or from Search; never by itself at launch. -->
@@ -14130,7 +14130,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
             <label class="switch" id="settings-companion-motion" title="Your companion floats and blinks beside the conversation. Calm and Off keep it still."><input id="workspace-motion" type="checkbox" checked><span class="track"></span><span>Let your companion move</span></label>
             <label class="switch" title="Blur what sits behind every sheet, menu and Home panel. Off gives them a plain, darker backdrop."><input type="checkbox" id="pref-blur" checked><span class="track"></span><span>Blur behind panels</span></label>
             <label class="switch" id="idle-home-switch" title="On: every launch lands on Home. Off: Studio reopens the last tab page you used. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span id="idle-home-label">Open Home on launch</span></label>
-            <label class="switch" id="settings-start-vibe-switch" title="On: every launch starts in Vibe, even if you closed Studio in Build. Off: Studio keeps the mode you closed it in."><input type="checkbox" id="settings-start-vibe" checked><span class="track"></span><span>Always start in Vibe</span></label>
+            <label class="switch" id="settings-start-vibe-switch" title="On: every launch starts in Social, even if you closed the app in Studio. Off: each launch keeps the mode you closed in."><input type="checkbox" id="settings-start-vibe" checked><span class="track"></span><span>Always start in Social</span></label>
             <label class="switch" id="settings-key-tips-switch" title="Small pop-ups beside buttons and tabs that show the key that does the same thing. Click one to fade it away."><input type="checkbox" id="settings-key-tips" checked><span class="track"></span><span>Show key tips</span></label>
             <label class="switch" id="settings-composer-picker-switch" title="Typing @ in Home's message box offers this project's files, # its tasks and / its skills, and the box shows what the message points at. Off leaves @, # and / as plain typing, and a /skill in a message is not expanded."><input type="checkbox" id="settings-composer-picker" checked><span class="track"></span><span>Suggest files, tasks and skills while I type</span></label>
             <label class="switch" title="On: after five minutes without input, Studio switches to Command view. Off: it stays on the page you left open."><input type="checkbox" id="idle-command-idle"><span class="track"></span><span>Show Command view after 5 quiet minutes</span></label>
@@ -14149,8 +14149,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
           <p class="muted" id="open-at-login-hint" hidden>Studio opens in the tray when you sign in, on the project you had open, and agents follow When Studio opens. A PC you leave working keeps working after an update restart.</p>
           <!-- The Vibe / Build choice, switched in place (vibe.js keeps you on Settings). -->
           <div class="settings-mode-row" id="settings-mode">
-            <span class="settings-mode-text"><b>Studio mode</b><span id="settings-mode-hint">Vibe is the calm front door. Build is the full studio.</span></span>
-            <div class="mode-switch" role="radiogroup" aria-label="Studio mode" data-mode="vibe" data-mode-stay><i class="mode-thumb" aria-hidden="true"></i><button type="button" role="radio" data-ui-mode="vibe" aria-checked="true" title="Vibe: the calm front door"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Vibe</span></button><button type="button" role="radio" data-ui-mode="build" aria-checked="false" title="Build: the full studio"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Build</span></button></div>
+            <span class="settings-mode-text"><b>Mode</b><span id="settings-mode-hint">Social is for friends and a light eye on your agents. Studio is for in-depth building.</span></span>
+            <div class="mode-switch" role="radiogroup" aria-label="Mode" data-mode="vibe" data-mode-stay><i class="mode-thumb" aria-hidden="true"></i><button type="button" role="radio" data-ui-mode="vibe" aria-checked="true" title="Social: friends, and a light eye on your agents"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Social</span></button><button type="button" role="radio" data-ui-mode="build" aria-checked="false" title="Studio: in-depth building"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Studio</span></button></div>
           </div>
         </details>
 <details class="settings-optional settings-card" id="settings-notifications" data-desktop-only><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-bell"/></svg></span><span class="settings-summary-text"><b>Notifications</b><span>Windows alerts, taskbar flash and count, quiet hours</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
@@ -23116,10 +23116,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     {
       // In Vibe mode Home is Vibe (go() lands there), so Search, Shortcuts
       // and the rail name it that instead of listing Home and Vibe twice.
-      id: "workspace", get label() { return vibeMode() ? "Vibe" : "Home"; }, get short() { return vibeMode() ? "Vibe" : "Home"; }, kind: "view", layer: null,
+      id: "workspace", get label() { return vibeMode() ? "Social" : "Home"; }, get short() { return vibeMode() ? "Social" : "Home"; }, kind: "view", layer: null,
       commandPrimary: true, section: "home",
       group: "surfaces", key: "H", get glyph() { return vibeMode() ? "g-spark" : "g-home"; }, badge: null,
-      get desc() { return vibeMode() ? "The calm front door: talk or build from one box, see what's building and what needs you" : "Project overview, conversation and work queue"; },
+      get desc() { return vibeMode() ? "Friends, and a light eye on your agents: talk or build from one box, see what's building and what needs you" : "Project overview, conversation and work queue"; },
       searchTerms: "home vibe project folder conversation chat give task review done",
       showIn: showIn({ dock: true, palette: true, help: true, footer: true }),
       open: () => window.MefiWorkspace?.enter?.(), close: () => window.MefiWorkspace?.exit?.(),
@@ -23893,7 +23893,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     root?.classList.toggle("from-command", Boolean(state.returnTo));
     const back = root?.querySelector(".sheet-back");
     if (back) {
-      const label = state.returnTo === "workspace" ? "Home" : state.returnTo === "vibe" ? "Vibe" : "Command";
+      const label = state.returnTo === "workspace" ? "Home" : state.returnTo === "vibe" ? "Social" : "Command";
       back.title = `Back to ${label} (Esc)`;
       const copy = back.querySelector(".label");
       if (copy) copy.textContent = label;
@@ -26015,7 +26015,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       const wait = booting() ? 1500 : busy ? 5000 : KEY_HINT_QUIET_MS - (now - quietSince);
       if (wait > 0 && tries++ < 120) { setTimeout(attempt, wait); return; }
       try { localStorage.setItem(KEY_HINT_STORE, "1"); } catch { /* the tip may show again next launch */ }
-      const home = vibeMode() ? "Vibe" : "workspace";
+      const home = vibeMode() ? "Social" : "workspace";
       window.MefiToast(`Tip: outside a text field, single keys move around Studio. H ${home}, D Command view, T task board. Press ? for the full list.`, "info", {
         duration: 12000,
         action: { label: "Show keys", run: () => go("help") },
@@ -42540,7 +42540,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (!["auto", "verify"].includes(value)) return false;
     state.buildModeSaving = true;
     try {
-      const result = await autopilotPrefs({ autoBuild: value === "auto" }, "Build mode");
+      const result = await autopilotPrefs({ autoBuild: value === "auto" }, "Build approval");
       if (!result && window.mefiStudio?.assistantStatus) {
         // A lost acknowledgement may still have saved the mode. Read it back;
         // a newer status push takes precedence over this recovery snapshot.
@@ -42549,7 +42549,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         try {
           const fresh = await Promise.race([
             window.mefiStudio.assistantStatus(),
-            new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error("Build mode status is unavailable.")), 12000); }),
+            new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error("Build approval status is unavailable.")), 12000); }),
           ]);
           const status = fresh?.status ?? fresh;
           if (fresh?.ok !== false && typeof status?.autoBuild === "boolean" && state.assistant === previous) {
@@ -62171,7 +62171,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     { id: "exec", title: "Files & Exec", about: "How work runs: builders, parallel workers, worktrees, tools, skills and approvals.", words: /\b(worker|workers|builder|builders|parallel|worktree|worktrees|executor|tool|tools|mcp|skill|skills|desk|delegat\w*|pipeline|pipelines|verify|approval|approve|build|queue|autopilot|backlog|permission|elevated|swarm|cluster)\b/i },
     { id: "web", title: "Web & Community", about: "Everything that reaches out: the web, updates, Discord and listening rooms.", words: /\b(web|link|links|discord|community|update|updates|release|github|browser|radio|stream|together|youtube|spotify)\b/i },
     { id: "storage", title: "Storage", about: "What Studio keeps: projects, data, backups, pruning and cleanup.", words: /\b(project|projects|data|storage|backup|prune|pruning|compact\w*|cache|folder|clean\w*|archive)\b/i },
-    { id: "ui", title: "UI & Surfaces", about: "How Studio looks and sounds: themes, nodes, motion, glass, Vibe and what opens on launch.", words: /\b(appearance|theme|themes|colou?rs?|node|nodes|motion|blur|glass|layout|sound|audio|music|vibe|launch|home|font|scale|companion|name|camera|ambient)\b/i },
+    { id: "ui", title: "UI & Surfaces", about: "How Studio looks and sounds: themes, nodes, motion, glass, Social and what opens on launch.", words: /\b(appearance|theme|themes|colou?rs?|node|nodes|motion|blur|glass|layout|sound|audio|music|vibe|social|studio|mode|launch|home|font|scale|companion|name|camera|ambient)\b/i },
     { id: "dev", title: "Dev & Meta", about: "Diagnostics, logs, performance and everything else.", words: /./ },
   ];
   // The page a setting lives on files it first; only a page that mixes
@@ -62825,7 +62825,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       h("div", "sm-itabs", null, h("span", "", { text: "Plan" }), h("span", "sm-on", null, "Changes ", h("em", "", { text: "3" })), h("span", "", { text: "Checks" })),
       h("div", "sm-ipad", null, files, h("div", "sm-card", null, h("div", "sm-card-title", null, "Acceptance checks", h("small", "", { text: "1 of 5" })), h("p", "", { text: "Renders when there are no notes" }))));
     const main = h("div", "sm-main", null,
-      h("div", "sm-top", null, h("span", "sm-seg", null, h("span", "", { text: "Vibe" }), h("span", "sm-on", { text: "Build" })), h("span", "", null, "Notes app / ", h("b", "", { text: SAMPLE.title }))),
+      h("div", "sm-top", null, h("span", "sm-seg", null, h("span", "", { text: "Social" }), h("span", "sm-on", { text: "Studio" })), h("span", "", null, "Notes app / ", h("b", "", { text: SAMPLE.title }))),
       h("div", "sm-tabs", null,
         h("span", "sm-tab sm-pin", null, h("span", "", { text: "Today" })),
         h("span", "sm-tab sm-on", null, h("span", "sm-dot sm-need"), h("span", "", { text: SAMPLE.title })),
@@ -62998,7 +62998,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   function modeName() {
     let mode = null;
     try { mode = window.MefiShell?.mode?.() ?? window.MefiVibe?.mode?.() ?? null; } catch { /* no mode to name */ }
-    return mode === "vibe" ? "Vibe" : mode === "build" ? "Build" : "";
+    return mode === "vibe" ? "Social" : mode === "build" ? "Studio" : "";
   }
   // The panels' sizes as the window has them, read-only: MefiShell knows them when it is there.
   function panelSizes() {
@@ -77747,7 +77747,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       action: "Walk me to the task box", route: "task", secondary: "Explore a plan", secondaryRoute: "plans",
       station: "This is the task box for the selected project. Describe the result and how you will check it, or open Use a task outline for a guided shape. I do not send anything from here.",
       // Vibe (the default) hides Build's workspace, so the walk uses its box.
-      vibeStation: "This is Vibe's box for the selected project. Describe the result and how you will check it, then choose Build it to save it as a task, or Talk it over to discuss it first. I do not send anything from here.",
+      vibeStation: "This is Social's box for the selected project. Describe the result and how you will check it, then choose Build it to save it as a task, or Talk it over to discuss it first. I do not send anything from here.",
       note: "These buttons open the editor and the plan sheet. They do not submit a task or start a planning request.",
       target: "#workspace-input", vibeTarget: "#vibe-input", done: "Task box found",
     },
@@ -77766,7 +77766,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       points: ["Open Review in Your work to read the result, evidence and next actions. Inspect the project changes and run any remaining acceptance checks.", "If work needs attention, read its reason first. Correct the connection, brief or prerequisite, then use its retry control when you are ready.", "Keep failed work available for diagnosis. Task history can recover an earlier brief; it does not roll back your project files."],
       action: "Walk me to Review", route: "review",
       station: "This is Review in Your work. Open a finished task to read the result and evidence, then run any remaining acceptance checks. Tasks that need attention keep their reason and retry controls here.",
-      vibeStation: "This is Tasks in Vibe. Open a task under Done to read the result and evidence, then run any remaining acceptance checks. Work that needs attention waits under Needs you with its reason.",
+      vibeStation: "This is Tasks in Social. Open a task under Done to read the result and evidence, then run any remaining acceptance checks. Work that needs attention waits under Needs you with its reason.",
       note: "You can reopen this guide from Start here at the foot of the menu, or from Settings or Shortcuts. Completing the guide does not mark any task done.",
       target: "#workspace-review", vibeTarget: "#vibe-panel", done: "Review found",
     },
@@ -81130,7 +81130,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         }
         ideaBranches.append(branch);
       }
-      if (!ideaBranches.children.length) ideaBranches.append(element("p", "pm-ideas-empty", words.length ? "No ideas or tasks match this search." : "Your first idea starts a branch. Ask Mefi in Vibe to modify, experiment, fix or improve something; saved ideas and tasks will grow here."));
+      if (!ideaBranches.children.length) ideaBranches.append(element("p", "pm-ideas-empty", words.length ? "No ideas or tasks match this search." : "Your first idea starts a branch. Ask Mefi in Social to modify, experiment, fix or improve something; saved ideas and tasks will grow here."));
       if (focusKey) [...ideaBranches.querySelectorAll("[data-idea-action]")].find(item => item.dataset.ideaAction === focusKey)?.focus({ preventScroll: true });
     }
 
@@ -86988,16 +86988,16 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const permissions = el("div"); body.append(permissions); window.MefiAutonomy?.mount(permissions, { full: true });
     const data = state.data;
     const mode = el("div", "vibe-set");
-    mode.append(el("span", "vibe-set-label", "Studio mode"));
+    mode.append(el("span", "vibe-set-label", "Mode"));
     const modes = el("div", "mode-switch vibe-set-mode");
-    modes.setAttribute("role", "radiogroup"); modes.setAttribute("aria-label", "Studio mode"); modes.dataset.mode = "vibe";
+    modes.setAttribute("role", "radiogroup"); modes.setAttribute("aria-label", "Mode"); modes.dataset.mode = "vibe";
     modes.append(el("i", "mode-thumb"));
-    for (const [key, label] of [["vibe", "Vibe"], ["build", "Build"]]) {
+    for (const [key, label] of [["vibe", "Social"], ["build", "Studio"]]) {
       const button = el("button", "", label);
       button.type = "button"; button.setAttribute("role", "radio"); button.dataset.uiMode = key; button.setAttribute("aria-checked", String(key === "vibe"));
       modes.append(button);
     }
-    mode.append(modes, el("span", "vibe-set-hint", "Build is the full studio: every board, model and setting."));
+    mode.append(modes, el("span", "vibe-set-hint", "Studio is for in-depth building: every board, model and setting."));
     body.append(mode);
 
     const themes = window.MefiMusic?.themes?.() ?? [];
@@ -87030,7 +87030,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     box.type = "checkbox"; box.setAttribute("role", "switch");
     box.checked = read("mefiStudio.commandHome") !== "0";
     box.addEventListener("change", () => setLaunch(box.checked));
-    launch.append(el("span", "vibe-set-label", "Open Vibe on launch"), box, el("span", "vibe-set-hint", "Off reopens the last page you used instead."));
+    launch.append(el("span", "vibe-set-label", "Open Social on launch"), box, el("span", "vibe-set-hint", "Off reopens the last page you used instead."));
     body.append(launch);
 
     // Vibe even after a day in Build (vibe.js LAUNCH_KEY), mirrored by
@@ -87043,9 +87043,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       const own = document.getElementById("settings-start-vibe");
       if (own && own.type === "checkbox") { own.checked = startBox.checked; own.dispatchEvent?.(new Event("change", { bubbles: true })); }
       else { try { localStorage.setItem("mefiStudio.uiMode.launch", startBox.checked ? "vibe" : "last"); } catch { /* private store */ } }
-      note(startBox.checked ? "Studio starts in Vibe every launch." : "Studio keeps the mode you close it in.", "good");
+      note(startBox.checked ? "Every launch starts in Social." : "Each launch keeps the mode you closed in.", "good");
     });
-    start.append(el("span", "vibe-set-label", "Always start in Vibe"), startBox, el("span", "vibe-set-hint", "Off keeps Build if you closed Studio in Build."));
+    start.append(el("span", "vibe-set-label", "Always start in Social"), startBox, el("span", "vibe-set-hint", "Off reopens Studio if that is where you left off."));
     body.append(start);
 
     // Key tips (renderer/key-tips.js): the small pop-ups naming each button's key.
@@ -87098,7 +87098,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       void api()?.prefsSet?.({ commandHome: on });
       try { localStorage.setItem("mefiStudio.commandHome", on ? "1" : "0"); } catch { /* private store */ }
     }
-    note(on ? "Studio opens on Vibe." : "Studio reopens the last page you used.", "good");
+    note(on ? "Every launch opens Social." : "Each launch reopens the last page you used.", "good");
   }
 
   // ---- a new app ----------------------------------------------------------------------
@@ -87509,7 +87509,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     // a fresh one, so the panel waits, then catches up. Your own moves paint.
     if (state.signature && $("body")?.querySelector?.(".danger-armed")) { clearTimeout(armedPaint); armedPaint = setTimeout(render, 3200); return; }
     state.signature = signature;
-    $("kicker").textContent = state.data.projectName || "Vibe";
+    $("kicker").textContent = state.data.projectName || "Social";
     $("title").textContent = view?.view === "task" ? "Task" : view?.view === "idea" ? "Idea" : view?.view === "family" ? "Plan" : TITLES[state.kind];
     $("back").hidden = !view;
     const body = $("body");
@@ -87631,13 +87631,13 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   function paintSettings(current) {
     const vibe = current === "vibe";
     const label = document.getElementById("idle-home-label");
-    if (label) label.textContent = vibe ? "Open Vibe on launch" : "Open Home on launch";
+    if (label) label.textContent = vibe ? "Open Social on launch" : "Open Home on launch";
     const hint = document.getElementById("idle-home-hint");
     if (hint) hint.textContent = vibe ? "When disabled, Studio reopens the last page you used after the project chooser." : "When disabled, Studio reopens the last tab page you used after the project chooser.";
     const toggle = document.getElementById("idle-home-switch");
-    if (toggle) toggle.title = vibe ? "On: every launch lands on Vibe. Off: Studio reopens the last page you used. The project chooser comes first either way." : "On: every launch lands on Home. Off: Studio reopens the last tab page you used. The project chooser comes first either way.";
+    if (toggle) toggle.title = vibe ? "On: every launch lands on Social. Off: Studio reopens the last page you used. The project chooser comes first either way." : "On: every launch lands on Home. Off: Studio reopens the last tab page you used. The project chooser comes first either way.";
     const modeHint = document.getElementById("settings-mode-hint");
-    if (modeHint) modeHint.textContent = vibe ? "Vibe: the calm front door, where every page opens in Vibe's rail." : "Build: the full studio, with Home, the menu and every tool.";
+    if (modeHint) modeHint.textContent = vibe ? "Social: friends, and a light eye on your agents, and every page opens in Social's rail." : "Studio: in-depth building, with Home, the menu and every tool.";
   }
   // Switching remembers the choice and lands on that mode's home. Vibe keeps
   // the rail shell on (nav.js asks mode()); Build gets the saved shell back.
@@ -88178,7 +88178,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
           pick.addEventListener("click", async () => {
             pick.disabled = true;
             try {
-              const result = offer.target?.id ? await api().assistantWorkOn({ ...offer.target, projectId: projectId(), start: true }) : await api().assistantMessage(`Work on "${offer.title}"`, projectId(), { view: "Vibe", companion: companion() });
+              const result = offer.target?.id ? await api().assistantWorkOn({ ...offer.target, projectId: projectId(), start: true }) : await api().assistantMessage(`Work on "${offer.title}"`, projectId(), { view: "Social", companion: companion() });
               if (result?.ok === false) throw new Error(result.error);
               feedback(window.MefiAutonomy?.outcome?.(result, "Requested. Watch the task for its next step.") || result?.dispatch?.message || "Requested."); await refresh();
             } catch (error) { item.append(el("p", "vibe-inline-error", error.message)); }
@@ -88589,7 +88589,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       const linkedIdeas = ideaIds.length > 1 ? { ideaIds } : ideaIds.length ? { ideaId: ideaIds[0] } : {};
       const result = intent === "build"
         ? await (sizing ? api().vibeBuild({ title, prompt, projectId: id, ...linkedIdeas, ...(run ? { requestId: run.id } : {}) }) : api().tasksCreate({ title, prompt, projectId: id }))
-        : await api().assistantMessage(value, id, { view: "Vibe", companion: companion(), mode: "talk" });
+        : await api().assistantMessage(value, id, { view: "Social", companion: companion(), mode: "talk" });
       if (!result || result.ok === false) throw new Error(result?.error || "That didn't go through.");
       if (run) { flow().end(run.id, { ok: true, steps: Number(result.steps) || 0 }); settleSizing(run, { familyId: Number(result.steps) > 0 ? result.task?.id ?? null : null }); }
       if (projectId() !== id || draftEpoch !== epoch) return;
@@ -89235,14 +89235,14 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // H, ? and Ctrl K stay nav.js's. The dock and the box wear them as keycaps.
   const togglePanel = (kind) => (window.MefiVibePanels?.current?.() === kind ? window.MefiVibePanels.close() : openPanel(kind));
   const VIBE_KEYS = [
-    ["/", "vibe-key-box", "Vibe: type in the box", () => { const input = $("input"); input.focus({ preventScroll: true }); try { input.setSelectionRange(input.value.length, input.value.length); } catch { /* not a text field */ } }],
-    ["N", "vibe-key-needs", "Vibe: what needs you", () => { const waiting = needs(); if (waiting.length) openNeed(waiting[0]); else feedback("Nothing needs you right now.", "good"); }],
-    ["C", "vibe-key-chat", "Vibe: the conversation", () => (state.chatOpen ? closeChat() : openChat())],
-    ["T", "vibe-key-tasks", "Vibe: your tasks", () => togglePanel("tasks")],
-    ["P", "vibe-key-plans", "Vibe: plans", () => togglePanel("plans")],
-    ["I", "vibe-key-ideas", "Vibe: ideas", () => togglePanel("ideas")],
-    ["M", "vibe-key-team", "Vibe: the team (who works on which model)", () => togglePanel("team")],
-    ["S", "vibe-key-settings", "Vibe: settings", () => togglePanel("settings")],
+    ["/", "vibe-key-box", "Social: type in the box", () => { const input = $("input"); input.focus({ preventScroll: true }); try { input.setSelectionRange(input.value.length, input.value.length); } catch { /* not a text field */ } }],
+    ["N", "vibe-key-needs", "Social: what needs you", () => { const waiting = needs(); if (waiting.length) openNeed(waiting[0]); else feedback("Nothing needs you right now.", "good"); }],
+    ["C", "vibe-key-chat", "Social: the conversation", () => (state.chatOpen ? closeChat() : openChat())],
+    ["T", "vibe-key-tasks", "Social: your tasks", () => togglePanel("tasks")],
+    ["P", "vibe-key-plans", "Social: plans", () => togglePanel("plans")],
+    ["I", "vibe-key-ideas", "Social: ideas", () => togglePanel("ideas")],
+    ["M", "vibe-key-team", "Social: the team (who works on which model)", () => togglePanel("team")],
+    ["S", "vibe-key-settings", "Social: settings", () => togglePanel("settings")],
   ];
   function vibeKeysOpen() {
     const nav = window.MefiNav?.state;
@@ -89325,32 +89325,32 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 
   // The palette and help list both modes; the rail's switch reads the same record.
   window.MefiNav?.register?.({
-    id: "vibe", label: "Vibe", short: "Vibe", kind: "view", layer: null, section: "home", group: "surfaces",
-    glyph: "g-spark", badge: null, desc: "The calm front door: talk or build from one box, see what's building and what needs you",
-    searchTerms: "vibe mode simple calm easy home start switch",
+    id: "vibe", label: "Social", short: "Social", kind: "view", layer: null, section: "home", group: "surfaces",
+    glyph: "g-spark", badge: null, desc: "Friends, and a light eye on your agents: talk or build from one box, see what's building and what needs you",
+    searchTerms: "social vibe mode friends simple calm easy home start switch",
     showIn: { tabs: false, tools: false, dock: false, palette: true, help: true, footer: false },
     // In Vibe mode Home is Vibe, and Search lists it once, as Home's record.
     hidden: () => mode() === "vibe",
     open: () => enter(), close: () => exit(), isOpen: () => active(),
   });
   window.MefiNav?.register?.({
-    id: "build-mode", label: "Switch to Build", short: "Build", kind: "action", layer: null, section: "home", group: "surfaces",
-    glyph: "g-wrench", badge: null, desc: "The full studio: Home, Command, boards, models and every setting",
-    searchTerms: "build mode full classic advanced studio switch",
+    id: "build-mode", label: "Switch to Studio", short: "Studio", kind: "action", layer: null, section: "home", group: "surfaces",
+    glyph: "g-wrench", badge: null, desc: "In-depth building: Home, Command, boards, models and every setting",
+    searchTerms: "studio build mode in depth full advanced switch",
     showIn: { tabs: false, tools: false, dock: false, palette: true, help: true, footer: false },
     hidden: () => mode() === "build",
     run: () => setMode("build"),
   });
   window.MefiNav?.register?.({
     id: "whats-new", label: "What's new", short: "What's new", kind: "action", layer: null, section: "help", group: "system",
-    glyph: "g-spark", badge: null, desc: "The Vibe and Build modes, and a link to the full changelog",
+    glyph: "g-spark", badge: null, desc: "The Social and Studio modes, and a link to the full changelog",
     searchTerms: "whats new changelog release notes patch notes update",
     showIn: { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false },
     run: () => showNotes({ force: true }),
   });
   // Vibe's keys on the shortcut sheet, under Home: display-only rows
   // (nav.js's handleKey skips the "command" group; the listener above acts).
-  for (const [key, id, label] of [...VIBE_KEYS, ["Enter", "vibe-key-talk", "Vibe: talk it over (in the box)"], ["Ctrl Enter", "vibe-key-build", "Vibe: build it (in the box)"]]) {
+  for (const [key, id, label] of [...VIBE_KEYS, ["Enter", "vibe-key-talk", "Social: talk it over (in the box)"], ["Ctrl Enter", "vibe-key-build", "Social: build it (in the box)"]]) {
     window.MefiNav?.register?.({
       id, label, short: label, desc: label, kind: "action", layer: null, section: "home", group: "command", key, glyph: null, badge: null,
       showIn: { tabs: false, tools: false, dock: false, palette: false, help: true, footer: false },
@@ -89384,7 +89384,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   const startSwitch = document.getElementById("settings-start-vibe");
   if (startSwitch) {
     startSwitch.checked = startsInVibe();
-    startSwitch.addEventListener("change", () => { setStartsInVibe(startSwitch.checked); window.MefiToast?.(startSwitch.checked ? "Studio starts in Vibe every launch." : "Studio keeps the mode you close it in.", "info"); });
+    startSwitch.addEventListener("change", () => { setStartsInVibe(startSwitch.checked); window.MefiToast?.(startSwitch.checked ? "Every launch starts in Social." : "Each launch keeps the mode you closed in.", "info"); });
   }
 
   window.addEventListener("mefi:nav", paintRail);
@@ -91046,7 +91046,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     });
     nav.register({
       id: "home-chat", label: "Open the conversation", short: "Conversation", kind: "action", layer: null, section: "home", group: "surfaces", key: null, glyph: "g-chat", badge: null,
-      paletteGroup: "Actions", desc: "Build's Home as it was: the conversation with Mefi, the queue, Activity and the app preview",
+      paletteGroup: "Actions", desc: "Studio's Home as it was: the conversation with Mefi, the queue, Activity and the app preview",
       searchTerms: "conversation chat talk message assistant mefi classic home queue activity preview",
       showIn: showIn({ palette: true, help: true }), hidden: () => !building(), keyMatch: () => false,
       run: () => { openChat(); },
@@ -92160,10 +92160,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     document.documentElement.dataset.railSessions = "";
     if (!sections.querySelector(".builder-mode-switch")) {
       const group = el("div", "mode-switch builder-mode-switch");
-      group.setAttribute("role", "radiogroup"); group.setAttribute("aria-label", "Studio mode");
+      group.setAttribute("role", "radiogroup"); group.setAttribute("aria-label", "Mode");
       const current = window.MefiVibe?.mode?.() || "build";
       group.dataset.mode = current;
-      for (const [mode, label, icon, title] of [["vibe", "Vibe", "g-home", "Vibe: your home, friends and Mefi"], ["build", "Build", "g-wrench", "Build: tasks, agents and every tool"]]) {
+      for (const [mode, label, icon, title] of [["vibe", "Social", "g-home", "Social: your home, friends and Mefi"], ["build", "Studio", "g-wrench", "Studio: in-depth building with tasks, agents and every tool"]]) {
         const choice = button(label, "", null, { icon, title });
         choice.setAttribute("role", "radio"); choice.dataset.uiMode = mode;
         choice.setAttribute("aria-checked", String(mode === current));
@@ -93110,7 +93110,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       state.asks.set(task.id, [...(state.asks.get(task.id) || []), ask].slice(-12));
       schedule();
       const title = task.title || window.MefiTasks?.shortTitle?.(task) || "this task";
-      const result = await api().assistantMessage(`About the task "${title}" (${task.id}): ${words}`, data.projectId, { view: "Build · task", companion: companion(), taskId: task.id }, ...(images.length ? [images] : []));
+      const result = await api().assistantMessage(`About the task "${title}" (${task.id}): ${words}`, data.projectId, { view: "Studio · task", companion: companion(), taskId: task.id }, ...(images.length ? [images] : []));
       ask.pending = false;
       if (result?.ok === false) { ask.error = plain(result.error, "No reply came back. Try again."); throw new Error(ask.error); }
       const reply = (result?.state?.messages || []).filter((message) => message.role === "assistant" && stampOf(message.at) >= ask.at - 1000 && message.kind !== "notice").at(-1);
@@ -93348,7 +93348,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // panes, so the other layout comes back with a reload.
   window.MefiNav?.register?.({
     id: "home-layout", label: "Switch Home layout: sessions or classic", short: "Home layout", kind: "action", layer: null, section: "settings", group: "system",
-    glyph: "g-frame", badge: null, desc: "Build's Home as a task list with panes (sessions), or the earlier single page (classic)",
+    glyph: "g-frame", badge: null, desc: "Studio's Home as a task list with panes (sessions), or the earlier single page (classic)",
     searchTerms: ["home layout sessions classic claude codex panes windows sidebar"],
     showIn: { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false },
     run: () => setLayout(sessions() ? "classic" : "sessions"),
@@ -95215,7 +95215,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (vibe === "vibe" || vibe === "build") return vibe;
     return rootEl()?.dataset?.uiMode === "vibe" ? "vibe" : "build";
   };
-  const modeWords = (mode) => (mode === "vibe" ? "Vibe" : "Build");
+  const modeWords = (mode) => (mode === "vibe" ? "Social" : "Studio");
   const isColumn = (name) => name === "list" || name === "inspector";
 
   // ---- the regions: the DOM ---------------------------------------------------------------
@@ -95603,12 +95603,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     parts.listToggle.id = "shell-list-toggle";
     parts.listToggle.append(icon("panelL"));
     // The app's own mode switch look (vibe.css); the click and the keys are this module's.
-    parts.group = el("div", "mode-switch shell-mode", { role: "radiogroup", "aria-label": "Studio mode", "data-mode": "build" });
+    parts.group = el("div", "mode-switch shell-mode", { role: "radiogroup", "aria-label": "Mode", "data-mode": "build" });
     parts.group.append(el("i", "mode-thumb", { "aria-hidden": "true" }));
     for (const mode of MODES) {
       const choice = button("shell-mode-choice", null, (event) => { event?.stopPropagation?.(); event?.preventDefault?.(); setMode(mode); }, { role: "radio", "aria-checked": "false", "data-ui-mode": mode });
       choice.setAttribute("aria-label", modeWords(mode));
-      choice.setAttribute("title", mode === "vibe" ? "Vibe: a calm board that is easy to keep an eye on (Ctrl M)" : "Build: list, thread and inspector, in depth (Ctrl M)");
+      choice.setAttribute("title", mode === "vibe" ? "Social: friends, and a light eye on your agents (Ctrl M)" : "Studio: in-depth building with the list, thread and inspector (Ctrl M)");
       choice.append(icon(mode === "vibe" ? "spark" : "build"), text("span", "", modeWords(mode)));
       choice.addEventListener("keydown", (event) => modeKeys(event, mode));
       parts.group.append(choice);
@@ -96356,7 +96356,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }
     menu.parts.tabs.toggleButton.setAttribute("aria-checked", String(prefs.tabs.open));
     const cell = (other, name) => (state.prefs[other][name].open ? `${state.prefs[other][name].w} px` : "closed");
-    const grid = ["", "Build", "Vibe", "List", cell("build", "list"), cell("vibe", "list"), "Inspector", cell("build", "inspector"), cell("vibe", "inspector")];
+    const grid = ["", "Studio", "Social", "List", cell("build", "list"), cell("vibe", "list"), "Inspector", cell("build", "inspector"), cell("vibe", "inspector")];
     menu.table.replaceChildren(...grid.map((value, at) => text(at < 3 || at % 3 === 0 ? "span" : "b", at < 3 ? "shell-grid-head" : "", value)));
   }
   // Size and density is the SIZE page's; until it says how to open it, Configuration's UI & Surfaces is where the scale lives.
@@ -96521,7 +96521,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const n = nav();
     if (state.keyRows || !n?.register) return;
     state.keyRows = true;
-    for (const [key, id, label] of [["Ctrl M", "shell-key-mode", "Switch between Vibe and Build"], ["Ctrl B", "shell-key-list", "Show or hide the list"], ["[", "shell-key-inspector", "Show or hide the inspector"]]) {
+    for (const [key, id, label] of [["Ctrl M", "shell-key-mode", "Switch between Social and Studio"], ["Ctrl B", "shell-key-list", "Show or hide the list"], ["[", "shell-key-inspector", "Show or hide the inspector"]]) {
       try { n.register({ id, label, short: label, desc: label, kind: "action", layer: null, section: "home", group: "command", key, glyph: null, badge: null, showIn: { tabs: false, tools: false, dock: false, palette: false, help: true, footer: false }, hidden: () => !state.on }); } catch { /* the sheet is optional */ }
     }
   }
@@ -96535,9 +96535,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const base = { kind: "action", layer: null, section: "home", group: "layout", key: null, keyMatch: () => false, badge: null, showIn: { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false }, hidden: () => !state.on };
     const run = () => (state.live ?? readLive()).run;
     const rows = [
-      { ...base, id: "shell-do-mode", chord: "Ctrl M", paletteGroup: "Actions", paletteBrowse: 4, searchTerms: "mode vibe build switch calm in depth",
-        get label() { return currentMode() === "vibe" ? "Switch to Build" : "Switch to Vibe"; }, get glyph() { return currentMode() === "vibe" ? "g-wrench" : "g-spark"; },
-        desc: "Vibe is the calm board; Build is the list, the thread and the inspector", run: () => setMode(currentMode() === "vibe" ? "build" : "vibe") },
+      { ...base, id: "shell-do-mode", chord: "Ctrl M", paletteGroup: "Actions", paletteBrowse: 4, searchTerms: "mode social studio vibe build switch friends calm in depth",
+        get label() { return currentMode() === "vibe" ? "Switch to Studio" : "Switch to Social"; }, get glyph() { return currentMode() === "vibe" ? "g-wrench" : "g-spark"; },
+        desc: "Social is for friends and a light eye on your agents; Studio is for in-depth building", run: () => setMode(currentMode() === "vibe" ? "build" : "vibe") },
       { ...base, id: "shell-do-pause", paletteGroup: "Actions", paletteBrowse: 2, glyph: null, searchTerms: "pause resume hold stop new work agents start",
         get label() { const now = run(); return now === "paused" ? "Resume new work" : now === "off" ? "Start agents" : "Pause new work"; },
         desc: "Hold all new work; running jobs finish normally", hidden: () => !state.on || run() === null, run: () => togglePause() },
