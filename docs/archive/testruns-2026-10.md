@@ -6,6 +6,32 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-04 Rust stage 2: five more modules move into Rust
+
+Branch `rust/stage2-ports` in `C:\wt\rust2` (pushed as wip/rust-stage2-ports):
+the Skills page's files (55281f0), a message's pictures (cd8cc2c), attempt
+snapshots (0ff6869), settings + keys + projects (1435ae9), and the Git chip's
+host layer with git-link's describe and chip (c5a1e03), each behind a
+Rust-backed factory in scripts/rust-modules.cjs, each with its parity test
+(rust_parity_skills, rust_parity_images, rust_parity_snapshots: twin repos
+with a fixed clock give the same commit ids; rust_parity_settings: main.cjs's
+own settings code from its text against Rust on twin userData folders;
+rust_parity_git: describe on about 830 sets of facts and 28 host steps on
+two boxes with the fake gh). `mefi-core repo-batch` now answers a
+{ $mefi: "fn" } argument with null and lists its calls.
+
+Full `npm test` on c5a1e03: Node 6899 tests, 6885 pass, 14 skipped, 0 fail;
+Electron lane 75: 70 pass, 1 skipped, 4 fail: layout_contract_render and
+shell_render (viewport 1921x1081, as on clean main on this PC),
+evidence_capture ("UnknownVizError") and task_overview_render ("No fixture
+report"), both while another worktree's full run shared the Electron stage:
+each passes alone (1/1, 1/1). Python 248 OK; path lock ok; `npm run audit` 0
+findings; `npm run check` ok (271 targets). An earlier run on 1435ae9 had the
+same picture apart from attempt_review_host "a shot that is slow" (28/28
+alone). A first run was stopped and its children kept running into a second
+one: overlapping runs failed to start processes (0xC0000142) and wrote one
+log; neither is counted here. `cargo test --lib` 26 pass.
+
 ## 2026-10-04 The Studio Daily lands: DevDay branch merged with main, Since you were away
 
 Branch `land/devday` in `C:\wt\devday-land`: origin/wip/feat/devday-2026 (the

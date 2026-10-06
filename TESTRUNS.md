@@ -39,6 +39,34 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-06 The social side polished, and two Studios meeting through the relay end to end
+
+Branch `wip/social-polish` in `C:\wt\polish` (bea5ec9 an open room like a chat app, rooms as cards, Friends icons,
+plain words; 671b1b8 the two-Studio proof and The Lobby following who arrives), main merged (1de784f, clean;
+booklet.html regenerated and equal).
+
+The two-person flow, recorded (tests/friends_two_render.test.mjs, new): one Electron process plays two PCs, two real
+windows in the 0.5 layout with their own user data (separate session partitions), each bridge reaching its own copy
+of main.cjs's real Rooms hub block, and the real relay between them (relay/node/adapter.mjs: the Worker, the Hub
+object, SQLite, scripted Discord). Both meet in The Lobby and see each other online; PC one makes "Two PC test" from
+New room and reads its invite code from the room's menu; PC two joins with the code typed in lower case with a space;
+they chat both ways with Enter and see each other's face in the room; PC two closes Studio, PC one sends two more, PC
+two comes back and the two missed messages are filled in from PC one's copy (the relay keeps none); PC one starts
+Listen together and PC two hears the shared player; PC one shares a project from the Project hub and PC two plays it:
+the link opens in the browser, two minutes on PC one gets "Someone played your project: +5 credits" and its Lobby
+shows 5 credits, PC two's shows 2. 1/1, about 40 s.
+
+Polish checked in real windows (friends_render): an open room with five messages (a mention of this member, one of
+someone unnamed, and this member's own) at 1920x1080, 1100x720 and 600x560 at 150%: the room's name once, the chat
+taking most of the height, the composer on screen with Send inside it, Load earlier at the top of the log, mentions as
+names and "@someone"; every Friends place at 1920x1080, 1440x900, 1100x720 and 600x560 at 150% in Chrome, and every
+place plus an open room in a light palette, with no text under 12 px and nothing wider than the page.
+
+Run alone here on the merge: friends_render, companion_hub_render, friends_two_render and unified_studio_render 1/1
+each; rooms_ui 14/14, friends_front_ui 12/12, friends_mod_ui 4/4, friends_navigation 8/8, project_hub_ui 7/7, app_rail
+40/40, onboarding 43/43, tabs_strip 66/66, module_purity 63/63, booklet_build 5/5, hub_host 14/14, relay_connect 6/6.
+`npm run check` ok. Windows CI runs the full gate on the landing commit before the fast-forward.
+
 ## 2026-10-06 Skills everywhere, answer styles and Connectors land on main
 
 Branch `feat/skills-everywhere` in `C:\wt\skills` (fef2aef skills for the chat, the helper agents and the builders,
@@ -504,32 +532,6 @@ same way on clean main on this PC; command_render and planning_render pass;
 Python 248 OK (1 skipped); path lock ok. Captures at 1920x1080 in
 `C:\wt\gap\after-work\` with prototype-left side-by-sides in
 `C:\wt\gap\after-work\compare\`.
-## 2026-10-04 Rust stage 2: five more modules move into Rust
-
-Branch `rust/stage2-ports` in `C:\wt\rust2` (pushed as wip/rust-stage2-ports):
-the Skills page's files (55281f0), a message's pictures (cd8cc2c), attempt
-snapshots (0ff6869), settings + keys + projects (1435ae9), and the Git chip's
-host layer with git-link's describe and chip (c5a1e03), each behind a
-Rust-backed factory in scripts/rust-modules.cjs, each with its parity test
-(rust_parity_skills, rust_parity_images, rust_parity_snapshots: twin repos
-with a fixed clock give the same commit ids; rust_parity_settings: main.cjs's
-own settings code from its text against Rust on twin userData folders;
-rust_parity_git: describe on about 830 sets of facts and 28 host steps on
-two boxes with the fake gh). `mefi-core repo-batch` now answers a
-{ $mefi: "fn" } argument with null and lists its calls.
-
-Full `npm test` on c5a1e03: Node 6899 tests, 6885 pass, 14 skipped, 0 fail;
-Electron lane 75: 70 pass, 1 skipped, 4 fail: layout_contract_render and
-shell_render (viewport 1921x1081, as on clean main on this PC),
-evidence_capture ("UnknownVizError") and task_overview_render ("No fixture
-report"), both while another worktree's full run shared the Electron stage:
-each passes alone (1/1, 1/1). Python 248 OK; path lock ok; `npm run audit` 0
-findings; `npm run check` ok (271 targets). An earlier run on 1435ae9 had the
-same picture apart from attempt_review_host "a shot that is slow" (28/28
-alone). A first run was stopped and its children kept running into a second
-one: overlapping runs failed to start processes (0xC0000142) and wrote one
-log; neither is counted here. `cargo test --lib` 26 pass.
-
 ## Read Before Any Tests
 
 This is the test guide for the standalone Mefi's Studio AI+ repository. Run all commands from this repository root.
