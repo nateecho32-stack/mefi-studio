@@ -213,14 +213,14 @@ button.setup-welcome-opt:hover { border-color: color-mix(in srgb, var(--gold) 40
    colours (--look-* set from the theme), then rows for colour, text size,
    motion and the dragon. The card's own colours change with each pick. */
 .setup-welcome-looks { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
-.setup-welcome-look { display: grid; gap: 8px; align-content: start; min-width: 0; margin: 0; padding: 8px 8px 10px; border: 1px solid color-mix(in srgb, var(--ivory) 10%, transparent); border-radius: 14px; background: color-mix(in srgb, var(--bg) 40%, transparent); color: var(--ivory); text-align: left; cursor: pointer; box-shadow: none; transition: border-color var(--motion-fast, 140ms) var(--ease-out, ease-out), background var(--motion-fast, 140ms) var(--ease-out, ease-out), translate var(--motion-base, 200ms) var(--ease-spring, ease-out); }
+.setup-welcome-look { display: grid; grid-template-columns: minmax(0, 1fr); justify-content: stretch; justify-items: stretch; gap: 8px; align-content: start; min-width: 0; margin: 0; padding: 8px 8px 10px; border: 1px solid color-mix(in srgb, var(--ivory) 10%, transparent); border-radius: 14px; background: color-mix(in srgb, var(--bg) 40%, transparent); color: var(--ivory); text-align: left; cursor: pointer; box-shadow: none; transition: border-color var(--motion-fast, 140ms) var(--ease-out, ease-out), background var(--motion-fast, 140ms) var(--ease-out, ease-out), translate var(--motion-base, 200ms) var(--ease-spring, ease-out); }
 .setup-welcome-look:hover { border-color: color-mix(in srgb, var(--gold) 40%, transparent); background: var(--tint-gold-1); translate: 0 -2px; transform: none; }
 .setup-welcome-look.is-on { border-color: color-mix(in srgb, var(--gold) 70%, transparent); background: color-mix(in srgb, var(--gold) 7%, color-mix(in srgb, var(--bg) 45%, transparent)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--gold) 35%, transparent); }
 /* A look is a button, and buttons keep to one line: its words wrap here. */
 .setup-welcome-look-words { display: grid; gap: 2px; min-width: 0; padding: 0 4px; white-space: normal; overflow-wrap: anywhere; }
 .setup-welcome-look-words b { font-size: max(12px, calc(15px * var(--text-scale, 1))); font-weight: 650; }
 .setup-welcome-look-words small { color: var(--muted); font-size: max(12px, calc(12.5px * var(--text-scale, 1))); line-height: 1.35; }
-.setup-welcome-look-art { position: relative; display: block; aspect-ratio: 16 / 10; overflow: hidden; border: 1px solid color-mix(in srgb, var(--look-text, #fff) 14%, transparent); border-radius: 10px; background: var(--look-bg, #111); }
+.setup-welcome-look-art { position: relative; display: block; width: 100%; aspect-ratio: 16 / 10; overflow: hidden; border: 1px solid color-mix(in srgb, var(--look-text, #fff) 14%, transparent); border-radius: 10px; background: var(--look-bg, #111); }
 .setup-welcome-look-art > i { position: absolute; display: block; border-radius: 3px; }
 .setup-welcome-look-art > .rail { inset: 0 auto 0 0; width: 16%; border-radius: 0; background: var(--look-panel, #222); }
 .setup-welcome-look-art > .bar { top: 9%; left: 22%; width: 46%; height: 9%; background: color-mix(in srgb, var(--look-text, #fff) 82%, transparent); }
@@ -254,6 +254,7 @@ button.setup-welcome-opt:hover { border-color: color-mix(in srgb, var(--gold) 40
   .setup-welcome-foot { padding-bottom: 16px; }
   .setup-welcome-opt { flex-wrap: wrap; }
   .setup-welcome-look-row { grid-template-columns: minmax(0, 1fr); }
+  .setup-welcome-look-art { aspect-ratio: 16 / 7; }
   .setup-welcome-look-note { grid-column: 1; }
 }
 @media (prefers-reduced-motion: reduce) { .setup-welcome { animation: none; } }
