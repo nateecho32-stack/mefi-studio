@@ -405,6 +405,17 @@ const api = {
     ...(payload.clear === true ? { clear: true } : {}), ...(payload.unlock === true ? { unlock: true } : {}),
   } : {}),
   onRemoteEvent: (callback) => ipcRenderer.on("remote:event", (_event, status) => callback(status)),
+  // Settings › Other apps (main.cjs "Other apps", docs/studio-api.md): the
+  // switch that lets Claude Code, Codex and other apps on this PC reach Studio,
+  // a new key, the setup prompt and the Claude Code skill. The key itself
+  // never comes to the page; it stays in the key file.
+  studioApiStatus: () => ipcRenderer.invoke("studio-api:status"),
+  studioApiSet: (patch) => ipcRenderer.invoke("studio-api:set", patch && typeof patch === "object" && typeof patch.on === "boolean" ? { on: patch.on } : {}),
+  studioApiRekey: () => ipcRenderer.invoke("studio-api:rekey"),
+  studioApiPrompt: () => ipcRenderer.invoke("studio-api:prompt"),
+  studioApiSkill: (options) => ipcRenderer.invoke("studio-api:skill", { save: options?.save === true }),
+  onStudioApiEvent: (callback) => ipcRenderer.on("studio-api:event", (_event, status) => callback(status)),
+  onStudioApiNotice: (callback) => ipcRenderer.on("studio-api:notice", (_event, notice) => callback(notice)),
   // Friends › Your PCs (main.cjs "Multi-PC sync"): the open project against
   // its default branch on GitHub. Main picks the folder; the renderer can only
   // ask for a rebase onto GitHub's commits. onSyncEvent carries every answer,

@@ -128,7 +128,7 @@
       const row = node("p", `companion-message companion-message-${item.role}${item.kind === "notice" ? " companion-message-notice" : ""}`);
       // A long reply is cut, and says so.
       const text = String(item.text || "");
-      row.append(node("strong", "", item.role === "user" ? "You" : name), document.createTextNode(` ${text.length > 1200 ? `${text.slice(0, 1200).trimEnd()}…` : text}`));
+      row.append(node("strong", "", item.role === "user" ? (item.app ? `${item.app} (app)` : "You") : name), document.createTextNode(` ${text.length > 1200 ? `${text.slice(0, 1200).trimEnd()}…` : text}`));
       thread.append(row);
     }
     // What the last reply offered, one tap away; two or more can all be taken.

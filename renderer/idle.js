@@ -1958,7 +1958,7 @@
         String(message.text ?? ""),
         thought
           ? `${agoLabel(message.at) ?? ""} · thinking`
-          : `${agoLabel(message.at) ?? ""}${message.role !== "user" && message.via === "local" ? " · local" : ""}`,
+          : `${agoLabel(message.at) ?? ""}${message.role !== "user" && message.via === "local" ? " · local" : ""}${message.role === "user" && message.app ? ` · from ${message.app}` : ""}`,
         false,
       ];
     });

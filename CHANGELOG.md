@@ -7,6 +7,24 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Other apps: Claude Code, Codex and your scripts can talk to Studio.**
+  Settings › Other apps has a switch, off until you turn it on, that lets
+  apps on this PC reach Studio. They can see what the agents are doing and
+  what waits on you, message Mefi, hand Studio a task and leave you a note.
+  Claude Code and Codex connect with one command the card shows (an MCP server
+  with eight tools), Cursor, Claude Desktop and VS Code with a JSON block, and
+  **Save to Claude Code** adds a skill that tells Claude Code when to use
+  Studio. Scripts and Claude Code hooks use the same file as a command line
+  (`studio-link.mjs status`, `say`, `task`, `notify`). Only this PC can
+  connect, with a key kept in your user folder, and no web page can call it.
+  An app has the same narrower powers as a message from Discord: **every task
+  it files waits for your OK in every permission mode**, and approving,
+  answering and settings stay in Studio. Its messages show in Mefi's thread
+  under the app's name. **Copy setup prompt** (on the same card and on the
+  setup helper's first page) copies a prompt for Claude Code, Codex or another
+  AI helper that says where Studio is on this PC, what to read and what to
+  leave alone, so it can walk you through setup. GETTING_STARTED.md has a
+  version for before Studio runs. See [docs/studio-api.md](docs/studio-api.md).
 - **Friends › Events: the community runs its own events.** Every week a
   **Build Jam** opens on Monday with a theme (and shows next week's): enter
   one of your shared projects until Saturday, play the others and vote for up

@@ -7651,7 +7651,8 @@ button.fleet-tnode:focus-visible { outline: 2px solid var(--gold-bright); outlin
 
 /* Settings cards and small sheets for what the host tells you: Notifications
    (renderer/alerts.js), Report a problem and the crash prompt
-   (renderer/report.js) and What's new (renderer/whats-new.js). Theme tokens
+   (renderer/report.js), What's new (renderer/whats-new.js) and Other apps
+   (renderer/studio-api.js). Theme tokens
    only, nothing under 12px, no scroll gutters: the app hides scrollbars and
    draws its own indicator. */
 
@@ -7721,6 +7722,22 @@ button.fleet-tnode:focus-visible { outline: 2px solid var(--gold-bright); outlin
 .alerts-sample span { color: var(--muted); font-size: var(--fs-sm); line-height: 1.4; overflow-wrap: anywhere; }
 .alerts-sample .alerts-sample-from { color: var(--dim); font-size: var(--fs-sm); }
 .alerts-actions { align-items: center; flex-wrap: wrap; }
+
+/* ---- Other apps: Settings › Other apps ------------------------------------- */
+.apps-prompt-row { align-items: center; flex-wrap: wrap; }
+.apps-prompt { display: block; width: 100%; min-height: 220px; margin: 10px 0 0; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: var(--r-md); background: color-mix(in srgb, var(--surface-sunk) 70%, transparent); color: var(--ivory); font: var(--fs-sm)/1.5 var(--font-mono); resize: vertical; }
+.apps-prompt[hidden] { display: none; }
+.apps-connect { display: grid; gap: 10px; margin: 10px 0 12px; }
+.apps-connect[hidden] { display: none; }
+.apps-connect-row { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: var(--r-md); background: color-mix(in srgb, var(--surface-sunk) 50%, transparent); }
+.apps-connect-head { display: flex; align-items: flex-start; gap: var(--s3); }
+.apps-connect-words { display: grid; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.apps-connect-words b { color: var(--ivory); font-size: var(--fs-md); font-weight: 600; }
+.apps-connect-words small { color: var(--muted); font-size: var(--fs-sm); line-height: 1.45; overflow-wrap: anywhere; }
+.apps-connect-actions { display: flex; flex: none; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.apps-code { margin: 0; padding: 8px 10px; border-radius: var(--r-sm, 6px); background: color-mix(in srgb, var(--bg-deep) 55%, transparent); color: var(--ivory); font: var(--fs-sm)/1.5 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.apps-log { display: grid; gap: 2px; margin: 4px 0 0; padding: 0; list-style: none; color: var(--muted); font-size: var(--fs-sm); }
+.apps-log[hidden], #apps-log-head[hidden], #apps-key-row[hidden] { display: none; }
 
 /* The Agent Brain's surfaces (renderer/agent-brain.js): the Agent brain sheet,
    the project map hub on Home and the docked companion. Every colour comes
@@ -15277,6 +15294,33 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
           </div>
         </details>
 <details class="settings-optional settings-card" id="settings-integrations"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-plug"/></svg></span><span class="settings-summary-text"><b>Integrations</b><span>Optional: Ruins Runner and Love2D</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary><p class="muted">Requires a separate game project and its LÖVE runtime. This integration is optional for Studio.</p><div class="row studio-actions" id="studio-actions"><button data-action="launch">Launch Love2D studio</button><button data-action="smoke">Run smoke</button><button data-action="game">Launch Ruins Runner</button><button data-action="stop">Stop game</button></div><p class="muted" id="studio-hint"></p></details>
+<!-- Other apps (renderer/studio-api.js, main.cjs "Other apps", docs/studio-api.md): a setup prompt for Claude Code or Codex, and the switch that lets apps on this PC reach Studio. In the 0.5 layout it is a place of its own (booklet.js SETTINGS_PLACES). -->
+<details class="settings-optional settings-card" id="settings-apps" data-desktop-only><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-plug"/></svg></span><span class="settings-summary-text"><b>Other apps</b><span>Setup help from Claude Code or Codex, and the Studio API (MCP) for apps on this PC</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
+          <div class="settings-place-cols">
+          <div class="settings-place-col">
+          <div class="settings-place-group" id="apps-group-help">
+          <p class="settings-eyebrow">Get help setting up</p>
+          <p class="muted">Copy a prompt that tells Claude Code, Codex or another AI helper where Studio is on this PC and what to read, then paste it there. It holds no keys.</p>
+          <div class="row tight apps-prompt-row"><button type="button" id="apps-copy-prompt">Copy setup prompt</button><button type="button" class="ghost" id="apps-show-prompt" aria-expanded="false" aria-controls="apps-prompt">Show it</button></div>
+          <textarea id="apps-prompt" class="apps-prompt" rows="14" readonly hidden aria-label="Setup prompt"></textarea>
+          <p class="settings-status" id="apps-prompt-status" role="status"></p>
+          </div>
+          </div>
+          <div class="settings-place-col">
+          <div class="settings-place-group" id="apps-group-link">
+          <p class="settings-eyebrow">Let apps reach Studio</p>
+          <div class="settings-control-list">
+            <label class="settings-control"><span><b>Let apps on this PC talk to Studio</b><small>Claude Code, Codex, Cursor or your own scripts can see what Studio is doing, message Mefi and hand it tasks. Only this PC can connect, with a key kept in your user folder, and work they file waits for your OK.</small></span><input id="apps-on" type="checkbox" role="switch"></label>
+          </div>
+          <p class="settings-status" id="apps-state" role="status"></p>
+          <div id="apps-connect" class="apps-connect" hidden></div>
+          <div class="row tight" id="apps-key-row" hidden><button type="button" class="ghost mini" id="apps-rekey" title="Replace the key. Apps that read the key file pick up the new one on their next call.">New key</button><button type="button" class="ghost mini" id="apps-open-file" title="Show the key file in its folder">Show key file</button></div>
+          <p class="settings-eyebrow" id="apps-log-head" hidden>Recent calls</p>
+          <ol id="apps-log" class="apps-log" hidden></ol>
+          </div>
+          </div>
+          </div>
+        </details>
 <details class="settings-optional settings-card" id="settings-styler" data-desktop-only><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-plug"/></svg></span><span class="settings-summary-text"><b>Discord Server Styler</b><span>Bot and local dashboard</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary><p class="muted">Run the bot and its local dashboard from this desktop. Bot credentials stay in the separate Server Styler project's <code>.env</code>.</p><div class="row studio-actions" id="server-styler-actions"><button class="primary" data-styler-action="start">Start Server Styler</button><button data-styler-action="open">Open dashboard</button><button data-styler-action="folder">Open bot folder</button><button data-styler-action="stop">Stop</button></div><p class="eyes-status" id="server-styler-status" role="status">Checking Server Styler…</p></details>
 <details class="settings-optional settings-card" id="settings-log"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-legend"/></svg></span><span class="settings-summary-text"><b>Connection log</b><span>Provider, tool and probe activity</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary><pre class="log" id="studio-log" aria-label="Connection log">No activity yet.</pre></details>
 </section>
@@ -39234,7 +39278,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         String(message.text ?? ""),
         thought
           ? `${agoLabel(message.at) ?? ""} · thinking`
-          : `${agoLabel(message.at) ?? ""}${message.role !== "user" && message.via === "local" ? " · local" : ""}`,
+          : `${agoLabel(message.at) ?? ""}${message.role !== "user" && message.via === "local" ? " · local" : ""}${message.role === "user" && message.app ? ` · from ${message.app}` : ""}`,
         false,
       ];
     });
@@ -53301,7 +53345,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     when.className = "when";
     when.textContent = thought
       ? `${ago(message.at)} · thinking`
-      : `${ago(message.at)}${message.role !== "user" && message.via === "local" ? " · local" : ""}`;
+      : `${ago(message.at)}${message.role !== "user" && message.via === "local" ? " · local" : ""}${message.role === "user" && message.app ? ` · from ${message.app}` : ""}`;
     element.append(when);
     return element;
   }
@@ -76663,6 +76707,232 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   init();
 })();
 
+// Other apps: Settings › Other apps (docs/studio-api.md).
+//
+// Two things live on this card. "Get help setting up" copies a prompt for
+// Claude Code, Codex or another AI helper that says where Studio is on this PC
+// and what to read; it needs nothing switched on, and the setup helper offers
+// the same copy (MefiStudioApi.copyPrompt). "Let apps reach Studio" is the
+// Studio API's switch: on, Claude Code, Codex, Cursor or the owner's scripts
+// can see what Studio is doing, message Mefi and hand it tasks (which wait for
+// the owner's OK). The card shows the commands that connect each app, saves the
+// Claude Code skill, makes a new key and lists the last calls apps made. Notes
+// an app sends (POST /v1/notify) show as a toast. Everything it says comes
+// from the host (main.cjs "Other apps", scripts/studio-api.cjs); this file
+// draws it. The key never reaches the page: it stays in the key file.
+(function () {
+  "use strict";
+  const api = () => window.mefiStudio;
+  const $ = (id) => document.getElementById(id);
+  const state = { view: null, loading: false, again: false, prompt: "" };
+  const reason = (error) => String(error?.message ?? error ?? "").slice(0, 160);
+  const ROUTE_WORDS = { hello: "said hello", status: "looked at status", needs: "read what needs you", made: "read what was made", say: "messaged Mefi", task: "filed a task", notify: "left a note", pause: "paused agents", resume: "resumed agents", setup: "read setup info" };
+  const clock = (at) => { try { return new Date(at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); } catch { return ""; } };
+  const node = (tag, className, text) => { const el = document.createElement(tag); if (className) el.className = className; if (text !== undefined) el.textContent = text; return el; };
+  const say = (id, text, bad = false) => { const line = $(id); if (line) { line.textContent = text || ""; line.classList.toggle("bad-text", bad); } };
+
+  async function copy(text) {
+    try {
+      if (typeof api()?.shellCopy === "function") { await api().shellCopy(text); return true; }
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // ---- the setup prompt -------------------------------------------------------------------------
+  async function readPrompt() {
+    if (typeof api()?.studioApiPrompt !== "function") return null;
+    const result = await api().studioApiPrompt();
+    if (!result?.ok) return null;
+    state.prompt = String(result.prompt ?? "");
+    const box = $("apps-prompt");
+    if (box) box.value = state.prompt;
+    return state.prompt;
+  }
+
+  /** Copies the setup prompt; `status` names the line that reports it. Used by the setup helper too. */
+  async function copyPrompt(status = "apps-prompt-status") {
+    try {
+      const prompt = await readPrompt();
+      if (!prompt) { say(status, "The setup prompt is not available in this build.", true); return false; }
+      if (await copy(prompt)) { say(status, "Copied. Paste it into Claude Code, Codex or another AI helper."); return true; }
+      say(status, "It could not be copied. Show it, select it and copy it by hand.", true);
+      return false;
+    } catch (error) {
+      say(status, `The setup prompt could not be made: ${reason(error)}`, true);
+      return false;
+    }
+  }
+
+  async function togglePrompt() {
+    const box = $("apps-prompt");
+    const button = $("apps-show-prompt");
+    if (!box) return;
+    if (box.hidden) await readPrompt();
+    box.hidden = !box.hidden;
+    if (button) { button.setAttribute("aria-expanded", String(!box.hidden)); button.textContent = box.hidden ? "Show it" : "Hide it"; }
+  }
+
+  // ---- the switch, the commands and the log ----------------------------------------------------------
+  async function load() {
+    if (typeof api()?.studioApiStatus !== "function") return null;
+    if (state.loading) { state.again = true; return null; }
+    state.loading = true;
+    try {
+      const view = await api().studioApiStatus();
+      if (!view?.ok) { state.view = null; say("apps-state", view?.error === "unavailable" ? "Other apps are not available in this build." : view?.error || "", true); return null; }
+      state.view = view;
+      paint();
+      return view;
+    } catch (error) {
+      say("apps-state", `Other apps could not be read: ${reason(error)}`, true);
+      return null;
+    } finally {
+      state.loading = false;
+      if (state.again) { state.again = false; void load(); }
+    }
+  }
+
+  function connectRow(title, about, code, actions) {
+    const row = node("div", "apps-connect-row");
+    const head = node("div", "apps-connect-head");
+    const words = node("span", "apps-connect-words");
+    words.append(node("b", "", title), node("small", "", about));
+    const buttons = node("span", "apps-connect-actions");
+    for (const [label, run, primary] of actions) {
+      const button = node("button", primary ? "mini" : "ghost mini", label);
+      button.type = "button";
+      button.addEventListener("click", () => { void run(button); });
+      buttons.append(button);
+    }
+    head.append(words, buttons);
+    row.append(head);
+    if (code) { const pre = node("pre", "apps-code", code); pre.tabIndex = 0; row.append(pre); }
+    return row;
+  }
+
+  const copyButton = (text) => ["Copy", async (button) => {
+    const done = await copy(text);
+    button.textContent = done ? "Copied" : "Copy failed";
+    setTimeout(() => { button.textContent = "Copy"; }, 1600);
+  }, true];
+
+  async function saveSkill(button) {
+    if (typeof api()?.studioApiSkill !== "function") return;
+    button.disabled = true;
+    try {
+      const result = await api().studioApiSkill({ save: true });
+      say("apps-state", result?.ok ? result.message || "Saved." : result?.error || "The skill was not saved.", !result?.ok);
+    } catch (error) {
+      say("apps-state", `The skill was not saved: ${reason(error)}`, true);
+    } finally {
+      button.disabled = false;
+    }
+  }
+  async function copySkill(button) {
+    const result = await api()?.studioApiSkill?.({ save: false });
+    const done = result?.ok && await copy(result.text);
+    button.textContent = done ? "Copied" : "Copy failed";
+    setTimeout(() => { button.textContent = "Copy"; }, 1600);
+  }
+
+  function paint() {
+    const view = state.view;
+    if (!view) return;
+    const on = view.settings?.on === true;
+    const box = $("apps-on");
+    if (box) { box.checked = on; box.disabled = view.killed === true; }
+    const where = view.url ? view.url.replace(/^http:\/\//, "") : "";
+    say("apps-state",
+      view.killed ? "Closed for this session by MEFI_STUDIO_NO_APP_API."
+        : view.error && on ? `Studio could not open the door for apps: ${view.error}`
+        : on && view.running ? `On: apps on this PC reach Studio at ${where}. Connect them below.`
+        : on ? "Opening…"
+        : "Off: no app can reach Studio.",
+      Boolean(view.error && on));
+    const connect = $("apps-connect");
+    if (connect) {
+      connect.hidden = !(on && view.running);
+      connect.replaceChildren();
+      const commands = view.connect;
+      if (commands && on && view.running) {
+        connect.append(
+          connectRow("Claude Code", "Run once in a terminal. New Claude Code sessions get Studio's tools.", commands.claudeCode, [copyButton(commands.claudeCode)]),
+          connectRow("Codex", "Run once in a terminal. New Codex sessions get Studio's tools.", commands.codex, [copyButton(commands.codex)]),
+          connectRow("Cursor, Claude Desktop, VS Code and other MCP apps", "Add this to the app's MCP servers.", commands.json, [copyButton(commands.json)]),
+          connectRow("Claude Code skill", "Tells Claude Code when to use Studio and how, even without the tools.", "", [["Save to Claude Code", saveSkill, true], ["Copy", copySkill]]),
+          connectRow("Scripts and the command line", "Add status, needs, made, say \"…\", task \"…\" or notify \"…\". --help lists them.", `${commands.cli?.bash ?? ""} status`, [copyButton(`${commands.cli?.bash ?? ""} status`)]),
+        );
+        if (commands.risky) connect.append(node("p", "muted", "Studio's folder has a character some terminals read as code. If a command fails, use the JSON instead."));
+      }
+    }
+    const keys = $("apps-key-row");
+    if (keys) keys.hidden = !(on && view.running);
+    const log = $("apps-log");
+    const head = $("apps-log-head");
+    const rows = Array.isArray(view.log) ? view.log : [];
+    if (log) {
+      log.replaceChildren(...rows.slice(0, 12).map((row) => node("li", row.ok ? "" : "bad-text", `${clock(row.at)} · ${row.app} ${ROUTE_WORDS[row.route] ?? row.route}${row.ok ? "" : " (refused)"}`)));
+      log.hidden = !rows.length;
+    }
+    if (head) head.hidden = !rows.length;
+  }
+
+  async function change(on) {
+    if (typeof api()?.studioApiSet !== "function") return null;
+    say("apps-state", on ? "Opening…" : "Closing…");
+    try {
+      const result = await api().studioApiSet({ on });
+      if (result?.ok === false) { say("apps-state", result.error || "That did not change.", true); await load(); return null; }
+      state.view = result;
+      paint();
+      return result;
+    } catch (error) {
+      say("apps-state", `That did not change: ${reason(error)}`, true);
+      await load();
+      return null;
+    }
+  }
+
+  async function rekey() {
+    if (typeof api()?.studioApiRekey !== "function") return;
+    const result = await api().studioApiRekey();
+    if (result?.ok === false) { say("apps-state", result.error || "No new key.", true); return; }
+    state.view = result;
+    paint();
+    say("apps-state", result.message || "New key saved.");
+  }
+
+  // A note an app sent: a toast, named after the app.
+  function notice(payload) {
+    const app = String(payload?.app ?? "An app").slice(0, 40);
+    const title = String(payload?.title ?? "").trim();
+    const text = String(payload?.text ?? "").trim();
+    if (!text) return;
+    window.MefiToast?.(`${app}${title ? ` · ${title}` : ""}: ${text}`, payload?.level === "warn" ? "warn" : "info");
+  }
+
+  function init() {
+    const card = $("settings-apps");
+    if (typeof api()?.studioApiStatus !== "function") { if (card) card.hidden = true; return; }
+    $("apps-copy-prompt")?.addEventListener("click", () => { void copyPrompt(); });
+    $("apps-show-prompt")?.addEventListener("click", () => { void togglePrompt(); });
+    $("apps-on")?.addEventListener("change", (event) => { void change(event.target.checked === true); });
+    $("apps-rekey")?.addEventListener("click", () => { void rekey(); });
+    $("apps-open-file")?.addEventListener("click", () => { if (state.view?.keyFile) void api().shellReveal?.(state.view.keyFile); });
+    // Read when the card is opened, not at launch.
+    card?.addEventListener("toggle", () => { if (card.open) void load(); });
+    if (card?.open) void load();
+    api().onStudioApiEvent?.((status) => { if (!status?.ok) return; state.view = status; paint(); });
+    api().onStudioApiNotice?.((payload) => { try { notice(payload); } catch { /* a note that cannot show is not an error */ } });
+  }
+
+  window.MefiStudioApi = { load, change, copyPrompt, readPrompt, rekey, notice, state };
+  init();
+})();
+
 // Friends › Playground: friends' companions out in your rooms, playdates with
 // them (or with Pip, the practice buddy that never leaves this PC), and what
 // your own companion may tell them. The rules, the cards and the scenes all
@@ -83598,7 +83868,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       const row = node("p", `companion-message companion-message-${item.role}${item.kind === "notice" ? " companion-message-notice" : ""}`);
       // A long reply is cut, and says so.
       const text = String(item.text || "");
-      row.append(node("strong", "", item.role === "user" ? "You" : name), document.createTextNode(` ${text.length > 1200 ? `${text.slice(0, 1200).trimEnd()}…` : text}`));
+      row.append(node("strong", "", item.role === "user" ? (item.app ? `${item.app} (app)` : "You") : name), document.createTextNode(` ${text.length > 1200 ? `${text.slice(0, 1200).trimEnd()}…` : text}`));
       thread.append(row);
     }
     // What the last reply offered, one tap away; two or more can all be taken.
@@ -89763,6 +90033,15 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         ["full", "Everything", "Every section, in order. Change anything later."],
       ], state.path, (value) => { state.path = value; paintSteps(); }, "Setup path"));
       body.append(paths);
+      // Help from an AI helper the owner already uses: a prompt that says
+      // where Studio is on this PC and what to read (renderer/studio-api.js).
+      if (typeof window.MefiStudioApi?.copyPrompt === "function") {
+        const helper = card("Want a hand?", "Copy a prompt for Claude Code, Codex or another AI helper. It tells them where Studio is on this PC and what to read, so they can walk you through setup. It holds no keys.");
+        const copy = button("Copy setup prompt", () => void window.MefiStudioApi.copyPrompt("setup-helper-status"));
+        copy.id = "setup-helper-copy-prompt";
+        helper.append(copy);
+        body.append(helper);
+      }
       if (returning) {
         const news = card("New in this version");
         const list = node("ul", "setup-helper-list");
@@ -93185,7 +93464,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     for (const message of list) {
       const item = el("li", `vibe-msg is-${message.role}${message.kind === "notice" ? " is-notice" : ""}`);
       item.dataset.key = message.id || `${message.role}:${message.at ?? ""}:${String(message.text ?? "").slice(0, 40)}`;
-      item.append(el("span", "vibe-msg-who", message.role === "user" ? person() || "You" : companion()), el("p", "vibe-msg-text", message.text));
+      // A message another app on this PC sent (Settings › Other apps) carries that app's name.
+      item.append(el("span", "vibe-msg-who", message.role === "user" ? (message.app ? `${message.app} (app)` : person() || "You") : companion()), el("p", "vibe-msg-text", message.text));
       // The skills and tools a reply used (renderer/chat-tools.js).
       const used = window.MefiChatTools?.used?.(message);
       if (used) item.append(used);
@@ -106496,6 +106776,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     { id: "audio", label: "Sound and music", glyph: "g-audio", about: "Sound effects, and the music and video the Map reacts to" },
     { id: "updates", label: "Updates", glyph: "g-update", group: "Updates and help", about: "Update, and go back to the build before if the new one misbehaves", cards: ["settings-updates"] },
     { id: "problem", label: "Report a problem", glyph: "g-flag", group: "Updates and help", cards: ["settings-report"] },
+    { id: "apps", label: "Other apps", glyph: "g-plug", group: "Updates and help", about: "Get setup help from Claude Code or Codex, and let apps on this PC talk to Studio", cards: ["settings-apps"] },
     { id: "system", label: "System", glyph: "g-gauge", group: "Advanced", about: "Diagnostics, and the optional projects Studio can start for you" },
   ]);
   let settingsFiled = false;

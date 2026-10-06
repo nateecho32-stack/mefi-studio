@@ -350,6 +350,15 @@
         ["full", "Everything", "Every section, in order. Change anything later."],
       ], state.path, (value) => { state.path = value; paintSteps(); }, "Setup path"));
       body.append(paths);
+      // Help from an AI helper the owner already uses: a prompt that says
+      // where Studio is on this PC and what to read (renderer/studio-api.js).
+      if (typeof window.MefiStudioApi?.copyPrompt === "function") {
+        const helper = card("Want a hand?", "Copy a prompt for Claude Code, Codex or another AI helper. It tells them where Studio is on this PC and what to read, so they can walk you through setup. It holds no keys.");
+        const copy = button("Copy setup prompt", () => void window.MefiStudioApi.copyPrompt("setup-helper-status"));
+        copy.id = "setup-helper-copy-prompt";
+        helper.append(copy);
+        body.append(helper);
+      }
       if (returning) {
         const news = card("New in this version");
         const list = node("ul", "setup-helper-list");

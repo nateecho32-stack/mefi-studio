@@ -195,16 +195,17 @@ function represented(board = {}, candidate = {}, { jobs = [], briefs = true, tit
 // Who asked for a card and how it arrived, which ranking reads: `by: "owner"`
 // is the owner's own work (chat, the composer, Work on it, a split answer, an
 // approved plan, an idea promoted by hand) whatever its `source` says. `via`
-// says where the ask came from: "remote" is Discord (docs/remote.md), whose
-// work waits for the owner's OK in every mode (autonomy.remoteWork). Keeping
-// only kind and by dropped it, so Discord work ran unapproved under Auto.
+// says where the ask came from: "remote" is Discord (docs/remote.md) and "app"
+// another app on this PC (docs/studio-api.md), whose work waits for the
+// owner's OK in every mode (autonomy.remoteWork). Keeping only kind and by
+// dropped it, so Discord work ran unapproved under Auto.
 function originOf(value) {
   if (!value || typeof value !== "object") return null;
   const kind = text(value.kind).slice(0, 24);
   const by = text(value.by).slice(0, 24);
-  // Remote work must retain its approval boundary through every admission
-  // and promotion. No other transport or caller-supplied fields are copied.
-  return kind && by ? { kind, by, ...(value.via === "remote" ? { via: "remote" } : {}) } : null;
+  // Remote and app work must retain their approval boundary through every
+  // admission and promotion. No other transport or caller-supplied fields are copied.
+  return kind && by ? { kind, by, ...(value.via === "remote" || value.via === "app" ? { via: value.via } : {}) } : null;
 }
 
 // ---- inbox requests ------------------------------------------------------------------

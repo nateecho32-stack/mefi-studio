@@ -653,6 +653,7 @@
     { id: "audio", label: "Sound and music", glyph: "g-audio", about: "Sound effects, and the music and video the Map reacts to" },
     { id: "updates", label: "Updates", glyph: "g-update", group: "Updates and help", about: "Update, and go back to the build before if the new one misbehaves", cards: ["settings-updates"] },
     { id: "problem", label: "Report a problem", glyph: "g-flag", group: "Updates and help", cards: ["settings-report"] },
+    { id: "apps", label: "Other apps", glyph: "g-plug", group: "Updates and help", about: "Get setup help from Claude Code or Codex, and let apps on this PC talk to Studio", cards: ["settings-apps"] },
     { id: "system", label: "System", glyph: "g-gauge", group: "Advanced", about: "Diagnostics, and the optional projects Studio can start for you" },
   ]);
   let settingsFiled = false;

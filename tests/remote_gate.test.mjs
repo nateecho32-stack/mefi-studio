@@ -51,16 +51,27 @@ test("work filed from Discord waits for the owner's OK in every mode, and so do 
   assert.equal(autonomy.needsApproval({ id: "o1", origin: { kind: "chat", by: "owner" } }, { level: "auto" }), false, "the owner's own chat work is unchanged");
 });
 
-test("every chat path narrows a Discord message and stamps what it files", () => {
+test("every chat path narrows a Discord message (or another app's) and stamps what it files", () => {
   assert.match(main, /if \(options\?\.remote === true\) user\.remote = true;/, "assistantMessage marks a message from Discord");
-  const gates = main.match(/if \(user\?\.remote && remoteRules\) checked = remoteRules\.gateActions\(checked\);/g) ?? [];
+  assert.match(main, /if \(typeof options\?\.app === "string" && options\.app\.trim\(\)\) \{ user\.remote = true; user\.from = "app"; user\.app = options\.app\.trim\(\)\.slice\(0, 40\); \}/, "and one from another app on this PC, by name");
+  const gates = main.match(/if \(user\?\.remote && remoteRules\) checked = remoteRules\.gateActions\(checked, \{ from: user\.from \}\);/g) ?? [];
   assert.equal(gates.length, 2, "the model's turn and the keyless control both gate");
-  assert.equal((main.match(/assistantChatAction\(action, \{ focused, remote: user\?\.remote === true \}\)/g) ?? []).length, 1);
-  assert.equal((main.match(/assistantChatAction\(action, \{ remote: user\?\.remote === true \}\)/g) ?? []).length, 1);
+  assert.equal((main.match(/assistantChatAction\(action, \{ focused, remote: user\?\.remote === true, from: user\?\.from \?\? null \}\)/g) ?? []).length, 1);
+  assert.equal((main.match(/assistantChatAction\(action, \{ remote: user\?\.remote === true, from: user\?\.from \?\? null \}\)/g) ?? []).length, 1);
   assert.match(main, /if \(user\.remote && remoteRules && !remoteRules\.LOCAL_ACTIONS\.includes\(action\)\) \{/, "the keyless reply's own actions are narrowed too");
-  assert.equal((main.match(/\.\.\.\(user\.remote && remoteRules \? \{ origin: \{ \.\.\.remoteRules\.ORIGIN \} \} : \{\}\)/g) ?? []).length, 1, "keyless filing stamps the origin");
-  assert.equal((main.match(/\.\.\.\(remote && remoteRules \? \{ origin: \{ \.\.\.remoteRules\.ORIGIN \} \} : \{\}\)/g) ?? []).length, 1, "the model's create_task stamps the origin");
+  assert.equal((main.match(/\.\.\.\(user\.remote && remoteRules \? \{ origin: \{ \.\.\.remoteRules\.ORIGIN, \.\.\.\(user\.from === "app" \? \{ via: "app" \} : \{\}\) \} \} : \{\}\)/g) ?? []).length, 1, "keyless filing stamps the origin");
+  assert.equal((main.match(/\.\.\.\(remote && remoteRules \? \{ origin: \{ \.\.\.remoteRules\.ORIGIN, \.\.\.\(from === "app" \? \{ via: "app" \} : \{\}\) \} \} : \{\}\)/g) ?? []).length, 1, "the model's create_task stamps the origin");
   assert.deepEqual([...remote.LOCAL_ACTIONS], ["pause", "resume", "queue-request"]);
+});
+
+test("the gate's refusals name where the message came from", () => {
+  const checked = { run: [{ kind: "approve", taskId: "t1" }, { kind: "answer" }, { kind: "create_task", title: "x" }] };
+  const discord = remote.gateActions(checked);
+  assert.deepEqual(discord.run.map((action) => action.kind), ["create_task"]);
+  assert.deepEqual(discord.rejected.map((row) => row.reason), ["from Discord, approve with the Approve button and your PIN, or in Studio", "from Discord this waits for you in Studio"]);
+  const app = remote.gateActions(checked, { from: "app" });
+  assert.deepEqual(app.run.map((action) => action.kind), ["create_task"], "an app gets exactly Discord's narrower chat");
+  assert.deepEqual(app.rejected.map((row) => row.reason), ["from another app, the owner approves in Studio", "from another app this waits for the owner in Studio"]);
 });
 
 test("create_task from Discord reaches the board with the remote origin", async () => {
@@ -77,8 +88,10 @@ test("create_task from Discord reaches the board with the remote origin", async 
   vm.runInContext(`${main.slice(start, end)}\nthis.run = assistantChatAction;`, context);
   await context.run({ kind: "create_task", title: "Add dark mode", ownerText: "Add dark mode please" }, { remote: true });
   await context.run({ kind: "create_task", title: "Tidy menus", ownerText: "Tidy menus" });
+  await context.run({ kind: "create_task", title: "Add search", ownerText: "Add search" }, { remote: true, from: "app" });
   assert.deepEqual(created[0].origin, { kind: "chat", by: "owner", via: "remote" });
   assert.equal(created[1].origin, undefined, "from Studio the chat default stands");
+  assert.deepEqual(created[2].origin, { kind: "chat", by: "owner", via: "app" }, "from another app it says so");
 });
 
 test("the bridge sends the PIN one way and only the fields main reads", async () => {

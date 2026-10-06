@@ -81,6 +81,7 @@ export const BOOKLET_INPUTS = {
     "whats-new.js",
     "report.js",
     "alerts.js",
+    "studio-api.js",
     "companion-friends.js",
     "rooms.js",
     "project-hub.js",
