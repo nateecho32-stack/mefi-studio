@@ -277,8 +277,10 @@ After the merges with main 33c3c4e, d71e1e0, d55269f and f1934aa: friends_render
 settings_render, size_render, skills_render, team_render, today_render, unified_studio_render, workflow_render ok on
 8b5eacb; builder_render (failed on 8b5eacb, the skills chip), today_render, workflow_render ok on aae6947;
 command_render, media_browser_render, media_window_render ok on 8e4a501; Friends, rail and Today unit suites 89/89 and
-59/59. sessions_render ("the keyboard starts on the open project") fails on clean main f1934aa too; it passes on main
-d71e1e0 and b79b4bc, so it came with the skills merge d55269f, not this branch.
+59/59. sessions_render failed at "the keyboard starts on the open project" on 8b5eacb and on clean main f1934aa (both
+runs fast, ~45 s) and passed on main d71e1e0, b79b4bc and 0661f8c and on this branch's b632757 (154 s): the timing
+flake an older row here already saw at that step. performance_render, startup_render and renderer_recovery ok on
+b632757 (main's studio log on disk and Trace).
 
 ## 2026-10-05 Linux CI: two Rust-side tests stop assuming Windows
 
