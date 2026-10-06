@@ -50,7 +50,7 @@
     const nav = window.MefiNav?.state;
     if (nav?.sheet || nav?.transient) return true;
     if (window.MefiBoot?.isActive?.() || window.MefiSetupHelper?.isOpen?.() || window.MefiSetupHelper?.welcomeOpen?.() || window.MefiCompanionHub?.isOpen?.() || window.MefiSidebar?.isOpen?.()) return true;
-    for (const id of ["walkthrough-overlay", "walkthrough-coach", "vibe-notes", "whats-new-sheet", "boot-layer", "setup-welcome", "shell-menu", "today-inbox", "app-help-menu", "music-dropdown"]) {
+    for (const id of ["walkthrough-overlay", "walkthrough-coach", "vibe-notes", "whats-new-sheet", "boot-layer", "setup-welcome", "setup-look-tip", "shell-menu", "today-inbox", "app-help-menu", "music-dropdown"]) {
       const node = document.getElementById(id);
       if (node && !node.hidden && node.getClientRects?.().length) return true;
     }

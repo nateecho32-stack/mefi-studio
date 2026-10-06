@@ -4,7 +4,7 @@
 // at a desktop and a phone-narrow width, keeps Tab inside the dialog, saves
 // through the bridge and closes on Escape. No application main process or
 // live state is loaded; network, permissions and child processes are blocked.
-// It also walks the first run's three-step welcome at 1920x1080 and at 600x560 zoomed 150%.
+// It also walks the first run's four-step welcome at 1920x1080 and at 600x560 zoomed 150%.
 const { app, BrowserWindow, session } = require("electron");
 const assert = require("node:assert/strict");
 const fs = require("node:fs"), path = require("node:path");
@@ -151,7 +151,7 @@ app.whenReady().then(async () => {
   await key("Escape");
   await until("!window.MefiSetupHelper.isOpen()", "Escape closes the helper");
   report.closedByEscape = true;
-  // ---- the 0.5 layout's first run: the three-step welcome (renderer/setup-helper.js) ----------------------------------------
+  // ---- the 0.5 layout's first run: the four-step welcome (renderer/setup-helper.js) -----------------------------------------
   // A capture launch never opens it by itself, so it is opened the way startup opens it on a fresh profile. Each step is measured
   // at 1920x1080 and at 600x560 zoomed 150% (the card fits the window, no text under 12 px, every line at 4.5:1 in the theme)
   // and walked with real pointer presses and real typing; Build it adds the task through tasks:create.
@@ -169,14 +169,14 @@ app.whenReady().then(async () => {
   for (const [width, height, zoom] of [[1920, 1080, 1], [600, 560, 1.5]]) {
     window.setContentSize(width, height); contents.setZoomFactor(zoom); await sleep(400);
     await run("window.MefiSetupHelper.welcome();");
-    const titles = ["Pick the AI that builds for you", "Choose a project", "What should Studio make first?"];
+    const titles = ["Make it yours", "Pick the AI that builds for you", "Choose a project", "What should Studio make first?"];
     for (const [step, title] of titles.entries()) {
       await until(`document.getElementById('setup-welcome-title')?.textContent === ${JSON.stringify(title)} && document.querySelectorAll('#setup-welcome-body > *').length > 0`, `${title} at ${width}x${height}@${zoom}`);
       await sleep(300);
       const layout = await run(`const card = document.getElementById('setup-welcome-card').getBoundingClientRect(), body = document.getElementById('setup-welcome-body');
         const probe = await (async () => { ${textProbe("#setup-welcome")} })();
         return { step: ${step}, size: '${width}x${height}@${zoom}', fits: card.left >= -1 && card.top >= -1 && card.right <= innerWidth + 1 && card.bottom <= innerHeight + 1, pageOverflow: document.documentElement.scrollWidth > innerWidth + 1,
-          wide: [...body.querySelectorAll('*')].filter((node) => node.getBoundingClientRect().right > body.getBoundingClientRect().right + 1).slice(0, 4).map((node) => node.className + ' ' + Math.round(node.getBoundingClientRect().right)),
+          wide: [...body.querySelectorAll('*')].filter((node) => node.getBoundingClientRect().right > body.getBoundingClientRect().right + 1).slice(0, 4).map((node) => (node.className || node.tagName) + ' ' + JSON.stringify(String(node.textContent || '').slice(0, 24)) + ' ' + Math.round(node.getBoundingClientRect().right)),
           gutter: document.getElementById('setup-welcome-card').offsetWidth - document.getElementById('setup-welcome-card').clientWidth - 2,
           rows: [...body.querySelectorAll('.setup-welcome-opt b')].map((node) => node.textContent), bars: [...document.querySelectorAll('.setup-welcome-steps i.on')].length,
           next: document.getElementById('setup-welcome-next').textContent, back: !document.getElementById('setup-welcome-back').hidden, ...probe };`);
@@ -188,20 +188,21 @@ app.whenReady().then(async () => {
       assert.deepEqual(layout.small, [], `${title}: no text under 12 px at ${layout.size}`);
       assert.deepEqual(layout.low, [], `${title}: every line reads at 4.5:1 at ${layout.size}`);
       assert.ok(layout.count >= 4, `${title}: the words were measured`);
-      assert.equal(layout.bars, step + 1, `${title}: the progress shows step ${step + 1} of 3`);
+      assert.equal(layout.bars, step + 1, `${title}: the progress shows step ${step + 1} of ${titles.length}`);
       assert.equal(layout.back, step > 0, `${title}: Back from the second step on`);
-      if (step === 0) assert.deepEqual(layout.rows, ["Claude Code", "Codex", "OpenCode"], "the tools found on this PC");
-      if (step === 1) assert.deepEqual(layout.rows, ["Setup trial", "Start a new app…", "Open a folder…"], "the projects, then the ways to add one, a new app first");
+      if (step === 0) assert.ok(await run("return document.querySelectorAll('#setup-welcome-body .setup-welcome-look').length;") >= 2, "the looks to pick from");
+      if (step === 1) assert.deepEqual(layout.rows, ["Claude Code", "Codex", "OpenCode"], "the tools found on this PC");
+      if (step === 2) assert.deepEqual(layout.rows, ["Setup trial", "Start a new app…", "Open a folder…"], "the projects, then the ways to add one, a new app first");
       if (width === 1920) await capture(`first-run-${step + 1}-1920x1080.png`);
       else if (step === 0) await capture("first-run-1-600x560@1.5.png");
-      if (step < 2) await pointer("#setup-welcome-next");
+      if (step < titles.length - 1) await pointer("#setup-welcome-next");
     }
     if (width === 1920) {
       // Real typing, then Build it.
       await run("document.getElementById('setup-welcome-task').focus();");
       contents.insertText("Add an empty state to the notes list"); await sleep(250);
       assert.equal(await run("return document.getElementById('setup-welcome-next').disabled;"), false, "typed words enable Build it");
-      await capture("first-run-3-typed-1920x1080.png");
+      await capture("first-run-4-typed-1920x1080.png");
       await pointer("#setup-welcome-next");
       await until("!window.MefiSetupHelper.welcomeOpen()", "Build it closes the welcome");
       report.welcomeTask = await run("return window.setupFixture.calls().filter((call) => call.name === 'tasksCreate').map((call) => call.args[0]);");

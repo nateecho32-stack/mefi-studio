@@ -12,9 +12,11 @@
 // (html[data-motion=off]) it naps in one still pose and never moves, and with
 // calm motion it keeps to its perch.
 //
-// The pet and its skins are Shop items (renderer/friends-shop.js): nothing
-// here decides what is owned, it asks MefiShop.owns(). A Try in the Shop
-// borrows the pet for a while (preview) without saving anything. The
+// Ember comes free with every Studio: a new profile's first run switches it
+// on (renderer/setup-helper.js, the look step), and Settings › Appearance
+// switches it on or off. Its skins are Shop items (renderer/friends-shop.js):
+// nothing here decides what is owned, it asks MefiShop.owns(). A Try in the
+// Shop borrows a skin for a while (preview) without saving anything. The
 // owner's choices live in localStorage mefiStudio.pet.v1, so a restart
 // brings the pet back the way it was.
 //
@@ -27,8 +29,8 @@
 (function () {
   "use strict";
   const STORE = "mefiStudio.pet.v1";
-  const ITEM = { dragon: "studio:pet-dragon" };
-  const KINDS = Object.freeze([{ id: "dragon", item: ITEM.dragon, name: "Ember the dragon" }]);
+  // Free with every Studio: no Shop item.
+  const KINDS = Object.freeze([{ id: "dragon", item: null, name: "Ember the dragon" }]);
   const SKIN_LIST = Object.freeze([
     { id: "theme", item: null, name: "Your theme's colours" },
     { id: "frost", item: "studio:skin-frost", name: "Frost scales" },
@@ -1029,14 +1031,13 @@
     if (!card) return;
     const body = card.querySelector(".settings-flair-body");
     const shown = state();
-    const owned = owns(ITEM.dragon);
     const rows = [];
     // The pet.
     const pet = el("div", "field settings-flair-pet");
     pet.append(el("span", "field-label", "Pet"));
     const save = fromCard((patch) => set(patch));
-    pet.append(switchRow(owned ? `${prefs.name} the dragon flies around the studio` : "Ember the dragon (in the Shop)", owned && prefs.on, (on) => save({ on }), !owned));
-    if (owned) {
+    pet.append(switchRow(`${prefs.name} the dragon flies around the studio`, prefs.on, (on) => save({ on })));
+    {
       const skins = el("select"); skins.setAttribute("aria-label", "Pet colours");
       for (const skin of SKIN_LIST) {
         const option = el("option", "", owns(skin.item) ? skin.name : `${skin.name} (in the Shop)`);
@@ -1052,11 +1053,13 @@
       pet.append(line);
       pet.append(switchRow("Stays on its perch while you type", prefs.calm, (calm) => save({ calm })));
       pet.append(switchRow("Comes to tell you when something needs you", prefs.come, (come) => save({ come })));
-    } else {
+    }
+    // Skins that are not owned yet: a Try and the way to the Shop.
+    if (SKIN_LIST.some((skin) => skin.item && !owns(skin.item))) {
       const line = el("div", "settings-you-row settings-flair-row");
-      const tryIt = el("button", "ghost mini", "Try it for 2 minutes"); tryIt.type = "button";
-      tryIt.addEventListener("click", () => preview({ kind: "dragon" }));
-      const get = el("button", "ghost mini", "See it in the Shop"); get.type = "button";
+      const tryIt = el("button", "ghost mini", "Try a skin for 2 minutes"); tryIt.type = "button";
+      tryIt.addEventListener("click", () => preview({ kind: "dragon", skin: (SKIN_LIST.find((skin) => skin.item && !owns(skin.item)) || SKIN_LIST[0]).id }));
+      const get = el("button", "ghost mini", "More skins in the Shop"); get.type = "button";
       get.addEventListener("click", SHOP("studio"));
       line.append(tryIt, get);
       pet.append(line);
@@ -1098,7 +1101,7 @@
     card.dataset.appearancePanel = "interface";
     const head = el("div", "settings-card-head");
     const words = el("div");
-    words.append(el("h3", "", "Pet and menu effects"), el("p", "muted", "Extras from the Shop. Try any of them for two minutes first."));
+    words.append(el("h3", "", "Pet and menu effects"), el("p", "muted", "Ember comes with every Studio. Skins and menu effects are in the Shop: try any for two minutes first."));
     head.append(words);
     card.append(head, el("div", "settings-flair-body"));
     const after = pane.querySelector("#settings-appearance");

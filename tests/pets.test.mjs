@@ -2,7 +2,8 @@
 // simulation stepped without a canvas, so these tests fly it through every
 // mode and check it keeps to the window, sits still when motion is off, stays
 // on its perch while you type, and reacts to finished work and to things that
-// need you. Its settings ask the Shop what is owned and survive a reload.
+// need you. Ember is free with every Studio; its skins ask the Shop what is
+// owned, and every choice survives a reload.
 import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
@@ -154,29 +155,29 @@ test("a resting pointer draws it over; a fast pointer makes it dart away; a wind
   assert.equal(sleepy.pet.mode, "sleep", "another app in front: it naps");
 });
 
-test("the pet shows only when owned, a Try borrows it without saving, and choices survive a reload", () => {
+test("Ember is free and off until switched on; skins need the Shop; a Try borrows one without saving; choices survive a reload", () => {
   const storage = new Map();
   let env = load({ storage });
-  assert.deepEqual(Array.from(env.pets.kinds(), (kind) => kind.item), ["studio:pet-dragon"]);
+  assert.deepEqual(Array.from(env.pets.kinds(), (kind) => kind.item), [null], "the dragon is no Shop item");
   assert.deepEqual(Array.from(env.pets.skins(), (skin) => skin.id), ["theme", "frost", "jade", "void", "gold"]);
+  assert.equal(env.pets.state().on, false, "an existing profile gets no surprise dragon after an update");
   env.pets.set({ on: true, skin: "void", name: "  Smaug  " });
-  assert.equal(env.pets.state().on, false, "not owned: switched on, but not shown");
+  assert.equal(env.pets.state().on, true, "switched on: shown, nothing to buy");
+  assert.equal(env.pets.state().skin, "theme", "a skin that is not owned falls back to the theme's colours");
   assert.equal(env.pets.state().name, "Smaug");
 
   env.pets.preview({ kind: "dragon", skin: "frost" }, 120000);
-  assert.equal(env.pets.state().on, true, "a Try shows it");
-  assert.equal(env.pets.state().skin, "frost");
+  assert.equal(env.pets.state().skin, "frost", "a Try wears the skin");
   assert.equal(env.pets.state().preview, true);
   assert.ok(!String(storage.get("mefiStudio.pet.v1")).includes("frost"), "a Try is never saved");
   env.pets.endPreview();
-  assert.equal(env.pets.state().on, false);
+  assert.equal(env.pets.state().skin, "theme");
 
-  env = load({ storage, owned: ["studio:pet-dragon"] });
-  assert.equal(env.pets.state().on, true, "owned and switched on: back after a restart");
-  assert.equal(env.pets.state().skin, "theme", "a skin that is not owned falls back to the theme's colours");
+  env = load({ storage });
+  assert.equal(env.pets.state().on, true, "switched on: back after a restart");
   assert.equal(env.pets.state().name, "Smaug");
-  env = load({ storage, owned: ["studio:pet-dragon", "studio:skin-void"] });
-  assert.equal(env.pets.state().skin, "void");
+  env = load({ storage, owned: ["studio:skin-void"] });
+  assert.equal(env.pets.state().skin, "void", "a bought skin comes back too");
 });
 
 test("Settings › Appearance gets one card for the pet and the menu effect, pointing at the Shop", () => {
@@ -184,15 +185,16 @@ test("Settings › Appearance gets one card for the pet and the menu effect, poi
   const card = env.document.querySelector("#settings-flair");
   assert.ok(card, "the card is mounted");
   assert.equal(card.dataset.appearancePanel, "interface", "it lives with the Interface section");
-  assert.match(card.textContent, /Ember the dragon \(in the Shop\)/);
-  assert.match(card.textContent, /Try it for 2 minutes/);
+  assert.match(card.textContent, /Ember the dragon flies around the studio/, "the dragon's switch is always there: it is free");
+  assert.match(card.textContent, /Stays on its perch while you type/);
+  assert.match(card.textContent, /Comes to tell you when something needs you/);
+  assert.match(card.textContent, /Void scales \(in the Shop\)/);
+  assert.match(card.textContent, /Try a skin for 2 minutes/);
   assert.match(card.textContent, /Open the Shop/);
 
-  const owned = load({ owned: ["studio:pet-dragon"] });
+  const owned = load({ owned: ["studio:skin-frost", "studio:skin-jade", "studio:skin-void", "studio:skin-gold"] });
   const text = owned.document.querySelector("#settings-flair").textContent;
-  assert.match(text, /Ember the dragon flies around the studio/);
-  assert.match(text, /Stays on its perch while you type/);
-  assert.match(text, /Comes to tell you when something needs you/);
+  assert.doesNotMatch(text, /Try a skin/, "every skin owned: nothing left to try");
 });
 
 test("a preview frame for the Shop's cards draws without a page", () => {

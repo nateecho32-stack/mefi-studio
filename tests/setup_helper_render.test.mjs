@@ -52,7 +52,7 @@ test("every setup helper section fits desktop and narrow windows, traps focus, s
     const team = report.calls.find((call) => call.name === "agentsSave");
     assert.equal(team.args[0].scope, "defaults");
     assert.equal(team.args[0].configuration.agentBrain.deskTool, true);
-    assert.equal(report.welcome.length, 6, "the welcome's three steps at two window sizes");
+    assert.equal(report.welcome.length, 8, "the welcome's four steps at two window sizes");
     assert.equal(report.welcomeTask.length, 1, "Build it adds one task");
     assert.ok(report.closedByEscape && report.complete);
   } finally {

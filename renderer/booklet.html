@@ -11554,15 +11554,16 @@ html[data-ui-mode="vibe"] .settings-nav :is(button, a) { border-radius: 12px; }
 }
 
 /* ---- The first run in the 0.5 layout (setupHelper's welcome, html[data-layout="v2"]) ----
-   The 0.5 prototype's welcome: one card over the whole window, three steps
-   (connect, project, first task), Back / Skip / Continue. Theme tokens only;
+   The 0.5 prototype's welcome: one card over the whole window, four steps
+   (your look, connect, project, first task), Back / Skip / Continue. Theme tokens only;
    no text under 12 px; the card scrolls inside itself on a short window and
    reserves no width for a bar. */
 .setup-welcome { position: fixed; inset: 0; z-index: calc(var(--z-toast, 95) - 1); display: grid; place-items: center; padding: 24px; overflow: auto; background: radial-gradient(90% 80% at 50% 30%, color-mix(in srgb, var(--panel-solid) 96%, var(--gold) 4%) 0%, var(--bg) 70%); animation: setup-welcome-in var(--motion-base, 200ms) var(--ease-out, ease-out); }
 .setup-welcome[hidden] { display: none; }
 @keyframes setup-welcome-in { from { opacity: 0; } to { opacity: 1; } }
 .setup-welcome-card { width: min(640px, 100%); max-height: calc(100vh - 48px); padding: 28px 28px 0; overflow: auto; scrollbar-width: none; border: 1px solid color-mix(in srgb, var(--ivory) 12%, transparent); border-radius: 18px; background: var(--panel-solid); box-shadow: 0 30px 80px -30px rgba(0, 0, 0, .8); outline: none; }
-.setup-welcome-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 0 22px; }
+/* One bar per step, however many there are. */
+.setup-welcome-steps { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; margin: 0 0 22px; }
 .setup-welcome-steps > i { height: 3px; border-radius: var(--r-pill, 999px); background: color-mix(in srgb, var(--ivory) 14%, transparent); transition: background var(--motion-base, 200ms) var(--ease-out, ease-out); }
 .setup-welcome-steps > i.on { background: var(--gold); }
 .setup-welcome-title { margin: 0 0 8px; color: var(--ivory); font: 650 max(12px, calc(22px * var(--text-scale, 1)))/1.25 var(--font-display); letter-spacing: -.01em; }
@@ -11595,11 +11596,52 @@ button.setup-welcome-opt:hover { border-color: color-mix(in srgb, var(--gold) 40
 .setup-welcome-gap { flex: 1 1 auto; }
 .setup-welcome-foot > button { min-height: 38px; padding: 0 16px; font-size: max(12px, calc(14px * var(--text-scale, 1))); }
 .setup-welcome-foot > button[hidden] { display: none; }
+/* Step 1, Make it yours: three looks as little windows painted in their own
+   colours (--look-* set from the theme), then rows for colour, text size,
+   motion and the dragon. The card's own colours change with each pick. */
+.setup-welcome-looks { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.setup-welcome-look { display: grid; gap: 8px; align-content: start; min-width: 0; margin: 0; padding: 8px 8px 10px; border: 1px solid color-mix(in srgb, var(--ivory) 10%, transparent); border-radius: 14px; background: color-mix(in srgb, var(--bg) 40%, transparent); color: var(--ivory); text-align: left; cursor: pointer; box-shadow: none; transition: border-color var(--motion-fast, 140ms) var(--ease-out, ease-out), background var(--motion-fast, 140ms) var(--ease-out, ease-out), translate var(--motion-base, 200ms) var(--ease-spring, ease-out); }
+.setup-welcome-look:hover { border-color: color-mix(in srgb, var(--gold) 40%, transparent); background: var(--tint-gold-1); translate: 0 -2px; transform: none; }
+.setup-welcome-look.is-on { border-color: color-mix(in srgb, var(--gold) 70%, transparent); background: color-mix(in srgb, var(--gold) 7%, color-mix(in srgb, var(--bg) 45%, transparent)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--gold) 35%, transparent); }
+/* A look is a button, and buttons keep to one line: its words wrap here. */
+.setup-welcome-look-words { display: grid; gap: 2px; min-width: 0; padding: 0 4px; white-space: normal; overflow-wrap: anywhere; }
+.setup-welcome-look-words b { font-size: max(12px, calc(15px * var(--text-scale, 1))); font-weight: 650; }
+.setup-welcome-look-words small { color: var(--muted); font-size: max(12px, calc(12.5px * var(--text-scale, 1))); line-height: 1.35; }
+.setup-welcome-look-art { position: relative; display: block; aspect-ratio: 16 / 10; overflow: hidden; border: 1px solid color-mix(in srgb, var(--look-text, #fff) 14%, transparent); border-radius: 10px; background: var(--look-bg, #111); }
+.setup-welcome-look-art > i { position: absolute; display: block; border-radius: 3px; }
+.setup-welcome-look-art > .rail { inset: 0 auto 0 0; width: 16%; border-radius: 0; background: var(--look-panel, #222); }
+.setup-welcome-look-art > .bar { top: 9%; left: 22%; width: 46%; height: 9%; background: color-mix(in srgb, var(--look-text, #fff) 82%, transparent); }
+.setup-welcome-look-art > .line { top: 27%; left: 22%; width: 66%; height: 6%; background: color-mix(in srgb, var(--look-text, #fff) 30%, transparent); }
+.setup-welcome-look-art > .line.short { top: 38%; width: 44%; }
+.setup-welcome-look-art > .button { left: 22%; bottom: 12%; width: 26%; height: 14%; border-radius: 5px; background: var(--look-accent, #888); }
+.setup-welcome-look-art > .orb { right: 12%; bottom: 14%; width: 16%; aspect-ratio: 1; height: auto; border-radius: 50%; background: radial-gradient(circle at 35% 35%, color-mix(in srgb, var(--look-accent, #888) 55%, #fff), var(--look-accent, #888) 70%); box-shadow: 0 0 12px color-mix(in srgb, var(--look-accent, #888) 60%, transparent); }
+.setup-welcome-look-art > .orb.two { right: 30%; bottom: 36%; width: 10%; background: radial-gradient(circle at 35% 35%, color-mix(in srgb, var(--look-accent2, #888) 55%, #fff), var(--look-accent2, #888) 70%); box-shadow: 0 0 10px color-mix(in srgb, var(--look-accent2, #888) 60%, transparent); }
+.setup-welcome-look-row { display: grid; grid-template-columns: 112px minmax(0, 1fr); align-items: center; gap: 4px 12px; margin-top: 8px; }
+.setup-welcome-look-label { color: var(--muted); font-size: max(12px, calc(13px * var(--text-scale, 1))); font-weight: 600; }
+.setup-welcome-look-note { grid-column: 2; color: var(--muted); font-size: max(12px, calc(12.5px * var(--text-scale, 1))); line-height: 1.4; }
+.setup-welcome-seg { justify-self: start; min-width: min(100%, 300px); }
+.setup-welcome-seg > button { min-height: 34px; justify-items: center; text-align: center; font-size: max(12px, calc(13px * var(--text-scale, 1))); }
+.setup-welcome-swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.setup-welcome-swatch { width: 30px; height: 30px; min-height: 0; padding: 0; border: 2px solid color-mix(in srgb, var(--ivory) 18%, transparent); border-radius: 50%; background: linear-gradient(135deg, var(--swatch) 0 50%, var(--swatch-2) 50% 100%); box-shadow: inset 0 0 0 3px var(--swatch-bg, transparent); cursor: pointer; }
+.setup-welcome-swatch:hover { border-color: var(--gold-dim); transform: none; }
+.setup-welcome-swatch[aria-checked="true"] { border-color: var(--gold-bright); box-shadow: inset 0 0 0 3px var(--swatch-bg, transparent), 0 0 0 2px color-mix(in srgb, var(--gold) 40%, transparent); }
+/* After the welcome, once: where the look lives. Beside the Settings button,
+   its arrow pointing at it (setup-helper.js placeLookTip). */
+.setup-look-tip { position: fixed; z-index: 9001; left: 0; top: 0; display: grid; gap: 6px; width: min(340px, calc(100vw - 32px)); padding: 14px 16px 12px; border: 1px solid color-mix(in srgb, var(--gold) 38%, transparent); border-radius: 14px; background: color-mix(in srgb, var(--panel-solid) 94%, transparent); backdrop-filter: var(--blur-hard); box-shadow: var(--studio-float-shadow), 0 0 40px -16px color-mix(in srgb, var(--gold) 60%, transparent); color: var(--ivory); font: 500 max(12px, calc(13px * var(--text-scale, 1)))/1.45 var(--font-ui); transition: opacity 200ms var(--ease-out, ease-out), translate 300ms var(--ease-spring, ease-out); }
+@starting-style { .setup-look-tip { opacity: 0; translate: -8px 0; } }
+.setup-look-tip p { margin: 0; color: var(--muted); }
+.setup-look-tip-title { font-size: max(12px, calc(14px * var(--text-scale, 1))); font-weight: 650; }
+.setup-look-tip-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.setup-look-tip::after { content: ""; position: absolute; width: 10px; height: 10px; rotate: 45deg; background: inherit; border: inherit; border-radius: 2px; }
+.setup-look-tip[data-side="right"]::after { left: -6px; top: calc(var(--arrow, 50%) - 5px); border-top: 0; border-right: 0; }
+.setup-look-tip[data-side="none"]::after { display: none; }
 @media (max-width: 520px) {
   .setup-welcome { padding: 12px; }
   .setup-welcome-card { padding: 20px 16px 0; max-height: calc(100vh - 24px); }
   .setup-welcome-foot { padding-bottom: 16px; }
   .setup-welcome-opt { flex-wrap: wrap; }
+  .setup-welcome-look-row { grid-template-columns: minmax(0, 1fr); }
+  .setup-welcome-look-note { grid-column: 1; }
 }
 @media (prefers-reduced-motion: reduce) { .setup-welcome { animation: none; } }
 
@@ -92191,11 +92233,14 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     void show(path[target].id);
   }
 
-  // ---- the first run in the 0.5 layout: a three-step welcome ----------------
+  // ---- the first run in the 0.5 layout: a four-step welcome -----------------
   // With html[data-layout="v2"] a fresh profile meets the 0.5 prototype's first
   // run (docs/prototype/mefi-studio-0.5-v5.html, welcomeView) instead of this
-  // whole sheet: connect the AI you already use, choose a project, give it a
-  // first task. Every step reads and acts through what already exists: the
+  // whole sheet: make it yours (Light, Dark or Stylized, a colour, the text
+  // size and motion, changed behind the card as you pick), connect the AI you
+  // already use, choose a project, give it a first task. Closing it leaves a
+  // small note on the Settings button saying where the look lives now (and
+  // that the Shop has more). Every step reads and acts through what already exists: the
   // coding tools from setup:cli-status and their own Sign in or install
   // (setup:cli-action); the projects from projects:list, switched through the
   // workspace's own project buttons (which ask before stopping busy agents),
@@ -92207,7 +92252,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // Configuration reach it as before. A returning profile after an update still
   // gets the sheet. The prototype's "Write a check first" has no counterpart in
   // the engine yet, so it is not offered.
-  const WELCOME_STEPS = 3;
+  const WELCOME = Object.freeze(["look", "connect", "projects", "task"]);
+  const WELCOME_STEPS = WELCOME.length;
+  const stepIs = (name) => WELCOME[welcome.step] === name;
   const MARKS = { claude: "CC", codex: "CX", opencode: "OC", grok: "GK", antigravity: "AG" };
   const COUNT = ["no", "one", "two", "three", "four", "five", "six"];
   const welcome = { open: false, step: 0, els: null, clis: null, projects: null, text: "", busy: false, then: null, previous: null, serial: 0, connected: null };
@@ -92264,6 +92311,128 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     return row;
   }
   const chip = (text, ready = false) => node("span", `setup-welcome-chip${ready ? " is-ready" : ""}`, ready ? `✓ ${text}` : text);
+  // Step 1: the look, in three plain choices. Each is a family of themes from
+  // music.js (MefiMusic.looks() when it has them; these keys otherwise), and a
+  // pick goes through music.js's own applyLook / applyTheme, so it is saved and
+  // comes back after a restart exactly as a pick in Settings › Appearance.
+  // Text size goes through MefiSize, motion through the Interface card's own
+  // Motion control (#motion-toggle). Nothing here is the Shop's.
+  const LOOKS = Object.freeze([
+    { id: "light", name: "Light", small: "Bright and clean, easy to read in daylight", themes: ["daylight", "paper"] },
+    { id: "dark", name: "Dark", small: "Calm and dark, easy on the eyes", themes: ["chrome", "midnight", "forest", "violet", "ember", "rose", "gold"] },
+    { id: "stylized", name: "Stylized", small: "Glowing colour and bold headings", themes: ["aurora", "dusk", "void", "eclipse", "abyss"] },
+  ]);
+  const TEXT_SIZES = Object.freeze([[1, "Default"], [1.1, "Large"], [1.2, "Larger"]]);
+  const MOTIONS = Object.freeze([["full", "Full"], ["calm", "Calm"], ["off", "Off"]]);
+  function lookFamilies() {
+    const music = window.MefiMusic;
+    const known = new Map((music?.themes?.() || []).map((theme) => [theme.key, theme]));
+    const listed = typeof music?.looks === "function" ? music.looks() : null;
+    return LOOKS.map((look) => {
+      const own = Array.isArray(listed) ? listed.find((item) => item?.id === look.id) : null;
+      const keys = (Array.isArray(own?.themes) ? own.themes : look.themes).filter((key) => known.has(key));
+      return { ...look, name: own?.name || look.name, themes: keys.map((key) => known.get(key)) };
+    }).filter((look) => look.themes.length);
+  }
+  function useLook(look, key) {
+    const music = window.MefiMusic;
+    if (typeof music?.applyLook === "function") music.applyLook(look.id, key, true);
+    else music?.applyTheme?.(key, true);
+  }
+  // A little window in that look: its rail, a title bar, two lines, a button, two orbs.
+  const luminance = (hex) => {
+    const match = /^#?([0-9a-f]{6})$/i.exec(String(hex || ""));
+    if (!match) return 0;
+    const n = parseInt(match[1], 16);
+    return (0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255;
+  };
+  function lookArt(theme) {
+    const art = node("span", "setup-welcome-look-art");
+    art.setAttribute("aria-hidden", "true");
+    const set = (name, value) => { if (value) art.style.setProperty?.(name, value); };
+    set("--look-bg", theme.bg); set("--look-panel", theme.panel); set("--look-accent", theme.accent);
+    set("--look-accent2", theme.accent2 || theme.bright); set("--look-text", luminance(theme.bg) > 0.45 ? "#1f242c" : "#eef1f6");
+    for (const part of ["rail", "bar", "line", "line short", "button", "orb", "orb two"]) art.append(node("i", part));
+    return art;
+  }
+  const motionNow = () => (document.body?.classList?.contains?.("no-motion") ? "off" : document.body?.classList?.contains?.("ws-still") ? "calm" : "full");
+  function segmented(label, options, current, pick) {
+    const row = node("div", "setup-welcome-look-row");
+    const name = node("span", "setup-welcome-look-label", label);
+    const group = node("div", "segmented setup-welcome-seg"); group.setAttribute("role", "group"); group.setAttribute("aria-label", label);
+    for (const [value, text] of options) {
+      const choice = button(text, () => { pick(value); for (const other of group.children) other.setAttribute("aria-pressed", String(other === choice)); }, "");
+      choice.dataset.value = String(value);
+      choice.setAttribute("aria-pressed", String(value === current));
+      group.append(choice);
+    }
+    row.append(name, group);
+    return row;
+  }
+  function paintLook({ keep = null } = {}) {
+    const { title, lead, body } = welcome.els;
+    title.textContent = "Make it yours";
+    lead.textContent = "Pick how Studio looks. It changes behind this card as you choose, and you can change it again any time in Settings › Appearance.";
+    const families = lookFamilies();
+    const current = window.MefiMusic?.theme?.();
+    const chosen = families.find((look) => look.themes.some((theme) => theme.key === current)) || null;
+    const looks = node("div", "setup-welcome-looks");
+    looks.setAttribute("role", "radiogroup"); looks.setAttribute("aria-label", "Look");
+    for (const look of families) {
+      const on = chosen?.id === look.id;
+      const pick = node("button", `setup-welcome-look${on ? " is-on" : ""}`);
+      pick.type = "button"; pick.dataset.look = look.id;
+      pick.setAttribute("role", "radio"); pick.setAttribute("aria-checked", String(on));
+      const words = node("span", "setup-welcome-look-words");
+      words.append(node("b", "", look.name), node("small", "", look.small));
+      pick.append(lookArt(look.themes[0]), words);
+      pick.addEventListener("click", () => { if (chosen?.id !== look.id) useLook(look, look.themes[0].key); paintLook({ keep: `[data-look="${look.id}"]` }); });
+      looks.append(pick);
+    }
+    const parts = [looks];
+    // The colours of the chosen family, as swatches.
+    if (chosen && chosen.themes.length > 1) {
+      const row = node("div", "setup-welcome-look-row");
+      const swatches = node("div", "setup-welcome-swatches");
+      swatches.setAttribute("role", "radiogroup"); swatches.setAttribute("aria-label", "Colour");
+      for (const theme of chosen.themes) {
+        const swatch = node("button", "setup-welcome-swatch");
+        swatch.type = "button"; swatch.dataset.theme = theme.key;
+        swatch.setAttribute("role", "radio"); swatch.setAttribute("aria-checked", String(theme.key === current));
+        swatch.setAttribute("aria-label", theme.name); swatch.title = theme.name;
+        swatch.style.setProperty?.("--swatch", theme.accent);
+        swatch.style.setProperty?.("--swatch-2", theme.accent2 || theme.bright || theme.accent);
+        swatch.style.setProperty?.("--swatch-bg", theme.bg);
+        swatch.addEventListener("click", () => { useLook(chosen, theme.key); paintLook({ keep: `[data-theme="${theme.key}"]` }); });
+        swatches.append(swatch);
+      }
+      row.append(node("span", "setup-welcome-look-label", "Colour"), swatches);
+      parts.push(row);
+    }
+    const size = window.MefiSize;
+    if (typeof size?.apply === "function") {
+      const now = Number(size.get?.()?.text) || 1;
+      parts.push(segmented("Text size", TEXT_SIZES, TEXT_SIZES.reduce((best, [value]) => (Math.abs(value - now) < Math.abs(best - now) ? value : best), 1), (text) => {
+        void Promise.resolve(size.apply({ text }, { source: "first-run" })).catch(() => welcomeSay("The text size was not saved. Try it again in Settings › Size.", true));
+      }));
+    }
+    const motion = document.getElementById("motion-toggle");
+    if (motion) {
+      parts.push(segmented("Motion", MOTIONS, motionNow(), (level) => {
+        motion.value = level;
+        motion.dispatchEvent?.(new Event("change"));
+      }));
+    }
+    // Every Studio comes with Ember, a little dragon (renderer/pets.js): on for a new studio, off in one click.
+    const pets = window.MefiPets;
+    if (typeof pets?.set === "function") {
+      const row = segmented("Your dragon", [[true, "On"], [false, "Off"]], pets.state?.()?.on === true, (on) => pets.set({ on }));
+      row.append(node("small", "setup-welcome-look-note", "Ember flies around and naps on the bars. Free with every Studio."));
+      parts.push(row);
+    }
+    body.replaceChildren(...parts);
+    if (keep) body.querySelector?.(keep)?.focus?.({ preventScroll: true });
+  }
   // Step 1: the AI that builds, in plain words: the coding tools on this PC with their own sign-in, and OpenCode's free
   // models for anyone starting with no subscription.
   async function paintConnect(serial) {
@@ -92320,17 +92489,17 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // button) it was on, since the step is drawn anew.
   async function recheckClis({ repaint = true } = {}) {
     try { welcome.clis = await api()?.cliSetupStatus?.() ?? welcome.clis; } catch { /* keep the last read */ }
-    if (!repaint || !welcome.open || welcome.step !== 0) return;
+    if (!repaint || !welcome.open || !stepIs("connect")) return;
     const held = welcome.els?.card?.contains?.(document.activeElement) ? document.activeElement : null;
     const heldKey = held?.closest?.("[data-option]")?.dataset?.option ?? held?.id ?? null;
-    await showWelcome(0, { focus: false });
-    if (!heldKey || !welcome.open || welcome.step !== 0) return;
+    await showWelcome(WELCOME.indexOf("connect"), { focus: false });
+    if (!heldKey || !welcome.open || !stepIs("connect")) return;
     const body = welcome.els?.body;
     const back = body?.querySelector?.(`[data-option="${heldKey}"] button`) ?? body?.querySelector?.(`[data-option="${heldKey}"]`) ?? document.getElementById?.(heldKey) ?? welcome.els?.title;
     back?.focus?.({ preventScroll: true });
   }
   // Coming back to Studio from a sign-in or install window: the first step reads the tools again.
-  const welcomeRefocus = () => { if (welcome.open && welcome.step === 0 && !welcome.busy) void recheckClis(); };
+  const welcomeRefocus = () => { if (welcome.open && stepIs("connect") && !welcome.busy) void recheckClis(); };
   // Leaving the first step puts Studio on what is ready, so the first task runs on it: a signed-in subscription for the
   // whole studio (setup:cli-use, the sheet's Use for the whole studio), else OpenCode's free models (the first scan's
   // setup, setup:first-scan and -apply). With nothing ready nothing changes, and Today's line says what is missing.
@@ -92404,7 +92573,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const { title, lead, body } = welcome.els;
     title.textContent = "What should Studio make first?";
     if (!welcomeProject()) {
-      lead.textContent = "Open or start a project first (step 2), then come back here: Studio needs a folder to build in.";
+      lead.textContent = `Open or start a project first (step ${WELCOME.indexOf("projects") + 1}), then come back here: Studio needs a folder to build in.`;
       body.replaceChildren();
       return;
     }
@@ -92432,8 +92601,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (welcome.step === WELCOME_STEPS - 1 && !welcome.text.trim()) welcome.text = savedFirstTask();
     els.next.disabled = welcome.busy || (welcome.step === WELCOME_STEPS - 1 && (!welcome.text.trim() || !welcomeProject()));
     welcomeSay("");
-    if (welcome.step === 0) await paintConnect(serial);
-    else if (welcome.step === 1) await paintProjects(serial);
+    if (stepIs("look")) paintLook();
+    else if (stepIs("connect")) await paintConnect(serial);
+    else if (stepIs("projects")) await paintProjects(serial);
     else paintTask();
     if (serial !== welcome.serial || !welcome.open) return;
     if (focus) (welcome.step === WELCOME_STEPS - 1 ? els.body.querySelector?.("input") : els.title)?.focus?.({ preventScroll: true });
@@ -92442,7 +92612,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (welcome.busy) return;
     if (welcome.step < WELCOME_STEPS - 1) {
       let said = "", bad = false;
-      if (welcome.step === 0) {
+      if (stepIs("connect")) {
         welcome.busy = true; welcome.els.next.disabled = true;
         try { await useConnected(); } catch (error) { welcomeSay(plain(error, "The AI was not set up."), true); }
         finally { welcome.busy = false; }
@@ -92476,7 +92646,14 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     } catch (error) { welcomeSay(plain(error, "The task was not added."), true); }
     finally { welcome.busy = false; if (welcome.open && welcome.els) welcome.els.next.disabled = !welcome.text.trim() || !welcomeProject(); }
   }
+  // A new studio gets its dragon: on, unless this profile already chose.
+  const PET_KEY = "mefiStudio.pet.v1";
+  function welcomeDragon() {
+    if (headless || typeof window.MefiPets?.set !== "function" || read(PET_KEY) !== null) return;
+    window.MefiPets.set({ on: true });
+  }
   function openWelcome({ then = null } = {}) {
+    welcomeDragon();
     const els = buildWelcome();
     if (!welcome.open) { welcome.open = true; welcome.previous = document.activeElement; welcome.then = then; els.overlay.hidden = false; window.addEventListener?.("focus", welcomeRefocus); }
     void showWelcome(0);
@@ -92499,6 +92676,76 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     window.dispatchEvent(new CustomEvent("mefi-setup-helper", { detail: { open: false, section: "first-run" } }));
     const then = welcome.then; welcome.then = null;
     if (typeof then === "function") { try { then({ tour: false }); } catch { /* the next prompt is a nicety */ } }
+    if (typeof setTimeout === "function") setTimeout(() => showLookTip(), 1400);
+  }
+
+  // ---- after the welcome: where the look lives --------------------------------
+  // Once, on the first run: a small note beside the Settings button saying the
+  // look changes in Settings › Appearance and that the Shop has more (pets,
+  // menu effects and style packs). Got it, Escape or a click elsewhere closes
+  // it for good. It waits while a sheet or another pop-up is open, and gives up
+  // after a minute.
+  const LOOK_TIP_KEY = "mefiStudio.lookTip.v1";
+  const lookNote = { el: null, tries: 0 };
+  function lookTipAnchor() {
+    for (const selector of ['#app-rail-foot [data-nav="studio"]', '#app-rail [data-nav="studio"]', '[data-nav="studio"]']) {
+      for (const candidate of document.querySelectorAll?.(selector) ?? []) {
+        const rect = candidate.getBoundingClientRect?.();
+        if (rect && rect.width > 0 && rect.height > 0) return candidate;
+      }
+    }
+    return null;
+  }
+  function showLookTip() {
+    if (read(LOOK_TIP_KEY) || lookNote.el || headless) return false;
+    const nav = window.MefiNav?.state;
+    const waiting = nav?.sheet || nav?.transient || welcome.open || state.open || document.getElementById?.("walkthrough-overlay")?.hidden === false;
+    if (waiting) { if (lookNote.tries++ < 30) setTimeout(() => showLookTip(), 2000); return false; }
+    const tip = node("div", "setup-look-tip");
+    tip.id = "setup-look-tip";
+    tip.setAttribute("role", "dialog"); tip.setAttribute("aria-labelledby", "setup-look-tip-title");
+    const heading = node("b", "setup-look-tip-title", "Change your look any time"); heading.id = "setup-look-tip-title";
+    const where = node("p", "", "Theme, colour, text size and motion are in Settings › Appearance.");
+    const more = node("p", "", "Pets, menu effects and style packs are in the Shop, on Friends.");
+    const actions = node("div", "setup-look-tip-actions");
+    const done = () => closeLookTip();
+    actions.append(
+      button("Open Appearance", () => { done(); window.MefiNav?.go?.("studio", { category: "appearance" }); }, "ghost mini"),
+      button("See the Shop", () => { done(); if (window.MefiShop?.open) window.MefiShop.open("studio"); else window.MefiNav?.go?.("friends", { place: "shop" }); }, "ghost mini"),
+      button("Got it", done, "primary mini"),
+    );
+    tip.append(heading, where, more, actions);
+    tip.addEventListener("keydown", (event) => { if (event.key === "Escape") { event.preventDefault?.(); done(); } });
+    document.body.append(tip);
+    lookNote.el = tip;
+    placeLookTip();
+    window.addEventListener?.("resize", placeLookTip);
+    document.addEventListener?.("pointerdown", lookTipOutside, true);
+    write(LOOK_TIP_KEY, "seen");
+    return true;
+  }
+  function lookTipOutside(event) { if (lookNote.el && !lookNote.el.contains?.(event.target)) closeLookTip(); }
+  function placeLookTip() {
+    const tip = lookNote.el;
+    if (!tip) return;
+    const anchor = lookTipAnchor();
+    const rect = anchor?.getBoundingClientRect?.();
+    const width = window.innerWidth || 1280, height = window.innerHeight || 800;
+    if (!rect) { tip.dataset.side = "none"; tip.style.left = `${Math.max(16, width / 2 - 170)}px`; tip.style.top = `${Math.max(16, height - 220)}px`; return; }
+    // Beside the button, its arrow pointing at it; kept inside the window.
+    const box = tip.getBoundingClientRect?.() || { width: 320, height: 150 };
+    const top = Math.min(Math.max(12, rect.top + rect.height / 2 - box.height / 2), height - box.height - 12);
+    tip.dataset.side = "right";
+    tip.style.left = `${Math.round(rect.right + 12)}px`;
+    tip.style.top = `${Math.round(top)}px`;
+    tip.style.setProperty?.("--arrow", `${Math.round(rect.top + rect.height / 2 - top)}px`);
+  }
+  function closeLookTip() {
+    if (!lookNote.el) return;
+    lookNote.el.remove();
+    lookNote.el = null;
+    window.removeEventListener?.("resize", placeLookTip);
+    document.removeEventListener?.("pointerdown", lookTipOutside, true);
   }
 
   // ---- open, close and the first launch -------------------------------------
@@ -92565,6 +92812,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     open: (id, options) => open(id, options), close, isOpen, startup, seen,
     // The 0.5 layout's first run: open it (as startup does on a fresh profile), whether it shows, and Skip.
     welcome: (options) => openWelcome(options), welcomeOpen: () => welcome.open, closeWelcome,
+    // The note that says where the look lives (shown once, after the welcome).
+    lookTip: () => showLookTip(), lookTipOpen: () => Boolean(lookNote.el),
     section: () => (state.open ? state.section : null),
     // Whether the last connections read found a working route (null before
     // any read), so the walkthrough can skip its own "link an AI" stop.
@@ -97755,7 +98004,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const nav = window.MefiNav?.state;
     if (nav?.sheet || nav?.transient) return true;
     if (window.MefiBoot?.isActive?.() || window.MefiSetupHelper?.isOpen?.() || window.MefiSetupHelper?.welcomeOpen?.() || window.MefiCompanionHub?.isOpen?.() || window.MefiSidebar?.isOpen?.()) return true;
-    for (const id of ["walkthrough-overlay", "walkthrough-coach", "vibe-notes", "whats-new-sheet", "boot-layer", "setup-welcome", "shell-menu", "today-inbox", "app-help-menu", "music-dropdown"]) {
+    for (const id of ["walkthrough-overlay", "walkthrough-coach", "vibe-notes", "whats-new-sheet", "boot-layer", "setup-welcome", "setup-look-tip", "shell-menu", "today-inbox", "app-help-menu", "music-dropdown"]) {
       const node = document.getElementById(id);
       if (node && !node.hidden && node.getClientRects?.().length) return true;
     }
@@ -108529,9 +108778,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 // (html[data-motion=off]) it naps in one still pose and never moves, and with
 // calm motion it keeps to its perch.
 //
-// The pet and its skins are Shop items (renderer/friends-shop.js): nothing
-// here decides what is owned, it asks MefiShop.owns(). A Try in the Shop
-// borrows the pet for a while (preview) without saving anything. The
+// Ember comes free with every Studio: a new profile's first run switches it
+// on (renderer/setup-helper.js, the look step), and Settings › Appearance
+// switches it on or off. Its skins are Shop items (renderer/friends-shop.js):
+// nothing here decides what is owned, it asks MefiShop.owns(). A Try in the
+// Shop borrows a skin for a while (preview) without saving anything. The
 // owner's choices live in localStorage mefiStudio.pet.v1, so a restart
 // brings the pet back the way it was.
 //
@@ -108544,8 +108795,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 (function () {
   "use strict";
   const STORE = "mefiStudio.pet.v1";
-  const ITEM = { dragon: "studio:pet-dragon" };
-  const KINDS = Object.freeze([{ id: "dragon", item: ITEM.dragon, name: "Ember the dragon" }]);
+  // Free with every Studio: no Shop item.
+  const KINDS = Object.freeze([{ id: "dragon", item: null, name: "Ember the dragon" }]);
   const SKIN_LIST = Object.freeze([
     { id: "theme", item: null, name: "Your theme's colours" },
     { id: "frost", item: "studio:skin-frost", name: "Frost scales" },
@@ -108687,7 +108938,6 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     function step(dt, world) {
       dt = clamp(Number(dt) || 0, 0, 0.05);
       pet.clock += dt;
-      const time = pet.clock - pet.modeAt;
       const pointer = world.pointer || null;
       const quietFor = Math.max(0, Number(world.quiet) || 0); // seconds without input
       const typing = Boolean(world.typing);
@@ -108707,6 +108957,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         pet.particles.length = 0;
         return;
       }
+      // How long it has been in this mode, read after any reaction changed it.
+      const time = pet.clock - pet.modeAt;
       switch (pet.mode) {
         case "wander": {
           if (!pet.target) pet.target = waypoint(world);
@@ -108714,7 +108966,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
           if (typing && world.calm !== false) { enter("perch", world); break; }
           if (calm || world.background) { enter("perch", world); break; }
           if (pointer && pointer.speed > 1400 && Math.hypot(pointer.x - pet.x, pointer.y - pet.y) < 110) { enter("dash", world); break; }
-          if (pointer && pointer.still > 1.6 && Math.hypot(pointer.x - pet.x, pointer.y - pet.y) < 520 && random() < dt * 0.6 && !(world.avoid || []).some((rect) => inside(rect, pointer.x, pointer.y, 20))) { enter("curious", world); break; }
+          // A pointer resting nearby draws it over now and then: sooner the closer it is.
+          if (pointer && pointer.still > 1.6 && pointer.still < 60 && !(world.avoid || []).some((rect) => inside(rect, pointer.x, pointer.y, 20))) {
+            const near = Math.hypot(pointer.x - pet.x, pointer.y - pet.y);
+            if (near < 520 && random() < dt * (near < 300 ? 1.4 : 0.6)) { enter("curious", world); break; }
+          }
           if (distance < 50 || time > 9) {
             pet.waypoints += 1;
             if (pet.waypoints >= 3 + Math.floor(random() * 4)) { pet.waypoints = 0; enter("perch", world); }
@@ -109541,14 +109797,13 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (!card) return;
     const body = card.querySelector(".settings-flair-body");
     const shown = state();
-    const owned = owns(ITEM.dragon);
     const rows = [];
     // The pet.
     const pet = el("div", "field settings-flair-pet");
     pet.append(el("span", "field-label", "Pet"));
     const save = fromCard((patch) => set(patch));
-    pet.append(switchRow(owned ? `${prefs.name} the dragon flies around the studio` : "Ember the dragon (in the Shop)", owned && prefs.on, (on) => save({ on }), !owned));
-    if (owned) {
+    pet.append(switchRow(`${prefs.name} the dragon flies around the studio`, prefs.on, (on) => save({ on })));
+    {
       const skins = el("select"); skins.setAttribute("aria-label", "Pet colours");
       for (const skin of SKIN_LIST) {
         const option = el("option", "", owns(skin.item) ? skin.name : `${skin.name} (in the Shop)`);
@@ -109564,11 +109819,13 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       pet.append(line);
       pet.append(switchRow("Stays on its perch while you type", prefs.calm, (calm) => save({ calm })));
       pet.append(switchRow("Comes to tell you when something needs you", prefs.come, (come) => save({ come })));
-    } else {
+    }
+    // Skins that are not owned yet: a Try and the way to the Shop.
+    if (SKIN_LIST.some((skin) => skin.item && !owns(skin.item))) {
       const line = el("div", "settings-you-row settings-flair-row");
-      const tryIt = el("button", "ghost mini", "Try it for 2 minutes"); tryIt.type = "button";
-      tryIt.addEventListener("click", () => preview({ kind: "dragon" }));
-      const get = el("button", "ghost mini", "See it in the Shop"); get.type = "button";
+      const tryIt = el("button", "ghost mini", "Try a skin for 2 minutes"); tryIt.type = "button";
+      tryIt.addEventListener("click", () => preview({ kind: "dragon", skin: (SKIN_LIST.find((skin) => skin.item && !owns(skin.item)) || SKIN_LIST[0]).id }));
+      const get = el("button", "ghost mini", "More skins in the Shop"); get.type = "button";
       get.addEventListener("click", SHOP("studio"));
       line.append(tryIt, get);
       pet.append(line);
@@ -109610,7 +109867,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     card.dataset.appearancePanel = "interface";
     const head = el("div", "settings-card-head");
     const words = el("div");
-    words.append(el("h3", "", "Pet and menu effects"), el("p", "muted", "Extras from the Shop. Try any of them for two minutes first."));
+    words.append(el("h3", "", "Pet and menu effects"), el("p", "muted", "Ember comes with every Studio. Skins and menu effects are in the Shop: try any for two minutes first."));
     head.append(words);
     card.append(head, el("div", "settings-flair-body"));
     const after = pane.querySelector("#settings-appearance");

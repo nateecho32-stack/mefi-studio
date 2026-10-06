@@ -709,8 +709,15 @@ settings and per-model work-kind summaries for the shared controls.
   close leaves it waiting as the Start here card (`MefiOnboarding.invite()`)
   with one toast to start it. When the helper has connected an AI, the
   walkthrough starts at Your project instead of its scan stop.
-- **The first run in the 0.5 layout** (`html[data-layout="v2"]`) is the 0.5
-  prototype's three-step welcome instead of the sheet: **Connect the AI you
+- **The first run in the 0.5 layout** (`html[data-layout="v2"]`) is a
+  four-step welcome instead of the sheet. **Make it yours** comes first:
+  Light, Dark or Stylized (families of music.js themes, `MefiMusic.looks()`,
+  applied through `applyLook`/`applyTheme` so they persist as an Appearance
+  pick would), a colour within the family, the text size (`MefiSize.apply`,
+  source `first-run`), motion (the Interface card's `#motion-toggle`) and
+  **Your dragon** (Ember, `renderer/pets.js`; switched on for a new profile
+  that has never chosen). Every pick shows behind the card at once. Then
+  **Connect the AI you
   already use** (the coding tools `setup:cli-status` finds, each with its own
   Sign in or install, and **Other ways to connect**, which opens the sheet at
   Connect an AI), **Choose a project** (the projects, switched through the
@@ -718,7 +725,10 @@ settings and per-model work-kind summaries for the shared controls.
   it a first task** (`tasks:create`, then the workspace's own start). Skip,
   Escape and Start the task mark the revision seen and hand on exactly as the
   sheet's close does. An update still brings the sheet, and the classic layout
-  keeps it for a first run. `MefiSetupHelper.welcome()` opens it.
+  keeps it for a first run. `MefiSetupHelper.welcome()` opens it. Once the
+  welcome closes, a note beside the rail's Settings button
+  (`#setup-look-tip`, once: `mefiStudio.lookTip.v1`) says the look lives in
+  Settings › Appearance and that the Shop has more; key tips wait for it.
 - The menu stays open by default at widths of 1100px or more, with the page
   beside it. **Keep menu open** saves your choice across launches. When unpinned
   or narrower than 1100px, it opens over the page on hover or keyboard focus;
