@@ -40,9 +40,9 @@ process.on("uncaughtException", finish); process.on("unhandledRejection", finish
 // The prototype's places, in its order, under its headings. Design system has no counterpart yet.
 const PLACES = [
   [null, "General"], [null, "Notifications"], [null, "Appearance"], [null, "Size and density"], [null, "Map look"], [null, "Sound and music"],
-  ["Updates and help", "Updates"], ["Updates and help", "Report a problem"], ["Advanced", "System"],
+  ["Updates and help", "Updates"], ["Updates and help", "Report a problem"], ["Updates and help", "Other apps"], ["Advanced", "System"],
 ];
-const PAGES = [["general", "General"], ["notifications", "Notifications"], ["appearance", "Appearance"], ["looks", "Map look"], ["audio", "Sound and music"], ["updates", "Updates"], ["problem", "Report a problem"], ["system", "System"]];
+const PAGES = [["general", "General"], ["notifications", "Notifications"], ["appearance", "Appearance"], ["looks", "Map look"], ["audio", "Sound and music"], ["updates", "Updates"], ["problem", "Report a problem"], ["apps", "Other apps"], ["system", "System"]];
 const THEMES = ["chrome", "aurora", "gold", "midnight", "forest", "violet", "ember", "rose", "void", "eclipse", "abyss", "dusk", "custom"];
 
 async function bridgeNames() {
@@ -204,11 +204,11 @@ app.whenReady().then(async () => {
   assert.deepEqual(first.rows, PLACES, "the places are the prototype's, in its order, under its headings");
   assert.equal(first.place, "general", "Settings opens on General");
   // The list column lists the places (renderer/shell.js) while Settings' own list steps aside, and the breadcrumb reads Settings / <place>.
-  assert.deepEqual(first.list, ["General *", "Notifications", "Appearance", "Size and density", "Map look", "Sound and music", "# Updates and help", "Updates", "Report a problem", "# Advanced", "System", "All settings in one place"], "the list column holds the places, under the prototype's headings");
+  assert.deepEqual(first.list, ["General *", "Notifications", "Appearance", "Size and density", "Map look", "Sound and music", "# Updates and help", "Updates", "Report a problem", "Other apps", "# Advanced", "System", "All settings in one place"], "the list column holds the places, under the prototype's headings");
   assert.equal(first.ownList, false, "Settings' own list is not drawn twice");
   assert.deepEqual(first.crumbs.slice(-2), ["Settings", "General"]);
   report.model = await run("return window.MefiBooklet.settingsPlaces();");
-  assert.deepEqual(report.model.map((row) => [row.id, row.group, row.sub, row.route]), [["general", null, false, null], ["notifications", null, false, null], ["appearance", null, false, null], ["size", null, true, "size"], ["looks", null, false, null], ["audio", null, false, null], ["updates", "Updates and help", false, null], ["problem", "Updates and help", false, null], ["system", "Advanced", false, null]], "the places, as data, for a list drawn elsewhere");
+  assert.deepEqual(report.model.map((row) => [row.id, row.group, row.sub, row.route]), [["general", null, false, null], ["notifications", null, false, null], ["appearance", null, false, null], ["size", null, true, "size"], ["looks", null, false, null], ["audio", null, false, null], ["updates", "Updates and help", false, null], ["problem", "Updates and help", false, null], ["apps", "Updates and help", false, null], ["system", "Advanced", false, null]], "the places, as data, for a list drawn elsewhere");
   for (const [id, title] of PAGES) {
     await click(`#shell-pages-list [data-page="settings:${id}"]`);
     await until(`document.getElementById('tab-studio').dataset.settingsPlace === ${JSON.stringify(id)}`, `${title} is the place`);
