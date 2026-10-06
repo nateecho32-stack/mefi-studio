@@ -6,6 +6,23 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-04 The v2 Work view lands on main with Rust stage 2
+
+Branch `land/ui-work-view` in `C:\wt\land-ui`: origin/main 90661df (Rust stage
+2's five ports) with wip/ui-work-view 898fe49 merged (only TESTRUNS.md
+conflicted: both new rows kept, newest first, one more older row rotated),
+plus fe59dd3: a key hint inside a filled button takes the button's ink (New
+task's "Ctrl N" was pale on teal, under 4.5:1; shell_frame_css pins it).
+
+Full `npm test` on fe59dd3: Node 6900 tests, 6885 pass, 14 skipped, 1 fail
+(project_preview, the whole file in 0.9 s under load: 18/18 alone); Electron
+lane 75: 72 pass, 1 skipped, 2 fail: layout_contract_render and shell_render
+(viewport 1921x1081, as on clean main on this PC); Python 248 OK; path lock
+ok; `npm run audit` 0 findings; `npm run check` ok (271 targets).
+sessions_render with captures passes (1/1); 1920x1080 captures in
+`C:\wt\shots\land-ui\`, the Work view beside the prototype in
+`C:\wt\gap\after-work\compare\`.
+
 ## 2026-10-04 The v2 Work view closer to the 0.5 prototype: breadcrumb, list head, run menu, inspector
 
 Branch `wip/ui-work-view` (worktree off main 39d98e3, node_modules junctioned),

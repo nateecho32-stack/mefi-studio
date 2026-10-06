@@ -204,6 +204,34 @@ progress delivers the board at once, untouched cards keep their objects, progres
 nothing, and the seeded walk checks every live delivery against the host's board). Electron fixtures not run here
 (no Electron in the container); judged on the Windows "Studio checks" run of this commit.
 
+## 2026-10-05 The 0.5 layout is the only layout: the classic layout's code goes, every window fixture runs the 0.5 layout
+
+Branch `ui/v2-only` (gated in `C:\wt\ui-v2only`, merged with main up to f1934aa in `C:\wt\v2m` as 8e4a501). Owner
+chose to remove the classic layout at 0.5.0. The switch and its ways back go (setLayout/setShell, ?layout=,
+MEFI_STUDIO_LAYOUT, the Settings and Search toggles); the classic code goes (nav.js's v1 paths, the classic rail,
+local navigation, dock, sheet links, tab row, footer and help button; the classic Search rows; the Agents navigation;
+the companion hub's Friends section and the Friends page's tab row and Close; Command's .cmd-top with its Ambience,
+View and Agent settings popovers, telemetry pills and corner usage panel; the CSS long tail, ~2,600 net lines of app
+code). Every Electron fixture launches the 0.5 layout; layout_contract_render and its v1 record are retired. Real bugs
+the converted fixtures found are fixed: Team seat rows at 1100, Fleet's fit at 1100, the Project map at 600x560@150%,
+Today's box, an Inbox question without options, the orb drag, the slim rail, the Settings strip, the plan page header,
+Activity over the chat box, Today's permissions popover, the inspector's Team card, the empty Map's Start button,
+hidden key tips, the Inbox keeping the focus on the need pill when its first card was a question without options so
+Escape never closed it (a47ac39), and main's new skills chip pushing Build it off Today's row at 1440x900 (aae6947).
+
+Hosted CI (Windows, the whole Node/Python/check/lint/audit chain; the 43 real-window suites skipped there): green on
+0da4dfd (37397654824), dc5264f (37398953883), 574fa9d (37399987736), 8b5eacb (37401397849) and 8e4a501
+(37402884931). Here, every Electron suite one at a time on 0da4dfd: 44 of 45 ok; shell_render timed out at "Escape
+closed the Inbox" while clean main d71e1e0 passed that step (control run), fixed in a47ac39, after which it stops
+where clean main stops on this PC ("it shrinks to leave the main area its 320", the display-scaling case). npm run
+check and npm run audit on 0da4dfd: exit 0 (audit 0 errors, 0 warnings); npm run check on 8b5eacb and 8e4a501: ok.
+After the merges with main 33c3c4e, d71e1e0, d55269f and f1934aa: friends_render, companion_hub_render,
+settings_render, size_render, skills_render, team_render, today_render, unified_studio_render, workflow_render ok on
+8b5eacb; builder_render (failed on 8b5eacb, the skills chip), today_render, workflow_render ok on aae6947;
+command_render, media_browser_render, media_window_render ok on 8e4a501; Friends, rail and Today unit suites 89/89 and
+59/59. sessions_render ("the keyboard starts on the open project") fails on clean main f1934aa too; it passes on main
+d71e1e0 and b79b4bc, so it came with the skills merge d55269f, not this branch.
+
 ## 2026-10-05 Linux CI: two Rust-side tests stop assuming Windows
 
 Branch `fix/linux-ci` (60b90a1, off main dfda798), test expectations only: rust_modules feeds the image-store
@@ -504,23 +532,6 @@ and 4.5:1 in all eleven themes); today_render (53 s) and tabs_render (118 s)
 passed alone before it and in the full run.
 Captures (1920x1080) in `C:\wt\gap\after-chrome\final\`, prototype-left
 side-by-sides in `C:\wt\gap\after-chrome\compare\`.
-## 2026-10-04 The v2 Work view lands on main with Rust stage 2
-
-Branch `land/ui-work-view` in `C:\wt\land-ui`: origin/main 90661df (Rust stage
-2's five ports) with wip/ui-work-view 898fe49 merged (only TESTRUNS.md
-conflicted: both new rows kept, newest first, one more older row rotated),
-plus fe59dd3: a key hint inside a filled button takes the button's ink (New
-task's "Ctrl N" was pale on teal, under 4.5:1; shell_frame_css pins it).
-
-Full `npm test` on fe59dd3: Node 6900 tests, 6885 pass, 14 skipped, 1 fail
-(project_preview, the whole file in 0.9 s under load: 18/18 alone); Electron
-lane 75: 72 pass, 1 skipped, 2 fail: layout_contract_render and shell_render
-(viewport 1921x1081, as on clean main on this PC); Python 248 OK; path lock
-ok; `npm run audit` 0 findings; `npm run check` ok (271 targets).
-sessions_render with captures passes (1/1); 1920x1080 captures in
-`C:\wt\shots\land-ui\`, the Work view beside the prototype in
-`C:\wt\gap\after-work\compare\`.
-
 ## Read Before Any Tests
 
 This is the test guide for the standalone Mefi's Studio AI+ repository. Run all commands from this repository root.
