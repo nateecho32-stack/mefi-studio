@@ -75,7 +75,7 @@ test("the hub explains itself until the room service carries projects", async ()
   await flush();
   assert.deepEqual(off.calls[0], ["connect"]);
   assert.equal(card.dataset.state, "ready");
-  assert.equal(unlinked.find("project-hub-link").textContent, "Link Discord", "and linking starts right there");
+  assert.equal(unlinked.find("project-hub-link").textContent, "Sign in with Discord", "and signing in starts right there");
 });
 
 test("your rank, credits, progress and special ranks; the map and the lists offer the actions each project needs", async () => {
@@ -133,7 +133,11 @@ test("a credits frame updates the balance and says why", async () => {
   env.push({ type: "credits", balance: 47, lifetime: 125, today: 12, delta: 5, reason: "played", rank: "ember" });
   assert.equal(card.find("project-hub-status").textContent, "+5 credits: someone played your project.");
   env.push({ type: "played", projectId: "proj_a", counted: true, credited: { owner: 5, you: 2 } });
-  assert.equal(card.find("project-hub-status").textContent, "Play counted: +2 credits for you.");
+  assert.equal(card.find("project-hub-status").textContent, "Play counted: +2 credits for you, +5 for the maker.");
+  for (const [why, words] of [["new-account", /under 30 days old/], ["own", /your own project/], ["limit", /already earned from this maker today/], ["maker-held", /can't earn credits right now/]]) {
+    env.push({ type: "played", projectId: "proj_a", counted: why !== "new-account", credited: { owner: 0, you: 0 }, why });
+    assert.match(card.find("project-hub-status").textContent, words, why);
+  }
 });
 
 test("anyone can report someone else's project with a reason; a moderator can also take it off", async () => {

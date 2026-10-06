@@ -116,7 +116,7 @@
     async function open(userId) {
       await guard("Reading their credits…", async () => {
         const answer = await call("modReview", userId);
-        if (!answer?.ok) { status.textContent = answer?.error === "not-found" ? "That member has not signed in to the relay." : why(answer, "Their credits could not be read."); return; }
+        if (!answer?.ok) { status.textContent = answer?.error === "not-found" ? "That member hasn't signed in to Friends yet." : why(answer, "Their credits could not be read."); return; }
         review = answer;
         status.textContent = "";
         paint();

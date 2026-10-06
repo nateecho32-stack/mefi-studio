@@ -73,7 +73,7 @@ test("the panel explains itself until the hub is configured, linked and connecte
   const unlinked = environment({ status: { configured: true, linked: false } }).rooms.panel();
   await flush();
   assert.equal(unlinked.find("rooms-status").textContent, "Link your Discord account to use rooms. Discord asks once in your browser.");
-  assert.equal(unlinked.find("rooms-link").textContent, "Link Discord");
+  assert.equal(unlinked.find("rooms-link").textContent, "Sign in with Discord");
   // Linked but not connected: opening Rooms is the ask, so it connects by itself, once.
   const off = environment({ status: { configured: true, linked: true, state: "off" }, rooms: [room()] });
   const panel = off.rooms.panel();
@@ -126,7 +126,7 @@ test("each room offers the one action it needs, and invites and requests reach t
   const panel = env.rooms.panel();
   await flush();
   const rows = panel.byClass("rooms-row").map((row) => [row.dataset.room, row.byClass("rooms-button").map((item) => item.textContent)]);
-  assert.deepEqual(rows, [["room_mine", ["Open"]], ["room_open", ["Ask to join"]], ["room_inv", ["Accept invite", "Decline"]], ["room_req", ["Cancel"]]], "a closed room is not listed");
+  assert.deepEqual(rows, [["room_mine", ["Open"]], ["room_open", ["Ask to join"]], ["room_inv", ["Join", "Decline"]], ["room_req", ["Cancel"]]], "a closed room is not listed");
   assert.equal(env.rooms.pending(), 2, "one invite to answer and one request to decide");
   assert.ok(notified >= 1);
   assert.equal(panel.find("rooms-tab-requests").textContent, "Requests (1)");
@@ -164,6 +164,7 @@ test("asking to join, deciding, answering invites and making a room go through h
   panel.find("rooms-tab-rooms").click();
   assert.equal(panel.find("rooms-create-name"), null, "the form waits behind New room");
   panel.find("rooms-new").click();
+  assert.equal(panel.find("rooms-create-listed").checked, false, "a new room starts private: listing opens at Flame rank");
   panel.find("rooms-create-name").value = "  Night owls  ";
   panel.find("rooms-create-kind").value = "cowork";
   panel.find("rooms-create-policy").value = "invite";
@@ -177,7 +178,7 @@ test("asking to join, deciding, answering invites and making a room go through h
   panel.find("rooms-create-name").value = "Nope";
   panel.find("rooms-create").click();
   await flush();
-  assert.equal(panel.find("rooms-status").textContent, "Showing a room in the list opens at Flame rank (200 credits, earned when friends play and star what you share). Untick \"Show it in the room list\" to make it now and invite people.", "the relay's reason in plain words");
+  assert.equal(panel.find("rooms-status").textContent, "Showing a room in the list opens at Flame rank (200 credits, earned when friends play and star what you share). Leave \"Show it in the room list\" off to make a private room and invite people with its code.", "the relay's reason in plain words");
 });
 
 test("a room shows chat as text with @names, follows live frames, and sends or says why not", async () => {
@@ -356,7 +357,7 @@ test("with Friends closed, invites and requests still reach the badge", async ()
 });
 
 test("the hub's own codes read as sentences, and closing, leaving and deleting ask twice", async () => {
-  for (const [code, words] of [["auth", /^Not connected\. Your Discord link needs signing in again/], ["version", /^Not connected\. The room service needs a newer Studio/], ["socket-closed", /^Not connected to the room service\. Try Connect again\.$/]]) {
+  for (const [code, words] of [["auth", /^Not connected\. Your Discord sign-in has run out/], ["version", /^Not connected\. The room service needs a newer Studio/], ["socket-closed", /^Not connected to the room service\. Try Connect again\.$/]]) {
     const panel = environment({ status: { configured: true, linked: true, state: "error", error: code } }).rooms.panel();
     await flush();
     assert.match(panel.find("rooms-status").textContent, words, code);

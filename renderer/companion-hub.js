@@ -382,7 +382,7 @@
         const playground = window.MefiCompanionFriends?.card?.({ name: name(), face: (look) => lookFace(look) });
         if (playground) el.extra.append(playground);
         el.extra.append(action("Friends & listening rooms", () => { window.MefiMusic?.openAudio?.(); window.MefiMusic?.setSource?.("link"); window.MefiMusic?.openSection?.("more"); }),
-          action("Connect with Discord", () => window.MefiNav?.go("community")));
+          action("Discord settings", () => window.MefiNav?.go("community")));
         // Friends › Rooms (renderer/rooms.js) and Friends › Your PCs
         // (renderer/pc-sync.js) stay in the hub: they answer in place instead
         // of navigating away.
@@ -608,7 +608,7 @@
     if (place.id === "playground") {
       const more = node("div", "friends-place-more");
       more.append(button("Friends & listening rooms", () => { window.MefiMusic?.openAudio?.(); window.MefiMusic?.setSource?.("link"); window.MefiMusic?.openSection?.("more"); }, "ghost"),
-        button("Connect with Discord", () => window.MefiNav?.go?.("community"), "ghost"));
+        button("Discord settings", () => window.MefiNav?.go?.("community"), "ghost"));
       parts.push(more);
     }
     friendsPage.body.replaceChildren(...parts);

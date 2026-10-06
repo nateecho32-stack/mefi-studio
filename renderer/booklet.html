@@ -9742,7 +9742,7 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 .agent-hub-avatar .c-eye { fill: currentColor; }
 .agent-hub-avatar :is(.c-line, .c-ring, .c-flame) { fill: none; stroke: currentColor; }
 .agent-hub-node { width: 88px; height: 88px; margin: -44px; transform: rotate(var(--hub-angle)) translateX(var(--hub-radius)) rotate(calc(-1 * var(--hub-angle))); animation: hub-spawn var(--motion-spring) var(--ease-emphasized) var(--hub-delay) both; transition: border-color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out); }
-.agent-hub-node-inner { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 6px; font-size: 10px; line-height: 1.2; scale: calc(1 + var(--hub-energy) * .04); transition: scale var(--motion-instant) linear; }
+.agent-hub-node-inner { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 4px; padding: 0 4px; font-size: 12px; line-height: 1.15; text-align: center; scale: calc(1 + var(--hub-energy) * .04); transition: scale var(--motion-instant) linear; }
 .agent-hub-icon { color: var(--gold-bright); display: block; }
 .agent-hub-icon .glyph { width: 22px; height: 22px; }
 .agent-hub-node:hover, .agent-hub-node[aria-expanded=true], .agent-hub-center:hover { background: color-mix(in srgb, var(--gold) 9%, transparent); border-color: color-mix(in srgb, var(--gold) 65%, transparent); }
@@ -10002,7 +10002,7 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
   .agent-hub { --hub-radius: 116px; padding: 12px; }
   .agent-hub-stage { width: 320px; height: 324px; max-width: calc(100vw - 24px); }
   .agent-hub-node { width: 76px; height: 76px; margin: -38px; }
-  .agent-hub-node-inner { font-size: 9px; gap: 5px; }
+  .agent-hub-node-inner { font-size: 12px; gap: 3px; }
   .agent-hub-center { width: 102px; height: 102px; }
   .agent-hub-avatar { width: 70px; height: 70px; }
   .agent-hub-orbit { width: 232px; height: 232px; }
@@ -10166,6 +10166,7 @@ html[data-layout="v2"] #friends-overlay .friends-place-head { padding-right: 0; 
 .front-tree-leaf { width: 7px; height: 7px; border-radius: 50%; }
 .front-tree-leaf.run { background: var(--live); }
 .front-tree-leaf.done { background: color-mix(in srgb, var(--good) 45%, transparent); }
+.front-events { display: grid; gap: 2px; }
 .front-kicker { margin: 0 0 6px; font: 650 12px/1.2 var(--font-ui); letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); }
 .front-lead-title { margin: 0; max-width: 24ch; font: 700 clamp(26px, 2.5vw, 40px)/1.08 var(--front-serif); letter-spacing: -0.015em; text-wrap: balance; }
 .front-dek { margin: 10px 0 0; max-width: 62ch; font: 400 16px/1.5 var(--front-serif); color: var(--muted); }
@@ -24307,7 +24308,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       // The 0.5 layout's Friends place (renderer/companion-hub.js openPlace): The Lobby, Rooms, Your PCs, Playground or the Project hub, one at a time.
       // go("friends") and its five ways in land here while the layout is on (friendsPages in go()); Search lists them.
       id: "friends-page", label: "Friends", short: "Friends", kind: "overlay", layer: "sheet", section: "friends", group: "tools",
-      glyph: "g-orbit", badge: null, desc: "Rooms, your PCs and companion playdates", searchTerms: "friends rooms pcs playground",
+      glyph: "g-orbit", badge: null, desc: "Rooms, your PCs and companion playdates", searchTerms: "friends lobby rooms chat invite code online pcs playground project hub credits ranks events moderation",
       showIn: showIn({}), hidden: () => !v2Places(), element: "friends-overlay", focus: "#friends-place-title",
       open: (params) => window.MefiCompanionHub?.openPlace?.(params), close: () => window.MefiCompanionHub?.closePlace?.(), isOpen: () => overlayOpen("friends-overlay"),
     },
@@ -75520,15 +75521,15 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     "not-member": "You're not in this room any more.",
     "not-found": "This room is gone.",
     "no-session": "Nothing is playing in this room.",
-    offline: "The rooms hub is out of reach.",
+    offline: "The room service is out of reach.",
     timeout: "The hub didn't answer in time.",
   };
   const ERRORS = {
     "not-member": "Only members of the Void Engine server can use rooms.",
     auth: "Discord asked Studio to link again: Settings › General › Community.",
     "not-linked": "Link your Discord account (Settings › General › Community) to listen with your rooms.",
-    version: "The rooms hub has moved on. Update Studio to listen together.",
-    "not-configured": "Listening together needs the Void Engine rooms hub, and this PC isn't connected to one yet: add its address in Settings › General › Community › Connection details.",
+    version: "The room service needs a newer Studio. Update Studio to listen together.",
+    "not-configured": "Listening together needs the room service, which this copy of Studio can't reach.",
     unsupported: "This Studio can't open the hub's connection.",
   };
   const bridge = () => window.mefiStudio;
@@ -75877,14 +75878,14 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   }
   function stateText() {
     const hub = state.hub;
-    if (!hub) return "Checking the rooms hub…";
+    if (!hub) return "Checking the room service…";
     if (!hub.configured) return ERRORS["not-configured"];
     if (!hub.communityConfigured) return "Listening together needs the Discord link, which this build doesn't have.";
     if (!hub.linked) return ERRORS["not-linked"];
     if (hub.state === "ready") return `Connected as ${hub.user?.name || "you"}${hub.readOnly ? " · listen-only while you're timed out" : ""}${hub.paused ? " · the hub is paused" : ""}.`;
-    if (hub.state === "connecting" || state.busy) return "Connecting to the rooms hub…";
-    if (hub.state === "offline") return "The rooms hub is out of reach. Studio keeps trying.";
-    if (hub.state === "error") return ERRORS[hub.error] || "The rooms hub refused the connection.";
+    if (hub.state === "connecting" || state.busy) return "Connecting to the room service…";
+    if (hub.state === "offline") return "The room service is out of reach. Studio keeps trying.";
+    if (hub.state === "error") return ERRORS[hub.error] || "The room service refused the connection.";
     return "Not connected. Choose Connect, or turn sharing on.";
   }
   function renderRooms() {
@@ -76976,12 +76977,12 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       log.replaceChildren(...(result.log ?? []).map((row) => node("li", "", `${when(row.at)} · ${words[row.command] ?? row.command}${row.note ? ` · ${row.note}` : ""}`)));
       if (!log.children.length) log.append(node("li", "muted", "Nothing asked yet."));
       status.textContent = !s.on ? "Off. Turn it on to check on this PC and talk to Mefi from a Discord DM."
-        : !result.linked ? "Link Discord first: Settings › General › Community."
-        : !hub.configured ? "Add the rooms hub's address first: Settings › General › Community › Connection details."
-        : hub.state === "ready" && !hub.remote ? "The rooms service does not carry the Discord remote yet. It comes back once the Void Engine bot is linked to it."
+        : !result.linked ? "Sign in with Discord first, in Friends."
+        : !hub.configured ? "This copy of Studio can't reach the room service."
+        : hub.state === "ready" && !hub.remote ? "The room service doesn't carry the Discord remote yet. It comes back once the Void Engine bot is linked to it."
         : hub.state === "ready" && hub.on ? `On. DM the Void Engine bot, or use /studio status. This PC answers as ${s.name}.`
-        : hub.state === "error" ? `The rooms hub refused this PC (${hub.error ?? "error"}). Studio tries again every ten minutes.`
-        : "Connecting to the rooms hub…";
+        : hub.state === "error" ? `${window.MefiFriendsFront?.hubState?.({ ...hub, linked: true })?.text || "The room service refused this PC."} Studio tries again every ten minutes.`
+        : "Connecting to the room service…";
     }
     const guard = async (label, work) => {
       if (busy) return;
@@ -78627,10 +78628,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   const button = (text, run, id) => { const el = node("button", "ghost rooms-button", text); el.type = "button"; if (id) el.id = id; el.addEventListener("click", run); return el; };
   const bridge = () => window.mefiStudio;
   const REASONS = {
-    "listed-rank": "Showing a room in the list opens at Flame rank (200 credits, earned when friends play and star what you share). Untick \"Show it in the room list\" to make it now and invite people.",
+    "listed-rank": "Showing a room in the list opens at Flame rank (200 credits, earned when friends play and star what you share). Leave \"Show it in the room list\" off to make a private room and invite people with its code.",
     "room-host-role": "Showing a room in the list needs the Room Host role in the Void Engine server.",
     "new-member": "New members can do this after their first day in the server.",
-    "week-member": "Making your own rooms opens after a week in the server. Meanwhile, join one with a code or from the list.",
+    "week-member": "Making your own rooms opens after your first week in the Void Engine server. Until then, join friends' rooms with their invite code or from the list, and say hi in the Lobby.",
     "owned-rooms": "You already own 3 open rooms. Close one first.",
     "daily-creates": "You have made 5 rooms today. Try again tomorrow.",
     "hub-full": "The room service is full right now.",
@@ -78659,12 +78660,30 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     timeout: "The room service did not answer in time. Try again.",
     "not-yours": "Only the person who posted it can change it.",
     "room-busy": "That room is busy. Try again in a moment.",
-    auth: "Your Discord link needs signing in again. Link Discord again in Settings › General › Community.",
+    auth: "Your Discord sign-in has run out. Sign in with Discord again in Friends.",
     version: "The room service needs a newer Studio. Update Studio, then connect again.",
     unsupported: "This copy of Studio cannot reach the room service.",
     lobby: "Everyone stays in the Lobby. Go back to All rooms to step out of it.",
     code: "That code didn't match a room. Check it and try again.",
   };
+  // A tab row's keys: arrows, Home and End choose the next tab, and focus follows it after the repaint.
+  function arrowKeys(row) {
+    row.addEventListener("keydown", (event) => {
+      const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
+      if (!step && event.key !== "Home" && event.key !== "End") return;
+      const items = [...row.children];
+      const at = items.indexOf(event.target);
+      if (at < 0) return;
+      event.preventDefault?.();
+      const next = items[event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : (at + step + items.length) % items.length];
+      next.click();
+      const id = next.id;
+      const settle = () => (typeof document !== "undefined" ? document.getElementById?.(id)?.focus?.() : null);
+      settle();
+      if (typeof requestAnimationFrame === "function") requestAnimationFrame(settle);
+    });
+  }
+
   // Two-step confirm (studio-ui.js MefiUi.arm): the first press asks, the
   // second acts. Without the shared helper (a bare page), the browser asks.
   const confirmed = (label, armed, ask, run) => (window.MefiUi?.arm
@@ -78788,8 +78807,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         const item = button(label, () => { tab = id; paint(); if (id === "online") void loadOnline(); }, `rooms-tab-${id}`);
         item.setAttribute("role", "tab");
         item.setAttribute("aria-selected", String(tab === id));
+        item.tabIndex = tab === id ? 0 : -1;
         row.append(item);
       }
+      arrowKeys(row);
       return row;
     }
 
@@ -78805,7 +78826,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       const invitation = invites.find((item) => item.roomId === room.id && item.status === "pending");
       const askable = !(room.you === "owner" || room.you === "member") && !invitation && !mine && room.policy === "request" && room.status === "active";
       if (room.you === "owner" || room.you === "member") actions.append(button("Open", () => { void open(room); }));
-      else if (invitation) actions.append(button("Accept invite", () => answerInvite(invitation, true)), button("Decline", () => answerInvite(invitation, false)));
+      else if (invitation) actions.append(button("Join", () => answerInvite(invitation, true)), button("Decline", () => answerInvite(invitation, false)));
       else if (mine) actions.append(node("span", "muted", "Requested"), button("Cancel", () => cancel(mine)));
       else if (askable) actions.append(button("Ask to join", () => { if (!asking.has(room.id)) { asking.add(room.id); ask(room, row); } }));
       row.append(text, actions);
@@ -78866,7 +78887,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       const listed = field(node("input"), "create-listed");
       listed.type = "checkbox";
       listed.id = "rooms-create-listed";
-      listed.checked = true;
+      // Off to start: a private room anyone a week in the server can make; listing it opens at Flame rank.
+      listed.checked = false;
       listedLabel.append(listed, node("span", "", " Show it in the room list (opens at Flame rank)"));
       const create = button("Make room", () => guard("Making the room…", async () => {
         const answer = await call("createRoom", { name: name.value.trim(), kind: kind.value, policy: policy.value, listed: listed.checked });
@@ -79339,7 +79361,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       const linked = await community.link();
       if (linked?.ok) { autoConnected = true; await connectNow(); return; }
       if (linked?.error === "not-member") { notMember(); return; }
-      status.textContent = linked?.error === "canceled" ? "Linking was cancelled. Press Link Discord to try again." : "Linking didn't finish. Press Link Discord to try again.";
+      status.textContent = linked?.error === "canceled" ? "Signing in was cancelled. Press Sign in with Discord to try again." : "Signing in didn't finish. Press Sign in with Discord to try again.";
     }
     function notMember() {
       root.dataset.state = "not-member";
@@ -79364,7 +79386,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         // Friends' one sign-in card (renderer/friends-front.js) when it is in this build.
         const gate = window.MefiFriendsFront?.gate?.({ onSignedIn: () => { autoConnected = true; void load(); } });
         status.textContent = gate ? "" : "Link your Discord account to use rooms. Discord asks once in your browser.";
-        body.replaceChildren(gate ?? button("Link Discord", () => { void linkHere(); }, "rooms-link"));
+        body.replaceChildren(gate ?? button("Sign in with Discord", () => { void linkHere(); }, "rooms-link"));
         return false;
       }
       if (hub.error === "not-member") { notMember(); return false; }
@@ -79526,6 +79548,41 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       default: return "Credits start once your account is in good standing in the server.";
     }
   }
+  // What a finished play earned, or why it earned nothing (the relay's why), in a sentence.
+  function playWords(event) {
+    const you = event?.credited?.you ?? 0;
+    const maker = event?.credited?.owner ?? 0;
+    if (you) return `Play counted: +${you} credits for you${maker ? `, +${maker} for the maker` : ""}.`;
+    switch (event?.why) {
+      case "own": return "That's your own project, so the play doesn't earn credits.";
+      case "new-account": return "Play noted. Plays from Discord accounts under 30 days old don't earn credits yet.";
+      case "new-member": return "Play noted. Plays start earning a week after you join the Void Engine server.";
+      case "forgot-me": return "Play noted. Credits are paused for 30 days after Forget me.";
+      case "read-only": return "Play noted. Credits are paused while your account is read-only in the server.";
+      case "maker-held": return "Play counted. The maker's account can't earn credits right now, so nobody earned this time.";
+      case "limit": return "Play counted. You've already earned from this maker today, or reached a daily or weekly limit.";
+      case "expired": return "That play took more than six hours to finish, so it wasn't counted. Press Play again.";
+      default: return event?.counted ? "Play counted." : "Play noted.";
+    }
+  }
+  // A tab row's keys: arrows, Home and End choose the next tab, and focus follows it after the repaint.
+  function arrowKeys(row) {
+    row.addEventListener("keydown", (event) => {
+      const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
+      if (!step && event.key !== "Home" && event.key !== "End") return;
+      const items = [...row.children];
+      const at = items.indexOf(event.target);
+      if (at < 0) return;
+      event.preventDefault?.();
+      const next = items[event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : (at + step + items.length) % items.length];
+      next.click();
+      const id = next.id;
+      const settle = () => (typeof document !== "undefined" ? document.getElementById?.(id)?.focus?.() : null);
+      settle();
+      if (typeof requestAnimationFrame === "function") requestAnimationFrame(settle);
+    });
+  }
+
   const why = (answer, fallback) => REASONS[answer?.reason] || REASONS[answer?.error] || fallback;
   const why_ = why;
   const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
@@ -79624,16 +79681,24 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         const item = button(label, () => { tab = id; selected = null; void refresh(); }, `project-hub-tab-${id}`);
         item.setAttribute("role", "tab");
         item.setAttribute("aria-selected", String(tab === id));
+        item.tabIndex = tab === id ? 0 : -1;
         row.append(item);
       }
+      arrowKeys(row);
       return row;
     }
 
     function actions(project) {
       const row = node("div", "project-hub-actions");
-      row.append(button("Play", () => play(project)));
+      const playIt = button("Play", () => play(project));
+      playIt.setAttribute("aria-label", `Play ${project.title}`);
+      row.append(playIt);
       const own = project.owner.id === me?.user?.id;
-      if (!own) row.append(button(project.starred ? "Starred" : "Star", () => star(project, !project.starred)));
+      if (!own) {
+        const starIt = button(project.starred ? "Starred" : "Star", () => star(project, !project.starred));
+        starIt.setAttribute("aria-label", project.starred ? `Unstar ${project.title}` : `Star ${project.title}`);
+        row.append(starIt);
+      }
       if (own && !project.featuredUntil) row.append(button(`Feature (${me?.featureCost ?? 100} credits)`, () => feature(project)));
       if (own) row.append(button("Remove", () => remove(project)));
       // Anyone may report someone else's project; a moderator may also take it off the hub.
@@ -79876,7 +79941,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       const linked = await community.link();
       if (linked?.ok) { autoConnected = true; await connectNow(); return; }
       if (linked?.error === "not-member") { notMember(); return; }
-      status.textContent = linked?.error === "canceled" ? "Linking was cancelled. Press Link Discord to try again." : "Linking didn't finish. Press Link Discord to try again.";
+      status.textContent = linked?.error === "canceled" ? "Signing in was cancelled. Press Sign in with Discord to try again." : "Signing in didn't finish. Press Sign in with Discord to try again.";
     }
     function notMember() {
       root.dataset.state = "not-member";
@@ -79896,7 +79961,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         // Friends' one sign-in card (renderer/friends-front.js) when it is in this build.
         const gate = window.MefiFriendsFront?.gate?.({ onSignedIn: () => { autoConnected = true; void load(); } });
         status.textContent = gate ? "" : "Link your Discord account to share and play projects. Discord asks once in your browser.";
-        body.replaceChildren(gate ?? button("Link Discord", () => { void linkHere(); }, "project-hub-link"));
+        body.replaceChildren(gate ?? button("Sign in with Discord", () => { void linkHere(); }, "project-hub-link"));
         return false;
       }
       if (hub.error === "not-member") { notMember(); return false; }
@@ -79909,11 +79974,14 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       }
       if (hub.state !== "ready") {
         root.dataset.state = hub.state || "off";
-        status.textContent = hub.state === "connecting" ? "Connecting to the room service…" : "Connect to see members' projects.";
-        body.replaceChildren(button("Connect", () => guard("Connecting…", async () => {
+        // Friends' one way of saying it (renderer/friends-front.js hubState): Connect only when it can help.
+        const said = window.MefiFriendsFront?.hubState?.(hub) ?? { action: "connect", text: hub.state === "connecting" ? "Connecting to the room service…" : "Connect to see members' projects." };
+        if (said.action === "signin" && window.MefiFriendsFront?.gate) { status.textContent = ""; body.replaceChildren(window.MefiFriendsFront.gate({ onSignedIn: () => { autoConnected = true; void load(); }, note: said.text })); return false; }
+        status.textContent = said.text;
+        body.replaceChildren(...(said.action === "connect" ? [button("Connect", () => guard("Connecting…", async () => {
           const answer = await api.hubConnect();
           if (answer?.status?.state === "ready" || answer?.ok) await load(); else explain(answer?.status);
-        }), "project-hub-connect"));
+        }), "project-hub-connect")] : []));
         return false;
       }
       if (!hub.projects) { status.textContent = REASONS.unsupported; root.dataset.state = "unsupported"; body.replaceChildren(); return false; }
@@ -79936,7 +80004,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         else if (event.reason === "revoked") status.textContent = `A moderator took back ${-event.delta} credits that came from farming.`;
         void refresh();
       } else if (event?.type === "played") {
-        status.textContent = event.counted ? `Play counted${event.credited?.you ? `: +${event.credited.you} credits for you` : ""}.` : "Play noted.";
+        status.textContent = playWords(event);
         void refresh();
       } else if (event?.type === "status") void load();
     }
@@ -79999,14 +80067,39 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // A steady colour per member, from their id.
   const hue = (id) => [...String(id)].reduce((sum, ch) => (sum * 31 + ch.charCodeAt(0)) % 360, 7);
   const goPlace = (place, extra = {}) => window.MefiNav?.go?.("friends-page", { place, ...extra });
+  // "today" and "yesterday" by the calendar, not by 24-hour spans.
+  const startOfDay = (ms) => { const day = new Date(ms); day.setHours(0, 0, 0, 0); return day.getTime(); };
   const when = (ms) => {
     if (!Number.isFinite(ms)) return "";
-    const days = Math.floor((Date.now() - ms) / 86_400_000);
+    const days = Math.round((startOfDay(Date.now()) - startOfDay(ms)) / 86_400_000);
     return days <= 0 ? "today" : days === 1 ? "yesterday" : new Date(ms).toLocaleDateString([], { weekday: "long" });
   };
+  const HOLD_WORDS = {
+    "new-account": "Credits start when your Discord account is 30 days old",
+    "new-member": "Credits start a week after you join the Void Engine server",
+    "forgot-me": "Credits are paused for 30 days after Forget me",
+    "read-only": "Credits are paused while your account is read-only",
+  };
+
+  // ---- the room service connection, said once for every Friends place ----------
+  // What the connection is doing, in a sentence, and the one thing that helps:
+  // sign in again, join the server, update Studio, or Connect (only when a
+  // connection can actually be made). The Lobby, the Project hub and Your PCs use it.
+  function hubState(hub) {
+    if (!hub?.configured) return { action: null, text: "This copy of Studio can't reach the room service." };
+    if (!hub.linked) return { action: "signin", text: "Sign in with Discord to use Friends." };
+    if (hub.error === "not-member") return { action: "join", text: "Your Discord account isn't in the Void Engine server yet. Join it, then check again." };
+    if (hub.error === "auth") return { action: "signin", text: "Your Discord sign-in has run out. Sign in with Discord again." };
+    if (hub.error === "version") return { action: "update", text: "The room service needs a newer Studio. Update Studio, then come back." };
+    if (hub.state === "ready") return { action: null, text: "" };
+    if (hub.state === "connecting") return { action: null, text: "Connecting to the room service…" };
+    if (hub.error === "too-many-sockets") return { action: "connect", text: "Studio is open in too many places with this account. Close one, then Connect." };
+    return { action: "connect", text: hub.error ? "Not connected to the room service. Check your internet, then Connect." : "Not connected to the room service yet." };
+  }
 
   // ---- the sign-in card -------------------------------------------------------
-  function gate({ onSignedIn } = {}) {
+  // note: a line to start with (why signing in is asked again).
+  function gate({ onSignedIn, note = "" } = {}) {
     const root = node("section", "friends-gate");
     root.id = "friends-gate";
     root.setAttribute("aria-labelledby", "friends-gate-title");
@@ -80014,10 +80107,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     title.id = "friends-gate-title";
     const lead = node("p", "friends-gate-lead", "See who's online, join a room, and share what you make with people who build with Studio.");
     const actions = node("div", "friends-gate-actions");
-    const status = node("p", "friends-gate-status");
+    const status = node("p", "friends-gate-status", note);
     status.id = "friends-gate-status";
     status.setAttribute("role", "status");
-    const fine = node("p", "friends-gate-fine", "Studio asks Discord for your name and your Void Engine server roles. Nothing you type in a room is stored on the server.");
+    const fine = node("p", "friends-gate-fine", "Studio asks Discord for your name and your Void Engine server roles. Studio's room service passes room messages along and keeps none of them.");
     const points = node("ul", "friends-gate-points");
     for (const [strong, rest] of [["You show as online", " while Studio is open. Turn it off any time."], ["Your PCs and Studio Daily", " keep working without signing in."]]) {
       const item = node("li");
@@ -80071,6 +80164,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
 
   // ---- Pop-ups --------------------------------------------------------------------
   const POPUPS_KEY = "mefiStudio.friendsPopups";
+  // Credits from community events (relay events.mjs), as a pop-up says them.
+  const EVENT_CREDITS = { together: "for building together", cowork: "for the cowork hour", jam: "from the Build Jam" };
   const popups = {
     on() { try { return globalThis.localStorage?.getItem(POPUPS_KEY) !== "0"; } catch { return true; } },
     set(on) { try { globalThis.localStorage?.setItem(POPUPS_KEY, on ? "1" : "0"); } catch { /* this window only */ } },
@@ -80104,6 +80199,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         case "credits":
           if (event.delta > 0 && event.reason === "played") popups.show(`Someone played your project: +${event.delta} credits`, "Project hub", "hub");
           else if (event.delta > 0 && event.reason === "starred") popups.show(`Someone starred your project: +${event.delta} credits`, "Project hub", "hub");
+          else if (event.delta > 0 && EVENT_CREDITS[event.reason]) popups.show(`+${event.delta} credits ${EVENT_CREDITS[event.reason]}`, "Events", "events");
           return;
         default:
       }
@@ -80138,6 +80234,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     let timer = null, seq = 0, tried = false, gone = false;
     let holding = false, soon = null, readAt = 0; // the Lobby room held for its presence frames
     let page = null; // the last front page read
+    let meId = null; // this member, from hub:status
     let sharing = false; // "Share what I'm building", as main's hub:status says
     let code = null; // { roomId, code, link } for the member's own room
 
@@ -80147,6 +80244,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         timer = null;
         if (gone || root.isConnected === false) { dispose(); return; }
         if (typeof document !== "undefined" && document.visibilityState === "hidden") { schedule(); return; }
+        // Someone is using a control on the page (a switch, Copy invite): read later, not under their hands.
+        if (typeof document !== "undefined" && root.contains?.(document.activeElement) && document.activeElement !== root) { schedule(); return; }
         void load();
       }, REFRESH_MS);
     };
@@ -80183,11 +80282,14 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
           return;
         }
         root.dataset.state = hub.state || "off";
-        status.textContent = hub.state === "connecting" ? "Connecting to the room service…" : "Not connected to the room service.";
-        body.replaceChildren(button("Connect", () => { tried = false; void Promise.resolve(api.hubConnect()).finally(() => load()); }, "ghost", "friends-front-connect"));
+        const said = hubState(hub);
+        if (said.action === "signin") { status.textContent = ""; body.replaceChildren(gate({ onSignedIn: () => { tried = false; void load(); }, note: said.text })); return; }
+        status.textContent = said.text;
+        body.replaceChildren(...(said.action === "connect" ? [button("Connect", () => { tried = false; void Promise.resolve(api.hubConnect()).finally(() => load()); }, "ghost", "friends-front-connect")] : []));
         return;
       }
       sharing = hub.shareBuilding === true;
+      meId = hub.user?.id ?? meId;
       if (!hub.front) {
         root.dataset.state = "unsupported";
         status.textContent = "This room service has no front page yet. Rooms and the Project hub still work.";
@@ -80306,7 +80408,11 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       by.textContent = facts.join(" · ");
       const play = button("Play", () => {
         void Promise.resolve(window.mefiStudio?.hubProjects?.("playProject", top.id)).then((answer) => {
-          status.textContent = answer?.ok ? "Opened in your browser. After two minutes you both earn credits." : "That project could not be opened.";
+          const hold = page.you.hold;
+          status.textContent = !answer?.ok ? "That project could not be opened."
+            : top.owner.id === meId ? "Opened your own project in your browser. Your own plays don't earn credits."
+            : hold ? `Opened in your browser. ${HOLD_WORDS[hold.reason] ?? "Credits start once your account is in good standing"}, so this play won't earn yet.`
+            : "Opened in your browser. After two minutes you both earn credits.";
         }).catch(() => { status.textContent = "That project could not be opened."; });
       }, "ghost front-play", "friends-front-play");
       story.append(by, play);
@@ -80343,7 +80449,11 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       if (you.week.plays) week.push(entry(`Your projects got ${plural(you.week.plays, "play")}`, `+${you.week.earned} credits this week`, () => goPlace("hub")));
       else if (you.week.earned) week.push(entry(`+${you.week.earned} credits this week`, "From playing friends' projects", () => goPlace("hub")));
       if (you.week.stars) week.push(entry(plural(you.week.stars, "new star"), "On your projects this week", () => goPlace("hub")));
-      if (!week.length) week.push(entry("Share a project to start earning", "Plays and stars earn you credits", () => goPlace("hub")));
+      if (!week.length) {
+        if (you.hold) week.push(entry(HOLD_WORDS[you.hold.reason] ?? "Credits start once your account is in good standing", you.hold.until ? `From ${new Date(you.hold.until).toLocaleDateString([], { day: "numeric", month: "long" })}` : "Plays and stars from friends count then", () => goPlace("hub")));
+        else if (!you.projects) week.push(entry("Share a project to start earning", "Plays and stars earn you credits", () => goPlace("hub")));
+        else week.push(entry("No plays yet this week", "Ask friends to play what you shared, and play theirs", () => goPlace("hub")));
+      }
       row.append(column("Your week", [mine, ...week], ""));
       return row;
     }
@@ -80358,7 +80468,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       tick.addEventListener("change", () => {
         void Promise.resolve(api.hubRoom("setOnlineVisible", tick.checked)).then((answer) => {
           if (answer?.ok) { page.visible = answer.visible; status.textContent = answer.visible ? "Friends can see you're online." : "You're hidden from Who's online."; }
-          else { tick.checked = !tick.checked; status.textContent = "That didn't save. Try again."; }
+          else { tick.checked = !tick.checked; status.textContent = "That didn't save. Check your connection and try again."; }
         }).catch(() => { tick.checked = !tick.checked; });
       });
       toggle.append(tick, node("span", "", "Show me as online"));
@@ -80377,7 +80487,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       shareTick.addEventListener("change", () => {
         void Promise.resolve(api.hubRoom("shareBuilding", shareTick.checked)).then((answer) => {
           if (answer?.ok) { sharing = answer.shareBuilding === true; status.textContent = sharing ? "Friends see your project's name and how many tasks run, never what they are." : "You stopped sharing what you're building."; }
-          else { shareTick.checked = !shareTick.checked; status.textContent = "That didn't save. Try again."; }
+          else { shareTick.checked = !shareTick.checked; status.textContent = "That didn't save. Check your connection and try again."; }
         }).catch(() => { shareTick.checked = !shareTick.checked; });
       });
       share.append(shareTick, node("span", "", "Share what I'm building"));
@@ -80395,9 +80505,33 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       return bar;
     }
 
+    // This week's community events (Friends › Events), when the room service runs them.
+    function eventsRow() {
+      const jam = page.events?.jam, cowork = page.events?.cowork;
+      if (!jam && !cowork) return null;
+      const box = node("section", "front-events");
+      box.setAttribute("aria-label", "This week");
+      box.append(node("h3", "front-col-title", "This week"));
+      const day = (ms) => (Number.isFinite(ms) ? new Date(ms).toLocaleDateString([], { weekday: "long" }) : "");
+      const hour = (ms) => (Number.isFinite(ms) ? new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "");
+      if (jam) {
+        const phase = jam.phase === "entries" ? `Entries open until ${day(jam.entriesUntil)}${jam.entered ? " · you're in" : ""}` : jam.phase === "voting" ? `Voting until ${day(jam.endsAt)}` : "The results are in";
+        box.append(entry(`Build Jam: ${jam.theme}`, `${phase} · ${jam.entries ?? 0} ${jam.entries === 1 ? "entry" : "entries"}`, () => goPlace("events")));
+      }
+      if (cowork) {
+        const now = Date.now();
+        const on = Number.isFinite(cowork.startsAt) && cowork.startsAt <= now && (!Number.isFinite(cowork.endsAt) || cowork.endsAt > now);
+        box.append(entry("Cowork hour", on ? `On now · ${cowork.here ?? 0} here` : `Next at ${hour(cowork.startsAt)}`, () => goPlace("events")));
+      }
+      return box;
+    }
+
     function paint() {
       if (!page) return;
-      body.replaceChildren(...[mast(), onlineRow(), buildingNow(), lead(), columns(), foot()].filter(Boolean));
+      // A repaint gives keyboard focus back to the same control.
+      const focused = typeof document !== "undefined" && root.contains?.(document.activeElement) ? document.activeElement.id : null;
+      body.replaceChildren(...[mast(), onlineRow(), buildingNow(), eventsRow(), lead(), columns(), foot()].filter(Boolean));
+      if (focused) document.getElementById?.(focused)?.focus?.({ preventScroll: true });
       window.MefiScroll?.scan?.(root);
     }
 
@@ -80427,7 +80561,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     return root;
   }
 
-  window.MefiFriendsFront = { gate, card, popups };
+  window.MefiFriendsFront = { gate, card, popups, hubState };
   // Pop-ups need the hub listener with Friends closed too.
   listen(bridge());
 })();
@@ -80550,7 +80684,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     async function open(userId) {
       await guard("Reading their credits…", async () => {
         const answer = await call("modReview", userId);
-        if (!answer?.ok) { status.textContent = answer?.error === "not-found" ? "That member has not signed in to the relay." : why(answer, "Their credits could not be read."); return; }
+        if (!answer?.ok) { status.textContent = answer?.error === "not-found" ? "That member hasn't signed in to Friends yet." : why(answer, "Their credits could not be read."); return; }
         review = answer;
         status.textContent = "";
         paint();
@@ -85372,7 +85506,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         const playground = window.MefiCompanionFriends?.card?.({ name: name(), face: (look) => lookFace(look) });
         if (playground) el.extra.append(playground);
         el.extra.append(action("Friends & listening rooms", () => { window.MefiMusic?.openAudio?.(); window.MefiMusic?.setSource?.("link"); window.MefiMusic?.openSection?.("more"); }),
-          action("Connect with Discord", () => window.MefiNav?.go("community")));
+          action("Discord settings", () => window.MefiNav?.go("community")));
         // Friends › Rooms (renderer/rooms.js) and Friends › Your PCs
         // (renderer/pc-sync.js) stay in the hub: they answer in place instead
         // of navigating away.
@@ -85598,7 +85732,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (place.id === "playground") {
       const more = node("div", "friends-place-more");
       more.append(button("Friends & listening rooms", () => { window.MefiMusic?.openAudio?.(); window.MefiMusic?.setSource?.("link"); window.MefiMusic?.openSection?.("more"); }, "ghost"),
-        button("Connect with Discord", () => window.MefiNav?.go?.("community"), "ghost"));
+        button("Discord settings", () => window.MefiNav?.go?.("community"), "ghost"));
       parts.push(more);
     }
     friendsPage.body.replaceChildren(...parts);
