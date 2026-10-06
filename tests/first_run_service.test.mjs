@@ -300,7 +300,7 @@ test("assist asks the linked assistant model, folds the map in, and falls back t
   const fallback = await broken.assist({ progress: {} });
   assert.equal(fallback.via, "static");
   assert.equal(fallback.advice.source, "static");
-  assert.match(fallback.advice.stops.workspace, /is selected/);
+  assert.match(fallback.advice.stops.workspace, /"probe" is open\. Its name is at the top/);
   assert.ok(fallback.warnings.some((note) => /built-in guidance/.test(note)));
   // Without a saved setup there is nothing to plan from.
   const bare = harness();
