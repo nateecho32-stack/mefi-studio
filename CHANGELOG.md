@@ -23,15 +23,6 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   room's join code. The prizes and co-work rewards share a daily community
   pot that grows with the number of people active that week, so the credits
   keep their worth as the community grows; plays and stars pay as before.
-- **Playlists in the media menu.** A new Playlists section (under every
-  source) starts you off with five lists of real videos: Code & math
-  explorers (Sebastian Lague, 2swap, 3Blue1Brown, Emergent Garden),
-  Visualizers, Focus streams, Shaders & graphics and Simulated worlds. Make
-  your own from scratch or from Up next, save any video with the new **+** on
-  Browse cards and the playing video, and drag rows to reorder. **Share**
-  copies a list as text that reads well in Discord, with a link that plays it
-  on YouTube; paste that text into **Add a shared playlist** or the Browse box
-  and Studio turns it back into a playlist.
 - **Test runs on one PC take turns.** When several sessions test Studio from
   their own folders at once, `npm test` and the new `npm run test:one --
   tests/x.test.mjs` now wait for their turn instead of starving each other:
