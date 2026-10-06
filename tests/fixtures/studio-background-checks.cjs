@@ -80,6 +80,9 @@ module.exports = async function backgroundChecks({ session, window, contents, ru
   report.backgroundContrast = [];
   for (const mode of ['build','vibe']) for (const light of [false,true]) for (const glass of [0,45,100]) for (const noBlur of [false,true]) {
     await run(`window.MefiVibe.setMode('${mode}');`);
+    // The Settings strip is laid out only while Settings is the page (renderer/shell.css leaves the tab pages out under
+    // another page, and the strip's solid fill is a container query on the page), so the Studio mode reads it there.
+    if (mode === 'build') await run("await window.MefiNav.go('studio',{category:'general'});await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));");
     await run(`window.MefiMusic.${light ? "applyCustomColors({background:'#f4f4f4',surface:'#ffffff',text:'#202020',accent:'#704000'})" : "applyTheme('gold')"};window.MefiAppearance.apply({glass:${glass}});document.documentElement.toggleAttribute('data-no-blur',${noBlur});`);
     // Settings' strip is read where it is seen. The mode switch shows that mode's home, and the frame then leaves the tab
     // pages (Settings among them) out of the layout, where Chromium reports no fill for the strip at all.
@@ -93,6 +96,7 @@ module.exports = async function backgroundChecks({ session, window, contents, ru
       // #shell-top is the 0.5 frame's fixed top bar (the classic page bar, #app-local-nav, is gone).
       for(const fill of ['studio-panel-bg','studio-shell-fill','studio-float-fill','studio-page-fill','v-glass','v-glass-hi','#app-rail','#shell-top','#vibe-panel','.settings-nav','#workspace-layer','.agents-card']) for(const ink of ['ivory','muted','dim']) {
         if(/^[#.]/.test(fill)&&!document.querySelector(fill)){rows.push({fill,ink,missing:true,alpha:1,contrast:0});continue;}
+        if(fill==='.settings-nav'&&!document.querySelector(fill).getClientRects().length){rows.push({fill,ink,unshown:true});continue;}
         probe.style.backgroundColor=/^[#.]/.test(fill)?getComputedStyle(document.querySelector(fill)).backgroundColor:'var(--'+fill+')';probe.style.color='var(--'+ink+')';
         const css=getComputedStyle(probe),bg=rgba(css.backgroundColor),fg=rgba(css.color);
         const ratios=[0,1].map(video=>{const a=lum(bg.slice(0,3).map(x=>x*bg[3]+video*(1-bg[3]))),b=lum(fg);return (Math.max(a,b)+.05)/(Math.min(a,b)+.05);});
@@ -102,6 +106,7 @@ module.exports = async function backgroundChecks({ session, window, contents, ru
     `);
     report.backgroundContrast.push({mode,light,glass,noBlur,rows});
     for (const row of rows) {
+      if (row.unshown) { assert.equal(mode, 'vibe', `the Settings strip is measured where Settings shows: ${JSON.stringify({mode,light,glass,noBlur,...row})}`); continue; }
       assert.ok(row.contrast>=4.5, `background reading contrast: ${JSON.stringify({mode,light,glass,noBlur,...row})}`);
       if (!glass) assert.equal(row.alpha,1,'zero glass makes reading surfaces solid');
     }
