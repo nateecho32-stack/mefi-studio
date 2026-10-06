@@ -519,12 +519,14 @@
     { id: "hub", label: "Project hub", glyph: "g-spark", about: "Share what you make and play what friends make. Playing someone else's project for two minutes earns you both credits." },
     // renderer/friends-events.js: the community events the relay runs by itself (the weekly Build Jam, co-work hours).
     { id: "events", label: "Events", glyph: "g-bolt", about: "This week's Build Jam, the co-work hours and building together. Credits come from making and playing things with friends." },
+    // renderer/friends-shop.js: scales for Ember (the dragon itself is free), menu effects and style packs for credits, and members' packs.
+    { id: "shop", label: "Shop", glyph: "g-shop", about: "Scales for Ember, menu effects and style packs for the credits you earn, and style packs members make. Ember itself is free; credits are earned, never bought." },
     // renderer/friends-mod.js: shown only once the relay says this member is a moderator (it checks every action again).
     { id: "mod", label: "Moderation", glyph: "g-flag", about: "Reports, credits that look farmed, and suspensions. Only moderators see this place.", modOnly: true },
   ]);
   // The places this member sees: Moderation only for moderators.
   const shownPlaces = () => FRIENDS_PLACES.filter((place) => !place.modOnly || window.MefiFriendsMod?.isMod?.() === true);
-  // A way in may name its place by target (lobby, rooms, pcs, playground, hub, events, mod).
+  // A way in may name its place by target (lobby, rooms, pcs, playground, hub, events, shop, mod).
   const friendsPlaceOfTarget = (target) => (FRIENDS_PLACES.some((place) => place.id === target) ? target : null);
   const friendsPage = { place: null, root: null, body: null, title: null, about: null, room: null };
   const friendsPlaceById = (id) => FRIENDS_PLACES.find((place) => place.id === id) ?? null;
@@ -555,6 +557,7 @@
     else if (place.id === "hub") card = window.MefiProjectHub?.card?.();
     else if (place.id === "mod") card = window.MefiFriendsMod?.card?.();
     else if (place.id === "events") card = window.MefiFriendsEvents?.card?.();
+    else if (place.id === "shop") card = window.MefiShop?.card?.();
     else if (place.id === "pcs") card = window.MefiPcSync?.card?.();
     else card = window.MefiCompanionFriends?.card?.({ name: name(), face: (look) => lookFace(look) });
     const parts = [card ?? node("p", "muted", "This part of Friends is not in this build.")];

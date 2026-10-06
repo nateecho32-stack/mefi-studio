@@ -203,7 +203,7 @@ test("sectionLabel names every record by its place, the palette's result kinds",
   assert.equal(nav.sectionLabel({ id: "assistantTidy", kind: "action", group: "assistant" }), "Assistant");
   assert.equal(nav.sectionLabel({ id: "settings:settings-updates", kind: "action", group: "settings" }), "Settings", "the Settings cards booklet.js files");
   assert.equal(nav.sectionLabel(null), null);
-  assert.deepEqual({ ...nav.RAIL_SLOTS }, { community: "foot", friends: "friends", "the-lobby": "friends", rooms: "friends", "your-pcs": "friends", playground: "friends", "project-hub": "friends", "friends-events": "friends" });
+  assert.deepEqual({ ...nav.RAIL_SLOTS }, { community: "foot", friends: "friends", "the-lobby": "friends", rooms: "friends", "your-pcs": "friends", playground: "friends", "project-hub": "friends", "friends-events": "friends", "friends-shop": "friends" });
   assert.ok(Object.isFrozen(nav.RAIL_SLOTS), "only nav places destinations in the rail");
   const ranks = ["workspace", "tasks", "command", "booklet", "friends-page", "studio", "help"].map((id) => nav.sectionRank(nav.get(id)));
   assert.deepEqual(ranks, [0, 0, 1, 2, 3, 4, 5], "ranks follow the rail from top to bottom: Work, Map, Team, Friends, then Settings and Help at the foot");
@@ -482,7 +482,7 @@ test("in the 0.5 layout the rail is the prototype's: Work, Map, Team and Friends
   assert.equal(document.getElementById("app-rail-compose"), null, "New task is the session list's (Ctrl N), not the rail's");
   assert.equal(document.getElementById("app-rail-recent-list"), null, "the session list holds the tasks");
   assert.equal(rail().querySelector(".app-rail-vibe"), null, "the mode switch is the top bar's (Ctrl M)");
-  assert.deepEqual(rail().querySelectorAll('.app-rail-section[data-section="friends"] .app-rail-children [data-nav]').map((button) => button.dataset.nav), ["the-lobby", "rooms", "your-pcs", "playground", "project-hub", "friends-events"], "Friends keeps The Lobby, its three pages, the Project hub and Events, so every place Friends lists is one click from the rail and in Search");
+  assert.deepEqual(rail().querySelectorAll('.app-rail-section[data-section="friends"] .app-rail-children [data-nav]').map((button) => button.dataset.nav), ["the-lobby", "rooms", "your-pcs", "playground", "project-hub", "friends-events", "friends-shop"], "Friends keeps The Lobby, its three pages, the Project hub, Events and the Shop, so every place Friends lists is one click from the rail and in Search");
   // The Help menu: the prototype's six, each the record it always was, in its order; a late arrival redraws the foot.
   nav.register(COMMUNITY); nav.register(SETUP_HELPER); nav.register(RELEASE_NOTES); nav.register(REPORT);
   await settle();

@@ -567,6 +567,45 @@ settings and per-model work-kind summaries for the shared controls.
   clipped and shown as text, never sent to a model. Playdates need the rooms
   hub to relay `companion` frames (see [community.md](community.md)); until it
   does, Friends says so and Pip is there to practice.
+- **Friends › Shop** (`renderer/friends-shop.js`, `window.MefiShop`; main's
+  `hub:shop` channel; the relay's `relay/src/shop.mjs`): scales for Ember,
+  menu effects and style packs for the credits members earn (never bought
+  with money), and the style packs members make. Ember the dragon itself
+  comes free with every Studio: its card has no price, Try or Buy, only a
+  **Show Ember** switch (`MefiPets.set({ on })`). The page has the balance,
+  **How to earn credits** (Friends › Events) and four views: **Studio**
+  (Studio's own items), **Community** (members' packs, New or Top), **Owned**
+  and **Make a style**. Every card shows its item live: scales on a flying
+  Ember (`MefiPets.paintPreview`, drawn only while the card is on screen, one
+  still frame with motion off), an effect played on a little menu on hover,
+  focus or Try (`MefiEffects.demo`), a pack as a tiny app window painted from
+  its own colours. **Try for 2 minutes** previews one item at a time
+  (`MefiPets.preview`, `MefiEffects.preview`, `MefiMusic.previewPack`) under a
+  banner with the time left, Buy and Stop; Stop, the clock and leaving the
+  Shop end it. **Buy for N** asks first, naming the item, the price and the
+  balance after. A member's pack can carry a tip for its maker (No tip, 5, 10,
+  25 or any amount up to 100; never on Studio's own items) and the question
+  shows the total; a member's free pack reads "Free · tips welcome" and its
+  **Get** asks the same way. Every refusal is a sentence: how many more
+  credits are needed and how to earn them, a changed price asked again, the
+  Project hub's words for a hold, an item no longer in the Shop. **Use** puts
+  what you own on (`MefiPets.set({ skin })`, `MefiEffects.use`,
+  `MefiMusic.applyPack(pack, true)`). **Make a style** has five colours with
+  hex fields, a node style, material and font, a big live preview and the
+  WCAG contrast of text on the background and on panels and of the accent;
+  `MefiShop.checkPack` is the relay's own check and says what stops a pack
+  from publishing. **Use it myself** puts it on this PC only; **Publish**
+  lists it free or for 10 to 250 credits; **Your packs** has Edit, Unlist and
+  List again, sales and credits earned. A member's pack has **Report** (a
+  reason and an optional line), a moderator also sees **Remove**, and a
+  reported pack shows in Friends › Moderation with **Remove pack**. What you
+  own is kept in `localStorage["mefiStudio.shop.v1"]` and read again when the
+  Shop opens, after a purchase and when the room service connects
+  (`mefi-shop-owned` tells the rest of Studio); signed out or out of reach,
+  the Shop is Friends' sign-in card and what you own keeps working. A part
+  not in the build says "Comes with the next Studio update." Settings ›
+  Appearance's Theme section has a way in (**Open the Shop**), and Search
+  finds it.
 - **Share between my PCs** (renderer/pc-vault.js; main.cjs "Your PCs vault";
   scripts/pc-vault.cjs, vault-crypto.cjs, vault-shelves.cjs, share-review.cjs).
   A private `<account>/mefi-studio-vault` repository, every file sealed

@@ -6,14 +6,16 @@
 //   - Looks like farming: members whose last 30 days of credits came mostly
 //     from one person, or two people trading credits (relay GET
 //     /v1/admin/credits/flags), each with Review.
-//   - Reports: messages and projects members reported, with Resolve, Remove
-//     project and Suspend the author for a week.
+//   - Reports: messages, projects and Shop style packs members reported, with
+//     Resolve, Remove project or Remove pack, and Suspend the author for a
+//     week. A pack report comes as kind "shop" with its packId (the relay
+//     keeps it as room "shop"); it is named from what the Shop has read.
 //   - Look someone up: a member search, then Review.
 //   - Review: where a member's credits came from, how old each account is,
 //     Take back (from one person, or everything in 30 days) and Suspend.
-// Everything goes through main's hub:room channel (HUB_ROOM_METHODS mod*) and
-// the hub:projects removeProject; text only; every action that changes
-// something asks twice (MefiUi.arm).
+// Everything goes through main's hub:room channel (HUB_ROOM_METHODS mod*),
+// the hub:projects removeProject and the hub:shop modShopRemove; text only;
+// every action that changes something asks twice (MefiUi.arm).
 (function () {
   "use strict";
   const node = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = text; return el; };
@@ -31,6 +33,16 @@
     return days < 1 ? "under a day" : days < 60 ? `${days} day${days === 1 ? "" : "s"}` : days < 730 ? `${Math.floor(days / 30)} months` : `${Math.floor(days / 365)} years`;
   };
   const why = (answer, fallback) => (answer?.error === "forbidden" ? "Only moderators can do that." : answer?.error === "rate-limited" ? "Slow down a moment, then try again." : fallback);
+  // A reported Shop style pack: hub-client hands it over as kind "shop" with its packId (the relay keeps it as room
+  // "shop" with the pack's id as its message). Its name is the report's own, or the one the Shop last read
+  // (friends-shop.js packName).
+  function shopPack(report) {
+    const shop = report?.kind === "shop" || report?.roomId === "shop";
+    const id = shop ? report.packId ?? report.messageId ?? null : null;
+    if (typeof id !== "string" || !id) return null;
+    const name = typeof report.packName === "string" && report.packName ? report.packName : window.MefiShop?.packName?.(id) ?? null;
+    return { id, name };
+  }
 
   // Whether this member is a moderator, as the relay last said (null: not known yet).
   let moderator = null;
@@ -147,11 +159,19 @@
           status.textContent = answer?.ok ? "The project is off the hub." : why(answer, "It could not be removed.");
           await load();
         })));
+        // A Shop style pack (kind "shop"): take it out of the Shop; members who got it lose it. The relay resolves the
+        // pack's open reports with it.
+        const pack = shopPack(report);
+        if (pack && typeof api.hubShop === "function") tools.push(confirmed("Remove pack", "Take it out of the Shop?", `Take ${pack.name ?? "this pack"} out of the Shop? Members who got it lose it.`, () => guard("Removing…", async () => {
+          const answer = await api.hubShop("modShopRemove", pack.id, { reason: report.reason });
+          status.textContent = answer?.ok ? "The pack is out of the Shop." : why(answer, "It could not be removed.");
+          await load();
+        })));
         if (report.author) tools.push(confirmed(`Suspend ${report.author.name} for a week`, "Suspend them?", `Suspend ${report.author.name} for 7 days?`, () => guard("Suspending…", async () => {
           const answer = await call("modSuspend", report.author.id, 7 * 24 * 60);
           status.textContent = answer?.ok ? `${report.author.name} is suspended for 7 days.` : why(answer, "The suspension did not go through.");
         })));
-        const what = report.kind === "project" ? "Project" : report.verified ? "Message (signed copy)" : "Message";
+        const what = report.kind === "project" ? "Project" : pack || report.roomId === "shop" ? `Style pack${pack?.name ? ` “${pack.name}”` : ""}` : report.verified ? "Message (signed copy)" : "Message";
         return row(`${what}: ${report.reason}`, `${report.text ? `“${report.text.slice(0, 200)}” · ` : ""}reported by ${report.reporter?.name ?? "a member"}${report.author ? ` · by ${report.author.name}` : ""}`, tools);
       }), "No open reports.");
     }
