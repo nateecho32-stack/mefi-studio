@@ -30,7 +30,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/0.5/build.webp" width="960" alt="The 0.5 layout in Studio mode: sessions grouped as Needs you, Running, Review, Queued and Done on the left, a running session with its steps and live output in the middle, and its plan, brief, checks and versions in the inspector on the right">
+  <img src="docs/images/0.5/build.webp" width="960" alt="The 0.5 layout in Studio mode: the project's sessions grouped as Needs you, Running, Review, Queued and Done on the left, Today in the middle with the message box, what needs you and what is running, and the project's repository, team and live activity on the right">
   <br>
   <sub>The 0.5 layout in Studio mode, in the new Chrome theme, from the current build on <code>main</code> with sample data.</sub>
 </p>
@@ -64,17 +64,17 @@ The [public roadmap](https://nateecho32-stack.github.io/mefi-studio/roadmap.html
 <table>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/images/0.5/today.webp" alt="Social in the 0.5 layout: What's next for Sunrise? with a box to build or talk it over, and a board of Needs you, Running, Review and Done today cards">
+      <img src="docs/images/0.5/today.webp" alt="Social in the 0.5 layout: What's next for Notes app? with a box to build or talk it over, and a board of Needs you, Running, Review and Done cards">
       <p><strong>Today.</strong> Social's home: one box to build or ask, and a board of what needs you, what runs, what to review and what is done.</p>
     </td>
     <td width="50%" valign="top">
-      <img src="docs/images/0.5/inbox.webp" alt="Work › Inbox: a question from OpenCode with Mefi's suggestion and two options, and a failed check with Try again, It's done and Drop it">
+      <img src="docs/images/0.5/inbox.webp" alt="The Inbox over Social's Today: a failed check with Try a different approach, a permission request with Deny recommended, and a question with Mefi's suggestion and numbered options">
       <p><strong>One Inbox.</strong> Every question, approval and failed check that waits on you, with a suggested answer.</p>
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/images/0.5/changes.webp" alt="A finished session in review: the worker's run and an attached picture in the thread, and four changed files with Accept changes, Revert attempt and Revert per file in the inspector">
+      <img src="docs/images/0.5/changes.webp" alt="A session in review: the thread with an attached picture and Mefi's answer, and four changed files with Accept changes, Revert attempt and Revert per file in the inspector">
       <p><strong>Changes you can take back.</strong> See the files a worker changed, then accept them or revert one file or the whole attempt.</p>
     </td>
     <td width="50%" valign="top">
