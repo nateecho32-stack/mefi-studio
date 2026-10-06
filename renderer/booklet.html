@@ -4161,8 +4161,8 @@ html #tab-studio[data-places="v2"] .settings-nav { gap: 6px; padding: 4px; borde
 #tab-studio[data-places="v2"]:is([data-settings-place="notifications"], [data-settings-place="problem"]) .settings-sections { max-width: 980px; }
 #tab-studio[data-places="v2"] .settings-sections > .settings-find { position: absolute; top: 0; right: 0; z-index: 1; width: min(280px, 38%); min-height: 38px; padding: 0 12px; border-radius: 10px; }
 #tab-studio[data-places="v2"] .settings-sections > .settings-find input { min-height: 36px; font-size: var(--f135, 13.5px); }
-#tab-studio[data-places="v2"] .settings-category-head { display: block; min-height: 40px; padding: 0 calc(min(280px, 38%) + 20px) 0 0; border-bottom: 0; text-align: left; }
-#tab-studio[data-places="v2"] .settings-category-head h2 { font: 650 var(--f22, 22px)/1.3 var(--font-display); letter-spacing: -.01em; }
+#tab-studio[data-places="v2"] .settings-category-head { display: block; min-height: 32px; padding: 0 calc(min(280px, 38%) + 20px) 0 0; border-bottom: 0; text-align: left; }
+#tab-studio[data-places="v2"] .settings-category-head h2 { font: 650 var(--f18, 18px)/1.3 var(--font-display); letter-spacing: -.01em; }
 #tab-studio[data-places="v2"] .settings-category-head p { margin-top: 4px; color: var(--muted); font-size: var(--f135, 13.5px); line-height: 1.5; max-width: 70ch; }
 #tab-studio[data-places="v2"] :is(.settings-search-results, .settings-find-empty) { margin-top: 56px; }
 #tab-studio[data-places="v2"] .settings-result-path { font-size: var(--f12, 12px); }
@@ -8188,11 +8188,11 @@ html[data-motion="off"] .companion-orb, html[data-motion="off"] .companion-orb .
    tokens the cards already use are re-pointed at the 0.5 type ladder (renderer/size.css, never under 12 px), as
    Settings does (#tab-studio[data-places="v2"]), so a card written for the classic page reads at least 12 px too. */
 #agents-overlay[data-places="v2"] { --fs-2xs: var(--f12, 12px); --fs-xs: var(--f12, 12px); --fs-sm: var(--f125, 12.5px); --fs-md: var(--f135, 13.5px); --fs-base: var(--f14, 14px); }
-#agents-overlay[data-places="v2"] .agents-head h1 { font-size: var(--f22, 22px); }
+#agents-overlay[data-places="v2"] .agents-head h1 { font-size: var(--f18, 18px); }
 /* The prototype's page: no frame around it, its head and body in one centred column (page-pad, 1080 px). */
 #agents-overlay[data-places="v2"] { --team-pad: max(16px, calc((100% - 1080px) / 2)); }
 #agents-overlay[data-places="v2"] .agents-sheet { border: 0; border-radius: 0; background: transparent; box-shadow: none; }
-#agents-overlay[data-places="v2"] .agents-head { padding: 22px var(--team-pad) 10px; border-bottom: 0; background: transparent; }
+#agents-overlay[data-places="v2"] .agents-head { padding: 12px var(--team-pad) 6px; border-bottom: 0; background: transparent; }
 #agents-overlay[data-places="v2"] .agents-body { padding: 8px var(--team-pad) 20px; }
 #agents-overlay[data-places="v2"] :is(#agents-team, .agents-team-toolbar) { max-width: none; }
 /* A <small> left at the browser's "smaller" reads 12 px at least (no specificity: a card's own size still wins); the few
@@ -9185,14 +9185,15 @@ html[data-shell=rail] body:has(.workspace-page:not([hidden])) #idle-layer-far { 
 /* The project map is a page like the others: no frame of its own. */
 html[data-shell=rail] .workspace-page > .agent-brain-sheet { background: transparent; border: 0; border-radius: 0; box-shadow: none; backdrop-filter: none; }
 
-/* One header band: same height, padding and title on every page. */
+/* One header band: same height, padding and title on every page, compact as an app's (48 px and an 18 px title under the frame's
+   own top bar and tabs, which already say where you are). */
 html[data-shell=rail] :is(.workspace-page, #plans-overlay) :is(.sheet-head, .explorer-head, .planning-head, .brains-head, .agent-brain-head),
 html[data-shell=rail] .agents-head {
-  min-height: 64px; padding: 12px 16px; gap: 12px; align-items: center;
+  min-height: 48px; padding: 8px 16px; gap: 12px; align-items: center;
   border-bottom: 1px solid var(--studio-glass-edge);
 }
 html[data-shell=rail] :is(.sheet-head .sheet-title h2, .planning-head h2, .brains-head h2, .agent-brain-head h2, .agents-head h1, .settings-category-head h2, #page-title) {
-  margin: 0; font-family: var(--font-display); font-size: 22px; font-weight: 600; line-height: 1.2;
+  margin: 0; font-family: var(--font-display); font-size: var(--f18, 18px); font-weight: 600; line-height: 1.25;
 }
 html[data-shell=rail] .planning-head p { margin-top: 2px; }
 
@@ -9819,7 +9820,7 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
 body:has(#friends-overlay:not([hidden])) > :is(header, main, #tree-rail), body:has(#friends-overlay:not([hidden])) :is(#workspace-layer, #vibe-layer, #idle-hud) { visibility: hidden; pointer-events: none; }
 #friends-overlay .friends-place-sheet { display: grid; gap: 16px; align-content: start; width: 100%; max-width: 1032px; max-height: none; overflow: visible; margin: 0 auto; padding: 22px 16px 28px; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
 #friends-overlay .friends-place-head { display: block; padding: 0; border: 0; background: none; }
-#friends-overlay .friends-place-head h1 { margin: 0; font: 650 var(--f22, 22px)/1.3 var(--font-display); letter-spacing: -.01em; color: var(--ivory); }
+#friends-overlay .friends-place-head h1 { margin: 0; font: 650 var(--f18, 18px)/1.3 var(--font-display); letter-spacing: -.01em; color: var(--ivory); }
 #friends-overlay .friends-place-about { margin: 4px 0 0; max-width: 70ch; font-size: var(--f135, 13.5px); line-height: 1.5; }
 #friends-overlay .friends-place-body { display: grid; gap: 14px; min-width: 0; }
 #friends-overlay .friends-place-body :is(.rooms, .pc-sync, .friends-card) { padding: 16px 18px; border-radius: 14px; background: color-mix(in srgb, var(--panel-solid) 72%, transparent); font-size: var(--f135, 13.5px); }
@@ -10985,7 +10986,17 @@ html[data-ui-mode="vibe"] .settings-nav :is(button, a) { border-radius: 12px; }
 /* ---- Vibe's Home in v2: the front door's own stage and dock step aside (its top bar stays: the project, New app, the conversation, Settings) ---- */
 #vibe-layer[data-today="on"] > :is(.vibe-stage, .vibe-dock) { display: none; }
 #vibe-layer[data-today="on"] > .vibe-top { grid-row: 1; grid-column: 1; }
+/* Its row lines up with the page's column (the project picker over the greeting, the conversation and Settings over the chips), so the
+   page reads as one column on a wide window rather than a bar across it with a column under it. */
+#vibe-layer[data-today="on"] > .vibe-top { padding: 12px max(clamp(14px, 3vw, 28px), calc((100% - 1180px) / 2)) 0; }
+@media (min-width: 1400px) {
+  #vibe-layer[data-today="on"]:has(> .vibe-chat:not([hidden])) > .vibe-top { padding-right: calc(min(420px, 100vw - 48px) + 44px); }
+}
 #vibe-layer[data-today="on"] .vibe-project-text small { font-size: max(12px, calc(12px * var(--text-scale, 1))); }
+/* The project picker on one line ("Project  Sunrise"), the height of the buttons beside it, so its row is no taller than they are. */
+#vibe-layer[data-today="on"] .vibe-project { min-height: 36px; gap: 8px; padding: 3px 10px 3px 4px; border-radius: 12px; }
+#vibe-layer[data-today="on"] .vibe-project-mark { width: 28px; height: 28px; border-radius: 8px; }
+#vibe-layer[data-today="on"] .vibe-project-text { display: flex; align-items: baseline; gap: 6px; }
 .today { grid-row: 2; grid-column: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
 .today-scroll { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: var(--t-gap) clamp(14px, 3vw, 28px) 28px; overscroll-behavior: contain; }
 /* minmax(0, 1fr): an automatic column is as wide as its widest item's smallest size, which at 400px pushed every row past the window. */
@@ -11001,11 +11012,11 @@ html[data-ui-mode="vibe"] .settings-nav :is(button, a) { border-radius: 12px; }
 .today .vibe-hero { flex: 1 1 280px; min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 14px; row-gap: 2px; align-items: center; justify-items: start; text-align: left; animation: none; }
 /* Vibe's own rules for a board with cards (#vibe-layer[data-cards="some"], in short windows too) shrink the orb, hide the greeting and set
    the title in vw; here they lose to the same names under #vibe-layer[data-today="on"], so the page keeps one greeting at every height. */
-#vibe-layer[data-today="on"] .today .vibe-orb { grid-row: 1 / span 2; width: 46px; height: 46px; margin: 0; }
+#vibe-layer[data-today="on"] .today .vibe-orb { grid-row: 1 / span 2; width: 40px; height: 40px; margin: 0; }
 .today .vibe-orb i:nth-child(2) { inset: -8px; }
 .today .vibe-orb i:nth-child(3) { inset: -16px; }
 #vibe-layer[data-today="on"] .today .vibe-kicker { display: block; font-size: var(--t-f13); }
-#vibe-layer[data-today="on"] .today .vibe-hero h1 { max-width: none; font-size: max(20px, calc(clamp(22px, 2vw, 30px) * var(--text-scale, 1))); line-height: 1.2; }
+#vibe-layer[data-today="on"] .today .vibe-hero h1 { max-width: none; font-size: max(20px, calc(clamp(21px, 1.5vw, 26px) * var(--text-scale, 1))); line-height: 1.2; }
 @media (max-height: 600px) { #vibe-layer[data-today="on"] .today .vibe-kicker { display: none; } }
 .today-summary { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .today-chip { display: inline-flex; align-items: center; gap: 8px; min-height: 30px; padding: 0 12px; border: 1px solid var(--t-edge); border-radius: 999px; background: var(--t-card); color: var(--t-soft); font: 600 var(--t-f13)/1 var(--font-ui); white-space: nowrap; }
@@ -11029,6 +11040,9 @@ html[data-ui-mode="vibe"] .settings-nav :is(button, a) { border-radius: 12px; }
 .today .vibe-last { width: 100% !important; margin-top: 0; animation: none; }
 .today .vibe-last-open { font-size: var(--t-f12); }
 #today-decisions, .today #vibe-decisions { justify-self: start; }
+.today-top > #vibe-decisions { display: inline-flex; align-items: center; min-height: 30px; margin: 0; padding: 0 12px; border: 1px solid var(--t-edge); border-radius: 999px; background: var(--t-card); color: var(--t-soft); font: 600 var(--t-f13)/1 var(--font-ui); white-space: nowrap; text-decoration: none; cursor: pointer; }
+.today-top > #vibe-decisions:hover { color: var(--t-ink); border-color: color-mix(in srgb, var(--ivory) 22%, transparent); }
+.today-top > #vibe-decisions[hidden] { display: none; }
 /* Starting points as chips: the four approaches and Suggest a next step in one row. */
 .today .vibe-sparks { width: 100% !important; margin: 0; padding: 0; border: 0; background: none; backdrop-filter: none; box-shadow: none; animation: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; justify-content: flex-start; }
 .today .vibe-evolution-head, .today .vibe-evolution-intents, .today .vibe-evolution-foot { display: contents; }
@@ -11067,7 +11081,15 @@ html[data-ui-mode="vibe"] .settings-nav :is(button, a) { border-radius: 12px; }
 #vibe-layer[data-today="on"] .today .vibe-compose #vibe-talk { margin-left: auto; }
 #vibe-layer[data-today="on"] .today .vibe-compose :is(#vibe-talk, #vibe-build) { min-height: 32px; height: 32px; padding: 0 13px; border-radius: 10px; font-size: var(--t-f13); }
 #vibe-layer[data-today="on"] .today #vibe-build .today-key { min-width: 17px; height: 20px; padding: 0 5px; border: 1px solid color-mix(in srgb, currentColor 55%, transparent); border-radius: 6px; background: transparent; color: inherit; font: 600 var(--t-f12)/1 var(--font-ui); }
-#vibe-layer[data-today="on"] .today-box > .vibe-hint { display: block; margin: -2px 2px 0; color: var(--t-soft); font-size: var(--t-f125); line-height: 1.6; }
+#vibe-layer[data-today="on"] .today-box > .vibe-hint { display: none; }
+#vibe-layer[data-today="on"] .today #vibe-talk .today-key { min-width: 17px; height: 20px; padding: 0 5px; border: 1px solid color-mix(in srgb, currentColor 40%, transparent); border-radius: 6px; background: transparent; color: inherit; font: 600 var(--t-f12)/1 var(--font-ui); }
+#vibe-layer[data-today="on"] .today .vibe-compose > .file-input-tools > [role="status"][data-idle] { display: none; }
+#vibe-layer[data-today="on"] .today .vibe-evolution-scope[data-whole] { display: none; }
+/* Nothing floats between the box and the board: the starting points sit right under the box, and a status line with nothing to say
+   takes no room (it stays in the page, at no height, so what it says later is still announced). */
+#vibe-layer[data-today="on"] .today .vibe-sparks { margin: 0; }
+#vibe-layer[data-today="on"] .today .vibe-feedback:empty { min-height: 0; height: 0; margin: 0 0 -8px; overflow: hidden; }
+#vibe-layer[data-today="on"] .today .vibe-last { margin: 2px 0 0; padding: 8px 10px 8px 14px; border-radius: 12px; }
 #vibe-layer[data-today="on"] .today-box > .vibe-hint .key { min-width: 0; height: auto; padding: 0; border: 0; background: none; box-shadow: none; color: inherit; font: inherit; }
 /* A card that waits on you: the question in its own warm box (the prototype's .bq), the answers under it. */
 .today-card-q { margin: 0; padding: 7px 9px; border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent); border-radius: 9px; background: color-mix(in srgb, var(--warn) 7%, transparent); color: var(--t-ink); font-size: var(--t-f13); line-height: 1.45; overflow-wrap: anywhere; }
@@ -11095,7 +11117,8 @@ html[data-ui-mode="vibe"] .settings-nav :is(button, a) { border-radius: 12px; }
 .today-card-head { display: flex; align-items: flex-start; gap: 9px; min-width: 0; }
 .today-card-head .today-dot { margin-top: 6px; }
 /* A button centres its content and never wraps it: the title is a flex item that takes the row and wraps to two lines. */
-.today-card-open { display: flex; align-items: flex-start; flex: 1 1 auto; min-width: 0; padding: 0; border: 0; background: none; color: var(--t-ink); text-align: left; white-space: normal; cursor: pointer; }
+/* A title, not a control row: no inherited 36 px minimum (styles.css button), so a one-line title leaves no empty row under it. */
+.today-card-open { display: flex; align-items: flex-start; flex: 1 1 auto; min-width: 0; min-height: 0; padding: 0; border: 0; background: none; color: var(--t-ink); text-align: left; white-space: normal; cursor: pointer; }
 .today-card-open:disabled { cursor: default; }
 .today-card-title { flex: 1 1 auto; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; font: 600 var(--t-f14)/1.35 var(--font-ui); text-align: left; white-space: normal; }
 .today-wt { flex: none; display: inline-grid; place-items: center; width: 22px; height: 22px; color: var(--t-soft); }
@@ -11276,6 +11299,8 @@ html[data-ui-mode="vibe"] .settings-nav :is(button, a) { border-radius: 12px; }
 #workspace-layer .today-b .ws-composer .composer-attach { padding: 0; font-size: var(--t-f12); }
 #workspace-layer .today-b .ws-composer .composer-attach:not(:has(.composer-thumb)):not(:has(.composer-attach-note:not(:empty))) { display: none; }
 #workspace-layer .today-b .ws-composer .file-input-tools { margin: 0; color: var(--t-soft); font-size: var(--t-f12); }
+/* Its idle "Drop text or code files" hint waits until it has news (file-inputs.js marks it data-idle), as in Social's box. */
+#workspace-layer .today-b .ws-composer .file-input-tools:has(> [role="status"][data-idle]) { display: none; }
 .today-b-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px; min-width: 0; }
 #workspace-layer .today-b :is(.today-b-cc, .today-b-autonomy .autonomy-chip) { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; height: 28px; padding: 0 9px; border: 1px solid var(--hairline-strong); border-radius: 9px; background: transparent; color: var(--t-soft); font: 500 var(--t-f125)/1 var(--font-ui); white-space: nowrap; }
 #workspace-layer .today-b :is(.today-b-cc, .today-b-autonomy .autonomy-chip):hover:not(:disabled) { background: color-mix(in srgb, var(--ivory) 6%, transparent); color: var(--t-ink); }
@@ -11379,6 +11404,25 @@ html[data-ui-mode="vibe"] .settings-nav :is(button, a) { border-radius: 12px; }
   .today-b-hero { padding-top: 4px; }
   .today-b-orb { width: 40px; height: 40px; margin-bottom: 8px; }
   .today-b-box { margin-top: 12px; }
+}
+/* Compact as an app (Social's Today does the same): the greeting beside its orb rather than under it, the box right below and as wide as
+   the column, no line of keys (each button carries its own), the starting points under the box's left edge, and tighter sections. */
+.today-b-hero { grid-template-columns: auto minmax(0, 1fr); column-gap: 12px; align-items: center; justify-items: start; padding-top: 2px; text-align: left; }
+.today-b-orb, .today-b-hero .today-b-orb { grid-row: 1 / span 2; width: 34px; height: 34px; margin: 0; }
+.today-b-kicker, .today-b-title { grid-column: 2; }
+.today-b-title { margin: 0; font-size: max(20px, calc(24px * var(--text-scale, 1))); }
+/* The column is the box's own width (the prototype's 780 px), so the greeting, the box and the sections share one left edge. */
+.today-b-col { width: min(780px, 100%); }
+.today-b-box, .today-b-col > .today-b-box { width: 100%; margin-top: 12px; }
+.today-b-hint { display: none; }
+.today-b-note { text-align: left; }
+#workspace-layer .today-b .ws-feedback-row { justify-content: flex-start; }
+#workspace-layer .today-b .ws-feedback { text-align: left; }
+.today-b-starts { justify-content: flex-start; margin-top: 10px; }
+.today-b-sect, .today-b-two { margin-top: 14px; }
+#workspace-layer .today-b .today-b-talk .today-key { color: var(--t-soft); }
+@container today-box (max-width: 560px) {
+  #workspace-layer .today-b .today-b-tools .today-b-talk .today-key { display: none; }
 }
 @media (max-width: 680px) {
   #workspace-layer .today-b .today-b-talk { margin-left: 0; }
@@ -13492,8 +13536,8 @@ html[data-frame] body:has(#friends-overlay:not([hidden])):not(.appearance-settin
 .sx-panel :is(input, textarea):not([type="range"]) { font-family: var(--font-ui); }
 
 /* ---- the list ------------------------------------------------------------------------------------------------------------------------- */
-.sx-list { gap: 8px; padding: 10px 10px 0; border-right: 1px solid var(--hairline); }
-.sx-proj { justify-content: flex-start; gap: 10px; width: 100%; min-height: 46px; padding: 6px 8px; border-color: transparent; background: transparent; text-align: left; }
+.sx-list { gap: 6px; padding: 8px 10px 0; border-right: 1px solid var(--hairline); }
+.sx-proj { justify-content: flex-start; gap: 10px; width: 100%; min-height: 40px; padding: 4px 8px; border-color: transparent; background: transparent; text-align: left; }
 .sx-proj-av { display: grid; flex: none; place-items: center; width: 32px; height: 32px; border-radius: var(--r-md); background: var(--tint-gold-3); color: var(--gold-bright); font: 700 var(--x14)/1 var(--font-ui); }
 .sx-proj-words { display: flex; flex: 1 1 auto; flex-direction: column; align-items: flex-start; gap: 1px; min-width: 0; }
 .sx-proj-words :is(b, small) { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -13509,6 +13553,8 @@ html[data-frame] body:has(#friends-overlay:not([hidden])):not(.appearance-settin
 .sx-trees { min-height: 28px; height: 28px; padding: 0 10px 0 8px; gap: 6px; border-radius: var(--r-pill); background: transparent; color: var(--muted); font-size: var(--x125); }
 .sx-trees:hover { color: var(--ivory); }
 .sx-trees .glyph { width: 14px; height: 14px; }
+/* The chip shows the mark and the count on the Git chip's row; "worktrees" is for a screen reader and the tooltip says the rest. */
+.sx-trees-word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .sx-projmenu { left: 10px; right: auto; width: min(300px, calc(100% - 20px)); }
 .sx-projmenu .sx-menu-item { min-height: 40px; gap: 10px; }
 .sx-menu-words { display: flex; flex: 1 1 auto; flex-direction: column; min-width: 0; text-align: left; }
@@ -13823,9 +13869,11 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
 .sx-itab.on { border-bottom-color: var(--gold); color: var(--ivory); }
 .sx-itab em { padding: 1px 5px; border-radius: var(--r-pill); background: var(--tint-gold-3); color: var(--gold-bright); font: 600 var(--x12)/1.2 var(--font-ui); }
 .sx-ibody { flex: 1 1 0; min-height: 0; padding: var(--x-pad); overflow-y: auto; overscroll-behavior: contain; }
-.sx-pane, .sx-own { display: grid; gap: var(--x-gap); align-content: start; min-width: 0; }
+/* minmax(0, 1fr): an automatic column is as wide as its widest item's smallest size, which pushed the project's cards past the
+   inspector's right edge at 1920 px (a member's state, a long value). */
+.sx-pane, .sx-own { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--x-gap); align-content: start; min-width: 0; }
 .sx-insp-empty { padding: 24px 16px; }
-.sx-icard { display: grid; gap: 8px; padding: var(--x-card); border: 1px solid var(--hairline); border-radius: var(--r-lg); background: var(--surface-raised); }
+.sx-icard { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 8px; padding: var(--x-card); border: 1px solid var(--hairline); border-radius: var(--r-lg); background: var(--surface-raised); }
 .sx-icard h4 { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 0; color: var(--ivory); font: 650 var(--x14)/1.3 var(--font-ui); letter-spacing: 0; text-transform: none; }
 .sx-icard h4 .r { color: var(--dim); font: 500 var(--x12)/1.3 var(--font-ui); letter-spacing: 0; text-align: right; text-transform: none; }
 .sx-kv { display: flex; justify-content: space-between; gap: 12px; font-size: var(--x13); }
@@ -15122,7 +15170,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
           <div class="settings-you-switches">
             <label class="switch" id="settings-companion-motion" title="Your companion floats and blinks beside the conversation. Calm and Off keep it still."><input id="workspace-motion" type="checkbox" checked><span class="track"></span><span>Let your companion move</span></label>
             <label class="switch" title="Blur what sits behind every sheet, menu and Home panel. Off gives them a plain, darker backdrop."><input type="checkbox" id="pref-blur" checked><span class="track"></span><span>Blur behind panels</span></label>
-            <label class="switch" id="idle-home-switch" title="On: every launch lands on Home. Off: Studio reopens the last tab page you used. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span id="idle-home-label">Open Home on launch</span></label>
+            <label class="switch" id="idle-home-switch" title="On: every launch lands on Today. Off: Studio reopens the last tab page you used. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span id="idle-home-label">Open Today on launch</span></label>
             <label class="switch" id="settings-start-vibe-switch" title="On: every launch starts in Social, even if you closed the app in Studio. Off: each launch opens the mode you last used."><input type="checkbox" id="settings-start-vibe" checked><span class="track"></span><span>Always start in Social mode</span></label>
             <label class="switch" id="settings-key-tips-switch" title="Small pop-ups beside buttons and tabs that show the key that does the same thing. Click one to fade it away."><input type="checkbox" id="settings-key-tips" checked><span class="track"></span><span>Show key tips</span></label>
             <label class="switch" id="settings-composer-picker-switch" title="Typing @ in Home's message box offers this project's files, # its tasks and / its skills, and the box shows what the message points at. Off leaves @, # and / as plain typing, and a /skill in a message is not expanded."><input type="checkbox" id="settings-composer-picker" checked><span class="track"></span><span>Suggest files, tasks and skills while I type</span></label>
@@ -23954,7 +24002,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const bar = document.createElement("div"); bar.className = "file-input-tools";
     const pick = document.createElement("button"); pick.type = "button"; pick.className = "ghost mini"; pick.textContent = "Add files";
     const picker = document.createElement("input"); picker.type = "file"; picker.multiple = true; picker.hidden = true;
-    const status = document.createElement("span"); status.setAttribute("role", "status"); status.textContent = "Drop text or code files into the box";
+    const status = document.createElement("span"); status.setAttribute("role", "status"); status.textContent = "Drop text or code files into the box"; status.setAttribute("data-idle", "1");
+    // Anything it says after the idle hint is news (reading, added, refused): the marker goes, and a page that hides the hint shows it.
+    const say = (text) => { status.textContent = text; status.removeAttribute?.("data-idle"); };
     bar.append(pick, picker, status); input.insertAdjacentElement("afterend", bar);
     const state = { reading: false, add: null }; bindings.set(input, state);
     const unavailable = () => input.disabled || input.readOnly || blocked();
@@ -23962,8 +24012,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       if (unavailable() || state.reading) return;
       const selected = Array.from(files || []);
       if (!selected.length) return;
-      if (selected.length > 8) { status.textContent = "Choose up to 8 files at a time."; return; }
-      state.reading = true; pick.disabled = true; status.textContent = "Reading files…";
+      if (selected.length > 8) { say("Choose up to 8 files at a time."); return; }
+      state.reading = true; pick.disabled = true; say("Reading files…");
       const blocks = [], errors = [];
       const cap = Math.min(limit, input.maxLength > 0 ? input.maxLength : limit);
       let used = input.value.length;
@@ -23982,11 +24032,11 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
             used += block.length; blocks.push(block);
           } catch (error) { errors.push(`${name}: ${error.message}.`); }
         }
-        if (scope() !== selectedScope || !input.isConnected || unavailable()) { status.textContent = "The draft changed. Add the files again in the intended box."; return; }
+        if (scope() !== selectedScope || !input.isConnected || unavailable()) { say("The draft changed. Add the files again in the intended box."); return; }
         const addition = blocks.join("");
-        if (input.value.length + addition.length > cap) { status.textContent = "The draft grew while reading. Add a smaller excerpt."; return; }
+        if (input.value.length + addition.length > cap) { say("The draft grew while reading. Add a smaller excerpt."); return; }
         if (addition) { input.value += addition; input.dispatchEvent(new Event("input", { bubbles: true })); input.focus(); }
-        status.textContent = [blocks.length ? `${blocks.length} file${blocks.length === 1 ? "" : "s"} added to the draft. Review before sending.` : "No files added.", ...errors].join(" ");
+        say([blocks.length ? `${blocks.length} file${blocks.length === 1 ? "" : "s"} added to the draft. Review before sending.` : "No files added.", ...errors].join(" "));
       } finally { state.reading = false; pick.disabled = false; picker.value = ""; }
     }
     state.add = (files) => add(files);
@@ -94434,11 +94484,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   function paintSettings(current) {
     const vibe = current === "vibe";
     const label = document.getElementById("idle-home-label");
-    if (label) label.textContent = vibe ? "Open Today on launch" : "Open Home on launch";
+    // Both modes' home is Today in the 0.5 layout (Studio's Home route shows its Today page), so the switch says Today in both.
+    if (label) label.textContent = "Open Today on launch";
     const hint = document.getElementById("idle-home-hint");
     if (hint) hint.textContent = vibe ? "When disabled, Studio reopens the last page you used after the project chooser." : "When disabled, Studio reopens the last tab page you used after the project chooser.";
     const toggle = document.getElementById("idle-home-switch");
-    if (toggle) toggle.title = vibe ? "On: every launch lands on Today. Off: Studio reopens the last page you used. The project chooser comes first either way." : "On: every launch lands on Home. Off: Studio reopens the last tab page you used. The project chooser comes first either way.";
+    if (toggle) toggle.title = vibe ? "On: every launch lands on Today. Off: Studio reopens the last page you used. The project chooser comes first either way." : "On: every launch lands on Today. Off: Studio reopens the last tab page you used. The project chooser comes first either way.";
     const modeHint = document.getElementById("settings-mode-hint");
     if (modeHint) modeHint.textContent = vibe ? "Social: friends, and a light eye on your agents, and every page opens in Social's rail." : "Studio: in-depth building, with Home, the menu and every tool.";
   }
@@ -95037,7 +95088,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const decisionState = permission?.projectId === projectId() ? permission : state.assistant;
     const decisions = (decisionState.decisions || []).filter((row) => !row.undone && !row.failed && !row.pending);
     const todos = (decisionState.todos || []).filter((row) => !row.doneAt);
-    if ($("decisions")) { $("decisions").hidden = !decisions.length && !todos.length; $("decisions").textContent = `Decided for you (${decisions.length}) · For you (${todos.length})`; }
+    // What Mefi decided on its own and what it left for you, as counts (Today shows it as a chip beside the greeting's).
+    if ($("decisions")) {
+      $("decisions").hidden = !decisions.length && !todos.length;
+      $("decisions").textContent = [decisions.length ? `${decisions.length} decided for you` : "", todos.length ? `${todos.length} left for you` : ""].filter(Boolean).join(" · ");
+      $("decisions").title = "What Mefi decided on its own, with Undo, and what it left for you to do";
+    }
     $("title").textContent = headline(project);
   }
   // The greeting's question, in one place: the front door says it, and so does Build's Today (renderer/today.js, through data()).
@@ -95220,6 +95276,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     for (const button of evolutionView.choices) button.setAttribute("aria-pressed", String(button.dataset.intent === evolution.intent));
     const where = evolution.context?.system || evolution.context?.files[0];
     evolutionView.scope.textContent = where ? `Scope: ${where}` : "Scope: the whole project. Pick an approach, or let Mefi suggest one.";
+    // Today shows the scope only once it is narrowed to an area (renderer/today.css): the whole project is what the chips already say.
+    if (where) delete evolutionView.scope.dataset.whole; else evolutionView.scope.dataset.whole = "1";
     evolutionView.suggestLabel.textContent = evolution.loading ? "Looking…" : evolution.result ? "Suggest again" : "Suggest a next step";
     evolutionView.suggest.disabled = evolution.loading || state.pending || !projectId();
     evolutionView.suggest.dataset.busy = evolution.loading ? "yes" : "no";
@@ -97268,7 +97326,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // ---- hosts ------------------------------------------------------------------------------------------------
   // Vibe's own layer is the host of the Home page: its backdrop, its drawers (the conversation, panels) and its keys stay.
   // The line that says the keys (#vibe-hint, from the box's own row) goes right under the box, as the prototype's.
-  const MOVED = ["vibe-compose", "vibe-hint", "vibe-flow", "vibe-feedback", "vibe-sparks", "vibe-decisions", "vibe-gate", "vibe-last"];
+  const MOVED = ["vibe-compose", "vibe-hint", "vibe-flow", "vibe-feedback", "vibe-sparks", "vibe-gate", "vibe-last"];
   function ensurePage(layer) {
     let today = byId("today-page");
     if (today) return today;
@@ -97302,14 +97360,18 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const hero = layer.querySelector(".vibe-hero");
     place(hero, row);
     row.append(summary);
+    // What Mefi decided for you sits with the other counts, beside the greeting, not as a line of its own between the box and the board.
+    place(byId("vibe-decisions"), row);
     for (const id of MOVED) place(byId(id), slot);
     for (const chip of slot.querySelectorAll?.(".vibe-evolution-intent") ?? []) { const hint = chip.querySelector?.("small")?.textContent; if (hint && !chip.title) chip.title = hint; }
-    // Build it says its key inside the button (the prototype's "Build it  Ctrl Enter"); restore() takes it out again.
-    const build = byId("vibe-build");
-    if (build && !build.querySelector?.(".today-key")) {
-      const key = el("kbd", "today-key", "Ctrl Enter"); key.setAttribute("aria-hidden", "true");
-      build.append(key); build.setAttribute("aria-keyshortcuts", "Control+Enter");
-      (state.added ||= []).push(() => { key.remove?.(); build.removeAttribute?.("aria-keyshortcuts"); });
+    // Build it and Talk it over say their keys inside the buttons (the prototype's "Build it  Ctrl Enter"), so the box needs no line of
+    // keys under it (today.css leaves #vibe-hint out); restore() takes them out again.
+    for (const [id, words, shortcut] of [["vibe-build", "Ctrl Enter", "Control+Enter"], ["vibe-talk", "Enter", "Enter"]]) {
+      const button = byId(id);
+      if (!button || button.querySelector?.(".today-key")) continue;
+      const key = el("kbd", "today-key", words); key.setAttribute("aria-hidden", "true");
+      button.append(key); button.setAttribute("aria-keyshortcuts", shortcut);
+      (state.added ||= []).push(() => { key.remove?.(); button.removeAttribute?.("aria-keyshortcuts"); });
     }
     return today;
   }
@@ -97451,7 +97513,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     // How Mefi answers (ELI5 and the other styles), its skills and tools (renderer/chat-tools.js), beside the mode.
     const chatTools = el("span", "today-b-autonomy today-b-chat-tools"); chatTools.id = "today-build-chat-tools";
     const talk = button("", "today-b-talk", () => void homeSend("chat"), { title: "Talk it over with Mefi first: the words go to the conversation, and its page opens" });
-    talk.id = "today-build-talk"; talk.append(glyph("g-chat"), el("span", "", "Talk it over"));
+    // Each button says its key (the line of keys under the box steps aside in today.css), as Social's Today does.
+    talk.id = "today-build-talk"; talk.append(glyph("g-chat"), el("span", "", "Talk it over"), el("kbd", "today-key", "Enter"));
     const build = button("", "today-b-send", () => void homeSend("work"), { title: "Build it: the words become a task, and a worker picks it up" });
     build.id = "today-build-build"; build.append(el("span", "", "Build it"), el("kbd", "today-key", "Ctrl Enter"));
     tools.append(attach, picker, autonomy, chatTools, talk, build);
@@ -106471,7 +106534,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     panel.project.title = data.project?.path ? `${data.project.path} · switch project` : "Switch project";
     panel.project.setAttribute("aria-expanded", String(S.projMenu));
     panel.trees.hidden = !trees.count;
-    panel.trees.replaceChildren(glyph("g-worktree"), el("span", "", plural(trees.count, "worktree")));
+    // The count beside the mark, so the chip shares the Git chip's row; the word stays for a screen reader (sessions.css) and the tooltip.
+    panel.trees.replaceChildren(glyph("g-worktree"), el("span", "", String(trees.count)), el("span", "sx-trees-word", ` ${trees.count === 1 ? "worktree" : "worktrees"}`));
     panel.trees.title = `${trees.headline || plural(trees.count, "worktree")} Open Work › Worktrees.`;
     panel.gitRow.hidden = !data.projectId;
     for (const tab of panel.tabs.querySelectorAll("[data-tab]")) {

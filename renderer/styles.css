@@ -4151,8 +4151,8 @@ html #tab-studio[data-places="v2"] .settings-nav { gap: 6px; padding: 4px; borde
 #tab-studio[data-places="v2"]:is([data-settings-place="notifications"], [data-settings-place="problem"]) .settings-sections { max-width: 980px; }
 #tab-studio[data-places="v2"] .settings-sections > .settings-find { position: absolute; top: 0; right: 0; z-index: 1; width: min(280px, 38%); min-height: 38px; padding: 0 12px; border-radius: 10px; }
 #tab-studio[data-places="v2"] .settings-sections > .settings-find input { min-height: 36px; font-size: var(--f135, 13.5px); }
-#tab-studio[data-places="v2"] .settings-category-head { display: block; min-height: 40px; padding: 0 calc(min(280px, 38%) + 20px) 0 0; border-bottom: 0; text-align: left; }
-#tab-studio[data-places="v2"] .settings-category-head h2 { font: 650 var(--f22, 22px)/1.3 var(--font-display); letter-spacing: -.01em; }
+#tab-studio[data-places="v2"] .settings-category-head { display: block; min-height: 32px; padding: 0 calc(min(280px, 38%) + 20px) 0 0; border-bottom: 0; text-align: left; }
+#tab-studio[data-places="v2"] .settings-category-head h2 { font: 650 var(--f18, 18px)/1.3 var(--font-display); letter-spacing: -.01em; }
 #tab-studio[data-places="v2"] .settings-category-head p { margin-top: 4px; color: var(--muted); font-size: var(--f135, 13.5px); line-height: 1.5; max-width: 70ch; }
 #tab-studio[data-places="v2"] :is(.settings-search-results, .settings-find-empty) { margin-top: 56px; }
 #tab-studio[data-places="v2"] .settings-result-path { font-size: var(--f12, 12px); }

@@ -415,7 +415,7 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
 body:has(#friends-overlay:not([hidden])) > :is(header, main, #tree-rail), body:has(#friends-overlay:not([hidden])) :is(#workspace-layer, #vibe-layer, #idle-hud) { visibility: hidden; pointer-events: none; }
 #friends-overlay .friends-place-sheet { display: grid; gap: 16px; align-content: start; width: 100%; max-width: 1032px; max-height: none; overflow: visible; margin: 0 auto; padding: 22px 16px 28px; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
 #friends-overlay .friends-place-head { display: block; padding: 0; border: 0; background: none; }
-#friends-overlay .friends-place-head h1 { margin: 0; font: 650 var(--f22, 22px)/1.3 var(--font-display); letter-spacing: -.01em; color: var(--ivory); }
+#friends-overlay .friends-place-head h1 { margin: 0; font: 650 var(--f18, 18px)/1.3 var(--font-display); letter-spacing: -.01em; color: var(--ivory); }
 #friends-overlay .friends-place-about { margin: 4px 0 0; max-width: 70ch; font-size: var(--f135, 13.5px); line-height: 1.5; }
 #friends-overlay .friends-place-body { display: grid; gap: 14px; min-width: 0; }
 #friends-overlay .friends-place-body :is(.rooms, .pc-sync, .friends-card) { padding: 16px 18px; border-radius: 14px; background: color-mix(in srgb, var(--panel-solid) 72%, transparent); font-size: var(--f135, 13.5px); }

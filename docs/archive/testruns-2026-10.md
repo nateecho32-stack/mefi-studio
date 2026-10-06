@@ -6,6 +6,54 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-06 The studio log kept on disk and Trace's Load older (S2) land on main
+
+Branch `land/s2-log` in a cloud session (Linux, Node 24.21.0), stacked on S12 over main f1934aa (first gated over 00d32ca): the parked "not
+shippable" slice 9782c8c re-applied (one conflict in traceRead, both sides kept) and finished (2611874): main.cjs's "Log
+core" block, which the WIP's hooks called but never had (lazy require, the core opening 1.5 s after ready, early lines
+bounded at 5,000, smoke and capture launches under their own profile, worker output and assistant ticks at debug
+level); a fix in segment-archive.cjs (a month whose index was lost was invisible to reads until its next seal; open()
+now re-indexes it from the members' headers); and Trace's Load older (renderer/trace.js, template, booklet rebuilt).
+
+Logging cost (main.cjs's own logLine and "Log core" code, a 200,000-line burst, two rounds): 2.9-4.3 us per logLine
+on the main thread before, 5.4-6.0 us after; total CPU 0.55-0.87 s before, 1.74-1.83 s after with the async writes
+and credential masking; 15.5 MB of segments, 1.22 MB once sealed (12.7x); newest 250 lines 5.4 ms (14-15 ms from a
+sealed archive), a problems page 15-20 ms, a page 90% back 51-60 ms. Kill switches MEFI_STUDIO_LOG_CORE=0 and
+settings.logs.keep false (memory only, as before), settings.logs.level for the threshold; all pinned.
+
+`npm run check` ok, `npm run audit` 0 findings, `npm run lint` 0 errors and 45 warnings (as main). `npm run
+test:fast` with mefi-core built, on the final tree: 7270 tests, 7234 pass, 34 skipped, 2 fail: rust_parity_git's two, as on clean main
+with the same binary (for the Rust chat). New: segment_archive 15/15 (a crash after each of the six seal steps keeps
+every record exactly once and the month zcat-readable, a half-written member past the index, torn lines, month
+rollover, a lost index readable at open, the lock, the exit path), log_core 9/9 (with local-dirs: OneDrive refused by
+env and by segment, case-blind on Windows, the userData fallback), log_core_host 7/7, trace 9/9 (+ Load older);
+alerts_wiring and report_wiring keep their start order. Python contracts 248 OK (3 skipped). Electron under xvfb as a
+non-root user: startup_render, renderer_startup and renderer_recovery 21 pass, 1 skipped.
+
+## 2026-10-06 Live CLI progress and prompts a provider can cache (S12) land on main
+
+Branch `land/s12-cli` in a cloud session (Linux, Node 24.21.0) over main f1934aa (first gated over 0b051b8; merged with skills everywhere, whose loaded skills stay beside the system prompt while the transcript moves to the user text): the parked "not shippable" slice
+f7c8f42 re-applied by hand (main's worker prompt, tool loop and Codex app-server harness had moved), finished and
+tested (5ddb52d). Fixed on the way: a fresh Claude session UUID per attempt (the WIP reused one, which Claude Code
+refuses on a retry); live progress decided for every run so a CLI fallback attempt streams too; picture messages keep
+the old tool-loop order; seat fallbacks receive the user content so a tool round's transcript survives them.
+
+Prompt size (tests/prompt_cache.test.mjs, the prefix two consecutive requests share; no prompt got longer): two
+workers' prompts 5 -> 4,241 of 4,615 characters; two chat turns (30-card board, 16-message thread) 12 -> 4,128 of
+4,167; two tool rounds with a 3,080-character user message 3,292 -> 6,373 of 6,499. Kill switches
+MEFI_STUDIO_PROMPT_CACHE=0 / settings.ai.promptCache false (every old byte back) and MEFI_STUDIO_LIVE_PROGRESS=0 /
+settings.executor.liveProgress false (text mode), both pinned. Live progress was checked against Claude Code
+stream-json and codex --json event shapes in fixtures, not against a real CLI run here.
+
+`npm run check` ok, `npm run audit` 0 findings, `npm run lint` 0 errors and 45 warnings (as main). `npm run
+test:fast` with mefi-core built: 7129 tests, 7093 pass, 34 skipped, 2 fail: rust_parity_git "the actions answer like
+the JavaScript" and "the chip's host answers like git-host.cjs", as on clean main with the same binary (Linux git;
+for the Rust chat). New: cli_stream 10/10, executor_live_progress 4/4 (the real spawnNextJob: a chunked Claude stream
+sets session, todos, tool and usage, the sentinel counts once, the attempt keeps cliSession and usage; the switch off
+keeps the text command line; the app server is untouched), prompt_cache 14/14. Updated pins: agent_tools,
+agent_tools_project and agent_tools_skills (read the whole request), mentions_host, tools/test_mefi_studio_routing.py. The executor, agent
+tools, task oversight and outside-work suites 658/658 (1 skipped). Python contracts 248 OK (3 skipped).
+
 ## 2026-10-06 Test runs take turns on one PC, size to free memory and start the slowest suites first
 
 Branch `wip/test-lease` (C:\wt\coop) off 00d32ca: `scripts/test-lease.mjs` (a machine-wide lease board in

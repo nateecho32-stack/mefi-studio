@@ -1020,7 +1020,7 @@
   // ---- hosts ------------------------------------------------------------------------------------------------
   // Vibe's own layer is the host of the Home page: its backdrop, its drawers (the conversation, panels) and its keys stay.
   // The line that says the keys (#vibe-hint, from the box's own row) goes right under the box, as the prototype's.
-  const MOVED = ["vibe-compose", "vibe-hint", "vibe-flow", "vibe-feedback", "vibe-sparks", "vibe-decisions", "vibe-gate", "vibe-last"];
+  const MOVED = ["vibe-compose", "vibe-hint", "vibe-flow", "vibe-feedback", "vibe-sparks", "vibe-gate", "vibe-last"];
   function ensurePage(layer) {
     let today = byId("today-page");
     if (today) return today;
@@ -1054,14 +1054,18 @@
     const hero = layer.querySelector(".vibe-hero");
     place(hero, row);
     row.append(summary);
+    // What Mefi decided for you sits with the other counts, beside the greeting, not as a line of its own between the box and the board.
+    place(byId("vibe-decisions"), row);
     for (const id of MOVED) place(byId(id), slot);
     for (const chip of slot.querySelectorAll?.(".vibe-evolution-intent") ?? []) { const hint = chip.querySelector?.("small")?.textContent; if (hint && !chip.title) chip.title = hint; }
-    // Build it says its key inside the button (the prototype's "Build it  Ctrl Enter"); restore() takes it out again.
-    const build = byId("vibe-build");
-    if (build && !build.querySelector?.(".today-key")) {
-      const key = el("kbd", "today-key", "Ctrl Enter"); key.setAttribute("aria-hidden", "true");
-      build.append(key); build.setAttribute("aria-keyshortcuts", "Control+Enter");
-      (state.added ||= []).push(() => { key.remove?.(); build.removeAttribute?.("aria-keyshortcuts"); });
+    // Build it and Talk it over say their keys inside the buttons (the prototype's "Build it  Ctrl Enter"), so the box needs no line of
+    // keys under it (today.css leaves #vibe-hint out); restore() takes them out again.
+    for (const [id, words, shortcut] of [["vibe-build", "Ctrl Enter", "Control+Enter"], ["vibe-talk", "Enter", "Enter"]]) {
+      const button = byId(id);
+      if (!button || button.querySelector?.(".today-key")) continue;
+      const key = el("kbd", "today-key", words); key.setAttribute("aria-hidden", "true");
+      button.append(key); button.setAttribute("aria-keyshortcuts", shortcut);
+      (state.added ||= []).push(() => { key.remove?.(); button.removeAttribute?.("aria-keyshortcuts"); });
     }
     return today;
   }
@@ -1203,7 +1207,8 @@
     // How Mefi answers (ELI5 and the other styles), its skills and tools (renderer/chat-tools.js), beside the mode.
     const chatTools = el("span", "today-b-autonomy today-b-chat-tools"); chatTools.id = "today-build-chat-tools";
     const talk = button("", "today-b-talk", () => void homeSend("chat"), { title: "Talk it over with Mefi first: the words go to the conversation, and its page opens" });
-    talk.id = "today-build-talk"; talk.append(glyph("g-chat"), el("span", "", "Talk it over"));
+    // Each button says its key (the line of keys under the box steps aside in today.css), as Social's Today does.
+    talk.id = "today-build-talk"; talk.append(glyph("g-chat"), el("span", "", "Talk it over"), el("kbd", "today-key", "Enter"));
     const build = button("", "today-b-send", () => void homeSend("work"), { title: "Build it: the words become a task, and a worker picks it up" });
     build.id = "today-build-build"; build.append(el("span", "", "Build it"), el("kbd", "today-key", "Ctrl Enter"));
     tools.append(attach, picker, autonomy, chatTools, talk, build);
