@@ -432,8 +432,27 @@
     }).catch(function () { /* the button keeps pointing at the download page */ });
   }
 
+  // Links to the old Home's sections (the roadmap's "See the screens", posts on Discord) land on the closest new one.
+  var OLD_ANCHORS = {
+    "first-look": "look", "pillars-title": "look", "flow": "how", "flow-title": "how",
+    "community-title": "friends", "tour-title": "studio", "skin-title": "themes", "install-title": "get",
+    "rust": "roadmap.html#now", "rust-title": "roadmap.html#now", "roadmap-title": "roadmap.html"
+  };
+  function oldAnchors() {
+    var id = decodeURIComponent(location.hash.slice(1));
+    if (!id || document.getElementById(id)) return;
+    var to = OLD_ANCHORS[id] || (/^look-/.test(id) ? "look" : "");
+    if (!to) return;
+    if (to.indexOf(".html") > 0) { location.replace(to); return; }
+    history.replaceState(null, "", "#" + to);
+    var el = document.getElementById(to);
+    if (el) el.scrollIntoView({ block: "start", behavior: "instant" });
+  }
+
   // =========================================================================
   document.addEventListener("DOMContentLoaded", function () {
+    safely("old links", oldAnchors);
+    window.addEventListener("hashchange", function () { safely("old links", oldAnchors); });
     safely("orbs", mountOrbs);
     safely("friend chips", friendChips);
     var gated = false;

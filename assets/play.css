@@ -71,6 +71,14 @@
 .pl-idea { padding: 6px 12px; border-radius: 999px; font: 560 13px var(--font-ui); color: var(--muted); background: rgb(255 255 255 / 0.04); border: 1px solid rgb(255 255 255 / 0.09); cursor: pointer; transition: color .2s, background .2s, border-color .2s, transform .3s var(--ease-spring); }
 .pl-idea:hover { color: var(--ivory); transform: translateY(-1px); }
 .pl-idea[aria-pressed="true"] { color: var(--ivory); background: rgb(var(--accent-2-rgb) / 0.14); border-color: rgb(var(--accent-2-rgb) / 0.42); }
+.pl-talk { display: inline-flex; align-items: center; gap: 9px; padding: 9px 9px 9px 15px; border-radius: 12px; font: 650 14px var(--font-ui); color: var(--ivory); cursor: pointer; background: rgb(255 255 255 / 0.05); border: 1px solid rgb(255 255 255 / 0.14); transition: background .2s, border-color .2s; }
+.pl-talk:hover { background: rgb(255 255 255 / 0.09); border-color: rgb(255 255 255 / 0.24); }
+.pl-talk kbd { font: 650 11px var(--font-ui); padding: 3px 7px; border-radius: 7px; color: var(--muted); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12); }
+.pl-app:not([data-step="0"]) .pl-talk { opacity: .45; pointer-events: none; }
+.pl-talkback { display: flex; gap: 12px; align-items: flex-start; max-width: 1060px; margin: 12px auto 0; padding: 12px 16px; border-radius: 16px; background: rgb(var(--accent-2-rgb) / 0.08); box-shadow: inset 0 0 0 1px rgb(var(--accent-2-rgb) / 0.2); animation: pl-msg-in .55s var(--ease-spring) both; }
+.pl-talkback p { margin: 0; font-size: 14px; color: var(--text); }
+.pl-talkback p b { display: block; font-size: 12px; color: var(--accent-bright); }
+.pl-orb.sm { width: 28px; height: 28px; animation: none; }
 .pl-build { display: inline-flex; align-items: center; gap: 9px; padding: 9px 9px 9px 16px; border: 0; border-radius: 12px; font: 700 14.5px var(--font-ui); color: var(--ink); cursor: pointer; background: linear-gradient(180deg, #fff, var(--accent-bright) 30%, var(--accent)); box-shadow: inset 0 1px 0 #fff, 0 10px 26px -10px rgb(var(--accent-2-rgb) / 0.7); transition: transform .3s var(--ease-spring); }
 .pl-build:hover { transform: translateY(-1px); } .pl-build:active { transform: scale(.96); }
 .pl-build svg { width: 15px; height: 15px; fill: currentColor; }
@@ -271,7 +279,7 @@
   .pl-crumb { font-size: 13px; }
   .pl-skip { padding: 7px 10px 7px 12px; font-size: 12.5px; }
   .pl-hello h2 { font-size: 1.3rem; }
-  .pl-build kbd { display: none; }
+  .pl-build kbd, .pl-talk kbd { display: none; }
 }
 @media (max-width: 480px) {
   .pl-top { gap: 8px; padding: 0 8px 0 12px; }

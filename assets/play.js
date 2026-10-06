@@ -102,6 +102,7 @@
               '<textarea id="pl-idea" rows="2" maxlength="120" spellcheck="false" placeholder="Describe an idea, a fix or a question…"></textarea>' +
               '<div class="pl-box-row">' +
                 '<div class="pl-ideas" role="group" aria-label="Ideas to try"></div>' +
+                '<button type="button" class="pl-talk"><span>Talk it over</span><kbd>Enter</kbd></button>' +
                 '<button type="submit" class="pl-build">' + SVG.spark + '<span>Build it</span><kbd>Ctrl Enter</kbd></button>' +
               '</div>' +
             '</form>' +
@@ -302,8 +303,32 @@
       clearInterval(typer);
       if (!custom) { custom = true; idea = "own"; $$(".pl-idea").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.idea === "own")); }); $$(".pl-proj").forEach(function (n) { n.textContent = IDEAS.own.project; }); }
     });
-    box.addEventListener("keydown", function (e) { if (e.key === "Enter" && (e.ctrlKey || !e.shiftKey)) { e.preventDefault(); $(".pl-build").click(); } });
+    // As in Studio: Enter talks it over, Ctrl Enter builds it.
+    box.addEventListener("keydown", function (e) {
+      if (e.key !== "Enter" || e.shiftKey) return;
+      e.preventDefault();
+      (e.ctrlKey || e.metaKey ? $(".pl-build") : $(".pl-talk")).click();
+    });
+    $(".pl-talk").addEventListener("click", function () { talkBack(); });
     $(".pl-box").addEventListener("submit", function (e) { e.preventDefault(); });
+
+    // Talk it over: Mefi answers under the box, then Build it is the next thing to press.
+    var TALK = {
+      game: "Easy: the time, the place and an RSVP friends can press. Build it and I'll split it into three steps.",
+      pixel: "A small canvas, a few colours and a Save button. Build it and I'll split it into three steps.",
+      band: "Next gig on top, the songs below with a play button. Build it and I'll split it into three steps.",
+      own: "Got it. Build it and I'll work out the steps and who does what."
+    };
+    function talkBack() {
+      if (app.dataset.step !== "0") return;
+      var old = $(".pl-talkback"); if (old) old.remove();
+      var reply = el("div", "pl-talkback");
+      reply.appendChild(el("span", "pl-orb sm"));
+      var p = el("p"); p.appendChild(el("b", "", "Mefi")); p.appendChild(document.createTextNode(TALK[custom ? "own" : idea])); reply.appendChild(p);
+      $(".pl-box").insertAdjacentElement("afterend", reply);
+      hint($(".pl-build"), "Build it");
+      say("Mefi: " + TALK[custom ? "own" : idea]);
+    }
 
     // ---- leaving ---------------------------------------------------------------
     var leaving = false;
@@ -335,6 +360,7 @@
         if (custom && !box.value.trim()) box.value = "Something for my friends and me";
         var asked = custom ? box.value.trim() : spec.text;
         clearInterval(typer);
+        var talked = $(".pl-talkback"); if (talked) talked.remove();
         app.classList.add("sent");
         say("Three builders start on " + asked);
         await sleep(420); alive();
