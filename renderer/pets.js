@@ -99,20 +99,29 @@
   // breathe, look around), sleep (eyes shut, little z's), curious (hover
   // beside a resting pointer), dash (dart away from a fast pointer), loop
   // (a celebration loop with a puff of fire), visit (fly to something that
-  // needs you and hover there). A step reads only `world` (the window size,
-  // the pointer, rectangles to keep clear of, perch spots) and the clock.
-  const SPEED = { wander: 150, perch: 170, dash: 380, curious: 190, visit: 260, loop: 230 };
+  // needs you and hover there), play (chase round another pet), and for a
+  // friend's pet that visits: arrive (fly in from an edge) and leave (fly out
+  // again). A step reads only `world` (the window size, the pointer,
+  // rectangles to keep clear of, perch spots, the other pets) and the clock.
+  const SPEED = { wander: 150, perch: 170, dash: 380, curious: 190, visit: 260, loop: 230, play: 235, arrive: 280, leave: 320 };
   const TURN = 4.6; // radians a second
-  function flight({ seed = 7, size = 1, width = 1280, height = 800 } = {}) {
+  function flight({ seed = 7, size = 1, width = 1280, height = 800, id = "you", arrive = false } = {}) {
     const random = seeded(seed);
     const pick = (low, high) => low + random() * (high - low);
+    // A visiting pet starts just outside a side of the window.
+    const side = Math.floor(random() * 4);
+    const start = arrive
+      ? { x: side === 0 ? -70 : side === 1 ? width + 70 : pick(80, width - 80), y: side === 2 ? -70 : side === 3 ? height + 70 : pick(80, height - 80) }
+      : { x: width * 0.72, y: height * 0.2 };
     const pet = {
-      x: width * 0.72, y: height * 0.2, heading: Math.PI * 0.85, speed: 0, size,
+      id, x: start.x, y: start.y, heading: arrive ? Math.atan2(height / 2 - start.y, width / 2 - start.x) : Math.PI * 0.85, speed: 0, size,
       mode: "wander", modeAt: 0, clock: 0, flap: 0, flapRate: 8, flapAmp: 1, glide: 0,
       target: null, waypoints: 0, perch: null, coilAngle: 0, coilFrom: 0, blinkAt: 2, blink: 0,
       look: 0, lookGoal: 0, lookAt: 3, breathe: 0, fire: 0, mouth: 0, sleepy: 0, held: false,
+      playWith: null, playFor: 0, playPhase: 0, gone: false,
       spine: [], particles: [], events: [],
     };
+    if (arrive) pet.mode = "arrive";
     for (let index = 0; index < SEGMENTS; index += 1) pet.spine.push({ x: pet.x - index * LINKS[index] * size, y: pet.y });
     follow(pet.spine, size);
 
@@ -149,8 +158,26 @@
       }
       if (mode === "loop") { pet.loopCenter = { x: pet.x + Math.cos(pet.heading) * 46 * size, y: pet.y + Math.sin(pet.heading) * 46 * size }; pet.loopFrom = pet.heading - Math.PI / 2; pet.fire = 0.55; }
       if (mode === "sleep") { pet.sleepy = 1; }
+      if (mode === "play") { pet.playFor = pick(3.5, 6.5); pet.playPhase = random() * TAU; }
+      if (mode === "leave") {
+        // Out by the nearest side.
+        const w = world.width, h = world.height;
+        const gaps = [pet.x, w - pet.x, pet.y, h - pet.y];
+        const out = gaps.indexOf(Math.min(...gaps));
+        pet.target = out === 0 ? { x: -120, y: pet.y } : out === 1 ? { x: w + 120, y: pet.y } : out === 2 ? { x: pet.x, y: -120 } : { x: pet.x, y: h + 120 };
+      }
       pet.events.push(mode);
       if (pet.events.length > 40) pet.events.shift();
+    }
+    // The closest other pet, by its head.
+    function nearest(world) {
+      let best = null;
+      for (const other of world.friends || []) {
+        if (other.id === pet.id) continue;
+        const distance = Math.hypot(other.x - pet.x, other.y - pet.y);
+        if (!best || distance < best.distance) best = { id: other.id, x: other.x, y: other.y, distance };
+      }
+      return best;
     }
     // Heads for (x, y), turning at most TURN a second and slowing to arrive.
     function steer(dt, x, y, top, sway = 1) {
@@ -200,6 +227,9 @@
           if (typing && world.calm !== false) { enter("perch", world); break; }
           if (calm || world.background) { enter("perch", world); break; }
           if (pointer && pointer.speed > 1400 && Math.hypot(pointer.x - pet.x, pointer.y - pet.y) < 110) { enter("dash", world); break; }
+          // Another pet nearby: now and then they chase round each other.
+          const friend = nearest(world);
+          if (friend && friend.distance < 420 && random() < dt * 0.3) { pet.playWith = friend.id; enter("play", world); break; }
           // A pointer resting nearby draws it over now and then: sooner the closer it is.
           if (pointer && pointer.still > 1.6 && pointer.still < 60 && !(world.avoid || []).some((rect) => inside(rect, pointer.x, pointer.y, 20))) {
             const near = Math.hypot(pointer.x - pet.x, pointer.y - pet.y);
@@ -272,6 +302,28 @@
           if (time > 1.25) { pet.speed = SPEED.wander; enter("wander", world); }
           break;
         }
+        case "play": {
+          const friend = (world.friends || []).find((other) => other.id === pet.playWith);
+          if (!friend || time > pet.playFor || typing || calm) { pet.playWith = null; enter(calm || typing ? "perch" : "wander", world); break; }
+          // Round and round: a point on a small circle about the friend.
+          const angle = pet.clock * 3.1 + pet.playPhase;
+          steer(dt, friend.x + Math.cos(angle) * 48 * pet.size, friend.y + Math.sin(angle) * 34 * pet.size, SPEED.play, 0.5);
+          if (time > 0.6 && (pet.clock % 2.4) < dt) puff(pet, "heart", 1);
+          break;
+        }
+        case "arrive": {
+          // In from the edge, toward the owner's pet if there is one.
+          const host = (world.friends || []).find((other) => other.id === "you");
+          const goal = host || { x: world.width / 2, y: world.height / 3 };
+          const distance = steer(dt, goal.x, goal.y, SPEED.arrive, 0.4);
+          if (distance < 120 || time > 6) { if (host) { pet.playWith = "you"; enter("play", world); } else enter("wander", world); }
+          break;
+        }
+        case "leave": {
+          steer(dt, pet.target.x, pet.target.y, SPEED.leave, 0.3);
+          if (pet.x < -90 || pet.y < -90 || pet.x > world.width + 90 || pet.y > world.height + 90) pet.gone = true;
+          break;
+        }
         case "visit": {
           const spot = pet.visit || { x: world.width - 80, y: 60 };
           const goalX = clamp(spot.x - 60 * pet.size, 30, world.width - 30), goalY = clamp(spot.y + 40 * pet.size, 30, world.height - 30);
@@ -281,9 +333,11 @@
         }
         default: enter("wander", world);
       }
-      // Stay inside the window.
-      pet.x = clamp(pet.x, 12, Math.max(13, world.width - 12));
-      pet.y = clamp(pet.y, 12, Math.max(13, world.height - 12));
+      // Stay inside the window (a visitor comes in and goes out past its edge).
+      if (!["arrive", "leave"].includes(pet.mode)) {
+        pet.x = clamp(pet.x, 12, Math.max(13, world.width - 12));
+        pet.y = clamp(pet.y, 12, Math.max(13, world.height - 12));
+      }
       pet.spine[0].x = pet.x; pet.spine[0].y = pet.y;
       follow(pet.spine, pet.size);
       wings(dt);
@@ -337,7 +391,7 @@
       pet.heading = 0.13 * 89 + Math.PI / 2;
       pet.speed = 0; pet.flapAmp = 0; pet.fold = 1;
     }
-    return { pet, step, enter: (mode, world) => enter(mode, world), settle: settleOnPerch };
+    return { pet, step, enter: (mode, world) => enter(mode, world), settle: settleOnPerch, leave: (world) => { if (pet.mode !== "leave") enter("leave", world); } };
   }
 
   // ---- particles --------------------------------------------------------------
@@ -422,7 +476,7 @@
     const length = Math.hypot(dx, dy) || 1;
     return { fx: dx / length, fy: dy / length, nx: -dy / length, ny: dx / length };
   }
-  function paintPet(ctx, pet, skin, { detail = 1 } = {}) {
+  function paintPet(ctx, pet, skin, { detail = 1, label = "" } = {}) {
     const colours = skinColours(skin);
     const s = pet.size;
     const spine = pet.spine;
@@ -490,6 +544,20 @@
     tailTip(ctx, pet, sides, colours);
     headShape(ctx, pet, colours);
     particles(ctx, pet, colours);
+    if (label) nameTag(ctx, pet, label);
+  }
+  // A visiting pet carries its owner's name above it, outlined so it reads on any page.
+  function nameTag(ctx, pet, label) {
+    const head = pet.spine[0];
+    ctx.save();
+    ctx.font = "600 12px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(10, 12, 16, 0.75)";
+    ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+    ctx.strokeText(label, head.x, head.y - 22 * pet.size);
+    ctx.fillText(label, head.x, head.y - 22 * pet.size);
+    ctx.restore();
   }
   function bodyPath(ctx, sides) {
     ctx.beginPath();
@@ -758,35 +826,47 @@
   }
 
   // ---- living on the page -----------------------------------------------------
-  const CANVAS = 360; // css px; the pet and its fire fit inside
-  const live = { canvas: null, ctx: null, sim: null, running: false, raf: 0, timer: 0, last: 0, painted: 0, dpr: 1, cost: 0, colours: null };
+  // Each pet on screen is a view: its flight, a small canvas of its own and
+  // whose it is. "you" is the owner's Ember; a friend's pet visiting from a
+  // room is a guest (MefiPets.guests). One clock steps and paints them all.
+  const CANVAS = 360; // css px; a pet and its fire fit inside
+  const MAX_GUESTS = 5;
+  const loop = { running: false, raf: 0, timer: 0, last: 0, dpr: 1, cost: 0, painted: 0 };
+  const views = new Map(); // id -> { id, canvas, ctx, sim, skin, label, guest }
   const input = { x: null, y: null, at: 0, speed: 0, keyAt: -1e9, anyAt: now(), still: 0 };
-  const world = { width: 1280, height: 800, pointer: null, quiet: 0, typing: false, motion: "on", avoid: [], perches: [], react: null, visit: null, come: true, calm: true, background: false };
+  const world = { width: 1280, height: 800, pointer: null, quiet: 0, typing: false, motion: "on", avoid: [], perches: [], react: null, visit: null, come: true, calm: true, background: false, friends: [] };
+  let pending = null; // a reaction waiting for the owner's pet's next step
   const headless = () => /[?&](smoke|capture)=1\b/.test(String(window.location?.search || ""));
   const motionMode = () => {
     const mode = document.documentElement?.dataset?.motion;
     if (window.MefiNav?.noMotion?.() === true || mode === "off") return "off";
     return mode === "calm" ? "calm" : "on";
   };
-  function ensureCanvas() {
-    if (live.canvas) return live.canvas;
+  function makeView(id, { guest = false, skin = "theme", label = "", size = 1 } = {}) {
     const canvas = document.createElement("canvas");
-    canvas.id = "studio-pet";
+    if (!guest) canvas.id = "studio-pet";
     canvas.setAttribute("aria-hidden", "true");
-    canvas.className = "studio-pet";
+    canvas.className = guest ? "studio-pet is-guest" : "studio-pet";
     document.body.append(canvas);
-    live.canvas = canvas;
-    live.ctx = canvas.getContext?.("2d") || null;
-    sizeCanvas();
-    return canvas;
+    readPage();
+    const view = { id, canvas, ctx: canvas.getContext?.("2d") || null, skin, label, guest,
+      sim: flight({ id, seed: Math.floor(Math.random() * 1e9), size, width: world.width, height: world.height, arrive: guest }) };
+    sizeCanvas(view);
+    views.set(id, view);
+    return view;
   }
-  function sizeCanvas() {
-    if (!live.canvas) return;
-    live.dpr = Math.min(2, Math.max(1, Number(window.devicePixelRatio) || 1));
-    live.canvas.width = Math.round(CANVAS * live.dpr);
-    live.canvas.height = Math.round(CANVAS * live.dpr);
-    live.canvas.style.width = `${CANVAS}px`;
-    live.canvas.style.height = `${CANVAS}px`;
+  function dropView(id) {
+    const view = views.get(id);
+    if (!view) return;
+    view.canvas.remove();
+    views.delete(id);
+  }
+  function sizeCanvas(view) {
+    loop.dpr = Math.min(2, Math.max(1, Number(window.devicePixelRatio) || 1));
+    view.canvas.width = Math.round(CANVAS * loop.dpr);
+    view.canvas.height = Math.round(CANVAS * loop.dpr);
+    view.canvas.style.width = `${CANVAS}px`;
+    view.canvas.style.height = `${CANVAS}px`;
   }
   // The things it keeps clear of, and the edges it sits on: read now and then, not every frame.
   let lookedAt = 0;
@@ -835,34 +915,46 @@
     if (still > 0.15) input.speed = lerp(input.speed, 0, 0.3);
     world.pointer = { x: input.x, y: input.y, speed: input.speed, still };
   }
-  // A step for every frame; a paint as often as the mode needs: smooth in
-  // flight, slower while sitting, slowest asleep.
+  // A step for every frame; a paint as often as the busiest pet needs: smooth
+  // in flight, slower while sitting, slowest asleep.
   const FPS = { rest: 15, sleep: 6, coil: 40 };
   function frame(at) {
-    live.raf = 0; live.timer = 0;
-    if (!live.running) return;
-    const dt = Math.min(0.05, Math.max(0, (at - (live.last || at)) / 1000));
-    live.last = at;
+    loop.raf = 0; loop.timer = 0;
+    if (!loop.running) return;
+    const dt = Math.min(0.05, Math.max(0, (at - (loop.last || at)) / 1000));
+    loop.last = at;
     if (at - lookedAt > 700) readPage();
     inputWorld(at);
     world.motion = motionMode();
     world.background = typeof document.hasFocus === "function" ? !document.hasFocus() : false;
     world.calm = prefs.calm; world.come = prefs.come;
-    live.sim.step(dt, world);
-    paint();
+    // Where every pet's head is, so they can find each other to play.
+    world.friends = [...views.values()].map((view) => ({ id: view.id, x: view.sim.pet.x, y: view.sim.pet.y }));
+    for (const view of views.values()) {
+      // Reactions (a finished job, something needing you) are the owner's pet's alone.
+      world.react = view.id === "you" ? pending : null;
+      view.sim.step(dt, world);
+      if (view.id === "you") pending = null;
+    }
+    world.react = null;
+    for (const view of [...views.values()]) {
+      if (view.sim.pet.gone) dropView(view.id);
+      else paint(view);
+    }
+    if (!views.size) { stop(); return; }
     schedule();
   }
   function schedule() {
-    if (!live.running || live.raf || live.timer) return;
-    const mode = live.sim?.pet?.mode;
-    const still = world.motion === "off" && mode === "sleep";
-    if (still) return; // drawn once, nothing moves
-    const fps = FPS[mode] || 60;
-    if (fps >= 60 || typeof setTimeout !== "function") live.raf = requestAnimationFrame(frame);
-    else live.timer = setTimeout(() => { live.timer = 0; live.raf = requestAnimationFrame(frame); }, 1000 / fps);
+    if (!loop.running || loop.raf || loop.timer) return;
+    const modes = [...views.values()].map((view) => view.sim.pet.mode);
+    // With motion off every pet sits asleep, drawn once.
+    if (world.motion === "off" && modes.every((mode) => mode === "sleep")) return;
+    const fps = Math.max(...modes.map((mode) => FPS[mode] || 60));
+    if (fps >= 60 || typeof setTimeout !== "function") loop.raf = requestAnimationFrame(frame);
+    else loop.timer = setTimeout(() => { loop.timer = 0; loop.raf = requestAnimationFrame(frame); }, 1000 / fps);
   }
-  function paint() {
-    const { canvas, ctx, sim } = live;
+  function paint(view) {
+    const { canvas, ctx, sim } = view;
     if (!canvas || !ctx || !sim) return;
     const pet = sim.pet;
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -873,42 +965,76 @@
     const started = now();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.setTransform(live.dpr, 0, 0, live.dpr, -left * live.dpr, -top * live.dpr);
-    paintPet(ctx, pet, look().skin, { detail: live.cost > 5 ? 0 : 1 });
-    live.cost = lerp(live.cost, now() - started, 0.1);
-    live.painted += 1;
+    ctx.setTransform(loop.dpr, 0, 0, loop.dpr, -left * loop.dpr, -top * loop.dpr);
+    paintPet(ctx, pet, view.guest ? view.skin : look().skin, { detail: loop.cost > 5 ? 0 : 1, label: view.guest ? view.label : "" });
+    loop.cost = lerp(loop.cost, now() - started, 0.1);
+    loop.painted += 1;
   }
   function start() {
-    if (live.running || headless() || typeof requestAnimationFrame !== "function") return;
-    ensureCanvas();
-    if (!live.ctx) return;
-    readPage();
-    if (!live.sim) live.sim = flight({ seed: Math.floor(Math.random() * 1e9), size: prefs.size, width: world.width, height: world.height });
-    live.sim.pet.size = look().on ? prefs.size : 1;
-    live.running = true;
-    live.canvas.hidden = false;
-    live.last = 0;
+    if (loop.running || headless() || typeof requestAnimationFrame !== "function" || !views.size) return;
+    if (![...views.values()].some((view) => view.ctx)) return;
+    loop.running = true;
+    for (const view of views.values()) view.canvas.hidden = false;
+    loop.last = 0;
     schedule();
   }
   function stop() {
-    live.running = false;
-    if (live.raf) cancelAnimationFrame(live.raf);
-    if (live.timer) clearTimeout(live.timer);
-    live.raf = 0; live.timer = 0;
-    if (live.canvas) live.canvas.hidden = true;
+    loop.running = false;
+    if (loop.raf) cancelAnimationFrame(loop.raf);
+    if (loop.timer) clearTimeout(loop.timer);
+    loop.raf = 0; loop.timer = 0;
+    for (const view of views.values()) view.canvas.hidden = true;
   }
+  // The owner's pet is there while it is on; guests while their room is open.
   function sync() {
+    if (headless()) return;
+    const shown = look();
+    if (shown.on && !views.has("you")) makeView("you", { size: prefs.size });
+    if (!shown.on && views.has("you")) dropView("you");
     const visible = document.visibilityState !== "hidden";
-    if (look().on && visible) start(); else stop();
+    if (views.size && visible) start(); else stop();
   }
-  function wake() { if (live.running && !live.raf && !live.timer) { live.last = 0; schedule(); } }
+  function wake() { if (loop.running && !loop.raf && !loop.timer) { loop.last = 0; schedule(); } }
+
+  // ---- friends' pets ------------------------------------------------------------
+  // A room's other members' pets (relay "roomPets", through renderer/rooms.js):
+  // each new one flies in from an edge and plays with the owner's Ember, each
+  // one that left flies out again. Only while the owner's own pet is on (one
+  // switch for every creature on screen), never with motion off, five at most.
+  const SKINS_OK = new Set(SKIN_LIST.map((skin) => skin.id));
+  let roomList = [];
+  function guests(list = roomList) {
+    roomList = Array.isArray(list) ? list : [];
+    const wanted = new Map();
+    if (look().on && motionMode() !== "off" && !headless()) {
+      for (const entry of Array.isArray(list) ? list : []) {
+        const id = String(entry?.id ?? entry?.userId ?? "");
+        const pet = entry?.pet;
+        if (!id || id === "you" || !pet || pet.kind !== "dragon" || wanted.size >= MAX_GUESTS) continue;
+        const owner = String(entry.name ?? "").trim().slice(0, 32);
+        const name = String(pet.name ?? "").trim().slice(0, 24);
+        wanted.set(`guest:${id}`, { skin: SKINS_OK.has(pet.skin) ? pet.skin : "theme", label: owner && name ? `${name} · ${owner}` : name || owner });
+      }
+    }
+    for (const [id, view] of views) {
+      if (!view.guest || wanted.has(id)) continue;
+      if (loop.running) view.sim.leave(world); else dropView(id);
+    }
+    for (const [id, guest] of wanted) {
+      const view = views.get(id);
+      if (view) { view.skin = guest.skin; view.label = guest.label; if (view.sim.pet.mode === "leave") view.sim.enter("wander", world); continue; }
+      makeView(id, { guest: true, ...guest });
+    }
+    sync();
+    return [...views.values()].filter((view) => view.guest && view.sim.pet.mode !== "leave").map((view) => view.id.slice(6));
+  }
 
   // ---- reacting to the studio -------------------------------------------------
   let running = null;
   let inbox = null;
   function react(kind) {
-    if (!live.sim || !["celebrate", "alert", "wake"].includes(kind)) return false;
-    world.react = kind;
+    if (!views.has("you") || !["celebrate", "alert", "wake"].includes(kind)) return false;
+    pending = kind;
     if (kind === "alert") {
       const target = document.querySelector?.('#app-inbox, [data-nav="inbox"], #shell-inbox, .shell-inbox');
       const rect = target?.getBoundingClientRect?.();
@@ -942,8 +1068,9 @@
     if ([0.8, 1, 1.25].includes(Number(patch.size))) next.size = Number(patch.size);
     prefs = next;
     writeStore();
-    if (live.sim) live.sim.pet.size = prefs.size;
+    if (views.has("you")) views.get("you").sim.pet.size = prefs.size;
     sync();
+    if (roomList.length) guests(roomList);
     window.dispatchEvent?.(new CustomEvent("mefi:pet", { detail: state() }));
     return state();
   }
@@ -1118,14 +1245,14 @@
     mountCard();
     for (const type of ["mefi-shop-owned", "mefi:pet", "mefi:effects"]) window.addEventListener(type, repaintCard);
     for (const type of ["pointermove", "pointerdown", "keydown", "wheel"]) window.addEventListener(type, noteInput, { passive: true, capture: true });
-    window.addEventListener("resize", () => { sizeCanvas(); readPage(); });
+    window.addEventListener("resize", () => { for (const view of views.values()) sizeCanvas(view); readPage(); });
     document.addEventListener("visibilitychange", sync);
     window.addEventListener("focus", wake);
     window.addEventListener("mefi:nav-badges", onBadges);
     window.addEventListener("mefi:inbox", onInbox);
     window.addEventListener("mefi-shop-owned", sync);
     // The theme skin follows the theme.
-    window.addEventListener("mefi-theme-change", () => { if (live.running) paint(); });
+    window.addEventListener("mefi-theme-change", () => { if (loop.running) for (const view of views.values()) paint(view); });
     sync();
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init, { once: true });
@@ -1134,7 +1261,7 @@
   window.MefiPets = {
     kinds: () => KINDS.map((kind) => ({ ...kind })),
     skins: () => SKIN_LIST.map((skin) => ({ ...skin })),
-    state, set, preview, endPreview, react, paintPreview,
+    state, set, preview, endPreview, react, paintPreview, guests,
     // For tests and the Shop: a pet's flight to step without the page.
     simulate: (options) => flight(options),
     paint: (ctx, pet, skin, options) => paintPet(ctx, pet, skin, options),

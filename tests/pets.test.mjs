@@ -197,6 +197,48 @@ test("Settings › Appearance gets one card for the pet and the menu effect, poi
   assert.doesNotMatch(text, /Try a skin/, "every skin owned: nothing left to try");
 });
 
+test("two pets play: they chase round each other; a friend's pet flies in, plays with yours, and flies out when it leaves", () => {
+  const { pets } = load();
+  const mine = pets.simulate({ seed: 31, id: "you" });
+  const theirs = pets.simulate({ seed: 32, id: "guest:42", arrive: true });
+  assert.ok(theirs.pet.x < 0 || theirs.pet.y < 0 || theirs.pet.x > 1280 || theirs.pet.y > 800, "a visitor starts outside the window");
+  const world = WORLD();
+  let closest = Infinity;
+  for (let index = 0; index < 60 * 20; index += 1) {
+    world.friends = [mine, theirs].map((sim) => ({ id: sim.pet.id, x: sim.pet.x, y: sim.pet.y }));
+    mine.step(1 / 60, world);
+    theirs.step(1 / 60, world);
+    closest = Math.min(closest, Math.hypot(mine.pet.x - theirs.pet.x, mine.pet.y - theirs.pet.y));
+  }
+  assert.ok(theirs.pet.events.includes("play"), `the visitor came to play (${theirs.pet.events.join(" > ")})`);
+  assert.ok(closest < 90, `they came within ${closest.toFixed(0)} px of each other`);
+  theirs.leave(world);
+  for (let index = 0; index < 60 * 8 && !theirs.pet.gone; index += 1) {
+    world.friends = [mine, theirs].map((sim) => ({ id: sim.pet.id, x: sim.pet.x, y: sim.pet.y }));
+    theirs.step(1 / 60, world);
+  }
+  assert.equal(theirs.pet.gone, true, "it left by the nearest side");
+});
+
+test("guests: a room's other pets get a view each (five at most), named for their owners; none with motion off", () => {
+  const room = Array.from({ length: 7 }, (_, index) => ({ id: `u${index}`, name: `Friend ${index}`, pet: { kind: "dragon", skin: index === 1 ? "void" : "nope", name: `Pip ${index}` } }));
+  room.push({ id: "u9", name: "No pet", pet: null });
+  const env = load();
+  assert.deepEqual(Array.from(env.pets.guests(room)), [], "your own pet is off: no visitors either");
+  env.pets.set({ on: true });
+  assert.deepEqual(Array.from(env.pets.guests(room)), ["u0", "u1", "u2", "u3", "u4"]);
+  const canvases = env.document.body.children.filter((node) => node.className === "studio-pet is-guest");
+  assert.equal(canvases.length, 5, "a canvas each, none for a member without a pet");
+  assert.deepEqual(Array.from(env.pets.guests(room.slice(1, 3))), ["u1", "u2"], "those who left go");
+  assert.deepEqual(Array.from(env.pets.guests([])), []);
+  env.pets.guests(room);
+  env.pets.set({ on: false });
+  assert.equal(env.document.body.children.filter((node) => node.className === "studio-pet is-guest").length, 0, "switching yours off sends them all home");
+  const still = load({ motion: "off" });
+  still.pets.set({ on: true });
+  assert.deepEqual(Array.from(still.pets.guests(room)), [], "motion Off: no visitors flying in");
+});
+
 test("a preview frame for the Shop's cards draws without a page", () => {
   const { pets } = load();
   const calls = [];
