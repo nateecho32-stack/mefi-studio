@@ -1826,7 +1826,7 @@
   const startSwitch = document.getElementById("settings-start-vibe");
   if (startSwitch) {
     startSwitch.checked = startsInVibe();
-    startSwitch.addEventListener("change", () => { setStartsInVibe(startSwitch.checked); window.MefiToast?.(startSwitch.checked ? "Every launch starts in Social." : "Each launch keeps the mode you closed in.", "info"); });
+    startSwitch.addEventListener("change", () => { setStartsInVibe(startSwitch.checked); window.MefiToast?.(startSwitch.checked ? "Every launch starts in Social." : "Each launch opens the mode you last used.", "info"); });
   }
 
   window.addEventListener("mefi:nav", paintRail);
