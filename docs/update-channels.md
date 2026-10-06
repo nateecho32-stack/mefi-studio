@@ -12,19 +12,25 @@ atomically in the existing release settings. It survives restart; old and
 unknown settings select Stable. It never enables itself just because a build
 version contains a prerelease suffix.
 
-The proposed workflow integration is deferred from this application-only
-checkpoint. The current ci.yml does not publish supported development builds,
-so the channel correctly reports that no artifact is available. The preserved
-full checkpoint contains the proposed workflow; it requires separate authorized
-publication and qualification before development delivery can work.
+ci.yml publishes the development builds (the owner turned this on on
+6 October 2026). After all its checks pass, every run packages a fresh portable
+build with the existing release packager (`scripts/package-development.mjs`),
+so a broken packager fails the branch that broke it. Only a push to main
+uploads that build, as an immutable Actions artifact named
+mefi-studio-development-win32-x64. Review branches and pull requests publish no
+development executables. This workflow creates no release and no version tag.
+Artifacts expire after 14 days. The check examines the most recent 20
+successful main push runs; it reports when no supported, unexpired artifact
+exists. It never substitutes source code for a missing build.
 
-In that proposed workflow, after all existing checks in ci.yml pass, a push to main packages a fresh
-portable build with the existing release packager and uploads an immutable
-Actions artifact named mefi-studio-development-win32-x64. Review branches and
-pull requests publish no development executables. This workflow creates no
-release and no version tag. Artifacts expire after 14 days. The check examines
-the most recent 20 successful main push runs; it reports when no supported,
-unexpired artifact exists. It never substitutes source code for a missing build.
+A new PC gets its first build by hand: sign in to github.com, open the
+repository's Actions tab, pick the newest green "Studio checks" run on main,
+download the mefi-studio-development-win32-x64 artifact, unzip it, unzip the
+Mefi-Studio-AI+-v…-win32-x64.zip inside it, and start Mefi Studio AI+.exe. Then
+Settings › System › Updates › Development / beta keeps that copy on the newest
+green main build. Studio needs a GitHub login with Actions read access for
+that (Set up this PC installs and signs in the GitHub CLI); it never asks for
+new grants by itself.
 
 Once the publishing workflow is available, development downloads use an existing GitHub login or stored token with Actions
 read access. No authentication or new grants are performed automatically. The
