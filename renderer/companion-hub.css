@@ -95,7 +95,7 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 .agent-hub-avatar .c-eye { fill: currentColor; }
 .agent-hub-avatar :is(.c-line, .c-ring, .c-flame) { fill: none; stroke: currentColor; }
 .agent-hub-node { width: 88px; height: 88px; margin: -44px; transform: rotate(var(--hub-angle)) translateX(var(--hub-radius)) rotate(calc(-1 * var(--hub-angle))); animation: hub-spawn var(--motion-spring) var(--ease-emphasized) var(--hub-delay) both; transition: border-color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out); }
-.agent-hub-node-inner { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 6px; font-size: 10px; line-height: 1.2; scale: calc(1 + var(--hub-energy) * .04); transition: scale var(--motion-instant) linear; }
+.agent-hub-node-inner { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 4px; padding: 0 4px; font-size: 12px; line-height: 1.15; text-align: center; scale: calc(1 + var(--hub-energy) * .04); transition: scale var(--motion-instant) linear; }
 .agent-hub-icon { color: var(--gold-bright); display: block; }
 .agent-hub-icon .glyph { width: 22px; height: 22px; }
 .agent-hub-node:hover, .agent-hub-node[aria-expanded=true], .agent-hub-center:hover { background: color-mix(in srgb, var(--gold) 9%, transparent); border-color: color-mix(in srgb, var(--gold) 65%, transparent); }
@@ -355,7 +355,7 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
   .agent-hub { --hub-radius: 116px; padding: 12px; }
   .agent-hub-stage { width: 320px; height: 324px; max-width: calc(100vw - 24px); }
   .agent-hub-node { width: 76px; height: 76px; margin: -38px; }
-  .agent-hub-node-inner { font-size: 9px; gap: 5px; }
+  .agent-hub-node-inner { font-size: 12px; gap: 3px; }
   .agent-hub-center { width: 102px; height: 102px; }
   .agent-hub-avatar { width: 70px; height: 70px; }
   .agent-hub-orbit { width: 232px; height: 232px; }

@@ -19,10 +19,10 @@
   const button = (text, run, id) => { const el = node("button", "ghost rooms-button", text); el.type = "button"; if (id) el.id = id; el.addEventListener("click", run); return el; };
   const bridge = () => window.mefiStudio;
   const REASONS = {
-    "listed-rank": "Showing a room in the list opens at Flame rank (200 credits, earned when friends play and star what you share). Untick \"Show it in the room list\" to make it now and invite people.",
+    "listed-rank": "Showing a room in the list opens at Flame rank (200 credits, earned when friends play and star what you share). Leave \"Show it in the room list\" off to make a private room and invite people with its code.",
     "room-host-role": "Showing a room in the list needs the Room Host role in the Void Engine server.",
     "new-member": "New members can do this after their first day in the server.",
-    "week-member": "Making your own rooms opens after a week in the server. Meanwhile, join one with a code or from the list.",
+    "week-member": "Making your own rooms opens after your first week in the Void Engine server. Until then, join friends' rooms with their invite code or from the list, and say hi in the Lobby.",
     "owned-rooms": "You already own 3 open rooms. Close one first.",
     "daily-creates": "You have made 5 rooms today. Try again tomorrow.",
     "hub-full": "The room service is full right now.",
@@ -51,12 +51,30 @@
     timeout: "The room service did not answer in time. Try again.",
     "not-yours": "Only the person who posted it can change it.",
     "room-busy": "That room is busy. Try again in a moment.",
-    auth: "Your Discord link needs signing in again. Link Discord again in Settings › General › Community.",
+    auth: "Your Discord sign-in has run out. Sign in with Discord again in Friends.",
     version: "The room service needs a newer Studio. Update Studio, then connect again.",
     unsupported: "This copy of Studio cannot reach the room service.",
     lobby: "Everyone stays in the Lobby. Go back to All rooms to step out of it.",
     code: "That code didn't match a room. Check it and try again.",
   };
+  // A tab row's keys: arrows, Home and End choose the next tab, and focus follows it after the repaint.
+  function arrowKeys(row) {
+    row.addEventListener("keydown", (event) => {
+      const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
+      if (!step && event.key !== "Home" && event.key !== "End") return;
+      const items = [...row.children];
+      const at = items.indexOf(event.target);
+      if (at < 0) return;
+      event.preventDefault?.();
+      const next = items[event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : (at + step + items.length) % items.length];
+      next.click();
+      const id = next.id;
+      const settle = () => (typeof document !== "undefined" ? document.getElementById?.(id)?.focus?.() : null);
+      settle();
+      if (typeof requestAnimationFrame === "function") requestAnimationFrame(settle);
+    });
+  }
+
   // Two-step confirm (studio-ui.js MefiUi.arm): the first press asks, the
   // second acts. Without the shared helper (a bare page), the browser asks.
   const confirmed = (label, armed, ask, run) => (window.MefiUi?.arm
@@ -180,8 +198,10 @@
         const item = button(label, () => { tab = id; paint(); if (id === "online") void loadOnline(); }, `rooms-tab-${id}`);
         item.setAttribute("role", "tab");
         item.setAttribute("aria-selected", String(tab === id));
+        item.tabIndex = tab === id ? 0 : -1;
         row.append(item);
       }
+      arrowKeys(row);
       return row;
     }
 
@@ -197,7 +217,7 @@
       const invitation = invites.find((item) => item.roomId === room.id && item.status === "pending");
       const askable = !(room.you === "owner" || room.you === "member") && !invitation && !mine && room.policy === "request" && room.status === "active";
       if (room.you === "owner" || room.you === "member") actions.append(button("Open", () => { void open(room); }));
-      else if (invitation) actions.append(button("Accept invite", () => answerInvite(invitation, true)), button("Decline", () => answerInvite(invitation, false)));
+      else if (invitation) actions.append(button("Join", () => answerInvite(invitation, true)), button("Decline", () => answerInvite(invitation, false)));
       else if (mine) actions.append(node("span", "muted", "Requested"), button("Cancel", () => cancel(mine)));
       else if (askable) actions.append(button("Ask to join", () => { if (!asking.has(room.id)) { asking.add(room.id); ask(room, row); } }));
       row.append(text, actions);
@@ -258,7 +278,8 @@
       const listed = field(node("input"), "create-listed");
       listed.type = "checkbox";
       listed.id = "rooms-create-listed";
-      listed.checked = true;
+      // Off to start: a private room anyone a week in the server can make; listing it opens at Flame rank.
+      listed.checked = false;
       listedLabel.append(listed, node("span", "", " Show it in the room list (opens at Flame rank)"));
       const create = button("Make room", () => guard("Making the room…", async () => {
         const answer = await call("createRoom", { name: name.value.trim(), kind: kind.value, policy: policy.value, listed: listed.checked });
@@ -731,7 +752,7 @@
       const linked = await community.link();
       if (linked?.ok) { autoConnected = true; await connectNow(); return; }
       if (linked?.error === "not-member") { notMember(); return; }
-      status.textContent = linked?.error === "canceled" ? "Linking was cancelled. Press Link Discord to try again." : "Linking didn't finish. Press Link Discord to try again.";
+      status.textContent = linked?.error === "canceled" ? "Signing in was cancelled. Press Sign in with Discord to try again." : "Signing in didn't finish. Press Sign in with Discord to try again.";
     }
     function notMember() {
       root.dataset.state = "not-member";
@@ -756,7 +777,7 @@
         // Friends' one sign-in card (renderer/friends-front.js) when it is in this build.
         const gate = window.MefiFriendsFront?.gate?.({ onSignedIn: () => { autoConnected = true; void load(); } });
         status.textContent = gate ? "" : "Link your Discord account to use rooms. Discord asks once in your browser.";
-        body.replaceChildren(gate ?? button("Link Discord", () => { void linkHere(); }, "rooms-link"));
+        body.replaceChildren(gate ?? button("Sign in with Discord", () => { void linkHere(); }, "rooms-link"));
         return false;
       }
       if (hub.error === "not-member") { notMember(); return false; }

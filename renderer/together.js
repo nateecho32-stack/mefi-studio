@@ -35,15 +35,15 @@
     "not-member": "You're not in this room any more.",
     "not-found": "This room is gone.",
     "no-session": "Nothing is playing in this room.",
-    offline: "The rooms hub is out of reach.",
+    offline: "The room service is out of reach.",
     timeout: "The hub didn't answer in time.",
   };
   const ERRORS = {
     "not-member": "Only members of the Void Engine server can use rooms.",
     auth: "Discord asked Studio to link again: Settings › General › Community.",
     "not-linked": "Link your Discord account (Settings › General › Community) to listen with your rooms.",
-    version: "The rooms hub has moved on. Update Studio to listen together.",
-    "not-configured": "Listening together needs the Void Engine rooms hub, and this PC isn't connected to one yet: add its address in Settings › General › Community › Connection details.",
+    version: "The room service needs a newer Studio. Update Studio to listen together.",
+    "not-configured": "Listening together needs the room service, which this copy of Studio can't reach.",
     unsupported: "This Studio can't open the hub's connection.",
   };
   const bridge = () => window.mefiStudio;
@@ -392,14 +392,14 @@
   }
   function stateText() {
     const hub = state.hub;
-    if (!hub) return "Checking the rooms hub…";
+    if (!hub) return "Checking the room service…";
     if (!hub.configured) return ERRORS["not-configured"];
     if (!hub.communityConfigured) return "Listening together needs the Discord link, which this build doesn't have.";
     if (!hub.linked) return ERRORS["not-linked"];
     if (hub.state === "ready") return `Connected as ${hub.user?.name || "you"}${hub.readOnly ? " · listen-only while you're timed out" : ""}${hub.paused ? " · the hub is paused" : ""}.`;
-    if (hub.state === "connecting" || state.busy) return "Connecting to the rooms hub…";
-    if (hub.state === "offline") return "The rooms hub is out of reach. Studio keeps trying.";
-    if (hub.state === "error") return ERRORS[hub.error] || "The rooms hub refused the connection.";
+    if (hub.state === "connecting" || state.busy) return "Connecting to the room service…";
+    if (hub.state === "offline") return "The room service is out of reach. Studio keeps trying.";
+    if (hub.state === "error") return ERRORS[hub.error] || "The room service refused the connection.";
     return "Not connected. Choose Connect, or turn sharing on.";
   }
   function renderRooms() {

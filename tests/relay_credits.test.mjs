@@ -140,7 +140,7 @@ test("young accounts and new members neither give nor earn, and their plays and 
     const play = await as(token, "POST", `/v1/projects/${id}/play`);
     clock += 2 * 60_000 + 1;
     const done = await as(token, "POST", `/v1/projects/${id}/played`, { token: play.token });
-    assert.deepEqual([done.counted, done.credited], [false, { owner: 0, you: 0 }], token);
+    assert.deepEqual([done.counted, done.credited, done.why], [false, { owner: 0, you: 0 }, token === "tok-fresh" ? "new-account" : "new-member"], token);
     const starred = await as(token, "POST", `/v1/projects/${id}/star`);
     assert.equal(starred.project.stars, 0, `${token}: a star is kept for them, not counted`);
   }
@@ -155,7 +155,7 @@ test("young accounts and new members neither give nor earn, and their plays and 
   const play = await as("tok-bob", "POST", `/v1/projects/${id}/play`);
   clock += 2 * 60_000 + 1;
   const done = await as("tok-bob", "POST", `/v1/projects/${id}/played`, { token: play.token });
-  assert.deepEqual([done.counted, done.credited], [true, { owner: 0, you: 0 }], "a suspended maker's project still counts the play, and pays no one");
+  assert.deepEqual([done.counted, done.credited, done.why], [true, { owner: 0, you: 0 }, "maker-held"], "a suspended maker's project still counts the play, and pays no one");
 });
 
 test("one member can make another earn at most 15 credits a week, and stars pay a maker once a week", async () => {

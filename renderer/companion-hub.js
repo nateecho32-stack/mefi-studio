@@ -557,7 +557,7 @@
     if (place.id === "playground") {
       const more = node("div", "friends-place-more");
       more.append(button("Friends & listening rooms", () => { window.MefiMusic?.openAudio?.(); window.MefiMusic?.setSource?.("link"); window.MefiMusic?.openSection?.("more"); }, "ghost"),
-        button("Connect with Discord", () => window.MefiNav?.go?.("community"), "ghost"));
+        button("Discord settings", () => window.MefiNav?.go?.("community"), "ghost"));
       parts.push(more);
     }
     friendsPage.body.replaceChildren(...parts);
