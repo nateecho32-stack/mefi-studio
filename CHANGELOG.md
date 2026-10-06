@@ -488,6 +488,15 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   shows as "Settings › Connections". Settings lists its places in the same
   column. Team's pages read at 12 px or more and fit a narrow window without
   scrolling sideways. The classic layout is unchanged.
+- **The Map and Team are called that everywhere.** Buttons, tooltips, toasts
+  and messages that still said Command view, Live or Agents › Setup now say
+  the Map and Team, and point where things are now: Team › Providers to
+  connect an AI or install a coding tool, Team › Seats and models for coding
+  models and the provider order, Help › Setup guide for Continue with
+  ChatGPT, and Settings › Report a problem in Search. "Open in Command" and
+  "View in Live" read "Open in Map" and "View in Map", and the companion's
+  "Open the Map" (it was "Open live agent work") opens the Map instead of
+  Team's Overview.
 - **Vibe's board lists a waiting task once.** A queued task that has asked
   you something (a permission, a question) is under Needs you only, not also
   "up next" under Running.

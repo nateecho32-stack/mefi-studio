@@ -227,7 +227,7 @@ test("missing HTTP credentials leave local analysis available without a CLI fall
   const result = await f.analyzerAi("project", { projectId: projectA.id });
   assert.equal(result.ok, false);
   assert.match(result.error, /needs a connected AI provider \(No saved HTTP key\)/, "the resolver's own reason survives");
-  assert.match(result.error, /Agents > Setup > Connections/);
+  assert.match(result.error, /Team > Providers/);
   assert.match(result.error, /local project analysis is available/);
   assert.doesNotMatch(result.error, /z\.ai, OpenCode Go or OpenCode Zen key/, "no maintainer-only provider list");
   assert.equal(f.analyzerProjectReports.has(projectA.id), true);

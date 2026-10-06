@@ -2553,7 +2553,7 @@ test("held work tints amber or dim instead of ready, and a cancelled todo dims i
   assert.equal(env.colorOf({ kind: "todo", status: "pending", state: "pending" }), NODE_RGB.pending);
 });
 
-// Fleet's Open in Command names a builder node, which exists only while its
+// Fleet's Open in Map names a builder node, which exists only while its
 // job runs, and the Agents page names a task. Both land on the task's node (or
 // the group holding it) when no builder is on the graph, and a task missing
 // from the board says so instead of selecting nothing.
@@ -2570,14 +2570,14 @@ test("Command's enter params fall back from a finished builder to its task, then
   assert.equal(env.applyEnterParams({ selected: "builder:task_a" }), true, "an idle seat's last task still selects");
   assert.equal(env.applyEnterParams({ selected: "builder:task_b" }), true);
   assert.equal(env.applyEnterParams({ taskId: "task_b", selected: "task:task_b" }), true, "nav's rewrite of a taskId still prefers the live builder");
-  // Tasks' View in Live and Home's Watch live wait for the same task to be
+  // Tasks' View in Map and Home's Watch live wait for the same task to be
   // selected, and the T key opens it from the builder.
   assert.equal(env.selection().id, "builder:task_b");
   assert.equal(env.selection().taskId, "task_b", "a builder reports the task it is building");
   assert.equal(env.applyEnterParams({ taskId: "member_1" }), true);
   assert.deepEqual(picked, ["task:task_a", "builder:task_b", "builder:task_b", "task:group_1"]);
   assert.equal(env.applyEnterParams({ taskId: "gone" }), false);
-  assert.deepEqual(toasts, ["That task is not on the Command board right now"]);
+  assert.deepEqual(toasts, ["That task is not on the Map right now"]);
   assert.equal(env.applyEnterParams({ selected: "session:gone" }), false);
   assert.equal(toasts.length, 1, "a stale restored selection stays quiet");
 });

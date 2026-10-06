@@ -492,7 +492,7 @@ test("an idle seat that has worked offers its last task and its orb, from the in
   assert.doesNotMatch(h.$("inspector").textContent, /Reading its runs/);
   buttonsOf(h.$("inspector")).find((button) => button.textContent === "Open task").click();
   assert.deepEqual(h.calls.tasks, [{ taskId: "task_a" }]);
-  buttonsOf(h.$("inspector")).find((button) => button.textContent === "Open in Command").click();
+  buttonsOf(h.$("inspector")).find((button) => button.textContent === "Open in Map").click();
   assert.deepEqual(h.calls.go.at(-1), ["command", { selected: "builder:task_a" }]);
   h.fleet.select(null);
   h.$("tabs").children.find((tab) => tab.dataset.tab === "table").click();

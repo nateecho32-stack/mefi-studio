@@ -1794,7 +1794,7 @@
   });
   window.MefiNav?.register?.({
     id: "build-mode", label: "Switch to Studio", short: "Studio", kind: "action", layer: null, section: "home", group: "surfaces",
-    glyph: "g-wrench", badge: null, desc: "In-depth building: Home, Command, boards, models and every setting",
+    glyph: "g-wrench", badge: null, desc: "In-depth building: Home, the Map, boards, models and every setting",
     searchTerms: "studio build mode in depth full advanced switch",
     showIn: { tabs: false, tools: false, dock: false, palette: true, help: true, footer: false },
     hidden: () => mode() === "build",

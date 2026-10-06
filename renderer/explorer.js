@@ -597,7 +597,7 @@
     link("Filter A-Eyes feed", "Show only this session's changes in the A-Eyes feed (3)", () =>
       window.MefiNav?.go?.("eyes", { sessionId: session.id })
     );
-    link("Open in Command", "Select this session in the Command view (D)", () =>
+    link("Open in Map", "Select this session on the Map (D)", () =>
       window.MefiNav?.go?.("command", { sessionId: session.id })
     );
     const owner = sessionTask(session.id);
@@ -1085,7 +1085,7 @@
       const hint = document.createElement("p");
       hint.className = "muted";
       hint.textContent = state.assistant?.ai?.keyPresent === false
-        ? "No briefing yet. Connect an AI provider in Agents › Setup › Connections, then press Brief me."
+        ? "No briefing yet. Connect an AI provider in Team › Providers, then press Brief me."
         : "No briefing yet. Press Brief me.";
       els.brief.append(hint);
     } else {

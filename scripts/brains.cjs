@@ -139,7 +139,7 @@ const NODE_TYPES = [
   },
   {
     type: "user.request", label: "You ask for it", group: "intake", runs: "host", glyph: "g-command",
-    summary: "The thread, the Command composer and the board box: work you asked for by hand.",
+    summary: "The thread, the Map's composer and the board box: work you asked for by hand.",
     can: ["Create a request or a task from what you typed", "Pin it ahead of generated work"],
     cannot: ["Be turned off — your own asks always reach the board"],
     permissions: ["create-task"],

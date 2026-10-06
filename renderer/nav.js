@@ -8,7 +8,7 @@
   "use strict";
 
   const SVG_NS = "http://www.w3.org/2000/svg";
-  const ESC_HELP = "Close the top-most layer: palette → help → sheet → Command (clear selection, then leave)";
+  const ESC_HELP = "Close the top-most layer: palette → help → sheet → Map (clear selection, then leave)";
   const BADGE_THROTTLE_MS = 2000;
   // Pushes keep the counts live; this backstop only catches a missed push.
   const BADGE_POLL_MS = 120000;
@@ -410,7 +410,7 @@
       keyMatch: (event) => settingsChord(event) || defaultKeyMatch("4")(event),
       glyph: "g-sliders",
       badge: null,
-      desc: "Your name, appearance, audio, updates and diagnostics; agent setup lives under Agents",
+      desc: "Your name, appearance, audio, updates and diagnostics; agent setup lives under Team",
       searchTerms: "settings connections api key login setup provider workers preferences you theme motion animations launch updates diagnostics",
       showIn: showIn({ dock: true, palette: true, help: true }),
       // A section param opens one card: go("studio", { section: "settings-updates" }).
@@ -736,7 +736,7 @@
       keyMatch: (event) => event.key === "?",
       glyph: "g-help",
       badge: null,
-      desc: "Keyboard shortcuts for pages, tools and Command view",
+      desc: "Keyboard shortcuts for pages, tools and the Map",
       showIn: showIn({ dock: true, palette: true, help: true, footer: true }),
       element: "help-overlay",
       focus: "#help-overlay .sheet",
@@ -1060,7 +1060,7 @@
     root?.classList.toggle("from-command", Boolean(state.returnTo));
     const back = root?.querySelector(".sheet-back");
     if (back) {
-      const label = state.returnTo === "workspace" ? "Home" : state.returnTo === "vibe" ? "Social" : "Command";
+      const label = state.returnTo === "workspace" ? "Home" : state.returnTo === "vibe" ? "Social" : "Map";
       back.title = `Back to ${label} (Esc)`;
       const copy = back.querySelector(".label");
       if (copy) copy.textContent = label;
@@ -1233,7 +1233,7 @@
         window.MefiIdle?.exit?.();
         state.returnTo = "command";
         // Only a deep link needs explaining; a plain tab click speaks for itself.
-        if (params && Object.keys(params).length) window.MefiToast?.("D returns to Command", "info");
+        if (params && Object.keys(params).length) window.MefiToast?.("D returns to the Map", "info");
       }
       dest.open?.(params);
       if (id === "eyes") {
@@ -3188,8 +3188,8 @@
       const wait = booting() ? 1500 : busy ? 5000 : KEY_HINT_QUIET_MS - (now - quietSince);
       if (wait > 0 && tries++ < 120) { setTimeout(attempt, wait); return; }
       try { localStorage.setItem(KEY_HINT_STORE, "1"); } catch { /* the tip may show again next launch */ }
-      const home = vibeMode() ? "Social" : "workspace";
-      window.MefiToast(`Tip: outside a text field, single keys move around Studio. H ${home}, D Command view, T task board. Press ? for the full list.`, "info", {
+      const home = vibeMode() ? "Social" : "Home";
+      window.MefiToast(`Tip: outside a text field, single keys move around Studio. H ${home}, D the Map, T task board. Press ? for the full list.`, "info", {
         duration: 12000,
         action: { label: "Show keys", run: () => go("help") },
       });

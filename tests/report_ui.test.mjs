@@ -285,7 +285,7 @@ test("Search reaches Report a problem, the Discord invite opens outside Studio, 
   const p = await page(t);
   const [record] = p.records;
   assert.equal(record.id, "settings:report");
-  assert.equal(record.label, "Settings › System › Report a problem");
+  assert.equal(record.label, "Settings › Report a problem");
   record.run();
   assert.deepEqual(p.routes.list.at(-1), ["studio", { section: "settings-report" }]);
   await p.get("report-discord").click();

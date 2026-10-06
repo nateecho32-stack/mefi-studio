@@ -458,7 +458,7 @@ test("the update pill and toasts point at Settings › Updates and open that car
 const v2Rail = (options = {}) => { const loaded = load({ search: "?shell=rail", layout: "v2", ...options }); loaded.nav.applyShell(); return loaded; };
 const SETUP_HELPER = { id: "setup-helper", label: "Setup helper", short: "Setup", kind: "overlay", layer: "sheet", section: "agents", group: "tools", glyph: "g-agents", showIn: { palette: true, help: true, tools: true }, open() {}, close() {}, isOpen: () => false };
 const RELEASE_NOTES = { id: "release-notes", label: "What's new in this version", short: "Release notes", kind: "action", layer: null, section: "help", group: "system", glyph: "g-spark", showIn: { palette: true }, run() {} };
-const REPORT = { id: "settings:report", label: "Settings › System › Report a problem", short: "Report a problem", kind: "action", layer: null, section: "settings", group: "system", glyph: "g-gauge", showIn: { palette: true }, run() {} };
+const REPORT = { id: "settings:report", label: "Settings › Report a problem", short: "Report a problem", kind: "action", layer: null, section: "settings", group: "system", glyph: "g-gauge", showIn: { palette: true }, run() {} };
 
 test("in the 0.5 layout the rail is the prototype's: Work, Map, Team and Friends, then Search, Settings and Help at its foot", async () => {
   const { nav, rail, document } = v2Rail();

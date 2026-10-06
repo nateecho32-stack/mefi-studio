@@ -181,7 +181,7 @@ test("an auto route with nothing usable names the saved order and what to do", a
   const result = await host.resolve();
   assert.equal(result.ok, false);
   assert.match(result.error, /no usable provider in the auto order \(Claude Code CLI > ChatGPT plan > Codex CLI > Grok CLI > Antigravity CLI > z\.ai GLM > OpenCode Go\)/);
-  assert.match(result.error, /save a key, install a CLI or change the order/);
+  assert.match(result.error, /save a key or install a CLI in Team > Providers, or change the order in Team > Seats and models/);
   assert.deepEqual(host.fetches, []);
 });
 
@@ -206,7 +206,7 @@ test("a ChatGPT plan that is signed out, not granted or at its limit keeps an ho
   for (const status of [{ signedIn: false }, { signedIn: true, planUsage: false }, { signedIn: true, planUsage: true, limited: true }]) {
     const result = await planHost(status, { settings: { aiProvider: "chatgpt" } }).resolve();
     assert.equal(result.ok, false);
-    assert.match(result.error, /Continue with ChatGPT under Setup > Connect an AI/);
+    assert.match(result.error, /Continue with ChatGPT in Help > Setup guide > Connect an AI/);
   }
   const armed = await planHost({ signedIn: false }, { settings: { aiProvider: "chatgpt", aiAutoFallback: true } }).resolve();
   assert.equal(armed.ok, true);

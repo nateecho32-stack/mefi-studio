@@ -333,7 +333,7 @@ const REFUSED_NAMES = {
   "opencode-go": ["OpenCode Go", "Go"], opencode: ["OpenCode Zen", "Zen"], "mefi-zai": ["z.ai", "coding plan"], "zai-coding-plan": ["z.ai", "coding plan"],
   openrouter: ["OpenRouter", ""], claude: ["Claude Code", "Claude"], codex: ["Codex", "ChatGPT"], grok: ["Grok", ""], antigravity: ["Antigravity", ""],
 };
-const REFUSAL_FIX = "Pick another coding model in Agents › Setup › Team & models, or renew the plan.";
+const REFUSAL_FIX = "Pick another coding model in Team › Seats and models, or renew the plan.";
 function refusedRoute(route, refusal = null) {
   if (!route || typeof route !== "object") return null;
   const cli = ["grok", "claude", "codex", "antigravity"].includes(route.cli) ? route.cli : "opencode";

@@ -22,7 +22,7 @@ const section = (start, end) => {
 
 const MINUTE = 60000;
 const REFUSED = "Error: Upstream request failed: An active OpenCode Go subscription is required to use Go models.";
-const NOTICE = "OpenCode Go says this login has no active Go subscription. Pick another coding model in Agents › Setup › Team & models, or renew the plan.";
+const NOTICE = "OpenCode Go says this login has no active Go subscription. Pick another coding model in Team › Seats and models, or renew the plan.";
 const GO = { cli: "opencode", env: {}, modelArgs: " --model opencode-go/deepseek-v4.1-flash", model: "opencode-go/deepseek-v4.1-flash", via: "opencode-go/deepseek-v4.1-flash" };
 const task = (id, extra = {}) => ({ id, title: `Implement fixture ${id}`, prompt: `Implement ${id} and retain its full acceptance brief.`, status: "open", createdAt: extra.createdAt ?? 1, files: [`src/${id}.js`], ...extra });
 
@@ -143,7 +143,7 @@ test("a model the plan leaves out falls back to the route's default model", asyn
   assert.match(h.starts[0].line, /--model opencode-go\/glm-6/);
   await h.finish("first", { code: 1, lines: [PLAN_REFUSED] }); await h.pump();
   assert.equal(row(h, "first").runFailures, undefined, "no attempt charged");
-  assert.deepEqual(notices.map((item) => item.text), ["OpenCode Go says glm-6 is not included in this login's plan. Pick another coding model in Agents › Setup › Team & models, or renew the plan."]);
+  assert.deepEqual(notices.map((item) => item.text), ["OpenCode Go says glm-6 is not included in this login's plan. Pick another coding model in Team › Seats and models, or renew the plan."]);
   assert.equal(h.starts.length, 2, "the route still runs");
   assert.equal(h.starts[1].taskId, "second");
   assert.match(h.starts[1].line, /--model opencode-go\/kimi-k3/, "on its default, not the parked model");
