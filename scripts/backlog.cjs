@@ -214,6 +214,13 @@ function workState(item, now = Date.now(), { tasks = null, autoBuild = true, app
   // what it is. canRetry stays unset: Work on it and Try again (retryTask) are
   // the release.
   const queued = !item.status || item.status === "open" || item.status === "pending" || item.status === "queued";
+  // On another of the owner's PCs (docs/my-pcs.md): moved, never copied, so
+  // the card waits here until that PC reports it done or the owner brings it
+  // back. It never reads as a problem.
+  if (queued && item.movedTo && typeof item.movedTo === "object" && !Array.isArray(item.movedTo)) {
+    const where = String(item.movedTo.name ?? "").replace(/\s+/g, " ").trim().slice(0, 40) || "another PC";
+    return { stage: "waiting", blockedBy: "pc", canRetry: false, reason: item.movedTo.pending ? `Offered to ${where}; waiting for its answer` : `On ${where}: it runs there and reports back` };
+  }
   if (queued && item.ownerHold && typeof item.ownerHold === "object" && !Array.isArray(item.ownerHold)) {
     const why = String(item.ownerHold.reason ?? "").replace(/\s+/g, " ").trim().slice(0, 80).trim();
     // Studio's own stop at the task's time limit (task-cap.cjs): nothing failed, and the words say who stopped it.
@@ -221,6 +228,14 @@ function workState(item, now = Date.now(), { tasks = null, autoBuild = true, app
       const minutes = Number(item.ownerHold.minutes);
       return { stage: "blocked", blockedBy: "owner", reason: `Stopped at the time limit${Number.isFinite(minutes) ? ` (${Math.round(minutes)} min)` : ""} — progress saved; say "work on it" or "try again" to continue` };
     }
+    // My PCs (docs/my-pcs.md): a laptop's battery stop, a friend's card
+    // waiting for this PC's owner, and a card that came back unfinished.
+    if (item.ownerHold.kind === "battery") {
+      const level = Number(item.ownerHold.level);
+      return { stage: "blocked", blockedBy: "owner", reason: `Stopped at ${Number.isFinite(level) ? `${Math.round(level)}%` : "low"} battery — progress saved${item.parked ? " and parked for your other PCs" : ""}; choose Continue in Friends › Your PCs` };
+    }
+    if (item.ownerHold.kind === "friend") return { stage: "blocked", blockedBy: "owner", reason: `${why ? why[0].toUpperCase() + why.slice(1) : "Sent by a friend"}: say "work on it" to run it on this PC` };
+    if (item.ownerHold.kind === "pc") return { stage: "blocked", blockedBy: "owner", reason: `Came back ${why ? `(${why})` : "from another PC"}; say "work on it" or "try again" to run it here` };
     return { stage: "blocked", blockedBy: "owner", reason: `Stopped by you${why ? ` (${why})` : ""} — say "work on it" or "try again" to resume it` };
   }
   // Work done outside Studio: a queued card waits while it is checked against

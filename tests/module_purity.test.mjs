@@ -103,6 +103,9 @@ const PROMISES = [
   { file: "scripts/prompt-cache.cjs", says: "Pure module: no Electron, filesystem, network, processes, timers or clock", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   // Where this PC's own files live (never inside OneDrive); main.cjs's "Log core" block makes the folders.
   { file: "scripts/local-dirs.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  // My PCs (docs/my-pcs.md): the keys and envelopes, and the rules for moving work; main.cjs "My PCs" owns the relay, the boards and the clock.
+  { file: "scripts/pc-trust.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  { file: "scripts/pc-fleet.cjs", says: "Pure module: no Electron, no filesystem, no", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
 ];
 
 const CLOCK = /\bDate\.now\s*\(|new\s+Date\s*\(\s*\)|\bperformance\.now\s*\(/;

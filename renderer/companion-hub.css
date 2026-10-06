@@ -140,6 +140,21 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 .pc-vault > :not(summary), .pc-vault-linked > *, .pc-vault-setup > *, .pc-vault-keys > :not(summary) { margin-top: 8px; }
 .pc-vault-heading { margin: 12px 0 0; font-size: 12px; font-weight: 600; }
 .pc-vault-label { display: block; font-size: 12px; color: var(--muted); }
+/* Friends › Your PCs › My PCs (renderer/pc-fleet.js): one row per PC, its readings and why it is not taking work. */
+.pc-fleet-rows, .pc-fleet-asks { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.pc-fleet-row { display: grid; gap: 4px; padding: 8px 10px; border: 1px solid var(--hairline); border-left: 3px solid var(--good); border-radius: 10px; font-size: 12px; min-width: 0; }
+.pc-fleet-row[data-state=busy] { border-left-color: var(--warn); }
+.pc-fleet-row[data-state=offline] { border-left-color: var(--muted); color: var(--muted); }
+.pc-fleet-head, .pc-fleet-meters, .pc-fleet-why { overflow-wrap: anywhere; }
+.pc-fleet-meters { font-variant-numeric: tabular-nums; color: var(--muted); }
+.pc-fleet-ask, .pc-fleet-lend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; }
+.pc-fleet-stop { display: grid; gap: 8px; padding: 8px 10px; border: 1px solid var(--bad); border-radius: 10px; font-size: 12px; }
+.pc-fleet-stop[hidden], .pc-fleet-send[hidden] { display: none; }
+.pc-fleet-stop > p { margin: 0; }
+.pc-fleet-send { display: grid; gap: 6px; }
+.pc-fleet-brief, .pc-fleet-pick, .pc-fleet-stay { box-sizing: border-box; width: 100%; max-width: 100%; min-width: 0; }
+.pc-fleet-number { width: 4.5em; }
+.pc-fleet .pc-sync-actions { align-items: center; }
 /* Reach this PC from Discord (pc-sync.js remoteSection): rows sit on one line. */
 .pc-remote .pc-sync-actions { align-items: center; }
 /* A PC's agents under its line (pc-vault.js agentsText). */

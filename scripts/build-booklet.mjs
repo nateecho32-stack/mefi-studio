@@ -78,6 +78,7 @@ export const BOOKLET_INPUTS = {
     "playlists.js",
     "pc-sync.js",
     "pc-vault.js",
+    "pc-fleet.js",
     "whats-new.js",
     "report.js",
     "alerts.js",

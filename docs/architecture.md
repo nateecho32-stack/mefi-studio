@@ -596,6 +596,22 @@ settings and per-model work-kind summaries for the shared controls.
   hub or link nothing waits. Alongside it, syncFollow asks GitHub every
   minute (sync.mjs remoteMoved, one ls-remote) and fast-forwards when this
   PC has nothing in the way and no builder is running.
+- **My PCs** (main.cjs "My PCs", scripts/pc-trust.cjs, pc-fleet.cjs,
+  pc-power.cjs, pc-handoff.cjs, relay/src/pcs.mjs, renderer/pc-fleet.js;
+  [my-pcs.md](my-pcs.md)). Each PC signed in to the Friends relay says who
+  it is (the cowork machine id, its public keys, who it lends itself to) and
+  how it is doing about once a minute. PCs pair by the six numbers both
+  screens show and then send each other sealed bodies through the relay:
+  offers of ready cards when one is short (a low battery, or memory held for
+  two minutes), work started from another PC, done notes, recalls and
+  handoff news. A moved card waits on its first board (`movedTo`, a
+  "waiting" stage in backlog.workState) and is never copied; a received one
+  remembers where it came from (`fromPc`) and sends its done note home. The
+  battery holds new starts at the low line (spawnNextJob's "battery" stop)
+  and at the stop line stops the running work with an ownerHold of kind
+  "battery", parks it as a handoff branch and waits for Continue. Keep this
+  PC on's Always keeps a plugged-in PC awake (applyKeepAwake). A friend's
+  lent PC holds their tasks for its owner (an ownerHold of kind "friend").
 - **Reach this PC from Discord** (main.cjs "Discord remote", scripts/remote.cjs,
   the hub client's `remote` frames; [remote.md](remote.md)). Off until the
   owner turns it on per PC. On, Studio keeps its outbound hub socket open and

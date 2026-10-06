@@ -7,6 +7,24 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **My PCs: your PCs work as one.** Friends › Your PCs now lists every PC
+  you sign in to Friends on, live: its CPU, free memory, battery and how
+  many tasks it runs, and why it is not taking work. Pair each PC once by
+  checking the same six numbers on both screens; only paired PCs can send
+  each other work, so a Discord login alone never can. From any PC, **Send
+  work here** starts a task on another or moves a ready card to it. When
+  every slot on a PC has been busy for two minutes, it is short of memory
+  that long, or a laptop's battery is at 20%, its ready cards move to a
+  paired PC with a free slot and the same project open; a card is moved,
+  never copied, at most two per project are out at
+  once, and it is marked done here when the other PC finishes it. At 20% a
+  laptop also starts nothing new; at 10% it stops its work with the
+  progress saved, parks the changes as a `mefi/handoff/*` branch another PC
+  can pick up, lets itself sleep, and waits for **Continue** (plugging in is
+  not enough). **Keep this PC on** can now keep a plugged-in PC awake with
+  nothing running, so the others can send it work. Each project has its own
+  switch, and a friend can lend you their PC: your tasks there wait for
+  their OK unless they choose otherwise. See docs/my-pcs.md.
 - **A way to Routing lands on Routing again.** Routing moved into **More
   settings** on Team's Seats and models page, so Search's Routing (and
   Team's own links to it) opened the page with Routing folded away. It now

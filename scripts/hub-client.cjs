@@ -49,6 +49,12 @@
 //     only): me() and memberCard() for ranks and balances, projects() for the
 //     hub, shareProject / playProject / finishPlay / star / feature, and a
 //     `credits` event when this member earns or spends.
+//   - My PCs (relay feature "pcs", docs/my-pcs.md): setPc names this socket
+//     as one of the member's PCs (its keys, and whom it lends itself to) with
+//     `pcHello` after every `ready`; pcState sends its status line and pcSend
+//     an envelope for one PC (acked, or nacked "not-online" / "not-allowed").
+//     The relay answers with `pcs` (the PCs this one sees), `pcState` and
+//     `pcMsg` events. Envelopes are pc-trust.cjs's and pass here unread.
 //
 // Like scripts/discord-oauth.cjs this is a network module, and everything it
 // reaches for is injected: fetch, the WebSocket class, the clock and the
@@ -75,7 +81,7 @@ const PRESENCE_EVERY_MS = 30_000;
 const KEEPALIVE_EVERY_MS = 30_000;
 const KEEPALIVE_FRAME = Object.freeze({ type: "ping" });
 // What this Studio tells the hub it can do (hello.features).
-const CLIENT_FEATURES = Object.freeze(["history.peer", "keepalive", "friend.online"]);
+const CLIENT_FEATURES = Object.freeze(["history.peer", "keepalive", "friend.online", "pcs"]);
 // A historyReply must fit the hub's 16 KB frame limit.
 const HISTORY_REPLY_BYTES = 15 * 1024;
 const HISTORY_REPLY_MESSAGES = 100;
@@ -110,6 +116,13 @@ const REMOTE_STYLES = Object.freeze(["primary", "secondary", "success", "danger"
 const PC_ID = /^[A-Za-z0-9_.:-]{1,64}$/;
 const BUTTON_ID = /^[A-Za-z0-9_.:-]{1,48}$/;
 const REMOTE_TEXT_MAX = 1900;
+// My PCs' shapes (docs/my-pcs.md, relay/src/protocol.mjs).
+const PC_KINDS = Object.freeze(["desktop", "laptop"]);
+const PC_KEY = /^[A-Za-z0-9+/]{43}=$/; // a raw 32-byte public key in base64
+const PC_LEND_TO = 8;
+const PCS_MAX = 16;
+const PC_STATE_BYTES = 3 * 1024;
+const PC_ENV_BYTES = 12 * 1024;
 
 const object = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
 const line = (value, max) => (typeof value === "string" && value.trim() && value.length <= max && ONE_LINE.test(value) ? value : null);
@@ -279,6 +292,45 @@ function remoteCommand(value) {
 function remotePcs(value) {
   if (!Array.isArray(value)) return null;
   return value.slice(0, 8).map((item) => (object(item) && PC_ID.test(String(item.id ?? "")) && line(item.name, 40) ? { id: item.id, name: item.name, since: Number.isFinite(item.since) ? item.since : null } : null)).filter(Boolean);
+}
+
+// ---- My PCs' shapes (docs/my-pcs.md) ----------------------------------------
+const pcId = (value) => (typeof value === "string" && PC_ID.test(value) ? value : null);
+// A PC's two public keys, or null.
+function pcKeys(value) {
+  if (!object(value) || typeof value.sign !== "string" || typeof value.box !== "string" || !PC_KEY.test(value.sign) || !PC_KEY.test(value.box)) return null;
+  return { sign: value.sign, box: value.box };
+}
+// The JSON size of a status line or an envelope, or Infinity when it is not plain JSON.
+function jsonBytes(value) {
+  try { return Buffer.byteLength(JSON.stringify(value)); } catch { return Infinity; }
+}
+// What setPc takes, as pcHello sends it: { pc: { id, name, kind }, keys, lendTo }, or null.
+function pcHello(value) {
+  if (!object(value) || !object(value.pc)) return null;
+  const id = pcId(value.pc.id);
+  const name = line(value.pc.name, 40);
+  const keys = pcKeys(value.keys);
+  const lendTo = value.lendTo == null ? [] : value.lendTo;
+  if (!id || !name || !PC_KINDS.includes(value.pc.kind) || !keys || !Array.isArray(lendTo) || lendTo.length > PC_LEND_TO) return null;
+  if (lendTo.some((uid) => !snowflake(uid))) return null;
+  return { pc: { id, name, kind: value.pc.kind }, keys, lendTo: [...new Set(lendTo)] };
+}
+// One PC of a `pcs` roster, or null: the member's own (mine) or lent to them (lends).
+function pcView(value) {
+  if (!object(value)) return null;
+  const id = pcId(value.id);
+  const name = line(value.name, 40);
+  const owner = user(value.owner);
+  const keys = pcKeys(value.keys);
+  if (!id || !name || !PC_KINDS.includes(value.kind) || !owner || !keys) return null;
+  return { id, name, kind: value.kind, owner, mine: value.mine === true, lends: value.mine !== true && value.lends === true, keys, since: Number.isFinite(value.since) ? value.since : null };
+}
+// A `pcs` roster: each PC id once, at most 16; null when it is not a list.
+function pcViews(value) {
+  if (!Array.isArray(value)) return null;
+  const seen = new Set();
+  return value.slice(0, PCS_MAX).map(pcView).filter((item) => item && !seen.has(item.id) && seen.add(item.id));
 }
 
 // A project card from the relay's hub, or null.
@@ -451,6 +503,8 @@ function createHubClient(options = {}) {
   // and the member's PCs the hub last listed.
   let remote = null;
   let remoteList = [];
+  // My PCs: this PC as main named it ({ pc: { id, name, kind }, keys, lendTo }), or null.
+  let pc = null;
   // Subscribed rooms, each with the parts of Studio holding it open (Rooms'
   // chat, Listen together, the cowork claims). The hub hears subscribe from
   // the first holder and unsubscribe only when the last lets go, so one part
@@ -470,6 +524,7 @@ function createHubClient(options = {}) {
       credits: features.includes("credits"), projects: features.includes("projects"),
       events: features.includes("events"),
       lobby: features.includes("lobby"), joinCodes: features.includes("join.codes"), online: features.includes("online"), front: features.includes("front"), building: features.includes("building"),
+      pcs: features.includes("pcs"), pcOn: Boolean(pc) && features.includes("pcs"),
     };
   }
   function setState(next, nextError = null) {
@@ -631,6 +686,8 @@ function createHubClient(options = {}) {
         if (building && features.includes("building")) send({ type: "building", now: building });
         // And which of this member's sockets is a PC the remote may reach.
         if (remote && features.includes("remote")) sendRemoteHello();
+        // And which of them is one of My PCs (the relay forgets it when a socket closes).
+        if (pc && features.includes("pcs")) sendPcHello();
         if (presenceTimer) stopEvery(presenceTimer);
         presenceTimer = every(() => { for (const roomId of rooms.keys()) send({ type: "presence", roomId }); }, PRESENCE_EVERY_MS);
         // The relay's keepalive keeps a socket with no rooms open (the remote,
@@ -732,6 +789,27 @@ function createHubClient(options = {}) {
         emit({ type: "status", status: status() });
         return;
       }
+      // My PCs: the PCs this one sees, a status line from one of them, and an
+      // envelope for this PC. Nothing is handed on unless setPc named this PC.
+      case "pcs": {
+        const pcs = pcReady() ? pcViews(frame.pcs) : null;
+        if (pcs) emit({ type: "pcs", pcs });
+        return;
+      }
+      case "pcState": {
+        const from = pcId(frame.from);
+        if (pcReady() && from && object(frame.state) && jsonBytes(frame.state) <= PC_STATE_BYTES) emit({ type: "pcState", from, state: frame.state, receivedAt: now() });
+        return;
+      }
+      case "pcMsg": {
+        const from = pcId(frame.from);
+        const fromUser = snowflake(frame.fromUser);
+        const keys = pcKeys(frame.keys);
+        if (pcReady() && from && fromUser && keys && object(frame.env) && jsonBytes(frame.env) <= PC_ENV_BYTES) {
+          emit({ type: "pcMsg", from, fromUser, fromName: text(frame.fromName, 100) || "member", keys, env: frame.env, receivedAt: now() });
+        }
+        return;
+      }
       case "ack":
       case "nack": {
         const entry = pending.get(frame.nonce);
@@ -768,6 +846,10 @@ function createHubClient(options = {}) {
     send({ type: "remoteHello", pc: { ...remote.pc }, on: remote.on === true });
   }
   const remoteReady = () => state === "ready" && features.includes("remote") && remote?.on === true;
+  function sendPcHello() {
+    send({ type: "pcHello", pc: { ...pc.pc }, keys: { ...pc.keys }, lendTo: [...pc.lendTo] });
+  }
+  const pcReady = () => state === "ready" && features.includes("pcs") && Boolean(pc);
 
   // An HTTP call with the hub session, renewed once when the hub says it
   // lapsed. Refusals keep the hub's own error, reason and retryAfter.
@@ -826,6 +908,7 @@ function createHubClient(options = {}) {
       features = [];
       remote = null;
       remoteList = [];
+      pc = null;
       setState("off");
       if (token) await request("DELETE", "/v1/session", undefined, token);
       return status();
@@ -1261,6 +1344,40 @@ function createHubClient(options = {}) {
       if (!remoteReady() || !PC_ID.test(String(key ?? "")) || !REMOTE_NOTICES.includes(kind) || !body || !list) return false;
       return send({ type: "remoteNotice", key, kind, text: body, ...(list.length ? { buttons: list } : {}) });
     },
+    // ---- My PCs (docs/my-pcs.md) ---------------------------------------------
+    // This PC: { pc: { id, name, kind }, keys: { sign, box }, lendTo: [userId] },
+    // kept and said again (pcHello) after each `ready` from a relay that
+    // carries "pcs"; only a change goes out. null forgets it here and sends
+    // nothing (the relay forgets a PC when its socket closes), as does
+    // disconnect(). False when the shape is wrong.
+    setPc(value) {
+      if (value == null) { pc = null; return true; }
+      const next = pcHello(value);
+      if (!next) return false;
+      if (JSON.stringify(next) === JSON.stringify(pc)) return true;
+      pc = next;
+      if (state === "ready" && features.includes("pcs")) sendPcHello();
+      return true;
+    },
+    // This PC's status line, for the PCs that see it. False when it did not go:
+    // not ready, a relay without "pcs", no setPc, or over 3 KB as JSON.
+    pcState(value) {
+      if (!pcReady() || !object(value) || jsonBytes(value) > PC_STATE_BYTES) return false;
+      return send({ type: "pcState", state: value });
+    },
+    // One envelope (pc-trust.cjs) for PC `to`: { ok: true } once the relay
+    // handed it over, or { ok: false, reason }: the relay's "not-online",
+    // "not-allowed" or "rate-limited" (with retryAfter), "timeout" after 10 s,
+    // or here "offline", "unsupported", "no-pc", "bad-request", "too-large"
+    // (over 12 KB as JSON). Nothing retries on its own.
+    pcSend(to, env) {
+      if (state !== "ready") return Promise.resolve({ ok: false, reason: "offline" });
+      if (!features.includes("pcs")) return Promise.resolve({ ok: false, reason: "unsupported" });
+      if (!pc) return Promise.resolve({ ok: false, reason: "no-pc" });
+      if (!pcId(to) || !object(env)) return Promise.resolve({ ok: false, reason: "bad-request" });
+      if (jsonBytes(env) > PC_ENV_BYTES) return Promise.resolve({ ok: false, reason: "too-large" });
+      return withAck({ type: "pcSend", to, env });
+    },
     // What this member is building ({ project, running, doneToday }), or null
     // to stop sharing. Kept and re-sent after a reconnect; only a change goes out.
     setBuilding(value) {
@@ -1289,6 +1406,7 @@ module.exports = {
   PROTOCOL_VERSION, HUB_URL, LISTEN_PROVIDERS, NOW_PLAYING_PROVIDERS, LISTEN_ACTIONS, HOLDERS, BACKOFF_MS, PRESENCE_EVERY_MS, SESSION_MARGIN_MS,
   hubAddress, configuredUrl, listenSession, nowPlayingTrack, roomSummary, roomMessage, joinRequest, roomInvite, postText, createHubClient,
   remoteText, remoteButtons, remoteCommand, remotePcs,
+  PC_KINDS, pcKeys, pcHello, pcView, pcViews,
   KEEPALIVE_FRAME, KEEPALIVE_EVERY_MS, CLIENT_FEATURES, wireMessage, projectCard, PROJECT_KINDS,
   eventsPage, eventsFront,
 };
