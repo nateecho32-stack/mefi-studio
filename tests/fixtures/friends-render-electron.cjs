@@ -89,7 +89,7 @@ app.whenReady().then(async () => {
   const front = {
     ok: true,
     online: { count: 3, people: [
-      { id: "200000000000000001", name: "Maxwell", rank: "flame", specialRanks: ["builder"], where: { id: "room_jam", name: "Friday jam", kind: "hangout" } },
+      { id: "200000000000000001", name: "Maxwell", rank: "flame", specialRanks: ["builder"], where: { id: "room_jam", name: "Friday jam", kind: "hangout" }, building: { project: "Pixel Forge", running: 3, doneToday: 4 } },
       { id: "200000000000000002", name: "Jabilee", rank: "ember", specialRanks: [], where: { id: "lobby", name: "Lobby", kind: "hangout" } },
       { id: "200000000000000003", name: "Rook", rank: "spark", specialRanks: [], where: null },
     ] },
@@ -259,7 +259,7 @@ app.whenReady().then(async () => {
       lead: front.querySelector('.front-lead-title')?.textContent, reads: window.friendsFixture.calls().filter((name) => name === 'hubRoom:front').length };`);
   assert.equal(report.lobby.state, "ready");
   assert.deepEqual(report.lobby.people, ["Maxwell", "Jabilee", "Rook"]);
-  assert.deepEqual(report.lobby.cols, ["Rooms open now", "New this week", "Your week"]);
+  assert.deepEqual(report.lobby.cols, ["Building now", "Rooms open now", "New this week", "Your week"], "Maxwell shares what he builds");
   await click("#friends-front .front-who-go");
   await until(placeIs("rooms") + " && document.getElementById('rooms')", "a person in a room opens Rooms there");
   // Signed out, Friends is one card; Your PCs keeps working without it.
