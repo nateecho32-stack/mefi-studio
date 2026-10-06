@@ -18,8 +18,14 @@ server.
    the Void Engine server (Studio offers **Join the Discord** if it is not).
    From then on Studio connects by itself a few seconds after it opens, so
    friends see you in Who's online and on The Lobby while Studio is open.
-   Untick **Show me as online** to hide; `"friends": { "connectAtLaunch":
-   false }` in Studio's `settings.json` stops the connection at launch.
+   It reconnects by itself after a dropped connection, a restart, an update
+   and a wake from sleep. Untick **Show me as online** to hide; untick
+   **Reconnect by itself** at the foot of The Lobby (`"friends":
+   { "connectAtLaunch": false }` in `settings.json`) to stay off after a
+   restart until you press Connect. Friends on different Studio versions
+   still meet: the room service accepts a window of protocol versions, and
+   only a Studio below it is asked to update (it looks for the update at
+   once, and connects again after it).
 2. **The Lobby** is Friends' first page: who is online and where, the rooms
    open now, the week's top and newest projects, rank-ups, and your own
    credits and week. Everyone signed in is also in the **Lobby** room, so

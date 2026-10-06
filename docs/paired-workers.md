@@ -35,8 +35,44 @@ by the implementation or its tests.
 4. Confirm Start worker. On the coordinator, confirm Queue this project's saved
    commit. The worker makes a fresh checkout at that SHA and runs targets, spec
    collisions, CSS merge, unused CSS, syntax and TESTRUNS checks.
-5. Stop worker and coordinator when finished. After an app restart, services
-   remain off until explicitly started again. Pairing and journals remain local.
+5. Stop worker and coordinator when finished. Pairing and journals remain local.
+
+## Reconnecting by itself
+
+A coordinator or worker you started comes back by itself after Studio
+restarts, updates, rolls back or crashes. The confirmed Start turns on its
+"Start by itself when Studio starts" switch (`settings.pairedCoordinator` and
+`settings.pairedWorker` `autoStart`); Stop turns it off, and the switch can be
+turned off while the service keeps running. Turning a switch on asks first,
+because it lets Studio start the service at launch without a dialog. The
+coordinator keeps its port, mode, advertised address and the paths of its TLS
+files, and reads the files again at each start. A launch that cannot bring a
+service back (a port in use, a moved certificate, no encrypted storage) says
+why in Your PCs and still starts the other one.
+
+Updates wait only for a check that is assigned or running. Idle services close
+cleanly before the update, rollback or automatic restart, and the relaunch
+starts them again about eight seconds in. A manual Restart goes ahead and the
+check is recorded as interrupted, as before. A worker that stops cleanly gives
+its session back, so the next instance connects at once instead of after the
+30-second lease.
+
+While the coordinator cannot be reached, the worker tries again after 5, 10,
+20 and 40 seconds and then every minute, and at once when the PC wakes from
+sleep. A running check rides out a dropped connection: a missed heartbeat or
+progress line is tolerated until the lease would run out, and the check stops
+only when the coordinator says the assignment is gone or the lease is spent.
+
+## Studio versions
+
+Every request carries the sender's protocol window and Studio version
+(`scripts/link-compat.cjs`). Each side accepts every protocol from its oldest
+to its newest; two PCs connect when those overlap, so PCs a release or two
+apart keep working and Your PCs only notes "older, still connects". Only a side
+whose newest protocol is below the other's oldest is refused, with HTTP 426
+naming who has to update. A worker that is too far behind looks for a Studio
+update at once and asks the coordinator again every ten minutes; the update's
+relaunch reconnects it by itself.
 
 The coordinator never supplies a shell command or local filesystem path. The
 worker maps its approved repository locally. It uses existing Git access only
@@ -53,7 +89,8 @@ a persisted start grant. Lost acknowledgements, expired 30-second leases and
 restart ambiguity are held uncertain. They are never automatically requeued or
 executed by a replacement worker. Finished results are persisted before sending;
 resending the same result is idempotent. A worker reconnects in its current
-session, with overlapping instances rejected while the prior session is live.
+session, with overlapping instances rejected while the prior session is live
+(a clean stop releases it; a crash lets it lapse after the lease).
 
 When recovery says Confirm previous check stopped, first verify or stop the
 previous process on that worker. Confirming records interruption, not success

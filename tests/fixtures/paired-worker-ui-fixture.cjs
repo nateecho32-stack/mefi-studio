@@ -3,7 +3,7 @@
 const fs=require("node:fs"),path=require("node:path"),assert=require("node:assert/strict");
 exports.seed=responses=>{
   responses.syncStatus={ok:true,state:{behind:0,ahead:0},pending:[],problems:[]};
-  responses.pairedStatus={ok:true,encryptionAvailable:true,coordinator:{running:false,url:null,workers:[{id:"fixture-worker",name:"Paired check PC",repos:["owner/mefi-studio"],revoked:false}],jobs:[{id:"fixture-job",spec:{repo:"owner/mefi-studio",commit:"a".repeat(40)},state:"uncertain",progress:[{text:"Connection lost; previous assignment is held for recovery."}],archived:0}],nextCursor:null},worker:{paired:true,running:false,repo:"owner/mefi-studio",uncertain:["fixture-job"]}};
+  responses.pairedStatus={ok:true,app:"0.5.0",encryptionAvailable:true,coordinator:{running:false,url:null,autoStart:false,workers:[{id:"fixture-worker",name:"Paired check PC",repos:["owner/mefi-studio"],revoked:false,app:"0.4.6"}],jobs:[{id:"fixture-job",spec:{repo:"owner/mefi-studio",commit:"a".repeat(40)},state:"uncertain",progress:[{text:"Connection lost; previous assignment is held for recovery."}],archived:0}],nextCursor:null},worker:{paired:true,running:false,autoStart:true,repo:"owner/mefi-studio",uncertain:["fixture-job"]}};
 };
 exports.capture=async({window,run,until,sleep,capturePage,report,root})=>{
   await until("window.MefiPcSync", "PC sync surface");
@@ -16,6 +16,8 @@ exports.capture=async({window,run,until,sleep,capturePage,report,root})=>{
   const geometry=await run("const section=document.getElementById('pc-paired-workers');return {width:innerWidth,controls:[...section.querySelectorAll('input,select,button')].filter(e=>e.checkVisibility()).map(e=>({id:e.id,left:e.getBoundingClientRect().left,right:e.getBoundingClientRect().right})),text:section.textContent};");
   for(const control of geometry.controls)assert.ok(control.left>=0&&control.right<=geometry.width+1,`Control fits: ${control.id}`);
   assert.match(geometry.text,/Confirm previous check stopped/);assert.match(geometry.text,/uncertain/);
+  assert.match(geometry.text,/Start by itself when Studio starts/);assert.match(geometry.text,/Studio 0\.4\.6 \(older, still connects\)/);
+  assert.equal(await run("return document.getElementById('paired-worker-auto').checked&&!document.getElementById('paired-coordinator-auto').checked;"),true,"the switches show what main says");
   fs.writeFileSync(path.join(directory,"paired-workers-narrow.png"),(await capturePage()).toPNG());
   report.pairedWorkers={bridge:"simulation",narrowFits:true,recoveryVisible:true};
   assert.deepEqual(report.errors,[]);assert.deepEqual(report.networkAttempts,[]);assert.deepEqual(report.processAttempts,[]);

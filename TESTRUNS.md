@@ -39,6 +39,29 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-06 Your PCs and Friends reconnect by themselves; only a Studio that is really behind must update
+
+Branch `wip/auto-reconnect` (C:\wt\reconnect), landed on main as 7718e36 (rebased three times as main moved; the
+CHANGELOG kept from both sides and `renderer/booklet.html` rebuilt, not merged). New `scripts/link-compat.cjs`
+(protocol windows for paired PCs and the relay); paired checks start again by themselves after a restart, update or
+crash and back off while the coordinator is away; Friends gets "Reconnect by itself", a retry on wake, and the relay's
+hello window. The relay change is not deployed by this landing: the live relay drops the new `oldest` field (checked
+against HEAD's protocol.mjs), so today's Studio and this one both connect until it is redeployed.
+
+`npm run check` ok, eslint on the changed files 0 problems (main.cjs keeps its 5 older warnings), `npm run audit` 0
+findings, booklet byte-identical to a fresh build. Through `npm run test:one` on the rebased tree: the affected and
+overlapping suites 135/135 (link_compat, paired_reconnect, paired_worker, paired_worker_lifecycle, paired_worker_ui,
+hub_client, hub_host, relay_core, relay_e2e, friends_front_ui, rooms_ui, project_hub_ui, playlists, friends_render);
+before the playlists rebase 177/179 across 26 suites incl. paired_worker_render, friends_render, friends_two_render
+and companion_hub_render, the 2 failures being paired_reconnect's own fixed-sleep waits under load, rewritten to wait
+for the poll, start and abort (then 6/6 on every run that got a lease turn; 3 of 5 back-to-back tries timed out
+waiting for the lease, not in the suite). paired_worker's heartbeat test now uses a 40 ms lease (it took 30 s once a
+missed heartbeat stopped aborting at once). paired_worker_render captures the Start by itself switches and "Studio
+0.4.6 (older, still connects)" fitting a 600 px window. Hosted CI (ci.yml, Windows) green on 6445219 (7 min 10 s),
+3a4c7be (7 min 23 s) and the landed 7718e36; after the last rebase 52/52 again here (hub_host,
+paired_worker_lifecycle, paired_reconnect, link_compat, hub_client), since main.cjs moved under it. Not run here: the
+full `npm test` (CI is the full gate) and a real two-PC test (owner).
+
 ## 2026-10-06 The release workflow's hosted gate, smoke launch, signing switch and Rust-host switch; the 0.5 scope refreshed
 
 Cloud session, branch `claude/funny-einstein-19ljkq` (436fd2c, a45cc38) on main fa672de. `release.yml` now holds
@@ -472,27 +495,6 @@ then the files), startup_marks 10/10, startup_marks_renderer, booklet_build, rel
 (pins updated for launchGate and ?marks=0). Python test_mefi_studio_idle + updater 42 OK. Electron: startup_render and
 renderer_startup 12/12; for S3, task_overview_render, sessions_render, builder_render, fleet_render and
 workflow_render 5/5.
-
-## 2026-10-06 Board pushes carry the rows that changed (S3) land on main
-
-Branch `wip/s3-row-push` in a cloud session (Linux, Node 24.21.0) over main 24d6756: the parked slice c682642
-re-applied (conflicts in main.cjs mutateBoard/HELD_WHILE_HIDDEN and module_purity, both sides kept), plus the bridge
-re-delivering the held board to onTasks when eyes:progress moves a card, so live progress in Tasks, Sessions and
-Build is unchanged (722e009).
-
-Bytes per board change (tests/row_push.test.mjs, a seeded 134-card board and 104-session checkpoint store, JSON
-bytes over IPC): eyes:tasks with one card changed 688,319 B before, 5,211 B after; an executor checkpoint 688,319 B
-before, 665 B after (eyes:progress, no list); eyes:checkpoints with one session changed 760,443 B before, 7,433 B
-after; a write that changes nothing sent the list before and sends nothing now. Kill switch MEFI_STUDIO_FULL_PUSHES=1
-(whole lists, pinned by host_push_batching and preload_fanout).
-
-`npm run check` ok, `npm run audit` 0 findings, `npm run lint` 0 errors and 45 warnings (as clean main).
-`npm run test:fast`: 7064 tests, 7005 pass, 58 skipped, 1 fail: rust_modules "the image-store factory ... keeps
-folder the engine's", as on clean main (the Rust chat has it). row_push, board_gateway, host_push_batching,
-module_purity, preload_fanout 114/114 together; preload_fanout 17/17 after the onTasks re-delivery (new pins: live
-progress delivers the board at once, untouched cards keep their objects, progress that moves no card delivers
-nothing, and the seeded walk checks every live delivery against the host's board). Electron fixtures not run here
-(no Electron in the container); judged on the Windows "Studio checks" run of this commit.
 
 ## Read Before Any Tests
 

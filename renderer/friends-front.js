@@ -66,10 +66,12 @@
     if (!hub.linked) return { action: "signin", text: "Sign in with Discord to use Friends." };
     if (hub.error === "not-member") return { action: "join", text: "Your Discord account isn't in the Void Engine server yet. Join it, then check again." };
     if (hub.error === "auth") return { action: "signin", text: "Your Discord sign-in has run out. Sign in with Discord again." };
-    if (hub.error === "version") return { action: "update", text: "The room service needs a newer Studio. Update Studio, then come back." };
+    if (hub.error === "version") return { action: "update", text: "The room service needs a newer Studio. Update Studio; Friends reconnects by itself after the update." };
+    if (hub.error === "relay-behind") return { action: null, text: "The room service is being updated. Studio reconnects by itself in a few minutes." };
     if (hub.state === "ready") return { action: null, text: "" };
     if (hub.state === "connecting") return { action: null, text: "Connecting to the room service…" };
     if (hub.error === "too-many-sockets") return { action: "connect", text: "Studio is open in too many places with this account. Close one, then Connect." };
+    if (hub.state === "offline") return { action: "connect", text: "Lost the room service. Studio reconnects by itself; Connect tries now." };
     return { action: "connect", text: hub.error ? "Not connected to the room service. Check your internet, then Connect." : "Not connected to the room service yet." };
   }
 
@@ -212,6 +214,7 @@
     let page = null; // the last front page read
     let meId = null; // this member, from hub:status
     let sharing = false; // "Share what I'm building", as main's hub:status says
+    let autoConnect = true; // "Reconnect by itself" (settings.friends.connectAtLaunch)
     let code = null; // { roomId, code, link } for the member's own room
 
     const schedule = () => {
@@ -265,6 +268,7 @@
         return;
       }
       sharing = hub.shareBuilding === true;
+      autoConnect = hub.autoConnect !== false;
       meId = hub.user?.id ?? meId;
       if (!hub.front) {
         root.dataset.state = "unsupported";
@@ -472,7 +476,20 @@
         }).catch(() => { shareTick.checked = !shareTick.checked; });
       });
       share.append(shareTick, node("span", "", "Share what I'm building"));
-      bar.append(toggle, pops, share);
+      // On: Friends connects again after every restart, update and wake from sleep.
+      const again = node("label", "front-visible");
+      const againTick = node("input");
+      againTick.type = "checkbox";
+      againTick.id = "friends-front-reconnect";
+      againTick.checked = autoConnect;
+      againTick.addEventListener("change", () => {
+        void Promise.resolve(api.hubRoom("autoConnect", againTick.checked)).then((answer) => {
+          if (answer?.ok) { autoConnect = answer.autoConnect === true; status.textContent = autoConnect ? "Friends reconnects by itself after restarts, updates and sleep." : "Friends stays off after a restart until you Connect."; }
+          else { againTick.checked = !againTick.checked; status.textContent = "That didn't save. Try again."; }
+        }).catch(() => { againTick.checked = !againTick.checked; });
+      });
+      again.append(againTick, node("span", "", "Reconnect by itself"));
+      bar.append(toggle, pops, share, again);
       const invite = node("span", "front-invite");
       if (code?.code) {
         invite.append(document.createTextNode("Invite code "), node("b", "front-code", code.code));

@@ -6,6 +6,27 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-06 Board pushes carry the rows that changed (S3) land on main
+
+Branch `wip/s3-row-push` in a cloud session (Linux, Node 24.21.0) over main 24d6756: the parked slice c682642
+re-applied (conflicts in main.cjs mutateBoard/HELD_WHILE_HIDDEN and module_purity, both sides kept), plus the bridge
+re-delivering the held board to onTasks when eyes:progress moves a card, so live progress in Tasks, Sessions and
+Build is unchanged (722e009).
+
+Bytes per board change (tests/row_push.test.mjs, a seeded 134-card board and 104-session checkpoint store, JSON
+bytes over IPC): eyes:tasks with one card changed 688,319 B before, 5,211 B after; an executor checkpoint 688,319 B
+before, 665 B after (eyes:progress, no list); eyes:checkpoints with one session changed 760,443 B before, 7,433 B
+after; a write that changes nothing sent the list before and sends nothing now. Kill switch MEFI_STUDIO_FULL_PUSHES=1
+(whole lists, pinned by host_push_batching and preload_fanout).
+
+`npm run check` ok, `npm run audit` 0 findings, `npm run lint` 0 errors and 45 warnings (as clean main).
+`npm run test:fast`: 7064 tests, 7005 pass, 58 skipped, 1 fail: rust_modules "the image-store factory ... keeps
+folder the engine's", as on clean main (the Rust chat has it). row_push, board_gateway, host_push_batching,
+module_purity, preload_fanout 114/114 together; preload_fanout 17/17 after the onTasks re-delivery (new pins: live
+progress delivers the board at once, untouched cards keep their objects, progress that moves no card delivers
+nothing, and the seeded walk checks every live delivery against the host's board). Electron fixtures not run here
+(no Electron in the container); judged on the Windows "Studio checks" run of this commit.
+
 ## 2026-10-05 The 0.5 layout is the only layout: the classic layout's code goes, every window fixture runs the 0.5 layout
 
 Branch `ui/v2-only` (gated in `C:\wt\ui-v2only`, merged with main up to f1934aa in `C:\wt\v2m` as 8e4a501). Owner

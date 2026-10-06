@@ -312,6 +312,22 @@ test("Building now: a small tree per friend who shares, and this member's own sw
   assert.equal(plain.byClass("front-building").length, 0, "nobody sharing: no section");
 });
 
+test("Reconnect by itself: the Lobby's switch reads hub:status and saves through hub:room", async () => {
+  const env = environment({ status: { configured: true, linked: true, state: "ready", user: ME, front: true, autoConnect: true }, replies: { autoConnect: (on) => ({ ok: true, autoConnect: on }) } });
+  const card = env.front.card();
+  await flush();
+  const tick = card.find("friends-front-reconnect");
+  assert.equal(tick.checked, true, "on unless turned off");
+  tick.change(false);
+  await flush();
+  assert.deepEqual(env.calls.find((call) => call[0] === "autoConnect"), ["autoConnect", false]);
+  assert.equal(card.find("friends-front-status").textContent, "Friends stays off after a restart until you Connect.");
+  const off = environment({ status: { configured: true, linked: true, state: "ready", user: ME, front: true, autoConnect: false } });
+  const offCard = off.front.card();
+  await flush();
+  assert.equal(offCard.find("friends-front-reconnect").checked, false, "the saved choice comes back");
+});
+
 test("while it shows, The Lobby holds the Lobby room and reads again when someone arrives or leaves", async () => {
   let reads = 0;
   const env = environment({ status: { configured: true, linked: true, state: "ready", user: ME, front: true, lobby: true }, page: () => { reads += 1; return front(); } });
@@ -339,6 +355,9 @@ test("one way to say the connection: Connect only when it can help; the right nu
   assert.equal(said({ configured: true, linked: true, state: "error", error: "version" }).action, "update", "an old Studio is told to update, not to Connect");
   assert.equal(said({ configured: true, linked: true, state: "error", error: "not-member" }).action, "join");
   assert.equal(said({ configured: true, linked: true, state: "offline", error: "network" }).action, "connect");
+  assert.match(said({ configured: true, linked: true, state: "offline", error: "network" }).text, /reconnects by itself/, "a lost connection is retried without anyone pressing Connect");
+  assert.deepEqual(said({ configured: true, linked: true, state: "offline", error: "relay-behind" }), { action: null, text: "The room service is being updated. Studio reconnects by itself in a few minutes." });
+  assert.match(said({ configured: true, linked: true, state: "error", error: "version" }).text, /reconnects by itself after the update/);
   assert.equal(said({ configured: true, linked: true, state: "ready" }).action, null);
   const old = environment({ status: { configured: true, linked: true, state: "error", error: "version", user: ME, front: true } });
   const stale = old.front.card();
