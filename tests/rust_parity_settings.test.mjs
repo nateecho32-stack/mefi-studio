@@ -11,7 +11,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -23,6 +23,7 @@ const autonomy = require("../scripts/autonomy.cjs");
 const authStore = require("../scripts/auth-store.cjs");
 const credentials = require("../scripts/credentials.cjs");
 const { createProjects, projectFromPath } = require("../scripts/projects.cjs");
+const { createSettingsCache } = require("../scripts/settings-cache.cjs");
 const binary = coreBinary();
 const skip = existsSync(binary) ? false : `mefi-core is not built (${binary}); run npm run host:core`;
 const CONST = (value) => ({ $mefi: "const", value });
@@ -44,8 +45,10 @@ const section = (start, end) => {
 
 const SAVED = { activeId: "project_0123456789abcdef", legacyPath: "C:\\Studio", items: [{ id: "project_0123456789abcdef", name: "app", path: "C:\\app" }] };
 
-// main.cjs's own settings code, on one folder.
-function jsStore(dir) {
+// main.cjs's own settings code, on one folder. With `cache`, readSettings
+// answers through the settings cache the way main.cjs builds it (bigint stats
+// of both files; no clock, so the stat alone decides, as in settings_cache).
+function jsStore(dir, { cache = false } = {}) {
   const logs = [];
   const env = vm.createContext({
     autonomy, autonomySettings: autonomy.migrate({}), path, readFile, readFileSync, writeFileSync, authStore,
@@ -56,6 +59,7 @@ function jsStore(dir) {
   });
   vm.runInContext(section("const settingsDisk =", "const projects = createProjects("), env);
   vm.runInContext(section("function rememberAutonomySettings(", "function send(channel, payload)"), env);
+  if (cache) env.settingsCache = createSettingsCache({ files: [env.SETTINGS_PATH, env.AUTH_PATH], stat: (file) => stat(file, { bigint: true }), read: () => env.readSettingsFiles() });
   // A top-level const is not a property of the context: hand the health out.
   vm.runInContext("globalThis.settingsHealth = settingsDisk;", env);
   return { env, logs };
@@ -77,7 +81,7 @@ function outcome(dir, logs) {
 async function scenario(t, label, files, steps, { seed = null } = {}) {
   const base = mkdtempSync(path.join(tmpdir(), "mefi-settings-parity-"));
   t.after(() => rmSync(base, { recursive: true, force: true }));
-  const dirs = { js: path.join(base, "js"), rs: path.join(base, "rs") };
+  const dirs = { js: path.join(base, "js"), rs: path.join(base, "rs"), cached: path.join(base, "cached") };
   const apply = (dir, step) => {
     if (step[0] === "put") writeFileSync(path.join(dir, step[1]), step[2]);
     if (step[0] === "dir") mkdirSync(path.join(dir, step[1]), { recursive: true });
@@ -87,14 +91,25 @@ async function scenario(t, label, files, steps, { seed = null } = {}) {
     for (const [name, text] of Object.entries(files)) apply(dir, text === null ? ["dir", name] : ["put", name, text]);
   }
 
-  const js = jsStore(dirs.js);
-  if (seed) Object.assign(js.env.settingsHealth, seed(dirs.js));
-  const expected = [];
-  for (const step of steps) {
-    if (step[0] === "read") expected.push(plain(await js.env.readSettings().catch((error) => ({ thrown: true, message: String(error?.message) }))));
-    else if (step[0] === "write") expected.push(plain(await js.env.writeSettings(step[1]).catch((error) => ({ thrown: true, message: String(error?.message) }))));
-    else apply(dirs.js, step);
-  }
+  const runJs = async (dir, options) => {
+    const store = jsStore(dir, options);
+    if (seed) Object.assign(store.env.settingsHealth, seed(dir));
+    const answers = [];
+    for (const step of steps) {
+      if (step[0] === "read") answers.push(plain(await store.env.readSettings().catch((error) => ({ thrown: true, message: String(error?.message) }))));
+      else if (step[0] === "write") answers.push(plain(await store.env.writeSettings(step[1]).catch((error) => ({ thrown: true, message: String(error?.message) }))));
+      else apply(dir, step);
+    }
+    return { store, answers };
+  };
+  const { store: js, answers: expected } = await runJs(dirs.js);
+  // The settings cache (MEFI_STUDIO_SETTINGS_CACHE, on by default) in front of
+  // the same code: the same views, files and log, so Rust's equality holds for
+  // the Electron build as shipped. Rust's store answers itself under the host.
+  const cached = await runJs(dirs.cached, { cache: true });
+  const noDir = (result) => JSON.parse(JSON.stringify(result).split(JSON.stringify(dirs.cached).slice(1, -1)).join("<dir>").split(JSON.stringify(dirs.js).slice(1, -1)).join("<dir>"));
+  assert.deepEqual(noDir(cached.answers), noDir(expected), `${label}: the cached reads`);
+  assert.deepEqual(outcome(dirs.cached, cached.store.logs), outcome(dirs.js, js.logs), `${label}: the files and the log with the cache on`);
 
   // Rust: one process per run of calls; the file's health crosses as the next run's seed.
   const context = { settingsPath: path.join(dirs.rs, "settings.json"), authPath: path.join(dirs.rs, "auth.json"), projects: SAVED, log: { $mefi: "fn", id: 1 } };

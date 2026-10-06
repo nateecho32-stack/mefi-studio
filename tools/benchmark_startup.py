@@ -2,6 +2,14 @@
 
 python tools/benchmark_startup.py [--source PATH] [--runs 3] [--output PATH]
 Requires this checkout's installed Electron. Does not read the live board or keys.
+
+Each run launches a copy of the source with --smoke (no launch screen, a hidden
+window) while the page itself boots as a real launch: the launch gate, then the
+home. The run is usable when that home is: Vibe (the default) with its first
+read landed and its composer enabled, Build's workspace with its composer
+enabled, or, for older sources, the catalog cards. Sources with startup marks
+(scripts/startup-marks.cjs) also write --startup-report; its app ready, first
+paint and gate release (ms since the main process started) are read from there.
 """
 import argparse
 import json
@@ -17,7 +25,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def measure(source):
-    electron = ROOT / "node_modules/electron/dist/electron.exe"
+    # Windows' electron.exe; Linux's electron (a Linux run needs a display, e.g. xvfb-run).
+    dist = ROOT / "node_modules/electron/dist"
+    electron = dist / "electron.exe" if (dist / "electron.exe").exists() else dist / "electron"
     with tempfile.TemporaryDirectory(prefix="mefi-startup-") as folder:
         temporary = Path(folder)
         app_root = temporary / "app"
@@ -34,6 +44,7 @@ def measure(source):
         for name in ("curated.json", "models.json"):
             shutil.copy2(source / "data" / name, app_root / "data" / name)
         profile = temporary / "profile"
+        startup_report = temporary / "startup-report.json"
         (profile / "session").mkdir(parents=True)
         (profile / "settings.json").write_text(json.dumps({"machine": {"autoKill": False}}), encoding="utf-8")
         package = json.loads((source / "package.json").read_text(encoding="utf-8-sig"))
@@ -46,7 +57,15 @@ process.on("unhandledRejection", (error) => { console.error(error?.stack || erro
 const started = performance.now();
 let finishReady;
 const ready = new Promise((resolve) => { finishReady = resolve; });
-global.__MefiMeasuredExit = () => ready.then((result) => electron.app.exit(result?.workspaceReady || result?.cards > 0 ? 0 : 1));
+// A source with startup marks writes its report once the gate releases; give it
+// up to 5 s to land before the smoke exits. Older sources never write one.
+const reportFile = STARTUP_REPORT_PATH;
+const reportWritten = () => new Promise((resolve) => {
+  const end = Date.now() + 5000;
+  const look = () => (require("node:fs").existsSync(reportFile) || Date.now() > end ? resolve() : setTimeout(look, 25));
+  look();
+});
+global.__MefiMeasuredExit = () => ready.then(async (result) => { await reportWritten(); electron.app.exit(result?.vibeReady || result?.workspaceReady || result?.cards > 0 ? 0 : 1); });
 electron.app.setPath("userData", PROFILE);
 electron.app.setPath("sessionData", PROFILE + "/session");
 const RealWindow = electron.BrowserWindow;
@@ -60,13 +79,22 @@ class MeasuredWindow extends RealWindow {
       try {
         const renderer = await this.webContents.executeJavaScript(`new Promise((resolve, reject) => {
           const end = performance.now() + 30000;
+          let vibeAsked = false, vibeSettled = false;
           const poll = () => {
             const boot = document.getElementById('boot-layer');
             const launchReady = !window.MefiBoot?.isActive?.() && boot?.hidden !== false;
             const workspaceReady = Boolean(launchReady && window.MefiWorkspace?.isActive?.() && document.getElementById('workspace-send')?.disabled === false);
+            // Vibe, the default home: usable once its first read has landed
+            // (MefiVibe.ready) and its composer takes a request.
+            const vibeActive = Boolean(launchReady && window.MefiVibe?.isActive?.());
+            if (vibeActive && !vibeAsked) {
+              vibeAsked = true;
+              Promise.resolve(window.MefiVibe.ready?.()).then(() => { vibeSettled = true; }, () => { vibeSettled = true; });
+            }
+            const vibeReady = Boolean(vibeActive && vibeSettled && document.getElementById('vibe-input') && document.getElementById('vibe-build')?.disabled === false);
             const cards = document.querySelectorAll('.card').length;
-            if (workspaceReady || (!window.MefiWorkspace && boot && boot.hidden && cards > 0)) {
-              resolve({ readyMs: Math.round(performance.now()), cards, workspaceReady });
+            if (vibeReady || workspaceReady || (!window.MefiWorkspace && boot && boot.hidden && cards > 0)) {
+              resolve({ readyMs: Math.round(performance.now()), cards, workspaceReady, vibeReady, home: vibeReady ? 'vibe' : workspaceReady ? 'workspace' : 'catalog' });
             } else if (performance.now() > end) reject(new Error('boot never became ready'));
             else setTimeout(poll, 10);
           }; poll();
@@ -80,7 +108,7 @@ class MeasuredWindow extends RealWindow {
 }
 global.__MefiMeasuredWindow = MeasuredWindow;
 require("./main.cjs");
-'''.replace("PROFILE", json.dumps(str(profile)))
+'''.replace("PROFILE", json.dumps(str(profile))).replace("STARTUP_REPORT_PATH", json.dumps(str(startup_report)))
         (app_root / "benchmark-entry.cjs").write_text(bootstrap, encoding="utf-8")
         # Instrument only the temporary window constructor; normal boot,
         # rendering, IPC, and assistant code remain the production sources.
@@ -95,7 +123,7 @@ require("./main.cjs");
                    MEFI_STUDIO_REPO=str(app_root), MEFI_STUDIO_GAME_ROOT=str(temporary / "absent-game"))
         start = time.perf_counter()
         with (temporary / "output.log").open("w", encoding="utf-8") as log:
-            process = subprocess.Popen([str(electron), ".", "--smoke"], cwd=app_root, env=env, stdout=log, stderr=log)
+            process = subprocess.Popen([str(electron), ".", "--smoke", "--startup-report", str(startup_report)], cwd=app_root, env=env, stdout=log, stderr=log)
             try:
                 process.wait(timeout=45)
             except subprocess.TimeoutExpired:
@@ -105,7 +133,19 @@ require("./main.cjs");
         records = [json.loads(line.removeprefix("[startup-ready] ")) for line in output.splitlines() if line.startswith("[startup-ready] ")]
         if process.returncode or not records:
             raise RuntimeError(output)
-        return {**records[0], "processMs": round((time.perf_counter() - start) * 1000)}
+        return {**records[0], **startup_marks(startup_report), "processMs": round((time.perf_counter() - start) * 1000)}
+
+
+# The startup report's headline marks, in ms since the main process started,
+# when the source wrote one; {} for a source that predates startup marks.
+def startup_marks(file):
+    try:
+        report = json.loads(Path(file).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    summary = report.get("summary") or {}
+    marks = {"appReadyMs": summary.get("ready"), "firstPaintMs": summary.get("firstPaint"), "releaseMs": summary.get("release")}
+    return {**{key: value for key, value in marks.items() if isinstance(value, (int, float))}, "startupReport": report}
 
 
 if __name__ == "__main__":
@@ -118,9 +158,14 @@ if __name__ == "__main__":
     for index in range(args.runs):
         result = measure(args.source.resolve())
         results.append(result)
-        print(f"run {index + 1}: loaded {result['loadedMs']} ms, interactive {result['readyMs']} ms, smoke completed {result['processMs']} ms", flush=True)
+        home = (result.get("renderer") or {}).get("home", "catalog")
+        marks = "".join(f", {label} {result[key]} ms" for key, label in (("appReadyMs", "app ready"), ("firstPaintMs", "first paint"), ("releaseMs", "gate released")) if key in result)
+        print(f"run {index + 1}: loaded {result['loadedMs']} ms, interactive ({home}) {result['readyMs']} ms{marks}, smoke completed {result['processMs']} ms", flush=True)
+    # loadedMs, readyMs and processMs count from the benchmark's own entry
+    # script; the startup-report marks count from the main process's start.
+    keys = [key for key in ("loadedMs", "readyMs", "appReadyMs", "firstPaintMs", "releaseMs", "processMs") if all(key in row for row in results)]
     report = {"source": str(args.source.resolve()), "runs": results,
-              "median": {key: statistics.median(row[key] for row in results) for key in ("loadedMs", "readyMs", "processMs")}}
+              "median": {key: statistics.median(row[key] for row in results) for key in keys}}
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")

@@ -1,6 +1,54 @@
 # Agent loop and startup measurements
 
 
+## Startup marks and the settings cache, October 6, 2026
+
+Every launch now times itself on one timeline, milliseconds since the main
+process started (`scripts/startup-marks.cjs`, `renderer/startup-marks.js`):
+main's first statement, app ready, the window, the booklet file's arrival,
+first paint, when the inline script began, DOMContentLoaded, each launch-gate
+step's start and settle, the launch choice and the gate's release. Trace
+gets one `[startup]` line per launch. For numbers:
+
+```
+npm start -- --startup-report logs/startup.json     # or MEFI_STUDIO_STARTUP_REPORT=<file>
+python tools/benchmark_startup.py --runs 5          # Linux: xvfb-run -a, as a non-root user
+```
+
+`benchmark_startup.py` reads the report and prints app ready, first paint and
+gate released beside its own loaded and interactive times, and now knows Vibe
+as a home. `MEFI_STUDIO_STARTUP_MARKS=0` turns both halves off (the page then
+opens with `?marks=0` and wraps nothing).
+
+Five smoke launches each (Linux container, Electron 44.4.1, xvfb, medians;
+"before" is main 24d6756, "after" this slice):
+
+| | Before | After |
+| --- | ---: | ---: |
+| booklet loaded (benchmark clock) | 2,624 ms | 2,616 ms |
+| interactive, Vibe (benchmark clock) | 4,055 ms | 4,024 ms |
+| app ready (main clock) | not measured | 212 ms |
+| first paint | not measured | 462 ms |
+| launch gate released | not measured | 3,856 ms |
+
+The marks cost nothing measurable. What they show: the gate opens about
+700 ms in, but the launch choice lands only at about 2,200 ms (dom-ready
+arrives with it), the five steps then take 0.4-560 ms in parallel, and the
+release comes about 600 ms after the last step settles. Those two gaps are
+the next levers (C2/C4).
+
+`readSettings` read and parsed `settings.json` and `auth.json` on every call,
+and the host calls it for nearly every model call, dispatch and IPC read.
+`scripts/settings-cache.cjs` keeps the merged view while both files keep the
+same bigint stat and hands each caller a clone; a read that is a fallback, a
+migration, a lost auth read, racy (modified within 2 s) or raced by a write
+is never kept, and `writeSettings` forgets the view before and after it
+writes. Main.cjs's own code on a 47 KB settings file: about 460 µs per call
+before, about 265 µs with the cache, and two stats instead of two file reads.
+`MEFI_STUDIO_SETTINGS_CACHE=0` reads both files every call. Under the Rust
+host its settings store answers first and the cache is not consulted;
+`tests/rust_parity_settings.test.mjs` holds the JavaScript with the cache on
+equal to Rust as well.
 ## Board pushes carry the rows that changed, October 6, 2026
 
 `eyes:tasks` was every card on the board and went out on every board write,
