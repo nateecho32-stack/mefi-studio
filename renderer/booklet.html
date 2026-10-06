@@ -12661,7 +12661,8 @@ html[data-motion="off"][data-frame] .shell-column[data-state="drawer"], html[dat
    scrolled and the scroll hint sat over the status bar on every page. The Settings and Appearance previews over the
    Map keep them, as their own rules ask. */
 html[data-frame] body:is(.workspace-active, .vibe-active, .command-active):not(.appearance-settings-active):not(.music-preview-active) > :is(main, header.page-head),
-html[data-frame] body:has(.workspace-page:not([hidden]), #friends-overlay:not([hidden])):not(.appearance-settings-active):not(.music-preview-active) > :is(main, header.page-head) { display: none; }
+html[data-frame] body:has(.workspace-page:not([hidden])):not(.appearance-settings-active):not(.music-preview-active) > :is(main, header.page-head),
+html[data-frame] body:has(#friends-overlay:not([hidden])):not(.appearance-settings-active):not(.music-preview-active) > :is(main, header.page-head) { display: none; }
 
 /* Tabs (renderer/tabs.js): the strip under the local navigation, its menus and the Tab behaviour card.
    Layout v2 only: nothing draws these until the script starts. Every colour is a theme token, every text size is
