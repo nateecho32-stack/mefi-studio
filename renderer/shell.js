@@ -27,8 +27,9 @@
 //
 // window.MefiShell: active, enable, disable, region, mode, setMode, size,
 // resize, info, open, close, toggle, isOpen, mount, onChange, openInbox,
-// resetLayout, layout, status, sync, pages, onInbox (a hook), plan, and the
-// constants LIMITS, DEFAULTS, REGIONS, MODES and PRESETS. It emits
+// resetLayout, layout, status, sync, pages, placeBar (a place's pages as a row
+// in its page, for when the list column is not showing them), onInbox (a hook),
+// plan, and the constants LIMITS, DEFAULTS, REGIONS, MODES and PRESETS. It emits
 // `mefi:shell-layout` on window when a region opens, closes, is resized or
 // becomes a drawer, when the mode changes, when the page list comes or goes
 // and when the frame comes or goes.

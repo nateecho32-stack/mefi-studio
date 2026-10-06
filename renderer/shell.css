@@ -34,7 +34,7 @@ html[data-frame] .shell-region {
 html[data-frame] #tree-rail { display: none !important; }
 html[data-frame] body, html[data-frame] body:has(#tree-rail.pinned) { padding-right: calc(var(--gutter) + var(--shell-x1)); }
 /* Vibe's own Home has no rail on screen: the list starts at the window's edge there. */
-html[data-frame] body.vibe-active:not(:has(.workspace-page:not([hidden]), #friends-overlay:not([hidden]))) :is(.shell-region, .shell-split) { --frame-rail-w: 0px; }
+html[data-frame] body.vibe-active:not(:has(.workspace-page:not([hidden]))):not(:has(#friends-overlay:not([hidden]))) :is(.shell-region, .shell-split) { --frame-rail-w: 0px; }
 
 /* Vibe's own layer starts under the bar; its header keeps the project, new app, update, conversation
    and settings buttons and drops the mode switch, the pulse and the search the bar carries now. */

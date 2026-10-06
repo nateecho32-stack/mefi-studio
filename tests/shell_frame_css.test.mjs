@@ -119,7 +119,7 @@ test("geometry comes from the contract's derived edges only, and the layers are 
   assert.equal(decl("html[data-frame] .shell-inspector", "width"), "var(--shell-inspector-w)");
   assert.equal(decl("html[data-frame] .shell-list", "width"), "var(--shell-list-w)");
   // Vibe's own Home has no rail: the list starts at the window's edge there.
-  assert.match(css, /html\[data-frame\] body\.vibe-active:not\(:has\(\.workspace-page:not\(\[hidden\]\)\)\) :is\(\.shell-region, \.shell-split\) \{ --frame-rail-w: 0px; \}/);
+  assert.match(css, /html\[data-frame\] body\.vibe-active:not\(:has\(\.workspace-page:not\(\[hidden\]\)\)\):not\(:has\(#friends-overlay:not\(\[hidden\]\)\)\) :is\(\.shell-region, \.shell-split\) \{ --frame-rail-w: 0px; \}/);
   // The splitters are placed from the same three values, so they must be given them: a custom property that is
   // not defined on the element makes its whole calc() invalid, and the splitter falls back to where it would sit in the flow.
   for (const selector of ["html[data-frame] .shell-region", "html[data-frame] .shell-split"]) for (const name of ["--frame-rail-w", "--frame-top-h", "--frame-x0"]) assert.ok(decl(selector, name), `${selector} defines ${name}`);
