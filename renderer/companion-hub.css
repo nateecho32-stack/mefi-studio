@@ -128,6 +128,8 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 .pc-setup-repos { flex: 1 1 180px; min-width: 0; max-width: 100%; }
 .pc-paired-field { display: grid; gap: 4px; min-width: 0; margin-block: 8px; }
 .pc-paired-field input { box-sizing: border-box; width: 100%; min-width: 0; }
+.pc-paired-auto { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12px; cursor: pointer; }
+.pc-paired-auto input { flex: none; margin: 0; }
 .pc-setup-list { list-style: none; padding-left: 0; }
 .pc-setup-links-head { margin: 10px 0 0; font-size: 12px; font-weight: 600; }
 .pc-setup-links button { margin-left: 8px; }

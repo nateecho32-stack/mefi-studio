@@ -9481,6 +9481,8 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 .pc-setup-repos { flex: 1 1 180px; min-width: 0; max-width: 100%; }
 .pc-paired-field { display: grid; gap: 4px; min-width: 0; margin-block: 8px; }
 .pc-paired-field input { box-sizing: border-box; width: 100%; min-width: 0; }
+.pc-paired-auto { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12px; cursor: pointer; }
+.pc-paired-auto input { flex: none; margin: 0; }
 .pc-setup-list { list-style: none; padding-left: 0; }
 .pc-setup-links-head { margin: 10px 0 0; font-size: 12px; font-weight: 600; }
 .pc-setup-links button { margin-left: 8px; }
@@ -75641,13 +75643,22 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const startWorker = button("paired-worker-start", "Start worker", () => api.pairedWorker("start"));
     const stopWorker = button("paired-worker-stop", "Stop worker", () => api.pairedWorker("stop"));
     const forget = button("paired-worker-forget", "Forget pairing", () => api.pairedWorker("forget"));
+    // "Start by itself": what was running comes back after a restart or an
+    // update. Main asks before turning one on; the box follows its answer.
+    const auto = (id, role, label) => {
+      const input = node("input"); input.id = id; input.type = "checkbox";
+      input.addEventListener("change", () => { const on = input.checked; input.checked = !on; void act(() => api.pairedAuto(role, on)); });
+      controls.add(input); const wrapper = node("label", "pc-paired-auto"); wrapper.append(input, node("span", "", label)); return { wrapper, input };
+    };
+    const coordinatorAuto = auto("paired-coordinator-auto", "coordinator", "Start by itself when Studio starts");
+    const workerAuto = auto("paired-worker-auto", "worker", "Start by itself when Studio starts");
     const refreshButton = button("paired-refresh", "Refresh", async () => { cursor = null; return api.pairedStatus(); });
     const older = button("paired-older", "Older jobs", async () => { cursor = latest?.coordinator?.nextCursor ?? null; return api.pairedStatus({ before: cursor }); });
     const actions = (...buttons) => { const row = node("div", "pc-sync-actions"); row.append(...buttons); return row; };
     box.append(node("summary", "", "Paired repository checks"), status,
-      node("p", "muted", "Make this PC the coordinator, or pair it as a worker. The first profile checks Studio at an exact saved commit in a fresh checkout. Your current changes stay here. Nothing starts automatically after an app restart."),
-      node("h5", "", "Coordinator"), port.wrapper, mode, address.wrapper, actions(startCoordinator, stopCoordinator, invite, enqueue), invitation.wrapper, actions(copy),
-      node("h5", "", "This PC as a worker"), code.wrapper, actions(pair, startWorker, stopWorker, forget), recovery,
+      node("p", "muted", "Make this PC the coordinator, or pair it as a worker. The first profile checks Studio at an exact saved commit in a fresh checkout. Your current changes stay here. What you start comes back by itself after Studio restarts or updates, and a worker reconnects by itself after a lost connection. PCs on different Studio versions keep working together; only one that is far behind is asked to update."),
+      node("h5", "", "Coordinator"), port.wrapper, mode, address.wrapper, actions(startCoordinator, stopCoordinator, invite, enqueue), coordinatorAuto.wrapper, invitation.wrapper, actions(copy),
+      node("h5", "", "This PC as a worker"), code.wrapper, actions(pair, startWorker, stopWorker, forget), workerAuto.wrapper, recovery,
       node("p", "muted", "Other PCs require trusted HTTPS, directly or through an existing reverse proxy. Certificate, network access and firewall setup are owner steps. A lost or uncertain assignment waits for recovery; it is never automatically run again."),
       node("h5", "", "Paired PCs"), workers, node("h5", "", "Recent jobs"), jobs, actions(refreshButton, older));
     function paintControls() {
@@ -75656,13 +75667,37 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       startCoordinator.disabled ||= Boolean(coordinator?.running); stopCoordinator.disabled ||= !coordinator?.running; invite.disabled ||= !coordinator?.running;
       startWorker.disabled ||= !worker?.paired || Boolean(worker?.running); stopWorker.disabled ||= !worker?.running; forget.disabled ||= !worker?.paired;
       pair.disabled ||= latest?.encryptionAvailable === false; older.disabled ||= !latest?.coordinator?.nextCursor;
+      coordinatorAuto.input.checked = coordinator?.autoStart === true; workerAuto.input.checked = worker?.autoStart === true;
+      workerAuto.input.disabled ||= !worker?.paired;
+    }
+    // "0.4.10" against "0.5.0"; anything unreadable compares equal.
+    const behindOf = (a, b) => {
+      const parse = (value) => (/^\d+\.\d+\.\d+/.exec(String(value ?? "")) ?? [""])[0].split(".").map(Number);
+      const left = parse(a), right = parse(b);
+      if (left.length < 3 || right.length < 3) return false;
+      for (let index = 0; index < 3; index += 1) if (left[index] !== right[index]) return left[index] < right[index];
+      return false;
+    };
+    // The worker's connection in words: connected, trying again, or which PC
+    // has to update first (scripts/link-compat.cjs decides; main says who).
+    function workerLine(worker) {
+      if (!worker?.paired) return "Worker not paired";
+      if (!worker.running) return worker.resumeError ? `Worker did not start by itself: ${worker.resumeError}` : "Worker paired, stopped";
+      const seconds = Number.isFinite(worker.retryInMs) ? Math.max(1, Math.round(worker.retryInMs / 1000)) : null;
+      if (worker.link === "update") return worker.update === "coordinator" ? "The coordinator PC's Studio is too far behind. Update Studio there; this worker reconnects by itself." : "This PC's Studio is too far behind the coordinator's. Update Studio here; the worker reconnects by itself.";
+      if (worker.link === "reconnecting") return `Worker lost ${worker.url}; reconnecting by itself${seconds ? ` (next try in ${seconds} s)` : ""}`;
+      if (worker.link === "connected") return `Worker connected to ${worker.url}${worker.busy ? ", running a check" : ""}`;
+      return `Worker connecting to ${worker.url}…`;
     }
     function paint(answer) {
       if (!answer?.ok) { status.textContent = answer?.error || "Paired workers did not answer."; return; }
       latest = answer; const coordinator = answer.coordinator, worker = answer.worker;
       for (const control of controls) if (control.id.startsWith("paired-revoke-") || control.id.startsWith("paired-recover-")) controls.delete(control);
-      status.textContent = [coordinator?.running ? `Coordinator: ${coordinator.url}` : "Coordinator off", worker?.running ? `Worker running for ${worker.repo}` : worker?.paired ? "Worker paired, stopped" : "Worker not paired", worker?.error].filter(Boolean).join(" · ");
-      workers.replaceChildren(...(coordinator?.workers ?? []).map(item => { const row = node("li", "", `${item.name} · ${item.revoked ? "revoked" : item.repos.join(", ")}`); if (!item.revoked) row.append(button(`paired-revoke-${item.id}`, "Revoke", () => api.pairedRevoke(item.id))); return row; }));
+      status.textContent = [coordinator?.running ? `Coordinator: ${coordinator.url}` : coordinator?.resumeError ? `Coordinator did not start by itself: ${coordinator.resumeError}` : "Coordinator off", workerLine(worker), worker?.running && worker?.link !== "update" ? worker?.error : null].filter(Boolean).join(" · ");
+      workers.replaceChildren(...(coordinator?.workers ?? []).map(item => {
+        const version = item.app ? ` · Studio ${item.app}${behindOf(item.app, answer.app) ? " (older, still connects)" : ""}` : "";
+        const row = node("li", "", `${item.name}${version} · ${item.revoked ? "revoked" : item.repos.join(", ")}`); if (!item.revoked) row.append(button(`paired-revoke-${item.id}`, "Revoke", () => api.pairedRevoke(item.id))); return row;
+      }));
       recovery.replaceChildren(...(worker?.uncertain ?? []).map(id => { const row = node("li", "", `Check ${id.slice(0, 8)} needs restart recovery. `); row.append(button(`paired-recover-${id}`, "Confirm previous check stopped", () => api.pairedWorker("recover", id))); return row; }));
       const visible = new Set((coordinator?.jobs ?? []).map(job => job.id));
       for (const [id, row] of jobRows) if (!visible.has(id)) { controls.delete(row.more); controls.delete(row.back); jobRows.delete(id); }
@@ -77251,7 +77286,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     "not-yours": "Only the person who posted it can change it.",
     "room-busy": "That room is busy. Try again in a moment.",
     auth: "Your Discord sign-in has run out. Sign in with Discord again in Friends.",
-    version: "The room service needs a newer Studio. Update Studio, then connect again.",
+    version: "The room service needs a newer Studio. Update Studio; it reconnects by itself after the update.",
+    "relay-behind": "The room service is being updated. Studio reconnects by itself in a few minutes.",
     unsupported: "This copy of Studio cannot reach the room service.",
     lobby: "Everyone stays in the Lobby. Go back to All rooms to step out of it.",
     code: "That code didn't match a room. Check it and try again.",
@@ -78693,10 +78729,12 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (!hub.linked) return { action: "signin", text: "Sign in with Discord to use Friends." };
     if (hub.error === "not-member") return { action: "join", text: "Your Discord account isn't in the Void Engine server yet. Join it, then check again." };
     if (hub.error === "auth") return { action: "signin", text: "Your Discord sign-in has run out. Sign in with Discord again." };
-    if (hub.error === "version") return { action: "update", text: "The room service needs a newer Studio. Update Studio, then come back." };
+    if (hub.error === "version") return { action: "update", text: "The room service needs a newer Studio. Update Studio; Friends reconnects by itself after the update." };
+    if (hub.error === "relay-behind") return { action: null, text: "The room service is being updated. Studio reconnects by itself in a few minutes." };
     if (hub.state === "ready") return { action: null, text: "" };
     if (hub.state === "connecting") return { action: null, text: "Connecting to the room service…" };
     if (hub.error === "too-many-sockets") return { action: "connect", text: "Studio is open in too many places with this account. Close one, then Connect." };
+    if (hub.state === "offline") return { action: "connect", text: "Lost the room service. Studio reconnects by itself; Connect tries now." };
     return { action: "connect", text: hub.error ? "Not connected to the room service. Check your internet, then Connect." : "Not connected to the room service yet." };
   }
 
@@ -78839,6 +78877,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     let page = null; // the last front page read
     let meId = null; // this member, from hub:status
     let sharing = false; // "Share what I'm building", as main's hub:status says
+    let autoConnect = true; // "Reconnect by itself" (settings.friends.connectAtLaunch)
     let code = null; // { roomId, code, link } for the member's own room
 
     const schedule = () => {
@@ -78892,6 +78931,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         return;
       }
       sharing = hub.shareBuilding === true;
+      autoConnect = hub.autoConnect !== false;
       meId = hub.user?.id ?? meId;
       if (!hub.front) {
         root.dataset.state = "unsupported";
@@ -79099,7 +79139,20 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         }).catch(() => { shareTick.checked = !shareTick.checked; });
       });
       share.append(shareTick, node("span", "", "Share what I'm building"));
-      bar.append(toggle, pops, share);
+      // On: Friends connects again after every restart, update and wake from sleep.
+      const again = node("label", "front-visible");
+      const againTick = node("input");
+      againTick.type = "checkbox";
+      againTick.id = "friends-front-reconnect";
+      againTick.checked = autoConnect;
+      againTick.addEventListener("change", () => {
+        void Promise.resolve(api.hubRoom("autoConnect", againTick.checked)).then((answer) => {
+          if (answer?.ok) { autoConnect = answer.autoConnect === true; status.textContent = autoConnect ? "Friends reconnects by itself after restarts, updates and sleep." : "Friends stays off after a restart until you Connect."; }
+          else { againTick.checked = !againTick.checked; status.textContent = "That didn't save. Try again."; }
+        }).catch(() => { againTick.checked = !againTick.checked; });
+      });
+      again.append(againTick, node("span", "", "Reconnect by itself"));
+      bar.append(toggle, pops, share, again);
       const invite = node("span", "front-invite");
       if (code?.code) {
         invite.append(document.createTextNode("Invite code "), node("b", "front-code", code.code));

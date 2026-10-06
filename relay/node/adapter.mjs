@@ -68,11 +68,11 @@ class ServerSocket {
     const client = this.client;
     queueMicrotask(() => client.deliver(text));
   }
-  close(code = 1000) {
+  close(code = 1000, reason = '') {
     if (!this.open) return;
     this.open = false;
     const client = this.client;
-    queueMicrotask(() => client.ended(code));
+    queueMicrotask(() => client.ended(code, reason));
   }
 }
 
@@ -178,10 +178,10 @@ export function createNodeRelay({ env: extraEnv = {}, discord = {}, now = () => 
       this.received.push(JSON.parse(text));
       this.onmessage?.({ data: text });
     }
-    ended(code) {
+    ended(code, reason = '') {
       if (this.readyState === 3) return;
       this.readyState = 3;
-      this.onclose?.({ code });
+      this.onclose?.({ code, reason });
     }
   }
 
