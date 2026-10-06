@@ -23,6 +23,15 @@
 // script's business: `npm test` (scripts/run-all-tests.mjs) finds the
 // interpreter before this stage starts.
 //
+// Several sessions gate this repository from their own worktrees on one PC,
+// so every stage first takes its turn through scripts/test-lease.mjs: one
+// Electron lane on the machine at a time, two parallel stages at a time,
+// first come first served, with a line every 30 s naming who holds the turn.
+// The parallel stage's width follows free memory (Node's default of one suite
+// per hardware thread less one meant 15 at once on the owner's laptop, with
+// ~0.7 GB free), and each stage starts its slowest suites first, from the
+// timings scripts/test-timings.mjs records after every run.
+//
 // Before any of that: the vm/section() suites eval slices of the real sources
 // (main.cjs, renderer/idle.js, ...) in sandboxes stubbed for the current
 // content, and a run launched while another session has those files mid-edit
@@ -32,11 +41,12 @@
 // file each run while every file passes solo. So the sources must hold still
 // for a beat before the stage launches, and a stage that fails against
 // sources that moved mid-run says so instead of looking like a code flake.
-import { readdir, readFile, stat } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
+import os from "node:os";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { spawn } from "node:child_process";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const studio = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const testsRoot = path.join(studio, "tests");
@@ -132,27 +142,49 @@ async function waitForSettledSources() {
   process.exit(1);
 }
 
+// The lease and the timings are only needed once suites actually run, so a
+// --list copy of this script stays a single file.
+const lease = await import("./test-lease.mjs");
+const timings = await import("./test-timings.mjs");
+const timingStore = await timings.readTimings();
+const samplesDir = await mkdtemp(path.join(os.tmpdir(), "mefi-test-timings-"));
+let samplesSeq = 0;
+
 // Paths go in relative to the checkout (the child's cwd): ~300 absolute paths
 // under a deep clone (a temp or OneDrive folder) passed Windows' 32,767-
 // character command-line limit, and the spawn failed with ENAMETOOLONG before
 // a single suite ran, printing nothing but "stage failed".
-const runGroup = (files, concurrency = 0) => {
+// The child runs asynchronously: a blocked event loop would stop the lease's
+// heartbeat, and after ten silent minutes other runs would take the turn.
+const runGroup = async (files, concurrency = 0) => {
   const flags = concurrency > 0 ? [`--test-concurrency=${concurrency}`] : [];
-  const run = spawnSync(process.execPath, ["--test", ...flags, ...files.map((file) => path.relative(studio, file))], { cwd: studio, stdio: "inherit" });
-  if (run.error) console.error(`run-node-tests: could not start node --test: ${run.error.message}`);
-  return { failed: run.status !== 0 || Boolean(run.error), status: run.status };
+  const samples = path.join(samplesDir, `stage-${(samplesSeq += 1)}.jsonl`);
+  const reporters = [
+    "--test-reporter=spec", "--test-reporter-destination=stdout",
+    `--test-reporter=${pathToFileURL(path.join(studio, "scripts", "test-timings.mjs")).href}`, `--test-reporter-destination=${samples}`,
+  ];
+  const ordered = timings.longestFirst(files, timingStore, studio);
+  const outcome = await new Promise((resolve) => {
+    const child = spawn(process.execPath, ["--test", ...flags, ...reporters, ...ordered.map((file) => path.relative(studio, file))], { cwd: studio, stdio: "inherit" });
+    child.once("error", (error) => resolve({ error }));
+    child.once("close", (status) => resolve({ status }));
+  });
+  if (outcome.error) console.error(`run-node-tests: could not start node --test: ${outcome.error.message}`);
+  await timings.recordRun(samples, { root: studio }).catch((error) => console.error(`run-node-tests: suite timings not saved (${error.message})`));
+  return { failed: outcome.status !== 0 || Boolean(outcome.error), status: outcome.status };
 };
 
-// The CPU-only suites run first at the runner's default width; a failure is
-// only trustworthy evidence about the code when the sources it read are the
-// ones that launched it, so both stages re-check the fingerprint before
-// reporting. Every stage runs even after one fails: stopping at the first red
-// stage hid whether the Electron lane and the exclusive fixtures passed, so a
-// fix needed a second full run just to learn that. The exit reports them all.
+// The CPU-only suites run first at a width that follows free memory; a
+// failure is only trustworthy evidence about the code when the sources it
+// read are the ones that launched it, so both stages re-check the fingerprint
+// before reporting. Every stage runs even after one fails: stopping at the
+// first red stage hid whether the Electron lane and the exclusive fixtures
+// passed, so a fix needed a second full run just to learn that. The exit
+// reports them all.
 const failures = [];
 const runStage = async (files, concurrency, label) => {
   if (!files.length) return;
-  const outcome = runGroup(files, concurrency);
+  const outcome = await runGroup(files, concurrency);
   if (!outcome.failed) return;
   failures.push({ label, status: outcome.status ?? 1 });
   if ((await sourceFingerprint()) !== settledAtLaunch) {
@@ -164,17 +196,46 @@ const runStage = async (files, concurrency, label) => {
   }
 };
 
+const waitedNote = (turn) => (turn.waitedMs >= 1000 ? `, after waiting ${Math.round(turn.waitedMs / 1000)} s for a turn` : "");
 const settledAtLaunch = await waitForSettledSources();
-await runStage(parallel, 0, "parallel");
-// The Electron fixtures run after the CPU-only suites have drained, at a
-// fixed two-file width: enough to overlap I/O waits, few enough that a
-// loaded desktop cannot starve every capture at once.
-await runStage(heavyLane, 2, "Electron fixture");
-// The exclusive fixtures each get their own invocation: a single
-// `node --test a b` call still runs the two files concurrently, and two
-// live windows fighting over occlusion and visibility is exactly what this
-// stage exists to prevent.
-for (const file of exclusive) await runStage([file], 0, `exclusive ${path.basename(file)}`);
+if (parallel.length) {
+  const turn = await lease.acquire({ lane: "suites", label: "npm test: parallel Node suites", tree: studio });
+  try {
+    const freeMB = lease.freeMemoryMB();
+    const width = lease.suggestWidth({ freeMB, threads: os.availableParallelism() });
+    await turn.update({ width });
+    console.log(`run-node-tests: parallel stage, ${width} suites at a time (${Math.round(freeMB)} MB free)${waitedNote(turn)}`);
+    await runStage(parallel, width, "parallel");
+  } finally {
+    await turn.release();
+  }
+}
+// The Electron fixtures run after the CPU-only suites have drained, two files
+// at a time (one when free memory has no room for a second window): enough to
+// overlap I/O waits, few enough that a loaded desktop cannot starve every
+// capture at once. The exclusive fixtures follow inside the same turn, so no
+// other run's windows open between them.
+if (heavyLane.length || exclusive.length) {
+  const turn = await lease.acquire({ lane: "windows", label: "npm test: Electron fixtures", tree: studio });
+  try {
+    const freeMB = lease.freeMemoryMB();
+    const width = lease.suggestWindowWidth({ freeMB });
+    await turn.update({ width });
+    if (heavyLane.length) console.log(`run-node-tests: Electron lane, ${width} window(s) at a time (${Math.round(freeMB)} MB free)${waitedNote(turn)}`);
+    await runStage(heavyLane, width, "Electron fixture");
+    // The exclusive fixtures each get their own invocation: a single
+    // `node --test a b` call still runs the two files concurrently, and two
+    // live windows fighting over occlusion and visibility is exactly what this
+    // stage exists to prevent.
+    for (const file of exclusive) {
+      await turn.update({ label: `npm test: ${path.basename(file)}` });
+      await runStage([file], 0, `exclusive ${path.basename(file)}`);
+    }
+  } finally {
+    await turn.release();
+  }
+}
+await rm(samplesDir, { recursive: true, force: true }).catch(() => {});
 if (failures.length) {
   console.error(`run-node-tests: ${failures.length} stage(s) failed: ${failures.map((failure) => failure.label).join(", ")}`);
   process.exit(failures[0].status || 1);
