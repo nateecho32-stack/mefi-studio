@@ -111,7 +111,9 @@ Landed on 5 and 6 October, after the layout:
   in The Lobby; Friends › Events (the week's Build Jam, co-work hours,
   building together, a community budget); credits that cannot be farmed, and
   no Discord roles needed (Flame rank lists a room, moderators are named
-  accounts).
+  accounts). Your PCs and Friends reconnect by themselves after a restart,
+  update, rollback or crash, and only a Studio that is really behind is asked
+  to update.
 - **Media:** Playlists in the media menu (five starting points, your own
   lists), shared in a room or on the Project hub.
 - **Team:** the simple Seats and models page and Providers (one provider for
@@ -162,7 +164,6 @@ release.
 | Work | Branch | State |
 | --- | --- | --- |
 | Settings › Other apps: a setup prompt to copy for Claude Code, Codex or another helper, and a Studio API, MCP server and skill for other apps on this PC (off until turned on) | `feat/studio-api` | Pushed 6 October, not on `main`. Large (33 files); whether it is 0.5.0 or 0.5.x is yours to say |
-| Your PCs and Friends reconnect by themselves after a restart, update, rollback or crash; only a Studio that is really behind is asked to update | `wip/auto-reconnect` | Pushed 6 October, not on `main` |
 | A once-seen hosted CI failure in the model-performance ledger (two writes in one clock tick) | `fix/model-perf-race` | Pushed 6 October, not on `main` |
 | Space plays or pauses the video in Command | `wip/space-plays-video` | Unfinished since 3 October (nothing calls it yet); 0.5.x unless finished |
 | Not built: an embedded live Preview tab (the inspector's Preview has the project's controls and Before and After), the pinned tree strip as a panel, Drafts in the session list (the app keeps none) | — | 0.5.x. Design source: `docs/prototype/` |
@@ -209,8 +210,9 @@ decision, and each has an owner-side default already in the code.
   (Linux fonts); judge them on Windows.
 - Check that the live relay runs `main`'s relay code: Friends › Events and the
   community budget (`relay/src/events.mjs`, `economy.mjs`, store schema 5)
-  came after its first deploy on 5 October. If not, redeploy it
-  ([relay/README.md](../relay/README.md), "Deploying").
+  came after its first deploy on 5 October, and the reconnect work's version
+  window (the hello's `oldest` field) is not deployed yet; both Studios connect
+  meanwhile. Redeploy it ([relay/README.md](../relay/README.md), "Deploying").
 - To try `main` on another PC without packaging a release: download the newest
   beta zip from a green "Studio checks" run on `main` (the
   `mefi-studio-development-win32-x64` artifact), then Settings › System ›
