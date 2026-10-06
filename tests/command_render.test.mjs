@@ -55,7 +55,7 @@ const runFixture = async () => {
     assert.equal(report.exited, true);
     assert.equal(report.homeRailPaints, 0);
     assert.equal(report.commandRailPaints, 0);
-    assert.equal(report.railResumed, true);
+    assert.equal(report.railQuiet, true, "the frame's tab pages leave the hidden tree strip unpainted");
     assert.equal(report.motion.rebuildStable, true);
     assert.equal(report.motion.completed, true);
     assert.ok(report.motion.samples >= 6 && report.motion.travel > 3 && report.motion.maxFrameStep <= report.motion.travel * 0.4);

@@ -941,9 +941,14 @@ app.whenReady().then(async () => {
     for(const key of ['__audioNodeSample','__audioSection','__fixtureAudio','__audioPaintPaths','__audioCurrentPath','__audioCanvasMethods','__audioCanvasProto','__audioAnalyserMethods','__audioInput','__audioControlSample','__audioControlSource','__audioCaptureCalls','__audioCaptureMethods'])delete window[key];
   `);
   await run("window.MefiNav.go('booklet');");
-  const visibleRailFrames = await run("return window.__railPaintFrames;");
-  await until(`window.__railPaintFrames>=${visibleRailFrames + 3}`, "visible rail resumes painting");
-  report.railResumed = true;
+  // The 0.5 frame has no node-tree strip (shell.css hides #tree-rail; the Map is the tree), so a tab page paints none
+  // either: tree3d.js stops drawing while the strip has no size.
+  await sleep(120);
+  const tabRailFrames = await run("return window.__railPaintFrames;");
+  await sleep(300);
+  report.tabRailPaints = await run(`return window.__railPaintFrames-${tabRailFrames};`);
+  assert.equal(report.tabRailPaints, 0, "a tab page in the 0.5 frame paints no hidden tree strip");
+  report.railQuiet = true;
   report.exited = await run("return !window.MefiIdle.isActive() && document.getElementById('idle-layer').hidden;");
   report.stoppedFrames = await run("return window.__commandPaintFrames;");
   await sleep(120);
