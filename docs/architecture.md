@@ -243,6 +243,7 @@ settings and per-model work-kind summaries for the shared controls.
 | **Size and density** | The 0.5 layout's four size settings on one page, with a live miniature of the window beside the controls: **interface scale** (the window's zoom), **text size**, **density** (Compact, Comfortable, Spacious) and **detail** (Titles, Titles and status, Everything). Only in `html[data-layout="v2"]`; components size themselves with `--text-scale`, `--d-*` and `--dt-*`, and `window.MefiSize` is the model. See "Size and density (layout v2)" under Workspace and work. |
 | **Diagnostics** | Settings › System: speed probe, profiler, auditor, machine tools, connection log and Report a problem. Auditor and machine links reveal Sessions' Diagnostics panel. |
 | **Notifications** | Settings › General: Windows alerts for what waits on you (only while Studio is not in front), the taskbar flash and count, and quiet hours shared with the Discord remote. |
+| **Other apps** | Settings › Other apps: **Copy setup prompt** for Claude Code, Codex or another AI helper, and the switch that lets apps on this PC reach Studio through its local API and MCP server (`scripts/studio-link.mjs`). Work an app files waits for your OK. See [studio-api.md](studio-api.md). |
 | **Search Studio** | The palette (`Ctrl K`), once called Key commands. It finds any page, tool, Settings card, action, task, node or model by familiar terms, and groups its results by menu section. Empty, it lists what you last opened (**Recent**); `task …` or `idea …` adds one on Enter. |
 | **Help** | The menu-foot popover containing onboarding, shortcuts and Community. These destinations are also available through Search; late-registered Community remains supported by the navigation registry. |
 | **Task** | One unit of work on the project board, with a brief, acceptance checks, prerequisites, attempts and evidence. New cards gather local references automatically when Automatic references is on; the configurable scout can use GPT-6 Luna on the fast tier to choose one verified starting file. A scout whose route is a coding CLI makes no call (no CLI answers within its 8 s), and the card keeps its local matches. |
@@ -633,6 +634,22 @@ settings and per-model work-kind summaries for the shared controls.
   `backlogControl` with that scope. A look once a minute
   turns changes into alerts (`remote.alerts`). Everything sent passes
   `shareReview.scrub` first.
+- **Other apps** (main.cjs "Other apps", scripts/studio-api.cjs,
+  scripts/studio-api-server.cjs, scripts/studio-link.mjs;
+  [studio-api.md](studio-api.md)). Settings › Other apps. **Copy setup prompt**
+  copies a prompt for Claude Code, Codex or another AI helper with this PC's
+  Studio folder, app files, data folder, open project, version and docs, and
+  ground rules about keys; it needs nothing switched on, and the setup
+  helper's first page offers it too. **Let apps on this PC talk to Studio**
+  (off until turned on) opens a `127.0.0.1` endpoint with a key in
+  `~/.mefi-studio/studio-api.json`. Apps run `studio-link.mjs` as an MCP
+  server or command line. An app is treated like a Discord DM: a message is
+  `assistantMessage(text, { app })`, which sets `user.remote` and
+  `user.from = "app"`, so the same chat gate narrows it, and the work it files
+  (or `POST /v1/tasks` files) carries `origin.via = "app"`, which
+  `autonomy.remoteWork` holds for the owner's OK in every mode. The thread
+  names the app instead of "You". Web pages are refused (Origin,
+  Sec-Fetch-Site, a rebinding Host), and the log keeps no words.
 - The same glowing wisp wakes in the launch box, responds to pointer play with
   floating ASCII expressions and a few sparks, and accompanies the first-run
   guide. During setup, a pending chat reply or reported agent work, little lights
@@ -1825,6 +1842,43 @@ failed process stays an error and cannot produce briefing requests.
   group holding it) once the run has ended. The Command node tree
   itself is unchanged. At 1500 px and under the inspector is a drawer under the
   tab bar, and under 760 px the page stacks.
+
+### Resources: making room for the agents
+
+- **Team › Resources** ([resource-manager.md](resource-manager.md)) lists this
+  PC's other apps, heaviest first, each as one app however many processes it
+  runs (a browser's tabs and a launcher's web views fold into it), with its
+  share of the PC's CPU, the memory it holds, its window title and what Studio
+  holds on it. Four meters sit on top: the PC's CPU, its memory, Studio and
+  its agents, and whether the agents are building. The status bar's CPU · Mem
+  reading opens the page.
+- Each app has **Slow down** (idle priority, efficiency mode and a low memory
+  priority), **Pause** (every thread suspended, then its memory handed back),
+  **Free memory** (its working set handed back without stopping it), **Close**
+  (its own close message), **End** (after a second press) and **Put back**.
+  **Restore all** undoes every hold.
+- **Manual** changes nothing by itself; **Make room now** does one round of
+  what auto mode would do, as your own holds. **Auto** acts only while agents
+  build or work waits for the machine: it slows heavy apps you are not using,
+  gives memory back when free memory drops under the amount you chose, offers
+  (never takes) the pauses that would close the gap, and pauses or closes only
+  the apps whose own menu says so. Calls, music, recording, remote access,
+  terminals and security software start as Leave it alone. It never touches
+  the app in front of you or one used in the last two minutes, lets a paused app
+  you switch to run at once, and puts back what it did once the agents finish
+  (after one minute by default). Its actions arrive as a toast with Open and
+  Put back.
+- Never touched: Studio, its agents and their tools, what Studio was started
+  from, Windows (its folder, services, critical processes), other people's
+  sessions, console windows and security software.
+- The host (`scripts/resource-host.cjs`, rules in `scripts/resource-rules.cjs`)
+  runs a small C# helper (`scripts/resource-helper.cs`, built once with
+  Windows' own `csc.exe` into the local folder's `resources/`) only while the
+  page is open, auto mode acts or an app is held. The helper is detached and
+  puts everything back when its stdin closes, so a quit, a crash or an ended
+  Studio never leaves an app paused; a journal beside it lets the next helper
+  or the next launch put back what an ended helper held. Windows only;
+  `MEFI_STUDIO_NO_RESOURCE_MANAGER=1` turns it off.
 
 ### The Agent Brain
 

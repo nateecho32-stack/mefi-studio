@@ -281,6 +281,59 @@
       isOpen: () => overlayOpen("fleet-overlay"),
     },
     {
+      // renderer/resources.js: this PC's other apps, and what Studio may do to them while agents build.
+      id: "resources",
+      label: "Resources",
+      short: "Resources",
+      kind: "overlay",
+      layer: "sheet",
+      section: "agents",
+      group: "tools",
+      key: null,
+      glyph: "g-gauge",
+      badge: null,
+      desc: "Slow down, pause or close other apps so the agents get this PC's CPU and memory while they build, by hand or automatically",
+      searchTerms: "resources resource manager memory ram cpu apps programs processes slow down pause suspend freeze close end kill free memory make room focus building performance priority efficiency mode task manager other apps auto manual machine load",
+      showIn: showIn({ tools: true, palette: true, help: true }),
+      element: "resources-overlay",
+      focus: "#resources-mode-manual",
+      open: (params) => window.MefiResources?.open?.(params),
+      close: () => window.MefiResources?.close?.(),
+      isOpen: () => overlayOpen("resources-overlay"),
+    },
+    {
+      id: "resources-focus",
+      label: "Make room for building",
+      short: "Make room",
+      kind: "action",
+      layer: null,
+      section: "agents",
+      group: "system",
+      key: null,
+      glyph: null,
+      badge: null,
+      desc: "Slow heavy background apps now, and give memory back if building is short of it (Team › Resources)",
+      searchTerms: "make room focus free memory ram cpu slow apps resources building",
+      showIn: showIn({ palette: true }),
+      run: () => { go("resources"); window.MefiResources?.focusNow?.(); },
+    },
+    {
+      id: "resources-restore",
+      label: "Put back apps Studio slowed or paused",
+      short: "Restore apps",
+      kind: "action",
+      layer: null,
+      section: "agents",
+      group: "system",
+      key: null,
+      glyph: null,
+      badge: null,
+      desc: "Every app the resource manager slowed down or paused goes back to how it was",
+      searchTerms: "restore resume unpause put back apps resources slowed paused",
+      showIn: showIn({ palette: true }),
+      run: () => { go("resources"); window.MefiResources?.restoreAll?.(); },
+    },
+    {
       id: "booklet",
       label: "Model catalog",
       short: "Catalog",
@@ -833,7 +886,7 @@
     window.MefiModelLab?.show?.(view);
   }
 
-  const WORKSPACE_PAGES = new Set(["tasks", "plans", "ideas", "brains", "analyzer", "worktrees", "explorer", "trace", "fleet", "overhead", "agent-brain", "skills", "agents", "today", "inbox"]);
+  const WORKSPACE_PAGES = new Set(["tasks", "plans", "ideas", "brains", "analyzer", "worktrees", "explorer", "trace", "fleet", "resources", "overhead", "agent-brain", "skills", "agents", "today", "inbox"]);
   const isWorkspacePage = (dest) => WORKSPACE_PAGES.has(dest?.id);
   // Settings' Size and density page (renderer/size.js, registered only in layout v2) is a page of the workspace too.
   WORKSPACE_PAGES.add("size");
@@ -1427,7 +1480,7 @@
     home: ["workspace"],
     // "inbox" is the 0.5 layout's Work › Inbox (renderer/today.js registers it there only); a route nobody registered is skipped.
     work: ["tasks", "plans", "ideas", "inbox", "analyzer", "worktrees"],
-    agents: ["agents", "command", "fleet", "eyes", "trace", "explorer", "overhead", "agent-brain", "skills", "brains", "context", "booklet", "graph", "usage"],
+    agents: ["agents", "command", "fleet", "resources", "eyes", "trace", "explorer", "overhead", "agent-brain", "skills", "brains", "context", "booklet", "graph", "usage"],
     // The Friends page (its places are drawn by renderer/shell.js friendsModel).
     friends: ["friends-page"],
     settings: ["studio"],

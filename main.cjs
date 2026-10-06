@@ -428,7 +428,7 @@ function handleProjectIpc(channel, handler) {
 // the launch screen's newspaper (news:) is asked for before any project is
 // open; neither belongs to a project. (Declared beside the wrapper so the
 // tests that load it from here up to app.setName see it.)
-const APP_WIDE_PREFIXES = ["projects:", "project-preview:", "performance:", "startup:", "community:", "hub:", "remote:", "styler:", "catalog:", "speed:", "shell:", "pc-setup:", "models:", "alerts:", "chatgpt-plan:", "news:", "connectors:"];
+const APP_WIDE_PREFIXES = ["projects:", "project-preview:", "performance:", "startup:", "community:", "hub:", "remote:", "studio-api:","styler:", "catalog:", "speed:", "shell:", "pc-setup:", "models:", "alerts:", "chatgpt-plan:", "news:", "connectors:"];
 const APP_WIDE_CHANNELS = new Set(["usage:accounts", "opencode:credits", "release:status", "release:check", "update:status", "update:set", "settings:get-key", "boot:healthy", "release:whats-new", "release:whats-new-seen", "release:whats-new-set", "report:dismiss", "report:set"]);
 ipcMain.handle = handleProjectIpc;
 
@@ -5548,6 +5548,248 @@ function startPcs() {
   } catch {}
 }
 // ---- end of My PCs ---------------------------------------------------------------
+
+// ---- Other apps: the Studio API (docs/studio-api.md) ------------------------------
+// Claude Code, Codex, Cursor or the owner's own scripts reach Studio on this PC
+// through a small endpoint on 127.0.0.1 (scripts/studio-api-server.cjs) that the
+// owner turns on in Settings › Other apps. scripts/studio-link.mjs is the MCP
+// server and command line those apps run, scripts/studio-api.cjs the rules, and
+// this block does the work. An app is the owner's chat with less power, as
+// Discord is: its messages pass the same chat gate (remote.gateActions) and the
+// work it files carries origin.via "app", which waits for the owner's OK in
+// every mode (autonomy.remoteWork). The address and key are in the key file
+// (~/.mefi-studio/studio-api.json); the key survives restarts so a script set
+// up once keeps working, New key replaces it at once, and turning the switch
+// off stops the endpoint and deletes the file. The setup prompt (Copy setup
+// prompt, here and in the setup helper) needs none of it.
+// MEFI_STUDIO_NO_APP_API=1 keeps the endpoint closed. Inert at load time:
+// everything starts from studioApiApply().
+let studioApiModules = null;
+let studioApiServer = null;
+let studioApiKey = null;
+let studioApiError = null;
+let studioApiApplying = Promise.resolve();
+const studioApiLog = []; // the calls apps made, newest first, without their words
+const studioApiKilled = () => process.env.MEFI_STUDIO_NO_APP_API === "1";
+
+function studioApiLoad() {
+  if (studioApiModules === null) {
+    const rules = optionalHelper("./scripts/studio-api.cjs", () => require("./scripts/studio-api.cjs"), null);
+    const server = rules ? optionalHelper("./scripts/studio-api-server.cjs", () => require("./scripts/studio-api-server.cjs"), null) : null;
+    studioApiModules = rules && server ? { rules, server } : false;
+  }
+  return studioApiModules || null;
+}
+
+async function studioApiSettings() {
+  const modules = studioApiLoad();
+  return modules ? modules.rules.normalizeSettings((await readSettings()).studioApi) : null;
+}
+const studioApiRunning = () => Boolean(studioApiServer?.running?.());
+
+// Where Studio lives on this PC and how an app starts studio-link.mjs: the
+// setup prompt, GET /v1/setup and the card's commands all read this.
+async function studioApiSetupInfo() {
+  const { rules, server } = studioApiLoad();
+  const packaged = app.isPackaged === true;
+  const studio = packaged ? path.dirname(process.execPath) : SOURCE_ROOT;
+  const local = (name) => path.join(STUDIO_ROOT, name);
+  const docs = [`${local("README.md")} (what Studio is)`, `${local("GETTING_STARTED.md")} (setting up a new PC, step by step)`];
+  // A portable build carries no docs/ folder: those pages are read on GitHub.
+  const deep = async (name, about) => ((await stat(local(path.join("docs", name))).then(() => true, () => false)) ? `${local(path.join("docs", name))} (${about})` : `${rules.DOCS_URL}/docs/${name} (${about})`);
+  docs.push(await deep("architecture.md", "how Studio works, and what its words mean"), await deep("studio-api.md", "how other apps talk to Studio"));
+  const link = rules.connect({ packaged, execPath: process.execPath, electron: Boolean(process.versions.electron), script: local(path.join("scripts", "studio-link.mjs")), platform: process.platform });
+  const settings = await studioApiSettings();
+  const system = process.platform === "win32" ? "Windows" : process.platform === "darwin" ? "macOS" : "Linux";
+  return {
+    app: "Mefi's Studio AI+", version: app.getVersion(), packaged, platform: process.platform, os: `${system} ${os.release()} (${process.arch})`,
+    host: process.env.MEFI_STUDIO_HOST === "tauri" ? "tauri" : "electron",
+    folders: { studio, app: STUDIO_ROOT, data: app.getPath("userData"), project: projects.open() ? projectRoot() : null },
+    docs, keyFile: server.keyFilePath(),
+    link: { ...link, on: settings?.on === true && studioApiRunning() },
+    skill: rules.skillText({ cli: link.cli }),
+  };
+}
+
+// Settings' view: the switch, whether it listens, the commands, and the log.
+async function studioApiStatus() {
+  const modules = studioApiLoad();
+  if (!modules) return { ok: false, error: "unavailable" };
+  const info = await studioApiSetupInfo();
+  const { claudeCode, codex, json, cli, risky, name } = info.link;
+  return {
+    ok: true, settings: await studioApiSettings(), killed: studioApiKilled(),
+    running: studioApiRunning(), url: studioApiRunning() ? `http://127.0.0.1:${studioApiServer.port()}` : null,
+    error: studioApiError, keyFile: info.keyFile, folder: info.folders.studio,
+    connect: { name, claudeCode, codex, json, cli, risky },
+    log: studioApiLog.slice(0, modules.rules.LOG_MAX),
+  };
+}
+// Settings hears the new state at most four times a second, however fast an app calls.
+let studioApiPushTimer = null;
+function studioApiPush() {
+  if (studioApiPushTimer) return;
+  studioApiPushTimer = setTimeout(() => {
+    studioApiPushTimer = null;
+    studioApiStatus().then((status) => send("studio-api:event", status)).catch(() => {});
+  }, 250);
+  studioApiPushTimer.unref?.();
+}
+
+// Opens or closes the endpoint to match the saved choice. One apply at a time.
+function studioApiApply() {
+  const next = studioApiApplying.then(async () => {
+    if (SMOKE || CAPTURE || CLI_MODE) return;
+    // Off and closed, as most launches are: nothing to load.
+    if (!studioApiServer && (await readSettings())?.studioApi?.on !== true) return;
+    const modules = studioApiLoad();
+    if (!modules) return;
+    const { rules, server } = modules;
+    const settings = await studioApiSettings();
+    const file = server.keyFilePath();
+    if (!settings.on || studioApiKilled()) {
+      if (!studioApiServer) return;
+      const key = studioApiKey;
+      await studioApiServer.stop();
+      studioApiServer = null;
+      studioApiKey = null;
+      // Off: the key goes too. A kill switch only closes the door for this run.
+      if (!settings.on) await server.removeKeyFile(file, key);
+      logLine("[studio-api] closed");
+      return;
+    }
+    if (studioApiRunning()) return;
+    // The saved key, so an app or script set up before keeps working.
+    const key = (await server.readKeyFile(file))?.token ?? server.newKey();
+    const endpoint = server.createApiServer({ handle: studioApiHandle, token: key });
+    const { url, port } = await endpoint.start();
+    studioApiServer = endpoint;
+    studioApiKey = key;
+    await server.writeKeyFile(file, { app: "Mefi's Studio AI+", api: rules.API_VERSION, url, port, token: key, pid: process.pid, version: app.getVersion(), startedAt: new Date().toISOString() });
+    studioApiError = null;
+    logLine(`[studio-api] listening on ${url}`);
+  });
+  studioApiApplying = next.catch((error) => {
+    studioApiError = String(error?.message ?? error).slice(0, 200);
+    logLine(`[studio-api] could not apply: ${studioApiError}`);
+  });
+  return studioApiApplying.then(() => studioApiPush());
+}
+
+// One call from an app: answered, then kept in the card's log without its words.
+async function studioApiHandle({ route, fields = {}, app: caller = "An app" } = {}) {
+  const { rules } = studioApiLoad();
+  const now = Date.now();
+  let answer;
+  try {
+    answer = await studioApiAnswer(rules, route, fields, caller, now);
+  } catch (error) {
+    logLine(`[studio-api] ${route} from ${caller} failed: ${error?.message ?? error}`);
+    answer = { ok: false, text: "Studio could not do that just now. Try again in a minute." };
+  }
+  studioApiLog.unshift(rules.logRow({ at: now, app: caller, route, ok: answer?.ok !== false, note: answer?.note }));
+  studioApiLog.length = Math.min(studioApiLog.length, rules.LOG_MAX);
+  studioApiPush();
+  return answer;
+}
+
+async function studioApiAnswer(rules, route, fields, caller, now) {
+  const noProject = (what) => ({ ok: false, status: 409, text: `No project is open in Studio, so ${what}. Open one in Studio first.` });
+  switch (route) {
+    case "hello": return rules.helloReply({ version: app.getVersion(), project: projects.open()?.name ?? null });
+    case "status": return rules.statusReply(await agentsSnapshot(now), { now });
+    case "made": return rules.madeReply(await agentsSnapshot(now), { now });
+    case "needs": return rules.needsReply(await assistantNeedsYouDigest(now));
+    case "setup": {
+      const info = await studioApiSetupInfo();
+      return { text: rules.setupPrompt(info), data: info };
+    }
+    case "pause":
+      await assistantPause();
+      return { text: "Paused: nothing new starts in Studio until it resumes. Running work finishes." };
+    case "resume":
+      if (autopilot.held) await releaseStartupHold();
+      else await assistantControl("start-work");
+      return { text: "Resumed: Studio's agents pick up work again." };
+    case "notify":
+      send("studio-api:notice", { at: now, app: caller, title: fields.title || "", text: fields.text, level: fields.level || "info" });
+      return { text: "Shown in Studio.", note: fields.level === "done" ? "done" : "" };
+    case "say": {
+      if (!projects.open()) return noProject("Mefi has nowhere to work");
+      const result = await assistantMessage(fields.text, { app: caller });
+      if (result?.ok === false) return { ok: false, status: 400, text: String(result.error ?? "Mefi could not take that message.") };
+      return rules.sayReply(result?.reply);
+    }
+    case "task": {
+      if (!projects.open()) return noProject("there is no board to file it on");
+      const admission = await assistantCreateTask({
+        title: fields.title, prompt: fields.detail ? `${fields.title}\n\n${fields.detail}` : fields.title,
+        source: "chat", conversation: {}, origin: { ...rules.ORIGIN },
+        details: `Filed by ${caller} through Studio's API (Settings › Other apps). It waits for your OK.`,
+      });
+      if (admission?.created) assistantAskForWork("a task from another app");
+      return { ...rules.taskReply(admission, { app: caller }), ...(admission?.created ? { note: "filed" } : {}) };
+    }
+    default: return { ok: false, status: 404, text: "Studio does not know that call." };
+  }
+}
+
+// Settings › Other apps: the switch.
+async function studioApiSet(patch = {}) {
+  const modules = studioApiLoad();
+  if (!modules) return { ok: false, error: "unavailable" };
+  if (typeof patch.on === "boolean") {
+    await updateSettings((saved) => {
+      const current = modules.rules.normalizeSettings(saved.studioApi);
+      if (current.on === patch.on) return false;
+      saved.studioApi = { ...(saved.studioApi ?? {}), on: patch.on };
+    });
+  }
+  await studioApiApply();
+  const status = await studioApiStatus();
+  logLine(`[studio-api] ${status.settings?.on ? "on" : "off"}`);
+  return status;
+}
+
+// New key: every app reads the key file again on its next call, so only a
+// script that copied the old key needs the new one.
+async function studioApiRekey() {
+  const modules = studioApiLoad();
+  if (!modules) return { ok: false, error: "unavailable" };
+  if (!studioApiRunning()) return { ...(await studioApiStatus()), ok: false, error: "Turn the switch on first." };
+  const file = modules.server.keyFilePath();
+  const key = modules.server.newKey();
+  const saved = await modules.server.readKeyFile(file);
+  studioApiServer.rekey(key);
+  studioApiKey = key;
+  await modules.server.writeKeyFile(file, { ...(saved ?? {}), app: "Mefi's Studio AI+", api: modules.rules.API_VERSION, url: `http://127.0.0.1:${studioApiServer.port()}`, port: studioApiServer.port(), token: key, pid: process.pid, version: app.getVersion(), startedAt: saved?.startedAt ?? new Date().toISOString() });
+  logLine("[studio-api] new key");
+  return { ...(await studioApiStatus()), message: "New key saved. Apps that read the key file pick it up on their next call." };
+}
+
+// The setup prompt for Claude Code, Codex or another AI helper.
+async function studioApiPrompt() {
+  const modules = studioApiLoad();
+  if (!modules) return { ok: false, error: "unavailable" };
+  return { ok: true, prompt: modules.rules.setupPrompt(await studioApiSetupInfo()) };
+}
+
+// The Claude Code skill: its text, or with `save` written to
+// ~/.claude/skills/mefi-studio/SKILL.md (only over a copy Studio wrote).
+async function studioApiSkill({ save = false } = {}) {
+  const modules = studioApiLoad();
+  if (!modules) return { ok: false, error: "unavailable" };
+  const text = (await studioApiSetupInfo()).skill;
+  if (!save) return { ok: true, text };
+  const file = path.join(os.homedir(), ".claude", "skills", "mefi-studio", "SKILL.md");
+  const existing = await readFile(file, "utf8").catch(() => null);
+  if (existing !== null && !/^---\r?\nname: mefi-studio\r?\n/.test(existing)) return { ok: false, error: `${file} holds another skill, so Studio left it alone.`, file };
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(file, text, "utf8");
+  logLine("[studio-api] saved the Claude Code skill");
+  return { ok: true, text, file, message: `Saved for Claude Code: ${file}. New Claude Code sessions can use it.` };
+}
+// ---- end of other apps ---------------------------------------------------------------
 
 // `explicit` is the owner asking (Work on it): a finished inbox row never
 // stands in for it, only unfinished work does.
@@ -13895,7 +14137,7 @@ function assistantSettleOfferAsks(taskId, title = "") {
 
 // One validated chat action, run through the same host functions the owner's
 // own buttons use. Returns the outcome resultLine() reads.
-async function assistantChatAction(action = {}, { focused = null, remote = false } = {}) {
+async function assistantChatAction(action = {}, { focused = null, remote = false, from = null } = {}) {
   const kind = String(action?.kind ?? "");
   let taskId = typeof action.taskId === "string" ? action.taskId : "";
   const titleOf = async () => {
@@ -13914,8 +14156,9 @@ async function assistantChatAction(action = {}, { focused = null, remote = false
       const prompt = String(action.ownerText || action.brief || action.title || "");
       const admission = await assistantCreateTask({ title: action.title, prompt, source: "chat", focused, conversation: {},
         details: action.brief && action.brief !== prompt ? `Assistant's reading (not the owner's words): ${action.brief}` : null,
-        // Asked for from Discord: it waits for the owner's OK in every mode.
-        ...(remote && remoteRules ? { origin: { ...remoteRules.ORIGIN } } : {}) });
+        // Asked for from Discord or another app on this PC (via "app", the
+        // "Other apps" block): it waits for the owner's OK in every mode.
+        ...(remote && remoteRules ? { origin: { ...remoteRules.ORIGIN, ...(from === "app" ? { via: "app" } : {}) } } : {}) });
       if (admission?.existing) {
         const item = admission.existing.item ?? {};
         return { ok: true, existing: { title: item.title ?? item.ref?.title ?? action.title, status: admission.existing.kind === "worker" ? "running" : item.status } };
@@ -14072,8 +14315,8 @@ async function assistantOverseerTurn({ user, text, intent, facts, did, slot, foc
   // cannot replace that explicit choice with its own interpretation.
   const proposed = localDecisions.length ? localDecisions : envelope.actions;
   let checked = taskOversight.validateChatActions(proposed, context);
-  // From Discord: file, note, brake, stop and start work only (remote.gateActions).
-  if (user?.remote && remoteRules) checked = remoteRules.gateActions(checked);
+  // From Discord or another app: file, note, brake, stop and start work only (remote.gateActions).
+  if (user?.remote && remoteRules) checked = remoteRules.gateActions(checked, { from: user.from });
   // Talk it over is a conversation: a card the model would file becomes an
   // offer the owner can take (a yes, or Build it), never work filed unasked.
   if (user?.ui?.mode === "talk") {
@@ -14100,7 +14343,7 @@ async function assistantOverseerTurn({ user, text, intent, facts, did, slot, foc
     }
     let outcome;
     try {
-      outcome = await assistantChatAction(action, { focused, remote: user?.remote === true });
+      outcome = await assistantChatAction(action, { focused, remote: user?.remote === true, from: user?.from ?? null });
     } catch (error) {
       outcome = { ok: false, error: error.message };
     }
@@ -14152,7 +14395,7 @@ async function assistantLocalControl({ user, text, intent, facts, slot }) {
   const proposed = decisions.length ? decisions : taskOversight.localChatActions(text, { digest: board, referents, intent, allTitles });
   if (!Array.isArray(proposed) || !proposed.length) return null;
   let checked = taskOversight.validateChatActions(proposed, { ...context, limit: 1 });
-  if (user?.remote && remoteRules) checked = remoteRules.gateActions(checked);
+  if (user?.remote && remoteRules) checked = remoteRules.gateActions(checked, { from: user.from });
   const results = assistantRefusalLines(checked.rejected);
   await slotReady(slot);
   for (const action of checked.run) {
@@ -14162,7 +14405,7 @@ async function assistantLocalControl({ user, text, intent, facts, slot }) {
       continue;
     }
     let outcome;
-    try { outcome = await assistantChatAction(action, { remote: user?.remote === true }); } catch (error) { outcome = { ok: false, error: error.message }; }
+    try { outcome = await assistantChatAction(action, { remote: user?.remote === true, from: user?.from ?? null }); } catch (error) { outcome = { ok: false, error: error.message }; }
     results.push(taskOversight.resultLine(action, outcome));
   }
   let tasks = context.tasks;
@@ -14285,7 +14528,7 @@ async function assistantRespond(user, entry = null) {
       await slotReady(slot);
       for (const action of local?.actions ?? []) {
         if (brakeStale(action, generation)) continue;
-        // From Discord only the brake and filing run (remote.LOCAL_ACTIONS).
+        // From Discord or another app only the brake and filing run (remote.LOCAL_ACTIONS).
         if (user.remote && remoteRules && !remoteRules.LOCAL_ACTIONS.includes(action)) {
           done.push(`${action} waits for you in Studio`);
           continue;
@@ -14342,7 +14585,7 @@ async function assistantRespond(user, entry = null) {
               focused,
               pin: Boolean(wanted?.pin),
               conversation: wanted ? { resolvedTitle: wanted.resolvedTitle, existingTarget: wanted.existingTarget } : {},
-              ...(user.remote && remoteRules ? { origin: { ...remoteRules.ORIGIN } } : {}),
+              ...(user.remote && remoteRules ? { origin: { ...remoteRules.ORIGIN, ...(user.from === "app" ? { via: "app" } : {}) } } : {}),
             });
             const created = admission.created;
             if (admission.existing) {
@@ -14479,9 +14722,11 @@ async function assistantMessage(raw, options = {}) {
   const ui = seen || manner ? { ...(seen ?? {}), ...(manner ? { personality: manner } : {}) } : null;
   const user = { id: assistantMessageId(), projectId: projects.current().id, at: Date.now(), role: "user", text, via: "local", intent: "chat", ...(ui ? { ui } : {}),
     ...(pictures.images.length ? { images: pictures.images.map(({ id, name, mime, bytes }) => ({ id, name, mime, bytes })) } : {}) };
-  // Sent from Discord (the "Discord remote" block): the chat gate narrows what
+  // Sent from Discord (the "Discord remote" block) or another app on this PC
+  // (the "Other apps" block, which names the app): the chat gate narrows what
   // it may do, and the work it files waits for the owner's OK.
   if (options?.remote === true) user.remote = true;
+  if (typeof options?.app === "string" && options.app.trim()) { user.remote = true; user.from = "app"; user.app = options.app.trim().slice(0, 40); }
   assistantState.messages.push(user);
   assistantTrim(assistantState.messages, assistantCaps().messages);
   assistantLog("message", user.text.slice(0, 160));
@@ -16934,6 +17179,68 @@ const fleetHost = (() => {
     return null;
   }
 })();
+// The resource manager for other apps (Team › Resources,
+// docs/resource-manager.md): it slows, pauses or closes OTHER apps so the
+// agents get this PC while they build, by hand or in auto mode. The rules are
+// scripts/resource-rules.cjs, the host scripts/resource-host.cjs and the
+// Windows helper scripts/resource-helper.cs. It only reads the executor's
+// state (autopilot) and the LÖVE watcher's capacity reading (resourcePass);
+// it never gates a worker start. MEFI_STUDIO_NO_RESOURCE_MANAGER=1 turns it
+// off for a launch, and test, capture and CLI launches never start it.
+async function resourceFolder() {
+  const dirs = optionalHelper("./scripts/local-dirs.cjs", () => require("./scripts/local-dirs.cjs"), null);
+  if (!dirs) return null;
+  const settings = await readSettings().catch(() => ({}));
+  const userData = app.getPath("userData");
+  const chosen = SMOKE || CAPTURE ? path.join(userData, "local") : typeof settings?.storage?.localDir === "string" ? settings.storage.localDir : null;
+  return dirs.localRoot({ platform: process.platform, env: process.env, homedir: os.homedir(), userData, chosen }).resourcesDir();
+}
+// Building, as the resource manager means it: a worker is running, or work is
+// queued and waiting for the machine (then making room is what lets it start).
+function resourceBuilding() {
+  const running = autopilot.jobs.filter((entry) => !entry.finished).length;
+  const waiting = autopilot.execute === true && (autopilot.capacityWaiting === true || autopilot.waiting === "machine busy");
+  const hold = autopilot.capacity?.resources?.holdKind ?? null;
+  return {
+    active: running > 0 || (waiting && autopilot.queueDepth > 0),
+    running,
+    waiting,
+    waitingForMemory: waiting && ["memory", "memory-severe", "memory-cap"].includes(hold),
+  };
+}
+// Loaded on first use (the launch's look for leftovers, four seconds after the
+// window; the page; a quit), never while Studio starts.
+let resourceHostLoaded;
+function resourceHostGet() {
+  if (resourceHostLoaded !== undefined) return resourceHostLoaded;
+  try {
+    resourceHostLoaded = require("./scripts/resource-host.cjs").createResourceHost({
+      spawn,
+      execFile: require("node:child_process").execFile,
+      fs: require("node:fs/promises"),
+      dir: () => resourceFolder(),
+      source: path.join(STUDIO_ROOT, "scripts", "resource-helper.cs"),
+      // Studio's own roots: this process, and under the Rust host the host that runs it.
+      studioPids: () => (process.env.MEFI_STUDIO_HOST === "tauri" ? [process.pid, process.ppid] : [process.pid]),
+      readPrefs: async () => (await readSettings()).resources ?? {},
+      savePrefs: async (prefs) => (await updateSettings((next) => { next.resources = prefs; })).resources,
+      building: () => resourceBuilding(),
+      // The only channels it may push, named here so the IPC audit sees them.
+      send: (channel, payload) => {
+        if (channel === "resources:update") send("resources:update", payload);
+        else if (channel === "resources:acted") send("resources:acted", payload);
+      },
+      logLine: (line) => logLine(line),
+      disabled: process.env.MEFI_STUDIO_NO_RESOURCE_MANAGER === "1"
+        ? "The resource manager is turned off for this launch (MEFI_STUDIO_NO_RESOURCE_MANAGER=1)."
+        : SMOKE || CAPTURE || CLI_MODE ? "The resource manager does not run in a test, capture or command-line launch." : null,
+    });
+  } catch (error) {
+    console.error(`[resources] disabled: ${error.message}`);
+    resourceHostLoaded = null;
+  }
+  return resourceHostLoaded;
+}
 const agentBrain = (() => {
   try {
     return require("./scripts/agent-brain-host.cjs").createAgentBrain({
@@ -23238,7 +23545,9 @@ function flushHeldPushes() {
 // hold, and nothing at all, with no window opened, when no row changed.
 const BOARD_PUSH_MS = 250;
 const BOARD_PUSH_CHANNELS = new Set(["eyes:tasks", "eyes:requests", "eyes:ideas"]);
-const HELD_WHILE_HIDDEN = new Set([...BOARD_PUSH_CHANNELS, "machine:status", "fleet:update", "eyes:progress"]);
+// Other apps' state and notes (the "Other apps" block) wait too: the newest
+// state, and the newest note, which toasts when the window is back.
+const HELD_WHILE_HIDDEN = new Set([...BOARD_PUSH_CHANNELS, "machine:status", "fleet:update", "eyes:progress", "studio-api:event", "studio-api:notice", "resources:update"]);
 const boardPushes = new Map(); // channel -> { timer, pending: { payload, projectId } | null }
 
 function pushBoardList(channel, payload) {
@@ -26939,6 +27248,24 @@ function registerIpc() {
     return { ok: true, prefs: settings.ui, ...(loginItem ? { loginItem } : {}) };
   });
 
+  // ---- the resource manager for other apps (Team › Resources) ------------
+  // resource-host.cjs: a read, a watch lease that keeps "resources:update"
+  // coming while the page is on screen, one action on one app named by its
+  // key (never a pid from the page: the host finds the processes itself),
+  // Make room now (op "focus"), Restore all, and the preferences.
+  const resourcesOff = { ok: false, error: "The resource manager is not available in this build." };
+  ipcMain.handle("resources:state", async () => resourceHostGet()?.snapshot() ?? resourcesOff);
+  ipcMain.handle("resources:watch", async (_event, payload) => resourceHostGet()?.watch(payload ?? {}) ?? resourcesOff);
+  ipcMain.handle("resources:act", async (_event, payload) => {
+    const host = resourceHostGet();
+    if (!host) return resourcesOff;
+    const op = typeof payload?.op === "string" ? payload.op : "";
+    if (op === "focus") return host.focus();
+    return host.act({ key: typeof payload?.key === "string" ? payload.key : "", op });
+  });
+  ipcMain.handle("resources:restore-all", async () => resourceHostGet()?.restoreAll() ?? resourcesOff);
+  ipcMain.handle("resources:set", async (_event, payload) => resourceHostGet()?.setPrefs(payload ?? {}) ?? resourcesOff);
+
   // ---- machine coordination + resource manager ----------------------------
   // A failed scan must reach the panel as a degraded result, not a rejected
   // invoke: the renderer read has no catch, and a stale "free" badge would
@@ -27128,6 +27455,14 @@ function registerIpc() {
     if (answer.response !== 1) return { ok: false, cancelled: true };
     return pcsDropHandoff({ branch: String(payload?.branch ?? ""), sha: String(payload?.sha ?? "") });
   });
+  // Settings › Other apps (the "Other apps" block): the Studio API's switch,
+  // its key, the setup prompt and the Claude Code skill. App-wide like
+  // remote:*: it belongs to this PC, not a project.
+  ipcMain.handle("studio-api:status", async () => studioApiStatus());
+  ipcMain.handle("studio-api:set", async (_event, patch) => studioApiSet(patch && typeof patch === "object" ? { on: patch.on === true ? true : patch.on === false ? false : undefined } : {}));
+  ipcMain.handle("studio-api:rekey", async () => studioApiRekey());
+  ipcMain.handle("studio-api:prompt", async () => studioApiPrompt());
+  ipcMain.handle("studio-api:skill", async (_event, payload) => studioApiSkill({ save: payload?.save === true }));
   // A pet or a playdate for the companion's bond (agent-brain-host companionBond).
   ipcMain.handle("companion:bond", async (_event, payload) => (agentBrain ? agentBrain.companionBond({ event: payload?.event }) : { ok: false, error: "The companion is unavailable." }));
 
@@ -28066,6 +28401,8 @@ app.whenReady().then(() => {
   if (AT_LOGIN) setTimeout(() => showLoginWindowWithoutTray(), 15000).unref?.();
   // Watchers start after the window is up so first paint is never delayed.
   setTimeout(() => startMachineWatch(), 2500);
+  // What a previous Studio left held on other apps goes back; auto mode starts watching.
+  if (!SMOKE && !CAPTURE && !CLI_MODE) setTimeout(() => { resourceHostGet()?.start().catch((error) => logLine(`[resources] start failed: ${error?.message ?? error}`)); }, 4000).unref?.();
   if (!SMOKE && !CAPTURE && !CLI_MODE) setTimeout(() => bootAutopilot(), 8000);
   // Both are fire-and-forget: a failure is logged, never an unhandled rejection.
   if (!SMOKE && !CAPTURE && !CLI_MODE) setTimeout(() => startUpdateWatch().catch((error) => logLine(`[update] watch failed: ${error?.message ?? error}`)), 3500);
@@ -28084,6 +28421,8 @@ app.whenReady().then(() => {
   if (!SMOKE && !CAPTURE && !CLI_MODE && typeof startPcs === "function") startPcs();
   // The Discord remote: when the owner turned it on, this PC answers their DMs.
   if (!SMOKE && !CAPTURE && !CLI_MODE) setTimeout(() => { remoteApply(); }, 20000).unref?.();
+  // Other apps: when the owner turned the Studio API on, it opens again.
+  if (!SMOKE && !CAPTURE && !CLI_MODE && typeof studioApiApply === "function") setTimeout(() => { studioApiApply(); }, 5000).unref?.();
   // Friends: a signed-in member shows as online while Studio is open (the "Rooms hub" block).
   if (!SMOKE && !CAPTURE && !CLI_MODE && typeof startHubPresence === "function") startHubPresence();
   // Paired checks: what the owner left running starts again by itself (the "Paired check workers" block).
@@ -28171,6 +28510,8 @@ app.on("before-quit", (event) => {
   if (typeof reportEnd === "function") reportEnd("quit");
   if (typeof alertsStop === "function") alertsStop();
   if (typeof outsideWorkQuit === "function") outsideWorkQuit();
+  // Every app the resource manager slowed or paused goes back as Studio leaves.
+  if (typeof resourceHostLoaded !== "undefined" && resourceHostLoaded) resourceHostLoaded.quit();
   executorClosing = true;
   performanceProfiler.stop();
   for (const pending of jevProjectQueues.values()) pending.then((queue) => queue.stop()).catch(() => {});

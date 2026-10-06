@@ -45,6 +45,8 @@ const PROMISES = [
   { file: "scripts/desk.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   // The Discord remote's rules (docs/remote.md); main.cjs "Discord remote" owns the I/O.
   { file: "scripts/remote.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  // The Studio API's rules (docs/studio-api.md); studio-api-server.cjs listens and main.cjs "Other apps" owns the I/O.
+  { file: "scripts/studio-api.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   // Windows notifications, the taskbar flash and the count on the taskbar icon: when Studio may speak, what it says and the picture of the count; alerts-host.cjs and main.cjs "Notifications" own the window, the Notification and the clock.
   { file: "scripts/alerts.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (time is", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   { file: "scripts/badge-icon.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
@@ -56,6 +58,8 @@ const PROMISES = [
   { file: "scripts/desk-resolve.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   { file: "scripts/companion.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (time", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   { file: "scripts/outside-work.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  // The resource manager's rules (Team › Resources); resource-host.cjs and the Windows helper own the processes and the files.
+  { file: "scripts/resource-rules.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   // The companion as a pet and a friend; agent-brain-host.cjs and main's "Companion friends" block own their I/O.
   { file: "scripts/companion-pet.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (time", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   { file: "scripts/companion-friends.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (time", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },

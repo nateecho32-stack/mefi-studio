@@ -45,7 +45,7 @@ test("Settings in the 0.5 layout: the prototype's places in its order, one page 
     }
     assert.equal(code, 0, `${report?.failure || "No renderer report"}\n${output}`);
     assert.deepEqual(report.errors, []); assert.deepEqual(report.networkAttempts, []); assert.deepEqual(report.processAttempts, []);
-    assert.equal(report.places.length, 8, "every page was opened from its row");
+    assert.equal(report.places.length, 9, "every page was opened from its row");
     assert.ok(report.shots.length >= 12, `the screenshots were taken (${report.shots.length})`);
     assert.ok(report.complete, "the fixture ran to its end");
   } finally {

@@ -6,6 +6,55 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-06 The Lobby, one sign-in, online at launch, credits that cannot be farmed, and no Discord roles land on main
+
+Branch `wip/credits-guard` in `C:\wt\credits` (bcc51f3 the Lobby front page, Sign in with Discord and online at launch;
+4970d71 the anti-farming rules and moderator review; 2ba413e Flame rank lists a room, no Discord roles needed), with
+main dfda798 merged (5506e9c) and the scope note's Friends lines updated.
+
+Windows CI (`Studio checks`: build-booklet, check, lint, the full `npm test`, audit) green on 4970d71 and 2ba413e, and
+run again on the landing commit before the fast-forward. On this PC the full gate could not get the machine to itself
+(other sessions' suites ran throughout); the one full `npm test` on bcc51f3: Node 7048 tests, 7013 pass, 20 fail, every
+one in the git-heavy suites that fail when git cannot start under load (attempt_review_host, attempt_snapshots_host,
+git_actions, rust_parity_repo, sync, sync_changes, sync_lineage, worktree_actions, worktrees; they passed alone on this
+branch's parent earlier today); Electron 88: layout_contract_render and shell_render as on clean main, and
+media_browser_render (not touched here). Python contracts and the path lock pass.
+
+Run alone after each change: relay_core 9/9, relay_e2e 9/9, relay_credits 10/10 (alts, one player and many projects,
+the 15-a-week pair limit, stars once a week, midnight replay, rate limits, Forget me's 30-day hold, a moderator's review
+and take-back), relay_connect 4/4, hub_client 16/16, hub_host 13/13, friends_front_ui 9/9, project_hub_ui 6/6,
+rooms_ui 13/13, friends_navigation 8/8, app_rail 40/40, onboarding 43/43, module_purity 58/58, booklet_build 5/5,
+layout_contract_nav 15/15, shell_frame_bars 34/34, community_rules 17/17; friends_render, companion_hub_render and
+unified_studio_render 1/1 each (friends_render walks The Lobby and the signed-out card at four window sizes with no
+text under 12 px). `npm run check` ok; lint adds no warning; audit 0. The relay was redeployed (version
+4b641b0c) and `relay/scripts/smoke.mjs` passes against it.
+
+## 2026-10-06 Startup marks and the settings cache (S1) land on main
+
+Branch `land/s1-boot` in a cloud session (Linux, Node 24.21.0), stacked on S3 over main dfda798: the parked slice
+0605bcd re-applied (conflicts in main.cjs, booklet.js, build-booklet.mjs, booklet_build and module_purity resolved
+file by file; booklet.html rebuilt). The compile cache stays main's first statement and the marks block follows;
+startup-marks.js is first in BOOKLET_INPUTS (the updater's prefix pin moved with it); booklet.js keeps bootHealthy
+before the gate. readSettings asks the Rust store first and the cache fronts only the Electron path (6f2c154).
+
+Startup (tools/benchmark_startup.py, finished here, 5 smoke launches each under xvfb as a non-root user, medians):
+interactive (Vibe) 4,055 ms on main, 4,024 ms with the marks (no cost; loaded 2,624 / 2,616 ms). New marks, ms since
+main started: app ready 212, first paint 462, gate released 3,856; the gate opens at ~700 but the launch choice lands
+at ~2,200, and the release comes ~600 ms after the last step. readSettings on a 47 KB settings file (main.cjs's own
+code, 2,000 calls): ~460 us per call before, ~265 us with the cache, two stats instead of two file reads.
+Kill switches MEFI_STUDIO_STARTUP_MARKS=0 and MEFI_STUDIO_SETTINGS_CACHE=0, both pinned.
+
+`npm run check` ok, `npm run audit` 0 findings, `npm run lint` 0 errors and 45 warnings (as main; the WIP's unused
+`utimes` import removed). `npm run test:fast` with mefi-core built (`npm run host:core`): 7099 tests, 7062 pass, 34
+skipped, 3 fail, all as on clean main with the same binary: rust_modules image-store folder, and rust_parity_git
+"the actions answer like the JavaScript" and "the chip's host answers like git-host.cjs" (fail identically on
+dfda798 here; for the Rust chat). rust_parity_settings 3/3 ran (not skipped) with its new cached leg: main's JS with
+the cache on equals the uncached JS and Rust step for step. settings_cache 17/17 (new: Rust first, then the cache,
+then the files), startup_marks 10/10, startup_marks_renderer, booklet_build, release_updater and shell_frame_wiring
+(pins updated for launchGate and ?marks=0). Python test_mefi_studio_idle + updater 42 OK. Electron: startup_render and
+renderer_startup 12/12; for S3, task_overview_render, sessions_render, builder_render, fleet_render and
+workflow_render 5/5.
+
 ## 2026-10-06 Board pushes carry the rows that changed (S3) land on main
 
 Branch `wip/s3-row-push` in a cloud session (Linux, Node 24.21.0) over main 24d6756: the parked slice c682642

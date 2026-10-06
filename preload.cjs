@@ -427,6 +427,17 @@ const api = {
   pcsPickUp: (branch, sha) => ipcRenderer.invoke("pcs:pick-up", { branch: String(branch ?? "").slice(0, 120), sha: String(sha ?? "").slice(0, 40) }),
   pcsDrop: (branch, sha) => ipcRenderer.invoke("pcs:drop", { branch: String(branch ?? "").slice(0, 120), sha: String(sha ?? "").slice(0, 40) }),
   onPcsEvent: (callback) => ipcRenderer.on("pcs:event", (_event, status) => callback(status)),
+  // Settings › Other apps (main.cjs "Other apps", docs/studio-api.md): the
+  // switch that lets Claude Code, Codex and other apps on this PC reach Studio,
+  // a new key, the setup prompt and the Claude Code skill. The key itself
+  // never comes to the page; it stays in the key file.
+  studioApiStatus: () => ipcRenderer.invoke("studio-api:status"),
+  studioApiSet: (patch) => ipcRenderer.invoke("studio-api:set", patch && typeof patch === "object" && typeof patch.on === "boolean" ? { on: patch.on } : {}),
+  studioApiRekey: () => ipcRenderer.invoke("studio-api:rekey"),
+  studioApiPrompt: () => ipcRenderer.invoke("studio-api:prompt"),
+  studioApiSkill: (options) => ipcRenderer.invoke("studio-api:skill", { save: options?.save === true }),
+  onStudioApiEvent: (callback) => ipcRenderer.on("studio-api:event", (_event, status) => callback(status)),
+  onStudioApiNotice: (callback) => ipcRenderer.on("studio-api:notice", (_event, notice) => callback(notice)),
   // Friends › Your PCs (main.cjs "Multi-PC sync"): the open project against
   // its default branch on GitHub. Main picks the folder; the renderer can only
   // ask for a rebase onto GitHub's commits. onSyncEvent carries every answer,
@@ -484,8 +495,17 @@ const api = {
   machineGet: () => ipcRenderer.invoke("machine:get"),
   machineSet: (prefs) => ipcRenderer.invoke("machine:set", prefs),
   machineKill: (pid) => ipcRenderer.invoke("machine:kill", { pid }),
+  // The resource manager for other apps (Team › Resources): an app is named by
+  // its key, never by a pid; the host finds its processes itself.
+  resourcesState: () => ipcRenderer.invoke("resources:state"),
+  resourcesWatch: (payload) => ipcRenderer.invoke("resources:watch", { id: typeof payload?.id === "string" ? payload.id.slice(0, 40) : "resources", on: payload?.on !== false }),
+  resourcesAct: (key, op) => ipcRenderer.invoke("resources:act", { key: typeof key === "string" ? key.slice(0, 64) : "", op: typeof op === "string" ? op.slice(0, 16) : "" }),
+  resourcesRestoreAll: () => ipcRenderer.invoke("resources:restore-all"),
+  resourcesSet: (patch) => ipcRenderer.invoke("resources:set", patch && typeof patch === "object" ? patch : {}),
   onAssistantStatus: (callback) => ipcRenderer.on("assistant:status", (_event, status) => callback(status)),
   onMachineStatus: (callback) => ipcRenderer.on("machine:status", (_event, status) => callback(status)),
+  onResources: (callback) => ipcRenderer.on("resources:update", (_event, view) => callback(view)),
+  onResourcesActed: (callback) => ipcRenderer.on("resources:acted", (_event, entry) => callback(entry)),
   onTasks: (callback) => ipcRenderer.on("eyes:tasks", (_event, tasks) => callback(tasks)),
   // A running card's newest runProgress, { projectId, byTask: { id: runProgress } }
   // (main.cjs persistExecutorCheckpoint), instead of the whole board.

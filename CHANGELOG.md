@@ -25,6 +25,24 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   nothing running, so the others can send it work. Each project has its own
   switch, and a friend can lend you their PC: your tasks there wait for
   their OK unless they choose otherwise. See docs/my-pcs.md.
+- **Other apps: Claude Code, Codex and your scripts can talk to Studio.**
+  Settings › Other apps has a switch, off until you turn it on, that lets
+  apps on this PC reach Studio. They can see what the agents are doing and
+  what waits on you, message Mefi, hand Studio a task and leave you a note.
+  Claude Code and Codex connect with one command the card shows (an MCP server
+  with eight tools), Cursor, Claude Desktop and VS Code with a JSON block, and
+  **Save to Claude Code** adds a skill that tells Claude Code when to use
+  Studio. Scripts and Claude Code hooks use the same file as a command line
+  (`studio-link.mjs status`, `say`, `task`, `notify`). Only this PC can
+  connect, with a key kept in your user folder, and no web page can call it.
+  An app has the same narrower powers as a message from Discord: **every task
+  it files waits for your OK in every permission mode**, and approving,
+  answering and settings stay in Studio. Its messages show in Mefi's thread
+  under the app's name. **Copy setup prompt** (on the same card and on the
+  setup helper's first page) copies a prompt for Claude Code, Codex or another
+  AI helper that says where Studio is on this PC, what to read and what to
+  leave alone, so it can walk you through setup. GETTING_STARTED.md has a
+  version for before Studio runs. See [docs/studio-api.md](docs/studio-api.md).
 - **Lighter background work.** Studio's background git reads (sync, Your
   PCs, the Git chip, worker checkouts, the project inventory) no longer leave
   git's file-system monitor running in every worktree they look at (one daemon
@@ -54,6 +72,21 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   (Settings needed 43 px and had 39). Studio's rail is checked at every
   window size, the smallest at 150% included, for places that can't be
   reached and words that are cut.
+- **Resources: make room for your agents.** Team › Resources lists the other
+  apps on this PC with their CPU and memory, and lets Studio hold them back
+  while agents build: **Slow down** (lowest priority and efficiency mode),
+  **Pause** (frozen, its memory handed back to Windows), **Free memory**,
+  **Close** and **End**, each undone by **Put back** or **Restore all**. In
+  **Manual** mode Studio only does what you press (or one round with **Make
+  room now**); in **Auto** mode it slows heavy apps you are not using while
+  agents build, gives memory back when building runs short, pauses or closes
+  only the apps you allow, and puts everything back when the agents finish.
+  Calls, music, recording, remote access and terminals are left alone unless
+  you say otherwise; Studio, its agents and Windows are never touched; a paused
+  app runs again the moment you switch to it; and nothing stays paused after
+  Studio closes, even if it crashes. Windows only for now. The status bar's
+  CPU · Mem reading now opens this page; the test-run Machine status it used
+  to open is still in Settings › Diagnostics and in Search.
 - **Friends › Events: the community runs its own events.** Every week a
   **Build Jam** opens on Monday with a theme (and shows next week's): enter
   one of your shared projects until Saturday, play the others and vote for up

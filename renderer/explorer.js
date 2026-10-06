@@ -773,7 +773,7 @@
     when.className = "when";
     when.textContent = thought
       ? `${ago(message.at)} · thinking`
-      : `${ago(message.at)}${message.role !== "user" && message.via === "local" ? " · local" : ""}`;
+      : `${ago(message.at)}${message.role !== "user" && message.via === "local" ? " · local" : ""}${message.role === "user" && message.app ? ` · from ${message.app}` : ""}`;
     element.append(when);
     return element;
   }
