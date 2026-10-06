@@ -1120,6 +1120,10 @@ async function applyRestart(files, { counted = true, stopAgents = false } = {}) 
   // off between saving the old project and selecting the new one.
   if (projectSwitching) return { deferred: true, reason: "Project switch is saving progress before update" };
   if (autopilot.jobs.length) return { deferred: true, reason: `${autopilot.jobs.length} build job(s) finishing before update; new dispatches wait` };
+  // An automatic restart waits for a paired check to finish; the updater
+  // tries again. A manual Restart goes ahead and the check is recorded as
+  // interrupted, as before.
+  if (counted && typeof pairedWorkersBusy === "function" && pairedWorkersBusy()) return { deferred: true, reason: "A paired check is finishing before update" };
   if (typeof pairedWorkersPrepareRestart === "function") {
     const prepared = await pairedWorkersPrepareRestart();
     if (prepared?.ok === false) return prepared;
@@ -1539,7 +1543,7 @@ async function applyReleaseUpdate() {
   }
   if (releaseState.state === "applying") return { ok: false, error: "the update is already applying", status: releaseStatus() };
   if (projectSwitching) return { ok: false, error: "A project switch is saving progress; try again when it finishes.", status: releaseStatus() };
-  if (typeof pairedWorkersBusy === "function" && pairedWorkersBusy()) return { ok: false, error: "Stop paired workers and the coordinator before installing an update.", status: releaseStatus() };
+  if (typeof pairedWorkersBusy === "function" && pairedWorkersBusy()) return { ok: false, error: "A paired check is running; install the update when it finishes.", status: releaseStatus() };
   if (activeChild && activeChild.exitCode === null) return { ok: false, error: "Love2D is running — close it and try again", status: releaseStatus() };
   const running = autopilot.jobs;
   if (running.length) return { ok: false, error: `${running.length} build job(s) still running — try again when they finish`, status: releaseStatus() };
@@ -1563,7 +1567,7 @@ async function applyReleaseUpdate() {
     if (projectSwitching || (typeof pairedWorkersBusy === "function" && pairedWorkersBusy()) || (activeChild && activeChild.exitCode === null) || autopilot.jobs.length) {
       releaseApplyInFlight = false;
       publishRelease({ state: "available", progress: null });
-      return { ok: false, deferred: true, error: "The build is ready; waiting for running jobs, Love2D or paired worker services to stop.", status: releaseStatus() };
+      return { ok: false, deferred: true, error: "The build is ready; waiting for running jobs, Love2D or a paired check to finish.", status: releaseStatus() };
     }
     publishRelease({ state: "applying", error: null });
     await updateSettings((settings) => {
@@ -1576,6 +1580,9 @@ async function applyReleaseUpdate() {
       window?.webContents.session.flushStorageData();
     } catch {}
     await new Promise((resolve) => setTimeout(resolve, 700));
+    // Paired services close cleanly; the new build starts them again by itself.
+    const pairedClosed = typeof pairedWorkersPrepareRestart === "function" ? await pairedWorkersPrepareRestart() : null;
+    if (pairedClosed?.ok === false) logLine(`[release] ${pairedClosed.error}`);
     stopReleaseWatch();
     stopUpdateWatch();
     stopEyesWatch();
@@ -1740,7 +1747,7 @@ async function releaseScanPrevious() {
 // this process, the same way an update is applied.
 async function releaseRollback() {
   const blocked = (error) => ({ ok: false, error, status: releaseStatus() });
-  if (typeof pairedWorkersBusy === "function" && pairedWorkersBusy()) return blocked("Stop paired worker services before rolling back Studio.");
+  if (typeof pairedWorkersBusy === "function" && pairedWorkersBusy()) return blocked("A paired check is running; roll back when it finishes.");
   if (SMOKE || CAPTURE || CLI_MODE) return blocked("rolling back is unavailable in this mode");
   if (!app.isPackaged || process.platform !== "win32") return blocked("Rolling back applies to the portable Windows build.");
   if (!updateSafety || !releasePrevious) return blocked("There is no saved version to go back to.");
@@ -1777,6 +1784,8 @@ async function releaseRollback() {
       window?.webContents.session.flushStorageData();
     } catch {}
     await new Promise((resolve) => setTimeout(resolve, 700));
+    const pairedClosed = typeof pairedWorkersPrepareRestart === "function" ? await pairedWorkersPrepareRestart() : null;
+    if (pairedClosed?.ok === false) logLine(`[release] ${pairedClosed.error}`);
     stopReleaseWatch();
     stopUpdateWatch();
     stopEyesWatch();
@@ -2483,6 +2492,7 @@ function hubInstance() {
           return undefined;
         }
         if ((event?.type === "status" || event?.type === "remoteState") && typeof remotePush === "function") remotePush();
+        if (event?.type === "status" && event.status?.error === "version") hubVersionBehind();
         return typeof friendsHear === "function" ? friendsHear(event) : send("hub:event", event);
       },
       log: (line) => logLine(line),
@@ -2497,8 +2507,13 @@ async function hubStatus() {
   let linked = false;
   try { linked = Boolean(community && (await communityRead()).state.link); } catch { linked = false; }
   let shareBuilding = false;
-  try { shareBuilding = (await readSettings())?.friends?.shareBuilding === true; } catch { shareBuilding = false; }
-  return { ...base, linked, communityConfigured: Boolean(communityClientId()), shareBuilding };
+  let autoConnect = true;
+  try {
+    const friends = (await readSettings())?.friends;
+    shareBuilding = friends?.shareBuilding === true;
+    autoConnect = friends?.connectAtLaunch !== false;
+  } catch { shareBuilding = false; }
+  return { ...base, linked, communityConfigured: Boolean(communityClientId()), shareBuilding, autoConnect };
 }
 
 async function hubCall(work) {
@@ -2531,6 +2546,8 @@ const HUB_ROOM_METHODS = Object.freeze({
   modFlags: 0, modReview: 1, modRevoke: 2, modReports: 0, modResolve: 1, modSuspend: 2,
   // The Lobby's "Share what I'm building" switch (hubBuildingShare below), not a hub-client method.
   shareBuilding: 1,
+  // The Lobby's "Reconnect by itself" switch (hubAutoConnect below), not a hub-client method either.
+  autoConnect: 1,
 });
 function hubRoom(method, args) {
   const arity = Object.hasOwn(HUB_ROOM_METHODS, method) ? HUB_ROOM_METHODS[method] : -1;
@@ -2538,6 +2555,7 @@ function hubRoom(method, args) {
   const plain = args.map((value) => (value == null || ["string", "number", "boolean"].includes(typeof value) ? value : typeof value === "object" && !Array.isArray(value) ? { ...value } : null));
   if (method === "messages") return hubCall((client) => hubRoomMessages(client, ...plain));
   if (method === "shareBuilding") return hubBuildingShare(plain[0] === true);
+  if (method === "autoConnect") return hubAutoConnect(plain[0] === true);
   // A report carries this PC's own copy of the message, which the relay keeps
   // as evidence only when its signature checks out.
   if (method === "report") return hubCall((client) => client.report(plain[0], plain[1], plain[2], roomHistory()?.page(plain[0], null, 500).messages.find((item) => item.id === String(plain[1])) ?? null));
@@ -2617,8 +2635,35 @@ async function hubPresenceLook() {
   await client.connect();
   return true;
 }
+// "Reconnect by itself" (the Lobby's foot): settings.friends.connectAtLaunch,
+// on unless turned off. On: Studio connects after every launch, restart and
+// update, and at once after the PC wakes. Turning it on also connects now.
+async function hubAutoConnect(on) {
+  await updateSettings((settings) => { settings.friends = { ...(settings.friends ?? {}), connectAtLaunch: on }; });
+  if (on) { hubPresenceHeld = false; await hubPresenceLook().catch(() => false); }
+  return { ok: true, autoConnect: on, status: await hubStatus() };
+}
+// The relay says this Studio is too far behind its protocol window: look for
+// a published update now, at most once an hour, so Settings › Updates offers
+// it; the update's relaunch reconnects by itself.
+const HUB_VERSION_LOOK_MS = 60 * 60 * 1000;
+let hubVersionLookAt = 0;
+function hubVersionBehind() {
+  if (Date.now() - hubVersionLookAt < HUB_VERSION_LOOK_MS || typeof checkRelease !== "function") return;
+  hubVersionLookAt = Date.now();
+  logLine("[hub] the relay needs a newer Studio; looking for an update");
+  checkRelease().catch(() => {});
+}
+// After sleep: retry now instead of at the end of a minute-long backoff, and
+// connect again if the client had stopped while the PC was away.
+async function hubPresenceWake() {
+  if (!(await hubPresenceWanted())) return false;
+  if (hubClient?.reconnectNow?.()) return true;
+  return hubPresenceLook();
+}
 function startHubPresence() {
   if (hubPresenceTimers) return;
+  if (typeof electron !== "undefined") electron.powerMonitor?.on?.("resume", () => { hubPresenceWake().catch(() => {}); });
   const look = () => { hubPresenceLook().catch((error) => logLine(`[hub] could not connect for Friends: ${error?.message ?? error}`)); };
   const building = () => { hubBuildingLook().catch((error) => logLine(`[hub] could not share what is being built: ${error?.message ?? error}`)); };
   hubPresenceTimers = { first: setTimeout(look, HUB_PRESENCE_FIRST_MS), every: setInterval(look, HUB_PRESENCE_EVERY_MS), building: setInterval(building, HUB_BUILDING_EVERY_MS) };
@@ -3518,14 +3563,19 @@ async function libraryUse(shelf, id, from) {
 let pairedWorkersHost = null;
 let pairedWorkersClosing = false;
 let pairedWorkersQuitSaved = false;
-function pairedWorkersBusy() { return pairedWorkersHost?.isRunning() === true; }
+// A paired check assigned or running now. Updates, rollbacks and automatic
+// restarts wait for this only: idle paired services close, and the relaunch
+// starts them again by itself (pairedWorkersResume below).
+function pairedWorkersBusy() { return pairedWorkersHost?.inFlight?.() === true; }
 function pairedWorkersDesktop() {
   if (SMOKE || CAPTURE || CLI_MODE) throw new Error("Paired workers are disabled in capture and CLI modes.");
   if (pairedWorkersClosing) throw new Error("Studio is closing its paired workers.");
   if (!pairedWorkersHost) {
     pairedWorkersHost = require("./scripts/paired-worker-host.cjs").createPairedHost({
       directory: path.join(app.getPath("userData"), "paired-workers"), readSettings, updateSettings,
-      encryptionAvailable: communityKeystore,
+      encryptionAvailable: communityKeystore, app: app.getVersion(),
+      // This PC is too far behind its coordinator: look for an update now.
+      onBehind: () => { if (typeof checkRelease === "function") checkRelease().catch(() => {}); },
       seal: value => safeStorage.encryptString(value).toString("base64"),
       unseal: value => safeStorage.decryptString(Buffer.from(value, "base64")),
       project: async () => {
@@ -3565,6 +3615,29 @@ async function pairedWorkersPrepareRestart() {
   try { await pairedWorkersClose(); return { ok: true }; }
   catch { return { ok: false, error: "Could not stop paired workers; their saved journals need recovery." }; }
   finally { pairedWorkersClosing = previous; }
+}
+// After a restart, an update or a crash: the coordinator or worker the owner
+// left running (settings.pairedCoordinator / pairedWorker `autoStart`) starts
+// again a few seconds after launch, with no dialog, and the worker polls at
+// once when the PC wakes from sleep. The host is built only when one of them
+// asks, so a PC that never used paired checks reads nothing.
+const PAIRED_RESUME_MS = 8 * 1000;
+let pairedResumeTimer = null;
+async function pairedWorkersResume() {
+  if (SMOKE || CAPTURE || CLI_MODE) return null;
+  const all = await readSettings();
+  if (all?.pairedCoordinator?.autoStart !== true && all?.pairedWorker?.autoStart !== true) return null;
+  const answer = await pairedWorkersCall("resume");
+  if (answer?.started?.length) logLine(`[paired] started again by itself: ${answer.started.join(", ")}`);
+  for (const role of ["coordinator", "worker"]) if (answer?.[role]?.resumeError) logLine(`[paired] the ${role} did not start by itself: ${answer[role].resumeError}`);
+  if (answer?.ok === false) logLine(`[paired] could not start again by itself: ${answer.error}`);
+  return answer;
+}
+function startPairedResume() {
+  if (pairedResumeTimer) return;
+  pairedResumeTimer = setTimeout(() => { pairedWorkersResume().catch((error) => logLine(`[paired] could not start again by itself: ${error?.message ?? error}`)); }, PAIRED_RESUME_MS);
+  pairedResumeTimer.unref?.();
+  if (typeof electron !== "undefined") electron.powerMonitor?.on?.("resume", () => { pairedWorkersHost?.wake?.(); });
 }
 function pairedWorkersQuit(event) {
   if (!pairedWorkersHost || pairedWorkersQuitSaved) return false;
@@ -26066,6 +26139,7 @@ function registerIpc() {
     return Object.hasOwn(actions, payload?.action) ? pairedWorkersCall(actions[payload.action], typeof payload?.jobId === "string" ? payload.jobId.slice(0, 80) : "") : { ok: false, error: "Choose a worker action." };
   });
   ipcMain.handle("paired:enqueue", async () => pairedWorkersCall("enqueue"));
+  ipcMain.handle("paired:auto", async (_event, payload) => ["coordinator", "worker"].includes(payload?.role) ? pairedWorkersCall("setAutoStart", payload.role, payload?.on === true) : { ok: false, error: "Choose the coordinator or the worker." });
   ipcMain.handle("paired:revoke", async (_event, payload) => pairedWorkersCall("revoke", typeof payload?.workerId === "string" ? payload.workerId.slice(0, 80) : ""));
   ipcMain.handle("paired:history", async (_event, payload) => pairedWorkersCall("history", typeof payload?.jobId === "string" ? payload.jobId.slice(0, 80) : "", { chunk: payload?.chunk, offset: payload?.offset }));
   ipcMain.handle("sync:run", async (_event, payload) => syncProject(true, { rebase: payload?.rebase === true }));
@@ -27006,6 +27080,8 @@ app.whenReady().then(() => {
   if (!SMOKE && !CAPTURE && !CLI_MODE && typeof studioApiApply === "function") setTimeout(() => { studioApiApply(); }, 5000).unref?.();
   // Friends: a signed-in member shows as online while Studio is open (the "Rooms hub" block).
   if (!SMOKE && !CAPTURE && !CLI_MODE && typeof startHubPresence === "function") startHubPresence();
+  // Paired checks: what the owner left running starts again by itself (the "Paired check workers" block).
+  if (!SMOKE && !CAPTURE && !CLI_MODE && typeof startPairedResume === "function") startPairedResume();
   if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => announceRestart().catch(() => {}));
   if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => announceRelease().catch(() => {}));
   // "Studio closed unexpectedly", once, after the page has had a moment to come up.

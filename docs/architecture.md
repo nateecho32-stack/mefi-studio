@@ -5,8 +5,11 @@ desktop adapter loads only when requested. Local IPC owns queueing, invitations,
 revocation and setup; the network protocol exposes only authenticated worker
 operations. Atomic coordinator and worker journals persist each start grant
 before execution. Expired assignments remain uncertain rather than moving to
-another worker. See [paired-workers.md](paired-workers.md) for the first profile,
-transport requirements, recovery and activation steps.
+another worker. A coordinator or worker the owner started comes back by itself
+after Studio restarts or updates, and PCs on different Studio versions keep
+working together unless one is really behind (`scripts/link-compat.cjs`). See
+[paired-workers.md](paired-workers.md) for the first profile, transport
+requirements, recovery, reconnecting and activation steps.
 
 The booklet builder declares one ordered, frozen `BOOKLET_INPUTS` inventory.
 Reads carry their source name with their content, so emission and error-source
@@ -2295,12 +2298,15 @@ Studio reuse the GitHub CLI's `gh auth token`.
 The packaged `Mefi Studio AI+.exe` is Electron's `electron.exe`, stamped with
 Studio's product name, version, copyright and icon (`scripts/stamp-exe.mjs`).
 Windows then shows Studio, not "Electron", in Task Manager, the file's
-Properties and SmartScreen. The tested release workflow proposal in
-[release-workflow-signpath.yml](release-workflow-signpath.yml) adds a packaged
-app smoke launch, optional SignPath signing and a hosted-runner gate. It is
-pending activation with a GitHub credential allowed to change workflows;
-the active release workflow remains unchanged. [code-signing.md](code-signing.md)
-holds the policy, activation steps and service setup.
+Properties and SmartScreen. The release workflow builds the tag it is given,
+opens the packaged app once (`--smoke`) before it signs or publishes
+anything, signs through SignPath once the repository's SignPath variables are
+set, and takes a `gate` input (`full` runs `npm test`; `hosted` leaves out the
+real-window suites, for a tag that passed the full local gate) and a `host`
+input (`tauri` adds the Rust-host zip; a tag push stays on Electron until
+`TAG_HOST` changes, see [rust-migration.md](rust-migration.md)).
+[code-signing.md](code-signing.md) holds the policy, activation steps and
+service setup.
 
 ### Git sync: Push, Pull and GitHub linking
 

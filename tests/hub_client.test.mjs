@@ -30,7 +30,7 @@ function harness({ url = "https://hub.example.test", token = { ok: true, token: 
     close(code = 1000) { this.readyState = 3; this.closedWith = code; }
     open() { this.readyState = 1; this.onopen?.(); }
     receive(frame) { this.onmessage?.({ data: JSON.stringify(frame) }); }
-    drop(code) { this.readyState = 3; this.onclose?.({ code }); }
+    drop(code, reason = "") { this.readyState = 3; this.onclose?.({ code, reason }); }
   }
   let sessions = 0;
   const respond = answer ?? ((method, path) => {
@@ -111,7 +111,7 @@ test("connecting trades the Discord token for a hub session once, says hello and
   assert.equal(h.socket().url, "wss://hub.example.test/v1/ws");
   assert.equal(h.client.status().state, "connecting");
   h.socket().open();
-  assert.deepEqual(h.socket().sent, [{ type: "hello", session: "hub-session-1", protocol: 1, features: ["history.peer", "keepalive", "friend.online"] }], "hello names what this Studio can do; an older hub drops the field");
+  assert.deepEqual(h.socket().sent, [{ type: "hello", session: "hub-session-1", protocol: 1, oldest: 1, features: ["history.peer", "keepalive", "friend.online"] }], "hello names what this Studio can do and the oldest protocol it speaks; an older hub drops both fields");
   h.socket().receive({ type: "ready", user: USER, protocol: 1 });
   await settle();
   const status = h.client.status();
@@ -210,6 +210,27 @@ test("a lost socket retries with backoff, an expired session gets a new one, and
   assert.equal(h.client.status().state, "error"); assert.equal(h.client.status().error, "version");
   await h.advance(120_000);
   assert.equal(h.sockets.length, 3, "a version mismatch never retries");
+});
+
+test("a relay behind this Studio's window is retried by itself; waking from sleep retries at once", async () => {
+  const h = harness();
+  await h.readyUp();
+  h.socket().drop(4002, "relay version");
+  assert.equal(h.client.status().state, "offline"); assert.equal(h.client.status().error, "relay-behind");
+  await h.advance(hub.RELAY_BEHIND_RETRY_MS - 1); assert.equal(h.sockets.length, 1, "it waits while the relay is updated");
+  await h.advance(1); assert.equal(h.sockets.length, 2, "then tries again by itself");
+  h.socket().open(); h.socket().receive({ type: "ready", user: USER, protocol: 1, oldest: 1 }); await settle();
+  assert.equal(h.client.status().state, "ready");
+  assert.equal(h.client.reconnectNow(), false, "a live connection is left alone");
+  for (let drop = 0; drop < 5; drop += 1) { h.socket().drop(1006); await h.advance(60_000); }
+  h.socket().drop(1006);
+  const before = h.sockets.length;
+  assert.equal(h.client.reconnectNow(), true, "after sleep it does not wait out a minute of backoff");
+  await settle();
+  assert.equal(h.sockets.length, before + 1);
+  h.socket().drop(4002, "protocol version");
+  assert.equal(h.client.status().error, "version");
+  assert.equal(h.client.reconnectNow(), false, "an old Studio waits for its update, not for a wake");
 });
 
 test("the session is renewed before it expires, over HTTP and then on the socket", async () => {

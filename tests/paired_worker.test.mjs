@@ -33,11 +33,11 @@ test("oversized coordinator responses are refused before decoding",async()=>{
   await assert.rejects(request("poll"),/too large/);
 });
 
-test("losing heartbeat aborts the owned runner and journals interruption without repeating it",async t=>{
+test("heartbeats lost for the rest of the lease abort the owned runner and journal interruption without repeating it",async t=>{
   const h=await setup(t);let runs=0;
   const send=transport.client({url:h.server.url,...h.paired,instanceId:"disconnect-instance"});
   const request=(action,payload)=>action==="heartbeat"?Promise.reject(new Error("disconnected")):send(action,payload);
-  const worker=await workerModule.createWorker({directory:path.join(h.directory,"worker"),request,heartbeatMs:10,run:async({signal})=>{runs++;await new Promise(resolve=>signal.addEventListener("abort",resolve,{once:true}));throw new Error("aborted");}});
+  const worker=await workerModule.createWorker({directory:path.join(h.directory,"worker"),request,heartbeatMs:10,leaseMs:40,run:async({signal})=>{runs++;await new Promise(resolve=>signal.addEventListener("abort",resolve,{once:true}));throw new Error("aborted");}});
   await worker.tick();await worker.tick();assert.equal(runs,1);assert.equal((await h.coordinator.status()).jobs[0].state,"interrupted");
 });
 
