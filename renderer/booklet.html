@@ -89361,9 +89361,6 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   async function openTeam(options = {}) {
     fileTeamV2(); fileSeats(true);
     const place = teamPlaceById(teamPlaceFromParams(options)) ?? TEAM_PLACES[0];
-    // An old way in to Routing (Search, Settings' links, pane "routing") is a way in to a folded card: the routing card
-    // sits under Seats and models' More settings (renderer/team-models.js), so it opens there, as Change does for a seat.
-    if (place.id === "seats" && options.pane === "routing" && !options.target) options = { ...options, target: "settings-routing" };
     const pane = place.id === "seats" ? (options.pane === "routing" || $(options.target)?.closest?.("#agents-routing") ? "routing" : "team") : place.id === "providers" ? "connections" : place.panes[0];
     const moved = params.place !== place.id;
     params = { section: place.id === "overview" ? "overview" : "setup", pane, place: place.id };
