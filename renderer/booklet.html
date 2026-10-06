@@ -12834,9 +12834,9 @@ html[data-frame] .shell-need[data-tone="clear"] .shell-pill-n, html[data-frame] 
 
 /* ---- the rail: the prototype's places (renderer/nav.js, renderRailV2) ----
    At rest each tile is its icon with its word beneath, at 12 px: Work, Map, Team and Friends at the top, and
-   Search, Settings and Help at the foot, as the prototype's railView draws them. The place you are in is a
-   tinted tile. Open (pinned, hovered or focused) the classic rail's rows stand, with every word and count at
-   12 px or more. The rail's geometry (64 px, 256 open) is the layout contract's and is not touched here. */
+   Settings and Help at the foot (the prototype's railView also put Search there; the top bar's Search is its one
+   home). The place you are in is a tinted tile. Open (pinned, hovered or focused) the classic rail's rows stand,
+   with every word and count at 12 px or more. The rail's geometry (64 px, 256 open) is the layout contract's and is not touched here. */
 html[data-frame] #app-rail { --fs-2xs: max(12px, calc(12px * var(--text-scale, 1))); }
 html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-head .app-rail-text,
 html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) :is(.app-rail-foot-item, #app-rail-foot .update-pill) .label {
@@ -12851,9 +12851,11 @@ html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:
 /* The smallest window at 150% zoom is about 373 CSS px tall: a tile keeps its icon and its word but not the tall minimum, so
    Work, Map, Team and Friends all stay in view (studio-ui.css's short-window rail, which the two rules above out-rank). */
 @media (max-height: 440px) {
-  html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-head { min-height: 32px; }
+  html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-head { min-height: 40px; }
 }
-html[data-frame] #app-rail .app-rail-search { margin-bottom: 0; }
+/* One home for Search: the top bar's (Ctrl K), in every window. The rail's copy stays in the page for a page without the
+   frame, and gives its room back to the places: in the smallest window a tile keeps 40 px instead of 32. */
+html[data-frame] #app-rail .app-rail-search { display: none; }
 html[data-frame] #app-rail .app-rail-section.current > .app-rail-head,
 html[data-frame] #app-rail .app-rail-foot-item[aria-current="page"] { background: var(--tint-gold-3, color-mix(in srgb, var(--gold) 14%, transparent)); color: var(--ivory); }
 html[data-frame] #app-rail .app-rail-section.current > .app-rail-head .glyph,
