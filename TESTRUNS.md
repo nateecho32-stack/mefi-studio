@@ -39,6 +39,24 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-06 paired_reconnect waits for the resumed worker's first poll and for missed heartbeats, not fixed sleeps
+
+Branch `fix/paired-reconnect-wait` (9da2cc1, off main 149e770, in C:\wt\rcwait), fast-forwarded onto main. Hosted
+Windows CI failed paired_reconnect's "a started worker and coordinator come back by themselves after a restart" once
+(run 37529114511 on main 9d38169: `'connecting'` where `'connected'` was expected at line 138). The test slept 50 ms
+and then expected the resumed worker's first poll over real HTTP to have answered; it now waits for the link to read
+connected (`until()` takes an async check, as the host's `status()` is one) and asserts as before. The file's other
+fixed sleep, 40 ms in the heartbeat test, is now a wait for three missed heartbeats, and that test's "the check
+starts" waits for `finish` (the check waiting on its abort, after its first progress line) instead of `signal`: an
+abort that came first went unseen and the test hung. A scratch copy whose coordinators take 200 ms per write
+(`createCoordinator`'s `write` option) reproduced both on the old file, the restart test failing exactly as CI did and
+the heartbeat test hanging until the test timeout; the new file passes 6/6 at 200 and 500 ms per write and exits by
+itself, its longest wait ("the check starts", about three coordinator writes) 1.6 s against the 5 s budget.
+scripts/paired-*.cjs are unchanged. Here: `npm run test:one -- tests/paired_reconnect.test.mjs` 5 runs, 6/6 each (the
+first at a loaded moment: 13 s, the heartbeat test 9.8 s); check ok, lint 47 warnings (as main), audit 0 findings.
+Hosted CI on the branch, green: Studio checks (Windows) run 37534722660, Node stage 7590 tests, 0 fail, 34 skipped
+(the restart test 141 ms, the heartbeat test 470 ms), Python contracts 248 OK, audit and the portable package ok.
+
 ## 2026-10-06 A more compact Studio: Today's board higher, 48 px page headers, the inspector's cards inside it
 
 Branch `ui/today-layout` (C:\wt\today, off main 149e770). The owner: "look at all this wasted space, stuff just
@@ -480,30 +498,6 @@ Run alone here on the merge: friends_render, companion_hub_render, friends_two_r
 each; rooms_ui 14/14, friends_front_ui 12/12, friends_mod_ui 4/4, friends_navigation 8/8, project_hub_ui 7/7, app_rail
 40/40, onboarding 43/43, tabs_strip 66/66, module_purity 63/63, booklet_build 5/5, hub_host 14/14, relay_connect 6/6.
 `npm run check` ok. Windows CI runs the full gate on the landing commit before the fast-forward.
-## 2026-10-06 The studio log kept on disk and Trace's Load older (S2) land on main
-
-Branch `land/s2-log` in a cloud session (Linux, Node 24.21.0), stacked on S12 over main f1934aa (first gated over 00d32ca): the parked "not
-shippable" slice 9782c8c re-applied (one conflict in traceRead, both sides kept) and finished (2611874): main.cjs's "Log
-core" block, which the WIP's hooks called but never had (lazy require, the core opening 1.5 s after ready, early lines
-bounded at 5,000, smoke and capture launches under their own profile, worker output and assistant ticks at debug
-level); a fix in segment-archive.cjs (a month whose index was lost was invisible to reads until its next seal; open()
-now re-indexes it from the members' headers); and Trace's Load older (renderer/trace.js, template, booklet rebuilt).
-
-Logging cost (main.cjs's own logLine and "Log core" code, a 200,000-line burst, two rounds): 2.9-4.3 us per logLine
-on the main thread before, 5.4-6.0 us after; total CPU 0.55-0.87 s before, 1.74-1.83 s after with the async writes
-and credential masking; 15.5 MB of segments, 1.22 MB once sealed (12.7x); newest 250 lines 5.4 ms (14-15 ms from a
-sealed archive), a problems page 15-20 ms, a page 90% back 51-60 ms. Kill switches MEFI_STUDIO_LOG_CORE=0 and
-settings.logs.keep false (memory only, as before), settings.logs.level for the threshold; all pinned.
-
-`npm run check` ok, `npm run audit` 0 findings, `npm run lint` 0 errors and 45 warnings (as main). `npm run
-test:fast` with mefi-core built, on the final tree: 7270 tests, 7234 pass, 34 skipped, 2 fail: rust_parity_git's two, as on clean main
-with the same binary (for the Rust chat). New: segment_archive 15/15 (a crash after each of the six seal steps keeps
-every record exactly once and the month zcat-readable, a half-written member past the index, torn lines, month
-rollover, a lost index readable at open, the lock, the exit path), log_core 9/9 (with local-dirs: OneDrive refused by
-env and by segment, case-blind on Windows, the userData fallback), log_core_host 7/7, trace 9/9 (+ Load older);
-alerts_wiring and report_wiring keep their start order. Python contracts 248 OK (3 skipped). Electron under xvfb as a
-non-root user: startup_render, renderer_startup and renderer_recovery 21 pass, 1 skipped.
-
 ## Read Before Any Tests
 
 This is the test guide for the standalone Mefi's Studio AI+ repository. Run all commands from this repository root.
