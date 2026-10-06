@@ -132,7 +132,7 @@ test("it explains what is missing before anything connects", async () => {
   const unconfigured = environment({ status: { configured: false } });
   await flush();
   assert.equal(unconfigured.host.hidden, false);
-  assert.match(unconfigured.find("music-together-connect").parentElement.parentElement.textContent, /isn't connected to one yet/);
+  assert.match(unconfigured.find("music-together-connect").parentElement.parentElement.textContent, /needs the room service, which this copy of Studio can't reach/);
   assert.equal(unconfigured.find("music-together-connect").hidden, true);
   assert.equal(unconfigured.find("music-share-nowplaying").disabled, true, "sharing needs the hub too");
   const unlinked = environment({ status: { linked: false } });

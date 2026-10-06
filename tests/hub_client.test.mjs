@@ -365,3 +365,13 @@ test("peer history: ask the room, answer an ask from the kept copy within one fr
   await old.readyUp();
   assert.deepEqual(await old.client.historyAsk(ROOM), { ok: false, reason: "unsupported" }, "never asked of a hub without the feature");
 });
+
+test("an id the relay left out is refused, never read as the word \"undefined\"", () => {
+  assert.equal(hub.roomSummary({ name: "No id", kind: "hangout" }), null);
+  assert.equal(hub.roomSummary({ id: 12345678, name: "Number id" }), null, "ids are strings");
+  assert.ok(hub.roomSummary({ id: "room_ok", name: "Fine" }));
+  assert.equal(hub.listenSession({ url: "https://example.com/a", label: "x", provider: "youtube", host: { id: "123456789012345678", name: "a" }, playing: true, positionMs: 0, startedAt: 1, updatedAt: 1 }), null);
+  const client = hub.createHubClient({ url: "https://hub.example.test", fetch: async () => ({ ok: false, status: 500, json: async () => ({}) }), WebSocket: class {}, getAccessToken: async () => ({ ok: false }) });
+  assert.equal(client.subscribe(undefined), false, "no room held for a missing id");
+  assert.equal(client.subscribe(null), false);
+});

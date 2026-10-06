@@ -12,6 +12,20 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   test windows) is stopped together with everything it started, and the run
   says which suites were still going. One stuck test window had held every
   session's window tests for nine hours.
+- **Friends says what helps.** When the connection to the room service can't
+  be made, Friends now says why in one sentence and offers only what helps:
+  Sign in with Discord again when the sign-in ran out, Update Studio when it
+  is too old, Join the Discord when your account isn't in the server, and
+  Connect only when connecting can work. A play that earns nothing says why
+  (your own project, a new account, a limit reached). New rooms start
+  private, so a first room never fails on the Flame rank. The Lobby nudges
+  you to share only if you haven't, says when your credits start if they
+  haven't yet, stops redrawing under your hands, and shows this week's Build
+  Jam and cowork hour when the room service runs them. The same words are
+  used everywhere (room service, invite code, Sign in with Discord, Join),
+  the companion's bubble labels are 12 px, Play and Star buttons name their
+  project for screen readers, the tab switches move with the arrow keys, and
+  Search finds The Lobby, the Project hub and moderation.
 - **Vibe is now Social, Build is now Studio.** The two modes have new names
   for what they are for: **Social** is vibing with friends and keeping a
   light eye on your agents, **Studio** is in-depth building, with the social

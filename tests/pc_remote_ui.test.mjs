@@ -64,10 +64,10 @@ test("nothing is read until the section opens, and the status names what stands 
   assert.equal(env.box.find("pc-remote-on").checked, false);
   assert.equal(env.box.find("pc-remote-on").getAttribute("role"), "switch");
   for (const [answer, words] of [
-    [view({ on: true }, {}, { linked: false }), /Link Discord first/],
-    [view({ on: true }, { configured: false }), /rooms hub's address first/],
-    [view({ on: true }, { remote: false }), /does not carry the Discord remote yet/],
-    [view({ on: true }, { state: "error", error: "not-member" }), /refused this PC \(not-member\)/],
+    [view({ on: true }, {}, { linked: false }), /Sign in with Discord first/],
+    [view({ on: true }, { configured: false }), /can't reach the room service/],
+    [view({ on: true }, { remote: false }), /doesn't carry the Discord remote yet/],
+    [view({ on: true }, { state: "error", error: "not-member" }), /^The room service refused this PC\. Studio tries again every ten minutes\.$/],
     [view({ on: true }, { state: "connecting" }), /Connecting/],
     [view({ on: true }, { on: true }), /^On\. DM the Void Engine bot.*answers as DESKTOP-HOME/],
   ]) {

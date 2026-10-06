@@ -2568,7 +2568,7 @@ function hubProjects(method, args) {
     const timer = setTimeout(() => {
       hubPlayTimers.delete(projectId);
       client.finishPlay(projectId, play.token)
-        .then((done) => send("hub:event", { type: "played", projectId, counted: done.ok && done.counted === true, credited: done.ok ? done.credited : null }))
+        .then((done) => send("hub:event", { type: "played", projectId, counted: done.ok && done.counted === true, credited: done.ok ? done.credited : null, why: done.ok ? done.why ?? null : done.reason ?? done.error ?? null }))
         .catch((error) => logLine(`[hub] play not counted: ${error?.message ?? error}`));
     }, play.minMs + 1000);
     timer.unref?.();

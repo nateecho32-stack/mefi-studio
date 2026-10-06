@@ -39,6 +39,22 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-06 The social review's fixes land with the polish: say what helps, why a play earned nothing, one vocabulary
+
+Branch `wip/social-polish-2` in `C:\wt\polish2`: wip/social-polish (a676b05, Windows CI green) + 67e5898, the fixes from
+the "Engine optimization and social features" session's review of the social side (string ids in hub-client; one
+hubState() so Connect shows only when it can help; a play's why from the relay to the Project hub; private first
+rooms; The Lobby's own nudges, focus kept across reads, calendar days, this week's events row; one vocabulary; 12 px
+bubble labels; Play/Star labels; arrow keys in the tab rows; Search words), with main 0661f8c merged (119bc83:
+CHANGELOG keeps both sides, TESTRUNS rows from both and main's archived row, rotated; booklet.html regenerated).
+
+Run through `npm run test:one` (the machine-wide test lease) on 119bc83: companion_hub_render, friends_render and
+friends_two_render (the two Studios meeting end to end) 1/1 each, rooms_ui, friends_front_ui (13, new: the connection
+sentences, the nudges, the events row), project_hub_ui (play reasons), hub_client (17, new: missing ids refused),
+hub_host, relay_credits (the play's why), relay_connect, relay_e2e, booklet_build and module_purity: 165 tests, 165
+pass. Also pc_remote_ui, pc_sync_ui, together_ui, friends_mod_ui, friends_navigation, relay_core, app_rail,
+onboarding and palette_layout_v2 on 67e5898. `npm run check` ok. Windows CI runs the full gate on the landing commit
+before the fast-forward; the relay is redeployed with it (front().you.projects and hold, the play's why).
 ## 2026-10-06 The Social/Studio names, the scroll fix, the social polish and the models page land while the PCs are offline
 
 Landed by the planning chat (cloud, Linux, Node 24.21.0) after the owner's PC became unreachable at 02:35 UTC. Each
@@ -508,36 +524,6 @@ gate and passed (3/3; the twin-repository test took 127 s under load, the
 case the time-limit scale is for). Python 248 OK; path lock ok; `npm run audit` 0 findings; `npm run check`
 ok.
 
-## 2026-10-04 Today in both modes closer to the 0.5 prototype: Build's Home and Vibe's board
-
-Branch `ui/today` in `C:\wt\ui-today` (off land/ui-chrome 74bf360,
-node_modules junctioned), pushed as wip/ui-today: 0b52d4c Build's Today
-(Home with no session open: the greeting and "What's next for <project>?",
-Home's own box borrowed with Add files or an image, the permission mode,
-Talk it over and Build it, the starters and Suggest a next step, Needs you,
-Running now, Finished while you were away; the classic Home is the route's
-"chat" view), 75b3dfa Vibe's Today (the prototype's board: four columns that
-say when they are empty, a waiting card as its session, results under
-Review, Build it with its key, "Today, the board").
-
-`npm run check` ok (271 targets), lint 0 errors (no warning in the touched
-files), `npm run audit` 0 findings. `npm run test:fast` at 0b52d4c's tree
-under heavy load: 6950 tests, 6926 pass, 14 skipped, 8 fail, 2 cancelled,
-all in six host suites that took 700-860 s each (attempt_review_host,
-attempt_snapshots_host, git_actions, pc_vault, rust_parity_git,
-rust_parity_repo): 137 tests, 134 pass, 3 skipped, 0 fail alone.
-
-Full `npm test` at 75b3dfa: Node 6952 tests, 6934 pass, 14 skipped, 4 fail
-(attempt_review_host 2, attempt_snapshots_host, rust_parity_snapshots,
-sync_changes: 63 tests, 60 pass, 3 skipped, 0 fail alone); Electron lane 75:
-72 pass, 1 skipped, 2 fail, layout_contract_render (viewport 1921x1081) and
-shell_render ("373 !== 372" at 1100 px), both as on clean main on this PC;
-sessions_render (with its new Today gallery: Build's Today at 1920x1080 and
-1100x720, 600x560 at 1 and 1.5, Vibe's board, every text 12 px or more and
-4.5:1 in all eleven themes for both) and today_render pass; Python 248 OK
-(1 skipped); path lock ok.
-Captures (1920x1080) in `C:\wt\gap\after-today\final\`, prototype-left
-side-by-sides in `C:\wt\gap\after-today\compare\`.
 ## Read Before Any Tests
 
 This is the test guide for the standalone Mefi's Studio AI+ repository. Run all commands from this repository root.

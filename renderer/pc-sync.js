@@ -287,12 +287,12 @@
       log.replaceChildren(...(result.log ?? []).map((row) => node("li", "", `${when(row.at)} · ${words[row.command] ?? row.command}${row.note ? ` · ${row.note}` : ""}`)));
       if (!log.children.length) log.append(node("li", "muted", "Nothing asked yet."));
       status.textContent = !s.on ? "Off. Turn it on to check on this PC and talk to Mefi from a Discord DM."
-        : !result.linked ? "Link Discord first: Settings › General › Community."
-        : !hub.configured ? "Add the rooms hub's address first: Settings › General › Community › Connection details."
-        : hub.state === "ready" && !hub.remote ? "The rooms service does not carry the Discord remote yet. It comes back once the Void Engine bot is linked to it."
+        : !result.linked ? "Sign in with Discord first, in Friends."
+        : !hub.configured ? "This copy of Studio can't reach the room service."
+        : hub.state === "ready" && !hub.remote ? "The room service doesn't carry the Discord remote yet. It comes back once the Void Engine bot is linked to it."
         : hub.state === "ready" && hub.on ? `On. DM the Void Engine bot, or use /studio status. This PC answers as ${s.name}.`
-        : hub.state === "error" ? `The rooms hub refused this PC (${hub.error ?? "error"}). Studio tries again every ten minutes.`
-        : "Connecting to the rooms hub…";
+        : hub.state === "error" ? `${window.MefiFriendsFront?.hubState?.({ ...hub, linked: true })?.text || "The room service refused this PC."} Studio tries again every ten minutes.`
+        : "Connecting to the room service…";
     }
     const guard = async (label, work) => {
       if (busy) return;

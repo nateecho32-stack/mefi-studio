@@ -57,6 +57,41 @@
       default: return "Credits start once your account is in good standing in the server.";
     }
   }
+  // What a finished play earned, or why it earned nothing (the relay's why), in a sentence.
+  function playWords(event) {
+    const you = event?.credited?.you ?? 0;
+    const maker = event?.credited?.owner ?? 0;
+    if (you) return `Play counted: +${you} credits for you${maker ? `, +${maker} for the maker` : ""}.`;
+    switch (event?.why) {
+      case "own": return "That's your own project, so the play doesn't earn credits.";
+      case "new-account": return "Play noted. Plays from Discord accounts under 30 days old don't earn credits yet.";
+      case "new-member": return "Play noted. Plays start earning a week after you join the Void Engine server.";
+      case "forgot-me": return "Play noted. Credits are paused for 30 days after Forget me.";
+      case "read-only": return "Play noted. Credits are paused while your account is read-only in the server.";
+      case "maker-held": return "Play counted. The maker's account can't earn credits right now, so nobody earned this time.";
+      case "limit": return "Play counted. You've already earned from this maker today, or reached a daily or weekly limit.";
+      case "expired": return "That play took more than six hours to finish, so it wasn't counted. Press Play again.";
+      default: return event?.counted ? "Play counted." : "Play noted.";
+    }
+  }
+  // A tab row's keys: arrows, Home and End choose the next tab, and focus follows it after the repaint.
+  function arrowKeys(row) {
+    row.addEventListener("keydown", (event) => {
+      const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
+      if (!step && event.key !== "Home" && event.key !== "End") return;
+      const items = [...row.children];
+      const at = items.indexOf(event.target);
+      if (at < 0) return;
+      event.preventDefault?.();
+      const next = items[event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : (at + step + items.length) % items.length];
+      next.click();
+      const id = next.id;
+      const settle = () => (typeof document !== "undefined" ? document.getElementById?.(id)?.focus?.() : null);
+      settle();
+      if (typeof requestAnimationFrame === "function") requestAnimationFrame(settle);
+    });
+  }
+
   const why = (answer, fallback) => REASONS[answer?.reason] || REASONS[answer?.error] || fallback;
   const why_ = why;
   const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
@@ -155,16 +190,24 @@
         const item = button(label, () => { tab = id; selected = null; void refresh(); }, `project-hub-tab-${id}`);
         item.setAttribute("role", "tab");
         item.setAttribute("aria-selected", String(tab === id));
+        item.tabIndex = tab === id ? 0 : -1;
         row.append(item);
       }
+      arrowKeys(row);
       return row;
     }
 
     function actions(project) {
       const row = node("div", "project-hub-actions");
-      row.append(button("Play", () => play(project)));
+      const playIt = button("Play", () => play(project));
+      playIt.setAttribute("aria-label", `Play ${project.title}`);
+      row.append(playIt);
       const own = project.owner.id === me?.user?.id;
-      if (!own) row.append(button(project.starred ? "Starred" : "Star", () => star(project, !project.starred)));
+      if (!own) {
+        const starIt = button(project.starred ? "Starred" : "Star", () => star(project, !project.starred));
+        starIt.setAttribute("aria-label", project.starred ? `Unstar ${project.title}` : `Star ${project.title}`);
+        row.append(starIt);
+      }
       if (own && !project.featuredUntil) row.append(button(`Feature (${me?.featureCost ?? 100} credits)`, () => feature(project)));
       if (own) row.append(button("Remove", () => remove(project)));
       // Anyone may report someone else's project; a moderator may also take it off the hub.
@@ -407,7 +450,7 @@
       const linked = await community.link();
       if (linked?.ok) { autoConnected = true; await connectNow(); return; }
       if (linked?.error === "not-member") { notMember(); return; }
-      status.textContent = linked?.error === "canceled" ? "Linking was cancelled. Press Link Discord to try again." : "Linking didn't finish. Press Link Discord to try again.";
+      status.textContent = linked?.error === "canceled" ? "Signing in was cancelled. Press Sign in with Discord to try again." : "Signing in didn't finish. Press Sign in with Discord to try again.";
     }
     function notMember() {
       root.dataset.state = "not-member";
@@ -427,7 +470,7 @@
         // Friends' one sign-in card (renderer/friends-front.js) when it is in this build.
         const gate = window.MefiFriendsFront?.gate?.({ onSignedIn: () => { autoConnected = true; void load(); } });
         status.textContent = gate ? "" : "Link your Discord account to share and play projects. Discord asks once in your browser.";
-        body.replaceChildren(gate ?? button("Link Discord", () => { void linkHere(); }, "project-hub-link"));
+        body.replaceChildren(gate ?? button("Sign in with Discord", () => { void linkHere(); }, "project-hub-link"));
         return false;
       }
       if (hub.error === "not-member") { notMember(); return false; }
@@ -440,11 +483,14 @@
       }
       if (hub.state !== "ready") {
         root.dataset.state = hub.state || "off";
-        status.textContent = hub.state === "connecting" ? "Connecting to the room service…" : "Connect to see members' projects.";
-        body.replaceChildren(button("Connect", () => guard("Connecting…", async () => {
+        // Friends' one way of saying it (renderer/friends-front.js hubState): Connect only when it can help.
+        const said = window.MefiFriendsFront?.hubState?.(hub) ?? { action: "connect", text: hub.state === "connecting" ? "Connecting to the room service…" : "Connect to see members' projects." };
+        if (said.action === "signin" && window.MefiFriendsFront?.gate) { status.textContent = ""; body.replaceChildren(window.MefiFriendsFront.gate({ onSignedIn: () => { autoConnected = true; void load(); }, note: said.text })); return false; }
+        status.textContent = said.text;
+        body.replaceChildren(...(said.action === "connect" ? [button("Connect", () => guard("Connecting…", async () => {
           const answer = await api.hubConnect();
           if (answer?.status?.state === "ready" || answer?.ok) await load(); else explain(answer?.status);
-        }), "project-hub-connect"));
+        }), "project-hub-connect")] : []));
         return false;
       }
       if (!hub.projects) { status.textContent = REASONS.unsupported; root.dataset.state = "unsupported"; body.replaceChildren(); return false; }
@@ -467,7 +513,7 @@
         else if (event.reason === "revoked") status.textContent = `A moderator took back ${-event.delta} credits that came from farming.`;
         void refresh();
       } else if (event?.type === "played") {
-        status.textContent = event.counted ? `Play counted${event.credited?.you ? `: +${event.credited.you} credits for you` : ""}.` : "Play noted.";
+        status.textContent = playWords(event);
         void refresh();
       } else if (event?.type === "status") void load();
     }
