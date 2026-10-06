@@ -13,7 +13,8 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   run asks **Pick the AI that builds for you** in plain words (which account
   each tool uses), offers OpenCode's free models when you have no
   subscription, and now really switches Studio to the tool you signed in to
-  when you press Continue (before, it kept the default). Its last step, **What
+  when you press Continue (before, it kept the default), including one you
+  signed in to in its own window a moment ago. Its last step, **What
   should Studio make first?**, has examples to tap, already holds what you
   said a new app should be, and never adds a task with no project open.
   Social's rail uses Studio's names (Friends, Map, Team) and
@@ -27,9 +28,10 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   first-run dialog; the old node-tree strip covered the right edge of
   Settings; the Ruins Runner launcher showed without the game; the status
   bar's player opened the media menu in the wrong place; Plans squeezed its
-  editor in a smaller window; the breadcrumb cut every crumb to a few letters.
-  The wide menu opens by itself only on screens 1600 px wide or more (your
-  pin still holds), Team lists Resources, and the startup settings read
+  editor in a smaller window; the breadcrumb cut every crumb to a few letters;
+  Size and density's picture could take most of the page beside its controls.
+  Team lists Resources, the place row turns into one picker in a narrow page
+  and steps aside in a very short window, and the startup settings read
   *Open Today on launch*, *Always start in Social mode* and *Agents when
   Studio opens*.
 - **My PCs: your PCs work as one.** Friends › Your PCs now lists every PC

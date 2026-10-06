@@ -573,7 +573,16 @@
     try { const box = getComputedStyle(pane); narrow = pane.clientWidth - parseFloat(box.paddingLeft) - parseFloat(box.paddingRight) <= 720; } catch { /* a wide page */ }
     const short = (window.innerHeight ?? 800) <= 520;
     const share = narrow ? (short ? 0.6 : 0.36) : 0.62;
-    const tall = Math.max(narrow ? 96 : 150, (pane?.clientHeight ?? 440) * share);
+    const paneTall = pane?.clientHeight ?? 440;
+    let tall = paneTall * share;
+    // Kept in view (any window taller than 520 px, beside the controls or above them), the whole preview, its caption and
+    // buttons too, stays within two thirds of the pane, so the controls keep their room.
+    if (!short) {
+      const host = $("mini-host");
+      const chrome = Math.max(0, (side.offsetHeight || 0) - (host?.offsetHeight || 0));
+      tall = Math.min(tall, paneTall * 0.66 - chrome);
+    }
+    tall = Math.max(narrow ? 96 : 150, tall);
     const k = Math.max(0.2, Math.min(1.25, (side.clientWidth || 760) / 760, tall / 440));
     if (Math.abs(k - ui.k) > 0.002) { ui.k = k; setVar(mini, "--mini-fit", String(Math.round(k * 10000) / 10000)); }
   }

@@ -12879,6 +12879,8 @@ html[data-frame] .shell-region {
    drawing while it has no size, and a pin saved by the old layout reserves no room. */
 html[data-frame] #tree-rail { display: none !important; }
 html[data-frame] body, html[data-frame] body:has(#tree-rail.pinned) { padding-right: calc(var(--gutter) + var(--shell-x1)); }
+/* A narrow window keeps the page's own narrow margin (styles.css, max-width 900px), as it had with the strip. */
+@media (max-width: 900px) { html[data-frame] body, html[data-frame] body:has(#tree-rail.pinned) { padding-right: calc(var(--s4) + var(--shell-x1)); } }
 /* Vibe's own Home has no rail on screen: the list starts at the window's edge there. */
 html[data-frame] body.vibe-active:not(:has(.workspace-page:not([hidden]))):not(:has(#friends-overlay:not([hidden]))) :is(.shell-region, .shell-split) { --frame-rail-w: 0px; }
 
@@ -13101,6 +13103,9 @@ html[data-frame] .shell-place-pick { display: none; width: auto; max-width: 100%
   html[data-frame] .shell-place-chips { display: none; }
   html[data-frame] .shell-place-pick { display: block; }
 }
+/* A window this short needs every row for the page itself (the Rules box, a form): the list toggle and Search reach
+   the same places. */
+@media (max-height: 520px) { html[data-frame] .shell-place-bar { display: none; } }
 html[data-frame] .shell-place-chip {
   display: inline-flex; align-items: center; height: 30px; padding: 0 12px; border-radius: 999px; white-space: nowrap;
   border: 1px solid var(--hairline-strong); background: color-mix(in srgb, var(--ivory) 3%, transparent);
@@ -25961,18 +25966,12 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // A pinned rail takes its open width from the page. Below this window width
   // it yields and behaves unpinned, opening over the page on hover or focus;
   // the saved choice stays, and the pin comes back when the window widens.
-  // With no saved choice the menu starts open only in a wide window: at the
-  // default 1460 px window the compact rail leaves the page and the list
-  // column their room (open, the menu and the list left Plans about 900 px).
   const RAIL_PIN_MIN_WIDTH = 1100;
-  const RAIL_PIN_DEFAULT_WIDTH = 1600;
   let railPinWanted = false;
-  let railPinChosen = false;
-  const railPinFits = () => !(Number.isFinite(window.innerWidth) && window.innerWidth < (railPinChosen ? RAIL_PIN_MIN_WIDTH : RAIL_PIN_DEFAULT_WIDTH));
+  const railPinFits = () => !(Number.isFinite(window.innerWidth) && window.innerWidth < RAIL_PIN_MIN_WIDTH);
 
-  function setRailPinned(pinned, { save = true, chosen = true } = {}) {
+  function setRailPinned(pinned, { save = true } = {}) {
     railPinWanted = Boolean(pinned);
-    railPinChosen = Boolean(chosen);
     document.getElementById("app-rail-pin")?.setAttribute("aria-pressed", String(railPinWanted));
     if (save) {
       try { localStorage.setItem(RAIL_PIN_KEY, pinned ? "1" : "0"); } catch { /* the pin is a convenience */ }
@@ -25998,9 +25997,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (!rail) return false;
     document.documentElement.dataset.shell = "rail";
     rail.hidden = false;
-    let saved = null;
-    try { saved = localStorage.getItem(RAIL_PIN_KEY); } catch { /* use the wide-window default */ }
-    setRailPinned(saved !== "0", { save: false, chosen: saved === "0" || saved === "1" });
+    let pinned = true;
+    try { pinned = localStorage.getItem(RAIL_PIN_KEY) !== "0"; } catch { /* use the wide-window default */ }
+    setRailPinned(pinned, { save: false });
     renderRail();
     window.dispatchEvent(new CustomEvent("mefi:shell", { detail: { rail: true } }));
     return true;
@@ -64510,7 +64509,16 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     try { const box = getComputedStyle(pane); narrow = pane.clientWidth - parseFloat(box.paddingLeft) - parseFloat(box.paddingRight) <= 720; } catch { /* a wide page */ }
     const short = (window.innerHeight ?? 800) <= 520;
     const share = narrow ? (short ? 0.6 : 0.36) : 0.62;
-    const tall = Math.max(narrow ? 96 : 150, (pane?.clientHeight ?? 440) * share);
+    const paneTall = pane?.clientHeight ?? 440;
+    let tall = paneTall * share;
+    // Kept in view (any window taller than 520 px, beside the controls or above them), the whole preview, its caption and
+    // buttons too, stays within two thirds of the pane, so the controls keep their room.
+    if (!short) {
+      const host = $("mini-host");
+      const chrome = Math.max(0, (side.offsetHeight || 0) - (host?.offsetHeight || 0));
+      tall = Math.min(tall, paneTall * 0.66 - chrome);
+    }
+    tall = Math.max(narrow ? 96 : 150, tall);
     const k = Math.max(0.2, Math.min(1.25, (side.clientWidth || 760) / 760, tall / 440));
     if (Math.abs(k - ui.k) > 0.002) { ui.k = k; setVar(mini, "--mini-fit", String(Math.round(k * 10000) / 10000)); }
   }
