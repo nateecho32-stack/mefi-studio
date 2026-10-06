@@ -124,8 +124,10 @@ app.whenReady().then(async () => {
 
   await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1" } });
   await until("window.MefiAgents", "Agents startup");
-  await run("await window.MefiNav.go('agents',{section:'setup',pane:'team'});");
-  await until("document.getElementById('agent-companion-provider')", "Agent rows");
+  // Seats and models opens on its plain page with the seat rows folded under More settings (renderer/team-models.js);
+  // an old way in that names a row opens it there, as a link from elsewhere in Studio does.
+  await run("await window.MefiNav.go('agents',{section:'setup',pane:'team',target:'agent-companion-provider'});");
+  await until("document.getElementById('agent-companion-provider') && document.getElementById('agents-more')?.open !== false", "Agent rows");
   const click = async (selector) => {
     assert.ok(await reachable(selector), selector + ' reachable');
     const point = await run(`const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)};`);

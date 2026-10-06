@@ -638,7 +638,7 @@ app.whenReady().then(async () => {
     assert.deepEqual(report.todayVibe.groups.map((group) => group[1]), ["Needs you", "Running", "Review", "Done"], "the prototype's four columns, all four drawn");
     assert.deepEqual(report.todayVibe.groups.find((group) => group[0] === "done").slice(2), [0, "Nothing finished yet today."], "an empty column says so");
     assert.deepEqual({ ...report.todayVibe.need, meta: report.todayVibe.need.meta?.replace(/\d+ min$/, "N min") }, { title: "Add an empty state to the notes list", meta: "Asking a question · N min", q: "Should the empty state also appear when a search has no matches?" }, "a card that waits on you is its session: the task, what it asks and for how long, the question in its box");
-    assert.equal(report.todayVibe.kicker, '" · Vibe"');
+    assert.equal(report.todayVibe.kicker, '" · Social"', "the calm mode is called Social now");
     assert.equal(report.todayVibe.build, "Ctrl Enter");
     await readable("#today-page", "Vibe's Today");
     await run("await window.MefiVibe.setMode('build', { go: false }); window.MefiNav.applyShell(true); window.MefiNav.setRailPinned(false, { save: false }); window.MefiNav.go('workspace');");
