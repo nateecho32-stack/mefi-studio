@@ -2178,10 +2178,12 @@ function stopCommunityWatch() {
 // ---- Rooms hub: listen together and now playing -----------------------------
 // scripts/hub-client.cjs speaks the Void Engine hub's protocol. This block owns
 // its one client, hands it the Discord access token the community link holds,
-// and relays its events to the renderer as hub:event. Nothing connects until
-// the renderer asks: the Links tab's Listen together, or the member turning
-// on "Share what I'm playing". Discord tokens and the hub session stay in this
-// process; the renderer sees status, rooms and the public frame fields.
+// and relays its events to the renderer as hub:event. A member signed in on
+// this PC connects a few seconds after launch (startHubPresence, at the end of
+// this block); otherwise nothing connects until the renderer asks: Friends,
+// the Links tab's Listen together, or "Share what I'm playing". Discord tokens
+// and the hub session stay in this process; the renderer sees status, rooms
+// and the public frame fields.
 const hubModule = optionalHelper("./scripts/hub-client.cjs", () => require("./scripts/hub-client.cjs"), null);
 let hubClient = null;
 
@@ -2394,8 +2396,8 @@ async function hubCall(work) {
   const result = await work(client);
   return { ...(result && typeof result === "object" ? result : { ok: Boolean(result) }), status: await hubStatus() };
 }
-const hubConnect = () => hubCall(async (client) => { const status = await client.connect(); return { ok: status.state === "ready" || status.state === "connecting" }; });
-const hubDisconnect = () => hubCall(async (client) => { await client.disconnect(); return { ok: true }; });
+const hubConnect = () => hubCall(async (client) => { hubPresenceHeld = false; const status = await client.connect(); return { ok: status.state === "ready" || status.state === "connecting" }; });
+const hubDisconnect = () => hubCall(async (client) => { hubPresenceHeld = true; await client.disconnect(); return { ok: true }; });
 const hubRooms = () => hubCall((client) => client.rooms());
 // The renderer holds rooms as Rooms' chat or as Listen together; each lets go
 // of its own hold only, so the open project's cowork room (held as "cowork"
@@ -2413,7 +2415,7 @@ const hubNowPlaying = (track) => hubCall((client) => ({ ok: client.setNowPlaying
 const HUB_ROOM_METHODS = Object.freeze({
   createRoom: 1, requestJoin: 2, requests: 0, decide: 2, cancelRequest: 1, invite: 2, invites: 0, acceptInvite: 1, declineInvite: 1,
   leave: 1, removeMember: 2, lock: 1, unlock: 1, close: 1, searchMembers: 1, messages: 2, report: 3, sendMessage: 2, editMessage: 3, deleteMessage: 2,
-  roomCode: 1, newRoomCode: 1, joinCode: 1, online: 0, setOnlineVisible: 1,
+  roomCode: 1, newRoomCode: 1, joinCode: 1, online: 0, setOnlineVisible: 1, front: 0,
 });
 function hubRoom(method, args) {
   const arity = Object.hasOwn(HUB_ROOM_METHODS, method) ? HUB_ROOM_METHODS[method] : -1;
@@ -2457,6 +2459,38 @@ function hubProjects(method, args) {
     hubPlayTimers.set(projectId, timer);
     return { ok: true, minMs: play.minMs };
   });
+}
+// Online while Studio is open: a member signed in on this PC (a Discord link)
+// connects a few seconds after launch, so friends see them in Who's online
+// and on The Lobby front page without anyone opening Friends; the relay
+// leaves out anyone who unticked "Show me as online". hub-client reconnects
+// by itself after a drop; this look tries again every ten minutes when the
+// client has stopped (no network at launch, a sign-in the community watch
+// renews). settings.friends.connectAtLaunch false turns it off, and a
+// Disconnect in Studio holds it off until the next Connect.
+const HUB_PRESENCE_FIRST_MS = 12 * 1000;
+const HUB_PRESENCE_EVERY_MS = 10 * 60 * 1000;
+let hubPresenceTimers = null;
+let hubPresenceHeld = false;
+async function hubPresenceWanted() {
+  if (hubPresenceHeld || !community || !hubModule) return false;
+  if ((await readSettings())?.friends?.connectAtLaunch === false) return false;
+  return Boolean((await communityRead()).state.link);
+}
+async function hubPresenceLook() {
+  if (!(await hubPresenceWanted())) return false;
+  const client = hubInstance();
+  const state = client?.status?.().state;
+  if (!client || (state !== "off" && state !== "error")) return false;
+  await client.connect();
+  return true;
+}
+function startHubPresence() {
+  if (hubPresenceTimers) return;
+  const look = () => { hubPresenceLook().catch((error) => logLine(`[hub] could not connect for Friends: ${error?.message ?? error}`)); };
+  hubPresenceTimers = { first: setTimeout(look, HUB_PRESENCE_FIRST_MS), every: setInterval(look, HUB_PRESENCE_EVERY_MS) };
+  hubPresenceTimers.first.unref?.();
+  hubPresenceTimers.every.unref?.();
 }
 // ---- end of the rooms hub ---------------------------------------------------
 
@@ -25907,6 +25941,8 @@ app.whenReady().then(() => {
   if (!SMOKE && !CAPTURE && !CLI_MODE) startCowork();
   // The Discord remote: when the owner turned it on, this PC answers their DMs.
   if (!SMOKE && !CAPTURE && !CLI_MODE) setTimeout(() => { remoteApply(); }, 20000).unref?.();
+  // Friends: a signed-in member shows as online while Studio is open (the "Rooms hub" block).
+  if (!SMOKE && !CAPTURE && !CLI_MODE && typeof startHubPresence === "function") startHubPresence();
   if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => announceRestart().catch(() => {}));
   if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => announceRelease().catch(() => {}));
   // "Studio closed unexpectedly", once, after the page has had a moment to come up.

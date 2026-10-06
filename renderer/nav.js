@@ -155,7 +155,7 @@
   // A rail place for a record whose kind alone would keep it out of the rail:
   // community.js registers "community" as a palette action at DOMContentLoaded,
   // and the foot (Help & community) is its home.
-  const RAIL_SLOTS = Object.freeze({ community: "foot", friends: "friends", rooms: "friends", "your-pcs": "friends", playground: "friends", "project-hub": "friends" });
+  const RAIL_SLOTS = Object.freeze({ community: "foot", friends: "friends", "the-lobby": "friends", rooms: "friends", "your-pcs": "friends", playground: "friends", "project-hub": "friends" });
   // Sections for records other modules register without one. The assistant's
   // commands and Command view's key rows name theirs in `group`.
   const ACTION_SECTIONS = Object.freeze({ community: "community" });
@@ -231,6 +231,7 @@
   const registry = [
     ...[
       ["friends", "Friends", "g-orbit", "Rooms, your PCs and companion playdates", null],
+      ["the-lobby", "The Lobby", "g-community", "Who's online, rooms open now and what friends are making", "lobby"],
       ["rooms", "Rooms", "g-orbit", "Room chat, invitations and requests to join", "rooms"],
       ["your-pcs", "Your PCs", "g-explorer", "Connect your PCs and sync work through GitHub", "pcs"],
       ["playground", "Playground", "g-ambience", "Companion playdates, sharing rules and practice with Pip", "playground"],
@@ -248,8 +249,8 @@
       open: (params) => window.MefiAgents?.open?.(params), close: () => window.MefiAgents?.close?.(), isOpen: () => overlayOpen("agents-overlay"),
     },
     {
-      // The 0.5 layout's Friends place (renderer/companion-hub.js openPlace): Rooms, Your PCs or Playground, one at a time.
-      // go("friends") and its three ways in land here while the layout is on (FRIENDS_PAGES); Search lists those four.
+      // The 0.5 layout's Friends place (renderer/companion-hub.js openPlace): The Lobby, Rooms, Your PCs, Playground or the Project hub, one at a time.
+      // go("friends") and its five ways in land here while the layout is on (friendsPages in go()); Search lists them.
       id: "friends-page", label: "Friends", short: "Friends", kind: "overlay", layer: "sheet", section: "friends", group: "tools",
       glyph: "g-orbit", badge: null, desc: "Rooms, your PCs and companion playdates", searchTerms: "friends rooms pcs playground",
       showIn: showIn({}), hidden: () => !v2Places(), element: "friends-overlay", focus: "#friends-place-title",
@@ -1168,12 +1169,12 @@
     // The prototype's names for routes that already exist: go("team") is the Agents page, go("map") the Command view.
     if (id === "team") id = "agents";
     else if (id === "map") id = "command";
-    // In the 0.5 layout Friends is a place of three pages (renderer/companion-hub.js openPlace): Friends and its three ways
-    // in open that page at their place, where the classic layout opens the companion's Friends bubble.
+    // In the 0.5 layout Friends is one page of five places (renderer/companion-hub.js openPlace): Friends opens it at The
+    // Lobby and each way in at its own place; the classic layout gets there through the companion hub's open().
     // (Spelled out here, not shared: suites run go() on its own.)
-    const friendsPages = { friends: null, rooms: "rooms", "your-pcs": "pcs", playground: "playground", "project-hub": "hub" };
+    const friendsPages = { friends: null, "the-lobby": "lobby", rooms: "rooms", "your-pcs": "pcs", playground: "playground", "project-hub": "hub" };
     if (globalThis.document?.documentElement?.dataset?.layout === "v2" && Object.hasOwn(friendsPages, id)) {
-      params = { place: friendsPages[id] || params.place || params.target || "rooms" };
+      params = { place: friendsPages[id] || params.place || params.target || "lobby" };
       id = "friends-page";
     }
     const redirected = window.MefiAgents?.redirect?.(id, params);
@@ -1678,7 +1679,7 @@
         const children = document.createElement("div");
         children.className = "app-rail-children app-rail-friends";
         children.setAttribute("role", "group"); children.setAttribute("aria-label", "Friends tools");
-        for (const id of ["rooms", "your-pcs", "playground", "project-hub"]) children.append(navButton(get(id), "app-rail-item", { key: false }));
+        for (const id of ["the-lobby", "rooms", "your-pcs", "playground", "project-hub"]) children.append(navButton(get(id), "app-rail-item", { key: false }));
         group.append(children);
       }
       sections.append(group);
@@ -1772,7 +1773,7 @@
         const children = document.createElement("div");
         children.className = "app-rail-children app-rail-friends";
         children.setAttribute("role", "group"); children.setAttribute("aria-label", "Friends tools");
-        for (const id of ["rooms", "your-pcs", "playground", "project-hub"]) children.append(navButton(get(id), "app-rail-item", { key: false }));
+        for (const id of ["the-lobby", "rooms", "your-pcs", "playground", "project-hub"]) children.append(navButton(get(id), "app-rail-item", { key: false }));
         group.append(children);
       }
       sections.append(group);

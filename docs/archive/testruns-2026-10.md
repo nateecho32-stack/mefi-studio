@@ -6,6 +6,35 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-03 Rust stage 2: the Git chip's actions move into Rust
+
+Branch `wip/rust-host`, after d428f9d. `scripts/git-actions.cjs` (glance,
+glanceMany, preview, save, pushBranch, publish, link, owners, nameCheck,
+publishPreview, account, identity) and the git-link/pc-setup/redaction/
+share-review rules it reads now have a Rust port in
+`crates/mefi-core/src/git/`, reached through the `git-actions` factory under
+the Rust host only. New: `jsre.rs` (JavaScript regexes with JavaScript's
+meaning) and the `MEFI_STUDIO_RUST_OFF` kill switch.
+
+`npm run check` ok (265 targets); `npm run test:fast` 6773 tests, 0 fail,
+14 skipped; lint 0 errors, 42 warnings (all pre-existing); audit ok;
+mefi-core 26 unit tests, host 13. Parity: `tests/rust_parity_git.test.mjs`
+(2 tests: about 330 pure-helper calls, and 89 steps on two identical
+folder trees with a local bare GitHub and a fake gh: every kind of save
+row, secrets by name and content, UTF-16 keys, a junction out of the
+project, 50/100 MB files, lock retries, merge in progress, push with a
+failing and a passing check, a rejected push, every publish path including
+resume and a taken name, and link related/unrelated/empty), all identical,
+with identical commit ids; `tests/rust_modules.test.mjs` 4 tests. The Git
+chip's existing suites (git_actions, git_host, git_link, git_link_host) and
+the other three parity suites: 202 tests, 0 fail. Live self-test on the Rust
+host: `git:state`, `projects:glance` and `git:save-preview` answered through
+Rust (rustCalls core.git.glance 3, glanceMany 1, preview 1); this checkout's
+preview (17 rows) and glance were byte-identical JSON to the JavaScript's.
+Timing on this checkout: glance about 330 ms and preview about 720 ms in
+both (git's own time). `fsutil fsinfo volumeinfo` is refused without admin
+on this PC, so the weak-drive check reads unknown in both languages.
+
 ## 2026-10-03 Rust stage 2: the store and repo modules move into Rust
 
 Branch `wip/rust-host`, after 80b1e0e. The OpenCode store reads

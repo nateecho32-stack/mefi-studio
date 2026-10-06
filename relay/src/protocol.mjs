@@ -83,6 +83,7 @@ export const FEATURES = Object.freeze({
   online: 'online', // GET /v1/online: who is in Studio right now
   credits: 'credits', // GET /v1/me, member cards, the credits frame
   projects: 'projects', // the project hub: share, play, star, feature
+  front: 'front', // GET /v1/front: the Lobby front page in one read
 });
 
 /** listen{action}: a room's shared player. */
@@ -103,7 +104,7 @@ export const REMOTE_BUTTON_STYLES = Object.freeze(['primary', 'secondary', 'succ
 
 /** Project cards (feature "projects") and why a credits frame was sent (feature "credits"). */
 export const PROJECT_KINDS = Object.freeze(['game', 'app', 'tool', 'art', 'music', 'other']);
-export const CREDIT_REASONS = Object.freeze(['played', 'play', 'starred', 'feature']);
+export const CREDIT_REASONS = Object.freeze(['played', 'play', 'starred', 'feature', 'revoked']);
 
 export const ROOM_KINDS = Object.freeze(['hangout', 'cowork']);
 export const ROOM_POLICIES = Object.freeze(['request', 'invite']);

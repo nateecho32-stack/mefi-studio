@@ -23,8 +23,8 @@ export const TEST_GUILD_ID = '1345380333302059129';
 
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
-/** A fetch that plays Discord's two endpoints (and refuses everything else, like oEmbed). */
-export function fakeDiscord(accounts, { calls = [] } = {}) {
+/** A fetch that plays Discord's two endpoints (and refuses everything else, like oEmbed), on the relay's clock. */
+export function fakeDiscord(accounts, { calls = [], now = () => Date.now() } = {}) {
   return async (input, init = {}) => {
     const url = new URL(String(input));
     const token = /^Bearer (.+)$/.exec(String(init.headers?.authorization ?? ''))?.[1] ?? '';
@@ -37,13 +37,13 @@ export function fakeDiscord(accounts, { calls = [] } = {}) {
       return json(200, {
         application: { id: account.appId ?? TEST_APP_ID },
         scopes: account.scopes ?? ['identify', 'guilds.members.read'],
-        expires: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+        expires: new Date(now() + 7 * 86_400_000).toISOString(),
         user: account.user,
       });
     }
     if (url.pathname === `/api/v10/users/@me/guilds/${TEST_GUILD_ID}/member`) {
       if (account.member === null) return json(404, { message: 'Unknown Guild', code: 10004 });
-      return json(200, { user: account.user, roles: [], joined_at: new Date(Date.now() - 30 * 86_400_000).toISOString(), pending: false, ...(account.member ?? {}) });
+      return json(200, { user: account.user, roles: [], joined_at: new Date(now() - 30 * 86_400_000).toISOString(), pending: false, ...(account.member ?? {}) });
     }
     return json(404, {});
   };
@@ -117,7 +117,7 @@ export function createNodeRelay({ env: extraEnv = {}, discord = {}, now = () => 
     STUDIO_APP_ID: TEST_APP_ID,
     GUILD_ID: TEST_GUILD_ID,
     ...extraEnv,
-    [Symbol.for('mefi.relay.fetch')]: fakeDiscord(discord, { calls: fetchCalls }),
+    [Symbol.for('mefi.relay.fetch')]: fakeDiscord(discord, { calls: fetchCalls, now: now ?? (() => Date.now()) }),
     [Symbol.for('mefi.relay.now')]: now,
   };
   // Cloudflare's auto-response pair, which Node does not have.

@@ -27,10 +27,12 @@ new_sqlite_classes = ["Hub"]
 STUDIO_APP_ID = "1556715336928334004"
 # The Void Engine Discord server.
 GUILD_ID = "1345380333302059129"
-# Discord role ids: moderators, and the roles rooms and ranks read (JSON object of key -> role id).
+# Optional Discord role ids, none needed: Studio's own ranks unlock listed rooms (Flame) and are the
+# badges everyone sees. Fill these only to also honour Discord roles: moderators, and extra badges or a
+# Room Host role (JSON object of key -> role id). Moderators by account: OWNER_IDS.
 MOD_ROLE_IDS = ""
 ROLE_IDS_JSON = "{}"
-# Discord user ids that are always moderators.
+# Discord user ids that are always moderators (comma-separated): add a person here to make them one.
 OWNER_IDS = "1502092064492617749"
 # "true" refuses every write (maintenance).
 PAUSED = "false"

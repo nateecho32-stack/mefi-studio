@@ -214,7 +214,11 @@
   opens its link in your browser and, two minutes later, tells the relay you
   played it. The relay keeps your credit balance, rank and streak and a
   180-day list of who credited whom (ids only); other members see your rank,
-  never your balance. Forget me removes all of it. While Studio holds a room open (Rooms, Listen together or a
+  never your balance, and moderators can see who your credits came from to
+  stop farming. Forget me removes all of it except a keyed fingerprint of
+  your account, kept for 30 days so forgetting cannot reset the credit
+  limits; the credits you gave others stay counted under that fingerprint
+  for a week. While Studio holds a room open (Rooms, Listen together or a
   linked cowork room), the hub also tells its members who has it open in
   Studio, and Studio sends that room a small companion card, but only to a
   hub that lists the companion feature and only at the level you allow. The

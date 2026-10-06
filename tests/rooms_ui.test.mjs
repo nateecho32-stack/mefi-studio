@@ -139,7 +139,7 @@ test("asking to join, deciding, answering invites and making a room go through h
     invites: [{ id: "inv_1", roomId: "room_x", roomName: "X", invitedBy: FRIEND, status: "pending", expiresAt: 9e12 }],
     replies: {
       requestJoin: { ok: true, request: {} },
-      createRoom: (fields) => (fields.name === "Nope" ? { ok: false, error: "forbidden", reason: "room-host-role" } : { ok: true, room: { name: fields.name } }),
+      createRoom: (fields) => (fields.name === "Nope" ? { ok: false, error: "forbidden", reason: "listed-rank" } : { ok: true, room: { name: fields.name } }),
     },
   });
   const panel = env.rooms.panel();
@@ -172,7 +172,7 @@ test("asking to join, deciding, answering invites and making a room go through h
   panel.find("rooms-create-name").value = "Nope";
   panel.find("rooms-create").click();
   await flush();
-  assert.equal(panel.find("rooms-status").textContent, "Creating rooms needs the Room Host role in the Void Engine server.", "the hub's reason in plain words");
+  assert.equal(panel.find("rooms-status").textContent, "Showing a room in the list opens at Flame rank (200 credits, earned when friends play and star what you share). Untick \"Show it in the room list\" to make it now and invite people.", "the relay's reason in plain words");
 });
 
 test("a room shows chat as text with @names, follows live frames, and sends or says why not", async () => {

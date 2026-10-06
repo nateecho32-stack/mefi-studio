@@ -36,6 +36,9 @@
 //     "online"): every member is in the Lobby; roomCode / newRoomCode hand
 //     out a room's short join code and link, joinCode joins with one, and
 //     online() lists who is in Studio now (setOnlineVisible hides you).
+//   - The Lobby front page (relay feature "front"): front() reads who is
+//     online and where, the rooms open now, the week's top and new projects,
+//     rank-ups and this member's week in one call.
 //   - Credits and the project hub (features "credits" and "projects", relay
 //     only): me() and memberCard() for ranks and balances, projects() for the
 //     hub, shareProject / playProject / finishPlay / star / feature, and a
@@ -72,6 +75,7 @@ const HISTORY_REPLY_BYTES = 15 * 1024;
 const HISTORY_REPLY_MESSAGES = 100;
 const PROJECT_KINDS = Object.freeze(["game", "app", "tool", "art", "music", "other"]);
 const PROJECT_VIEWS = Object.freeze(["new", "top", "played", "mine"]);
+const CREDIT_HOLDS = Object.freeze(["unknown", "read-only", "new-account", "new-member", "forgot-me"]);
 const RANK_KEY = /^[a-z_]{1,20}$/;
 const ACK_TIMEOUT_MS = 10_000;
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -290,6 +294,35 @@ function rankOf(value) {
   return { key: value.key, name: line(value.name, 20) ?? value.key, next, progress: Number.isFinite(value.progress) ? Math.max(0, Math.min(1, value.progress)) : 0 };
 }
 const specialOf = (value) => (Array.isArray(value) ? value.filter((key) => RANK_KEY.test(String(key))).slice(0, 12) : []);
+// The Lobby front page from the relay (GET /v1/front), every part checked.
+function frontPage(data) {
+  const place = (value) => (object(value) && OPAQUE_ID.test(String(value.id)) && line(value.name, 80) ? { id: value.id, name: value.name, kind: value.kind === "cowork" ? "cowork" : "hangout" } : null);
+  const list = (value, shape, max) => (Array.isArray(value) ? value.map(shape).filter(Boolean).slice(0, max) : []);
+  const person = (item) => {
+    const who = user(item);
+    return who ? { ...who, rank: RANK_KEY.test(String(item.rank ?? "")) ? item.rank : "spark", specialRanks: specialOf(item.specialRanks), where: place(item.where) } : null;
+  };
+  const room = (item) => { const summary = roomSummary(item); return summary ? { ...summary, here: count(item.here, 1000) ?? 0 } : null; };
+  const rankUp = (item) => {
+    const who = user(item);
+    const rank = object(item?.rank) && RANK_KEY.test(String(item.rank.key)) ? { key: item.rank.key, name: line(item.rank.name, 20) ?? item.rank.key } : null;
+    return who && rank ? { ...who, rank } : null;
+  };
+  const top = projectCard(data?.top);
+  const you = object(data?.you) ? data.you : {};
+  return {
+    ok: true,
+    online: { count: count(data?.online?.count, 1e6) ?? 0, people: list(data?.online?.people, person, 50) },
+    lobby: { here: count(data?.lobby?.here, 1e6) ?? 0 },
+    rooms: list(data?.rooms, room, 12),
+    ownRoom: place(data?.ownRoom),
+    visible: data?.visible !== false,
+    top: top ? { ...top, week: data.top.week === true, weekPlays: count(data.top.weekPlays, 1e9) ?? 0, weekStars: count(data.top.weekStars, 1e9) ?? 0 } : null,
+    fresh: list(data?.fresh, projectCard, 10),
+    rankUps: list(data?.rankUps, rankUp, 10),
+    you: { balance: count(you.balance, 1e12) ?? 0, lifetime: count(you.lifetime, 1e12) ?? 0, rank: rankOf(you.rank), week: { earned: count(you.week?.earned, 1e9) ?? 0, plays: count(you.week?.plays, 1e9) ?? 0, stars: count(you.week?.stars, 1e9) ?? 0 } },
+  };
+}
 // A room's join code ("7K3Q-M2XR") and its link, or a failure.
 function codeOf(data) {
   const code = typeof data?.code === "string" && /^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(data.code) ? data.code : null;
@@ -351,7 +384,7 @@ function createHubClient(options = {}) {
       remote: features.includes("remote"), remoteOn: Boolean(remote?.on) && features.includes("remote"), remotePcs: remoteList,
       history: features.includes("history.peer"),
       credits: features.includes("credits"), projects: features.includes("projects"),
-      lobby: features.includes("lobby"), joinCodes: features.includes("join.codes"), online: features.includes("online"),
+      lobby: features.includes("lobby"), joinCodes: features.includes("join.codes"), online: features.includes("online"), front: features.includes("front"),
     };
   }
   function setState(next, nextError = null) {
@@ -834,6 +867,11 @@ function createHubClient(options = {}) {
       const answer = await authed("POST", "/v1/me/online", { visible });
       return answer.ok ? { ok: true, visible: answer.data.visible === true } : refused(answer);
     },
+    async front() {
+      if (!features.includes("front")) return { ok: false, error: "unsupported" };
+      const answer = await authed("GET", "/v1/front");
+      return answer.ok ? frontPage(answer.data) : refused(answer);
+    },
     // ---- Credits, ranks and the project hub (features "credits", "projects") ---
     async me() {
       if (!features.includes("credits")) return { ok: false, error: "unsupported" };
@@ -845,6 +883,8 @@ function createHubClient(options = {}) {
         credits: { balance: count(data.credits?.balance, 1e12) ?? 0, lifetime: count(data.credits?.lifetime, 1e12) ?? 0, today: count(data.credits?.today, 1e6) ?? 0, todayCap: count(data.credits?.todayCap, 1e6) ?? 0 },
         rank: rankOf(data.rank), specialRanks: specialOf(data.specialRanks), streak: { days: count(data.streak?.days, 1e6) ?? 0, best: count(data.streak?.best, 1e6) ?? 0 },
         featureCost: count(data.featureCost, 1e6) ?? 0, canEarn: data.canEarn === true,
+        // Why this member cannot give or earn credits yet, and until when (relay/src/credits.mjs GUARD).
+        hold: object(data.hold) && CREDIT_HOLDS.includes(data.hold.reason) ? { reason: data.hold.reason, until: Number.isFinite(data.hold.until) ? data.hold.until : null } : null,
         projects: Array.isArray(data.projects) ? data.projects.map(projectCard).filter(Boolean) : [],
       };
     },

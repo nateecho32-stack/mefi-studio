@@ -7,6 +7,32 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Credits cannot be farmed.** Credits and ranks are worked out by the
+  relay, never by Studio, and they now hold up against second accounts,
+  trading and replays: credits start once a Discord account is 30 days old
+  and a week in the Void Engine server; a play pays a maker once a day per
+  player whichever project it was, and a star once a week; one person can
+  make another earn at most 15 credits a week; a play counts only for the
+  day it started; Forget me cannot reset a limit; featuring is once a week;
+  and only plays and stars from members in good standing count toward Top.
+  The Project hub says when your credits start, and moderators can see
+  where someone's credits came from and take farmed ones back.
+- **No Discord roles needed.** Ranks are Studio's own, from credits: Flame
+  rank (200 credits) now unlocks showing a room in the public list, which
+  used to need a Room Host role in the Discord server. Anyone a week in the
+  server can still make an unlisted room and invite people with its code.
+  Moderators are named accounts.
+- **Friends has a front page, a sign-in and shows you online.** Friends now
+  opens on **The Lobby**, a front page in the style of The Studio Daily: who
+  is online right now and which room they are in, the week's top project
+  with a Play button, the rooms open now, what was shared this week, who
+  moved up a rank, and your own credits and week. At its foot are **Show me
+  as online** and your room's invite code with **Copy invite**. Until you
+  sign in, The Lobby, Rooms and the Project hub show one **Sign in with
+  Discord** card; Your PCs and the Playground work without it. Once signed
+  in, Studio connects by itself a few seconds after it opens, so friends see
+  you online without you opening Friends (untick Show me as online to hide).
+  The Lobby is also in the rail's Friends menu and in Search.
 - **Studio times its own launch.** Trace shows one `[startup]` line per
   launch (app ready, first paint, each loading step and when the window was
   ready), and `--startup-report <file>` writes the same as JSON.
@@ -45,7 +71,6 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   turn run side by side, a connector's server stays open between calls (so a
   browser it opened is still there for the next click), and a connector's
   pictures reach a builder as pictures.
-
 - **Chrome's buttons no longer look struck through.** The metal on main
   buttons and chosen tabs had a hard dark line at half height, right behind
   the words. Its horizon is now a soft band below them, and the darkest part
