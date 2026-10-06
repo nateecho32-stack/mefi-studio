@@ -88226,7 +88226,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       window.MefiTeamModels?.mount?.(page, teamContext); window.MefiTeamModels?.providers?.(providers, teamContext);
     }
     const inside = $("agents-more-body");
-    for (const el of [document.querySelector("#agents-team .agents-team-intro"), $("agents-role-grid"), $("settings-routing"), $("settings-workers"), $("agents-model-skills"), $("agents-team-behavior")]) {
+    for (const el of [$("agents-team")?.querySelector(".agents-team-intro"), $("agents-role-grid"), $("settings-routing"), $("settings-workers"), $("agents-model-skills"), $("agents-team-behavior")]) {
       if (!el) continue;
       if (on) {
         if (el.parentNode === inside) continue;

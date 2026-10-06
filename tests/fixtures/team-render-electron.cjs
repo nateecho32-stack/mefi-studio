@@ -248,7 +248,9 @@ app.whenReady().then(async () => {
   await click('#shell-pages-list [data-page="team:seats"]');
   await until(placeIs("seats"), "Seats and models again");
   await until("document.querySelectorAll('#team-models .tm-tbody .tm-tr').length === 8", "Who does what lists its eight jobs");
-  report.seats = await run(`const shown = (node) => Boolean(node) && node.getClientRects().length > 0;
+  // checkVisibility: a closed <details> hides its content with content-visibility,
+  // which getClientRects still measures.
+  report.seats = await run(`const shown = (node) => Boolean(node) && node.checkVisibility();
     return {
       parts: [...document.querySelectorAll('#team-models > .tm-panel .tm-title')].map((node) => node.textContent),
       choices: [...document.querySelectorAll('#team-models .tm-row')].map((node) => node.dataset.choice),
