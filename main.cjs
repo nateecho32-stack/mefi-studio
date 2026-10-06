@@ -2387,7 +2387,9 @@ async function hubStatus() {
   const base = client ? client.status() : { configured: false, state: "off", error: "unavailable", user: null, readOnly: false, paused: false, rooms: [] };
   let linked = false;
   try { linked = Boolean(community && (await communityRead()).state.link); } catch { linked = false; }
-  return { ...base, linked, communityConfigured: Boolean(communityClientId()) };
+  let shareBuilding = false;
+  try { shareBuilding = (await readSettings())?.friends?.shareBuilding === true; } catch { shareBuilding = false; }
+  return { ...base, linked, communityConfigured: Boolean(communityClientId()), shareBuilding };
 }
 
 async function hubCall(work) {
@@ -2418,12 +2420,15 @@ const HUB_ROOM_METHODS = Object.freeze({
   roomCode: 1, newRoomCode: 1, joinCode: 1, online: 0, setOnlineVisible: 1, front: 0,
   // Friends › Moderation (renderer/friends-mod.js); the relay refuses anyone who is not a moderator.
   modFlags: 0, modReview: 1, modRevoke: 2, modReports: 0, modResolve: 1, modSuspend: 2,
+  // The Lobby's "Share what I'm building" switch (hubBuildingShare below), not a hub-client method.
+  shareBuilding: 1,
 });
 function hubRoom(method, args) {
   const arity = Object.hasOwn(HUB_ROOM_METHODS, method) ? HUB_ROOM_METHODS[method] : -1;
   if (arity < 0 || !Array.isArray(args) || args.length > arity) return Promise.resolve({ ok: false, error: "bad-request" });
   const plain = args.map((value) => (value == null || ["string", "number", "boolean"].includes(typeof value) ? value : typeof value === "object" && !Array.isArray(value) ? { ...value } : null));
   if (method === "messages") return hubCall((client) => hubRoomMessages(client, ...plain));
+  if (method === "shareBuilding") return hubBuildingShare(plain[0] === true);
   // A report carries this PC's own copy of the message, which the relay keeps
   // as evidence only when its signature checks out.
   if (method === "report") return hubCall((client) => client.report(plain[0], plain[1], plain[2], roomHistory()?.page(plain[0], null, 500).messages.find((item) => item.id === String(plain[1])) ?? null));
@@ -2490,9 +2495,32 @@ async function hubPresenceLook() {
 function startHubPresence() {
   if (hubPresenceTimers) return;
   const look = () => { hubPresenceLook().catch((error) => logLine(`[hub] could not connect for Friends: ${error?.message ?? error}`)); };
-  hubPresenceTimers = { first: setTimeout(look, HUB_PRESENCE_FIRST_MS), every: setInterval(look, HUB_PRESENCE_EVERY_MS) };
+  const building = () => { hubBuildingLook().catch((error) => logLine(`[hub] could not share what is being built: ${error?.message ?? error}`)); };
+  hubPresenceTimers = { first: setTimeout(look, HUB_PRESENCE_FIRST_MS), every: setInterval(look, HUB_PRESENCE_EVERY_MS), building: setInterval(building, HUB_BUILDING_EVERY_MS) };
   hubPresenceTimers.first.unref?.();
   hubPresenceTimers.every.unref?.();
+  hubPresenceTimers.building.unref?.();
+}
+
+// "Share what I'm building" (The Lobby's foot, off until the member turns it
+// on: settings.friends.shareBuilding): the open project's name and how many
+// tasks run and finished today, never titles or files, so friends see it
+// under Building now. Read every two minutes while connected (agentsSnapshot,
+// the same look Your PCs uses); only a change goes out, and the relay keeps
+// it on the connection only.
+const HUB_BUILDING_EVERY_MS = 2 * 60 * 1000;
+async function hubBuildingLook() {
+  const client = hubClient;
+  if (!client || client.status?.().state !== "ready") return false;
+  if ((await readSettings())?.friends?.shareBuilding !== true) { client.setBuilding?.(null); return false; }
+  const snapshot = typeof agentsSnapshot === "function" ? await agentsSnapshot() : null;
+  if (!snapshot?.project) { client.setBuilding?.(null); return false; }
+  return client.setBuilding?.({ project: snapshot.project, running: snapshot.working.length, doneToday: snapshot.done.length }) === true;
+}
+async function hubBuildingShare(on) {
+  await updateSettings((settings) => { settings.friends = { ...(settings.friends ?? {}), shareBuilding: on }; });
+  await hubBuildingLook();
+  return { ok: true, shareBuilding: on, status: await hubStatus() };
 }
 // ---- end of the rooms hub ---------------------------------------------------
 

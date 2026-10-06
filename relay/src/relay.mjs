@@ -208,7 +208,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
   const onlineHidden = (uid) => store.get('SELECT online_hidden FROM members WHERE user_id = ?', uid)?.online_hidden === 1;
 
   const paused = () => config.paused || store.meta('paused') === 'true';
-  const features = () => [FEATURES.companion, FEATURES.companionDirect, FEATURES.historyPeer, FEATURES.keepalive, FEATURES.messagesSigned, FEATURES.lobby, FEATURES.joinCodes, FEATURES.online, FEATURES.credits, FEATURES.projects, FEATURES.front, FEATURES.friendOnline];
+  const features = () => [FEATURES.companion, FEATURES.companionDirect, FEATURES.historyPeer, FEATURES.keepalive, FEATURES.messagesSigned, FEATURES.lobby, FEATURES.joinCodes, FEATURES.online, FEATURES.credits, FEATURES.projects, FEATURES.front, FEATURES.friendOnline, FEATURES.building];
 
   // ---- rooms in the store --------------------------------------------------------
 
@@ -496,6 +496,8 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
       }
       case 'nowPlaying':
         return nowPlaying(ws, a, frame.track);
+      case 'building':
+        return building(ws, a, frame.now);
       case 'companion':
         return companion(ws, a, frame);
       case 'historyRequest':
@@ -661,6 +663,13 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
       const url = track.url ? publicLink(track.url) : null;
       a.np = { label, provider: track.provider, ...(url ? { url } : {}), since: now() };
     }
+    sockets.write(ws, a);
+  }
+
+  // What a member is building, with their say-so: kept on the socket only, gone when it closes.
+  function building(ws, a, value) {
+    const project = value ? cleanLine(value.project, 80) : '';
+    a.bd = project ? { project, running: value.running, doneToday: value.doneToday, since: now() } : null;
     sockets.write(ws, a);
   }
 
@@ -1173,7 +1182,9 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     const listed = new Map(store.all(`SELECT id, name, kind FROM rooms WHERE status = 'active' AND listed = 1`).map((row) => [row.id, row]));
     const here = new Map(); // room id -> uids with a socket in it
     const rooms = new Map(); // uid -> room ids their sockets hold
+    const builds = new Map(); // uid -> what they share they are building
     for (const { a } of ready) {
+      if (a.bd && !builds.has(a.uid)) builds.set(a.uid, a.bd);
       if (!rooms.has(a.uid)) rooms.set(a.uid, new Set());
       for (const roomId of a.rooms ?? []) {
         rooms.get(a.uid).add(roomId);
@@ -1188,7 +1199,8 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
       const held = [...rooms.get(uid)];
       const named = held.map((roomId) => listed.get(roomId)).find((room) => room && room.id !== LOBBY.id);
       const where = named ? { id: named.id, name: named.name, kind: named.kind } : held.includes(LOBBY.id) ? { id: LOBBY.id, name: LOBBY.name, kind: 'hangout' } : null;
-      return { id: uid, name: card.name, rank: card.rank.key, specialRanks: card.specialRanks, where };
+      const made = builds.get(uid);
+      return { id: uid, name: card.name, rank: card.rank.key, specialRanks: card.specialRanks, where, building: made ? { project: made.project, running: made.running, doneToday: made.doneToday } : null };
     }).filter(Boolean);
     people.sort((x, y) => Number(Boolean(y.where)) - Number(Boolean(x.where)) || x.name.localeCompare(y.name));
     const crowd = (roomId) => [...(here.get(roomId) ?? [])].filter((uid) => isMember(roomId, uid) && (roomId !== LOBBY.id || !onlineHidden(uid))).length;
