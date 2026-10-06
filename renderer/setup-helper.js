@@ -1122,7 +1122,7 @@
       const swatches = node("div", "setup-helper-swatches"); swatches.setAttribute("role", "radiogroup"); swatches.setAttribute("aria-label", "Theme");
       for (const theme of music.themes?.() || []) {
         const swatch = button(theme.name, () => {
-          music.applyTheme?.(theme.key, true, { navigate: false });
+          music.applyTheme?.(theme.key, true);
           for (const other of swatches.children) other.setAttribute("aria-checked", String(other === swatch));
           say(`${theme.name} theme on.`, "good");
         }, "setup-helper-swatch");

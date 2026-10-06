@@ -187,7 +187,7 @@ body:has(#plans-overlay:not([hidden])) #idle-layer { opacity: .18; }
 /* Where a line came from. Your own words read as settled; anything Mefi
    proposed stays visibly unconfirmed until you record it as a decision. */
 .planning-note[data-note-kind="interpretation"], .planning-note[data-note-kind="conflict"] { border-left-style: dashed; }
-.planning-note[data-note-kind="conflict"] strong { color: #f0c073; }
+.planning-note[data-note-kind="conflict"] strong { color: var(--warn); }
 .planning-interview { border-color: var(--hairline-strong); background: var(--tint-gold-2); }
 .planning-interview-ask { margin: 10px 0 14px; padding-left: 12px; border-left: 3px solid var(--gold-bright); font-size: 18px; line-height: 1.5; color: var(--ivory); letter-spacing: -.01em; }
 /* Mefi's reading of your answer, with the one-click way to make it yours. */

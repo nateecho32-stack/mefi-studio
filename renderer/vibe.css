@@ -58,6 +58,8 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 .vibe-aurora.two { width: 46vw; height: 38vw; right: -14vw; top: 8vh; background: radial-gradient(circle, color-mix(in srgb, var(--info) 55%, transparent), transparent 70%); animation-duration: 32s; animation-delay: -9s; opacity: .22; }
 .vibe-aurora.three { width: 60vw; height: 30vw; left: 20vw; bottom: -22vw; background: radial-gradient(circle, color-mix(in srgb, var(--gold-bright) 45%, transparent), transparent 70%); animation-duration: 38s; animation-delay: -17s; opacity: .2; }
 :root[data-studio-theme-tone="light"] .vibe-aurora { mix-blend-mode: multiply; opacity: .16; }
+/* The box and cards lift on the light tone's soft shadow; the dark one read as a smudge under them. */
+:root[data-studio-theme-tone="light"] #vibe-layer { --v-lift: var(--shadow-2), inset 0 1px 0 color-mix(in srgb, var(--panel-solid) 70%, transparent); }
 @keyframes vibe-drift {
   0% { transform: translate3d(0, 0, 0) scale(1); }
   50% { transform: translate3d(4vw, 3vh, 0) scale(1.08); }

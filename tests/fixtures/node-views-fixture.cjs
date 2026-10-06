@@ -57,7 +57,7 @@ exports.capture = async ({ window, contents, run, until, sleep, capturePage, rep
   window.setContentSize(1440, 900); contents.setZoomFactor(1);
   await run("window.MefiNav.go('command'); await window.MefiIdle.ready(); window.MefiIdle.fitAll();");
   for (const style of ["orbs", "glass", "minimal", "halo", "crystal", "singularity", "prism", "sigil"]) {
-    await run(`window.MefiMusic.applyNodeStyle(${JSON.stringify(style)},false,{navigate:false});`); await settle();
+    await run(`window.MefiMusic.applyNodeStyle(${JSON.stringify(style)},false);`); await settle();
     assert.equal(await run("return window.MefiIdle.status().nodeStyle;"), style);
     report.styles.push(style); await save(`style-${style}`);
   }
@@ -69,7 +69,7 @@ exports.capture = async ({ window, contents, run, until, sleep, capturePage, rep
     report.layouts.push({ view, layout }); await save(`layout-${view}-${layout}`);
   }
   await contents.debugger.sendCommand("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
-  await run("window.MefiIdle.setView('3d'); window.MefiMusic.applyNodeLayout('constellation',false); window.MefiMusic.applyTheme('void',false,{navigate:false}); window.MefiIdle.fitAll();");
+  await run("window.MefiIdle.setView('3d'); window.MefiMusic.applyNodeLayout('constellation',false); window.MefiMusic.applyTheme('void',false); window.MefiIdle.fitAll();");
   await save("reduced-motion-void");
   const before = await run("return window.MefiIdle.geometryStatus();"); await sleep(200);
   const after = await run("return window.MefiIdle.geometryStatus();");

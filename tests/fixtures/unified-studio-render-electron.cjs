@@ -326,7 +326,7 @@ app.whenReady().then(async () => {
     assert.deepEqual(bars,[],id); assert.deepEqual(report.errors,[],id+': '+JSON.stringify(report.errors));
   }
   report.themes=[];
-  for (const theme of ['chrome','gold','midnight','forest','violet','ember','aurora','rose']) {
+  for (const theme of ['chrome','gold','midnight','forest','violet','ember','aurora','rose','daylight','paper']) {
     await run(`window.MefiMusic.applyTheme(${JSON.stringify(theme)});await window.MefiNav.go('agents');`);
     assert.deepEqual(report.errors,[]);report.themes.push(theme);
   }

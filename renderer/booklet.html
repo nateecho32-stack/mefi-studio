@@ -104,6 +104,7 @@
   --glow-live: 0 0 6px rgba(87, 255, 154, 0.6);
   --blur: blur(14px) saturate(1.05);
   --scrim: rgba(3, 4, 6, 0.74);           /* behind every modal sheet */
+  --scrim-dense: rgba(3, 3, 4, 0.94);      /* the same with nothing blurred under it */
   --scrim-blur: blur(12px);
   --blur-hard: blur(18px) saturate(1.1);
 
@@ -196,11 +197,28 @@ body {
   --hairline: var(--theme-hairline);
   --hairline-strong: var(--theme-hairline-strong);
 }
-/* music.js sets the tone from the theme's background. */
+/* music.js sets the tone from the theme's background. A light tone takes the
+   light native controls (checkboxes, pickers, the search field's clear button,
+   autofill), shadows that shade instead of blacken, a lighter scrim, and status
+   hues deep enough to read as text on a light page: the dark themes' pale ones
+   wash out there. Each holds 4.5:1 on the light themes' pages and panels, and
+   on its own 14% tint (a chip, a well). */
 :root[data-studio-theme-tone="light"] {
+  color-scheme: light;
   --on-ivory: var(--panel-solid);
-  /* The dark theme's pale red washes out on a light page (Delete, errors). */
-  --bad: #b42318;
+  --bad: #a51f16;
+  --warn: #7f4c00;
+  --good: #125f35;
+  --live: #075c2d;
+  --live-dim: rgba(7, 92, 45, 0.14);
+  --info: #2b52b4;
+  --idea: #64489c;
+  --shadow-1: 0 6px 16px rgba(20, 28, 40, 0.1);
+  --shadow-2: 0 18px 40px rgba(20, 28, 40, 0.14);
+  --shadow-3: 0 30px 70px rgba(20, 28, 40, 0.18);
+  --scrim: rgba(28, 34, 44, 0.34);
+  --scrim-dense: color-mix(in srgb, var(--bg) 92%, transparent);
+  --frost-lift: 0 18px 44px -24px rgba(20, 28, 40, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
 h1 { font: 600 var(--fs-2xl)/var(--lh-tight) var(--font-display); letter-spacing: 0.01em; margin: 2px 0; }
@@ -1094,14 +1112,14 @@ table#table tr:hover td { background: color-mix(in srgb, var(--gold) 4%, transpa
 }
 .assistant-msg.user {
   align-self: flex-end;
-  background: #231e16;
+  background: color-mix(in srgb, var(--gold) 12%, var(--panel-solid));
   border: 1px solid var(--gold-dim);
   color: var(--gold-bright);
   border-bottom-right-radius: 3px;
 }
 .assistant-msg.assistant {
   align-self: flex-start;
-  background: #14151a;
+  background: var(--panel-solid);
   border: 1px solid var(--hairline);
   color: var(--ivory);
   border-bottom-left-radius: 3px;
@@ -1145,7 +1163,7 @@ table#table tr:hover td { background: color-mix(in srgb, var(--gold) 4%, transpa
 .cmd-card .assistant-thread {
   max-height: 200px; margin: 0;
   padding: var(--s2);
-  background: rgba(0, 0, 0, 0.22);
+  background: color-mix(in srgb, var(--bg-deep) 50%, transparent);
   border: 1px solid var(--hairline);
   border-radius: var(--r-sm);
   overscroll-behavior: contain;
@@ -1425,7 +1443,7 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
   display: grid; place-items: center;
 }
 #palette-overlay, #help-overlay, #walkthrough-overlay { z-index: var(--z-transient); }                                    
-.overlay.no-blur { backdrop-filter: none; background: rgba(3, 3, 4, 0.94); }
+.overlay.no-blur { backdrop-filter: none; background: var(--scrim-dense); }
 .overlay h2 { color: var(--ivory); }
 
 .overlay .sheet {
@@ -2560,13 +2578,13 @@ body.workspace-active > header, body.workspace-active > main, body.workspace-act
 .workspace button { transition: background .18s, border-color .18s, color .18s; }
 .workspace button:focus-visible, .workspace summary:focus-visible { outline: 2px solid var(--ws-accent); outline-offset: 3px; }
 .workspace .ghost { background: transparent; border-color: var(--hairline); color: var(--muted); }
-.workspace .ghost:hover { background: var(--tint-gold-2); color: #f6f3e9; border-color: var(--hairline-strong); }
+.workspace .ghost:hover { background: var(--tint-gold-2); color: var(--ivory); border-color: var(--hairline-strong); }
 .workspace .primary { color: #25251f; background: var(--ws-accent); border: 1px solid var(--ws-accent); box-shadow: none; font-weight: 650; }
 .workspace .primary:hover { filter: brightness(1.07); }
-.workspace kbd { font: 10px var(--font-ui); color: #91968d; border: 1px solid #3a3d36; background: transparent; padding: 1px 4px; }
+.workspace kbd { font: 10px var(--font-ui); color: var(--muted); border: 1px solid var(--hairline-strong); background: transparent; padding: 1px 4px; }
 .ws-sidebar { min-height: 0; display: flex; flex-direction: column; padding: 29px 18px 17px; background: var(--panel-solid); border-right: 1px solid var(--hairline); overflow-y: auto; }
-.ws-brand { display: flex; gap: 12px; align-items: center; color: #f0eee3; font: 600 17px var(--font-ui); text-decoration: none; margin: 0 6px 35px; }
-.ws-brand:hover { color: white; }
+.ws-brand { display: flex; gap: 12px; align-items: center; color: var(--ivory); font: 600 17px var(--font-ui); text-decoration: none; margin: 0 6px 35px; }
+.ws-brand:hover { color: var(--gold-bright); }
 .ws-brand-mark { color: var(--ws-accent); font: italic 37px Georgia, serif; letter-spacing: -5px; width: 37px; }
 .ws-brand-mark span { font: 16px var(--font-ui); vertical-align: top; margin-left: 5px; }
 .ws-brand small { display: block; color: var(--dim); font: 8px var(--font-ui); letter-spacing: 1.65px; margin-top: 8px; }
@@ -2588,8 +2606,8 @@ body.workspace-active > header, body.workspace-active > main, body.workspace-act
 .ws-sidebar-bottom { margin-top: auto; padding-top: 16px; }
 .ws-tools > summary { display: flex; align-items: center; gap: 9px; list-style: none; cursor: pointer; color: var(--muted); font-size: 12px; }
 .ws-tools > summary::marker, .ws-tools > summary::-webkit-details-marker { content: ""; display: none; }
-.ws-local-note { display: block; font-size: 9.5px; line-height: 1.7; color: #7e8874; padding: 12px 8px 0; }
-.ws-local-note i { display: inline-block; height: 5px; width: 5px; border-radius: 50%; background: #91a77d; margin-right: 4px; }
+.ws-local-note { display: block; font-size: 9.5px; line-height: 1.7; color: var(--dim); padding: 12px 8px 0; }
+.ws-local-note i { display: inline-block; height: 5px; width: 5px; border-radius: 50%; background: var(--good); margin-right: 4px; }
 .ws-main { min-width: 0; min-height: 0; display: flex; flex-direction: column; padding: 0 28px; background: var(--bg); overflow-y: auto; }
 .ws-topbar { height: 56px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--hairline); gap: 20px; }
 .ws-project-heading { display: flex; align-items: center; gap: 10px; overflow: hidden; white-space: nowrap; }
@@ -3024,6 +3042,9 @@ body.workspace-active > header, body.workspace-active > main, body.workspace-act
    dense and unfiltered. The ids outrank the theme rules in music.css on
    purpose: this is Home's one skin, in every theme. */
 body.home-backdrop :is(#idle-layer, #idle-layer-far) { z-index: calc(var(--z-workspace) - 1); pointer-events: none; }
+/* A light theme draws the tree's orbs in ink, as solid shapes rather than a glow,
+   so behind Home and Social's front door they step further back. */
+:root[data-studio-theme-tone="light"] body.home-backdrop :is(#idle-layer, #idle-layer-far):not([hidden]) { opacity: .42; }
 html[data-no-blur] {
   --frost: none;
   --frost-glass: color-mix(in srgb, var(--panel-solid) 94%, transparent);
@@ -3037,8 +3058,9 @@ html[data-no-blur] {
 /* The veil keeps the tree a backdrop: a little deeper behind the headline,
    lighter lower down where the panels already frost it. */
 #workspace-layer .ws-main { background: radial-gradient(ellipse at 65% 0, var(--tint-gold-2), transparent 54%), linear-gradient(180deg, color-mix(in srgb, var(--bg) 46%, transparent), var(--frost-veil) 260px); }
-:root[data-studio-theme-tier="premium"] #workspace-layer .ws-main { background: radial-gradient(ellipse at 12% 100%, rgba(var(--accent-2-rgb), .07), transparent 46%), radial-gradient(ellipse at 65% 0, var(--tint-gold-2), transparent 54%), linear-gradient(180deg, color-mix(in srgb, var(--bg) 46%, transparent), var(--frost-veil) 260px); }
+:root[data-studio-theme-tier="duo"] #workspace-layer .ws-main { background: radial-gradient(ellipse at 12% 100%, rgba(var(--accent-2-rgb), .07), transparent 46%), radial-gradient(ellipse at 65% 0, var(--tint-gold-2), transparent 54%), linear-gradient(180deg, color-mix(in srgb, var(--bg) 46%, transparent), var(--frost-veil) 260px); }
 #workspace-layer .ws-topbar { text-shadow: 0 1px 14px rgba(0, 0, 0, 0.6); }
+:root[data-studio-theme-tone="light"] #workspace-layer .ws-topbar { text-shadow: none; }
 #workspace-layer .ws-topbar { border-color: var(--frost-edge-soft); }
 
 /* top-level panels: the frost itself */
@@ -3580,7 +3602,7 @@ html[data-motion="off"] {
   background: var(--scrim); backdrop-filter: var(--scrim-blur);
 }
 html[data-no-blur] :is(.overlay, .planning-overlay, .brains-overlay, .profiler-overlay):not(.music-overlay) {
-  background: rgba(3, 3, 4, 0.94); backdrop-filter: none;
+  background: var(--scrim-dense); backdrop-filter: none;
 }
 /* a sheet-to-sheet swap keeps one continuous scrim: nav marks both roots, the
    old one vanishes, the new one is simply there, and only its panel rises */
@@ -3730,7 +3752,7 @@ html[data-motion="off"]::view-transition-new(*) { animation: none !important; }
    member theme's own pair while one is on. Frames are a gradient hairline over
    an opaque fill, so the border gradient never shows through. */
 .community-invitation, #settings-community { --void-a: 124, 108, 255; --void-b: 54, 209, 255; }
-:root[data-studio-theme-tier="premium"] :is(.community-invitation, #settings-community) { --void-a: var(--studio-accent-rgb); --void-b: var(--accent-2-rgb); }
+:root[data-studio-theme-tier="duo"] :is(.community-invitation, #settings-community) { --void-a: var(--studio-accent-rgb); --void-b: var(--accent-2-rgb); }
 .community-invitation.community-enter { animation: pop-in var(--dur-3) var(--ease); }
 .walkthrough-invitation.community-invitation { justify-content: flex-start; gap: var(--s4); border-color: transparent; background: radial-gradient(90% 160% at 0 0, rgba(var(--void-a), 0.1), transparent 55%) padding-box, linear-gradient(color-mix(in srgb, var(--gold) 5%, var(--panel-solid)), color-mix(in srgb, var(--gold) 5%, var(--panel-solid))) padding-box, linear-gradient(115deg, rgba(var(--void-a), 0.6), rgba(var(--void-b), 0.35) 40%, var(--hairline-strong) 75%) border-box; }
 /* The emblem: the four themes' two-tone swatches (music.css .void-swatch). */
@@ -3956,7 +3978,7 @@ body.command-active .walkthrough-coach { right: calc(392px + var(--shell-x1)); }
 .provider-tile:has(.provider-pill[data-state="ready"]) { border-color: color-mix(in srgb, var(--good) 28%, var(--hairline)); }
 
 .provider-tile-head { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; min-width: 0; }
-.provider-mark { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; border: 1px solid var(--hairline-strong); background: radial-gradient(circle at 30% 25%, var(--tint-gold-3), transparent 60%), rgba(8, 8, 11, 0.6); color: var(--gold-bright); font: 700 12px/1 var(--font-display); letter-spacing: .02em; }
+.provider-mark { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; border: 1px solid var(--hairline-strong); background: radial-gradient(circle at 30% 25%, var(--tint-gold-3), transparent 60%), color-mix(in srgb, var(--bg-deep) 60%, transparent); color: var(--gold-bright); font: 700 12px/1 var(--font-display); letter-spacing: .02em; }
 .provider-title { flex: 1 1 auto; min-width: 0; display: grid; gap: 1px; }
 .provider-name { color: var(--ivory); font: 600 var(--fs-sm)/1.3 var(--font-ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .provider-kind { color: var(--dim); font-size: var(--fs-2xs); letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -4968,7 +4990,7 @@ body.command-zen :is(#app-rail) { opacity: 0; pointer-events: none; }
 .workspace .ws-top-actions { align-items: center; gap: 12px; }
 .workspace .ws-top-actions button:first-child { display: inline-flex; }
 .workspace .ws-project-actions > summary { min-height: 32px; border: 1px solid #ffffff16; border-radius: var(--r-xs); padding-inline: 10px 8px; font-size: 12px; }
-.workspace #workspace-activity-toggle[aria-expanded="true"] { color: var(--ivory); background: #ffffff10; border-color: #ffffff24; }
+.workspace #workspace-activity-toggle[aria-expanded="true"] { color: var(--ivory); background: color-mix(in srgb, var(--ivory) 6%, transparent); border-color: color-mix(in srgb, var(--ivory) 14%, transparent); }
 /* "N need you" is the one header control that asks for something. */
 .workspace #workspace-attention-shortcut { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 38%, transparent); background: color-mix(in srgb, var(--warn) 7%, transparent); }
 .workspace #workspace-attention-shortcut:hover { background: color-mix(in srgb, var(--warn) 13%, transparent); }
@@ -5266,18 +5288,22 @@ html[data-frame] #idle-hud #map-zoom .glyph { width: 14px; height: 14px; }
 :root[data-studio-theme] :is(.ws-companion-copy p, .ws-welcome p, .ws-project-path, .ws-sidebar-note, .ws-work-summary, .ws-dash-note) { color: var(--muted); }
 :root[data-studio-theme] .ws-work-search input::placeholder { color: var(--muted); }
 :root[data-studio-theme] .ws-buddy-face { background: radial-gradient(circle at 35% 20%, var(--tint-gold-3), var(--panel-solid) 75%); }
-/* Void collection tier: the members' themes add a second hue (--accent-2, set by music.js with the tier flag). */
-:root[data-studio-theme-tier="premium"] .primary { background: linear-gradient(120deg, var(--gold-bright), var(--gold) 52%, var(--accent-2)); }
+/* Two-tone themes (data-studio-theme-tier="duo": the Void collection, a pack with a second hue) add their
+   second hue, --accent-2, which music.js sets with the tier. The primaries name every one the shared rules
+   in studio-ui.css paint, at their resting and their hover specificity and one attribute more (an id and
+   three or four), so the two-tone fill wins from here, earlier in the bundle; a .danger keeps its red.
+   The second hue ends the fill as --accent-2-fill: itself, or moved until the ink on the buttons reads on it. */
+:root[data-studio-theme][data-studio-theme-tier="duo"] :is(.primary:not(#idle-hud *, .danger), #workspace-layer .primary, #idle-hud .primary) { background: linear-gradient(120deg, var(--gold-bright), var(--gold) 52%, var(--accent-2-fill, var(--accent-2))); }
 /* Only a primary that can be pressed glows; a disabled or busy one stays flat. */
-:root[data-studio-theme-tier="premium"] .primary:not(:disabled, [aria-disabled="true"]) { box-shadow: 0 0 0 1px rgba(var(--accent-2-rgb), .22), 0 6px 20px -10px rgba(var(--accent-2-rgb), .7); }
-:root[data-studio-theme-tier="premium"] .ws-main { background: radial-gradient(ellipse at 12% 100%, rgba(var(--accent-2-rgb), .07), transparent 46%), radial-gradient(ellipse at 65% 0, var(--tint-gold-2), transparent 54%), var(--bg); }
-:root[data-studio-theme-tier="premium"] .music-theme[aria-pressed="true"] { box-shadow: 0 0 16px -6px rgba(var(--accent-2-rgb), .75); }
-:root[data-studio-theme-tier="premium"] .music-node-choice[aria-pressed="true"] { box-shadow: inset 0 -2px var(--gold), 0 0 16px -6px rgba(var(--accent-2-rgb), .75); }
+:root[data-studio-theme][data-studio-theme-tier="duo"] :is(.primary:not(#idle-hud *, .danger), #workspace-layer .primary, #idle-hud .primary):not(:disabled, [aria-disabled="true"]) { box-shadow: 0 0 0 1px rgba(var(--accent-2-rgb), .22), 0 6px 20px -10px rgba(var(--accent-2-rgb), .7); }
+:root[data-studio-theme-tier="duo"] .ws-main { background: radial-gradient(ellipse at 12% 100%, rgba(var(--accent-2-rgb), .07), transparent 46%), radial-gradient(ellipse at 65% 0, var(--tint-gold-2), transparent 54%), var(--bg); }
+:root[data-studio-theme-tier="duo"] .music-theme[aria-pressed="true"] { box-shadow: 0 0 16px -6px rgba(var(--accent-2-rgb), .75); }
+:root[data-studio-theme-tier="duo"] .music-node-choice[aria-pressed="true"] { box-shadow: inset 0 -2px var(--gold), 0 0 16px -6px rgba(var(--accent-2-rgb), .75); }
 @media (prefers-reduced-motion: no-preference) {
   /* A sheen that sweeps toward the second hue, only while a primary button is pointed at: nothing animates at rest.
      The global button transition list names background-color alone, so this one adds background-position and keeps the rest. */
-  :root[data-studio-theme-tier="premium"] .primary { background-size: 160% 100%; background-position: 0 0; transition: background-position var(--motion-panel) var(--ease), box-shadow var(--motion-menu) var(--ease), border-color var(--motion-press) var(--ease), color var(--motion-press) var(--ease), transform var(--motion-press) var(--ease-enter); }
-  :root[data-studio-theme-tier="premium"] .primary:not(:disabled, [aria-disabled="true"]):is(:hover, :focus-visible) { background-position: 100% 0; box-shadow: 0 0 0 1px rgba(var(--accent-2-rgb), .4), 0 8px 26px -8px rgba(var(--accent-2-rgb), .85); }
+  :root[data-studio-theme][data-studio-theme-tier="duo"] :is(.primary:not(#idle-hud *, .danger), #workspace-layer .primary, #idle-hud .primary) { background-size: 160% 100%; background-position: 0 0; transition: background-position var(--motion-panel) var(--ease), box-shadow var(--motion-menu) var(--ease), border-color var(--motion-press) var(--ease), color var(--motion-press) var(--ease), transform var(--motion-press) var(--ease-enter); }
+  :root[data-studio-theme][data-studio-theme-tier="duo"] :is(.primary:not(#idle-hud *, .danger), #workspace-layer .primary, #idle-hud .primary):not(:disabled, [aria-disabled="true"]):is(:hover, :focus-visible) { background-position: 100% 0; box-shadow: 0 0 0 1px rgba(var(--accent-2-rgb), .4), 0 8px 26px -8px rgba(var(--accent-2-rgb), .85); }
 }
 /* The sheet's column, read by the overlay and by the toasts beside it. With
    the menu on, it is measured beside the menu (the overlay starts at its
@@ -5334,8 +5360,21 @@ body.music-preview-active #toast-host { left: calc(var(--shell-x0) + var(--music
 /* Two-tone swatch: the theme's accent (--swatch) and its second hue (--swatch-2)
    split on the diagonal inside a hairline ring, the free dots' size and halo.
    The 1.2px blend at the seam is the anti-aliasing a hard stop lacks. */
-.music-theme-premium::before, .void-swatch { box-sizing: border-box; flex: none; width: 13px; height: 13px; border-radius: 50%; background: linear-gradient(135deg, var(--swatch) calc(50% - .6px), var(--swatch-2) calc(50% + .6px)); box-shadow: 0 0 0 1px rgba(255, 255, 255, .16), 0 0 0 3px color-mix(in srgb, var(--swatch-2) 14%, transparent); }
-.music-theme-premium[aria-pressed="true"]::before { box-shadow: 0 0 0 1px rgba(255, 255, 255, .34), 0 0 8px color-mix(in srgb, var(--swatch-2) 65%, transparent); }
+.music-theme-duo::before, .void-swatch { box-sizing: border-box; flex: none; width: 13px; height: 13px; border-radius: 50%; background: linear-gradient(135deg, var(--swatch) calc(50% - .6px), var(--swatch-2) calc(50% + .6px)); box-shadow: 0 0 0 1px rgba(255, 255, 255, .16), 0 0 0 3px color-mix(in srgb, var(--swatch-2) 14%, transparent); }
+.music-theme-duo[aria-pressed="true"]::before { box-shadow: 0 0 0 1px rgba(255, 255, 255, .34), 0 0 8px color-mix(in srgb, var(--swatch-2) 65%, transparent); }
+/* A light theme's swatch: its page (--swatch-2) and its accent (--swatch) split on the diagonal like the
+   two-tone ones, inside a ring of the label's own ink, so the pale half reads on a light panel and a dark one. */
+.music-theme-light::before { box-sizing: border-box; flex: none; background: linear-gradient(135deg, var(--swatch-2) calc(50% - .6px), var(--swatch) calc(50% + .6px)); box-shadow: 0 0 0 1px color-mix(in srgb, currentColor 40%, transparent); }
+.music-theme-light[aria-pressed="true"]::before { box-shadow: 0 0 0 1px currentColor, 0 0 0 3px color-mix(in srgb, var(--swatch) 18%, transparent); }
+/* The heading faces (FONTS in music.js): each says its name beside a sample in its own face. */
+.music-fonts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+.music-font { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 7px 10px; border: 1px solid transparent; border-radius: 9px; background: none; color: var(--muted); text-align: left; white-space: normal; font-size: 12px; }
+.music-font-sample { flex: none; width: 28px; color: var(--ivory); font: 600 18px/1 var(--font-ui); text-align: center; }
+.music-font-copy { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+.music-font-copy strong { color: inherit; font: 600 12px/1.35 var(--font-ui); }
+.music-font-copy small { color: var(--muted); font: 12px/1.35 var(--font-ui); }
+.music-font:hover { color: var(--ivory); background: var(--tint-gold-1); }
+.music-font[aria-pressed="true"] { border-color: var(--hairline-strong); color: var(--ivory); background: var(--tint-gold-2); }
 .music-theme-locked:hover { background: rgba(var(--void-a), .07); }
 /* The buttons are ghost mini; the sheet's smaller type keeps all three on one line. */
 /* A member sees one quiet line where the fork path would be. */
@@ -5837,7 +5876,7 @@ body.appearance-settings-active .settings-media :is(.music-section, .music-node-
 body.appearance-settings-active .settings-media .music-themes { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 body.appearance-settings-active .settings-media .music-theme { min-height: 52px; flex-direction: column; justify-content: center; gap: 6px; padding: 7px 4px; font-size: 11px; line-height: 1.3; text-align: center; white-space: normal; border: 1px solid var(--hairline); background: var(--bg-deep); }
 body.appearance-settings-active .settings-media .music-theme::before { width: 26px; height: 6px; flex: none; border-radius: 3px; }
-body.appearance-settings-active .music-theme-premium { position: relative; }
+body.appearance-settings-active .music-theme-duo { position: relative; }
 body.appearance-settings-active .settings-media .music-theme[aria-pressed="true"] { border-color: var(--gold); background: var(--tint-gold-2); }
 body.appearance-settings-active .settings-media .music-node-choices { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 body.appearance-settings-active .settings-media .music-node-choice { min-height: 0; padding: 7px; gap: 3px; }
@@ -6501,7 +6540,7 @@ body:has(#plans-overlay:not([hidden])) #idle-layer { opacity: .18; }
 /* Where a line came from. Your own words read as settled; anything Mefi
    proposed stays visibly unconfirmed until you record it as a decision. */
 .planning-note[data-note-kind="interpretation"], .planning-note[data-note-kind="conflict"] { border-left-style: dashed; }
-.planning-note[data-note-kind="conflict"] strong { color: #f0c073; }
+.planning-note[data-note-kind="conflict"] strong { color: var(--warn); }
 .planning-interview { border-color: var(--hairline-strong); background: var(--tint-gold-2); }
 .planning-interview-ask { margin: 10px 0 14px; padding-left: 12px; border-left: 3px solid var(--gold-bright); font-size: 18px; line-height: 1.5; color: var(--ivory); letter-spacing: -.01em; }
 /* Mefi's reading of your answer, with the one-click way to make it yours. */
@@ -8802,6 +8841,9 @@ span.catalog-expand { width: 16px; height: 16px; }
 :root[data-studio-theme=violet] { --studio-secondary: #de9cb7; --font-display: "Trebuchet MS", "Segoe UI", sans-serif; --studio-gradient-angle: 145deg; }
 :root[data-studio-theme=ember] { --studio-secondary: #d2ba7b; --font-display: "Georgia", serif; --studio-title-tracking: -.025em; --studio-gradient-angle: 115deg; }
 :root[data-studio-theme=rose] { --studio-secondary: #bba2de; --font-display: "Georgia", serif; --studio-title-tracking: -.025em; }
+/* The light themes: Daylight's sky blue drifts toward teal; Paper sets its headings like a printed page. */
+:root[data-studio-theme=daylight] { --studio-secondary: #3f9bc2; --studio-gradient-angle: 150deg; }
+:root[data-studio-theme=paper] { --studio-secondary: #b08a3e; --font-display: "Georgia", serif; --studio-title-tracking: -.02em; --studio-gradient-angle: 125deg; }
 :root[data-studio-theme-tier=duo] { --studio-secondary: var(--accent-2); }
 :root[data-studio-theme=eclipse] { --font-display: "Georgia", serif; --studio-gradient-angle: 110deg; }
 :root[data-studio-theme=dusk] { --font-display: "Trebuchet MS", "Segoe UI", sans-serif; --studio-gradient-angle: 160deg; }
@@ -10259,6 +10301,8 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 .vibe-aurora.two { width: 46vw; height: 38vw; right: -14vw; top: 8vh; background: radial-gradient(circle, color-mix(in srgb, var(--info) 55%, transparent), transparent 70%); animation-duration: 32s; animation-delay: -9s; opacity: .22; }
 .vibe-aurora.three { width: 60vw; height: 30vw; left: 20vw; bottom: -22vw; background: radial-gradient(circle, color-mix(in srgb, var(--gold-bright) 45%, transparent), transparent 70%); animation-duration: 38s; animation-delay: -17s; opacity: .2; }
 :root[data-studio-theme-tone="light"] .vibe-aurora { mix-blend-mode: multiply; opacity: .16; }
+/* The box and cards lift on the light tone's soft shadow; the dark one read as a smudge under them. */
+:root[data-studio-theme-tone="light"] #vibe-layer { --v-lift: var(--shadow-2), inset 0 1px 0 color-mix(in srgb, var(--panel-solid) 70%, transparent); }
 @keyframes vibe-drift {
   0% { transform: translate3d(0, 0, 0) scale(1); }
   50% { transform: translate3d(4vw, 3vh, 0) scale(1.08); }
@@ -11787,6 +11831,8 @@ html[data-ui-mode="vibe"] .settings-nav :is(button, a) { border-radius: 12px; }
 .setup-welcome[hidden] { display: none; }
 @keyframes setup-welcome-in { from { opacity: 0; } to { opacity: 1; } }
 .setup-welcome-card { width: min(640px, 100%); max-height: calc(100vh - 48px); padding: 28px 28px 0; overflow: auto; scrollbar-width: none; border: 1px solid color-mix(in srgb, var(--ivory) 12%, transparent); border-radius: 18px; background: var(--panel-solid); box-shadow: 0 30px 80px -30px rgba(0, 0, 0, .8); outline: none; }
+/* On a light page the card's dark drop shadow read as a smudge: it takes the light tone's softer one. */
+:root[data-studio-theme-tone="light"] .setup-welcome-card { box-shadow: var(--shadow-3); }
 /* One bar per step, however many there are. */
 .setup-welcome-steps { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; margin: 0 0 22px; }
 .setup-welcome-steps > i { height: 3px; border-radius: var(--r-pill, 999px); background: color-mix(in srgb, var(--ivory) 14%, transparent); transition: background var(--motion-base, 200ms) var(--ease-out, ease-out); }
@@ -15338,7 +15384,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
           <div class="settings-you-fields">
             <label class="field"><span class="field-label">Your name</span><input id="workspace-person-name" type="text" maxlength="40" placeholder="What should I call you?" autocomplete="off"></label>
             <label class="field"><span class="field-label">Companion name</span><input id="workspace-agent-name" type="text" maxlength="30" placeholder="Mefi" autocomplete="off"></label>
-            <div class="field settings-you-theme"><label class="field-label" for="workspace-accent">Studio theme</label><div class="settings-you-row"><select id="workspace-accent"><option value="chrome">Chrome</option><option value="aurora">Aurora</option><option value="gold">Studio gold</option><option value="midnight">Midnight</option><option value="sage">Forest</option><option value="violet">Violet</option><option value="ember">Ember</option><option value="rose">Rose</option><option value="custom">Custom colors</option><optgroup label="Void collection"><option value="void">Void</option><option value="eclipse">Eclipse</option><option value="abyss">Abyss</option><option value="dusk">Neon Dusk</option></optgroup></select><button type="button" class="ghost mini" data-settings-nav="music" title="Themes, custom colors and node styles in Appearance">Appearance settings <span aria-hidden="true">↗</span></button></div></div>
+            <div class="field settings-you-theme"><label class="field-label" for="workspace-accent">Studio theme</label><div class="settings-you-row"><select id="workspace-accent"><option value="chrome">Chrome</option><option value="aurora">Aurora</option><option value="gold">Studio gold</option><option value="midnight">Midnight</option><option value="sage">Forest</option><option value="violet">Violet</option><option value="ember">Ember</option><option value="rose">Rose</option><option value="custom">Custom colors</option><optgroup label="Light"><option value="daylight">Daylight</option><option value="paper">Paper</option></optgroup><optgroup label="Void collection"><option value="void">Void</option><option value="eclipse">Eclipse</option><option value="abyss">Abyss</option><option value="dusk">Neon Dusk</option></optgroup></select><button type="button" class="ghost mini" data-settings-nav="music" title="Themes, custom colors and node styles in Appearance">Appearance settings <span aria-hidden="true">↗</span></button></div></div>
           </div>
           <div class="field settings-you-motion">
             <span class="field-label" id="settings-motion-label">Motion</span>
@@ -38170,6 +38216,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   const BACKDROP_ORDER = ["follow", "aurora", "deepspace", "nebula", "embers", "fireflies", "bokeh", "dust", "grid", "minimal"];
   // Chrome's sky is deep space: silver stars over matte black.
   const THEME_BACKDROP = { chrome: "deepspace", gold: "dust", midnight: "deepspace", forest: "fireflies", violet: "nebula", ember: "embers", aurora: "aurora", rose: "bokeh", custom: "dust",
+    // The light themes: scenes drawn in ink, not light (aurora and bokeh add light, which a pale sky cannot show).
+    daylight: "grid", paper: "dust",
     // The Void collection's two-tone themes.
     void: "deepspace", eclipse: "dust", abyss: "fireflies", dusk: "grid" };
   // Speech bubbles: what an agent says while it works, drawn beside its orb.
@@ -70904,10 +70952,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     for (const [id, key, fallback] of [["person-name", "person", ""], ["agent-name", "companion", "Mefi"], ["accent", "accent", "chrome"]]) {
       $(id).value = storage.get(key, fallback);
       $(id).addEventListener("input", () => {
-        // Music announces the actual theme (and whether this is a temporary
-        // preview) before Workspace writes its own accent preference.
+        // Music applies and announces the theme; syncThemeChoice below then
+        // writes Workspace's own accent preference from that announcement.
         if (id === "accent" && window.MefiMusic?.applyTheme) {
-          window.MefiMusic.applyTheme($(id).value === "sage" ? "forest" : $(id).value, true, { navigate: false });
+          window.MefiMusic.applyTheme($(id).value === "sage" ? "forest" : $(id).value, true);
           return;
         }
         storage.set(key, $(id).value);
@@ -71639,6 +71687,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
 // Jam, Twitch, any other page) can open in the player's built-in browser.
 // Every source plays through one card: the media menu's mini player, with a
 // transport, a volume and quick tree switches, that unfolds into sections.
+// It also owns the light themes, the three looks the first run offers (Light,
+// Dark, Stylized) with their heading faces, and the Shop's style packs: see
+// "Looks and style packs" below for the calls.
 (() => {
   "use strict";
   const STORAGE_KEY = "mefiStudio.music.v1";
@@ -71660,6 +71711,12 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     ember: { name: "Ember", accent: "#dd997a", bright: "#ffc5a9", rgb: "221,153,122", bg: "#100805", panel: "#21150f", muted: "#c0ab9d" },
     aurora: { name: "Aurora", accent: "#71cbb7", bright: "#a7f3da", rgb: "113,203,183", bg: "#050d13", panel: "#101f29", muted: "#abc4c9", text: "#e7f5ee" },
     rose: { name: "Rose", accent: "#dc96af", bright: "#ffbed3", rgb: "220,150,175", bg: "#10080f", panel: "#23141e", muted: "#c6aebc", text: "#f7e5ea" },
+    // The light themes (tone "light"): dark ink on a pale page, which the
+    // stylesheets answer with a light color-scheme, softer shadows and deeper
+    // status hues. "bright" is the accent's deeper ink here, as it is its
+    // paler one on a dark theme: links, focus rings and chosen tabs use it.
+    daylight: { name: "Daylight", accent: "#2c5cc0", bright: "#1d479e", rgb: "44,92,192", bg: "#eef1f5", panel: "#fbfcfd", muted: "#4b5567", text: "#18202c", tone: "light" },
+    paper: { name: "Paper", accent: "#a14b26", bright: "#843815", rgb: "161,75,38", bg: "#f3eee4", panel: "#fffcf6", muted: "#625849", text: "#2b241d", tone: "light" },
     // The Void collection, free like every theme: each carries a second hue
     // (accent2) that the "duo" tier paints with, and the pickers list them
     // under their own small heading.
@@ -71686,6 +71743,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   const isVoidTheme = (key) => typeof key === "string" && Object.hasOwn(THEMES, key) && THEMES[key].collection === "void";
   const isNodeStyle = (key) => typeof key === "string" && Object.hasOwn(NODE_STYLES, key);
   const isVoidNodeStyle = (key) => isNodeStyle(key) && NODE_STYLES[key].collection === "void";
+  const isLightTheme = (key) => typeof key === "string" && Object.hasOwn(THEMES, key) && THEMES[key].tone === "light";
   const NODE_LAYOUTS = {
     constellation: { name: "Constellation", detail: "An open arrangement" },
     tree: { name: "Branches", detail: "A clear hierarchy" },
@@ -71693,6 +71751,57 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     helix: { name: "Helix", detail: "A rising spiral" },
     layers: { name: "Terraces", detail: "Stacked levels" },
   };
+  // Heading faces (html[data-studio-font] and --font-display on the root),
+  // the one table of them: looks, packs and the Settings picker all name
+  // these keys. "studio" keeps each theme's own face (studio-ui.css gives
+  // Studio gold its serif and Neon Dusk its Trebuchet); the others replace it
+  // on every theme. Faces that ship with the system only: Studio loads no web
+  // font, and each stack ends in a generic family.
+  const FONTS = {
+    studio: { name: "Studio", detail: "Each theme's own headings", stack: null },
+    display: { name: "Display", detail: "Tall, condensed headings", stack: '"Bahnschrift Condensed", "Bahnschrift SemiCondensed", "Arial Narrow", "Roboto Condensed", sans-serif', tracking: "0em" },
+    serif: { name: "Serif", detail: "Book headings", stack: '"Sitka Heading", "Georgia", "Times New Roman", serif', tracking: "-.015em" },
+    mono: { name: "Mono", detail: "Code-style headings", stack: '"Cascadia Code", "Consolas", ui-monospace, monospace', tracking: "-.02em" },
+  };
+  const isFont = (key) => typeof key === "string" && Object.hasOwn(FONTS, key);
+  // Materials are MefiAppearance's presets (renderer/studio-ui.js): how much
+  // glass, glow and roundness the surfaces have.
+  const MATERIALS = ["focus", "studio", "atmosphere"];
+  // The looks the first run offers. Each lists its themes, its default first,
+  // and the extras it brings: Light and Dark keep the plain material and each
+  // theme's own headings, Stylized opens the glass, raises the glow and sets
+  // the display face. A theme added to the table lands in Light or Dark by its
+  // tone; Stylized is the expressive ones, named here.
+  const STYLIZED_THEMES = ["aurora", "void", "eclipse", "abyss", "dusk"];
+  const LOOKS = Object.freeze([
+    { id: "light", name: "Light", themes: Object.keys(THEMES).filter((key) => isLightTheme(key)), material: "studio", font: "studio" },
+    { id: "dark", name: "Dark", themes: Object.keys(THEMES).filter((key) => !isLightTheme(key) && !STYLIZED_THEMES.includes(key)), material: "studio", font: "studio" },
+    { id: "stylized", name: "Stylized", themes: STYLIZED_THEMES, material: "atmosphere", font: "display" },
+  ].map((look) => Object.freeze({ ...look, themes: Object.freeze([...look.themes]) })));
+  // A style pack as music.js keeps it: the Shop's pack data (#rrggbb colours,
+  // keys from the tables above) with its id and name. Only these fields are
+  // copied, so nothing else a caller hands over is painted or stored; a colour
+  // or key that is not one of ours refuses the whole pack (null).
+  const PACK_COLORS = ["accent", "background", "surface", "text", "accent2"];
+  function safePack(value) {
+    if (!value || typeof value !== "object" || !value.palette || typeof value.palette !== "object") return null;
+    const palette = {};
+    for (const key of PACK_COLORS) {
+      if (key === "accent2" && value.palette.accent2 == null) continue;
+      const color = hexColor(value.palette[key]);
+      if (!color) return null;
+      palette[key] = color.toLowerCase();
+    }
+    const id = typeof value.id === "string" && /^[\w:.-]{1,80}$/.test(value.id) ? value.id : null;
+    const name = typeof value.name === "string" && value.name.trim() ? value.name.replace(/\s+/g, " ").trim().slice(0, 60) : "Style pack";
+    const pack = { id, name, palette };
+    for (const [key, valid] of [["nodeStyle", isNodeStyle], ["material", (material) => MATERIALS.includes(material)], ["font", isFont]]) {
+      if (value[key] == null) continue;
+      if (!valid(value[key])) return null;
+      pack[key] = value[key];
+    }
+    return pack;
+  }
   const AUDIO_EFFECTS = {
     waves: { title: "Connection waves", detail: "Let sound gently bend the connections.", enabled: true },
     splitBands: { title: "Separate frequency lines", detail: "Bass, mids and treble drive different connections.", enabled: true },
@@ -71797,28 +71906,55 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   const mixColor = (a, b, amount) => `#${channels(a).map((value, index) => Math.round(value + (channels(b)[index] - value) * amount).toString(16).padStart(2, "0")).join("")}`;
   const luminance = (color) => channels(color).map((value) => { const n = value / 255; return n <= .04045 ? n / 12.92 : ((n + .055) / 1.055) ** 2.4; }).reduce((sum, value, index) => sum + value * [.2126, .7152, .0722][index], 0);
   const contrast = (a, b) => (Math.max(luminance(a), luminance(b)) + .05) / (Math.min(luminance(a), luminance(b)) + .05);
-  function readableColor(color, background, minimum = 4.5) {
+  // `target` is the end an ink moves toward: by default whichever of white
+  // and black reads better on `background`.
+  function readableColor(color, background, minimum = 4.5, target = contrast("#FFFFFF", background) >= contrast("#000000", background) ? "#FFFFFF" : "#000000") {
     if (contrast(color, background) >= minimum) return color;
-    const target = contrast("#FFFFFF", background) >= contrast("#000000", background) ? "#FFFFFF" : "#000000";
     for (let step = 1; step <= 40; step += 1) { const candidate = mixColor(color, target, step / 40); if (contrast(candidate, background) >= minimum) return candidate; }
     return target;
   }
-  function resolvePalette(theme, customColors) {
+  // "custom" paints the saved custom colours and "pack" a style pack's palette
+  // (`pack`, as safePack keeps it); both take the same steps from here on.
+  function resolvePalette(theme, customColors, pack = null) {
     const custom = safeCustomColors(customColors);
-    const base = theme === "custom" ? { accent: custom.accent, bright: mixColor(custom.accent, "#FFFFFF", .3), bg: custom.background, panel: custom.surface, text: custom.text } : THEMES[theme] || THEMES[DEFAULT_THEME];
+    const chosen = theme === "custom" ? { accent: custom.accent, bg: custom.background, panel: custom.surface, text: custom.text }
+      : theme === "pack" && pack?.palette ? { accent: pack.palette.accent, accent2: pack.palette.accent2, bg: pack.palette.background, panel: pack.palette.surface, text: pack.palette.text } : null;
+    // Chosen colours get their stronger accent ink from the panel's tone:
+    // brighter on a dark panel, deeper on a light one.
+    const base = chosen ? { ...chosen, bright: mixColor(chosen.accent, luminance(chosen.panel) > .35 ? "#000000" : "#FFFFFF", .3) } : THEMES[theme] || THEMES[DEFAULT_THEME];
     // Leave contrast headroom for the translucent panels and their subtle sheen.
-    const text = readableColor(base.text || "#ece5d8", base.panel, 5.5);
-    const bright = readableColor(base.bright, base.panel, 4.5);
-    const muted = readableColor(base.muted || mixColor(text, base.panel, .32), base.panel, 5.5);
-    const dim = readableColor(mixColor(text, base.panel, .5), base.panel, 4.5);
+    let text = readableColor(base.text || "#ece5d8", base.panel, 5.5);
+    let bright = readableColor(base.bright, base.panel, 4.5);
+    let muted = readableColor(base.muted || mixColor(text, base.panel, .32), base.panel, 5.5);
+    let dim = readableColor(mixColor(text, base.panel, .5), base.panel, 4.5);
     const border = readableColor(mixColor(base.accent, base.panel, .6), base.panel, 3);
     const canvasText = readableColor(base.text || "#ece5d8", base.bg);
     // Custom background and surface colours may have opposite tones. Reading
     // areas use the safe base; the canvas keeps the exact chosen background.
     const readingBackground = [text, muted, bright].every((ink) => contrast(ink, base.bg) >= 4.5) ? base.bg : base.panel;
-    const onAccent = contrast("#FFFFFF", base.accent) > contrast("#000000", base.accent) ? "#FFFFFF" : "#000000";
-    const actionEnd = mixColor(base.accent, onAccent === "#FFFFFF" ? "#000000" : "#FFFFFF", .18);
-    return { accent: base.accent, bright, accent2: base.accent2 || bright, background: base.bg, readingBackground, actionEnd, surface: base.panel, text, muted, dim, border,
+    // Where the page is a reading surface too, each ink keeps its minimum
+    // there as well, moving the way it moved for the panel: a light page sits
+    // a shade darker than its panels, so an ink just readable on a panel could
+    // fall short on it. A light page also takes the panels' tinted glass and
+    // its own colour washes, which darken it a little more, so there every ink
+    // keeps .8 of headroom on the page and the panels alike. A dark page is
+    // darker than its panels and those layers only lift contrast: nothing moves.
+    if (readingBackground === base.bg) {
+      const toward = contrast("#FFFFFF", base.panel) >= contrast("#000000", base.panel) ? "#FFFFFF" : "#000000";
+      const headroom = luminance(base.bg) > .35 ? .8 : 0;
+      [text, bright, muted, dim] = [[text, 5.5], [bright, 4.5], [muted, 5.5], [dim, 4.5]].map(([ink, minimum]) => readableColor(readableColor(ink, base.panel, minimum + headroom, toward), base.bg, minimum + headroom, toward));
+    }
+    // The ink on the accent's fills (primaries, badges, the chosen segment).
+    // Many of them run from the accent to bright, so it is whichever of white
+    // and black reads better on both: on a light panel a chosen accent's bright
+    // is deeper than the accent, and black on it would fail.
+    const inkOn = (ink) => Math.min(contrast(ink, base.accent), contrast(ink, bright));
+    const onAccent = inkOn("#FFFFFF") > inkOn("#000000") ? "#FFFFFF" : "#000000";
+    const awayFromInk = onAccent === "#FFFFFF" ? "#000000" : "#FFFFFF";
+    const actionEnd = mixColor(base.accent, awayFromInk, .18);
+    // The second hue as a fill under that ink: the two-tone primaries end on it.
+    const accent2Fill = readableColor(base.accent2 || bright, onAccent, 4.5, awayFromInk);
+    return { accent: base.accent, bright, accent2: base.accent2 || bright, accent2Fill, background: base.bg, readingBackground, actionEnd, surface: base.panel, text, muted, dim, border,
       rgb: channels(base.accent).join(","), surfaceRgb: channels(base.panel).join(","),
       onAccent,
       canvas: { background: base.bg, accent: base.accent, bright: readableColor(base.bright, base.bg, 3), accent2: base.accent2 || readableColor(base.bright, base.bg, 3), text: canvasText, muted: readableColor(mixColor(canvasText, base.bg, .32), base.bg), dim: readableColor(mixColor(canvasText, base.bg, .5), base.bg, 3) } };
@@ -71927,7 +72063,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     // from before the Links tab, read once and never written again.
     const links = [...new Set([...(Array.isArray(raw.links) ? raw.links : []), ...(Array.isArray(raw.spotify) ? raw.spotify : [])]
       .map((item) => playableLink(mediaLink(item))?.url).filter(Boolean))].slice(0, 8);
-    return { theme: isTheme(raw.theme) ? raw.theme : DEFAULT_THEME, customColors: safeCustomColors(raw.customColors), volume: Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : .7, links,
+    // A style pack is kept only while it is the theme on screen.
+    const pack = raw.theme === "pack" ? safePack(raw.pack) : null;
+    return { theme: pack ? "pack" : isTheme(raw.theme) ? raw.theme : DEFAULT_THEME, pack, font: isFont(raw.font) ? raw.font : "studio",
+      customColors: safeCustomColors(raw.customColors), volume: Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : .7, links,
       nodeStyle: isNodeStyle(raw.nodeStyle) ? raw.nodeStyle : "orbs",
       nodeLayout: Object.hasOwn(NODE_LAYOUTS, raw.nodeLayout) ? raw.nodeLayout : "constellation",
       station: STATION_IDS.has(raw.station) ? raw.station : null,
@@ -72064,25 +72203,33 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   function themeTokens(palette) {
     return { "--gold": palette.accent, "--gold-bright": palette.bright, "--gold-dim": `rgba(${palette.rgb},.32)`, "--hairline": `rgba(${channels(palette.border).join(",")},.5)`, "--hairline-strong": palette.border, "--tint-gold-1": `rgba(${palette.rgb},.06)`, "--tint-gold-2": `rgba(${palette.rgb},.09)`, "--tint-gold-3": `rgba(${palette.rgb},.14)`, "--ring": `0 0 0 3px rgba(${palette.rgb},.15)`, "--glow-gold": `0 0 14px rgba(${palette.rgb},.3)`, "--bg": palette.background, "--bg-deep": palette.background, "--cmd-bg": palette.background, "--panel-solid": palette.surface, "--panel": `rgba(${palette.surfaceRgb},.85)`, "--glass": `rgba(${palette.surfaceRgb},.76)`, "--glass-hard": `rgba(${palette.surfaceRgb},.94)`, "--glass-soft": `rgba(${palette.surfaceRgb},.7)`, "--ivory": palette.text, "--muted": palette.muted, "--dim": palette.dim, "--ink": palette.onAccent };
   }
-  // tier "duo": a theme with a second hue of its own (the Void collection),
-  // which the stylesheets paint with (--accent-2); every other theme is "solo".
-  const themeDetail = (key) => { const palette = resolvePalette(key, prefs.customColors); return { theme: key, tier: THEMES[key]?.accent2 ? "duo" : "solo", ...palette, tokens: themeTokens(palette) }; };
-  // Paints a theme; applyTheme decides whether it is saved.
-  function paintTheme(key) {
-    const detail = themeDetail(key);
+  // tier "duo": a theme with a second hue of its own (the Void collection, a
+  // pack with an accent2), which the stylesheets paint with (--accent-2) and
+  // music.css and styles.css answer under [data-studio-theme-tier="duo"];
+  // every other theme is "solo".
+  const themeDetail = (key, pack = prefs.pack) => {
+    const palette = resolvePalette(key, prefs.customColors, pack);
+    const second = key === "pack" ? pack?.palette?.accent2 : THEMES[key]?.accent2;
+    return { theme: key, tier: second ? "duo" : "solo", ...palette, tokens: themeTokens(palette) };
+  };
+  // Paints a theme; applyTheme decides whether it is saved. "pack" paints
+  // `pack`: the applied one, or the one the Shop is trying.
+  function paintTheme(key, pack = prefs.pack) {
+    const detail = themeDetail(key, pack);
     const root = document.documentElement;
     for (const [name, value] of Object.entries(detail.tokens)) root.style.setProperty(name, value);
     for (const [name, value] of Object.entries(detail.canvas)) root.style.setProperty(`--canvas-${name}`, value);
     root.style.setProperty("--studio-accent-rgb", detail.rgb);
     root.style.setProperty("--accent-2", detail.accent2);
     root.style.setProperty("--accent-2-rgb", channels(detail.accent2).join(","));
+    root.style.setProperty("--accent-2-fill", detail.accent2Fill);
     root.style.setProperty("--studio-reading-bg", detail.readingBackground);
     root.style.setProperty("--studio-action-end", detail.actionEnd);
     root.dataset.studioTheme = key;
     root.dataset.studioThemeTier = detail.tier;
     // Shared glass surfaces adapt their edge and shadow to a light palette.
     root.dataset.studioThemeTone = luminance(detail.readingBackground) > 0.35 ? "light" : "dark";
-    for (const button of [...els.themes?.children || [], ...els.voidThemes?.children || []]) {
+    for (const button of [...els.themes?.children || [], ...els.lightThemes?.children || [], ...els.voidThemes?.children || []]) {
       button.setAttribute("aria-pressed", String(button.dataset.theme === key));
       if (button.dataset.theme === "custom") button.style.setProperty("--swatch", prefs.customColors.accent);
     }
@@ -72092,11 +72239,15 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     }
     return detail;
   }
-  // Every theme applies and saves the same way, Void collection included.
+  // Every theme applies and saves the same way, Void collection included;
+  // "pack" repaints the applied style pack (applyPack chooses one). Choosing
+  // for real ends a pack the Shop is trying.
   function applyTheme(theme, save = true) {
+    endPreview(false);
     settingsReveal.custom = false;
-    const key = isTheme(theme) ? theme : DEFAULT_THEME;
+    const key = theme === "pack" ? prefs.pack ? "pack" : DEFAULT_THEME : isTheme(theme) ? theme : DEFAULT_THEME;
     prefs.theme = key;
+    if (key !== "pack") prefs.pack = null;
     const detail = paintTheme(key);
     if (save) persist();
     event("mefi-theme-change", detail);
@@ -72109,24 +72260,133 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     applyTheme("custom", save);
     return true;
   }
+  // ---- Looks and style packs ---------------------------------------------------
+  // What the first run's "choose your look" and the Shop call (owner checks
+  // stay with the Shop: it decides what may be applied, this paints it):
+  //
+  //   looks() -> [{ id, name, themes, material, font }]: Light, Dark and
+  //     Stylized, each with its theme keys (its default first) and the extras
+  //     it brings: a material (a MefiAppearance preset) and a heading face (a
+  //     FONTS key).
+  //   applyLook(lookId, themeKey, save = true) -> the theme key it applied (a
+  //     key the look does not list is its first), or null for no such look.
+  //     The look's material and face go on with it, so Light and Dark put the
+  //     plain ones back. Everything is kept: the theme and face here, the
+  //     material in MefiAppearance's own store.
+  //   look() -> the id of the look the theme on screen belongs to, or null
+  //     (Custom, a pack).
+  //   fonts() -> [{ key, name, detail, stack }]; applyFont(key, save = true).
+  //   applyPack({ id, name, palette, nodeStyle?, material?, font? }, save = true)
+  //     -> true, or false (nothing changes) for a pack it cannot paint. The
+  //     pack becomes the theme "pack", painted from its palette the way Custom
+  //     is (plus accent2, which makes it two-tone), with its node style and
+  //     material when it names them and its face ("studio" when it names
+  //     none). It is kept in mefiStudio.music.v1 and comes back at boot.
+  //   previewPack(pack) -> true or false; paints a pack, its node style, face
+  //     and material for the Shop's Try without saving anything.
+  //     endPreview() -> true when it ended one: everything a try changed goes
+  //     back as it was. Choosing a theme, a face, a node style, a look or a
+  //     pack for real ends a try first.
+  //   packInfo() -> a copy of the applied pack, or null.
+  const lookOf = (theme) => LOOKS.find((look) => look.themes.includes(theme))?.id ?? null;
+  // What a material leaves on MefiAppearance, to tell whether it is still on.
+  const materialOf = (value) => value ? `${value.preset}|${value.glass}|${value.glow}` : "";
+  // The person's density (Size and density) stays as it is under any material.
+  function applyMaterial(material, save = true) {
+    const appearance = window.MefiAppearance;
+    if (!MATERIALS.includes(material) || typeof appearance?.apply !== "function") return false;
+    const density = appearance.get?.()?.density;
+    appearance.apply(density ? { preset: material, density } : { preset: material }, save);
+    return true;
+  }
+  function paintFont(key) {
+    const root = document.documentElement;
+    const chosen = isFont(key) ? key : "studio";
+    root.dataset.studioFont = chosen;
+    for (const [name, value] of [["--font-display", FONTS[chosen].stack], ["--studio-title-tracking", FONTS[chosen].tracking]]) {
+      if (value) root.style.setProperty(name, value);
+      else root.style.removeProperty?.(name);
+    }
+    for (const choice of els.fonts?.children || []) choice.setAttribute("aria-pressed", String(choice.dataset.font === chosen));
+  }
+  function applyFont(key, save = true) {
+    endPreview();
+    prefs.font = isFont(key) ? key : "studio";
+    paintFont(prefs.font);
+    if (save) persist();
+    return prefs.font;
+  }
+  function applyLook(lookId, themeKey, save = true) {
+    const look = LOOKS.find((one) => one.id === lookId);
+    if (!look) return null;
+    const theme = applyTheme(look.themes.includes(themeKey) ? themeKey : look.themes[0], save);
+    applyMaterial(look.material, save);
+    applyFont(look.font, save);
+    return theme;
+  }
+  function applyPack(value, save = true) {
+    const pack = safePack(value);
+    if (!pack) return false;
+    endPreview(false);
+    prefs.pack = pack;
+    applyTheme("pack", save);
+    if (pack.nodeStyle) applyNodeStyle(pack.nodeStyle, save);
+    if (pack.material) applyMaterial(pack.material, save);
+    applyFont(pack.font || "studio", save);
+    return true;
+  }
+  // The pack the Shop is trying, and what it changed beyond prefs (which a
+  // try never touches): the MefiAppearance store as it was, and the material
+  // the try left on, if any.
+  let trying = null;
+  function previewPack(value) {
+    const pack = safePack(value);
+    if (!pack) return false;
+    const appearance = window.MefiAppearance;
+    trying ||= { before: appearance?.get?.() ?? null, material: "" };
+    trying.pack = pack;
+    trying.nodeStyle = pack.nodeStyle || prefs.nodeStyle;
+    event("mefi-theme-change", { ...paintTheme("pack", pack), preview: true });
+    syncTreePreferences(false);
+    paintFont(pack.font || "studio");
+    if (pack.material && applyMaterial(pack.material, false)) trying.material = materialOf(appearance.get?.());
+    else if (trying.material && trying.before) { appearance.apply(trying.before, false); trying.material = ""; }
+    return true;
+  }
+  // paint false: the caller paints a theme of its own right after.
+  function endPreview(paint = true) {
+    if (!trying) return false;
+    const { before, material, nodeStyle } = trying;
+    trying = null;
+    if (paint) event("mefi-theme-change", paintTheme(prefs.theme));
+    if (nodeStyle !== prefs.nodeStyle) syncTreePreferences(false);
+    paintFont(prefs.font);
+    // The material goes back only while the try's is still on: one chosen in
+    // Settings meanwhile stays.
+    const appearance = window.MefiAppearance;
+    if (material && before && materialOf(appearance?.get?.()) === material) appearance.apply(before, false);
+    return true;
+  }
+  const copyPack = (pack) => pack ? { ...pack, palette: { ...pack.palette } } : null;
   // The palette on screen, read every frame by the tree rail and the Command
   // view. resolvePalette runs dozens of contrast searches (about 70 µs), so
   // the answer is kept until the theme or a custom colour changes, and every
-  // reader shares one frozen copy.
+  // reader shares one frozen copy. A pack the Shop is trying is on screen too.
   let paletteKey = null, paletteMemo = null;
   function themePalette() {
-    const theme = prefs.theme;
+    const theme = trying ? "pack" : prefs.theme;
+    const pack = trying ? trying.pack : prefs.pack;
     const custom = prefs.customColors;
-    const key = theme === "custom" ? `custom|${custom.accent}|${custom.background}|${custom.surface}|${custom.text}` : theme;
+    const key = theme === "custom" ? `custom|${custom.accent}|${custom.background}|${custom.surface}|${custom.text}` : theme === "pack" ? `pack|${PACK_COLORS.map((name) => pack?.palette?.[name] ?? "").join("|")}` : theme;
     if (key !== paletteKey || !paletteMemo) {
-      const palette = resolvePalette(theme, custom);
+      const palette = resolvePalette(theme, custom, pack);
       paletteMemo = Object.freeze({ theme, ...palette, canvas: Object.freeze(palette.canvas) });
       paletteKey = key;
     }
     return paletteMemo;
   }
   // Read per node per frame by the tree rail: plain fields, no storage reads.
-  function graphPreferences() { return { nodeStyle: prefs.nodeStyle, nodeLayout: prefs.nodeLayout, orbitTrails: prefs.orbitTrails, extraGlow: prefs.extraGlow }; }
+  function graphPreferences() { return { nodeStyle: trying ? trying.nodeStyle : prefs.nodeStyle, nodeLayout: prefs.nodeLayout, orbitTrails: prefs.orbitTrails, extraGlow: prefs.extraGlow }; }
   function syncTreePreferences(save) {
     const value = graphPreferences();
     Object.assign(document.documentElement.dataset, value);
@@ -72139,6 +72399,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     event("mefi-tree-preferences", value);
   }
   function applyNodeStyle(style, save = true) {
+    endPreview();
     prefs.nodeStyle = isNodeStyle(style) ? style : "orbs";
     syncTreePreferences(save);
     return prefs.nodeStyle;
@@ -72199,6 +72460,42 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       for (let index = 0; index < (kind === "style" ? 3 : 5); index += 1) element("i", null, null, preview);
       element("strong", null, option.name, choice);
       element("small", null, option.detail, choice);
+    }
+    return group;
+  }
+  // The light themes: an ordinary choice each, under a small heading of their
+  // own. The swatch is the theme's page with its accent on it.
+  function lightThemeChoices(parent) {
+    const title = element("h4", "music-node-label", "Light", parent);
+    title.id = "music-light-theme-label";
+    const group = element("div", "music-themes", null, parent);
+    group.id = "music-light-themes";
+    group.setAttribute("role", "group"); group.setAttribute("aria-labelledby", title.id);
+    for (const [key, palette] of Object.entries(THEMES).filter(([key]) => isLightTheme(key))) {
+      const choice = button(palette.name, "music-theme music-theme-light", group, () => applyTheme(key), `music-theme-${key}`);
+      choice.dataset.theme = key;
+      choice.style.setProperty("--swatch", palette.accent); choice.style.setProperty("--swatch-2", palette.bg);
+      choice.setAttribute("aria-pressed", String(prefs.theme === key));
+    }
+    return group;
+  }
+  // The heading faces (FONTS), each choice showing a sample in its own face.
+  function fontChoices(parent) {
+    const title = element("h4", "music-node-label", "Headings", parent);
+    title.id = "music-font-label";
+    const group = element("div", "music-fonts", null, parent);
+    group.id = "music-fonts";
+    group.setAttribute("role", "group"); group.setAttribute("aria-labelledby", title.id);
+    for (const [key, font] of Object.entries(FONTS)) {
+      const choice = button(null, "music-font", group, () => applyFont(key), `music-font-${key}`);
+      choice.dataset.font = key;
+      const sample = element("span", "music-font-sample", "Aa", choice);
+      sample.setAttribute("aria-hidden", "true");
+      if (font.stack) sample.style.fontFamily = font.stack;
+      const copy = element("span", "music-font-copy", null, choice);
+      element("strong", null, font.name, copy);
+      element("small", null, font.detail, copy);
+      choice.setAttribute("aria-pressed", String(prefs.font === key));
     }
     return group;
   }
@@ -73636,7 +73933,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     element("h3", null, "Color theme", themeSection);
     els.themes = element("div", "music-themes", null, themeSection);
     els.themes.setAttribute("role", "group"); els.themes.setAttribute("aria-label", "Color theme");
-    for (const [key, palette] of [...Object.entries(THEMES).filter(([key]) => !isVoidTheme(key)), ["custom", { name: "Custom palette", bright: prefs.customColors.accent }]]) {
+    for (const [key, palette] of [...Object.entries(THEMES).filter(([key]) => !isVoidTheme(key) && !isLightTheme(key)), ["custom", { name: "Custom palette", bright: prefs.customColors.accent }]]) {
       const choice = button(palette.name, "music-theme", els.themes, () => applyTheme(key));
       choice.dataset.theme = key; choice.style.setProperty("--swatch", palette.bright); choice.setAttribute("aria-pressed", String(prefs.theme === key));
     }
@@ -73659,7 +73956,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       els.customInputs[key] = { picker, hex };
     }
     button("Reset custom colors", "ghost music-custom-reset", els.customPalette, () => applyCustomColors(CUSTOM_DEFAULTS), "music-custom-reset");
+    els.lightThemes = lightThemeChoices(themeSection);
     els.voidThemes = voidThemeChoices(themeSection);
+    els.fonts = fontChoices(themeSection);
     element("p", "music-fineprint", "Colors are separate from node style and layout.", themeSection);
     const nodeSection = element("section", "music-node-settings", null, settings);
     nodeSection.dataset.appearancePanel = "nodes";
@@ -74332,7 +74631,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     build();
     bindAudioHover(document.getElementById("settings-audio-open"));
     window.addEventListener("blur", () => { if (!els.browser?.active && !els.linkPlayer?.contains(document.activeElement)) closeAudio(); });
-    applyTheme(prefs.theme, false);
+    applyTheme(prefs.theme, false); paintFont(prefs.font);
     syncTreePreferences(false); render(); renderMediaMenu();
     if (lastLink) els.linkInput.value = lastLink.url;
     // A station that was sounding when Studio closed is tuned again. Smoke and
@@ -74617,7 +74916,11 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     // Where the playing source is ({ position, duration } in seconds; duration 0 for a stream with no end): the status bar's time left.
     playback: () => { const at = playbackPosition(); return { position: at.position, duration: at.duration }; }, setRecommender: (fn) => { recommender = typeof fn === "function" ? fn : null; render(); }, addFiles, setSource, applyTheme, applyCustomColors,
     // The free palettes as swatches, and the one on screen (Vibe's settings panel).
-    themes: () => Object.entries(THEMES).map(([key, theme]) => ({ key, name: theme.name, accent: theme.accent, bright: theme.bright, bg: theme.bg, panel: theme.panel, ...(theme.accent2 ? { accent2: theme.accent2 } : {}) })),
+    themes: () => Object.entries(THEMES).map(([key, theme]) => ({ key, name: theme.name, accent: theme.accent, bright: theme.bright, bg: theme.bg, panel: theme.panel, tone: isLightTheme(key) ? "light" : "dark", ...(theme.accent2 ? { accent2: theme.accent2 } : {}) })),
+    // Looks and style packs (see "Looks and style packs" above).
+    looks: () => LOOKS.map((look) => ({ ...look, themes: [...look.themes] })), applyLook, look: () => lookOf(prefs.theme),
+    fonts: () => Object.entries(FONTS).map(([key, font]) => ({ key, name: font.name, detail: font.detail, stack: font.stack })), applyFont, font: () => prefs.font,
+    applyPack, previewPack, endPreview: () => endPreview(), packInfo: () => copyPack(prefs.theme === "pack" ? prefs.pack : null),
     // Every node style and layout, for the setup helper's Look section.
     nodeStyles: () => Object.entries(NODE_STYLES).map(([key, style]) => ({ key, name: style.name, detail: style.detail })),
     nodeLayouts: () => Object.entries(NODE_LAYOUTS).map(([key, layout]) => ({ key, name: layout.name, detail: layout.detail })), theme: () => prefs.theme,
@@ -93879,7 +94182,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       const swatches = node("div", "setup-helper-swatches"); swatches.setAttribute("role", "radiogroup"); swatches.setAttribute("aria-label", "Theme");
       for (const theme of music.themes?.() || []) {
         const swatch = button(theme.name, () => {
-          music.applyTheme?.(theme.key, true, { navigate: false });
+          music.applyTheme?.(theme.key, true);
           for (const other of swatches.children) other.setAttribute("aria-checked", String(other === swatch));
           say(`${theme.name} theme on.`, "good");
         }, "setup-helper-swatch");

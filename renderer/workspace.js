@@ -1336,10 +1336,10 @@
     for (const [id, key, fallback] of [["person-name", "person", ""], ["agent-name", "companion", "Mefi"], ["accent", "accent", "chrome"]]) {
       $(id).value = storage.get(key, fallback);
       $(id).addEventListener("input", () => {
-        // Music announces the actual theme (and whether this is a temporary
-        // preview) before Workspace writes its own accent preference.
+        // Music applies and announces the theme; syncThemeChoice below then
+        // writes Workspace's own accent preference from that announcement.
         if (id === "accent" && window.MefiMusic?.applyTheme) {
-          window.MefiMusic.applyTheme($(id).value === "sage" ? "forest" : $(id).value, true, { navigate: false });
+          window.MefiMusic.applyTheme($(id).value === "sage" ? "forest" : $(id).value, true);
           return;
         }
         storage.set(key, $(id).value);

@@ -242,7 +242,7 @@ test("Settings › You lists Chrome first, and Workspace's own copy of the theme
   assert.ok(select, "the Studio theme select");
   const values = [...select[1].matchAll(/<option value="([\w-]+)"/g)].map((match) => match[1]);
   assert.equal(values[0], "chrome");
-  assert.deepEqual([...values].sort(), ["abyss", "aurora", "chrome", "custom", "dusk", "eclipse", "ember", "gold", "midnight", "rose", "sage", "violet", "void"], "every theme once (Forest is 'sage' there)");
+  assert.deepEqual([...values].sort(), ["abyss", "aurora", "chrome", "custom", "daylight", "dusk", "eclipse", "ember", "gold", "midnight", "paper", "rose", "sage", "violet", "void"], "every theme once (Forest is 'sage' there)");
   const workspace = await read("workspace.js");
   assert.equal((workspace.match(/storage\.get\("accent", "chrome"\)/g) || []).length, 2);
   assert.ok(workspace.includes('["accent", "accent", "chrome"]'));
