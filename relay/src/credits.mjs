@@ -6,7 +6,8 @@
 // someone else's project for two minutes, both of them earn (the maker 5, the
 // player 2), and a star earns the maker 3. Credits are never bought and never
 // cashed out; they are spent on featuring a project at the top of the hub for
-// a day.
+// a day, and in the Shop (shop.mjs), where a style pack's maker earns a share
+// of its price through sale(), under that kind's own caps.
 //
 // Ranks come in two kinds. Levels follow lifetime credits (Spark, Ember,
 // Flame, Comet, Star, Nova, Void) and are badges in Studio only. Special
@@ -59,6 +60,11 @@ export const EARN = Object.freeze({
   together: Object.freeze({ amount: 4, perDay: 4, award: true }),
   cowork: Object.freeze({ amount: 4, perDay: 8, award: true }),
   jam: Object.freeze({ amount: 0, max: 450, perDay: 1000, award: true, prize: true }),
+  // A Shop sale (shop.mjs), paid only through sale(): a community pack's maker earns a share of its price from the
+  // buyer. Prize-style, so the day's 60 and the 15-a-week pair limit do not stack on its own caps (300 a day, and
+  // GUARD.salePairWeek from one buyer to one maker in 7 days). A sale still counts toward that pair's 15 for every
+  // other kind, so after one, the buyer's plays and stars pay that maker nothing more that week.
+  sale: Object.freeze({ amount: 0, max: 100, perDay: 300, prize: true }),
   dayCap: 60,
 });
 
@@ -77,6 +83,7 @@ export const GUARD = Object.freeze({
   flagShare: 0.6,
   flagMutual: 10,
   projectReportsPerHour: 10,
+  salePairWeek: 100, // what one buyer's Shop purchases can make one maker earn in 7 days
 });
 
 const DISCORD_EPOCH = 1_420_070_400_000n;
@@ -138,7 +145,8 @@ export function projectLink(url) {
 /**
  * createCredits({ store, now, key, sendToUser, member })
  *   key: an HMAC key for play tokens; sendToUser(uid, type, fields); member(uid) -> describeMember()
- * -> { routes(route), forget(uid, fingerprint), fingerprint(uid), upkeep(), me(uid), card(uid), account(uid), front(uid), standing(uid, heldUntil) }
+ * -> { routes(route), forget(uid, fingerprint), fingerprint(uid), upkeep(), me(uid), card(uid), account(uid), front(uid), standing(uid, heldUntil),
+ *      spend(uid, amount), sale({ buyer, maker, itemId, amount, buyerHeld, makerHeld }), tell(uid, delta, reason) }
  */
 export function createCredits({ store, now, key, sendToUser, member, economy = null }) {
   const accountRow = (uid) => store.get('SELECT * FROM accounts WHERE user_id = ?', uid);
@@ -248,6 +256,34 @@ export function createCredits({ store, now, key, sendToUser, member, economy = n
     });
     tell(target, paid, kind);
     return paid;
+  }
+
+  /**
+   * Spend credits inside the caller's transaction (the Shop): off the balance only, never the lifetime total (so a
+   * rank never drops), and never as a credit row, since several sums over credit_events do not look at the sign.
+   * The caller keeps its own record of what the credits bought. -> false when the balance is short.
+   */
+  function spend(uid, amount) {
+    const cost = Math.floor(Number(amount) || 0);
+    if (cost <= 0) return cost === 0;
+    if ((accountRow(uid)?.balance ?? 0) < cost) return false;
+    store.run('UPDATE accounts SET balance = balance - ? WHERE user_id = ?', cost, uid);
+    return true;
+  }
+
+  /**
+   * A Shop sale, inside the caller's transaction (shop.mjs): the maker of a community pack earns `amount` from its
+   * buyer, once per (buyer, maker, pack). Both must be in good standing (their holds read before the transaction),
+   * nobody earns from themselves, and one buyer is worth at most GUARD.salePairWeek credits to one maker in 7 days;
+   * what is left of the price is nobody's. Paid through pay(), so once and under the kind's day cap.
+   * -> the amount paid (the caller tells the maker once its transaction is done).
+   */
+  function sale({ buyer, maker, itemId, amount, buyerHeld = 0, makerHeld = 0 }) {
+    if (!isSnowflake(buyer) || !isSnowflake(maker) || buyer === maker) return 0;
+    if (!standing(buyer, buyerHeld).ok || !standing(maker, makerHeld).ok) return 0;
+    const week = Number(store.get(`SELECT COALESCE(SUM(amount), 0) AS n FROM credit_events WHERE actor_id = ? AND target_id = ? AND kind = 'sale' AND at > ?`, buyer, maker, now() - 7 * DAY_MS)?.n ?? 0);
+    const asked = Math.max(0, Math.min(Math.floor(Number(amount) || 0), GUARD.salePairWeek - week));
+    return asked ? pay({ actor: buyer, target: maker, kind: 'sale', uniq: itemId, ref: itemId, amount: asked }) : 0;
   }
 
   function tell(uid, delta, reason) {
@@ -757,5 +793,5 @@ export function createCredits({ store, now, key, sendToUser, member, economy = n
     store.run('DELETE FROM features WHERE ends_at < ?', at - PROJECT_LIMITS.eventKeepMs);
   }
 
-  return Object.freeze({ routes, forget, fingerprint, upkeep, me, card, account, front, standing, heldUntil, award });
+  return Object.freeze({ routes, forget, fingerprint, upkeep, me, card, account, front, standing, heldUntil, award, spend, sale, tell });
 }

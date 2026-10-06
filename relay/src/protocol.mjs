@@ -99,6 +99,7 @@ export const FEATURES = Object.freeze({
   friendOnline: 'friend.online', // friendOnline: someone you share a room with just opened Studio (to clients that list it)
   building: 'building', // building: what a member is making right now, with their say-so (The Lobby's Building now)
   pcs: 'pcs', // My PCs: pcHello / pcState / pcSend, and the pcs / pcState / pcMsg frames (relay/src/pcs.mjs)
+  shop: 'shop', // GET /v1/shop: Studio's own items and members' style packs, bought with credits (relay/src/shop.mjs)
 });
 
 /** listen{action}: a room's shared player. */
@@ -119,9 +120,9 @@ export const REMOTE_BUTTON_STYLES = Object.freeze(['primary', 'secondary', 'succ
 /** pcHello{pc.kind}: My PCs tells a laptop (it has a battery to watch) from a desktop. */
 export const PC_KINDS = Object.freeze(['desktop', 'laptop']);
 
-/** Project cards (feature "projects") and why a credits frame was sent (feature "credits"). */
+/** Project cards (feature "projects") and why a credits frame was sent (feature "credits"; "shop" a purchase, "sale" a pack's maker paid). */
 export const PROJECT_KINDS = Object.freeze(['game', 'app', 'tool', 'art', 'music', 'other']);
-export const CREDIT_REASONS = Object.freeze(['played', 'play', 'starred', 'feature', 'revoked', 'together', 'cowork', 'jam']);
+export const CREDIT_REASONS = Object.freeze(['played', 'play', 'starred', 'feature', 'revoked', 'together', 'cowork', 'jam', 'shop', 'sale']);
 
 export const ROOM_KINDS = Object.freeze(['hangout', 'cowork']);
 export const ROOM_POLICIES = Object.freeze(['request', 'invite']);
@@ -187,6 +188,16 @@ export const HTTP_ERRORS = Object.freeze([
   'rate-limited',
   'paused',
   'internal',
+  // The Shop (feature "shop"): a purchase refused, with what Studio needs to say why, and a style pack refused.
+  'owned',
+  'own',
+  'needs',
+  'price-changed',
+  'short',
+  'hold',
+  'bad-pack',
+  'too-big',
+  'low-contrast',
 ]);
 
 /** WebSocket close codes the hub uses. */
@@ -678,6 +689,25 @@ export const HTTP_BODIES = Object.freeze({
   enterEvent: { projectId: opaqueId() },
   // POST /v1/events/:id/votes: a vote for an entrant, by their member id.
   voteEvent: { userId: snowflake() },
+  // POST /v1/admin/reports/:id/resolve: "remove" also takes a reported Shop pack off for good.
+  resolveReport: { action: optional(oneOf(['remove'])) },
+  // POST /v1/shop/:id/buy (feature "shop"): the price the member was shown, so a changed price is never paid by surprise.
+  shopBuy: { price: integer(0, 1_000_000) },
+  // POST /v1/shop/packs: a style pack. `data` passes through whole (up to the body limit) so relay/src/shop-pack.mjs
+  // can refuse a key it does not name instead of it being dropped here, and say when a pack is too big.
+  shopPublish: { name: string(1, 40, { pattern: SINGLE_LINE, nonBlank: true }), blurb: optional(line(0, 160)), price: integer(0, 250), data: opaqueObject(LIMITS.bodyBytes) },
+  // PUT /v1/shop/packs/:id: any of them, and `listed` to take the pack off the Shop or put it back.
+  shopUpdate: {
+    name: optional(string(1, 40, { pattern: SINGLE_LINE, nonBlank: true })),
+    blurb: optional(line(0, 160)),
+    price: optional(integer(0, 250)),
+    data: optional(opaqueObject(LIMITS.bodyBytes)),
+    listed: optional(boolean()),
+  },
+  // POST /v1/shop/packs/:id/report: why, and a few words more if the reporter has them.
+  shopReport: { reason: string(1, LIMITS.reasonChars, { pattern: TEXT, nonBlank: true }), text: optional(string(0, 300, { pattern: TEXT })) },
+  // POST /v1/admin/shop/:id/remove (moderators).
+  shopRemove: { reason: optional(line(0, 200)) },
 });
 
 /** Query strings, by name. */

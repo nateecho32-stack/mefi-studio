@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { FONTS, MATERIALS, NODE_STYLES, PACK_LIMITS, PALETTE_KEYS, PALETTE_OPTIONAL, checkPack, contrastRatio } from "../relay/src/shop-pack.mjs";
+import { CATALOG } from "../relay/src/shop.mjs";
 
 // What a Shop style pack may hold (relay/src/shop-pack.mjs): data only, every
 // key from the schema, colours as #rrggbb, readable text and accents. The
@@ -48,4 +49,11 @@ test("WCAG contrast: black on white is 21, a colour on itself 1, and the limits 
   assert.deepEqual([...NODE_STYLES], ["orbs", "glass", "minimal", "halo", "crystal", "singularity", "prism", "sigil"]);
   assert.deepEqual([...MATERIALS], ["focus", "studio", "atmosphere"]);
   assert.deepEqual([...FONTS], ["studio", "display", "serif", "mono"]);
+});
+
+test("Studio's own packs pass the same check, exactly as they are kept", () => {
+  const packs = CATALOG.filter((item) => item.kind === "pack");
+  assert.equal(packs.length, 3);
+  for (const item of packs) assert.deepEqual(checkPack(item.data), { ok: true, pack: JSON.parse(JSON.stringify(item.data)) }, item.id);
+  assert.ok(CATALOG.filter((item) => item.kind !== "pack").every((item) => item.data === null), "pets, skins and effects carry no data");
 });

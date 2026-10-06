@@ -10,7 +10,7 @@
 // What is kept, and why, is listed in relay/README.md. Chat text, files, IP
 // addresses and Discord tokens are never written here.
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 // One statement per entry: Cloudflare's exec runs a single statement when it has bindings.
 const V1 = [
@@ -224,12 +224,36 @@ const V5 = [
   `CREATE INDEX IF NOT EXISTS credit_events_day_kind ON credit_events (day, kind)`,
 ];
 
+// v6: the Shop (shop.mjs). Members' style packs, data only (colours and a few
+// keys from Studio's lists, checked by shop-pack.mjs), and who owns what,
+// Studio's own items and packs alike. A purchase is kept here as the item and
+// what it cost, never as a negative credit row.
+const V6 = [
+  `CREATE TABLE IF NOT EXISTS shop_packs (
+     id TEXT PRIMARY KEY,
+     maker_id TEXT NOT NULL,
+     name TEXT NOT NULL,
+     blurb TEXT NOT NULL DEFAULT '',
+     price INTEGER NOT NULL,
+     data TEXT NOT NULL,
+     status TEXT NOT NULL DEFAULT 'listed',
+     sales INTEGER NOT NULL DEFAULT 0,
+     created_at INTEGER NOT NULL,
+     updated_at INTEGER NOT NULL
+   ) STRICT`,
+  `CREATE INDEX IF NOT EXISTS shop_packs_listed ON shop_packs (status, created_at)`,
+  `CREATE INDEX IF NOT EXISTS shop_packs_maker ON shop_packs (maker_id)`,
+  `CREATE TABLE IF NOT EXISTS shop_owned (user_id TEXT NOT NULL, item_id TEXT NOT NULL, price INTEGER NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (user_id, item_id)) STRICT, WITHOUT ROWID`,
+  `CREATE INDEX IF NOT EXISTS shop_owned_item ON shop_owned (item_id)`,
+];
+
 export const MIGRATIONS = Object.freeze([
   { version: 1, statements: V1 },
   { version: 2, statements: V2 },
   { version: 3, statements: V3 },
   { version: 4, statements: V4 },
   { version: 5, statements: V5 },
+  { version: 6, statements: V6 },
 ]);
 
 const bindValue = (value) => (value === undefined ? null : value === true ? 1 : value === false ? 0 : value);
