@@ -39,6 +39,32 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-06 model_performance: the corrupt-ledger race, and the store's cache compares a fresh ledger's bytes
+
+Branch `fix/model-perf-race` (C:\wt\mperf), landed from `land/model-perf-race` on main 86cfa93. Hosted Windows CI failed "corrupt ledger failures preserve the file and
+do not poison subsequent operations" once (run 37455162395 on fx/scaling, attempt 1: "Missing expected rejection" at
+line 165; the re-run passed). The test's last outside edit rewrote the ledger in place, on the same inode, at the
+very length the store had written ("10" for "0" pays for the store's trailing newline: 1007 bytes both). The store
+keyed its cache on `[dev, ino, size, mtimeNs, ctimeNs]`, and file times move once per clock tick (15.6 ms on Windows
+by default; that test took 10 ms on the runner). When the store's save and the edit shared a tick, all five fields
+matched, `record()` reused the ledger `snapshot()`/`read()` had cached, and it resolved. The store now follows git's
+racy rule like `settings-cache.cjs`: for 2 s after the file's mtime or ctime, a cache hit reads the file and compares
+bytes before reusing the parsed ledger; past that the five fields decide alone (`racyMs: 0` turns it off). The
+corrupt-ledger test is unchanged; the external-edits test now asserts its ctime-only case instead of skipping it;
+two new tests hold the file times in one tick and pin the check and its off switch.
+
+Loops, one `node --test --test-name-pattern="corrupt ledger" tests/model_performance.test.mjs` at a time under a
+suites lease. Old store: quiet 34/200 failed, all at line 165 (a later quiet run 0/200: the file clock here steps
+1 ms while an app holds a fine timer resolution); 15 spinning threads 0/200 (load spreads the steps over ticks);
+with a preload rounding `fs.promises.stat` file times to 1 s, 98/100 failed at line 165. Fixed store, test
+unchanged: 1 s rounding 200/200 passed; quiet 200/200; 8 spinning threads (holding the Electron lane, so no fixture
+ran beside them) 100/100. `snapshot()` on a 10,000-row ledger (4.57 MB): a miss ~110 ms and a settled hit ~5.8 ms
+as before; a hit within 2 s of a change ~15 ms against ~6 ms (one async read and a byte compare). `npm run check` ok, `npm run audit` 0/0, eslint clean on both files, `npm run test:one` on the 14 suites that reach
+the store (model_performance, learning_host, model_routing, model_routing_evidence, model_win_evaluator,
+planning_routing, usage_tracker_host, task_cap_host, kind_routes_host, jev_model_routing_host,
+explicit_route_fallback, builder_thinking_host, build_home_host, ai_route_gate): 201/201. Not run: the full
+`npm test` (hosted CI runs the Node stage on the branch).
+
 ## 2026-10-06 Your PCs and Friends reconnect by themselves; only a Studio that is really behind must update
 
 Branch `wip/auto-reconnect` (C:\wt\reconnect), landed on main as 7718e36 (rebased three times as main moved; the
@@ -470,32 +496,6 @@ layout_contract_nav 15/15, shell_frame_bars 34/34, community_rules 17/17; friend
 unified_studio_render 1/1 each (friends_render walks The Lobby and the signed-out card at four window sizes with no
 text under 12 px). `npm run check` ok; lint adds no warning; audit 0. The relay was redeployed (version
 4b641b0c) and `relay/scripts/smoke.mjs` passes against it.
-## 2026-10-06 Startup marks and the settings cache (S1) land on main
-
-Branch `land/s1-boot` in a cloud session (Linux, Node 24.21.0), stacked on S3 over main dfda798: the parked slice
-0605bcd re-applied (conflicts in main.cjs, booklet.js, build-booklet.mjs, booklet_build and module_purity resolved
-file by file; booklet.html rebuilt). The compile cache stays main's first statement and the marks block follows;
-startup-marks.js is first in BOOKLET_INPUTS (the updater's prefix pin moved with it); booklet.js keeps bootHealthy
-before the gate. readSettings asks the Rust store first and the cache fronts only the Electron path (6f2c154).
-
-Startup (tools/benchmark_startup.py, finished here, 5 smoke launches each under xvfb as a non-root user, medians):
-interactive (Vibe) 4,055 ms on main, 4,024 ms with the marks (no cost; loaded 2,624 / 2,616 ms). New marks, ms since
-main started: app ready 212, first paint 462, gate released 3,856; the gate opens at ~700 but the launch choice lands
-at ~2,200, and the release comes ~600 ms after the last step. readSettings on a 47 KB settings file (main.cjs's own
-code, 2,000 calls): ~460 us per call before, ~265 us with the cache, two stats instead of two file reads.
-Kill switches MEFI_STUDIO_STARTUP_MARKS=0 and MEFI_STUDIO_SETTINGS_CACHE=0, both pinned.
-
-`npm run check` ok, `npm run audit` 0 findings, `npm run lint` 0 errors and 45 warnings (as main; the WIP's unused
-`utimes` import removed). `npm run test:fast` with mefi-core built (`npm run host:core`): 7099 tests, 7062 pass, 34
-skipped, 3 fail, all as on clean main with the same binary: rust_modules image-store folder, and rust_parity_git
-"the actions answer like the JavaScript" and "the chip's host answers like git-host.cjs" (fail identically on
-dfda798 here; for the Rust chat). rust_parity_settings 3/3 ran (not skipped) with its new cached leg: main's JS with
-the cache on equals the uncached JS and Rust step for step. settings_cache 17/17 (new: Rust first, then the cache,
-then the files), startup_marks 10/10, startup_marks_renderer, booklet_build, release_updater and shell_frame_wiring
-(pins updated for launchGate and ?marks=0). Python test_mefi_studio_idle + updater 42 OK. Electron: startup_render and
-renderer_startup 12/12; for S3, task_overview_render, sessions_render, builder_render, fleet_render and
-workflow_render 5/5.
-
 ## Read Before Any Tests
 
 This is the test guide for the standalone Mefi's Studio AI+ repository. Run all commands from this repository root.
