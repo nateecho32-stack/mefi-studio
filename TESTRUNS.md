@@ -39,6 +39,33 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-06 The rail's words are whole, and its places are checked at every window size
+
+Branch `ui/rail-words` in `C:\wt\modes` on main 4b150b3: 0f5076a (the Social/Studio launch hint, "Each launch opens
+the mode you last used", which main's merge of the rename did not take) and f9fb916 (at rest the rail keeps 4 px at
+its sides instead of 10 and a tile 2 px, so a word has about 51 px instead of 39; the rail's 64 px is unchanged).
+
+Measured in a real window (`shell_render`, new section 2b, Studio's rail at 1920x1080, 1440x900, 1100x720, 600x560 and
+600x560 at 150%): before, "Settings" needed 43 px and had 39 at the three larger sizes (Segoe UI), and every place was
+reachable; after, no word is cut and every place's middle is the place itself at all five sizes, with Segoe UI and with
+Verdana standing in for Linux's DejaVu Sans. Social's Home has no rail (a question for the owner, not changed here).
+The whole `shell_render` passes on this branch (214 s), the new section included; `skills_render` 1/1.
+
+`npm run check` ok, `npm run audit` 0 errors and 0 warnings, `npm run lint` 0 errors and 47 warnings (as main).
+shell_frame_css, shell_frame_bars, layout_contract_css, app_rail, vibe_home, vibe_panels, vibe_frame, booklet_build
+and size_page: 182/182.
+
+The skills landing (d55269f) said six of its window suites were still queued: all passed afterwards on its tree, one at
+a time: today_render (67 s), skills_render (27 s), composer_render (47 s), autonomy_render (17 s), agent_setup_render
+(45 s) and unified_studio_render (190 s), with team_render and sessions_render as reported.
+
+Incident on this PC, 08:26: removing a throwaway worktree with `git worktree remove --force` followed its node_modules
+junction into the shared node_modules and deleted @electron/get, @electron-internal/extract-zip, @types/node, debug and
+Electron's chrome_100_percent.pak and chrome_200_percent.pak before a locked DLL stopped it. Restored by 08:31 from
+Electron's download cache and an `npm ci --ignore-scripts` scratch copy; all 15 lock entries match, `electron.exe
+--version` is 44.4.1 and window suites pass again. A window suite that failed oddly on this PC between 08:26 and 08:31
+should be run again.
+
 ## 2026-10-06 shell_render passes at 125% display scaling: the inspector check reads the page's own width
 
 Branch `fx/scaling` (on main 017d51a; first proven on 0b2fa14): in `tests/fixtures/shell-render-electron.cjs` the narrow-window
@@ -474,48 +501,6 @@ screenshots; no file this branch changed but CHANGELOG). Merged as d39878e (CHAN
 regenerated) and re-checked rather than re-gated: `npm run check`; chrome_theme 9/9, tabs_strip 66/66,
 shell_frame_bars 34/34, today_inbox 38/38, builder_kit 21/21; settings_render (every theme at 4.5:1), friends_render,
 team_render and today_render 1/1 each.
-
-## 2026-10-05 Chrome's iridescent finish: holo edges, hairlines and a tinted ground
-
-Branch `paint/chrome-gradients` in a cloud worktree (Linux, Node 24.21.0,
-Electron fixtures as tester under xvfb, two at a time, on snapshots of the
-tree), off origin/main 3752b7e. renderer/chrome.css takes the website's
---chrome-holo tokens word for word and uses them sparingly: 2-5% ice, lilac and
-aqua washes in the scene and Vibe's aurora, a tinted sheen, the 2px holo bar on
-the straight run of the rail's current place, the selected session row, the
-frame's current page and the palette's active row (plain chrome round the
-corners), a 2px holo line under the open tab, the inspector's tabs, the local
-navigation and a chosen theme, the holo line at a quarter strength in the
-hairlines under the top bar and tab strip, over the status bar and along the
-floating menus' tops, a cooler metal that glows under the pointer, holo
-meter, switches and project mark, and a holo-tinted greeting. The edges and
-lines are border images (no room taken, never a layer behind words, which the
-readability probes would read as the colour under every word). Static
-gradients, no hot path touched, nothing to measure.
-
-`npm run check` ok (271 targets, 30 stylesheets used), `npm run audit` 0
-findings, `npm run lint` 0 errors and the same 44 warnings as clean main.
-`npm run test:fast`: 6981 tests, 6922 pass, 58 skipped, 1 fail: rust_modules
-"the image-store factory ... keeps folder the engine's", as on clean
-origin/main here (a Windows path resolved on Linux). tests/chrome_theme.test.mjs
-9/9 (new: Chrome is static; the holo layer is the website's tokens, each used,
-edges and lights only, the ground and the sky faint); 15 hand mutations of
-chrome.css (a bar as a background layer, 3px, an outset, a border width, an
-animation, a loud ground, a changed token...) each fail it. Python contracts
-258 OK (3 skipped).
-
-Electron on the final tree: today_render (63 s), shell_render (152 s),
-sessions_render (122 s; the every-theme 4.5:1 probes on the status bar, Search,
-the Inbox and both Todays), tabs_render (150 s), layout_contract_render
-(349 s), size_render (47 s), review_render (12 s), command_render (83 s) and
-unified_studio_render (169 s) pass. settings_render fails exactly as on clean
-main (600x560 at 1.5: the same four Report a problem rows, 391 > 384); with that
-size left out in a throwaway copy its every-theme contrast pass is green for
-Chrome and the other twelve palettes, on this tree and on clean main.
-unified_studio_render failed once on clean main ("at the end of the pane the
-thumb rests on its bottom edge", 39 s) and passed on the rerun (138 s). A
-throwaway copy of today_render also opened v1's Vibe front door in Chrome for
-the greeting and Build it under the pointer.
 
 ## Read Before Any Tests
 
