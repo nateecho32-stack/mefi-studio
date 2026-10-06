@@ -88,6 +88,10 @@ function createResourceHost(options = {}) {
     buildHelper = null,
   } = options;
   const windowsDir = String(env.SystemRoot || env.windir || env.WINDIR || "C:\\Windows");
+  // The helper's folder (its program and the journal) is joined for the
+  // platform this host was given, not the one Node runs on: the same on
+  // Windows, and tests/resource_host drives a Windows PC from any host.
+  const paths = platform === "win32" ? path.win32 : path;
   // The home folder never reaches the log or the page: Windows and the
   // compiler name files in full, with the person's account name in them.
   const home = String(env.USERPROFILE || env.HOME || "").replace(/[\\/]+$/, "");
@@ -176,12 +180,12 @@ function createResourceHost(options = {}) {
     const hash = crypto.createHash("sha256").update(text).digest("hex").slice(0, 12);
     const folder = await dir();
     if (!folder) throw new Error("Studio has no folder of its own on this PC to keep the helper in.");
-    const exe = path.join(folder, `resource-helper-${hash}.exe`);
+    const exe = paths.join(folder, `resource-helper-${hash}.exe`);
     if (await exists(exe)) return exe;
     await fs.mkdir(folder, { recursive: true });
     const csc = await compiler();
     if (!csc) throw new Error("Windows' C# compiler (csc.exe, part of .NET Framework 4) is missing, so Studio cannot build its resource helper on this PC.");
-    const temp = path.join(folder, `resource-helper-${hash}.${process.pid}.tmp.exe`);
+    const temp = paths.join(folder, `resource-helper-${hash}.${process.pid}.tmp.exe`);
     await run(csc, ["/nologo", "/optimize+", "/target:exe", "/platform:anycpu", `/out:${temp}`, source]);
     try {
       await fs.rename(temp, exe);
@@ -190,9 +194,9 @@ function createResourceHost(options = {}) {
       await fs.unlink(temp).catch(() => {});
       if (!(await exists(exe))) throw error;
     }
-    logLine(`[resources] built the resource helper (${path.basename(exe)})`);
+    logLine(`[resources] built the resource helper (${paths.basename(exe)})`);
     for (const name of await fs.readdir(folder).catch(() => [])) {
-      if (/^resource-helper-[0-9a-f]{12}\.exe$/.test(name) && name !== path.basename(exe)) fs.unlink(path.join(folder, name)).catch(() => {});
+      if (/^resource-helper-[0-9a-f]{12}\.exe$/.test(name) && name !== paths.basename(exe)) fs.unlink(paths.join(folder, name)).catch(() => {});
     }
     return exe;
   }
@@ -309,7 +313,7 @@ function createResourceHost(options = {}) {
   // ---- the journal --------------------------------------------------------------------
   async function journalPath() {
     const folder = await dir();
-    return folder ? path.join(folder, "journal.json") : null;
+    return folder ? paths.join(folder, "journal.json") : null;
   }
 
   async function writeJournal(ledger) {
@@ -325,7 +329,7 @@ function createResourceHost(options = {}) {
     const file = await journalPath();
     if (!file) return;
     try {
-      await fs.mkdir(path.dirname(file), { recursive: true });
+      await fs.mkdir(paths.dirname(file), { recursive: true });
       const temp = `${file}.${process.pid}.tmp`;
       await fs.writeFile(temp, JSON.stringify({ v: 1, at: now(), entries }, null, 2));
       await fs.rename(temp, file);

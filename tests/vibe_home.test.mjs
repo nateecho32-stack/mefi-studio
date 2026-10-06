@@ -97,6 +97,19 @@ test("a new project's dock still offers Watch, so its tree is one click away", a
   assert.equal(loaded.get("vibe-stop-watch").hidden, false);
 });
 
+test("N on Social opens the first thing that needs you in the Inbox, and in Social's drawer only without one", async () => {
+  const loaded = await load({ needsYou: { items: [{ kind: "review", taskId: "t2", title: "Fix the login redirect loop" }] } });
+  await loaded.window.MefiVibe.enter(); await settle();
+  const asked = [];
+  loaded.window.MefiToday = { openNeed: (ref) => { asked.push(JSON.parse(JSON.stringify(ref))); return true; } };
+  loaded.key("N");
+  assert.deepEqual(asked, [{ kind: "review", id: "t2" }], "the Inbox answers it, as every other answer opens it");
+  assert.equal(loaded.get("vibe-ask").hidden, true, "Social's old drawer stays closed");
+  loaded.window.MefiToday = { openNeed: () => false };
+  loaded.key("N");
+  assert.equal(loaded.get("vibe-ask").hidden, false, "with no Inbox to take it, the drawer opens as before");
+});
+
 test("a result waiting for review is confirmed or sent back from Vibe's drawer", async () => {
   const loaded = await load({ needsYou: { items: [{ kind: "review", taskId: "t2", title: "Fix the login redirect loop" }] } });
   await loaded.window.MefiVibe.enter(); await settle();

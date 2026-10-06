@@ -1697,7 +1697,12 @@
   const togglePanel = (kind) => (window.MefiVibePanels?.current?.() === kind ? window.MefiVibePanels.close() : openPanel(kind));
   const VIBE_KEYS = [
     ["/", "vibe-key-box", "Social: type in the box", () => { const input = $("input"); input.focus({ preventScroll: true }); try { input.setSelectionRange(input.value.length, input.value.length); } catch { /* not a text field */ } }],
-    ["N", "vibe-key-needs", "Social: what needs you", () => { const waiting = needs(); if (waiting.length) openNeed(waiting[0]); else feedback("Nothing needs you right now.", "good"); }],
+    ["N", "vibe-key-needs", "Social: what needs you", () => {
+      const waiting = needs();
+      if (!waiting.length) { feedback("Nothing needs you right now.", "good"); return; }
+      // The 0.5 layout answers in the Inbox (renderer/today.js), as openNeedById does; Social's own drawer is the way otherwise.
+      if (!window.MefiToday?.openNeed?.({ kind: waiting[0].kind, id: waiting[0].id })) openNeed(waiting[0]);
+    }],
     ["C", "vibe-key-chat", "Social: the conversation", () => (state.chatOpen ? closeChat() : openChat())],
     ["T", "vibe-key-tasks", "Social: your tasks", () => togglePanel("tasks")],
     ["P", "vibe-key-plans", "Social: plans", () => togglePanel("plans")],

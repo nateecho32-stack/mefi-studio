@@ -1594,7 +1594,11 @@
     if (event.defaultPrevented) return;
     if (modifier && !event.altKey && !event.shiftKey && (code === "KeyM" || key === "m")) { event.preventDefault?.(); setMode(currentMode() === "vibe" ? "build" : "vibe"); return; }
     if (modifier && !event.altKey && !event.shiftKey && (code === "KeyB" || key === "b")) { event.preventDefault?.(); toggle("list"); return; }
-    if (!modifier && !event.altKey && event.key === "[" && !typing(event.target) && !nav()?.state?.transient) { event.preventDefault?.(); toggle("inspector"); }
+    // On the Map, [ and ] step through its tasks (renderer/idle.js): the bracket is the Map's there, and the top bar's button
+    // and Search still show or hide the inspector.
+    let onMap = false;
+    try { onMap = window.MefiIdle?.isActive?.() === true; } catch { /* no Map to ask */ }
+    if (!modifier && !event.altKey && event.key === "[" && !typing(event.target) && !nav()?.state?.transient && !onMap) { event.preventDefault?.(); toggle("inspector"); }
   }
   // Display-only rows for the shortcut sheet (nav.js skips the "command" group; onKey acts).
   function registerKeyRows() {

@@ -461,6 +461,11 @@ test("keys: Ctrl M switches the mode, Ctrl B the list, [ the inspector, and none
   page.key({ key: "[", code: "BracketLeft" });
   assert.equal(shell.isOpen("inspector"), true, "over a sheet or the palette a bracket is left alone");
   page.nav.state.transient = false;
+  // On the Map, [ and ] step through its tasks (idle.js): there the bracket is the Map's.
+  page.window.MefiIdle = { isActive: () => true };
+  assert.equal(page.key({ key: "[", code: "BracketLeft" }).defaultPrevented, false, "the frame leaves the bracket to the Map");
+  assert.equal(shell.isOpen("inspector"), true, "on the Map a bracket steps through its tasks instead");
+  delete page.window.MefiIdle;
   // Off, the keys do nothing at all.
   shell.disable();
   const again = page.calls.vibe.length;
