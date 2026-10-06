@@ -6,6 +6,32 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-06 Startup marks and the settings cache (S1) land on main
+
+Branch `land/s1-boot` in a cloud session (Linux, Node 24.21.0), stacked on S3 over main dfda798: the parked slice
+0605bcd re-applied (conflicts in main.cjs, booklet.js, build-booklet.mjs, booklet_build and module_purity resolved
+file by file; booklet.html rebuilt). The compile cache stays main's first statement and the marks block follows;
+startup-marks.js is first in BOOKLET_INPUTS (the updater's prefix pin moved with it); booklet.js keeps bootHealthy
+before the gate. readSettings asks the Rust store first and the cache fronts only the Electron path (6f2c154).
+
+Startup (tools/benchmark_startup.py, finished here, 5 smoke launches each under xvfb as a non-root user, medians):
+interactive (Vibe) 4,055 ms on main, 4,024 ms with the marks (no cost; loaded 2,624 / 2,616 ms). New marks, ms since
+main started: app ready 212, first paint 462, gate released 3,856; the gate opens at ~700 but the launch choice lands
+at ~2,200, and the release comes ~600 ms after the last step. readSettings on a 47 KB settings file (main.cjs's own
+code, 2,000 calls): ~460 us per call before, ~265 us with the cache, two stats instead of two file reads.
+Kill switches MEFI_STUDIO_STARTUP_MARKS=0 and MEFI_STUDIO_SETTINGS_CACHE=0, both pinned.
+
+`npm run check` ok, `npm run audit` 0 findings, `npm run lint` 0 errors and 45 warnings (as main; the WIP's unused
+`utimes` import removed). `npm run test:fast` with mefi-core built (`npm run host:core`): 7099 tests, 7062 pass, 34
+skipped, 3 fail, all as on clean main with the same binary: rust_modules image-store folder, and rust_parity_git
+"the actions answer like the JavaScript" and "the chip's host answers like git-host.cjs" (fail identically on
+dfda798 here; for the Rust chat). rust_parity_settings 3/3 ran (not skipped) with its new cached leg: main's JS with
+the cache on equals the uncached JS and Rust step for step. settings_cache 17/17 (new: Rust first, then the cache,
+then the files), startup_marks 10/10, startup_marks_renderer, booklet_build, release_updater and shell_frame_wiring
+(pins updated for launchGate and ?marks=0). Python test_mefi_studio_idle + updater 42 OK. Electron: startup_render and
+renderer_startup 12/12; for S3, task_overview_render, sessions_render, builder_render, fleet_render and
+workflow_render 5/5.
+
 ## 2026-10-06 Board pushes carry the rows that changed (S3) land on main
 
 Branch `wip/s3-row-push` in a cloud session (Linux, Node 24.21.0) over main 24d6756: the parked slice c682642

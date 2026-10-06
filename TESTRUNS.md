@@ -39,6 +39,26 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-06 Other apps: the Studio API, MCP server and skill, and the setup prompt
+
+Branch `feat/studio-api` (C:\wt\apilink), merged with main twice (the CHANGELOG kept from both sides,
+`renderer/booklet.html` rebuilt, not merged). New `scripts/studio-api.cjs` (pure rules),
+`scripts/studio-api-server.cjs` (127.0.0.1 endpoint and key file), `scripts/studio-link.mjs` (the MCP server and command
+line apps run), `renderer/studio-api.js` (Settings › Other apps) and main.cjs "Other apps"; work an app files carries
+`origin.via = "app"` and waits for the owner's OK in every mode.
+
+`npm run check` ok, eslint on the changed files no new warnings, `npm run audit` 0 findings, booklet byte-identical to
+a fresh build. Through `npm run test:one` on the final tree: studio_api_rules 8, studio_api_server 9, studio_api_host 8,
+remote_gate, remote_admission, remote_host, module_purity, settings_nav, app_wide_ipc, preload_fanout, booklet_build and
+setup_helper, 191/191; settings_render (the new place at four window sizes, every theme) 1/1. Hosted Windows CI green on
+e35b1db. The full `npm test` here, run while other sessions held the PC, failed only in suites that fail under load or
+on clean main: the git-heavy attempt_review_host, attempt_snapshots_host and board_store passed alone (220/220 with the
+rest); shell_render and performance_render passed alone; task_overview_render and unified_studio_render fail the same
+way on clean main 593633a (C:\wt\apimain); rust_parity_git and the Python `electron . --smoke` launcher test (a 120 s
+timeout, clean main timed out too) and the real-OpenCode routing test (OpenCode itself timed out) are load. Live: the
+MCP server under `ELECTRON_RUN_AS_NODE=1` with Studio's own electron.exe answered initialize and tools/call; the
+card was checked in the browser pane (switch, five connect rows, Copy setup prompt, Show it, a note's toast).
+
 ## 2026-10-06 Your PCs and Friends reconnect by themselves; only a Studio that is really behind must update
 
 Branch `wip/auto-reconnect` (C:\wt\reconnect), landed on main as 7718e36 (rebased three times as main moved; the
@@ -470,32 +490,6 @@ layout_contract_nav 15/15, shell_frame_bars 34/34, community_rules 17/17; friend
 unified_studio_render 1/1 each (friends_render walks The Lobby and the signed-out card at four window sizes with no
 text under 12 px). `npm run check` ok; lint adds no warning; audit 0. The relay was redeployed (version
 4b641b0c) and `relay/scripts/smoke.mjs` passes against it.
-## 2026-10-06 Startup marks and the settings cache (S1) land on main
-
-Branch `land/s1-boot` in a cloud session (Linux, Node 24.21.0), stacked on S3 over main dfda798: the parked slice
-0605bcd re-applied (conflicts in main.cjs, booklet.js, build-booklet.mjs, booklet_build and module_purity resolved
-file by file; booklet.html rebuilt). The compile cache stays main's first statement and the marks block follows;
-startup-marks.js is first in BOOKLET_INPUTS (the updater's prefix pin moved with it); booklet.js keeps bootHealthy
-before the gate. readSettings asks the Rust store first and the cache fronts only the Electron path (6f2c154).
-
-Startup (tools/benchmark_startup.py, finished here, 5 smoke launches each under xvfb as a non-root user, medians):
-interactive (Vibe) 4,055 ms on main, 4,024 ms with the marks (no cost; loaded 2,624 / 2,616 ms). New marks, ms since
-main started: app ready 212, first paint 462, gate released 3,856; the gate opens at ~700 but the launch choice lands
-at ~2,200, and the release comes ~600 ms after the last step. readSettings on a 47 KB settings file (main.cjs's own
-code, 2,000 calls): ~460 us per call before, ~265 us with the cache, two stats instead of two file reads.
-Kill switches MEFI_STUDIO_STARTUP_MARKS=0 and MEFI_STUDIO_SETTINGS_CACHE=0, both pinned.
-
-`npm run check` ok, `npm run audit` 0 findings, `npm run lint` 0 errors and 45 warnings (as main; the WIP's unused
-`utimes` import removed). `npm run test:fast` with mefi-core built (`npm run host:core`): 7099 tests, 7062 pass, 34
-skipped, 3 fail, all as on clean main with the same binary: rust_modules image-store folder, and rust_parity_git
-"the actions answer like the JavaScript" and "the chip's host answers like git-host.cjs" (fail identically on
-dfda798 here; for the Rust chat). rust_parity_settings 3/3 ran (not skipped) with its new cached leg: main's JS with
-the cache on equals the uncached JS and Rust step for step. settings_cache 17/17 (new: Rust first, then the cache,
-then the files), startup_marks 10/10, startup_marks_renderer, booklet_build, release_updater and shell_frame_wiring
-(pins updated for launchGate and ?marks=0). Python test_mefi_studio_idle + updater 42 OK. Electron: startup_render and
-renderer_startup 12/12; for S3, task_overview_render, sessions_render, builder_render, fleet_render and
-workflow_render 5/5.
-
 ## Read Before Any Tests
 
 This is the test guide for the standalone Mefi's Studio AI+ repository. Run all commands from this repository root.
