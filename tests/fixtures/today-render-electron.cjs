@@ -746,15 +746,20 @@ app.whenReady().then(async () => {
   for (let index = 0; index < 60; index += 1) {
     contents.sendInputEvent({ type: "keyDown", keyCode: "Tab" }); contents.sendInputEvent({ type: "keyUp", keyCode: "Tab" });
     await sleep(40);
-    stops.push(await run(`const node = document.activeElement; if (!node || node === document.body) return null; const r = node.getBoundingClientRect(), style = getComputedStyle(node); return { id: node.id || '', cls: typeof node.className === 'string' ? node.className.split(' ')[0] : '', text: (node.textContent || '').trim().slice(0, 28), x: Math.round(r.left), y: Math.round(r.top), ring: style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0, today: Boolean(node.closest('#today-page')), ours: /^today-/.test(typeof node.className === 'string' ? node.className.split(' ')[0] : '') };`));
+    stops.push(await run(`const node = document.activeElement; if (!node || node === document.body) return null; const r = node.getBoundingClientRect(), style = getComputedStyle(node); return { under: Boolean(node.closest('body > main, body > header.page-head')), id: node.id || '', cls: typeof node.className === 'string' ? node.className.split(' ')[0] : '', text: (node.textContent || '').trim().slice(0, 28), x: Math.round(r.left), y: Math.round(r.top), ring: style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0, today: Boolean(node.closest('#today-page')), ours: /^today-/.test(typeof node.className === 'string' ? node.className.split(' ')[0] : '') };`));
   }
   report.tabStops = stops.map((stop) => (stop ? `${stop.id || stop.cls}:${stop.text}@${stop.x},${stop.y}` : null));
-  assert.ok(stops.every(Boolean), "focus never falls out to the page while tabbing through Today");
+  // Past the page's last control the order leaves the document for one press (Chromium's wrap) and comes back at the
+  // frame's first control. It never lands on the tab pages under the frame's layers: before the frame left them out of
+  // the flow while Today is the page, the Model catalog's 28 controls sat in the order there, invisible.
+  const outs = stops.flatMap((stop, index) => (stop ? [] : [index]));
+  assert.ok(outs.every((index) => index === stops.length - 1 || stops[index + 1]?.id === "shell-list-toggle"), `focus leaves the page only where the order wraps, back to the frame's first control: ${JSON.stringify(report.tabStops)}`);
+  assert.ok(stops.every((stop) => !stop?.under), `no stop lands on a page under the frame's layers: ${JSON.stringify(stops.filter((stop) => stop?.under))}`);
   const at = (match) => stops.findIndex((stop) => stop && match(stop));
   const order = [at((stop) => stop.id === "vibe-project"), at((stop) => stop.id === "vibe-new-app"), at((stop) => stop.id === "vibe-chat-toggle"), at((stop) => stop.cls === "today-chip"), at((stop) => stop.id === "vibe-input"), at((stop) => stop.id === "vibe-talk"), at((stop) => stop.id === "vibe-build"), at((stop) => stop.cls === "vibe-evolution-intent"), at((stop) => stop.cls === "today-card-open")];
   assert.ok(order.every((found) => found >= 0), `every stop is reached by Tab: ${JSON.stringify(order)} in ${JSON.stringify(report.tabStops)}`);
   assert.deepEqual([...order].sort((a, b) => a - b), order, "in the order the page reads: project, the summary, the box, its buttons, the starting points, the board");
-  const firstCards = stops.filter((stop) => stop.cls === "today-card-open" || stop.cls === "today-btn" || stop.cls === "today-link" || stop.cls === "today-chip");
+  const firstCards = stops.filter((stop) => stop && (stop.cls === "today-card-open" || stop.cls === "today-btn" || stop.cls === "today-link" || stop.cls === "today-chip"));
   assert.ok(firstCards.length >= 4, "the board's own controls are in the tab order");
   assert.ok(firstCards.every((stop) => stop.ring), `a focus ring on every stop of Today's own: ${JSON.stringify(firstCards.filter((stop) => !stop.ring))}`);
   // Down the board the order follows the columns: the first card of Needs you comes before the first of Running.

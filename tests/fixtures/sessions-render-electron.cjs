@@ -827,7 +827,7 @@ app.whenReady().then(async () => {
   await until("window.sessionsFixture.calls().some((call) => call.name === 'assistantMessage')", "Enter sends an Ask");
   const asked = (await callsOf(["assistantMessage"]))[0].args;
   assert.equal(asked[0], 'About the task "Add an empty state to the notes list" (task_ask): Does it handle search?');
-  assert.deepEqual(asked[2], { view: "Build · task", companion: "Mefi", taskId: "task_ask" });
+  assert.deepEqual(asked[2], { view: "Studio · task", companion: "Mefi", taskId: "task_ask" });
   await until("[...document.querySelectorAll('#sessions-thread .sx-item.is-ask')].some((node) => node.textContent.includes('Yes: that matches.'))", "the question and Mefi's answer show in the thread");
   await click("#sessions-intent-change");
   await forget();
