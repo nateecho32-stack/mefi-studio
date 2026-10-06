@@ -270,7 +270,7 @@ app.whenReady().then(async () => {
   await until("!document.getElementById('walkthrough-cli-use').disabled", "Signed-in CLI checked");
   await capture('guided-cli-ready.png');
   await click('#walkthrough-cli-use');
-  await until("document.getElementById('walkthrough-map-status').textContent.includes('Folder mapped')", "Subscription map without OpenCode");
+  await until("document.getElementById('walkthrough-map-status').textContent.includes('Project mapped')", "Subscription map without OpenCode");
   assert.ok(await run("return window.unifiedFixture.calls().some(c=>c.name==='cliSetupUse'&&c.value==='codex');"));
   window.setContentSize(600,600); contents.setZoomFactor(1.25);
   await until("Math.abs(innerWidth-480)<=2", "Compact walkthrough");
