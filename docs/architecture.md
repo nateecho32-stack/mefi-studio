@@ -1712,6 +1712,22 @@ failed process stays an error and cannot produce briefing requests.
   rooms hub through `scripts/hub-client.cjs`, and **Share what I'm playing**
   feeds the bot's `/nowplaying` (see [community.md](community.md)). Audio input and reactions activate only when
   enabled.
+  **Playlists** (`renderer/playlists.js`, a section of the media menu under
+  every source) are lists of up to 50 videos or links. Studio ships five
+  starting points of real YouTube uploads (Code & math explorers with
+  Sebastian Lague, 2swap, 3Blue1Brown and Emergent Garden; Visualizers; Focus
+  streams; Shaders & graphics; Simulated worlds). **Make it yours** copies
+  one; **New playlist** (optionally from Up next), the **+** Save button on a
+  Browse card or on the playing video, a pasted link, or a video dragged in
+  from Up next fills your own, which stay on this PC
+  (`mefiStudio.playlists.v1`, at most 40). **Play** starts the first video and
+  puts the rest at the front of Up next; a row plays from itself on. **Share**
+  copies the list as plain text for Discord or a room: a `Mefi Studio
+  playlist:` heading, one numbered line per video ending in its `<link>`, and,
+  when every video is on YouTube, a `watch_videos` link that plays the lot on
+  YouTube for anyone without Studio. **Add a shared playlist**, or pasting
+  that text or link into Browse's box, brings it back. A list plays only
+  through `MefiMusic.playlists`, and holds only links `mediaLink` would play.
   With the Audio link on, its **Tree motion** reaction lets the music
   smoothly quicken the Overview's spin, sway it round a small figure of eight
   and swell it on the bass, inside room the frame keeps for it.
