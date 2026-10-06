@@ -41,7 +41,7 @@ const review = {
   givers: [{ ...BOB, amount: 30, events: 9, share: 75, accountCreatedAt: Date.now() - 40 * DAY, joinedAt: Date.now() - 8 * DAY }, { id: null, name: "a member who used Forget me", amount: 10, events: 2, share: 25, accountCreatedAt: null, joinedAt: null }],
 };
 
-function environment({ moderator = true, confirm = true } = {}) {
+function environment({ moderator = true, confirm = true, extraReports = [], packNames = {} } = {}) {
   const calls = [];
   const api = {
     hubStatus: async () => ({ ok: true, status: { state: "ready", credits: true, linked: true } }),
@@ -52,14 +52,17 @@ function environment({ moderator = true, confirm = true } = {}) {
       if (method === "modReports") return { ok: true, reports: [
         { id: "rep_a", kind: "project", projectId: "proj_a", roomId: null, messageId: null, author: ALICE, reporter: BOB, reason: "Spam or a broken link", text: "One · https://alice.itch.io/one", verified: true, createdAt: 1 },
         { id: "rep_b", kind: "message", projectId: null, roomId: "room_a", messageId: "300000000000000001", author: BOB, reporter: ALICE, reason: "rude", text: "go away", verified: true, createdAt: 2 },
+        ...extraReports,
       ] };
       if (method === "modReview") return review;
       if (method === "modRevoke") return { ok: true, revoked: args[1]?.from ? 30 : 40, credits: { balance: 10, lifetime: 90, rank: "ember" } };
       if (method === "searchMembers") return { ok: true, members: [BOB] };
       return { ok: true };
     },
+    hubShop: async (method, ...args) => { calls.push([`shop:${method}`, ...JSON.parse(JSON.stringify(args))]); return { ok: true }; },
   };
-  const window = { mefiStudio: api, confirm: () => confirm };
+  // The Shop's names for packs it has read (renderer/friends-shop.js packName).
+  const window = { mefiStudio: api, confirm: () => confirm, MefiShop: { packName: (id) => packNames[id] ?? null } };
   const context = vm.createContext({ window, document: { createElement: (tag) => new Element(tag) }, Date, Number, Array, Set, Map, Promise, JSON, Object, String, Math });
   vm.runInContext(source, context);
   return { window, mod: window.MefiFriendsMod, calls };
@@ -118,6 +121,28 @@ test("farming, reports and a review: take back from one giver or all, suspend, r
   card.find("friends-mod-reports").buttons("Suspend Bob for a week")[0].click();
   await flush();
   assert.deepEqual(env.calls.filter((call) => call[0] === "modSuspend").at(-1), ["modSuspend", BOB.id, 10080]);
+});
+
+test("a reported Shop style pack is named, and Remove pack takes it out of the Shop (the relay resolves its reports)", async () => {
+  const env = environment({
+    extraReports: [
+      // As hub-client hands a pack report over: kind "shop" with its packId.
+      { id: "rep_c", kind: "shop", roomId: "shop", messageId: null, packId: "pack_nightmarket0001", projectId: null, author: BOB, reporter: ALICE, reason: "Copies someone else's work", text: "It is Synthwave renamed.", verified: true, createdAt: 3 },
+      { id: "rep_d", kind: "message", roomId: "shop", messageId: null, projectId: null, author: BOB, reporter: ALICE, reason: "Hard to read", text: null, verified: true, createdAt: 4 },
+    ],
+    packNames: { pack_nightmarket0001: "Night market" },
+  });
+  const card = env.mod.card();
+  await flush();
+  const reports = card.find("friends-mod-reports");
+  assert.match(reports.textContent, /Style pack “Night market”: Copies someone else's work“It is Synthwave renamed\.” · reported by Alice · by Bob/);
+  assert.match(reports.textContent, /Style pack: Hard to readreported by Alice · by Bob/, "a pack report that came without its id still reads as one");
+  assert.equal(reports.buttons("Remove pack").length, 1, "Remove pack only where the pack's id came with the report");
+  reports.buttons("Remove pack")[0].click();
+  await flush();
+  assert.deepEqual(env.calls.find((call) => call[0] === "shop:modShopRemove"), ["shop:modShopRemove", "pack_nightmarket0001", { reason: "Copies someone else's work" }]);
+  assert.equal(env.calls.some((call) => call[0] === "modResolve"), false, "removing a pack resolves its reports on the relay: no second ask");
+  assert.equal(env.calls.filter((call) => call[0] === "modReports").length, 2, "and the reports are read again");
 });
 
 test("look someone up by name, then review them; nothing happens without a yes", async () => {
