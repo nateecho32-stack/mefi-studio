@@ -69,8 +69,8 @@ To pet your companion, stroke it back and forth with the pointer. It leans in an
 
 The **Friends** bubble leads to Listen together and [Your PCs](#/your-pcs).
 
-- <span class="status next">Coming in 0.5</span> It also holds **Rooms** and the **Playground**, where your companion meets friends' companions. **Practice with Pip** works on your own PC with nothing sent.
-- <span class="status rolling">Rolling out</span> Rooms and playdates with friends need the rooms hub.
+- <span class="status next">Coming in 0.5</span> It opens Friends, a place of its own, at the right page: **The Lobby**, **Rooms**, the **Playground**, where your companion meets friends' companions, and Your PCs. **Practice with Pip** works on your own PC with nothing sent.
+- <span class="status next">Coming in 0.5</span> Rooms and playdates with friends run on the Mefi Studio relay, which is built into Studio, after you sign in with Discord once.
 
 [Friends, rooms and playdates](#/friends-and-rooms) covers all of it.
 

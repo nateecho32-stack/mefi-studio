@@ -64,7 +64,7 @@ Planning never starts coding workers by itself. [Tasks](workflow.md) explains wh
 
 In Vibe, the **Plans** panel and the **Plan in flight** card follow a plan while it's being built.
 
-> <span class="status next">Coming in 0.5</span> Plans show one step at a time, with an **Up next** button to the step that's waiting on you (**Show every step** lays the whole plan out again). The interview reads like a chat, and Mefi can ask the next question on its own. A new idea needs no name and offers **Idea starters**. **Where this lives** pins a plan to an area of your [project map](agent-brain.md). In Vibe, the plan panel shows a timeline of which agent is on each step.
+> <span class="status next">Coming in 0.5</span> Plans show one step at a time, with an **Up next** button to the step that's waiting on you (**Show every step** lays the whole plan out again). The interview reads like a chat, and Mefi can ask the next question on its own. A new idea needs no name and offers **Idea starters**. **Where this lives** pins a plan to an area of your [project map](agent-brain.md). A split request's plan shows a timeline of which agent is on each step.
 
 ## Check plans against your code
 

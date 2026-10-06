@@ -41,7 +41,7 @@ Every feature and roadmap item says where it stands. Keep the labels honest:
 - Before a release: **In 0.4.4** (in the download today) and **Coming in 0.5** (built on `main`, ships with the next release). 0.4.5 and 0.4.6 were folded into 0.5.
 - After it: **In Studio** (in the download) and **New in 0.5** (new in the latest release).
 - **In progress** (with the release it's meant for, such as "In progress for 0.5"): being built now, not in a download yet.
-- **Rolling out**: built, but it needs a part outside Studio to be live first (today, the Studio bot’s side of Reach this PC from Discord).
+- **Rolling out**: built, but it needs a part outside Studio to be live first (today, the Studio bot’s side of Reach this PC from Discord and of `/nowplaying`, which wait for the bot to be linked to the relay).
 - **Planned**, and ideas with no date.
 
 The download stays on the latest published release.
@@ -56,7 +56,7 @@ The download stays on the latest published release.
 
 ## Wiki pages
 
-Add a markdown file under `wiki/pages/` and list it in `wiki/pages.json` (title, section and a one-line summary). Link between pages with `#/slug`. Mark what the latest release added with `<span class="status next">New in 0.4.5</span>`, and work that isn't in a download yet with `<span class="status progress">In progress</span>` or `<span class="status planned">Planned</span>`.
+Add a markdown file under `wiki/pages/` and list it in `wiki/pages.json` (title, section and a one-line summary). Link between pages with `#/slug`. Mark what the next release adds with `<span class="status next">Coming in 0.5</span>` (it becomes `New in 0.5` once 0.5 is out), and work that isn't built yet with `<span class="status progress">In progress</span>` or `<span class="status planned">Planned</span>`. A mark inside a heading doesn't change that heading's link, so other pages' `#/page/heading` links keep working when a mark changes.
 
 ## Names and assets
 

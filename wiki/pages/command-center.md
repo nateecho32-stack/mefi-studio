@@ -4,6 +4,8 @@ Command view shows your project's tasks, sessions and agents as one moving tree.
 
 Use it to see what's running, follow a task and answer questions without leaving the work.
 
+> <span class="status next">Coming in 0.5</span> The Command view becomes **the Map**, a place of its own on the rail. Your sessions stay in the list beside the tree, and a small bar over it holds **Map | Fleet | Pipelines**, **Running only** and **View** (the layouts, labels, the camera, and a flat map or a 3D orbit). The toolbar described below belongs to 0.4.4: in 0.5, Search and new tasks live in the frame, and the Legend and the colours of the four states sit at the bottom left, with Fit and zoom at the bottom right.
+
 ![Command view with the live tree and work panel](../../assets/shots/command.webp)
 
 ## Find the work you care about
@@ -59,7 +61,7 @@ The toolbar's audio button (**Connect audio**) opens **Music & video**. Closing 
 
 In 0.4.4, Studio switches to Command view after five quiet minutes. Move the mouse or press a key, then **Close** (`Esc` or `D`) to go back.
 
-> <span class="status next">Coming in 0.5</span> This becomes a switch in **Settings › General**, **Show Command view after 5 quiet minutes**, and it's off by default. The Command header also says why agents aren't working, with the one control that fixes it. Answered questions leave the **Ask** list at once, and **Stop all** and **Restart** ask twice.
+> <span class="status next">Coming in 0.5</span> Opening the Map after five quiet minutes becomes a switch in **Settings › General**, and it's off by default. The Map also says why agents aren't working, with the one control that fixes it. Answered questions leave the list at once, and **Stop all** and **Restart** ask twice.
 
 ## Other Live views
 

@@ -8,7 +8,7 @@ Every change saves as you make it. The helper has no settings of its own: each c
 
 ## When it opens
 
-- **On a new install**, it opens by itself before the Start here walkthrough.
+- **On a new install**, a three-step welcome comes first: pick the AI that builds for you, choose a project, and say what Studio should make first. **Other ways to connect** opens the helper at **Connect an AI**, and **Skip** leaves it waiting in Help and Search.
 - **After you update to 0.5**, it opens once, with your current choices already filled in.
 - **Any time later**, press `Ctrl K` and type *setup helper*. To go straight to one part, pick it from the results, for example **Setup helper › Routing** or **Setup helper › Permissions**.
 

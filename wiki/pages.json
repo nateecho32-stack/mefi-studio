@@ -54,7 +54,7 @@
         {
           "slug": "coming-in-0-5",
           "title": "Coming in 0.5",
-          "summary": "The 0.5 scope, which took in 0.4.5 and 0.4.6: setup, the 0.5 layout, Fleet, Friends, PC sharing and the move to Rust; what stays later or needs the hub"
+          "summary": "The 0.5 scope, which took in 0.4.5 and 0.4.6: the 0.5 layout with Social and Studio, the Map and Team, Friends on a built-in relay, setup, PC sharing and the move to Rust; what stays for later"
         }
       ]
     },
@@ -119,8 +119,8 @@
         {
           "slug": "friends-and-rooms",
           "title": "Friends, rooms and playdates",
-          "summary": "Rolling out: join rooms, chat, listen together and let agents cowork across PCs",
-          "status": "rolling"
+          "summary": "Coming in 0.5: The Lobby, rooms and chat, the Project hub, listening together and agents that cowork across PCs",
+          "status": "next"
         },
         {
           "slug": "your-pcs",

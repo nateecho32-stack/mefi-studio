@@ -50,7 +50,7 @@ Some things never go to Mefi, whatever your mode:
 - a question about whether work done outside Studio already covers a task;
 - approving a build, when your mode asks for approval.
 
-<span class="status next">Coming in 0.5</span> Work you ask for from Discord also waits for your OK in every mode. That's part of **Reach this PC from Discord**, which works once the bot's side goes live. See [Your PCs](#/your-pcs).
+<span class="status next">Coming in 0.5</span> A task that another app on this PC files through **Settings › Other apps** waits for your OK in every mode. So does work you ask for from Discord, part of **Reach this PC from Discord** <span class="status rolling">Rolling out</span>, which works once the Studio bot is linked to the relay. See [Your PCs](#/your-pcs).
 
 ## Decided for you and For you
 

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Everything in Studio — Mefi Studio features</title>
-<meta name="description" content="Every feature in Mefi Studio, the free, open-source Windows app for building ideas with coding agents: Vibe and Build, your agent team, Command view, Friends and rooms, Your PCs, media, themes and privacy. Each one says whether it is in 0.4.4, coming in 0.5, rolling out or experimental.">
+<meta name="description" content="Every feature in Mefi Studio, the free, open-source Windows app for building ideas with coding agents: its two modes (Social and Studio from 0.5), your agent team, the live tree (the Map from 0.5), Friends and rooms, Your PCs, media, themes and privacy. Each one says whether it is in 0.4.4, coming in 0.5, rolling out or experimental.">
 <meta property="og:title" content="Everything in Studio — Mefi Studio features">
 <meta property="og:description" content="Every feature in Mefi Studio, grouped and searchable, each marked In 0.4.4, Coming in 0.5, Rolling out or Experimental.">
 <meta property="og:site_name" content="Mefi Studio">
@@ -68,14 +68,14 @@
     <p class="eyebrow">Features</p>
     <h1>Everything in Studio</h1>
     <p class="lede">Mefi Studio is a free, open-source Windows app where you build your ideas with coding agents, watch them work, and share what you make with other people.</p>
-    <p class="feat-total"><strong data-count="all">343</strong> features in 14 areas. Each one carries a badge that says where it stands.</p>
+    <p class="feat-total"><strong data-count="all">357</strong> features in 14 areas. Each one carries a badge that says where it stands.</p>
     <dl class="feat-legend">
       <div class="legend-released"><dt><span class="status released">In 0.4.4</span><span class="num" data-count="released">240</span></dt><dd>In the download today.</dd></div>
-      <div class="legend-next"><dt><span class="status next">Coming in 0.5</span><span class="num" data-count="next">90</span></dt><dd>Built on main. It ships with 0.5, the next release.</dd></div>
-      <div class="legend-rolling"><dt><span class="status rolling">Rolling out</span><span class="num" data-count="rolling">9</span></dt><dd>Built. It goes live for everyone once the community rooms hub and Discord link are online.</dd></div>
+      <div class="legend-next"><dt><span class="status next">Coming in 0.5</span><span class="num" data-count="next">112</span></dt><dd>Built on main. It ships with 0.5, the next release.</dd></div>
+      <div class="legend-rolling"><dt><span class="status rolling">Rolling out</span><span class="num" data-count="rolling">1</span></dt><dd>Built. It goes live once the Studio bot’s side is linked to Studio’s relay.</dd></div>
       <div class="legend-experimental"><dt><span class="status experimental">Experimental</span><span class="num" data-count="experimental">4</span></dt><dd>Built, but off by default, opt-in or not officially supported.</dd></div>
     </dl>
-    <p class="feat-planned"><strong>0.5 is not released yet.</strong> It’s being built now, with no release date. There’s no 0.4.5 or 0.4.6: both were folded into 0.5. These are the features built for it; faster agent sends, kept logs, a faster launch and Friends 2.0 are still in progress, and bigger rebuilds stay later. See <a href="wiki/#/coming-in-0-5/what-will-and-wont-ship">what will and won’t ship in 0.5</a>, or the <a href="roadmap.html">full roadmap</a>.</p>
+    <p class="feat-planned"><strong>0.5 is not released yet.</strong> It’s being built now, with no release date. There’s no 0.4.5 or 0.4.6: both were folded into 0.5. These are the features built for it; a faster launch is still in progress, and bigger rebuilds stay later. See <a href="wiki/#/coming-in-0-5/what-will-and-wont-ship">what will and won’t ship in 0.5</a>, or the <a href="roadmap.html">full roadmap</a>.</p>
     <p class="feat-planned">Studio is also moving to Rust, in stages, with the same screens, settings and API keys. The download is still the Electron build. <a href="wiki/#/coming-in-0-5/studio-is-moving-to-rust">How the move works</a>.</p>
   </div>
 </div>
@@ -88,10 +88,10 @@
       <input type="search" id="feat-q" placeholder="Search features, e.g. rooms, keys, radio" autocomplete="off" spellcheck="false">
     </div>
     <div class="chips feat-filters" role="group" aria-label="Show features by status">
-      <button type="button" class="chip" data-filter="all" aria-pressed="true">All <span class="count" data-count="all">343</span></button>
+      <button type="button" class="chip" data-filter="all" aria-pressed="true">All <span class="count" data-count="all">357</span></button>
       <button type="button" class="chip" data-filter="released" aria-pressed="false"><span class="dot released" aria-hidden="true"></span>In 0.4.4 <span class="count" data-count="released">240</span></button>
-      <button type="button" class="chip" data-filter="next" aria-pressed="false"><span class="dot next" aria-hidden="true"></span>Coming in 0.5 <span class="count" data-count="next">90</span></button>
-      <button type="button" class="chip" data-filter="rolling" aria-pressed="false"><span class="dot rolling" aria-hidden="true"></span>Rolling out <span class="count" data-count="rolling">9</span></button>
+      <button type="button" class="chip" data-filter="next" aria-pressed="false"><span class="dot next" aria-hidden="true"></span>Coming in 0.5 <span class="count" data-count="next">112</span></button>
+      <button type="button" class="chip" data-filter="rolling" aria-pressed="false"><span class="dot rolling" aria-hidden="true"></span>Rolling out <span class="count" data-count="rolling">1</span></button>
       <button type="button" class="chip" data-filter="experimental" aria-pressed="false"><span class="dot experimental" aria-hidden="true"></span>Experimental <span class="count" data-count="experimental">4</span></button>
     </div>
     <p class="feat-result" data-result aria-live="polite"></p>
@@ -101,32 +101,32 @@
 <nav class="feat-jump" aria-label="Areas on this page">
   <div class="container">
     <ul class="jump-list" role="list">
-      <li><a class="chip" href="#build" data-jump="build">Vibe and Build <span class="count" data-jump-count>37</span></a></li>
+      <li><a class="chip" href="#build" data-jump="build">Vibe and Build <span class="count" data-jump-count>39</span></a></li>
       <li><a class="chip" href="#tasks" data-jump="tasks">Plans and tasks <span class="count" data-jump-count>36</span></a></li>
-      <li><a class="chip" href="#agents" data-jump="agents">Agent team <span class="count" data-jump-count>18</span></a></li>
+      <li><a class="chip" href="#agents" data-jump="agents">Agent team <span class="count" data-jump-count>21</span></a></li>
       <li><a class="chip" href="#in-charge" data-jump="in-charge">In charge <span class="count" data-jump-count>29</span></a></li>
-      <li><a class="chip" href="#watch" data-jump="watch">Watch <span class="count" data-jump-count>22</span></a></li>
+      <li><a class="chip" href="#watch" data-jump="watch">Watch <span class="count" data-jump-count>23</span></a></li>
       <li><a class="chip" href="#brain" data-jump="brain">Brain and maps <span class="count" data-jump-count>22</span></a></li>
       <li><a class="chip" href="#models" data-jump="models">Models <span class="count" data-jump-count>23</span></a></li>
       <li><a class="chip" href="#companion" data-jump="companion">Companion <span class="count" data-jump-count>18</span></a></li>
-      <li><a class="chip" href="#friends" data-jump="friends">Friends <span class="count" data-jump-count>21</span></a></li>
-      <li><a class="chip" href="#pcs" data-jump="pcs">Your PCs <span class="count" data-jump-count>16</span></a></li>
-      <li><a class="chip" href="#media" data-jump="media">Media <span class="count" data-jump-count>27</span></a></li>
-      <li><a class="chip" href="#make-it-yours" data-jump="make-it-yours">Make it yours <span class="count" data-jump-count>18</span></a></li>
-      <li><a class="chip" href="#setup" data-jump="setup">Get started <span class="count" data-jump-count>36</span></a></li>
-      <li><a class="chip" href="#trust" data-jump="trust">Private and safe <span class="count" data-jump-count>19</span></a></li>
+      <li><a class="chip" href="#friends" data-jump="friends">Friends <span class="count" data-jump-count>25</span></a></li>
+      <li><a class="chip" href="#pcs" data-jump="pcs">Your PCs <span class="count" data-jump-count>17</span></a></li>
+      <li><a class="chip" href="#media" data-jump="media">Media <span class="count" data-jump-count>28</span></a></li>
+      <li><a class="chip" href="#make-it-yours" data-jump="make-it-yours">Make it yours <span class="count" data-jump-count>19</span></a></li>
+      <li><a class="chip" href="#setup" data-jump="setup">Get started <span class="count" data-jump-count>37</span></a></li>
+      <li><a class="chip" href="#trust" data-jump="trust">Private and safe <span class="count" data-jump-count>20</span></a></li>
     </ul>
   </div>
 </nav>
 
-<section class="feat-area" id="build" aria-labelledby="build-title" data-area data-total="37">
+<section class="feat-area" id="build" aria-labelledby="build-title" data-area data-total="39">
   <div class="container">
     <div class="area-head has-shot">
       <div class="area-intro">
         <div class="area-label"><span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9-1.9 5.1-1.9-5.1L5 10.5l5.1-1.9z"/><path d="M18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></svg></span><span class="area-num">01</span></div>
         <h2 id="build-title">Vibe and Build</h2>
-        <p class="area-sum">Studio opens in Vibe: one box where you talk an idea over or build it. Build is the full studio, and one menu, one search box and single keys reach every page.</p>
-        <p class="area-meta" data-area-count>37 features · 25 in 0.4.4 · 12 coming in 0.5</p>
+        <p class="area-sum">Studio opens in Vibe: one box where you talk an idea over or build it. Build is the full studio, and one menu, one search box and single keys reach every page. In 0.5 the two modes are called Social and Studio, and they share one layout.</p>
+        <p class="area-meta" data-area-count>39 features · 25 in 0.4.4 · 14 coming in 0.5</p>
       </div>
       <figure class="frame area-shot"><img src="assets/shots/vibe.webp" width="2400" height="1500" loading="lazy" decoding="async" alt="Vibe mode for a sample Notes app project: a box asking what's next, with Talk it over and Build it buttons, and Needs you, Building now, Freshly done and Fresh ideas cards below it"><figcaption><strong>Vibe mode</strong>, shown with a sample Notes app project.</figcaption></figure>
     </div>
@@ -160,12 +160,14 @@
       <li class="feat" data-status="next"><div class="feat-top"><h3>Watch your team on a split request</h3><span class="status next">Coming in 0.5</span></div><p>The plan card draws its steps as a track that ends in the final check, naming the step being built and what its agent is doing now.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>MEFI: Modify, Experiment, Fix, Improve</h3><span class="status next">Coming in 0.5</span></div><p>Four starting points for changing the open project, Studio itself included. Pick an approach, describe the change, then talk it over or build it.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>Suggest a next step</h3><span class="status next">Coming in 0.5</span></div><p>Mefi reads your project and suggests next steps with reasons and file references. Add to draft, Save idea or Clear; nothing starts until you build.</p></li>
-      <li class="feat" data-status="next"><div class="feat-top"><h3>The 0.5 layout</h3><span class="status next">Coming in 0.5</span></div><p>Optional, and off by default. Turn it on with Try the 0.5 layout in Settings, or type 'Switch layout: 0.5 or classic' in Search. It brings a top bar with a Vibe | Build switch, and a status bar.</p></li>
-      <li class="feat" data-status="next"><div class="feat-top"><h3>Session list and inspector</h3><span class="status next">Coming in 0.5</span></div><p>In the 0.5 layout, resize the session list and the inspector, or fold them into drawers.</p></li>
-      <li class="feat" data-status="next"><div class="feat-top"><h3>Tabs you add and pin</h3><span class="status next">Coming in 0.5</span></div><p>In the 0.5 layout, add tabs and pin the ones you want to keep. Studio keeps them tidy.</p></li>
-      <li class="feat" data-status="next"><div class="feat-top"><h3>Build's tasks as sessions</h3><span class="status next">Coming in 0.5</span></div><p>In the 0.5 layout, Build's tasks become a session list. Each one has a thread and an inspector with Plan, Changes, Checks, Preview and Agent.</p></li>
-      <li class="feat" data-status="next"><div class="feat-top"><h3>New Settings, Search and first run</h3><span class="status next">Coming in 0.5</span></div><p>The 0.5 layout has its own Settings, Search (Ctrl K) and a three-step first run.</p></li>
-      <li class="feat" data-status="next"><div class="feat-top"><h3>Build as a coding-agent desktop</h3><span class="status next">Coming in 0.5</span></div><p>Build becomes a desktop for working with your coding agents.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>Social and Studio</h3><span class="status next">Coming in 0.5</span></div><p>Vibe is now Social, for time with friends and a light eye on your agents, and Build is now Studio, for in-depth building with the social side still there. Ctrl+M switches. Only the names change: your saved mode and settings carry over.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>The 0.5 layout</h3><span class="status next">Coming in 0.5</span></div><p>Studio’s only layout from 0.5: a top bar with the Social | Studio switch, a rail with Work, Map, Team and Friends, and a status bar. The classic layout and its switch are gone, and every control they held has a place in the new one.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>Session list and inspector</h3><span class="status next">Coming in 0.5</span></div><p>Resize the session list and the inspector by dragging or with the keys, or fold them into drawers in a small window.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>Tabs you add and pin</h3><span class="status next">Coming in 0.5</span></div><p>Open any page or session in a tab and pin the ones you want to keep. Studio keeps the rest tidy.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>Your tasks as sessions</h3><span class="status next">Coming in 0.5</span></div><p>Studio mode lists the project's tasks as sessions. Each one has a thread and an inspector with Plan, Changes, Checks, Preview and Agent.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>New Settings, Search and first run</h3><span class="status next">Coming in 0.5</span></div><p>Settings and Search (Ctrl K) are rebuilt, and a new install gets a three-step welcome: pick the AI that builds for you, choose a project, and say what Studio should make first.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>A coding-agent desktop</h3><span class="status next">Coming in 0.5</span></div><p>Off by default. Search's Switch Home layout lists your tasks the way coding-agent desktop apps list sessions, with panes that dock beside the page or pop out.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>Answer styles</h3><span class="status next">Coming in 0.5</span></div><p>Mefi explains things like you're five unless you pick another style: Short answers, Teach me, Brainstorm, Poke holes, Expert or plain. A chip in each message box changes it.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>Pictures on a message</h3><span class="status next">Coming in 0.5</span></div><p>Add pictures to a message you send.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>The @ # / picker</h3><span class="status next">Coming in 0.5</span></div><p>Type @, # or / in a message to pick from a list. @ searches your project's files.</p></li>
     </ul>
@@ -213,7 +215,7 @@
       <li class="feat" data-status="released"><div class="feat-top"><h3>Projects and Save &amp; switch</h3><span class="status released">In 0.4.4</span></div><p>Each folder keeps its own tasks, conversations, plans and references. Switching while a worker runs saves its progress first, and Remove project never touches your files.</p></li>
       <li class="feat" data-status="released"><div class="feat-top"><h3>While Studio was away</h3><span class="status released">In 0.4.4</span></div><p>Studio keeps a last look at each folder. When you come back it reports the commits, uncommitted edits and Claude Code, Codex or OpenCode sessions run there meanwhile.</p></li>
       <li class="feat" data-status="released"><div class="feat-top"><h3>Queued work is checked first</h3><span class="status released">In 0.4.4</span></div><p>If the code changed, each queued card is checked against that work. One that looks already done waits for you with Mark it done, Drop it or Build it anyway, and its Evidence tab shows why.</p></li>
-      <li class="feat" data-status="next"><div class="feat-top"><h3>Plan timeline in Vibe</h3><span class="status next">Coming in 0.5</span></div><p>Vibe's Plans panel shows a plan as a timeline: who is on each step, and which step each waiting one waits for.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>Plan timeline</h3><span class="status next">Coming in 0.5</span></div><p>A split request's plan shows as a timeline: who is on each step, and which step each waiting one waits for.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>Compact Ideas cards</h3><span class="status next">Coming in 0.5</span></div><p>The Ideas list gets clear titles, short excerpts and status tags in compact cards. Short cards slide into free space, the layout adapts to the window, and selecting a card opens its existing detail and actions.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>Ask what changed, even without AI</h3><span class="status next">Coming in 0.5</span></div><p>Ask 'what did I do while Studio was closed?' and the chat answers from the report, even with no model connected.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>Recently deleted</h3><span class="status next">Coming in 0.5</span></div><p>Deleted tasks and ideas wait in Recently deleted, so a delete can be undone.</p></li>
@@ -223,14 +225,14 @@
   </div>
 </section>
 
-<section class="feat-area" id="agents" aria-labelledby="agents-title" data-area data-total="18">
+<section class="feat-area" id="agents" aria-labelledby="agents-title" data-area data-total="21">
   <div class="container">
     <div class="area-head">
       <div class="area-intro">
         <div class="area-label"><span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M15.5 4.8a3.5 3.5 0 0 1 0 6.4M18 14.2a6.5 6.5 0 0 1 3.5 5.8"/></svg></span><span class="area-num">03</span></div>
         <h2 id="agents-title">Your agent team</h2>
         <p class="area-sum">Choose who answers and who builds. Coding tools do the building with your own logins, and a team of helper agents plans, reviews and writes the briefs.</p>
-        <p class="area-meta" data-area-count>18 features · 10 in 0.4.4 · 5 coming in 0.5 · 3 experimental</p>
+        <p class="area-meta" data-area-count>21 features · 10 in 0.4.4 · 8 coming in 0.5 · 3 experimental</p>
       </div>
     </div>
     <ul class="feat-grid" role="list">
@@ -247,7 +249,10 @@
       <li class="feat" data-status="next"><div class="feat-top"><h3>Habits</h3><span class="status next">Coming in 0.5</span></div><p>Short behaviour rules for each agent, such as explain changes, test and take small steps. Each can be off, brief or full, and Studio shows the tokens they add to every prompt.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>Every builder checked the same way</h3><span class="status next">Coming in 0.5</span></div><p>Claude Code, Codex, Grok and Antigravity builds are checked by Studio's own verification instead of being sent back to OpenCode, and Codex builders get Studio's tools.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>Rules for your agents</h3><span class="status next">Coming in 0.5</span></div><p>Set rules that your agents work by.</p></li>
-      <li class="feat" data-status="next"><div class="feat-top"><h3>Skills page</h3><span class="status next">Coming in 0.5</span></div><p>Agents › Setup › Skills gives your agents' skills a page of their own.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>Team</h3><span class="status next">Coming in 0.5</span></div><p>Agents is now Team, with a place for each part: Providers, Seats and models, Permissions, Rules, Skills, Connectors, Workflows, Models and more. Seats and models says who does each job, in plain words.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>Skills page</h3><span class="status next">Coming in 0.5</span></div><p>Team › Skills gives your agents' skills a page of their own, with an editor and live checks. Each skill can be always on, picked when it fits, or used only when called.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>Connectors</h3><span class="status next">Coming in 0.5</span></div><p>Team › Connectors adds, approves, tests and imports MCP servers, including the ones Claude Code, Cursor, VS Code and other tools already use. You choose which ones the chat, the helper agents and the builders get, and online servers work too.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>Thinking that steps up</h3><span class="status next">Coming in 0.5</span></div><p>Claude Code, Codex and OpenCode start every job with light thinking and think harder only when it fails its check. After two misses a stronger model takes it, and Max thinking waits for your OK.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>Codex workers over codex app-server</h3><span class="status next">Coming in 0.5</span></div><p>Codex builders run through <code>codex app-server</code>.</p></li>
       <li class="feat" data-status="experimental"><div class="feat-top"><h3>Ask the desk mid-run</h3><span class="status experimental">Experimental</span></div><p>Turn on Let workers ask the desk, and OpenCode and Claude Code workers can ask the desk agent a question and wait for its answer. Off by default.</p></li>
       <li class="feat" data-status="experimental"><div class="feat-top"><h3>Nested delegation and head drafts</h3><span class="status experimental">Experimental</span></div><p>Two switches, off by default: one lets a delegated slice split once more (never past three levels), the other lets the lead draft a pipeline for a complex task no recipe fits.</p></li>
@@ -289,7 +294,7 @@
       <li class="feat" data-status="released"><div class="feat-top"><h3>Mark done</h3><span class="status released">In 0.4.4</span></div><p>Mark a result complete after reviewing it yourself. The board keeps 'Completion verified' apart from 'Completion confirmed by you'.</p></li>
       <li class="feat" data-status="released"><div class="feat-top"><h3>Honest retries</h3><span class="status released">In 0.4.4</span></div><p>A retry is judged by its own check, never by an earlier pass, and its note quotes the failing command for the next worker.</p></li>
       <li class="feat" data-status="released"><div class="feat-top"><h3>Rate recent work</h3><span class="status released">In 0.4.4</span></div><p>Give your own score to a result you reviewed. It stays separate from model judging.</p></li>
-      <li class="feat" data-status="next"><div class="feat-top"><h3>Agents say why they are not working</h3><span class="status next">Coming in 0.5</span></div><p>Home, Vibe, Command, the Agents switches, each task and the chat read one shared answer about what is holding work back, so they never disagree.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>Agents say why they are not working</h3><span class="status next">Coming in 0.5</span></div><p>Today, the Map, Team's switches, each task and the chat read one shared answer about what is holding work back, so they never disagree.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>A tidy Needs you</h3><span class="status next">Coming in 0.5</span></div><p>Answered questions leave the list at once, and questions past their age or whose card left the board close when the project loads.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>Ask twice before it can't be undone</h3><span class="status next">Coming in 0.5</span></div><p>Stop all, Restart, dropping a task, deleting a preset and similar actions share one two-step button: the first press asks, the second acts.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>Today and one Inbox</h3><span class="status next">Coming in 0.5</span></div><p>The 0.5 layout has Today, and one Inbox for everything waiting on you.</p></li>
@@ -301,14 +306,14 @@
   </div>
 </section>
 
-<section class="feat-area" id="watch" aria-labelledby="watch-title" data-area data-total="22">
+<section class="feat-area" id="watch" aria-labelledby="watch-title" data-area data-total="23">
   <div class="container">
     <div class="area-head has-shot">
       <div class="area-intro">
         <div class="area-label"><span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg></span><span class="area-num">05</span></div>
         <h2 id="watch-title">Watch your agents work</h2>
-        <p class="area-sum">Command view draws your project as a live node tree where agents fly to the work they're doing. Read-only views show every session, change and log.</p>
-        <p class="area-meta" data-area-count>22 features · 20 in 0.4.4 · 2 coming in 0.5</p>
+        <p class="area-sum">Command view draws your project as a live node tree where agents fly to the work they're doing. Read-only views show every session, change and log. In 0.5 the Command view becomes the Map, a place of its own on the rail.</p>
+        <p class="area-meta" data-area-count>23 features · 20 in 0.4.4 · 3 coming in 0.5</p>
       </div>
       <figure class="frame area-shot"><img src="assets/shots/command.webp" width="2400" height="1500" loading="lazy" decoding="async" alt="Command view: sessions and tasks drawn as a connected tree with two builders at work, and the Live work panel listing two running tasks and three working agents"><figcaption><strong>Command view</strong> with the Live work panel, shown with a sample project.</figcaption></figure>
     </div>
@@ -333,7 +338,8 @@
       <li class="feat" data-status="released"><div class="feat-top"><h3>Activity &amp; evidence (3)</h3><span class="status released">In 0.4.4</span></div><p>A read-only feed of changes with diffs, totals per session, screenshots you can pin and the tail of the log.</p></li>
       <li class="feat" data-status="released"><div class="feat-top"><h3>Trace</h3><span class="status released">In 0.4.4</span></div><p>Studio's logs as channels in one viewer under Agents › Live. Search, filter by level and source, follow live, copy lines or open the file.</p></li>
       <li class="feat" data-status="released"><div class="feat-top"><h3>Analyzer (A)</h3><span class="status released">In 0.4.4</span></div><p>Compares plans and notes with the current source, listing file:line evidence and completion claims nobody has verified. It runs locally, with an optional AI read.</p></li>
-      <li class="feat" data-status="next"><div class="feat-top"><h3>Fleet: seats, pods and wires</h3><span class="status next">Coming in 0.5</span></div><p>Agents › Live › Fleet shows your team in Graph, Table, Recent, Tree and Health views. A seat’s inspector shows its work and earlier runs, with Open task, Open in Command and Stop this run. Lanes, missions and other PCs remain later work.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>The Map</h3><span class="status next">Coming in 0.5</span></div><p>The Command view is now the Map. Your sessions stay in the list beside the tree, and a small bar over it holds Map | Fleet | Pipelines, Running only and View, with the layouts, labels and camera.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>Fleet: seats, pods and wires</h3><span class="status next">Coming in 0.5</span></div><p>Map › Fleet shows your team in Graph, Table, Recent, Tree and Health views. A seat’s inspector shows its work and earlier runs, with Open task, a way to its node on the Map and Stop this run. Lanes, missions and other PCs remain later work.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>Pages that say what they mean</h3><span class="status next">Coming in 0.5</span></div><p>Pages leave out values that were never recorded instead of printing '?' or 'undefined', counts match what is shown, and errors read as plain sentences.</p></li>
     </ul>
   </div>
@@ -375,7 +381,7 @@
       <li class="feat" data-status="released"><div class="feat-top"><h3>Edits are never lost</h3><span class="status released">In 0.4.4</span></div><p>Closing the editor keeps unsaved edits for next time. Discard unsaved changes throws them away when you mean to.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>Connected system cards</h3><span class="status next">Coming in 0.5</span></div><p>Systems that changed together share a branch with their parts and files. Systems without that evidence wait under Connections still to discover.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>Ideas tree</h3><span class="status next">Coming in 0.5</span></div><p>Groups your ideas and tasks by system and progress, keeps subtasks under their parents and regroups as agents discover files.</p></li>
-      <li class="feat" data-status="next"><div class="feat-top"><h3>Work with Mefi from the map</h3><span class="status next">Coming in 0.5</span></div><p>The map inspector's Modify, Experiment, Fix and Improve buttons prepare a Vibe draft about the chosen area.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>Work with Mefi from the map</h3><span class="status next">Coming in 0.5</span></div><p>The map inspector's Modify, Experiment, Fix and Improve buttons prepare a draft about the chosen area, ready to talk over or build.</p></li>
     </ul>
   </div>
 </section>
@@ -451,52 +457,56 @@
   </div>
 </section>
 
-<section class="feat-area" id="friends" aria-labelledby="friends-title" data-area data-total="21">
+<section class="feat-area" id="friends" aria-labelledby="friends-title" data-area data-total="25">
   <div class="container">
     <div class="area-head has-shot">
       <div class="area-intro">
         <div class="area-label"><span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20.5 11.5a7.5 7.5 0 0 1-10.9 6.7L4 19.5l1.3-4.8a7.5 7.5 0 1 1 15.2-3.2z"/><path d="M9 11.5h.01M12.5 11.5h.01M16 11.5h.01"/></svg></span><span class="area-num">09</span></div>
         <h2 id="friends-title">Friends, rooms and Discord</h2>
-        <p class="area-sum">Friends gathers rooms, playdates, Listen together and your PCs. In 0.5 it gets its own main-menu section as well as the companion bubble. Room features go live when the community rooms hub is online; the app works without Discord.</p>
-        <p class="area-meta" data-area-count>21 features · 3 in 0.4.4 · 10 coming in 0.5 · 8 rolling out</p>
+        <p class="area-sum">Friends gathers rooms, playdates, Listen together and your PCs. In 0.4.4 it lives in the companion's Friends bubble. In 0.5 it becomes a place of its own, with The Lobby, the Project hub and Events, and it runs on the Mefi Studio relay built into Studio, so there is nothing to set up. Rooms use a Discord sign-in; the rest of the app works without Discord.</p>
+        <p class="area-meta" data-area-count>25 features · 3 in 0.4.4 · 21 coming in 0.5 · 1 rolling out</p>
         <p class="area-more"><a href="community.html">The Discord server, its bot and ways to share your work are on the Community page.</a></p>
       </div>
-      <figure class="frame area-shot crop-listen"><img src="assets/shots/listen-panel.webp" width="1252" height="636" loading="lazy" decoding="async" alt="Listen together with sample data: a room picker set to Late-night builders, a Play this link in the room button, and a friend's track playing with a Stop listening along button"><figcaption><strong>Listen together</strong>, shown with sample data. It goes live with the rooms hub.</figcaption></figure>
+      <figure class="frame area-shot crop-listen"><img src="assets/shots/listen-panel.webp" width="1252" height="636" loading="lazy" decoding="async" alt="Listen together with sample data: a room picker set to Late-night builders, a Play this link in the room button, and a friend's track playing with a Stop listening along button"><figcaption><strong>Listen together</strong>, shown with sample data. From 0.5 it runs through the relay.</figcaption></figure>
     </div>
     <ul class="feat-grid" role="list">
       <li class="feat" data-status="released"><div class="feat-top"><h3>Community card</h3><span class="status released">In 0.4.4</span></div><p>A small card invites people who aren't in the Discord yet. It waits three days after first launch, shows at most weekly and never while you type, and respects Not now and Don't show again.</p></li>
       <li class="feat" data-status="released"><div class="feat-top"><h3>Settings › Community</h3><span class="status released">In 0.4.4</span></div><p>Join the Discord and your Discord link live in one card, with a plain note on what linking reads.</p></li>
       <li class="feat" data-status="released"><div class="feat-top"><h3>Nothing locked behind Discord</h3><span class="status released">In 0.4.4</span></div><p>Every theme and node style is free for everyone. Linking Discord is optional and only joins you to the community.</p></li>
-      <li class="feat" data-status="next"><div class="feat-top"><h3>Friends in the main menu</h3><span class="status next">Coming in 0.5</span></div><p>Friends has its own Build menu section with Rooms, Your PCs and Playground, plus a stop in Vibe’s rail. Each link opens its card in the existing hub, and Search reaches them directly in both modes.</p></li>
-      <li class="feat" data-status="next"><div class="feat-top"><h3>Friends bubble</h3><span class="status next">Coming in 0.5</span></div><p>One place in the companion menu for rooms, playdates, sharing rules and your PCs, with a badge for invites, join requests and PC work waiting on you.</p></li>
-      <li class="feat" data-status="next"><div class="feat-top"><h3>Connection details</h3><span class="status next">Coming in 0.5</span></div><p>Paste the Mefi Studio Link app ID and the rooms hub address once per PC, and linking, Rooms, Friends and Listen together work at once. Save says whether the hub answered.</p></li>
-      <li class="feat" data-status="next"><div class="feat-top"><h3>Practice with Pip</h3><span class="status next">Coming in 0.5</span></div><p>A practice buddy on your own PC that plays a playdate with your companion. Nothing is sent anywhere, and it works without Discord or the hub.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>Friends, a place of its own</h3><span class="status next">Coming in 0.5</span></div><p>The rail's Friends opens one page, with The Lobby, Rooms, Your PCs, Playground, the Project hub and Events in the list beside it. Search reaches each of them directly.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>Friends bubble</h3><span class="status next">Coming in 0.5</span></div><p>The companion menu's Friends bubble opens Friends at the right place, with a badge for invites, join requests and PC work waiting on you.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>Friends with no setup</h3><span class="status next">Coming in 0.5</span></div><p>Rooms, room chat, Listen together, playdates and cowork claims run through the Mefi Studio relay, a free service built into Studio. No PC has to stay on, the relay keeps no chat, and it signs every message it passes on.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>The Lobby</h3><span class="status next">Coming in 0.5</span></div><p>Friends opens on The Lobby: who is online and in which room, the week's top project, the rooms open now, what was shared this week and who moved up a rank. Everyone signed in is in the Lobby room.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>The Project hub</h3><span class="status next">Coming in 0.5</span></div><p>Share a project as a card (a public link, a title and a line about it, never a file) and play what friends make. A star map draws every shared project, and New, Top and Mine list them.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>Credits and ranks</h3><span class="status next">Coming in 0.5</span></div><p>Play someone else's project for two minutes and you both earn credits: 5 for the maker, 2 for you. Ranks run from Spark to Void, and 100 credits put a project at the top of the hub for a day. Credits are never bought and never earned by inviting people.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>Friends › Events</h3><span class="status next">Coming in 0.5</span></div><p>A Build Jam every week with a theme, co-work hours three times a day, and credits for building together with a friend. The events run by themselves.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>Practice with Pip</h3><span class="status next">Coming in 0.5</span></div><p>A practice buddy on your own PC that plays a playdate with your companion. Nothing is sent anywhere, and it works without Discord or the relay.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>Playdate games</h3><span class="status next">Coming in 0.5</span></div><p>High five, a race, rock-paper-scissors, hide and seek and a sticker swap, plus a dance when music plays and a nap when both companions rest.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>Sharing levels</h3><span class="status next">Coming in 0.5</span></div><p>Choose what your companion tells friends: Stay home, Play only (the default), Say hi, Status or Work titles.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>Sharing rules per friend or room</h3><span class="status next">Coming in 0.5</span></div><p>Set a level for everyone, one room or one friend, for this session or always.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>Share back?</h3><span class="status next">Coming in 0.5</span></div><p>When a friend's companion shares more with you, yours asks before sharing the same back. It never shares more on its own.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>What was sent</h3><span class="status next">Coming in 0.5</span></div><p>A list of every card your companion sent this session, and a fixed list of what is never shared: keys, file paths and links, your chat, decisions and settings.</p></li>
-      <li class="feat" data-status="next"><div class="feat-top"><h3>Friends setup hints</h3><span class="status next">Coming in 0.5</span></div><p>When something is missing, Friends says which step to take next.</p></li>
-      <li class="feat" data-status="rolling"><div class="feat-top"><h3>Link my Discord</h3><span class="status rolling">Rolling out</span></div><p>Optional. Sign in with Discord in your browser so Rooms, Listen together and Friends know who you are. Studio reads only your Discord id, name and roles in the server, never messages or projects, and Unlink revokes it.</p></li>
-      <li class="feat" data-status="rolling"><div class="feat-top"><h3>Friends › Rooms</h3><span class="status rolling">Rolling out</span></div><p>Browse your rooms and listed ones, ask to join with a short note, and accept or decline invites. Each room has a plain-text chat with @names.</p></li>
-      <li class="feat" data-status="rolling"><div class="feat-top"><h3>Make a room</h3><span class="status rolling">Rolling out</span></div><p>Start a Hangout room for up to 25 people or a Cowork room for up to 10, open to requests or invite-only, listed or not.</p></li>
-      <li class="feat" data-status="rolling"><div class="feat-top"><h3>Room owner controls</h3><span class="status rolling">Rolling out</span></div><p>Invite people by name, lock a room, close it for everyone or leave it. Actions that can't be undone ask twice.</p></li>
-      <li class="feat" data-status="rolling"><div class="feat-top"><h3>Room chat safety</h3><span class="status rolling">Rolling out</span></div><p>Links in room chat are never clickable, you can delete your own messages and report one to the moderators. Every room says moderators can read it.</p></li>
-      <li class="feat" data-status="rolling"><div class="feat-top"><h3>Friends › Playground</h3><span class="status rolling">Rolling out</span></div><p>Companions of friends in the same open room meet and play short scripted playdates. Both screens see the same scene, each from its own side.</p></li>
-      <li class="feat" data-status="rolling"><div class="feat-top"><h3>Listen together</h3><span class="status rolling">Rolling out</span></div><p>Play a link for one of your rooms. Everyone who chooses Listen along hears it at the same point, and the room's Discord thread gets a note.</p></li>
-      <li class="feat" data-status="rolling"><div class="feat-top"><h3>Share what I'm playing</h3><span class="status rolling">Rolling out</span></div><p>Off by default. Lets community members see your current link or station with /nowplaying in Discord. It never shows a file's name, and the hub forgets it when Studio closes.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>Friends says what helps</h3><span class="status next">Coming in 0.5</span></div><p>When Friends can't connect, it says why in one sentence and offers only what helps: sign in again, update Studio, join the Discord or connect.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>Sign in with Discord</h3><span class="status next">Coming in 0.5</span></div><p>Optional. Sign in once in your browser so The Lobby, Rooms and the Project hub know who you are, and Studio connects by itself after that. It reads only who you are and your membership in the Void Engine server, never messages or projects, and no Discord roles are needed.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>Friends › Rooms</h3><span class="status next">Coming in 0.5</span></div><p>Browse rooms, ask to join with a short note, accept invites, or type a friend's invite code to come straight in. An open room reads like a chat app, with @names, and Enter sends.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>Make a room</h3><span class="status next">Coming in 0.5</span></div><p>Start a Hangout room for up to 25 people or a Cowork room for up to 10. Anyone a week in the Void Engine server can make one, new rooms start private, and showing a room in the public list opens at the Flame rank.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>Room owner controls</h3><span class="status next">Coming in 0.5</span></div><p>Invite people by name or with the room's code, make a new code, lock a room, close it for everyone or leave it. Actions that can't be undone ask twice.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>Room chat safety</h3><span class="status next">Coming in 0.5</span></div><p>Links in room chat are never clickable, you can delete your own messages, and Report sends one to the moderators, who see a message only when someone reports it. The relay keeps no chat.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>Friends › Playground</h3><span class="status next">Coming in 0.5</span></div><p>Companions of friends in the same open room meet and play short scripted playdates. Both screens see the same scene, each from its own side.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>Listen together</h3><span class="status next">Coming in 0.5</span></div><p>Play a link for one of your rooms. Everyone who chooses Listen along hears it at the same point, and whoever put it on, or the room's owner, can pause or stop it.</p></li>
+      <li class="feat" data-status="rolling"><div class="feat-top"><h3>Share what I'm playing</h3><span class="status rolling">Rolling out</span></div><p>Off by default. Lets community members see your current link or station with /nowplaying in Discord, once the Studio bot is linked to the relay. It never shows a file's name, and nothing about it is kept after Studio closes.</p></li>
     </ul>
   </div>
 </section>
 
-<section class="feat-area" id="pcs" aria-labelledby="pcs-title" data-area data-total="16">
+<section class="feat-area" id="pcs" aria-labelledby="pcs-title" data-area data-total="17">
   <div class="container">
     <div class="area-head has-shot">
       <div class="area-intro">
         <div class="area-label"><span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="11.5" rx="2"/><path d="M9 20h6M12 16v4"/><path d="M9.5 9.2a3 3 0 0 1 5-.7M14.5 11.3a3 3 0 0 1-5 .7"/></svg></span><span class="area-num">10</span></div>
         <h2 id="pcs-title">Your PCs</h2>
-        <p class="area-sum">Friends › Your PCs keeps your own computers in step through GitHub. 0.5 adds a setup checklist, automatic follow, a sealed vault for your setups and share files for friends.</p>
-        <p class="area-meta" data-area-count>16 features · 3 in 0.4.4 · 12 coming in 0.5 · 1 rolling out</p>
+        <p class="area-sum">Friends › Your PCs keeps your own computers in step through GitHub. 0.5 adds a setup checklist, automatic follow, a sealed vault for your setups, share files for friends, and PCs that share the work.</p>
+        <p class="area-meta" data-area-count>17 features · 3 in 0.4.4 · 14 coming in 0.5</p>
       </div>
       <figure class="frame area-shot natural"><img src="assets/shots/friends-panel.webp" width="1840" height="1240" loading="lazy" decoding="async" alt="The companion menu open on its Friends bubble, with a Your PCs card that says This PC matches GitHub and a Sync this PC button"><figcaption><strong>Friends › Your PCs</strong> in 0.4.4, shown with sample data.</figcaption></figure>
     </div>
@@ -516,19 +526,20 @@
       <li class="feat" data-status="next"><div class="feat-top"><h3>Your PCs list</h3><span class="status next">Coming in 0.5</span></div><p>Shows each paired PC, when it last synced and what waits on it per project.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>Share with friends (.mefishare)</h3><span class="status next">Coming in 0.5</span></div><p>Save one brain, recipe, team setup, set of model results, memory note or preferences to a file you can send anyone. Studio scrubs it, shows exactly what's inside, and reviews a friend's file before it reaches your library.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>Work › Worktrees</h3><span class="status next">Coming in 0.5</span></div><p>A page under Work for your project's Git worktrees.</p></li>
-      <li class="feat" data-status="rolling"><div class="feat-top"><h3>Agents on several PCs</h3><span class="status rolling">Rolling out</span></div><p>Link a cowork room to a project and builders on each PC claim the files they will edit, so no two PCs' agents edit the same file. It needs the rooms hub and a Discord link.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>My PCs: your PCs work as one</h3><span class="status next">Coming in 0.5</span></div><p>Your PCs lists every PC you sign in to Friends on, live, with its load, battery and tasks. Pair each PC once, then Send work here starts a task on another, and a PC that stays busy or a laptop low on battery hands its ready cards to a paired one.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>Agents on several PCs</h3><span class="status next">Coming in 0.5</span></div><p>Link a cowork room to a project and builders on each PC claim the files they will edit, so no two PCs' agents edit the same file. It runs through the relay and needs Sign in with Discord.</p></li>
     </ul>
   </div>
 </section>
 
-<section class="feat-area" id="media" aria-labelledby="media-title" data-area data-total="27">
+<section class="feat-area" id="media" aria-labelledby="media-title" data-area data-total="28">
   <div class="container">
     <div class="area-head has-shot">
       <div class="area-intro">
         <div class="area-label"><span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 18V5.5l11-2V16"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg></span><span class="area-num">11</span></div>
         <h2 id="media-title">Music, video and radio</h2>
         <p class="area-sum">A media player built into Studio. Play links, local music and ad-free radio, queue things up, browse the web, put a video behind your work, and let the node tree move to the music.</p>
-        <p class="area-meta" data-area-count>27 features · 24 in 0.4.4 · 3 coming in 0.5</p>
+        <p class="area-meta" data-area-count>28 features · 24 in 0.4.4 · 4 coming in 0.5</p>
       </div>
       <figure class="frame area-shot"><img src="assets/shots/watch-bg.webp" width="2400" height="1500" loading="lazy" decoding="async" alt="Command view with a video playing as its background, and the agent tree and Live work panel drawn on top of it"><figcaption><strong>Background video</strong> behind Command view.</figcaption></figure>
     </div>
@@ -559,12 +570,13 @@
       <li class="feat" data-status="released"><div class="feat-top"><h3>Tree brightness and outlines</h3><span class="status released">In 0.4.4</span></div><p>Node and line brightness sliders and optional outlines make the tree easier to read.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>Player controls within reach</h3><span class="status next">Coming in 0.5</span></div><p>The floating player gets a move handle, Settings, minimize and close buttons and a visible restore bar, and the keyboard can move and resize it.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>A redesigned media player</h3><span class="status next">Coming in 0.5</span></div><p>The media player gets a redesign.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>Playlists</h3><span class="status next">Coming in 0.5</span></div><p>Five starting lists of real videos, lists of your own, and a + to save any video. Share copies a list as text with a link that plays it on YouTube, or posts it to a room or the Project hub.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>Lighter tree brightness</h3><span class="status next">Coming in 0.5</span></div><p>Tree brightness takes much less work from the graphics card.</p></li>
     </ul>
   </div>
 </section>
 
-<section class="feat-area" id="make-it-yours" aria-labelledby="make-it-yours-title" data-area data-total="18">
+<section class="feat-area" id="make-it-yours" aria-labelledby="make-it-yours-title" data-area data-total="19">
   <div class="container">
     <div class="area-head has-shot">
       <div class="area-intro">
@@ -575,7 +587,7 @@
       </div>
       <figure class="frame area-shot"><img src="assets/shots/vibe-void.webp" width="2400" height="1500" loading="lazy" decoding="async" alt="Vibe mode in a violet theme from the Void collection"><figcaption><strong>Vibe</strong> in a Void collection theme.</figcaption></figure>
     </div>
-    <ul class="theme-strip" role="list" aria-label="Command view in six theme and node style pairs">
+    <ul class="theme-strip" role="list" aria-label="The live tree in six theme and node style pairs">
       <li><figure><img src="assets/shots/thumb-command-chrome.webp" width="960" height="680" loading="lazy" decoding="async" alt=""><figcaption>Chrome theme, new in 0.5</figcaption></figure></li>
       <li><figure><img src="assets/shots/thumb-command-abyss.webp" width="960" height="681" loading="lazy" decoding="async" alt=""><figcaption>Abyss theme, Prism nodes</figcaption></figure></li>
       <li><figure><img src="assets/shots/thumb-command-dusk.webp" width="960" height="681" loading="lazy" decoding="async" alt=""><figcaption>Neon Dusk theme, Sigil nodes</figcaption></figure></li>
@@ -584,7 +596,7 @@
       <li><figure><img src="assets/shots/thumb-command-midnight.webp" width="960" height="681" loading="lazy" decoding="async" alt=""><figcaption>Midnight theme, Minimal nodes</figcaption></figure></li>
     </ul>
     <ul class="feat-grid" role="list">
-      <li class="feat" data-status="next"><div class="feat-top"><h3>Chrome, the new default look</h3><span class="status next">Coming in 0.5</span></div><p>Matte black panels, silver type and brushed metal on the main buttons and the side of a switch you are on, with an iridescent finish (silver, ice blue, lilac and aqua) on the edges, selection bars and highlights, and silver nodes in the Command view. New installs open in it; a theme you already picked stays.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>Chrome, the new default look</h3><span class="status next">Coming in 0.5</span></div><p>Matte black panels, silver type and brushed metal on the main buttons and the side of a switch you are on, with an iridescent finish (silver, ice blue, lilac and aqua) on the edges, selection bars and highlights, and silver nodes on the Map. New installs open in it; a theme you already picked stays.</p></li>
       <li class="feat" data-status="released"><div class="feat-top"><h3>Colour themes</h3><span class="status released">In 0.4.4</span></div><p>Seven themes: Aurora (the default), Studio gold, Midnight, Forest, Violet, Ember and Rose, each with its own fonts, gradients and matching sky.</p></li>
       <li class="feat" data-status="released"><div class="feat-top"><h3>Void collection</h3><span class="status released">In 0.4.4</span></div><p>Four two-tone themes (Void, Eclipse, Abyss, Neon Dusk) and three node styles (Singularity, Prism, Sigil), free for everyone.</p></li>
       <li class="feat" data-status="released"><div class="feat-top"><h3>Custom colours</h3><span class="status released">In 0.4.4</span></div><p>Pick your own accent, background, surface and text colours. Studio keeps text readable, and light palettes work too.</p></li>
@@ -607,14 +619,14 @@
   </div>
 </section>
 
-<section class="feat-area" id="setup" aria-labelledby="setup-title" data-area data-total="36">
+<section class="feat-area" id="setup" aria-labelledby="setup-title" data-area data-total="37">
   <div class="container">
     <div class="area-head">
       <div class="area-intro">
         <div class="area-label"><span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.5v11.5M7 10.5l5 5 5-5M4.5 20.5h15"/></svg></span><span class="area-num">13</span></div>
         <h2 id="setup-title">Get started and connect an AI</h2>
         <p class="area-sum">Download the portable Windows build, open a folder and use an AI you already have: a subscription login, an API key or a model on your own PC. Nothing runs until you choose.</p>
-        <p class="area-meta" data-area-count>36 features · 24 in 0.4.4 · 11 coming in 0.5 · 1 experimental</p>
+        <p class="area-meta" data-area-count>37 features · 24 in 0.4.4 · 12 coming in 0.5 · 1 experimental</p>
         <p class="notice info area-note">Studio runs on Windows 10 and 11. It doesn't sell AI access, so your provider's limits and terms apply. <a href="download.html">Download 0.4.4</a> · <a href="wiki/#/getting-started">Your first project</a></p>
       </div>
     </div>
@@ -647,26 +659,27 @@
       <li class="feat" data-status="next"><div class="feat-top"><h3>Start free with OpenCode</h3><span class="status next">Coming in 0.5</span></div><p>No subscription and no key? Start free with OpenCode picks OpenCode's free models for you. Free models may use your prompts for training.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>More than one login</h3><span class="status next">Coming in 0.5</span></div><p>Add up to six Claude Code or Codex subscription logins. When one hits its usage limit, work moves to the next without costing the task an attempt.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>I have an API key or a local model server</h3><span class="status next">Coming in 0.5</span></div><p>At Scan and First map, this button takes you to Connections instead of installing a tool, then scans again when you're back.</p></li>
-      <li class="feat" data-status="next"><div class="feat-top"><h3>Clear help when no AI is connected</h3><span class="status next">Coming in 0.5</span></div><p>Home, Vibe and agent status say 'No AI connected' with a Connect an AI button, and with no coding tool installed Studio says which one to install.</p></li>
-      <li class="feat" data-status="next"><div class="feat-top"><h3>When Studio opens</h3><span class="status next">Coming in 0.5</span></div><p>Choose Resume what I had (the default), Start agents or Keep agents off. Studio also stops jumping to Command view after five quiet minutes unless you turn that on.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>Clear help when no AI is connected</h3><span class="status next">Coming in 0.5</span></div><p>Today and agent status say 'No AI connected' with a Connect an AI button, and with no coding tool installed Studio says which one to install.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>When Studio opens</h3><span class="status next">Coming in 0.5</span></div><p>Choose Resume what I had (the default), Start agents or Keep agents off. Studio also stops jumping to the Map after five quiet minutes unless you turn that on.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>Install and sign in</h3><span class="status next">Coming in 0.5</span></div><p>Opens a visible setup window that installs the tool and runs its sign-in. 0.5 fixes a bug that could close that window at once; on 0.4.4, sign in to the tool from a terminal if that happens.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>Updates that install themselves</h3><span class="status next">Coming in 0.5</span></div><p>Update downloads and checks the new build, then replaces the app files after Studio exits. A bug stopped that last step up to 0.4.4, so when 0.5 is out, move to it by hand from the Download page and keep your <code>resources\app\data</code> folder. The 0.5 release will say how.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>Sign in with ChatGPT</h3><span class="status next">Coming in 0.5</span></div><p>Sign in with ChatGPT to use your ChatGPT plan in Studio.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>The Studio Daily</h3><span class="status next">Coming in 0.5</span></div><p>The launch screen becomes a daily paper of what changed while you were away.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>What's new after an update</h3><span class="status next">Coming in 0.5</span></div><p>After an update, Studio shows what's new.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>Other apps</h3><span class="status next">Coming in 0.5</span></div><p>Off until you turn it on in Settings › Other apps: Claude Code, Codex and your scripts on this PC can see what the agents are doing, message Mefi and hand Studio a task, which always waits for your OK. Copy setup prompt gives a helper what it needs to walk you through setup.</p></li>
       <li class="feat" data-status="experimental"><div class="feat-top"><h3>Runs on Linux from source</h3><span class="status experimental">Experimental</span></div><p>Studio ships for Windows only. Every push also checks that the source opens a window on Linux, but Linux and macOS aren't supported desktop platforms.</p></li>
     </ul>
   </div>
 </section>
 
-<section class="feat-area" id="trust" aria-labelledby="trust-title" data-area data-total="19">
+<section class="feat-area" id="trust" aria-labelledby="trust-title" data-area data-total="20">
   <div class="container">
     <div class="area-head">
       <div class="area-intro">
         <div class="area-label"><span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5.5" y="10.5" width="13" height="10" rx="2"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/><path d="M12 14.5v2.5"/></svg></span><span class="area-num">14</span></div>
         <h2 id="trust-title">Private, safe and light on your PC</h2>
         <p class="area-sum">Studio is local-first and open source, with no account, no telemetry and encrypted keys. It keeps working in the tray, guards your PC against runaway runs and rests when nothing changes.</p>
-        <p class="area-meta" data-area-count>19 features · 17 in 0.4.4 · 2 coming in 0.5</p>
+        <p class="area-meta" data-area-count>20 features · 17 in 0.4.4 · 3 coming in 0.5</p>
       </div>
     </div>
     <ul class="feat-grid" role="list">
@@ -689,6 +702,7 @@
       <li class="feat" data-status="released"><div class="feat-top"><h3>Diagnostics</h3><span class="status released">In 0.4.4</span></div><p>Settings › System › Diagnostics gathers a speed probe, the Performance profiler (exportable as JSON), the auditor, machine tools and the connection log.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>Tray and keep-awake switches</h3><span class="status next">Coming in 0.5</span></div><p>The setup helper gets switches to turn off hiding in the tray and keeping the PC awake.</p></li>
       <li class="feat" data-status="next"><div class="feat-top"><h3>Report a problem</h3><span class="status next">Coming in 0.5</span></div><p>Report a problem from inside Studio, and get a prompt to do so after a crash.</p></li>
+      <li class="feat" data-status="next"><div class="feat-top"><h3>Resources: make room for your agents</h3><span class="status next">Coming in 0.5</span></div><p>Team › Resources lists the other apps on this PC and can slow down, pause, close or end them while agents build, by hand or automatically. Auto puts everything back when the agents finish, nothing stays paused after Studio closes, and Windows and Studio are never touched.</p></li>
     </ul>
   </div>
 </section>

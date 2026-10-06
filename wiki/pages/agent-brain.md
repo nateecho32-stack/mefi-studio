@@ -63,7 +63,7 @@ A line between two systems means their files **changed together**. It doesn't me
 - **Tidier lists.** The pipeline list no longer cuts long titles off, the Playbook shelf keeps its books in tight rows, and the feed no longer says nothing happened on a task that finished steps before Studio opened.
 - **Connected system cards.** Systems whose files change together share a branch, with their parts and files. Systems without that evidence wait under **Connections still to discover**.
 - **The Ideas tree.** A **Systems | Ideas tree** switch shows your ideas and tasks grouped by system and progress. Ideas sit under their tasks, and subtasks under their parents. The tree regroups as agents find files and work moves on, and work that hasn't found its place waits under **To explore**.
-- **Work with Mefi.** Idea cards have **Work with Mefi**, and an inspected system has **Modify**, **Experiment**, **Fix** and **Improve**. Each prepares a draft in [Vibe](#/vibe-mode/mefi-modify-experiment-fix-improve) about that area.
+- **Work with Mefi.** Idea cards have **Work with Mefi**, and an inspected system has **Modify**, **Experiment**, **Fix** and **Improve**. Each prepares a draft about that area in your message box, as [Vibe's MEFI starters](#/vibe-mode/mefi-modify-experiment-fix-improve) do.
 
 ## Agent brain or Brain maps?
 
@@ -72,9 +72,9 @@ A line between two systems means their files **changed together**. It doesn't me
 
 ## The Fleet page
 
-<span class="status next">Coming in 0.5</span> The Fleet page, **Agents › Live › Fleet**, shows every agent as a seat in pods.
+<span class="status next">Coming in 0.5</span> The Fleet page, **Map › Fleet** (beside the Map and Pipelines), shows every agent as a seat in Lead, Build, Check and Keep pods, in Graph, Table, Recent, Tree and Health views. In 0.5 the Agent brain's live work is the Map's **Pipelines** view.
 
-<span class="status planned">Planned for 0.5</span> Fleet lanes, missions and your other PCs. See the [roadmap](../roadmap.html).
+<span class="status planned">Planned</span> Fleet lanes, missions and your other PCs' fleets come after 0.5. See the [roadmap](../roadmap.html).
 
 ## Related pages
 

@@ -6,7 +6,7 @@ Yes. Mefi Studio is free and open source under the MIT license. Every theme and 
 
 ## Will there be paid extras?
 
-Today, nothing in Studio costs money. The owner plans community credits: you'd earn them by trying or looking at other people's projects, and spend them to promote your own project or on cosmetics and creator styles. Credits are earned only, never bought. This is <span class="status planned">Planned</span>, and the details are still open. Follow it on the [roadmap](../roadmap.html).
+Nothing in Studio costs money, and community credits are earned only, never bought. <span class="status next">Coming in 0.5</span> You earn credits by playing other people's projects on the Project hub, and can spend them to feature your own project for a day. Spending them on cosmetics and creator styles is <span class="status planned">Planned</span>, and the details are still open. Follow it on the [roadmap](../roadmap.html).
 
 ## Can I join the community without using the app?
 
@@ -30,6 +30,8 @@ In 0.4.4, work built by a tool other than OpenCode usually waits for you to conf
 
 **Vibe** is the calm front door: one box to talk an idea over or build it, what's being built, and what needs you. **Build** is the full studio, with the Command view, the boards, the models and every setting. Switch with the toggle at the top of Vibe or in **Settings › General › Studio mode**. See [Vibe mode](vibe-mode.md).
 
+<span class="status next">Coming in 0.5</span> Vibe is called **Social** and Build is called **Studio**, and they share one layout. Switch with the top bar or `Ctrl M`. See [the 0.5 layout](coming-in-0-5.md#the-05-layout).
+
 ## Does it work on macOS or Linux?
 
 Studio is built and tested for Windows 10 and 11. Other systems are untested. Linux support is <span class="status planned">Planned</span> for a release after 0.5: see the [roadmap](../roadmap.html). The portable Windows download needs no installer or Node.js.
@@ -40,7 +42,7 @@ It may, when a connected AI provider or coding agent needs project context. Stud
 
 ## Can we watch videos together?
 
-Studio 0.4.4 has a personal media player. Listen together and shared rooms are <span class="status rolling">Rolling out</span>: they depend on the rooms hub that the Studio owner runs, and on a linked Discord account. See [Friends, rooms and playdates](friends-and-rooms.md), or the [Community page](../../community.html) for what's available and what's planned.
+Studio 0.4.4 has a personal media player. <span class="status next">Coming in 0.5</span> **Listen together** plays one link for everyone in a room at the same point, and a playlist can be shared into a room. Rooms and Listen together run on the Mefi Studio relay, which is built into Studio, and use a Discord sign-in. See [Friends, rooms and playdates](friends-and-rooms.md), or the [Community page](../../community.html) for what's available and what's planned.
 
 ## Can I say "Hey Studio" to open it?
 
@@ -76,7 +78,7 @@ Yes. Install it on each PC. **Friends › Your PCs** keeps a project's Git commi
 
 ## What's in 0.5, and when does it come out?
 
-0.5 is the next release. There is no 0.4.5 or 0.4.6: both were folded into 0.5. The work built for 0.4.5 is on `main` and ships with 0.5, along with an optional new layout and more. Faster agents, kept logs, a faster launch and Friends 2.0 were meant for 0.4.6. They're planned for 0.5 and still <span class="status progress">In progress</span> on branches. 0.5 isn't published and has no date yet. [Coming in 0.5](coming-in-0-5.md) lists its scope and service dependencies, and the [roadmap](../roadmap.html) shows what's being built.
+0.5 is the next release. There is no 0.4.5 or 0.4.6: both were folded into 0.5. It brings one new layout, with the modes renamed Social and Studio, the Map and Team; Friends with nothing to set up, with The Lobby, rooms, the Project hub and a weekly Build Jam; and the work built for 0.4.5 and 0.4.6. A faster launch is still <span class="status progress">In progress</span>. 0.5 isn't published and has no date yet. [Coming in 0.5](coming-in-0-5.md) lists its scope, and the [roadmap](../roadmap.html) shows what's being built.
 
 ## Is Studio moving to Rust?
 

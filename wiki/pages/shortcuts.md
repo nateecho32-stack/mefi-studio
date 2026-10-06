@@ -35,7 +35,7 @@ The pin button, **Keep the menu open**, keeps the menu open beside the page in w
 | **Work** | Tasks, Plans, Ideas and Analyzer |
 | **Agents › Overview** | Your team, whether it's ready, and the queue switches |
 | **Agents › Setup** | Team & models, Providers, Routing & fallback, Run behavior |
-| **Agents › Live** | Command, Pipelines, Sessions, Activity, Trace, Overhead; <span class="status next">Coming in 0.5</span> Fleet |
+| **Agents › Live** | Command, Pipelines, Sessions, Activity, Trace, Overhead; <span class="status next">Coming in 0.5</span> Fleet, beside the Map |
 | **Agents › Workflows** | Brain maps, Playbook, Project map, Context |
 | **Agents › Models** | Catalog, Performance |
 | **Agents › Usage** | Recorded calls, Provider accounts |
@@ -43,7 +43,23 @@ The pin button, **Keep the menu open**, keeps the menu open beside the page in w
 
 > <span class="status next">Coming in 0.5</span> **M+** opens Projects with keyboard focus on the project you're in.
 
-<span class="status next">Coming in 0.5</span> Build adds a **Friends** section with **Rooms**, **Your PCs** and **Playground**. Vibe’s rail gets a Friends stop too. Search opens Friends or any of those cards directly in both modes; the companion’s Friends bubble stays available.
+<span class="status next">Coming in 0.5</span> The 0.5 layout replaces this menu with a rail of four places: **Work** (Tasks, Plans, Ideas, the Inbox, the Analyzer and Worktrees), **Map** (the live tree, Fleet and Pipelines), **Team** (everything under Agents today) and **Friends** (The Lobby, Rooms, Your PCs, Playground, the Project hub and Events), with **Search**, **Settings** and **Help** at its foot. Search opens any place directly, and the companion's Friends bubble stays available. See [the 0.5 layout](coming-in-0-5.md#the-05-layout).
+
+## In the 0.5 layout <span class="status next">Coming in 0.5</span>
+
+| Key | Action |
+| --- | --- |
+| `Ctrl M` | Switch between Social and Studio |
+| `Ctrl K` | Search, from the top bar |
+| `Ctrl J` | Open the Inbox |
+| `Ctrl N` | A new task, in Studio mode |
+| `Ctrl T` / `Ctrl W` | Add a tab / close the tab you're on. `Ctrl W` never closes the window. |
+| `Ctrl Tab`, `Ctrl 1` to `9` | Move between tabs |
+| `Ctrl Shift T` | Reopen the tab you closed last |
+| `Ctrl B` / `[` | Show or hide the session list / the inspector |
+| `Ctrl +` `Ctrl −` `Ctrl 0` | Interface scale up, down, or back to normal |
+
+On the Map, `N` opens a new task and `S` opens Search.
 
 ## Single keys
 

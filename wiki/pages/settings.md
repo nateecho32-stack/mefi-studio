@@ -26,7 +26,7 @@ Settings has four categories: **General**, **Appearance**, **Audio** and **Syste
 <span class="status next">Coming in 0.5</span> Three more startup settings:
 
 - **When Studio opens**: **Resume what I had** (the default), **Start agents** or **Keep agents off**. The launch screen's main button follows it, and opening with agents off stays one click away.
-- **Show Command view after 5 quiet minutes**, off by default. In 0.4.4, Studio switched to the Command view by itself after five quiet minutes.
+- **A switch to open the Map after five quiet minutes**, off by default. In 0.4.4, Studio switched to the Command view by itself after five quiet minutes.
 - **Start with Windows**: Studio opens in the tray when you sign in to Windows, on the project you had open. The agents then follow **When Studio opens**.
 
 ### Community
@@ -35,9 +35,7 @@ Your link to the Void Engine Discord. **Help › Community** opens this card too
 
 When linking is available, you'll see **Link my Discord**, **Check now** and **Unlink**. Linking reads your Discord id and name, and your roles and join date in the Void Engine server. Nothing about your projects is sent.
 
-<span class="status next">Coming in 0.5</span> **Connection details** takes the Mefi Studio Link application ID and the rooms hub's address, once per PC. **Save** says whether the hub answered.
-
-> <span class="status rolling">Rolling out</span> Discord linking and rooms switch on once the owner's rooms hub is online and the Mefi Studio Link app is set up. See [Friends, rooms and playdates](#/friends-and-rooms) and [The Void Engine Discord](#/discord).
+> <span class="status next">Coming in 0.5</span> Friends needs no setup: the Mefi Studio Link app and the address of the Mefi Studio relay are built into Studio. **Sign in with Discord** also sits in Friends, and The Lobby, rooms and the Project hub use it. **Connection details** only points a PC somewhere else, for testing. See [Friends, rooms and playdates](#/friends-and-rooms) and [The Void Engine Discord](#/discord).
 
 ## Appearance
 
@@ -104,8 +102,6 @@ Settings are filed in seven groups: **Inference & Agents**, **Knowledge**, **Fil
 
 Your settings, saved keys, project list and Discord link are stored on your PC in `%APPDATA%\Mefi's Studio AI+`. Keys are encrypted with Windows' own key store, so they only work for the Windows account that saved them. See [Privacy](#/privacy).
 
-## Planned
+## Settings in 0.5
 
-A menu overhaul that puts every setting on one Settings page is planned, with no release set yet. See the [roadmap](../roadmap.html).
-
-<span class="status next">Coming in 0.5</span> The optional 0.5 layout has new Settings of its own. Turn the layout on with **Try the 0.5 layout** in Settings. See [the 0.5 layout](#/coming-in-0-5/the-05-layout).
+<span class="status next">Coming in 0.5</span> Settings is rebuilt for the 0.5 layout, which is Studio's only layout from 0.5. It lists **General** (with Community), **Notifications**, **Appearance** (with **Size and density**), **Map look** and **Sound and music**, then **Updates**, **Report a problem** and **Other apps**, and **System**. Everything about agents moves to **Team**. See [the 0.5 layout](#/coming-in-0-5/the-05-layout).

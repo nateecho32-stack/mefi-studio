@@ -119,6 +119,18 @@
               ]
             },
             {
+              "id": "vibe-social",
+              "title": "Social and Studio: two modes, two moods",
+              "text": "Vibe is now Social, for hanging out with friends and keeping a light eye on your agents. Build is now Studio, for in-depth building, with the social side still there.",
+              "status": "next",
+              "label": "Coming in 0.5",
+              "area": "Menus",
+              "details": [
+                "Only the names change: your saved mode, settings and links carry over.",
+                "Ctrl+M or the switch in the top bar changes mode. Every launch starts in Social unless you turn off Always start in Social in Settings; then Studio opens the mode you last used."
+              ]
+            },
+            {
               "id": "map",
               "title": "The Map: your agents’ tree beside your sessions",
               "status": "next",
@@ -365,6 +377,34 @@
               "details": [
                 "A run can work in its own worktree; Studio mode marks the tasks that do.",
                 "`npm run worktrees` prints the same list for a checkout."
+              ]
+            },
+            {
+              "id": "other-apps",
+              "title": "Other apps: Claude Code, Codex and your scripts can talk to Studio",
+              "text": "Settings › Other apps has a switch, off until you turn it on, that lets apps on this PC see what the agents are doing and what waits on you, message Mefi, hand Studio a task and leave you a note.",
+              "status": "next",
+              "label": "Coming in 0.5",
+              "area": "Platform",
+              "details": [
+                "Claude Code and Codex connect with one command (an MCP server with eight tools), Cursor, Claude Desktop and VS Code with a JSON block, and scripts and hooks with a command line.",
+                "Every task an app files waits for your OK in every permission mode, and approving, answering and settings stay in Studio.",
+                "Only this PC can connect, with a key kept in your user folder, and no web page can call it.",
+                "Copy setup prompt gives Claude Code, Codex or another AI helper what it needs to walk you through setup."
+              ]
+            },
+            {
+              "id": "resources",
+              "title": "Resources: make room for your agents",
+              "text": "Team › Resources lists the other apps on this PC with their CPU and memory, and can hold them back while agents build.",
+              "status": "next",
+              "label": "Coming in 0.5",
+              "area": "Platform",
+              "details": [
+                "Slow down, Pause, Free memory, Close and End, each undone by Put back or Restore all.",
+                "Manual does only what you press. Auto slows heavy apps you aren’t using while agents build, and puts everything back when they finish.",
+                "Calls, music, recording, remote access and terminals are left alone unless you say otherwise, and Studio, its agents and Windows are never touched.",
+                "Nothing stays paused after Studio closes, even if it crashes. Windows only for now."
               ]
             },
             {
@@ -760,7 +800,7 @@
               "area": "Platform",
               "details": [
                 "Bursts of status updates are merged into one.",
-                "A closed Explorer and Command's hidden rail stop repainting on every update."
+                "A closed Explorer no longer repaints on every update."
               ]
             },
             {
@@ -772,7 +812,7 @@
               "area": "Agents & work",
               "details": [
                 "Graph, Table, Recent, Tree and Health views show the team, handoffs, checks and what needs a look.",
-                "Each seat opens an inspector with its current work, earlier runs and Open task, Open in Command and a two-press Stop this run.",
+                "Each seat opens an inspector with its current work, earlier runs, Open task, a way to its node on the Map and a two-press Stop this run.",
                 "It folds its columns to the room it has, so Fit shows the whole team in a narrow window too.",
                 "Agent lanes, missions and fleets from other PCs belong to the later Fleet work."
               ],
@@ -834,7 +874,7 @@
             {
               "id": "friends-menu",
               "title": "Friends, a place of its own",
-              "text": "The rail’s Friends opens one roomy page: The Lobby, Rooms, Your PCs, Playground and the Project hub, in the list beside it.",
+              "text": "The rail’s Friends opens one roomy page: The Lobby, Rooms, Your PCs, Playground, the Project hub and Events, in the list beside it.",
               "status": "next",
               "label": "Coming in 0.5",
               "area": "Menus",
@@ -883,7 +923,7 @@
               "area": "Media & looks",
               "details": [
                 "Whoever put it on, or the room's owner, can pause, restart or stop it.",
-                "Share what I'm playing, off by default, lets the bot's /nowplaying show your current link or station. It never shows a file's name.",
+                "Share what I'm playing, off by default, lets the bot's /nowplaying show your current link or station once the Studio bot is linked to the relay. It never shows a file's name.",
                 "Studio's side has been in the app since 0.4.0."
               ]
             },
@@ -910,6 +950,21 @@
               "details": [
                 "A task whose files another PC holds waits and picks other work.",
                 "Without a linked room, nothing waits."
+              ]
+            },
+            {
+              "id": "my-pcs",
+              "title": "My PCs: your PCs work as one",
+              "text": "Friends › Your PCs lists every PC you sign in to Friends on, live: its CPU, free memory, battery and running tasks, and why it isn’t taking work.",
+              "status": "next",
+              "label": "Coming in 0.5",
+              "area": "Friends",
+              "details": [
+                "Pair each PC once by checking the same six numbers on both screens. Only paired PCs can send each other work.",
+                "Send work here starts a task on another PC, or moves a ready card to it.",
+                "When a PC stays busy or short of memory, or a laptop’s battery reaches 20%, its ready cards move to a paired PC with a free slot and the same project open. A card is moved, never copied.",
+                "At 10% a laptop saves its progress, parks its changes as a branch another PC can pick up, and waits for Continue.",
+                "A friend can lend you their PC: your tasks there wait for their OK unless they choose otherwise."
               ]
             },
             {
@@ -1058,18 +1113,6 @@
           "title": "In progress for 0.5",
           "note": "Being finished for 0.5. Anything that isn’t finished and tested when 0.5 is ready moves to 0.5.x.",
           "items": [
-            {
-              "id": "vibe-social",
-              "title": "Social and Studio: two modes, two moods",
-              "text": "Vibe is now Social, for hanging out with friends and keeping a light eye on your agents. Build is now Studio, for in-depth building, with the social side still there.",
-              "status": "progress",
-              "label": "In progress for 0.5",
-              "area": "Menus",
-              "details": [
-                "The new names are on main. Your saved mode, settings and links carry over.",
-                "What each mode shows is still being worked out."
-              ]
-            },
             {
               "id": "faster-launch",
               "title": "A faster launch",

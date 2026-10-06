@@ -11,7 +11,7 @@ Most pages have no mark: they describe what's in the 0.4.4 download. Newer thing
 | Mark | What it means |
 | --- | --- |
 | <span class="status next">Coming in 0.5</span> | Finished on `main`, and ships with 0.5, the next release. |
-| <span class="status rolling">Rolling out</span> | Built, but it needs the rooms hub that the Studio owner runs. It may not work for you yet. |
+| <span class="status rolling">Rolling out</span> | Built, but it needs a part outside Studio first: today, the Studio bot's side of Reach this PC from Discord. It may not work for you yet. |
 | <span class="status progress">In progress</span> | Being built right now. |
 | <span class="status planned">Planned</span> | On the [roadmap](../roadmap.html), not started yet. |
 | <span class="status idea">Idea</span> | Something being thought about. The details are open. |
@@ -53,7 +53,7 @@ Already using Studio? Read [what's new in 0.4.4](whats-new.md), then see what's 
 
 The [Void Engine Discord](discord.md) is the easiest way to meet other builders. Share a project or a work in progress, ask for help, or keep someone company while you work. Unfinished work is welcome, and you don't need Studio to join. Joining is always optional: nothing in Studio needs it.
 
-Inside Studio, [friends and rooms](friends-and-rooms.md) are <span class="status rolling">Rolling out</span>. Rooms with chat, listening together and companion playdates need the owner's rooms hub to be online. [Community and Discord](community.md) explains what works today and what's planned.
+Inside Studio, [friends and rooms](friends-and-rooms.md) are <span class="status next">Coming in 0.5</span>: The Lobby, rooms with chat, listening together, the Project hub and companion playdates, on a relay built into Studio, with nothing to set up. [Community and Discord](community.md) explains what works today and what's planned.
 
 ## Ask for something
 

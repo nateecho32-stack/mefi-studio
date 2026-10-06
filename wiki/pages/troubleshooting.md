@@ -41,7 +41,7 @@ In 0.4.4 the guided **Install and sign in** window may close as soon as it opens
 
 A working chat connection doesn't prove the coding worker is ready, so check the coding tool as well. If it still fails, run that tool in a terminal and read its error before you retry in Studio. In 0.4.4, a missing coding tool can show up as "'opencode' is not recognized".
 
-> <span class="status next">Coming in 0.5</span> The [setup helper](setup-helper.md) opens first, marks a tool that's installed but not signed in, and offers **Set up automatically**. With no coding tool installed, **Start agents** says to install OpenCode, Claude Code or Codex, and a run that fails that way says the tool "is not installed or not on PATH".
+> <span class="status next">Coming in 0.5</span> A new install starts with a short welcome that lists the coding tools on this PC and marks one that's installed but not signed in, and the [setup helper](setup-helper.md) offers **Set up automatically**. With no coding tool installed, **Start agents** says to install OpenCode, Claude Code or Codex, and a run that fails that way says the tool "is not installed or not on PATH".
 
 ## A Claude Code or Codex login hit its limit
 
@@ -59,7 +59,7 @@ Open the task and read its waiting reason. Then check that:
 
 Studio may also wait while the PC is busy, or while a failed connection cools down. Creating the task again won't clear that wait.
 
-> <span class="status next">Coming in 0.5</span> A ready task that won't start says why: new work is paused, the agents are cooling down, the scheduler is stuck, the task needs your OK in the current [permission mode](permissions.md), the free coding model runs one task at a time, or it waits for a running worker with the same title. A task you put off reads **Scheduled for later**. With a cowork room <span class="status rolling">Rolling out</span>, a task also waits while another PC holds its files.
+> <span class="status next">Coming in 0.5</span> A ready task that won't start says why: new work is paused, the agents are cooling down, the scheduler is stuck, the task needs your OK in the current [permission mode](permissions.md), the free coding model runs one task at a time, or it waits for a running worker with the same title. A task you put off reads **Scheduled for later**. With a cowork room linked to the project, a task also waits while another PC holds its files.
 
 ## I created a task but it did not appear
 
@@ -85,7 +85,7 @@ In 0.4.4, **Clear list** in the companion's list takes stuck items off it until 
 
 ## Studio switched to Command view by itself
 
-In 0.4.4, Studio switches to Command view after five quiet minutes. Move the mouse or press a key to get back to work. <span class="status next">Coming in 0.5</span> This becomes a switch, **Show Command view after 5 quiet minutes**, and it's off by default.
+In 0.4.4, Studio switches to Command view after five quiet minutes. Move the mouse or press a key to get back to work. <span class="status next">Coming in 0.5</span> The Command view is called the Map, and opening it after five quiet minutes becomes a switch in Settings, off by default.
 
 ## A worker will not stop
 
@@ -113,9 +113,9 @@ A synced folder can lock files while it uploads them. Try keeping the Studio fol
 
 ## I cannot join a shared listening room
 
-Listen together and rooms are <span class="status rolling">Rolling out</span>. They need the Void Engine rooms hub, which the Studio owner runs, and a linked Discord account. In 0.4.4 the message reads "this build isn't connected to one yet", and reinstalling won't change that. The music player itself works without any of it.
+In 0.4.4, Listen together has no room service to connect to: the message reads "this build isn't connected to one yet", and reinstalling won't change that. The music player itself works without it.
 
-> <span class="status next">Coming in 0.5</span> Once the hub is live, each PC can add its address under **Settings › General › Community › Connection details**. Every "not connected yet" message says which value is missing. See [Friends, rooms and playdates](friends-and-rooms.md).
+> <span class="status next">Coming in 0.5</span> Rooms and Listen together run on the Mefi Studio relay, which is built into Studio, so there's no address to enter. Sign in with Discord in Friends; your account needs to be in the Void Engine server. When Friends can't connect, it says why in one sentence and offers only what helps: sign in again, update Studio, join the Discord or connect. See [Friends, rooms and playdates](friends-and-rooms.md).
 
 ## `npm start` says Electron is running as Node
 

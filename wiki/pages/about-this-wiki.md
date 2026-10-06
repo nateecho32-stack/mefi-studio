@@ -10,12 +10,14 @@ Anything that isn't in the 0.4.4 download carries a mark, so you always know wha
 | --- | --- |
 | <span class="status released">Released</span> | In the current download. Most pages leave this mark out. |
 | <span class="status next">Coming in 0.5</span> | Finished on `main`, and ships with 0.5, the next release. |
-| <span class="status rolling">Rolling out</span> | Built, but it needs the rooms hub that the Studio owner runs. |
+| <span class="status rolling">Rolling out</span> | Built, but it needs a part outside Studio first, such as the Studio bot's side of Reach this PC from Discord. |
 | <span class="status progress">In progress</span> | Being built right now. |
 | <span class="status planned">Planned</span> | On the [roadmap](../roadmap.html), not started. |
 | <span class="status idea">Idea</span> | Being thought about. The details are open. |
 
-There was no 0.4.5 or 0.4.6 release. Both were folded into 0.5: what was marked for 0.4.5 is built on `main` and ships with 0.5, and what was in progress for 0.4.6 is planned for 0.5 and still being built.
+There was no 0.4.5 or 0.4.6 release. Both were folded into 0.5: what was marked for 0.4.5 is built on `main` and ships with 0.5, and so is most of what was in progress for 0.4.6.
+
+Pages describe 0.4.4, so they use its names. In 0.5, Vibe is called **Social**, Build is called **Studio**, the Command view is **the Map** and Agents is **Team**; a page's 0.5 marks use the new names.
 
 In a page's Markdown, write a mark as a span, for example `<span class="status next">Coming in 0.5</span>`. The classes are `released`, `next`, `rolling`, `progress`, `planned` and `idea`. A mark inside a heading doesn't change that heading's link.
 
@@ -23,7 +25,7 @@ To colour a whole note, start a quote with the mark, or with bold words that beg
 
 ```markdown
 > <span class="status next">Coming in 0.5</span> The setup helper opens first.
-> **Rolling out:** rooms need the rooms hub.
+> **Rolling out:** Reach this PC from Discord needs the Studio bot.
 ```
 
 A page's `"status"` in `wiki/pages.json` (`"next"` or `"rolling"`) adds a tag beside it in the page list. When a release ships, a maintainer updates `release` and `next` in `pages.json` and removes the marks for what shipped.

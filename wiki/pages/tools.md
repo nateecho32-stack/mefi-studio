@@ -11,7 +11,7 @@ Besides its model, each agent can use a few tools while it works: web search, re
 
 Each project's team, the Studio defaults and your saved team presets keep their own choices.
 
-> <span class="status next">Coming in 0.5</span> The panel becomes **Skills, tools & habits**, and the [setup helper](setup-helper.md)'s **Tools & skills** section holds the same choices for every agent.
+> <span class="status next">Coming in 0.5</span> The panel becomes **Skills, tools & habits**, and the [setup helper](setup-helper.md)'s **Tools & skills** section holds the same choices for every agent. Agents is called **Team**: **Team › Skills** gives skills a page of their own, and **Team › Connectors** adds, approves, tests and imports MCP servers, local or online.
 
 ## Web search
 

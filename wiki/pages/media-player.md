@@ -76,14 +76,15 @@ With **Tree motion** on and the 3D overview spinning, the music's energy quicken
 - **Music recommendations**: say what you're in the mood for and choose **Ask for recommendations**. Each suggestion has a **Search Spotify** button. This needs a connected AI.
 - **Zen bells**, under **Settings › Audio › Sound effects**, play soft bells that follow how fast your agents work. Pick a **Profile**: Zen Bells, Deep Temple, Crystal Bells or After Hours.
 
-## Listen with friends <span class="status rolling">Rolling out</span>
+## Listen with friends <span class="status next">Coming in 0.5</span>
 
-**Listen together** lets a room hear the same link at the same moment. **Share what I'm playing** lets Void Engine members see what you're playing with `/nowplaying`. Both need the rooms hub. See [Listen together](#/friends-and-rooms/listen-together).
+**Listen together** lets a room hear the same link at the same moment. From 0.5 it runs through the Mefi Studio relay, which is built into Studio, once you sign in with Discord. <span class="status rolling">Rolling out</span> **Share what I'm playing** will let Void Engine members see what you're playing with `/nowplaying`, once the Studio bot is linked to the relay. See [Listen together](#/friends-and-rooms/listen-together).
 
 ## What's next
 
-- <span class="status progress">In progress</span> **A smaller player.** The media menu becomes a mini player with play, pause, back, forward and volume, quick switches for the node tree, and YouTube videos you can scroll through and add to Up next. It isn't in a release yet.
-- <span class="status planned">Planned</span> **Shared mixes.** Share your mixes and see which ones are played the most, counted only from people who turn on “share music taste”. Nothing is built yet.
+- <span class="status next">Coming in 0.5</span> **A smaller player.** The media menu becomes a mini player with play, pause, back, forward and volume, quick switches for the node tree, and YouTube videos you can scroll through and add to Up next.
+- <span class="status next">Coming in 0.5</span> **Playlists.** Five starting lists of real videos, lists of your own, and a **+** to save any video. **Share** copies a list as text with a link that plays it on YouTube, or posts it into a room or onto the Project hub.
+- <span class="status planned">Planned</span> **Shared mixes.** Share your mixes and see which ones are played the most, counted only from people who turn on “share music taste”.
 
 The [roadmap](../roadmap.html) has the details.
 

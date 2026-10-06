@@ -2,11 +2,11 @@
 
 When something goes wrong, Trace shows you what Studio was doing. It puts Studio's logs in one viewer that you can search, filter and follow live. For slowdowns and connection checks, **Settings › System › Diagnostics** has a few more tools.
 
-Trace arrived in 0.4.4. Small fixes are <span class="status next">Coming in 0.5</span>, and a bigger logging rework is <span class="status progress">In progress for 0.5</span>.
+Trace arrived in 0.4.4. Small fixes, and a log that's kept instead of starting empty, are <span class="status next">Coming in 0.5</span>.
 
 ## Open Trace
 
-- In Build's menu, go to **Agents › Live › Trace**. It sits beside **Activity**.
+- In Build's menu, go to **Agents › Live › Trace**. It sits beside **Activity**. <span class="status next">Coming in 0.5</span> It's under **Team › Inspect**.
 - Or press `Ctrl K` and type *trace*.
 
 Trace has no single-key shortcut. `Esc` closes it.
@@ -59,9 +59,9 @@ The **Connection log** (provider, tool and probe activity) is in **Agents › Se
 
 You can also ask for help in the [Void Engine Discord](https://discord.gg/xgfKc5pVxG). It's optional; GitHub works without it.
 
-## In progress for 0.5
+## The log is kept
 
-> <span class="status progress">In progress for 0.5</span> A logging rework: structured logs, a transcript of each run, and old logs archived instead of deleted, with all of them kept. It was meant for 0.4.6, which was folded into 0.5. It's being built on a branch, so it isn't on `main` yet. See the [roadmap](../roadmap.html).
+> <span class="status next">Coming in 0.5</span> Studio's log, the assistant's log and the window's warnings are saved on this PC, in its local app-data folder (never in OneDrive), and packed into monthly archives that are never deleted. **Load older** pages back past the last few thousand lines, and **Open file** shows the folder. Trace also shows one line per launch with how long each startup step took. `MEFI_STUDIO_LOG_CORE=0` keeps the log in memory only, as in 0.4.4. See the [roadmap](../roadmap.html).
 
 ## Related pages
 

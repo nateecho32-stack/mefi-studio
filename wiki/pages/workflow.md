@@ -78,7 +78,7 @@ The Free coding tier runs one worker at a time.
 
 Vibe's Tasks panel has its own **Worker limit**. Studio runs at most three build workers, so in 0.4.4 the higher choices there (4, 6 and 8) still run three.
 
-> <span class="status next">Coming in 0.5</span> Vibe's worker limit offers only 1, 2, 3 or **Automatic**. Actions you can't undo, such as **Stop all**, **Restart** or dropping a task, ask twice: the first press asks, the second acts. And Studio says why agents aren't working, with the one control that fixes it.
+> <span class="status next">Coming in 0.5</span> The worker limit offers only 1, 2, 3 or **Automatic**. Actions you can't undo, such as **Stop all**, **Restart** or dropping a task, ask twice: the first press asks, the second acts. And Studio says why agents aren't working, with the one control that fixes it.
 
 A split request has a **Plan in flight** card. **Make it one task** removes the steps that haven't started, so the original request runs as a whole.
 
@@ -86,7 +86,7 @@ A split request has a **Plan in flight** card. **Make it one task** removes the 
 
 Studio tracks which files its workers are changing and holds known conflicts. Other editors and tools can still change those files, so coordinate overlapping work. [Per-session worktrees](assistant.md#per-session-worktrees) give each run its own checkout when you turn them on.
 
-> <span class="status next">Coming in 0.5</span> <span class="status rolling">Rolling out</span> Agents on several PCs can share a project through a cowork room. Builders claim the files they'll edit, and a task whose files another PC holds waits. See [Friends, rooms and playdates](friends-and-rooms.md).
+> <span class="status next">Coming in 0.5</span> Agents on several PCs can share a project through a cowork room. Builders claim the files they'll edit, and a task whose files another PC holds waits. See [Friends, rooms and playdates](friends-and-rooms.md).
 
 ## Review and recover
 

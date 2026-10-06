@@ -13,40 +13,39 @@ Now and then Studio shows a small card inviting you to join. **Not now** snoozes
 ## Share your work
 
 - **In the Discord**: post it to the showcase, with a link and a short description. Ask for feedback, or find someone to build with.
-- **With a friend** <span class="status next">Coming in 0.5</span>: **Share with friends** saves one brain, recipe, team setup, set of model results, memory note or your preferences to a `.mefishare` file you can send however you like. Studio cleans it and shows you what's inside first. A friend's file is reviewed before you use it, and it can't change your permissions. This needs no rooms hub. See [Your PCs](your-pcs.md).
+- **With a friend** <span class="status next">Coming in 0.5</span>: **Share with friends** saves one brain, recipe, team setup, set of model results, memory note or your preferences to a `.mefishare` file you can send however you like. Studio cleans it and shows you what's inside first. A friend's file is reviewed before you use it, and it can't change your permissions. It needs no sign-in. See [Your PCs](your-pcs.md).
+- **On the Project hub** <span class="status next">Coming in 0.5</span>: share a project as a card in **Friends › Project hub**, and play what other people make. See [Friends, rooms and playdates](friends-and-rooms.md#the-project-hub).
 
-## Friends in Studio <span class="status rolling">Rolling out</span>
+## Friends in Studio
 
-Your companion's **Friends** bubble is where friends live in Studio. Most of it needs the Void Engine rooms hub, which the Studio owner runs, and a linked Discord account, so it may not work for you yet. [Friends, rooms and playdates](friends-and-rooms.md) has the full guide.
+In 0.4.4, your companion's **Friends** bubble holds **Your PCs**, and **Listen together**, which has no room service to connect to yet. [Friends, rooms and playdates](friends-and-rooms.md) has the full guide.
 
-- **Link my Discord**, under **Settings › General › Community**, is optional and unlocks nothing. Listen together and rooms use it to find your Void Engine rooms. Linking reads your Discord id and name, and your roles and join date in the server, and nothing about your projects.
-- **Listen together**: in **Music & video › Links**, pick one of your rooms and play a link for it. Everyone else in the room chooses **Listen along**. **Share what I'm playing** is a separate, optional setting that lets the Void Engine bot show what you're playing with `/nowplaying`.
-
-> <span class="status next">Coming in 0.5</span> More of Friends arrives, still rolling out while the hub comes online:
+> <span class="status next">Coming in 0.5</span> Friends becomes a place of its own, with nothing to set up: rooms, room chat, Listen together, playdates and cowork claims run through the Mefi Studio relay, a free service built into Studio. Sign in with Discord once.
 >
-> - **Friends › Rooms**: browse your rooms and the listed ones, **Ask to join** with a note, and accept or decline invites. If you have the Room Host role, **Make a room**: a Hangout (up to 25 people) or a Cowork room (up to 10). Room chat is plain text with @names, links are never made clickable, and every message can be reported. Void Engine moderators can read every room.
+> - **The Lobby**: who is online, the week's top project, the rooms open now and what was shared this week. Everyone signed in is in the Lobby room.
+> - **Friends › Rooms**: join with a friend's invite code, or ask to join a listed room. An open room reads like a chat app. Room chat is plain text with @names, links are never made clickable, every message can be reported, and moderators see a message only when someone reports it.
+> - **Friends › Project hub**: share what you make as a card, and play what others make. Playing someone else's project for two minutes earns you both credits, which raise your rank and can feature a project for a day.
+> - **Friends › Events**: a weekly Build Jam, co-work hours, and credits for building together.
 > - **Cowork rooms for agents**: **Use this room for this project's agents** lets agents on several PCs share a project without editing the same file at once.
-> - **Friends › Playground**: companions in the same room meet for short playdates. **Practice with Pip** works on your own PC, with no hub. Your companion shares nothing about you until you allow it, and **What was sent** lists every card that left.
-> - **Connection details**, under **Settings › General › Community**, where each PC adds the hub's address once it's live.
+> - **Friends › Playground**: companions in the same room meet for short playdates. **Practice with Pip** works on your own PC, without signing in. Your companion shares nothing about you until you allow it, and **What was sent** lists every card that left.
+> - **Sign in with Discord** is optional and unlocks nothing. It reads your Discord id and name, and your roles and join date in the server, and nothing about your projects.
 
 ## Keep your own PCs in step
 
-**Friends › Your PCs** keeps a project in step across your own PCs through GitHub, and it doesn't need the rooms hub. See [Your PCs](your-pcs.md).
+**Friends › Your PCs** keeps a project in step across your own PCs through GitHub, with no Discord sign-in. See [Your PCs](your-pcs.md).
 
 ## Music while you work
 
-Studio has its own music and video player, and it works without Discord or any hub. See [Music, video and the player](media-player.md).
+Studio has its own music and video player, and it works without Discord or a sign-in. See [Music, video and the player](media-player.md).
 
 ## What's planned <span class="status planned">Planned</span>
 
-The owner's plan for the community, with the details still open:
+The owner's plan for the community has started: sharing projects, credits and ranks, and a weekly Build Jam are <span class="status next">Coming in 0.5</span>, as above. Still open:
 
-- Share your ideas and projects with other people.
-- Earn credits for trying or looking at other people's projects, and spend them to promote your own.
 - Cosmetics and creator styles you can get with credits.
 - Shared mixes, with the most-played lists for people who choose to share their music taste.
 
-Credits are earned only, never bought. Today, every theme and node style is free. The [roadmap](../roadmap.html) shows these plans and what's being built now. A "Hey Studio" voice shortcut is an <span class="status idea">Idea</span>.
+Credits are earned only, never bought, and never for inviting people. Every theme and node style stays free. The [roadmap](../roadmap.html) shows these plans and what's being built now. A "Hey Studio" voice shortcut is an <span class="status idea">Idea</span>.
 
 ## Ask for something
 

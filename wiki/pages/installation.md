@@ -43,7 +43,7 @@ The launch screen asks which project to open. Pick one or choose **Open another 
 
 **Help › Start here** then walks you through setup, sign-in and a connection check. Continue with [Your first project](getting-started.md).
 
-> <span class="status next">Coming in 0.5</span> The [setup helper](setup-helper.md) opens first on a new install, and once after you update. With no project yet, the launch screen leads with **Open a folder…**. **Settings › General › When Studio opens** picks the default button: **Resume what I had** (the default), **Start agents** or **Keep agents off**.
+> <span class="status next">Coming in 0.5</span> A new install starts with a three-step welcome: pick the AI that builds for you, choose a project, and say what Studio should make first. The [setup helper](setup-helper.md) opens once after you update, and waits in Help and Search. The launch screen has one **Open** button with a **Start agents** switch, and **Open a folder…**, **Start a new app** and **Get from GitHub** at its foot. **Settings › General › When Studio opens** decides whether agents start: **Resume what I had** (the default), **Start agents** or **Keep agents off**.
 
 ## Connect an AI account
 

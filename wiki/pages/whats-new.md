@@ -51,7 +51,7 @@ An update's **Restart now** stops the coding agents, saves their latest work and
 
 0.4.4 is still the current download. The next release is 0.5, and it's being built now, with no release date yet. There is no 0.4.5 or 0.4.6: both were folded into 0.5.
 
-0.5 is taking shape on `main`: the setup helper, clearer reasons when agents aren't working, more than one Claude Code or Codex login, sharing between your own PCs, an optional new layout, Windows notifications, undo for deleted tasks and ideas, Sign in with ChatGPT, and more. Rooms and companion playdates are built too, and they're <span class="status rolling">Rolling out</span>. Faster agent sends, kept logs, a faster launch and Friends 2.0 are planned for 0.5 and still <span class="status progress">In progress</span>. [Coming in 0.5](coming-in-0-5.md) lists it all.
+0.5 is taking shape on `main`: one new layout, with Vibe and Build renamed Social and Studio, the Map and Team; Friends with nothing to set up, with The Lobby, rooms, the Project hub and a weekly Build Jam; the setup helper, clearer reasons when agents aren't working, more than one Claude Code or Codex login, sharing between your own PCs, Windows notifications, undo for deleted tasks and ideas, Sign in with ChatGPT, and more. A faster launch is still <span class="status progress">In progress</span>. [Coming in 0.5](coming-in-0-5.md) lists it all.
 
 ## Studio is moving to Rust
 

@@ -2,7 +2,7 @@
 
 Vibe is Studio's calm front door and its default mode. You get one box for an idea, a fix or a question. Below it, cards appear only when they have something to show: what needs you, what's building and what just finished.
 
-Vibe arrived in 0.4.2, and 0.4.4 added its panels, **Build it** sizing and **New app**. Items marked <span class="status next">Coming in 0.5</span> are finished on main and ship with 0.5, the next release.
+Vibe arrived in 0.4.2, and 0.4.4 added its panels, **Build it** sizing and **New app**. Items marked <span class="status next">Coming in 0.5</span> are finished on main and ship with 0.5, the next release. In 0.5, Vibe is called **Social** and Build is called **Studio**: see [Social and Studio](#social-and-studio).
 
 ## Vibe or Build
 
@@ -78,6 +78,10 @@ Each one opens a compact panel beside the box. Rows open their details, and **Ba
 
 > <span class="status next">Coming in 0.5</span> These are finished on main and not in the 0.4.4 download.
 
+### Social and Studio
+
+Vibe is called **Social**: time with friends and a light eye on your agents. Build is called **Studio**: in-depth building, with the social side still there. Both modes share the 0.5 layout, Studio's only layout from 0.5, and open on **Today**: your box to build or talk it over, and a board of what needs you, what runs, what to review and what is done. Switch in the top bar or with `Ctrl M`. Only the names change: your saved mode and settings carry over. See [the 0.5 layout](#/coming-in-0-5/the-05-layout).
+
 ### MEFI: Modify, Experiment, Fix, Improve
 
 The starter chips under the box become four ways to build on the open project:
@@ -103,10 +107,6 @@ A split request's **Plan in flight** card draws its steps as a track that ends i
 - The **Worker limit** offers only what Studio really runs: 1, 2, 3 or **Automatic**. In 0.4.4, higher numbers were quietly treated as 3.
 - A deferred task reads **Scheduled for later** and shows why.
 - Questions that expired, or whose task left the board, close when the project loads, so **Needs you** shows only live ones.
-
-## Planned
-
-Vibe as Studio's social mode is planned, and not started yet. See the [roadmap](../roadmap.html).
 
 ## Related pages
 

@@ -2,9 +2,9 @@
 
 Do you work on the same project from more than one Windows PC? **Your PCs** keeps them in step through GitHub. Each PC keeps its own copy, and the project's default branch on GitHub is the one state they share. Studio shows what hasn't reached GitHub yet and only syncs in safe directions.
 
-Open your [companion](#/companion), choose **Friends**, and find **Your PCs**. Opening it only looks. Nothing moves until you press a button. <span class="status next">Coming in 0.5</span> **Friends › Your PCs** also opens straight from Build’s main menu or Search, and Friends is on Vibe’s rail.
+Open your [companion](#/companion), choose **Friends**, and find **Your PCs**. Opening it only looks. Nothing moves until you press a button. <span class="status next">Coming in 0.5</span> Friends is a place of its own on the rail, and Search opens **Friends › Your PCs** directly.
 
-This page covers syncing, [Set up this PC](#set-up-this-pc), [Share between my PCs](#share-between-my-pcs) (your private vault) and [Share with friends](#share-with-friends).
+This page covers syncing, [My PCs](#my-pcs-your-pcs-work-as-one) (your PCs sharing the work), [Set up this PC](#set-up-this-pc), [Share between my PCs](#share-between-my-pcs) (your private vault) and [Share with friends](#share-with-friends).
 
 ## See what is only on this PC
 
@@ -23,6 +23,19 @@ Your PCs says whether this PC matches the open project's default branch on GitHu
 - **A badge on Friends.** The Friends bubble shows a badge for work only this PC holds, commits waiting on GitHub, or a GitHub that couldn't be checked. Studio looks 45 seconds after launch and then every 15 minutes.
 - **A question before closing.** When the open project has work on this PC alone, closing Studio asks first: **Push and close**, **Close anyway** or **Keep Studio open**. Update restarts never ask.
 
+## My PCs: your PCs work as one <span class="status next">Coming in 0.5</span>
+
+Every PC you sign in to Friends on shows in **Your PCs**, live: its CPU, free memory, battery and how many tasks it runs, and why it isn't taking work.
+
+- **Pair each PC once** by checking that both screens show the same six numbers. Only paired PCs can send each other work, so a Discord sign-in alone never can.
+- **Send work here** starts a task on another PC, or moves a ready card to it.
+- **Sharing the load.** When every slot on a PC has been busy for two minutes, it's short of memory that long, or a laptop's battery is at 20%, its ready cards move to a paired PC with a free slot and the same project open. A card is moved, never copied, at most two per project are out at once, and it's marked done here when the other PC finishes it.
+- **A laptop on low battery.** At 20% it starts nothing new. At 10% it stops its work with the progress saved, parks the changes as a branch another PC can pick up, lets itself sleep, and waits for **Continue**. Plugging in isn't enough.
+- **Keep this PC on** keeps a plugged-in PC awake with nothing running, so your other PCs can send it work.
+- Each project has its own switch, and a friend can lend you their PC: your tasks there wait for their OK unless they choose otherwise.
+
+Work sent between PCs is sealed, so the Mefi Studio relay that carries it can't read it.
+
 ## Set up this PC <span class="status next">Coming in 0.5</span>
 
 **Set up this PC**, inside Your PCs, checks what a PC needs to share projects through GitHub:
@@ -35,7 +48,7 @@ Each gap has a button, such as **Install Git** or **Sign in to GitHub**. It open
 
 **Get a project from GitHub** lists your own repositories. Pick one, choose **Choose a folder and get it**, and Studio downloads the project and opens it.
 
-Under **Linking this PC**, the checklist also shows whether this PC is paired with your vault, and whether Discord and the rooms hub are set up. Each line takes you to the place that finishes it.
+Under **Linking this PC**, the checklist also shows whether this PC is paired with your vault, and whether Discord is linked for Friends. Each line takes you to the place that finishes it.
 
 ## Share between my PCs <span class="status next">Coming in 0.5</span>
 
@@ -91,7 +104,7 @@ Turn on **Start with Windows** in **Settings › General › Profile & startup**
 
 ## Reach this PC from Discord <span class="status rolling">Rolling out</span>
 
-**Reach this PC from Discord**, inside Your PCs, will let you check on this PC and talk to Mefi from a DM with the Void Engine bot. Studio's side is ready, but the bot's side isn't live yet, so it doesn't work today. [Reach your PCs from Discord](#/discord/reach-your-pcs-from-discord) explains what it will do.
+**Reach this PC from Discord**, inside Your PCs, will let you check on this PC and talk to Mefi from a DM with the Void Engine bot. Studio's side is built for 0.5 and the relay carries it, but it works only once the Studio bot is linked to the relay, so it doesn't work today. [Reach your PCs from Discord](#/discord/reach-your-pcs-from-discord) explains what it will do.
 
 ## Good to know
 

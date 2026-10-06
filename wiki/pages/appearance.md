@@ -71,7 +71,7 @@ Then adjust **Density** (**Comfortable** or **Compact**), **Glass intensity** an
 - **Blur behind panels**: turn it off to give sheets, menus and Home's panels a plain, darker backdrop.
 - **Let your companion move**: turn it off to keep your [companion](#/companion) still.
 
-<span class="status next">Coming in 0.5</span> **Interface scale** makes the whole interface 70% to 150% of its size, text included, and keeps it for the next launch. Find it in **Configuration** under **UI & Surfaces**. Open Configuration with **Ctrl + Shift + ,** or **All settings in one place** in Settings.
+<span class="status next">Coming in 0.5</span> **Interface scale** makes the whole interface 70% to 150% of its size, text included, and keeps it for the next launch. Find it in **Configuration** under **UI & Surfaces**. Open Configuration with **Ctrl + Shift + ,** or **All settings in one place** in Settings. It's also on the 0.5 layout's **Size and density** page, with a live miniature of the window, and **Ctrl +**, **Ctrl −** and **Ctrl 0** change it.
 
 ## Keys
 
@@ -83,10 +83,10 @@ Then adjust **Density** (**Comfortable** or **Compact**), **Glass intensity** an
 | **C** | Cycle the camera: overview, follow or free |
 | **Space** | Pause or resume the spin |
 
-**V**, **L**, **C** and **Space** work in [Command view](#/command-center). [Navigation and shortcuts](#/shortcuts) lists the rest.
+**V**, **L**, **C** and **Space** work in [Command view](#/command-center), which is called the Map from 0.5. [Navigation and shortcuts](#/shortcuts) lists the rest.
 
 ## Looks from the community <span class="status planned">Planned</span>
 
-Every theme and node style in Studio today stays free. The owner's community plan adds new cosmetics, and styles that other people make, which you could get with credits. You'd earn credits by trying other people's projects, and you can't buy them. None of this is built yet. See the [roadmap](../roadmap.html).
+Every theme and node style in Studio today stays free. The owner's community plan adds new cosmetics, and styles that other people make, which you could get with credits. Credits come with 0.5: you earn them by playing other people's projects on the Project hub, and you can't buy them. Cosmetics and styles for credits aren't built yet. See the [roadmap](../roadmap.html).
 
 See also: [Settings and Configuration](#/settings) and [Your companion](#/companion).
