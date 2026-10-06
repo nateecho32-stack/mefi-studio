@@ -152,7 +152,8 @@ async function makePc(relay, { id, name, uid = OWNER, repo = REPO, battery = nul
   pc.context = context;
   pc.client = client;
   pc.saved = () => saved;
-  pc.cleanup = () => rm(userData, { recursive: true, force: true });
+  // Pending writes (peers, outbox) finish before the folder goes.
+  pc.cleanup = async () => { await settle(); await context.api.pcsMem().files.catch(() => {}); await rm(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 }); };
   await context.api.pcsHello();
   await settle();
   return pc;
