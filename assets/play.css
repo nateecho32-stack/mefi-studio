@@ -66,6 +66,8 @@
 .pl-app.sent .pl-box { transform: translateY(-6px) scale(.99); opacity: .6; }
 .pl-box textarea { display: block; width: 100%; min-height: 50px; resize: none; border: 0; outline: 0; padding: 0; background: transparent; font: inherit; font-size: 16px; color: var(--ivory); caret-color: rgb(var(--accent-2-rgb)); }
 .pl-box textarea::placeholder { color: var(--dim); }
+/* The demo types its ideas itself: the box can't be typed in. */
+.pl-box textarea[readonly] { cursor: default; caret-color: transparent; }
 .pl-box-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
 .pl-ideas { display: flex; flex-wrap: wrap; gap: 7px; flex: 1; min-width: 0; }
 .pl-idea { padding: 6px 12px; border-radius: 999px; font: 560 13px var(--font-ui); color: var(--muted); background: rgb(255 255 255 / 0.04); border: 1px solid rgb(255 255 255 / 0.09); cursor: pointer; transition: color .2s, background .2s, border-color .2s, transform .3s var(--ease-spring); }
@@ -113,8 +115,7 @@
 .pl-opt { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 6px; padding: 8px 10px; border-radius: 10px; font: 600 12.5px var(--font-ui); text-align: left; color: var(--text); background: rgb(255 255 255 / 0.03); border: 1px solid rgb(255 255 255 / 0.12); cursor: pointer; transition: background .2s, border-color .2s, color .2s; }
 .pl-opt:hover { border-color: rgb(255 255 255 / 0.28); background: rgb(255 255 255 / 0.06); }
 .pl-opt em { margin-left: auto; font-style: normal; font-size: 10.5px; padding: 1px 7px; border-radius: 6px; color: var(--muted); background: rgb(255 255 255 / 0.08); }
-.pl-own { margin: 8px 2px 0; font-size: 11.5px; color: var(--dim); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgb(255 255 255 / 0.2); }
-.pl-ask.answered .pl-opt, .pl-ask.answered .pl-own { display: none; }
+.pl-ask.answered .pl-opt { display: none; }
 .pl-answer { margin: 4px 0 0; font-size: 12.5px; font-weight: 700; color: var(--live); }
 .pl-checks { display: grid; gap: 6px; margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: rgb(87 255 154 / 0.05); box-shadow: inset 0 0 0 1px rgb(87 255 154 / 0.18); font-size: 12.5px; color: var(--text); }
 .pl-checks span { display: flex; align-items: center; gap: 8px; opacity: 0; transform: translateX(-6px); transition: opacity .35s, transform .45s var(--ease-out); }
@@ -166,7 +167,7 @@
 .pl-files.reverted li { opacity: .4; }
 .pl-files.reverted .tag { color: var(--warn); background: rgb(255 212 121 / 0.1); }
 .pl-acts { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
-.pl-accept, .pl-revert, .pl-share, .pv-rsvp, .pv-save, .pv-count, .pl-enter { font: 700 13.5px var(--font-ui); cursor: pointer; border-radius: 11px; transition: transform .3s var(--ease-spring), background .2s, opacity .3s; }
+.pl-accept, .pl-revert, .pl-share, .pv-rsvp, .pv-save, .pl-enter { font: 700 13.5px var(--font-ui); cursor: pointer; border-radius: 11px; transition: transform .3s var(--ease-spring), background .2s, opacity .3s; }
 .pl-accept { padding: 9px 15px; border: 0; color: var(--ink); background: linear-gradient(180deg, #fff, var(--accent-bright) 30%, var(--accent)); }
 .pl-revert { padding: 9px 14px; border: 1px solid rgb(255 255 255 / 0.14); color: var(--bad); background: transparent; }
 .pl-accept:disabled, .pl-revert:disabled { opacity: .55; cursor: default; }
@@ -210,13 +211,6 @@
 .pv-songs li.playing { background: rgb(var(--accent-2-rgb) / 0.12); }
 .pv-songs li.playing .pv-prog { animation: pv-song 12s linear forwards; }
 @keyframes pv-song { to { transform: scaleX(1); } }
-.pv-own-card { padding: 18px; border-radius: 16px; background: #17171d; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1); }
-.pv-own-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
-.pv-own-tabs b { padding: 4px 10px; border-radius: 8px; font-size: 12px; color: var(--muted); box-shadow: inset 0 0 0 1px var(--pl-line); } .pv-own-tabs b.on { color: var(--ivory); background: rgb(255 255 255 / 0.07); }
-.pv-own-card h4 { margin: 0 0 4px; font-size: 1.25rem; letter-spacing: -0.02em; overflow-wrap: anywhere; }
-.pv-own-card p { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
-.pv-count { padding: 10px 16px; border: 0; color: var(--ink); background: linear-gradient(180deg, #fff, var(--accent-bright) 30%, var(--accent)); }
-.pv-count b { margin-left: 6px; color: var(--ink); }
 
 /* ---- the step dots ------------------------------------------------------------- */
 .pl-foot { display: flex; align-items: center; justify-content: center; border-top: 1px solid var(--pl-line); background: rgb(var(--bg-2-rgb)); }

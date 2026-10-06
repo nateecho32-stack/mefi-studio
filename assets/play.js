@@ -1,6 +1,6 @@
 /* Mefi Studio website — "Try the app": a playable, made-up copy of Studio's
    Social mode, opened from Home's gate or its buttons (window.MefiPlay.open).
-   The visitor picks or types an idea and presses Build it, three builders
+   The visitor picks one of the ideas and presses Build it, three builders
    work on it while a friend chats, one asks a question and the answer changes
    what gets built, the checks pass, the visitor accepts (or reverts) the
    changes, tries what was built and shares it with friends in a room. The
@@ -46,17 +46,6 @@
       files: [["index.html", "+94"], ["gigs.json", "+18"], ["player.js", "+52"]],
       share: "Our band site is up. Press play!",
       replies: [["Rook", 32, "The player works!"], ["Tess", 330, "Putting Saturday in my calendar."], ["Maxwell", 146, "Sharing it with everyone."]]
-    },
-    own: {
-      chip: "My own idea", project: "My app", lead: "your idea",
-      text: "",
-      tasks: [["Sketch the first screen", "Claude Code", ["reading the project", "writing the layout", "styling it"]],
-        ["Build the main part", "Codex", ["reading the code", "writing the logic", "wiring it up"]],
-        ["Check it works", "OpenCode", ["writing the tests", "running them", "checking its work"]]],
-      ask: { q: "Keep it to one screen for now?", yes: "Yes, one screen", no: "Add a second screen" },
-      files: [["index.html", "+64"], ["app.js", "+48"], ["style.css", "+30"]],
-      share: "Built a first version. Have a look!",
-      replies: [["Maxwell", 146, "Okay, that's actually cool."], ["Juno", 268, "What's next for it?"], ["Rook", 32, "Put it on the Project hub!"]]
     }
   };
   var STEPS = ["Idea", "Build", "Decide", "Review", "Try", "Share"];
@@ -99,7 +88,7 @@
             '<div class="pl-hello"><span class="pl-orb" aria-hidden="true"></span><div><small><span class="pl-greet">Good evening</span> · Social</small><h2>What’s next for <span class="pl-proj">Game night</span>?</h2></div></div>' +
             '<form class="pl-box" autocomplete="off">' +
               '<label class="visually-hidden" for="pl-idea">Your idea</label>' +
-              '<textarea id="pl-idea" rows="2" maxlength="120" spellcheck="false" placeholder="Describe an idea, a fix or a question…"></textarea>' +
+              '<textarea id="pl-idea" rows="2" readonly tabindex="-1" spellcheck="false" placeholder="Describe an idea, a fix or a question…"></textarea>' +
               '<div class="pl-box-row">' +
                 '<div class="pl-ideas" role="group" aria-label="Ideas to try"></div>' +
                 '<button type="button" class="pl-talk"><span>Talk it over</span><kbd>Enter</kbd></button>' +
@@ -148,7 +137,7 @@
     var $ = function (s) { return root.querySelector(s); };
     var $$ = function (s) { return Array.prototype.slice.call(root.querySelectorAll(s)); };
     var token = { alive: true }, timers = [];
-    var idea = "game", custom = false, answer = "yes";
+    var idea = "game", answer = "yes";
     var live = $(".pl-live");
     function say(text) { live.textContent = text; }
     function sleep(ms) { return new Promise(function (r) { timers.push(setTimeout(r, still() ? Math.min(ms, 40) : ms)); }); }
@@ -282,7 +271,7 @@
     var box = $("#pl-idea"), ideasEl = $(".pl-ideas"), typer = null;
     Object.keys(IDEAS).forEach(function (k) {
       var b = el("button", "pl-idea", IDEAS[k].chip); b.type = "button"; b.dataset.idea = k; b.setAttribute("aria-pressed", String(k === "game"));
-      b.addEventListener("click", function () { pick(k, true); });
+      b.addEventListener("click", function () { pick(k); });
       ideasEl.appendChild(b);
     });
     function typeText(text) {
@@ -292,17 +281,13 @@
       var i = 0;
       typer = setInterval(function () { i += 1 + (Math.random() < 0.3 ? 1 : 0); box.value = text.slice(0, i); if (i >= text.length) clearInterval(typer); }, 26);
     }
-    function pick(k, focus) {
-      idea = k; custom = k === "own";
+    // The box only ever holds one of the ideas, typed for the visitor: the demo has nothing to build from free text.
+    function pick(k) {
+      idea = k;
       $$(".pl-idea").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.idea === k)); });
-      if (custom) { clearInterval(typer); box.value = ""; if (focus) box.focus(); }
-      else typeText(IDEAS[k].text);
+      typeText(IDEAS[k].text);
       $$(".pl-proj").forEach(function (n) { n.textContent = IDEAS[k].project; });
     }
-    box.addEventListener("input", function () {
-      clearInterval(typer);
-      if (!custom) { custom = true; idea = "own"; $$(".pl-idea").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.idea === "own")); }); $$(".pl-proj").forEach(function (n) { n.textContent = IDEAS.own.project; }); }
-    });
     // As in Studio: Enter talks it over, Ctrl Enter builds it.
     box.addEventListener("keydown", function (e) {
       if (e.key !== "Enter" || e.shiftKey) return;
@@ -316,18 +301,17 @@
     var TALK = {
       game: "Easy: the time, the place and an RSVP friends can press. Build it and I'll split it into three steps.",
       pixel: "A small canvas, a few colours and a Save button. Build it and I'll split it into three steps.",
-      band: "Next gig on top, the songs below with a play button. Build it and I'll split it into three steps.",
-      own: "Got it. Build it and I'll work out the steps and who does what."
+      band: "Next gig on top, the songs below with a play button. Build it and I'll split it into three steps."
     };
     function talkBack() {
       if (app.dataset.step !== "0") return;
       var old = $(".pl-talkback"); if (old) old.remove();
       var reply = el("div", "pl-talkback");
       reply.appendChild(el("span", "pl-orb sm"));
-      var p = el("p"); p.appendChild(el("b", "", "Mefi")); p.appendChild(document.createTextNode(TALK[custom ? "own" : idea])); reply.appendChild(p);
+      var p = el("p"); p.appendChild(el("b", "", "Mefi")); p.appendChild(document.createTextNode(TALK[idea])); reply.appendChild(p);
       $(".pl-box").insertAdjacentElement("afterend", reply);
       hint($(".pl-build"), "Build it");
-      say("Mefi: " + TALK[custom ? "own" : idea]);
+      say("Mefi: " + TALK[idea]);
     }
 
     // ---- leaving ---------------------------------------------------------------
@@ -340,8 +324,8 @@
       hint(null);
       window.removeEventListener("resize", placeHint);
       document.removeEventListener("keydown", onKey);
-      var lead = (custom ? IDEAS.own : IDEAS[idea]).lead;
-      if (opts.onLeave) opts.onLeave({ how: how, idea: custom ? "own" : idea, lead: lead, from: how === "skip" ? $(".pl-skip") : $(".pl-end .pl-enter") || $(".pl-skip") });
+      var lead = IDEAS[idea].lead;
+      if (opts.onLeave) opts.onLeave({ how: how, idea: idea, lead: lead, from: how === "skip" ? $(".pl-skip") : $(".pl-end .pl-enter") || $(".pl-skip") });
     }
     function onKey(e) { if (e.key === "Escape") { e.preventDefault(); leave("skip"); } }
     document.addEventListener("keydown", onKey);
@@ -356,9 +340,7 @@
         step(0);
         var buildBtn = $(".pl-build");
         await waitClick(buildBtn, "Build it", 14000); alive();
-        var spec = custom ? IDEAS.own : IDEAS[idea];
-        if (custom && !box.value.trim()) box.value = "Something for my friends and me";
-        var asked = custom ? box.value.trim() : spec.text;
+        var spec = IDEAS[idea], asked = spec.text;
         clearInterval(typer);
         var talked = $(".pl-talkback"); if (talked) talked.remove();
         app.classList.add("sent");
@@ -393,7 +375,6 @@
         var yes = el("button", "pl-opt rec"); yes.type = "button"; yes.appendChild(document.createTextNode(spec.ask.yes)); yes.appendChild(el("em", "", "Recommended"));
         var no = el("button", "pl-opt"); no.type = "button"; no.textContent = spec.ask.no;
         q.appendChild(yes); q.appendChild(no);
-        q.appendChild(el("p", "pl-own", "or answer in your own words"));
         asker.appendChild(q);
         move([[asker, lists.need]]);
         say(spec.tasks[1][1] + " asks: " + spec.ask.q);
@@ -467,7 +448,7 @@
         var pv = $("[data-pane='preview']");
         pv.innerHTML = "";
         pv.appendChild(el("p", "pl-k", "Preview"));
-        var made = preview(custom ? "own" : idea, answer, asked);
+        var made = preview(idea, answer);
         pv.appendChild(made.node);
         tab("preview");
         say("The preview is ready. Try it.");
@@ -525,7 +506,7 @@
     }
 
     // ---- what was built ----------------------------------------------------------
-    function preview(kind, ans, asked) {
+    function preview(kind, ans) {
       var wrap = el("div", "pv pv-" + kind), target, label = "Try it";
       if (kind === "game") {
         var t = el("div", "pv-ticket");
@@ -592,16 +573,6 @@
         wrap.appendChild(head);
         if (ans === "yes") { wrap.appendChild(gig); wrap.appendChild(songs); } else { wrap.appendChild(songs); wrap.appendChild(gig); }
         target = first; label = "Press play";
-      } else {
-        var o = el("div", "pv-own-card");
-        var tabs = el("div", "pv-own-tabs"); tabs.appendChild(el("b", "on", "Home")); if (ans === "no") tabs.appendChild(el("b", "", "More"));
-        o.appendChild(tabs);
-        o.appendChild(el("h4", "", asked.length > 60 ? asked.slice(0, 58) + "…" : asked));
-        o.appendChild(el("p", "", "A first screen, ready to grow."));
-        var cnt = el("button", "pv-count"); cnt.type = "button"; cnt.appendChild(document.createTextNode("Click me ")); var num = el("b", "", "0"); cnt.appendChild(num);
-        cnt.addEventListener("click", function () { num.textContent = String(Number(num.textContent) + 1); });
-        o.appendChild(cnt);
-        wrap.appendChild(o); target = cnt; label = "Click it";
       }
       return { node: wrap, target: target, label: label };
     }
