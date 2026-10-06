@@ -7,6 +7,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **The rail's words are whole.** At rest, Settings, Friends and Search
+  no longer end in "…": a tile's word now gets the rail's whole width
+  (Settings needed 43 px and had 39). Studio's rail is checked at every
+  window size, the smallest at 150% included, for places that can't be
+  reached and words that are cut.
 - **Friends › Events: the community runs its own events.** Every week a
   **Build Jam** opens on Monday with a theme (and shows next week's): enter
   one of your shared projects until Saturday, play the others and vote for up
