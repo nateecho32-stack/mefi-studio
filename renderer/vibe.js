@@ -1062,7 +1062,7 @@
         const what = steps ? `Split into ${steps} steps, then a final check.` : "Added to the queue.";
         feedback(gate === "held" ? `${what} Select Start agents below and it begins.` : gate === "paused" ? `${what} New work is paused; Resume below to start it.` : gate === "key" ? `${what} Connect an AI below so it can be built.`
           : state.status.autoBuild === false ? `${steps ? what : "Added."} ${steps ? "They wait" : "It waits"} for your go-ahead under Needs you.`
-          : steps ? `${what} Follow it on the plan card.` : "Added. It shows under Building now as soon as an agent picks it up.", gate && gate !== "waiting" ? "warn" : "good");
+          : steps ? `${what} Its steps show under Running as they start.` : "Added. It shows under Running as soon as an agent picks it up.", gate && gate !== "waiting" ? "warn" : "good");
         scheduleBacklog();
         window.dispatchEvent(new CustomEvent("mefi:task-created", { detail: { taskId: result.task?.id, projectId: id } }));
       } else feedback("");
@@ -1454,7 +1454,7 @@
     if (text) body.append(text);
     const retryable = row.canRetry !== false && !["verifying", "awaiting_verification"].includes(task?.status);
     body.append(actions([
-      { label: HOLD_VERBS[hold] || "Try again", primary: true, disabled: !retryable, title: "Put it back in the queue; it continues from its saved progress", run: () => act(need, () => api().tasksAction({ taskId: need.id, projectId: projectId(), action: "retry" }), "Back in the queue. It shows under Building now when a worker picks it up.") },
+      { label: HOLD_VERBS[hold] || "Try again", primary: true, disabled: !retryable, title: "Put it back in the queue; it continues from its saved progress", run: () => act(need, () => api().tasksAction({ taskId: need.id, projectId: projectId(), action: "retry" }), "Back in the queue. It shows under Running when a worker picks it up.") },
       markDone(need),
       { label: "Drop it", confirm: "Drop this task?", title: "Close it without finishing; it is not marked done", run: () => act(need, () => api().tasksAction({ taskId: need.id, projectId: projectId(), action: "drop" }), "Dropped. It's closed without being finished.") },
     ]));

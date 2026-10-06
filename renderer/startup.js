@@ -176,7 +176,7 @@
   }
   const agentsOn = () => Boolean(state.selectedId) && (state.agents ?? startsAgents());
   function why() {
-    if (!state.selectedId) return "You can add a folder later from the M+ menu.";
+    if (!state.selectedId) return "You can open a folder any time from the M+ project button, top left.";
     if (!agentsOn()) return "Agents stay off until you start them.";
     if (state.agents === null && state.launch?.choice !== "start") return "Agents were running here when you left, so they start again.";
     return "Agents start when the studio opens. Change this in Settings › General.";
@@ -276,7 +276,7 @@
     const empty = !state.projects.length;
     state.rows = new Map();
     list.replaceChildren();
-    if (empty) list.append(node("p", "boot-projects-empty", "No project is open yet. Open a folder and Studio will start there, or continue without one."));
+    if (empty) list.append(node("p", "boot-projects-empty", "New here? Start a new app and Studio makes the folder for you. Already have a project folder? Open it."));
     for (const project of state.projects) list.append(row(project));
     const none = node("p", "boot-projects-empty", "No project matches that.");
     none.hidden = true;
@@ -285,13 +285,13 @@
     if ($("choose")) $("choose").dataset.empty = String(empty);
     // Under the title: a line for a list, nothing for the first launch.
     if ($("detail")) $("detail").textContent = empty ? "" : "Pick a project to work on, or add one below.";
-    // First launch: the way in leads and sits beside the quiet continue; a list
-    // has the switch and Open in that place, and the folder verb joins the others.
-    // Moving nodes drops focus, so they move only when the card changes shape.
+    // First launch: a new app leads (the beginner's way in: Studio makes the folder), the folder you already have
+    // sits beside it, and GitHub and the quiet continue follow; a list has the switch and Open in that place, and the
+    // folder verb joins the others. Moving nodes drops focus, so they move only when the card changes shape.
     if (state.shape !== empty) {
       state.shape = empty;
-      if (ui.go) ui.go.replaceChildren(...(empty ? [ui.add, ui.open] : [ui.sw, ui.open]).filter(Boolean));
-      if (ui.verbs) ui.verbs.replaceChildren(...(empty ? [ui.newApp, ui.github] : [ui.add, ui.newApp, ui.github]).filter(Boolean));
+      if (ui.go) ui.go.replaceChildren(...(empty ? [ui.newApp, ui.add] : [ui.sw, ui.open]).filter(Boolean));
+      if (ui.verbs) ui.verbs.replaceChildren(...(empty ? [ui.github, ui.open] : [ui.add, ui.newApp, ui.github]).filter(Boolean));
     }
     applyFilter();
     paintControls();
@@ -313,9 +313,10 @@
   function paintControls() {
     const empty = !state.projects.length, chosen = selected();
     if (ui.sw) { ui.sw.setAttribute("aria-checked", String(agentsOn())); ui.sw.hidden = !state.selectedId; }
-    if (ui.add) { ui.add.className = empty ? "primary boot-add" : "boot-verb"; face(ui.add, "Open a folder…", "folder"); }
+    if (ui.add) { ui.add.className = empty ? "ghost boot-add" : "boot-verb"; face(ui.add, "Open a folder…", "folder"); }
+    if (ui.newApp) { ui.newApp.className = empty ? "primary boot-add" : "boot-verb"; face(ui.newApp, "Start a new app", "plus"); }
     if (!ui.open) return;
-    ui.open.className = state.selectedId ? "primary" : "ghost";
+    ui.open.className = state.selectedId ? "primary" : empty ? "boot-verb" : "ghost";
     // A pick the filter hides (nothing matches) is not opened blind.
     ui.open.disabled = state.busy || missing(chosen) || Boolean(chosen && !matches(chosen));
     if (!state.busy) { ui.open.textContent = state.selectedId ? "Open" : "Continue without a project"; delete ui.open.dataset.busy; }
@@ -353,7 +354,7 @@
   function focusSelected() {
     const entry = state.rows.get(state.selectedId);
     if (entry) { entry.wrap.scrollIntoView?.({ block: "nearest" }); entry.button.focus?.({ preventScroll: true }); return; }
-    (!state.projects.length ? ui.add : ui.open)?.focus?.({ preventScroll: true });
+    (!state.projects.length ? ui.newApp ?? ui.add : ui.open)?.focus?.({ preventScroll: true });
   }
   // A control that locks while the host works drops the keyboard to the page;
   // when the action ends and the screen stays up, focus goes back to where the

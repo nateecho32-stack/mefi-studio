@@ -291,24 +291,26 @@ test("Open a folder adopts the folder the host added and a cancelled picker chan
   assert.equal(bad.note().classList.contains("error"), true);
 });
 
-test("with no project yet the screen leads with Open a folder, offers to continue without one, and never shows the agents switch", async () => {
+test("with no project yet the screen leads with Start a new app, offers the folder you have and continuing without one, and never shows the agents switch", async () => {
   const { api, calls } = bridge({ startupState: async () => ({ ok: true, interactive: true, chosen: false, projects: [], activeId: null }), startupChoose: async (id) => { calls.push(["choose", id]); return { ok: true, projects: [], activeId: null }; } });
   const env = environment(api);
   const choice = env.startup.choose();
   await flush();
   assert.equal(env.rows().length, 0);
-  assert.match(env.get("boot-projects").textContent, /No project is open yet. Open a folder and Studio will start there, or continue without one./);
+  assert.match(env.get("boot-projects").textContent, /New here\? Start a new app and Studio makes the folder for you\. Already have a project folder\? Open it\./);
   assert.equal(env.get("boot-open").textContent, "Continue without a project");
-  assert.equal(env.get("boot-open").className, "ghost", "continuing without a project is the quiet choice");
+  assert.equal(env.get("boot-open").className, "boot-verb", "continuing without a project is the quietest choice");
+  assert.equal(env.get("boot-new-app").textContent, "Start a new app");
+  assert.equal(env.get("boot-new-app").className, "primary boot-add", "a beginner's way in leads: Studio makes the folder");
   assert.equal(env.get("boot-add-project").textContent, "Open a folder…");
-  assert.equal(env.get("boot-add-project").className, "primary boot-add");
+  assert.equal(env.get("boot-add-project").className, "ghost boot-add");
   assert.equal(env.get("boot-start-agents").hidden, true);
-  assert.deepEqual(env.get("boot-go").children, [env.get("boot-add-project"), env.get("boot-open")], "the way in leads and sits beside the quiet continue");
-  assert.deepEqual(env.get("boot-verbs").children, [env.get("boot-new-app"), env.get("boot-from-github")], "the footer keeps the other two ways in");
+  assert.deepEqual(env.get("boot-go").children, [env.get("boot-new-app"), env.get("boot-add-project")], "a new app leads, beside the folder you already have");
+  assert.deepEqual(env.get("boot-verbs").children, [env.get("boot-from-github"), env.get("boot-open")], "the footer keeps GitHub and the quiet continue");
   assert.equal(env.get("boot-choose").dataset.empty, "true");
   assert.equal(env.get("boot-detail").textContent, "", "the title stands alone above the empty note");
-  assert.equal(env.get("boot-add-project").focused, true, "the way in has the focus");
-  assert.match(env.note().textContent, /M\+ menu/);
+  assert.equal(env.get("boot-new-app").focused, true, "the way in has the focus");
+  assert.match(env.note().textContent, /M\+ project button, top left/);
   await env.get("boot-open").click();
   assert.deepEqual(plain(await choice), { projectId: null, startAgents: false, changed: false });
   assert.deepEqual(calls, [["choose", null]]);
@@ -551,9 +553,9 @@ test("removing the last project falls back to the first-launch screen; a refused
   await flush();
   assert.equal(emptied.rows().length, 0);
   assert.equal(emptied.get("boot-open").textContent, "Continue without a project");
-  assert.equal(emptied.get("boot-add-project").className, "primary boot-add");
+  assert.equal(emptied.get("boot-new-app").className, "primary boot-add");
   assert.equal(emptied.get("boot-start-agents").hidden, true);
-  assert.equal(emptied.get("boot-add-project").focused, true, "the way in has the focus again");
+  assert.equal(emptied.get("boot-new-app").focused, true, "the way in has the focus again");
 });
 
 test("the filter appears from the sixth project and narrows the list without losing the pick", async () => {
@@ -861,7 +863,7 @@ test("panels lock with the screen while the host works, and an empty launch offe
   assert.equal(empty.get("boot-go").hidden, true, "the first-launch buttons give way to the panel too");
   await empty.button(empty.panel(), "Cancel").click();
   assert.equal(empty.get("boot-go").hidden, false);
-  assert.equal(empty.get("boot-add-project").className, "primary boot-add");
+  assert.equal(empty.get("boot-new-app").className, "primary boot-add");
 });
 
 // A control that locks under the keyboard drops focus to the page; when the
