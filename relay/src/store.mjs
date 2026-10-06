@@ -10,7 +10,7 @@
 // What is kept, and why, is listed in relay/README.md. Chat text, files, IP
 // addresses and Discord tokens are never written here.
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 // One statement per entry: Cloudflare's exec runs a single statement when it has bindings.
 const V1 = [
@@ -193,11 +193,43 @@ const V4 = [
   `CREATE INDEX IF NOT EXISTS credit_events_pair ON credit_events (actor_id, target_id, at)`,
 ];
 
+// v5: community events the relay runs by itself (events.mjs) and the daily
+// community budget (economy.mjs). An event is a weekly Build Jam or a co-work
+// hour; entries name a shared project, votes name an entrant, attendance is a
+// count of the moments a member was seen in a co-work hour's room, and
+// together_ticks counts the same for members' own co-work rooms, one row per
+// member and day (kept a week). econ_days fixes each day's active count.
+const V5 = [
+  `CREATE TABLE IF NOT EXISTS events (
+     id TEXT PRIMARY KEY,
+     kind TEXT NOT NULL,
+     title TEXT NOT NULL,
+     theme TEXT,
+     room_id TEXT,
+     starts_at INTEGER NOT NULL,
+     entries_until INTEGER,
+     ends_at INTEGER NOT NULL,
+     checks_done INTEGER NOT NULL DEFAULT 0,
+     status TEXT NOT NULL DEFAULT 'open',
+     pool INTEGER,
+     results TEXT,
+     closed_at INTEGER
+   ) STRICT`,
+  `CREATE INDEX IF NOT EXISTS events_open ON events (kind, status, ends_at)`,
+  `CREATE TABLE IF NOT EXISTS event_entries (event_id TEXT NOT NULL, user_id TEXT NOT NULL, project_id TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (event_id, user_id)) STRICT, WITHOUT ROWID`,
+  `CREATE TABLE IF NOT EXISTS event_votes (event_id TEXT NOT NULL, voter_id TEXT NOT NULL, entrant_id TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (event_id, voter_id, entrant_id)) STRICT, WITHOUT ROWID`,
+  `CREATE TABLE IF NOT EXISTS event_attendance (event_id TEXT NOT NULL, user_id TEXT NOT NULL, checks INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (event_id, user_id)) STRICT, WITHOUT ROWID`,
+  `CREATE TABLE IF NOT EXISTS together_ticks (day INTEGER NOT NULL, user_id TEXT NOT NULL, ticks INTEGER NOT NULL DEFAULT 0, partner_id TEXT, last_at INTEGER NOT NULL, PRIMARY KEY (day, user_id)) STRICT, WITHOUT ROWID`,
+  `CREATE TABLE IF NOT EXISTS econ_days (day INTEGER PRIMARY KEY, active INTEGER NOT NULL) STRICT`,
+  `CREATE INDEX IF NOT EXISTS credit_events_day_kind ON credit_events (day, kind)`,
+];
+
 export const MIGRATIONS = Object.freeze([
   { version: 1, statements: V1 },
   { version: 2, statements: V2 },
   { version: 3, statements: V3 },
   { version: 4, statements: V4 },
+  { version: 5, statements: V5 },
 ]);
 
 const bindValue = (value) => (value === undefined ? null : value === true ? 1 : value === false ? 0 : value);

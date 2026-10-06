@@ -48,6 +48,7 @@ function load({ delayed = false } = {}) {
     MefiPcSync: { card: () => card("pcs", "pc-sync-title"), subscribe() {}, badge: () => 0 },
     MefiCompanionFriends: { card: () => card("playground", "friends-title") },
     MefiProjectHub: { card: () => card("hub", "project-hub-title") },
+    MefiFriendsEvents: { card: () => card("events", "friends-events-title") },
     MefiFriendsFront: { card: () => card("lobby", "friends-front-title") },
   };
   const context = vm.createContext({
@@ -73,7 +74,7 @@ function load({ delayed = false } = {}) {
 // Friends is a page of its own (renderer/companion-hub.js openPlace): the
 // companion's Friends bubble and its targets open that page at a place, one
 // card at a time; the frame's list column lists the places.
-for (const [target, title, kind] of [["lobby", "The Lobby", "lobby"], ["rooms", "Rooms", "rooms"], ["pcs", "Your PCs", "pcs"], ["playground", "Playground", "playground"], ["hub", "Project hub", "hub"]]) {
+for (const [target, title, kind] of [["lobby", "The Lobby", "lobby"], ["rooms", "Rooms", "rooms"], ["pcs", "Your PCs", "pcs"], ["playground", "Playground", "playground"], ["hub", "Project hub", "hub"], ["events", "Events", "events"]]) {
   test(`Friends ${target} opens the Friends page at that place, not the bubbles`, () => {
     const loaded = load();
     assert.equal(loaded.hub.open({ section: "friends", target }), true);
@@ -86,7 +87,7 @@ for (const [target, title, kind] of [["lobby", "The Lobby", "lobby"], ["rooms", 
     assert.deepEqual(loaded.made, [kind], "only the place's own card is built");
     assert.equal(loaded.document.querySelector("#friends-place-tabs"), null, "the list column lists the places: no tabs of the page's own");
     const places = [...loaded.hub.friendsPlaces()];
-    assert.deepEqual(places.map((place) => place.label), ["The Lobby", "Rooms", "Your PCs", "Playground", "Project hub"], "Moderation shows only to moderators");
+    assert.deepEqual(places.map((place) => place.label), ["The Lobby", "Rooms", "Your PCs", "Playground", "Project hub", "Events"], "Moderation shows only to moderators");
     assert.deepEqual(places.filter((place) => place.current).map((place) => place.id), [target]);
   });
 }

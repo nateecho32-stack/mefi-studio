@@ -2576,6 +2576,19 @@ function hubProjects(method, args) {
     return { ok: true, minMs: play.minMs };
   });
 }
+// Friends › Events (renderer/friends-events.js): the community events the
+// relay runs by itself (relay/src/events.mjs): the weekly Build Jam, the
+// co-work hours and building together. Same gate as the project hub: a
+// listed method and plain arguments. Nothing here holds a room open: the
+// relay counts a co-work hour's members while their Studio is connected,
+// and Rooms opens the room when someone wants its chat.
+const HUB_EVENT_METHODS = Object.freeze({ events: 0, enterEvent: 2, leaveEvent: 1, voteEvent: 3, joinEvent: 1, removeEntry: 2 });
+function hubEvents(method, args) {
+  const arity = Object.hasOwn(HUB_EVENT_METHODS, method) ? HUB_EVENT_METHODS[method] : -1;
+  if (arity < 0 || !Array.isArray(args) || args.length > arity) return Promise.resolve({ ok: false, error: "bad-request" });
+  const plain = args.map((value) => (value == null || ["string", "number", "boolean"].includes(typeof value) ? value : null));
+  return hubCall((client) => client[method](...plain));
+}
 // Online while Studio is open: a member signed in on this PC (a Discord link)
 // connects a few seconds after launch, so friends see them in Who's online
 // and on The Lobby front page without anyone opening Friends; the relay
@@ -25765,6 +25778,7 @@ function registerIpc() {
   ipcMain.handle("hub:room", async (_event, payload) => hubRoom(String(payload?.method ?? ""), Array.isArray(payload?.args) ? payload.args : []));
   // Friends › Project hub: one channel, HUB_PROJECT_METHODS decides what it may call.
   ipcMain.handle("hub:projects", async (_event, payload) => hubProjects(String(payload?.method ?? ""), Array.isArray(payload?.args) ? payload.args : []));
+  ipcMain.handle("hub:events", async (_event, payload) => hubEvents(String(payload?.method ?? ""), Array.isArray(payload?.args) ? payload.args : []));
   // Companion friends (the "Companion friends" block): what friends' companions
   // may see, the friends out now, and playdates.
   ipcMain.handle("hub:friends", async (_event, payload) => friendsView(payload ?? {}));

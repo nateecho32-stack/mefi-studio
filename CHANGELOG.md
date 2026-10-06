@@ -12,6 +12,22 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   test windows) is stopped together with everything it started, and the run
   says which suites were still going. One stuck test window had held every
   session's window tests for nine hours.
+- **Friends › Events: the community runs its own events.** Every week a
+  **Build Jam** opens on Monday with a theme (and shows next week's): enter
+  one of your shared projects until Saturday, play the others and vote for up
+  to three until Monday, when the results are paid (Studio shows these times
+  in your own time zone). A vote counts only for an entry you played for two
+  minutes, and votes stay hidden until the results; a place needs three votes,
+  and whoever wins one sits out the next two jams' places.
+  Three times a day (02:00, 10:00 and 18:00 UTC) a **co-work hour** opens a
+  room: join it, keep Studio open and work on anything, and everyone who
+  stays with others earns 4 credits. **Building together** in your own
+  co-work room with a friend earns you both 4 credits a day. Credits still come
+  from making and playing things together, never from inviting people
+  (Discord's rules forbid invite rewards): to bring a friend, send them your
+  room's join code. The prizes and co-work rewards share a daily community
+  pot that grows with the number of people active that week, so the credits
+  keep their worth as the community grows; plays and stars pay as before.
 - **Friends says what helps.** When the connection to the room service can't
   be made, Friends now says why in one sentence and offers only what helps:
   Sign in with Discord again when the sign-in ran out, Update Studio when it
@@ -26,6 +42,12 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   the companion's bubble labels are 12 px, Play and Star buttons name their
   project for screen readers, the tab switches move with the arrow keys, and
   Search finds The Lobby, the Project hub and moderation.
+- **Ready-to-run beta builds of main.** Every green push to `main` now also
+  packages the portable build and keeps it on GitHub for 14 days, so a new PC
+  can download Studio and run it without Node, Git or any commands, and
+  Settings › System › Updates › Development / beta keeps that copy on the
+  newest build. Every check run also packages the build, so a change that
+  breaks packaging fails before it reaches `main`. No release or tag is made.
 - **Vibe is now Social, Build is now Studio.** The two modes have new names
   for what they are for: **Social** is vibing with friends and keeping a
   light eye on your agents, **Studio** is in-depth building, with the social

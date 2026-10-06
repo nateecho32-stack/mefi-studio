@@ -1,7 +1,11 @@
 # The pull-request gate. Every push and PR runs the full chain on Windows:
 # install, rebuild the committed renderer bundle and diff it, spec-naming
 # audit (CONTRIBUTING.md "Test file conventions"), `npm run check`,
-# `npm test` (node + python contracts) and `npm run audit`.
+# `npm test` (node + python contracts) and `npm run audit`. After that every
+# run packages the portable build, so a broken packager shows up on the branch
+# that broke it, and a push to main keeps that build as the Development / beta
+# artifact Studio's update channel installs (docs/update-channels.md). No
+# release and no tag are made here; release.yml does that from a v* tag.
 name: Studio checks
 
 on:
@@ -38,3 +42,20 @@ jobs:
         run: npm test
       - name: Application audit
         run: npm run audit
+      # npm ci can leave node_modules/electron without its dist/; this is a
+      # no-op when the postinstall already placed the binary (as in release.yml).
+      - name: Fetch the Electron binary
+        run: node node_modules/electron/install.js
+      - name: Package the portable build (X.Y.Z-dev.RUN.ATTEMPT)
+        run: node scripts/package-development.mjs
+      - name: Keep the Development / beta build (main only, 14 days)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mefi-studio-development-win32-x64
+          path: |
+            dist/releases/*-win32-x64.zip
+            dist/releases/*-win32-x64.zip.sha256
+            dist/releases/development-build.json
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,32 @@
+/* Friends › Events (renderer/friends-events.js): the weekly Build Jam, the
+   co-work hour and building together. Colours are the theme's tokens; no
+   text under 12px. */
+.friends-events { display: grid; gap: 14px; min-width: 0; color: var(--ivory); }
+.friends-events-status { margin: 0; color: var(--muted); font-size: 13px; }
+.friends-events-status:empty { display: none; }
+.friends-events-body { display: grid; gap: 18px; min-width: 0; }
+.friends-events-section { display: grid; gap: 8px; min-width: 0; padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--r-lg); background: color-mix(in srgb, var(--ivory) 2%, transparent); }
+.friends-events-heading { margin: 0; font-size: 14px; font-weight: 650; color: var(--ivory); }
+.friends-events-lead { margin: 0; font-size: 13.5px; }
+.friends-events-pot, .friends-events-fine, .friends-events-budget { margin: 0; font-size: 12.5px; }
+/* Why this member's votes do not count yet, and when they will. */
+.friends-events-hold { margin: 0; padding: 6px 10px; border-left: 2px solid var(--gold); color: var(--ivory); font-size: 12.5px; }
+.friends-events-section p { margin: 0; }
+/* A button on its own line keeps its own width: the section is a grid, which would stretch it across the card. */
+.friends-events-section > :is(.friends-events-button, .friends-events-primary) { justify-self: start; padding: 0 14px; }
+.friends-events-enter-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.friends-events-pick { min-height: 32px; max-width: 100%; padding: 0 8px; border: 1px solid var(--line-strong); border-radius: var(--r-lg); background: var(--panel); color: var(--ivory); font: inherit; font-size: 13px; }
+.friends-events-entries { display: grid; gap: 6px; min-width: 0; }
+.friends-events-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; min-width: 0; padding: 6px 0; border-top: 1px solid var(--line); }
+.friends-events-row:first-child { border-top: 0; }
+.friends-events-words { display: grid; gap: 2px; min-width: 0; }
+.friends-events-words strong { font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.friends-events-meta { font-size: 12px; overflow-wrap: anywhere; }
+.friends-events-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.friends-events-button { min-height: 30px; font-size: 12.5px; }
+.friends-events-primary { min-height: 30px; padding: 0 14px; border: 0; border-radius: var(--r-lg); background: var(--gold); color: var(--bg); font-weight: 600; font-size: 12.5px; cursor: pointer; }
+.friends-events-primary:hover { filter: brightness(1.08); }
+.friends-events-button:disabled, .friends-events-primary:disabled { opacity: 0.55; cursor: default; }
+.friends-events-primary:focus-visible, .friends-events-pick:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+/* On the Friends page the page title says "Events": the card's own small title steps aside, as the other places' do. */
+#friends-overlay .friends-place-body .friends-events-title { display: none; }

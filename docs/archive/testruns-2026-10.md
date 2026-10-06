@@ -6,6 +6,28 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-05 Today in both modes and the snapshot time limits land on main
+
+Branch `land/ui-today` in `C:\wt\land-ui`: origin/main 3daf9d8 with
+rust/snapshot-timeouts 1a1c1f4 (attempt snapshots take a `timeoutScale` for
+every git time limit, in JavaScript and in Rust; the snapshot parity test uses
+6 on both sides) and ui/today merged (3780663), then 577bf4e: the today_render
+and sessions_render fixtures expect a run that waits on you under Needs you
+only. Both fixtures failed alone on 3780663 (they pinned the old picture) and
+pass alone on 577bf4e (72 s and 117 s).
+
+Full `npm test` on 577bf4e (quiet machine apart from a cleanup session doing
+git work): Node 6970 tests, 6953 pass, 14 skipped, 3 fail, all pass alone:
+advisory_checks (26/26; EPERM removing its temp folder), attempt_review_host
+(28/28; "a claim cancelled before its worker started", known under load) and
+update_continuity (9/9; read a helper mid-write under load). Electron lane 76:
+72 pass, 1 skipped, 3 fail: layout_contract_render and shell_render (as on
+clean main on this PC) and sessions_render ("the keyboard starts on the open
+project", passes alone again, 122 s). rust_parity_snapshots ran inside the
+gate and passed (3/3; the twin-repository test took 127 s under load, the
+case the time-limit scale is for). Python 248 OK; path lock ok; `npm run audit` 0 findings; `npm run check`
+ok.
+
 ## 2026-10-04 Today in both modes closer to the 0.5 prototype: Build's Home and Vibe's board
 
 Branch `ui/today` in `C:\wt\ui-today` (off land/ui-chrome 74bf360,

@@ -335,8 +335,77 @@ function frontPage(data) {
       projects: count(you.projects, 1000) ?? 0,
       hold: object(you.hold) && CREDIT_HOLDS.includes(you.hold.reason) ? { reason: you.hold.reason, until: Number.isFinite(you.hold.until) ? you.hold.until : null } : null,
     },
+    events: eventsFront(data?.events),
   };
 }
+// Community events (relay feature "events", relay/src/events.mjs): the
+// weekly Build Jam, the co-work hour and building together, every part
+// checked like the rest of what the relay sends.
+const JAM_PHASES = Object.freeze(["entries", "voting", "results"]);
+const timeOf = (value) => (Number.isFinite(value) ? value : null);
+// An id must be a string of the pattern: String(undefined) is "undefined", which the pattern alone lets through.
+const opaque = (value) => (typeof value === "string" && OPAQUE_ID.test(value) ? value : null);
+const snowflake = (value) => (typeof value === "string" && SNOWFLAKE.test(value) ? value : null);
+function eventProject(value) {
+  if (!object(value) || !opaque(value.id)) return null;
+  return { id: value.id, title: line(value.title, 100) ?? "project", url: listenUrl(value.url), host: line(value.host, 253) ?? "", kind: PROJECT_KINDS.includes(value.kind) ? value.kind : "other" };
+}
+function jamPayout(value) {
+  if (!object(value) || !snowflake(value.userId)) return null;
+  return {
+    userId: String(value.userId), name: text(value.name, 100) || "member", place: count(value.place, 3), why: value.why === "place" ? "place" : "showcase",
+    amount: count(value.amount, 1e6) ?? 0, paid: count(value.paid, 1e6), projectId: opaque(value.projectId),
+  };
+}
+function jamOf(value) {
+  if (!object(value) || !opaque(value.id)) return null;
+  const entry = (item) => {
+    const who = user(item?.user);
+    return who ? { user: who, project: eventProject(item.project), players: count(item.players, 1e6) ?? 0, votes: item.votes == null ? null : count(item.votes, 1e6), mine: item.mine === true, voted: item.voted === true, played: item.played === true } : null;
+  };
+  return {
+    id: value.id, theme: line(value.theme, 60) ?? "", nextTheme: line(value.nextTheme, 60) ?? "",
+    phase: JAM_PHASES.includes(value.phase) ? value.phase : "entries",
+    startsAt: timeOf(value.startsAt), entriesUntil: timeOf(value.entriesUntil), endsAt: timeOf(value.endsAt), pool: count(value.pool, 1e6) ?? 0,
+    entries: Array.isArray(value.entries) ? value.entries.map(entry).filter(Boolean).slice(0, 100) : [],
+    you: { entered: opaque(value.you?.entered), votesLeft: count(value.you?.votesLeft, 10) ?? 0 },
+    results: Array.isArray(value.results) ? value.results.map(jamPayout).filter(Boolean).slice(0, 100) : null,
+  };
+}
+function coworkOf(value) {
+  if (!object(value) || !opaque(value.id)) return null;
+  return {
+    id: value.id, roomId: opaque(value.roomId), startsAt: timeOf(value.startsAt), endsAt: timeOf(value.endsAt),
+    started: value.started === true, joined: value.joined === true, here: count(value.here, 1e4) ?? 0,
+    checks: count(value.checks, 10) ?? 0, checksDone: count(value.checksDone, 10) ?? 0, checksNeeded: count(value.checksNeeded, 10) ?? 2,
+    attendees: count(value.attendees, 1e4) ?? 0, amount: count(value.amount, 1e4) ?? 0,
+  };
+}
+// GET /v1/events.
+function eventsPage(data) {
+  const last = object(data?.lastJam) && opaque(data.lastJam.id) ? {
+    id: data.lastJam.id, theme: line(data.lastJam.theme, 60) ?? "", endsAt: timeOf(data.lastJam.endsAt), pool: count(data.lastJam.pool, 1e6) ?? 0,
+    results: Array.isArray(data.lastJam.results) ? data.lastJam.results.map(jamPayout).filter(Boolean).slice(0, 100) : [],
+  } : null;
+  const budget = object(data?.budget) ? data.budget : {};
+  const together = object(data?.together) ? data.together : {};
+  return {
+    ok: true, now: timeOf(data?.now), jam: jamOf(data?.jam), lastJam: last, cowork: coworkOf(data?.cowork), nextCowork: timeOf(data?.nextCowork),
+    together: { ticks: count(together.ticks, 100) ?? 0, needed: count(together.needed, 100) ?? 3, amount: count(together.amount, 1e4) ?? 0, everyMs: count(together.everyMs, 864e5) ?? 600000 },
+    budget: { budget: count(budget.budget, 1e7) ?? 0, paid: count(budget.paid, 1e7) ?? 0, left: count(budget.left, 1e7) ?? 0, active: count(budget.active, 1e7) ?? 0 },
+  };
+}
+// The events line on the Lobby front page (GET /v1/front's `events`).
+function eventsFront(value) {
+  if (!object(value)) return null;
+  const jam = object(value.jam) && opaque(value.jam.id) ? {
+    id: value.jam.id, theme: line(value.jam.theme, 60) ?? "", phase: JAM_PHASES.includes(value.jam.phase) ? value.jam.phase : "entries",
+    entriesUntil: timeOf(value.jam.entriesUntil), endsAt: timeOf(value.jam.endsAt), entries: count(value.jam.entries, 1e6) ?? 0, entered: value.jam.entered === true,
+  } : null;
+  const cowork = object(value.cowork) ? { id: opaque(value.cowork.id), startsAt: timeOf(value.cowork.startsAt), endsAt: timeOf(value.cowork.endsAt), here: count(value.cowork.here, 1e4) ?? 0 } : null;
+  return { jam, cowork };
+}
+
 // A room's join code ("7K3Q-M2XR") and its link, or a failure.
 function codeOf(data) {
   const code = typeof data?.code === "string" && /^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(data.code) ? data.code : null;
@@ -399,6 +468,7 @@ function createHubClient(options = {}) {
       remote: features.includes("remote"), remoteOn: Boolean(remote?.on) && features.includes("remote"), remotePcs: remoteList,
       history: features.includes("history.peer"),
       credits: features.includes("credits"), projects: features.includes("projects"),
+      events: features.includes("events"),
       lobby: features.includes("lobby"), joinCodes: features.includes("join.codes"), online: features.includes("online"), front: features.includes("front"), building: features.includes("building"),
     };
   }
@@ -967,6 +1037,43 @@ function createHubClient(options = {}) {
       const answer = await authed("GET", "/v1/front");
       return answer.ok ? frontPage(answer.data) : refused(answer);
     },
+    // ---- Community events (feature "events"): the weekly Build Jam, co-work hours, building together ---
+    async events() {
+      if (!features.includes("events")) return { ok: false, error: "unsupported" };
+      const answer = await authed("GET", "/v1/events");
+      return answer.ok ? eventsPage(answer.data) : refused(answer);
+    },
+    // One of your own shared projects into this week's jam (until Saturday); a different one replaces it.
+    async enterEvent(eventId, projectId) {
+      if (!features.includes("events") || !id(eventId) || !id(projectId)) return { ok: false, error: "bad-request" };
+      const answer = await authed("POST", `/v1/events/${eventId}/entry`, { projectId });
+      return answer.ok ? { ok: true, jam: jamOf(answer.data.jam) } : refused(answer);
+    },
+    async leaveEvent(eventId) {
+      if (!features.includes("events") || !id(eventId)) return { ok: false, error: "bad-request" };
+      const answer = await authed("DELETE", `/v1/events/${eventId}/entry`);
+      return answer.ok ? { ok: true, jam: jamOf(answer.data.jam) } : refused(answer);
+    },
+    // A vote for an entrant (by member id), or taking it back; only for an entry you played during the jam.
+    async voteEvent(eventId, userId, on = true) {
+      if (!features.includes("events") || !id(eventId) || !SNOWFLAKE.test(String(userId ?? ""))) return { ok: false, error: "bad-request" };
+      const answer = on === false ? await authed("DELETE", `/v1/events/${eventId}/votes/${userId}`) : await authed("POST", `/v1/events/${eventId}/votes`, { userId: String(userId) });
+      if (answer.ok) return { ok: true, jam: jamOf(answer.data.jam) };
+      // Why this member's votes do not count yet (credits.mjs standing()), so Studio can say when they will.
+      return { ...refused(answer), ...(CREDIT_HOLDS.includes(answer.data?.hold) ? { hold: answer.data.hold } : {}) };
+    },
+    // A moderator takes an entry out of a jam that is still running.
+    removeEntry(eventId, userId) {
+      if (!features.includes("events") || !id(eventId) || !SNOWFLAKE.test(String(userId ?? ""))) return bad();
+      return simple("DELETE", `/v1/events/${eventId}/entries/${userId}`);
+    },
+    // A co-work hour's room, joined straight away. The caller keeps it open (subscribe) while attending.
+    async joinEvent(eventId) {
+      if (!features.includes("events") || !id(eventId)) return { ok: false, error: "bad-request" };
+      const answer = await authed("POST", `/v1/events/${eventId}/join`);
+      if (!answer.ok) return refused(answer);
+      return opaque(answer.data.roomId) ? { ok: true, roomId: answer.data.roomId, cowork: coworkOf(answer.data.cowork) } : { ok: false, error: "failed" };
+    },
     // ---- Credits, ranks and the project hub (features "credits", "projects") ---
     async me() {
       if (!features.includes("credits")) return { ok: false, error: "unsupported" };
@@ -1183,4 +1290,5 @@ module.exports = {
   hubAddress, configuredUrl, listenSession, nowPlayingTrack, roomSummary, roomMessage, joinRequest, roomInvite, postText, createHubClient,
   remoteText, remoteButtons, remoteCommand, remotePcs,
   KEEPALIVE_FRAME, KEEPALIVE_EVERY_MS, CLIENT_FEATURES, wireMessage, projectCard, PROJECT_KINDS,
+  eventsPage, eventsFront,
 };

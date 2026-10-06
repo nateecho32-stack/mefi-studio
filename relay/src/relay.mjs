@@ -22,6 +22,8 @@
 
 import { createChat, idTime } from './chat.mjs';
 import { FRONT, RANKS, createCredits, rankFor } from './credits.mjs';
+import { createEconomy } from './economy.mjs';
+import { createEvents } from './events.mjs';
 import { createLeases } from './leases.mjs';
 import { createListen } from './listen.mjs';
 import { createOembed, publicLink } from './media.mjs';
@@ -143,6 +145,8 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
   let leases = null;
   let listen = null;
   let credits = null;
+  let economy = null;
+  let events = null;
   let alarmAt = undefined; // unknown after a wake
   const oembed = createOembed({ fetch: fetchImpl, now });
 
@@ -178,8 +182,12 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     chat = createChat({ key: keys.message, now });
     leases = createLeases({ store, clock: { now }, isRoomMember: (roomId, uid) => isMember(roomId, uid) });
     listen = createListen({ store, now, oembed, publish: (roomId, session) => publishRoom(roomId, 'listen', { roomId, session, sentAt: now() }), roomFor });
-    credits = createCredits({ store, now, key: keys.play, sendToUser, member: (uid) => sessions.member(uid) });
+    economy = createEconomy({ store, now });
+    credits = createCredits({ store, now, key: keys.play, sendToUser, member: (uid) => sessions.member(uid), economy });
     credits.routes(route);
+    // Community events the relay runs by itself (events.mjs): the weekly Build Jam, co-work hours, building together.
+    events = createEvents({ store, now, credits, economy, paused, rooms: { present: presentIn, online: onlineIn, open: openEventRoom, join: joinDirect, close: (roomId) => setStatus({ uid: null, isMod: true }, roomId, 'closed'), member: isMember } });
+    events.routes(route);
     const at = now();
     store.run(
       `INSERT INTO rooms (id, kind, name, owner_id, policy, listed, max_members, status, member_count, created_at, updated_at)
@@ -208,7 +216,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
   const onlineHidden = (uid) => store.get('SELECT online_hidden FROM members WHERE user_id = ?', uid)?.online_hidden === 1;
 
   const paused = () => config.paused || store.meta('paused') === 'true';
-  const features = () => [FEATURES.companion, FEATURES.companionDirect, FEATURES.historyPeer, FEATURES.keepalive, FEATURES.messagesSigned, FEATURES.lobby, FEATURES.joinCodes, FEATURES.online, FEATURES.credits, FEATURES.projects, FEATURES.front, FEATURES.friendOnline, FEATURES.building];
+  const features = () => [FEATURES.companion, FEATURES.companionDirect, FEATURES.historyPeer, FEATURES.keepalive, FEATURES.messagesSigned, FEATURES.lobby, FEATURES.joinCodes, FEATURES.online, FEATURES.credits, FEATURES.projects, FEATURES.front, FEATURES.friendOnline, FEATURES.building, FEATURES.events];
 
   // ---- rooms in the store --------------------------------------------------------
 
@@ -308,6 +316,53 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     for (const { ws, a } of readySockets()) if (a.uid === uid) sockets.send(ws, text);
   }
 
+  /** Members with the room open in Studio right now (a ready socket subscribed to it). */
+  function presentIn(roomId) {
+    const members = memberIds(roomId);
+    return [...new Set(readySockets().filter(({ a }) => a.rooms?.includes(roomId) && members.has(a.uid)).map(({ a }) => a.uid))];
+  }
+
+  /** Members of the room with Studio connected right now, on any page. */
+  function onlineIn(roomId) {
+    const members = memberIds(roomId);
+    return [...new Set(readySockets().filter(({ a }) => members.has(a.uid)).map(({ a }) => a.uid))];
+  }
+
+  /**
+   * A co-work room the relay itself opens for an event (events.mjs). Nobody owns it and it is not in the
+   * room list (a request to join would go to nobody): Friends › Events joins it straight away.
+   */
+  function openEventRoom({ name, maxMembers }) {
+    const id = newId('room');
+    const at = now();
+    store.run(
+      `INSERT INTO rooms (id, kind, name, owner_id, policy, listed, max_members, status, member_count, created_at, updated_at) VALUES (?, 'cowork', ?, NULL, 'request', 0, ?, 'active', 0, ?, ?)`,
+      id, cleanLine(name, LIMITS.roomNameChars), maxMembers, at, at,
+    );
+    return id;
+  }
+
+  /** Joining an event's room straight away, by the join code's rules. -> { ok } | { ok: false, status, error, reason } */
+  function joinDirect(roomId, uid) {
+    const at = now();
+    const result = store.transaction(() => {
+      const room = roomRow(roomId);
+      if (!room || room.status === 'closed') return { ok: false, status: 404, error: 'not-found' };
+      if (isMember(room.id, uid)) return { ok: true, unchanged: true };
+      if (room.status === 'locked') return { ok: false, status: 409, error: 'conflict', reason: 'locked' };
+      if (store.get('SELECT 1 AS yes FROM removals WHERE room_id = ? AND user_id = ? AND at > ?', room.id, uid, at - ROOM_LIMITS.removedCooldownMs)) return { ok: false, status: 403, error: 'forbidden', reason: 'removed' };
+      if (room.member_count >= room.max_members) return { ok: false, status: 409, error: 'limit', reason: 'room-full' };
+      store.run('INSERT INTO room_members (room_id, user_id, role, joined_at) VALUES (?, ?, ?, ?)', room.id, uid, 'member', at);
+      store.run('UPDATE rooms SET member_count = member_count + 1, updated_at = ? WHERE id = ?', at, room.id);
+      return { ok: true };
+    });
+    if (result.ok && !result.unchanged) {
+      publishRoom(roomId, 'membership', { roomId, userId: uid, state: 'joined' });
+      sendToUser(uid, 'membership', { roomId, userId: uid, state: 'joined' });
+    }
+    return result;
+  }
+
   function publishPresence(roomId) {
     const members = memberIds(roomId);
     let inStudio = [...new Set(readySockets().filter(({ a }) => a.rooms?.includes(roomId) && members.has(a.uid)).map(({ a }) => a.uid))];
@@ -357,6 +412,8 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     if (sockets.list().length > 0) candidates.push(at + RETENTION.sweepEveryMs);
     const lastUpkeep = Number(store.meta('upkeep_at') ?? 0);
     candidates.push(Math.max(at + MINUTE_MS, lastUpkeep + RETENTION.maintenanceEveryMs));
+    const eventsDue = events?.nextDue();
+    if (Number.isFinite(eventsDue)) candidates.push(eventsDue);
     return Math.max(at + SECOND_MS, Math.min(...candidates));
   }
 
@@ -388,6 +445,8 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
       store.run(`DELETE FROM members WHERE last_seen < ? AND user_id NOT IN (SELECT user_id FROM room_members)`, at - RETENTION.idleMemberMs);
       store.run(`DELETE FROM room_codes WHERE room_id NOT IN (SELECT id FROM rooms WHERE status <> 'closed')`);
       credits.upkeep();
+      events.upkeep();
+      economy.upkeep();
       store.setMeta('upkeep_at', at);
     });
   }
@@ -410,6 +469,14 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     listen.sweep();
     for (const [id, ask] of pendingHistory) if (ask.expiresAt <= at) pendingHistory.delete(id);
     if (at - Number(store.meta('upkeep_at') ?? 0) >= RETENTION.maintenanceEveryMs) upkeep();
+    // The community events never stop the rest of the alarm: a fault there waits for the next one.
+    if (!paused()) {
+      try {
+        await events.tick();
+      } catch {
+        // logged nowhere on purpose (the relay keeps no logs); the next alarm tries again
+      }
+    }
     for (const bucket of [userCalls, mints, searches, reportsBucket, claimWrites, connects, frames, postsShort, postsLong, companions, historyAsks]) bucket.sweep();
     await schedule();
   }
@@ -1221,6 +1288,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
       ownRoom: own ? { id: own.id, name: own.name } : null,
       visible: !onlineHidden(actor.uid),
       ...credits.front(actor.uid, held),
+      events: events.front(actor.uid),
     });
   });
 
@@ -1331,6 +1399,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
       store.run('DELETE FROM token_cache WHERE user_id = ?', actor.uid);
       out.projects = count('SELECT COUNT(*) AS n FROM projects WHERE owner_id = ?', actor.uid);
       credits.forget(actor.uid, fingerprint);
+      events.forget(actor.uid);
       store.run('DELETE FROM members WHERE user_id = ?', actor.uid);
       return out;
     });

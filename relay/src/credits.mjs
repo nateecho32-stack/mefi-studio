@@ -25,7 +25,10 @@
 // an overall 60 a day. A play token pays only for the day it started. Plays
 // and stars that count toward "Top" come from members in good standing only.
 // Moderators can read where a member's credits came from and take back the
-// ones that came from farming. There are no invite or referral rewards
+// ones that came from farming. Community events (events.mjs) add three
+// kinds paid only through award(): building together, co-work hours and the
+// weekly Build Jam's prizes, the first two under the day's community budget
+// (economy.mjs). There are no invite or referral rewards
 // (Discord's platform rules), no reaction rewards and no public leaderboard:
 // a balance is private, a rank badge is public, and ranks are worked out
 // here from lifetime credits, never sent by a Studio.
@@ -50,6 +53,12 @@ export const EARN = Object.freeze({
   played: Object.freeze({ amount: 5, perDay: 30 }), // the maker, when a member plays one of their projects for 2 minutes: once per (player, maker, day)
   play: Object.freeze({ amount: 2, perDay: 10 }), // the player, for playing someone else's project: once per (maker, day)
   starred: Object.freeze({ amount: 3, perDay: 15 }), // the maker, for a star: once per (member, maker, week)
+  // Community rewards (events.mjs), paid only through award(): building together in a co-work room once a day, a
+  // co-work hour attended with others (twice a day at most), both from the day's community budget (economy.mjs);
+  // and the weekly Build Jam's prizes from its pool, which are paid once per jam and sit outside the daily caps.
+  together: Object.freeze({ amount: 4, perDay: 4, award: true }),
+  cowork: Object.freeze({ amount: 4, perDay: 8, award: true }),
+  jam: Object.freeze({ amount: 0, max: 450, perDay: 1000, award: true, prize: true }),
   dayCap: 60,
 });
 
@@ -131,7 +140,7 @@ export function projectLink(url) {
  *   key: an HMAC key for play tokens; sendToUser(uid, type, fields); member(uid) -> describeMember()
  * -> { routes(route), forget(uid, fingerprint), fingerprint(uid), upkeep(), me(uid), card(uid), account(uid), front(uid), standing(uid, heldUntil) }
  */
-export function createCredits({ store, now, key, sendToUser, member }) {
+export function createCredits({ store, now, key, sendToUser, member, economy = null }) {
   const accountRow = (uid) => store.get('SELECT * FROM accounts WHERE user_id = ?', uid);
   const playStarts = keyedBuckets({ capacity: GUARD.playStartsPerHour, refillPerSec: GUARD.playStartsPerHour / 3600, now });
   const starTaps = keyedBuckets({ capacity: GUARD.starsPerHour, refillPerSec: GUARD.starsPerHour / 3600, now });
@@ -170,9 +179,15 @@ export function createCredits({ store, now, key, sendToUser, member }) {
     return { balance: row?.balance ?? 0, lifetime: row?.lifetime ?? 0, today: earnedToday, todayCap: EARN.dayCap, streak: streakLive, best: row?.best_streak ?? 0 };
   }
 
-  /** Pay credits inside the caller's transaction: once per (actor, target, kind, uniq), under the kind's and the day's caps. -> the amount paid. */
-  function pay({ actor, target, kind, uniq, ref = null }) {
+  /**
+   * Pay credits inside the caller's transaction: once per (actor, target, kind, uniq), under the kind's and the
+   * day's caps and the pair limit. `amount` asks for a different amount than the kind's own (a jam prize), never
+   * more than its max. A prize kind is outside the daily and pair caps, and the community kinds are capped by
+   * what is left of the day's budget (economy.mjs). -> the amount paid.
+   */
+  function pay({ actor, target, kind, uniq, ref = null, amount: asked = null }) {
     const rule = EARN[kind];
+    const prize = rule.prize === true;
     const at = now();
     const today = dayOf(at);
     const inserted = store.get(
@@ -192,22 +207,47 @@ export function createCredits({ store, now, key, sendToUser, member }) {
     const pairWeek = Number(store.get('SELECT COALESCE(SUM(amount), 0) AS n FROM credit_events WHERE actor_id = ? AND target_id = ? AND at > ?', actor, target, at - 7 * DAY_MS)?.n ?? 0);
     const row = accountRow(target);
     const earnedToday = row && row.day === today ? row.earned_today : 0;
-    const amount = Math.max(0, Math.min(rule.amount, rule.perDay - kindToday, EARN.dayCap - earnedToday, GUARD.pairWeek - pairWeek));
+    const base = asked === null ? rule.amount : Math.max(0, Math.min(Math.floor(Number(asked) || 0), rule.max ?? rule.amount));
+    const capped = Math.max(0, Math.min(base, rule.perDay - kindToday, prize ? Infinity : EARN.dayCap - earnedToday, prize ? Infinity : GUARD.pairWeek - pairWeek));
+    const amount = economy ? economy.cap(kind, capped, today) : capped;
     if (amount === 0) return 0;
     store.run('UPDATE credit_events SET amount = ? WHERE id = ?', amount, inserted.id);
     const streakDay = row?.streak_day ?? 0;
     const streak = streakDay === today ? row.streak : streakDay === today - 1 ? row.streak + 1 : 1;
+    // A prize does not use up the day's earning cap: earned_today counts only what that cap limits.
+    const counted = prize ? 0 : amount;
     store.run(
-      `INSERT INTO accounts (user_id, balance, lifetime, day, earned_today, streak, streak_day, best_streak) VALUES (?1, ?2, ?2, ?3, ?2, ?4, ?3, ?4)
+      `INSERT INTO accounts (user_id, balance, lifetime, day, earned_today, streak, streak_day, best_streak) VALUES (?1, ?2, ?2, ?3, ?5, ?4, ?3, ?4)
        ON CONFLICT (user_id) DO UPDATE SET balance = balance + ?2, lifetime = lifetime + ?2,
-         earned_today = CASE WHEN day = ?3 THEN earned_today + ?2 ELSE ?2 END, day = ?3,
+         earned_today = CASE WHEN day = ?3 THEN earned_today + ?5 ELSE ?5 END, day = ?3,
          streak = ?4, streak_day = ?3, best_streak = MAX(best_streak, ?4)`,
       target,
       amount,
       today,
       streak,
+      counted,
     );
     return amount;
+  }
+
+  /**
+   * A community reward paid from outside the routes (events.mjs): only the kinds EARN marks `award`. The earner
+   * must be in good standing, and so must the giver when the giver is a member (an `event:` giver is the relay
+   * itself); nobody gives to themselves. It goes through pay(), so it is paid once and under every cap that
+   * applies, and the earner's Studio hears about it. -> the amount paid.
+   */
+  async function award({ actor, target, kind, uniq, ref = null, amount = null }) {
+    if (EARN[kind]?.award !== true || !isSnowflake(target)) return 0;
+    const fromMember = !String(actor).startsWith('event:');
+    if (fromMember && (!isSnowflake(actor) || actor === target)) return 0;
+    const [targetHeld, actorHeld] = [await heldUntil(target), fromMember ? await heldUntil(actor) : 0];
+    const paid = store.transaction(() => {
+      if (!standing(target, targetHeld).ok) return 0;
+      if (fromMember && !standing(actor, actorHeld).ok) return 0;
+      return pay({ actor, target, kind, uniq, ref, amount });
+    });
+    tell(target, paid, kind);
+    return paid;
   }
 
   function tell(uid, delta, reason) {
@@ -538,7 +578,9 @@ export function createCredits({ store, now, key, sendToUser, member }) {
       '/v1/admin/credits/flags',
       () => {
         const since = now() - GUARD.reviewDays * DAY_MS;
-        const pairs = store.all(`SELECT target_id, actor_id, SUM(amount) AS amount FROM credit_events WHERE at > ? AND amount > 0 AND actor_id NOT LIKE 'gone:%' GROUP BY target_id, actor_id`, since);
+        // Left out: a community event's prizes (no member gave them), and co-working rewards, which two people
+        // working together always earn from each other; the pair limit caps those, and a review still lists them.
+        const pairs = store.all(`SELECT target_id, actor_id, SUM(amount) AS amount FROM credit_events WHERE at > ? AND amount > 0 AND actor_id NOT LIKE 'gone:%' AND actor_id NOT LIKE 'event:%' AND kind NOT IN ('together', 'cowork') GROUP BY target_id, actor_id`, since);
         const byTarget = new Map();
         const given = new Map(); // "actor>target" -> amount
         for (const row of pairs) {
@@ -590,11 +632,12 @@ export function createCredits({ store, now, key, sendToUser, member }) {
         );
         const total = rows.reduce((sum, row) => sum + Number(row.amount), 0);
         const givers = rows.map((row) => {
-          const gone = String(row.actor_id).startsWith('gone:');
+          // Not a member: someone who used Forget me, or a community event's prize (events.mjs).
+          const gone = String(row.actor_id).startsWith('gone:') || String(row.actor_id).startsWith('event:');
           const giver = gone ? null : member(row.actor_id);
           return {
             id: gone ? null : row.actor_id,
-            name: gone ? 'a member who used Forget me' : (giver?.name ?? 'member'),
+            name: String(row.actor_id).startsWith('event:') ? 'a community event' : gone ? 'a member who used Forget me' : (giver?.name ?? 'member'),
             amount: Number(row.amount),
             events: Number(row.events),
             share: total ? Math.round((Number(row.amount) / total) * 100) : 0,
@@ -714,5 +757,5 @@ export function createCredits({ store, now, key, sendToUser, member }) {
     store.run('DELETE FROM features WHERE ends_at < ?', at - PROJECT_LIMITS.eventKeepMs);
   }
 
-  return Object.freeze({ routes, forget, fingerprint, upkeep, me, card, account, front, standing, heldUntil });
+  return Object.freeze({ routes, forget, fingerprint, upkeep, me, card, account, front, standing, heldUntil, award });
 }
