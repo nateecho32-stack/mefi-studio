@@ -102,10 +102,12 @@ test("the host program comes from the Rust host's release folder unless one is n
   const target = path.join(root, "cargo-target");
   const missing = run(root, "package-portable.mjs", ["--host", "tauri", "--node", path.join(root, "bin", "node.exe")], { env: { CARGO_TARGET_DIR: target }, ok: false });
   assert.notEqual(missing.status, 0);
-  assert.match(missing.stderr, /the Rust host is not built: .*cargo-target.*release.*mefi-studio\.exe is missing - run: node scripts\/rust-host\.mjs release-build/);
+  // The host program is mefi-studio.exe on Windows and mefi-studio elsewhere (scripts/rust-host.mjs hostBinary).
+  const hostName = process.platform === "win32" ? "mefi-studio.exe" : "mefi-studio";
+  assert.match(missing.stderr, new RegExp(`the Rust host is not built: .*cargo-target.*release.*${hostName.replace(".", "\\.")} is missing - run: node scripts/rust-host\\.mjs release-build`));
   assert.equal(await stat(path.join(root, "dist")).then(() => true, () => false), false, "nothing is written before the program is found");
 
-  await write(target, "release/mefi-studio.exe", "built by release-build");
+  await write(target, `release/${hostName}`, "built by release-build");
   run(root, "package-portable.mjs", ["--host", "tauri", "--node", path.join(root, "bin", "node.exe")], { env: { CARGO_TARGET_DIR: target } });
   assert.equal(await text(path.join(root, "dist", APP, EXE)), "built by release-build");
 

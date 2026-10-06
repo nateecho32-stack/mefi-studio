@@ -61,6 +61,61 @@ layout_contract_nav 15/15, shell_frame_bars 34/34, community_rules 17/17; friend
 unified_studio_render 1/1 each (friends_render walks The Lobby and the signed-out card at four window sizes with no
 text under 12 px). `npm run check` ok; lint adds no warning; audit 0. The relay was redeployed (version
 4b641b0c) and `relay/scripts/smoke.mjs` passes against it.
+## 2026-10-06 Startup marks and the settings cache (S1) land on main
+
+Branch `land/s1-boot` in a cloud session (Linux, Node 24.21.0), stacked on S3 over main dfda798: the parked slice
+0605bcd re-applied (conflicts in main.cjs, booklet.js, build-booklet.mjs, booklet_build and module_purity resolved
+file by file; booklet.html rebuilt). The compile cache stays main's first statement and the marks block follows;
+startup-marks.js is first in BOOKLET_INPUTS (the updater's prefix pin moved with it); booklet.js keeps bootHealthy
+before the gate. readSettings asks the Rust store first and the cache fronts only the Electron path (6f2c154).
+
+Startup (tools/benchmark_startup.py, finished here, 5 smoke launches each under xvfb as a non-root user, medians):
+interactive (Vibe) 4,055 ms on main, 4,024 ms with the marks (no cost; loaded 2,624 / 2,616 ms). New marks, ms since
+main started: app ready 212, first paint 462, gate released 3,856; the gate opens at ~700 but the launch choice lands
+at ~2,200, and the release comes ~600 ms after the last step. readSettings on a 47 KB settings file (main.cjs's own
+code, 2,000 calls): ~460 us per call before, ~265 us with the cache, two stats instead of two file reads.
+Kill switches MEFI_STUDIO_STARTUP_MARKS=0 and MEFI_STUDIO_SETTINGS_CACHE=0, both pinned.
+
+`npm run check` ok, `npm run audit` 0 findings, `npm run lint` 0 errors and 45 warnings (as main; the WIP's unused
+`utimes` import removed). `npm run test:fast` with mefi-core built (`npm run host:core`): 7099 tests, 7062 pass, 34
+skipped, 3 fail, all as on clean main with the same binary: rust_modules image-store folder, and rust_parity_git
+"the actions answer like the JavaScript" and "the chip's host answers like git-host.cjs" (fail identically on
+dfda798 here; for the Rust chat). rust_parity_settings 3/3 ran (not skipped) with its new cached leg: main's JS with
+the cache on equals the uncached JS and Rust step for step. settings_cache 17/17 (new: Rust first, then the cache,
+then the files), startup_marks 10/10, startup_marks_renderer, booklet_build, release_updater and shell_frame_wiring
+(pins updated for launchGate and ?marks=0). Python test_mefi_studio_idle + updater 42 OK. Electron: startup_render and
+renderer_startup 12/12; for S3, task_overview_render, sessions_render, builder_render, fleet_render and
+workflow_render 5/5.
+
+## 2026-10-06 Board pushes carry the rows that changed (S3) land on main
+
+Branch `wip/s3-row-push` in a cloud session (Linux, Node 24.21.0) over main 24d6756: the parked slice c682642
+re-applied (conflicts in main.cjs mutateBoard/HELD_WHILE_HIDDEN and module_purity, both sides kept), plus the bridge
+re-delivering the held board to onTasks when eyes:progress moves a card, so live progress in Tasks, Sessions and
+Build is unchanged (722e009).
+
+Bytes per board change (tests/row_push.test.mjs, a seeded 134-card board and 104-session checkpoint store, JSON
+bytes over IPC): eyes:tasks with one card changed 688,319 B before, 5,211 B after; an executor checkpoint 688,319 B
+before, 665 B after (eyes:progress, no list); eyes:checkpoints with one session changed 760,443 B before, 7,433 B
+after; a write that changes nothing sent the list before and sends nothing now. Kill switch MEFI_STUDIO_FULL_PUSHES=1
+(whole lists, pinned by host_push_batching and preload_fanout).
+
+`npm run check` ok, `npm run audit` 0 findings, `npm run lint` 0 errors and 45 warnings (as clean main).
+`npm run test:fast`: 7064 tests, 7005 pass, 58 skipped, 1 fail: rust_modules "the image-store factory ... keeps
+folder the engine's", as on clean main (the Rust chat has it). row_push, board_gateway, host_push_batching,
+module_purity, preload_fanout 114/114 together; preload_fanout 17/17 after the onTasks re-delivery (new pins: live
+progress delivers the board at once, untouched cards keep their objects, progress that moves no card delivers
+nothing, and the seeded walk checks every live delivery against the host's board). Electron fixtures not run here
+(no Electron in the container); judged on the Windows "Studio checks" run of this commit.
+
+## 2026-10-05 Linux CI: two Rust-side tests stop assuming Windows
+
+Branch `fix/linux-ci` (60b90a1, off main dfda798), test expectations only: rust_modules feeds the image-store
+factory's folder() a platform-native absolute folder (a `C:\` path is relative on Linux), and package_host names
+the Rust host program mefi-studio.exe on Windows and mefi-studio elsewhere, as rust-host.mjs does. Here (Windows):
+rust_modules and package_host pass alone. Hosted CI on the branch (run 37395258702, Windows): the whole chain green.
+studio-linux.yml runs on the main push this lands with; it failed on every main push since 4 October on exactly
+these two tests.
 
 ## 2026-10-05 The Mefi Studio relay, the Project hub, the Lobby and one Friends page land on main
 
@@ -488,80 +543,6 @@ UTF-16); a real file dropped through the DevTools protocol got its path; a
 clicked getDisplayMedia gave 1 audio track, 0 video, no picker, and peak
 0.029 back while the page played a 440 Hz tone at gain 0.03. Release host
 build 4 min (2 jobs), portable folder 123 MB.
-
-## 2026-10-03 Rust stage 2: the Git chip's actions move into Rust
-
-Branch `wip/rust-host`, after d428f9d. `scripts/git-actions.cjs` (glance,
-glanceMany, preview, save, pushBranch, publish, link, owners, nameCheck,
-publishPreview, account, identity) and the git-link/pc-setup/redaction/
-share-review rules it reads now have a Rust port in
-`crates/mefi-core/src/git/`, reached through the `git-actions` factory under
-the Rust host only. New: `jsre.rs` (JavaScript regexes with JavaScript's
-meaning) and the `MEFI_STUDIO_RUST_OFF` kill switch.
-
-`npm run check` ok (265 targets); `npm run test:fast` 6773 tests, 0 fail,
-14 skipped; lint 0 errors, 42 warnings (all pre-existing); audit ok;
-mefi-core 26 unit tests, host 13. Parity: `tests/rust_parity_git.test.mjs`
-(2 tests: about 330 pure-helper calls, and 89 steps on two identical
-folder trees with a local bare GitHub and a fake gh: every kind of save
-row, secrets by name and content, UTF-16 keys, a junction out of the
-project, 50/100 MB files, lock retries, merge in progress, push with a
-failing and a passing check, a rejected push, every publish path including
-resume and a taken name, and link related/unrelated/empty), all identical,
-with identical commit ids; `tests/rust_modules.test.mjs` 4 tests. The Git
-chip's existing suites (git_actions, git_host, git_link, git_link_host) and
-the other three parity suites: 202 tests, 0 fail. Live self-test on the Rust
-host: `git:state`, `projects:glance` and `git:save-preview` answered through
-Rust (rustCalls core.git.glance 3, glanceMany 1, preview 1); this checkout's
-preview (17 rows) and glance were byte-identical JSON to the JavaScript's.
-Timing on this checkout: glance about 330 ms and preview about 720 ms in
-both (git's own time). `fsutil fsinfo volumeinfo` is refused without admin
-on this PC, so the weak-drive check reads unknown in both languages.
-
-## 2026-10-03 Rust stage 2: the store and repo modules move into Rust
-
-Branch `wip/rust-host`, after 80b1e0e. The OpenCode store reads
-(`eyes.mjs` worker methods) and `sync.mjs`/`worktrees.mjs`/
-`worktree-actions.mjs` now have Rust ports in `crates/mefi-core`, served under
-the Rust host only.
-
-Full `npm test` on the store port (node_modules junctioned to the main
-checkout, so the Electron lane ran): Node 6765 tests, 0 fail in the parallel
-stage; Python 248 OK; path lock ok. Four Electron fixtures failed in the
-loaded run: `tree_dynamics_render` and `today_render` pass solo (load);
-`layout_contract_render` (viewport 1921x1081, was 1920x1080) and
-`shell_render` (373 vs 372 px) fail identically on a clean origin/main
-worktree (72c6f58) on this PC, so they are this display's state, not the port.
-
-After the repo port: `npm run check` ok (265 targets), `npm run test:fast`
-6768 tests, 0 fail; lint 0 errors, no new warnings; audit ok; 16 mefi-core
-unit tests. Parity: `tests/rust_parity_eyes.test.mjs` (4 tests, ~100 store
-reads plus the dump and git helpers) and `tests/rust_parity_repo.test.mjs`
-(3 tests: sync through clean/behind/check-failed/pushed/diverged/rebased,
-lost work found and acknowledged, every worktree action) all identical. On
-the owner's 20 GB OpenCode store, read-only: 12 of 12 reads identical;
-usageLedger cold 2.1 s vs 3.1 s, warm 22 ms vs ~190 ms. Live self-test on
-the Rust host: `eyes:state` and `worktrees:list` answered through Rust
-(rustCalls lists eyes.* and repo.sync.sync, repo.worktrees.listWorktrees).
-
-## 2026-10-03 Rust host stage 1 (Tauri) - first gate
-
-Branch `claude/app-migration-rust-b89096` (pushed as `wip/rust-host`), based on
-72c6f58. `npm run check` ok (264 targets). `npm test`: Node 6757 tests, 6743
-pass, 14 skipped, 0 fail (274 s); Python contracts 248 OK; normalized-path lock
-ok. The Electron lane skipped 39 suites in that run because the worktree had no
-`node_modules`; with a junction to the main checkout's, `evidence_capture`,
-`startup_render`, `task_overview_render` and `command_render` (56 s) each pass
-solo. `npm run lint`: 0 errors, no new warnings. `npm run audit`: ok.
-
-New: `tests/rust_host_bridge.test.mjs` (4 tests, no Rust needed: the wire's
-tagging, the engine shim over a real pipe against a fake host, the page bridge
-built from the real preload.cjs). `npm run host:test`: 13 Rust unit tests pass.
-On the host itself, with scratch userData: `--smoke` exits 0 (45 cards, models,
-assistant tick 1); `MEFI_HOST_SELFTEST` recorded a 1825x1175 page capture, 40
-invokes, 29 channels listened to, live pushes and an accepted toast. Electron
-44.4.1 safeStorage round trip verified both ways on synthetic data in a scratch
-app folder. No change to what the Electron build does.
 
 ## Read Before Any Tests
 
