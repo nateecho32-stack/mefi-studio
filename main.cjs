@@ -2613,6 +2613,60 @@ function hubEvents(method, args) {
   const plain = args.map((value) => (value == null || ["string", "number", "boolean"].includes(typeof value) ? value : null));
   return hubCall((client) => client[method](...plain));
 }
+// Friends › Shop (renderer/friends-shop.js): Studio's own items and members'
+// style packs on the Mefi Studio relay (relay/src/shop.mjs), got with
+// credits. Same gate as Events, plus one object of fields: its values plain,
+// and a pack's `data` and its `palette` copied as plain values too, so
+// nothing but data crosses. Any other nested value becomes null and keeps its
+// key, so the relay's pack check refuses it instead of never seeing it.
+// MEFI_STUDIO_SHOP_ALL=1 (development and tests only) answers shopOwned with
+// every Studio item and no relay, so fixtures and screenshots can show
+// everything. SHOP_STUDIO_ITEMS mirrors the relay's CATALOG for that (the
+// packs with their data); tests/shop_host.test.mjs keeps the two the same.
+const HUB_SHOP_METHODS = Object.freeze({ shop: 2, shopOwned: 0, shopBuy: 2, shopPublish: 1, shopUpdate: 2, shopUnlist: 1, shopReport: 2, modShopRemove: 2 });
+const SHOP_ALL = process.env.MEFI_STUDIO_SHOP_ALL === "1";
+const SHOP_STUDIO_ITEMS = Object.freeze([
+  { id: "studio:pet-dragon", kind: "pet", name: "Ember the dragon" },
+  { id: "studio:skin-frost", kind: "skin", name: "Frost scales" },
+  { id: "studio:skin-jade", kind: "skin", name: "Jade scales" },
+  { id: "studio:skin-void", kind: "skin", name: "Void scales" },
+  { id: "studio:skin-gold", kind: "skin", name: "Gold scales" },
+  { id: "studio:fx-dissolve", kind: "effect", name: "Dissolve" },
+  { id: "studio:fx-embers", kind: "effect", name: "Burn away" },
+  { id: "studio:fx-stardust", kind: "effect", name: "Stardust" },
+  { id: "studio:pack-synthwave", kind: "pack", name: "Synthwave", data: { v: 1, palette: { accent: "#ff4fa3", background: "#0d0b1f", surface: "#17132e", text: "#f3ecff", accent2: "#8b5cff" }, nodeStyle: "halo", material: "atmosphere", font: "display" } },
+  { id: "studio:pack-deep-sea", kind: "pack", name: "Deep sea", data: { v: 1, palette: { accent: "#2fd6c3", background: "#04131c", surface: "#0a2230", text: "#e2f6f7", accent2: "#3a7bff" }, nodeStyle: "glass", material: "studio", font: "studio" } },
+  { id: "studio:pack-sakura", kind: "pack", name: "Sakura (light)", data: { v: 1, palette: { accent: "#d6457a", background: "#fbf6f4", surface: "#ffffff", text: "#2b1f24", accent2: "#8a6bd1" }, nodeStyle: "minimal", material: "focus", font: "studio" } },
+]);
+const shopPlain = (value) => (value == null || ["string", "number", "boolean"].includes(typeof value) ? value : null);
+const shopObject = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
+const shopLevel = (value) => Object.fromEntries(Object.entries(value).map(([key, item]) => [key, shopPlain(item)]));
+function hubShopArg(value) {
+  if (!shopObject(value)) return shopPlain(value);
+  const out = shopLevel(value);
+  if (shopObject(value.data)) {
+    out.data = shopLevel(value.data);
+    if (shopObject(value.data.palette)) out.data.palette = shopLevel(value.data.palette);
+  }
+  return out;
+}
+function hubShop(method, args) {
+  const arity = Object.hasOwn(HUB_SHOP_METHODS, method) ? HUB_SHOP_METHODS[method] : -1;
+  if (arity < 0 || !Array.isArray(args) || args.length > arity) return Promise.resolve({ ok: false, error: "bad-request" });
+  // One object at most: the fields of a pack, a report or a removal.
+  let objects = 0;
+  const plain = args.map((value) => {
+    if (!shopObject(value)) return shopPlain(value);
+    objects += 1;
+    return objects === 1 ? hubShopArg(value) : null;
+  });
+  if (method === "shopOwned" && SHOP_ALL) return hubShopAll();
+  return hubCall((client) => client[method](...plain));
+}
+async function hubShopAll() {
+  const items = SHOP_STUDIO_ITEMS.map((item) => ({ id: item.id, kind: item.kind, name: item.name, data: item.data ? JSON.parse(JSON.stringify(item.data)) : null, updatedAt: null }));
+  return { ok: true, items, all: true, status: await hubStatus() };
+}
 // Online while Studio is open: a member signed in on this PC (a Discord link)
 // connects a few seconds after launch, so friends see them in Who's online
 // and on The Lobby front page without anyone opening Friends; the relay
@@ -27429,6 +27483,8 @@ function registerIpc() {
   // Friends › Project hub: one channel, HUB_PROJECT_METHODS decides what it may call.
   ipcMain.handle("hub:projects", async (_event, payload) => hubProjects(String(payload?.method ?? ""), Array.isArray(payload?.args) ? payload.args : []));
   ipcMain.handle("hub:events", async (_event, payload) => hubEvents(String(payload?.method ?? ""), Array.isArray(payload?.args) ? payload.args : []));
+  // Friends › Shop: one channel, HUB_SHOP_METHODS decides what it may call.
+  ipcMain.handle("hub:shop", async (_event, payload) => hubShop(String(payload?.method ?? ""), Array.isArray(payload?.args) ? payload.args : []));
   // Companion friends (the "Companion friends" block): what friends' companions
   // may see, the friends out now, and playdates.
   ipcMain.handle("hub:friends", async (_event, payload) => friendsView(payload ?? {}));

@@ -41,6 +41,19 @@ const connectorDraft = (draft) => ({
 });
 const connectorId = (value) => ({ id: gitText(typeof value === "string" ? value : value?.id, 60) });
 
+// The Shop's calls (main.cjs HUB_SHOP_METHODS): plain values, and an object of plain values whose pack `data` and
+// its `palette` cross as plain values too. Any other nested value becomes null and keeps its key, so the relay's
+// pack check refuses it instead of never seeing it.
+const shopPlain = (value) => (value == null || ["string", "number", "boolean"].includes(typeof value) ? value : null);
+const shopObject = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
+const shopLevel = (value) => Object.fromEntries(Object.entries(value).slice(0, 16).map(([key, item]) => [key, shopPlain(item)]));
+const shopArg = (value) => {
+  if (!shopObject(value)) return shopPlain(value);
+  const out = shopLevel(value);
+  if (shopObject(value.data)) out.data = { ...shopLevel(value.data), ...(shopObject(value.data.palette) ? { palette: shopLevel(value.data.palette) } : {}) };
+  return out;
+};
+
 const api = {
   mediaSceneSample: (rect) => ipcRenderer.invoke("media:scene-sample", rect),
   youtubeSearch: (query) => ipcRenderer.invoke("media:youtube-search", query),
@@ -378,6 +391,11 @@ const api = {
   hubEvents: (method, ...args) => ipcRenderer.invoke("hub:events", {
     method: typeof method === "string" ? method : "",
     args: args.slice(0, 3).map((value) => (value == null || ["string", "number", "boolean"].includes(typeof value) ? value : null)),
+  }),
+  // Friends › Shop (main.cjs HUB_SHOP_METHODS): plain values, and a pack's fields with its data (shopArg).
+  hubShop: (method, ...args) => ipcRenderer.invoke("hub:shop", {
+    method: typeof method === "string" ? method : "",
+    args: args.slice(0, 2).map(shopArg),
   }),
   // Companion friends (main.cjs "Companion friends"): what friends' companions
   // may see, the friends out now and playdates. Only named fields cross.

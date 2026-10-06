@@ -5,14 +5,15 @@ import { GUARD } from "../relay/src/credits.mjs";
 import { CREDIT_REASONS, FEATURES } from "../relay/src/protocol.mjs";
 import { CATALOG, PACK_ID, SHOP } from "../relay/src/shop.mjs";
 import { MIGRATIONS, SCHEMA_VERSION, createStore } from "../relay/src/store.mjs";
-import { ALICE, BOB, CARA, MOD, makeRelay, rawSocket, until } from "./fixtures/relay-harness.mjs";
+import { ALICE, BOB, CARA, MOD, makeRelay, member, connectAll, rawSocket, until } from "./fixtures/relay-harness.mjs";
 
 // The Shop on the relay (relay/src/shop.mjs): Studio's own items and members'
 // style packs, got with credits. A purchase is one transaction that never
 // writes a negative credit row; a pack's maker earns 75% of its price only
 // through credits.sale(), with both in good standing, at most 100 from one
 // buyer in 7 days and 300 a day. Then publishing's checks and limits,
-// reports and moderators, Forget me and the v6 migration.
+// reports and moderators, Forget me, the v6 migration, and Studio's own
+// client against all of it.
 
 const DAY = 86_400_000;
 // An hour into a UTC day, so a test's few minutes never cross midnight by accident.
@@ -460,4 +461,51 @@ test("schema v6: a v5 database gains the Shop's tables and keeps every row it ha
   assert.equal(MIGRATIONS.at(-1).version, 6);
   assert.ok(MIGRATIONS.at(-1).statements.every((statement) => !/;\s*\S/.test(statement)), "one statement per entry");
   db.close();
+});
+
+test("Studio's client: the Shop's lists, a purchase that needs the dragon first, a pack published, bought and removed, refusals with their details", async () => {
+  let clock = morning();
+  const relay = makeRelay({ now: () => clock });
+  const alice = member(relay, "tok-alice");
+  const bob = member(relay, "tok-bob");
+  const mod = member(relay, "tok-mod");
+  const newbie = member(relay, "tok-newbie");
+  await connectAll(alice, bob, mod, newbie);
+  assert.equal(alice.client.status().shop, true, "the relay lists the Shop in ready.features");
+  give(relay, BOB.id, 300);
+  const studio = await bob.client.shop("studio");
+  assert.deepEqual([studio.ok, studio.view, studio.items.length, studio.balance, studio.canEarn, studio.hold, studio.next], [true, "studio", 11, 300, true, null, null]);
+  assert.deepEqual(studio.items[8].data.palette, CATALOG[8].data.palette);
+  assert.deepEqual(await bob.client.shopBuy("studio:skin-gold", 60), { ok: false, error: "needs", needs: "studio:pet-dragon" });
+  assert.deepEqual(await bob.client.shopBuy("studio:pet-dragon", 100), { ok: false, error: "price-changed", price: 150 });
+  const dragon = await bob.client.shopBuy("studio:pet-dragon", 150);
+  assert.deepEqual([dragon.ok, dragon.item.owned, dragon.balance], [true, true, 150]);
+  await until(() => bob.of("credits").some((event) => event.reason === "shop" && event.delta === -150), "bob's credits event");
+
+  const made = await alice.client.shopPublish({ name: "Neon night", blurb: "Blue on black", price: 100, data: PACK });
+  assert.equal(made.ok, true, JSON.stringify(made));
+  assert.deepEqual([made.pack.name, made.pack.maker.id, made.pack.data], ["Neon night", ALICE.id, PACK]);
+  assert.deepEqual(await alice.client.shopPublish({ name: "Bad", price: 0, data: { ...PACK, css: "x" } }), { ok: false, error: "bad-pack" }, "the relay's check answers, so a key is refused rather than dropped on the way");
+  assert.deepEqual(await alice.client.shopPublish({ name: "Dim", price: 0, data: { v: 1, palette: { ...PACK.palette, text: "#2a2f3a" } } }), { ok: false, error: "low-contrast" });
+  assert.deepEqual(await alice.client.shopPublish({ name: "Big", price: 0, data: { ...PACK, note: "x".repeat(3000) } }), { ok: false, error: "too-big" });
+  const held = await newbie.client.shopPublish({ name: "Starter", price: 20, data: PACK });
+  assert.deepEqual([held.ok, held.error, held.hold, typeof held.until], [false, "hold", "new-member", "number"]);
+  assert.equal((await bob.client.shopBuy(made.pack.id, 100)).balance, 50);
+  await until(() => alice.of("credits").some((event) => event.reason === "sale" && event.delta === 75), "alice hears the sale");
+  assert.deepEqual(await bob.client.shopBuy("studio:skin-gold", 60), { ok: false, error: "short", price: 60, balance: 50 });
+  const owned = await bob.client.shopOwned();
+  assert.deepEqual(owned.items.map((item) => [item.id, item.kind, item.data === null]), [[made.pack.id, "pack", false], ["studio:pet-dragon", "pet", true]]);
+  assert.deepEqual((await bob.client.shop("new")).items.map((item) => [item.id, item.owned, item.sales]), [[made.pack.id, true, 1]]);
+
+  assert.equal((await alice.client.shopUpdate(made.pack.id, { name: "Neon dawn" })).pack.name, "Neon dawn");
+  assert.equal((await alice.client.shopUnlist(made.pack.id)).pack.status, "unlisted");
+  assert.equal((await alice.client.shopUpdate(made.pack.id, { listed: true })).pack.status, "listed");
+  assert.deepEqual(await bob.client.shopReport(made.pack.id, { reason: "Looks like someone else's", text: "From a game" }), { ok: true });
+  const reports = await mod.client.modReports();
+  assert.deepEqual(reports.reports.filter((item) => item.kind === "shop").map((item) => [item.packId, item.author.id, item.text]), [[made.pack.id, ALICE.id, "Neon dawn · From a game"]]);
+  assert.deepEqual(await alice.client.modShopRemove(made.pack.id, { reason: "mine" }), { ok: false, error: "forbidden" });
+  assert.deepEqual(await mod.client.modShopRemove(made.pack.id, { reason: "a copy" }), { ok: true });
+  assert.deepEqual((await bob.client.shopOwned()).items.map((item) => item.id), ["studio:pet-dragon"], "a removed pack leaves its owners too");
+  assert.equal((await mod.client.modReports()).reports.filter((item) => item.kind === "shop").length, 0);
+  for (const one of [alice, bob, mod, newbie]) await one.client.disconnect();
 });

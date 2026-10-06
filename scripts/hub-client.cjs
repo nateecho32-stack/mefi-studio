@@ -55,6 +55,11 @@
 //     an envelope for one PC (acked, or nacked "not-online" / "not-allowed").
 //     The relay answers with `pcs` (the PCs this one sees), `pcState` and
 //     `pcMsg` events. Envelopes are pc-trust.cjs's and pass here unread.
+//   - The Shop (relay feature "shop", relay/src/shop.mjs): shop() lists
+//     Studio's own items and members' style packs, shopOwned() what this
+//     member owns (for a new PC), shopBuy / shopPublish / shopUpdate /
+//     shopUnlist / shopReport, and modShopRemove for moderators. A pack's
+//     data comes back with the schema's keys only (packData).
 //
 // Like scripts/discord-oauth.cjs this is a network module, and everything it
 // reaches for is injected: fetch, the WebSocket class, the clock and the
@@ -94,6 +99,19 @@ const PROJECT_KINDS = Object.freeze(["game", "app", "tool", "art", "music", "oth
 const PROJECT_VIEWS = Object.freeze(["new", "top", "played", "mine"]);
 const CREDIT_HOLDS = Object.freeze(["unknown", "read-only", "new-account", "new-member", "forgot-me"]);
 const RANK_KEY = /^[a-z_]{1,20}$/;
+// The Shop's shapes (relay/src/shop.mjs and shop-pack.mjs).
+const SHOP_VIEWS = Object.freeze(["studio", "new", "top", "owned", "mine"]);
+const SHOP_ITEM_KINDS = Object.freeze(["pet", "skin", "effect", "pack"]);
+const SHOP_STATUSES = Object.freeze(["listed", "unlisted", "removed"]);
+const STUDIO_ITEM = /^studio:[a-z0-9-]{1,40}$/;
+const PACK_ID = /^pack_[A-Za-z0-9_-]{16}$/;
+const SHOP_CURSOR = /^[A-Za-z0-9_-]{1,32}$/;
+const PACK_COLOUR = /^#[0-9a-fA-F]{6}$/;
+const PACK_PALETTE = Object.freeze(["accent", "background", "surface", "text"]);
+const PACK_NODE_STYLES = Object.freeze(["orbs", "glass", "minimal", "halo", "crystal", "singularity", "prism", "sigil"]);
+const PACK_MATERIALS = Object.freeze(["focus", "studio", "atmosphere"]);
+const PACK_FONTS = Object.freeze(["studio", "display", "serif", "mono"]);
+const PACK_PRICE_MAX = 250;
 const ACK_TIMEOUT_MS = 10_000;
 const REQUEST_TIMEOUT_MS = 15_000;
 const BACKOFF_MS = Object.freeze([1_000, 2_000, 5_000, 10_000, 30_000, 60_000]);
@@ -463,6 +481,81 @@ function eventsFront(value) {
   return { jam, cowork };
 }
 
+// ---- The Shop's shapes (relay/src/shop.mjs) ----------------------------------
+const shopItemId = (value) => typeof value === "string" && (STUDIO_ITEM.test(value) || PACK_ID.test(value));
+const isPackId = (value) => typeof value === "string" && PACK_ID.test(value);
+// A style pack's data with the schema's keys only (relay/src/shop-pack.mjs),
+// colours lower-cased, or null when it is not one. Anything else in it is
+// left behind, so nothing but colours and Studio's own keys reaches a page.
+function packData(value) {
+  if (!object(value) || value.v !== 1 || !object(value.palette)) return null;
+  const palette = {};
+  for (const key of [...PACK_PALETTE, "accent2"]) {
+    const colour = value.palette[key];
+    if (key === "accent2" && colour == null) continue;
+    if (typeof colour !== "string" || !PACK_COLOUR.test(colour)) return null;
+    palette[key] = colour.toLowerCase();
+  }
+  return {
+    v: 1, palette,
+    ...(PACK_NODE_STYLES.includes(value.nodeStyle) ? { nodeStyle: value.nodeStyle } : {}),
+    ...(PACK_MATERIALS.includes(value.material) ? { material: value.material } : {}),
+    ...(PACK_FONTS.includes(value.font) ? { font: value.font } : {}),
+  };
+}
+// A Shop item from the relay, or null: only the known fields, strings and
+// numbers capped. A pack whose data is not a pack is left out.
+function itemCard(value) {
+  if (!object(value) || !shopItemId(value.id) || !SHOP_ITEM_KINDS.includes(value.kind)) return null;
+  const name = line(value.name, 40);
+  const data = value.kind === "pack" ? packData(value.data) : null;
+  if (!name || (value.kind === "pack" && !data)) return null;
+  return {
+    id: value.id, kind: value.kind, name, blurb: line(value.blurb, 160) ?? "",
+    price: count(value.price, 1e6) ?? 0, requires: shopItemId(value.requires) ? value.requires : null,
+    maker: object(value.maker) && snowflake(value.maker.id) ? { id: value.maker.id, name: text(value.maker.name, 100) || "member" } : null,
+    data, sales: count(value.sales, 1e9) ?? 0, owned: value.owned === true,
+    status: SHOP_STATUSES.includes(value.status) ? value.status : "listed",
+    createdAt: timeOf(value.createdAt), updatedAt: timeOf(value.updatedAt),
+  };
+}
+// What a member typed for a pack: { name, blurb, price, data, listed } as the
+// relay takes them, the ones given only; null when one is wrong. The pack's
+// data goes as plain JSON, every key kept, so the relay's check can refuse a
+// key it does not name instead of it being dropped here, and say "too-big"
+// for anything over 2 KB that still fits a request (16 KB).
+function packFields(fields, { required = false } = {}) {
+  if (!object(fields)) return null;
+  const out = {};
+  if (fields.name !== undefined || required) {
+    const name = line(fields.name, 40);
+    if (!name || name.trim().length < 2) return null;
+    out.name = name;
+  }
+  if (typeof fields.blurb === "string" && !fields.blurb.trim()) out.blurb = "";
+  else if (fields.blurb != null) {
+    const blurb = line(fields.blurb, 160);
+    if (!blurb) return null;
+    out.blurb = blurb;
+  }
+  if (fields.price !== undefined || required) {
+    if (!Number.isInteger(fields.price) || (fields.price !== 0 && (fields.price < 10 || fields.price > PACK_PRICE_MAX))) return null;
+    out.price = fields.price;
+  }
+  if (fields.data !== undefined || required) {
+    if (!object(fields.data)) return null;
+    let json;
+    try { json = JSON.stringify(fields.data); } catch { return null; }
+    if (typeof json !== "string" || Buffer.byteLength(json) > 15 * 1024) return null;
+    out.data = JSON.parse(json);
+  }
+  if (fields.listed !== undefined) {
+    if (typeof fields.listed !== "boolean") return null;
+    out.listed = fields.listed;
+  }
+  return out;
+}
+
 // A room's join code ("7K3Q-M2XR") and its link, or a failure.
 function codeOf(data) {
   const code = typeof data?.code === "string" && /^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(data.code) ? data.code : null;
@@ -530,6 +623,7 @@ function createHubClient(options = {}) {
       events: features.includes("events"),
       lobby: features.includes("lobby"), joinCodes: features.includes("join.codes"), online: features.includes("online"), front: features.includes("front"), building: features.includes("building"),
       pcs: features.includes("pcs"), pcOn: Boolean(pc) && features.includes("pcs"),
+      shop: features.includes("shop"),
     };
   }
   function setState(next, nextError = null) {
@@ -880,6 +974,19 @@ function createHubClient(options = {}) {
     return answer;
   }
   const refused = (answer) => ({ ok: false, error: answer.error, ...(answer.reason ? { reason: answer.reason } : {}), ...(answer.retryAfter != null ? { retryAfter: answer.retryAfter } : {}) });
+  // A Shop refusal also keeps what Studio needs to say why: the item to get first (needs), the price now, the
+  // balance, and why this member cannot sell yet (hold, until).
+  const shopRefused = (answer) => {
+    const data = object(answer.data) ? answer.data : {};
+    return {
+      ...refused(answer),
+      ...(shopItemId(data.needs) ? { needs: data.needs } : {}),
+      ...(count(data.price, 1e6) != null ? { price: data.price } : {}),
+      ...(count(data.balance, 1e12) != null ? { balance: data.balance } : {}),
+      ...(CREDIT_HOLDS.includes(data.hold) ? { hold: data.hold } : {}),
+      ...(Number.isFinite(data.until) ? { until: data.until } : {}),
+    };
+  };
   const bad = () => Promise.resolve({ ok: false, error: "bad-request" });
   const id = (value) => opaqueId(value);
   async function simple(method, path, body) {
@@ -896,6 +1003,12 @@ function createHubClient(options = {}) {
     const answer = await authed("GET", path);
     if (!answer.ok) return refused(answer);
     return { ok: true, [key]: Array.isArray(answer.data[key]) ? answer.data[key].map(shape).filter(Boolean) : [] };
+  }
+  // A pack the relay sent back after publishing, changing or unlisting it.
+  function packAnswer(answer) {
+    if (!answer.ok) return shopRefused(answer);
+    const pack = itemCard(answer.data.pack);
+    return pack ? { ok: true, pack } : { ok: false, error: "failed" };
   }
 
   return {
@@ -1125,9 +1238,11 @@ function createHubClient(options = {}) {
       const reports = Array.isArray(answer.data.reports) ? answer.data.reports.map((item) => {
         if (!object(item) || !opaqueId(item.id)) return null;
         return {
-          id: item.id, kind: item.kind === "project" ? "project" : "message",
+          id: item.id, kind: item.kind === "project" ? "project" : item.kind === "shop" ? "shop" : "message",
           roomId: opaqueId(item.roomId) ? item.roomId : null, messageId: SNOWFLAKE.test(String(item.messageId)) ? String(item.messageId) : null,
           projectId: opaqueId(item.projectId) ? item.projectId : null,
+          // A Shop pack's report (relay/src/shop.mjs): modShopRemove takes the pack off.
+          packId: isPackId(item.packId) ? item.packId : null,
           author: user(item.author), reporter: user(item.reporter), reason: text(item.reason, 500), text: typeof item.text === "string" ? text(item.text, 2000) : null,
           verified: item.verified === true, createdAt: Number.isFinite(item.createdAt) ? item.createdAt : null,
         };
@@ -1255,6 +1370,90 @@ function createHubClient(options = {}) {
       const answer = await authed("POST", `/v1/projects/${projectId}/feature`);
       if (!answer.ok) return refused(answer);
       return { ok: true, featuredUntil: Number.isFinite(answer.data.featuredUntil) ? answer.data.featuredUntil : null, balance: count(answer.data.balance, 1e12) ?? 0 };
+    },
+    // ---- The Shop (feature "shop", relay/src/shop.mjs) -----------------------
+    // Studio's own pets, effects and packs, and members' style packs, got with
+    // credits (never money). Each answers { ok, ... } or the relay's refusal
+    // with needs, price, balance and hold kept (shopRefused).
+    // A list: "studio", "new", "top", "owned" or "mine" (anything else is
+    // "studio"); `cursor` is the `next` of the page before.
+    async shop(view = "studio", cursor = null) {
+      if (!features.includes("shop")) return { ok: false, error: "unsupported" };
+      const which = SHOP_VIEWS.includes(view) ? view : "studio";
+      if (cursor != null && !SHOP_CURSOR.test(String(cursor))) return { ok: false, error: "bad-request" };
+      const answer = await authed("GET", `/v1/shop?view=${which}${cursor != null ? `&cursor=${cursor}` : ""}`);
+      if (!answer.ok) return shopRefused(answer);
+      const data = answer.data;
+      return {
+        ok: true, view: which,
+        items: Array.isArray(data.items) ? data.items.map(itemCard).filter(Boolean).slice(0, 100) : [],
+        next: typeof data.next === "string" && SHOP_CURSOR.test(data.next) ? data.next : null,
+        balance: count(data.balance, 1e12) ?? 0, canEarn: data.canEarn === true,
+        hold: object(data.hold) && CREDIT_HOLDS.includes(data.hold.reason) ? { reason: data.hold.reason, until: timeOf(data.hold.until) } : null,
+      };
+    },
+    // Everything this member owns, to put back on a new PC: { items: [{ id, kind, name, data, updatedAt }] }.
+    async shopOwned() {
+      if (!features.includes("shop")) return { ok: false, error: "unsupported" };
+      const answer = await authed("GET", "/v1/shop/owned");
+      if (!answer.ok) return shopRefused(answer);
+      const owned = (item) => {
+        if (!object(item) || !shopItemId(item.id) || !SHOP_ITEM_KINDS.includes(item.kind)) return null;
+        const name = line(item.name, 40);
+        const data = item.kind === "pack" ? packData(item.data) : null;
+        return name && (item.kind !== "pack" || data) ? { id: item.id, kind: item.kind, name, data, updatedAt: timeOf(item.updatedAt) } : null;
+      };
+      return { ok: true, items: Array.isArray(answer.data.items) ? answer.data.items.map(owned).filter(Boolean).slice(0, 2048) : [] };
+    },
+    // Buying, or getting a free pack. `price` is the price the member was
+    // shown, so a changed one is never paid by surprise. Refusals: "gone",
+    // "owned", "own" (your own pack), "needs" (+ needs), "price-changed"
+    // (+ price), "short" (+ balance, price).
+    async shopBuy(itemId, price) {
+      if (!features.includes("shop")) return { ok: false, error: "unsupported" };
+      if (!shopItemId(itemId) || count(price, 1e6) == null) return { ok: false, error: "bad-request" };
+      const answer = await authed("POST", `/v1/shop/${itemId}/buy`, { price });
+      if (!answer.ok) return shopRefused(answer);
+      const item = itemCard(answer.data.item);
+      return item ? { ok: true, item, balance: count(answer.data.balance, 1e12) ?? 0 } : { ok: false, error: "failed" };
+    },
+    // A style pack: { name, blurb?, price (0, or 10 to 250), data }. Refusals:
+    // "bad-pack", "too-big", "low-contrast", "hold" (+ hold, until) for a
+    // priced pack before its maker may earn, and the limits' reasons.
+    async shopPublish(fields = {}) {
+      if (!features.includes("shop")) return { ok: false, error: "unsupported" };
+      const given = packFields(fields, { required: true });
+      if (!given) return { ok: false, error: "bad-request" };
+      return packAnswer(await authed("POST", "/v1/shop/packs", { name: given.name, ...(given.blurb ? { blurb: given.blurb } : {}), price: given.price, data: given.data }));
+    },
+    // Any of { name, blurb, price, data, listed } for one of your packs; listed
+    // false takes it off the Shop, true puts it back (within the limits).
+    async shopUpdate(packId, fields = {}) {
+      if (!features.includes("shop")) return { ok: false, error: "unsupported" };
+      const given = packFields(fields);
+      if (!isPackId(packId) || !given) return { ok: false, error: "bad-request" };
+      return packAnswer(await authed("PUT", `/v1/shop/packs/${packId}`, given));
+    },
+    // Off the Shop's lists; everyone who owns it keeps it.
+    async shopUnlist(packId) {
+      if (!features.includes("shop")) return { ok: false, error: "unsupported" };
+      if (!isPackId(packId)) return { ok: false, error: "bad-request" };
+      return packAnswer(await authed("DELETE", `/v1/shop/packs/${packId}`));
+    },
+    // { reason, text? }: into the moderators' reports, once per member, never your own pack.
+    shopReport(packId, fields = {}) {
+      if (!features.includes("shop")) return Promise.resolve({ ok: false, error: "unsupported" });
+      const why = typeof fields?.reason === "string" ? fields.reason.trim() : "";
+      const more = typeof fields?.text === "string" ? fields.text.trim() : "";
+      if (!isPackId(packId) || !why || why.length > 500 || more.length > 300) return bad();
+      return simple("POST", `/v1/shop/packs/${packId}/report`, { reason: text(why, 500), ...(more ? { text: text(more, 300) } : {}) });
+    },
+    // Moderators: a pack off the Shop for good (its owners lose it too), and its open reports resolved. { reason? }
+    modShopRemove(packId, fields = {}) {
+      if (!features.includes("shop")) return Promise.resolve({ ok: false, error: "unsupported" });
+      const given = fields?.reason == null || fields.reason === "" ? null : line(fields.reason, 200);
+      if (!isPackId(packId) || (given === null && fields?.reason != null && fields.reason !== "")) return bad();
+      return simple("POST", `/v1/admin/shop/${packId}/remove`, given ? { reason: given } : {});
     },
     // ---- File claims in a cowork room (main.cjs "Cowork claims") -------------
     // Claim before editing, renew every minute, release when done. A conflict
@@ -1433,4 +1632,5 @@ module.exports = {
   PC_KINDS, pcKeys, pcHello, pcView, pcViews,
   KEEPALIVE_FRAME, KEEPALIVE_EVERY_MS, CLIENT_FEATURES, wireMessage, projectCard, PROJECT_KINDS,
   eventsPage, eventsFront,
+  SHOP_VIEWS, SHOP_ITEM_KINDS, itemCard, packData, packFields,
 };
