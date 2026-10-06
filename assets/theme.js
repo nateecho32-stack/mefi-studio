@@ -10,6 +10,9 @@
   var KEY = "mefiSite.theme.v1";
   var DEFAULT = "chrome";
   var root = document.documentElement;
+  // <html class="motion"> before the first paint unless the visitor asked for
+  // less motion: fx.css and home.css only stage entrances under it.
+  try { if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) root.classList.add("motion"); } catch (e) { /* old engines: no entrances */ }
 
   // a2 / a3 are the two decorative companions of the accent (headline gradient,
   // glows, the sky). The Void collection carries its own second hue; the rest

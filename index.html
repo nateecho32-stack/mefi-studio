@@ -3,38 +3,50 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Mefi Studio — Bring an idea. Find your people.</title>
-<meta name="description" content="Mefi Studio is a free, open-source Windows app for building ideas with coding agents, with a community to share them in. Join the Discord, see what's done and planned on the roadmap, and help decide what comes next.">
-<meta property="og:title" content="Mefi Studio — Bring an idea. Find your people.">
-<meta property="og:description" content="Build your ideas with coding agents and share them with people. Join the Discord, follow the roadmap and request what you'd like next. Free and open source for Windows.">
+<title>Mefi Studio — Hang out. Work alongside. Build when you want.</title>
+<meta name="description" content="Mefi Studio is a free, open-source app for Windows where you and your friends hang out, chat in rooms and listen together, and coding agents build your ideas while you keep talking.">
+<meta property="og:title" content="Mefi Studio — Hang out. Work alongside. Build when you want.">
+<meta property="og:description" content="A free Windows app for you and your friends: The Lobby, rooms, Listen together and a weekly Build Jam, with coding agents that build your ideas in your own project.">
 <meta property="og:site_name" content="Mefi Studio">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://nateecho32-stack.github.io/mefi-studio/">
-<meta property="og:image" content="https://nateecho32-stack.github.io/mefi-studio/assets/shots/og-05.jpg">
+<meta property="og:image" content="https://nateecho32-stack.github.io/mefi-studio/assets/shots/og-site.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:type" content="image/jpeg">
-<meta property="og:image:alt" content="Mefi Studio: Bring an idea. Find your people. Make it together. Share ideas, build with agents and hang out.">
+<meta property="og:image:alt" content="Mefi Studio: Hang out. Work alongside. Build when you want. A chrome orb with friends around it, beside the app's Lobby.">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Mefi Studio — Bring an idea. Find your people.">
-<meta name="twitter:description" content="Build your ideas with coding agents and share them with people. Join the Discord, follow the roadmap and request what you'd like next. Free and open source for Windows.">
-<meta name="twitter:image" content="https://nateecho32-stack.github.io/mefi-studio/assets/shots/og-05.jpg">
-<meta name="twitter:image:alt" content="Mefi Studio: Bring an idea. Find your people. Make it together.">
+<meta name="twitter:title" content="Mefi Studio — Hang out. Work alongside. Build when you want.">
+<meta name="twitter:description" content="A free Windows app for you and your friends, with coding agents that build your ideas while you keep talking.">
+<meta name="twitter:image" content="https://nateecho32-stack.github.io/mefi-studio/assets/shots/og-site.jpg">
+<meta name="twitter:image:alt" content="Mefi Studio: Hang out. Work alongside. Build when you want.">
 <link rel="canonical" href="https://nateecho32-stack.github.io/mefi-studio/">
-<meta name="theme-color" content="#0a0a0c">
+<meta name="theme-color" content="#070709">
 <link rel="icon" href="assets/favicon.ico">
+<script>
+  /* The opening (the "Build it" screen) plays once a visit, and never for a
+     link to a section, a reload in the same tab or reduced motion.
+     ?intro=1 shows it anyway, ?intro=0 skips it. */
+  (function () {
+    try {
+      var want = new URLSearchParams(location.search).get("intro");
+      var still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      var seen = sessionStorage.getItem("mefiSite.intro.v1");
+      if (want === "1" || (want !== "0" && !still && !seen && !location.hash)) document.documentElement.classList.add("intro-on");
+    } catch (e) { /* storage blocked: no opening */ }
+  })();
+</script>
 <link rel="stylesheet" href="assets/site.css">
 <link rel="stylesheet" href="assets/fx.css">
 <link rel="stylesheet" href="assets/chrome.css">
 <script src="assets/theme.js"></script>
 <link rel="stylesheet" href="assets/home.css">
-<link rel="stylesheet" href="assets/demo.css">
 </head>
 <body class="home">
 <a class="skip-link" href="#main">Skip to content</a>
 <header class="site-head">
   <div class="container head-inner">
-    <a class="brand" href="index.html"><img src="assets/icon-256.png" width="30" height="30" alt="">Mefi Studio</a>
+    <a class="brand" href="index.html"><img src="assets/icon-256.png" width="32" height="32" alt="">Mefi Studio</a>
     <nav class="tabs" aria-label="Site">
       <a href="index.html" data-tab="home" aria-current="page">Home</a>
       <a href="features.html" data-tab="features">Features</a>
@@ -63,379 +75,311 @@
     </details>
   </div>
 </header>
-<a class="now-strip" href="roadmap.html#now"><span class="now-dot" aria-hidden="true"></span><b>Now</b> <span>0.5 is being built, and Studio is moving to Rust.</span> <span class="now-more">What’s coming <span aria-hidden="true">→</span></span></a>
+
 <main id="main">
 
-<!-- HERO -->
-<section class="hero" aria-labelledby="hero-title">
-  <canvas class="hero-sky" aria-hidden="true"></canvas>
-  <div class="container hero-copy">
-    <a class="pill enter" style="--i:0" href="roadmap.html#now"><b>0.5</b> A new layout is being built, and Studio is moving to Rust <span aria-hidden="true">→</span></a>
-    <h1 id="hero-title" class="enter" style="--i:1">Bring an idea.<br>Find your people.<br><span class="grad shine">Make it together.</span></h1>
-    <p class="lede enter" style="--i:2">Mefi Studio is a free, open-source app for Windows. Build your ideas with coding agents, bring your work in progress to the Discord, and help decide what Studio becomes next.</p>
-    <div class="cta-row enter" style="--i:3">
-      <a class="btn btn-primary btn-lg" href="https://discord.gg/xgfKc5pVxG" rel="noopener">Join the Discord <span aria-hidden="true">↗</span></a>
-      <a class="btn btn-lg" href="download.html">Download for Windows</a>
+<!-- THE OPENING: Studio's own "What's next?" box. Build it plays a short,
+     sped-up build and the site opens out of the button. home.js runs it;
+     without script (or after six seconds of nothing) it gets out of the way. -->
+<div class="intro" id="intro" role="dialog" aria-modal="true" aria-labelledby="intro-title" aria-describedby="intro-hint">
+  <div class="intro-sky" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <div class="intro-card">
+    <div class="intro-head">
+      <span class="intro-orb-slot" id="intro-orb-slot" aria-hidden="true"><span class="intro-pearl"></span></span>
+      <div>
+        <p class="intro-hello"><span id="intro-greeting">Hello</span> · Social</p>
+        <h1 class="intro-title" id="intro-title">What do you want to make?</h1>
+      </div>
     </div>
-    <div class="hero-meta enter" style="--i:4">
-      <p class="pulse" data-discord-pulse hidden><span class="dot"></span><span data-pulse-text></span></p>
-      <p class="fine" data-latest-hint>Latest release: <a href="https://github.com/nateecho32-stack/mefi-studio/releases/latest">see GitHub</a></p>
+    <form class="intro-box" id="intro-form" autocomplete="off">
+      <label class="visually-hidden" for="intro-idea">Your idea</label>
+      <textarea id="intro-idea" rows="2" maxlength="120" spellcheck="false" placeholder="Describe an idea, a fix or a question…"></textarea>
+      <div class="intro-row">
+        <div class="intro-ideas" role="group" aria-label="Ideas to try">
+          <button type="button" class="intro-idea" data-idea="game" aria-pressed="true">Game-night page</button>
+          <button type="button" class="intro-idea" data-idea="pixel" aria-pressed="false">Pixel art tool</button>
+          <button type="button" class="intro-idea" data-idea="band" aria-pressed="false">Our band's site</button>
+          <button type="button" class="intro-idea" data-idea="own" aria-pressed="false">My own idea</button>
+        </div>
+        <button type="submit" class="intro-build" id="intro-build"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c.6 3.6 2.4 5.4 6 6-3.6.6-5.4 2.4-6 6-.6-3.6-2.4-5.4-6-6 3.6-.6 5.4-2.4 6-6Z"/><path d="M19 15.5c.25 1.5 1 2.25 2.5 2.5-1.5.25-2.25 1-2.5 2.5-.25-1.5-1-2.25-2.5-2.5 1.5-.25 2.25-1 2.5-2.5Z"/></svg><span>Build it</span><kbd>Enter</kbd></button>
+      </div>
+    </form>
+    <div class="intro-run" id="intro-run" aria-hidden="true">
+      <div class="intro-session"><i class="intro-spin"></i><b id="intro-session-title">Game-night page</b><span id="intro-session-state">Planning the steps</span></div>
+      <div class="intro-tasks" id="intro-tasks"></div>
+      <div class="intro-checks" id="intro-checks"><span><i></i>Tests pass</span><span><i></i>Lint is clean</span><span><i></i>It builds</span></div>
     </div>
-    <p class="fine enter" style="--i:5">Free and open source · Windows 10 and 11 · No Studio account · Discord is optional</p>
+    <p class="intro-foot">
+      <button type="button" class="intro-skip" id="intro-skip">Skip to the site</button>
+      <span id="intro-hint">Press <b>Build it</b> to open the site. The build is sped up: a real one takes a few minutes, and you check what lands.</span>
+    </p>
   </div>
-  <div class="container hero-shot enter" style="--i:6">
-    <figure class="frame window frame-hero">
-      <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i><span>Mefi Studio · 0.5 layout · Studio</span></div>
-      <a class="zoom" href="assets/shots/05/build.webp"><img src="assets/shots/05/build.webp" width="1920" height="1080" alt="Studio's 0.5 layout in Studio mode: the project's sessions grouped as Needs you, Running, Review, Queued and Done on the left; the session Search notes by tag in the middle with its run, steps and live output; its plan, brief, acceptance checks and versions in the inspector on the right" fetchpriority="high" decoding="async"><span class="visually-hidden"> (open a larger view)</span></a>
-    </figure>
-    <figure class="frame window frame-float" aria-hidden="true">
-      <div class="window-bar"><i></i><i></i><i></i><span>Social · Today</span></div>
-      <img src="assets/shots/05/today-960.webp" width="960" height="540" alt="" loading="lazy" decoding="async">
-    </figure>
-    <div class="float-chip chip-a" aria-hidden="true"><i class="dot live"></i>3 agents working</div>
-    <div class="float-chip chip-b" aria-hidden="true"><i class="dot warn"></i>2 need you</div>
-    <div class="float-chip chip-c" aria-hidden="true"><i class="dot info"></i>4 files changed · Accept or Revert</div>
+</div>
+
+<!-- HERO -->
+<section class="hero" id="hero" aria-labelledby="hero-title">
+  <div class="container hero-grid">
+    <div class="hero-copy">
+      <a class="hero-pill h-enter" style="--d:0" href="#friends"><b>New</b><span>The Lobby, rooms and a weekly Build Jam, inside Studio</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+      <h1 id="hero-title" class="hero-title" data-split data-split-manual tabindex="-1"><span class="ln">Hang out.</span> <span class="ln">Work alongside.</span> <span class="ln"><span class="grad shimmer">Build when you want.</span></span></h1>
+      <p class="hero-lede h-enter" style="--d:3">Mefi Studio is a free app for Windows where you and your friends hang out, chat in rooms and listen together. When an idea clicks, coding agents build it in your project while you keep talking.</p>
+      <div class="cta-row h-enter" style="--d:4">
+        <a class="btn btn-primary btn-lg" href="download.html" data-magnetic><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>Download for Windows</a>
+        <a class="btn btn-lg" href="https://discord.gg/xgfKc5pVxG" rel="noopener"><svg class="fill" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.3 4.4A19.6 19.6 0 0 0 15.4 3l-.6 1.3a18.2 18.2 0 0 0-5.6 0L8.6 3a19.6 19.6 0 0 0-4.9 1.5C.6 9.1-.3 13.7.1 18.2a19.8 19.8 0 0 0 6 3l1.3-2.1a12.8 12.8 0 0 1-2-1l.5-.4a14.1 14.1 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.7 19.7 0 0 0 6-3c.5-5.2-.8-9.8-3.6-13.8ZM8 15.5c-1.2 0-2.2-1.1-2.2-2.4S6.8 10.7 8 10.7s2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Zm8 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Z"/></svg>Join the Discord</a>
+      </div>
+      <ul class="hero-meta h-enter" style="--d:5">
+        <li>Free and open source</li>
+        <li>Windows 10 and 11</li>
+        <li>No Studio account</li>
+      </ul>
+      <div class="hero-live h-enter" style="--d:6">
+        <p class="pulse" data-discord-pulse hidden><span class="dot" aria-hidden="true"></span><span data-pulse-text></span></p>
+        <p class="hero-release" data-latest-hint>Latest release on <a href="https://github.com/nateecho32-stack/mefi-studio/releases/latest" rel="noopener">GitHub</a></p>
+      </div>
+    </div>
+    <div class="hero-stage h-enter" style="--d:2" aria-hidden="true">
+      <div class="orb" id="hero-orb"><span class="orb-pearl"></span></div>
+      <ul class="orb-friends" id="orb-friends">
+        <li class="orb-friend" data-i="0"><i style="--h:146">M</i><b>Maxwell</b><span>building Pixel Forge</span></li>
+        <li class="orb-friend" data-i="1"><i style="--h:268">J</i><b>Juno</b><span>in Friday jam</span></li>
+        <li class="orb-friend" data-i="2"><i style="--h:32">R</i><b>Rook</b><span>listening together</span></li>
+        <li class="orb-friend" data-i="3"><i style="--h:196">S</i><b>Sol</b><span>just joined</span></li>
+      </ul>
+    </div>
+  </div>
+  <button type="button" class="replay h-enter" style="--d:7" id="replay-intro" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>Watch it build again</button>
+</section>
+
+<!-- SHOWCASE: the real app, four screens -->
+<section class="showcase" id="look" aria-labelledby="look-title">
+  <div class="container">
+    <div class="section-head center">
+      <p class="eyebrow">A look inside</p>
+      <h2 id="look-title" data-split>Your friends and your projects, <span class="grad">in one window.</span></h2>
+    </div>
+    <div class="show-stage" data-scene>
+      <div class="show-tilt">
+        <div class="win" data-tilt="2.5">
+          <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i><span>Mefi Studio <em data-win-title>The Lobby</em></span></div>
+          <div class="win-screens">
+            <img class="win-shot is-on" data-screen="0" src="assets/shots/site/lobby.webp" srcset="assets/shots/site/lobby-960.webp 960w, assets/shots/site/lobby.webp 1920w" sizes="(max-width: 1260px) 94vw, 1180px" width="1920" height="1080" alt="The Lobby in Mefi Studio: three friends online, Building now, the top project of the week, the rooms open now and your week's credits.">
+            <img class="win-shot" data-screen="1" src="assets/shots/site/room.webp" srcset="assets/shots/site/room-960.webp 960w, assets/shots/site/room.webp 1920w" sizes="(max-width: 1260px) 94vw, 1180px" width="1920" height="1080" loading="lazy" alt="A room called Friday jam: friends chatting about a jam tonight, with a Listen together button.">
+            <img class="win-shot" data-screen="2" src="assets/shots/site/social.webp" srcset="assets/shots/site/social-960.webp 960w, assets/shots/site/social.webp 1920w" sizes="(max-width: 1260px) 94vw, 1180px" width="1920" height="1080" loading="lazy" alt="Social mode's Today: a box to describe an idea with Build it, and the board of what needs you, what is running, what is in review and what is done.">
+            <img class="win-shot" data-screen="3" src="assets/shots/site/studio.webp" srcset="assets/shots/site/studio-960.webp 960w, assets/shots/site/studio.webp 1920w" sizes="(max-width: 1260px) 94vw, 1180px" width="1920" height="1080" loading="lazy" alt="Studio mode: the session list on the left, Today in the middle with what needs you and what is running, and the team and live activity on the right.">
+          </div>
+        </div>
+      </div>
+      <div class="show-float" aria-hidden="true">
+        <span class="float-chip f1" data-parallax="-0.07"><i class="av" style="--h:268">J</i>Juno came online</span>
+        <span class="float-chip f2" data-parallax="0.09"><i class="eq"><b></b><b></b><b></b><b></b></i>Listening together</span>
+        <span class="float-chip f3" data-parallax="-0.11"><i class="spark"></i>3 agents building</span>
+        <span class="float-chip f4" data-parallax="0.06"><i class="ok"></i>Checks passed</span>
+      </div>
+    </div>
+    <div class="win-tabs" role="tablist" aria-label="Screens from Mefi Studio">
+      <button type="button" role="tab" aria-selected="true" data-screen="0"><b>The Lobby</b><small>What friends are making</small><i class="bar"><i></i></i></button>
+      <button type="button" role="tab" aria-selected="false" data-screen="1"><b>Rooms</b><small>Chat and listen together</small><i class="bar"><i></i></i></button>
+      <button type="button" role="tab" aria-selected="false" data-screen="2"><b>Social</b><small>Your day at a glance</small><i class="bar"><i></i></i></button>
+      <button type="button" role="tab" aria-selected="false" data-screen="3"><b>Studio</b><small>Every task as a session</small><i class="bar"><i></i></i></button>
+    </div>
+    <p class="fine center show-note">Real screens from Studio, with made-up friends and projects.</p>
   </div>
 </section>
 
 <!-- WORKS WITH -->
-<section class="works-with" aria-labelledby="works-title">
+<section class="works" aria-labelledby="works-title">
   <div class="container">
-    <p class="works-title" id="works-title">Bring the agent you already use</p>
-    <div class="marquee" data-marquee>
-      <ul class="marquee-track">
-        <li>Codex</li>
-        <li>Claude Code</li>
-        <li>Grok</li>
-        <li>Antigravity</li>
-        <li>Your own CLI login</li>
-        <li>Any API key</li>
-        <li>Local models</li>
+    <h2 class="works-title" id="works-title" data-reveal>Bring the agent you already use</h2>
+  </div>
+  <div class="marquee" data-play>
+    <ul class="marquee-track">
+      <li>Claude Code</li><li>Codex</li><li>OpenCode</li><li>Grok</li><li>Antigravity</li><li>OpenRouter</li><li>z.ai</li><li>LM Studio</li><li>Any API key</li><li>Local models</li>
+    </ul>
+    <ul class="marquee-track" aria-hidden="true">
+      <li>Claude Code</li><li>Codex</li><li>OpenCode</li><li>Grok</li><li>Antigravity</li><li>OpenRouter</li><li>z.ai</li><li>LM Studio</li><li>Any API key</li><li>Local models</li>
+    </ul>
+  </div>
+  <div class="container">
+    <p class="fine center" data-reveal>Use the login or key you already have, or start free with OpenCode's free models. Product names belong to their owners, and Studio isn't affiliated with them.</p>
+  </div>
+</section>
+
+<!-- FRIENDS -->
+<section class="friends" id="friends" aria-labelledby="friends-title">
+  <div class="container friends-grid">
+    <div class="friends-copy">
+      <p class="eyebrow" data-reveal>Friends</p>
+      <h2 id="friends-title" data-split>Start with <span class="grad">your people.</span></h2>
+      <p class="lede" data-reveal>Open Studio and The Lobby shows who's around, what they're making and which rooms are open. Hop into a hangout, put on a song for everyone and keep each other company while you work.</p>
+      <ul class="friend-points" data-stagger="90">
+        <li data-reveal><b>The Lobby.</b> Who's online and where, what friends are building (when they share it) and the week's top project.</li>
+        <li data-reveal><b>Rooms.</b> Hangouts for up to 25 and cowork rooms for up to 10, with a chat that fills in what you missed.</li>
+        <li data-reveal><b>Listen together.</b> One song for the whole room, at the same moment.</li>
+        <li data-reveal><b>Pop-ups.</b> A nudge when a friend opens Studio, invites you or plays what you made.</li>
       </ul>
+      <p class="fine" data-reveal>Friends runs on the Mefi Studio relay, a free service built into Studio: sign in with Discord once, through the Void Engine community server, and there's nothing else to set up. The relay keeps no chat, and the rest of Studio never needs the sign-in.</p>
     </div>
-    <p class="fine center">Start here can install and sign in the first four. Product names belong to their owners, and Studio isn't affiliated with them.</p>
-  </div>
-</section>
-
-<!-- 0.5: A FIRST LOOK -->
-<section class="first-look" id="first-look" aria-labelledby="look-title">
-  <div class="container">
-    <div class="section-head center" data-reveal>
-      <p class="eyebrow"><span class="status next">Coming in 0.5</span></p>
-      <h2 id="look-title">A first look at the 0.5 layout.</h2>
-      <p>Social and Studio, the two modes (Vibe and Build in 0.4.4), share one frame: your sessions on the left, the work in the middle, an inspector beside it, tabs on top and a status bar below. It is built on main and becomes Studio’s only layout in 0.5. The download is still 0.4.4.</p>
-    </div>
-    <div class="look" data-look data-reveal>
-      <div class="look-tabs" role="tablist" aria-label="Screens from the 0.5 layout">
-        <button type="button" role="tab" id="look-tab-build" aria-controls="look-build" aria-selected="true">Studio</button>
-        <button type="button" role="tab" id="look-tab-today" aria-controls="look-today" aria-selected="false" tabindex="-1">Today</button>
-        <button type="button" role="tab" id="look-tab-inbox" aria-controls="look-inbox" aria-selected="false" tabindex="-1">Inbox</button>
-        <button type="button" role="tab" id="look-tab-changes" aria-controls="look-changes" aria-selected="false" tabindex="-1">Changes</button>
-        <button type="button" role="tab" id="look-tab-ask" aria-controls="look-ask" aria-selected="false" tabindex="-1">Questions</button>
-        <button type="button" role="tab" id="look-tab-search" aria-controls="look-search" aria-selected="false" tabindex="-1">Search</button>
-        <button type="button" role="tab" id="look-tab-size" aria-controls="look-size" aria-selected="false" tabindex="-1">Size</button>
+    <div class="friends-stage" data-play aria-hidden="true">
+      <div class="fr-shot">
+        <img src="assets/shots/site/lobby-960.webp" srcset="assets/shots/site/lobby-960.webp 960w, assets/shots/site/lobby.webp 1920w" sizes="(max-width: 960px) 92vw, 640px" width="1920" height="1080" loading="lazy" alt="">
       </div>
-      <div class="look-panels">
-      <div class="look-panel" id="look-build" role="tabpanel" aria-labelledby="look-tab-build" tabindex="0">
-        <figure class="frame window look-shot">
-          <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i><span>Studio</span></div>
-          <a class="zoom" href="assets/shots/05/build.webp"><img src="assets/shots/05/build.webp" width="1920" height="1080" alt="Studio mode in the 0.5 layout: sessions on the left, a running session with its steps and live output in the middle, and its plan, brief, checks and versions in the inspector." loading="lazy" decoding="async"><span class="visually-hidden"> (open a larger view)</span></a>
-        </figure>
-        <div class="look-copy">
-          <h3>Studio: your tasks as sessions</h3>
-          <p>Every task is a session with a thread: the brief, each run with its steps, your notes and questions, and what the worker said.</p>
-          <ul class="ticks"><li>Grouped as Needs you, Running, Review, Queued and Done.</li><li>An inspector with Plan, Changes, Checks, Preview and Agent.</li><li>A box for a Note, an Ask or a Change, with pictures and the @ # / picker.</li></ul>
+      <div class="fr-card fr-online" data-parallax="-0.05">
+        <p class="fr-label"><i class="dot live"></i>3 online now</p>
+        <ul>
+          <li><i class="av" style="--h:146">M</i><b>Maxwell</b><span>Flame · In Friday jam</span></li>
+          <li><i class="av" style="--h:268">J</i><b>Juno</b><span>Ember · In the Lobby</span></li>
+          <li><i class="av" style="--h:32">R</i><b>Rook</b><span>Spark · In Studio</span></li>
+        </ul>
+      </div>
+      <div class="fr-card fr-chat" data-parallax="0.07">
+        <p class="fr-label">Friday jam <span>Hangout · 4 here</span></p>
+        <div class="fr-msg"><i class="av" style="--h:146">M</i><p><b>Maxwell</b>Anyone up for a jam tonight?</p></div>
+        <div class="fr-msg"><i class="av" style="--h:268">J</i><p><b>Juno</b>Me! Bringing the new tileset.</p></div>
+        <div class="fr-msg me"><i class="av">Y</i><p><b>You</b>I'm in. See you at 8.</p></div>
+        <div class="fr-typing"><i></i><i></i><i></i></div>
+      </div>
+      <div class="fr-card fr-listen" data-parallax="-0.09">
+        <div class="fr-disc"></div>
+        <div>
+          <p class="fr-label">Listening together</p>
+          <b>Late night lo-fi</b>
+          <span class="fr-eq"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
         </div>
+        <span class="fr-sync">In sync · 4</span>
       </div>
-      <div class="look-panel" id="look-today" role="tabpanel" aria-labelledby="look-tab-today" tabindex="0">
-        <figure class="frame window look-shot">
-          <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i><span>Today</span></div>
-          <a class="zoom" href="assets/shots/05/today.webp"><img src="assets/shots/05/today.webp" width="1920" height="1080" alt="Social in the 0.5 layout: What’s next for Sunrise? with a box to build or talk it over, and a board of Needs you, Running, Review and Done today cards." loading="lazy" decoding="async"><span class="visually-hidden"> (open a larger view)</span></a>
-        </figure>
-        <div class="look-copy">
-          <h3>Today: Social’s calm home</h3>
-          <p>Social opens on Today: say what you want next, and keep an eye on what needs you, what runs, what to review and what is done.</p>
-          <ul class="ticks"><li>Answer a question or a permission from its card.</li><li>Mefi’s own decisions show with an Undo.</li><li>The same frame, tabs and status bar as Studio mode.</li></ul>
-        </div>
-      </div>
-      <div class="look-panel" id="look-inbox" role="tabpanel" aria-labelledby="look-tab-inbox" tabindex="0">
-        <figure class="frame window look-shot">
-          <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i><span>Inbox</span></div>
-          <a class="zoom" href="assets/shots/05/inbox.webp"><img src="assets/shots/05/inbox.webp" width="1920" height="1080" alt="Work › Inbox: a question from OpenCode with Mefi’s suggestion and two options, and a failed check with Try again, It’s done and Drop it." loading="lazy" decoding="async"><span class="visually-hidden"> (open a larger view)</span></a>
-        </figure>
-        <div class="look-copy">
-          <h3>One Inbox for everything waiting on you</h3>
-          <p>Questions, permissions, approvals, reviews and stopped tasks, in one list that every count in the window agrees with.</p>
-          <ul class="ticks"><li>The recommended answer comes first, with Mefi’s reason.</li><li>Decide later, or answer in your own words.</li><li>Ctrl J opens it from anywhere; a Windows notification opens it too.</li></ul>
-        </div>
-      </div>
-      <div class="look-panel" id="look-changes" role="tabpanel" aria-labelledby="look-tab-changes" tabindex="0">
-        <figure class="frame window look-shot">
-          <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i><span>Changes</span></div>
-          <a class="zoom" href="assets/shots/05/changes.webp"><img src="assets/shots/05/changes.webp" width="1920" height="1080" alt="A finished session in review: the worker’s run and a picture you attached in the thread, and four changed files with Accept changes, Revert attempt and Revert per file in the inspector." loading="lazy" decoding="async"><span class="visually-hidden"> (open a larger view)</span></a>
-        </figure>
-        <div class="look-copy">
-          <h3>See what changed, and take it back</h3>
-          <p>After a worker runs, the inspector lists the files it changed. Accept them, or revert one file or the whole attempt.</p>
-          <ul class="ticks"><li>A private before and after copy of the folder, so a revert can be undone.</li><li>Lint and typecheck after an attempt, as advice.</li><li>Pictures on a message, read back in the thread.</li></ul>
-        </div>
-      </div>
-      <div class="look-panel" id="look-ask" role="tabpanel" aria-labelledby="look-tab-ask" tabindex="0">
-        <figure class="frame window look-shot">
-          <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i><span>Questions</span></div>
-          <a class="zoom" href="assets/shots/05/ask.webp"><img src="assets/shots/05/ask.webp" width="1920" height="1080" alt="A session whose worker asks: Should the empty state also appear when a search has no matches? with Yes, reuse it, Only when there are no notes and Decide later, above the message box." loading="lazy" decoding="async"><span class="visually-hidden"> (open a larger view)</span></a>
-        </figure>
-        <div class="look-copy">
-          <h3>Questions that wait for you, not on you</h3>
-          <p>When a worker needs a decision, the question sits above the box with its options, Mefi’s suggestion and why.</p>
-          <ul class="ticks"><li>Pick an option, answer in your own words, or decide later.</li><li>The plan, brief and acceptance checks stay beside it.</li><li>Every saved change to the brief is kept as a version.</li></ul>
-        </div>
-      </div>
-      <div class="look-panel" id="look-search" role="tabpanel" aria-labelledby="look-tab-search" tabindex="0">
-        <figure class="frame window look-shot">
-          <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i><span>Search</span></div>
-          <a class="zoom" href="assets/shots/05/search.webp"><img src="assets/shots/05/search.webp" width="1920" height="1080" alt="Search (Ctrl K) open over Studio mode: sessions with their state, and the places on the rail with their keys." loading="lazy" decoding="async"><span class="visually-hidden"> (open a larger view)</span></a>
-        </figure>
-        <div class="look-copy">
-          <h3>Search, and everything else, in one place</h3>
-          <p>Ctrl K finds sessions, ideas, pages and actions, and can add work: type “task …” or “idea …”.</p>
-          <ul class="ticks"><li>It starts with what you used last.</li><li>Tabs you add and pin, which Studio keeps tidy.</li><li>Ctrl T, Ctrl W, Ctrl Tab and Ctrl 1 to 9.</li></ul>
-        </div>
-      </div>
-      <div class="look-panel" id="look-size" role="tabpanel" aria-labelledby="look-tab-size" tabindex="0">
-        <figure class="frame window look-shot look-shot-detail">
-          <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i><span>Size</span></div>
-          <a class="zoom" href="assets/shots/05/size.webp"><img src="assets/shots/05/size.webp" width="1112" height="860" alt="Size and density: sliders for interface scale and text size, density and detail choices, and a live miniature of the window beside them." loading="lazy" decoding="async"><span class="visually-hidden"> (open a larger view)</span></a>
-        </figure>
-        <div class="look-copy">
-          <h3>Size and density, with a live preview</h3>
-          <p>Make text and information bigger or smaller and watch a miniature of the window change before you apply it.</p>
-          <ul class="ticks"><li>Interface scale, text size, three densities and three detail levels.</li><li>No more flipping back and forth to check a setting.</li><li>Ctrl +, Ctrl − and Ctrl 0, remembered.</li></ul>
-        </div>
-      </div>
-      </div>
-    </div>
-    <p class="fine center look-note">Real screens from the current build, with sample data from a made-up Notes app and Sunrise project.</p>
-  </div>
-</section>
-
-<!-- MOVING TO RUST -->
-<section class="band rust" id="rust" aria-labelledby="rust-title">
-  <div class="container rust-grid">
-    <div class="section-head" data-reveal>
-      <p class="eyebrow">Under the hood</p>
-      <h2 id="rust-title">Studio is moving to Rust.</h2>
-      <p>Studio is moving from Electron to Rust with Tauri 2, in stages. The interface stays the same, and so do your settings and saved keys. The app keeps working at every step, and each part that moves gives the same answers as the code it replaces, held equal by tests that run both.</p>
-      <p class="fine">Started 3 October 2026. The download is still the Electron build, and the switch has no date yet.</p>
-      <div class="cta-row"><a class="btn" href="roadmap.html#moving-to-rust">Follow it on the roadmap <span aria-hidden="true">→</span></a></div>
-    </div>
-    <ol class="stages" data-reveal>
-      <li class="stage is-done">
-        <span class="stage-n" aria-hidden="true">1</span>
-        <div><h3>The Rust host</h3><p>Rust runs the window, the tray, dialogs, notifications, saved keys and the page’s bridge, with the engine beside it. It already runs from source, and a portable build can ship on it.</p><span class="status next">Built on main</span></div>
-      </li>
-      <li class="stage is-now">
-        <span class="stage-n" aria-hidden="true">2</span>
-        <div><h3>The engine moves into Rust</h3><p>Part by part: so far the session store, sync and worktrees, the file picker’s search, the Git chip, Skills, pictures, Revert, and settings and keys. Early result: the usage ledger’s repeat reads are about nine times faster.</p><span class="status progress">In progress</span></div>
-      </li>
-      <li class="stage">
-        <span class="stage-n" aria-hidden="true">3</span>
-        <div><h3>One Rust program</h3><p>A release carries only the Rust host, with no Node runtime beside it. One bridge release carries today’s installs across.</p><span class="status planned">Planned</span></div>
-      </li>
-    </ol>
-  </div>
-</section>
-
-<!-- PILLARS -->
-<section class="pillars" aria-labelledby="pillars-title">
-  <div class="container">
-    <div class="section-head center" data-reveal>
-      <p class="eyebrow">What Studio is</p>
-      <h2 id="pillars-title">A studio for making things, with company.</h2>
-      <p>Describe what you want and agents build it in your project. You stay in charge, and people are close by when you want them.</p>
-    </div>
-    <div class="grid-4">
-      <a class="card card-link pillar" href="features.html#build" data-reveal>
-        <span class="glyph"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3l1.9 5.1L18 10l-5.1 1.9L11 17l-1.9-5.1L4 10l5.1-1.9Z"/><path d="M18.5 15v5M16 17.5h5"/></svg></span>
-        <h3>Build with agents</h3>
-        <p>Type an idea, a fix or a question. <b>Build it</b> puts coding agents to work in your project folder, and finished work waits in <b>Review</b> until its checks pass.</p>
-        <span class="more">How building works <span aria-hidden="true">→</span></span>
-      </a>
-      <a class="card card-link pillar" href="features.html#friends" data-reveal>
-        <span class="glyph void"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h10a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H9l-4 3v-3H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/><path d="M19 9h1a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-1v3l-4-3h-3"/></svg></span>
-        <h3>Hang out and share</h3>
-        <p>Show what you're making in the Discord, trade feedback and keep each other company while you build. From 0.5, The Lobby, rooms and a Project hub come inside Studio, with nothing to set up.</p>
-        <span class="more">The social side <span aria-hidden="true">→</span></span>
-      </a>
-      <a class="card card-link pillar" href="features.html#in-charge" data-reveal>
-        <span class="glyph"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.4-2.9 8.2-7 10-4.1-1.8-7-5.6-7-10V6Z"/><path d="M9 12l2 2 4-4"/></svg></span>
-        <h3>Stay in charge</h3>
-        <p>Choose how much agents do alone, from <b>Always ask</b> to <b>Auto</b>. Questions wait in one <b>Needs you</b> list, and every automatic choice has a <b>Why</b> and an <b>Undo</b>.</p>
-        <span class="more">You decide <span aria-hidden="true">→</span></span>
-      </a>
-      <a class="card card-link pillar" href="features.html#make-it-yours" data-reveal>
-        <span class="glyph gold"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1 0 1.6-.7 1.6-1.5 0-1-.8-1.4-.8-2.3 0-.9.7-1.6 1.6-1.6H17a4 4 0 0 0 4-4C21 6.8 17 3 12 3Z"/><path d="M7.5 12h.01M9.5 7.5h.01M14.5 7.5h.01"/></svg></span>
-        <h3>Make it yours</h3>
-        <p>Twelve colour themes (Chrome, the matte black one, is new in 0.5), eight animated node styles, your own colours, and music or a video behind your work. Every look is free.</p>
-        <span class="more">Themes and styles <span aria-hidden="true">→</span></span>
-      </a>
     </div>
   </div>
 </section>
 
-<!-- WATCH IT WORK -->
-<section class="flow" id="flow" aria-labelledby="flow-title">
-  <div class="container">
-    <div class="section-head center" data-reveal>
-      <p class="eyebrow">Watch it work</p>
-      <h2 id="flow-title">From one sentence to finished work.</h2>
-      <p>An illustration of a single request moving through Studio, drawn with sample data from a made-up Notes app.</p>
-    </div>
-    <div class="flow-grid" data-flow data-reveal>
-      <div class="flow-side">
-        <div class="flow-steps" role="group" aria-label="Steps in the illustration">
-          <button type="button" class="flow-tab" data-tab="0" aria-current="step">
-            <span class="n">1</span>
-            <span class="t"><b>Say what you want</b><small>Type an idea, a fix or a question into Vibe. No setup ceremony, no ticket to file.</small></span>
-            <i class="bar"><i></i></i>
-          </button>
-          <button type="button" class="flow-tab" data-tab="1">
-            <span class="n">2</span>
-            <span class="t"><b>Agents get to work</b><small>Big requests become small steps. Builders work on them side by side while you keep going.</small></span>
-            <i class="bar"><i></i></i>
-          </button>
-          <button type="button" class="flow-tab" data-tab="2">
-            <span class="n">3</span>
-            <span class="t"><b>You make the calls</b><small>When an agent needs a decision it waits in <b>Needs you</b> with a recommended answer, or takes your own words.</small></span>
-            <i class="bar"><i></i></i>
-          </button>
-          <button type="button" class="flow-tab" data-tab="3">
-            <span class="n">4</span>
-            <span class="t"><b>Checked, then done</b><small>Finished work waits in Review until its checks pass, then lands in Freshly done.</small></span>
-            <i class="bar"><i></i></i>
-          </button>
-          <button type="button" class="flow-tab" data-tab="4">
-            <span class="n">5</span>
-            <span class="t"><b>See it as a tree</b><small>Command view draws the same work as a live tree of tasks and builders.</small></span>
-            <i class="bar"><i></i></i>
-          </button>
-        </div>
-        <button type="button" class="flow-toggle" aria-pressed="false"><svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg><svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5l12 7-12 7Z"/></svg><span>Pause</span></button>
+<!-- JOURNEY: pinned while it plays -->
+<section class="journey" id="how" aria-labelledby="how-title" data-scene="pin">
+  <div class="jn-pin">
+    <div class="container jn-grid">
+      <div class="jn-copy">
+        <p class="eyebrow">How it goes</p>
+        <h2 id="how-title">From “what if” to <span class="grad">“it works.”</span></h2>
+        <ol class="jn-steps" id="jn-steps">
+          <li data-step="0" class="is-on"><b>Hang out</b><span>Friends chat in a room, with a song playing for everyone.</span></li>
+          <li data-step="1"><b>Say what you want</b><span>Type the idea into Social's box and press Build it. No setup, no ticket.</span></li>
+          <li data-step="2"><b>Agents build it</b><span>Claude Code, Codex or OpenCode work in your project while you keep chatting.</span></li>
+          <li data-step="3"><b>You make the calls</b><span>When a choice matters, it waits in your Inbox with a recommended answer.</span></li>
+          <li data-step="4"><b>Checked, then yours</b><span>Finished work waits for its checks. Accept it, or take it back.</span></li>
+          <li data-step="5"><b>Share it</b><span>Put it on the Project hub. When friends play it, you both earn credits.</span></li>
+        </ol>
+        <p class="fine jn-note">An illustration with made-up friends, sped up to fit the page.</p>
       </div>
-      <div class="flow-stage">
-        <p class="visually-hidden">Illustration: a request typed into Vibe becomes three tasks that agents build. One task asks a question and waits for an answer, then its checks pass and it moves to Freshly done. Command view then shows the same work as a tree.</p>
-        <div class="demo-wrap">
-          <div class="demo" data-beat="0" data-view="vibe" aria-hidden="true">
-            <div class="d-top">
-              <span class="d-dots"><i></i><i></i><i></i></span>
-              <span class="d-project"><i class="d-mark">M+</i>Notes app</span>
-              <span class="d-seg"><b data-seg="vibe">Vibe</b><b data-seg="cmd">Command</b></span>
-              <span class="d-live"><i></i><span data-map="0:Idle|1:3 agents building|2:3 agents · 1 needs you|3:2 agents building|4:1 agent building|5:1 agent building">Idle</span></span>
+      <div class="jn-stage" aria-hidden="true">
+        <div class="jn-fit">
+          <div class="jn-app" id="jn-app" data-beat="0">
+            <div class="jn-top">
+              <span class="jn-dots"><i></i><i></i><i></i></span>
+              <span class="jn-seg"><b class="on">Social</b><b>Studio</b></span>
+              <span class="jn-crumb"><span class="v-room">Friends / Friday game night</span><span class="v-today">Game night / Today</span><span class="v-hub">Friends / Project hub</span></span>
+              <span class="jn-pill need"><i></i><em>1 needs you</em></span>
+              <span class="jn-pill work"><i></i><em class="w-n">3</em> working</span>
             </div>
-
-            <div class="d-vibe">
-              <div class="d-title">What's next for Notes app?</div>
-              <div class="d-input">
-                <span class="d-typed" data-type="Show a friendly empty state when there are no notes"></span><i class="d-caret"></i>
-                <span class="d-ph swap" data-show="1-5">Describe what to build next…</span>
-                <span class="d-send">Build it</span>
-              </div>
-              <div class="d-needs" data-show="2-2"><div class="in"><div class="d-nbox">
-                <div class="d-q"><span class="d-chip warn">Needs you</span><span>Should the empty state also appear when a search has no matches?</span></div>
-                <div class="d-opts">
-                  <span class="d-opt rec"><b>Yes, one component for both</b><em>Recommended</em></span>
-                  <span class="d-opt"><b>No, only when there are no notes</b></span>
+            <div class="jn-body">
+              <div class="jn-rail"><i class="r-friends"></i><i class="r-today"></i><i class="r-work"></i><i class="r-map"></i></div>
+              <div class="jn-main">
+                <!-- the room -->
+                <div class="jn-view jn-room">
+                  <div class="jn-room-head"><b>Friday game night</b><span>Hangout · 3 here</span><span class="jn-listen"><span class="fr-eq"><i></i><i></i><i></i><i></i></span>Listening together</span></div>
+                  <div class="jn-msgs">
+                    <div class="jn-msg m1"><i class="av" style="--h:146">M</i><p><b>Maxwell</b>Friday game night. Can we stop losing the plan in chat?</p></div>
+                    <div class="jn-msg m2"><i class="av" style="--h:330">T</i><p><b>Tess</b>Please. I never know what time it starts.</p></div>
+                    <div class="jn-msg m3 me"><i class="av">Y</i><p><b>You</b>On it. I'll make us a page.</p></div>
+                    <div class="jn-msg m4"><i class="av" style="--h:146">M</i><p><b>Maxwell</b>Wait, it's done already? Okay, that's actually useful.</p></div>
+                    <div class="jn-msg m5"><i class="av" style="--h:330">T</i><p><b>Tess</b>RSVP'd. See you Friday!</p></div>
+                  </div>
+                  <div class="jn-compose">Message Friday game night</div>
                 </div>
-                <div class="d-own">or answer in your own words</div>
-                <div class="d-answered"><span class="d-chip ok">✓ Answered</span> Yes, one component for both</div>
-              </div></div></div>
-              <div class="d-cols">
-                <div class="d-col">
-                  <h4>Building now <em data-map="0:0|1:3|2:3|3:2|4:1|5:1">0</em></h4>
-                  <div class="d-task" data-show="1-2"><div class="in"><div class="d-card">
-                    <div class="d-t">Empty-state component</div>
-                    <div class="d-s stack"><span data-show="1-1" class="swap">writing EmptyState.tsx</span><span data-show="2-2" class="swap"><span class="d-chip warn">Waiting for you</span></span></div>
-                    <div class="d-bar"><i data-w="1:44|2:70"></i></div>
-                  </div></div></div>
-                  <div class="d-task" data-show="1-3"><div class="in"><div class="d-card">
-                    <div class="d-t">Hook up search</div>
-                    <div class="d-s">reading Search.tsx</div>
-                    <div class="d-bar"><i data-w="1:28|2:52|3:88"></i></div>
-                  </div></div></div>
-                  <div class="d-task" data-show="1-4"><div class="in"><div class="d-card">
-                    <div class="d-t">Copy and tests</div>
-                    <div class="d-s">drafting the empty text</div>
-                    <div class="d-bar"><i data-w="1:18|2:36|3:64|4:92"></i></div>
-                  </div></div></div>
+                <!-- Today -->
+                <div class="jn-view jn-today">
+                  <div class="jn-hello"><i class="jn-orb"></i><div><small>Good evening · Social</small><b>What's next for Game night?</b></div></div>
+                  <div class="jn-box">
+                    <p class="jn-typed"><span id="jn-typed"></span><i class="jn-caret"></i></p>
+                    <div class="jn-box-row"><span class="jn-chip">Add files</span><span class="jn-chip">Auto</span><span class="jn-build"><i></i>Build it</span></div>
+                  </div>
+                  <div class="jn-board">
+                    <div class="jn-col c-need"><h5>Needs you <em class="n-need">0</em></h5>
+                      <div class="jn-ask">
+                        <p class="q">Should RSVPs close an hour before it starts?</p>
+                        <span class="opt rec">Yes, an hour before <em>Recommended</em></span>
+                        <span class="opt">No, keep them open</span>
+                        <span class="jn-answered">✓ Answered</span>
+                      </div>
+                    </div>
+                    <div class="jn-col c-run"><h5>Running <em class="n-run">0</em></h5>
+                      <div class="jn-task t1"><b>Lay out the page</b><small><span class="a">Claude Code</span> · <span class="s1">reading the project</span><span class="s2">writing index.html</span></small><i class="jn-bar"><i></i></i></div>
+                      <div class="jn-task t2"><b>Make the RSVP work</b><small><span class="a">Codex</span> · <span class="s1">reading form.js</span><span class="s2">waiting for you</span></small><i class="jn-bar"><i></i></i></div>
+                      <div class="jn-task t3"><b>Write the invite</b><small><span class="a">OpenCode</span> · <span class="s1">drafting the text</span><span class="s2">checking its work</span></small><i class="jn-bar"><i></i></i></div>
+                    </div>
+                    <div class="jn-col c-done"><h5>Done <em class="n-done">0</em></h5>
+                      <div class="jn-review">
+                        <p class="ck"><i></i>Tests pass <em>12 of 12</em></p>
+                        <p class="ck"><i></i>Lint is clean</p>
+                        <p class="ck"><i></i>The page builds</p>
+                        <p class="files">3 files changed <span class="acc">Accept</span><span class="rev">Revert</span></p>
+                      </div>
+                      <div class="jn-done-card"><b>Game-night page</b><small>✓ Done · 3 files</small></div>
+                    </div>
+                  </div>
                 </div>
-                <div class="d-col">
-                  <h4>Review <em data-map="0:0|3:1|4:1|5:1">0</em></h4>
-                  <div class="d-task" data-show="3-3"><div class="in"><div class="d-card">
-                    <div class="d-t">Empty-state component</div>
-                    <ul class="d-checks">
-                      <li style="--k:0">Tests pass <em>14 of 14</em></li>
-                      <li style="--k:1">Lint is clean</li>
-                      <li style="--k:2">The app builds</li>
-                    </ul>
-                  </div></div></div>
-                  <div class="d-task" data-show="4-5"><div class="in"><div class="d-card">
-                    <div class="d-t">Hook up search</div>
-                    <div class="d-s"><span class="d-spin"></span>checking its work</div>
-                  </div></div></div>
-                </div>
-                <div class="d-col">
-                  <h4>Freshly done <em data-map="0:0|4:1|5:1">0</em></h4>
-                  <div class="d-task" data-show="4-5"><div class="in"><div class="d-card done">
-                    <div class="d-t">Empty-state component</div>
-                    <div class="d-s">3 files changed</div>
-                    <span class="d-chip ok">✓ Done</span>
-                  </div></div></div>
+                <!-- Project hub -->
+                <div class="jn-view jn-hub">
+                  <div class="jn-hub-head"><b>Project hub</b><span>Share what you make. Play what friends make.</span></div>
+                  <div class="jn-proj">
+                    <div class="jn-proj-art"><span>FRI</span><b>8 PM</b><em>RSVP</em></div>
+                    <div class="jn-proj-copy">
+                      <small>Shared by you · app</small>
+                      <b>Game night</b>
+                      <p>The time, the place and an RSVP button.</p>
+                      <div class="jn-plays"><i class="av" style="--h:146">M</i><i class="av" style="--h:330">T</i><i class="av" style="--h:268">J</i><span>3 plays</span></div>
+                    </div>
+                    <span class="jn-credit">+5 credits</span>
+                  </div>
+                  <div class="jn-toast"><i class="av" style="--h:146">M</i><p><b>Maxwell played Game night</b>You both earned credits.</p></div>
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="jn-progress" aria-hidden="true"><i></i></div>
+  </div>
+</section>
 
-            <div class="d-cmd">
-              <div class="d-livework"><b>Live work</b><span><i class="g"></i>1 ready</span><span><i class="a"></i>1 verifying</span><span><i class="w"></i>1 building</span></div>
-              <svg viewBox="0 0 400 250" preserveAspectRatio="xMidYMid meet" focusable="false">
-                <defs>
-                  <radialGradient id="dg-done" cx=".35" cy=".3" r=".85"><stop offset="0" stop-color="#c9ffe0"/><stop offset=".55" stop-color="#28a862"/><stop offset="1" stop-color="#0c3e26"/></radialGradient>
-                  <radialGradient id="dg-check" cx=".35" cy=".3" r=".85"><stop offset="0" stop-color="#fff0bd"/><stop offset=".55" stop-color="#c9982f"/><stop offset="1" stop-color="#4d3910"/></radialGradient>
-                  <radialGradient id="dg-work" cx=".35" cy=".3" r=".85"><stop offset="0" style="stop-color:var(--accent-bright)"/><stop offset=".55" style="stop-color:var(--accent)"/><stop offset="1" style="stop-color:color-mix(in srgb, var(--accent) 30%, #000)"/></radialGradient>
-                </defs>
-                <g class="edges">
-                  <path d="M200 42 C200 81 85 81 85 120"/>
-                  <path d="M200 42 L200 134"/>
-                  <path d="M200 42 C200 81 315 81 315 120"/>
-                  <path d="M85 120 C85 158 48 158 48 196"/>
-                  <path d="M85 120 C85 160 122 160 122 200"/>
-                  <path d="M200 134 L200 205"/>
-                  <path d="M315 120 C315 159 285 159 285 198"/>
-                  <path d="M315 120 C315 155 348 155 348 190"/>
-                </g>
-                <g class="pulses">
-                  <path pathLength="100" d="M200 42 C200 81 315 81 315 120" style="--dl:0s"/>
-                  <path pathLength="100" d="M200 42 L200 134" style="--dl:.7s"/>
-                  <path pathLength="100" d="M315 120 C315 159 285 159 285 198" style="--dl:1.3s"/>
-                  <path pathLength="100" d="M200 134 L200 205" style="--dl:.3s"/>
-                  <path pathLength="100" d="M200 42 C200 81 85 81 85 120" style="--dl:1.9s"/>
-                </g>
-                <g class="nodes">
-                  <g transform="translate(200 42)"><g class="node root" style="--k:0"><circle class="halo" r="20"/><circle class="orb" r="15"/><text class="mono" y="3.6">M+</text></g></g>
-                  <g transform="translate(85 120)"><g class="node n-done" style="--k:1"><circle class="orb" r="12"/><path class="tick" d="M-4.5 0.5 L-1.3 3.6 L4.6 -3.4"/></g><text y="26">Empty state</text></g>
-                  <g transform="translate(200 134)"><g class="node n-check" style="--k:2"><circle class="halo" r="17"/><circle class="orb" r="12"/></g><text y="26">Search</text></g>
-                  <g transform="translate(315 120)"><g class="node n-work" style="--k:3"><circle class="halo" r="17"/><circle class="orb" r="12"/></g><text y="26">Copy + tests</text></g>
-                  <g transform="translate(48 196)"><g class="node n-done" style="--k:4"><circle class="orb" r="6.5"/></g></g>
-                  <g transform="translate(122 200)"><g class="node n-done" style="--k:5"><circle class="orb" r="6.5"/></g></g>
-                  <g transform="translate(200 205)"><g class="node n-done" style="--k:6"><circle class="orb" r="6.5"/></g></g>
-                  <g transform="translate(285 198)"><g class="node n-work" style="--k:7"><circle class="halo" r="12"/><circle class="orb" r="6.5"/></g></g>
-                  <g transform="translate(348 190)"><g class="node n-queue" style="--k:8"><circle class="orb" r="6.5"/></g></g>
-                </g>
-              </svg>
-            </div>
-
-            <i class="d-cursor"><svg viewBox="0 0 24 24"><path d="M5 3l14 7.5-6.2 1.6L9.6 19Z"/></svg></i>
-            <i class="d-ripple"></i>
-            <div class="d-toast" data-show="4-4"><span class="d-chip ok">✓</span> Empty-state component is done</div>
+<!-- TWO MODES -->
+<section class="modes" id="modes" aria-labelledby="modes-title">
+  <div class="container">
+    <div class="section-head center">
+      <p class="eyebrow" data-reveal>Two modes, one app</p>
+      <h2 id="modes-title" data-split>Social for hanging out. <span class="grad">Studio for going deep.</span></h2>
+    </div>
+    <div class="mode-switch" role="tablist" aria-label="Modes" data-reveal>
+      <button type="button" role="tab" aria-selected="true" aria-controls="mode-panel" data-mode="social"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c.6 3.6 2.4 5.4 6 6-3.6.6-5.4 2.4-6 6-.6-3.6-2.4-5.4-6-6 3.6-.6 5.4-2.4 6-6Z"/></svg>Social</button>
+      <button type="button" role="tab" aria-selected="false" aria-controls="mode-panel" data-mode="studio"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4 2.6-2.6Z"/></svg>Studio</button>
+      <i class="mode-knob" aria-hidden="true"></i>
+    </div>
+    <div class="mode-panel" id="mode-panel" role="tabpanel" data-mode="social">
+      <div class="mode-copy">
+        <div class="mc mc-social">
+          <h3>Your day at a glance</h3>
+          <p>A box for ideas, fixes and questions, then what needs you, what's running, what's in review and what got done. Friends are one click away.</p>
+        </div>
+        <div class="mc mc-studio">
+          <h3>Every task is a session</h3>
+          <p>Your sessions down the side, each with its thread, plan, changes, checks and preview. Pin tabs and drag the panels to fit the way you work.</p>
+        </div>
+        <p class="fine">Switch any time with <kbd class="key">Ctrl</kbd> <kbd class="key">M</kbd>. Your friends come with you in both.</p>
+      </div>
+      <div class="mode-win" data-reveal="scale">
+        <div class="win" data-tilt="2">
+          <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i><span>Mefi Studio <em class="mw-social">Social · Today</em><em class="mw-studio">Studio · Sessions</em></span></div>
+          <div class="win-screens">
+            <img class="mode-shot ms-social" src="assets/shots/site/social.webp" srcset="assets/shots/site/social-960.webp 960w, assets/shots/site/social.webp 1920w" sizes="(max-width: 1260px) 94vw, 1000px" width="1920" height="1080" loading="lazy" alt="Social mode: Today with the idea box and the board.">
+            <img class="mode-shot ms-studio" src="assets/shots/site/studio.webp" srcset="assets/shots/site/studio-960.webp 960w, assets/shots/site/studio.webp 1920w" sizes="(max-width: 1260px) 94vw, 1000px" width="1920" height="1080" loading="lazy" alt="Studio mode: sessions, the work and the inspector.">
           </div>
         </div>
       </div>
@@ -443,307 +387,314 @@
   </div>
 </section>
 
-<!-- AT A GLANCE -->
-<section class="glance" aria-label="Studio at a glance">
+<!-- STUDIO BENTO -->
+<section class="bento-sec" id="studio" aria-labelledby="studio-title">
   <div class="container">
-    <div class="stats" data-reveal>
-      <div class="stat"><b class="num" data-count="12">12</b><span>colour themes, all free</span></div>
-      <div class="stat"><b class="num" data-count="8">8</b><span>animated node styles</span></div>
-      <div class="stat"><b class="num" data-count="35">35</b><span>guides in the wiki</span></div>
-      <div class="stat" data-live-members hidden><b class="num" data-count="0">0</b><span>people in the Discord</span></div>
+    <div class="section-head">
+      <p class="eyebrow" data-reveal>Studio</p>
+      <h2 id="studio-title" data-split>Build like you brought <span class="grad">a whole team.</span></h2>
+      <p data-reveal>Coding agents do the work in your project folder. You stay in charge of what they do and what lands.</p>
     </div>
-  </div>
-</section>
+    <div class="bento" data-stagger="80">
 
-<!-- COMMUNITY -->
-<section class="band community" aria-labelledby="community-title">
-  <div class="container">
-    <div class="head-row" data-reveal>
-      <div class="section-head">
-        <p class="eyebrow">Community</p>
-        <h2 id="community-title">Good ideas get better with company.</h2>
-        <p>The community meets in the Void Engine Discord today. You don't need Studio to join, and you don't need Discord to use Studio.</p>
-      </div>
-      <a class="btn" href="community.html">Visit the Community page <span aria-hidden="true">→</span></a>
-    </div>
-    <div class="grid-3 community-grid">
-      <article class="card card-feature" data-reveal>
-        <span class="badge live">Open now</span>
-        <h3>In the Discord today</h3>
-        <p>Share what you're making, ask for feedback, swap model setups and keep each other company. Unfinished work and first-timers are welcome.</p>
-        <ul class="ticks">
-          <li><b>/showcase</b> posts your project to #showcase, with credit for anyone who helped</li>
-          <li><b>/cowork start</b> opens a temporary voice room and thread to work side by side</li>
-          <li>New Studio releases are posted in #updates</li>
-        </ul>
+      <article class="bento-card b-map" data-reveal data-play data-spot>
+        <div class="b-art" aria-hidden="true">
+          <svg class="map-svg" viewBox="0 0 520 260">
+            <defs>
+              <radialGradient id="mg-node" cx="35%" cy="30%" r="70%"><stop offset="0" stop-color="#fff"/><stop offset=".45" stop-color="rgb(var(--accent-2-rgb))"/><stop offset="1" stop-color="rgb(var(--accent-3-rgb))" stop-opacity=".9"/></radialGradient>
+              <linearGradient id="mg-wire" x1="0" x2="1"><stop offset="0" stop-color="rgb(var(--accent-2-rgb))" stop-opacity=".9"/><stop offset="1" stop-color="rgb(var(--accent-3-rgb))" stop-opacity=".5"/></linearGradient>
+            </defs>
+            <g class="wires" fill="none" stroke="url(#mg-wire)" stroke-width="1.6">
+              <path id="w1" class="w" d="M80 130 C 150 130, 170 60, 240 60"/>
+              <path id="w2" class="w" d="M80 130 C 150 130, 170 130, 240 130"/>
+              <path id="w3" class="w" d="M80 130 C 150 130, 170 200, 240 200"/>
+              <path id="w4" class="w" d="M240 60 C 300 60, 320 36, 380 36"/>
+              <path id="w5" class="w" d="M240 60 C 300 60, 320 86, 380 86"/>
+              <path id="w6" class="w" d="M240 130 C 300 130, 320 130, 380 130"/>
+              <path id="w7" class="w" d="M240 200 C 300 200, 320 180, 380 180"/>
+              <path id="w8" class="w" d="M240 200 C 300 200, 320 226, 380 226"/>
+              <path id="w9" class="w" d="M380 130 C 420 130, 430 130, 460 130"/>
+            </g>
+            <g class="pulses">
+              <circle r="3"><animateMotion dur="2.4s" repeatCount="indefinite" keyPoints="1;0" keyTimes="0;1" calcMode="linear"><mpath href="#w4"/></animateMotion></circle>
+              <circle r="3"><animateMotion dur="2.9s" begin=".6s" repeatCount="indefinite" keyPoints="1;0" keyTimes="0;1" calcMode="linear"><mpath href="#w6"/></animateMotion></circle>
+              <circle r="3"><animateMotion dur="2.6s" begin="1.1s" repeatCount="indefinite" keyPoints="1;0" keyTimes="0;1" calcMode="linear"><mpath href="#w8"/></animateMotion></circle>
+              <circle r="3"><animateMotion dur="2.2s" begin=".3s" repeatCount="indefinite" keyPoints="1;0" keyTimes="0;1" calcMode="linear"><mpath href="#w2"/></animateMotion></circle>
+            </g>
+            <g class="nodes">
+              <g class="n n0" transform="translate(80 130)"><circle class="ring" r="22"/><circle r="15" fill="url(#mg-node)"/></g>
+              <g class="n n1" transform="translate(240 60)"><circle class="ring" r="15"/><circle r="10" fill="url(#mg-node)"/></g>
+              <g class="n n2" transform="translate(240 130)"><circle class="ring" r="15"/><circle r="10" fill="url(#mg-node)"/></g>
+              <g class="n n3" transform="translate(240 200)"><circle class="ring" r="15"/><circle r="10" fill="url(#mg-node)"/></g>
+              <g class="n n4 b" transform="translate(380 36)"><circle class="ring" r="11"/><circle r="6.5" fill="url(#mg-node)"/></g>
+              <g class="n n5 b" transform="translate(380 86)"><circle class="ring" r="11"/><circle r="6.5" fill="url(#mg-node)"/></g>
+              <g class="n n6 b busy" transform="translate(380 130)"><circle class="ring" r="11"/><circle r="6.5" fill="url(#mg-node)"/></g>
+              <g class="n n7 b" transform="translate(380 180)"><circle class="ring" r="11"/><circle r="6.5" fill="url(#mg-node)"/></g>
+              <g class="n n8 b busy" transform="translate(380 226)"><circle class="ring" r="11"/><circle r="6.5" fill="url(#mg-node)"/></g>
+              <g class="n n9 b" transform="translate(460 130)"><circle class="ring" r="9"/><circle r="5" fill="url(#mg-node)"/></g>
+            </g>
+            <g class="tags" font-family="inherit" font-size="11" font-weight="600">
+              <text x="62" y="170">Game night</text>
+              <text x="252" y="50">Layout</text>
+              <text x="252" y="120">RSVP</text>
+              <text x="252" y="230">Invite</text>
+            </g>
+          </svg>
+        </div>
+        <div class="b-copy">
+          <h3>See it all on the Map</h3>
+          <p>Your project's work as a live tree of tasks and builders. Watch it grow, see what's running and follow the reports back up.</p>
+        </div>
       </article>
-      <article class="card card-feature" data-reveal>
-        <span class="status next">Coming in 0.5</span>
-        <h3>Friends in Studio</h3>
-        <p><b>The Lobby</b> shows who is online and what was shared this week. <b>Rooms</b> have a chat that reads like a chat app: hangout rooms for up to 25 people and cowork rooms for up to 10, joined with a short invite code. <b>Listen together</b> plays one link for everyone in a room, at the same point.</p>
-        <p class="note">It all runs on the Mefi Studio relay, a free service built into Studio, so there is nothing to set up: sign in with Discord once. The relay keeps no chat.</p>
+
+      <article class="bento-card b-changes" data-reveal data-play data-spot>
+        <div class="b-art" aria-hidden="true">
+          <div class="diff">
+            <p class="diff-head"><b>4 files changed</b><span class="add">+212</span><span class="del">−18</span></p>
+            <p class="row"><code>src/export/markdown.ts</code><span class="tag">Added</span><span class="rv">Revert</span></p>
+            <p class="row"><code>src/notes/Toolbar.tsx</code><span class="n">+31 −4</span><span class="rv">Revert</span></p>
+            <p class="row gone"><code>src/export/names.ts</code><span class="tag">Added</span><span class="rv done">Reverted ↺</span></p>
+            <p class="row"><code>tests/export.test.ts</code><span class="n">+33 −14</span><span class="rv">Revert</span></p>
+            <p class="diff-foot"><span class="acc">Accept changes</span><span class="ra">Revert attempt</span></p>
+          </div>
+        </div>
+        <div class="b-copy">
+          <h3>Changes you can take back</h3>
+          <p>See every file a builder touched. Accept the lot, or revert one file or the whole attempt.</p>
+        </div>
       </article>
-      <article class="card card-feature" data-reveal>
-        <span class="status next">Coming in 0.5</span>
-        <h3>The Project hub</h3>
-        <p>Share what you make as a card and play what friends make. Playing someone else's project for two minutes earns you both credits, which raise your rank and can put a project at the top of the hub for a day. A weekly Build Jam and co-work hours run by themselves.</p>
-        <p class="note">Credits are only earned: never bought, and never for inviting people or for Discord activity. Every theme and node style stays free. Cosmetics, creator styles and shared mixes are still planned, so come and help shape them.</p>
+
+      <article class="bento-card b-perms" data-reveal data-spot>
+        <div class="b-art" aria-hidden="true">
+          <div class="perm" id="perm-dial" data-stop="2">
+            <div class="perm-track"><i class="perm-fill"></i><i class="perm-knob"></i></div>
+            <ol class="perm-stops">
+              <li data-s="0">Always ask</li>
+              <li data-s="1">Accept per task</li>
+              <li data-s="2">Auto</li>
+              <li data-s="3">Elevated only</li>
+            </ol>
+            <p class="perm-say"><span data-s="0">Every new task waits for your OK.</span><span data-s="1">Each task waits for your OK once.</span><span data-s="2">Tasks start on their own. Confident choices are handled.</span><span data-s="3">Your tasks start; agents' ideas wait for you.</span></p>
+          </div>
+        </div>
+        <div class="b-copy">
+          <h3>You choose how much it asks</h3>
+          <p>From Always ask to Auto. Every automatic choice has a Why and an Undo.</p>
+        </div>
+      </article>
+
+      <article class="bento-card b-inbox" data-reveal data-play data-spot>
+        <div class="b-art" aria-hidden="true">
+          <div class="asks">
+            <div class="ask a3"><p class="k">Permission</p><b>builder-3 wants to write outside its folder</b></div>
+            <div class="ask a2"><p class="k">Checks failed</p><b>Try a different approach?</b></div>
+            <div class="ask a1"><p class="k">Question</p><b>Should #Work and #work be the same tag?</b><span class="opt rec">Yes, ignore case <em>Recommended</em></span><span class="opt">Keep them separate</span></div>
+          </div>
+        </div>
+        <div class="b-copy">
+          <h3>One Inbox for everything</h3>
+          <p>Questions wait in one place with a recommended answer, or answer in your own words.</p>
+        </div>
+      </article>
+
+      <article class="bento-card b-think" data-reveal data-play data-spot>
+        <div class="b-art" aria-hidden="true">
+          <div class="ladder">
+            <span class="rung r1">Light</span>
+            <span class="rung r2">Harder</span>
+            <span class="rung r3">Stronger model</span>
+            <i class="climber"></i>
+          </div>
+        </div>
+        <div class="b-copy">
+          <h3>Thinks harder only when it's stuck</h3>
+          <p>Jobs start light, step up a level when they miss, and move to a stronger model after two.</p>
+        </div>
+      </article>
+
+      <article class="bento-card b-connect" data-reveal data-play data-spot>
+        <div class="b-art" aria-hidden="true">
+          <div class="plugs">
+            <span class="hub">MCP</span>
+            <span class="plug p1">GitHub</span><span class="plug p2">Figma</span><span class="plug p3">Postgres</span><span class="plug p4">Browser</span><span class="plug p5">Skills</span>
+          </div>
+        </div>
+        <div class="b-copy">
+          <h3>Skills and Connectors</h3>
+          <p>Add MCP servers, or bring them over from Claude Code, Cursor, VS Code and more. Skills switch on where they help.</p>
+        </div>
+      </article>
+
+      <article class="bento-card b-notify" data-reveal data-play data-spot>
+        <div class="b-art" aria-hidden="true">
+          <div class="toast-demo">
+            <div class="wt"><img src="assets/icon-256.png" width="22" height="22" alt=""><div><b>A builder needs you</b><span>Should RSVPs close an hour before it starts?</span></div></div>
+            <div class="taskbar"><i class="tb-icon"><img src="assets/icon-256.png" width="16" height="16" alt=""><em>1</em></i></div>
+          </div>
+        </div>
+        <div class="b-copy">
+          <h3>Tells you when it needs you</h3>
+          <p>Windows notifications, a taskbar count and quiet hours, so you can step away.</p>
+        </div>
+      </article>
+
+    </div>
+  </div>
+</section>
+
+<!-- THEMES -->
+<section class="themes" id="themes" aria-labelledby="themes-title">
+  <div class="container themes-grid">
+    <div class="themes-copy">
+      <p class="eyebrow" data-reveal>Make it yours</p>
+      <h2 id="themes-title" data-split>Twelve looks. <span class="grad">All free.</span></h2>
+      <p class="lede" data-reveal>Pick one and this whole page wears it, so you can see the mood before you download. Studio also has eight animated node styles, your own colours, and music or a video behind your work.</p>
+      <div class="theme-picker" data-reveal>
+        <p class="tp-label">Colour themes</p>
+        <div id="theme-plain"></div>
+        <p class="tp-label">The Void collection</p>
+        <div id="theme-void"></div>
+      </div>
+      <p class="fine theme-now" data-reveal>Showing <b id="theme-name">Chrome</b>. Your pick is remembered on this device.</p>
+    </div>
+    <div class="themes-stage" data-reveal="scale">
+      <div class="win" data-tilt="2.5">
+        <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i><span>Mefi Studio <em id="theme-win-name">Chrome</em></span></div>
+        <div class="win-screens theme-screens" id="theme-screens">
+          <img class="theme-shot is-on" src="assets/shots/site/theme-chrome.webp" width="1440" height="810" loading="lazy" alt="Studio's Today in the Chrome theme.">
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- COMMUNITY: Build Jam, co-work hours, ranks -->
+<section class="jam" id="jam" aria-labelledby="jam-title">
+  <div class="container">
+    <div class="section-head center">
+      <p class="eyebrow" data-reveal>Every week</p>
+      <h2 id="jam-title" data-split>Make things <span class="grad">with the community.</span></h2>
+      <p data-reveal>A new Build Jam theme every Monday, co-work hours three times a day, and credits you earn by building and playing together.</p>
+    </div>
+    <div class="jam-grid" data-stagger="100">
+      <article class="jam-card jam-main" data-reveal data-spot>
+        <p class="jam-k">This week's Build Jam</p>
+        <p class="jam-theme" id="jam-theme">Tiny worlds</p>
+        <p class="jam-phase" id="jam-phase">Make something, share it on the Project hub and enter it.</p>
+        <div class="jam-week" aria-hidden="true">
+          <div class="jw-bar"><i class="jw-enter"></i><i class="jw-vote"></i><i class="jw-now" id="jam-now"></i></div>
+          <div class="jw-days"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+          <div class="jw-legend"><span><i class="e"></i>Make and enter</span><span><i class="v"></i>Play and vote</span></div>
+        </div>
+        <p class="jam-fine">Everyone gets three votes, for entries they played. The top three share the prize pot in credits.</p>
+      </article>
+      <article class="jam-card jam-cowork" data-reveal data-spot>
+        <p class="jam-k">Co-work hours</p>
+        <p class="jam-big" id="cowork-next">Three times a day</p>
+        <ul class="cowork-times" id="cowork-times"><li>02:00 UTC</li><li>10:00 UTC</li><li>18:00 UTC</li></ul>
+        <p class="jam-fine">An hour of working side by side. Stay for most of it with someone else there and you both earn credits.</p>
+      </article>
+      <article class="jam-card jam-ranks" data-reveal data-play data-spot>
+        <p class="jam-k">Ranks you earn</p>
+        <ol class="ranks">
+          <li style="--r:0">Spark</li><li style="--r:1">Ember</li><li style="--r:2" class="key">Flame</li><li style="--r:3">Comet</li><li style="--r:4">Star</li><li style="--r:5">Nova</li><li style="--r:6">Void</li>
+        </ol>
+        <p class="jam-fine">Credits come from making and playing things with friends. They can't be bought and never come from invites. At Flame you can list a room for everyone.</p>
       </article>
     </div>
-  </div>
-</section>
-
-<!-- TOUR -->
-<section class="tour" aria-labelledby="tour-title">
-  <div class="container">
-    <div class="head-row" data-reveal>
-      <div class="section-head">
-        <p class="eyebrow"><span class="status released">In 0.4.4</span></p>
-        <h2 id="tour-title">What’s in the download today.</h2>
-        <p>Three screens from 0.4.4, the version you can download now, using sample data from a made-up Notes app.</p>
-      </div>
-      <a class="btn" href="features.html">See every feature <span aria-hidden="true">→</span></a>
-    </div>
-    <div class="grid-3 tour-grid">
-      <figure class="frame" data-reveal>
-        <a class="zoom" href="assets/shots/needs-you.webp"><img src="assets/shots/needs-you.webp" width="2400" height="1500" loading="lazy" decoding="async" alt="Vibe mode with a decision drawer open: Should the empty state also appear when a search has no matches? The option Yes, one component for both is marked Recommended, with a box to answer in your own words"><span class="visually-hidden"> (open a larger view)</span></a>
-        <figcaption><strong>Answer in Vibe.</strong> A decision shows its question and options, recommended first, or takes your own words.</figcaption>
-      </figure>
-      <figure class="frame" data-reveal>
-        <a class="zoom" href="assets/shots/command.webp"><img src="assets/shots/command.webp" width="2400" height="1500" loading="lazy" decoding="async" alt="Command view: tasks and builders drawn as a connected tree, with a Live work panel counting 2 ready and 1 verifying, and 3 agents working"><span class="visually-hidden"> (open a larger view)</span></a>
-        <figcaption><strong>Command view.</strong> Tasks and builders as a live tree, with what's ready, verifying and waiting at the side.</figcaption>
-      </figure>
-      <figure class="frame" data-reveal>
-        <a class="zoom" href="assets/shots/watch-bg.webp"><img src="assets/shots/watch-bg.webp" width="2400" height="1500" loading="lazy" decoding="async" alt="Command view in a violet theme with a music video playing behind the tree and its playback controls at the bottom"><span class="visually-hidden"> (open a larger view)</span></a>
-        <figcaption><strong>A video behind the tree.</strong> Play something while you work, right behind your agents.</figcaption>
-      </figure>
-    </div>
-  </div>
-</section>
-
-<!-- MAKE IT YOURS -->
-<section class="skin" id="themes" aria-labelledby="skin-title">
-  <div class="container skin-grid">
-    <div class="skin-copy" data-reveal>
-      <p class="eyebrow">Make it yours</p>
-      <h2 id="skin-title">Pick a look. This whole page follows.</h2>
-      <p>Studio has twelve colour themes, Chrome new among them in 0.5, and every one is free. Choose one here and the site wears it too, so you can see the mood before you download anything. Your pick is remembered on this device.</p>
-      <div class="skin-picker" data-swatches></div>
-      <noscript><p class="fine">The theme picker needs JavaScript.</p></noscript>
-    </div>
-    <div class="skin-shot" data-reveal>
-      <figure class="frame skin-frame">
-        <div class="skin-stack" data-skin-stack>
-          <img src="assets/shots/thumb-command-chrome.webp" width="960" height="680" loading="lazy" decoding="async" alt="The Map (called Command view in 0.4.4) in the Chrome theme: silver nodes and linked task cards on matte black, with a task's details open at the right" data-skin-theme="chrome" class="on">
-        </div>
-        <figcaption data-skin-cap><strong>The Map in Chrome.</strong> Studio's default theme from 0.5, with sample data.</figcaption>
-      </figure>
-    </div>
-  </div>
-</section>
-
-<!-- ROADMAP TEASER -->
-<section class="band roadmap-teaser" aria-labelledby="roadmap-title">
-  <div class="container">
-    <div class="head-row" data-reveal>
-      <div class="section-head">
-        <p class="eyebrow">Roadmap</p>
-        <h2 id="roadmap-title">Done, being worked on, and planned.</h2>
-        <p>0.5 is next: the new layout and everything built since 0.4.4, including what was planned for 0.4.5 and 0.4.6. The download is 0.4.4, and 0.5 has no date yet. <a href="roadmap.html#now">See what’s in 0.5</a>.</p>
-      </div>
-      <a class="btn" href="roadmap.html">See the whole roadmap <span aria-hidden="true">→</span></a>
-    </div>
-    <div class="board">
-      <div class="lane" data-reveal>
-        <div class="lane-head"><h3>Done</h3></div>
-        <p class="lane-note">In the download today.</p>
-        <div class="item">
-          <h4>Set up with one sign-in</h4>
-          <p>Start here can install Codex, Claude Code, Grok or Antigravity, sign you in and check the connection.</p>
-          <div class="meta"><span class="status released">In 0.4.4</span></div>
-        </div>
-        <div class="item">
-          <h4>Big requests become steps</h4>
-          <p><b>Build it</b> decides whether a request is one task or two to six steps, each leaving your project working.</p>
-          <div class="meta"><span class="status released">In 0.4.4</span></div>
-        </div>
-        <div class="item">
-          <h4>Every look is free</h4>
-          <p>Every theme and node style, the Void collection included.</p>
-          <div class="meta"><span class="status released">In 0.4.4</span></div>
-        </div>
-      </div>
-      <div class="lane" data-reveal>
-        <div class="lane-head"><h3>Being worked on</h3></div>
-        <p class="lane-note">Built on main for 0.5, or being built now.</p>
-        <div class="item">
-          <h4>The 0.5 layout</h4>
-          <p>One frame for Social and Studio, with the Map, Team, sessions, tabs you pin, one Inbox and Size and density.</p>
-          <div class="meta"><span class="status next">Coming in 0.5</span></div>
-        </div>
-        <div class="item">
-          <h4>Friends with no setup</h4>
-          <p>The Lobby, rooms, Listen together, the Project hub and a weekly Build Jam, with credits you earn by playing, run on a free relay built into Studio.</p>
-          <div class="meta"><span class="status next">Coming in 0.5</span></div>
-        </div>
-        <div class="item">
-          <h4>Changes you can take back</h4>
-          <p>See the files a worker changed, then accept them or revert a file or the whole attempt.</p>
-          <div class="meta"><span class="status next">Coming in 0.5</span></div>
-        </div>
-        <div class="item">
-          <h4>Windows tells you when something needs you</h4>
-          <p>Notifications, a taskbar count and quiet hours, plus Report a problem and What’s new after an update.</p>
-          <div class="meta"><span class="status next">Coming in 0.5</span></div>
-        </div>
-        <div class="item">
-          <h4>Connectors, skills and smarter thinking</h4>
-          <p>Add MCP servers in Team › Connectors, use skills the way you want, and let agents think harder only when a job gets stuck.</p>
-          <div class="meta"><span class="status next">Coming in 0.5</span></div>
-        </div>
-        <div class="item">
-          <h4>Moving to Rust</h4>
-          <p>The Rust host is built; the engine is moving into Rust part by part.</p>
-          <div class="meta"><span class="status progress">In progress</span></div>
-        </div>
-      </div>
-      <div class="lane" data-reveal>
-        <div class="lane-head"><h3>Planned</h3></div>
-        <p class="lane-note">Decided, not started yet.</p>
-        <div class="item">
-          <h4>More for Friends</h4>
-          <p>Studios on the same Wi-Fi find each other, friends’ cursors on a shared tree, and a fair shared-video queue.</p>
-          <div class="meta"><span class="status planned">Planned</span></div>
-        </div>
-        <div class="item">
-          <h4>A bridge to your creative tools</h4>
-          <p>Blender, Godot and Unity through MCP, and setups that need no AI at all.</p>
-          <div class="meta"><span class="status planned">Planned</span></div>
-        </div>
-        <div class="item">
-          <h4>Linux support</h4>
-          <p>A Linux build of Studio. No date yet.</p>
-          <div class="meta"><span class="status planned">Planned</span></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="cta-band request" data-reveal>
+    <div class="jam-cta" data-reveal>
       <div>
-        <h2>Want something in Studio?</h2>
-        <p>Ask for it. Open a feature request on GitHub (it needs a free GitHub account), or say it in the Discord. If someone already asked, add a thumbs-up to their request.</p>
+        <h3>The community meets in the Void Engine Discord</h3>
+        <p class="pulse" data-discord-pulse hidden><span class="dot" aria-hidden="true"></span><span data-pulse-text></span></p>
       </div>
       <div class="cta-row">
-        <a class="btn btn-primary" href="https://github.com/nateecho32-stack/mefi-studio/issues/new?template=feature_request.md" rel="noopener">Request on GitHub <span aria-hidden="true">↗</span></a>
-        <a class="btn" href="https://discord.gg/xgfKc5pVxG" rel="noopener">Suggest it in Discord <span aria-hidden="true">↗</span></a>
+        <a class="btn btn-primary" href="https://discord.gg/xgfKc5pVxG" rel="noopener">Join the Discord <span class="go" aria-hidden="true">↗</span></a>
+        <a class="btn" href="community.html">See the community <span class="go" aria-hidden="true">→</span></a>
       </div>
     </div>
   </div>
 </section>
 
-<!-- INSTALL -->
-<section class="install" aria-labelledby="install-title">
+<!-- TRUST -->
+<section class="trust" aria-labelledby="trust-title">
   <div class="container">
-    <div class="head-row" data-reveal>
-      <div class="section-head">
-        <p class="eyebrow">Get started</p>
-        <h2 id="install-title">Up and running in three steps.</h2>
-        <p>Studio is a portable app: there is no installer and nothing else to set up first.</p>
-      </div>
-      <a class="btn" href="download.html">Download page <span aria-hidden="true">→</span></a>
+    <div class="section-head center">
+      <p class="eyebrow" data-reveal>Yours</p>
+      <h2 id="trust-title" data-split>Your PC. Your AI. <span class="grad">Your call.</span></h2>
     </div>
-    <ol class="steps">
-      <li class="step" data-reveal>
-        <h3>Download the zip</h3>
-        <p>Get the Windows zip from the <a href="download.html">latest release</a>.</p>
-      </li>
-      <li class="step" data-reveal>
-        <h3>Unzip and run</h3>
-        <p>Right-click the zip, choose <b>Extract All</b>, keep the folder together and open <b>Mefi Studio AI+.exe</b>.</p>
-      </li>
-      <li class="step" data-reveal>
-        <h3>Get past SmartScreen</h3>
-        <p>The build isn't code-signed yet, so Windows may warn you the first time. Choose <b>More info</b>, then <b>Run anyway</b>.</p>
-      </li>
-    </ol>
-    <div class="strip trust" data-reveal>
-      <div><strong>Stays on your PC</strong><span>Tasks, conversations, plans and settings stay on your computer.</span></div>
-      <div><strong>No Studio account</strong><span>No sign-up and no usage telemetry. Discord and AI connections are your choice.</span></div>
-      <div><strong>Keys stay locked</strong><span>API keys are encrypted with the Windows keystore, and Studio only shows "saved" or "not saved".</span></div>
-      <div><strong>Your AI, your choice</strong><span>Use a CLI login, an API key or a local model. Only the providers you connect get your prompts and project context.</span></div>
+    <ul class="trust-grid" data-stagger="80">
+      <li data-reveal><span class="glyph"><svg viewBox="0 0 24 24"><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v9H4Z"/><path d="M2 19h20"/><path d="M9 15v4M15 15v4"/></svg></span><b>Stays on your PC</b><span>Tasks, chats, plans and settings live on your computer.</span></li>
+      <li data-reveal><span class="glyph"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/><path d="m3 3 18 18"/></svg></span><b>No Studio account</b><span>No sign-up and no usage telemetry.</span></li>
+      <li data-reveal><span class="glyph"><svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><b>Keys stay locked</b><span>API keys are encrypted with the Windows keystore.</span></li>
+      <li data-reveal><span class="glyph"><svg viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/><circle cx="12" cy="12" r="3"/></svg></span><b>Your AI, your choice</b><span>A CLI login, an API key or a local model. Only what you connect sees your prompts.</span></li>
+      <li data-reveal><span class="glyph"><svg viewBox="0 0 24 24"><path d="m8 16-4-4 4-4M16 8l4 4-4 4M14 4l-4 16"/></svg></span><b>Open source</b><span>MIT licensed. Read every line on GitHub.</span></li>
+    </ul>
+  </div>
+</section>
+
+<!-- LAST CALL -->
+<section class="final" id="get" aria-labelledby="final-title">
+  <div class="container final-grid">
+    <div class="final-orb" aria-hidden="true"><div class="orb" id="final-orb"><span class="orb-pearl"></span></div></div>
+    <div class="final-copy">
+      <p class="eyebrow" data-reveal>Get Mefi Studio</p>
+      <h2 id="final-title" data-split>Your idea <span class="grad">is waiting.</span></h2>
+      <p class="lede" data-reveal id="final-lede">Download Studio, open a folder and say what you want. Your friends are a click away.</p>
+      <div class="cta-row" data-reveal>
+        <a class="btn btn-primary btn-lg" href="download.html" id="final-download" data-magnetic><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg><span id="final-download-label">Download for Windows</span></a>
+        <a class="btn btn-lg" href="download.html">Install steps</a>
+      </div>
+      <p class="fine" data-reveal><span data-latest-hint>Free · Windows 10 and 11 · 64-bit portable zip</span></p>
+      <ol class="final-steps" data-stagger="110">
+        <li data-reveal><b>Download the zip</b><span>One portable zip. No installer.</span></li>
+        <li data-reveal><b>Unzip it and open it</b><span>Run <code>Mefi Studio AI+.exe</code>. If SmartScreen asks, choose More info, then Run anyway.</span></li>
+        <li data-reveal><b>Say what you want</b><span>Pick a folder, connect the AI you use and press Build it.</span></li>
+      </ol>
     </div>
   </div>
 </section>
 
 <!-- FAQ -->
-<section class="band questions" aria-labelledby="faq-title">
-  <div class="container faq-split">
-    <div class="section-head" data-reveal>
-      <p class="eyebrow">Questions</p>
-      <h2 id="faq-title">Good to know</h2>
-      <p>More answers in the <a href="wiki/#/faq">wiki's FAQ</a>, or ask in the Discord.</p>
+<section class="faq-sec" aria-labelledby="faq-title">
+  <div class="container narrow">
+    <div class="section-head center">
+      <p class="eyebrow" data-reveal>Questions</p>
+      <h2 id="faq-title" data-split>Good to know</h2>
     </div>
-    <div class="faq">
-      <details>
+    <div class="faq" data-stagger="70">
+      <details data-reveal>
         <summary>Is Mefi Studio free?</summary>
-        <p>Yes. It's open source under the MIT license, and every theme and node style is free. The AI services you connect may charge for their own use, so you can also use a subscription you already have or a local model.</p>
+        <p>Yes. Studio is free and open source under the MIT licence. The AI tools you connect use their own plans or keys, and local models and OpenCode's free models cost nothing.</p>
       </details>
-      <details>
-        <summary>Can I join before I have something to show?</summary>
-        <p>Please do. Bring an unfinished idea, ask a question, give someone feedback or just hang out. You don't need to download Studio to take part.</p>
+      <details data-reveal>
+        <summary>Do I need Discord?</summary>
+        <p>Not to build. Friends (The Lobby, rooms, Listen together and the Build Jam) signs in with Discord through the Void Engine community server. Everything else works without it.</p>
       </details>
-      <details>
-        <summary>Do I need Discord to use Studio?</summary>
-        <p>No. Discord is the easiest way to meet the community, but Studio works without it and has no account of its own. Signing in with Discord inside Studio is optional. From 0.5, The Lobby, Rooms and the Project hub use that sign-in to know who you are; the rest of Studio never needs it, and ways for friends to connect without Discord are planned.</p>
-      </details>
-      <details>
+      <details data-reveal>
         <summary>What do I need to run it?</summary>
-        <p>Windows 10 or 11. To build, connect a coding agent: Start here can install Codex, Claude Code, Grok or Antigravity and sign you in. A Linux build is planned.</p>
+        <p>A Windows 10 or 11 PC (64-bit). To build, a coding tool such as OpenCode, Claude Code or Codex. Studio's first run helps you set one up, or start free with OpenCode.</p>
       </details>
-      <details>
+      <details data-reveal>
         <summary>Will agents change my files without asking?</summary>
-        <p>Agents run real commands in the project folder you choose, so you decide how much they do alone. <b>Always ask</b> makes every new task wait for your OK, and <b>Auto</b>, the default, lets routine work run. Every automatic choice comes with a Why and an Undo.</p>
+        <p>You decide. Permission modes go from Always ask to Auto, questions wait in your Inbox, and every change can be accepted or reverted, a file at a time or the whole attempt.</p>
       </details>
-      <details>
-        <summary>What do the labels mean?</summary>
-        <ul class="labels">
-          <li><span class="status released">In 0.4.4</span> in the download today.</li>
-          <li><span class="status next">Coming in 0.5</span> built on main, and ships with 0.5, the next release.</li>
-          <li><span class="status rolling">Rolling out</span> built, and switches on once the Studio bot’s side is live.</li>
-          <li><span class="status progress">In progress for 0.5</span> being built now on its own branch, aiming for 0.5.</li>
-          <li><span class="status planned">Planned</span> decided, with details still open. There are no dates.</li>
-        </ul>
+      <details data-reveal>
+        <summary>Windows warned me about the download. Is it safe?</summary>
+        <p>The build isn't code-signed yet, so SmartScreen may warn you the first time. Choose <strong>More info</strong>, then <strong>Run anyway</strong>. Every release comes with a SHA-256 file so you can <a href="download.html#verify">check the zip</a>, and the source is on GitHub.</p>
       </details>
     </div>
-  </div>
-</section>
-
-<!-- CLOSING -->
-<section class="final" aria-labelledby="final-title">
-  <div class="container final-inner" data-reveal>
-    <img src="assets/icon-256.png" width="60" height="60" alt="" loading="lazy" decoding="async">
-    <h2 id="final-title">There's room for your idea here.</h2>
-    <p>Start a project. Share a little progress. Help someone else get going.</p>
-    <div class="cta-row center">
-      <a class="btn btn-primary btn-lg" href="https://discord.gg/xgfKc5pVxG" rel="noopener">Join the Discord <span aria-hidden="true">↗</span></a>
-      <a class="btn btn-lg" href="download.html">Download for Windows</a>
-    </div>
+    <p class="center fine faq-more" data-reveal>More in the <a href="wiki/#/faq">wiki's FAQ</a>, or ask in the <a href="https://discord.gg/xgfKc5pVxG" rel="noopener">Discord</a>.</p>
   </div>
 </section>
 
 </main>
 
-<dialog class="lightbox" aria-label="Larger screenshot">
-  <button type="button" class="lightbox-close" aria-label="Close">×</button>
-  <img alt="">
-</dialog>
-
 <footer class="site-foot">
   <div class="container">
     <div class="foot-grid">
       <div class="foot-brand">
-        <a class="brand" href="index.html"><img src="assets/icon-256.png" width="30" height="30" alt="">Mefi Studio</a>
-        <p>A free, open-source studio for Windows. Build your ideas with coding agents, and make them with people.</p>
+        <a class="brand" href="index.html"><img src="assets/icon-256.png" width="32" height="32" alt="">Mefi Studio</a>
+        <p>A free, open-source app for Windows. Hang out with friends, work alongside each other, and build when you want.</p>
       </div>
       <div class="foot-col">
         <h2>Studio</h2>
@@ -781,7 +732,7 @@
 </footer>
 <script src="assets/site.js"></script>
 <script src="assets/fx.js"></script>
+<script src="assets/orb.js"></script>
 <script src="assets/home.js"></script>
-<script src="assets/demo.js"></script>
 </body>
 </html>
