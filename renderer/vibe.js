@@ -83,14 +83,25 @@
   }
   // Switching remembers the choice and lands on that mode's home. Vibe keeps
   // the rail shell on (nav.js asks mode()); Build gets the saved shell back.
-  function setMode(next, { go = true } = {}) {
+  function setMode(next, { go = true, swap = true } = {}) {
     next = next === "build" ? "build" : "vibe";
     const was = mode();
     write(MODE_KEY, next);
     paintMode();
     if (was !== next) { window.MefiNav?.applyShell?.(); window.MefiNav?.paintCurrent?.(); }
     if (go) window.MefiNav?.go?.(next === "vibe" ? "vibe" : "workspace");
+    else if (swap && was !== next) swapUnderlay(next);
     return next;
+  }
+  // A switch that keeps the page (Settings' Mode, the top bar from a page that is not Home) still changes what is
+  // under it: the new mode's Home quietly takes the old one's place, so Social's flag cannot leave Studio's rail
+  // hidden (vibe.css) and closing the page lands on the right Home. Focus stays where it was.
+  function swapUnderlay(next) {
+    const held = document.activeElement;
+    if (next === "build" && active()) { exit(); window.MefiWorkspace?.enter?.(); }
+    else if (next === "vibe" && window.MefiWorkspace?.isActive?.()) { window.MefiWorkspace.exit?.(); enter(); }
+    else return;
+    if (held && held !== document.body && held.isConnected && document.activeElement !== held) held.focus?.({ preventScroll: true });
   }
 
   // ---- the Vibe rail --------------------------------------------------------
@@ -1524,7 +1535,7 @@
   function active() { return !layer.hidden; }
   function enter() {
     init();
-    if (mode() !== "vibe") setMode("vibe", { go: false });
+    if (mode() !== "vibe") setMode("vibe", { go: false, swap: false });
     window.MefiWorkspace?.exit?.();
     window.MefiIdle?.exit?.();
     layer.hidden = false;

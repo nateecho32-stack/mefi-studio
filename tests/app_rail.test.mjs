@@ -253,7 +253,15 @@ test("the default pin yields in narrow windows and honours an explicit collapsed
   assert.equal(narrow.store.has("mefiStudio.railPinned"), false, "responsive layout does not write a preference");
   narrow.window.innerWidth = 1280;
   narrow.fire("resize");
+  assert.equal(narrow.document.documentElement.dataset.railPinned, undefined, "with no saved choice the menu opens by itself only in a wide window");
+  narrow.window.innerWidth = 1680;
+  narrow.fire("resize");
   assert.equal(narrow.document.documentElement.dataset.railPinned, "");
+  assert.equal(narrow.store.has("mefiStudio.railPinned"), false, "still no preference written");
+  const laptop = load({ init: true, width: 1460 });
+  assert.equal(laptop.document.documentElement.dataset.railPinned, undefined, "the default 1460 px window starts with the compact rail, so the page and the list column keep their room");
+  const chosen = load({ init: true, width: 1460, stored: { "mefiStudio.railPinned": "1" } });
+  assert.equal(chosen.document.documentElement.dataset.railPinned, "", "a saved pin still holds down to 1100 px");
   const collapsed = load({ init: true, width: 1280, stored: { "mefiStudio.railPinned": "0" } });
   assert.equal(collapsed.document.documentElement.dataset.railPinned, undefined);
   assert.equal(collapsed.get("app-rail-pin").getAttribute("aria-pressed"), "false");

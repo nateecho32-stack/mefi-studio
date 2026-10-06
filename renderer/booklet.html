@@ -12940,6 +12940,12 @@ html[data-frame] .shell-need[data-tone="clear"] .shell-pill-n, html[data-frame] 
 
 /* The queries below repeat the html[data-frame] prefix: a container query adds no specificity, so a bare
    class would lose to the base rules above. */
+/* A bar without room for the whole trail keeps where you are, whole: the project and the place are already named in
+   the rail's head and the list column's title, so the earlier crumbs go before any word is cut to three letters. */
+@container shell-top (max-width: 1080px) {
+  html[data-frame] .shell-trail > .shell-crumb:not(.is-current), html[data-frame] .shell-trail > .shell-sep { display: none; }
+  html[data-frame] .shell-trail > .shell-crumb.is-current { flex-shrink: 1; }
+}
 /* a narrow bar gives up its words before its controls */
 @container shell-top (max-width: 780px) {
   html[data-frame] .shell-search { flex: 0 1 auto; width: auto; min-width: 0; }
@@ -25881,12 +25887,18 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // A pinned rail takes its open width from the page. Below this window width
   // it yields and behaves unpinned, opening over the page on hover or focus;
   // the saved choice stays, and the pin comes back when the window widens.
+  // With no saved choice the menu starts open only in a wide window: at the
+  // default 1460 px window the compact rail leaves the page and the list
+  // column their room (open, the menu and the list left Plans about 900 px).
   const RAIL_PIN_MIN_WIDTH = 1100;
+  const RAIL_PIN_DEFAULT_WIDTH = 1600;
   let railPinWanted = false;
-  const railPinFits = () => !(Number.isFinite(window.innerWidth) && window.innerWidth < RAIL_PIN_MIN_WIDTH);
+  let railPinChosen = false;
+  const railPinFits = () => !(Number.isFinite(window.innerWidth) && window.innerWidth < (railPinChosen ? RAIL_PIN_MIN_WIDTH : RAIL_PIN_DEFAULT_WIDTH));
 
-  function setRailPinned(pinned, { save = true } = {}) {
+  function setRailPinned(pinned, { save = true, chosen = true } = {}) {
     railPinWanted = Boolean(pinned);
+    railPinChosen = Boolean(chosen);
     document.getElementById("app-rail-pin")?.setAttribute("aria-pressed", String(railPinWanted));
     if (save) {
       try { localStorage.setItem(RAIL_PIN_KEY, pinned ? "1" : "0"); } catch { /* the pin is a convenience */ }
@@ -25912,9 +25924,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (!rail) return false;
     document.documentElement.dataset.shell = "rail";
     rail.hidden = false;
-    let pinned = true;
-    try { pinned = localStorage.getItem(RAIL_PIN_KEY) !== "0"; } catch { /* use the wide-window default */ }
-    setRailPinned(pinned, { save: false });
+    let saved = null;
+    try { saved = localStorage.getItem(RAIL_PIN_KEY); } catch { /* use the wide-window default */ }
+    setRailPinned(saved !== "0", { save: false, chosen: saved === "0" || saved === "1" });
     renderRail();
     window.dispatchEvent(new CustomEvent("mefi:shell", { detail: { rail: true } }));
     return true;
@@ -63752,6 +63764,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     // the sheet's own entrance carries both.
     state.painted = null;
     if (state.mark?.dataset) state.mark.dataset.on = "false";
+    // The transient layer is Configuration's while it shows: Escape from anywhere and closeAll() find it, and a
+    // second pop-up (Search, Shortcuts) takes its place instead of stacking over a dialog nobody can close by key.
+    window.MefiNav?.claim?.("config");
     $("overlay").hidden = false;
     render();
     requestAnimationFrame(() => $("search")?.focus?.({ preventScroll: true }));
@@ -63762,9 +63777,13 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   function close() {
     if (!isOpen()) return;
     $("overlay").hidden = true;
+    window.MefiNav?.release?.("config");
+    // MefiNav hands focus back first; this only steps in when nothing usable took it.
     const back = state.previous;
     state.previous = null;
-    if (back && document.contains?.(back)) back.focus?.({ preventScroll: true });
+    const current = document.activeElement;
+    const stranded = !current || current === document.body || $("overlay").contains?.(current);
+    if (stranded && back && document.contains?.(back)) back.focus?.({ preventScroll: true });
   }
   // Up and Down walk the categories from the tree.
   function step(delta) {
@@ -85700,6 +85719,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     friendsPage.body.replaceChildren();
     friendsPage.root.hidden = true;
     friendsPage.place = null;
+    // The sheet layer goes back with the page: otherwise the next place keeps Friends' breadcrumb, tab title and list.
+    window.MefiNav?.release?.("friends-page");
   }
   // The places in order, for a list drawn elsewhere (renderer/shell.js): each with whether it shows and the way there.
   function friendsPlaces() {
@@ -93883,14 +93904,25 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
   // Switching remembers the choice and lands on that mode's home. Vibe keeps
   // the rail shell on (nav.js asks mode()); Build gets the saved shell back.
-  function setMode(next, { go = true } = {}) {
+  function setMode(next, { go = true, swap = true } = {}) {
     next = next === "build" ? "build" : "vibe";
     const was = mode();
     write(MODE_KEY, next);
     paintMode();
     if (was !== next) { window.MefiNav?.applyShell?.(); window.MefiNav?.paintCurrent?.(); }
     if (go) window.MefiNav?.go?.(next === "vibe" ? "vibe" : "workspace");
+    else if (swap && was !== next) swapUnderlay(next);
     return next;
+  }
+  // A switch that keeps the page (Settings' Mode, the top bar from a page that is not Home) still changes what is
+  // under it: the new mode's Home quietly takes the old one's place, so Social's flag cannot leave Studio's rail
+  // hidden (vibe.css) and closing the page lands on the right Home. Focus stays where it was.
+  function swapUnderlay(next) {
+    const held = document.activeElement;
+    if (next === "build" && active()) { exit(); window.MefiWorkspace?.enter?.(); }
+    else if (next === "vibe" && window.MefiWorkspace?.isActive?.()) { window.MefiWorkspace.exit?.(); enter(); }
+    else return;
+    if (held && held !== document.body && held.isConnected && document.activeElement !== held) held.focus?.({ preventScroll: true });
   }
 
   // ---- the Vibe rail --------------------------------------------------------
@@ -95324,7 +95356,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   function active() { return !layer.hidden; }
   function enter() {
     init();
-    if (mode() !== "vibe") setMode("vibe", { go: false });
+    if (mode() !== "vibe") setMode("vibe", { go: false, swap: false });
     window.MefiWorkspace?.exit?.();
     window.MefiIdle?.exit?.();
     layer.hidden = false;

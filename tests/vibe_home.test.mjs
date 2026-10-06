@@ -170,3 +170,23 @@ test("Vibe's single keys open its panels, the box and what needs you, but never 
   loaded.window.MefiVibe.exit();
   assert.equal(loaded.key("t"), false, "off the front door, T is Build's task board again");
 });
+
+test("a mode switch that keeps the page swaps the Home underneath it, so Studio's rail is never left under Social's flag", async () => {
+  const loaded = await load();
+  const workspace = { active: false, entered: 0, exited: 0, enter() { this.active = true; this.entered += 1; }, exit() { this.active = false; this.exited += 1; }, isActive() { return this.active; } };
+  loaded.window.MefiWorkspace = workspace;
+  await loaded.window.MefiVibe.enter();
+  const layer = loaded.get("vibe-layer");
+  assert.equal(layer.hidden, false);
+  assert.equal(loaded.window.document?.body?.classList?.contains?.("vibe-active") ?? true, true);
+  // Settings' Mode switch and the top bar from a page that is not Home both keep the page (go: false).
+  loaded.window.MefiVibe.setMode("build", { go: false });
+  assert.equal(loaded.window.MefiVibe.mode(), "build");
+  assert.equal(layer.hidden, true, "Social's Home steps out from under the page");
+  assert.equal(workspace.entered, 1, "Studio's Home takes its place");
+  assert.deepEqual(loaded.gone, [], "the page itself stays: nothing navigates");
+  loaded.window.MefiVibe.setMode("vibe", { go: false });
+  assert.equal(workspace.exited >= 1, true, "and back again: Studio's Home steps out");
+  assert.equal(layer.hidden, false, "Social's Home is under the page again");
+  assert.deepEqual(loaded.gone, []);
+});

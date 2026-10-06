@@ -592,6 +592,8 @@
     friendsPage.body.replaceChildren();
     friendsPage.root.hidden = true;
     friendsPage.place = null;
+    // The sheet layer goes back with the page: otherwise the next place keeps Friends' breadcrumb, tab title and list.
+    window.MefiNav?.release?.("friends-page");
   }
   // The places in order, for a list drawn elsewhere (renderer/shell.js): each with whether it shows and the way there.
   function friendsPlaces() {

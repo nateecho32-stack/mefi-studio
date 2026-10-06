@@ -1707,12 +1707,18 @@
   // A pinned rail takes its open width from the page. Below this window width
   // it yields and behaves unpinned, opening over the page on hover or focus;
   // the saved choice stays, and the pin comes back when the window widens.
+  // With no saved choice the menu starts open only in a wide window: at the
+  // default 1460 px window the compact rail leaves the page and the list
+  // column their room (open, the menu and the list left Plans about 900 px).
   const RAIL_PIN_MIN_WIDTH = 1100;
+  const RAIL_PIN_DEFAULT_WIDTH = 1600;
   let railPinWanted = false;
-  const railPinFits = () => !(Number.isFinite(window.innerWidth) && window.innerWidth < RAIL_PIN_MIN_WIDTH);
+  let railPinChosen = false;
+  const railPinFits = () => !(Number.isFinite(window.innerWidth) && window.innerWidth < (railPinChosen ? RAIL_PIN_MIN_WIDTH : RAIL_PIN_DEFAULT_WIDTH));
 
-  function setRailPinned(pinned, { save = true } = {}) {
+  function setRailPinned(pinned, { save = true, chosen = true } = {}) {
     railPinWanted = Boolean(pinned);
+    railPinChosen = Boolean(chosen);
     document.getElementById("app-rail-pin")?.setAttribute("aria-pressed", String(railPinWanted));
     if (save) {
       try { localStorage.setItem(RAIL_PIN_KEY, pinned ? "1" : "0"); } catch { /* the pin is a convenience */ }
@@ -1738,9 +1744,9 @@
     if (!rail) return false;
     document.documentElement.dataset.shell = "rail";
     rail.hidden = false;
-    let pinned = true;
-    try { pinned = localStorage.getItem(RAIL_PIN_KEY) !== "0"; } catch { /* use the wide-window default */ }
-    setRailPinned(pinned, { save: false });
+    let saved = null;
+    try { saved = localStorage.getItem(RAIL_PIN_KEY); } catch { /* use the wide-window default */ }
+    setRailPinned(saved !== "0", { save: false, chosen: saved === "0" || saved === "1" });
     renderRail();
     window.dispatchEvent(new CustomEvent("mefi:shell", { detail: { rail: true } }));
     return true;

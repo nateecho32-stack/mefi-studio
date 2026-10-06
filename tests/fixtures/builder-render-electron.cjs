@@ -102,6 +102,8 @@ app.whenReady().then(async () => {
     contextBridge.exposeInMainWorld('mefiStudio',bridge);
     contextBridge.exposeInMainWorld('builderFixture',{calls:()=>calls,clear:()=>{calls.length=0;}});
     localStorage.setItem('mefiStudio.homeLayout','sessions');
+    // The sessions layout lists its sessions in the menu: this owner keeps it pinned open (the default opens it only at 1600 px).
+    localStorage.setItem('mefiStudio.railPinned','1');
     localStorage.setItem('mefiStudio.commandHome','0');localStorage.setItem('mefiStudio.zen','0');localStorage.setItem('mefiStudio.zenReactive','0');localStorage.setItem('mefiStudio.keyHint.v1','1');localStorage.setItem('mefiStudio.walkthrough.v1',JSON.stringify({version:1,step:0,status:'complete'}));
   `);
   const window = new BrowserWindow({ show: false, width: 1440, height: 900, frame: false, webPreferences: { preload, contextIsolation: true, nodeIntegration: false, sandbox: true, offscreen: true, backgroundThrottling: false } });
@@ -159,8 +161,8 @@ app.whenReady().then(async () => {
   report.layoutName = await run("return window.MefiBuilder.layout();");
   assert.equal(report.layoutName, "sessions");
 
-  // The menu (pinned open by default in a wide window, so the rows are readable) and the branch marks.
-  await until("'railPinned' in document.documentElement.dataset", "the menu is pinned open at 1440 px");
+  // The menu (pinned open, so the rows are readable) and the branch marks.
+  await until("'railPinned' in document.documentElement.dataset", "the pinned menu stays open at 1440 px");
   await sleep(400);
   await until("document.querySelector('#app-rail-sessions .builder-worktree')", "the marks arrive after the first quiet look");
   report.marks = await run("return [...document.querySelectorAll('#app-rail-sessions .builder-session')].filter((node) => node.querySelector('.builder-worktree')).map((node) => node.dataset.key);");

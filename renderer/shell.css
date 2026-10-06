@@ -133,6 +133,12 @@ html[data-frame] .shell-need[data-tone="clear"] .shell-pill-n, html[data-frame] 
 
 /* The queries below repeat the html[data-frame] prefix: a container query adds no specificity, so a bare
    class would lose to the base rules above. */
+/* A bar without room for the whole trail keeps where you are, whole: the project and the place are already named in
+   the rail's head and the list column's title, so the earlier crumbs go before any word is cut to three letters. */
+@container shell-top (max-width: 1080px) {
+  html[data-frame] .shell-trail > .shell-crumb:not(.is-current), html[data-frame] .shell-trail > .shell-sep { display: none; }
+  html[data-frame] .shell-trail > .shell-crumb.is-current { flex-shrink: 1; }
+}
 /* a narrow bar gives up its words before its controls */
 @container shell-top (max-width: 780px) {
   html[data-frame] .shell-search { flex: 0 1 auto; width: auto; min-width: 0; }
