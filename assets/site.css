@@ -177,6 +177,13 @@ body::after {
   pointer-events: none;
   view-transition-name: site-head;
 }
+/* Once the page scrolls, a soft fade behind the bar keeps text from showing through its edges. */
+.site-head::before {
+  content: ""; position: absolute; inset: 0 0 -26px; z-index: -1; pointer-events: none;
+  background: linear-gradient(180deg, rgb(var(--bg-rgb) / 0.92) 0%, rgb(var(--bg-rgb) / 0.7) 55%, rgb(var(--bg-rgb) / 0));
+  opacity: 0; transition: opacity .4s ease;
+}
+.is-scrolled .site-head::before { opacity: 1; }
 .head-inner.container, .head-inner {
   pointer-events: auto;
   position: relative;

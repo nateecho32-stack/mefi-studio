@@ -87,7 +87,7 @@ html.wiki-flat .wiki-main { view-transition-name: none; }
   html { scroll-padding-top: 124px; }
   .wiki { padding-top: 0; }
   .wiki-bar {
-    position: sticky; top: 64px; z-index: 30;
+    position: sticky; top: 70px; z-index: 30;
     margin: 0 calc(-1 * var(--gutter)) 18px; padding: 10px var(--gutter);
     background: rgb(var(--bg-rgb) / 0.98);
     border-bottom: 1px solid var(--hairline);

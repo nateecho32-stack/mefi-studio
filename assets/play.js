@@ -185,7 +185,7 @@
     window.addEventListener("resize", placeHint);
 
     // Waits for a click on one of the targets; after a quiet while it clicks the first itself.
-    function waitClick(targets, label, idleMs, side) {
+    function waitClick(targets, label, idleMs, side, anchor) {
       targets = [].concat(targets);
       return new Promise(function (resolve) {
         var idle = null, done = false;
@@ -200,7 +200,7 @@
         }
         targets.forEach(function (t) { t.addEventListener("click", finish); });
         root.addEventListener("pointermove", arm, { passive: true }); root.addEventListener("keydown", arm);
-        hint(targets[0], label, side);
+        hint(anchor || targets[0], label, side);
         arm();
       });
     }
@@ -327,8 +327,7 @@
     async function run() {
       try {
         pick("game");
-        await sleep(still() ? 0 : 900); alive();
-        // Idea
+        // Idea: Build it listens from the first moment, so an early press is never lost.
         step(0);
         var buildBtn = $(".pl-build");
         await waitClick(buildBtn, "Build it", 14000); alive();
@@ -372,7 +371,7 @@
         asker.appendChild(q);
         move([[asker, lists.need]]);
         say(spec.tasks[1][1] + " asks: " + spec.ask.q);
-        var picked = await waitClick([yes, no], "Your call", 13000); alive();
+        var picked = await waitClick([yes, no], "Your call", 13000, "below", q); alive();
         answer = picked === no ? "no" : "yes";
         q.classList.add("answered");
         q.appendChild(el("p", "pl-answer", "✓ " + (answer === "yes" ? spec.ask.yes : spec.ask.no)));
@@ -586,7 +585,9 @@
       root.style.setProperty("--ox", (r.left + r.width / 2).toFixed(0) + "px");
       root.style.setProperty("--oy", (r.top + r.height / 2).toFixed(0) + "px");
     }
+    // Opens on the next frame; a timer covers a tab that hands out no frames.
     requestAnimationFrame(function () { root.classList.add("open"); });
+    setTimeout(function () { root.classList.add("open"); }, 140);
     setTimeout(function () { try { $(".pl-build").focus({ preventScroll: true }); } catch (e) { /* old engines */ } }, 700);
     tab("friends");
     // the room was already talking before you came in

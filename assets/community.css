@@ -185,7 +185,7 @@
 
 /* ---- responsive ---- */
 @media (min-width: 961px) {
-  .cm-tabset > [role="tablist"] { position: sticky; top: 76px; z-index: 20; }
+  .cm-tabset > [role="tablist"] { position: sticky; top: 88px; z-index: 20; }
 }
 @media (max-width: 960px) {
   .cm-hero { grid-template-columns: 1fr; gap: 32px; }
