@@ -56,6 +56,17 @@ limit and usage on each task, pictures on a message, the `@ # /` picker and the
 Skills page. The room the new shell needs (four derived edges, `MefiNav.layout`
 and `MefiNav.usable()`) is in.
 
+Skills everywhere and Connectors (landed 6 October): answer styles for the chat
+(Explain like I'm 5 by default, Short answers, Teach me, Brainstorm, Poke holes,
+Expert) on a chip in Vibe's and Build's message boxes; every skill always on,
+picked when it fits (`use_skill`) or only called, separately for the chat, the
+helper agents and the builders (Skills › How skills are used); Team ›
+Connectors adding, approving, testing and importing MCP servers (from Claude
+Code, Claude Desktop, Cursor, VS Code, Windsurf, Codex, OpenCode and Gemini
+CLI), with encrypted values and per-place switches; and a tool loop whose calls
+run side by side, with MCP servers kept open between calls and Streamable HTTP
+servers supported.
+
 The new shell itself, built in pieces on the same branch behind a switch
 (every piece draws, stores and asks for nothing in the classic layout): the
 frame (a top bar with the Vibe | Build switch, Search and
@@ -265,8 +276,8 @@ geometry, not how it feels)
 
 ## Follows in 0.5.x
 
-Connectors, related folders, new app from a template, effort settings, saved map
-views, and good-for text for seats you define.
+Related folders, new app from a template, effort settings, saved map views, and
+good-for text for seats you define. (Connectors landed in 0.5.0: see Included.)
 
 ## Included with a service dependency
 
