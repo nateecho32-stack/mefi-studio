@@ -162,7 +162,7 @@ npm start
 3. **Check the connection.** A fresh install runs **auto setup** by itself on the first launch, from the keys, CLIs and local servers already on the machine, and **Settings › Connections** says what it chose. Press **Run auto setup** again after adding a key or CLI, or configure a provider there. No key yet? The catalog, manual planning and saved work all work without one.
 4. **Give one clear task** and watch it move from *Ready* to *Working* to *Review*.
 
-[GETTING_STARTED.md](GETTING_STARTED.md) covers the same path in detail, including what every task state means and what to do next.
+[GETTING_STARTED.md](GETTING_STARTED.md) walks through 0.5 (on `main` and in the beta builds) step by step, in plain words: your first ten minutes, where things are, and what every task state means.
 
 ## A short tour of 0.4.4
 
