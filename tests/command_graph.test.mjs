@@ -1882,6 +1882,47 @@ test("the tree's centre is the smallest circle around it from above, halfway up 
   assert.equal(env.orbitCentre(nodes), centre, "an unchanged tree reuses its centre");
 });
 
+test("a small tree fills the 3D overview: a handful of nodes comes in closer than 1, ten or more stay at 1, all in view", () => {
+  const frames = {};
+  for (const count of [3, 6, 12, 30]) {
+    const { env, state, nodes, area } = overviewFixture("constellation", { count });
+    let frame = null;
+    overviewTurn(env, state, nodes, area, 1, (points, step) => {
+      frame ??= state.overviewScale;
+      assert.ok(Math.abs(state.overviewScale - frame) < 1e-9, `${count} nodes keep one frame through the turn (step ${step})`);
+      for (const { node, p } of points) assert.ok(p.x - 25 >= area.x - 1e-6 && p.x + 25 <= area.x + area.w + 1e-6 && p.y - 25 >= area.y - 1e-6 && p.y + 25 <= area.y + area.h + 1e-6, `${count} nodes: ${node.id} stays in view`);
+    });
+    frames[count] = frame;
+  }
+  // As far in as the room allows (the layout already spreads a few nodes wide).
+  assert.ok(frames[3] > 1.1, `three nodes come in closer (${frames[3]})`);
+  assert.ok(frames[6] > 1 && frames[6] <= frames[3] + 1e-9, `six come in less (${frames[6]})`);
+  assert.ok(frames[12] <= 1 && frames[30] <= 1, "ten or more sit at 1 at most, as before");
+  // The flat map keeps its screen places: no fill there.
+  const flat = overviewFixture("constellation", { count: 3 });
+  flat.state.view = "2d";
+  overviewTurn(flat.env, flat.state, flat.nodes, flat.area, 0, () => {});
+  assert.ok(flat.state.overviewScale <= 1, "2D stays at 1");
+});
+
+test("every work orb's ring is a Map legend state: Done while its finish holds, then Review, Needs you, Running; quiet work and agents wear none", () => {
+  const env = vm.createContext({});
+  vm.runInContext(`${section("function stateRingOf(", "function drawStateRing(")}
+this.stateRingOf = stateRingOf;`, env);
+  const ring = (node, active = false, hold = null) => env.stateRingOf(node, active, hold);
+  assert.equal(ring({ kind: "task" }, false, { at: 1 }), "done");
+  assert.equal(ring({ kind: "task", _workLabel: "Verifying" }, true), "verify", "a check in progress is Review even while active");
+  assert.equal(ring({ kind: "task", task: { status: "awaiting_verification" } }), "verify");
+  assert.equal(ring({ kind: "task", _stage: "approval" }), "held");
+  assert.equal(ring({ kind: "task", _stage: "blocked" }), "held");
+  assert.equal(ring({ kind: "task", _workLabel: "Running" }), "active");
+  assert.equal(ring({ kind: "todo" }, true), "active");
+  assert.equal(ring({ kind: "session", workTask: { status: "open" }, _workLabel: "Running" }), "active", "work pinned on a session rings its host");
+  assert.equal(ring({ kind: "task" }), null, "quiet work: no ring");
+  assert.equal(ring({ kind: "session" }, true), null, "a session with no work of its own: no ring");
+  assert.equal(ring({ kind: "agent", status: "running" }, true), null, "agents keep their own dress");
+});
+
 test("music moves the overview only inside the frame it keeps in reserve", () => {
   for (const layout of ["constellation", "tree", "helix", "layers"]) {
     const { env, state, nodes, area } = overviewFixture(layout);
@@ -1988,8 +2029,12 @@ test("circular 3D views retain meaningful volume and separate work rims through 
     assert.ok(Number.isFinite(thickness) && thickness > shortSide * 0.04, `${layout} retains a curved volume instead of a flat or tilted field (${thickness.toFixed(1)}px)`);
     const surfaceRadius = ({ node, p }) => {
       const working = node._workLabel === "Running";
-      const base = node.kind === "task" ? 12 : node.kind === "assistant" ? 15 : 11;
-      const radius = Math.min(working || node.kind === "assistant" ? 15 : 11, base * Math.max(0.75, Math.min(1.15, p.k)));
+      // idle.js's sizes: a task orb is 13 (capped 12, 16 when working), the
+      // assistant 15 (14 + 4 lifted), others 11 (15 lifted); a working orb's
+      // orbit reaches 9 past it, and a state ring 5 past a quiet one.
+      const base = node.kind === "task" ? 13 : node.kind === "assistant" ? 15 : 11;
+      const cap = (node.kind === "task" ? 12 : node.kind === "assistant" ? 14 : 11) + (working || node.kind === "assistant" ? 4 : 0);
+      const radius = Math.min(cap, base * Math.max(0.75, Math.min(1.15, p.k)));
       return radius + (working ? 9 : 0);
     };
     for (const yaw of [-0.45, -0.25, 0, 0.25, 0.45]) for (const pitch of [-0.2, 0, 0.2]) {
