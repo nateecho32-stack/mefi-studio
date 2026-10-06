@@ -4620,6 +4620,9 @@ body.appearance-settings-active #tab-studio[data-places="v2"] .settings-nav-item
 #tab-studio[data-places="v2"] #settings-audio-media > h3:first-child { margin: 0 0 4px; font: 650 var(--f14, 14px)/1.35 var(--font-ui); }
 #tab-studio[data-places="v2"] #settings-audio-media > p:nth-child(2) { grid-column: 1; margin: 0; font-size: var(--f13, 13px); }
 #tab-studio[data-places="v2"] #settings-audio-media > button:nth-child(3) { grid-column: 2; grid-row: 2; }
+/* With its words behind the heading's "i" (MefiUi.tuck), the heading and its button share the one row. */
+#tab-studio[data-places="v2"] #settings-audio-media:has(> .info-pop) > h3:first-child { grid-column: 1; margin: 0; }
+#tab-studio[data-places="v2"] #settings-audio-media:has(> .info-pop) > button:nth-child(3) { grid-row: 1; }
 /* The Appearance sidebar's own small print reads at 12 px or more too. */
 #tab-studio[data-places="v2"] :is(.music-fineprint, .music-node-label, .music-node-choice strong, .music-node-choice small, .music-effect-copy small, .studio-style-choice strong, .music-void-theme-label) { font-size: var(--f12, 12px); }
 #tab-studio[data-places="v2"] .settings-media .music-theme { font-size: var(--f12, 12px); }
@@ -9723,6 +9726,64 @@ html[data-studio-style] .catalog-model { border-radius: var(--r-lg); }
 html[data-motion="off"] .key-tip { transition: none; }
 @media (max-width: 720px) { .key-tip { display: none; } }
 
+/* --- info circles (MefiUi.info and MefiUi.tuck, studio-ui.js) -------------------------
+   An "i" at the end of a title opens the how-to that used to sit under it. The
+   circle is 18px and takes a 26px press; it draws its letter, so it adds no
+   words to its title. The box is a popover in the top layer: one floating
+   surface over the page in every theme, its words in the page's main ink. */
+button.info-dot {
+  position: relative; display: inline-grid; place-items: center; flex: none; box-sizing: border-box;
+  width: 18px; height: 18px; min-width: 0; min-height: 0; margin: 0 0 0 .4em; padding: 0;
+  vertical-align: middle; translate: 0 -1px;
+  border: 1px solid color-mix(in srgb, currentColor 60%, transparent); border-radius: 50%;
+  background: transparent; box-shadow: none; color: var(--muted);
+  font: italic 700 12px/1 Georgia, "Times New Roman", serif; letter-spacing: 0; text-transform: none; text-decoration: none; white-space: nowrap;
+  cursor: help;
+  transition: color var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out), background-color var(--motion-fast) var(--ease-out);
+}
+/* The letter is drawn, not written: no text for a screen reader (its name says what it is) or a text audit. */
+button.info-dot::before { content: "i" / ""; }
+button.info-dot::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; }
+button.info-dot:hover, button.info-dot[aria-expanded="true"] { color: var(--gold-bright); border-color: var(--gold-bright); background: var(--tint-gold-2); transform: none; }
+button.info-dot:active { transform: none; }
+button.info-dot:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
+.info-pop {
+  position: fixed; inset: auto; z-index: 9000; box-sizing: border-box; margin: 0; overflow: visible;
+  width: max-content; min-width: 0; max-width: min(320px, calc(100vw - 16px)); padding: 10px 12px;
+  border: 1px solid var(--studio-glass-edge); border-radius: var(--r-md);
+  background: var(--studio-wash), var(--studio-sheen), var(--studio-float-fill);
+  backdrop-filter: var(--studio-float-blur); box-shadow: var(--studio-float-shadow);
+  color: var(--ivory); font: 400 max(13px, var(--f125, 13px))/1.5 var(--font-ui); cursor: auto;
+  letter-spacing: normal; text-align: left; text-transform: none; white-space: normal; overflow-wrap: anywhere;
+  opacity: 1; translate: 0 0;
+  transition: opacity var(--motion-fast) var(--ease-out), translate var(--motion-base) var(--ease-out), overlay var(--motion-fast) allow-discrete, display var(--motion-fast) allow-discrete;
+}
+.info-pop[popover]:not(:popover-open) { opacity: 0; translate: 0 4px; }
+.info-pop[popover][data-side="above"]:not(:popover-open) { translate: 0 -4px; }
+@starting-style {
+  .info-pop:popover-open { opacity: 0; translate: 0 4px; }
+  .info-pop[data-side="above"]:popover-open { translate: 0 -4px; }
+}
+/* The little arrow at the circle (--info-arrow, from placeTip). */
+.info-pop::before {
+  content: ""; position: absolute; left: calc(var(--info-arrow, 50%) - 5px); width: 10px; height: 10px; rotate: 45deg;
+  border: inherit; border-radius: 2px; background: var(--studio-float-fill);
+}
+.info-pop[data-side="below"]::before { top: -6px; border-right: 0; border-bottom: 0; }
+.info-pop[data-side="above"]::before { bottom: -6px; border-top: 0; border-left: 0; }
+.info-pop:not([data-side])::before { display: none; }
+.info-pop-body { position: relative; max-height: min(60vh, 420px); overflow: auto; overscroll-behavior: contain; }
+.info-pop-body.is-text { white-space: pre-line; }
+/* Words that moved in keep their element, id and classes, so code and tests
+   still find them, but read as the box's own: the rules that styled them where
+   they sat (a dim 11px hint, an uppercase eyebrow, an id's margin) would win
+   over the box otherwise, some of them by id. */
+.info-pop-body > * { display: block !important; margin: 0 !important; padding: 0 !important; max-width: none !important; color: inherit !important; font: inherit !important; letter-spacing: inherit !important; text-transform: none !important; text-align: inherit !important; opacity: 1 !important; }
+.info-pop-body > * + * { margin-top: 8px !important; }
+.info-pop-body > [hidden] { display: none !important; }
+@media (prefers-reduced-motion: reduce) { button.info-dot, .info-pop { transition: none; } }
+html:is([data-motion="off"], [data-motion="calm"]) :is(button.info-dot, .info-pop), body.no-motion :is(button.info-dot, .info-pop) { transition: none; }
+
 /* ---- Finish (every theme) ----------------------------------------------------
    Timing, light and press only, from tokens, so every palette, Studio style and
    density follows; nothing changes size, gap, place or scrolling.
@@ -12763,6 +12824,9 @@ html[data-layout="v2"][data-detail="all"],
   .size-preview .size-actions { margin-top: 8px; }
 }
 @media (max-height: 520px) { .size-preview { position: static; } }
+/* With the intro behind the Preview caption's "i" (MefiUi.tuck), its row is not kept empty above the page. */
+.size-wrap:not(:has(> .size-intro)) { grid-template-areas: "controls preview"; }
+@container (max-width: 720px) { .size-wrap:not(:has(> .size-intro)) { grid-template-areas: "preview" "controls"; } }
 
 /* ---- 6. the miniature ---------------------------------------------------------
    A 760 x 440 window drawn with the real regions' parts (rail, list, top bar, tab
@@ -14930,7 +14994,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
             <label class="switch" id="settings-composer-picker-switch" title="Typing @ in Home's message box offers this project's files, # its tasks and / its skills, and the box shows what the message points at. Off leaves @, # and / as plain typing, and a /skill in a message is not expanded."><input type="checkbox" id="settings-composer-picker" checked><span class="track"></span><span>Suggest files, tasks and skills while I type</span></label>
             <label class="switch" title="On: after five minutes without input, Studio switches to Command view. Off: it stays on the page you left open."><input type="checkbox" id="idle-command-idle"><span class="track"></span><span>Show Command view after 5 quiet minutes</span></label>
           </div>
-          <p class="muted" id="idle-home-hint">When disabled, Studio reopens the last tab page you used after the project chooser.</p>
+          <p class="muted" id="idle-home-hint" data-info-anchor="idle-home-label">When disabled, Studio reopens the last tab page you used after the project chooser.</p>
           <!-- settings.ui.launchAgents (main.cjs launchAgentsInfo); the launch screen's default button follows it. -->
           <label class="field"><span class="field-label">When Studio opens</span><select id="launch-agents" aria-describedby="launch-agents-hint"><option value="resume">Resume what I had</option><option value="start">Start agents</option><option value="off">Keep agents off</option></select><span class="field-hint" id="launch-agents-hint">Resume starts agents on a project where they were running when you closed Studio. The launch screen still offers both choices.</span></label>
           <!-- settings.ui.dailyNews (main.cjs news:edition, startup:state news); renderer/daily-paper.js keeps it. -->
@@ -16516,7 +16580,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       </div>
       <div class="walkthrough-activity" id="walkthrough-activity" hidden><div class="walkthrough-activity-track"><span id="walkthrough-activity-fill"></span></div><span id="walkthrough-activity-label"></span></div>
       <div id="walkthrough-cli-setup" class="walkthrough-panel" hidden>
-        <h3>Use the account you already have</h3>
+        <h3 id="walkthrough-cli-heading">Use the account you already have</h3>
         <p>One supported subscription can handle chat, mapping, planning and coding. Choose your tool, sign in with its own window, then check the connection. Your account's model access and usage limits apply.</p>
         <label for="walkthrough-cli-choice">Your coding tool</label>
         <select id="walkthrough-cli-choice"><option value="codex">Codex</option><option value="claude">Claude Code</option><option value="grok">Grok</option><option value="antigravity">Antigravity</option><option value="opencode">OpenCode (free models or linked providers)</option></select>
@@ -16529,9 +16593,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
           <button class="ghost mini" id="walkthrough-cli-refresh" type="button">Refresh installed tools</button>
           <button class="ghost mini" id="walkthrough-cli-docs" type="button">Setup instructions</button>
         </div>
-        <p class="muted">Install opens a setup window and downloads the selected tool. Node.js is installed if an npm tool needs it. Studio looks for the tool again when that window closes. Check connection sends a small test using your account's allowance. Passwords stay in the provider's sign-in window.</p>
+        <p class="muted" data-info-anchor="walkthrough-cli-heading">Install opens a setup window and downloads the selected tool. Node.js is installed if an npm tool needs it. Studio looks for the tool again when that window closes. Check connection sends a small test using your account's allowance. Passwords stay in the provider's sign-in window.</p>
         <div class="walkthrough-panel-actions"><button class="ghost" id="walkthrough-cli-keys" type="button">I have an API key or a local model server</button></div>
-        <p class="muted">No subscription tool? Save a z.ai, OpenRouter, OpenCode Go or Zen key, point the custom route at your own endpoint, or pick LM Studio in Connections. The guide walks you there, then scans again so Use this setup can map your folder with it.</p>
+        <p class="muted" data-info-anchor="walkthrough-cli-heading">No subscription tool? Save a z.ai, OpenRouter, OpenCode Go or Zen key, point the custom route at your own endpoint, or pick LM Studio in Connections. The guide walks you there, then scans again so Use this setup can map your folder with it.</p>
         <p id="walkthrough-cli-status" role="status" aria-live="polite"></p>
       </div>
       <div id="walkthrough-scan" class="walkthrough-panel" hidden>
@@ -22839,7 +22903,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     return { size, at };
   }
   function track(el) {
-    if (!el || regions.has(el) || el.closest?.(".studio-scroll-hint")) return;
+    // An info box draws in the top layer, above the hint layer: no hint for it or its words.
+    if (!el || regions.has(el) || el.closest?.(".studio-scroll-hint, .info-pop")) return;
     const css = getComputedStyle(el);
     if (el !== document.scrollingElement && !/(auto|scroll)/.test(`${css.overflowX} ${css.overflowY}`)) return;
     const hint = node("div", "studio-scroll-hint");
@@ -23277,6 +23342,353 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     glidePlace(host, item, false);
   }
   function glideFollow() { if (glideHost && glideItem?.isConnected) glidePlace(glideHost, glideItem, false); }
+  // ---- info circles: the how-to behind a small "i" --------------------------
+  // Pages used to hold their how-to words under every title. An "i" at the end
+  // of the title opens them in a small box instead, so a page shows its
+  // controls first and the words stay one click away. Two calls, shared by
+  // every page (the Team pages call them too, so keep their shape):
+  //
+  //   MefiUi.info(content, { label }) returns the circle, a
+  //     <button type="button" class="info-dot"> named "More about <label>",
+  //     with aria-expanded and aria-controls. It opens a box (.info-pop)
+  //     holding `content`: a string (its line breaks kept) or a Node. The box
+  //     goes in right after the circle once the circle has a parent, so place
+  //     the circle outside a title whose words are read elsewhere, or use tuck.
+  //   MefiUi.tuck(root, { min = 60 } = {}) moves the help words under the field
+  //     and card titles in `root` into such boxes, each circle at the end of its
+  //     title, and returns how many it moved. Run it after every render: words
+  //     already moved stay where they are, so it never wraps anything twice.
+  //
+  // The box is a popover="auto": the top layer (no panel clips it), a click
+  // outside or Esc closes it, one is open at a time. Click, Enter and Space open
+  // and close it; a mouse resting on the circle opens it after a moment and
+  // leaving closes it again, unless a click opened it. It sits under the circle
+  // (over it when there is more room there), inside the window, and follows the
+  // circle while the page scrolls or the window changes size.
+  const TIP_WAIT = 350, TIP_LINGER = 160, TIP_EDGE = 8, TIP_GAP = 8;
+  const POPOVER = typeof HTMLElement === "function" && "popover" in HTMLElement.prototype;
+  const titleTips = new WeakMap();
+  let tipSerial = 0, shownTip = null, tipFrame = 0, tipFollow = null, tipWatch = null;
+  const tipWords = (text) => String(text ?? "").replace(/\s+/g, " ").trim();
+  const mouseOnly = (event) => !event?.pointerType || event.pointerType === "mouse";
+  function tipShown(tip) {
+    if (!POPOVER) return !tip.pop.hidden;
+    try { return tip.pop.matches(":popover-open"); } catch { return tip.shown; }
+  }
+  function makeTip(content, label) {
+    const id = `info-pop-${++tipSerial}`;
+    const pop = node("div", "info-pop"), body = node("div", "info-pop-body");
+    pop.id = id; body.id = `${id}-body`;
+    if (content != null && typeof content === "object" && content.nodeType) body.append(content);
+    else if (content != null && content !== "") { body.classList.add("is-text"); body.textContent = String(content); }
+    pop.append(body);
+    if (POPOVER) pop.setAttribute("popover", "auto"); else pop.hidden = true;
+    const dot = node("button", "info-dot");
+    dot.type = "button";
+    dot.setAttribute("aria-expanded", "false"); dot.setAttribute("aria-controls", id); dot.setAttribute("aria-describedby", body.id);
+    // The circle is its box's invoker, so a click on it is not a click outside
+    // the box: the light dismiss leaves an open box to its circle.
+    if (POPOVER) { try { dot.popoverTargetElement = pop; } catch { /* the circle still opens it */ } }
+    const tip = { dot, pop, body, how: null, wait: 0, linger: 0, overDot: false, overPop: false, shown: false, title: null, control: null, named: false };
+    nameTip(tip, label);
+    wireTip(tip);
+    return tip;
+  }
+  function nameTip(tip, label) {
+    const words = tipWords(label);
+    const name = words ? `More about ${words}` : "More about this";
+    if (tip.dot.getAttribute("aria-label") !== name) tip.dot.setAttribute("aria-label", name);
+  }
+  function wireTip(tip) {
+    const { dot, pop } = tip;
+    dot.addEventListener("click", (event) => {
+      // The circle decides, not the popover target's own toggle: a box the
+      // pointer opened stays open, pinned, when its circle is then clicked.
+      event.preventDefault(); event.stopPropagation();
+      if (!tipShown(tip)) showTip(tip, "click");
+      else if (tip.how === "hover") { tip.how = "click"; clearTimeout(tip.linger); }
+      else hideTip(tip);
+    });
+    dot.addEventListener("pointerenter", (event) => {
+      if (!mouseOnly(event)) return;
+      tip.overDot = true; clearTimeout(tip.linger);
+      if (tipShown(tip)) return;
+      clearTimeout(tip.wait);
+      tip.wait = setTimeout(() => { if (tip.overDot && !tipShown(tip)) showTip(tip, "hover"); }, TIP_WAIT);
+    });
+    dot.addEventListener("pointerleave", (event) => { if (!mouseOnly(event)) return; tip.overDot = false; clearTimeout(tip.wait); lingerTip(tip); });
+    pop.addEventListener("pointerenter", (event) => { if (!mouseOnly(event)) return; tip.overPop = true; clearTimeout(tip.linger); });
+    pop.addEventListener("pointerleave", (event) => { if (!mouseOnly(event)) return; tip.overPop = false; lingerTip(tip); });
+    // The box can sit inside a label: a click on its words must not reach the
+    // label (which would flip its switch) or a clickable row around it.
+    pop.addEventListener("click", (event) => {
+      const control = event.target?.closest?.("a[href], button, input, select, textarea, summary, [tabindex]");
+      if (control && pop.contains(control)) return;
+      event.preventDefault(); event.stopPropagation();
+    });
+    // A click outside and Esc close the box without asking the circle.
+    pop.addEventListener("toggle", (event) => {
+      if (event.newState === "open" && tipShown(tip)) {
+        tip.shown = true;
+        if (shownTip !== tip) { if (shownTip) settleTip(shownTip); shownTip = tip; }
+        if (dot.getAttribute("aria-expanded") !== "true") dot.setAttribute("aria-expanded", "true");
+        placeTip(tip); followTips(true);
+      } else if (event.newState === "closed") settleTip(tip);
+    });
+  }
+  function showTip(tip, how) {
+    clearTimeout(tip.wait); clearTimeout(tip.linger);
+    const { dot, pop } = tip;
+    if (!dot.isConnected) return false;
+    if (!pop.isConnected) dot.after(pop);
+    if (POPOVER) { try { if (!tipShown(tip)) pop.showPopover(); } catch { return false; } }
+    else { if (shownTip && shownTip !== tip) hideTip(shownTip); pop.hidden = false; }
+    // The Popover API closed the box that was open; its circle hears it here.
+    if (shownTip && shownTip !== tip) settleTip(shownTip);
+    tip.shown = true; tip.how = how; shownTip = tip;
+    dot.setAttribute("aria-expanded", "true");
+    placeTip(tip); followTips(true);
+    return true;
+  }
+  function hideTip(tip, { focus = false } = {}) {
+    if (POPOVER) { try { if (tipShown(tip)) tip.pop.hidePopover(); } catch { /* already closed */ } }
+    else tip.pop.hidden = true;
+    settleTip(tip);
+    if (focus && tip.dot.isConnected) tip.dot.focus?.({ preventScroll: true });
+  }
+  function settleTip(tip) {
+    clearTimeout(tip.wait); clearTimeout(tip.linger);
+    tip.shown = false; tip.how = null; tip.overPop = false;
+    if (tip.dot.getAttribute("aria-expanded") !== "false") tip.dot.setAttribute("aria-expanded", "false");
+    if (shownTip === tip) { shownTip = null; followTips(false); }
+  }
+  // A box the pointer opened closes a moment after the pointer leaves both it and its circle.
+  function lingerTip(tip) {
+    if (tip.how !== "hover") return;
+    clearTimeout(tip.linger);
+    tip.linger = setTimeout(() => { if (tip.how === "hover" && !tip.overDot && !tip.overPop) hideTip(tip); }, TIP_LINGER);
+  }
+  // Under the circle, or over it when there is more room there, and never
+  // nearer than TIP_EDGE to the window's edge. A circle scrolled out of the
+  // window, hidden or gone takes its box with it.
+  function placeTip(tip) {
+    const { dot, pop } = tip;
+    const at = dot.isConnected ? dot.getBoundingClientRect() : null;
+    if (!at || (!at.width && !at.height) || at.bottom < 0 || at.top > innerHeight || at.right < 0 || at.left > innerWidth) { hideTip(tip); return; }
+    const box = pop.getBoundingClientRect();
+    const width = Math.min(box.width, innerWidth - TIP_EDGE * 2), height = box.height;
+    const below = innerHeight - TIP_EDGE - (at.bottom + TIP_GAP), above = at.top - TIP_GAP - TIP_EDGE;
+    const up = height > below && above > below;
+    const top = Math.max(TIP_EDGE, Math.min(up ? at.top - TIP_GAP - height : at.bottom + TIP_GAP, innerHeight - TIP_EDGE - height));
+    const middle = at.left + at.width / 2;
+    const left = Math.max(TIP_EDGE, Math.min(middle - width / 2, innerWidth - TIP_EDGE - width));
+    const side = up ? "above" : "below";
+    if (pop.dataset.side !== side) pop.dataset.side = side;
+    pop.style.left = `${Math.round(left)}px`; pop.style.top = `${Math.round(top)}px`;
+    // The little arrow points at the circle, wherever the edge pushed the box.
+    pop.style.setProperty("--info-arrow", `${Math.round(Math.max(12, Math.min(width - 12, middle - left)))}px`);
+  }
+  function followTips(on) {
+    if (on === Boolean(tipFollow)) return;
+    if (on) {
+      tipFollow = () => { if (!tipFrame) tipFrame = requestAnimationFrame(() => { tipFrame = 0; if (shownTip) placeTip(shownTip); }); };
+      document.addEventListener("scroll", tipFollow, { capture: true, passive: true });
+      window.addEventListener("resize", tipFollow);
+      return;
+    }
+    document.removeEventListener("scroll", tipFollow, { capture: true });
+    window.removeEventListener("resize", tipFollow);
+    cancelAnimationFrame(tipFrame); tipFrame = 0; tipFollow = null;
+  }
+  // Esc closes the open box before the sheet, sidebar or page under it hears
+  // the key; the keyboard goes back to its circle. On the window's capture
+  // phase, from the moment this file loads: the Appearance sidebar
+  // (music.js) and others take Esc there too, and they load later.
+  window.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !shownTip) return;
+    const tip = shownTip;
+    if (!tipShown(tip)) { settleTip(tip); return; }
+    event.preventDefault(); event.stopImmediatePropagation();
+    const active = document.activeElement;
+    hideTip(tip, { focus: active === tip.dot || tip.pop.contains(active) });
+  }, true);
+  function info(content, { label = "" } = {}) {
+    const tip = makeTip(content, label);
+    // The box follows its circle into the page, once the caller has placed it.
+    queueMicrotask(() => { if (!tip.pop.parentNode && tip.dot.parentNode) tip.dot.after(tip.pop); });
+    return tip.dot;
+  }
+  // What tuck moves, and where its circle goes:
+  //  - a field's help: a small, p or .field-hint inside a field (a label,
+  //    .field, .studio-field, .settings-control, .setup-helper-field,
+  //    .setup-helper-toggle-words, .size-row, or the words beside a label's
+  //    control), to the field's title: the nearest title before it (b,
+  //    strong, a label, .field-label, .setup-helper-label, a heading), past the
+  //    field's own controls, or the title a row before it starts with;
+  //  - a card's intro: a paragraph right under a heading (h1 to h6, legend,
+  //    .settings-eyebrow), or under a row that starts with its title;
+  //  - help marked data-info-anchor="<id of its title>", whatever its length.
+  // What stays where it is: help under `min` characters; a status line (role
+  // status, alert or log, aria-live, data-tone or data-state, a status, error
+  // or warning class or id, a "Last run:" or "Now:" line); anything under
+  // data-keep-visible; help that holds a control or a link, or sits inside a
+  // page's header (its title and subtitle line), a button, a summary, a
+  // picture or hidden content; help whose title is hidden or inside such a place.
+  // A moved help keeps its element, id and classes inside the box (hidden
+  // until it opens), so code that rewrites it and tests that read textContent
+  // still find it; the box takes its old place, so the order around it holds.
+  // The field's control is described by it (aria-describedby). A label that
+  // wraps its control is pointed at that control (htmlFor), or the circle, a
+  // button before it, would become the label's control; the control is named
+  // by the title's words (aria-label), or the circle's name would join its own.
+  const TUCK_HELP = "p, small, .field-hint, [data-info-anchor]";
+  const TUCK_FIELD = "label, .field, .studio-field, .settings-control, .setup-helper-field, .setup-helper-toggle-words, .size-row";
+  const TUCK_HEADING = "h1, h2, h3, h4, h5, h6, legend, .settings-eyebrow";
+  const TUCK_TITLE = `${TUCK_HEADING}, b, strong, label, .field-label, .setup-helper-label`;
+  const TUCK_CONTROL = "input, select, textarea, button, [role=switch], [role=radio], [role=radiogroup], [role=slider], [role=combobox], [role=group], [contenteditable=true]";
+  const TUCK_OUTSIDE = "header, button, a[href], summary, select, textarea, [role=button], [role=link], [role=radio], [role=option], [role=tab], [role=menuitem], [role=switch], [role=checkbox], [role=img], [inert], [aria-hidden=true], .info-pop";
+  const STATUS_NAME = /(?:^|[\s_-])(?:status|error|warning|alert)(?:$|[\s_-])/i;
+  const STATUS_WORDS = /^(?:last run|now|status)\s*:/i;
+  // A title the stylesheet hides is remembered as hidden: a page that paints
+  // again (Settings on every Find keystroke) would otherwise read its style
+  // again, after the paint's own changes, and force the page's style anew.
+  // Only "hidden" is kept, so the worst a stale answer does is leave words in
+  // view. Off the page (a section drawn before it is attached, as the setup
+  // helper's) nothing is read at all: its titles count as shown.
+  const styleHidden = new WeakSet();
+  function hiddenByStyle(el) {
+    if (styleHidden.has(el)) return true;
+    try { if (typeof getComputedStyle === "function" && el.isConnected && getComputedStyle(el).display === "none") { styleHidden.add(el); return true; } } catch { /* no styles to read */ }
+    return false;
+  }
+  function statusLine(help) {
+    if (help.closest("[role=status], [role=alert], [role=log], [role=progressbar], [aria-live]")) return true;
+    if (help.matches("[data-tone], [data-state], .bad-text, .is-bad") || help.parentElement?.matches("[data-tone], [data-state]")) return true;
+    return STATUS_NAME.test(`${help.id || ""} ${help.getAttribute("class") || ""}`) || STATUS_WORDS.test(tipWords(help.textContent));
+  }
+  function tuckable(help, min, explicit) {
+    if (help.hidden || help.closest(TUCK_OUTSIDE) || help.closest("[data-keep-visible]") || help.matches(TUCK_HEADING)) return false;
+    if (help.querySelector(`a[href], [tabindex], ${TUCK_CONTROL}`) || statusLine(help)) return false;
+    return explicit || tipWords(help.textContent).length >= min;
+  }
+  const holdsControl = (el) => el.matches(TUCK_CONTROL) || Boolean(el.querySelector(TUCK_CONTROL));
+  // A row that starts with its title: Size's label row, a key's head row.
+  function rowTitle(row) {
+    const first = row?.firstElementChild;
+    return first && first.matches(TUCK_TITLE) && !holdsControl(first) ? first : null;
+  }
+  function fieldTitle(help) {
+    const parent = help.parentElement;
+    if (!parent || !(parent.matches(TUCK_FIELD) || parent.parentElement?.matches("label"))) return null;
+    for (let at = help.previousElementSibling; at; at = at.previousElementSibling) {
+      if (at.matches(TUCK_TITLE) && !holdsControl(at)) return at;
+      const lead = rowTitle(at);
+      if (lead) return lead;
+      // The field's own controls (and a switch's drawn track) sit between a title and its help.
+      if (!holdsControl(at) && !at.matches("datalist, .track, .setup-helper-track, [aria-hidden=true]")) return null;
+    }
+    return null;
+  }
+  function cardTitle(help) {
+    const before = help.matches("p") ? help.previousElementSibling : null;
+    if (!before) return null;
+    if (before.matches(TUCK_HEADING)) return before;
+    return before.matches(`p, ul, ol, ${TUCK_FIELD}`) ? null : rowTitle(before);
+  }
+  function anchorTitle(help, root) {
+    const id = help.dataset?.infoAnchor;
+    if (!id) return null;
+    return (root.ownerDocument || document).getElementById(id) ?? root.querySelector(`[id="${id}"]`);
+  }
+  const usableTitle = (title, help) => Boolean(title) && title !== help && !help.contains(title) && !title.hidden && !title.closest(TUCK_OUTSIDE) && !hiddenByStyle(title);
+  // A title's own words, without a count or a note in a span inside it.
+  function titleWords(title) {
+    const own = [...(title?.childNodes || [])].filter((child) => child.nodeType === 3).map((child) => child.textContent).join(" ");
+    return tipWords(own) || tipWords(title?.firstElementChild?.textContent) || tipWords(title?.textContent);
+  }
+  function describeBy(control, help, tip) {
+    const ids = (control.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean);
+    if ((help.id && ids.includes(help.id)) || ids.includes(tip.body.id)) return;
+    control.setAttribute("aria-describedby", [...ids, tip.body.id].join(" "));
+  }
+  function bindTip(tip, help, field) {
+    const title = tip.title, doc = title.ownerDocument || document;
+    const label = title.closest("label");
+    const usable = (el) => el.type !== "hidden" && !el.closest(".info-pop");
+    let control = null;
+    if (label) {
+      control = (label.htmlFor && doc.getElementById(label.htmlFor)) || [...label.querySelectorAll("input, select, textarea")].find(usable) || null;
+      if (control && !label.htmlFor) {
+        if (!control.id) control.id = `info-control-${tipSerial}`;
+        label.htmlFor = control.id;
+      }
+      if (control && !control.hasAttribute("aria-label") && !control.hasAttribute("aria-labelledby")) { control.setAttribute("aria-label", titleWords(title)); tip.named = true; }
+    } else if (field) {
+      const box = tip.pop.parentElement?.closest(TUCK_FIELD) ?? tip.pop.parentElement;
+      control = [...(box?.querySelectorAll("input, select, textarea, [role=radiogroup], [role=group], [role=slider], [role=switch]") ?? [])].find((el) => usable(el) && el.getAttribute("aria-hidden") !== "true") ?? null;
+    }
+    if (!control) return;
+    tip.control = control;
+    describeBy(control, help, tip);
+    // An enhanced select is read through its button (enhanceSelect above).
+    const choice = control.classList?.contains("studio-select-source") ? doc.getElementById(`${control.id}-choice`) : null;
+    if (choice) describeBy(choice, help, tip);
+  }
+  // A title whose words are rewritten (vibe.js renames Open Home on launch for
+  // the mode) gets its circle back at its end, and the names follow the words.
+  function watchTitle(title) {
+    if (typeof MutationObserver !== "function") return;
+    tipWatch ??= new MutationObserver((records) => {
+      const seen = new Set();
+      for (const record of records) {
+        let at = record.target;
+        while (at && !titleTips.has(at)) at = at.parentNode;
+        if (!at || seen.has(at)) continue;
+        seen.add(at);
+        const tip = titleTips.get(at), words = titleWords(at);
+        if (tip.dot.parentNode !== at) at.append(tip.dot);
+        nameTip(tip, words);
+        if (tip.named && tip.control && tip.control.getAttribute("aria-label") !== words) tip.control.setAttribute("aria-label", words);
+      }
+    });
+    tipWatch.observe(title, { childList: true, characterData: true, subtree: true });
+  }
+  function tuckInto(help, title, field) {
+    const known = titleTips.get(title);
+    if (known) {
+      // A second help for the same title joins the first one's box.
+      if (known.dot.parentNode !== title) title.append(known.dot);
+      help.remove(); known.body.append(help);
+      return;
+    }
+    const tip = makeTip(null, titleWords(title));
+    tip.title = title; titleTips.set(title, tip);
+    help.replaceWith(tip.pop);
+    tip.body.append(help);
+    title.append(tip.dot);
+    bindTip(tip, help, field);
+    watchTitle(title);
+  }
+  // The kill switch: localStorage "mefiStudio.infoTips" set to "off" leaves
+  // every help where it was (info() still makes circles for new UI).
+  const tucksOff = () => { try { return localStorage.getItem("mefiStudio.infoTips") === "off"; } catch { return false; } };
+  function tuck(root, { min = 60 } = {}) {
+    if (!root?.querySelectorAll || tucksOff()) return 0;
+    // Every choice is read first and every move made after: a move between two
+    // reads of a title's style forced the whole page's style again each time
+    // (13 moves took 274 ms in Settings; read first, one recalculation).
+    const moves = [];
+    for (const help of [...root.querySelectorAll(TUCK_HELP)]) {
+      const explicit = Boolean(help.dataset?.infoAnchor);
+      if (!tuckable(help, min, explicit)) continue;
+      let title = null, field = false;
+      if (explicit) title = anchorTitle(help, root);
+      else { title = fieldTitle(help); field = Boolean(title); title ??= cardTitle(help); }
+      if (usableTitle(title, help)) moves.push([help, title, field]);
+    }
+    for (const [help, title, field] of moves) tuckInto(help, title, field);
+    return moves.length;
+  }
   function init() {
     layer(); applyAppearance({}, false); scan(); mountAppearance();
     document.addEventListener("scroll", schedule, true);
@@ -23362,7 +23774,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (/cannot read propert|is not a function|is not defined|is not valid json|unexpected (token|end)|\bundefined\b|\[object /i.test(text)) return fallback;
     return text[0].toUpperCase() + text.slice(1);
   }
-  window.MefiUi = Object.assign(window.MefiUi || {}, { arm, plainError });
+  window.MefiUi = Object.assign(window.MefiUi || {}, { arm, plainError, info, tuck });
   window.MefiScroll = { attach: track, scan, refresh: schedule, owns: (parent, target) => [...regions.values()].some(({ el, hint }) => parent?.contains(el) && hint.contains(target)) };
   window.MefiSelect = { enhance: enhanceSelect, refresh: schedule, close: closeSelect, owns: (parent) => Boolean(popup && parent?.contains(popup.select)), contains: (target) => Boolean(popup?.root.contains(target)), near: (parent, x, y) => { if (!popup || !parent?.contains(popup.select)) return false; const box = popup.root.getBoundingClientRect(); return x >= box.left - 16 && x <= box.right + 16 && y >= box.top - 16 && y <= box.bottom + 16; } };
   window.MefiAppearance = { get: () => ({ ...appearance }), apply: applyAppearance, mount: mountAppearance };
@@ -65276,7 +65688,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     out.id = `size-${key}-out`;
     input.addEventListener("input", () => change(Number(input.value)));
     const ticks = h("div", "size-ticks", null, ...marks.map(([label, at]) => tick(label, at)));
-    return row(key, h("div", "size-label", null, h("label", "", { for: `size-${key}`, text: title }), out), hint, input, ticks);
+    const name = h("label", "", { for: `size-${key}`, text: title });
+    name.id = `size-${key}-title`;
+    return row(key, h("div", "size-label", null, name, out), hint, input, ticks);
   }
   function choiceRow(key, title, hint, choices, change) {
     const group = h("div", "size-seg", { role: "radiogroup", "aria-label": title });
@@ -65315,10 +65729,14 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const detail = choiceRow("detail", "Detail", "How much each session row and board card shows.", DETAILS.map(([key, label]) => [key, label]), (value) => preview({ detail: value }));
     const grid = h("dl", "size-grid");
     grid.id = "size-panels";
+    // The page's how-to words sit behind an "i" at the end of the title they explain (MefiUi.tuck, studio-ui.js,
+    // run at the end of build): data-info-anchor names that title for the words that are not right under it.
+    const panelsTitle = h("span", "", { text: "Panels" });
+    panelsTitle.id = "size-panels-title";
     const panels = h("section", "size-panel", { "aria-label": "Panels" },
-      h("h3", "", null, h("span", "", { text: "Panels" }), h("small", "", { text: "" })),
+      h("h3", "", null, panelsTitle, h("small", "", { text: "" })),
       grid,
-      h("p", "size-note", { text: "Each mode remembers its own. Drag the edge of a panel to resize it; a double-click on the edge puts it back." }));
+      h("p", "size-note", { text: "Each mode remembers its own. Drag the edge of a panel to resize it; a double-click on the edge puts it back.", "data-info-anchor": "size-panels-title" }));
     const applyButton = h("button", "primary", { type: "button", text: "Apply" });
     applyButton.id = "size-apply";
     const resetButton = h("button", "ghost", { type: "button", text: "Reset", title: "Back to 100%, default text, comfortable, titles and status" });
@@ -65334,19 +65752,22 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const mini = buildMini();
     mini.id = "size-mini";
     host.append(mini);
+    const previewTitle = h("b", "", { text: "Preview" });
+    previewTitle.id = "size-preview-title";
     const side = h("div", "size-preview", null,
-      h("div", "size-cap", null, h("b", "", { text: "Preview" }), h("span", "size-sample", { text: "Sample data" }), stateText),
+      h("div", "size-cap", null, previewTitle, h("span", "size-sample", { text: "Sample data" }), stateText),
       host, appliedText,
       h("div", "size-actions", null, applyButton, resetButton, discardButton));
     side.id = "size-preview";
     body.replaceChildren(
       h("div", "size-wrap", null,
-        h("p", "size-intro", { text: "Move a control and the preview beside it changes at once. The rest of the window changes when you press Apply, so you never have to flip back and forth." }),
+        h("p", "size-intro", { text: "Move a control and the preview beside it changes at once. The rest of the window changes when you press Apply, so you never have to flip back and forth.", "data-info-anchor": "size-preview-title" }),
         h("div", "size-controls", null,
           h("section", "size-panel", { "aria-label": "Size and density" }, zoom, size, density, detail),
           panels,
-          h("p", "size-aside", { text: "Pages from before the 0.5 layout are drawn in fixed pixels, so the interface scale is what resizes them. Text size, density and detail change the new panels." })),
+          h("p", "size-aside", { text: "Pages from before the 0.5 layout are drawn in fixed pixels, so the interface scale is what resizes them. Text size, density and detail change the new panels.", "data-info-anchor": "size-zoom-title" })),
         side));
+    window.MefiUi?.tuck?.(body);
     applyButton.addEventListener("click", () => { void apply(); });
     resetButton.addEventListener("click", () => { void reset(); });
     discardButton.addEventListener("click", () => { discard(); });
@@ -80757,6 +81178,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (!overlay) return;
     state = { ...state, status: "reading", mode: "sheet" };
     save(); render();
+    // The account step's fine print sits behind an "i" at its heading (MefiUi.tuck, studio-ui.js); the
+    // step's own words and its live line under the tool choice stay in view.
+    window.MefiUi?.tuck?.($("cli-setup"));
     const coachEl = $("coach");
     if (coachEl) coachEl.hidden = true;
     clearHighlight();
@@ -88579,6 +89003,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (!chatgptBridge()) return null;
     const plan = data.chatgpt || {};
     const box = card("Use your ChatGPT plan", "Complete eligible AI requests in this app with usage included in your ChatGPT plan or credits balance.", "setup-helper-card setup-helper-chatgpt-card");
+    // OpenAI's words stay as written and in view: none of them goes behind an "i" (MefiUi.tuck).
+    box.dataset.keepVisible = "";
     const manage = (className) => button("Manage usage", () => { void api()?.openExternal?.(plan.manageUsageUrl || CHATGPT_USAGE_URL); }, className);
     if (state.chatgptWelcome) {
       const welcome = node("div", "setup-helper-chatgpt-welcome");
@@ -89407,6 +89833,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       if (serial === renderSerial) say(plain(error, "This section could not load."), "bad");
     }
     if (serial !== renderSerial) return;
+    // A card's long description and a field's long hint sit behind an "i" at the end of its title
+    // (MefiUi.tuck, studio-ui.js), so a section reads as its controls. Done while the section is still
+    // off the page, where tuck reads no style, and before the focus is put back, so a circle that had
+    // the keyboard is found again by its name.
+    window.MefiUi?.tuck?.(content);
     const active = document.activeElement;
     const held = els.content.contains?.(active) ? { label: active.getAttribute?.("aria-label"), text: active.tagName === "BUTTON" ? active.textContent : null, tag: active.tagName, row: active.closest?.(".setup-helper-toggle")?.querySelector?.("strong")?.textContent || null } : null;
     els.content.removeAttribute("aria-busy");
@@ -105264,7 +105695,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   function settingsControlLabel(control) {
     const label = control.closest?.("label") ?? document.querySelector?.(`label[for="${control.id}"]`);
     const named = label?.querySelector?.(".field-label, b, strong, .grow");
-    const parts = label ? Array.from(label.children ?? []).filter((node) => !["INPUT", "SELECT", "TEXTAREA", "SMALL"].includes(node.tagName)).map((node) => node.textContent ?? "").join(" ") : "";
+    const parts = label ? Array.from(label.children ?? []).filter((node) => !["INPUT", "SELECT", "TEXTAREA", "SMALL"].includes(node.tagName) && !node.classList?.contains?.("info-pop")).map((node) => node.textContent ?? "").join(" ") : "";
     return String(control.getAttribute?.("aria-label") || named?.textContent || parts || (control.tagName === "BUTTON" ? settingsButtonLabel(control) : "") || control.getAttribute?.("title") || "").replace(/\s+/g, " ").trim();
   }
   function settingsEntries() {
@@ -105281,7 +105712,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         if (label) entries.push({ id: card.id, label, category, terms: `${words} ${card.id.replace(/-/g, " ")}` });
       }
       for (const control of pane.querySelectorAll("input, select, textarea, button")) {
-        if (!settingsAvailable(control) || control.type === "hidden" || control.getAttribute?.("aria-hidden") === "true" || control.hidden || control.closest?.(".settings-you-theme[hidden], .music-queue, .music-recent, .music-suggestion")) continue;
+        // An info circle (MefiUi.tuck) is the help of the setting beside it, not a setting of its own.
+        if (!settingsAvailable(control) || control.type === "hidden" || control.getAttribute?.("aria-hidden") === "true" || control.hidden || control.closest?.(".settings-you-theme[hidden], .music-queue, .music-recent, .music-suggestion, .info-dot")) continue;
         const label = settingsControlLabel(control);
         if (!label) continue;
         if (!control.id) control.id = `settings-control-${category}-${++settingsControlSerial}`;
@@ -105393,6 +105825,21 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (browser) browser.hidden = Boolean(window.mefiStudio?.launchStudio);
     for (const note of document.querySelectorAll("[data-desktop-message]")) note.hidden = Boolean(window.mefiStudio?.launchStudio);
   }
+  // A setting's long how-to words move behind an "i" at the end of its title (MefiUi.tuck, studio-ui.js), so a place
+  // shows its controls first. Connections, Models and Automation are the Team pages' (renderer/agents.js takes their
+  // cards there and tucks them) and Community is renderer/community.js's, so they are marked to stay as they are. One
+  // call for all of Settings: tuck reads every title's style before it moves anything, and a call per card read it
+  // again after each card's moves (about 20 ms of style each, 120 ms on the first paint). Every paint while Settings
+  // shows runs it: rows drawn since (Appearance's media) are tucked, rows already tucked stay as they are.
+  const SETTINGS_UNTUCKED = ["settings-category-connections", "settings-category-models", "settings-category-automation", "settings-community"];
+  function tuckSettings() {
+    const tuck = window.MefiUi?.tuck, sections = document.getElementById("settings-sections");
+    // Not before the page has loaded: renderer/nav.js chooses the layout then, and Settings is filed for it (a
+    // reopened Settings paints earlier, while a title the 0.5 layout hides, like Report's, still shows).
+    if (typeof tuck !== "function" || !sections || document.readyState === "loading") return;
+    for (const id of SETTINGS_UNTUCKED) document.getElementById(id)?.setAttribute?.("data-keep-visible", "");
+    tuck(sections);
+  }
   function paintSettingsRows() {
     mountSettingsControls();
     if (document.querySelector && !document.querySelector(`[data-settings-category-pane="${settingsPane(settingsCategory)}"]`)) settingsCategory = "general";
@@ -105413,6 +105860,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }
     for (const pane of document.querySelectorAll("[data-settings-category-pane]")) pane.hidden = Boolean(query) || pane.dataset.settingsCategoryPane !== settingsPane(settingsCategory);
     if (document.getElementById("tab-studio")?.hidden === false) {
+      // Only once Settings shows: by then the layout is chosen and filed, and tuck reads which titles it shows.
+      tuckSettings();
       window.MefiMusic?.activateSettings?.(query ? null : settingsPane(settingsCategory));
       if (settingsCategory === "automation") void loadSettingsAutomation();
       if (!query) openSettingsPlace(settingsCategory);

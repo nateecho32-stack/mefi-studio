@@ -292,13 +292,14 @@ app.whenReady().then(async () => {
   // Tab walks the page in order: two sliders, the two choices (one stop each), then the buttons that can be pressed.
   await run("document.getElementById('size-zoom').focus();");
   const trail = [];
-  const here = () => run("const node = document.activeElement; return node ? (node.id || node.dataset.value || node.textContent.trim().slice(0, 20)) + (document.getElementById('size-overlay').contains(node) ? '' : ' (outside)') : 'none';");
+  // An "i" circle (MefiUi.info) has no id or text of its own: it is named by its aria-label.
+  const here = () => run("const node = document.activeElement; return node ? (node.id || node.dataset.value || (node.classList.contains('info-dot') ? node.getAttribute('aria-label') : '') || node.textContent.trim().slice(0, 20)) + (document.getElementById('size-overlay').contains(node) ? '' : ' (outside)') : 'none';");
   trail.push(await here());
-  for (let step = 0; step < 4; step += 1) { await key("Tab"); trail.push(await here()); }
+  for (let step = 0; step < 6; step += 1) { await key("Tab"); trail.push(await here()); }
   report.tabTrail = trail;
-  assert.deepEqual(trail, ["size-zoom", "size-text", "comfortable", "status", "size-reset"], "sliders, then the checked choice of each group, then Reset: Apply is disabled and Discard is hidden, so neither takes a stop");
-  await key("Tab", ["shift"]);
-  assert.equal(await here(), "status", "Shift+Tab goes back to Detail's stop");
+  assert.deepEqual(trail, ["size-zoom", "size-text", "comfortable", "status", "More about Panels", "More about Preview", "size-reset"], "sliders, then the checked choice of each group, the Panels and Preview \"i\" circles, then Reset: Apply is disabled and Discard is hidden, so neither takes a stop");
+  for (let step = 0; step < 3; step += 1) await key("Tab", ["shift"]);
+  assert.equal(await here(), "status", "Shift+Tab goes back past the two circles to Detail's stop");
   await key("Left"); // on Detail: a radio moves with the arrow
   assert.equal(await run("return window.MefiSize.draft().detail;"), "titles", "an arrow moves a choice");
   assert.equal(await here(), "titles", "and takes the keyboard with it");

@@ -647,6 +647,9 @@
     if (!overlay) return;
     state = { ...state, status: "reading", mode: "sheet" };
     save(); render();
+    // The account step's fine print sits behind an "i" at its heading (MefiUi.tuck, studio-ui.js); the
+    // step's own words and its live line under the tool choice stay in view.
+    window.MefiUi?.tuck?.($("cli-setup"));
     const coachEl = $("coach");
     if (coachEl) coachEl.hidden = true;
     clearHighlight();

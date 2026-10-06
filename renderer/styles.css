@@ -4610,6 +4610,9 @@ body.appearance-settings-active #tab-studio[data-places="v2"] .settings-nav-item
 #tab-studio[data-places="v2"] #settings-audio-media > h3:first-child { margin: 0 0 4px; font: 650 var(--f14, 14px)/1.35 var(--font-ui); }
 #tab-studio[data-places="v2"] #settings-audio-media > p:nth-child(2) { grid-column: 1; margin: 0; font-size: var(--f13, 13px); }
 #tab-studio[data-places="v2"] #settings-audio-media > button:nth-child(3) { grid-column: 2; grid-row: 2; }
+/* With its words behind the heading's "i" (MefiUi.tuck), the heading and its button share the one row. */
+#tab-studio[data-places="v2"] #settings-audio-media:has(> .info-pop) > h3:first-child { grid-column: 1; margin: 0; }
+#tab-studio[data-places="v2"] #settings-audio-media:has(> .info-pop) > button:nth-child(3) { grid-row: 1; }
 /* The Appearance sidebar's own small print reads at 12 px or more too. */
 #tab-studio[data-places="v2"] :is(.music-fineprint, .music-node-label, .music-node-choice strong, .music-node-choice small, .music-effect-copy small, .studio-style-choice strong, .music-void-theme-label) { font-size: var(--f12, 12px); }
 #tab-studio[data-places="v2"] .settings-media .music-theme { font-size: var(--f12, 12px); }
