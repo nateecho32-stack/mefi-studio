@@ -1753,6 +1753,16 @@ failed process stays an error and cannot produce briefing requests.
   YouTube for anyone without Studio. **Add a shared playlist**, or pasting
   that text or link into Browse's box, brings it back. A list plays only
   through `MefiMusic.playlists`, and holds only links `mediaLink` would play.
+  **Send it to friends** (under Share) needs nothing new from the relay:
+  **Post** sends the share text to a room through `hubRoom("sendMessage")`
+  (cut to 2,000 characters; the play-them-all link keeps every video), and
+  `rooms.js` shows such a message as a playlist card (`MefiPlaylists.card`).
+  **Add to the Project hub** shares the `watch_videos` link (at most 512
+  characters, so the first videos that fit) as a project of kind `other`;
+  `project-hub.js` and The Lobby's top project recognise it
+  (`MefiPlaylists.fromLink`), show its videos and play it in Studio:
+  `playProject` with `{ here: true }` skips opening the browser for a YouTube
+  `watch_videos` link only, and the play still counts after two minutes.
   With the Audio link on, its **Tree motion** reaction lets the music
   smoothly quicken the Overview's spin, sway it round a small figure of eight
   and swell it on the bass, inside room the frame keeps for it.
