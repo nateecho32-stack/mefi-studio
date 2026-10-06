@@ -1213,7 +1213,7 @@
     watch.hidden = false;
     if (need.kind === "question") {
       $("ask-kicker").textContent = `Decision${position}`;
-      watch.textContent = "Open in Watch";
+      watch.textContent = "Open on the Map";
       watch.onclick = () => { closeAsk({ quiet: true }); go("command", { rail: "ask" }); };
       renderQuestion(body, need.question);
       return;
