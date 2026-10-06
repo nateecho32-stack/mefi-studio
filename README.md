@@ -107,6 +107,16 @@ Settings, saved keys and projects stay where they are (`%APPDATA%\Mefi's Studio 
 
 The portable build keeps its tasks, ideas, plans and conversations in its own `resources\app\data` folder. Settings, saved keys, the project list, the Discord link and resume state live in `%APPDATA%\Mefi's Studio AI+`, shared with a source install on the same Windows account, so only one of the two runs at a time: opening the other brings the running one forward.
 
+### Newest build from main (beta)
+
+Every green push to `main` also makes a ready-to-run beta build, kept on GitHub for 14 days. No Node, Git or commands needed:
+
+1. Sign in to GitHub, open [Actions › Studio checks](https://github.com/nateecho32-stack/mefi-studio/actions/workflows/ci.yml?query=branch%3Amain), pick the newest green run on `main` and download **mefi-studio-development-win32-x64** under Artifacts.
+2. Unzip it, unzip the `Mefi-Studio-AI+-v…-win32-x64.zip` inside it, and open `Mefi Studio AI+.exe`.
+3. To stay on the newest build, turn on **Settings › System › Updates › Development / beta**. Studio then installs each new build of `main` by itself while no work is running. It needs a GitHub sign-in on that PC; **Set up this PC** installs the GitHub CLI for it.
+
+Beta builds have not been through a release's checks: back up your work first.
+
 ### Updating from 0.4.4
 
 An installed 0.4.4 cannot update itself. Its update helper never runs, so the **Update** button downloads the new build, Studio quits and nothing is installed. 0.5 carries the fix, so in-app updates work from 0.5 onward. When 0.5 is out, move a portable 0.4.4 to it by hand:

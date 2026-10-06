@@ -37,6 +37,12 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   the companion's bubble labels are 12 px, Play and Star buttons name their
   project for screen readers, the tab switches move with the arrow keys, and
   Search finds The Lobby, the Project hub and moderation.
+- **Ready-to-run beta builds of main.** Every green push to `main` now also
+  packages the portable build and keeps it on GitHub for 14 days, so a new PC
+  can download Studio and run it without Node, Git or any commands, and
+  Settings › System › Updates › Development / beta keeps that copy on the
+  newest build. Every check run also packages the build, so a change that
+  breaks packaging fails before it reaches `main`. No release or tag is made.
 - **Vibe is now Social, Build is now Studio.** The two modes have new names
   for what they are for: **Social** is vibing with friends and keeping a
   light eye on your agents, **Studio** is in-depth building, with the social
