@@ -386,6 +386,8 @@ app.whenReady().then(async () => {
     assert.ok(reach.places.length >= 7, `${tag}: the rail lists its places (${JSON.stringify(reach.places)})`);
     assert.deepEqual(reach.out, [], `${tag}: every place in the rail can be reached (${JSON.stringify(reach.places)})`);
     assert.deepEqual(reach.cut, [], `${tag}: every word in the rail is whole`);
+    assert.equal(reach.places.includes("Search"), false, `${tag}: Search has one home, the top bar's`);
+    await centre("shell-search");
   }
 
   // ============ 3. every destination can be opened and lands inside what the frame leaves ============
