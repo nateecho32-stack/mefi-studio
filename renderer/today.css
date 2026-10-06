@@ -337,10 +337,14 @@
 #workspace-layer .today-b :is(.today-b-cc, .today-b-autonomy .autonomy-chip):hover:not(:disabled) { background: color-mix(in srgb, var(--ivory) 6%, transparent); color: var(--t-ink); }
 #workspace-layer .today-b .today-b-cc .glyph { width: 14px; height: 14px; }
 /* Where the frame's columns leave the box narrow (1440x900 with the session list and the inspector open), Add files keeps its icon,
-   its tooltip and its name for a screen reader, so the controls stay one row and Build it never drops to a line of its own. */
+   its tooltip and its name for a screen reader, so the controls stay one row and Build it never drops to a line of its own.
+   The skills chip (renderer/chat-tools.js) does the same, and Build it lets its Ctrl Enter hint go (the key still works). */
 @container today-box (max-width: 560px) {
   #workspace-layer .today-b .today-b-cc { padding: 0 7px; }
-  #workspace-layer .today-b .today-b-cc > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  #workspace-layer .today-b .today-b-cc > span,
+  #workspace-layer .today-b .today-b-tools .today-b-chat-tools .chat-tools-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  #workspace-layer .today-b .today-b-tools .today-b-chat-tools .chat-tools-chip { padding: 0 7px; }
+  #workspace-layer .today-b .today-b-tools .today-b-send .today-key { display: none; }
 }
 .today-b-autonomy { position: relative; display: inline-flex; align-items: center; min-width: 0; }
 #workspace-layer .today-b .today-b-autonomy .autonomy-note:empty { display: none; }
