@@ -1,0 +1,111 @@
+﻿From 575579fbb334585ca0e1efd785b765d32f6edd48 Mon Sep 17 00:00:00 2001
+From: nateecho32-stack <277190781+nateecho32-stack@users.noreply.github.com>
+Date: Sun, 4 Oct 2026 09:48:40 -0500
+Subject: [PATCH] release.yml: build and publish the Rust-host portable build
+ on request
+
+workflow_dispatch gains a "host" input (electron | tauri). For tauri the job
+installs the Rust toolchain, caches Cargo, builds the host
+(rust-host.mjs release-build, CARGO_TARGET_DIR in the workspace, 4 jobs) and
+packages with --host tauri, which adds the "-tauri" zip to the release. Tag
+pushes stay on Electron (TAG_HOST) until the bridge release, whose updater
+can install a host build, has reached installed copies.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .github/workflows/release.yml | 52 +++++++++++++++++++++++++++++++++--
+ 1 file changed, 49 insertions(+), 3 deletions(-)
+
+diff --git a/.github/workflows/release.yml b/.github/workflows/release.yml
+index 6502581..39bb481 100644
+--- a/.github/workflows/release.yml
++++ b/.github/workflows/release.yml
+@@ -5,7 +5,10 @@
+ #
+ #   git tag v0.2.0 && git push origin v0.2.0
+ #
+-# workflow_dispatch builds and publishes the version given as input.
++# workflow_dispatch builds and publishes the version given as input, on the
++# host given as input. Each host has its own asset name (scripts/
++# release-updater.mjs releaseAssetName), so a second run for the same version
++# with the other host adds its zip to the same release.
+ name: Publish portable release
+ 
+ on:
+@@ -16,6 +19,11 @@ on:
+       version:
+         description: "Version tag to publish (vX.Y.Z)"
+         required: true
++      host:
++        description: "Runtime the portable build carries: electron, or tauri (the Rust host with Node beside it)"
++        type: choice
++        options: ["electron", "tauri"]
++        default: "electron"
+ 
+ permissions:
+   contents: write
+@@ -23,6 +31,14 @@ permissions:
+ jobs:
+   release:
+     runs-on: windows-latest
++    env:
++      # scripts/rust-host.mjs puts Cargo's output here instead of
++      # %LOCALAPPDATA%, so the cache step below finds it. The runner's
++      # checkout path has no apostrophe for the resource compiler to trip on.
++      CARGO_TARGET_DIR: ${{ github.workspace }}\target
++      # A hosted runner has the memory for four parallel jobs; the script's
++      # default of 2 is for the owner's laptop.
++      MEFI_RUST_JOBS: "4"
+     steps:
+       - uses: actions/checkout@v4
+       - uses: actions/setup-node@v4
+@@ -43,14 +59,44 @@ jobs:
+         run: npm run check
+       - name: Behavioral and isolated desktop checks
+         run: npm test
+-      - name: Resolve the version
++      - name: Resolve the version and the host
+         id: version
+         shell: pwsh
++        env:
++          # The host a tag push publishes. It stays electron until the bridge
++          # release has reached installed copies: an installed copy's updater
++          # is the one that installs the next build, and only builds from the
++          # bridge on look for the "-tauri" zip, stop the Rust host's program
++          # and its node.exe before copying, clear the host's environment
++          # before starting a build, and remove the Electron runtime the host
++          # build does not use. Older copies keep updating through Electron
++          # builds until then. Flip this one value to tauri once the bridge
++          # release is out (docs/rust-migration.md, stage 1).
++          TAG_HOST: electron
+         run: |
+           $version = "${{ github.event_name == 'push' && github.ref_name || inputs.version }}"
+           if ($version -notmatch '^v') { $version = "v$version" }
++          $packageHost = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ inputs.host }}" } else { $env:TAG_HOST }
++          if ($packageHost -notin @("electron", "tauri")) { throw "unknown host: $packageHost" }
+           "value=$version" >> $env:GITHUB_OUTPUT
++          "host=$packageHost" >> $env:GITHUB_OUTPUT
++          Write-Host "Publishing $version on the $packageHost host"
++      # The Rust host's toolchain and its build, only for a host build. MSVC is
++      # the runner's default target, and the host links WebView2's loader
++      # statically, so the program needs no DLL beside it.
++      - name: Install the Rust toolchain
++        if: steps.version.outputs.host == 'tauri'
++        uses: dtolnay/rust-toolchain@stable
++      - name: Cache Cargo's registry and build output
++        if: steps.version.outputs.host == 'tauri'
++        uses: Swatinem/rust-cache@v2
++        with:
++          workspaces: ". -> target"
++      - name: Build the Rust host (release)
++        if: steps.version.outputs.host == 'tauri'
++        run: node scripts/rust-host.mjs release-build
++      # A host build ships the Node this job runs on (Node 24) as node.exe.
+       - name: Build and publish the portable release
+         env:
+           GH_TOKEN: ${{ github.token }}
+-        run: node scripts/package-release.mjs --version "${{ steps.version.outputs.value }}" --publish
++        run: node scripts/package-release.mjs --version "${{ steps.version.outputs.value }}" --host "${{ steps.version.outputs.host }}" --publish
+-- 
+2.53.0.windows.3
+
