@@ -5080,6 +5080,17 @@ html[data-shell="rail"] body:has(#workspace-layer:not([hidden])):not(:has(.works
   .workspace .ws-thread:has(.ws-welcome) { height: auto; }
   .workspace .ws-suggestions { display: none; }
 }
+/* A narrow column (the frame's main column is one at every window size) has no room beside the conversation. In a
+   window tall enough for both, the open Activity panel takes the conversation's place above the box, the box and Send
+   stay where they were, and closing the panel brings the conversation back; a shorter window keeps the drawer over the
+   conversation, since the box alone fills it. */
+@media (min-height: 700px) {
+  @container ws-main (max-width: 740px) {
+    .workspace[data-activity="open"] .ws-home-layout { grid-template-rows: minmax(min(160px, 40%), 1fr) auto; gap: 12px; }
+    .workspace .ws-workflow { position: static; order: -1; width: auto; box-shadow: none; }
+    .workspace[data-activity="open"] .ws-conversation-content { display: none; }
+  }
+}
 @container ws-main (max-width: 540px) {
   .workspace .ws-topbar { padding-block: 14px; }
   .ws-home-intro { padding-block: 24px; }
@@ -8877,6 +8888,9 @@ html[data-studio-style] .catalog-model { border-radius: var(--r-lg); }
 .autonomy-chip::after { content: ""; display: inline-block; width: 12px; height: 12px; margin-left: 4px; vertical-align: -2px; opacity: .6; background: currentColor; -webkit-mask: var(--chev-mask) center / contain no-repeat; mask: var(--chev-mask) center / contain no-repeat; }
 .autonomy-popover { position: absolute; z-index: 20; bottom: calc(100% + 10px); left: 0; width: min(340px, 80vw); padding: 10px; border-radius: 16px; border: 1px solid var(--hairline-strong); background: var(--panel-solid); box-shadow: var(--shadow-3); display: grid; gap: 6px; }
 .autonomy-popover[hidden] { display: none; }
+/* Its rows are buttons, which keep to one line everywhere else: here they wrap inside the menu's own width. */
+.autonomy-popover { white-space: normal; grid-template-columns: minmax(0, 1fr); }
+.autonomy-popover .autonomy-button { min-width: 0; white-space: normal; }
 .autonomy-mode { text-align: left; display: block; width: 100%; }
 .autonomy-mode small, .autonomy-check small { display: block; margin-top: 4px; font-size: 11px; line-height: 1.4; opacity: .7; font-weight: 400; }
 .autonomy-modes { display: grid; gap: 7px; }
@@ -10340,6 +10354,10 @@ html[data-ui-mode="vibe"] .settings-nav :is(button, a) { border-radius: 12px; }
 .today :is(.vibe-evolution-note, .vibe-evolution-why, .vibe-evolution-stale, .vibe-evolution-facts, .vibe-evolution-num, .vibe-evolution-file, .vibe-evolution-suggestion > p, .vibe-evolution-suggestion h3, .vibe-evolution-actions .vibe-btn, .vibe-inline-error, .vibe-ask-link) { font-size: var(--t-f12); }
 .today .vibe-evolution-suggestion h3, .today .vibe-evolution-suggestion > p { font-size: var(--t-f13); }
 .today :is(.autonomy-chip, .autonomy-note) { font-size: var(--t-f12); }
+/* Today's box sits near the top of the page: its permissions menu opens below the chip, not up under the bars, and
+   the box rises over the board and the strips below it while the menu is open. */
+.today .autonomy-popover { top: calc(100% + 8px); bottom: auto; }
+.today :is(.vibe-compose, .today-b):has(.autonomy-popover:not([hidden])) { position: relative; z-index: 30; }
 
 /* ---- Vibe's Today as the 0.5 prototype draws it ------------------------------------------------------------------------------------------
    The greeting says which mode it is; the box is the words with one row of controls under them (Add files, the permission mode, then Talk
@@ -12864,7 +12882,9 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
 .sx-ptab { display: inline-flex; align-items: center; min-height: 38px; padding: 0 8px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font: 600 var(--x125)/1 var(--font-ui); }
 .sx-ptab.on { border-bottom-color: var(--gold); color: var(--ivory); }
 .sx-member { align-items: center; }
-.sx-member-open { min-width: 0; min-height: 0; padding: 0; overflow: hidden; color: var(--ivory); font-size: var(--x13); text-align: left; text-decoration: none; text-overflow: ellipsis; white-space: nowrap; }
+.sx-member-open { display: block; flex: 1 1 auto; min-width: 0; min-height: 0; padding: 0; overflow: hidden; color: var(--ivory); font-size: var(--x13); text-align: left; text-decoration: none; text-overflow: ellipsis; white-space: nowrap; }
+/* The member's state keeps its word whole; the name before it gives way with an ellipsis (a centred button clipped both ends). */
+.sx-member > b { flex: none; white-space: nowrap; overflow-wrap: normal; }
 .sx-kv b[data-tone="live"] { color: var(--live); }
 .sx-kv b[data-tone="warn"] { color: var(--warn); }
 .sx-feedrow { display: flex; align-items: flex-start; gap: 8px; width: 100%; min-height: 0; padding: 6px 2px; border: 0; border-radius: var(--r-sm); background: transparent; text-align: left; white-space: normal; }

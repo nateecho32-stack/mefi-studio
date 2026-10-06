@@ -7,6 +7,15 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Activity, the permissions menu and the Team card no longer cover or
+  cut their own words.** On Home's chat view, Activity used to lie over the
+  conversation, message box and Send included, at every window width in the
+  0.5 layout; in a window 700 px tall or more it now takes the
+  conversation's place above the box, which stays where it was (a shorter
+  window keeps the drawer). The permissions menu on Today opens below its
+  button over the board instead of up under the bars, with its choices
+  wrapped inside it. The inspector's Team card shows a worker's name with
+  an ellipsis and its state whole (it read "ixture builder … workin g").
 - **Team, Fleet and the Project map fit narrow windows in the 0.5 layout.**
   With the session list beside them they have less room than the window:
   Team's seat rows now fold by the page's own width (at 1100 px Effort and

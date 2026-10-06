@@ -5070,6 +5070,17 @@ html[data-shell="rail"] body:has(#workspace-layer:not([hidden])):not(:has(.works
   .workspace .ws-thread:has(.ws-welcome) { height: auto; }
   .workspace .ws-suggestions { display: none; }
 }
+/* A narrow column (the frame's main column is one at every window size) has no room beside the conversation. In a
+   window tall enough for both, the open Activity panel takes the conversation's place above the box, the box and Send
+   stay where they were, and closing the panel brings the conversation back; a shorter window keeps the drawer over the
+   conversation, since the box alone fills it. */
+@media (min-height: 700px) {
+  @container ws-main (max-width: 740px) {
+    .workspace[data-activity="open"] .ws-home-layout { grid-template-rows: minmax(min(160px, 40%), 1fr) auto; gap: 12px; }
+    .workspace .ws-workflow { position: static; order: -1; width: auto; box-shadow: none; }
+    .workspace[data-activity="open"] .ws-conversation-content { display: none; }
+  }
+}
 @container ws-main (max-width: 540px) {
   .workspace .ws-topbar { padding-block: 14px; }
   .ws-home-intro { padding-block: 24px; }

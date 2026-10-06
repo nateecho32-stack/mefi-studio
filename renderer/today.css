@@ -100,6 +100,10 @@
 .today :is(.vibe-evolution-note, .vibe-evolution-why, .vibe-evolution-stale, .vibe-evolution-facts, .vibe-evolution-num, .vibe-evolution-file, .vibe-evolution-suggestion > p, .vibe-evolution-suggestion h3, .vibe-evolution-actions .vibe-btn, .vibe-inline-error, .vibe-ask-link) { font-size: var(--t-f12); }
 .today .vibe-evolution-suggestion h3, .today .vibe-evolution-suggestion > p { font-size: var(--t-f13); }
 .today :is(.autonomy-chip, .autonomy-note) { font-size: var(--t-f12); }
+/* Today's box sits near the top of the page: its permissions menu opens below the chip, not up under the bars, and
+   the box rises over the board and the strips below it while the menu is open. */
+.today .autonomy-popover { top: calc(100% + 8px); bottom: auto; }
+.today :is(.vibe-compose, .today-b):has(.autonomy-popover:not([hidden])) { position: relative; z-index: 30; }
 
 /* ---- Vibe's Today as the 0.5 prototype draws it ------------------------------------------------------------------------------------------
    The greeting says which mode it is; the box is the words with one row of controls under them (Add files, the permission mode, then Talk

@@ -596,6 +596,9 @@ html[data-studio-style] .catalog-model { border-radius: var(--r-lg); }
 .autonomy-chip::after { content: ""; display: inline-block; width: 12px; height: 12px; margin-left: 4px; vertical-align: -2px; opacity: .6; background: currentColor; -webkit-mask: var(--chev-mask) center / contain no-repeat; mask: var(--chev-mask) center / contain no-repeat; }
 .autonomy-popover { position: absolute; z-index: 20; bottom: calc(100% + 10px); left: 0; width: min(340px, 80vw); padding: 10px; border-radius: 16px; border: 1px solid var(--hairline-strong); background: var(--panel-solid); box-shadow: var(--shadow-3); display: grid; gap: 6px; }
 .autonomy-popover[hidden] { display: none; }
+/* Its rows are buttons, which keep to one line everywhere else: here they wrap inside the menu's own width. */
+.autonomy-popover { white-space: normal; grid-template-columns: minmax(0, 1fr); }
+.autonomy-popover .autonomy-button { min-width: 0; white-space: normal; }
 .autonomy-mode { text-align: left; display: block; width: 100%; }
 .autonomy-mode small, .autonomy-check small { display: block; margin-top: 4px; font-size: 11px; line-height: 1.4; opacity: .7; font-weight: 400; }
 .autonomy-modes { display: grid; gap: 7px; }
