@@ -655,7 +655,9 @@ test("nothing in Studio pushes with a mirror, --all, --tags or a refs/ refspec",
     for (const match of text.matchAll(/\[[^\]\n]*["'`]push["'`][^\]\n]*\]/g)) pushes.push([file, match[0]]);
   }
   assert.ok(pushes.length >= 4, "the search finds Studio's pushes");
-  for (const [file, argv] of pushes) assert.doesNotMatch(argv, /--mirror|--all\b|--tags|--prune|refs\/|"\+|\*/, `${file}: ${argv}`);
+  // A branch may be named in full (My PCs' handoffs push refs/heads/mefi/handoff/*,
+  // scripts/pc-handoff.cjs); every other ref, refs/mefi above all, stays at home.
+  for (const [file, argv] of pushes) assert.doesNotMatch(argv, /--mirror|--all\b|--tags|--prune|refs\/(?!heads\/)|"\+|\*/, `${file}: ${argv}`);
 });
 
 test("timeoutScale stretches every git time limit, and nothing under 1 shortens them", async () => {
