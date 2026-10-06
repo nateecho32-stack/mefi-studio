@@ -14,8 +14,9 @@
 /* Two-tone themes (data-studio-theme-tier="duo": the Void collection, a pack with a second hue) add their
    second hue, --accent-2, which music.js sets with the tier. The primaries name every one the shared rules
    in studio-ui.css paint, at their resting and their hover specificity and one attribute more (an id and
-   three or four), so the two-tone fill wins from here, earlier in the bundle; a .danger keeps its red. */
-:root[data-studio-theme][data-studio-theme-tier="duo"] :is(.primary:not(#idle-hud *, .danger), #workspace-layer .primary, #idle-hud .primary) { background: linear-gradient(120deg, var(--gold-bright), var(--gold) 52%, var(--accent-2)); }
+   three or four), so the two-tone fill wins from here, earlier in the bundle; a .danger keeps its red.
+   The second hue ends the fill as --accent-2-fill: itself, or moved until the ink on the buttons reads on it. */
+:root[data-studio-theme][data-studio-theme-tier="duo"] :is(.primary:not(#idle-hud *, .danger), #workspace-layer .primary, #idle-hud .primary) { background: linear-gradient(120deg, var(--gold-bright), var(--gold) 52%, var(--accent-2-fill, var(--accent-2))); }
 /* Only a primary that can be pressed glows; a disabled or busy one stays flat. */
 :root[data-studio-theme][data-studio-theme-tier="duo"] :is(.primary:not(#idle-hud *, .danger), #workspace-layer .primary, #idle-hud .primary):not(:disabled, [aria-disabled="true"]) { box-shadow: 0 0 0 1px rgba(var(--accent-2-rgb), .22), 0 6px 20px -10px rgba(var(--accent-2-rgb), .7); }
 :root[data-studio-theme-tier="duo"] .ws-main { background: radial-gradient(ellipse at 12% 100%, rgba(var(--accent-2-rgb), .07), transparent 46%), radial-gradient(ellipse at 65% 0, var(--tint-gold-2), transparent 54%), var(--bg); }

@@ -598,7 +598,12 @@ test("glass reading surfaces and both action-gradient ends retain contrast for c
     for (const ink of [palette.text, palette.muted, palette.bright]) {
       assert.ok(helpers.contrast(ink, palette.readingBackground) >= 4.5);
     }
-    assert.ok(helpers.contrast(palette.onAccent, palette.accent) >= 4.5);
+    // The ink on the accent's fills reads on the accent and on bright, which fills the other end of many of them:
+    // the ink whose worse fill reads better, which is one at 4.5 on both whenever either ink gets there.
+    const worst = (ink) => Math.min(helpers.contrast(ink, palette.accent), helpers.contrast(ink, palette.bright));
+    const other = palette.onAccent === "#FFFFFF" ? "#000000" : "#FFFFFF";
+    assert.ok(worst(palette.onAccent) >= worst(other), `${colors.accent}: the ink with the better worst case`);
+    if (colors.accent === "#BA2460") assert.ok(worst(palette.onAccent) >= 4.5, "a light panel's deeper bright takes the same ink as its accent");
     assert.ok(helpers.contrast(palette.onAccent, palette.actionEnd) >= 4.5);
     assert.equal(env.styles.get("--studio-reading-bg"), palette.readingBackground);
     assert.equal(env.styles.get("--studio-action-end"), palette.actionEnd);
@@ -802,6 +807,10 @@ test("applyPack paints a pack the way Custom is painted, two-tone with its secon
   assert.equal(palette.theme, "pack");
   assert.deepEqual(JSON.parse(JSON.stringify(palette)), JSON.parse(JSON.stringify({ theme: "pack", ...helpers.resolvePalette("pack", {}, helpers.safePack(SAKURA)) })));
   for (const ink of ["text", "muted", "dim", "bright"]) assert.ok(helpers.contrast(palette[ink], palette.surface) >= 4.5, `the pack's ${ink}`);
+  // A light pack's bright is deeper than its accent, so the ink on its fills is white, and its second hue moves until white reads on it.
+  assert.equal(palette.onAccent, "#FFFFFF");
+  assert.equal(env.styles.get("--accent-2-fill"), palette.accent2Fill);
+  assert.ok(helpers.contrast("#FFFFFF", palette.accent2Fill) >= 4.5);
   assert.equal(env.music.graphPreferences().nodeStyle, "minimal");
   assert.equal(root.dataset.studioFont, "serif");
   assert.deepEqual(env.window.MefiAppearance.get(), { preset: "focus", glass: 0, glow: 0, density: "spacious" });
@@ -902,8 +911,14 @@ test("two-tone themes and packs paint under tier duo: the stylesheets answer duo
     assert.doesNotMatch(text, /data-studio-theme-tier="?premium|music-theme-premium/, `${name} paints no tier that music.js never sets`);
     for (const tier of text.matchAll(/data-studio-theme-tier=["']?(\w+)/g)) assert.ok(["duo", "solo"].includes(tier[1]), `${name}: tier ${tier[1]}`);
   }
-  // The two-tone primary outranks the shared one in studio-ui.css, at rest and under the pointer.
-  assert.match(css["music.css"], /:root\[data-studio-theme\]\[data-studio-theme-tier="duo"\] :is\(\.primary:not\(#idle-hud \*, \.danger\), #workspace-layer \.primary, #idle-hud \.primary\) \{ background: linear-gradient\(120deg, var\(--gold-bright\), var\(--gold\) 52%, var\(--accent-2\)\); \}/);
+  // The two-tone primary outranks the shared one in studio-ui.css, at rest and under the pointer, and ends on the
+  // second hue as a fill the ink reads on.
+  assert.match(css["music.css"], /:root\[data-studio-theme\]\[data-studio-theme-tier="duo"\] :is\(\.primary:not\(#idle-hud \*, \.danger\), #workspace-layer \.primary, #idle-hud \.primary\) \{ background: linear-gradient\(120deg, var\(--gold-bright\), var\(--gold\) 52%, var\(--accent-2-fill, var\(--accent-2\)\)\); \}/);
+  // Its three stops under the ink: bright, the accent and the fill, for the Void themes and the Studio packs alike.
+  for (const [name, palette] of [...["void", "eclipse", "abyss", "dusk"].map((key) => [key, helpers.resolvePalette(key, {})]), ...[SAKURA, SYNTHWAVE, DEEP_SEA].map((pack) => [pack.name, helpers.resolvePalette("pack", {}, helpers.safePack(pack))])]) {
+    for (const stop of ["bright", "actionEnd", "accent2Fill"]) assert.ok(helpers.contrast(palette.onAccent, palette[stop]) >= 4.5, `${name}: the ink on ${stop} at ${helpers.contrast(palette.onAccent, palette[stop]).toFixed(2)}`);
+  }
+  for (const key of ["void", "eclipse", "abyss", "dusk"]) assert.equal(helpers.resolvePalette(key, {}).accent2Fill, helpers.THEMES[key].accent2, `${key} keeps its own second hue`);
   assert.match(css["studio-ui.css"], /\.primary:not\(#idle-hud \*, \.danger\):not\(:disabled, \[aria-disabled=true\]\):is\(:hover, :focus-visible\),/, "the shared hover the two-tone fill must outrank");
   assert.match(css["music.css"], /\.music-theme-duo::before, \.void-swatch \{/);
   assert.match(css["styles.css"], /:root\[data-studio-theme-tier="duo"\] #workspace-layer \.ws-main \{/);

@@ -104,6 +104,7 @@
   --glow-live: 0 0 6px rgba(87, 255, 154, 0.6);
   --blur: blur(14px) saturate(1.05);
   --scrim: rgba(3, 4, 6, 0.74);           /* behind every modal sheet */
+  --scrim-dense: rgba(3, 3, 4, 0.94);      /* the same with nothing blurred under it */
   --scrim-blur: blur(12px);
   --blur-hard: blur(18px) saturate(1.1);
 
@@ -205,17 +206,18 @@ body {
 :root[data-studio-theme-tone="light"] {
   color-scheme: light;
   --on-ivory: var(--panel-solid);
-  --bad: #b42318;
+  --bad: #a51f16;
   --warn: #7f4c00;
-  --good: #15673a;
-  --live: #0a6a35;
-  --live-dim: rgba(10, 106, 53, 0.14);
+  --good: #125f35;
+  --live: #075c2d;
+  --live-dim: rgba(7, 92, 45, 0.14);
   --info: #2b52b4;
   --idea: #64489c;
   --shadow-1: 0 6px 16px rgba(20, 28, 40, 0.1);
   --shadow-2: 0 18px 40px rgba(20, 28, 40, 0.14);
   --shadow-3: 0 30px 70px rgba(20, 28, 40, 0.18);
   --scrim: rgba(28, 34, 44, 0.34);
+  --scrim-dense: color-mix(in srgb, var(--bg) 92%, transparent);
   --frost-lift: 0 18px 44px -24px rgba(20, 28, 40, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
@@ -1110,14 +1112,14 @@ table#table tr:hover td { background: color-mix(in srgb, var(--gold) 4%, transpa
 }
 .assistant-msg.user {
   align-self: flex-end;
-  background: #231e16;
+  background: color-mix(in srgb, var(--gold) 12%, var(--panel-solid));
   border: 1px solid var(--gold-dim);
   color: var(--gold-bright);
   border-bottom-right-radius: 3px;
 }
 .assistant-msg.assistant {
   align-self: flex-start;
-  background: #14151a;
+  background: var(--panel-solid);
   border: 1px solid var(--hairline);
   color: var(--ivory);
   border-bottom-left-radius: 3px;
@@ -1161,7 +1163,7 @@ table#table tr:hover td { background: color-mix(in srgb, var(--gold) 4%, transpa
 .cmd-card .assistant-thread {
   max-height: 200px; margin: 0;
   padding: var(--s2);
-  background: rgba(0, 0, 0, 0.22);
+  background: color-mix(in srgb, var(--bg-deep) 50%, transparent);
   border: 1px solid var(--hairline);
   border-radius: var(--r-sm);
   overscroll-behavior: contain;
@@ -1441,7 +1443,7 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
   display: grid; place-items: center;
 }
 #palette-overlay, #help-overlay, #walkthrough-overlay { z-index: var(--z-transient); }                                    
-.overlay.no-blur { backdrop-filter: none; background: rgba(3, 3, 4, 0.94); }
+.overlay.no-blur { backdrop-filter: none; background: var(--scrim-dense); }
 .overlay h2 { color: var(--ivory); }
 
 .overlay .sheet {
@@ -2576,13 +2578,13 @@ body.workspace-active > header, body.workspace-active > main, body.workspace-act
 .workspace button { transition: background .18s, border-color .18s, color .18s; }
 .workspace button:focus-visible, .workspace summary:focus-visible { outline: 2px solid var(--ws-accent); outline-offset: 3px; }
 .workspace .ghost { background: transparent; border-color: var(--hairline); color: var(--muted); }
-.workspace .ghost:hover { background: var(--tint-gold-2); color: #f6f3e9; border-color: var(--hairline-strong); }
+.workspace .ghost:hover { background: var(--tint-gold-2); color: var(--ivory); border-color: var(--hairline-strong); }
 .workspace .primary { color: #25251f; background: var(--ws-accent); border: 1px solid var(--ws-accent); box-shadow: none; font-weight: 650; }
 .workspace .primary:hover { filter: brightness(1.07); }
-.workspace kbd { font: 10px var(--font-ui); color: #91968d; border: 1px solid #3a3d36; background: transparent; padding: 1px 4px; }
+.workspace kbd { font: 10px var(--font-ui); color: var(--muted); border: 1px solid var(--hairline-strong); background: transparent; padding: 1px 4px; }
 .ws-sidebar { min-height: 0; display: flex; flex-direction: column; padding: 29px 18px 17px; background: var(--panel-solid); border-right: 1px solid var(--hairline); overflow-y: auto; }
-.ws-brand { display: flex; gap: 12px; align-items: center; color: #f0eee3; font: 600 17px var(--font-ui); text-decoration: none; margin: 0 6px 35px; }
-.ws-brand:hover { color: white; }
+.ws-brand { display: flex; gap: 12px; align-items: center; color: var(--ivory); font: 600 17px var(--font-ui); text-decoration: none; margin: 0 6px 35px; }
+.ws-brand:hover { color: var(--gold-bright); }
 .ws-brand-mark { color: var(--ws-accent); font: italic 37px Georgia, serif; letter-spacing: -5px; width: 37px; }
 .ws-brand-mark span { font: 16px var(--font-ui); vertical-align: top; margin-left: 5px; }
 .ws-brand small { display: block; color: var(--dim); font: 8px var(--font-ui); letter-spacing: 1.65px; margin-top: 8px; }
@@ -2604,8 +2606,8 @@ body.workspace-active > header, body.workspace-active > main, body.workspace-act
 .ws-sidebar-bottom { margin-top: auto; padding-top: 16px; }
 .ws-tools > summary { display: flex; align-items: center; gap: 9px; list-style: none; cursor: pointer; color: var(--muted); font-size: 12px; }
 .ws-tools > summary::marker, .ws-tools > summary::-webkit-details-marker { content: ""; display: none; }
-.ws-local-note { display: block; font-size: 9.5px; line-height: 1.7; color: #7e8874; padding: 12px 8px 0; }
-.ws-local-note i { display: inline-block; height: 5px; width: 5px; border-radius: 50%; background: #91a77d; margin-right: 4px; }
+.ws-local-note { display: block; font-size: 9.5px; line-height: 1.7; color: var(--dim); padding: 12px 8px 0; }
+.ws-local-note i { display: inline-block; height: 5px; width: 5px; border-radius: 50%; background: var(--good); margin-right: 4px; }
 .ws-main { min-width: 0; min-height: 0; display: flex; flex-direction: column; padding: 0 28px; background: var(--bg); overflow-y: auto; }
 .ws-topbar { height: 56px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--hairline); gap: 20px; }
 .ws-project-heading { display: flex; align-items: center; gap: 10px; overflow: hidden; white-space: nowrap; }
@@ -3040,6 +3042,9 @@ body.workspace-active > header, body.workspace-active > main, body.workspace-act
    dense and unfiltered. The ids outrank the theme rules in music.css on
    purpose: this is Home's one skin, in every theme. */
 body.home-backdrop :is(#idle-layer, #idle-layer-far) { z-index: calc(var(--z-workspace) - 1); pointer-events: none; }
+/* A light theme draws the tree's orbs in ink, as solid shapes rather than a glow,
+   so behind Home and Social's front door they step further back. */
+:root[data-studio-theme-tone="light"] body.home-backdrop :is(#idle-layer, #idle-layer-far):not([hidden]) { opacity: .42; }
 html[data-no-blur] {
   --frost: none;
   --frost-glass: color-mix(in srgb, var(--panel-solid) 94%, transparent);
@@ -3055,6 +3060,7 @@ html[data-no-blur] {
 #workspace-layer .ws-main { background: radial-gradient(ellipse at 65% 0, var(--tint-gold-2), transparent 54%), linear-gradient(180deg, color-mix(in srgb, var(--bg) 46%, transparent), var(--frost-veil) 260px); }
 :root[data-studio-theme-tier="duo"] #workspace-layer .ws-main { background: radial-gradient(ellipse at 12% 100%, rgba(var(--accent-2-rgb), .07), transparent 46%), radial-gradient(ellipse at 65% 0, var(--tint-gold-2), transparent 54%), linear-gradient(180deg, color-mix(in srgb, var(--bg) 46%, transparent), var(--frost-veil) 260px); }
 #workspace-layer .ws-topbar { text-shadow: 0 1px 14px rgba(0, 0, 0, 0.6); }
+:root[data-studio-theme-tone="light"] #workspace-layer .ws-topbar { text-shadow: none; }
 #workspace-layer .ws-topbar { border-color: var(--frost-edge-soft); }
 
 /* top-level panels: the frost itself */
@@ -3596,7 +3602,7 @@ html[data-motion="off"] {
   background: var(--scrim); backdrop-filter: var(--scrim-blur);
 }
 html[data-no-blur] :is(.overlay, .planning-overlay, .brains-overlay, .profiler-overlay):not(.music-overlay) {
-  background: rgba(3, 3, 4, 0.94); backdrop-filter: none;
+  background: var(--scrim-dense); backdrop-filter: none;
 }
 /* a sheet-to-sheet swap keeps one continuous scrim: nav marks both roots, the
    old one vanishes, the new one is simply there, and only its panel rises */
@@ -3972,7 +3978,7 @@ body.command-active .walkthrough-coach { right: calc(392px + var(--shell-x1)); }
 .provider-tile:has(.provider-pill[data-state="ready"]) { border-color: color-mix(in srgb, var(--good) 28%, var(--hairline)); }
 
 .provider-tile-head { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; min-width: 0; }
-.provider-mark { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; border: 1px solid var(--hairline-strong); background: radial-gradient(circle at 30% 25%, var(--tint-gold-3), transparent 60%), rgba(8, 8, 11, 0.6); color: var(--gold-bright); font: 700 12px/1 var(--font-display); letter-spacing: .02em; }
+.provider-mark { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; border: 1px solid var(--hairline-strong); background: radial-gradient(circle at 30% 25%, var(--tint-gold-3), transparent 60%), color-mix(in srgb, var(--bg-deep) 60%, transparent); color: var(--gold-bright); font: 700 12px/1 var(--font-display); letter-spacing: .02em; }
 .provider-title { flex: 1 1 auto; min-width: 0; display: grid; gap: 1px; }
 .provider-name { color: var(--ivory); font: 600 var(--fs-sm)/1.3 var(--font-ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .provider-kind { color: var(--dim); font-size: var(--fs-2xs); letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -4984,7 +4990,7 @@ body.command-zen :is(#app-rail) { opacity: 0; pointer-events: none; }
 .workspace .ws-top-actions { align-items: center; gap: 12px; }
 .workspace .ws-top-actions button:first-child { display: inline-flex; }
 .workspace .ws-project-actions > summary { min-height: 32px; border: 1px solid #ffffff16; border-radius: var(--r-xs); padding-inline: 10px 8px; font-size: 12px; }
-.workspace #workspace-activity-toggle[aria-expanded="true"] { color: var(--ivory); background: #ffffff10; border-color: #ffffff24; }
+.workspace #workspace-activity-toggle[aria-expanded="true"] { color: var(--ivory); background: color-mix(in srgb, var(--ivory) 6%, transparent); border-color: color-mix(in srgb, var(--ivory) 14%, transparent); }
 /* "N need you" is the one header control that asks for something. */
 .workspace #workspace-attention-shortcut { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 38%, transparent); background: color-mix(in srgb, var(--warn) 7%, transparent); }
 .workspace #workspace-attention-shortcut:hover { background: color-mix(in srgb, var(--warn) 13%, transparent); }
@@ -5285,8 +5291,9 @@ html[data-frame] #idle-hud #map-zoom .glyph { width: 14px; height: 14px; }
 /* Two-tone themes (data-studio-theme-tier="duo": the Void collection, a pack with a second hue) add their
    second hue, --accent-2, which music.js sets with the tier. The primaries name every one the shared rules
    in studio-ui.css paint, at their resting and their hover specificity and one attribute more (an id and
-   three or four), so the two-tone fill wins from here, earlier in the bundle; a .danger keeps its red. */
-:root[data-studio-theme][data-studio-theme-tier="duo"] :is(.primary:not(#idle-hud *, .danger), #workspace-layer .primary, #idle-hud .primary) { background: linear-gradient(120deg, var(--gold-bright), var(--gold) 52%, var(--accent-2)); }
+   three or four), so the two-tone fill wins from here, earlier in the bundle; a .danger keeps its red.
+   The second hue ends the fill as --accent-2-fill: itself, or moved until the ink on the buttons reads on it. */
+:root[data-studio-theme][data-studio-theme-tier="duo"] :is(.primary:not(#idle-hud *, .danger), #workspace-layer .primary, #idle-hud .primary) { background: linear-gradient(120deg, var(--gold-bright), var(--gold) 52%, var(--accent-2-fill, var(--accent-2))); }
 /* Only a primary that can be pressed glows; a disabled or busy one stays flat. */
 :root[data-studio-theme][data-studio-theme-tier="duo"] :is(.primary:not(#idle-hud *, .danger), #workspace-layer .primary, #idle-hud .primary):not(:disabled, [aria-disabled="true"]) { box-shadow: 0 0 0 1px rgba(var(--accent-2-rgb), .22), 0 6px 20px -10px rgba(var(--accent-2-rgb), .7); }
 :root[data-studio-theme-tier="duo"] .ws-main { background: radial-gradient(ellipse at 12% 100%, rgba(var(--accent-2-rgb), .07), transparent 46%), radial-gradient(ellipse at 65% 0, var(--tint-gold-2), transparent 54%), var(--bg); }
@@ -6533,7 +6540,7 @@ body:has(#plans-overlay:not([hidden])) #idle-layer { opacity: .18; }
 /* Where a line came from. Your own words read as settled; anything Mefi
    proposed stays visibly unconfirmed until you record it as a decision. */
 .planning-note[data-note-kind="interpretation"], .planning-note[data-note-kind="conflict"] { border-left-style: dashed; }
-.planning-note[data-note-kind="conflict"] strong { color: #f0c073; }
+.planning-note[data-note-kind="conflict"] strong { color: var(--warn); }
 .planning-interview { border-color: var(--hairline-strong); background: var(--tint-gold-2); }
 .planning-interview-ask { margin: 10px 0 14px; padding-left: 12px; border-left: 3px solid var(--gold-bright); font-size: 18px; line-height: 1.5; color: var(--ivory); letter-spacing: -.01em; }
 /* Mefi's reading of your answer, with the one-click way to make it yours. */
@@ -10113,6 +10120,8 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 .vibe-aurora.two { width: 46vw; height: 38vw; right: -14vw; top: 8vh; background: radial-gradient(circle, color-mix(in srgb, var(--info) 55%, transparent), transparent 70%); animation-duration: 32s; animation-delay: -9s; opacity: .22; }
 .vibe-aurora.three { width: 60vw; height: 30vw; left: 20vw; bottom: -22vw; background: radial-gradient(circle, color-mix(in srgb, var(--gold-bright) 45%, transparent), transparent 70%); animation-duration: 38s; animation-delay: -17s; opacity: .2; }
 :root[data-studio-theme-tone="light"] .vibe-aurora { mix-blend-mode: multiply; opacity: .16; }
+/* The box and cards lift on the light tone's soft shadow; the dark one read as a smudge under them. */
+:root[data-studio-theme-tone="light"] #vibe-layer { --v-lift: var(--shadow-2), inset 0 1px 0 color-mix(in srgb, var(--panel-solid) 70%, transparent); }
 @keyframes vibe-drift {
   0% { transform: translate3d(0, 0, 0) scale(1); }
   50% { transform: translate3d(4vw, 3vh, 0) scale(1.08); }
@@ -11641,6 +11650,8 @@ html[data-ui-mode="vibe"] .settings-nav :is(button, a) { border-radius: 12px; }
 .setup-welcome[hidden] { display: none; }
 @keyframes setup-welcome-in { from { opacity: 0; } to { opacity: 1; } }
 .setup-welcome-card { width: min(640px, 100%); max-height: calc(100vh - 48px); padding: 28px 28px 0; overflow: auto; scrollbar-width: none; border: 1px solid color-mix(in srgb, var(--ivory) 12%, transparent); border-radius: 18px; background: var(--panel-solid); box-shadow: 0 30px 80px -30px rgba(0, 0, 0, .8); outline: none; }
+/* On a light page the card's dark drop shadow read as a smudge: it takes the light tone's softer one. */
+:root[data-studio-theme-tone="light"] .setup-welcome-card { box-shadow: var(--shadow-3); }
 .setup-welcome-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 0 22px; }
 .setup-welcome-steps > i { height: 3px; border-radius: var(--r-pill, 999px); background: color-mix(in srgb, var(--ivory) 14%, transparent); transition: background var(--motion-base, 200ms) var(--ease-out, ease-out); }
 .setup-welcome-steps > i.on { background: var(--gold); }
@@ -71605,14 +71616,26 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     // Where the page is a reading surface too, each ink keeps its minimum
     // there as well, moving the way it moved for the panel: a light page sits
     // a shade darker than its panels, so an ink just readable on a panel could
-    // fall short on it. A dark page is darker than its panels; nothing moves.
+    // fall short on it. A light page also takes the panels' tinted glass and
+    // its own colour washes, which darken it a little more, so there every ink
+    // keeps .8 of headroom on the page and the panels alike. A dark page is
+    // darker than its panels and those layers only lift contrast: nothing moves.
     if (readingBackground === base.bg) {
       const toward = contrast("#FFFFFF", base.panel) >= contrast("#000000", base.panel) ? "#FFFFFF" : "#000000";
-      [text, bright, muted, dim] = [[text, 5.5], [bright, 4.5], [muted, 5.5], [dim, 4.5]].map(([ink, minimum]) => readableColor(ink, base.bg, minimum, toward));
+      const headroom = luminance(base.bg) > .35 ? .8 : 0;
+      [text, bright, muted, dim] = [[text, 5.5], [bright, 4.5], [muted, 5.5], [dim, 4.5]].map(([ink, minimum]) => readableColor(readableColor(ink, base.panel, minimum + headroom, toward), base.bg, minimum + headroom, toward));
     }
-    const onAccent = contrast("#FFFFFF", base.accent) > contrast("#000000", base.accent) ? "#FFFFFF" : "#000000";
-    const actionEnd = mixColor(base.accent, onAccent === "#FFFFFF" ? "#000000" : "#FFFFFF", .18);
-    return { accent: base.accent, bright, accent2: base.accent2 || bright, background: base.bg, readingBackground, actionEnd, surface: base.panel, text, muted, dim, border,
+    // The ink on the accent's fills (primaries, badges, the chosen segment).
+    // Many of them run from the accent to bright, so it is whichever of white
+    // and black reads better on both: on a light panel a chosen accent's bright
+    // is deeper than the accent, and black on it would fail.
+    const inkOn = (ink) => Math.min(contrast(ink, base.accent), contrast(ink, bright));
+    const onAccent = inkOn("#FFFFFF") > inkOn("#000000") ? "#FFFFFF" : "#000000";
+    const awayFromInk = onAccent === "#FFFFFF" ? "#000000" : "#FFFFFF";
+    const actionEnd = mixColor(base.accent, awayFromInk, .18);
+    // The second hue as a fill under that ink: the two-tone primaries end on it.
+    const accent2Fill = readableColor(base.accent2 || bright, onAccent, 4.5, awayFromInk);
+    return { accent: base.accent, bright, accent2: base.accent2 || bright, accent2Fill, background: base.bg, readingBackground, actionEnd, surface: base.panel, text, muted, dim, border,
       rgb: channels(base.accent).join(","), surfaceRgb: channels(base.panel).join(","),
       onAccent,
       canvas: { background: base.bg, accent: base.accent, bright: readableColor(base.bright, base.bg, 3), accent2: base.accent2 || readableColor(base.bright, base.bg, 3), text: canvasText, muted: readableColor(mixColor(canvasText, base.bg, .32), base.bg), dim: readableColor(mixColor(canvasText, base.bg, .5), base.bg, 3) } };
@@ -71880,6 +71903,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     root.style.setProperty("--studio-accent-rgb", detail.rgb);
     root.style.setProperty("--accent-2", detail.accent2);
     root.style.setProperty("--accent-2-rgb", channels(detail.accent2).join(","));
+    root.style.setProperty("--accent-2-fill", detail.accent2Fill);
     root.style.setProperty("--studio-reading-bg", detail.readingBackground);
     root.style.setProperty("--studio-action-end", detail.actionEnd);
     root.dataset.studioTheme = key;

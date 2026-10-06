@@ -256,14 +256,26 @@
     // Where the page is a reading surface too, each ink keeps its minimum
     // there as well, moving the way it moved for the panel: a light page sits
     // a shade darker than its panels, so an ink just readable on a panel could
-    // fall short on it. A dark page is darker than its panels; nothing moves.
+    // fall short on it. A light page also takes the panels' tinted glass and
+    // its own colour washes, which darken it a little more, so there every ink
+    // keeps .8 of headroom on the page and the panels alike. A dark page is
+    // darker than its panels and those layers only lift contrast: nothing moves.
     if (readingBackground === base.bg) {
       const toward = contrast("#FFFFFF", base.panel) >= contrast("#000000", base.panel) ? "#FFFFFF" : "#000000";
-      [text, bright, muted, dim] = [[text, 5.5], [bright, 4.5], [muted, 5.5], [dim, 4.5]].map(([ink, minimum]) => readableColor(ink, base.bg, minimum, toward));
+      const headroom = luminance(base.bg) > .35 ? .8 : 0;
+      [text, bright, muted, dim] = [[text, 5.5], [bright, 4.5], [muted, 5.5], [dim, 4.5]].map(([ink, minimum]) => readableColor(readableColor(ink, base.panel, minimum + headroom, toward), base.bg, minimum + headroom, toward));
     }
-    const onAccent = contrast("#FFFFFF", base.accent) > contrast("#000000", base.accent) ? "#FFFFFF" : "#000000";
-    const actionEnd = mixColor(base.accent, onAccent === "#FFFFFF" ? "#000000" : "#FFFFFF", .18);
-    return { accent: base.accent, bright, accent2: base.accent2 || bright, background: base.bg, readingBackground, actionEnd, surface: base.panel, text, muted, dim, border,
+    // The ink on the accent's fills (primaries, badges, the chosen segment).
+    // Many of them run from the accent to bright, so it is whichever of white
+    // and black reads better on both: on a light panel a chosen accent's bright
+    // is deeper than the accent, and black on it would fail.
+    const inkOn = (ink) => Math.min(contrast(ink, base.accent), contrast(ink, bright));
+    const onAccent = inkOn("#FFFFFF") > inkOn("#000000") ? "#FFFFFF" : "#000000";
+    const awayFromInk = onAccent === "#FFFFFF" ? "#000000" : "#FFFFFF";
+    const actionEnd = mixColor(base.accent, awayFromInk, .18);
+    // The second hue as a fill under that ink: the two-tone primaries end on it.
+    const accent2Fill = readableColor(base.accent2 || bright, onAccent, 4.5, awayFromInk);
+    return { accent: base.accent, bright, accent2: base.accent2 || bright, accent2Fill, background: base.bg, readingBackground, actionEnd, surface: base.panel, text, muted, dim, border,
       rgb: channels(base.accent).join(","), surfaceRgb: channels(base.panel).join(","),
       onAccent,
       canvas: { background: base.bg, accent: base.accent, bright: readableColor(base.bright, base.bg, 3), accent2: base.accent2 || readableColor(base.bright, base.bg, 3), text: canvasText, muted: readableColor(mixColor(canvasText, base.bg, .32), base.bg), dim: readableColor(mixColor(canvasText, base.bg, .5), base.bg, 3) } };
@@ -531,6 +543,7 @@
     root.style.setProperty("--studio-accent-rgb", detail.rgb);
     root.style.setProperty("--accent-2", detail.accent2);
     root.style.setProperty("--accent-2-rgb", channels(detail.accent2).join(","));
+    root.style.setProperty("--accent-2-fill", detail.accent2Fill);
     root.style.setProperty("--studio-reading-bg", detail.readingBackground);
     root.style.setProperty("--studio-action-end", detail.actionEnd);
     root.dataset.studioTheme = key;

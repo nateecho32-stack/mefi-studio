@@ -175,6 +175,8 @@
 .setup-welcome[hidden] { display: none; }
 @keyframes setup-welcome-in { from { opacity: 0; } to { opacity: 1; } }
 .setup-welcome-card { width: min(640px, 100%); max-height: calc(100vh - 48px); padding: 28px 28px 0; overflow: auto; scrollbar-width: none; border: 1px solid color-mix(in srgb, var(--ivory) 12%, transparent); border-radius: 18px; background: var(--panel-solid); box-shadow: 0 30px 80px -30px rgba(0, 0, 0, .8); outline: none; }
+/* On a light page the card's dark drop shadow read as a smudge: it takes the light tone's softer one. */
+:root[data-studio-theme-tone="light"] .setup-welcome-card { box-shadow: var(--shadow-3); }
 .setup-welcome-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 0 22px; }
 .setup-welcome-steps > i { height: 3px; border-radius: var(--r-pill, 999px); background: color-mix(in srgb, var(--ivory) 14%, transparent); transition: background var(--motion-base, 200ms) var(--ease-out, ease-out); }
 .setup-welcome-steps > i.on { background: var(--gold); }
