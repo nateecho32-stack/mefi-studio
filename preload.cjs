@@ -372,6 +372,9 @@ const api = {
     provider: typeof payload.provider === "string" ? payload.provider : undefined, positionMs: Number.isFinite(payload.positionMs) ? payload.positionMs : undefined,
   } : null),
   hubNowPlaying: (track) => ipcRenderer.invoke("hub:now-playing", { track: track && typeof track === "object" ? { label: String(track.label ?? ""), provider: String(track.provider ?? ""), ...(typeof track.url === "string" ? { url: track.url } : {}) } : null }),
+  // This member's pet for the rooms they have open (main.cjs hubPet): { kind, skin, name }, or null (or { on: false })
+  // for none. Only those fields cross; the room's pets come back on onHubEvent as { type: "roomPets", roomId, pets }.
+  hubPet: (pet) => ipcRenderer.invoke("hub:pet", { pet: pet && typeof pet === "object" && pet.on !== false ? { kind: String(pet.kind ?? ""), skin: String(pet.skin ?? ""), name: typeof pet.name === "string" ? pet.name.slice(0, 64) : "" } : null }),
   onHubEvent: (callback) => ipcRenderer.on("hub:event", (_event, payload) => callback(payload)),
   // Friends › Rooms (main.cjs HUB_ROOM_METHODS): a method name and plain
   // arguments (strings, numbers, booleans, one flat object); main allows only

@@ -55,6 +55,10 @@
 //     an envelope for one PC (acked, or nacked "not-online" / "not-allowed").
 //     The relay answers with `pcs` (the PCs this one sees), `pcState` and
 //     `pcMsg` events. Envelopes are pc-trust.cjs's and pass here unread.
+//   - Pets (relay feature "pets", relay/src/pets.mjs): setPet names this
+//     member's pet ({ kind, skin, name } or null), said again after every
+//     `ready`, and the rooms this Studio has open answer with `roomPets`
+//     events: the pets of the members there, this member's own included.
 //   - The Shop (relay feature "shop", relay/src/shop.mjs): shop() lists
 //     Studio's own items and members' style packs, shopOwned() what this
 //     member owns (for a new PC), shopBuy / shopPublish / shopUpdate /
@@ -91,7 +95,7 @@ const PRESENCE_EVERY_MS = 30_000;
 const KEEPALIVE_EVERY_MS = 30_000;
 const KEEPALIVE_FRAME = Object.freeze({ type: "ping" });
 // What this Studio tells the hub it can do (hello.features).
-const CLIENT_FEATURES = Object.freeze(["history.peer", "keepalive", "friend.online", "pcs"]);
+const CLIENT_FEATURES = Object.freeze(["history.peer", "keepalive", "friend.online", "pcs", "pets"]);
 // A historyReply must fit the hub's 16 KB frame limit.
 const HISTORY_REPLY_BYTES = 15 * 1024;
 const HISTORY_REPLY_MESSAGES = 100;
@@ -113,6 +117,13 @@ const PACK_MATERIALS = Object.freeze(["focus", "studio", "atmosphere"]);
 const PACK_FONTS = Object.freeze(["studio", "display", "serif", "mono"]);
 const PACK_PRICE_MAX = 250;
 const PACK_TIP_MAX = 100; // a tip for a community pack's maker, in credits
+// Pets' shapes (relay/src/protocol.mjs PET_KINDS, PET_SKINS; renderer/pets.js).
+const PET_KINDS = Object.freeze(["dragon"]);
+const PET_SKINS = Object.freeze(["theme", "frost", "jade", "void", "gold"]);
+const PET_NAME_MAX = 24;
+const ROOM_PETS_MAX = 12;
+// The relay takes six pet frames a minute from one socket: a change waits its turn, and the latest one wins.
+const PET_EVERY_MS = 10_000;
 const ACK_TIMEOUT_MS = 10_000;
 const REQUEST_TIMEOUT_MS = 15_000;
 const BACKOFF_MS = Object.freeze([1_000, 2_000, 5_000, 10_000, 30_000, 60_000]);
@@ -557,6 +568,32 @@ function packFields(fields, { required = false } = {}) {
   return out;
 }
 
+// ---- Pets' shapes (relay/src/pets.mjs) ---------------------------------------
+// A pet as the relay takes it, { kind, skin, name } with the name on one line
+// and at most 24 characters, or null when it is not one.
+function petLook(value) {
+  if (!object(value) || !PET_KINDS.includes(value.kind) || !PET_SKINS.includes(value.skin)) return null;
+  const name = typeof value.name === "string" ? value.name.replace(/[\x00-\x1f\x7f]/g, " ").replace(/\s+/g, " ").trim().slice(0, PET_NAME_MAX).trim() : "";
+  return { kind: value.kind, skin: value.skin, name };
+}
+// A room's pets from the relay, each member once and at most 12, or null
+// when it is not a list: { id, userId, name, pet }, where id and userId are
+// the member's user id (id is what renderer/pets.js MefiPets.guests() reads)
+// and name is the member's display name.
+function roomPetsOf(value) {
+  if (!Array.isArray(value)) return null;
+  const seen = new Set();
+  const out = [];
+  for (const item of value.slice(0, ROOM_PETS_MAX)) {
+    const id = object(item) ? snowflake(item.userId) : null;
+    const pet = id ? petLook(item.pet) : null;
+    if (!pet || seen.has(id)) continue;
+    seen.add(id);
+    out.push({ id, userId: id, name: text(item.name, 100) || "member", pet });
+  }
+  return out;
+}
+
 // A room's join code ("7K3Q-M2XR") and its link, or a failure.
 function codeOf(data) {
   const code = typeof data?.code === "string" && /^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(data.code) ? data.code : null;
@@ -604,6 +641,13 @@ function createHubClient(options = {}) {
   let remoteList = [];
   // My PCs: this PC as main named it ({ pc: { id, name, kind }, keys, lendTo }), or null.
   let pc = null;
+  // Pets: this member's pet as setPet named it (kept across reconnects and a
+  // Disconnect, since it is this Studio's own), what this socket last told
+  // the relay, and when, so changes keep to the relay's pace.
+  let myPet = null;
+  let petHeard = null;
+  let petSentAt = 0;
+  let petTimer = null;
   // Subscribed rooms, each with the parts of Studio holding it open (Rooms'
   // chat, Listen together, the cowork claims). The hub hears subscribe from
   // the first holder and unsubscribe only when the last lets go, so one part
@@ -624,7 +668,7 @@ function createHubClient(options = {}) {
       events: features.includes("events"),
       lobby: features.includes("lobby"), joinCodes: features.includes("join.codes"), online: features.includes("online"), front: features.includes("front"), building: features.includes("building"),
       pcs: features.includes("pcs"), pcOn: Boolean(pc) && features.includes("pcs"),
-      shop: features.includes("shop"),
+      shop: features.includes("shop"), pets: features.includes("pets"),
     };
   }
   function setState(next, nextError = null) {
@@ -798,6 +842,11 @@ function createHubClient(options = {}) {
         if (remote && features.includes("remote")) sendRemoteHello();
         // And which of them is one of My PCs (the relay forgets it when a socket closes).
         if (pc && features.includes("pcs")) sendPcHello();
+        // And this member's pet: a new socket starts without one, and is told at once.
+        petTimer = clearTimer(petTimer);
+        petHeard = null;
+        petSentAt = 0;
+        if (myPet) sendPetSoon();
         if (presenceTimer) stopEvery(presenceTimer);
         presenceTimer = every(() => { for (const roomId of rooms.keys()) send({ type: "presence", roomId }); }, PRESENCE_EVERY_MS);
         // The relay's keepalive keeps a socket with no rooms open (the remote,
@@ -931,6 +980,12 @@ function createHubClient(options = {}) {
           : { ok: false, reason: typeof frame.reason === "string" ? frame.reason : "failed", retryAfter: Number.isFinite(frame.retryAfter) ? frame.retryAfter : undefined });
         return;
       }
+      // A room's pets (feature "pets"): the members there with a pet, this member's own included.
+      case "roomPets": {
+        const pets = features.includes("pets") && opaqueId(frame.roomId) ? roomPetsOf(frame.pets) : null;
+        if (pets) emit({ type: "roomPets", roomId: frame.roomId, pets });
+        return;
+      }
       case "error":
         emit({ type: "hubError", code: typeof frame.code === "string" ? frame.code : "unknown" });
         return;
@@ -960,6 +1015,21 @@ function createHubClient(options = {}) {
     send({ type: "pcHello", pc: { ...pc.pc }, keys: { ...pc.keys }, lendTo: [...pc.lendTo] });
   }
   const pcReady = () => state === "ready" && features.includes("pcs") && Boolean(pc);
+  // The pet frame to a relay that carries pets: at most one every PET_EVERY_MS
+  // (the latest pet waits its turn), and never one the relay already has.
+  function sendPetSoon() {
+    if (petTimer || state !== "ready" || !features.includes("pets")) return;
+    if (JSON.stringify(myPet) === JSON.stringify(petHeard)) return;
+    const wait = petSentAt + PET_EVERY_MS - now();
+    if (wait > 0) {
+      petTimer = later(() => { petTimer = null; sendPetSoon(); }, wait);
+      return;
+    }
+    if (send({ type: "pet", pet: myPet })) {
+      petHeard = myPet;
+      petSentAt = now();
+    }
+  }
 
   // An HTTP call with the hub session, renewed once when the hub says it
   // lapsed. Refusals keep the hub's own error, reason and retryAfter.
@@ -1048,6 +1118,9 @@ function createHubClient(options = {}) {
       remote = null;
       remoteList = [];
       pc = null;
+      // The pet stays (it is this Studio's own); the next socket is told it again.
+      petTimer = clearTimer(petTimer);
+      petHeard = null;
       setState("off");
       if (token) await request("DELETE", "/v1/session", undefined, token);
       return status();
@@ -1606,6 +1679,19 @@ function createHubClient(options = {}) {
       if (jsonBytes(env) > PC_ENV_BYTES) return Promise.resolve({ ok: false, reason: "too-large" });
       return withAck({ type: "pcSend", to, env });
     },
+    // This member's pet ({ kind, skin, name }, as renderer/pets.js has it), or
+    // null for none: kept, and said again after each `ready` from a relay that
+    // carries "pets", so the rooms this Studio has open show it to the members
+    // there. Only a change goes out, at most one every 10 s (the latest wins).
+    // False when the shape is wrong.
+    setPet(value) {
+      const next = value == null ? null : petLook(value);
+      if (value != null && !next) return false;
+      if (JSON.stringify(next) === JSON.stringify(myPet)) return true;
+      myPet = next;
+      sendPetSoon();
+      return true;
+    },
     // What this member is building ({ project, running, doneToday }), or null
     // to stop sharing. Kept and re-sent after a reconnect; only a change goes out.
     setBuilding(value) {
@@ -1638,4 +1724,5 @@ module.exports = {
   KEEPALIVE_FRAME, KEEPALIVE_EVERY_MS, CLIENT_FEATURES, wireMessage, projectCard, PROJECT_KINDS,
   eventsPage, eventsFront,
   SHOP_VIEWS, SHOP_ITEM_KINDS, itemCard, packData, packFields,
+  PET_KINDS, PET_SKINS, petLook, roomPetsOf,
 };

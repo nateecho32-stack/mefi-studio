@@ -2537,6 +2537,14 @@ const hubSubscribe = (roomId, on, holder) => hubCall((client) => {
 });
 const hubListen = (payload) => hubCall((client) => client.listen(payload?.roomId, payload ?? {}));
 const hubNowPlaying = (track) => hubCall((client) => ({ ok: client.setNowPlaying(track) }));
+// This member's pet (renderer/pets.js) for the rooms they have open (relay
+// feature "pets"): { kind, skin, name } copied field by field, or null for
+// none, as is a pet that is off ({ on: false }, the way MefiPets.state() puts
+// it). The hub client keeps it and says it again after every reconnect; the
+// room's pets come back as hub:event { type: "roomPets", roomId, pets }.
+const hubPet = (pet) => hubCall((client) => ({
+  ok: client.setPet(pet && typeof pet === "object" && pet.on !== false ? { kind: String(pet.kind ?? ""), skin: String(pet.skin ?? ""), name: typeof pet.name === "string" ? pet.name : "" } : null),
+}));
 // Friends › Rooms (renderer/rooms.js): creating rooms, joining by request or
 // invite, deciding requests, and room chat. The renderer names a method from
 // this list and passes plain arguments; the client checks every argument
@@ -27478,6 +27486,7 @@ function registerIpc() {
   ipcMain.handle("hub:subscribe", async (_event, payload) => hubSubscribe(payload?.roomId, payload?.on !== false, payload?.holder));
   ipcMain.handle("hub:listen", async (_event, payload) => hubListen(payload));
   ipcMain.handle("hub:now-playing", async (_event, payload) => hubNowPlaying(payload?.track ?? null));
+  ipcMain.handle("hub:pet", async (_event, payload) => hubPet(payload?.pet ?? null));
   // Friends › Rooms: one channel, HUB_ROOM_METHODS decides what it may call.
   ipcMain.handle("hub:room", async (_event, payload) => hubRoom(String(payload?.method ?? ""), Array.isArray(payload?.args) ? payload.args : []));
   // Friends › Project hub: one channel, HUB_PROJECT_METHODS decides what it may call.

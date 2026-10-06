@@ -97,7 +97,7 @@ const isPackId = (value) => typeof value === 'string' && PACK_ID.test(value);
  * createShop({ store, now, credits, catalog })
  *   credits: createCredits(...) (account, standing, heldUntil, spend, sale, tell)
  *   catalog: Studio's items, CATALOG unless a test gives its own
- * -> { routes(route), remove(packId, modId, reason), forget(uid), upkeep() }
+ * -> { routes(route), remove(packId, modId, reason), forget(uid), upkeep(), owns(uid, itemId) }
  */
 export function createShop({ store, now, credits, catalog = CATALOG }) {
   const studioItems = new Map(catalog.map((item) => [item.id, item]));
@@ -107,6 +107,12 @@ export function createShop({ store, now, credits, catalog = CATALOG }) {
   const nameOf = (uid) => store.get('SELECT name FROM members WHERE user_id = ?', uid)?.name ?? 'member';
   const packRow = (id) => (isPackId(id) ? store.get('SELECT * FROM shop_packs WHERE id = ?', id) : undefined);
   const hasRow = (uid, itemId) => Boolean(store.get('SELECT 1 AS yes FROM shop_owned WHERE user_id = ? AND item_id = ?', uid, itemId));
+  /** Whether a member owns an item (pets.mjs asks about a pet's skin): a Studio item they got, or a pack still served. */
+  function owns(uid, itemId) {
+    if (!isPackId(itemId)) return hasRow(uid, itemId);
+    const pack = packRow(itemId);
+    return Boolean(pack) && pack.status !== 'removed' && (pack.maker_id === uid || hasRow(uid, itemId));
+  }
 
   /** The ids a member owns: what they got in the Shop (a removed pack left out) and their own packs. */
   function ownedIds(uid) {
@@ -422,5 +428,5 @@ export function createShop({ store, now, credits, catalog = CATALOG }) {
     }
   }
 
-  return Object.freeze({ routes, remove, forget, upkeep });
+  return Object.freeze({ routes, remove, forget, upkeep, owns });
 }
