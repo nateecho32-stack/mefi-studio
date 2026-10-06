@@ -4620,6 +4620,9 @@ body.appearance-settings-active #tab-studio[data-places="v2"] .settings-nav-item
 #tab-studio[data-places="v2"] #settings-audio-media > h3:first-child { margin: 0 0 4px; font: 650 var(--f14, 14px)/1.35 var(--font-ui); }
 #tab-studio[data-places="v2"] #settings-audio-media > p:nth-child(2) { grid-column: 1; margin: 0; font-size: var(--f13, 13px); }
 #tab-studio[data-places="v2"] #settings-audio-media > button:nth-child(3) { grid-column: 2; grid-row: 2; }
+/* With its words behind the heading's "i" (MefiUi.tuck), the heading and its button share the one row. */
+#tab-studio[data-places="v2"] #settings-audio-media:has(> .info-pop) > h3:first-child { grid-column: 1; margin: 0; }
+#tab-studio[data-places="v2"] #settings-audio-media:has(> .info-pop) > button:nth-child(3) { grid-row: 1; }
 /* The Appearance sidebar's own small print reads at 12 px or more too. */
 #tab-studio[data-places="v2"] :is(.music-fineprint, .music-node-label, .music-node-choice strong, .music-node-choice small, .music-effect-copy small, .studio-style-choice strong, .music-void-theme-label) { font-size: var(--f12, 12px); }
 #tab-studio[data-places="v2"] .settings-media .music-theme { font-size: var(--f12, 12px); }
@@ -14795,7 +14798,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
             <label class="switch" id="settings-composer-picker-switch" title="Typing @ in Home's message box offers this project's files, # its tasks and / its skills, and the box shows what the message points at. Off leaves @, # and / as plain typing, and a /skill in a message is not expanded."><input type="checkbox" id="settings-composer-picker" checked><span class="track"></span><span>Suggest files, tasks and skills while I type</span></label>
             <label class="switch" title="On: after five minutes without input, Studio switches to Command view. Off: it stays on the page you left open."><input type="checkbox" id="idle-command-idle"><span class="track"></span><span>Show Command view after 5 quiet minutes</span></label>
           </div>
-          <p class="muted" id="idle-home-hint">When disabled, Studio reopens the last tab page you used after the project chooser.</p>
+          <p class="muted" id="idle-home-hint" data-info-anchor="idle-home-label">When disabled, Studio reopens the last tab page you used after the project chooser.</p>
           <!-- settings.ui.launchAgents (main.cjs launchAgentsInfo); the launch screen's default button follows it. -->
           <label class="field"><span class="field-label">When Studio opens</span><select id="launch-agents" aria-describedby="launch-agents-hint"><option value="resume">Resume what I had</option><option value="start">Start agents</option><option value="off">Keep agents off</option></select><span class="field-hint" id="launch-agents-hint">Resume starts agents on a project where they were running when you closed Studio. The launch screen still offers both choices.</span></label>
           <!-- settings.ui.dailyNews (main.cjs news:edition, startup:state news); renderer/daily-paper.js keeps it. -->
@@ -104410,7 +104413,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   function settingsControlLabel(control) {
     const label = control.closest?.("label") ?? document.querySelector?.(`label[for="${control.id}"]`);
     const named = label?.querySelector?.(".field-label, b, strong, .grow");
-    const parts = label ? Array.from(label.children ?? []).filter((node) => !["INPUT", "SELECT", "TEXTAREA", "SMALL"].includes(node.tagName)).map((node) => node.textContent ?? "").join(" ") : "";
+    const parts = label ? Array.from(label.children ?? []).filter((node) => !["INPUT", "SELECT", "TEXTAREA", "SMALL"].includes(node.tagName) && !node.classList?.contains?.("info-pop")).map((node) => node.textContent ?? "").join(" ") : "";
     return String(control.getAttribute?.("aria-label") || named?.textContent || parts || (control.tagName === "BUTTON" ? settingsButtonLabel(control) : "") || control.getAttribute?.("title") || "").replace(/\s+/g, " ").trim();
   }
   function settingsEntries() {
@@ -104427,7 +104430,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         if (label) entries.push({ id: card.id, label, category, terms: `${words} ${card.id.replace(/-/g, " ")}` });
       }
       for (const control of pane.querySelectorAll("input, select, textarea, button")) {
-        if (!settingsAvailable(control) || control.type === "hidden" || control.getAttribute?.("aria-hidden") === "true" || control.hidden || control.closest?.(".settings-you-theme[hidden], .music-queue, .music-recent, .music-suggestion")) continue;
+        // An info circle (MefiUi.tuck) is the help of the setting beside it, not a setting of its own.
+        if (!settingsAvailable(control) || control.type === "hidden" || control.getAttribute?.("aria-hidden") === "true" || control.hidden || control.closest?.(".settings-you-theme[hidden], .music-queue, .music-recent, .music-suggestion, .info-dot")) continue;
         const label = settingsControlLabel(control);
         if (!label) continue;
         if (!control.id) control.id = `settings-control-${category}-${++settingsControlSerial}`;
@@ -104539,6 +104543,21 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (browser) browser.hidden = Boolean(window.mefiStudio?.launchStudio);
     for (const note of document.querySelectorAll("[data-desktop-message]")) note.hidden = Boolean(window.mefiStudio?.launchStudio);
   }
+  // A setting's long how-to words move behind an "i" at the end of its title (MefiUi.tuck, studio-ui.js), so a place
+  // shows its controls first. Connections, Models and Automation are the Team pages' (renderer/agents.js takes their
+  // cards there and tucks them) and Community is renderer/community.js's, so they are marked to stay as they are. One
+  // call for all of Settings: tuck reads every title's style before it moves anything, and a call per card read it
+  // again after each card's moves (about 20 ms of style each, 120 ms on the first paint). Every paint while Settings
+  // shows runs it: rows drawn since (Appearance's media) are tucked, rows already tucked stay as they are.
+  const SETTINGS_UNTUCKED = ["settings-category-connections", "settings-category-models", "settings-category-automation", "settings-community"];
+  function tuckSettings() {
+    const tuck = window.MefiUi?.tuck, sections = document.getElementById("settings-sections");
+    // Not before the page has loaded: renderer/nav.js chooses the layout then, and Settings is filed for it (a
+    // reopened Settings paints earlier, while a title the 0.5 layout hides, like Report's, still shows).
+    if (typeof tuck !== "function" || !sections || document.readyState === "loading") return;
+    for (const id of SETTINGS_UNTUCKED) document.getElementById(id)?.setAttribute?.("data-keep-visible", "");
+    tuck(sections);
+  }
   function paintSettingsRows() {
     mountSettingsControls();
     if (document.querySelector && !document.querySelector(`[data-settings-category-pane="${settingsPane(settingsCategory)}"]`)) settingsCategory = "general";
@@ -104559,6 +104578,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }
     for (const pane of document.querySelectorAll("[data-settings-category-pane]")) pane.hidden = Boolean(query) || pane.dataset.settingsCategoryPane !== settingsPane(settingsCategory);
     if (document.getElementById("tab-studio")?.hidden === false) {
+      // Only once Settings shows: by then the layout is chosen and filed, and tuck reads which titles it shows.
+      tuckSettings();
       window.MefiMusic?.activateSettings?.(query ? null : settingsPane(settingsCategory));
       if (settingsCategory === "automation") void loadSettingsAutomation();
       if (!query) openSettingsPlace(settingsCategory);
