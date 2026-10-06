@@ -39,6 +39,27 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-06 A more compact Studio: Today's board higher, 48 px page headers, the inspector's cards inside it
+
+Branch `ui/today-layout` (C:\wt\today, off main 149e770). The owner: "look at all this wasted space, stuff just
+floats", then "make sure that applies everywhere that we could save space, we want something compact as an app".
+Social's Today at 1920x1080: the board starts at y 489 instead of 636 (1440x900: 503 instead of 636); the keys moved
+into Talk it over and Build it, the whole-project scope line and the idle drop hint wait until they say something,
+"Decided for you" became a count chip, an empty status line under the box takes no room, the project picker is one
+line in the column. Board cards lost the empty row a one-line title kept (the title button inherited every button's 36
+px minimum). Studio's Today: greeting beside a 34 px orb, a 780 px column, keys in the buttons. Every page's header
+band is 48 px with an 18 px title (was 64 px and 22 px); Team's 0.5 head lost its 22 px band; Friends and Settings
+titles 18 px. The session list puts the Git chip and the worktree count on one row. Found on the way, on main too: the
+project inspector's cards ran past the window's right edge at 1920 (one-column grids with an automatic column; now
+minmax(0, 1fr)); confirmed against a clean-main capture (C:\wt\ctl2).
+
+Real windows, one at a time under the lease, on the final tree: today_render (five sizes, the Inbox popover and page,
+the drawer), sessions_render (Studio's Today, the inspector whole at 1920; one earlier run failed on its "waiting 4m"
+clock, which read 5m on a slow run, and passed again), team_render, settings_render, friends_render, planning_render,
+worktrees_render, skills_render, review_render and map_render all pass. Unit suites: 764/764 across today_*, vibe_*,
+sessions_*, settings_*, agents_*, team_*, friends_*, shell_frame_*, size_*, layout_contract_css, studio_ui, info_tips,
+file_inputs (a new test for the idle marker), booklet_build and module_purity; `npm run check` ok.
+
 ## 2026-10-06 Linux CI: My PCs' battery and Resources stop asking Node for the platform
 
 Branch `fix/linux-ci-battery-resources` (b06201c, off main 8f84614, in C:\wt\lxci), with PR #7 open so
@@ -482,30 +503,6 @@ rollover, a lost index readable at open, the lock, the exit path), log_core 9/9 
 env and by segment, case-blind on Windows, the userData fallback), log_core_host 7/7, trace 9/9 (+ Load older);
 alerts_wiring and report_wiring keep their start order. Python contracts 248 OK (3 skipped). Electron under xvfb as a
 non-root user: startup_render, renderer_startup and renderer_recovery 21 pass, 1 skipped.
-
-## 2026-10-06 Live CLI progress and prompts a provider can cache (S12) land on main
-
-Branch `land/s12-cli` in a cloud session (Linux, Node 24.21.0) over main f1934aa (first gated over 0b051b8; merged with skills everywhere, whose loaded skills stay beside the system prompt while the transcript moves to the user text): the parked "not shippable" slice
-f7c8f42 re-applied by hand (main's worker prompt, tool loop and Codex app-server harness had moved), finished and
-tested (5ddb52d). Fixed on the way: a fresh Claude session UUID per attempt (the WIP reused one, which Claude Code
-refuses on a retry); live progress decided for every run so a CLI fallback attempt streams too; picture messages keep
-the old tool-loop order; seat fallbacks receive the user content so a tool round's transcript survives them.
-
-Prompt size (tests/prompt_cache.test.mjs, the prefix two consecutive requests share; no prompt got longer): two
-workers' prompts 5 -> 4,241 of 4,615 characters; two chat turns (30-card board, 16-message thread) 12 -> 4,128 of
-4,167; two tool rounds with a 3,080-character user message 3,292 -> 6,373 of 6,499. Kill switches
-MEFI_STUDIO_PROMPT_CACHE=0 / settings.ai.promptCache false (every old byte back) and MEFI_STUDIO_LIVE_PROGRESS=0 /
-settings.executor.liveProgress false (text mode), both pinned. Live progress was checked against Claude Code
-stream-json and codex --json event shapes in fixtures, not against a real CLI run here.
-
-`npm run check` ok, `npm run audit` 0 findings, `npm run lint` 0 errors and 45 warnings (as main). `npm run
-test:fast` with mefi-core built: 7129 tests, 7093 pass, 34 skipped, 2 fail: rust_parity_git "the actions answer like
-the JavaScript" and "the chip's host answers like git-host.cjs", as on clean main with the same binary (Linux git;
-for the Rust chat). New: cli_stream 10/10, executor_live_progress 4/4 (the real spawnNextJob: a chunked Claude stream
-sets session, todos, tool and usage, the sentinel counts once, the attempt keeps cliSession and usage; the switch off
-keeps the text command line; the app server is untouched), prompt_cache 14/14. Updated pins: agent_tools,
-agent_tools_project and agent_tools_skills (read the whole request), mentions_host, tools/test_mefi_studio_routing.py. The executor, agent
-tools, task oversight and outside-work suites 658/658 (1 skipped). Python contracts 248 OK (3 skipped).
 
 ## Read Before Any Tests
 
