@@ -19,7 +19,7 @@ const yt = (id) => `https://www.youtube.com/watch?v=${id}`;
 // Values made inside the vm carry its prototypes; compare them as plain data.
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
-function harness({ saved = null, queued = [], playing = null, showLinks = true, shown = true } = {}) {
+function harness({ saved = null, queued = [], playing = null, showLinks = true, shown = true, hub = null } = {}) {
   const storage = new Map(saved ? [[STORE, JSON.stringify(saved)]] : []);
   const documentListeners = new Map();
   let document;
@@ -49,7 +49,7 @@ function harness({ saved = null, queued = [], playing = null, showLinks = true, 
   menu.rect = { top: 100, left: 100, right: 1000, bottom: 900, width: 900, height: 800 };
   const deck = new Element("section"); menu.append(deck);
   const host = new Element("section"); host.hidden = true; deck.append(host);
-  const calls = { play: [], queue: [], browse: [], notes: [], copied: [], open: 0 };
+  const calls = { play: [], queue: [], browse: [], notes: [], copied: [], open: 0, nav: [] };
   const listeners = new Map();
   let hook = null;
   const hands = {
@@ -71,6 +71,8 @@ function harness({ saved = null, queued = [], playing = null, showLinks = true, 
     localStorage: { getItem: (key) => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value), removeItem: (key) => storage.delete(key) },
     window: {
       MefiMusic: { playlists: (given) => { hook = given; return hands; } },
+      MefiNav: { go: (...args) => calls.nav.push(args) },
+      ...(hub ? { mefiStudio: hub } : {}),
       addEventListener: (type, fn) => listeners.set(type, fn),
       navigator: { clipboard: { writeText: async (text) => { calls.copied.push(text); } } },
     },
@@ -334,4 +336,121 @@ test("a video saved before its title was known takes the title its player report
   assert.equal(rows[0].dataset.state, undefined); assert.equal(rows[1].dataset.state, "playing");
   env.music({ source: "radio", link: null, title: "Groove Salad" });
   assert.equal(env.classed("music-pl-item")[1].dataset.state, undefined);
+});
+
+const flushAll = async () => { for (let i = 0; i < 30; i += 1) await Promise.resolve(); };
+const readyHub = ({ linked = true, state = "ready", refuse = null } = {}) => {
+  const sent = [];
+  return {
+    sent,
+    hubStatus: async () => ({ ok: true, status: { configured: true, communityConfigured: true, linked, state } }),
+    hubConnect: async () => { sent.push(["connect"]); return { ok: true }; },
+    hubRooms: async () => ({ ok: true, rooms: [
+      { id: "room_a", name: "Lo-fi corner", you: "member", status: "active" },
+      { id: "lobby", name: "Lobby", you: "member", status: "active" },
+      { id: "room_x", name: "Not mine", you: "none", status: "active" },
+      { id: "room_c", name: "Closed", you: "owner", status: "closed" },
+    ] }),
+    hubRoom: async (method, ...args) => { sent.push([method, ...args]); return refuse?.room ?? { ok: true }; },
+    hubProjects: async (method, fields) => { sent.push([method, { ...fields }]); return refuse?.hub ?? { ok: true }; },
+  };
+};
+
+test("a long list posted in a room fits one message, and the YouTube link brings every video back", () => {
+  const env = harness();
+  const { shareText, parseShare } = env.playlists.model;
+  const ids = Array.from({ length: 50 }, (_, i) => `vid${String(i).padStart(8, "0")}`);
+  const list = { name: "Fifty", items: ids.map((id, i) => ({ url: yt(id), title: `A rather long video title number ${i} about shaders and simulations`, channel: "Some Channel", duration: "12:34" })) };
+  const text = shareText(list, info, { max: 2000 });
+  assert.ok(text.length <= 2000, `${text.length} characters`);
+  assert.match(text, /\n…and \d+ more videos in the YouTube link\nPlay all on YouTube: </);
+  const back = parseShare(text, info);
+  assert.equal(back.items.length, 50);
+  assert.equal(back.items[0].title, list.items[0].title, "the lines that fit keep their titles");
+  assert.equal(back.items[49].title, "", "the rest come from the link, titled when they play");
+  assert.equal(shareText(list, info), shareText(list, info, { max: Infinity }), "no limit, no cut");
+});
+
+test("Share sends a list to friends: a room gets the text, the Project hub one YouTube link, and refusals say why", async () => {
+  const hub = readyHub();
+  const env = harness({ hub });
+  env.button("Open Code & math explorers, 12 videos").click();
+  env.button("Share").click();
+  await flushAll();
+  const box = env.classed("music-pl-friends")[0];
+  const select = env.all((node) => node.tagName === "SELECT", box)[0];
+  assert.deepEqual(plain(select.children.map((option) => option.textContent)), ["Lo-fi corner", "Lobby"], "only active rooms you're in");
+  assert.equal(select.value, "lobby", "the Lobby first");
+  env.button("Post", box).click();
+  await flushAll();
+  const [method, roomId, text] = hub.sent[0];
+  assert.equal(method, "sendMessage"); assert.equal(roomId, "lobby");
+  assert.ok(text.length <= 2000);
+  assert.equal(env.playlists.model.parseShare(text, info).items.length, 12);
+  assert.match(env.classed("music-pl-friends-note")[0].textContent, /^Posted in Lobby\./);
+  env.button("Open Lobby").click();
+  assert.deepEqual(plain(env.calls.nav.at(-1)), ["friends-page", { place: "rooms", room: "lobby" }]);
+  env.button("Add to the Project hub").click();
+  await flushAll();
+  const [share, fields] = hub.sent[1];
+  assert.equal(share, "shareProject");
+  assert.equal(fields.kind, "other"); assert.equal(fields.title, "Code & math explorers");
+  assert.ok(fields.url.length <= 512);
+  assert.equal(fields.blurb, "A playlist of 12 videos: Sebastian Lague, 3Blue1Brown, 2swap, Emergent Garden.");
+  const fromHub = env.playlists.fromLink(fields.url, fields.title);
+  assert.equal(fromHub.name, "Code & math explorers"); assert.equal(fromHub.items.length, 12);
+  assert.match(env.classed("music-pl-friends-note")[0].textContent, /you both earn credits/);
+  env.button("Open the Project hub").click();
+  assert.deepEqual(plain(env.calls.nav.at(-1)), ["friends-page", { place: "hub" }]);
+  // Refusals in plain words.
+  const refused = readyHub({ refuse: { hub: { ok: false, error: "conflict", reason: "owned-projects" }, room: { ok: false, error: "rate-limited" } } });
+  const other = harness({ hub: refused });
+  other.button("Open Visualizers, 8 videos").click(); other.button("Share").click(); await flushAll();
+  other.button("Add to the Project hub").click(); await flushAll();
+  assert.equal(other.classed("music-pl-friends-note")[0].textContent, "Not added: You have 5 things on the Project hub. Remove one there to add this.");
+  other.button("Post").click(); await flushAll();
+  assert.equal(other.classed("music-pl-friends-note")[0].textContent, "Not posted: Slow down a moment, then try again.");
+});
+
+test("Share says what is missing: a Discord sign-in, a connection, or YouTube-only for the hub", async () => {
+  const out = harness({ hub: readyHub({ linked: false }) });
+  out.button("Open Focus streams, 7 videos").click(); out.button("Share").click(); await flushAll();
+  assert.match(out.classed("music-pl-friends")[0].textContent, /Sign in with Discord in Friends/);
+  out.button("Open Friends").click();
+  assert.deepEqual(plain(out.calls.nav.at(-1)), ["friends-page", { place: "lobby" }]);
+  const hub = readyHub({ state: "closed" });
+  const off = harness({ hub });
+  off.button("Open Focus streams, 7 videos").click(); off.button("Share").click(); await flushAll();
+  off.button("Connect").click(); await flushAll();
+  assert.deepEqual(plain(hub.sent[0]), ["connect"]);
+  const none = harness();
+  none.button("Open Focus streams, 7 videos").click(); none.button("Share").click(); await flushAll();
+  assert.match(none.classed("music-pl-friends")[0].textContent, /need the Studio desktop app/);
+  const mixed = harness({ hub: readyHub(), saved: { lists: [{ id: "pl-mix", name: "Mixed", items: [{ url: yt("Qz0KTGYJtUk"), title: "One" }, { url: "https://vimeo.com/76979871", title: "Two" }] }] } });
+  mixed.button("Open Mixed, 2 videos").click(); mixed.button("Share").click(); await flushAll();
+  assert.equal(mixed.has("Add to the Project hub"), false);
+  assert.match(mixed.classed("music-pl-friends")[0].textContent, /Only playlists of YouTube videos go on the Project hub/);
+  assert.equal(mixed.has("Post"), true, "a room still takes it");
+});
+
+test("a shared playlist where friends talk is a card to play or save, saved once; a hub link is a playlist named after its card", () => {
+  const env = harness();
+  assert.equal(env.playlists.card("just chatting about https://youtu.be/Qz0KTGYJtUk"), null);
+  const text = env.playlists.model.shareText({ name: "Mix", items: [{ url: yt("Qz0KTGYJtUk"), title: "One", channel: "Sebastian Lague", duration: "37:58" }, { url: yt("aircAruvnKk"), title: "Two", channel: "3Blue1Brown", duration: "18:40" }] }, info);
+  const card = env.playlists.card(text);
+  assert.ok(card);
+  assert.match(card.textContent, /PlaylistMix2 videos · about 57 min/);
+  env.button("Play Mix", card).click();
+  assert.deepEqual(plain(env.calls.play.at(-1)), [[yt("Qz0KTGYJtUk"), yt("aircAruvnKk")], "Mix"]);
+  env.button("Save Mix to your playlists", card).click();
+  assert.deepEqual(plain(env.playlists.lists().map((list) => [list.name, list.from, list.items.length])), [["Mix", "shared", 2]]);
+  const again = env.playlists.card(text);
+  assert.equal(env.button("Mix is in your playlists", again).disabled, true, "the same list is saved once");
+  assert.equal(env.playlists.keep(env.playlists.parse(text)).already, true);
+  const hubLink = "https://www.youtube.com/watch_videos?video_ids=Qz0KTGYJtUk,aircAruvnKk&title=Old%20name";
+  assert.equal(env.playlists.fromLink(hubLink, "Card title").name, "Card title");
+  assert.equal(env.playlists.fromLink(hubLink).name, "Old name");
+  for (const other of ["https://aksana.itch.io/void", yt("Qz0KTGYJtUk"), "http://www.youtube.com/watch_videos?video_ids=Qz0KTGYJtUk", "https://evil.test/watch_videos?video_ids=Qz0KTGYJtUk"]) assert.equal(env.playlists.fromLink(other), null, other);
+  const shelf = env.playlists.cardFor(env.playlists.fromLink(hubLink, "Card title"), { play: false, title: false });
+  assert.equal(env.has("Play Card title", shelf), false); assert.equal(env.has("Save Card title to your playlists", shelf), true);
 });

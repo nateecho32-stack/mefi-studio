@@ -491,3 +491,23 @@ test("connecting made simple: the Lobby opens by itself, a code joins, a room sh
   assert.deepEqual(env.calls.find(([method]) => method === "invite"), ["invite", "room_mine", FRIEND.id]);
   assert.match(panel.find("rooms-status").textContent, /^Invited Aksana to Lo-fi corner/);
 });
+
+test("a shared playlist in a room's chat shows as a playlist card; every other message stays text", async () => {
+  const SHARE = "Mefi Studio playlist: Mix\n1. One <https://youtu.be/Qz0KTGYJtUk>";
+  const env = environment({ rooms: [room()], replies: { messages: { ok: true, messages: [message({ text: SHARE }), message({ id: "523456789012345678", text: "plain words" })], hasMore: false } } });
+  const asked = [];
+  env.window.MefiPlaylists = { card: (text) => {
+    asked.push(text);
+    if (!text.startsWith("Mefi Studio playlist:")) return null;
+    const card = new Element("section"); card.className = "music-pl-shared"; card.textContent = "Mix";
+    return card;
+  } };
+  const panel = env.rooms.panel();
+  await flush();
+  panel.buttons("Open")[0].click();
+  await flush();
+  assert.deepEqual(asked, [SHARE, "plain words"]);
+  assert.equal(panel.byClass("music-pl-shared").length, 1);
+  assert.deepEqual(panel.byClass("rooms-message-text").map((item) => item.textContent), ["plain words"]);
+  delete env.window.MefiPlaylists;
+});
