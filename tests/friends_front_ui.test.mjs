@@ -290,6 +290,27 @@ test("pop-ups: friends coming online are one toast, invites, requests and plays 
   assert.equal(toasts.length, 5, "turned off: nothing");
 });
 
+test("Building now: a small tree per friend who shares, and this member's own switch", async () => {
+  const people = front().online.people.map((person, n) => (n === 0 ? { ...person, building: { project: "Pixel Forge", running: 3, doneToday: 2 } } : person));
+  const env = environment({ page: front({ online: { count: 2, people } }), status: { configured: true, linked: true, state: "ready", user: ME, front: true, shareBuilding: false }, replies: { shareBuilding: (on) => ({ ok: true, shareBuilding: on }) } });
+  const card = env.front.card();
+  await flush();
+  const box = card.byClass("front-building")[0];
+  assert.match(box.textContent, /Building nowAlice · Pixel Forge3 running · 2 done today/);
+  assert.equal(box.byClass("front-tree-leaf").length, 5, "three lit leaves and two dim ones");
+  assert.equal(box.byClass("front-building-item").length, 1, "only friends who share are here");
+  const tick = card.find("friends-front-building");
+  assert.equal(tick.checked, false, "off until this member turns it on");
+  tick.change(true);
+  await flush();
+  assert.deepEqual(env.calls.find((call) => call[0] === "shareBuilding"), ["shareBuilding", true]);
+  assert.equal(card.find("friends-front-status").textContent, "Friends see your project's name and how many tasks run, never what they are.");
+  const quiet = environment();
+  const plain = quiet.front.card();
+  await flush();
+  assert.equal(plain.byClass("front-building").length, 0, "nobody sharing: no section");
+});
+
 test("main lets the renderer read the front page through hub:room", () => {
   assert.match(main, /const HUB_ROOM_METHODS = Object\.freeze\(\{[^}]*\bfront: 0,/s);
 });

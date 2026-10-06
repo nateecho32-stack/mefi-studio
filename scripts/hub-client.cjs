@@ -306,7 +306,8 @@ function frontPage(data) {
   const list = (value, shape, max) => (Array.isArray(value) ? value.map(shape).filter(Boolean).slice(0, max) : []);
   const person = (item) => {
     const who = user(item);
-    return who ? { ...who, rank: RANK_KEY.test(String(item.rank ?? "")) ? item.rank : "spark", specialRanks: specialOf(item.specialRanks), where: place(item.where) } : null;
+    const made = object(item.building) ? { project: line(item.building.project, 80), running: count(item.building.running, 1000) ?? 0, doneToday: count(item.building.doneToday, 1000) ?? 0 } : null;
+    return who ? { ...who, rank: RANK_KEY.test(String(item.rank ?? "")) ? item.rank : "spark", specialRanks: specialOf(item.specialRanks), where: place(item.where), building: made?.project ? made : null } : null;
   };
   const room = (item) => { const summary = roomSummary(item); return summary ? { ...summary, here: count(item.here, 1000) ?? 0 } : null; };
   const rankUp = (item) => {
@@ -435,6 +436,7 @@ function createHubClient(options = {}) {
   let paused = false;
   let nonceSeq = 0;
   let nowPlaying = null;
+  let building = null; // what this member shares they are building (feature "building")
   let opening = null;
   // What the hub said it carries in its last `ready` frame.
   let features = [];
@@ -460,7 +462,7 @@ function createHubClient(options = {}) {
       history: features.includes("history.peer"),
       credits: features.includes("credits"), projects: features.includes("projects"),
       events: features.includes("events"),
-      lobby: features.includes("lobby"), joinCodes: features.includes("join.codes"), online: features.includes("online"), front: features.includes("front"),
+      lobby: features.includes("lobby"), joinCodes: features.includes("join.codes"), online: features.includes("online"), front: features.includes("front"), building: features.includes("building"),
     };
   }
   function setState(next, nextError = null) {
@@ -619,6 +621,7 @@ function createHubClient(options = {}) {
         for (const roomId of rooms.keys()) { send({ type: "subscribe", roomId }); send({ type: "presence", roomId }); }
         // The hub forgets a share when the member's last socket closes.
         if (nowPlaying) sendNowPlaying();
+        if (building && features.includes("building")) send({ type: "building", now: building });
         // And which of this member's sockets is a PC the remote may reach.
         if (remote && features.includes("remote")) sendRemoteHello();
         if (presenceTimer) stopEvery(presenceTimer);
@@ -812,6 +815,7 @@ function createHubClient(options = {}) {
       session = null;
       rooms.clear();
       nowPlaying = null;
+      building = null;
       features = [];
       remote = null;
       remoteList = [];
@@ -1241,6 +1245,17 @@ function createHubClient(options = {}) {
       const list = remoteButtons(buttons);
       if (!remoteReady() || !PC_ID.test(String(key ?? "")) || !REMOTE_NOTICES.includes(kind) || !body || !list) return false;
       return send({ type: "remoteNotice", key, kind, text: body, ...(list.length ? { buttons: list } : {}) });
+    },
+    // What this member is building ({ project, running, doneToday }), or null
+    // to stop sharing. Kept and re-sent after a reconnect; only a change goes out.
+    setBuilding(value) {
+      const project = value == null ? null : line(value.project, 80);
+      if (value != null && !project) return false;
+      const next = project ? { project, running: count(value.running, 1000) ?? 0, doneToday: count(value.doneToday, 1000) ?? 0 } : null;
+      if (JSON.stringify(next) === JSON.stringify(building)) return true;
+      building = next;
+      if (state === "ready" && features.includes("building")) send({ type: "building", now: building });
+      return true;
     },
     // The track /nowplaying may show, or null to stop sharing. Kept and
     // re-sent after a reconnect; only a change goes out.

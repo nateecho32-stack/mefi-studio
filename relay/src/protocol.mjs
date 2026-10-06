@@ -86,6 +86,7 @@ export const FEATURES = Object.freeze({
   front: 'front', // GET /v1/front: the Lobby front page in one read
   events: 'events', // GET /v1/events: the weekly Build Jam, co-work hours and building together (relay/src/events.mjs)
   friendOnline: 'friend.online', // friendOnline: someone you share a room with just opened Studio (to clients that list it)
+  building: 'building', // building: what a member is making right now, with their say-so (The Lobby's Building now)
 });
 
 /** listen{action}: a room's shared player. */
@@ -420,6 +421,10 @@ export const CLIENT_FRAMES = Object.freeze({
   },
   nowPlaying: {
     track: nullable(object({ label: line(1, LIMITS.listenLabelMax), provider: oneOf(NOW_PLAYING_PROVIDERS), url: optional(httpsUrl()) })),
+  },
+  // What this member is building (feature "building"): the open project's name and counts only, or null to stop.
+  building: {
+    now: nullable(object({ project: line(1, 80), running: integer(0, 1000), doneToday: integer(0, 1000) })),
   },
   // The Discord remote (feature "remote"): turn this socket's PC on or off, answer a remote frame, alert the member.
   remoteHello: { pc: remotePc(), on: boolean() },

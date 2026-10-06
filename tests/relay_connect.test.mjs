@@ -156,6 +156,26 @@ test("opening Studio tells the people you share a room with, once in a while, ne
   for (const one of [again, hidden, cara]) await one.client.disconnect();
 });
 
+test("what a member shares they are building shows on friends' front pages, and goes when they stop or leave", async () => {
+  const relay = makeRelay();
+  const alice = member(relay, "tok-alice");
+  const bob = member(relay, "tok-bob");
+  await connectAll(alice, bob);
+  assert.equal(alice.client.status().building, true);
+  assert.equal(alice.client.setBuilding({ project: "Pixel Forge", running: 3, doneToday: 2 }), true);
+  assert.equal(alice.client.setBuilding({ project: "" }), false, "a share needs a project name");
+  await until(async () => (await bob.client.front()).online.people.some((person) => person.building?.project === "Pixel Forge"), "bob sees what alice builds");
+  const seen = (await bob.client.front()).online.people.find((person) => person.id === ALICE.id);
+  assert.deepEqual(seen.building, { project: "Pixel Forge", running: 3, doneToday: 2 });
+  alice.client.setBuilding(null);
+  await until(async () => (await bob.client.front()).online.people.every((person) => !person.building), "stopped sharing");
+  // A reconnect re-sends what is shared; a disconnect forgets it.
+  alice.client.setBuilding({ project: "Tiny Tides", running: 1, doneToday: 0 });
+  await alice.client.disconnect();
+  await until(async () => (await bob.client.front()).online.count === 0, "alice gone");
+  await bob.client.disconnect();
+});
+
 test("Who's online lists the people in Studio now, and anyone can hide", async () => {
   const relay = makeRelay();
   const alice = member(relay, "tok-alice");

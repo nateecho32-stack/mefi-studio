@@ -35,7 +35,7 @@ function host({ link = { userId: "42" }, tokens = null, clientId = "1234567890",
       createHubClient: (options) => { created = options; return { status: () => ({ configured: true, state: "off", error: null, user: null, readOnly: false, paused: false, rooms: [] }), ...client }; },
     }),
   });
-  vm.runInContext(`${block}\nthis.api = { hubAccessToken, hubStatus, hubInstance, hubSubscribe, hubConnect, hubDisconnect, hubPresenceLook, startHubPresence };`, context);
+  vm.runInContext(`${block}\nthis.api = { hubAccessToken, hubStatus, hubInstance, hubSubscribe, hubConnect, hubDisconnect, hubPresenceLook, startHubPresence, hubBuildingLook, hubBuildingShare, hubRoom };`, context);
   return { api: context.api, context, sent, checks, created: () => created };
 }
 
@@ -86,8 +86,30 @@ test("a member signed in on this PC connects for Friends at launch; the switch, 
   h.context.setInterval = (_fn, ms) => { timers.push(["every", ms]); return { unref() {} }; };
   h.api.startHubPresence();
   h.api.startHubPresence();
-  assert.deepEqual(timers, [["once", 12_000], ["every", 600_000]], "a first look 12 s in, then every ten minutes, started once");
+  assert.deepEqual(timers, [["once", 12_000], ["every", 600_000], ["every", 120_000]], "a first look 12 s in, then every ten minutes, and what is being built every two, started once");
   assert.match(main, /if \(!SMOKE && !CAPTURE && !CLI_MODE && typeof startHubPresence === "function"\) startHubPresence\(\);/);
+});
+
+test("Share what I'm building: off until turned on, then the open project's name and counts only, through hub:room", async () => {
+  let settings = {};
+  const shared = [];
+  const h = host({ client: {
+    status: () => ({ configured: true, state: "ready", error: null, user: null, readOnly: false, paused: false, rooms: [] }),
+    setBuilding: (value) => { shared.push(value === null ? null : { ...value }); return true; },
+  } });
+  h.context.readSettings = async () => settings;
+  h.context.updateSettings = async (mutate) => { const next = JSON.parse(JSON.stringify(settings)); mutate(next); settings = next; };
+  h.context.agentsSnapshot = async () => ({ project: "Pixel Forge", working: [{ title: "a secret plan" }, { title: "b" }], done: [{ title: "c" }] });
+  h.api.hubInstance();
+  assert.equal(await h.api.hubBuildingLook(), false, "off by default");
+  assert.deepEqual(shared, [null]);
+  const turned = await h.api.hubRoom("shareBuilding", [true]);
+  assert.equal(turned.ok, true);
+  assert.equal(settings.friends.shareBuilding, true, "remembered across restarts");
+  assert.deepEqual(shared.at(-1), { project: "Pixel Forge", running: 2, doneToday: 1 }, "a name and two counts, never a task title");
+  assert.equal((await h.api.hubStatus()).shareBuilding, true, "The Lobby reads the switch from hub:status");
+  await h.api.hubRoom("shareBuilding", [false]);
+  assert.deepEqual(shared.at(-1), null, "off again: the relay forgets it");
 });
 
 test("a live Discord access token is handed over as is", async () => {

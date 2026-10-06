@@ -23,6 +23,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   to the whole Lobby or while they hide from Who's online, and the same
   friend at most every 30 minutes. **Pop-ups from friends** at the foot of
   The Lobby turns them off.
+- **Building now in The Lobby.** Turn on **Share what I'm building** at the
+  foot of The Lobby and friends see your open project's name with a small
+  live tree: a lit leaf for each task running and a dim one for each finished
+  today. Only the name and the counts are shared, never task titles or files,
+  and it is off until you turn it on.
 - **Credits cannot be farmed.** Credits and ranks are worked out by the
   relay, never by Studio, and they now hold up against second accounts,
   trading and replays: credits start once a Discord account is 30 days old
