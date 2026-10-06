@@ -7,6 +7,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **How-to text waits behind a small "i".** In Settings, Size and density,
+  the setup helper and Start here's account step, the longer explanations
+  under a title now sit behind a round "i" beside it: click it (or press
+  Enter or Space), or rest the pointer on it, to read them; Esc or a click
+  elsewhere closes it. Short hints, warnings and status lines stay in view.
 - **Chrome's buttons no longer look struck through.** The metal on main
   buttons and chosen tabs had a hard dark line at half height, right behind
   the words. Its horizon is now a soft band below them, and the darkest part
