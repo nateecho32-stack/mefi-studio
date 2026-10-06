@@ -171,11 +171,14 @@ app.whenReady().then(async () => {
       crumbs: [...document.querySelectorAll('.shell-trail .shell-crumb')].map((node) => node.textContent.trim()),
       sheet: box(overlay), nav: box(document.getElementById('shell-pages')),
       pageOverflow: document.documentElement.scrollWidth > innerWidth + 1 || document.body.scrollWidth > innerWidth + 1,
+      // The window itself never scrolls under a page: the classic tab pages beneath are not laid out.
+      docScroll: [document.scrollingElement.scrollHeight, innerHeight],
       sideways: overlay ? overlay.scrollWidth > overlay.clientWidth + 1 : false, small, wide,
       hub: document.getElementById('agent-hub')?.hidden === false,
     };`;
   const problems = (m, tag) => [
     ...(m.pageOverflow ? [`${tag}: the page overflows the window`] : []),
+    ...(m.docScroll[0] > m.docScroll[1] + 1 ? [`${tag}: the whole window scrolls (${m.docScroll[0]} over ${m.docScroll[1]})`] : []),
     ...(m.sideways ? [`${tag}: the page scrolls sideways ${JSON.stringify(m.wide)}`] : []),
     ...m.small.map((line) => `${tag}: text under 12 px: ${line}`),
     ...m.wide.map((line) => `${tag}: past the page's right edge: ${line}`),

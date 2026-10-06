@@ -357,3 +357,11 @@ html[data-frame] #palette-overlay #palette-hint kbd { padding: 0 5px; border: 1p
   html[data-frame] .shell-split::after, html[data-frame] .shell-switch i { transition: none; }
 }
 html[data-motion="off"][data-frame] .shell-column[data-state="drawer"], html[data-motion="off"][data-frame] .shell-scrim { animation: none; }
+
+/* The tab pages (renderer/booklet.js: the Model catalog, Performance, Activity, Settings) stay in the document's flow
+   under the frame's layers. While a layer is the page (Home, Vibe, the Map, a page of Work or Team, Friends) they are
+   not laid out at all: with only their visibility off they kept the document their height, so the whole window
+   scrolled and the scroll hint sat over the status bar on every page. The Settings and Appearance previews over the
+   Map keep them, as their own rules ask. */
+html[data-frame] body:is(.workspace-active, .vibe-active, .command-active):not(.appearance-settings-active):not(.music-preview-active) > :is(main, header.page-head),
+html[data-frame] body:has(.workspace-page:not([hidden]), #friends-overlay:not([hidden])):not(.appearance-settings-active):not(.music-preview-active) > :is(main, header.page-head) { display: none; }
