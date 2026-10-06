@@ -620,7 +620,10 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 - A portable build can now ship on the Rust host (`npm run package:host`):
   the same folder as the Electron build, with Node beside the program. The
   updater in this version can install either kind of build and roll back
-  from either, so the next releases can move to the Rust host.
+  from either, so the next releases can move to the Rust host. The release
+  workflow builds it when asked (`host: tauri`); a version tag still
+  publishes the Electron build until this version has reached installed
+  copies.
 - More of the engine runs in Rust on the Rust host: the Skills page's files, a
   message's pictures, the before and after pictures behind Changed files and
   Revert, settings.json and auth.json (with the same care for a broken
@@ -1157,12 +1160,12 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   signed.** The portable `Mefi Studio AI+.exe` now carries Studio's name,
   version, copyright and icon. Task Manager, the file's Properties and
   Windows' SmartScreen prompt stopped saying "Electron" by "GitHub, Inc.".
-  The tested signing workflow proposal is preserved in
-  [docs/release-workflow-signpath.yml](docs/release-workflow-signpath.yml).
-  It adds a packaged-app smoke launch, signing after SignPath acceptance,
-  explicit-tag builds and a hosted-runner gate. Activation is pending a
-  GitHub credential with workflow permission; releases remain unsigned.
-  See [docs/code-signing.md](docs/code-signing.md).
+  The release workflow
+  ([.github/workflows/release.yml](.github/workflows/release.yml)) now opens
+  the packaged app once before it publishes anything, builds the tag it is
+  given, has a gate that GitHub's own machines can pass, and signs through
+  SignPath once the project is accepted and its settings are added. Until
+  then releases stay unsigned. See [docs/code-signing.md](docs/code-signing.md).
 - **Live › Fleet: every seat on your team, and the wires between them.** A
   new page beside Command shows the open project's team the way OpenRig draws a
   rig. An explorer lists it as pods (Lead, Build, Check, Keep) of seats such as

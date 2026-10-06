@@ -5,7 +5,31 @@
 #
 #   git tag v0.2.0 && git push origin v0.2.0
 #
-# workflow_dispatch builds and publishes the version given as input.
+# workflow_dispatch builds and publishes an existing tag, on the host given as
+# input. Each host has its own asset name (scripts/release-updater.mjs
+# releaseAssetName), so a second run for the same version with the other host
+# adds its zip to the same release. A tag push builds on TAG_HOST below.
+#
+# The dispatch's `gate` input picks what the runner proves first:
+#   full   - npm run check + npm test, as a tag push does.
+#   hosted - npm run check, the audit, the Node suites without Electron, the
+#            Python contracts and the path lock. This job fetches the Electron
+#            binary, so `full` runs the real-window suites, which ci.yml skips
+#            (scripts/fetch-electron.mjs: a hosted runner is not the desktop
+#            they measure). Four of them have failed on hosted runners since
+#            0.4.0 while passing locally, so use this for a tag that passed the
+#            full local gate (its TESTRUNS row) instead of publishing a
+#            hand-built zip, which cannot be signed.
+# Either way the packaged app must open (a --smoke launch) before anything is
+# signed or published.
+#
+# Signing: once the SignPath repository variables below are set, the
+# executable is signed by SignPath before the zip is made, and the release
+# is not published unless the signature checks out. Without them the build
+# is published unsigned, as before. Setup and policy: docs/code-signing.md.
+#   vars.SIGNPATH_ORGANIZATION_ID, vars.SIGNPATH_PROJECT_SLUG,
+#   vars.SIGNPATH_SIGNING_POLICY_SLUG, secrets.SIGNPATH_API_TOKEN
+# tests/release_workflow.test.mjs pins these rules.
 name: Publish portable release
 
 on:
@@ -14,17 +38,64 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version tag to publish (vX.Y.Z)"
+        description: "Version tag to publish (vX.Y.Z); the build is made from that tag"
         required: true
+      host:
+        description: "Runtime the portable build carries: electron, or tauri (the Rust host with Node beside it)"
+        type: choice
+        options: ["electron", "tauri"]
+        default: "electron"
+      gate:
+        description: "full = npm test on the runner; hosted = the checks a hosted runner passes, for a tag that passed the full local gate"
+        type: choice
+        options: [full, hosted]
+        default: full
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   release:
     runs-on: windows-latest
+    env:
+      GATE: ${{ github.event_name == 'workflow_dispatch' && inputs.gate || 'full' }}
+      SIGN: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
+      # scripts/rust-host.mjs puts Cargo's output here instead of
+      # %LOCALAPPDATA%, so the cache step below finds it. The runner's
+      # checkout path has no apostrophe for the resource compiler to trip on.
+      CARGO_TARGET_DIR: ${{ github.workspace }}\target
+      # A hosted runner has the memory for four parallel jobs; the script's
+      # default of 2 is for the owner's laptop.
+      MEFI_RUST_JOBS: "4"
     steps:
+      - name: Resolve the version and the host
+        id: version
+        shell: pwsh
+        env:
+          # The host a tag push publishes. It stays electron until the bridge
+          # release has reached installed copies: an installed copy's updater
+          # is the one that installs the next build, and only builds from the
+          # bridge on look for the "-tauri" zip, stop the Rust host's program
+          # and its node.exe before copying, clear the host's environment
+          # before starting a build, and remove the Electron runtime the host
+          # build does not use. Older copies keep updating through Electron
+          # builds until then. Flip this one value to tauri once the bridge
+          # release is out (docs/rust-migration.md, stage 1).
+          TAG_HOST: electron
+        run: |
+          $version = "${{ github.event_name == 'push' && github.ref_name || inputs.version }}"
+          if ($version -notmatch '^v') { $version = "v$version" }
+          $packageHost = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ inputs.host }}" } else { $env:TAG_HOST }
+          if ($packageHost -notin @("electron", "tauri")) { throw "unknown host: $packageHost" }
+          "value=$version" >> $env:GITHUB_OUTPUT
+          "number=$($version.Substring(1))" >> $env:GITHUB_OUTPUT
+          "host=$packageHost" >> $env:GITHUB_OUTPUT
+          Write-Host "Publishing $version on the $packageHost host"
+      # A dispatch builds the tag it names, not the branch it was started from.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', steps.version.outputs.value) || github.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -42,15 +113,117 @@ jobs:
       - name: Full check gate
         run: npm run check
       - name: Behavioral and isolated desktop checks
+        if: env.GATE == 'full'
         run: npm test
-      - name: Resolve the version
-        id: version
+      # The hosted gate: npm test's own legs (scripts/run-all-tests.mjs
+      # testLegs) without the Electron suites. One command per step: the pwsh
+      # wrapper only reads the last command's exit code.
+      - name: Hosted gate - application audit
+        if: env.GATE == 'hosted'
+        run: npm run audit
+      - name: Hosted gate - Node suites without Electron
+        if: env.GATE == 'hosted'
+        run: npm run test:fast
+      - name: Hosted gate - Python contracts
+        if: env.GATE == 'hosted'
+        run: python -m unittest discover -s tools -p "test_mefi_studio_*.py"
+      - name: Hosted gate - normalized-path lock
+        if: env.GATE == 'hosted'
+        run: node tools/test_normalized_path_lock.mjs
+      # The Rust host's toolchain and its build, only for a host build. MSVC is
+      # the runner's default target, and the host links WebView2's loader
+      # statically, so the program needs no DLL beside it.
+      - name: Install the Rust toolchain
+        if: steps.version.outputs.host == 'tauri'
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache Cargo's registry and build output
+        if: steps.version.outputs.host == 'tauri'
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+      - name: Build the Rust host (release)
+        if: steps.version.outputs.host == 'tauri'
+        run: node scripts/rust-host.mjs release-build
+      # A host build ships the Node this job runs on (Node 24) as node.exe.
+      - name: Build the portable release
+        run: node scripts/package-release.mjs --version "${{ steps.version.outputs.value }}" --host "${{ steps.version.outputs.host }}"
+      - name: Find the portable folder
+        id: portable
         shell: pwsh
         run: |
-          $version = "${{ github.event_name == 'push' && github.ref_name || inputs.version }}"
-          if ($version -notmatch '^v') { $version = "v$version" }
-          "value=$version" >> $env:GITHUB_OUTPUT
-      - name: Build and publish the portable release
+          $version = "${{ steps.version.outputs.number }}"
+          $packageHost = "${{ steps.version.outputs.host }}"
+          $build = Get-ChildItem dist/releases -Directory -Filter "mefi-studio-$version-$packageHost-*" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $build) { throw "no $packageHost portable folder for $version under dist/releases" }
+          $folder = Join-Path $build.FullName "Mefi Studio AI+"
+          "folder=$folder" >> $env:GITHUB_OUTPUT
+          "exe=$(Join-Path $folder 'Mefi Studio AI+.exe')" >> $env:GITHUB_OUTPUT
+      # The executable is Electron's or the Rust host's, stamped with Studio's
+      # name, version and icon (scripts/stamp-exe.mjs). Launch a copy, so the
+      # run leaves nothing in the folder that gets zipped. Electron takes the
+      # scratch profile from --user-data-dir, the Rust host from
+      # MEFI_STUDIO_USER_DATA, and the Rust host relays the engine's output on
+      # its stderr, so the [smoke] line is looked for in both logs.
+      - name: Smoke-launch the packaged app
+        shell: pwsh
+        timeout-minutes: 5
+        env:
+          FOLDER: ${{ steps.portable.outputs.folder }}
+          MEFI_STUDIO_GAME_ROOT: ${{ runner.temp }}\absent-game
+        run: |
+          $copy = Join-Path $env:RUNNER_TEMP "smoke-app"
+          Copy-Item -Recurse -LiteralPath $env:FOLDER -Destination $copy
+          $log = Join-Path $env:RUNNER_TEMP "smoke.out"
+          $userData = Join-Path $env:RUNNER_TEMP "smoke-user-data"
+          $env:MEFI_STUDIO_USER_DATA = $userData
+          $exe = Join-Path $copy "Mefi Studio AI+.exe"
+          $run = Start-Process -FilePath $exe -ArgumentList "--user-data-dir=`"$userData`"", "--smoke" -RedirectStandardOutput $log -RedirectStandardError "$log.err" -PassThru -Wait
+          Get-Content -LiteralPath $log, "$log.err" -ErrorAction SilentlyContinue
+          if ($run.ExitCode -ne 0) { throw "the packaged app's smoke launch exited $($run.ExitCode)" }
+          if (-not (Select-String -LiteralPath $log, "$log.err" -Pattern '^\[smoke\] \{' -Quiet)) { throw "the packaged app's smoke launch printed no [smoke] result line" }
+      - name: Upload the executable for signing
+        id: unsigned
+        if: env.SIGN == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-executable
+          path: ${{ steps.portable.outputs.exe }}
+          if-no-files-found: error
+          retention-days: 1
+      # SignPath signs only the file its artifact configuration names, and
+      # only when its product name and version match (docs/code-signing.md).
+      # The release signing policy waits for the maintainer's approval in
+      # SignPath, so the wait is long.
+      - name: Sign with SignPath
+        if: env.SIGN == 'true'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: ${{ runner.temp }}\signed
+          parameters: |
+            version: ${{ toJSON(steps.version.outputs.number) }}
+      - name: Put the signed executable in place and check its signature
+        if: env.SIGN == 'true'
+        shell: pwsh
+        env:
+          EXE: ${{ steps.portable.outputs.exe }}
+        run: |
+          $signed = Join-Path $env:RUNNER_TEMP "signed\Mefi Studio AI+.exe"
+          if (-not (Test-Path -LiteralPath $signed)) { throw "SignPath returned no Mefi Studio AI+.exe" }
+          $signature = Get-AuthenticodeSignature -LiteralPath $signed
+          if ($signature.Status -ne "Valid") { throw "the signed executable's signature is $($signature.Status): $($signature.StatusMessage)" }
+          $before = (Get-Item -LiteralPath $env:EXE).VersionInfo
+          $after = (Get-Item -LiteralPath $signed).VersionInfo
+          if ($after.ProductName -ne $before.ProductName -or $after.ProductVersion -ne $before.ProductVersion) { throw "the signed executable is not the one that was uploaded" }
+          Copy-Item -LiteralPath $signed -Destination $env:EXE -Force
+          "Signed by $($signature.SignerCertificate.Subject)"
+      - name: Zip and publish the portable release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: node scripts/package-release.mjs --version "${{ steps.version.outputs.value }}" --publish
+        run: node scripts/package-release.mjs --version "${{ steps.version.outputs.value }}" --host "${{ steps.version.outputs.host }}" --skip-build --publish
