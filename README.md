@@ -59,7 +59,7 @@ The [public roadmap](https://nateecho32-stack.github.io/mefi-studio/roadmap.html
 
 ## Coming in 0.5
 
-0.5 puts both modes in one frame (Vibe is now **Social**, for vibing with friends and keeping a light eye on agents; Build is now **Studio**, for in-depth building): your sessions on the left, the work in the middle, an inspector beside it, tabs on top and a status bar below. It is on `main` now and switched off by default: in a source run, turn on **Settings › General › Profile & startup › Try the 0.5 layout** (or **Switch layout** in Search). Studio reloads to switch, and the same switch takes you back.
+0.5 puts two modes in one frame: **Social** (once called Vibe), for vibing with friends and keeping a light eye on agents, and **Studio** (once called Build), for in-depth building. Your sessions on the left, the work in the middle, an inspector beside it, tabs on top and a status bar below; Ctrl+M switches modes. It is the only layout on `main`: a source run opens in it. The 0.4.4 download keeps the classic layout described further down until 0.5 is released.
 
 <table>
   <tr>
@@ -84,7 +84,7 @@ The [public roadmap](https://nateecho32-stack.github.io/mefi-studio/roadmap.html
   </tr>
 </table>
 
-Also in 0.5: **Chrome**, a new matte black and brushed-metal theme with an iridescent finish (silver, ice blue, lilac and aqua on its edges and highlights) that new installs open in (a theme you already picked stays), tabs you add and pin, Work › Worktrees, Windows notifications and quiet hours, Report a problem, What's new after an update, pictures on a message, the `@ # /` picker, Skills and rules for agents, and The Studio Daily. The [0.5 scope](docs/release-scope-0.5.0.md) has the full list and what moves to 0.5.x.
+Also in 0.5: an easier first run (**Start a new app** on the launch screen, **Pick the AI that builds for you** in plain words, and **What should Studio make first?**), **Chrome**, a new matte black and brushed-metal theme with an iridescent finish (silver, ice blue, lilac and aqua on its edges and highlights) that new installs open in (a theme you already picked stays), tabs you add and pin, Work › Worktrees, Windows notifications and quiet hours, Report a problem, What's new after an update, pictures on a message, the `@ # /` picker, Skills and rules for agents, and The Studio Daily. The [0.5 scope](docs/release-scope-0.5.0.md) has the full list and what moves to 0.5.x.
 
 ## Moving to Rust
 
